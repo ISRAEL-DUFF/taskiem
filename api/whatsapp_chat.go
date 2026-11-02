@@ -626,6 +626,10 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if code, ok := strings.CutPrefix(text, linkOfferPrefix); ok {
 		return s.waLinkOffer(ctx, c, code)
 	}
+	// Confirm on a payout the supplier's matching did not pair (bills.go).
+	if strings.HasPrefix(text, billPairPrefix) {
+		return s.waBillPairPress(ctx, c, text)
+	}
 	// A reply quoting a linked business's message, into its conversation
 	// (link_chat.go), whatever else the conversation is in the middle of.
 	if done, err := s.waQuotedReply(ctx, c); done || err != nil {

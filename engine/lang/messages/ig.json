@@ -4884,6 +4884,42 @@
       "text": "*{from}* edozila ajụjụ gị maka {reference}. {note}",
       "reviewed": false
     },
+    "bill.unknown_title": {
+      "text": "Ịkwụ ụgwọ {reference}: lee ya",
+      "reviewed": false
+    },
+    "bill.unknown": {
+      "text": "Ịkwụ ụgwọ gị nke {amount} nye *{supplier}* maka {reference} apụọla, mana Taskiem enweghị ike idekọ otú o si kwụsị. Ụgwọ ahụ ga-anọ dị ka a na-akwụ ya ruo mgbe ị lere ya: lelee ịkwụ ụgwọ ahụ na ngwa ụlọ akụ gị tupu ị kwụọ ọzọ.",
+      "reviewed": false
+    },
+    "bill.unpaired_title": {
+      "text": "{reference}: ego ahụ ruru {supplier}, ọ dịghị ụgwọ ejikọrọ",
+      "reviewed": false
+    },
+    "bill.unpaired": {
+      "text": "Ego gị {amount} maka {reference} ruru *{supplier}* ụbọchị atọ gara aga, mana Taskiem ha agụbeghị ya maka akwụkwọ ụgwọ ahụ. Ha nwere ike ịgụ ya maka akwụkwọ ụgwọ ochie. Ọ bụrụ na ọ bụ maka {reference}, kwenye ya, a ga-agwa ha.",
+      "reviewed": false
+    },
+    "bill.button_confirm_pair": {
+      "text": "Ọ bụ maka ụgwọ a",
+      "reviewed": false
+    },
+    "bill.pair_gone": {
+      "text": "Ejikọọla ịkwụ ụgwọ ahụ, ma ọ bụ ọ bụghị nke gị ikwenye.",
+      "reviewed": false
+    },
+    "bill.pair_confirmed": {
+      "text": "Edeela ya: ịkwụ ụgwọ gị bụ maka {reference}. Agwala *{supplier}*.",
+      "reviewed": false
+    },
+    "bill.notice.paired_title": {
+      "text": "{from}: otu ịkwụ ụgwọ bụ maka {reference}",
+      "reviewed": false
+    },
+    "bill.notice.paired": {
+      "text": "*{from}* kwuru na nnyefe ego ya nke {amount} ({note}) bụ maka akwụkwọ ụgwọ {reference}. Ọ bụrụ na agụrụ ya maka akwụkwọ ụgwọ ọzọ, bugharịa ya na peeji akwụkwọ ụgwọ ahụ.",
+      "reviewed": false
+    },
     "order.link.ordered_title": {
       "text": "{from} zitere iwu {reference}",
       "reviewed": false

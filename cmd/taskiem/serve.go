@@ -762,7 +762,8 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	copts.Schools = schoolOps
 	copts.Storefront = orders
 	copts.Riders = riderOps
-	copts.Bills = &links.Payments{Pool: pool}
+	bills := &links.Payments{Pool: pool}
+	copts.Bills = bills
 	copts.Link = linkOps
 	copts.Stock = stockOps
 	copts.Forms = formOps
@@ -792,7 +793,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 		BYOKCacheTTL: cfg.Keys.CacheTTL, DestroyAfter: cfg.Keys.DestroyAfter,
 		Platform: secrets.PlatformClients{"iswallet": cfg.ISWallet.credentials()}}
 	e := &engine{cfg: cfg, log: log, pool: pool, registry: reg, vault: vault, connectors: src, linkOps: linkOps,
-		store: &runtime.Store{Pool: pool, Registry: reg, PII: vault, Defaults: &cfg.Limits, Billing: cfg.Billing.On, MoneyLog: &moneylog.Log{Pool: pool, PII: vault}, HooksURL: cfg.HooksURL}}
+		store: &runtime.Store{Pool: pool, Registry: reg, PII: vault, Defaults: &cfg.Limits, Billing: cfg.Billing.On, MoneyLog: &moneylog.Log{Pool: pool, PII: vault}, PayoutSent: bills, HooksURL: cfg.HooksURL}}
 	e.stock = &stock.Stock{Pool: pool, Table: &storefront.XenibaseStock{Pool: pool, Registry: reg, Vault: vault, Guard: &egress.Guard{Logger: log}},
 		MoneyLog: &moneylog.Log{Pool: pool, PII: vault}}
 	stockOps.Set(e.stock)

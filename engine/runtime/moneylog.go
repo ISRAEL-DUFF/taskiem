@@ -53,6 +53,31 @@ func (w *Worker) recordPayout(ctx context.Context, tx pgx.Tx, p *plan, result hi
 	return err
 }
 
+// tellPayoutSent tells Store.PayoutSent, in the transaction that records
+// a payment step's completion, that the rail took the money: the step
+// answered pending or settled. A failed answer moved no money.
+func (w *Worker) tellPayoutSent(ctx context.Context, tx pgx.Tx, p *plan, result history.Event) error {
+	if w.Store.PayoutSent == nil || p.conn == nil || result.Type != history.StepCompleted || !projected(p) {
+		return nil
+	}
+	spec, ok := capability.Get(p.step.Capability.Uses)
+	if !ok || !spec.IsPayout() {
+		return nil
+	}
+	v, err := expr.DecodeJSON(result.Payload)
+	if err != nil {
+		return err
+	}
+	done, _ := v.(map[string]any)
+	out, _ := done["output"].(map[string]any)
+	status, _ := out["status"].(string)
+	if status != "pending" && status != "settled" {
+		return nil
+	}
+	ref, _ := out["payout_id"].(string)
+	return w.Store.PayoutSent.PayoutSent(ctx, tx, p.c.tenant, p.c.run, ref)
+}
+
 // rememberPaidAccounts records, in the transaction that records a payment
 // step's completion, the bank accounts it paid (pay_bank, and pay_many's
 // items) in prod, for the approvals warning "First payment to this

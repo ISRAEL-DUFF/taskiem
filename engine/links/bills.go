@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/israel-duff/taskiem/engine/db"
@@ -178,19 +180,51 @@ func ListBillsTx(ctx context.Context, tx pgx.Tx, status string, limit int) ([]Bi
 	return out, err
 }
 
+// ErrAmbiguous: a reference two suppliers used for open bills; say which
+// supplier ("Dangote INV-0042"), or use the bill's id.
+var ErrAmbiguous = errors.New("links: more than one bill")
+
 // GetBillTx is one of the business in scope's bills, by its id or its
-// invoice's number (the newest when two suppliers used the same number).
+// invoice's number, with the supplier's name before the number when two
+// suppliers used the same number ("Dangote INV-0042"). A number alone
+// that two suppliers' open bills share is refused with ErrAmbiguous,
+// naming them; a closed bill (paid, cancelled) gives way to an open one,
+// and the newest wins among closed ones.
 func GetBillTx(ctx context.Context, tx pgx.Tx, idOrReference string) (Bill, error) {
-	q := `SELECT ` + billCols + ` FROM bills WHERE reference = $1 ORDER BY created_at DESC LIMIT 1`
-	var arg any = strings.ToUpper(strings.TrimSpace(idOrReference))
-	if id, err := uuid.Parse(idOrReference); err == nil {
-		q, arg = `SELECT `+billCols+` FROM bills WHERE id = $1`, id
+	if id, err := uuid.Parse(strings.TrimSpace(idOrReference)); err == nil {
+		b, err := scanBill(tx.QueryRow(ctx, `SELECT `+billCols+` FROM bills WHERE id = $1`, id))
+		if errors.Is(err, pgx.ErrNoRows) {
+			return b, ErrNotFound
+		}
+		return b, err
 	}
-	b, err := scanBill(tx.QueryRow(ctx, q, arg))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return b, ErrNotFound
+	words := strings.Fields(idOrReference)
+	if len(words) == 0 {
+		return Bill{}, ErrNotFound
 	}
-	return b, err
+	ref, supplier := strings.ToUpper(words[len(words)-1]), strings.Join(words[:len(words)-1], " ")
+	rows, err := tx.Query(ctx, `SELECT `+billCols+` FROM bills WHERE reference = $1 AND ($2 = '' OR supplier_name ILIKE '%' || $2 || '%')
+		ORDER BY status IN ('paid', 'void'), created_at DESC`, ref, supplier)
+	if err != nil {
+		return Bill{}, err
+	}
+	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (Bill, error) { return scanBill(r) })
+	if err != nil {
+		return Bill{}, err
+	}
+	if len(list) == 0 {
+		return Bill{}, ErrNotFound
+	}
+	var suppliers []string
+	for _, b := range list {
+		if b.Status != "paid" && b.Status != "void" && !slices.Contains(suppliers, b.SupplierName) {
+			suppliers = append(suppliers, b.SupplierName)
+		}
+	}
+	if len(suppliers) > 1 {
+		return Bill{}, fmt.Errorf("%w: %s is a bill from %s; say which supplier, as \"%s %s\"", ErrAmbiguous, ref, strings.Join(suppliers, " and "), suppliers[0], ref)
+	}
+	return list[0], nil
 }
 
 // BillPayment is a payment of a bill from Taskiem (§6.2).
@@ -203,10 +237,44 @@ type BillPayment struct {
 	Connection  string     `json:"connection"`
 	AccountName string     `json:"account_name,omitempty"`
 	RunID       *uuid.UUID `json:"run_id,omitempty"`
-	Status      string     `json:"status"`
-	CreatedBy   string     `json:"created_by"`
-	CreatedAt   time.Time  `json:"created_at"`
-	FinishedAt  *time.Time `json:"finished_at,omitempty"`
+	// Status: pending (started, waiting to be approved, sent or confirmed),
+	// paid (the bank confirmed), failed, rejected (not approved), or
+	// unknown (the money went, and the workflow ended without saying how it
+	// ended: the bill stays paying until a person looks).
+	Status    string    `json:"status"`
+	CreatedBy string    `json:"created_by"`
+	CreatedAt time.Time `json:"created_at"`
+	// SentAt is when the rail took the money (the payout step answered
+	// pending or settled); PairedAt when the supplier's matching paired it
+	// with its credit, or the business confirmed the pair.
+	SentAt     *time.Time `json:"sent_at,omitempty"`
+	PairedAt   *time.Time `json:"paired_at,omitempty"`
+	FinishedAt *time.Time `json:"finished_at,omitempty"`
+	// SupplierName is the bill's supplier.
+	SupplierName string `json:"supplier_name,omitempty"`
+}
+
+const paymentCols = `p.id, p.bill_id, b.reference, b.supplier_name, p.amount_kobo, p.token, p.connection, COALESCE(p.account_name, ''), p.run_id, p.status,
+	p.created_by, p.created_at, p.sent_at, p.paired_at, p.finished_at`
+
+func scanPayment(r pgx.Row) (BillPayment, error) {
+	var p BillPayment
+	err := r.Scan(&p.ID, &p.BillID, &p.Reference, &p.SupplierName, &p.AmountKobo, &p.Token, &p.Connection, &p.AccountName, &p.RunID, &p.Status,
+		&p.CreatedBy, &p.CreatedAt, &p.SentAt, &p.PairedAt, &p.FinishedAt)
+	return p, err
+}
+
+// PaymentsOfBillTx are a bill's payments from Taskiem, newest first.
+func PaymentsOfBillTx(ctx context.Context, tx pgx.Tx, bill uuid.UUID) ([]BillPayment, error) {
+	rows, err := tx.Query(ctx, `SELECT `+paymentCols+` FROM bill_payments p JOIN bills b ON b.id = p.bill_id WHERE p.bill_id = $1 ORDER BY p.created_at DESC`, bill)
+	if err != nil {
+		return nil, err
+	}
+	out, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (BillPayment, error) { return scanPayment(r) })
+	if out == nil {
+		out = []BillPayment{}
+	}
+	return out, err
 }
 
 // PayIn is a payment of a bill being started.
@@ -251,11 +319,29 @@ func StartBillPaymentTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, in Pay
 		return BillPayment{}, fmt.Errorf("%w: the supplier takes this bill paid in full", ErrInvalid)
 	}
 	p := BillPayment{ID: uuid.Must(uuid.NewV7()), BillID: in.Bill, Reference: b.ref, AmountKobo: in.AmountKobo, Connection: in.Connection,
-		Token: b.ref + "/" + strings.ToUpper(newCode()[:4]), Status: "pending", CreatedBy: in.By}
-	if err := tx.QueryRow(ctx, `INSERT INTO bill_payments (id, tenant_id, bill_id, amount_kobo, token, connection, bank_code, account_number, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING created_at`,
-		p.ID, tenant, p.BillID, p.AmountKobo, p.Token, p.Connection, in.BankCode, in.AccountNumber, p.CreatedBy).Scan(&p.CreatedAt); err != nil {
-		return BillPayment{}, err
+		Status: "pending", CreatedBy: in.By}
+	// The code is short, so a token may clash with an earlier payment's:
+	// another is drawn, a few times.
+	for try := 0; ; try++ {
+		p.Token = b.ref + "/" + strings.ToUpper(newCode()[:4])
+		sp, err := tx.Begin(ctx)
+		if err != nil {
+			return BillPayment{}, err
+		}
+		err = sp.QueryRow(ctx, `INSERT INTO bill_payments (id, tenant_id, bill_id, amount_kobo, token, connection, bank_code, account_number, created_by)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING created_at`,
+			p.ID, tenant, p.BillID, p.AmountKobo, p.Token, p.Connection, in.BankCode, in.AccountNumber, p.CreatedBy).Scan(&p.CreatedAt)
+		if err == nil {
+			if err := sp.Commit(ctx); err != nil {
+				return BillPayment{}, err
+			}
+			break
+		}
+		_ = sp.Rollback(ctx)
+		var pe *pgconn.PgError
+		if !errors.As(err, &pe) || pe.Code != "23505" || try >= 5 {
+			return BillPayment{}, err
+		}
 	}
 	_, err = tx.Exec(ctx, `UPDATE bills SET paying_kobo = paying_kobo + $2 WHERE id = $1`, in.Bill, in.AmountKobo)
 	return p, err
@@ -269,60 +355,204 @@ func SetPaymentRunTx(ctx context.Context, tx pgx.Tx, payment, run uuid.UUID) err
 
 // FinishBillPaymentTx records how a payment went: paid (the bank
 // confirmed; the business sent the money, and the bill counts it when the
-// supplier's match does), failed or rejected. The bill is no longer
-// paying. The same outcome twice changes nothing; a finished payment
-// never changes.
+// supplier's match does), failed, rejected (not approved), or unknown (the
+// workflow ended after the money went without saying how: the bill stays
+// paying until a person looks). The bill is no longer paying after any
+// other outcome. The same outcome twice changes nothing; a paid, failed or
+// rejected payment never changes, an unknown one takes paid or failed when
+// it is known.
 func FinishBillPaymentTx(ctx context.Context, tx pgx.Tx, payment uuid.UUID, status, accountName string) (BillPayment, error) {
-	if status != "paid" && status != "failed" && status != "rejected" {
-		return BillPayment{}, fmt.Errorf("%w: status is paid, failed or rejected", ErrInvalid)
+	if status != "paid" && status != "failed" && status != "rejected" && status != "unknown" {
+		return BillPayment{}, fmt.Errorf("%w: status is paid, failed, rejected or unknown", ErrInvalid)
 	}
-	var p BillPayment
-	err := tx.QueryRow(ctx, `SELECT p.id, p.bill_id, b.reference, p.amount_kobo, p.token, p.connection, COALESCE(p.account_name, ''), p.run_id, p.status,
-		p.created_by, p.created_at, p.finished_at FROM bill_payments p JOIN bills b ON b.id = p.bill_id WHERE p.id = $1 FOR UPDATE OF p`, payment).
-		Scan(&p.ID, &p.BillID, &p.Reference, &p.AmountKobo, &p.Token, &p.Connection, &p.AccountName, &p.RunID, &p.Status, &p.CreatedBy, &p.CreatedAt, &p.FinishedAt)
+	p, err := scanPayment(tx.QueryRow(ctx, `SELECT `+paymentCols+` FROM bill_payments p JOIN bills b ON b.id = p.bill_id WHERE p.id = $1 FOR UPDATE OF p`, payment))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return p, ErrNotFound
 	}
-	if err != nil || p.Status != "pending" {
+	if err != nil || p.Status == status || (p.Status != "pending" && (p.Status != "unknown" || status == "rejected")) {
 		return p, err
 	}
-	if err := tx.QueryRow(ctx, `UPDATE bill_payments SET status = $2, account_name = COALESCE(NULLIF($3, ''), account_name), finished_at = now()
-		WHERE id = $1 RETURNING finished_at`, payment, status, accountName).Scan(&p.FinishedAt); err != nil {
+	was := p.Status
+	if err := tx.QueryRow(ctx, `UPDATE bill_payments SET status = $2, account_name = COALESCE(NULLIF($3, ''), account_name), finished_at = now(),
+		sent_at = CASE WHEN $2 IN ('paid', 'unknown') THEN COALESCE(sent_at, now()) ELSE sent_at END
+		WHERE id = $1 RETURNING finished_at, sent_at`, payment, status, accountName).Scan(&p.FinishedAt, &p.SentAt); err != nil {
 		return p, err
 	}
 	p.Status = status
+	if status == "unknown" {
+		return p, nil // the bill stays paying
+	}
 	sent := int64(0)
 	if status == "paid" {
 		sent = p.AmountKobo
+		if err := nameEntryTx(ctx, tx, p); err != nil {
+			return p, err
+		}
+	}
+	if was == "unknown" && status == "failed" {
+		// Nothing was sent after all.
+		_, err = tx.Exec(ctx, `UPDATE bills SET paying_kobo = GREATEST(paying_kobo - $2, 0) WHERE id = $1`, p.BillID, p.AmountKobo)
+		return p, err
 	}
 	_, err = tx.Exec(ctx, `UPDATE bills SET paying_kobo = GREATEST(paying_kobo - $2, 0), sent_kobo = sent_kobo + $3 WHERE id = $1`, p.BillID, p.AmountKobo, sent)
 	return p, err
 }
 
-// SettleStalePaymentsTx marks failed the payments of the business in scope
-// whose run ended without recording them (failed, cancelled), so their
-// bills are no longer paying.
-func SettleStalePaymentsTx(ctx context.Context, tx pgx.Tx) error {
-	rows, err := tx.Query(ctx, `SELECT p.id FROM bill_payments p JOIN runs r ON r.id = p.run_id
-		WHERE p.status = 'pending' AND r.status IN ('failed', 'cancelled')`)
+// MarkPayoutSentTx records that the rail took the money of the payment a
+// run is paying (the payout step answered pending or settled), with the
+// rail's payout id, in the transaction that records the step: from here
+// the payment is never failed by a sweep, whatever becomes of the run.
+// The payout entry in the money log, when it is there already, names the
+// bill.
+func MarkPayoutSentTx(ctx context.Context, tx pgx.Tx, tenant, run uuid.UUID, payoutRef string) error {
+	rows, err := tx.Query(ctx, `UPDATE bill_payments p SET sent_at = COALESCE(p.sent_at, now()), payout_ref = COALESCE(NULLIF($3, ''), p.payout_ref)
+		FROM bills b WHERE b.id = p.bill_id AND p.tenant_id = $1 AND p.run_id = $2 AND p.status IN ('pending', 'unknown')
+		RETURNING `+paymentCols, tenant, run, payoutRef)
 	if err != nil {
 		return err
 	}
-	ids, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (BillPayment, error) { return scanPayment(r) })
 	if err != nil {
 		return err
 	}
-	for _, id := range ids {
-		if _, err := FinishBillPaymentTx(ctx, tx, id, "failed", ""); err != nil {
+	for _, p := range list {
+		if err := nameEntryTx(ctx, tx, p); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
+// nameEntryTx puts the bill in the description of the payout's money-log
+// entry, where the entry is written and says nothing yet ("Bill INV-0042
+// to Dangote Stores"): the buyer's expense for the bill is the payout.
+func nameEntryTx(ctx context.Context, tx pgx.Tx, p BillPayment) error {
+	var ref *string
+	if err := tx.QueryRow(ctx, `SELECT payout_ref FROM bill_payments WHERE id = $1`, p.ID).Scan(&ref); err != nil {
+		return err
+	}
+	if ref == nil || *ref == "" {
+		return nil
+	}
+	_, err := tx.Exec(ctx, `UPDATE money_entries SET description = $2 WHERE direction = 'out' AND kind = 'payout' AND reference = $1 AND COALESCE(description, '') = ''`,
+		*ref, PayoutDescription(p.Reference, p.SupplierName))
+	return err
+}
+
+// PayoutDescription is what a bill's payout entry says in the money log.
+func PayoutDescription(reference, supplier string) string {
+	return "Bill " + reference + " to " + supplier
+}
+
+// SettleStalePaymentsTx settles the payments of the business in scope
+// whose workflow ended without recording them: a run failed or cancelled
+// before the money went (no sent_at), or no run started within ten
+// minutes, is failed, and the bill is no longer paying. A run that ended
+// after the money went makes the payment unknown: the bill stays paying,
+// and the payments turned unknown are answered, for the owner to be told.
+func SettleStalePaymentsTx(ctx context.Context, tx pgx.Tx) ([]BillPayment, error) {
+	rows, err := tx.Query(ctx, `SELECT p.id, p.sent_at IS NOT NULL FROM bill_payments p LEFT JOIN runs r ON r.id = p.run_id
+		WHERE p.status = 'pending' AND (r.status IN ('failed', 'cancelled') OR (p.run_id IS NULL AND p.created_at < now() - interval '10 minutes'))`)
+	if err != nil {
+		return nil, err
+	}
+	type stale struct {
+		id   uuid.UUID
+		sent bool
+	}
+	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (stale, error) {
+		var x stale
+		return x, r.Scan(&x.id, &x.sent)
+	})
+	if err != nil {
+		return nil, err
+	}
+	var unknown []BillPayment
+	for _, x := range list {
+		status := "failed"
+		if x.sent {
+			status = "unknown"
+		}
+		p, err := FinishBillPaymentTx(ctx, tx, x.id, status, "")
+		if err != nil {
+			return nil, err
+		}
+		if x.sent {
+			unknown = append(unknown, p)
+		}
+	}
+	return unknown, nil
+}
+
+// UnpairedPayoutsTx are the business in scope's payouts the bank confirmed
+// three days ago or more that no match has paired (§5.3), each answered
+// once: they are marked told, and the owner is told of each.
+func UnpairedPayoutsTx(ctx context.Context, tx pgx.Tx) ([]BillPayment, error) {
+	rows, err := tx.Query(ctx, `UPDATE bill_payments p SET alerted_at = now() FROM bills b WHERE b.id = p.bill_id
+		AND p.status = 'paid' AND p.paired_at IS NULL AND p.alerted_at IS NULL AND p.sent_at IS NOT NULL AND p.sent_at < now() - interval '3 days'
+		RETURNING `+paymentCols)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (BillPayment, error) { return scanPayment(r) })
+}
+
+// UnknownPaymentsTx are the business in scope's payments whose outcome is
+// unknown and whose owner has not been told, each answered once.
+func UnknownPaymentsTx(ctx context.Context, tx pgx.Tx) ([]BillPayment, error) {
+	rows, err := tx.Query(ctx, `UPDATE bill_payments p SET alerted_at = now() FROM bills b WHERE b.id = p.bill_id
+		AND p.status = 'unknown' AND p.alerted_at IS NULL RETURNING `+paymentCols)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (BillPayment, error) { return scanPayment(r) })
+}
+
+// ConfirmPairTx is the business's own word that its payout paid the bill
+// it was made for (§5.3), when the supplier's matching paired nothing in
+// three days: the payment is marked paired, and the supplier is told,
+// through the one door, which invoice the money was for, so its side can
+// re-aim its match where the two disagree.
+func ConfirmPairTx(ctx context.Context, tx pgx.Tx, buyer uuid.UUID, bill, payment string, by Actor) (BillPayment, Notice, uuid.UUID, error) {
+	b, err := GetBillTx(ctx, tx, bill)
+	if err != nil {
+		return BillPayment{}, Notice{}, uuid.Nil, err
+	}
+	id, err := uuid.Parse(strings.TrimSpace(payment))
+	if err != nil {
+		return BillPayment{}, Notice{}, uuid.Nil, fmt.Errorf("%w: a payment's id", ErrInvalid)
+	}
+	p, err := scanPayment(tx.QueryRow(ctx, `SELECT `+paymentCols+` FROM bill_payments p JOIN bills b ON b.id = p.bill_id WHERE p.id = $1 AND p.bill_id = $2 FOR UPDATE OF p`, id, b.ID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return p, Notice{}, uuid.Nil, ErrNotFound
+	}
+	if err != nil {
+		return p, Notice{}, uuid.Nil, err
+	}
+	switch {
+	case p.PairedAt != nil:
+		return p, Notice{}, uuid.Nil, fmt.Errorf("%w: the payment is paired already", ErrState)
+	case p.Status != "paid" && p.Status != "unknown":
+		return p, Notice{}, uuid.Nil, fmt.Errorf("%w: the bank has not confirmed this payment", ErrState)
+	}
+	if err := tx.QueryRow(ctx, `UPDATE bill_payments SET paired_at = now() WHERE id = $1 RETURNING paired_at`, p.ID).Scan(&p.PairedAt); err != nil {
+		return p, Notice{}, uuid.Nil, err
+	}
+	amount := p.AmountKobo
+	n, seller, err := tellOther(ctx, tx, buyer, b.LinkID, Notice{Kind: "paired", Reference: b.Reference, AmountKobo: &amount, Note: p.Token}, "link.pair.confirmed", by, nil)
+	return p, n, seller, err
+}
+
 // Payments records bill payments for the bills connector, each in the
 // calling run's business.
 type Payments struct{ Pool *pgxpool.Pool }
+
+// PayoutSent is the runtime's word, in the transaction that records a
+// payout step's completion, that the rail took the money of the payment
+// run is paying (runtime.Store.PayoutSent).
+func (p *Payments) PayoutSent(ctx context.Context, tx pgx.Tx, tenant, run uuid.UUID, payoutRef string) error {
+	return MarkPayoutSentTx(ctx, tx, tenant, run, payoutRef)
+}
 
 // FinishBillPayment is FinishBillPaymentTx in a transaction of tenant's.
 func (p *Payments) FinishBillPayment(ctx context.Context, tenant, payment uuid.UUID, status, accountName string) (BillPayment, error) {

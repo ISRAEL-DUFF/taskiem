@@ -4884,6 +4884,42 @@
       "text": "*{from}* ti yanjú ìbéèrè yín lórí {reference}. {note}",
       "reviewed": false
     },
+    "bill.unknown_title": {
+      "text": "Ìsanwó {reference}: ẹ wo o",
+      "reviewed": false
+    },
+    "bill.unknown": {
+      "text": "Ìsanwó yín {amount} sí *{supplier}* fún {reference} ti jáde, ṣùgbọ́n Taskiem kò lè kọ bí ó ṣe parí. Owó-ìpè náà wà bí a ń sanwó títí ẹ ó fi wò ó: ẹ yẹ ìsanwó náà wò nínú app báńkì yín kí ẹ tó tún sanwó.",
+      "reviewed": false
+    },
+    "bill.unpaired_title": {
+      "text": "{reference}: owó náà dé ọ̀dọ̀ {supplier}, kò sí owó-ìpè tí a so pọ̀",
+      "reviewed": false
+    },
+    "bill.unpaired": {
+      "text": "Owó yín {amount} fún {reference} dé ọ̀dọ̀ *{supplier}* ní ọjọ́ mẹ́ta sẹ́yìn, ṣùgbọ́n Taskiem wọn kò tíì kà á sí owó-ìpè yẹn. Wọ́n lè ti kà á sí owó-ìpè àtijọ́. Bí ó bá jẹ́ fún {reference}, ẹ jẹ́rìí sí i, a ó sì sọ fún wọn.",
+      "reviewed": false
+    },
+    "bill.button_confirm_pair": {
+      "text": "Fún owó-ìpè yìí ni",
+      "reviewed": false
+    },
+    "bill.pair_gone": {
+      "text": "A ti so ìsanwó yẹn pọ̀ tẹ́lẹ̀, tàbí kì í ṣe tiyín láti jẹ́rìí sí.",
+      "reviewed": false
+    },
+    "bill.pair_confirmed": {
+      "text": "A ti kọ ọ́: ìsanwó yín jẹ́ fún {reference}. A ti sọ fún *{supplier}*.",
+      "reviewed": false
+    },
+    "bill.notice.paired_title": {
+      "text": "{from}: ìsanwó kan jẹ́ fún {reference}",
+      "reviewed": false
+    },
+    "bill.notice.paired": {
+      "text": "*{from}* sọ pé ìfiránṣẹ́ owó rẹ̀ {amount} ({note}) jẹ́ fún owó-ìpè {reference}. Bí a bá ti kà á sí owó-ìpè mìíràn, ẹ gbé e lọ ní ojú-ìwé owó-ìpè náà.",
+      "reviewed": false
+    },
     "order.link.ordered_title": {
       "text": "{from} fi ọja-ibere {reference} ranṣẹ",
       "reviewed": false

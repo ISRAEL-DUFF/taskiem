@@ -1018,6 +1018,9 @@ func (w *Worker) finish(ctx context.Context, p *plan, result *history.Event) err
 		if err := w.recordPayout(ctx, tx, p, *result); err != nil {
 			return err
 		}
+		if err := w.tellPayoutSent(ctx, tx, p, *result); err != nil {
+			return err
+		}
 		if err := w.rememberPaidAccounts(ctx, tx, p, *result); err != nil {
 			return err
 		}

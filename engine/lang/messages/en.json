@@ -6104,6 +6104,51 @@
       "reviewed": true,
       "context": "The seller settled a buyer's query; {note} is what they said, or nothing"
     },
+    "bill.unknown_title": {
+      "text": "Payment of {reference}: look at it",
+      "reviewed": true,
+      "context": "A bill's payout went out and its workflow ended without recording the outcome"
+    },
+    "bill.unknown": {
+      "text": "Your payment of {amount} to *{supplier}* for {reference} went out, but Taskiem could not record how it ended. The bill stays as being paid until you look: check the payment in your bank app before paying again.",
+      "reviewed": true,
+      "context": "A bill payment of unknown outcome; the bill stays paying"
+    },
+    "bill.unpaired_title": {
+      "text": "{reference}: the money reached {supplier}, no bill paired",
+      "reviewed": true,
+      "context": "A payout confirmed three days ago that the supplier's matching did not pair"
+    },
+    "bill.unpaired": {
+      "text": "Your {amount} for {reference} reached *{supplier}* three days ago, but their Taskiem has not counted it towards that invoice. They may have counted it against an older invoice. If it was for {reference}, confirm it, and they are told.",
+      "reviewed": true,
+      "context": "A payout unpaired after three days; the owner may confirm the pair"
+    },
+    "bill.button_confirm_pair": {
+      "text": "It was for this bill",
+      "reviewed": true,
+      "context": "Button: confirm the payout paid the bill it was made for"
+    },
+    "bill.pair_gone": {
+      "text": "That payment is paired already, or is not yours to confirm.",
+      "reviewed": true,
+      "context": "Confirm pressed on a payout that cannot be confirmed"
+    },
+    "bill.pair_confirmed": {
+      "text": "Noted: your payment was for {reference}. *{supplier}* is told.",
+      "reviewed": true,
+      "context": "The buyer confirmed a payout paid its bill"
+    },
+    "bill.notice.paired_title": {
+      "text": "{from}: a payment was for {reference}",
+      "reviewed": true,
+      "context": "A linked buyer confirmed which invoice its payout was for; the title"
+    },
+    "bill.notice.paired": {
+      "text": "*{from}* says its transfer of {amount} ({note}) was for invoice {reference}. If it was counted against another invoice, move it on the invoice's page.",
+      "reviewed": true,
+      "context": "A linked buyer confirmed which invoice its payout was for; {note} is the payout's token"
+    },
     "order.link.ordered_title": {
       "text": "{from} sent order {reference}",
       "reviewed": true,

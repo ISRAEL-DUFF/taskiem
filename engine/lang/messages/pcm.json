@@ -4884,6 +4884,42 @@
       "text": "*{from}* don settle your query for {reference}. {note}",
       "reviewed": false
     },
+    "bill.unknown_title": {
+      "text": "Payment for {reference}: check am",
+      "reviewed": false
+    },
+    "bill.unknown": {
+      "text": "Your payment of {amount} to *{supplier}* for {reference} don go out, but Taskiem no fit record how e end. The bill go stay as e dey paid until you check: check the payment for your bank app before you pay again.",
+      "reviewed": false
+    },
+    "bill.unpaired_title": {
+      "text": "{reference}: the money reach {supplier}, no bill pair am",
+      "reviewed": false
+    },
+    "bill.unpaired": {
+      "text": "Your {amount} for {reference} reach *{supplier}* three days ago, but their Taskiem never count am for that invoice. Dem fit don count am for older invoice. If na for {reference}, confirm am, and dem go hear.",
+      "reviewed": false
+    },
+    "bill.button_confirm_pair": {
+      "text": "Na for this bill",
+      "reviewed": false
+    },
+    "bill.pair_gone": {
+      "text": "That payment don already pair, or no be your own to confirm.",
+      "reviewed": false
+    },
+    "bill.pair_confirmed": {
+      "text": "Noted: your payment na for {reference}. *{supplier}* don hear.",
+      "reviewed": false
+    },
+    "bill.notice.paired_title": {
+      "text": "{from}: one payment na for {reference}",
+      "reviewed": false
+    },
+    "bill.notice.paired": {
+      "text": "*{from}* talk say their transfer of {amount} ({note}) na for invoice {reference}. If e don count for another invoice, move am for the invoice page.",
+      "reviewed": false
+    },
     "order.link.ordered_title": {
       "text": "{from} send order {reference}",
       "reviewed": false

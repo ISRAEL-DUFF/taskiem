@@ -40,7 +40,9 @@ func (s *Server) billRoutes(r chi.Router) {
 	r.With(manage).Get("/bills/pay", s.getBillPay)
 	r.With(manage, s.tenantWide).Put("/bills/pay/setup", s.setupBillPay)
 	r.With(read).Get("/bills/{id}", s.getBill)
+	r.With(read).Get("/bills/{id}/payments", s.listBillPayments)
 	r.With(manage, s.tenantWide).Post("/bills/{id}/pay", s.payBill)
+	r.With(manage, s.tenantWide).Post("/bills/{id}/payments/{payment}/confirm-pair", s.confirmBillPair)
 	r.With(manage, s.tenantWide).Post("/bills/{id}/declare", s.declareBillPaid)
 	r.With(manage, s.tenantWide).Post("/bills/{id}/query", s.queryBill)
 	r.With(manage, s.tenantWide).Post("/invoices/{id}/settle-query", s.settleInvoiceQuery)
@@ -75,15 +77,36 @@ func (s *Server) getBill(w http.ResponseWriter, r *http.Request) {
 		b, err = links.GetBillTx(r.Context(), tx, chi.URLParam(r, "id"))
 		return err
 	}); err != nil {
-		s.fail(w, r, linkErr(err))
+		s.fail(w, r, billErr(err))
 		return
 	}
 	writeJSON(w, http.StatusOK, b)
 }
 
+// listBillPayments is GET /v1/bills/{id}/payments: the bill's payments
+// from Taskiem, newest first, each with whether the bank confirmed it and
+// whether the supplier's matching paired it.
+func (s *Server) listBillPayments(w http.ResponseWriter, r *http.Request) {
+	var out []links.BillPayment
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		b, err := links.GetBillTx(r.Context(), tx, chi.URLParam(r, "id"))
+		if err != nil {
+			return err
+		}
+		out, err = links.PaymentsOfBillTx(r.Context(), tx, b.ID)
+		return err
+	}); err != nil {
+		s.fail(w, r, billErr(err))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"payments": out})
+}
+
 // billErr answers a bill's refusals with their reasons.
 func billErr(err error) error {
 	switch {
+	case errors.Is(err, links.ErrAmbiguous):
+		return fmt.Errorf("%w: %s", errConflict, strings.TrimPrefix(err.Error(), links.ErrAmbiguous.Error()+": "))
 	case errors.Is(err, links.ErrState):
 		return fmt.Errorf("%w: %s", errConflict, strings.TrimPrefix(err.Error(), links.ErrState.Error()+": "))
 	case errors.Is(err, links.ErrInvalid):
@@ -100,13 +123,18 @@ func billErr(err error) error {
 // does the linked orders' work (link_orders.go), every few seconds, while
 // ctx lives.
 func (s *Server) runLinkMirrors(ctx context.Context) {
-	tick, hourly := time.NewTicker(3*time.Second), time.NewTicker(time.Hour)
+	tick, payments, hourly := time.NewTicker(3*time.Second), time.NewTicker(2*time.Minute), time.NewTicker(time.Hour)
 	defer tick.Stop()
+	defer payments.Stop()
 	defer hourly.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-payments.C:
+			if _, err := s.BillPaymentsTick(ctx); err != nil && ctx.Err() == nil {
+				s.Logger.Error("links: settling bill payments", "err", err)
+			}
 		case <-tick.C:
 			if _, err := s.LinkMirrorTick(ctx); err != nil && ctx.Err() == nil {
 				s.Logger.Error("links: mirroring bills", "err", err)
@@ -136,6 +164,133 @@ func (s *Server) LinkReconcile(ctx context.Context) (int, error) {
 		s.Logger.Warn("links: bills differed from their invoices and are mirrored again", "count", n)
 	}
 	return n, nil
+}
+
+// BillPaymentsTick settles, in every business with a bill payment to look
+// at, the payments whose workflow ended without recording them (failed,
+// cancelled, or never started), and tells the business's owners of a
+// payment whose outcome is unknown (the money went, the workflow ended
+// without saying how; the bill stays paying) and of a payout the bank
+// confirmed three days ago that the supplier's matching never paired
+// (§5.3): the money reached the supplier, who may have counted it against
+// an older invoice; a button confirms the pair from the bill. It reports
+// how many businesses it looked at.
+func (s *Server) BillPaymentsTick(ctx context.Context) (int, error) {
+	rows, err := s.Store.Pool.Query(ctx, `SELECT taskiem_bill_payments_tenants()`)
+	if err != nil {
+		return 0, err
+	}
+	tenants, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return 0, err
+	}
+	for _, tenant := range tenants {
+		var unknown, unpaired []links.BillPayment
+		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			if _, err := links.SettleStalePaymentsTx(ctx, tx); err != nil {
+				return err
+			}
+			var err error
+			if unknown, err = links.UnknownPaymentsTx(ctx, tx); err != nil {
+				return err
+			}
+			unpaired, err = links.UnpairedPayoutsTx(ctx, tx)
+			return err
+		}); err != nil {
+			s.Logger.Warn("links: settling a business's bill payments", "tenant", tenant, "err", err)
+			continue
+		}
+		for _, p := range unknown {
+			s.tellHoldersWith(ctx, tenant, []string{PermInvoiceManage, PermLinkManage}, "bill-payment:"+p.ID.String(), "/bills/"+p.BillID.String(),
+				func(l lang.Tag) (string, string) {
+					return tr(l, "bill.unknown_title", "reference", p.Reference), tr(l, "bill.unknown", "supplier", whatsapp.SafeText(p.SupplierName),
+						"reference", p.Reference, "amount", invoicing.Naira(p.AmountKobo))
+				}, nil)
+		}
+		for _, p := range unpaired {
+			s.tellHoldersWith(ctx, tenant, []string{PermInvoiceManage, PermLinkManage}, "bill-payment:"+p.ID.String(), "/bills/"+p.BillID.String(),
+				func(l lang.Tag) (string, string) {
+					return tr(l, "bill.unpaired_title", "reference", p.Reference), tr(l, "bill.unpaired", "supplier", whatsapp.SafeText(p.SupplierName),
+						"reference", p.Reference, "amount", invoicing.Naira(p.AmountKobo), "token", p.Token)
+				}, func(l lang.Tag) []whatsapp.Button {
+					return []whatsapp.Button{{ID: billPairPrefix + p.ID.String(), Title: tr(l, "bill.button_confirm_pair")}}
+				})
+		}
+	}
+	return len(tenants), nil
+}
+
+// billPairPrefix starts the chat button that confirms a payout paid its
+// bill: bp:<payment>.
+const billPairPrefix = "bp:"
+
+// waBillPairPress takes Confirm on an unpaired payout's message, for
+// whichever of the person's businesses made the payment, if they may pay
+// bills there.
+func (s *Server) waBillPairPress(ctx context.Context, c *chat, reply string) error {
+	id, err := uuid.Parse(strings.TrimPrefix(reply, billPairPrefix))
+	if err != nil {
+		return c.say(ctx, s, c.t("bill.pair_gone"))
+	}
+	tenants := append([]tenantRef{c.tenant}, slices.DeleteFunc(slices.Clone(c.tenants), func(t tenantRef) bool { return t.ID == c.tenant.ID })...)
+	for _, t := range tenants {
+		var bill uuid.UUID
+		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{t.ID}, func(tx pgx.Tx) error {
+			return tx.QueryRow(ctx, `SELECT bill_id FROM bill_payments WHERE id = $1`, id).Scan(&bill)
+		}); errors.Is(err, pgx.ErrNoRows) {
+			continue
+		} else if err != nil {
+			return err
+		}
+		p, err := s.principalOf(ctx, t.ID, c.p.UserID)
+		if err != nil || !p.Can(PermInvoiceManage) {
+			return c.say(ctx, s, c.t("bill.denied", "org", t.Name))
+		}
+		pay, n, seller, err := s.confirmPair(ctx, p, bill.String(), id.String())
+		switch {
+		case errors.Is(err, links.ErrState):
+			return c.say(ctx, s, c.t("bill.pair_gone"))
+		case err != nil:
+			return err
+		}
+		s.tellNotice(ctx, seller, t.ID, n, "/invoices/"+pay.Reference)
+		return c.say(ctx, s, c.t("bill.pair_confirmed", "reference", pay.Reference, "supplier", whatsapp.SafeText(pay.SupplierName)))
+	}
+	return c.say(ctx, s, c.t("bill.pair_gone"))
+}
+
+// confirmPair marks a payout paired with its bill, as p's business, and
+// tells the supplier which invoice the money was for.
+func (s *Server) confirmPair(ctx context.Context, p *Principal, bill, payment string) (links.BillPayment, links.Notice, uuid.UUID, error) {
+	var pay links.BillPayment
+	var n links.Notice
+	var seller uuid.UUID
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+		detail, _ := json.Marshal(map[string]any{"payment": payment})
+		if _, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, $2, $3, 'bill.pair', $4, $5)`, p.TenantID, p.ActorType(), p.Actor(), bill, detail); err != nil {
+			return err
+		}
+		var err error
+		pay, n, seller, err = links.ConfirmPairTx(ctx, tx, p.TenantID, bill, payment, links.Actor{Type: p.ActorType(), ID: p.Actor()})
+		return err
+	})
+	return pay, n, seller, err
+}
+
+// confirmBillPair is POST /v1/bills/{id}/payments/{payment}/confirm-pair
+// (§5.3): the business's own word that a payout the bank confirmed, which
+// the supplier's matching did not pair in three days, paid this bill. The
+// payment is marked paired and the supplier is told which invoice the
+// money was for.
+func (s *Server) confirmBillPair(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r.Context())
+	pay, n, seller, err := s.confirmPair(r.Context(), p, chi.URLParam(r, "id"), chi.URLParam(r, "payment"))
+	if err != nil {
+		s.fail(w, r, billErr(err))
+		return
+	}
+	s.tellNotice(r.Context(), seller, p.TenantID, n, "/invoices/"+pay.Reference)
+	writeJSON(w, http.StatusOK, pay)
 }
 
 // LinkMirrorTick mirrors the invoices due, and reports how many it
@@ -621,7 +776,9 @@ func (s *Server) startBillPay(ctx context.Context, tenant uuid.UUID, bill string
 	var b links.Bill
 	var version int
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		if err := links.SettleStalePaymentsTx(ctx, tx); err != nil {
+		// A payment whose workflow died is settled first; one the money
+		// went for stays, and the tick tells the owner.
+		if _, err := links.SettleStalePaymentsTx(ctx, tx); err != nil {
 			return err
 		}
 		var err error

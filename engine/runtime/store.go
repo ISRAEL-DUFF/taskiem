@@ -56,6 +56,12 @@ type Store struct {
 	// settled at once in the money log, with the step's outcome (prod
 	// only; docs/money-log.md); nil records nothing.
 	MoneyLog *moneylog.Log
+	// PayoutSent, when set, hears in the transaction that records a payout
+	// step's completion that the rail took the money (the step answered
+	// pending or settled), with the run and the rail's payout id: a bill's
+	// payment is marked sent (business links §6.2), whatever becomes of the
+	// run after. nil hears nothing.
+	PayoutSent PayoutSentHook
 	// Templates is the template library template steps are expanded from
 	// (decision 0047); nil is the embedded library.
 	Templates *templates.Library
@@ -69,6 +75,11 @@ type Store struct {
 	limits   sync.Map // tenant -> cachedLimits
 	hits     sync.Map // "tenant/limit" -> time recorded
 	hitCount atomic.Int64
+}
+
+// PayoutSentHook hears that a payout step's rail took the money.
+type PayoutSentHook interface {
+	PayoutSent(ctx context.Context, tx pgx.Tx, tenant, run uuid.UUID, payoutRef string) error
 }
 
 // settleStatus, appended to the UPDATE that ends a decision, sets a live

@@ -4884,6 +4884,42 @@
       "text": "*{from}* ya warware tambayarku kan {reference}. {note}",
       "reviewed": false
     },
+    "bill.unknown_title": {
+      "text": "Biyan {reference}: duba shi",
+      "reviewed": false
+    },
+    "bill.unknown": {
+      "text": "Biyan ku na {amount} ga *{supplier}* don {reference} ya fita, amma Taskiem bai iya rubuta yadda ya ƙare ba. Lissafin zai kasance ana biya har sai kun duba: duba biyan a manhajar bankinku kafin ku sake biya.",
+      "reviewed": false
+    },
+    "bill.unpaired_title": {
+      "text": "{reference}: kuɗin sun isa {supplier}, ba a haɗa lissafi ba",
+      "reviewed": false
+    },
+    "bill.unpaired": {
+      "text": "Kuɗin ku {amount} na {reference} sun isa *{supplier}* kwanaki uku da suka wuce, amma Taskiem ɗinsu bai ƙirga su zuwa wannan takardar ba. Wataƙila sun ƙirga su zuwa tsohuwar takarda. Idan na {reference} ne, tabbatar, kuma za a gaya musu.",
+      "reviewed": false
+    },
+    "bill.button_confirm_pair": {
+      "text": "Na wannan lissafin ne",
+      "reviewed": false
+    },
+    "bill.pair_gone": {
+      "text": "An riga an haɗa wannan biyan, ko ba naku ba ne ku tabbatar.",
+      "reviewed": false
+    },
+    "bill.pair_confirmed": {
+      "text": "An lura: biyan ku na {reference} ne. An gaya wa *{supplier}*.",
+      "reviewed": false
+    },
+    "bill.notice.paired_title": {
+      "text": "{from}: wani biya na {reference} ne",
+      "reviewed": false
+    },
+    "bill.notice.paired": {
+      "text": "*{from}* ya ce tura kuɗinsa na {amount} ({note}) na takardar {reference} ne. Idan an ƙirga shi zuwa wata takarda, matsar da shi a shafin takardar.",
+      "reviewed": false
+    },
     "order.link.ordered_title": {
       "text": "{from} ya aika oda {reference}",
       "reviewed": false

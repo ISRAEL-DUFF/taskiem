@@ -6262,6 +6262,74 @@ paths:
                                   format: date-time
         default:
           $ref: '#/components/responses/Error'
+  /v1/bills/{id}/payments:
+    get:
+      operationId: listBillPayments
+      tags:
+      - Links
+      summary: A bill's payments from Taskiem
+      description: Newest first, each with when the bank took the money and whether the supplier's matching paired it with its credit.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The payments
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [payments]
+                properties:
+                  payments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BillPayment'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/bills/{id}/payments/{payment}/confirm-pair:
+    post:
+      operationId: confirmBillPair
+      tags:
+      - Links
+      summary: Confirm a payout paid this bill
+      description: 'For a payout the bank confirmed that the supplier''s matching did not pair within three days: the business''s own word that the money was for this bill. The payment is marked paired, and the supplier is told which invoice the money was for, so its side can re-aim its match.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: payment
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The payment, paired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillPayment'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/bills/{id}:
     get:
       operationId: getBill
@@ -30633,15 +30701,26 @@ components:
           format: uuid
         status:
           type: string
-          enum: [pending, paid, failed, rejected]
+          enum: [pending, paid, failed, rejected, unknown]
+          description: 'unknown: the money went and the workflow ended without saying how; the bill stays paying until a person looks'
         created_by:
           type: string
         created_at:
           type: string
           format: date-time
+        sent_at:
+          type: [string, 'null']
+          format: date-time
+          description: When the rail took the money
+        paired_at:
+          type: [string, 'null']
+          format: date-time
+          description: When the supplier's matching paired the payout with its credit, or the business confirmed the pair
         finished_at:
           type: [string, 'null']
           format: date-time
+        supplier_name:
+          type: string
     LinkRequestResult:
       type: object
       additionalProperties: false
