@@ -5,7 +5,7 @@
   "part": "D",
   "order": 2,
   "summary": "How secrets and personal data are encrypted and erased, how a tenant brings its own key, how outbound traffic is fenced, the HTTP hardening, and the threat model the team reviews against.",
-  "verified": "c7f9f76faafcecb67ccde261b0f28f90af48808d",
+  "verified": "095bef23d016f831981dcc92b3c3eb1626d51a38",
   "sources": [
     "engine/secrets/", "engine/byok/", "engine/pii/", "engine/egress/", "engine/httpsec/",
     "engine/runtime/sealing.go", "engine/runtime/scrub.go", "api/server.go", "cmd/taskiem/hardening.go",
@@ -14,7 +14,7 @@
 }
 -->
 <h2>What is protected, and against whom</h2>
-<p>A tenant trusts Taskiem with three kinds of thing: credentials (API keys, OAuth tokens, database passwords), the personal data that passes through its runs (BVNs, account numbers, names), and the ability to call out to the world. The design keeps each of those safe from the other tenants, from someone who gets a copy of the database, and from the tenant's own workflows reaching places they should not. The <x-ref path="docs/security/threat-model.md">threat model</x-ref> lists 19 boundaries, B1 to B19, and says what holds at each; a change that adds an entry point, a role, a secret store or a way to run tenant code updates it in the same pull request.</p>
+<p>A tenant trusts Taskiem with three kinds of thing: credentials (API keys, OAuth tokens, database passwords), the personal data that passes through its runs (BVNs, account numbers, names), and the ability to call out to the world. The design keeps each of those safe from the other tenants, from someone who gets a copy of the database, and from the tenant's own workflows reaching places they should not. The <x-ref path="docs/security/threat-model.md">threat model</x-ref> lists 20 boundaries, B1 to B20, and says what holds at each (B20 is the link between two businesses: one door with dual audit, a reconciler that compares figures only, no money moved by the link, and no session ever holding the other business); a change that adds an entry point, a role, a secret store or a way to run tenant code updates it in the same pull request.</p>
 
 <h2 id="security--keys">Keys</h2>
 <p>Nothing secret is stored in the clear. Every value is encrypted under its own key, and keys are wrapped by keys above them:</p>

@@ -5,11 +5,12 @@
   "part": "D",
   "order": 1,
   "summary": "How people, keys, partners and operators prove who they are, what each may do, and how every request ends up scoped to one tenant: sign-in, sessions, API keys, roles, step-up, sub-tenants, embedding and the operator console.",
-  "verified": "c7f9f76faafcecb67ccde261b0f28f90af48808d",
+  "verified": "095bef23d016f831981dcc92b3c3eb1626d51a38",
   "sources": [
     "engine/access/", "engine/oidc/", "engine/saml/", "engine/webauthn/", "engine/totp/", "engine/embed/", "engine/ops/",
     "api/auth.go", "api/passkeys.go", "api/password.go", "api/sso.go", "api/scim.go", "api/roles.go", "api/approvals.go",
     "api/partner.go", "api/partnerpeople.go", "api/embed.go", "api/embedapps.go", "api/ops.go", "api/ops_console.go",
+    "api/links.go", "engine/links/links.go", "docs/decisions/0061-business-links.md",
     "engine/db/db.go", "engine/runtime/approvals.go",
     "docs/decisions/0015-embedding-tenancy.md", "docs/decisions/0026-bound-step-up-and-cookie-sessions.md", "docs/decisions/0027-operator-console.md",
     "docs/spec/architecture.md"
@@ -100,6 +101,8 @@
 <div class="callout risk"><span class="callout-label">Risk</span>
   <p>A partner with <code>partner.manage</code> can invite its own staff into a sub-tenant as admin at any time, and can define custom roles there with any permission except the partner ones, including revealing personal data and managing secrets. The person must accept the invitation, both audit logs record it, and the sub-tenant's people can see who is a member. The threat model accepts this, as a partner usually operates the product for its customers, but a sub-tenant has no way to refuse it.</p>
 </div>
+
+<p>A <strong>linked business</strong> (<x-ref path="docs/decisions/0061-business-links.md">decision 0061</x-ref>) is a peer, not a partner: two tenants that both consented to trade, each keeping its own plan, people and rows. No membership, session or key ever holds the other tenant in scope. The one way in is <code>taskiem_link_enter</code>, modelled on the partner's door: the link must be active and the caller one of its sides, both audit chains record the entry (the other side's entry names the caller as <code>link:&lt;tenant&gt;/&lt;actor&gt;</code>), and the scope is narrowed to the other tenant for the rest of that transaction, which then writes one event into the other side's own tables. Two permissions govern it: <code>link.manage</code> (owners and admins) asks, accepts, blocks and ends links and sets whether the business can be found; <code>chat.trade</code> (owners, admins and operators) writes in the conversation, and a workflow's <code>reply</code> is allowed only when the person who published the workflow holds it. The <x-page id="business-modules">Business modules</x-page> page has the documents that cross.</p>
 
 <h2 id="identity-tenancy--embedding">Embedding</h2>
 <p>A partner can put Taskiem inside its own product (<x-ref path="docs/decisions/0015-embedding-tenancy.md">decision 0015</x-ref>). It registers an embed app with the origins allowed to frame it, and its server mints a short-lived end-user token, 15 minutes by default and an hour at most (also a database constraint), for one sub-tenant. Such a token can only ever hold a few permissions, whatever the partner asks for:</p>

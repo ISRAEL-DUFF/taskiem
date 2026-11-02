@@ -5,12 +5,13 @@
   "part": "A",
   "order": 1,
   "summary": "What Taskiem is, the roles its one binary runs as, how the repository is laid out, and a map of every engine package.",
-  "verified": "c7f9f76faafcecb67ccde261b0f28f90af48808d",
+  "verified": "095bef23d016f831981dcc92b3c3eb1626d51a38",
   "sources": ["cmd/taskiem/serve.go", "cmd/taskiem/main.go", "engine/runtime/scheduler.go", "go.mod", "web/package.json", "docs/spec/architecture.md"]
 }
 -->
 <h2>What Taskiem is</h2>
 <p>Taskiem runs workflows for businesses whose workflows move money. A workflow is a versioned JSON document in the <code>wd/v1</code> format. It can be drawn on the canvas, written as TypeScript, drafted by the AI builder or built from WhatsApp, and all of these produce the same document. A run of that workflow is an append-only log of events in PostgreSQL. Workers carry out the steps: calling Paystack or Moniepoint, running sandboxed code, asking a model. Every call that moves money carries an idempotency key derived from the run, so a crash or a retry never pays twice.</p>
+<p>Around the engine sit the business modules: the money log and matching, invoices, storefronts and stock, riders, schools, data tables, and, since decision 0061, <strong>business links</strong>: two businesses on Taskiem trading as mirrored records under each one's own tenancy, with a WhatsApp-like conversation between them and workflows that start on what passes across the link (the <x-page id="business-modules">Business modules</x-page> page).</p>
 <p>The spec names four kinds of customer (<x-ref path="docs/spec/architecture.md" symbol="### 1.1 Target users">spec 1.1</x-ref>):</p>
 <div class="table-wrap"><table>
   <thead><tr><th>Segment</th><th>Example</th><th>What they need from it</th></tr></thead>

@@ -5,10 +5,10 @@
   "part": "C",
   "order": 1,
   "summary": "The connector/v1 manifest and how it is checked, the Go handler interface and the registry, WebAssembly connectors, conformance suites, the signed public catalogue, drift monitoring, and Paystack and Zoho Books from manifest to call.",
-  "verified": "c7f9f76faafcecb67ccde261b0f28f90af48808d",
+  "verified": "095bef23d016f831981dcc92b3c3eb1626d51a38",
   "sources": [
     "engine/connector/", "engine/wasmconn/", "engine/conntest/", "engine/connpkg/", "engine/catalogue/", "engine/drift/",
-    "engine/effects/", "connectors/builtin/builtin.go", "connectors/paystack/", "connectors/zohobooks/", "sdk/connectorsdk/",
+    "engine/effects/", "connectors/builtin/builtin.go", "connectors/paystack/", "connectors/zohobooks/", "connectors/link/", "connectors/bills/", "sdk/connectorsdk/",
     "api/tenantconnectors.go", "schemas/connector-v1.schema.json",
     "docs/contracts/connector-v1.md", "docs/contracts/connector-wasm-v1.md", "docs/spec/architecture.md"
   ]
@@ -47,6 +47,8 @@
 <p>Each built-in package embeds its manifest, parses it with <code>MustParse</code> and returns a <code>Connector</code> with one handler per action. <x-ref path="connectors/builtin/builtin.go" symbol="func Register(r *connector.Registry, o Options) error {"><code>builtin.Register</code></x-ref> registers the list at start-up:</p>
 <x-code path="engine/connector/runtime.go" start="func (r *Registry) Register(c *Connector) error {" caption="ids starting x_ and p_ are reserved"/>
 <p><x-ref path="engine/connector/runtime.go" symbol="func (c *Connector) Check() error {"><code>Check</code></x-ref> fails start-up if a manifest action has no handler or a handler has no action. For each call, <x-ref path="engine/connector/runtime.go" symbol="func (r *Registry) For(ctx context.Context, tenant string) (Lookup, error) {"><code>Registry.For</code></x-ref> adds the tenant's own and installed connectors to the built-ins. Because of the prefixes, a tenant's connector can never stand in for a built-in.</p>
+<p>Some platform connectors do their work in the api process rather than in the connector package, because the work is the business's own records: <code>link@1</code> (<x-ref path="connectors/link/link.go"><code>connectors/link</code></x-ref>), what a workflow does between linked businesses, holds the manifest and hands each action with the run's tenant, step, idempotency key and environment to the server (<x-ref path="api/link_connector.go" symbol="func (s *Server) LinkAction("><code>LinkAction</code></x-ref>) through a <code>Late</code> binding, since the registry is built before the server; a deployment whose worker runs apart from the api builds a server of its own for them. <code>bills@1</code> (<x-ref path="connectors/bills/"><code>connectors/bills</code></x-ref>) is what the managed bill-payment workflow records its outcome with. Both need no connection, and neither answers outside a run.</p>
+
 <h3 id="connectors--rate-limits">Rate limits and versions</h3>
 <p>A manifest's <code>rate_limit</code> (Paystack: 50 requests a second per connection) is kept by every worker together. <x-ref path="engine/runtime/worker.go" symbol="func takeRate(ctx context.Context, tx pgx.Tx, p *plan) error {"><code>takeRate</code></x-ref> draws a token from a bucket in <code>connector_rate_buckets</code>, in the same transaction that records the call's intent. When the bucket is empty the task goes back to the queue until a token is due: nothing was sent, no intent is open, and no retry is spent.</p>
 <p>A run keeps the connector versions it started with. <span class="evt">RunStarted</span> records them, and the worker resolves each step through <x-ref path="engine/connector/runtime.go" symbol="func (r *Registry) Pinned("><code>Registry.Pinned</code></x-ref>, which loads an uploaded connector's recorded version even after a newer one is uploaded or the recorded one is disabled for new runs. A built-in has only the version in the running binary. A catalogue version that was revoked, or a partner's that is no longer shared, gives way to the newest, with a warning in the worker's log.</p>
