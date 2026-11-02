@@ -1,6 +1,20 @@
 # Storefronts
 
-A storefront is a business's one-page public page: who it is, what it sells, and how to reach it ([spec](spec/storefronts.md), decision 0036). This is Phase 5, S2 and S3: the page, its catalogue, and ordering, questions and call-backs. Booking came with S4 ([below](#bookings)); setting up and running it [from chat](#from-chat) with S5, and field agents later in S5; the business's [own domain](#your-own-domain) with S6, and embedding later.
+A storefront is a business's public page: who it is, what it sells, and how to reach it ([spec](spec/storefronts.md), decision 0036). Its home page has the business card, the catalogue and four forms (order, question, call-back, booking). Beside it the business can add **fronts**, more pages each made from a **kind** with its own list, its own forms and their own workflows ([plan](spec/fronts.md), decision [0059](decisions/0059-fronts.md)): the shop that also cooks, the tailor who hires out chairs, the church with a bookshop and a hall, on one page, one money log and one number.
+
+| Kind | What it sells or takes | Its list | Its form and workflow |
+| --- | --- | --- | --- |
+| Shop | Products | `products` | Order now (`storefront-order`), Ask a question |
+| Food | A menu, with options and how long each dish takes | `menu` | Order now, delivering by default (`storefront-order`, or `dispatch-orders` with riders) |
+| Hire | Chairs, canopies, generators by the day | `hire_items` (how many, a rate per day) | Hire now: an item, the days, how many (`storefront-hire`: deposit, due back, Returned, late fee) |
+| Spaces | A hall or room by the day or the hour | `spaces`, with a calendar | Book the space (`storefront-space`: deposit, balance, reminder) |
+| Tickets | An event's tickets | `events` (when, where, how many) | Buy tickets, paid when bought (`storefront-tickets`: a code per seat, checked in at the door) |
+| Classes | Places in a class | `classes` (when, places, the fee) | Enrol, in full or by instalment (`storefront-classes`, with a waiting list) |
+| Quotes | Anything made to order | none | Request a quote (`storefront-quote`: priced in chat, accepted on the order page, a deposit) |
+| Questions, Call-backs | A question, a call back | none | That one form |
+| Custom | What no kind covers | your choice | Forms you add: blank, question, call-back, quote |
+
+Every front's orders are ordinary storefront orders: the Orders page, matching, refunds and the money log treat a ticket, a hire and a dish alike. Below: [the page](#the-page), [fronts](#fronts), [orders](#orders-questions-and-call-backs) and [bookings](#bookings), [your own domain](#your-own-domain), and [running it from chat](#from-chat). For owners, [Sell more than one thing](guide/sell-more-than-one-thing.md) walks through it.
 
 It is built and off by default: pages are served only by the [public host](public-host.md), and the web app's **Storefront** page needs `storefront.manage` (owners and admins).
 
@@ -95,7 +109,7 @@ The page offers up to four **forms**: **order** (the catalogue as a basket), **e
 
 ### Setting up
 
-Under Storefront > Forms, **Set up** adds the form's default workflow from the template library (`storefront-order`, `storefront-enquiry`, `storefront-callback`) and publishes it. A form can be switched on only once a workflow with a storefront trigger for it (`{"type": "storefront", "config": {"action": "order"}}`) is deployed to prod, and only one workflow per form and environment. Publishing another workflow for a form that already starts one is refused with the form and that workflow named, and the editor offers **Replace it with this one**: the other workflow is taken out of use and this one published in one change, so the form never starts none or two (refused under four-eyes publishing, with the reason; [fronts F0](spec/fronts.md#131-as-built-f0)). The owner can edit the workflow like any other.
+Under Storefront > Forms, **Set up** adds the form's default workflow from the template library (`storefront-order`, `storefront-enquiry`, `storefront-callback`) and publishes it. A form can be switched on only once a workflow with a storefront trigger for it (`{"type": "storefront", "config": {"action": "order"}}`) is deployed to prod, and only one workflow per form and environment. Publishing another workflow for a form that already starts one is refused with the form and that workflow named, and the editor offers **Replace it with this one**: the other workflow is taken out of use and this one published in one change, so the form never starts none or two (refused under four-eyes publishing, with the reason; [fronts F0](spec/fronts.md#131-as-built-f0)). It also offers **Make a new action for this workflow**: a second form like it, off, which this workflow starts, while the first form keeps its workflow ([fronts F2](spec/fronts.md#133-as-built-f2)). The new form shows under Storefront > Forms as its own card; switched on, it has its own button on the page and its own address (`/a/order-2`). The owner can edit the workflow like any other. The run gets the submission as `trigger.body`, Taskiem's record of it as `trigger.submission`, and the answers to any questions of the form's own as `trigger.answers`, kept apart from Taskiem's fields ([fronts F1](spec/fronts.md#132-as-built-f1)). A trigger may name its form by kind (`action`) or by the action's id (`action_id`).
 
 **Order settings:**
 - **Payment:**
@@ -145,9 +159,12 @@ The **storefront** platform connector (`storefront@1`, no connection needed) is 
 | Action | Does |
 | --- | --- |
 | `decide` | `accept`, `decline`, `complete` or `cancel` the order (`reference`, optional `note`). Accepting lowers the [stock](#stock), returning the items that were `short`. A decision the order's status does not allow fails the step |
-| `payment_link` | The checkout page for an accepted order paid after acceptance, made once. The run can then wait for the `storefront.payment` signal, correlated by the reference, whose payload's `status` is `paid` or `expired` |
+| `payment_link` | The checkout page for an accepted order paid after acceptance, made once. The run can then wait for the `storefront.payment` signal, correlated by the reference, whose payload's `status` is `paid` or `expired`, with `amount_kobo` (what the link asked) and `balance_kobo` (what is still to pay). On an order paid before, it asks for what is left (or `amount_kobo`, when given) with a page of its own: a balance, or a late fee ([part payments](#part-payments)) |
 | `notify_customer` | An SMS, and an email when there is one, to the order's customer (`reference`, `text`, optional `subject`). `{link}` in the text becomes the customer's status link, where they confirm new prices or move and cancel a booking; no run sees the link itself |
 | `get_booking` | A booking's status, service and time (`when`, as customers read it), when its reminders fall (`remind_day_at`, `remind_hours_at`, and whether each is still to come) and its payment page |
+| `issue_tickets` | A paid ticket order's codes, one per seat (`AK-7QX4KD-2`): `codes`, `count`, `event` and `when`. Asked again, the same codes |
+| `offer_place` | Gives a name on a full class's waiting list its place when one is free (fails while it is still full); the order is then accepted and paid after acceptance, for a `payment_link` step |
+| `mark_returned` | A hire's items are back: frees them for other dates, adds the late fee for each day late, and gives `late_days`, `late_fee`, `balance_kobo` and `balance`. Asked again, it gives the same answer and charges nothing more |
 | `refund` | Refunds a refund-due order or booking in full through Paystack and tells the customer; put an approval before it ([refunds](#refunds)). A refusal fails the step and leaves it refund due |
 
 `decide` also takes `no_show` for a booking the customer did not come to; declining or cancelling a booking frees its time.
@@ -176,6 +193,10 @@ An order's payment is [matched](matching.md) to it as an invoice's is, and liste
 
 - **Through its checkout page:** matched exactly, with no one asked. The payment check and the Paystack event (in the money log) take one path: the money log entry, its match `order:AK-7QX4KD`, and the order moved to paid are written together, under the money's lock and the order's, so whichever comes first wins and the other finds it done. The order's paid flow (the workflow started, or the waiting workflow told it is paid, and the status page) happens once.
 - **Any other money** (a bank transfer naming the order, a POS sale, a statement line) is suggested for orders waiting for money, beside open invoices, under **Invoices > To match**: an order waiting for its checkout payment (`awaiting_payment`), or one taken with **no online payment** that is not yet paid, cancelled, expired or decided against. An order paid after acceptance is not suggested until its payment link is made (its workflow sends the link and waits for that payment). Confirmed, matched by hand or matched automatically, the money must be at least what is paid online (the deposit, or the total); the order is then paid exactly as by its checkout page. An order taken with no online payment keeps its status (`received`, or `accepted` becomes `paid`); its workflow is already running and waits for nothing.
+
+### Part payments
+
+An order can be paid in parts ([plan](spec/fronts.md#136-as-built-f5)). Money less than it asks is counted towards it and the order waits; the part that reaches the deposit, or the total, moves it on as a payment in one go would. What an order costs is its total and anything added later (a hire's late fee); what is paid so far is kept from its payments. A later `payment_link` asks for the balance with its own page, and a transfer for part of it is suggested to match like any other. The status page says what is paid of what, what is due now, and **Pay the balance**. A card refund of an order paid in more than one step is made by hand.
 
 **Undoing a match** takes the money out of the order and puts it back to be matched. It is refused when the order went on with the payment:
 - the payment completed the order's checkout (it was `awaiting_payment`), so its workflow was started or told it was paid;
@@ -253,6 +274,25 @@ A **moved** booking's run is ended and a new one started with the new time (`tri
 
 A booking run's `trigger.body` also holds `booking` (`service_id`, `service`, `starts_at`, `ends_at` in Lagos time, `when`, `auto_confirm`, the reminder times) and `event` (`new` or `rescheduled`).
 
+## Fronts
+
+A storefront can have more pages beside its home page: **fronts** ([plan](spec/fronts.md#134-as-built-f3)), such as a kitchen's menu on a shop's page. Under Storefront > **Fronts**, **Add a front** asks a name and a kind:
+- **Shop**: products to order, with a `products` table, an order form and a question form.
+- **Food**: a menu with prices, options (sizes, extras, each with its price) and how long each dish takes, with a `menu` table and an order form that delivers by default.
+- **Hire**: chairs, canopies, generators, with a `hire_items` table (how many you have, a rate per day) and a **Hire now** form: an item, the first and last day, and how many. A hire is refused when that many are not free for those days. Its workflow takes a deposit, reminds the customer on the day it is due back, asks you **Are the items back?**, adds a late fee for each day late (the form's `late_fee_kobo`), and asks for the balance.
+- **Spaces**: halls, event centres, studios, with a `spaces` table (a rate per day or per hour) and a **Book the space** form on the space list's own calendar: by the day (from 08:00 on the first day to 22:00 on the last) or by the hour (at least two hours), with an hour of setup kept clear between bookings. One booking of a space at a time. Its workflow takes a deposit, sends the balance's link, and reminds the customer the day before.
+- **Tickets**: an event, with an `events` table (when it starts, where, how many tickets, the price; a row per ticket type) and a **Buy tickets** form, paid when bought, refused once the event's tickets are gone or it has started. Each seat gets its own code, sent to the customer and checked in at the door from chat.
+- **Classes**: a course or workshop, with a `classes` table (when it starts, places, the fee) and an **Enrol** form: pay in full, or in up to four instalments (the first when enrolling, the rest asked for on their dates). A full class can keep a waiting list: you are asked to offer a place when one frees.
+- **Quotes**: tailoring, catering, printing, anything made to order, with no table and a **Request a quote** form: what they need and by when. You are told what was asked; reply `quote AK-7QX4KD 45000` in chat to send a price. The customer accepts it on their order page and pays the deposit (half, by default); when you approve that the work is ready, they are asked for the balance. A quote stands for seven days.
+- **Questions** and **Call-backs**: a page with that one form.
+- **Custom**: nothing to start with. Add forms to it (or to any front) through the API: a blank form whose questions you write, a question, a call-back or a quote request.
+
+A front is made off. Add its items in its table (**Add your first item**), set up its forms (**Set up** makes each one's workflow), then **Turn on**: the page is published again, with its checks. A front's address is its name (`/small-chops`), changeable on its page, and its forms are at `/small-chops/a/order`. The home page lists the other fronts. Each front's list is copied for the page as the catalogue is, and its orders start its own forms' workflows; Orders can be filtered by front. A front with no orders or workflow can be removed; otherwise turn it off.
+
+A Food dish's options go in its `options` cell as a list of groups: `[{"name": "Size", "choices": ["Regular", {"name": "Large", "price": 500}]}]`. The customer picks one choice in each group, and the dish is priced with its choices, checked again from the table before the order goes on.
+
+Fronts are run from chat too ([below](#fronts-from-chat)).
+
 ## Your own domain
 
 A business that already owns a domain can serve its page there instead of the preview address ([spec 6.6](spec/storefronts.md#66-addresses-domains-and-sharing)): `adakitchen.ng`, or a part of a domain it uses for something else, such as `shop.example.com`. This is Phase 5, S6. Buying a domain through the domain platform waits for its contract; embedding the page on a website comes later.
@@ -326,6 +366,30 @@ The owner runs the storefront from WhatsApp or Telegram (spec [5.1](spec/storefr
 | `order AK-7QX4KD ready` | For an accepted or paid order: texts the customer that it is ready (by SMS, and email when they gave one), and leaves its status: it is not done until it is collected |
 | `order AK-7QX4KD delivered` (or `collected`, `done`) | Completes it, as the order workflow's "mark it delivered or collected" step does. A run still waiting on that step finds it completed |
 | `order AK-7QX4KD to Musa`, `release AK-7QX4KD`, `deliveries`, `turn on deliveries` | A business's own riders ([dispatch](dispatch.md#in-chat)) |
+
+### Fronts from chat
+
+[Fronts](#fronts) from WhatsApp or Telegram ([plan](spec/fronts.md#135-as-built-f4)), with the same permissions, confirmations and audit as the commands above, and through the same code as the Fronts tab. The storefront's other commands keep their meaning for the home page.
+
+| Message | What happens |
+| --- | --- |
+| `fronts` | Each front: its name, kind, on or off, its address, how many items it has and how many of its forms are on |
+| `add front Snacks` | The kind asked as a numbered list (Shop, Food, Hire, Spaces, Tickets, Classes, Quotes, Questions, Call-backs, Custom), each with its line; the number or the kind's word answers it. Then the front is shown (its list, its forms, that it starts off) and made on **yes**, its table made too (`table.edit`). The reply says what to add first and how to turn its form and the front on |
+| `add food front Snacks`, `add questions front Ask us`, `add hire front Tools`, `add spaces front Halls`, `add tickets front Concerts`, `add class front Courses`, `add quotes front Tailoring` | The kind named: no question (`rental`, `hall`, `venue`, `event` and `course` name Hire, Spaces, Tickets and Classes too) |
+| `front Snacks on`, `front Snacks off` | Turns a front on or off on **yes**; a published page is published again with its checks. Its items and orders stay when it is off. The home page is always on (`close shop` stops orders) |
+| `add dish Jollof rice 2500` | To the Food front when there is one; otherwise name it with `to <front>`. Shown, then added to the front's own table on **yes** |
+| `add item Chin chin 500 to Snacks`, `add product … to Snacks`, a photo captioned `Chin chin 500 to Snacks` | To that front's own table. Without `to <front>`, `add product` goes to the home page's catalogue, as before |
+| `price`, `hide`, `show`, `sold out <item>` | Once other fronts have items, the item is found on any list; when the name is on more than one, the numbered pick names each one's front (`Puff puff (Snacks)`). `sold out` hides the item until `show`. Only the home page's catalogue keeps [stock](stock.md), so `stock` for another front's item says so |
+| `turn on orders for Snacks`, `turn on questions for Ask us`, `turn on call-backs for …` | The front's own form: its workflow made from its kind's template, naming the form by id, and published from chat with the Forms page's checks (or kept, when one is deployed for it already); the form switched on and a published page published again |
+| `turn on hire for Tools`, `turn on bookings for Halls`, `turn on tickets for Concerts`, `turn on enrolment for Courses` | A Hire, Spaces, Tickets or Classes front's form, the same way. An item added from chat starts with a count of one (one canopy, one ticket, one place): change it in its table |
+| `quotes` | The quote requests waiting for a price, with what each asks and by when |
+| `quote AK-7QX4KD 45000` | Sends a quote request its price (`45k` and `₦45,000` work too), once. The customer gets it with a link to accept or decline it |
+| `check in AK-7QX4KD-2` | Lets a ticket in at the door, once; a second time says when it went in, and a refunded or cancelled order's tickets are refused |
+| `tickets left`, `places left` | Each event's tickets left and checked in, or each class's places left |
+| `turn on deliveries for Snacks` | The front's order form's workflow made from `dispatch-orders` in place of its plain one ([dispatch](dispatch.md#in-chat)); the home page's order form keeps its own |
+| `orders Snacks` | That front's open orders; `orders` names each order's front when there is more than one |
+
+`fronts`, `add front`, switching a front on or off and `orders <front>` have words in every language that is on (`make new front Snacks`, `orders for Snacks` in Pidgin; `fi front kún` and `tan front` in Yoruba; `ƙara front` and `kunna front` in Hausa; `tinye front` and `gbanyụọ front` in Igbo; drafts until reviewed). `add dish`, `sold out` and `turn on … for` are typed in English in every language, as `add product` is.
 
 Photos are fetched from the chat (WhatsApp's media API, Telegram's `getFile`), at most 10 MB, held in memory only. A photo sent while something else is being answered is refused.
 

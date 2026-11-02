@@ -29,10 +29,13 @@ var manifest []byte
 // Ops is what the actions call: *storefront.Orders.
 type Ops interface {
 	Decide(ctx context.Context, tenant uuid.UUID, reference, decision, note, actor string) (map[string]any, error)
-	PaymentLink(ctx context.Context, tenant uuid.UUID, reference string) (map[string]any, error)
+	PaymentLink(ctx context.Context, tenant uuid.UUID, reference string, amountKobo int64) (map[string]any, error)
 	NotifyCustomer(ctx context.Context, tenant uuid.UUID, reference, text, subject, key string) (map[string]any, error)
 	GetBooking(ctx context.Context, tenant uuid.UUID, reference string) (map[string]any, error)
 	Refund(ctx context.Context, tenant uuid.UUID, reference, actor string) (sf.Order, error)
+	MarkReturned(ctx context.Context, tenant uuid.UUID, reference, actor string) (sf.Returned, error)
+	IssueTickets(ctx context.Context, tenant uuid.UUID, reference string) ([]sf.Ticket, sf.Order, error)
+	OfferPlace(ctx context.Context, tenant uuid.UUID, reference, actor string) (sf.Order, error)
 	// CustomerLanguage is the business's language for its customers
 	// (its default chat language), English when it has none.
 	CustomerLanguage(ctx context.Context, tenant uuid.UUID) lang.Tag
@@ -48,6 +51,9 @@ func New(ops Ops) *connector.Connector {
 		"notify_customer": connector.ActionFunc(a.notify),
 		"get_booking":     connector.ActionFunc(a.getBooking),
 		"refund":          connector.ActionFunc(a.refund),
+		"mark_returned":   connector.ActionFunc(a.markReturned),
+		"issue_tickets":   connector.ActionFunc(a.issueTickets),
+		"offer_place":     connector.ActionFunc(a.offerPlace),
 	}}
 }
 
@@ -84,7 +90,22 @@ func (a *actions) paymentLink(ctx context.Context, req connector.Request) (conne
 	if err != nil {
 		return connector.Response{}, err
 	}
-	out, err := a.ops.PaymentLink(ctx, c.Tenant, ref)
+	// An amount asks for part of what is left on an order paid before (a
+	// deposit's balance, an instalment; fronts F5); none, the order's
+	// payment, or then its balance.
+	var amount int64
+	switch v := req.Input["amount_kobo"].(type) {
+	case nil:
+	case float64:
+		amount = int64(v)
+	case int64:
+		amount = v
+	case int:
+		amount = int64(v)
+	default:
+		return connector.Response{}, fmt.Errorf("amount_kobo is a whole number of kobo: %w", effects.ErrFatal)
+	}
+	out, err := a.ops.PaymentLink(ctx, c.Tenant, ref, amount)
 	return connector.Response{Output: out}, classify(err)
 }
 
@@ -128,6 +149,57 @@ func (a *actions) getBooking(ctx context.Context, req connector.Request) (connec
 	return connector.Response{Output: out}, classify(err)
 }
 
+// markReturned ends a hire: its items are back (fronts F5). A late return
+// adds its fee to what is owed; balance_kobo says what is left to ask.
+func (a *actions) markReturned(ctx context.Context, req connector.Request) (connector.Response, error) {
+	c, ref, err := a.caller(ctx, req)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	r, err := a.ops.MarkReturned(ctx, c.Tenant, ref, "workflow:"+c.Run.String())
+	if err != nil {
+		return connector.Response{}, classify(err)
+	}
+	return connector.Response{Output: map[string]any{"reference": ref, "late_days": r.LateDays, "late_fee_kobo": r.LateFeeKobo,
+		"late_fee": sf.FormatNaira(r.LateFeeKobo), "balance_kobo": r.Order.BalanceKobo(), "balance": sf.FormatNaira(r.Order.BalanceKobo())}}, nil
+}
+
+// issueTickets makes a paid ticket order's codes, one per seat (fronts
+// F6); asked again, the same codes.
+func (a *actions) issueTickets(ctx context.Context, req connector.Request) (connector.Response, error) {
+	c, ref, err := a.caller(ctx, req)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	list, ord, err := a.ops.IssueTickets(ctx, c.Tenant, ref)
+	if err != nil {
+		return connector.Response{}, classify(err)
+	}
+	codes := make([]string, len(list))
+	for i, t := range list {
+		codes[i] = t.Code
+	}
+	when := ""
+	if ord.StartsAt != nil {
+		when = sf.When(*ord.StartsAt)
+	}
+	return connector.Response{Output: map[string]any{"reference": ref, "count": len(codes), "codes": strings.Join(codes, ", "), "event": ord.ServiceName, "when": when}}, nil
+}
+
+// offerPlace gives a name on a full class's waiting list its place, when
+// one is free (fronts F6); still full, the step fails and may be retried.
+func (a *actions) offerPlace(ctx context.Context, req connector.Request) (connector.Response, error) {
+	c, ref, err := a.caller(ctx, req)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	o, err := a.ops.OfferPlace(ctx, c.Tenant, ref, "workflow:"+c.Run.String())
+	if err != nil {
+		return connector.Response{}, classify(err)
+	}
+	return connector.Response{Output: map[string]any{"reference": ref, "status": o.Status, "total_kobo": o.TotalKobo, "total": sf.FormatNaira(o.TotalKobo)}}, nil
+}
+
 func (a *actions) refund(ctx context.Context, req connector.Request) (connector.Response, error) {
 	c, ref, err := a.caller(ctx, req)
 	if err != nil {
@@ -137,13 +209,13 @@ func (a *actions) refund(ctx context.Context, req connector.Request) (connector.
 	if errors.Is(err, sf.ErrRefundByHand) {
 		// Paid by bank transfer: the owner sends it back from their bank
 		// and marks it refunded; the order says so (N3).
-		return connector.Response{Output: map[string]any{"reference": ref, "status": o.Status, "total": sf.FormatNaira(o.Payable()), "by_hand": true,
+		return connector.Response{Output: map[string]any{"reference": ref, "status": o.Status, "total": sf.FormatNaira(o.RefundKobo()), "by_hand": true,
 			"note": strings.TrimSpace(strings.TrimPrefix(err.Error(), sf.ErrRefundByHand.Error()+":"))}}, nil
 	}
 	if err != nil {
 		return connector.Response{}, classify(err)
 	}
-	return connector.Response{Output: map[string]any{"reference": ref, "status": o.Status, "total": sf.FormatNaira(o.Payable())}}, nil
+	return connector.Response{Output: map[string]any{"reference": ref, "status": o.Status, "total": sf.FormatNaira(o.RefundKobo())}}, nil
 }
 
 // classify makes refusals fatal: retrying an order the tenant does not
@@ -186,12 +258,12 @@ func (l *Late) Decide(ctx context.Context, tenant uuid.UUID, reference, decision
 	return ops.Decide(ctx, tenant, reference, decision, note, actor)
 }
 
-func (l *Late) PaymentLink(ctx context.Context, tenant uuid.UUID, reference string) (map[string]any, error) {
+func (l *Late) PaymentLink(ctx context.Context, tenant uuid.UUID, reference string, amountKobo int64) (map[string]any, error) {
 	ops, err := l.get()
 	if err != nil {
 		return nil, err
 	}
-	return ops.PaymentLink(ctx, tenant, reference)
+	return ops.PaymentLink(ctx, tenant, reference, amountKobo)
 }
 
 func (l *Late) NotifyCustomer(ctx context.Context, tenant uuid.UUID, reference, text, subject, key string) (map[string]any, error) {
@@ -216,6 +288,30 @@ func (l *Late) GetBooking(ctx context.Context, tenant uuid.UUID, reference strin
 		return nil, err
 	}
 	return ops.GetBooking(ctx, tenant, reference)
+}
+
+func (l *Late) MarkReturned(ctx context.Context, tenant uuid.UUID, reference, actor string) (sf.Returned, error) {
+	ops, err := l.get()
+	if err != nil {
+		return sf.Returned{}, err
+	}
+	return ops.MarkReturned(ctx, tenant, reference, actor)
+}
+
+func (l *Late) IssueTickets(ctx context.Context, tenant uuid.UUID, reference string) ([]sf.Ticket, sf.Order, error) {
+	ops, err := l.get()
+	if err != nil {
+		return nil, sf.Order{}, err
+	}
+	return ops.IssueTickets(ctx, tenant, reference)
+}
+
+func (l *Late) OfferPlace(ctx context.Context, tenant uuid.UUID, reference, actor string) (sf.Order, error) {
+	ops, err := l.get()
+	if err != nil {
+		return sf.Order{}, err
+	}
+	return ops.OfferPlace(ctx, tenant, reference, actor)
 }
 
 func (l *Late) Refund(ctx context.Context, tenant uuid.UUID, reference, actor string) (sf.Order, error) {

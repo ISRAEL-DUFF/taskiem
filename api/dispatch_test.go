@@ -555,3 +555,56 @@ func TestDispatchOnTelegram(t *testing.T) {
 		t.Fatalf("order %v", o["status"])
 	}
 }
+
+// TestTurnOnDeliveriesForAFront (fronts F4): a Food front's own order
+// form is turned on from chat, then its deliveries: the workflow made from
+// dispatch-orders names that form by id and takes the place of its plain
+// one, and the page's own order form keeps its workflow.
+func TestTurnOnDeliveriesForAFront(t *testing.T) {
+	w, ada := newDispatchWorld(t, "Ada Stores")
+	w.srv.PublicHosts = []string{"shops.test"}
+	ctx := context.Background()
+	ops := &ridersconn.Late{}
+	ops.Set(w.srv.Riders)
+	ops.SetDispatch(w.srv.Dispatch)
+	for _, c := range []*connector.Connector{sfconn.New(w.orders), ridersconn.New(ops)} {
+		if err := w.env.Registry.Register(c); err != nil {
+			t.Fatal(err)
+		}
+	}
+	verifyPhone(t, w.world, ada, "phone", "business")
+	builtin := ada.must(200, "GET", "/v1/dispatch/workflow", nil)["workflow_id"].(string)
+	if err := db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{w.biz}, func(tx pgx.Tx) error {
+		_, err := storefront.CreateFront(ctx, tx, w.biz, storefront.NewFront{Name: "Snacks", Kind: "food"})
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	const adaWA = "+2348020000002"
+	ada.must(202, "POST", "/v1/me/whatsapp", map[string]any{"number": adaWA, "password": testPassword})
+	ada.must(200, "POST", "/v1/me/whatsapp/verify", map[string]any{"code": codeRe.FindString(w.graph.Last(t, adaWA).Text)})
+	ask := func(text, want, done string) {
+		t.Helper()
+		got := w.whatsapp(t, adaWA, text)
+		if len(got) != 1 || !strings.Contains(got[0].Text, want) || len(got[0].Buttons) != 2 {
+			t.Fatalf("%s: %+v", text, got)
+		}
+		if got := w.press(t, adaWA, got[0].Buttons[0].ID); len(got) != 1 || !strings.Contains(got[0].Text, done) {
+			t.Fatalf("%s, yes: %+v", text, got)
+		}
+	}
+	ask("turn on orders for Snacks", "Turn on *Order now* on *Snacks*?", "*Snacks* takes orders now")
+	ask("turn on deliveries for Snacks", "Turn on deliveries for *Snacks*?", "Deliveries are on")
+	var tpl, name string
+	var n int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT COALESCE(v.template_id, ''), wf.name, count(*) OVER () FROM triggers t
+		JOIN storefront_actions a ON a.id = t.storefront_action_id JOIN storefront_fronts f ON f.id = a.front_id
+		JOIN workflow_versions v ON v.workflow_id = t.workflow_id AND v.version = t.version JOIN workflows wf ON wf.id = t.workflow_id
+		WHERE t.environment = 'prod' AND f.name = 'Snacks'`).Scan(&tpl, &name, &n); err != nil || tpl != "dispatch-orders" || n != 1 || name != "Snacks: orders with deliveries" {
+		t.Fatalf("the front's workflow: %v %q %q %d", err, tpl, name, n)
+	}
+	if v := ada.must(200, "GET", "/v1/dispatch/workflow", nil); v["workflow_id"] != builtin || v["on"] != false {
+		t.Fatalf("the page's own order form: %v", v)
+	}
+	ask("turn on deliveries for Snacks", "Turn on deliveries for *Snacks*?", "Deliveries are on")
+}

@@ -1,0 +1,11 @@
+{
+  "name": "shop",
+  "title": "Shop",
+  "line": "Products to order: provisions, fashion, phones, cosmetics.",
+  "table": "products",
+  "mapping": {"name": "name", "price": "price", "price_unit": "naira", "photo": "photo", "description": "description", "category": "category", "available": "available"},
+  "actions": [
+    {"kind": "order", "label": "Order now", "template": "storefront-order", "options": {"pickup": true}},
+    {"kind": "enquiry", "label": "Ask a question", "template": "storefront-enquiry"}
+  ]
+}

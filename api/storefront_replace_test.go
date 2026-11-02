@@ -81,3 +81,144 @@ func TestPublishReplacesTheFormsWorkflow(t *testing.T) {
 		t.Errorf("a request that could never be approved: %d %v", waiting, err)
 	}
 }
+
+// A storefront trigger may name its action by id (fronts F1, §5.3): the
+// built-in order action by id is the same action as action "order", so the
+// one-workflow rule holds across both forms, the trigger row keeps the id,
+// and an id the business has no action for is refused.
+func TestStorefrontTriggerByActionID(t *testing.T) {
+	w, ada := newDispatchWorld(t, "Ada Stores")
+	ctx := context.Background()
+	if err := w.env.Registry.Register(sfconn.New(w.orders)); err != nil {
+		t.Fatal(err)
+	}
+	var order string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT id::text FROM storefront_actions WHERE tenant_id = $1 AND kind = 'order' AND builtin`, w.biz).Scan(&order); err != nil {
+		t.Fatal(err)
+	}
+	tpl, _ := templates.Default().Get("storefront-order")
+	byID := func(name, id string) string {
+		t.Helper()
+		raw, err := tpl.Instantiate(map[string]any{}, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var def map[string]any
+		if err := json.Unmarshal(raw, &def); err != nil {
+			t.Fatal(err)
+		}
+		def["trigger"].(map[string]any)["config"].(map[string]any)["action_id"] = id
+		return ada.must(201, "POST", "/v1/workflows", map[string]any{"name": name, "definition": def})["id"].(string)
+	}
+	mine := byID("Orders by id", order)
+	if e := ada.must(409, "POST", "/v1/workflows/"+mine+"/versions/1/publish", nil); e["code"] != "action_taken" || e["action"] != "order" {
+		t.Fatalf("the same action by id: %v", e)
+	}
+	ada.must(200, "POST", "/v1/workflows/"+mine+"/versions/1/publish", map[string]any{"replace": true})
+	var held string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT storefront_action_id::text FROM triggers WHERE workflow_id = $1 AND environment = 'prod'`, mine).Scan(&held); err != nil || held != order {
+		t.Fatalf("the trigger's action: %q %v", held, err)
+	}
+	// Back by kind: still the same action.
+	plain := draftOrder(t, ada, "Orders by kind")
+	if e := ada.must(409, "POST", "/v1/workflows/"+plain+"/versions/1/publish", nil); e["code"] != "action_taken" {
+		t.Fatalf("the same action by kind: %v", e)
+	}
+	// An id the business has no action for.
+	none := byID("Orders nowhere", "00000000-0000-0000-0000-00000000dead")
+	if e := ada.must(409, "POST", "/v1/workflows/"+none+"/versions/1/publish", nil); !strings.Contains(e["error"].(string), "no action") {
+		t.Fatalf("no such action: %v", e)
+	}
+}
+
+// draftOrder saves a workflow made from storefront-order.
+func draftOrder(t *testing.T, c *client, name string) string {
+	t.Helper()
+	tpl, _ := templates.Default().Get("storefront-order")
+	def, err := tpl.Instantiate(map[string]any{}, name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c.must(201, "POST", "/v1/workflows", map[string]any{"name": name, "definition": json.RawMessage(def)})["id"].(string)
+}
+
+// Fronts F1e (§5.3): publishing a workflow that reads trigger.answers
+// fields its action's form does not ask is refused, naming them; once the
+// form asks them, it publishes.
+func TestPublishRefusesAnswersTheFormDoesNotAsk(t *testing.T) {
+	w, ada := newDispatchWorld(t, "Ada Stores")
+	ctx := context.Background()
+	if err := w.env.Registry.Register(sfconn.New(w.orders)); err != nil {
+		t.Fatal(err)
+	}
+	def := `{"schema":"wd/v1","id":"wf_sizes","version":1,"name":"Sizes","trigger":{"type":"storefront","config":{"action":"enquiry"}},
+		"steps":[{"id":"s","type":"transform","config":{"output":{"s":"=trigger.answers.size"}}}]}`
+	id := ada.must(201, "POST", "/v1/workflows", map[string]any{"name": "Sizes", "definition": json.RawMessage(def)})["id"].(string)
+	if e := ada.must(409, "POST", "/v1/workflows/"+id+"/versions/1/publish", nil); !strings.Contains(e["error"].(string), "trigger.answers.size") ||
+		!strings.Contains(e["error"].(string), "question form") {
+		t.Fatalf("an answer the form does not ask: %v", e)
+	}
+	if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO storefront_actions (storefront_id, kind, tenant_id, enabled, label, payment, form)
+		SELECT id, 'enquiry', tenant_id, false, 'Ask', 'none', '{"type": "object", "properties": {"size": {"type": "string"}}}' FROM storefronts WHERE tenant_id = $1
+		ON CONFLICT (storefront_id, kind) WHERE builtin DO UPDATE SET form = EXCLUDED.form`, w.biz); err != nil {
+		t.Fatal(err)
+	}
+	ada.must(200, "POST", "/v1/workflows/"+id+"/versions/1/publish", nil)
+}
+
+// Fronts F2: Make a new action for this workflow. The 409 offers it; the
+// publish with new_action copies the held order action (off), saves a new
+// version naming the copy, and publishes that, leaving the first workflow
+// on its form; the copy is listed and switched on by its id.
+func TestPublishMakesANewAction(t *testing.T) {
+	w, ada := newDispatchWorld(t, "Ada Stores")
+	ctx := context.Background()
+	if err := w.env.Registry.Register(sfconn.New(w.orders)); err != nil {
+		t.Fatal(err)
+	}
+	first := orderWorkflowID(t, w)
+	mine := draftOrder(t, ada, "Food delivery")
+	if e := ada.must(409, "POST", "/v1/workflows/"+mine+"/versions/1/publish", nil); e["can_new_action"] != true {
+		t.Fatalf("not offered: %v", e)
+	}
+	out := ada.must(200, "POST", "/v1/workflows/"+mine+"/versions/1/publish", map[string]any{"new_action": true})
+	made, _ := out["new_action"].(map[string]any)
+	if out["state"] != "published" || out["version"] != float64(2) || made["slug"] != "order-2" || made["kind"] != "order" {
+		t.Fatalf("published: %v", out)
+	}
+	var held, copied string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT t.workflow_id::text FROM triggers t JOIN storefront_actions a ON a.id = t.storefront_action_id
+		WHERE a.builtin AND a.kind = 'order' AND t.environment = 'prod'`).Scan(&held); err != nil || held != first {
+		t.Fatalf("the order form's workflow: %q %v", held, err)
+	}
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT workflow_id::text FROM triggers WHERE storefront_action_id = $1 AND environment = 'prod'`, made["id"]).
+		Scan(&copied); err != nil || copied != mine {
+		t.Fatalf("the new action's workflow: %q %v", copied, err)
+	}
+	list := ada.must(200, "GET", "/v1/storefront/actions", nil)["actions"].([]any)
+	last := list[len(list)-1].(map[string]any)
+	if last["slug"] != "order-2" || last["builtin"] != false || last["enabled"] != false || last["workflow_id"] != mine {
+		t.Fatalf("listed: %v", last)
+	}
+	w.srv.PublicHosts = []string{"shops.test"}
+	if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO tenant_verifications (id, tenant_id, level, method, actor) VALUES (gen_random_uuid(), $1, 'phone', 'test', 'test')`,
+		w.biz); err != nil {
+		t.Fatal(err)
+	}
+	on := ada.must(200, "PUT", "/v1/storefront/actions/"+made["id"].(string), map[string]any{"enabled": true, "label": "Food delivery", "payment": "after_accept",
+		"options": map[string]any{"pickup": true}})
+	if on["enabled"] != true || on["slug"] != "order-2" {
+		t.Fatalf("switched on: %v", on)
+	}
+}
+
+// orderWorkflowID is the workflow deployed in prod for the order form.
+func orderWorkflowID(t *testing.T, w *dispatchWorld) string {
+	t.Helper()
+	var id string
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT workflow_id::text FROM triggers WHERE type = 'storefront' AND storefront_action = 'order' AND environment = 'prod'`).
+		Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	return id
+}

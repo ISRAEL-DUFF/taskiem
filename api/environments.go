@@ -49,6 +49,9 @@ func (s *Server) deployTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, 
 	if err := s.formsDeployable(ctx, tx, tenant, d); err != nil {
 		return err
 	}
+	if err := storefrontAnswersDeployable(ctx, tx, d); err != nil {
+		return err
+	}
 	// Capability steps must be able to run on this environment's
 	// connections; the rails they will run on are kept with the deployment.
 	if s.Store != nil {
@@ -88,6 +91,9 @@ func (s *Server) deployTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, 
 		var held *ingest.ActionTaken
 		if errors.As(err, &held) {
 			return actionTaken{ActionTaken: held}
+		}
+		if errors.Is(err, ingest.ErrNoStorefrontAction) {
+			return fmt.Errorf("%w: the storefront has no action with the id this workflow's trigger names", errConflict)
 		}
 		if errors.Is(err, ingest.ErrTriggerTaken) {
 			return fmt.Errorf("%w: %s", errConflict, strings.TrimPrefix(err.Error(), ingest.ErrTriggerTaken.Error()+": "))

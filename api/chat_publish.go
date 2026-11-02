@@ -459,7 +459,7 @@ func (s *Server) shopTurnOnOrders(ctx context.Context, c *chat) error {
 	for _, f := range forms {
 		var have *uuid.UUID
 		for _, a := range actions {
-			if a.Kind == f.kind {
+			if a.Builtin && a.Kind == f.kind {
 				have = a.Workflow
 			}
 		}

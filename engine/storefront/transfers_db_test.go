@@ -148,7 +148,7 @@ func TestPaymentLinkOnAnotherRail(t *testing.T) {
 	if o.Status != "awaiting_payment" || o.PaymentURL != "" || o.ExpiresAt == nil || o.ExpiresAt.Before(time.Now().Add(23*time.Hour)) {
 		t.Fatalf("after accepting: %+v", o)
 	}
-	link, err := w.orders.PaymentLink(ctx, w.env.Tenant, ref)
+	link, err := w.orders.PaymentLink(ctx, w.env.Tenant, ref, 0)
 	if err != nil || !strings.HasPrefix(link["url"].(string), "https://ada-kitchen.shops.test/o/"+ref+"?k=") {
 		t.Fatalf("link %v %v", link, err)
 	}

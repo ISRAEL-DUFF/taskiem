@@ -4492,6 +4492,10 @@
       "text": "Mgbe mmadụ zitere fọm {form} nke ụlọ ahịa",
       "reviewed": false
     },
+    "wd.trigger.storefront_action": {
+      "text": "Mgbe mmadụ zitere fọm na peeji ahịa",
+      "reviewed": false
+    },
     "wd.trigger.subflow": {
       "text": "Mgbe usoro ọrụ ọzọ kpọrọ ya",
       "reviewed": false
@@ -4562,6 +4566,366 @@
     },
     "wd.workflow.does": {
       "text": "Jiri ọrụ gị: {template}, nke {does}",
+      "reviewed": false
+    },
+    "wa.help.fronts": {
+      "text": "• *fronts*: ibe ndị ọzọ gị, dị ka ndepụta nri; *add front Snacks*; *add dish Jollof rice 2500*; *turn on orders for Snacks*; *front Snacks on*; *orders Snacks*",
+      "reviewed": false
+    },
+    "wa.front.list_head": {
+      "text": "Fronts gị:",
+      "reviewed": false
+    },
+    "wa.front.on": {
+      "text": "dị ndụ",
+      "reviewed": false
+    },
+    "wa.front.off": {
+      "text": "agbanyụọla",
+      "reviewed": false
+    },
+    "wa.front.home": {
+      "text": "ibe mbụ",
+      "reviewed": false
+    },
+    "wa.front.items": {
+      "text": "ihe {n}",
+      "reviewed": false
+    },
+    "wa.front.forms_on": {
+      "text": "fọm {n} dị ndụ",
+      "reviewed": false
+    },
+    "wa.front.list_tail": {
+      "text": "Tinye otu site na *add front Snacks*. Gbanwuo ma ọ bụ gbanyụọ otu site na *front Snacks on* ma ọ bụ *front Snacks off*.",
+      "reviewed": false
+    },
+    "wa.front.none_named": {
+      "text": "Ọ dịghị front aha ya bụ {name}. Fronts gị: {fronts}.",
+      "reviewed": false
+    },
+    "wa.front.how_add": {
+      "text": "Dee ya dị ka *add front Snacks*, ma ọ bụ *add food front Snacks*: aha na-erughị mkpụrụedemede 80.",
+      "reviewed": false
+    },
+    "wa.front.exists": {
+      "text": "I nweelarị front aha ya bụ *{name}*. Ziga *fronts* ka ị hụ ha.",
+      "reviewed": false
+    },
+    "wa.front.which_kind": {
+      "text": "Gịnị ka *{name}* bụ maka ya?\n{list}\nZaa ya na nọmba ya.",
+      "reviewed": false
+    },
+    "wa.front.confirm_add": {
+      "text": "Ka anyị tinye *{name}*, front {kind}?",
+      "reviewed": false
+    },
+    "wa.front.confirm_table": {
+      "text": "Ọ ga-enwe ndepụta nke ya, {table}, iji tinye ihe.",
+      "reviewed": false
+    },
+    "wa.front.confirm_forms": {
+      "text": "Fọm ya: {forms}.",
+      "reviewed": false
+    },
+    "wa.front.confirm_off": {
+      "text": "Ọ ga-amalite na mgbanyụ, ka ndị ahịa wee hụ ya naanị mgbe ị gbanwuru ya.",
+      "reviewed": false
+    },
+    "wa.front.not_made": {
+      "text": "Anyị enweghị ike ime front ahụ: {reason}",
+      "reviewed": false
+    },
+    "wa.front.made": {
+      "text": "Emeela *{name}*, front {kind}. Ọ gbanyụrụ ugbu a.",
+      "reviewed": false
+    },
+    "wa.front.next_dish": {
+      "text": "Tinye nri mbụ gị: *add dish Jollof rice 2500 to {front}*",
+      "reviewed": false
+    },
+    "wa.front.next_item": {
+      "text": "Tinye ihe mbụ gị: *add item Chin chin 500 to {front}*",
+      "reviewed": false
+    },
+    "wa.front.next_forms": {
+      "text": "Gbanwuo fọm ya: *turn on {what} for {front}*",
+      "reviewed": false
+    },
+    "wa.front.next_on": {
+      "text": "Mgbe ọ dị njikere: *front {front} on*",
+      "reviewed": false
+    },
+    "wa.front.home_always_on": {
+      "text": "*{name}* bụ ibe mbụ gị, ọ na-adị ndụ mgbe niile. Iji kwụsị order nwa oge, ziga *close shop*.",
+      "reviewed": false
+    },
+    "wa.front.already_on": {
+      "text": "*{name}* dịlarị ndụ.",
+      "reviewed": false
+    },
+    "wa.front.already_off": {
+      "text": "*{name}* agbanyụọlarị.",
+      "reviewed": false
+    },
+    "wa.front.confirm_on": {
+      "text": "Ka anyị gbanwuo *{name}*? Ndị ahịa ga-ahụ ya na ibe gị.",
+      "reviewed": false
+    },
+    "wa.front.confirm_off_now": {
+      "text": "Ka anyị gbanyụọ *{name}*? Ndị ahịa agaghị ahụ ya ọzọ. A ga-edebe ihe ya na order ya.",
+      "reviewed": false
+    },
+    "wa.front.gone": {
+      "text": "*{name}* adịghịzi. Ziga *fronts* ka ị hụ fronts gị.",
+      "reviewed": false
+    },
+    "wa.front.not_changed": {
+      "text": "Ọ dịghị ihe gbanwere: {reason}",
+      "reviewed": false
+    },
+    "wa.front.now_off": {
+      "text": "*{name}* agbanyụọla. A debere ihe ya na order ya.",
+      "reviewed": false
+    },
+    "wa.front.now_on": {
+      "text": "*{name}* dị ndụ.",
+      "reviewed": false
+    },
+    "wa.front.forms_off": {
+      "text": "Fọm ya ka gbanyụrụ: *turn on {what} for {front}*",
+      "reviewed": false
+    },
+    "wa.front.no_food": {
+      "text": "Ị nwebeghị front Food. Mee otu site na *add food front Kitchen*.",
+      "reviewed": false
+    },
+    "wa.front.no_item_fronts": {
+      "text": "Ọ dịghị nke ọ bụla n'ime fronts gị nwere ndepụta a ga-etinye ihe. Tinye na ibe gị site na *add product Jollof rice 2000*, ma ọ bụ mee front site na *add food front Kitchen*.",
+      "reviewed": false
+    },
+    "wa.front.say_which": {
+      "text": "Kwuo front ọ bụ maka ya, dị ka *add item Chin chin 500 to Snacks*. Fronts gị nwere ihe: {fronts}.",
+      "reviewed": false
+    },
+    "wa.front.no_list": {
+      "text": "*{front}* enweghị ndepụta ihe: ọ na-egosi naanị fọm ya.",
+      "reviewed": false
+    },
+    "wa.front.how_item": {
+      "text": "Dee ya dị ka *add item Chin chin 500 to {front}*: aha, wee ọnụahịa.",
+      "reviewed": false
+    },
+    "wa.front.item_exists": {
+      "text": "*{name}* dịlarị na {front}, na {price}. Gbanwee ọnụahịa ya site na *price {name} 3000*.",
+      "reviewed": false
+    },
+    "wa.front.confirm_item": {
+      "text": "Ka anyị tinye nke a na *{front}*?\n*{name}* {price}{photo}",
+      "reviewed": false
+    },
+    "wa.front.item_added": {
+      "text": "Etinyela *{name}* na {price} na *{front}*.",
+      "reviewed": false
+    },
+    "wa.quote.sent": {
+      "text": "Ezitela *{reference}*: {total}, {now} a ga-akwụ mgbe ha nabatara ya. Ọ ga-adị ruo {until}.",
+      "reviewed": false
+    },
+    "wa.quote.price": {
+      "text": "Kwuo ọnụ ahịa *{reference}* na naira, dịka *quote {reference} 45000*.",
+      "reviewed": false
+    },
+    "wa.quote.none": {
+      "text": "Ọ dịghị arịrịọ ọnụ ahịa nwere nọmba *{reference}*.",
+      "reviewed": false
+    },
+    "wa.quote.refused": {
+      "text": "Enweghị ike izipu ọnụ ahịa *{reference}*: {why}",
+      "reviewed": false
+    },
+    "wa.quotes.head": {
+      "text": "Arịrịọ ọnụ ahịa na-eche ọnụ ahịa:",
+      "reviewed": false
+    },
+    "wa.quotes.by": {
+      "text": "(achọrọ ya tupu {date})",
+      "reviewed": false
+    },
+    "wa.quotes.how": {
+      "text": "Zaa *quote <nọmba> <ọnụ ahịa>* iji zipu ọnụ ahịa.",
+      "reviewed": false
+    },
+    "wa.quotes.none": {
+      "text": "Ọ dịghị arịrịọ na-eche ọnụ ahịa.",
+      "reviewed": false
+    },
+    "wa.ticket.in": {
+      "text": "Abanyela: *{code}*, oche {seat} n'ime {of}, {event}.",
+      "reviewed": false
+    },
+    "wa.ticket.already": {
+      "text": "*{code}* abanyelarị: e lebara ya {at}.",
+      "reviewed": false
+    },
+    "wa.ticket.none": {
+      "text": "Ọ dịghị tiketi nwere koodu *{code}*. Lelee ya na ozi onye ahịa.",
+      "reviewed": false
+    },
+    "wa.ticket.refused": {
+      "text": "*{code}* enweghị ike ịbanye: eweghachila ego ma ọ bụ kagbuo usoro ya.",
+      "reviewed": false
+    },
+    "wa.tickets.left": {
+      "text": "Tiketi fọdụrụ:",
+      "reviewed": false
+    },
+    "wa.tickets.left_line": {
+      "text": "*{name}* ({front}): {left} n'ime {total} fọdụrụ, {in} abanyela",
+      "reviewed": false
+    },
+    "wa.tickets.none": {
+      "text": "Ọ dịghị mmemme a na-ere tiketi ya.",
+      "reviewed": false
+    },
+    "wa.places.left": {
+      "text": "Ohere fọdụrụ:",
+      "reviewed": false
+    },
+    "wa.places.left_line": {
+      "text": "*{name}* ({front}): ohere {left} n'ime {total} fọdụrụ",
+      "reviewed": false
+    },
+    "wa.places.none": {
+      "text": "Ọ dịghị klaasị meghere maka ndebanye aha.",
+      "reviewed": false
+    },
+    "wa.front.turn_on_hint": {
+      "text": "*{front}* gbanyụrụ: ziga *front {front} on* ka o gosi.",
+      "reviewed": false
+    },
+    "wa.front.catalogue": {
+      "text": "ibe mbụ",
+      "reviewed": false
+    },
+    "wa.front.stock_catalogue_only": {
+      "text": "Naanị ngwaahịa ibe mbụ gị na-edebe ọnụ ọgụgụ ihe fọdụrụ. *{name}* na {front} dị ma ọ bụ ọ gwụla: *sold out {name}*.",
+      "reviewed": false
+    },
+    "wa.front.changed": {
+      "text": "Emechaala: emeela mgbanwe na *{name}* na {front}.",
+      "reviewed": false
+    },
+    "wa.front.no_form": {
+      "text": "*{front}* enweghị fọm maka {what}.",
+      "reviewed": false
+    },
+    "wa.front.no_deliveries": {
+      "text": "Nnyefe site n'aka ndị na-eburu gị adịbeghị ebe a.",
+      "reviewed": false
+    },
+    "wa.front.confirm_deliveries": {
+      "text": "Ka anyị gbanwuo nnyefe maka *{front}*? A ga-enye ndị na-eburu gị order ọ bụla ị kwadoro maka nnyefe otu otu. Fọm order ya ga-anọ ka ọ dị.",
+      "reviewed": false
+    },
+    "wa.front.form_already_on": {
+      "text": "*{form}* na {front} dịlarị ndụ.",
+      "reviewed": false
+    },
+    "wa.front.confirm_form_on": {
+      "text": "Ka anyị gbanwuo *{form}* na *{front}*? Ndị ahịa nwere ike iji ya, nke ọ bụla ga-abịakwute gị ebe a.",
+      "reviewed": false
+    },
+    "wa.front.form_on": {
+      "text": "*{front}* na-anabata {what} ugbu a: nke ọ bụla ga-abịakwute gị ebe a.",
+      "reviewed": false
+    },
+    "wa.front.no_orders": {
+      "text": "Ọ dịghị order mepere emepe na *{front}*.",
+      "reviewed": false
+    },
+    "wa.front.orders_head": {
+      "text": "Order mepere emepe na *{front}*, ndị ọhụrụ na mbụ:",
+      "reviewed": false
+    },
+    "customer.deposit_received": {
+      "text": "Anyị anatala ego {amount} i kwụrụ maka {reference}. {balance} ka fọdụrụ ịkwụ.",
+      "reviewed": false
+    },
+    "customer.balance_due": {
+      "text": "{balance} ka fọdụrụ ịkwụ maka {reference}. Kwụọ ya ebe a: {url}",
+      "reviewed": false
+    },
+    "customer.hire_confirmed": {
+      "text": "Akwadoola mgbazinye gị {reference}: {item}, site na {from}. Weghachite ya tupu {due_back} agwụ.",
+      "reviewed": false
+    },
+    "customer.hire_due_back": {
+      "text": "Ncheta: a ga-eweghachi {item} maka {reference} taa, {due_back}.",
+      "reviewed": false
+    },
+    "customer.space_confirmed": {
+      "text": "Akwadoola ndebe gị {reference}: {space}, {when}.",
+      "reviewed": false
+    },
+    "customer.space_reminder": {
+      "text": "Ncheta: ndebe gị {reference} nke {space} bụ echi, {when}.",
+      "reviewed": false
+    },
+    "customer.quote_requested": {
+      "text": "Anyị natara arịrịọ gị {reference}. Ị ga-enweta ọnụ ahịa site na SMS, ya na njikọ iji nabata ya.",
+      "reviewed": false
+    },
+    "customer.quote_sent": {
+      "text": "Ọnụ ahịa gị {reference} adịla njikere: {total}. Kwụọ {now} iji gaa n'ihu, tupu {until}: {link}",
+      "reviewed": false
+    },
+    "customer.quote_accepted": {
+      "text": "Daalụ: anabatala {reference} ma ego gị abatala. Anyị ga-agwa gị mgbe ọ dị njikere.",
+      "reviewed": false
+    },
+    "customer.quote_expired": {
+      "text": "Ọnụ ahịa gị {reference} emechiela. Kpọtụrụ anyị ma ọ bụrụ na ị ka chọrọ ya.",
+      "reviewed": false
+    },
+    "customer.work_ready": {
+      "text": "{reference} adịla njikere. Kwụọ ego fọdụrụ, {balance}, ebe a: {url}",
+      "reviewed": false
+    },
+    "customer.ticket_issued": {
+      "text": "Tiketi gị maka {event}, {when}: {codes}. Gosi koodu n'ọnụ ụzọ. Nọmba {reference}.",
+      "reviewed": false
+    },
+    "customer.event_reminder": {
+      "text": "Ncheta: {event} bụ echi, {when}. Tiketi gị: {codes}.",
+      "reviewed": false
+    },
+    "customer.enrolled": {
+      "text": "Edebanyela gị aha na {class}, ọ ga-amalite {when}. Nọmba {reference}.",
+      "reviewed": false
+    },
+    "customer.instalment_due": {
+      "text": "Akụkụ ụgwọ ọzọ maka {class}, {amount}, eruola. Kwụọ ebe a: {url}",
+      "reviewed": false
+    },
+    "customer.session_reminder": {
+      "text": "Ncheta: {class} ga-amalite echi, {when}.",
+      "reviewed": false
+    },
+    "customer.waiting_list": {
+      "text": "{class} ejupụtala, ya mere ị nọ na ndepụta nchere ya (nọmba {reference}). Anyị ga-agwa gị mgbe ohere dị.",
+      "reviewed": false
+    },
+    "customer.place_offered": {
+      "text": "Ohere dị na {class} maka gị. Kwụọ {total} ebe a n'ime otu ụbọchị iji were ya: {url}",
+      "reviewed": false
+    },
+    "customer.hire_returned": {
+      "text": "Daalụ: {reference} alọghachila n'aka anyị.",
+      "reviewed": false
+    },
+    "customer.hire_late": {
+      "text": "{reference} lọghachiri ụbọchị {days} n'azụ oge, ya mere etinyere ụgwọ ịbịa n'azụ oge {late_fee}. Ihe fọdụrụ ịkwụ: {balance}.",
       "reviewed": false
     }
   }

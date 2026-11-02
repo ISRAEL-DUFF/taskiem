@@ -77,14 +77,21 @@ var ErrSlotTaken = errors.New("publicweb: the slot is taken")
 // As Submit, ref is the first reference made for idem and ok is false
 // when the booking form is not open; ErrSlotTaken and ErrReferenceTaken
 // refuse it.
-type Book func(ctx context.Context, storefront uuid.UUID, reference string, idem, statusHash, payload []byte, slot storefront.Booked) (ref string, ok bool, err error)
+// The action is as Submit's.
+type Book func(ctx context.Context, storefront uuid.UUID, action *uuid.UUID, reference string, idem, statusHash, payload []byte, slot storefront.Booked) (ref string, ok bool, err error)
 
-// DBBook books with taskiem_public_book.
+// DBBook books with taskiem_public_book_action, or taskiem_public_book.
 func DBBook(pool *pgxpool.Pool) Book {
-	return func(ctx context.Context, id uuid.UUID, reference string, idem, statusHash, payload []byte, b storefront.Booked) (string, bool, error) {
+	return func(ctx context.Context, id uuid.UUID, action *uuid.UUID, reference string, idem, statusHash, payload []byte, b storefront.Booked) (string, bool, error) {
 		var ref *string
-		err := pool.QueryRow(ctx, `SELECT taskiem_public_book($1, $2, $3, $4, $5, $6, $7, $8, $9)`, id, reference, idem, statusHash, payload,
-			b.ServiceID, b.Start, b.Until, b.Capacity).Scan(&ref)
+		var err error
+		if action != nil {
+			err = pool.QueryRow(ctx, `SELECT taskiem_public_book_action($1, $2, $3, $4, $5, $6, $7, $8, $9)`, *action, reference, idem, statusHash, payload,
+				b.ServiceID, b.Start, b.Until, b.Capacity).Scan(&ref)
+		} else {
+			err = pool.QueryRow(ctx, `SELECT taskiem_public_book($1, $2, $3, $4, $5, $6, $7, $8, $9)`, id, reference, idem, statusHash, payload,
+				b.ServiceID, b.Start, b.Until, b.Capacity).Scan(&ref)
+		}
 		var pe *pgconn.PgError
 		if errors.As(err, &pe) {
 			switch {

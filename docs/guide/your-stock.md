@@ -71,3 +71,13 @@ Taskiem also tells you when an item has been low for a week with nothing ordered
 ## When the count looks wrong
 
 Open **Storefront > Stock** and press **History** on the item. Every change is there: goods received, orders, adjustments with their reasons, counts. If someone changed the number in your products table by hand, it shows as **Changed in the table**.
+
+## Your other pages (fronts)
+
+Stock is kept for your shop's products, the list on your home page, only. If your page has other fronts, they count in their own way, not as stock:
+- a **Food** menu has no stock: mark a dish *sold out* (it is hidden until you *show* it again);
+- **Hire** items have a count (how many canopies you have); a hire holds some for its days and gives them back when you mark it returned, so your count never goes down;
+- a **Spaces** hall is booked one party at a time on its calendar;
+- **Tickets** and **Classes** have their tickets or places, held while an order lives and given back on a refund.
+
+None of these makes a stock movement, and selling on them never changes your products table. See [Sell more than one thing](sell-more-than-one-thing.md).

@@ -1,0 +1,18 @@
+{
+  "name": "classes",
+  "front": true,
+  "title": "Classes",
+  "description": "Classes a business enrols learners in: a course, lessons, a workshop, a bootcamp, coaching. Each with its photo and description, when it starts, where, its sessions (such as 8 Saturdays), how many places there are, the fee in naira, the instructor, and whether it is open for enrolment.",
+  "columns": [
+    {"name": "name", "title": "Class", "type": "text", "required": true},
+    {"name": "photo", "title": "Photo", "type": "text"},
+    {"name": "description", "title": "Description", "type": "text"},
+    {"name": "starts", "title": "Starts", "type": "datetime"},
+    {"name": "venue", "title": "Where", "type": "text"},
+    {"name": "sessions", "title": "Sessions", "type": "text"},
+    {"name": "places", "title": "Places", "type": "integer", "required": true},
+    {"name": "fee", "title": "Fee (₦)", "type": "number", "required": true},
+    {"name": "instructor", "title": "Instructor", "type": "text"},
+    {"name": "available", "title": "Open", "type": "boolean"}
+  ]
+}

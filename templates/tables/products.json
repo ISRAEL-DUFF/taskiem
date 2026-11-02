@@ -1,0 +1,20 @@
+{
+  "name": "products",
+  "front": true,
+  "title": "Products",
+  "description": "What a shop sells: a name, a price in naira, a photo, a description and a category, whether it is available, and the stock kept of it.",
+  "columns": [
+    {"name": "name", "title": "Name", "type": "text", "required": true},
+    {"name": "price", "title": "Price (₦)", "type": "number"},
+    {"name": "photo", "title": "Photo", "type": "text"},
+    {"name": "description", "title": "Description", "type": "text"},
+    {"name": "category", "title": "Category", "type": "text"},
+    {"name": "available", "title": "Available", "type": "boolean"},
+    {"name": "stock", "title": "Stock", "type": "integer"},
+    {"name": "unit", "title": "Unit", "type": "text"},
+    {"name": "cost_price", "title": "Cost price (₦)", "type": "number"},
+    {"name": "reorder_level", "title": "Reorder at", "type": "integer"},
+    {"name": "target_level", "title": "Order up to", "type": "integer"},
+    {"name": "supplier", "title": "Supplier", "type": "text"}
+  ]
+}

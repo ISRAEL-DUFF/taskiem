@@ -46,6 +46,13 @@ const (
 	IntentQR        Intent = "qr"
 	IntentReady     Intent = "order_ready"
 	IntentDelivered Intent = "order_delivered"
+	// Fronts from chat (docs/spec/fronts.md §7.2): the list, adding one by
+	// its name, and switching one on or off by its name. IntentOrders also
+	// takes a front's name ("orders Snacks").
+	IntentFronts   Intent = "fronts"
+	IntentAddFront Intent = "add_front"
+	IntentFrontOn  Intent = "front_on"
+	IntentFrontOff Intent = "front_off"
 	// Invoices and the money log from chat (docs/invoices.md#from-chat,
 	// docs/money-log.md#from-chat) in the other languages. English's own
 	// words ("invoice", "bill", "spent", "expense", "cash in", "cash out")
@@ -94,6 +101,7 @@ const (
 // Intents are every intent, in a fixed order.
 var Intents = []Intent{IntentHelp, IntentStatus, IntentApprovals, IntentCancel, IntentYes, IntentNo, IntentSwitch, IntentRun, IntentBuild, IntentLanguage,
 	IntentTables, IntentAdd, IntentFind, IntentPublish, IntentMakePage, IntentMyPage, IntentOrders, IntentOpenShop, IntentCloseShop, IntentQR, IntentReady, IntentDelivered,
+	IntentFronts, IntentAddFront, IntentFrontOn, IntentFrontOff,
 	IntentInvoice, IntentExpense, IntentCashIn, IntentCashOut, IntentSold, IntentReceived, IntentCount, IntentStock, IntentTakeOff,
 	IntentSignup, IntentConnect, IntentInvite, IntentPlan, IntentNewTable, IntentChangeRow, IntentDeleteRow, IntentOwes, IntentPaid, IntentAsk}
 
@@ -125,6 +133,7 @@ type Words struct {
 
 // prefixIntents take what follows them; the others are whole messages.
 var prefixIntents = []Intent{IntentSwitch, IntentRun, IntentBuild, IntentLanguage, IntentAdd, IntentFind, IntentPublish, IntentCloseShop, IntentReady, IntentDelivered,
+	IntentAddFront, IntentFrontOn, IntentFrontOff, IntentOrders,
 	IntentInvoice, IntentExpense, IntentCashIn, IntentCashOut, IntentSold, IntentReceived, IntentCount, IntentStock, IntentTakeOff, IntentConnect, IntentInvite, IntentNewTable,
 	IntentChangeRow, IntentDeleteRow}
 

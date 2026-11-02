@@ -1,0 +1,8 @@
+{
+  "name": "callbacks",
+  "title": "Call-backs",
+  "line": "A page where customers ask you to call them.",
+  "actions": [
+    {"kind": "callback", "label": "Request a call back", "template": "storefront-callback"}
+  ]
+}

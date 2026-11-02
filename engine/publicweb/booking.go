@@ -58,6 +58,9 @@ type bookingData struct {
 	Ahead    int
 
 	Name, Phone, Email string
+	// Questions are the booking action's own questions (fronts F1): its
+	// form's fields but the time.
+	Questions []*field
 }
 
 type serviceView struct {
@@ -243,7 +246,8 @@ func (s *Server) serveBooking(w http.ResponseWriter, r *http.Request, site Site,
 	}
 	c := p.Model.Card
 	d := bookingData{pageData: pageData{Title: act.Label, Lang: c.Language}, Business: c.Name, Label: act.Label, Action: "/a/booking", Home: "/",
-		Honeypot: formguard.HoneypotField, Purpose: purposes["booking"], form: formID(site.ID, "booking")}
+		Honeypot: formguard.HoneypotField, Purpose: purposes["booking"], form: formID(site.ID, "booking"),
+		Questions: questions(storefront.EffectiveForm(act.Form, act.Kind))}
 	d.Look = s.lookFor(r.Context(), site.Tenant, c.Name)
 	prefix := ""
 	if embed {
@@ -359,7 +363,7 @@ func (s *Server) submitBooking(w http.ResponseWriter, r *http.Request, site Site
 		s.showBooking(w, r, http.StatusBadRequest, d, "")
 		return
 	}
-	f := formData{Kind: "booking", Business: d.Business, Name: d.Name, Phone: d.Phone, Email: d.Email}
+	f := formData{Kind: "booking", Business: d.Business, Name: d.Name, Phone: d.Phone, Email: d.Email, Questions: d.Questions}
 	sub, msg := f.check(v, nil)
 	d.Name, d.Phone, d.Email = f.Name, f.Phone, f.Email
 	if msg != "" {
@@ -394,7 +398,7 @@ func (s *Server) submitBooking(w http.ResponseWriter, r *http.Request, site Site
 		sub.Channel = "embed"
 	}
 	sub.Submitted = s.now().UTC()
-	ref, ok, err := s.recordBooking(r.Context(), site.ID, p.Model.Slug, idem, sub)
+	ref, ok, err := s.recordBooking(r.Context(), site.ID, p.Model.Slug, act.ID, idem, sub)
 	switch {
 	case errors.Is(err, ErrSlotTaken):
 		// Fresh times, keeping what was typed; a new token, since the
@@ -435,7 +439,7 @@ func (s *Server) submitBooking(w http.ResponseWriter, r *http.Request, site Site
 
 // recordBooking seals a booking and holds its slot, as record does for
 // the other forms.
-func (s *Server) recordBooking(ctx context.Context, sf uuid.UUID, slug string, idem [32]byte, sub storefront.Submission) (string, bool, error) {
+func (s *Server) recordBooking(ctx context.Context, sf uuid.UUID, slug string, action *uuid.UUID, idem [32]byte, sub storefront.Submission) (string, bool, error) {
 	hash := storefront.StatusHash(sub.StatusKey)
 	for range 3 {
 		ref := storefront.NewReference(slug)
@@ -443,7 +447,7 @@ func (s *Server) recordBooking(ctx context.Context, sf uuid.UUID, slug string, i
 		if err != nil {
 			return "", false, err
 		}
-		got, ok, err := s.Book(ctx, sf, ref, idem[:], hash, payload, *sub.Booking)
+		got, ok, err := s.Book(ctx, sf, action, ref, idem[:], hash, payload, *sub.Booking)
 		if errors.Is(err, ErrReferenceTaken) {
 			continue
 		}

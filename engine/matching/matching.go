@@ -465,7 +465,8 @@ func ScoreRemembered(amount int64, payer, reference string, when time.Time, x in
 // ScoreOrder rates an open storefront order as Score does an invoice:
 // what is due is what is paid online (the deposit, or the total), the
 // customer is the order's, and the days count from when it was placed.
-// An order takes no part payments.
+// What is due is what the order asks now (fronts F5): the rest of its
+// deposit or total, or of a later step; a smaller payment is a part.
 func ScoreOrder(amount int64, payer, reference string, when time.Time, x storefront.Order) (Suggestion, bool) {
 	return ScoreOrderRemembered(amount, payer, reference, when, x, "")
 }
@@ -475,7 +476,7 @@ func ScoreOrder(amount int64, payer, reference string, when time.Time, x storefr
 // their paying "account" or their "name" (or "" for not remembered).
 func ScoreOrderRemembered(amount int64, payer, reference string, when time.Time, x storefront.Order, remembered string) (Suggestion, bool) {
 	id, placed := x.ID, x.CreatedAt
-	return score(amount, payer, reference, when, candidate{order: &id, number: x.Reference, due: x.Payable(), customer: x.Customer.Name, since: &placed, verb: "placed", remembered: remembered})
+	return score(amount, payer, reference, when, candidate{order: &id, number: x.Reference, due: x.AskedKobo(), part: true, customer: x.Customer.Name, since: &placed, verb: "placed", remembered: remembered})
 }
 
 func score(amount int64, payer, reference string, when time.Time, x candidate) (Suggestion, bool) {

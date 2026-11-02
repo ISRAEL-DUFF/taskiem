@@ -1,0 +1,355 @@
+{
+  "id": "storefront-space",
+  "title": "Spaces: accept, take the deposit, ask for the balance, remind",
+  "summary": "Each booking of a hall or room from a Spaces front comes to you to accept or decline; the customer pays the deposit, is sent the balance, and is reminded the day before.",
+  "description": "Starts when a customer books a space from a Spaces front: the space, and the days or hours they want it. You get the booking to accept or decline; if nobody answers in a day it is declined, and the time is free again. Once accepted, the customer gets a payment link for the deposit. When it is paid they are told the booking is confirmed, and sent a link for the balance. The day before, they are reminded, and once the booking is over it is completed. Messages go from your business's name, by SMS, and by email when the customer gave one.",
+  "category": "storefront",
+  "tags": [
+    "storefront"
+  ],
+  "keywords": [
+    "storefront",
+    "space",
+    "spaces",
+    "hall",
+    "event centre",
+    "event hall",
+    "venue",
+    "auditorium",
+    "training room",
+    "studio",
+    "book a hall"
+  ],
+  "connectors": [
+    "storefront@1"
+  ],
+  "variables": [],
+  "params": [
+    {
+      "name": "approver_role",
+      "type": "string",
+      "title": "Who confirms bookings",
+      "description": "The role that accepts or declines space bookings.",
+      "required": false,
+      "default": "owner",
+      "example": "owner",
+      "pattern": "^[a-z][a-z0-9_]{0,39}$",
+      "picker": "role"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_storefrontSpace",
+    "version": 1,
+    "name": "Storefront space bookings",
+    "trigger": {
+      "type": "storefront",
+      "config": {
+        "action": "space"
+      }
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "reference"
+        ],
+        "properties": {
+          "reference": {
+            "type": "string"
+          },
+          "front": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "total_kobo": {
+            "type": "integer"
+          },
+          "due_kobo": {
+            "type": "integer"
+          },
+          "paid_kobo": {
+            "type": "integer"
+          },
+          "status_link": {
+            "type": "string"
+          },
+          "payment": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              }
+            }
+          },
+          "customer": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "x-pii": "name"
+              },
+              "phone": {
+                "type": "string",
+                "x-pii": "phone"
+              }
+            }
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "space": {
+            "type": "object",
+            "properties": {
+              "space": {
+                "type": "string"
+              },
+              "when": {
+                "type": "string"
+              },
+              "from": {
+                "type": "string"
+              },
+              "until": {
+                "type": "string"
+              },
+              "days": {
+                "type": "integer"
+              },
+              "hours": {
+                "type": "integer"
+              },
+              "starts_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "ends_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "remind_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "ask",
+        "type": "approval",
+        "name": "Accept or decline the booking",
+        "config": {
+          "role": "{{approver_role}}",
+          "count": 1,
+          "timeout": "24h",
+          "subject": {
+            "booking": "=trigger.body.reference",
+            "space": "=trigger.body.space.space",
+            "when": "=trigger.body.space.when"
+          }
+        }
+      },
+      {
+        "id": "answer",
+        "type": "connector",
+        "name": "Record the answer",
+        "connector": "storefront@1",
+        "action": "decide",
+        "needs": [
+          "ask"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "decision": "=steps.ask.output.decision == 'approved' ? 'accept' : 'decline'",
+          "note": "=steps.ask.output.decision == 'approved' ? '' : (has(steps.ask.output.reason) && steps.ask.output.reason == 'timeout' ? 'No answer within a day' : 'Declined')"
+        }
+      },
+      {
+        "id": "tell_declined",
+        "type": "connector",
+        "name": "Tell the customer it was declined",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "answer"
+        ],
+        "when": "=steps.ask.output.decision != 'approved'",
+        "input": {
+          "reference": "=trigger.body.reference",
+          "say": "order_declined",
+          "vars": {
+            "reference": "=trigger.body.reference"
+          }
+        }
+      },
+      {
+        "id": "link",
+        "type": "connector",
+        "name": "Make the deposit's payment link",
+        "connector": "storefront@1",
+        "action": "payment_link",
+        "needs": [
+          "answer"
+        ],
+        "when": "=steps.ask.output.decision == 'approved'",
+        "input": {
+          "reference": "=trigger.body.reference"
+        }
+      },
+      {
+        "id": "tell_pay",
+        "type": "connector",
+        "name": "Send the deposit's payment link",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "link"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "say": "order_pay",
+          "vars": {
+            "reference": "=trigger.body.reference",
+            "total": "=steps.link.output.total",
+            "url": "=steps.link.output.url"
+          }
+        }
+      },
+      {
+        "id": "wait_pay",
+        "type": "signal",
+        "name": "Wait for the deposit",
+        "needs": [
+          "tell_pay"
+        ],
+        "config": {
+          "event": "storefront.payment",
+          "correlation": "=trigger.body.reference",
+          "timeout": "25h"
+        }
+      },
+      {
+        "id": "tell_confirmed",
+        "type": "connector",
+        "name": "Tell the customer it is booked",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "wait_pay"
+        ],
+        "when": "=steps.wait_pay.output.status == 'paid'",
+        "input": {
+          "reference": "=trigger.body.reference",
+          "say": "space_confirmed",
+          "vars": {
+            "reference": "=trigger.body.reference",
+            "space": "=trigger.body.space.space",
+            "when": "=trigger.body.space.when"
+          }
+        }
+      },
+      {
+        "id": "balance_link",
+        "type": "connector",
+        "name": "Make the balance's payment link",
+        "connector": "storefront@1",
+        "action": "payment_link",
+        "needs": [
+          "tell_confirmed"
+        ],
+        "when": "=steps.wait_pay.output.balance_kobo >= 100",
+        "input": {
+          "reference": "=trigger.body.reference"
+        }
+      },
+      {
+        "id": "tell_balance",
+        "type": "connector",
+        "name": "Send the balance's payment link",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "balance_link"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "say": "balance_due",
+          "vars": {
+            "reference": "=trigger.body.reference",
+            "balance": "=steps.balance_link.output.total",
+            "url": "=steps.balance_link.output.url"
+          }
+        }
+      },
+      {
+        "id": "wait_remind",
+        "type": "wait",
+        "name": "Until the day before",
+        "needs": [
+          "tell_confirmed"
+        ],
+        "config": {
+          "until": "=trigger.body.space.remind_at"
+        }
+      },
+      {
+        "id": "say_remind",
+        "type": "connector",
+        "name": "Remind the customer",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "wait_remind"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "say": "space_reminder",
+          "vars": {
+            "reference": "=trigger.body.reference",
+            "space": "=trigger.body.space.space",
+            "when": "=trigger.body.space.when"
+          }
+        }
+      },
+      {
+        "id": "wait_over",
+        "type": "wait",
+        "name": "Until the booking is over",
+        "needs": [
+          "say_remind"
+        ],
+        "config": {
+          "until": "=trigger.body.space.ends_at"
+        }
+      },
+      {
+        "id": "finish",
+        "type": "connector",
+        "name": "Complete the booking",
+        "connector": "storefront@1",
+        "action": "decide",
+        "needs": [
+          "wait_over"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "decision": "complete"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "4800h"
+    }
+  }
+}

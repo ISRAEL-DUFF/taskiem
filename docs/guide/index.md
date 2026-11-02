@@ -7,6 +7,7 @@ Plain how-tos for running your business on Taskiem: no code and no technical ste
 - [Templates](templates.md): filling in a template's details.
 - [Connecting your apps](connections.md): Paystack, Google Sheets, WhatsApp and the rest.
 - [Paying people](paying-people.md): staff and suppliers by bank and account number.
+- [Sell more than one thing](sell-more-than-one-thing.md): more pages beside your shop (a menu, hire, a hall, tickets, classes, quotes), each with its own list and form.
 - [Your riders](your-riders.md): orders sent to your riders on WhatsApp, paying at the door, cash riders owe, weekly pay and ratings.
 - [Running a school](schools.md): students, term fees, each child's own account number, receipts, the family page, chasing, clearance and the gate, and the daily close.
 - [Your tables](tables.md): keeping records in Taskiem instead of a spreadsheet.
