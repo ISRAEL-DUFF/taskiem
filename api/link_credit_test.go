@@ -25,7 +25,9 @@ func TestLinkCredit(t *testing.T) {
 	withLinkedOrders(w.world)
 	seller, buyer, sellerID, buyerID := linkedPair(t, w.waWorld)
 	buyer.must(200, "POST", "/v1/stock/setup", nil)
-	rice := buyer.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Rice", "quantity": 3, "unit": "bag", "cost_kobo": 4000000},
+	// The buyer's cost is the seller's price: an order at another price is
+	// the seller's change, not accepted by itself (§16.3).
+	rice := buyer.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Rice", "quantity": 3, "unit": "bag", "cost_kobo": 4500000},
 		"Idempotency-Key", "r")["item"].(map[string]any)["id"].(string)
 	seller.must(200, "POST", "/v1/stock/setup", nil)
 	seller.must(201, "POST", "/v1/stock/items", map[string]any{"name": "rice", "quantity": 500, "unit": "bag", "price_kobo": 4500000}, "Idempotency-Key", "sr")
@@ -89,6 +91,11 @@ func TestLinkCredit(t *testing.T) {
 	if st["available_kobo"] != float64(50000000-45000000) {
 		t.Errorf("available: %v", st)
 	}
+	// The buyer's statement says the same: its accepted order, not yet
+	// invoiced, counts against the limit as the seller counts it.
+	if mine := buyer.must(200, "GET", "/v1/links/"+link+"/statement", nil)["we_owe"].(map[string]any); mine["available_kobo"] != st["available_kobo"] {
+		t.Errorf("available on both sides: %v / %v", mine["available_kobo"], st["available_kobo"])
+	}
 
 	// Raised, it is checked again and accepted by itself.
 	seller.must(200, "PUT", "/v1/links/"+sellerLink+"/trade", map[string]any{"credit_limit_kobo": 100000000})
@@ -125,6 +132,11 @@ func TestLinkCredit(t *testing.T) {
 	if theirs["owed_kobo"] != ours["owed_kobo"] || theirs["owed_kobo"] != float64(1000000) || len(ours["documents"].([]any)) != 1 ||
 		ours["documents"].([]any)[0].(map[string]any)["reference"] != x["number"] {
 		t.Fatalf("one number both sides: %v / %v", theirs, ours)
+	}
+	// What is left to use too: the limit less the invoice and the three
+	// accepted orders not yet invoiced (₦450,000 + ₦225,000 + ₦90,000).
+	if theirs["available_kobo"] != ours["available_kobo"] || theirs["available_kobo"] != float64(70000000-1000000-76500000) {
+		t.Fatalf("what is left on both sides: %v / %v", theirs["available_kobo"], ours["available_kobo"])
 	}
 
 	// The morning summary: due in 14 days is not due yet; overdue is.

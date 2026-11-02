@@ -466,23 +466,44 @@ func TestLinkedOrdersMatchedAndPlaced(t *testing.T) {
 		t.Errorf("the buyer's order at the agreed price: %v", p)
 	}
 
-	// Accepted by itself, as the seller sets for the link.
+	// Set to accept by itself: at the seller's price, which is not what the
+	// buyer proposed, the order is the seller's change instead, for the
+	// buyer to accept; the seller is told so.
 	if got := seller.must(200, "PUT", "/v1/links/"+sellerLink+"/trade", map[string]any{"auto_accept": true}); got["auto_accept"] != true || got["invoice_at"] != "delivered" {
 		t.Fatalf("auto accept: %v", got)
 	}
 	before := len(w.graph.Sent(sellerOn))
 	po2, ref2 := send("m-2", 5)
-	if o := orderOf(ref2); o["status"] != "accepted" || o["lines"].([]any)[0].(map[string]any)["matched"] != "linked" {
-		t.Fatalf("accepted by itself: %v", o)
+	if o := orderOf(ref2); o["status"] != "changed" || o["lines"].([]any)[0].(map[string]any)["matched"] != "linked" ||
+		o["lines"].([]any)[0].(map[string]any)["priced_by"] != "catalogue" || o["lines"].([]any)[0].(map[string]any)["proposed_kobo"] != float64(4000000) {
+		t.Fatalf("changed by itself: %v", o)
 	}
-	if p := buyer.must(200, "GET", "/v1/stock/purchases/"+po2, nil)["purchase"].(map[string]any); p["status"] != "confirmed" || p["seller_status"] != "accepted" {
-		t.Errorf("the buyer's, accepted: %v", p)
-	}
-	if told := w.lastTo(t, sellerOn, before); len(told) != 1 || !strings.Contains(told[0].Text, "*Ada's Kitchen* ordered 5 bags Rice, ₦225,000. It is accepted, as you set for them.") ||
+	if told := w.lastTo(t, sellerOn, before); len(told) != 1 || !strings.Contains(told[0].Text, "*Ada's Kitchen* ordered 5 bags Rice, ₦225,000. It proposed other prices, so it is sent back at yours for them to accept, as you set for them.") ||
 		len(told[0].Buttons) != 0 {
 		t.Errorf("the seller told: %+v", told)
 	}
+	if got := sellerStock("rice"); got != float64(40) {
+		t.Errorf("the seller's stock before the buyer accepts: %v", got)
+	}
+	if p := buyer.must(200, "POST", "/v1/stock/purchases/"+po2+"/accept-change", nil)["purchase"].(map[string]any); p["status"] != "confirmed" || p["seller_status"] != "accepted" ||
+		p["total_kobo"] != float64(22500000) {
+		t.Fatalf("the buyer's, accepted at the seller's price: %v", p)
+	}
+	w.srv.WaitBackground()
 	if got := sellerStock("rice"); got != float64(35) {
+		t.Errorf("the seller's stock after the buyer accepted: %v", got)
+	}
+	// Proposed at the seller's price, it is accepted by itself.
+	before = len(w.graph.Sent(sellerOn))
+	buyer.must(200, "PATCH", "/v1/stock/items/"+rice, map[string]any{"cost_kobo": 4500000})
+	_, ref2b := send("m-2b", 1)
+	if o := orderOf(ref2b); o["status"] != "accepted" {
+		t.Fatalf("accepted by itself: %v", o)
+	}
+	if told := w.lastTo(t, sellerOn, before); len(told) != 1 || !strings.Contains(told[0].Text, "It is accepted, as you set for them.") {
+		t.Errorf("the seller told: %+v", told)
+	}
+	if got := sellerStock("rice"); got != float64(34) {
 		t.Errorf("the seller's stock after accepting by itself: %v", got)
 	}
 
@@ -520,7 +541,7 @@ func TestLinkedOrdersMatchedAndPlaced(t *testing.T) {
 	if o := orderOf(ref3); o["status"] != "accepted" {
 		t.Errorf("the seller's, confirmed: %v", o)
 	}
-	if got := sellerStock("rice"); got != float64(31) {
+	if got := sellerStock("rice"); got != float64(30) {
 		t.Errorf("the seller's stock after the buyer confirmed: %v", got)
 	}
 

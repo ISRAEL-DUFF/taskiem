@@ -25,6 +25,19 @@ func TestParseMentions(t *testing.T) {
 	if got := parseMentions("mail me at ada@example.com", names); len(got.Parts)+len(got.Unknown) != 0 {
 		t.Fatalf("an address is no mention: %+v", got)
 	}
+	// Characters whose lower case is another length in bytes (the Kelvin
+	// sign, a dotted capital I) neither panic nor shift what follows.
+	if got := parseMentions("3 bags from @KK and 2 rice from @Dangote", names); !reflect.DeepEqual(got.Unknown, []string{"KK"}) ||
+		len(got.Parts) != 1 || got.Parts[0].Business != "Dangote" || got.Parts[0].Text != "2 rice" {
+		t.Fatalf("the Kelvin sign: %+v", got)
+	}
+	if got := parseMentions("İyi 5 rice from @İzmir Stores and 2 garri from @dangote", append(names, "İzmir Stores")); len(got.Parts) != 2 ||
+		got.Parts[0].Business != "İzmir Stores" || got.Parts[0].Text != "İyi 5 rice" || got.Parts[1].Business != "Dangote" || got.Parts[1].Text != "2 garri" {
+		t.Fatalf("a dotted capital I: %+v", got)
+	}
+	if got := parseMentions("2 from @KELVİN", append(names, "Kelvin")); len(got.Parts) != 0 || len(got.Unknown) != 1 {
+		t.Fatalf("İ is not i: %+v", got)
+	}
 }
 
 func TestAskedItems(t *testing.T) {
