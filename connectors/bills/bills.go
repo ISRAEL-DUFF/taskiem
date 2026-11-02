@@ -1,5 +1,7 @@
 // Package bills is the bills platform connector (docs/spec/business-links.md
-// §6.2): what the pay-linked-bill workflow records about a bill's payment.
+// §6.2): what the pay-linked-bill workflow records about a bill's payment,
+// on every path it can end on (paid, failed, rejected, or unknown when the
+// bank never said).
 // Like the riders connector it acts on Taskiem's own records, for the
 // tenant of the run calling it (connector.CallerFrom), never one named in
 // its input.

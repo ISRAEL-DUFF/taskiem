@@ -47,6 +47,16 @@
           "output": {
             "status": "settled"
           }
+        },
+        "record_not_paid": {
+          "output": {
+            "status": "failed"
+          }
+        },
+        "record_unknown": {
+          "output": {
+            "status": "unknown"
+          }
         }
       },
       "approvals": {
@@ -119,6 +129,16 @@
             "payout_id": "po_1",
             "status": "failed"
           }
+        },
+        "record_not_paid": {
+          "output": {
+            "status": "failed"
+          }
+        },
+        "record_unknown": {
+          "output": {
+            "status": "unknown"
+          }
         }
       },
       "approvals": {
@@ -175,6 +195,16 @@
           "output": {
             "status": "rejected"
           }
+        },
+        "record_not_paid": {
+          "output": {
+            "status": "failed"
+          }
+        },
+        "record_unknown": {
+          "output": {
+            "status": "unknown"
+          }
         }
       },
       "approvals": {
@@ -197,6 +227,165 @@
         },
         "calls": {
           "pay_bill": 0
+        }
+      }
+    },
+    {
+      "name": "a transfer that could not be made is recorded as not paid",
+      "trigger": {
+        "body": {
+          "payment_id": "pay_1",
+          "supplier": "Dangote Stores",
+          "reference": "INV-0042",
+          "token": "INV-0042/7QX4",
+          "bank_code": "035",
+          "account_number": "8800000001",
+          "amount_kobo": 42500000
+        }
+      },
+      "mocks": {
+        "check_name": {
+          "output": {
+            "account_name": "DANGOTE STORES/ADA"
+          }
+        },
+        "record_paid": {
+          "output": {
+            "status": "paid"
+          }
+        },
+        "record_settled": {
+          "output": {
+            "status": "paid"
+          }
+        },
+        "record_rejected": {
+          "output": {
+            "status": "rejected"
+          }
+        },
+        "record_not_paid": {
+          "output": {
+            "status": "failed"
+          }
+        },
+        "record_unknown": {
+          "output": {
+            "status": "unknown"
+          }
+        },
+        "pay_bill": {
+          "error": {
+            "kind": "fatal",
+            "message": "the rail refused the account"
+          }
+        }
+      },
+      "approvals": {
+        "approve_payment": {
+          "decision": "approved",
+          "by": "owner"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "record_not_paid": {
+            "payment_id": "pay_1",
+            "status": "failed",
+            "account_name": "DANGOTE STORES/ADA"
+          }
+        },
+        "steps": {
+          "record_not_paid": "completed",
+          "settle": "skipped",
+          "record_paid": "skipped",
+          "record_settled": "skipped",
+          "record_rejected": "skipped"
+        }
+      }
+    },
+    {
+      "name": "a transfer the bank never confirmed is recorded as unknown, never as not paid",
+      "trigger": {
+        "body": {
+          "payment_id": "pay_1",
+          "supplier": "Dangote Stores",
+          "reference": "INV-0042",
+          "token": "INV-0042/7QX4",
+          "bank_code": "035",
+          "account_number": "8800000001",
+          "amount_kobo": 42500000
+        }
+      },
+      "mocks": {
+        "check_name": {
+          "output": {
+            "account_name": "DANGOTE STORES/ADA"
+          }
+        },
+        "record_paid": {
+          "output": {
+            "status": "paid"
+          }
+        },
+        "record_settled": {
+          "output": {
+            "status": "paid"
+          }
+        },
+        "record_rejected": {
+          "output": {
+            "status": "rejected"
+          }
+        },
+        "record_not_paid": {
+          "output": {
+            "status": "failed"
+          }
+        },
+        "record_unknown": {
+          "output": {
+            "status": "unknown"
+          }
+        },
+        "pay_bill": {
+          "output": {
+            "payout_id": "po_1",
+            "status": "pending"
+          }
+        },
+        "settle": {
+          "error": {
+            "kind": "fatal",
+            "message": "the bank did not answer in 72h"
+          }
+        }
+      },
+      "approvals": {
+        "approve_payment": {
+          "decision": "approved",
+          "by": "owner"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "record_unknown": {
+            "payment_id": "pay_1",
+            "status": "unknown",
+            "account_name": "DANGOTE STORES/ADA"
+          }
+        },
+        "steps": {
+          "record_unknown": "completed",
+          "record_not_paid": "not_run",
+          "record_paid": "skipped",
+          "record_settled": "skipped",
+          "record_rejected": "skipped"
+        },
+        "calls": {
+          "pay_bill": 1
         }
       }
     }

@@ -14,7 +14,7 @@ auth:
 actions:
   finish_bill_payment:
     title: Record a linked bill's outcome
-    description: For Taskiem's own linked-bill flow only. Records the outcome it reached for one bill (paid, failed or rejected); the same outcome twice changes nothing.
+    description: For Taskiem's own linked-bill flow only. Records the outcome it reached for one bill (paid, failed, rejected, or unknown when the money went and the bank never said how it ended; the bill then stays being paid until a person looks); the same outcome twice changes nothing.
     class: idempotent_write
     idempotency:
       field: idempotency_key
@@ -27,7 +27,7 @@ actions:
       required: [payment_id, status]
       properties:
         payment_id:   { type: string }
-        status:       { type: string, enum: [paid, failed, rejected] }
+        status:       { type: string, enum: [paid, failed, rejected, unknown] }
         account_name: { type: string, description: The bank's name for the account }
     output:
       type: object
