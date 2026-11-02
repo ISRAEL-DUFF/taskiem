@@ -228,6 +228,16 @@ export function ChatPage() {
   );
   useLiveRefresh(convs.reload);
   const reloadConvs = convs.reload; // stable
+  // The list follows the conversations every few seconds while the page
+  // is seen (the typing line, the unread counts, the last message), as
+  // the open conversation follows itself; 30 s otherwise (useLiveRefresh).
+  useEffect(() => {
+    const t = setInterval(
+      () => document.visibilityState === "visible" && reloadConvs(),
+      5_000,
+    );
+    return () => clearInterval(t);
+  }, [reloadConvs]);
   // A link accepted or ended here changes the chats too.
   const linksSeen = view.data;
   useEffect(() => {

@@ -85,7 +85,7 @@ test("two linked businesses talk", async ({ browser }) => {
   const mine = pane.locator('[data-testid="chat-message"][data-mine="true"]');
   await expect(mine).toContainText("Send 20 bags, please");
   await expect(mine.getByTestId("chat-quote")).toContainText("Good morning");
-  await expect(mine.getByRole("img", { name: "Delivered" })).toBeVisible();
+  await expect(mine.getByRole("img", { name: "Delivered" })).toHaveText("✓✓");
   const theirs = await (await seller.request.get(`/v1/link-chats/${link}/messages`, { headers: H })).json();
   expect(theirs.messages[1].body).toBe("Send 20 bags, please");
   expect(theirs.messages[1].reply.mine).toBe(true);
@@ -209,8 +209,27 @@ test("pin, the typing line, forward and delete for me", async ({ browser }) => {
   await pane.getByRole("button", { name: "Pin" }).click();
   await expect(pane.getByRole("button", { name: "Unpin" })).toBeVisible();
 
-  // Forwarded to Gbenga.
+  // Held on a phone: the menu (reply, copy, forward, delete for me); a
+  // finger that moves is not a hold.
   const msg = pane.getByTestId("chat-message").first();
+  const box = (await msg.boundingBox()) ?? { x: 0, y: 0, width: 0, height: 0 };
+  const finger = { pointerType: "touch", pointerId: 9, isPrimary: true, clientX: box.x + 20, clientY: box.y + 10 };
+  await msg.dispatchEvent("pointerdown", finger);
+  await msg.dispatchEvent("pointermove", { ...finger, clientY: box.y + 60 });
+  await msg.dispatchEvent("pointerup", { ...finger, clientY: box.y + 60 });
+  await buyer.waitForTimeout(700);
+  await expect(msg.getByTestId("chat-more")).toHaveCount(0);
+  await msg.dispatchEvent("pointerdown", finger);
+  await buyer.waitForTimeout(700);
+  await msg.dispatchEvent("pointerup", finger);
+  await expect(msg.getByTestId("chat-more")).toBeVisible();
+  for (const name of ["Reply", "Copy", "Forward", "Delete for me"]) await expect(msg.getByTestId("chat-more").getByRole("button", { name })).toBeVisible();
+  await msg.getByTestId("chat-more").getByRole("button", { name: "Reply" }).click();
+  await expect(pane.getByTestId("chat-replying")).toContainText("Rice is");
+  await pane.getByRole("button", { name: /^Cancel/ }).click();
+
+  // Forwarded to Gbenga, from More (shown on hover with a mouse).
+  await msg.hover();
   await msg.getByRole("button", { name: /^More/ }).click();
   await axeBoth(buyer, "a message's options");
   await msg.getByRole("button", { name: "Forward" }).click();

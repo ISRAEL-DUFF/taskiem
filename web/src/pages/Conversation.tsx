@@ -41,6 +41,8 @@ import { ErrorBox, fmtTime, Modal, Skeleton, useAction, useLoad } from "../ui";
 const EVERY_MS = 3000;
 /** A swipe this far right replies. */
 const SWIPE_REPLY_PX = 60;
+/** A finger held this long on a bubble opens its menu, as WhatsApp's. */
+const HOLD_MS = 500;
 
 /** What can be attached: a photo or a PDF (a voice note is recorded). */
 const ATTACH = "image/jpeg,image/png,image/webp,application/pdf";
@@ -307,37 +309,68 @@ function Bubble({
   const card = m.kind === "card" ? m.card : undefined;
   const [more, setMore] = useState(false);
   const [copied, setCopied] = useState(false);
-  // Swipe right to reply, on a touch screen, as WhatsApp's.
+  const hasMenu = !card && !!(onForward || onHide || m.body || canReply);
+  // Swipe right to reply, and a finger held to open the menu (reply,
+  // copy, forward, delete for me), on a touch screen, as WhatsApp's; the
+  // hold is let go by a move or a scroll.
   const drag = useRef<{ x: number; y: number; id: number } | null>(null);
+  const hold = useRef<number>(undefined);
+  const held = useRef(false);
   const [dx, setDx] = useState(0);
-  const swipe = canReply
-    ? {
-        onPointerDown: (e: React.PointerEvent) => {
-          if (e.pointerType === "touch")
-            drag.current = { x: e.clientX, y: e.clientY, id: e.pointerId };
-        },
-        onPointerMove: (e: React.PointerEvent) => {
-          const d = drag.current;
-          if (!d || e.pointerId !== d.id) return;
-          const x = e.clientX - d.x;
-          if (Math.abs(e.clientY - d.y) > 30 && x < 20) {
-            drag.current = null;
-            setDx(0);
-            return;
-          }
-          setDx(Math.max(0, Math.min(x, 80)));
-        },
-        onPointerUp: () => {
-          if (drag.current && dx >= SWIPE_REPLY_PX) onReply(m);
+  const endHold = () => {
+    window.clearTimeout(hold.current);
+    hold.current = undefined;
+  };
+  const touch = {
+    onPointerDown: (e: React.PointerEvent) => {
+      if (e.pointerType === "mouse") return;
+      if (canReply) drag.current = { x: e.clientX, y: e.clientY, id: e.pointerId };
+      if (!hasMenu) return;
+      endHold();
+      hold.current = window.setTimeout(() => {
+        hold.current = undefined;
+        held.current = true;
+        drag.current = null;
+        setDx(0);
+        setCopied(false);
+        setMore(true);
+      }, HOLD_MS);
+    },
+    onPointerMove: (e: React.PointerEvent) => {
+      const d = drag.current;
+      if (d && e.pointerId === d.id) {
+        const x = e.clientX - d.x;
+        if (Math.abs(x) > 10 || Math.abs(e.clientY - d.y) > 10) endHold();
+        if (Math.abs(e.clientY - d.y) > 30 && x < 20) {
           drag.current = null;
           setDx(0);
-        },
-        onPointerCancel: () => {
-          drag.current = null;
-          setDx(0);
-        },
+          return;
+        }
+        setDx(Math.max(0, Math.min(x, 80)));
+      } else if (e.pointerType !== "mouse") endHold();
+    },
+    onPointerUp: () => {
+      endHold();
+      if (drag.current && dx >= SWIPE_REPLY_PX) onReply(m);
+      drag.current = null;
+      setDx(0);
+    },
+    onPointerCancel: () => {
+      endHold();
+      drag.current = null;
+      setDx(0);
+    },
+    // A long press on a touch screen also asks for the browser's own menu.
+    onContextMenu: (e: React.MouseEvent) => {
+      if (held.current) {
+        e.preventDefault();
+        held.current = false;
       }
-    : {};
+    },
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (e.key === "Escape" && more) setMore(false);
+    },
+  };
   const what = card ? cardLine(card, m.mine, other) : previewLine(m, other);
   return (
     <div
@@ -345,7 +378,7 @@ function Bubble({
       data-testid={card ? "chat-card" : "chat-message"}
       data-mine={m.mine}
       style={dx ? { transform: `translateX(${dx}px)` } : undefined}
-      {...swipe}
+      {...touch}
     >
       {!m.mine && !card && m.sender_name && (
         <span className="who">{m.sender_name}</span>
@@ -386,7 +419,21 @@ function Bubble({
         </>
       )}
       {more && (
-        <span className="row-actions bubble-more" data-testid="chat-more">
+        <span
+          className="row-actions bubble-more"
+          data-testid="chat-more"
+          role="group"
+          aria-label={`Options for ${what}`}
+        >
+          {canReply && (
+            <button
+              type="button"
+              className="small"
+              onClick={() => (setMore(false), onReply(m))}
+            >
+              Reply
+            </button>
+          )}
           {!card && m.body && (
             <button
               type="button"
@@ -432,10 +479,10 @@ function Bubble({
             <span className="sr-only"> to {what}</span>
           </button>
         )}
-        {!card && (onForward || onHide || m.body) && (
+        {hasMenu && (
           <button
             type="button"
-            className="reply-btn"
+            className="reply-btn more-btn"
             aria-expanded={more}
             onClick={() => (setMore(!more), setCopied(false))}
           >
@@ -445,13 +492,16 @@ function Bubble({
         <time dateTime={m.created_at} title={fmtTime(m.created_at)}>
           {clock(m.created_at)}
         </time>
+        {/* Our message is written in the other business's conversation in
+            the same transaction it is sent, so it is delivered as soon as
+            it is here: two ticks, coloured once they have read it. */}
         {m.mine && !card && (
           <span
             className={`ticks${m.read_at ? " read" : ""}`}
             aria-label={m.read_at ? "Read" : "Delivered"}
             role="img"
           >
-            {m.read_at ? "✓✓" : "✓"}
+            ✓✓
           </span>
         )}
       </span>
