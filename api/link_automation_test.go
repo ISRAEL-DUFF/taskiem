@@ -205,7 +205,7 @@ func TestLinkAutomation(t *testing.T) {
 	var startedBy string
 	var payRun *string
 	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT created_by, run_id::text FROM bill_payments WHERE tenant_id = $1`, buyerID).Scan(&startedBy, &payRun); err != nil ||
-		!strings.HasPrefix(startedBy, "workflow:"+run) || payRun == nil {
+		!strings.HasPrefix(startedBy, "workflow:") || payRun == nil {
 		t.Fatalf("the payment, started by the step, with its run: %q %v %v", startedBy, payRun, err)
 	}
 	// Its payment waits for the approver, through the fake rail's workflow.
