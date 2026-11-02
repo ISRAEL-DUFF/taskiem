@@ -9,6 +9,7 @@ Plain how-tos for running your business on Taskiem: no code and no technical ste
 - [Paying people](paying-people.md): staff and suppliers by bank and account number.
 - [Sell more than one thing](sell-more-than-one-thing.md): more pages beside your shop (a menu, hire, a hall, tickets, classes, quotes), each with its own list and form.
 - [Your riders](your-riders.md): orders sent to your riders on WhatsApp, paying at the door, cash riders owe, weekly pay and ratings.
+- [Trade with businesses on Taskiem](trade-with-businesses.md): link with a supplier or a customer who is on Taskiem, chat, bills you pay from Taskiem, orders that arrive as orders, price lists, credit terms, and what the other side sees.
 - [Running a school](schools.md): students, term fees, each child's own account number, receipts, the family page, chasing, clearance and the gate, and the daily close.
 - [Your tables](tables.md): keeping records in Taskiem instead of a spreadsheet.
 - [Keep your records in chat](keep-your-records-in-chat.md): your lists, who owes you, and questions about them, from WhatsApp or Telegram, in your language.

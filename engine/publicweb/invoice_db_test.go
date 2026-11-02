@@ -271,3 +271,25 @@ func TestInvoicePayThroughTheDatabase(t *testing.T) {
 		t.Errorf("another customer sees the number: %s", body)
 	}
 }
+
+// TestInvoiceLinkCodeThroughTheDatabase: the public role reads the
+// business's link code for its invoice's page (business links), and
+// nothing before the business has one.
+func TestInvoiceLinkCodeThroughTheDatabase(t *testing.T) {
+	env := rt.New(t)
+	ctx := context.Background()
+	w := &invoiceWorld{t: t, env: env, tokens: map[string]string{}, inv: &invoicing.Invoices{Pool: env.DB.App, Vault: env.Vault, PageBase: "https://" + formHost,
+		Messages: &sender.Queue{Vault: env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}, Signal: env.Store.DeliverSignalOnce}}
+	w.make("sent", invoicing.Draft{AmountKobo: 150000, Description: "Rice"}, true)
+	read := DBInvoices(env.DB.PublicPool(t, 1))
+	p, ok, err := read(ctx, invoicing.TokenHash(w.tokens["sent"]))
+	if err != nil || !ok || p.LinkCode != "" {
+		t.Fatalf("before a code: %+v %v %v", p.LinkCode, ok, err)
+	}
+	if _, err := env.DB.Admin.Exec(ctx, `INSERT INTO link_settings (tenant_id, code, updated_by) VALUES ($1, 'abcd2345', 'test')`, env.Tenant); err != nil {
+		t.Fatal(err)
+	}
+	if p, _, err = read(ctx, invoicing.TokenHash(w.tokens["sent"])); err != nil || p.LinkCode != "abcd2345" {
+		t.Errorf("the code: %q %v", p.LinkCode, err)
+	}
+}

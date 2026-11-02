@@ -103,6 +103,10 @@ func (c *slackChannel) Send(ctx context.Context, addr string, m whatsapp.Message
 	if err != nil {
 		return "", err
 	}
+	if m.Tenant == uuid.Nil {
+		m.Tenant = c.tenant
+	}
+	c.s.recordSent(ctx, "slack", addr, m)
 	ts, _ := out["ts"].(string)
 	return ts, nil
 }

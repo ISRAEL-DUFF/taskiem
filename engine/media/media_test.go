@@ -23,6 +23,7 @@ type fakeFiles struct {
 	mu      sync.Mutex
 	buckets map[string]bucketInfo
 	objects map[string]string // bucket/path -> content type
+	data    map[string][]byte // bucket/path -> what was stored
 	calls   []string
 	patchOK bool
 	putErr  *Error
@@ -83,6 +84,10 @@ func (f *fakeFiles) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		bucket := strings.TrimSuffix(strings.TrimPrefix(p, "/buckets/"), "/object")
 		f.objects[bucket+"/"+r.URL.Query().Get("path")] = r.Header.Get("Content-Type")
+		if f.data == nil {
+			f.data = map[string][]byte{}
+		}
+		f.data[bucket+"/"+r.URL.Query().Get("path")] = body
 		_ = json.NewEncoder(w).Encode(storedObject{Bucket: bucket, Path: r.URL.Query().Get("path"), Size: int64(len(body)), MIMEType: r.Header.Get("Content-Type")})
 	case r.Method == "POST" && strings.HasSuffix(p, "/sign"):
 		var in struct {
@@ -107,6 +112,11 @@ func (f *fakeFiles) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(404)
 	}
 }
+
+// scannerFunc is a Scanner for tests.
+type scannerFunc func(data []byte) string
+
+func (f scannerFunc) Scan(_ context.Context, data []byte) (string, error) { return f(data), nil }
 
 func newService(t *testing.T) (*Service, *fakeFiles) {
 	f := &fakeFiles{buckets: map[string]bucketInfo{}, objects: map[string]string{}, patchOK: true, t: t}
@@ -254,5 +264,86 @@ func TestFetchPublic(t *testing.T) {
 		if _, _, err := s.FetchPublic(context.Background(), uuid.New(), bad); !errors.Is(err, ErrNotOurs) {
 			t.Errorf("%s: %v", bad, err)
 		}
+	}
+}
+
+func TestChatFiles(t *testing.T) {
+	for _, c := range []struct {
+		data []byte
+		want string
+	}{
+		{oggOpus(nil, false), "audio/ogg"},
+		{webmOf(false), "audio/webm"},
+		{mp3Of(true), "audio/mpeg"},
+		{mp3Of(false), "audio/mpeg"},
+		{mp4Of(false), "audio/mp4"},
+		{[]byte("OggS\x00\x02rest"), ""},
+		{[]byte{0xFF, 0xFB, 0x90, 0x00}, ""},
+		{[]byte("%PDF-1.4"), ""},
+		{[]byte("#!/bin/sh"), ""},
+	} {
+		if got := voiceType(c.data); got != c.want {
+			t.Errorf("voiceType(%q) = %q, want %q", c.data, got, c.want)
+		}
+	}
+	for ctype, want := range map[string]string{"image/jpeg": "photo", "audio/ogg": "voice", "application/pdf": "file"} {
+		if got := ChatKind(ctype); got != want {
+			t.Errorf("ChatKind(%s) = %s", ctype, got)
+		}
+	}
+
+	s, f := newService(t)
+	ctx, tenant := context.Background(), uuid.New()
+	voice := oggOpus([]string{"TITLE=secret"}, false)
+	got, err := s.PutChatFile(ctx, tenant, voice)
+	if err != nil || got.Type != "audio/ogg" || !strings.HasPrefix(got.Path, "chat/") || !strings.HasSuffix(got.Path, ".ogg") {
+		t.Fatalf("a voice note: %+v %v", got, err)
+	}
+	if f.objects[PrivateBucket+"/"+got.Path] != "audio/ogg" {
+		t.Fatalf("stored privately: %v", f.objects)
+	}
+	if stored := f.data[PrivateBucket+"/"+got.Path]; len(stored) != len(voice) || strings.Contains(string(stored), "secret") {
+		t.Fatalf("stored with its tags: %d bytes", len(stored))
+	}
+	if _, err := s.PutChatFile(ctx, tenant, webmOf(true)); !errors.Is(err, ErrFile) {
+		t.Fatalf("a video: %v", err)
+	}
+	if err := s.ScanChatFile(ctx, voice); !errors.Is(err, ErrNoScanner) {
+		t.Fatalf("no scanner: %v", err)
+	}
+	s.Scanner = scannerFunc(func(data []byte) string {
+		if strings.Contains(string(data), "EICAR") {
+			return "Eicar-Test-Signature"
+		}
+		return ""
+	})
+	if err := s.ScanChatFile(ctx, voice); err != nil {
+		t.Fatalf("scanned: %v", err)
+	}
+	if err := s.ScanChatFile(ctx, []byte("EICAR")); !errors.Is(err, ErrThreat) {
+		t.Fatalf("a threat: %v", err)
+	}
+	if b := f.buckets[PrivateBucket]; !strings.Contains(strings.Join(b.AllowedMIMETypes, ","), "audio/ogg") {
+		t.Errorf("the private bucket takes voice notes: %v", b.AllowedMIMETypes)
+	}
+	if got, err := s.PutChatFile(ctx, tenant, encodeJPEG(t, halves(100, 100))); err != nil || got.Type != "image/jpeg" || !strings.HasPrefix(got.Path, "files/") {
+		t.Fatalf("a photo: %+v %v", got, err)
+	}
+	if _, err := s.PutChatFile(ctx, tenant, []byte("#!/bin/sh\necho hi\n")); !errors.Is(err, ErrFile) {
+		t.Fatalf("a script: %v", err)
+	}
+	if _, err := s.PutChatFile(ctx, tenant, append([]byte("OggS"), make([]byte, MaxVoiceBytes)...)); !errors.Is(err, ErrFile) {
+		t.Fatalf("a voice note too long: %v", err)
+	}
+	// A signed URL on a host that is not the tenant's own (the fake signs
+	// on ref.xb.test) is never fetched.
+	creds := s.Credentials
+	s.Credentials = func(ctx context.Context, tenant uuid.UUID) (map[string]string, error) {
+		c, err := creds(ctx, tenant)
+		c["api_url"] = "https://elsewhere.test"
+		return c, err
+	}
+	if _, _, err := s.GetFile(ctx, tenant, "chat/x.ogg"); !errors.Is(err, ErrNotOurs) {
+		t.Fatalf("a signed URL elsewhere: %v", err)
 	}
 }

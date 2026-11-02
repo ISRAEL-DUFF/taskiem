@@ -30,6 +30,7 @@ import (
 	emailconn "github.com/israel-duff/taskiem/connectors/email"
 	formconn "github.com/israel-duff/taskiem/connectors/form"
 	invconn "github.com/israel-duff/taskiem/connectors/invoices"
+	linkconn "github.com/israel-duff/taskiem/connectors/link"
 	"github.com/israel-duff/taskiem/connectors/notify"
 	ridersconn "github.com/israel-duff/taskiem/connectors/riders"
 	schconn "github.com/israel-duff/taskiem/connectors/schools"
@@ -54,6 +55,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/ingest"
 	"github.com/israel-duff/taskiem/engine/inmail"
 	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/moneydigest"
 	"github.com/israel-duff/taskiem/engine/moneylog"
@@ -118,6 +120,7 @@ type config struct {
 	ChatSignup         api.ChatSignupConfig
 	Terms              api.TermsConfig
 	BindingDormantDays int
+	ChatHistoryDays    int
 	// Public is the public host for storefronts and forms (public.go).
 	Public publicConfig
 	// Messages are SMS and email to people outside a tenant (messages.go).
@@ -395,6 +398,13 @@ func chatWayIn(c *config) error {
 		}
 		c.BindingDormantDays = n
 	}
+	if v := strings.TrimSpace(os.Getenv("TASKIEM_CHAT_HISTORY_DAYS")); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > 3650 {
+			return fmt.Errorf("TASKIEM_CHAT_HISTORY_DAYS must be a number of days from 1 to 3650, not %q", v)
+		}
+		c.ChatHistoryDays = n
+	}
 	c.Terms = api.TermsConfig{URL: strings.TrimSpace(os.Getenv("TASKIEM_TERMS_URL")), Version: strings.TrimSpace(os.Getenv("TASKIEM_TERMS_VERSION")),
 		PrivacyVersion: strings.TrimSpace(os.Getenv("TASKIEM_PRIVACY_VERSION"))}
 	for k, v := range map[string]string{"TASKIEM_TERMS_VERSION": c.Terms.Version, "TASKIEM_PRIVACY_VERSION": c.Terms.PrivacyVersion} {
@@ -668,6 +678,9 @@ type engine struct {
 	// orders are the storefront's orders (S3); nil without the public
 	// host's key.
 	orders *storefront.Orders
+	// linkOps does link@1's actions (business links L6): the api role's
+	// server, or a worker's own when the api role runs elsewhere.
+	linkOps *linkconn.Late
 	// forms are hosted forms' api side (S7); nil without the public key.
 	forms *forms.Service
 	// schoolInboxKey opens what school families send from their pages
@@ -742,12 +755,16 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	emailOps := &emailconn.Late{}
 	tell := &notify.Late{}
 	invoiceOps := &invconn.Late{}
+	linkOps := &linkconn.Late{}
 	schoolOps := &schconn.Late{}
 	copts := cfg.Connectors
 	copts.Invoices = invoiceOps
 	copts.Schools = schoolOps
 	copts.Storefront = orders
 	copts.Riders = riderOps
+	bills := &links.Payments{Pool: pool}
+	copts.Bills = bills
+	copts.Link = linkOps
 	copts.Stock = stockOps
 	copts.Forms = formOps
 	copts.Email = emailOps
@@ -775,8 +792,8 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 		BYOK:         &byok.Factory{Guard: &egress.Guard{Logger: log}, AllowPrivate: cfg.Keys.AllowPrivate},
 		BYOKCacheTTL: cfg.Keys.CacheTTL, DestroyAfter: cfg.Keys.DestroyAfter,
 		Platform: secrets.PlatformClients{"iswallet": cfg.ISWallet.credentials()}}
-	e := &engine{cfg: cfg, log: log, pool: pool, registry: reg, vault: vault, connectors: src,
-		store: &runtime.Store{Pool: pool, Registry: reg, PII: vault, Defaults: &cfg.Limits, Billing: cfg.Billing.On, MoneyLog: &moneylog.Log{Pool: pool, PII: vault}, HooksURL: cfg.HooksURL}}
+	e := &engine{cfg: cfg, log: log, pool: pool, registry: reg, vault: vault, connectors: src, linkOps: linkOps,
+		store: &runtime.Store{Pool: pool, Registry: reg, PII: vault, Defaults: &cfg.Limits, Billing: cfg.Billing.On, MoneyLog: &moneylog.Log{Pool: pool, PII: vault}, PayoutSent: bills, HooksURL: cfg.HooksURL}}
 	e.stock = &stock.Stock{Pool: pool, Table: &storefront.XenibaseStock{Pool: pool, Registry: reg, Vault: vault, Guard: &egress.Guard{Logger: log}},
 		MoneyLog: &moneylog.Log{Pool: pool, PII: vault}}
 	stockOps.Set(e.stock)
@@ -1173,7 +1190,7 @@ func serve(ctx context.Context, args []string) error {
 			return err
 		}
 		srv.SignupPerAddress, srv.SignupBlockedDomains, srv.DocsURL = cfg.SignupPerAddress, cfg.SignupBlockedDomains, cfg.DocsURL
-		srv.ChatSignup, srv.Terms, srv.BindingDormantDays = cfg.ChatSignup, cfg.Terms, cfg.BindingDormantDays
+		srv.ChatSignup, srv.Terms, srv.BindingDormantDays, srv.ChatHistoryDays = cfg.ChatSignup, cfg.Terms, cfg.BindingDormantDays, cfg.ChatHistoryDays
 		if len(cfg.ChatSignup.Channels) > 0 {
 			log.Info("sign-up from chat on", "channels", strings.Join(cfg.ChatSignup.Channels, ","), "terms", cfg.Terms.Version, "privacy", cfg.Terms.PrivacyVersion)
 		}
@@ -1220,6 +1237,16 @@ func serve(ctx context.Context, args []string) error {
 		srv.DomainTarget = storefront.DomainTarget{CNAME: cfg.Public.CNAME, Addresses: cfg.Public.Addresses}
 		// Storefront photos in tenants' Xenibase storage (docs/media.md).
 		srv.Orders = e.orders
+		if e.orders != nil {
+			// A linked business's order tells its buyer in the buyer's own
+			// Taskiem (business links).
+			e.orders.TradeNotify = srv.TradeNotify
+		}
+		if e.invoices != nil {
+			// A linked business's terms set its invoices' due dates, and a
+			// reminder reaches it in its own business (business links L5).
+			e.invoices.DueFor, e.invoices.Reminded = srv.InvoiceDueFor, srv.InvoiceReminded
+		}
 		srv.Forms = e.forms
 		if e.forms != nil {
 			srv.ReachHost = e.forms.FormHost
@@ -1232,12 +1259,21 @@ func serve(ctx context.Context, args []string) error {
 		// Account numbers asked for with an invoice's chat buttons are
 		// answered in the chat.
 		e.invoices.Answered = srv.InvoiceAnswered
+		// An invoice to another business's own number offers it a link
+		// the first time (business links).
+		e.invoices.LinkOffer = srv.LinkOfferLine
 		srv.MailDomain = cfg.Mail.Domain
 		if e.email != nil {
 			tasks = append(tasks, func(ctx context.Context) error { e.email.Run(ctx, emailDrainInterval); return nil })
 		}
 		srv.Media = &media.Service{Credentials: srv.Tables.Credentials, Guard: &egress.Guard{Logger: log}, Logger: log}
+		if addr := strings.TrimSpace(os.Getenv("TASKIEM_CLAMD_ADDR")); addr != "" {
+			// Files sent in conversations are scanned as hosted forms' are;
+			// without a scanner they are refused (business links §13).
+			srv.Media.Scanner = &forms.ClamdScanner{Addr: addr}
+		}
 		srv.SiteProver = &embedsites.Prover{LookupTXT: api.LookupTXT, Guard: &egress.Guard{Logger: log}}
+		e.linkOps.Set(srv)
 		tasks = append(tasks, httpTask("api", cfg.Listen, srv.Handler(), log), srv.RunGitSyncs, srv.RunWhatsApp, srv.RunUSSD, srv.RunStorefronts, srv.RunStorefrontOrders, srv.RunForms, srv.RunInvoices)
 		if e.wa != nil {
 			// Template statuses from Meta, at start and hourly (docs/whatsapp.md#templates).
@@ -1385,6 +1421,13 @@ func serve(ctx context.Context, args []string) error {
 		tasks = append(tasks, s.Run)
 	}
 	if is("worker") {
+		if !is("api") {
+			// link@1's actions (business links L6) need the api's side of
+			// links, stock and invoices: a server of the worker's own.
+			ls := &api.Server{Store: e.store, Vault: e.vault, Registry: e.registry, Connectors: e.connectors, Logger: log, Invoices: e.invoices, Orders: e.orders}
+			e.chat(ls)
+			e.linkOps.Set(ls)
+		}
 		host, _ := os.Hostname()
 		loopback := connectorLoopback(e.registry, log)
 		prefix := host + "/"

@@ -215,6 +215,9 @@ func (s *Server) tgHandle(ctx context.Context, u telegram.Update) error {
 		return nil
 	}
 	in := whatsapp.Inbound{ID: strconv.FormatInt(u.ID, 10), Type: "text", Text: strings.TrimSpace(u.Text)}
+	if u.ReplyTo != 0 {
+		in.Quoted = strconv.FormatInt(u.ReplyTo, 10)
+	}
 	user, err := tg.UserOf(ctx, u.FromID)
 	if err != nil {
 		return err

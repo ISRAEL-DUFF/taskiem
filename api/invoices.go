@@ -343,11 +343,13 @@ func (s *Server) putCreditTerms(w http.ResponseWriter, r *http.Request) {
 // RunInvoices moves invoices past their due date to overdue, hourly (the
 // check is cheap and the date turns at midnight in Lagos).
 func (s *Server) RunInvoices(ctx context.Context) error {
+	s.chatHooks()
 	if s.Invoices == nil {
 		<-ctx.Done()
 		return nil
 	}
 	go s.runInvoicePayments(ctx)
+	go s.runLinkMirrors(ctx) // linked invoices into their buyers' bills (bills.go)
 	go s.runSchoolAccounts(ctx)
 	go s.runSchoolFamilyInbox(ctx)
 	tick := time.NewTicker(time.Hour)

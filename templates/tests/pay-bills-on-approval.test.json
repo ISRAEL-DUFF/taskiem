@@ -1,0 +1,186 @@
+{
+  "schema": "wd-test/v1",
+  "template": "pay-bills-on-approval",
+  "params": {},
+  "cases": [
+    {
+      "name": "bills up to the amount go for approval; bigger, queried or failed ones are held and named",
+      "trigger": {
+        "scheduled_time": "2026-11-06T08:00:00Z"
+      },
+      "mocks": {
+        "bills": {
+          "output": {
+            "count": 4,
+            "due_kobo": 0,
+            "bills": [
+              {
+                "reference": "INV-0042",
+                "business": "Dangote Stores",
+                "link": "l1",
+                "status": "open",
+                "amount_kobo": 42500000,
+                "paid_kobo": 0,
+                "due_kobo": 42500000,
+                "due_on": "2026-11-06",
+                "payable": true
+              },
+              {
+                "reference": "INV-0050",
+                "business": "Dangote Stores",
+                "link": "l1",
+                "status": "open",
+                "amount_kobo": 90000000,
+                "paid_kobo": 0,
+                "due_kobo": 90000000,
+                "due_on": "2026-11-06",
+                "payable": true
+              },
+              {
+                "reference": "INV-0007",
+                "business": "Mama Put",
+                "link": "l1",
+                "status": "open",
+                "amount_kobo": 1000000,
+                "paid_kobo": 0,
+                "due_kobo": 1000000,
+                "due_on": "2026-11-06",
+                "payable": false
+              },
+              {
+                "reference": "INV-0061",
+                "business": "Ada Farms",
+                "link": "l1",
+                "status": "open",
+                "amount_kobo": 2000000,
+                "paid_kobo": 0,
+                "due_kobo": 2000000,
+                "due_on": "2026-11-06",
+                "payable": true
+              }
+            ]
+          }
+        },
+        "pay[0].pay_one": {
+          "output": {
+            "payment_id": "pay_1",
+            "reference": "INV-0042",
+            "amount_kobo": 42500000,
+            "status": "approving"
+          }
+        },
+        "pay[1].pay_one": {
+          "error": {
+            "kind": "fatal",
+            "message": "set up paying bills first"
+          }
+        },
+        "tell": {
+          "output": {
+            "sent": true
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "pay[0].pay_one": {
+            "reference": "INV-0042"
+          },
+          "pay[1].pay_one": {
+            "reference": "INV-0061"
+          },
+          "tell": {
+            "message": "Waiting for approval: INV-0042. Held for you: INV-0050 from Dangote Stores, INV-0007 from Mama Put, INV-0061 (see Bills)."
+          }
+        },
+        "calls": {
+          "pay_one": 2
+        }
+      }
+    },
+    {
+      "name": "only one supplier's bills, when named",
+      "params": {
+        "supplier": "Dangote Stores",
+        "max_naira": 1000000
+      },
+      "trigger": {
+        "scheduled_time": "2026-11-06T08:00:00Z"
+      },
+      "mocks": {
+        "bills": {
+          "output": {
+            "count": 1,
+            "due_kobo": 90000000,
+            "bills": [
+              {
+                "reference": "INV-0050",
+                "business": "Dangote Stores",
+                "link": "l1",
+                "status": "open",
+                "amount_kobo": 90000000,
+                "paid_kobo": 0,
+                "due_kobo": 90000000,
+                "due_on": "2026-11-06",
+                "payable": true
+              }
+            ]
+          }
+        },
+        "pay[0].pay_one": {
+          "output": {
+            "payment_id": "pay_2",
+            "reference": "INV-0050",
+            "amount_kobo": 90000000,
+            "status": "approving"
+          }
+        },
+        "tell": {
+          "output": {
+            "sent": true
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "bills": {
+            "business": "Dangote Stores",
+            "due_within_days": 7
+          },
+          "tell": {
+            "message": "Waiting for approval: INV-0050. "
+          }
+        }
+      }
+    },
+    {
+      "name": "nothing due: nobody is told",
+      "trigger": {
+        "scheduled_time": "2026-11-06T08:00:00Z"
+      },
+      "mocks": {
+        "bills": {
+          "output": {
+            "count": 0,
+            "due_kobo": 0,
+            "bills": []
+          }
+        },
+        "tell": {
+          "output": {
+            "sent": true
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "pay": "skipped",
+          "tell": "skipped"
+        }
+      }
+    }
+  ]
+}

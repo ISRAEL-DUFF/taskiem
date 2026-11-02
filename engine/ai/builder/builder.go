@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 
@@ -577,6 +578,11 @@ func (b *Builder) contextDoc(req Request, reg connector.Lookup) (map[string]any,
 		if len(refs) >= n {
 			break
 		}
+		// link@1 works only between linked businesses: a business with
+		// none is not offered it (business links L6).
+		if strings.HasPrefix(r.Ref, "link@") && len(req.Context.Linked) == 0 {
+			continue
+		}
 		if !seen[r.Ref] {
 			seen[r.Ref] = true
 			refs = append(refs, r.Ref)
@@ -585,9 +591,17 @@ func (b *Builder) contextDoc(req Request, reg connector.Lookup) (map[string]any,
 	offered := []string{}
 	var tpls []map[string]any
 	if b.Templates != nil && len(req.Base) == 0 {
-		for i, m := range b.Templates.MatchFor(req.Goal, 2, req.Context.Holds) {
+		goal := req.Goal
+		if req.Context.NamesLinked(goal) {
+			// A business linked on Taskiem, named: the link templates
+			// (business links L6) are offered as for "a linked business".
+			goal += ", a linked business"
+		}
+		for i, m := range b.Templates.MatchFor(goal, 2, req.Context.Holds) {
 			tc := TemplateContext(m.Template)
-			tc["match"] = map[string]any{"score": m.Score, "matched_words": m.Matched}
+			// The score to a tenth, not rounded to a whole: a near miss
+			// of a reader's threshold stays one.
+			tc["match"] = map[string]any{"score": math.Round(m.Exact*10) / 10, "matched_words": m.Matched}
 			tpls = append(tpls, tc)
 			offered = append(offered, m.Template.ID)
 			// The best template brings its connectors' schemas, after the

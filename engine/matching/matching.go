@@ -137,6 +137,9 @@ type entry struct {
 	// Source is who said it moved: a rail (event, lookup, step) or a
 	// person (entered, upload).
 	Source string
+	// Description is what the rail passed on of the payer's note, where
+	// it gives one: an invoice it names (business links).
+	Description string
 }
 
 // Tenant looks at up to 100 of a tenant's new money-in entries.
@@ -144,7 +147,7 @@ func (m *Matcher) Tenant(ctx context.Context, tenant uuid.UUID) error {
 	var list []entry
 	err := db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT e.id, COALESCE(e.occurred_at, e.recorded_at), e.amount_kobo, e.fee_kobo, e.net, e.channel, e.reference,
-				COALESCE(e.account_number, ''), e.payer, taskiem_money_entry_reversed(e.id), e.source
+				COALESCE(e.account_number, ''), e.payer, taskiem_money_entry_reversed(e.id), e.source, COALESCE(e.description, '')
 			FROM money_entries e WHERE e.tenant_id = $1 AND e.direction = 'in' AND e.status = 'settled'
 			  AND e.kind IN ('payment', 'account_credit', 'pos_sale', 'statement', 'cash')
 			  AND NOT EXISTS (SELECT 1 FROM money_match_state s WHERE s.entry_id = e.id)
@@ -159,7 +162,7 @@ func (m *Matcher) Tenant(ctx context.Context, tenant uuid.UUID) error {
 		rs, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (raw, error) {
 			var x raw
 			var m moneylog.Entry
-			err := r.Scan(&x.e.ID, &x.e.When, &m.AmountKobo, &m.FeeKobo, &m.Net, &x.e.Channel, &x.e.Reference, &x.e.AccountNumber, &x.payer, &x.e.Reversed, &x.e.Source)
+			err := r.Scan(&x.e.ID, &x.e.When, &m.AmountKobo, &m.FeeKobo, &m.Net, &x.e.Channel, &x.e.Reference, &x.e.AccountNumber, &x.payer, &x.e.Reversed, &x.e.Source, &x.e.Description)
 			x.e.AmountKobo = moneylog.CountableKobo(m) - x.e.Reversed
 			return x, err
 		})

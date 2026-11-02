@@ -5,10 +5,11 @@
   "part": "C",
   "order": 3,
   "summary": "How work gets in: every /hooks route and how it is verified, registration with providers, platform apps routed by account, polling and cron, rates and back-pressure, and the WhatsApp, Telegram, USSD and email channels.",
-  "verified": "c7f9f76faafcecb67ccde261b0f28f90af48808d",
+  "verified": "45717e9447fe77bcd11f93e6ae074052e2994fad",
   "sources": [
     "engine/ingest/", "engine/remote/", "engine/whatsapp/", "engine/telegram/", "engine/ussd/", "engine/inmail/", "engine/voice/", "engine/lang/", "engine/reach/",
     "api/whatsapp_chat.go", "api/telegram.go", "api/ussd.go", "api/oauthconnections.go", "cmd/taskiem/mail.go",
+    "engine/links/events.go", "api/link_events.go", "api/chat_history.go",
     "engine/runtime/limits.go", "engine/db/migrations/00228_platform_apps.sql", "deploy/plans.yaml",
     "docs/decisions/0012-trigger-registration.md", "docs/decisions/0021-remote-trigger-registration.md", "docs/decisions/0051-platform-apps.md", "docs/spec/architecture.md"
   ]
@@ -48,6 +49,9 @@
 <h2 id="triggers-channels--registration">Registering triggers</h2>
 <p>Publishing a workflow version rewrites its <code>triggers</code> rows for each environment it deploys to, in the same transaction (<x-ref path="engine/ingest/triggers.go" symbol="func SyncEnvironments("><code>SyncEnvironments</code></x-ref>, <x-ref path="docs/decisions/0012-trigger-registration.md">decision 0012</x-ref>). A webhook path is unique within a tenant and environment. A schedule fires in <code>prod</code> only. A USSD service code belongs to one workflow per environment. Form and email endpoints keep their public address across versions.</p>
 <p>Some providers must be told where to send events. <x-ref path="engine/remote/remote.go"><code>engine/remote</code></x-ref> keeps those subscriptions in step with what is deployed (<x-ref path="docs/decisions/0021-remote-trigger-registration.md">decision 0021</x-ref>). A deploy declares the subscription it wants and a removal marks it absent, both in the publishing transaction. Then a reconciler, every 5 seconds in the scheduler, makes the provider match. It creates, updates or deletes the subscription, adopts one it finds under its own name after a crash, and renews it before it expires. The signing secret goes in the vault before the row records the provider's id, so a crash in between cannot leave a subscription whose deliveries Taskiem cannot verify. Fatal errors back off from an hour to a day, transient ones from 10 seconds to an hour (<x-ref path="engine/remote/remote.go" symbol="func backoff("><code>backoff</code></x-ref>).</p>
+
+<p>One trigger has no route and no provider: <code>link</code>, what happens between two businesses linked on Taskiem (<x-ref path="docs/decisions/0061-business-links.md">decision 0061</x-ref>). A bill mirrored, an order written or delivered, a message, a link accepted: the transaction that makes the event happen queues one row per deployed <code>prod</code> workflow of that business that starts on it (<x-ref path="engine/links/events.go" symbol="func QueueEventTx("><code>QueueEventTx</code></x-ref>, unique per workflow and event), and the link worker starts the run with the event as <code>trigger.body</code>: the link, the other business's name, the document's reference and the amounts, never contact details (<x-ref path="api/link_events.go" symbol="func (s *Server) startLinkRun("><code>startLinkRun</code></x-ref>). The other side's workflows never see it. Queued starts are kept 90 days.</p>
+<p>The web app is a fourth chat channel on the same conversation engine: a message typed in the Chat page's Taskiem conversation (<code>POST /v1/taskiem-chat</code>) is read as one typed on WhatsApp, in the business the page is in, and the history of every channel is kept there, sealed, for 90 days (<x-ref path="api/chat_history.go"><code>api/chat_history.go</code></x-ref>).</p>
 
 <h2 id="triggers-channels--platform-apps">One app, many tenants</h2>
 <p>For Slack, Meta and QuickBooks, a tenant connects through Taskiem's own app, and the provider sends every event for every customer to one address. <x-ref path="engine/ingest/apps.go" symbol="func (h *Handler) appEvent("><code>appEvent</code></x-ref> verifies the delivery with the app's secret, reads the account it is about (a Slack team, a Meta page, a QuickBooks company), and finds every connection made for that account (<x-ref path="docs/decisions/0051-platform-apps.md">decision 0051</x-ref>):</p>

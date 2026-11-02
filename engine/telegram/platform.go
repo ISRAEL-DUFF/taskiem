@@ -42,6 +42,9 @@ type Platform struct {
 	Logger *slog.Logger
 	// Now is the clock (tests).
 	Now func() time.Time
+	// Sent, when set, is told of every message sent, after it was sent
+	// (the Taskiem conversation's history; business links L3).
+	Sent whatsapp.SentHook
 }
 
 // New builds the platform from its configuration.
@@ -77,6 +80,14 @@ func (p *Platform) OwnTenant() uuid.UUID { return uuid.Nil }
 // (callback_data holds 64 bytes, decision tokens are longer). It returns
 // the message id.
 func (p *Platform) Send(ctx context.Context, addr string, m whatsapp.Message) (string, error) {
+	id, err := p.send(ctx, addr, m)
+	if err == nil && p.Sent != nil {
+		p.Sent(ctx, "telegram", addr, m)
+	}
+	return id, err
+}
+
+func (p *Platform) send(ctx context.Context, addr string, m whatsapp.Message) (string, error) {
 	chat, ok := ParseAddress(addr)
 	if !ok {
 		return "", errors.New("telegram: not a Telegram address")

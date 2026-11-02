@@ -241,12 +241,36 @@ func TestListFor(t *testing.T) {
 		_, err := w.inv.Void(ctx, tx, w.env.Tenant, voided.Number, "Raised in error", "user:ada")
 		return err
 	})
+	// A linked buyer's overdue invoice whose bill it queried is left out
+	// of both lists until the query is settled (business links §8).
+	linked := invoicing.Customer{Name: "Ada's Kitchen", Key: "link:" + uuid.NewString()}
+	queried := w.create(invoicing.Draft{Customer: linked, AmountKobo: 450000, DueOn: "2019-12-01"})
+	if _, err := w.inv.Send(ctx, w.env.Tenant, queried.Number, "user:ada", "s-"+queried.Number); err != nil {
+		t.Fatal(err)
+	}
+	w.in(func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE customer_invoices SET disputed = true WHERE tenant_id = $1 AND number = $2`, w.env.Tenant, queried.Number)
+		return err
+	})
 	over, err := svc.ListFor(ctx, w.env.Tenant, "overdue", 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(over) != 1 || over[0].Number != late.Number || over[0].DueKobo != 300000 || over[0].DueOn != "2020-01-01" || over[0].DaysOverdue < 2000 {
 		t.Fatalf("overdue %+v", over)
+	}
+	if customers, err := svc.ListCustomersOverdue(ctx, w.env.Tenant, 0); err != nil || len(customers) != 1 || customers[0].Number != late.Number {
+		t.Fatalf("customers overdue, the queried one left out: %v %+v", err, customers)
+	}
+	w.in(func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE customer_invoices SET disputed = false WHERE tenant_id = $1 AND number = $2`, w.env.Tenant, queried.Number)
+		return err
+	})
+	if over, err := svc.ListFor(ctx, w.env.Tenant, "overdue", 0, 0); err != nil || len(over) != 2 || over[0].Number != queried.Number {
+		t.Fatalf("settled, listed again: %v %+v", err, over)
+	}
+	if customers, err := svc.ListCustomersOverdue(ctx, w.env.Tenant, 0); err != nil || len(customers) != 2 {
+		t.Fatalf("customers overdue, settled: %v %+v", err, customers)
 	}
 	got, err := svc.ListFor(ctx, w.env.Tenant, "paid", time.Hour, 10)
 	if err != nil || len(got) != 1 || got[0].Number != paid.Number || got[0].PaidAt == nil || got[0].DueKobo != 0 {

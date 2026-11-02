@@ -11,8 +11,11 @@ export interface Supplier {
   id: string;
   name: string;
   phone: string;
-  /** Where an order goes: the chat app they tapped in on, or sms. */
-  reached: "whatsapp" | "telegram" | "sms";
+  /** Where an order goes: the chat app they tapped in on, or sms; link
+   * when the supplier is a linked business on Taskiem. */
+  reached: "whatsapp" | "telegram" | "sms" | "link";
+  /** The link with the supplier's business, when it is one. */
+  link_id?: string | null;
   owed_kobo: number;
   /** Their orders not yet received or cancelled. */
   open: number;
@@ -40,6 +43,8 @@ export interface PurchaseLine {
   quantity: number;
   cost_kobo: number;
   received: number;
+  /** What a linked supplier says it delivered. */
+  delivered?: number;
 }
 
 export type PurchaseStatus =
@@ -73,6 +78,19 @@ export interface Purchase {
   paid_kobo: number;
   owed_kobo: number;
   created_at: string;
+  /** Sent to a linked supplier through this link; the supplier's side,
+   * mirrored, and our own cancel request and Not all came. */
+  link_id?: string;
+  seller_status?: "proposed" | "received" | "changed" | "accepted" | "ready" | "dispatched" | "delivered" | "declined" | "cancelled" | null;
+  seller_note?: string;
+  change?: PurchaseLine[];
+  delivered_at?: string;
+  cancel_asked_at?: string;
+  short_at?: string;
+  /** Our count of what came of each line (Not all came). */
+  short?: number[];
+  /** When the supplier raised the order's invoice (mirrored). */
+  invoiced_at?: string;
 }
 
 /** An order's status in a word or two, and its badge. */
@@ -89,6 +107,7 @@ export const STATUS: Record<PurchaseStatus, { label: string; tone: string }> = {
 export function reachedLine(s: Supplier): string {
   if (s.reached === "whatsapp") return "Gets orders on WhatsApp";
   if (s.reached === "telegram") return "Gets orders on Telegram";
+  if (s.reached === "link") return "Linked on Taskiem: orders go straight to their business";
   return "Gets orders by text message until they tap the link";
 }
 
@@ -125,18 +144,37 @@ export function purchaseSub(p: Purchase): string {
   return parts.join(" · ");
 }
 
+/** Whether a linked supplier handles the order: it is received by the
+ * link's own steps (All came, Not all came), never by hand. */
+export const linkedOrder = (p: Pick<Purchase, "link_id" | "seller_status">) =>
+  !!p.link_id && !!p.seller_status;
+
+/** Whether the buyer may say what came of a linked supplier's delivery:
+ * All came, or Not all came (which stays open after the day, as a
+ * dispute the supplier settles). */
+export const answersDelivery = (
+  p: Pick<Purchase, "status" | "seller_status" | "link_id" | "short_at">,
+) =>
+  !!p.link_id &&
+  p.seller_status === "delivered" &&
+  !p.short_at &&
+  p.status !== "cancelled";
+
 /** What the order's buttons may do in its status. */
 export function purchaseActions(p: Purchase) {
   return {
-    send: p.status === "drafted",
-    confirm: p.status === "sent",
+    send: p.status === "drafted" && p.seller_status !== "proposed",
+    confirm: p.status === "sent" && !p.link_id,
     receive:
-      p.status === "sent" ||
-      p.status === "confirmed" ||
-      p.status === "part_received",
+      (p.status === "sent" ||
+        p.status === "confirmed" ||
+        p.status === "part_received") &&
+      !linkedOrder(p),
+    answerDelivery: answersDelivery(p),
     pay: p.status !== "drafted" && p.status !== "cancelled",
     cancel:
-      p.status === "drafted" || p.status === "sent" || p.status === "confirmed",
+      (p.status === "drafted" || p.status === "sent" || p.status === "confirmed") &&
+      !(p.link_id && (p.cancel_asked_at || p.seller_status === "delivered")),
   };
 }
 

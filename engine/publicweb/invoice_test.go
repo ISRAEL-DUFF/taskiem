@@ -64,6 +64,24 @@ func TestInvoicePage(t *testing.T) {
 		}
 	}
 
+	// The business's link code (business links): a customer that is a
+	// business on Taskiem too can ask to link; nothing without the web
+	// app's address or a code.
+	p.LinkCode = "abcd2345"
+	for _, theme := range brand.Themes {
+		s := invoiceServer(fakeInvoice(p), nil)
+		withBrand(s, brand.Brand{Theme: theme})
+		if body := get(s.Handler(), "GET", formHost, "/i/"+invoiceToken).Body.String(); strings.Contains(body, "/l/abcd2345") {
+			t.Errorf("%s: a link with no app address", theme)
+		}
+		s.AppURL = "https://app.taskiem.test/"
+		body := get(s.Handler(), "GET", formHost, "/i/"+invoiceToken).Body.String()
+		if !strings.Contains(body, `<a href="https://app.taskiem.test/l/abcd2345">Link with Ada Kitchen</a>`) {
+			t.Errorf("%s: no link line in %s", theme, body)
+		}
+	}
+	p.LinkCode = ""
+
 	// A draft, should one ever be read, is not found.
 	p.Status = "draft"
 	if res := get(invoiceServer(fakeInvoice(p), nil).Handler(), "GET", formHost, "/i/"+invoiceToken); res.Code != 404 {

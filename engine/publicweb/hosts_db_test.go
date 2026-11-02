@@ -186,6 +186,8 @@ func TestPublicRoleReachesNothingElse(t *testing.T) {
 		"taskiem_public_school_family(bytea)": true, "taskiem_public_school_family_students(bytea)": true, "taskiem_public_school_family_invoices(bytea)": true,
 		"taskiem_public_school_family_receipts(bytea)": true, "taskiem_public_school_family_requests(bytea)": true,
 		"taskiem_public_school_family_ask(bytea,text,uuid,bytea,bytea)": true,
+		// Business links: a business's link code, printed on its invoice's page (decision 0061).
+		"taskiem_public_link_code(uuid)": true,
 		// A customer's page (decision 0060, R5): their open lines with nothing personal, and paying towards the total.
 		"taskiem_public_customer_link(bytea)": true, "taskiem_public_customer_link_request(bytea,text,bigint)": true,
 		"taskiem_public_customer_link_payment(bytea)": true, "taskiem_public_customer_link_own_account(bytea)": true}

@@ -85,6 +85,10 @@ type Limits struct {
 	SMSMonthly                int64 `json:"sms_monthly"`
 	EmbedSites                int   `json:"embed_sites"`
 
+	// LinkMessagesDaily caps messages sent to linked businesses per UTC
+	// day (business links §13); 0: no limit.
+	LinkMessagesDaily int64 `json:"link_messages_daily"`
+
 	// The plan (when billing is on) and its subscription status: a
 	// sub-tenant's are its partner's. Set by the store.
 	plan, billing string
@@ -186,6 +190,7 @@ var LimitKeys = []struct{ Key, Help string }{
 	{"storefront_bookings_monthly", "storefront bookings per UTC month; beyond it bookings are paused (0: no limit)"},
 	{"sms_monthly", "SMS to customers per UTC month; beyond it only verification codes are sent (0: no limit)"},
 	{"embed_sites", "websites that may embed the storefront and forms (0: no limit)"},
+	{"link_messages_daily", "messages to linked businesses per UTC day; more are refused (0: no limit)"},
 }
 
 // DefaultEmbedSites is the platform's default number of websites that

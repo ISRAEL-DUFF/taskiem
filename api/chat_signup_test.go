@@ -139,6 +139,22 @@ func TestChatSignupOnWhatsApp(t *testing.T) {
 	if fmt.Sprint(actions) != "[tenant.create terms.accept]" {
 		t.Fatalf("audit: %v", actions)
 	}
+	// Asked once, in the sign-up's last message, whether other businesses
+	// find it (business links): the default holds until it answers.
+	if !strings.Contains(done[0].Text, "send *find us* to let them, or *hide us*") {
+		t.Errorf("not asked about being found: %q", done[0].Text)
+	}
+	var asked bool
+	var findable *bool
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT asked_at IS NOT NULL, findable FROM link_settings WHERE tenant_id = $1`, tenant).Scan(&asked, &findable); err != nil || !asked || findable != nil {
+		t.Errorf("link settings: asked %v, findable %v, %v", asked, findable, err)
+	}
+	if r := w.say(t, ada, "find us"); !strings.Contains(r, "can now find Ada Foods") {
+		t.Errorf("find us: %q", r)
+	}
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT findable FROM link_settings WHERE tenant_id = $1`, tenant).Scan(&findable); err != nil || findable == nil || !*findable {
+		t.Errorf("after find us: %v %v", findable, err)
+	}
 
 	// The first template, without the AI: its one missing detail, the
 	// steps, saved as a draft.

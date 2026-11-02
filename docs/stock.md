@@ -77,7 +77,9 @@ A **purchase order** is a supplier, lines (an item, how many, the price of one: 
 4. **Received**, in part or in full (**Goods came in**, `received 10 bags of rice` in chat, `receive` with `purchase` in a workflow): a `received` movement per item naming the order, the item's cost price set to the order's, and the value received owed to the supplier until paid. Once every line has come, the order is received.
 5. **Paid**, in cash or by transfer (**Record a payment**, `paid Dangote 425,000 transfer`): an `expense` in the [money log](money-log.md) with the supplier as its vendor and the order in its description. What is received and not yet paid is owed to the supplier, shown on **Suppliers** and in chat (`suppliers`).
 
-An order can be cancelled until anything is received on it. The morning [money summary](money-reports.md#the-daily-summary-in-chat) lists what is low, with how many to order.
+An order can be cancelled until anything is received on it. A supplier that is also a business on Taskiem, linked to yours, can be marked as that business (**On Taskiem** on the Suppliers page): its orders then arrive as orders in its business rather than messages, and its answers come back to the order. Before it accepts an order, a cancel cancels it on both sides; once it has, a cancel is a request it accepts or declines, which is narrower than the rule above. Say where they deliver (**Where linked suppliers deliver** on the Suppliers page) and their rider brings your orders there. When it delivers, **All came** or **Not all came** records what came; with neither, its count is taken a day later. Those are the only way such an order is received: **Goods came in** on the Stock page opens the order's page for it once it is delivered, and `received …` in chat answers with **All came**; neither records a receipt by hand. **Not all came** after the day still counts: your count is kept as a dispute on the order, and when the supplier agrees it, what did not come is taken off its invoice (your bill) and off your stock. It may also draft an order for you (an order taken by phone): it waits on its page for your **Confirm**, where you say which of your items each line is ([business links](spec/business-links.md) §16.3). A linked supplier may share a **price list** with you (**Prices** on its row; `prices from Dangote` in chat): its items at your prices, with a minimum and whether each is available. Order from it (**Draft the order**, or `order 20 bags of rice from Dangote`), saying the first time which of your items each of theirs is; that is remembered, and those items reach them as their own. Your own price lists, for the businesses you supply, are under **Storefront > Price lists** ([business links](spec/business-links.md) §16.5). The morning [money summary](money-reports.md#the-daily-summary-in-chat) lists what is low, with how many to order.
+
+**Credit with a linked supplier.** A linked supplier may give your business **days to pay** and a **credit limit** (its trade settings for the link). You see both, and what is left to use, on the link's **Statement** (**Statement** on the supplier's row), and the days set the due date of every bill they send you. An order that would take what you owe them, across open bills and accepted orders not yet invoiced, past the limit still reaches them, but waits flagged rather than being accepted by itself: your purchase order says why, and the people who pay your bills are told, with the bills to pay. Paying brings it within the limit on the next hourly check, or the supplier accepts it anyway. A workflow's `link@1 low_orders` lists what the low items would order from each linked supplier at their prices, and `place_order` sends such an order; `reorder-from-linked-suppliers` (below) does both every morning ([business links](spec/business-links.md) §16.6, §16.7).
 
 ## Counts, shrinkage and leaks
 
@@ -89,12 +91,13 @@ Three things are **leaks**, valued at cost and closed with a reason as other [le
 
 ## Templates
 
-Four templates start from the Stock record (Templates, or the Start page):
+Four templates start from the Stock record (Templates, or the Start page), and a fifth needs a linked supplier's price list:
 
 | Template | What it does |
 | --- | --- |
 | `low-stock-alert` | Every morning, the items at or below their reorder level, each with how many are left and how many to order |
 | `reorder-from-supplier` | Every morning, an order to each supplier for their low items (on no open order), sent after one approval; above the business's limit an order is left for a second person |
+| `reorder-from-linked-suppliers` | Every morning, one order per linked supplier for the low items on its price list (on no open order), at its prices and minimums, shown to the approver as one list and sent on approval; above the business's limit an order is left for a second person; low items no linked supplier lists are named ([business links](spec/business-links.md) §16.7) |
 | `sales-day-total` | Every evening, the day's sales recorded by chat or the Stock page, by cash, transfer and terminal, with what sold most |
 | `stock-count-reminder` | Once a week, a reminder to count the shelf |
 
@@ -142,7 +145,9 @@ Items are found as `price` finds them: the exact name, else the one the words st
 | `GET`/`POST /v1/stock/counts` | Counts; a count is `lines` (`item_id`, `count`) and a `reason`, with an `Idempotency-Key` |
 | `GET /v1/stock/shrinkage?from=&to=` | A period's received, sold and lost, at cost (this month by default) |
 | `GET`/`POST /v1/stock/purchases`, `POST /v1/stock/purchases/low` | Orders, drafted by hand or for what is low, with an `Idempotency-Key` |
+| `GET /v1/stock/purchases/{id}` | One order, with a linked supplier's side of it |
 | `POST /v1/stock/purchases/{id}/send`, `/confirm`, `/cancel`, `/receive`, `/pay` | An order's steps; `receive` and `pay` take an `Idempotency-Key` |
+| `PUT /v1/stock/suppliers/{id}/link`; `POST /v1/stock/purchases/{id}/accept-change`, `/all-came`, `/not-all-came` | A linked supplier, and an order's steps with it ([business links](spec/business-links.md) §16.3) |
 | `GET /v1/stock/sales?day=2026-10-29` | A day's sales (today in Lagos by default), added up by how paid, the top items, how many wait, and the terminal's sales with no items |
 
 ## In workflows: `stock@1`

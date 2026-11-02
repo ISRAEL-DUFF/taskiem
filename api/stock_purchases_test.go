@@ -215,3 +215,60 @@ func TestPurchaseOrdersByChat(t *testing.T) {
 		t.Errorf("help: %q", r)
 	}
 }
+
+// A supplier whose number is a business's own on Taskiem gets, with the
+// first order, the offer to link (business links §5.1), in the order's
+// message.
+func TestPurchaseOrderOffersALink(t *testing.T) {
+	ctx := context.Background()
+	w := shopWorld(t)
+	withStock(w.world)
+	withPurchases(w.world)
+	owner := w.tenant(t, "Mama Put Stores", "ada@mamaput.test")
+	dangote := w.tenant(t, "Dangote Depot", "d@depot.test")
+	const on, supplier = "+2348010000331", "+2348010000332"
+	w.bind(t, owner, on)
+	w.bind(t, dangote, supplier)
+	tenant := uuid.MustParse(tenantOf(t, owner))
+	owner.must(200, "POST", "/v1/stock/setup", nil)
+	owner.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Rice", "quantity": 3, "unit": "bag", "cost_kobo": 4000000, "reorder_level": 5,
+		"target_level": 20}, "Idempotency-Key", "r")
+	if r := w.say(t, on, "add supplier Dangote Depot "+supplier+" for rice"); !strings.Contains(r, "Add *Dangote Depot* as a supplier") {
+		t.Fatalf("add: %q", r)
+	}
+	w.yes(t, on)
+	// Dangote's owner writes, so the order reaches them in the window.
+	w.say(t, supplier, "links")
+	if err := db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		_, err := w.srv.Reach.LinkTx(ctx, tx, tenant, supplier, "whatsapp", supplier)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	w.say(t, on, "order from dangote")
+	before := len(w.graph.Sent(supplier))
+	w.yes(t, on)
+	got := w.lastTo(t, supplier, before)
+	if len(got) != 1 || !strings.Contains(got[0].Text, "Order P-") || !strings.Contains(got[0].Text, "Mama Put Stores is on Taskiem too. Link with us: ") ||
+		!strings.Contains(got[0].Text, "/l/") || len(got[0].Buttons) != 3 || !strings.HasPrefix(got[0].Buttons[2].ID, "lk:offer:") || got[0].Buttons[2].Title != "Link" {
+		t.Fatalf("to the supplier: %+v", got)
+	}
+	// From a number no one is bound to (a business's own WhatsApp number),
+	// Link answers the link to open signed in.
+	if r := w.press(t, "+2348010000399", got[0].Buttons[2].ID); len(r) != 1 || !strings.Contains(r[0].Text, "/l/"+strings.TrimPrefix(got[0].Buttons[2].ID, "lk:offer:")) {
+		t.Errorf("unbound Link: %+v", r)
+	}
+	// Dangote's owner taps Link: how they trade, then the request, which
+	// reaches Mama Put's owner.
+	ask := w.press(t, supplier, got[0].Buttons[2].ID)
+	if len(ask) != 1 || !strings.Contains(ask[0].Text, "How do you trade with *Mama Put Stores*?") || len(ask[0].Buttons) != 3 {
+		t.Fatalf("Link: %+v", ask)
+	}
+	before = len(w.graph.Sent(on))
+	if r := w.press(t, supplier, "lk:role:customer"); len(r) != 1 || !strings.Contains(r[0].Text, "Asked *Mama Put Stores* to link") {
+		t.Fatalf("asked: %+v", r)
+	}
+	if told := w.lastTo(t, on, before); len(told) != 1 || !strings.Contains(told[0].Text, "*Dangote Depot* asks to link with Mama Put Stores on Taskiem (they supply you)") {
+		t.Errorf("Mama Put told: %+v", told)
+	}
+}

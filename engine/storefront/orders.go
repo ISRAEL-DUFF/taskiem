@@ -94,6 +94,10 @@ type Orders struct {
 	// IssueTransfer asks the business's rail for a one-time account number
 	// for an order (N3; invoicing's IssueForOrder): nil offers none.
 	IssueTransfer IssueTransfer
+	// TradeNotify tells a linked business, the customer of an order of
+	// the kind trade, a message meant for its customer (business links
+	// §7): in its own Taskiem, not by SMS.
+	TradeNotify func(ctx context.Context, tenant uuid.UUID, ord Order, text string) error
 	// AfterPaid hears of an order a payment moved to paid, after the
 	// payment is counted (dispatch tells the rider at the door).
 	AfterPaid func(ctx context.Context, tenant uuid.UUID, ord Order) error
@@ -189,9 +193,10 @@ type Order struct {
 func (x Order) CustomerID() string { return x.subject }
 
 const orderCols = `id, reference, kind, status, customer, subject_id, basket, total_kobo, COALESCE(fulfilment, ''), payment, COALESCE(payment_url, ''),
-	COALESCE(payment_ref, ''), paid_at, run_id, COALESCE(note, ''), COALESCE(decided_by, ''), decided_at, expires_at, created_at, storefront_id,
+	COALESCE(payment_ref, ''), paid_at, run_id, COALESCE(note, ''), COALESCE(decided_by, ''), decided_at, expires_at, created_at,
+	COALESCE(storefront_id, '00000000-0000-0000-0000-000000000000'::uuid),
 	COALESCE(service_id, ''), COALESCE(service_name, ''), starts_at, ends_at, version, deposit_kobo, price_change,
-	COALESCE(zone, ''), COALESCE(delivery_kobo, 0), action_id, front_id, extra_kobo, paid_kobo, pay_to_kobo, pay_step_kobo, pay_seq, returned_at, instalments, waitlist,
+	COALESCE(zone, ''), COALESCE(delivery_kobo, 0), COALESCE(action_id, '00000000-0000-0000-0000-000000000000'::uuid), front_id, extra_kobo, paid_kobo, pay_to_kobo, pay_step_kobo, pay_seq, returned_at, instalments, waitlist,
 	CASE WHEN paid_at IS NULL THEN ''
 	  WHEN EXISTS (SELECT 1 FROM customer_invoice_accounts x WHERE x.order_id = storefront_orders.id AND x.status = 'paid') THEN 'transfer'
 	  WHEN EXISTS (SELECT 1 FROM storefront_order_payments p WHERE p.order_id = storefront_orders.id AND p.undoes IS NULL
@@ -268,7 +273,7 @@ func (o *Orders) ListOrdersOn(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 	switch status {
 	case "":
 	case "open":
-		q += ` AND status IN ('received', 'awaiting_payment', 'paid', 'accepted', 'refund_due', 'price_changed', 'dispatched', 'on_the_way', 'arrived')`
+		q += ` AND status IN ('received', 'awaiting_payment', 'paid', 'accepted', 'refund_due', 'price_changed', 'dispatched', 'on_the_way', 'arrived', 'proposed', 'changed')`
 	default:
 		args = append(args, status)
 		q += fmt.Sprintf(` AND status = $%d`, len(args))
@@ -705,6 +710,13 @@ func (x Order) Payable() int64 {
 	return x.TotalKobo
 }
 
+// StartTrade starts the order workflow's run for a linked business's
+// order (kind trade, business links §7), as a submission's starts: the
+// order names the business's built-in order action, so its workflow.
+func (o *Orders) StartTrade(ctx context.Context, tenant uuid.UUID, reference string) error {
+	return o.startRun(ctx, tenant, reference)
+}
+
 // DueKobo is what the order costs: its total and anything added since (a
 // late fee).
 func (x Order) DueKobo() int64 { return x.TotalKobo + x.ExtraKobo }
@@ -751,16 +763,29 @@ func (o *Orders) startRun(ctx context.Context, tenant uuid.UUID, reference strin
 		if ord, err = o.GetOrder(ctx, tx, tenant, reference); err != nil {
 			return err
 		}
-		if rec, err = o.recordOf(ctx, tx, tenant, ord); err != nil {
-			return err
+		// A linked business's order (kind trade, business links §7) names
+		// the built-in order action of the business's storefront, and so
+		// has a record like any order's; a business without a storefront
+		// takes such an order too, under its own name, with no action and
+		// no record (and with no status link in a run's trigger.body).
+		if ord.action != uuid.Nil {
+			if rec, err = o.recordOf(ctx, tx, tenant, ord); err != nil {
+				return err
+			}
 		}
-		var draft []byte
-		if err := tx.QueryRow(ctx, `SELECT COALESCE(published_slug, slug), draft FROM storefronts WHERE id = $1`, ord.storefront).Scan(&slug, &draft); err != nil {
-			return err
+		if ord.storefront == uuid.Nil {
+			if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, tenant).Scan(&name); err != nil {
+				return err
+			}
+		} else {
+			var draft []byte
+			if err := tx.QueryRow(ctx, `SELECT COALESCE(published_slug, slug), draft FROM storefronts WHERE id = $1`, ord.storefront).Scan(&slug, &draft); err != nil {
+				return err
+			}
+			var c Card
+			_ = json.Unmarshal(draft, &c)
+			name = c.Name
 		}
-		var c Card
-		_ = json.Unmarshal(draft, &c)
-		name = c.Name
 		if ord.Kind == "booking" {
 			sf, err := Get(ctx, tx, tenant)
 			if err != nil {
@@ -768,7 +793,16 @@ func (o *Orders) startRun(ctx context.Context, tenant uuid.UUID, reference strin
 			}
 			autoConfirm = sf.Availability.AutoConfirm
 		}
-		err = tx.QueryRow(ctx, `SELECT workflow_id, version FROM triggers WHERE type = 'storefront' AND storefront_action_id = $1 AND environment = 'prod'`, ord.action).Scan(&wf, &version)
+		// The workflow deployed on the order's action; a trade order with
+		// no action (a business without a storefront, or whose storefront
+		// has no built-in order action yet) starts the one deployed on the
+		// built-in order kind by name, as a trigger deployed before its
+		// action exists is kept (fronts F1c).
+		if ord.action != uuid.Nil {
+			err = tx.QueryRow(ctx, `SELECT workflow_id, version FROM triggers WHERE type = 'storefront' AND storefront_action_id = $1 AND environment = 'prod'`, ord.action).Scan(&wf, &version)
+		} else {
+			err = tx.QueryRow(ctx, `SELECT workflow_id, version FROM triggers WHERE type = 'storefront' AND storefront_action = 'order' AND environment = 'prod'`).Scan(&wf, &version)
+		}
 		if errors.Is(err, pgx.ErrNoRows) {
 			_, err = tx.Exec(ctx, `UPDATE storefront_orders SET note = 'No workflow is deployed for this form: set it up under Storefront.', updated_at = now()
 				WHERE tenant_id = $1 AND id = $2`, tenant, ord.ID)
@@ -1017,6 +1051,25 @@ func (o *Orders) Decide(ctx context.Context, tenant uuid.UUID, reference, decisi
 	var out map[string]any
 	var accepted *Order
 	err := db.InTenantTx(ctx, o.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		var err error
+		out, accepted, err = o.DecideTx(ctx, tx, tenant, reference, decision, note, actor)
+		return err
+	})
+	if err != nil || accepted == nil {
+		return out, err
+	}
+	return o.afterAccept(ctx, tenant, *accepted, out)
+}
+
+// DecideTx is Decide's decision in the caller's transaction (a linked
+// order's step takes it with its own record, business links §16.3): the
+// order's status, its delivery and its slot. It answers the order when
+// the decision accepts it, for the caller to lower its stock once the
+// transaction commits (LowerStock), else nil.
+func (o *Orders) DecideTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, reference, decision, note, actor string) (map[string]any, *Order, error) {
+	var out map[string]any
+	var accepted *Order
+	err := func() error {
 		ord, err := scanOrder(tx.QueryRow(ctx, `SELECT `+orderCols+` FROM storefront_orders WHERE tenant_id = $1 AND reference = $2 FOR UPDATE`, tenant, reference))
 		if err != nil {
 			return err
@@ -1034,7 +1087,7 @@ func (o *Orders) Decide(ctx context.Context, tenant uuid.UUID, reference, decisi
 			switch ord.Status {
 			case "declined", "refund_due":
 				next = ord.Status
-			case "received", "accepted", "dispatched":
+			case "received", "accepted", "dispatched", "changed":
 				next = "declined"
 				if ord.PaidAt != nil {
 					next = "refund_due"
@@ -1062,7 +1115,7 @@ func (o *Orders) Decide(ctx context.Context, tenant uuid.UUID, reference, decisi
 			switch ord.Status {
 			case "cancelled", "expired":
 				next = ord.Status
-			case "received", "accepted", "awaiting_payment", "dispatched", "on_the_way", "arrived":
+			case "received", "accepted", "awaiting_payment", "dispatched", "on_the_way", "arrived", "proposed", "changed":
 				next = "cancelled"
 				if ord.PaidAt != nil {
 					next = "refund_due"
@@ -1073,6 +1126,19 @@ func (o *Orders) Decide(ctx context.Context, tenant uuid.UUID, reference, decisi
 		}
 		if next == "" {
 			return fmt.Errorf("%w: %s cannot be %sed while %s", ErrDecision, reference, strings.TrimSuffix(decision, "e"), ord.Status)
+		}
+		if ord.Kind == "trade" && next == "accepted" && next != ord.Status {
+			// A linked business's order is accepted only with every line
+			// priced (business links §16.3), by whichever path accepts it:
+			// its invoice charges each line's price.
+			var unpriced bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM link_orders o, jsonb_array_elements(o.lines) l
+				WHERE o.order_id = $1 AND COALESCE((l->>'price_kobo')::bigint, 0) < 1)`, ord.ID).Scan(&unpriced); err != nil {
+				return err
+			}
+			if unpriced {
+				return fmt.Errorf("%w: %s has an item with no price; change the order to give it yours", ErrDecision, reference)
+			}
 		}
 		if next != ord.Status {
 			if _, err := tx.Exec(ctx, `UPDATE storefront_orders SET status = $3, note = COALESCE(NULLIF($4, ''), note), decided_by = COALESCE(decided_by, $5),
@@ -1090,6 +1156,12 @@ func (o *Orders) Decide(ctx context.Context, tenant uuid.UUID, reference, decisi
 				if _, err := tx.Exec(ctx, `UPDATE deliveries SET status = 'delivered', delivered_at = now() WHERE tenant_id = $1 AND order_id = $2
 					AND status IN ('accepted', 'picked_up', 'arrived')`, tenant, ord.ID); err != nil {
 					return err
+				}
+				if ord.Kind == "trade" {
+					// A linked order delivered by a rider: delivered now.
+					if _, err := tx.Exec(ctx, `UPDATE link_orders SET delivered_at = COALESCE(delivered_at, now()), updated_at = now() WHERE order_id = $1`, ord.ID); err != nil {
+						return err
+					}
 				}
 				if _, err := tx.Exec(ctx, `UPDATE deliveries SET status = 'withdrawn', answered_at = now() WHERE tenant_id = $1 AND order_id = $2 AND status = 'offered'`,
 					tenant, ord.ID); err != nil {
@@ -1114,11 +1186,34 @@ func (o *Orders) Decide(ctx context.Context, tenant uuid.UUID, reference, decisi
 			accepted = &ord
 		}
 		return nil
-	})
-	if err != nil || accepted == nil {
-		return out, err
+	}()
+	return out, accepted, err
+}
+
+// LowerStock lowers the stock for an order accepted in a caller's own
+// transaction (DecideTx), once it committed; a retry finishes what is
+// left. It answers the items there was too little of.
+func (o *Orders) LowerStock(ctx context.Context, tenant uuid.UUID, reference string) ([]string, error) {
+	var ord Order
+	if err := db.InTenantTx(ctx, o.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		var err error
+		ord, err = o.GetOrder(ctx, tx, tenant, reference)
+		return err
+	}); err != nil {
+		return nil, err
 	}
-	short, err := o.lowerStock(ctx, tenant, *accepted)
+	out, err := o.afterAccept(ctx, tenant, ord, map[string]any{})
+	if err != nil {
+		return nil, err
+	}
+	short, _ := out["short"].([]string)
+	return short, nil
+}
+
+// afterAccept lowers an accepted order's stock and notes what there was
+// too little of on it.
+func (o *Orders) afterAccept(ctx context.Context, tenant uuid.UUID, accepted Order, out map[string]any) (map[string]any, error) {
+	short, err := o.lowerStock(ctx, tenant, accepted)
 	if err != nil {
 		return nil, err
 	}
@@ -1225,10 +1320,15 @@ func (o *Orders) NotifyCustomer(ctx context.Context, tenant uuid.UUID, reference
 	}
 	var channels []string
 	overAllowance := false
+	var trade *Order
 	err := db.InTenantTx(ctx, o.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		ord, err := o.GetOrder(ctx, tx, tenant, reference)
 		if err != nil {
 			return err
+		}
+		if ord.Kind == "trade" {
+			trade = &ord
+			return nil
 		}
 		var draft []byte
 		if err := tx.QueryRow(ctx, `SELECT draft FROM storefronts WHERE id = $1`, ord.storefront).Scan(&draft); err != nil {
@@ -1270,6 +1370,16 @@ func (o *Orders) NotifyCustomer(ctx context.Context, tenant uuid.UUID, reference
 		}
 		return nil
 	})
+	if err == nil && trade != nil {
+		// A linked business is told in its own Taskiem, never by SMS.
+		if o.TradeNotify == nil {
+			return nil, errors.New("storefront: linked businesses cannot be told here")
+		}
+		if err := o.TradeNotify(ctx, tenant, *trade, strings.ReplaceAll(text, "{link}", "")); err != nil {
+			return nil, err
+		}
+		channels = []string{"link"}
+	}
 	if channels == nil {
 		channels = []string{}
 	}

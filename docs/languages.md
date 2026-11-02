@@ -56,7 +56,7 @@ The default language must be English or a language that is on. Turning a languag
 
 ## Voice notes
 
-A beta. A voice note (or audio message) from a person whose number is linked, in a tenant that turned voice notes on, on a deployment with a transcription provider, is:
+A beta. A voice note (or audio message) from a person whose number is linked, in a tenant that turned voice notes on, on a deployment with a transcription provider, is (a voice note recorded in the web app's Taskiem conversation comes with its message instead of being downloaded, and is otherwise the same):
 
 1. looked up and downloaded from Meta (only from Meta's media host, refused above the size cap without downloading when Meta reports the size, checked against Meta's digest);
 2. checked: an audio type, within the size cap, and for Ogg (WhatsApp's voice notes) within the duration cap, read from the stream itself (the largest granule position of any page);

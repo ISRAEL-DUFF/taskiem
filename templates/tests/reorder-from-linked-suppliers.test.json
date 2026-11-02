@@ -1,0 +1,235 @@
+{
+  "schema": "wd-test/v1",
+  "template": "reorder-from-linked-suppliers",
+  "params": {},
+  "cases": [
+    {
+      "name": "one order per linked supplier at their prices, sent after one approval",
+      "trigger": {
+        "scheduled_time": "2026-11-06T07:00:00Z"
+      },
+      "mocks": {
+        "low": {
+          "output": {
+            "count": 2,
+            "not_listed": [
+              "Garri"
+            ],
+            "orders": [
+              {
+                "business": "Dangote Stores",
+                "link": "l1",
+                "total_kobo": 45000000,
+                "items": [
+                  {
+                    "item": "s1",
+                    "name": "Rice 50kg",
+                    "own_item": "Rice",
+                    "unit": "bag",
+                    "quantity": 10,
+                    "price_kobo": 4500000
+                  }
+                ]
+              },
+              {
+                "business": "Mama Oil",
+                "link": "l2",
+                "total_kobo": 90000000,
+                "items": [
+                  {
+                    "item": "s9",
+                    "name": "Oil 25l",
+                    "own_item": "Oil",
+                    "unit": "bag",
+                    "quantity": 30,
+                    "price_kobo": 3000000
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "send[0].order": {
+          "output": {
+            "reference": "P-7QX4KD",
+            "business": "Dangote Stores",
+            "status": "sent",
+            "total_kobo": 45000000
+          }
+        },
+        "send[1].order": {
+          "output": {
+            "reference": "P-K2M9PA",
+            "business": "Mama Oil",
+            "status": "drafted",
+            "total_kobo": 90000000,
+            "reason": "P-K2M9PA is above your limit"
+          }
+        },
+        "tell": {
+          "output": {
+            "sent": true
+          }
+        }
+      },
+      "approvals": {
+        "approve": {
+          "decision": "approved",
+          "by": "owner"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "send[0].order": {
+            "business": "l1",
+            "items": [
+              {
+                "item": "s1",
+                "name": "Rice 50kg",
+                "own_item": "Rice",
+                "unit": "bag",
+                "quantity": 10,
+                "price_kobo": 4500000
+              }
+            ]
+          },
+          "tell": {
+            "message": "Ordered: P-7QX4KD from Dangote Stores, P-K2M9PA from Mama Oil (waiting for a second person to send it)"
+          }
+        }
+      }
+    },
+    {
+      "name": "a refused order is named, the rest still go",
+      "trigger": {
+        "scheduled_time": "2026-11-06T07:00:00Z"
+      },
+      "mocks": {
+        "low": {
+          "output": {
+            "count": 1,
+            "not_listed": [],
+            "orders": [
+              {
+                "business": "Dangote Stores",
+                "link": "l1",
+                "total_kobo": 45000000,
+                "items": [
+                  {
+                    "item": "s1",
+                    "name": "Rice 50kg",
+                    "own_item": "Rice",
+                    "unit": "bag",
+                    "quantity": 10,
+                    "price_kobo": 4500000
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "send[0].order": {
+          "error": {
+            "kind": "fatal",
+            "message": "Rice 50kg is not available now"
+          }
+        },
+        "tell": {
+          "output": {
+            "sent": true
+          }
+        }
+      },
+      "approvals": {
+        "approve": {
+          "decision": "approved",
+          "by": "owner"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "tell": {
+            "message": "Ordered: . Not ordered: Dangote Stores (Rice 50kg is not available now)"
+          }
+        }
+      }
+    },
+    {
+      "name": "rejected: nothing is ordered",
+      "trigger": {
+        "scheduled_time": "2026-11-06T07:00:00Z"
+      },
+      "mocks": {
+        "low": {
+          "output": {
+            "count": 1,
+            "not_listed": [],
+            "orders": [
+              {
+                "business": "Dangote Stores",
+                "link": "l1",
+                "total_kobo": 45000000,
+                "items": [
+                  {
+                    "item": "s1",
+                    "name": "Rice 50kg",
+                    "own_item": "Rice",
+                    "unit": "bag",
+                    "quantity": 10,
+                    "price_kobo": 4500000
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "tell": {
+          "output": {
+            "sent": true
+          }
+        }
+      },
+      "approvals": {
+        "approve": {
+          "decision": "rejected",
+          "by": "owner"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "send": "skipped",
+          "tell": "skipped"
+        },
+        "calls": {
+          "order": 0
+        }
+      }
+    },
+    {
+      "name": "nothing low: nothing to approve",
+      "trigger": {
+        "scheduled_time": "2026-11-06T07:00:00Z"
+      },
+      "mocks": {
+        "low": {
+          "output": {
+            "count": 0,
+            "not_listed": [],
+            "orders": []
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "approve": "skipped",
+          "send": "skipped",
+          "tell": "skipped"
+        }
+      }
+    }
+  ]
+}

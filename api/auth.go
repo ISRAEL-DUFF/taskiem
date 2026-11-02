@@ -88,6 +88,9 @@ type Principal struct {
 	// EndUser is set for an embed app's end user (embed.go): a lightweight
 	// principal in a sub-tenant, with neither UserID nor KeyID.
 	EndUser *EndUser
+	// Run is a workflow run acting through link@1 (link_connector.go):
+	// it acts as the system, "workflow:<run>".
+	Run uuid.UUID
 	// Invitee is a person with no membership signed in to answer their
 	// invitations (invitations.go): UserID only, no tenant, no permissions.
 	Invitee                   bool
@@ -142,6 +145,9 @@ func (p *Principal) HasRole(role string) bool {
 }
 
 func (p *Principal) Actor() string {
+	if p.Run != uuid.Nil {
+		return "workflow:" + p.Run.String()
+	}
 	if p.Agent != nil {
 		return "agent:" + p.Agent.Code
 	}
@@ -166,6 +172,9 @@ func (p *Principal) Human() uuid.UUID {
 }
 
 func (p *Principal) ActorType() string {
+	if p.Run != uuid.Nil {
+		return "system"
+	}
 	if p.Agent != nil {
 		return "agent"
 	}

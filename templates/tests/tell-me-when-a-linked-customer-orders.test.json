@@ -1,0 +1,51 @@
+{
+  "schema": "wd-test/v1",
+  "template": "tell-me-when-a-linked-customer-orders",
+  "params": {},
+  "cases": [
+    {
+      "name": "the team hears who ordered what",
+      "params": {
+        "role": "sales"
+      },
+      "trigger": {
+        "type": "link",
+        "event": "order.received",
+        "body": {
+          "event": "order.received",
+          "link": "l1",
+          "business": "Ada's Kitchen",
+          "reference": "P-7QX4KD",
+          "total_kobo": 45000000,
+          "note": "",
+          "lines": [
+            {
+              "item": "Rice 50kg",
+              "unit": "bag",
+              "quantity": 10,
+              "price_kobo": 4500000
+            }
+          ]
+        }
+      },
+      "mocks": {
+        "tell": {
+          "output": {
+            "sent": true
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "tell": {
+            "to": "role",
+            "role": "sales",
+            "title": "Ada's Kitchen ordered",
+            "message": "Ada's Kitchen sent order P-7QX4KD: 10 Rice 50kg, NGN 450000. See it on the Trade orders page."
+          }
+        }
+      }
+    }
+  ]
+}

@@ -137,9 +137,12 @@ type Invoice struct {
 	PaidAt     *time.Time `json:"paid_at"`
 	VoidedAt   *time.Time `json:"voided_at"`
 	VoidReason string     `json:"void_reason,omitempty"`
-	CreatedBy  string     `json:"created_by"`
-	CreatedAt  time.Time  `json:"created_at"`
-	Payments   []Payment  `json:"payments,omitempty"`
+	// Disputed: a linked buyer queried it (its bill); oldest-first
+	// matching passes over it (docs/spec/business-links.md §8).
+	Disputed  bool      `json:"disputed,omitempty"`
+	CreatedBy string    `json:"created_by"`
+	CreatedAt time.Time `json:"created_at"`
+	Payments  []Payment `json:"payments,omitempty"`
 	// Amendments are the changes made to it after it was sent, each also
 	// a line (amendments.go).
 	Amendments []Amendment `json:"amendments,omitempty"`
@@ -231,6 +234,22 @@ type Invoices struct {
 	// Answered is told of a request from chat once it is issued (or
 	// failed), to reply to the customer there.
 	Answered func(ctx context.Context, r Request, a Account, err error)
+	// LinkOffer is a line to add to an invoice sent to a phone that is
+	// another business's own on Taskiem, offering it a link the first time
+	// (docs/spec/business-links.md §5.1); "" for none, and always for an
+	// empty phone (called then to make the business's link code, which
+	// the invoice's page prints). fits says whether a
+	// line still fits the message: a line that does not is left out and
+	// not counted as offered. Nil offers nothing.
+	LinkOffer func(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, phone string, fits func(line string) bool) (string, error)
+	// DueFor, when set, is the due date an invoice to a customer takes
+	// when it names none: a linked business's terms (business links L5),
+	// "" for none.
+	DueFor func(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, customerKey string) (string, error)
+	// Reminded, when set, tells a linked business a message for it (an
+	// invoice's customer that is a linked business has no phone or email:
+	// it is told in its own business, L5), once the transaction commits.
+	Reminded func(ctx context.Context, tenant uuid.UUID, x Invoice, text string)
 	// OrderRequested issues what a storefront order's status page asked
 	// for (N3): the storefront checks the order and calls IssueForOrder.
 	// OrderReceived counts a payment the checker found into an order's
@@ -368,14 +387,14 @@ func nextNumber(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (string, Setti
 
 const cols = `id, number, status, customer, subject_id, lines, total_kobo, paid_kobo, currency, COALESCE(to_char(due_on, 'YYYY-MM-DD'), ''),
 	COALESCE(note, ''), connection, fee_paid_by, allow_part_payments, sent_at, paid_at, voided_at, COALESCE(void_reason, ''), created_by, created_at, page_token, customer_id,
-	kind, recorded_at`
+	kind, recorded_at, disputed`
 
 func scan(r pgx.Row) (Invoice, error) {
 	var x Invoice
 	var cust, lines, token []byte
 	err := r.Scan(&x.ID, &x.Number, &x.Status, &cust, &x.subject, &lines, &x.TotalKobo, &x.PaidKobo, &x.Currency, &x.DueOn,
 		&x.Note, &x.Connection, &x.FeePaidBy, &x.AllowPartPayments, &x.SentAt, &x.PaidAt, &x.VoidedAt, &x.VoidReason, &x.CreatedBy, &x.CreatedAt, &token, &x.customerID,
-		&x.Kind, &x.RecordedAt)
+		&x.Kind, &x.RecordedAt, &x.Disputed)
 	if err != nil {
 		return x, err
 	}
@@ -492,8 +511,10 @@ func check(d Draft) ([]Line, int64, error) {
 	if d.Customer.Name == "" || len(d.Customer.Name) > 120 {
 		return nil, 0, invalid("the customer's name is required (up to 120 characters)")
 	}
-	// A customer of the debtor book may have neither (book.go).
-	if d.Customer.Phone == "" && d.Customer.Email == "" && !strings.HasPrefix(d.Customer.Key, BookKeyPrefix) {
+	// A linked business (link:<its id>) is sent its invoice as a bill, not
+	// a message (docs/spec/business-links.md §6.1); a customer of the
+	// debtor book may have neither (book.go).
+	if d.Customer.Phone == "" && d.Customer.Email == "" && !strings.HasPrefix(d.Customer.Key, "link:") && !strings.HasPrefix(d.Customer.Key, BookKeyPrefix) {
 		return nil, 0, invalid("give the customer's phone number or email, to send the invoice to")
 	}
 	if d.Customer.Email != "" {
@@ -632,6 +653,11 @@ func (s *Invoices) CreateOnce(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 	lines, total, err := check(d)
 	if err != nil {
 		return Invoice{}, err
+	}
+	if d.DueOn == "" && d.Customer.Key != "" && s.DueFor != nil {
+		if d.DueOn, err = s.DueFor(ctx, tx, tenant, d.Customer.Key); err != nil {
+			return Invoice{}, err
+		}
 	}
 	number, st, err := nextNumber(ctx, tx, tenant)
 	if err != nil {
@@ -809,6 +835,26 @@ func (s *Invoices) Send(ctx context.Context, tenant uuid.UUID, idOrNumber, by, k
 		if family {
 			text = familySendText(business, cur, link)
 		}
+		if s.LinkOffer != nil {
+			// The SMS must stay within its parts; the invoice goes either
+			// way. A school family's invoice offers nothing (its phone is a
+			// parent's), but the hook still makes sure the business has the
+			// link code its invoice's page prints.
+			phone := cur.Customer.Phone
+			if family {
+				phone = ""
+			}
+			fits := func(line string) bool {
+				return sender.Segments(business+": "+text+" "+line) <= sender.MaxSegments
+			}
+			line, err := s.LinkOffer(ctx, tx, tenant, phone, fits)
+			if err != nil {
+				return err
+			}
+			if line != "" {
+				text += " " + line
+			}
+		}
 		out.Queued, out.SMSOverAllowance, err = s.deliver(ctx, tx, tenant, cur, business, text, "Invoice "+cur.Number+" from "+business, "invoice:"+key)
 		if err != nil {
 			return err
@@ -984,6 +1030,8 @@ func (s *Invoices) NotifyCustomer(ctx context.Context, tenant uuid.UUID, idOrNum
 		return nil, invalid("no text")
 	}
 	out := map[string]any{}
+	var linked *Invoice
+	var linkedText string
 	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		x, err := s.Get(ctx, tx, tenant, idOrNumber)
 		if err != nil {
@@ -991,6 +1039,31 @@ func (s *Invoices) NotifyCustomer(ctx context.Context, tenant uuid.UUID, idOrNum
 		}
 		if x.SentAt == nil && x.RecordedAt == nil {
 			return fmt.Errorf("%w: invoice %s has not been sent", ErrState, x.Number)
+		}
+		// A linked business is told in its own business, on the bill, not
+		// by text message (business links L5).
+		if strings.HasPrefix(x.Customer.Key, "link:") && s.Reminded != nil {
+			// A bill the buyer queried is not reminded until the query is
+			// settled (business links §8): nothing is sent, and the run is
+			// told why.
+			if x.Disputed {
+				out["number"], out["queued"], out["sent"], out["reason"] = x.Number, []string{}, false, "disputed"
+				return nil
+			}
+			// The bill is the link there: none is sent.
+			customerDue, customerLines := Naira(x.DueKobo), "1"
+			if strings.Contains(text, "{customer_due}") || strings.Contains(text, "{customer_lines}") {
+				due, n, err := customerOverdue(ctx, tx, tenant, x.CustomerID())
+				if err != nil {
+					return err
+				}
+				customerDue, customerLines = Naira(due), strconv.Itoa(n)
+			}
+			text = strings.NewReplacer("{link}", "", "{customer_link}", "", "{number}", x.Number, "{due}", Naira(x.DueKobo), "{fee_line}", "",
+				"{customer_due}", customerDue, "{customer_lines}", customerLines).Replace(text)
+			linked, linkedText = &x, strings.Join(strings.Fields(strings.TrimSuffix(strings.TrimSpace(text), ":")), " ")
+			out["number"], out["queued"] = x.Number, []string{"link"}
+			return nil
 		}
 		// A notebook debt may have no phone or email yet: nothing to send
 		// it to, which is not a failure (a receipt for cash on it).
@@ -1068,6 +1141,9 @@ func (s *Invoices) NotifyCustomer(ctx context.Context, tenant uuid.UUID, idOrNum
 		}
 		return nil
 	})
+	if err == nil && linked != nil {
+		s.Reminded(ctx, tenant, *linked, linkedText)
+	}
 	return out, err
 }
 
@@ -1414,7 +1490,8 @@ type ListedCustomer struct {
 
 // ListCustomersOverdue lists the customers with overdue invoices or
 // notebook debts, oldest due first: what one message per customer needs.
-// A debt with no due date is never overdue, so never listed.
+// A debt with no due date is never overdue, so never listed, and nor is
+// a linked buyer's invoice whose bill it queried (business links §8).
 func (s Service) ListCustomersOverdue(ctx context.Context, tenant uuid.UUID, limit int) ([]ListedCustomer, error) {
 	if limit <= 0 || limit > MaxListed {
 		limit = 50
@@ -1425,6 +1502,7 @@ func (s Service) ListCustomersOverdue(ctx context.Context, tenant uuid.UUID, lim
 			to_char(min(due_on), 'YYYY-MM-DD'), ((now() AT TIME ZONE 'Africa/Lagos')::date - min(due_on))
 			FROM customer_invoices WHERE tenant_id = $1 AND status IN ('recorded', 'sent', 'part_paid', 'overdue')
 			AND due_on IS NOT NULL AND due_on < (now() AT TIME ZONE 'Africa/Lagos')::date
+			AND NOT (disputed AND customer_id LIKE 'key:link:%')
 			GROUP BY customer_id ORDER BY min(due_on), customer_id LIMIT $2`, tenant, limit)
 		if err != nil {
 			return err
@@ -1462,7 +1540,8 @@ const MaxPaidWithin = 7 * 24 * time.Hour
 // (sent or part paid and past the due date, oldest due first) or "paid"
 // (paid within the last within, oldest paid first). Overdue is computed
 // from the date here as the status is, so an invoice the hourly check has
-// not reached yet is included.
+// not reached yet is included; a linked buyer's invoice whose bill it
+// queried is left out until the query is settled (business links §8).
 func (s Service) ListFor(ctx context.Context, tenant uuid.UUID, status string, within time.Duration, limit int) ([]Listed, error) {
 	if limit <= 0 || limit > MaxListed {
 		limit = 50
@@ -1475,6 +1554,7 @@ func (s Service) ListFor(ctx context.Context, tenant uuid.UUID, status string, w
 			((now() AT TIME ZONE 'Africa/Lagos')::date - due_on)
 			FROM customer_invoices WHERE tenant_id = $1 AND status IN ('recorded', 'sent', 'part_paid', 'overdue')
 			AND due_on IS NOT NULL AND due_on < (now() AT TIME ZONE 'Africa/Lagos')::date
+			AND NOT (disputed AND customer_id LIKE 'key:link:%')
 			ORDER BY due_on, number LIMIT $2`
 		args = []any{tenant, limit}
 	case "paid":
