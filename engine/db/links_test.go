@@ -397,3 +397,285 @@ func TestLinkSearchByWhatIsSold(t *testing.T) {
 		t.Errorf("found after turning it off: %+v", got)
 	}
 }
+
+// TestLinkRequestPrivacy (docs/spec/business-links.md §5.1, §13; migration
+// 00287): what a request may not reveal. A blind request to a business the
+// caller already sees leaves its row alone; a request by search after a
+// blind one shows as sent whether or not the blind one reached anyone;
+// the daily quota counts no blind request; the side blocked cannot lift
+// the block by blocking back or unblocking; and asking again a business
+// that blocked us leaves our clock as asking one that declined does.
+func TestLinkRequestPrivacy(t *testing.T) {
+	d := dbtest.New(t)
+	ada, dangote, cherry, bisi := d.SeedTenant(t, nil), d.SeedTenant(t, nil), d.SeedTenant(t, nil), d.SeedTenant(t, nil)
+	phones := map[uuid.UUID]string{dangote.ID: "+2348031110001", cherry.ID: "+2348031110002", bisi.ID: "+2348031110003"}
+	if err := scoped(t, d, []uuid.UUID{ada.ID}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `INSERT INTO link_settings (tenant_id, findable, updated_by) VALUES ($1, true, 'test')`, ada.ID)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for tn, phone := range phones {
+		owner := uuid.Must(uuid.NewV7())
+		if err := scoped(t, d, []uuid.UUID{tn}, func(tx pgx.Tx) error {
+			if _, err := tx.Exec(ctx, `INSERT INTO users (id, email) VALUES ($1, $2)`, owner, owner.String()+"@links.test"); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, `INSERT INTO memberships (tenant_id, user_id, role) VALUES ($1, $2, 'owner')`, tn, owner); err != nil {
+				return err
+			}
+			_, err := tx.Exec(ctx, `INSERT INTO link_settings (tenant_id, findable, updated_by) VALUES ($1, true, 'test')`, tn)
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := d.Admin.Exec(ctx, `INSERT INTO whatsapp_bindings (user_id, number) VALUES ($1, $2)`, owner, phone); err != nil {
+			t.Fatal(err)
+		}
+	}
+	as := func(tn uuid.UUID, fn func(tx pgx.Tx) error) error { return scoped(t, d, []uuid.UUID{tn}, fn) }
+	request := func(from, to uuid.UUID) *uuid.UUID {
+		t.Helper()
+		var told *uuid.UUID
+		if err := as(from, func(tx pgx.Tx) error {
+			return tx.QueryRow(ctx, `SELECT taskiem_link_request($1, NULL, NULL, NULL, 'supplier', 'user', 'u1')`, to).Scan(&told)
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return told
+	}
+	blind := func(from uuid.UUID, phone string) *uuid.UUID {
+		t.Helper()
+		var told *uuid.UUID
+		if err := as(from, func(tx pgx.Tx) error {
+			return tx.QueryRow(ctx, `SELECT taskiem_link_request(NULL, NULL, $1, NULL, 'supplier', 'user', 'u1')`, phone).Scan(&told)
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return told
+	}
+	view := func(me, other uuid.UUID) string {
+		t.Helper()
+		state := "(none)"
+		if err := as(me, func(tx pgx.Tx) error {
+			err := tx.QueryRow(ctx, `SELECT state FROM taskiem_links_of() WHERE business = $1`, other).Scan(&state)
+			if err == pgx.ErrNoRows {
+				return nil
+			}
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return state
+	}
+	linkID := func(me, other uuid.UUID) uuid.UUID {
+		t.Helper()
+		var id uuid.UUID
+		if err := as(me, func(tx pgx.Tx) error {
+			return tx.QueryRow(ctx, `SELECT id FROM taskiem_links_of() WHERE business = $1`, other).Scan(&id)
+		}); err != nil {
+			t.Fatalf("the link of %v with %v: %v", me, other, err)
+		}
+		return id
+	}
+	answer := func(tn, link uuid.UUID, a string) error {
+		return as(tn, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `SELECT taskiem_link_answer($1, $2, 'user', 'u2')`, link, a)
+			return err
+		})
+	}
+	// row is the stored row's privacy-bearing fields, read as the operator.
+	type row struct {
+		how, status          string
+		requestedAt, expires string
+		hidden               bool
+	}
+	rowOf := func(a, b uuid.UUID) row {
+		t.Helper()
+		var r row
+		if err := d.Admin.QueryRow(ctx, `SELECT how, status, requested_at::text, expires_at::text, requester_hidden FROM business_links
+			WHERE a_tenant = LEAST($1::uuid, $2::uuid) AND b_tenant = GREATEST($1::uuid, $2::uuid)`, a, b).Scan(&r.how, &r.status, &r.requestedAt, &r.expires, &r.hidden); err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	toldOf := func(tn uuid.UUID) int {
+		t.Helper()
+		var n int
+		if err := d.Admin.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE tenant_id = $1 AND action = 'link.requested'`, tn).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+
+	// 1. A row the requester sees is never touched by a blind request:
+	// while it waits, and once linked.
+	if told := request(ada.ID, dangote.ID); told == nil {
+		t.Fatal("Dangote not told")
+	}
+	before := rowOf(ada.ID, dangote.ID)
+	if told := blind(ada.ID, phones[dangote.ID]); told != nil {
+		t.Errorf("a blind request to a business already asked told %v", told)
+	}
+	if after := rowOf(ada.ID, dangote.ID); after != before || view(ada.ID, dangote.ID) != "requested" {
+		t.Errorf("a blind request moved a visible row: %+v -> %+v, Ada sees %s", before, after, view(ada.ID, dangote.ID))
+	}
+	if err := answer(dangote.ID, linkID(dangote.ID, ada.ID), "accept"); err != nil {
+		t.Fatal(err)
+	}
+	before = rowOf(ada.ID, dangote.ID)
+	if told := blind(ada.ID, phones[dangote.ID]); told != nil || rowOf(ada.ID, dangote.ID) != before || view(ada.ID, dangote.ID) != "active" {
+		t.Errorf("a blind request to a linked business: told %v, %+v -> %+v", told, before, rowOf(ada.ID, dangote.ID))
+	}
+	if n := toldOf(dangote.ID); n != 1 {
+		t.Errorf("Dangote told %d times", n)
+	}
+
+	// 2. A request by search where a blind one stands shows as sent, as it
+	// does where none did, and tells the business once.
+	if told := blind(ada.ID, phones[cherry.ID]); told == nil || *told != cherry.ID {
+		t.Fatalf("Cherry's number: told %v", told)
+	}
+	if v := view(ada.ID, cherry.ID); v != "(none)" {
+		t.Fatalf("a blind request shows to its requester as %s", v)
+	}
+	if told := request(ada.ID, cherry.ID); told != nil {
+		t.Errorf("Cherry told twice: %v", told)
+	}
+	if told := request(ada.ID, bisi.ID); told == nil {
+		t.Errorf("Bisi not told")
+	}
+	if c, b := view(ada.ID, cherry.ID), view(ada.ID, bisi.ID); c != "requested" || b != "requested" {
+		t.Errorf("after a blind request (Cherry) and none (Bisi), the search requests read %s and %s", c, b)
+	}
+	if r := rowOf(ada.ID, cherry.ID); r.how != "search" || r.status != "requested" {
+		t.Errorf("the blind row became %+v", r)
+	}
+	if n := toldOf(cherry.ID); n != 1 {
+		t.Errorf("Cherry told %d times", n)
+	}
+	// The same where the blind request was blocked.
+	if told := blind(bisi.ID, phones[cherry.ID]); told == nil {
+		t.Fatal("Cherry not told of Bisi's blind request")
+	}
+	if err := answer(cherry.ID, linkID(cherry.ID, bisi.ID), "block"); err != nil {
+		t.Fatal(err)
+	}
+	if told := request(bisi.ID, cherry.ID); told != nil {
+		t.Errorf("Cherry told of a blocked requester: %v", told)
+	}
+	if v := view(bisi.ID, cherry.ID); v != "requested" {
+		t.Errorf("blocked after a blind request, Bisi's search request reads %s", v)
+	}
+	if v := view(cherry.ID, bisi.ID); v != "blocked" {
+		t.Errorf("Cherry's block became %s", v)
+	}
+
+	// 3. The quota counts no blind request: twenty blind rows leave a
+	// request by search free; twenty by search refuse the next.
+	var partners []uuid.UUID
+	for range 20 {
+		p := d.SeedTenant(t, nil)
+		partners = append(partners, p.ID)
+		if _, err := d.Admin.Exec(ctx, `INSERT INTO business_links (id, a_tenant, b_tenant, status, requested_by, requester_actor, how, role, expires_at)
+			VALUES (gen_random_uuid(), LEAST($1::uuid, $2::uuid), GREATEST($1::uuid, $2::uuid), 'requested', $1, 'user:u1', 'blind', 'both', now() + interval '30 days')`, cherry.ID, p.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if told := request(cherry.ID, dangote.ID); told == nil {
+		t.Error("twenty blind requests counted against a request by search")
+	}
+	if _, err := d.Admin.Exec(ctx, `UPDATE business_links SET how = 'search' WHERE requested_by = $1 AND (a_tenant = ANY($2) OR b_tenant = ANY($2))`, cherry.ID, partners); err != nil {
+		t.Fatal(err)
+	}
+	if err := as(cherry.ID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `SELECT taskiem_link_request($1, NULL, NULL, NULL, 'supplier', 'user', 'u1')`, ada.ID)
+		return err
+	}); sqlState(err) != "53400" {
+		t.Errorf("the twenty-first request by search: %v", err)
+	}
+	if _, err := d.Admin.Exec(ctx, `DELETE FROM business_links WHERE a_tenant = ANY($1) OR b_tenant = ANY($1)`, partners); err != nil {
+		t.Fatal(err)
+	}
+
+	// 4. A block is each side's own. Dangote blocks the link it made with
+	// Ada; Ada reads it as ended and may block too, which neither lifts
+	// Dangote's block nor tells Dangote; her unblock lifts only hers; her
+	// later request is dropped.
+	ld := linkID(dangote.ID, ada.ID)
+	if err := answer(dangote.ID, ld, "block"); err != nil {
+		t.Fatal(err)
+	}
+	if v := view(ada.ID, dangote.ID); v != "ended" {
+		t.Fatalf("blocked by Dangote, Ada sees %s", v)
+	}
+	if err := answer(ada.ID, ld, "block"); err != nil {
+		t.Fatalf("Ada's block: %v", err)
+	}
+	if a, dg := view(ada.ID, dangote.ID), view(dangote.ID, ada.ID); a != "blocked" || dg != "blocked" {
+		t.Errorf("both blocked: Ada sees %s, Dangote %s", a, dg)
+	}
+	if err := answer(ada.ID, ld, "unblock"); err != nil {
+		t.Fatalf("Ada's unblock: %v", err)
+	}
+	if a, dg := view(ada.ID, dangote.ID), view(dangote.ID, ada.ID); a != "ended" || dg != "blocked" {
+		t.Errorf("Ada unblocked: Ada sees %s, Dangote %s", a, dg)
+	}
+	if err := answer(ada.ID, ld, "unblock"); sqlState(err) != "55000" {
+		t.Errorf("Ada unblocked again: %v", err)
+	}
+	told := toldOf(dangote.ID)
+	if got := request(ada.ID, dangote.ID); got != nil || toldOf(dangote.ID) != told {
+		t.Errorf("a request from a blocked business reached Dangote: %v", got)
+	}
+	if a, dg := view(ada.ID, dangote.ID), view(dangote.ID, ada.ID); a != "requested" || dg != "blocked" {
+		t.Errorf("asked a business that blocked us: Ada sees %s, Dangote %s", a, dg)
+	}
+	// With both sides blocking, the side that unblocks first still reads
+	// the other's block as a link that ended; the other's stands.
+	if err := answer(ada.ID, ld, "block"); err == nil {
+		t.Error("Ada blocked a request of her own")
+	}
+	if _, err := d.Admin.Exec(ctx, `UPDATE business_links SET a_blocked = true, b_blocked = true WHERE id = $1`, ld); err != nil {
+		t.Fatal(err)
+	}
+	if err := answer(dangote.ID, ld, "unblock"); err != nil {
+		t.Fatal(err)
+	}
+	if a, dg := view(ada.ID, dangote.ID), view(dangote.ID, ada.ID); a != "blocked" || dg != "(none)" {
+		t.Errorf("Dangote unblocked while Ada blocks: Ada sees %s, Dangote %s", a, dg)
+	}
+	if got := request(dangote.ID, ada.ID); got != nil {
+		t.Errorf("a request from Dangote reached Ada, who blocks it: %v", got)
+	}
+
+	// 5. Asked again within the 30 days, a business that declined and one
+	// that blocked keep the same clock; after them, both start again.
+	if err := answer(bisi.ID, linkID(bisi.ID, ada.ID), "decline"); err != nil {
+		t.Fatal(err)
+	}
+	if err := answer(cherry.ID, linkID(cherry.ID, ada.ID), "block"); err != nil {
+		t.Fatal(err)
+	}
+	declined, blocked := rowOf(ada.ID, bisi.ID), rowOf(ada.ID, cherry.ID)
+	request(ada.ID, bisi.ID)
+	request(ada.ID, cherry.ID)
+	if d2, b2 := rowOf(ada.ID, bisi.ID), rowOf(ada.ID, cherry.ID); d2.expires != declined.expires || b2.expires != blocked.expires {
+		t.Errorf("asked again within 30 days: declined %s -> %s, blocked %s -> %s", declined.expires, d2.expires, blocked.expires, b2.expires)
+	}
+	if _, err := d.Admin.Exec(ctx, `UPDATE business_links SET expires_at = now() - interval '1 minute' WHERE requested_by = $1`, ada.ID); err != nil {
+		t.Fatal(err)
+	}
+	if b, c := view(ada.ID, bisi.ID), view(ada.ID, cherry.ID); b != "not_accepted" || c != "not_accepted" {
+		t.Errorf("after 30 days: declined %s, blocked %s", b, c)
+	}
+	request(ada.ID, bisi.ID)
+	request(ada.ID, cherry.ID)
+	d2, b2 := rowOf(ada.ID, bisi.ID), rowOf(ada.ID, cherry.ID)
+	if d2.expires == declined.expires || b2.expires == blocked.expires || view(ada.ID, bisi.ID) != "requested" || view(ada.ID, cherry.ID) != "requested" {
+		t.Errorf("asked again after 30 days: declined %+v, blocked %+v", d2, b2)
+	}
+	if c := view(cherry.ID, ada.ID); c != "blocked" {
+		t.Errorf("Cherry's block after Ada asked again: %s", c)
+	}
+}
