@@ -1908,7 +1908,7 @@ button.chat-avatar { border: 0; padding: 0; cursor: pointer; }
 /* The camera beside the microphone, as on a phone (WhatsApp's): where the
    screen is touched; a computer has the clip's menu. */
 .camera-quick { display: none; }
-@media (pointer: coarse), (max-width: 860px) { .camera-quick { display: grid; } }
+@media (pointer: coarse) { .camera-quick { display: grid; } }
 
 /* Reactions and stars (Phase 5): the six emoji above the bubble's menu, a
    chip under the bubble for each emoji given, a star by the time. */

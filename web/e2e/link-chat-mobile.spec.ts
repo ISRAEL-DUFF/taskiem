@@ -291,28 +291,30 @@ test("Taskiem's long answer is folded the same way", async ({ browser }) => {
   await axeBoth(page, "a folded answer");
 });
 
-test("the camera is beside the clip at phone width, with a touch screen or without (a narrow window), and not on a wide one", async ({
+test("the camera is beside the clip on a touch screen, inside the pill; a computer's window, narrow or wide, has it in the clip's menu", async ({
   browser,
 }) => {
-  const narrow = await linked(browser, { viewport: PHONE }); // no touch: a narrow window
-  await narrow.buyer.goto(`/chat?with=${narrow.link}`);
-  const quick = narrow.buyer
-    .getByTestId("chat-pane")
-    .getByTestId("camera-quick");
+  const phone = await linked(browser, {
+    viewport: PHONE,
+    hasTouch: true,
+    isMobile: true,
+  });
+  await phone.buyer.goto(`/chat?with=${phone.link}`);
+  const pane = phone.buyer.getByTestId("chat-pane");
+  const quick = pane.getByTestId("camera-quick");
   await expect(quick).toBeVisible();
-  const pill = narrow.buyer.getByTestId("chat-pane").locator(".composer-pill");
-  const p = must(await pill.boundingBox());
+  const p = must(await pane.locator(".composer-pill").boundingBox());
   const q = must(await quick.boundingBox());
   expect(q.x).toBeGreaterThanOrEqual(p.x);
   expect(q.x + q.width).toBeLessThanOrEqual(p.x + p.width + 1); // inside the pill
-  await narrow.buyer.getByTestId("chat-pane").locator("#chat-text").fill("hi");
+  await pane.locator("#chat-text").fill("hi");
   await expect(quick).toBeHidden(); // the send button takes over, as WhatsApp's
 
-  const wide = await linked(browser, {
-    viewport: { width: 1280, height: 800 },
-  });
-  await wide.buyer.goto(`/chat?with=${wide.link}`);
-  await expect(
-    wide.buyer.getByTestId("chat-pane").getByTestId("camera-quick"),
-  ).toBeHidden();
+  for (const viewport of [PHONE, { width: 1280, height: 800 }]) {
+    const computer = await linked(browser, { viewport }); // a mouse: no touch
+    await computer.buyer.goto(`/chat?with=${computer.link}`);
+    await expect(
+      computer.buyer.getByTestId("chat-pane").getByTestId("camera-quick"),
+    ).toBeHidden();
+  }
 });
