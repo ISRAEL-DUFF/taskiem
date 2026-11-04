@@ -3,7 +3,7 @@
 // and schools. An area that is off is hidden and refused; nothing in it is
 // deleted, and turning it back on restores it.
 //
-// Five areas are rows of business_areas (migration 00305). The sixth,
+// Five areas are rows of business_areas (migration 00309). The sixth,
 // Schools, keeps its switch in school_settings (migration 00211) and is
 // read from there. A business with no row for an area follows DefaultOn.
 package areas

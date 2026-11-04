@@ -13,6 +13,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -317,6 +318,11 @@ func (s *Server) recordHeard(ctx context.Context, c *chat) {
 		}
 	}
 	id := s.keepHistory(ctx, c.tenant.ID, c.p.UserID, c.ch.Name(), true, kind, text, nil)
+	if c.ch.Name() == "web" {
+		// Whatever the person says on the web, the step has moved on: the
+		// buttons of the answer before are no longer to be pressed.
+		s.clearLiveButtons(ctx, c.tenant.ID, c.p.UserID)
+	}
 	if live := liveOf(ctx); live != nil {
 		live.add(TaskiemMessage{ID: id, Channel: "web", Inbound: true, Kind: kind, Text: text, CreatedAt: time.Now().UTC()})
 	}
@@ -420,6 +426,11 @@ func (w *webChannel) Send(ctx context.Context, addr string, m whatsapp.Message) 
 		tenant = w.tenant
 	}
 	id := w.s.keepHistory(ctx, tenant, user, "web", false, "text", m.Text, buttonTitles(m.Buttons))
+	if id != uuid.Nil {
+		// The ids of this answer's buttons are kept for a step's life (the
+		// history keeps titles only), so they press after a reload.
+		w.s.keepLiveButtons(ctx, tenant, user, id, m.Buttons)
+	}
 	if live := liveOf(ctx); live != nil && live.user == user && tenant == w.tenant {
 		msg := TaskiemMessage{ID: id, Channel: "web", Kind: "text", Text: strings.TrimSpace(m.Text), CreatedAt: time.Now().UTC()}
 		for _, b := range m.Buttons {
@@ -619,7 +630,7 @@ func (s *Server) taskiemHistory(w http.ResponseWriter, r *http.Request) {
 			}
 			out.Messages = append(out.Messages, x.m)
 		}
-		return nil
+		return s.attachLiveButtons(r.Context(), tx, p, out.Messages)
 	})
 	if err != nil {
 		s.fail(w, r, err)
@@ -629,4 +640,141 @@ func (s *Server) taskiemHistory(w http.ResponseWriter, r *http.Request) {
 		slices.Reverse(out.Messages)
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// taskiemSince is the person's own conversation with Taskiem, every channel,
+// after a time, oldest first (the live stream's look): the same rows and
+// words as GET /v1/taskiem-chat.
+func (s *Server) taskiemSince(ctx context.Context, tx pgx.Tx, p *Principal, since time.Time, limit int) ([]TaskiemMessage, error) {
+	rows, err := tx.Query(ctx, `SELECT id, channel, inbound, kind, body, buttons, created_at FROM chat_history
+		WHERE tenant_id = $1 AND user_id = $2 AND expires_at > now() AND created_at > $3 ORDER BY created_at, id LIMIT $4`, p.TenantID, p.UserID, since, limit)
+	if err != nil {
+		return nil, err
+	}
+	type row struct {
+		m       TaskiemMessage
+		env     map[string]any
+		buttons []string
+	}
+	got, err := pgx.CollectRows(rows, func(rr pgx.CollectableRow) (row, error) {
+		var x row
+		err := rr.Scan(&x.m.ID, &x.m.Channel, &x.m.Inbound, &x.m.Kind, &x.env, &x.buttons, &x.m.CreatedAt)
+		return x, err
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]TaskiemMessage, 0, len(got))
+	for _, x := range got {
+		v, err := s.Store.PII.OpenTx(ctx, tx, p.TenantID, x.env)
+		switch {
+		case errors.Is(err, pii.ErrErased):
+			x.m.Text = pii.Erased
+		case err != nil:
+			return nil, err
+		default:
+			x.m.Text, _ = v.(string)
+		}
+		for _, b := range x.buttons {
+			x.m.Buttons = append(x.m.Buttons, TaskiemButton{Title: b})
+		}
+		out = append(out, x.m)
+	}
+	return out, s.attachLiveButtons(ctx, tx, p, out)
+}
+
+// liveButtonsTTL is how long the buttons of an unanswered answer stay
+// pressable: as long as the step they belong to (waPendingTTL).
+const liveButtonsTTL = waPendingTTL
+
+// keepLiveButtons keeps the ids of the buttons an answer on the web came
+// with (replacing the answer's before), or, an answer with none, forgets
+// them: the question is over.
+func (s *Server) keepLiveButtons(ctx context.Context, tenant, user, message uuid.UUID, buttons []whatsapp.Button) {
+	var kept []TaskiemButton
+	for _, b := range buttons {
+		if b.ID != "" && strings.TrimSpace(b.Title) != "" && len(kept) < 10 {
+			kept = append(kept, TaskiemButton{ID: b.ID, Title: cutRunes(strings.TrimSpace(b.Title), 40)})
+		}
+	}
+	if len(kept) == 0 {
+		s.clearLiveButtons(ctx, tenant, user)
+		return
+	}
+	raw, err := json.Marshal(kept)
+	if err != nil {
+		return
+	}
+	ctx = context.WithoutCancel(ctx)
+	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		// Sealed: the ids carry decision tokens.
+		env, err := s.Store.PII.SealTx(ctx, tx, tenant, "other", string(raw))
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO chat_live_buttons (tenant_id, user_id, message_id, buttons, expires_at)
+			VALUES ($1, $2, $3, $4, now() + $5::interval)
+			ON CONFLICT (tenant_id, user_id) DO UPDATE SET message_id = EXCLUDED.message_id, buttons = EXCLUDED.buttons, expires_at = EXCLUDED.expires_at`,
+			tenant, user, message, env, liveButtonsTTL.String())
+		return err
+	})
+	if err != nil {
+		s.Logger.Warn("chat history: live buttons not kept", "tenant", tenant, "err", err)
+	}
+}
+
+// clearLiveButtons forgets the buttons still to be pressed.
+func (s *Server) clearLiveButtons(ctx context.Context, tenant, user uuid.UUID) {
+	if tenant == uuid.Nil || user == uuid.Nil {
+		return
+	}
+	ctx = context.WithoutCancel(ctx)
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `DELETE FROM chat_live_buttons WHERE tenant_id = $1 AND user_id = $2`, tenant, user)
+		return err
+	})
+	if err != nil {
+		s.Logger.Warn("chat history: live buttons not cleared", "tenant", tenant, "err", err)
+	}
+}
+
+// attachLiveButtons gives the answer the live buttons belong to its buttons'
+// ids, when it is among these messages and they have not expired. Every
+// other message has its buttons by title only.
+func (s *Server) attachLiveButtons(ctx context.Context, tx pgx.Tx, p *Principal, msgs []TaskiemMessage) error {
+	if len(msgs) == 0 {
+		return nil
+	}
+	var message uuid.UUID
+	var env map[string]any
+	err := tx.QueryRow(ctx, `SELECT message_id, buttons FROM chat_live_buttons
+		WHERE tenant_id = $1 AND user_id = $2 AND expires_at > now()`, p.TenantID, p.UserID).Scan(&message, &env)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	v, err := s.Store.PII.OpenTx(ctx, tx, p.TenantID, env)
+	if err != nil {
+		if errors.Is(err, pii.ErrErased) {
+			return nil
+		}
+		return err
+	}
+	text, _ := v.(string)
+	var live []TaskiemButton
+	if err := json.Unmarshal([]byte(text), &live); err != nil {
+		s.Logger.Warn("chat history: live buttons unreadable", "tenant", p.TenantID, "err", err)
+		return nil
+	}
+	if len(live) == 0 {
+		return nil
+	}
+	for i := range msgs {
+		if msgs[i].ID == message {
+			msgs[i].Buttons = live
+		}
+	}
+	return nil
 }

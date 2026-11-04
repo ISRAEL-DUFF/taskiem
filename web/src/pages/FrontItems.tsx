@@ -1,7 +1,21 @@
 import { useRef, useState } from "react";
 import { ApiError, del, get, patch, post, put, uploadFile } from "../api";
-import { EmptyState, ErrorBox, Field, Items, Modal, Row, Skeleton, useAction, useLoad } from "../ui";
-import { actionForm, actionRequest, type StorefrontAction } from "../lib/orders";
+import {
+  EmptyState,
+  ErrorBox,
+  Field,
+  Items,
+  Modal,
+  Row,
+  Skeleton,
+  useAction,
+  useLoad,
+} from "../ui";
+import {
+  actionForm,
+  actionRequest,
+  type StorefrontAction,
+} from "../lib/orders";
 import {
   emptyItem,
   itemForm,
@@ -19,7 +33,13 @@ import { refusalOf } from "../lib/trust";
  * what is on its list, with a photo, a price and whether it can be ordered
  * now, **Add an item**, and a change, a photo or a removal for each. They are
  * the rows of the front's table, so a change here is a change there. */
-export function FrontItems({ front, onChanged }: { front: Front; onChanged: () => void }) {
+export function FrontItems({
+  front,
+  onChanged,
+}: {
+  front: Front;
+  onChanged: () => void;
+}) {
   const base = `/v1/storefront/fronts/${front.id}/items`;
   const view = useLoad(() => get<FrontItemsView>(base), [front.id]);
   const act = useAction();
@@ -45,7 +65,11 @@ export function FrontItems({ front, onChanged }: { front: Front; onChanged: () =
           Items
         </h2>
         {v && (
-          <button type="button" className="primary" onClick={() => setEditing("new")}>
+          <button
+            type="button"
+            className="primary"
+            onClick={() => setEditing("new")}
+          >
             Add an item
           </button>
         )}
@@ -53,8 +77,20 @@ export function FrontItems({ front, onChanged }: { front: Front; onChanged: () =
       <ErrorBox error={view.error ?? act.error} />
       {!v && !view.error && <Skeleton rows={3} label="Loading the items…" />}
       {v && v.items.length === 0 && (
-        <EmptyState icon="storefront" action={<button type="button" className="primary" onClick={() => setEditing("new")}>Add your first item</button>}>
-          Nothing on this front yet. Add what you sell, with a price and a photo.
+        <EmptyState
+          icon="storefront"
+          action={
+            <button
+              type="button"
+              className="primary"
+              onClick={() => setEditing("new")}
+            >
+              Add your first item
+            </button>
+          }
+        >
+          Nothing on this front yet. Add what you sell, with a price and a
+          photo.
         </EmptyState>
       )}
       {v && v.items.length > 0 && (
@@ -66,16 +102,30 @@ export function FrontItems({ front, onChanged }: { front: Front; onChanged: () =
               image={thumb(it.photo)}
               tone={it.available ? undefined : "muted"}
               title={it.name}
-              side={it.price_kobo !== undefined ? <span className="sf-price">{formatPrice(it.price_kobo)}</span> : undefined}
+              side={
+                it.price_kobo !== undefined ? (
+                  <span className="sf-price">{formatPrice(it.price_kobo)}</span>
+                ) : undefined
+              }
               sub={
                 <span className="sub">
-                  {[it.category, it.available ? "" : "Hidden from customers", it.description].filter(Boolean).join(" · ")}
+                  {[
+                    it.category,
+                    it.available ? "" : "Hidden from customers",
+                    it.description,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </span>
               }
               testid="front-item"
               attrs={{ "data-available": String(it.available) }}
             >
-              <button type="button" className="small" onClick={() => setEditing(it)}>
+              <button
+                type="button"
+                className="small"
+                onClick={() => setEditing(it)}
+              >
                 Change<span className="sr-only"> {it.name}</span>
               </button>
               {v.takes.photo && (
@@ -88,7 +138,9 @@ export function FrontItems({ front, onChanged }: { front: Front; onChanged: () =
                     picker.current?.click();
                   }}
                 >
-                  {it.photo && Object.keys(it.photo).length > 0 ? "Change photo" : "Add photo"}
+                  {it.photo && Object.keys(it.photo).length > 0
+                    ? "Change photo"
+                    : "Add photo"}
                   <span className="sr-only"> for {it.name}</span>
                 </button>
               )}
@@ -99,8 +151,17 @@ export function FrontItems({ front, onChanged }: { front: Front; onChanged: () =
                   disabled={act.busy}
                   onClick={() =>
                     void act.run(
-                      async () => (await tidy(patch(`${base}/${encodeURIComponent(it.id)}`, { available: !it.available })), await after()),
-                      it.available ? `${it.name} is hidden` : `${it.name} is on sale`,
+                      async () => (
+                        await tidy(
+                          patch(`${base}/${encodeURIComponent(it.id)}`, {
+                            available: !it.available,
+                          }),
+                        ),
+                        await after()
+                      ),
+                      it.available
+                        ? `${it.name} is hidden`
+                        : `${it.name} is on sale`,
                     )
                   }
                 >
@@ -114,7 +175,13 @@ export function FrontItems({ front, onChanged }: { front: Front; onChanged: () =
                 disabled={act.busy}
                 onClick={() =>
                   confirm(`Remove ${it.name} from ${front.name}?`) &&
-                  void act.run(async () => (await del(`${base}/${encodeURIComponent(it.id)}`), await after()), `${it.name} removed`)
+                  void act.run(
+                    async () => (
+                      await del(`${base}/${encodeURIComponent(it.id)}`),
+                      await after()
+                    ),
+                    `${it.name} removed`,
+                  )
                 }
               >
                 Remove<span className="sr-only"> {it.name}</span>
@@ -133,7 +200,10 @@ export function FrontItems({ front, onChanged }: { front: Front; onChanged: () =
           e.target.value = "";
           const row = photoFor.current;
           if (!file || !row) return;
-          void act.run(async () => (await sendPhoto(row, file), await after()), "Photo added");
+          void act.run(
+            async () => (await sendPhoto(row, file), await after()),
+            "Photo added",
+          );
         }}
       />
       {editing && v && (
@@ -144,11 +214,16 @@ export function FrontItems({ front, onChanged }: { front: Front; onChanged: () =
           onClose={() => setEditing(null)}
           onSave={async (form, file) => {
             if (editing === "new") {
-              const made = await tidy(post<{ id: string }>(base, itemRequest(form, v.takes)));
+              const made = await tidy(
+                post<{ id: string }>(base, itemRequest(form, v.takes)),
+              );
               if (file) await sendPhoto(made.id, file);
             } else {
               const body = itemRequest(form, v.takes, itemForm(editing));
-              if (Object.keys(body).length > 0) await tidy(patch(`${base}/${encodeURIComponent(editing.id)}`, body));
+              if (Object.keys(body).length > 0)
+                await tidy(
+                  patch(`${base}/${encodeURIComponent(editing.id)}`, body),
+                );
               if (file) await sendPhoto(editing.id, file);
             }
             setEditing(null);
@@ -177,10 +252,15 @@ function ItemSheet({
   const [f, setF] = useState<ItemForm>(item ? itemForm(item) : emptyItem);
   const [photo, setPhoto] = useState<File | null>(null);
   const act = useAction();
-  const problem = itemProblem(f, view.takes) || (photo ? (imageProblem(photo) ?? "") : "");
-  const set = (k: keyof ItemForm) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
+  const problem =
+    itemProblem(f, view.takes) || (photo ? (imageProblem(photo) ?? "") : "");
+  const set = (k: keyof ItemForm) => (e: { target: { value: string } }) =>
+    setF({ ...f, [k]: e.target.value });
   return (
-    <Modal title={item ? `Change ${item.name}` : `Add an item to ${front.name}`} onClose={onClose}>
+    <Modal
+      title={item ? `Change ${item.name}` : `Add an item to ${front.name}`}
+      onClose={onClose}
+    >
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -188,32 +268,76 @@ function ItemSheet({
         }}
       >
         <Field label="Name">
-          <input value={f.name} onChange={set("name")} maxLength={120} autoFocus required />
+          <input
+            value={f.name}
+            onChange={set("name")}
+            maxLength={120}
+            autoFocus
+            required
+          />
         </Field>
         {view.takes.price && (
-          <Field label="Price (₦)" hint="What one costs, in naira. Leave it empty if it has no price.">
-            <input value={f.price} onChange={set("price")} inputMode="decimal" placeholder="1,500" />
+          <Field
+            label="Price (₦)"
+            hint="What one costs, in naira. Leave it empty if it has no price."
+          >
+            <input
+              value={f.price}
+              onChange={set("price")}
+              inputMode="decimal"
+              placeholder="1,500"
+            />
           </Field>
         )}
         {view.takes.description && (
-          <Field label="Description" hint="Optional: what it is, what it comes with.">
-            <textarea value={f.description} onChange={set("description")} maxLength={1000} rows={3} />
+          <Field
+            label="Description"
+            hint="Optional: what it is, what it comes with."
+          >
+            <textarea
+              value={f.description}
+              onChange={set("description")}
+              maxLength={1000}
+              rows={3}
+            />
           </Field>
         )}
         {view.takes.category && (
-          <Field label="Category" hint="Optional: items with the same category are shown together.">
-            <input value={f.category} onChange={set("category")} maxLength={60} />
+          <Field
+            label="Category"
+            hint="Optional: items with the same category are shown together."
+          >
+            <input
+              value={f.category}
+              onChange={set("category")}
+              maxLength={60}
+            />
           </Field>
         )}
         {view.takes.photo && (
-          <Field label={item ? "A new photo" : "Photo"} hint="Optional: a JPEG, PNG or WebP picture of it.">
-            <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setPhoto(e.target.files?.[0] ?? null)} />
+          <Field
+            label={item ? "A new photo" : "Photo"}
+            hint="Optional: a JPEG, PNG or WebP picture of it."
+          >
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={(e) => setPhoto(e.target.files?.[0] ?? null)}
+            />
           </Field>
         )}
-        {problem && f.name !== "" && <p className="hint" role="status">{problem}</p>}
+        {problem && f.name !== "" && (
+          <p className="hint" role="status">
+            {problem}
+          </p>
+        )}
         <ErrorBox error={act.error} />
         <div className="toolbar">
-          <button type="submit" className="primary" disabled={act.busy || problem !== ""}>
+          <button
+            type="submit"
+            className="primary"
+            disabled={act.busy || problem !== ""}
+          >
             {act.busy ? "Saving…" : item ? "Save" : "Add the item"}
           </button>
           <button type="button" onClick={onClose}>
@@ -229,7 +353,17 @@ function ItemSheet({
  * off or has no workflow behind it, so the page has nothing to press. One
  * button sets it up, switches it on and (as the Forms card does) has the
  * page updated, with the same checks. */
-export function OrdersBanner({ front, action, published, onDone }: { front: Front; action: StorefrontAction; published: boolean; onDone: () => void }) {
+export function OrdersBanner({
+  front,
+  action,
+  published,
+  onDone,
+}: {
+  front: Front;
+  action: StorefrontAction;
+  published: boolean;
+  onDone: () => void;
+}) {
   const act = useAction();
   const [waiting, setWaiting] = useState(false);
   const [notice, setNotice] = useState("");
@@ -237,8 +371,16 @@ export function OrdersBanner({ front, action, published, onDone }: { front: Fron
     act.run(async () => {
       setNotice("");
       const setUp = async (): Promise<boolean> => {
-        const made = await tidy(post<{ workflow_id: string }>(`/v1/storefront/actions/${action.id ?? ""}/setup`));
-        const p = await tidy(post<{ state: string }>(`/v1/workflows/${made.workflow_id}/versions/1/publish`));
+        const made = await tidy(
+          post<{ workflow_id: string }>(
+            `/v1/storefront/actions/${action.id ?? ""}/setup`,
+          ),
+        );
+        const p = await tidy(
+          post<{ state: string }>(
+            `/v1/workflows/${made.workflow_id}/versions/1/publish`,
+          ),
+        );
         return p.state === "published";
       };
       if (!action.workflow_id && !(await setUp())) {
@@ -246,29 +388,53 @@ export function OrdersBanner({ front, action, published, onDone }: { front: Fron
         return;
       }
       const enable = () =>
-        tidy(put(`/v1/storefront/actions/${action.id ?? ""}`, actionRequest(action.kind, { ...actionForm(action), enabled: true })));
+        tidy(
+          put(
+            `/v1/storefront/actions/${action.id ?? ""}`,
+            actionRequest(action.kind, {
+              ...actionForm(action),
+              enabled: true,
+            }),
+          ),
+        );
       try {
         await enable();
       } catch (e) {
         // No workflow deployed after all: set it up, then once more.
-        if (e instanceof ApiError && e.status === 409 && !refusalOf(e) && (await setUp())) await enable();
+        if (
+          e instanceof ApiError &&
+          e.status === 409 &&
+          !refusalOf(e) &&
+          (await setUp())
+        )
+          await enable();
         else throw e;
       }
-      setNotice(published ? "Customers can order now." : "Customers can order once you publish your page.");
+      setNotice(
+        published
+          ? "Customers can order now."
+          : "Customers can order once you publish your page.",
+      );
       onDone();
     }, false);
   return (
-    <section className="card sf-orders-banner" aria-labelledby={`orders-off-${front.id}`} data-testid="orders-banner">
+    <section
+      className="card sf-orders-banner"
+      aria-labelledby={`orders-off-${front.id}`}
+      data-testid="orders-banner"
+    >
       <h2 id={`orders-off-${front.id}`} style={{ marginTop: 0 }}>
         Customers cannot order from this front yet
       </h2>
       <p>
-        Its “{action.label}” form is {action.workflow_id ? "off" : "not set up"}, so items on {front.name} have nothing to press. Turn it on and an item opens with{" "}
-        <strong>Add to order</strong>.
+        Its “{action.label}” form is {action.workflow_id ? "off" : "not set up"}
+        , so items on {front.name} have nothing to press. Turn it on and an item
+        opens with <strong>Add to order</strong>.
       </p>
       {waiting && (
         <div className="notice" role="status">
-          The form's workflow waits for a second person to publish it under Approvals. Come back and turn it on once it is published.
+          The form's workflow waits for a second person to publish it under
+          Approvals. Come back and turn it on once it is published.
         </div>
       )}
       {notice && (
@@ -277,7 +443,12 @@ export function OrdersBanner({ front, action, published, onDone }: { front: Fron
         </div>
       )}
       <ErrorBox error={act.error} />
-      <button type="button" className="primary" disabled={act.busy} onClick={() => void turnOn()}>
+      <button
+        type="button"
+        className="primary"
+        disabled={act.busy}
+        onClick={() => void turnOn()}
+      >
         {act.busy ? "Turning on…" : "Turn on orders"}
       </button>
     </section>

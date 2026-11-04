@@ -9,12 +9,18 @@ import { axe, describe } from "./a11y";
 test.use({ bypassCSP: true, viewport: { width: 390, height: 844 } });
 
 const H = { "X-Taskiem-Request": "1" };
-const letters = () => String(Date.now()).replace(/\d/g, (d) => "abcdefghij".charAt(Number(d)));
+const letters = () =>
+  String(Date.now()).replace(/\d/g, (d) => "abcdefghij".charAt(Number(d)));
 
 async function signUp(page: Page, tenant: string) {
   const r = await page.request.post("/v1/signup", {
     headers: H,
-    data: { tenant, email: `${letters()}-${Math.random().toString(36).slice(2, 8)}@chat.test`, name: `${tenant.split(" ")[0]} Owner`, password: "correct horse battery" },
+    data: {
+      tenant,
+      email: `${letters()}-${Math.random().toString(36).slice(2, 8)}@chat.test`,
+      name: `${tenant.split(" ")[0]} Owner`,
+      password: "correct horse battery",
+    },
   });
   expect(r.status(), await r.text()).toBe(201);
 }
@@ -22,10 +28,18 @@ async function signUp(page: Page, tenant: string) {
 async function axeBoth(page: Page, where: string) {
   for (const scheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+    // The theme is the app's own (data-theme), not the browser's: set it, so dark is checked for real.
+    await page.evaluate((t) => {
+      if (t === "dark") document.documentElement.dataset.theme = "dark";
+      else delete document.documentElement.dataset.theme;
+    }, scheme);
+    await page.waitForTimeout(400); // colours ease between themes: wait for them to settle
     const vs = await axe(page);
     expect(vs, describe(`${where} (${scheme})`, vs)).toEqual([]);
   }
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(390);
 }
 
 test("two linked businesses talk", async ({ browser }) => {
@@ -35,15 +49,43 @@ test("two linked businesses talk", async ({ browser }) => {
   await signUp(seller, sellerName);
   const buyer = await (await browser.newContext()).newPage();
   await signUp(buyer, `Ada Kitchen ${stamp}`);
-  expect((await seller.request.put("/v1/link-settings", { headers: H, data: { findable: true } })).status()).toBe(200);
-  const found = await (await buyer.request.get(`/v1/links/search?q=${encodeURIComponent(`dangote depot ${stamp}`)}`, { headers: H })).json();
-  expect((await buyer.request.post("/v1/links", { headers: H, data: { business: found.results[0].business, role: "supplier" } })).status()).toBe(201);
-  const pending = await (await seller.request.get("/v1/links", { headers: H })).json();
+  expect(
+    (
+      await seller.request.put("/v1/link-settings", {
+        headers: H,
+        data: { findable: true },
+      })
+    ).status(),
+  ).toBe(200);
+  const found = await (
+    await buyer.request.get(
+      `/v1/links/search?q=${encodeURIComponent(`dangote depot ${stamp}`)}`,
+      { headers: H },
+    )
+  ).json();
+  expect(
+    (
+      await buyer.request.post("/v1/links", {
+        headers: H,
+        data: { business: found.results[0].business, role: "supplier" },
+      })
+    ).status(),
+  ).toBe(201);
+  const pending = await (
+    await seller.request.get("/v1/links", { headers: H })
+  ).json();
   const link = pending.links[0].id as string;
-  expect((await seller.request.post(`/v1/links/${link}/accept`, { headers: H })).status()).toBe(200);
+  expect(
+    (
+      await seller.request.post(`/v1/links/${link}/accept`, { headers: H })
+    ).status(),
+  ).toBe(200);
 
   // Dangote writes.
-  const sent = await seller.request.post(`/v1/link-chats/${link}/messages`, { headers: H, data: { text: "Good morning, rice is back in stock" } });
+  const sent = await seller.request.post(`/v1/link-chats/${link}/messages`, {
+    headers: H,
+    data: { text: "Good morning, rice is back in stock" },
+  });
   expect(sent.status(), await sent.text()).toBe(201);
 
   // Ada's list: the conversation with its last message and one unread.
@@ -54,21 +96,57 @@ test("two linked businesses talk", async ({ browser }) => {
   await expect(row).toContainText("1");
   await axeBoth(buyer, "/chat with a conversation");
 
+  // The filters: Unread shows it, Archived (none yet) does not, All again.
+  await buyer.getByRole("button", { name: "Unread (1)" }).click();
+  await expect(row).toBeVisible();
+  await buyer.getByRole("button", { name: "Archived (0)" }).click();
+  await expect(row).toHaveCount(0);
+  await expect(buyer.getByText("No archived chats.")).toBeVisible();
+  await buyer.getByRole("button", { name: "All", exact: true }).click();
+  await expect(row).toBeVisible();
+
   // Opened: the bubble, read; Dangote's double tick.
   await row.click();
   const pane = buyer.getByTestId("chat-pane");
-  await expect(pane.getByTestId("chat-message")).toContainText("Good morning, rice is back in stock");
+  await expect(pane.getByTestId("chat-message")).toContainText(
+    "Good morning, rice is back in stock",
+  );
   await expect(pane.getByTestId("chat-message")).toContainText("Dangote");
   await axeBoth(buyer, "an open conversation");
+
+  // Contact info: the avatar opens the business's panel; Escape closes it.
+  await pane.getByRole("button", { name: `About ${sellerName}` }).click();
+  const info = pane.getByTestId("chat-info");
+  await expect(info).toContainText("They supply you");
+  await expect(
+    info.getByRole("button", { name: "Mute notifications" }),
+  ).toBeVisible();
+  await axeBoth(buyer, "the contact info");
+  await buyer.keyboard.press("Escape");
+  await expect(info).toHaveCount(0);
   await expect(async () => {
-    const out = await (await seller.request.get(`/v1/link-chats/${link}/messages`, { headers: H })).json();
+    const out = await (
+      await seller.request.get(`/v1/link-chats/${link}/messages`, {
+        headers: H,
+      })
+    ).json();
     expect(out.messages[0].read_at).toBeTruthy();
   }).toPass({ timeout: 10_000 });
 
   // Swiped right on a phone: replying to it; cancelled.
   const bubble = pane.getByTestId("chat-message").first();
-  const at = (await bubble.boundingBox()) ?? { x: 0, y: 0, width: 0, height: 0 };
-  const touch = { pointerType: "touch", pointerId: 7, isPrimary: true, clientY: at.y + 10 };
+  const at = (await bubble.boundingBox()) ?? {
+    x: 0,
+    y: 0,
+    width: 0,
+    height: 0,
+  };
+  const touch = {
+    pointerType: "touch",
+    pointerId: 7,
+    isPrimary: true,
+    clientY: at.y + 10,
+  };
   await bubble.dispatchEvent("pointerdown", { ...touch, clientX: at.x + 10 });
   await bubble.dispatchEvent("pointermove", { ...touch, clientX: at.x + 50 });
   await bubble.dispatchEvent("pointermove", { ...touch, clientX: at.x + 90 });
@@ -78,62 +156,133 @@ test("two linked businesses talk", async ({ browser }) => {
   await expect(pane.getByTestId("chat-replying")).toHaveCount(0);
 
   // A reply quoting it, sent with Enter.
-  await pane.getByRole("button", { name: /^Reply/ }).click();
+  // Reply, from the menu at the bubble's corner.
+  await pane
+    .getByTestId("chat-message")
+    .first()
+    .getByRole("button", { name: /^More/ })
+    .click();
+  await pane
+    .getByTestId("chat-more")
+    .getByRole("button", { name: "Reply" })
+    .click();
   await expect(pane.getByTestId("chat-replying")).toContainText("Good morning");
   await pane.getByLabel("Message").fill("Send 20 bags, please");
   await pane.getByLabel("Message").press("Enter");
   const mine = pane.locator('[data-testid="chat-message"][data-mine="true"]');
   await expect(mine).toContainText("Send 20 bags, please");
   await expect(mine.getByTestId("chat-quote")).toContainText("Good morning");
-  await expect(mine.getByRole("img", { name: "Delivered" })).toHaveText("✓✓");
-  const theirs = await (await seller.request.get(`/v1/link-chats/${link}/messages`, { headers: H })).json();
+  await expect(mine.getByRole("img", { name: "Delivered" })).toBeVisible();
+  const theirs = await (
+    await seller.request.get(`/v1/link-chats/${link}/messages`, { headers: H })
+  ).json();
   expect(theirs.messages[1].body).toBe("Send 20 bags, please");
   expect(theirs.messages[1].reply.mine).toBe(true);
 
   // Dangote's next message arrives while it is open.
-  await seller.request.post(`/v1/link-chats/${link}/messages`, { headers: H, data: { text: "On its way tomorrow" } });
-  await expect(pane.getByTestId("chat-message").last()).toContainText("On its way tomorrow", { timeout: 10_000 });
+  await seller.request.post(`/v1/link-chats/${link}/messages`, {
+    headers: H,
+    data: { text: "On its way tomorrow" },
+  });
+  await expect(pane.getByTestId("chat-message").last()).toContainText(
+    "On its way tomorrow",
+    { timeout: 10_000 },
+  );
 
   // Search in the conversation; archive it.
   await pane.getByTestId("chat-search").fill("bags");
   await expect(pane.getByTestId("chat-message")).toHaveCount(1);
   await pane.getByTestId("chat-search").fill("");
+  await pane
+    .getByRole("button", { name: "More about this conversation" })
+    .click();
   await pane.getByRole("button", { name: "Archive" }).click();
   await pane.getByRole("button", { name: "Back to the chats" }).click();
-  await expect(buyer.getByRole("button", { name: "Archived (1)" })).toBeVisible();
+  await expect(
+    buyer.getByRole("button", { name: "Archived (1)" }),
+  ).toBeVisible();
   await expect(buyer.getByTestId("link-linked")).toHaveCount(0);
 });
 
-test("a bill's card, its query, and the query settled by taking an amount off", async ({ browser }) => {
+test("a bill's card, its query, and the query settled by taking an amount off", async ({
+  browser,
+}) => {
   const stamp = letters();
   const sellerName = `Cherry Blocks ${stamp}`;
   const seller = await (await browser.newContext()).newPage();
   await signUp(seller, sellerName);
   const buyer = await (await browser.newContext()).newPage();
   await signUp(buyer, `Bola Builders ${stamp}`);
-  expect((await seller.request.put("/v1/link-settings", { headers: H, data: { findable: true } })).status()).toBe(200);
-  const found = await (await buyer.request.get(`/v1/links/search?q=${encodeURIComponent(`cherry blocks ${stamp}`)}`, { headers: H })).json();
-  expect((await buyer.request.post("/v1/links", { headers: H, data: { business: found.results[0].business, role: "supplier" } })).status()).toBe(201);
-  const link = (await (await seller.request.get("/v1/links", { headers: H })).json()).links[0].id as string;
-  expect((await seller.request.post(`/v1/links/${link}/accept`, { headers: H })).status()).toBe(200);
-  const buyerID = (await (await buyer.request.get("/v1/me", { headers: H })).json()).tenant_id as string;
+  expect(
+    (
+      await seller.request.put("/v1/link-settings", {
+        headers: H,
+        data: { findable: true },
+      })
+    ).status(),
+  ).toBe(200);
+  const found = await (
+    await buyer.request.get(
+      `/v1/links/search?q=${encodeURIComponent(`cherry blocks ${stamp}`)}`,
+      { headers: H },
+    )
+  ).json();
+  expect(
+    (
+      await buyer.request.post("/v1/links", {
+        headers: H,
+        data: { business: found.results[0].business, role: "supplier" },
+      })
+    ).status(),
+  ).toBe(201);
+  const link = (
+    await (await seller.request.get("/v1/links", { headers: H })).json()
+  ).links[0].id as string;
+  expect(
+    (
+      await seller.request.post(`/v1/links/${link}/accept`, { headers: H })
+    ).status(),
+  ).toBe(200);
+  const buyerID = (
+    await (await buyer.request.get("/v1/me", { headers: H })).json()
+  ).tenant_id as string;
 
   // Cherry invoices Bola as a linked business: a card in both conversations.
   const inv = await seller.request.post("/v1/invoices", {
     headers: { ...H, "Idempotency-Key": `inv-${stamp}` },
-    data: { customer: { name: "Bola Builders", key: `link:${buyerID}` }, lines: [{ description: "Blocks", quantity: 100, unit_kobo: 45000 }] },
+    data: {
+      customer: { name: "Bola Builders", key: `link:${buyerID}` },
+      lines: [{ description: "Blocks", quantity: 100, unit_kobo: 45000 }],
+    },
   });
   expect(inv.status(), await inv.text()).toBe(201);
   const x = await inv.json();
-  expect((await seller.request.post(`/v1/invoices/${x.id}/send`, { headers: { ...H, "Idempotency-Key": `send-${stamp}` } })).status()).toBe(200);
+  expect(
+    (
+      await seller.request.post(`/v1/invoices/${x.id}/send`, {
+        headers: { ...H, "Idempotency-Key": `send-${stamp}` },
+      })
+    ).status(),
+  ).toBe(200);
   await buyer.goto(`/chat?with=${link}`);
   const card = buyer.getByTestId("chat-card");
-  await expect(card).toContainText(`${sellerName} sent invoice ${x.number}`, { timeout: 20_000 });
-  await expect(card.getByRole("link", { name: `Pay ${x.number}` })).toBeVisible();
+  await expect(card).toContainText(`${sellerName} sent invoice ${x.number}`, {
+    timeout: 20_000,
+  });
+  await expect(
+    card.getByRole("link", { name: `Pay ${x.number}` }),
+  ).toBeVisible();
   await axeBoth(buyer, "a bill's card");
 
   // Bola queries it; on Cherry's invoice, the query is settled with ₦5,000 off.
-  expect((await buyer.request.post(`/v1/bills/${x.number}/query`, { headers: H, data: { reason: "Ten blocks broke" } })).status()).toBe(200);
+  expect(
+    (
+      await buyer.request.post(`/v1/bills/${x.number}/query`, {
+        headers: H,
+        data: { reason: "Ten blocks broke" },
+      })
+    ).status(),
+  ).toBe(200);
   await seller.goto(`/invoices/${x.id}`);
   const q = seller.getByTestId("invoice-query");
   await expect(q).toBeVisible();
@@ -143,7 +292,10 @@ test("a bill's card, its query, and the query settled by taking an amount off", 
   await axeBoth(seller, "settling a query");
   await q.getByRole("button", { name: "Settle the query" }).click();
   await expect(q).toHaveCount(0);
-  await expect(seller.getByTestId("doc-thread")).toContainText("Took ₦5,000 off: Ten blocks broke", { timeout: 15_000 });
+  await expect(seller.getByTestId("doc-thread")).toContainText(
+    "Took ₦5,000 off: Ten blocks broke",
+    { timeout: 15_000 },
+  );
   await axeBoth(seller, "an invoice's messages");
 });
 
@@ -159,7 +311,9 @@ test("the Taskiem conversation on the web", async ({ browser }) => {
   // The words of the phone: a question with buttons, answered by a press.
   await pane.getByLabel("Message to Taskiem").fill("cash in 5,000 till");
   await pane.getByLabel("Message to Taskiem").press("Enter");
-  const theirs = pane.locator('[data-testid="taskiem-message"][data-mine="false"]');
+  const theirs = pane.locator(
+    '[data-testid="taskiem-message"][data-mine="false"]',
+  );
   await expect(theirs.last()).toContainText("₦5,000");
   await axeBoth(page, "Taskiem asking");
   await theirs.last().getByRole("button").first().click();
@@ -168,7 +322,11 @@ test("the Taskiem conversation on the web", async ({ browser }) => {
   // Kept: the same conversation after a reload, its old buttons no longer pressable.
   await page.reload();
   await expect(page.getByTestId("taskiem-message")).toHaveCount(4);
-  await expect(page.getByTestId("taskiem-pane").getByRole("button", { name: "Yes" })).toHaveCount(0);
+  await expect(
+    page
+      .getByTestId("taskiem-pane")
+      .getByRole("button", { name: "Yes", exact: true }),
+  ).toHaveCount(0);
   await axeBoth(page, "the Taskiem conversation's history");
 });
 
@@ -183,37 +341,85 @@ test("pin, the typing line, forward and delete for me", async ({ browser }) => {
   const buyer = await make(`Femi Foods ${stamp}`);
   const third = await make(`Gbenga Gas ${stamp}`);
   const link = async (to: Page, name: string) => {
-    expect((await to.request.put("/v1/link-settings", { headers: H, data: { findable: true } })).status()).toBe(200);
-    const found = await (await buyer.request.get(`/v1/links/search?q=${encodeURIComponent(name.toLowerCase())}`, { headers: H })).json();
-    expect((await buyer.request.post("/v1/links", { headers: H, data: { business: found.results[0].business, role: "supplier" } })).status()).toBe(201);
-    const id = (await (await to.request.get("/v1/links", { headers: H })).json()).links[0].id as string;
-    expect((await to.request.post(`/v1/links/${id}/accept`, { headers: H })).status()).toBe(200);
+    expect(
+      (
+        await to.request.put("/v1/link-settings", {
+          headers: H,
+          data: { findable: true },
+        })
+      ).status(),
+    ).toBe(200);
+    const found = await (
+      await buyer.request.get(
+        `/v1/links/search?q=${encodeURIComponent(name.toLowerCase())}`,
+        { headers: H },
+      )
+    ).json();
+    expect(
+      (
+        await buyer.request.post("/v1/links", {
+          headers: H,
+          data: { business: found.results[0].business, role: "supplier" },
+        })
+      ).status(),
+    ).toBe(201);
+    const id = (
+      await (await to.request.get("/v1/links", { headers: H })).json()
+    ).links[0].id as string;
+    expect(
+      (
+        await to.request.post(`/v1/links/${id}/accept`, { headers: H })
+      ).status(),
+    ).toBe(200);
     return id;
   };
   const withSeller = await link(seller, `Eko Rice ${stamp}`);
   const withThird = await link(third, `Gbenga Gas ${stamp}`);
-  const sent = await seller.request.post(`/v1/link-chats/${withSeller}/messages`, { headers: H, data: { text: "Rice is ₦45,000 a bag this week" } });
+  const sent = await seller.request.post(
+    `/v1/link-chats/${withSeller}/messages`,
+    { headers: H, data: { text: "Rice is ₦45,000 a bag this week" } },
+  );
   expect(sent.status()).toBe(201);
 
   await buyer.goto(`/chat?with=${withSeller}`);
   const pane = buyer.getByTestId("chat-pane");
-  await expect(pane.getByTestId("chat-message")).toContainText("Rice is ₦45,000");
+  await expect(pane.getByTestId("chat-message")).toContainText(
+    "Rice is ₦45,000",
+  );
 
   // The seller types: the buyer sees it.
   await expect(async () => {
-    await seller.request.post(`/v1/link-chats/${withSeller}/typing`, { headers: H });
-    await expect(pane.getByTestId("chat-typing")).toBeVisible({ timeout: 4_000 });
+    await seller.request.post(`/v1/link-chats/${withSeller}/typing`, {
+      headers: H,
+    });
+    await expect(pane.getByTestId("chat-typing")).toBeVisible({
+      timeout: 4_000,
+    });
   }).toPass({ timeout: 20_000 });
 
   // Pinned.
+  await pane
+    .getByRole("button", { name: "More about this conversation" })
+    .click();
   await pane.getByRole("button", { name: "Pin" }).click();
+  await pane
+    .getByRole("button", { name: "More about this conversation" })
+    .click();
   await expect(pane.getByRole("button", { name: "Unpin" })).toBeVisible();
+  await buyer.keyboard.press("Escape");
+  await expect(pane.getByTestId("chat-menu")).toHaveCount(0);
 
   // Held on a phone: the menu (reply, copy, forward, delete for me); a
   // finger that moves is not a hold.
   const msg = pane.getByTestId("chat-message").first();
   const box = (await msg.boundingBox()) ?? { x: 0, y: 0, width: 0, height: 0 };
-  const finger = { pointerType: "touch", pointerId: 9, isPrimary: true, clientX: box.x + 20, clientY: box.y + 10 };
+  const finger = {
+    pointerType: "touch",
+    pointerId: 9,
+    isPrimary: true,
+    clientX: box.x + 20,
+    clientY: box.y + 10,
+  };
   await msg.dispatchEvent("pointerdown", finger);
   await msg.dispatchEvent("pointermove", { ...finger, clientY: box.y + 60 });
   await msg.dispatchEvent("pointerup", { ...finger, clientY: box.y + 60 });
@@ -223,8 +429,14 @@ test("pin, the typing line, forward and delete for me", async ({ browser }) => {
   await buyer.waitForTimeout(700);
   await msg.dispatchEvent("pointerup", finger);
   await expect(msg.getByTestId("chat-more")).toBeVisible();
-  for (const name of ["Reply", "Copy", "Forward", "Delete for me"]) await expect(msg.getByTestId("chat-more").getByRole("button", { name })).toBeVisible();
-  await msg.getByTestId("chat-more").getByRole("button", { name: "Reply" }).click();
+  for (const name of ["Reply", "Copy", "Forward", "Delete for me"])
+    await expect(
+      msg.getByTestId("chat-more").getByRole("button", { name }),
+    ).toBeVisible();
+  await msg
+    .getByTestId("chat-more")
+    .getByRole("button", { name: "Reply" })
+    .click();
   await expect(pane.getByTestId("chat-replying")).toContainText("Rice is");
   await pane.getByRole("button", { name: /^Cancel/ }).click();
 
@@ -238,7 +450,11 @@ test("pin, the typing line, forward and delete for me", async ({ browser }) => {
   await axeBoth(buyer, "forwarding a message");
   await sheet.getByRole("button", { name: "Forward" }).click();
   await expect(sheet).toHaveCount(0);
-  const theirs = await (await third.request.get(`/v1/link-chats/${withThird}/messages`, { headers: H })).json();
+  const theirs = await (
+    await third.request.get(`/v1/link-chats/${withThird}/messages`, {
+      headers: H,
+    })
+  ).json();
   expect(theirs.messages[0].body).toBe("Rice is ₦45,000 a bag this week");
   expect(theirs.messages[0].forwarded).toBe(true);
 
@@ -247,12 +463,18 @@ test("pin, the typing line, forward and delete for me", async ({ browser }) => {
   await msg.getByRole("button", { name: /^More/ }).click();
   await msg.getByRole("button", { name: "Delete for me" }).click();
   await expect(pane.getByTestId("chat-message")).toHaveCount(0);
-  const kept = await (await seller.request.get(`/v1/link-chats/${withSeller}/messages`, { headers: H })).json();
+  const kept = await (
+    await seller.request.get(`/v1/link-chats/${withSeller}/messages`, {
+      headers: H,
+    })
+  ).json();
   expect(kept.messages).toHaveLength(1);
   await axeBoth(buyer, "after delete for me");
 });
 
-test("mentions: @ a linked business, # an item with its price", async ({ browser }) => {
+test("mentions: @ a linked business, # an item with its price", async ({
+  browser,
+}) => {
   const stamp = letters();
   const make = async (name: string) => {
     const p = await (await browser.newContext()).newPage();
@@ -263,11 +485,36 @@ test("mentions: @ a linked business, # an item with its price", async ({ browser
   const buyer = await make(`Jide Foods ${stamp}`);
   const third = await make(`Kola Gas ${stamp}`);
   const link = async (to: Page, name: string) => {
-    expect((await to.request.put("/v1/link-settings", { headers: H, data: { findable: true } })).status()).toBe(200);
-    const found = await (await buyer.request.get(`/v1/links/search?q=${encodeURIComponent(name.toLowerCase())}`, { headers: H })).json();
-    expect((await buyer.request.post("/v1/links", { headers: H, data: { business: found.results[0].business, role: "supplier" } })).status()).toBe(201);
-    const id = (await (await to.request.get("/v1/links", { headers: H })).json()).links[0].id as string;
-    expect((await to.request.post(`/v1/links/${id}/accept`, { headers: H })).status()).toBe(200);
+    expect(
+      (
+        await to.request.put("/v1/link-settings", {
+          headers: H,
+          data: { findable: true },
+        })
+      ).status(),
+    ).toBe(200);
+    const found = await (
+      await buyer.request.get(
+        `/v1/links/search?q=${encodeURIComponent(name.toLowerCase())}`,
+        { headers: H },
+      )
+    ).json();
+    expect(
+      (
+        await buyer.request.post("/v1/links", {
+          headers: H,
+          data: { business: found.results[0].business, role: "supplier" },
+        })
+      ).status(),
+    ).toBe(201);
+    const id = (
+      await (await to.request.get("/v1/links", { headers: H })).json()
+    ).links[0].id as string;
+    expect(
+      (
+        await to.request.post(`/v1/links/${id}/accept`, { headers: H })
+      ).status(),
+    ).toBe(200);
     return id;
   };
   const withSeller = await link(seller, `Ikoyi Rice ${stamp}`);
@@ -276,7 +523,19 @@ test("mentions: @ a linked business, # an item with its price", async ({ browser
     route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ whose: "theirs", items: [{ item_id: "r1", name: "Rice, 50 kg", unit: "bag", price_kobo: 4_200_000, min_quantity: 5, available: true }] }),
+      body: JSON.stringify({
+        whose: "theirs",
+        items: [
+          {
+            item_id: "r1",
+            name: "Rice, 50 kg",
+            unit: "bag",
+            price_kobo: 4_200_000,
+            min_quantity: 5,
+            available: true,
+          },
+        ],
+      }),
     }),
   );
 
@@ -287,22 +546,36 @@ test("mentions: @ a linked business, # an item with its price", async ({ browser
   // "#": the item, with its unit and price.
   await box.fill("Can I get 10 #ri");
   await expect(pane.getByTestId("mention-list")).toContainText("#Rice, 50 kg");
-  await expect(pane.getByTestId("mention-list")).toContainText("₦42,000 a bag · at least 5");
+  await expect(pane.getByTestId("mention-list")).toContainText(
+    "₦42,000 a bag · at least 5",
+  );
   await axeBoth(buyer, "an item suggested");
   await box.press("Escape");
   await expect(pane.getByTestId("mention-list")).toHaveCount(0);
 
   // "@": a linked business, picked with the keyboard, sent as a mention.
   await box.fill("Ask @Kol");
-  await expect(pane.getByTestId("mention-list")).toContainText(`@Kola Gas ${stamp}`);
+  await expect(pane.getByTestId("mention-list")).toContainText(
+    `@Kola Gas ${stamp}`,
+  );
   await box.press("Enter");
   await expect(box).toHaveValue(`Ask @Kola Gas ${stamp} `);
   await box.press("End");
   await box.pressSequentially("for gas");
   await box.press("Enter");
-  const sent = pane.locator('[data-testid="chat-message"][data-mine="true"]').last();
-  await expect(sent.getByRole("link", { name: `@Kola Gas ${stamp}` })).toHaveAttribute("href", `/chat?with=${withThird}`);
-  const theirs = await (await seller.request.get(`/v1/link-chats/${withSeller}/messages`, { headers: H })).json();
-  expect(theirs.messages[0].mentions).toEqual([{ kind: "business", name: `Kola Gas ${stamp}` }]);
+  const sent = pane
+    .locator('[data-testid="chat-message"][data-mine="true"]')
+    .last();
+  await expect(
+    sent.getByRole("link", { name: `@Kola Gas ${stamp}` }),
+  ).toHaveAttribute("href", `/chat?with=${withThird}`);
+  const theirs = await (
+    await seller.request.get(`/v1/link-chats/${withSeller}/messages`, {
+      headers: H,
+    })
+  ).json();
+  expect(theirs.messages[0].mentions).toEqual([
+    { kind: "business", name: `Kola Gas ${stamp}` },
+  ]);
   await axeBoth(buyer, "a message with a mention");
 });

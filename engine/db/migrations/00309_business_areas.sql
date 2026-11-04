@@ -20,7 +20,7 @@ CREATE TABLE business_areas (
   PRIMARY KEY (tenant_id, area)
 );
 INSERT INTO business_areas (tenant_id, area, enabled, updated_by)
-  SELECT t.id, a.area, true, 'migration:00305'
+  SELECT t.id, a.area, true, 'migration:00309'
     FROM tenants t CROSS JOIN (VALUES ('storefront'), ('orders'), ('stock'), ('money'), ('links')) AS a(area);
 ALTER TABLE business_areas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE business_areas FORCE ROW LEVEL SECURITY;

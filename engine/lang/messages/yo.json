@@ -5168,6 +5168,14 @@
       "text": "Fáìlì",
       "reviewed": false
     },
+    "chat.link.reacted": {
+      "text": "{name} fèsì pẹ̀lú {emoji} sí “{what}”",
+      "reviewed": false
+    },
+    "chat.link.reacted_plain": {
+      "text": "{name} fèsì pẹ̀lú {emoji} sí ìfiránṣẹ́ kan",
+      "reviewed": false
+    },
     "wa.prices.list": {
       "text": "Iye owo *{name}* fun ọ:\n{items}\n\nPaṣẹ bayi: *order 20 bags of rice from {name}*.",
       "reviewed": false

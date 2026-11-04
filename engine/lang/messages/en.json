@@ -6459,6 +6459,16 @@
       "reviewed": true,
       "context": "A file (a PDF) sent in a conversation with a linked business, told on the phone"
     },
+    "chat.link.reacted": {
+      "text": "{name} reacted {emoji} to “{what}”",
+      "reviewed": true,
+      "context": "Told on the phone: a person on the other business reacted to a message of the conversation; {what} is the start of the message"
+    },
+    "chat.link.reacted_plain": {
+      "text": "{name} reacted {emoji} to a message",
+      "reviewed": true,
+      "context": "Told on the phone: a person on the other business reacted to a message that has no words (a photo, a card)"
+    },
     "wa.prices.list": {
       "text": "*{name}*'s prices for you:\n{items}\n\nOrder with *order 20 bags of rice from {name}*.",
       "reviewed": true,

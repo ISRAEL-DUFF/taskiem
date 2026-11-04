@@ -6987,7 +6987,7 @@ paths:
       tags:
       - Links
       summary: A page of a conversation
-      description: Oldest first; before (older), after (newer, to follow an open conversation), q (the messages saying it).
+      description: Oldest first; before (older), after (newer, oldest first and a page at a time, to follow an open conversation), around (a message and those either side of it; 404 when it is not in this conversation), q (the messages saying it).
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -7009,6 +7009,11 @@ paths:
         schema:
           type: string
           format: date-time
+      - name: around
+        in: query
+        schema:
+          type: string
+          format: uuid
       - name: q
         in: query
         schema:
@@ -7043,7 +7048,7 @@ paths:
       tags:
       - Links
       summary: Send a message to a linked business
-      description: Written in both businesses at once; its people who write to linked businesses are told on their phones unless they muted the conversation. reply_to quotes a message, and a card's makes it a reply about that card's document.
+      description: Written in both businesses at once; its people who write to linked businesses are told on their phones unless they muted the conversation. reply_to quotes a message, and a card's makes it a reply about that card's document. client_id is an id the sender made, and the same send repeated (a retry after a dropped connection) is answered with the first message (200), never sent again. A client_id reused for different words, or for a message since deleted for your side, is refused (409).
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -7072,6 +7077,9 @@ paths:
                 reply_to:
                   type: string
                   format: uuid
+                client_id:
+                  type: string
+                  format: uuid
                 mentions:
                   type: array
                   maxItems: 10
@@ -7092,6 +7100,17 @@ paths:
       responses:
         '201':
           description: Sent
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [message]
+                properties:
+                  message:
+                    $ref: '#/components/schemas/LinkMessage'
+        '200':
+          description: The same send repeated (its client_id), answered with the first message and not sent again
           content:
             application/json:
               schema:
@@ -7800,9 +7819,24 @@ paths:
                 reply_to:
                   type: string
                   format: uuid
+                client_id:
+                  type: string
+                  format: uuid
+                  description: An id the sender made; the same send repeated is answered with the first message and stores nothing again.
       responses:
         '201':
           description: Sent
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [message]
+                properties:
+                  message:
+                    $ref: '#/components/schemas/LinkMessage'
+        '200':
+          description: The same send repeated (its client_id), answered with the first message and not sent again
           content:
             application/json:
               schema:
@@ -8019,6 +8053,231 @@ paths:
       responses:
         '204':
           description: Hidden
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/messages/{id}/reaction:
+    put:
+      operationId: reactLinkMessage
+      tags:
+      - Links
+      summary: React to a message
+      description: Your emoji on a message, one of 👍 ❤️ 😂 😮 😢 🙏, replacing the one you gave, seen by both businesses. One reaction per member per message. The other side's people are told on their phones unless they muted the conversation, and a first reaction counts against the plan's messages per day. Refused once the link has ended (409).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: chat.trade
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [emoji]
+              properties:
+                emoji:
+                  type: string
+                  enum: ['👍', '❤️', '😂', '😮', '😢', '🙏']
+      responses:
+        '200':
+          description: The reactions on the message, as this business sees them
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [reactions]
+                properties:
+                  reactions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LinkReaction'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: unreactLinkMessage
+      tags:
+      - Links
+      summary: Take a reaction back
+      description: Your reaction is taken off the message, on both sides. Nothing is told, and taking back one you did not give is nothing.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: chat.trade
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The reactions on the message, as this business sees them
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [reactions]
+                properties:
+                  reactions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LinkReaction'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/messages/{id}/star:
+    put:
+      operationId: starLinkMessage
+      tags:
+      - Links
+      summary: Star a message
+      description: Kept for you alone, so no one is told and no one else can see it. An API key has no stars of its own (403).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Whether it is starred now
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [starred]
+                properties:
+                  starred:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: unstarLinkMessage
+      tags:
+      - Links
+      summary: Unstar a message
+      description: The star is taken off.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Whether it is starred now
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [starred]
+                properties:
+                  starred:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/chat/stream:
+    get:
+      operationId: chatStream
+      tags:
+      - Links
+      summary: Stream the changes in your conversations
+      description: 'Server-sent events: what changes in your conversations with linked businesses, as it happens. A message event is a message of a conversation, new or changed (its read mark, its reactions), as the messages API gives it. A gone event is a message deleted for your side. A conversation event is a change of a conversation''s settings (muted, archived, pinned). A typing event is the conversations whose other side is typing now. A taskiem event is the person''s own conversation with Taskiem, on every channel (what GET /v1/taskiem-chat gives). Each has an id, its time in microseconds, so a client that reconnects with Last-Event-ID is sent what it missed and nothing twice, going back at most an hour. A ready event comes on connecting and a ping event at least every ten seconds, so a client can tell a quiet stream from a stalled one; the stream closes after half an hour and clients reconnect. A business may hold twelve open (429 with Retry-After past that), and a client that cannot should poll the messages API as before.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: Last-Event-ID
+        in: header
+        schema:
+          type: string
+        description: Resume after this event
+      responses:
+        '200':
+          description: Server-sent events
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/starred:
+    get:
+      operationId: starredLinkMessages
+      tags:
+      - Links
+      summary: Your starred messages
+      description: The messages you starred, across conversations, the most recently starred first (up to 100).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The messages
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [messages]
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LinkMessage'
         default:
           $ref: '#/components/responses/Error'
   /v1/link-chats/{link}/read:
@@ -30015,6 +30274,25 @@ components:
           type: string
         price_kobo:
           type: integer
+    LinkReaction:
+      type: object
+      additionalProperties: false
+      required: [emoji, count]
+      properties:
+        emoji:
+          type: string
+          enum: ['👍', '❤️', '😂', '😮', '😢', '🙏']
+        count:
+          type: integer
+          description: How many people gave it, on both sides
+        mine:
+          type: boolean
+          description: You gave it
+        by:
+          type: array
+          items:
+            type: string
+          description: Their first names
     LinkMessage:
       type: object
       additionalProperties: false
@@ -30078,6 +30356,13 @@ components:
           maxItems: 10
           items:
             $ref: '#/components/schemas/LinkMention'
+        reactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/LinkReaction'
+        starred:
+          type: boolean
+          description: You starred it
         reply:
           type: object
           additionalProperties: false

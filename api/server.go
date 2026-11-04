@@ -60,10 +60,15 @@ import (
 
 // Server serves the API.
 type Server struct {
-	Store    *runtime.Store
-	Vault    *secrets.Vault
-	Registry *connector.Registry
-	Logger   *slog.Logger
+	// chatGate caps the open Chat page streams (chat_stream.go).
+	chatGate chatStreamGate
+	// ChatStreamPing is how often an open chat stream says something when it
+	// has nothing to say (zero: ten seconds).
+	ChatStreamPing time.Duration
+	Store          *runtime.Store
+	Vault          *secrets.Vault
+	Registry       *connector.Registry
+	Logger         *slog.Logger
 	// AllowSignup enables POST /v1/signup (self-serve tenants; off by default
 	// until Phase 4).
 	AllowSignup bool

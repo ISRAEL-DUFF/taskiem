@@ -72,7 +72,13 @@ export interface FrontItem {
 export interface FrontItemsView {
   table_id: string;
   items: FrontItem[];
-  takes: { price?: boolean; description?: boolean; category?: boolean; available?: boolean; photo?: boolean };
+  takes: {
+    price?: boolean;
+    description?: boolean;
+    category?: boolean;
+    available?: boolean;
+    photo?: boolean;
+  };
 }
 
 /** What the owner types for an item. */
@@ -83,7 +89,12 @@ export interface ItemForm {
   category: string;
 }
 
-export const emptyItem: ItemForm = { name: "", price: "", description: "", category: "" };
+export const emptyItem: ItemForm = {
+  name: "",
+  price: "",
+  description: "",
+  category: "",
+};
 
 /** The form of an item, to be changed. */
 export function itemForm(it: FrontItem): ItemForm {
@@ -98,37 +109,65 @@ export function itemForm(it: FrontItem): ItemForm {
 /** A price typed in naira ("1,500" or "1500.50") as a number, or null for
  * what is not one. Empty is "no price": null too, for the caller to tell. */
 export function nairaOf(raw: string): number | null {
-  const s = raw.trim().replace(/^[₦N]\s*/i, "").replace(/,/g, "");
+  const s = raw
+    .trim()
+    .replace(/^[₦N]\s*/i, "")
+    .replace(/,/g, "");
   if (!/^\d{1,9}(\.\d{1,2})?$/.test(s)) return null;
   return Number(s);
 }
 
 /** What is wrong with an item typed in, in plain words, or "". */
-export function itemProblem(f: ItemForm, takes: FrontItemsView["takes"]): string {
+export function itemProblem(
+  f: ItemForm,
+  takes: FrontItemsView["takes"],
+): string {
   const name = f.name.trim();
   if (!name) return "Give the item a name.";
   if ([...name].length > 120) return "A name is up to 120 characters.";
-  if (takes.price && f.price.trim() !== "" && nairaOf(f.price) === null) return "Type the price in naira, such as 1,500 or 1500.50.";
-  if ([...f.description].length > 1000) return "A description is up to 1,000 characters.";
-  if ([...f.category.trim()].length > 60) return "A category is up to 60 characters.";
+  if (takes.price && f.price.trim() !== "" && nairaOf(f.price) === null)
+    return "Type the price in naira, such as 1,500 or 1500.50.";
+  if ([...f.description].length > 1000)
+    return "A description is up to 1,000 characters.";
+  if ([...f.category.trim()].length > 60)
+    return "A category is up to 60 characters.";
   return "";
 }
 
 /** The request for an item typed in: only what the list takes. For a
  * change, `was` leaves out what did not change. */
-export function itemRequest(f: ItemForm, takes: FrontItemsView["takes"], was?: ItemForm): Record<string, unknown> {
+export function itemRequest(
+  f: ItemForm,
+  takes: FrontItemsView["takes"],
+  was?: ItemForm,
+): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   const changed = (k: keyof ItemForm) => !was || was[k].trim() !== f[k].trim();
   if (changed("name")) out.name = f.name.trim();
-  if (takes.price && changed("price") && f.price.trim() !== "") out.price_naira = nairaOf(f.price);
-  if (takes.description && changed("description") && (was || f.description.trim() !== "")) out.description = f.description.trim();
-  if (takes.category && changed("category") && (was || f.category.trim() !== "")) out.category = f.category.trim();
+  if (takes.price && changed("price") && f.price.trim() !== "")
+    out.price_naira = nairaOf(f.price);
+  if (
+    takes.description &&
+    changed("description") &&
+    (was || f.description.trim() !== "")
+  )
+    out.description = f.description.trim();
+  if (
+    takes.category &&
+    changed("category") &&
+    (was || f.category.trim() !== "")
+  )
+    out.category = f.category.trim();
   return out;
 }
 
 /** The front's order form when customers cannot use it yet: not switched
  * on, or with no workflow behind it. Nothing to turn on when it is ready, or
  * when the front takes no orders. */
-export function orderToTurnOn(f: Pick<Front, "actions">): StorefrontAction | undefined {
-  return f.actions.find((a) => a.kind === "order" && !a.builtin && !(a.enabled && a.workflow_id));
+export function orderToTurnOn(
+  f: Pick<Front, "actions">,
+): StorefrontAction | undefined {
+  return f.actions.find(
+    (a) => a.kind === "order" && !a.builtin && !(a.enabled && a.workflow_id),
+  );
 }

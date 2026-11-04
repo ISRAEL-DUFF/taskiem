@@ -7,6 +7,8 @@
   --bg: #f1f4ef;
   --panel: #ffffff;
   --panel-2: #f6f8f4;
+  --chat-wallpaper: #efeae2; --chat-in: #ffffff; --chat-out: #d9fdd3; --chat-out-meta: #4a5a52; --chat-out-danger: #a3231b; --chat-tick-read: #0b66b8; --chat-select: #f0f2f5; --chat-doodle: rgba(14, 26, 20, 0.06); --chat-shadow: rgba(14, 26, 20, 0.14);
+--chat-pattern: radial-gradient(var(--chat-doodle) 1.2px, transparent 1.7px) 0 0 / 28px 28px, radial-gradient(var(--chat-doodle) 1.2px, transparent 1.7px) 14px 14px / 28px 28px;
   --text: #0e1a14;
   --muted: #55615a;
   --border: #e2e7df;
@@ -63,6 +65,7 @@
   --nav-bg: #0d0e0c; --nav-text: #c9cbc4; --nav-muted: #8a8d85; --nav-hover: rgba(255, 255, 255, 0.05); --nav-active: rgba(255, 255, 255, 0.08);
   --shadow: none; --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35); --shadow-lg: 0 24px 48px rgba(0, 0, 0, 0.5);
   --tint: rgba(200, 241, 105, 0.12); --tint-text: var(--brand-dark); --tint-warn: rgba(253, 176, 34, 0.14); --tint-warn-text: #fdb022;
+  --chat-wallpaper: #0e1512; --chat-in: #1f2a26; --chat-out: #0f4a37; --chat-out-meta: #c9d6cf; --chat-out-danger: #ffb4ab; --chat-tick-read: #8fd0ff; --chat-select: #232f2a; --chat-doodle: rgba(255, 255, 255, 0.045); --chat-shadow: rgba(0, 0, 0, 0.35);
   color-scheme: dark;
 }
 :root[data-brand="seal"] {
@@ -80,6 +83,7 @@
     --nav-bg: #0d0e0c; --nav-text: #c9cbc4; --nav-muted: #8a8d85; --nav-hover: rgba(255, 255, 255, 0.05); --nav-active: rgba(255, 255, 255, 0.08);
     --shadow: none; --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35); --shadow-lg: 0 24px 48px rgba(0, 0, 0, 0.5);
     --tint: rgba(200, 241, 105, 0.12); --tint-text: var(--brand-dark); --tint-warn: rgba(253, 176, 34, 0.14); --tint-warn-text: #fdb022;
+    --chat-wallpaper: #0e1512; --chat-in: #1f2a26; --chat-out: #0f4a37; --chat-out-meta: #c9d6cf; --chat-out-danger: #ffb4ab; --chat-tick-read: #8fd0ff; --chat-select: #232f2a; --chat-doodle: rgba(255, 255, 255, 0.045); --chat-shadow: rgba(0, 0, 0, 0.35);
     color-scheme: dark;
   }
 }
@@ -1672,21 +1676,22 @@ fieldset.path-set legend { font-size: 12.5px; font-weight: 600; padding: 0 4px; 
 .chat-pane { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); display: flex; flex-direction: column; min-height: 60vh; }
 .chat-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
 .chat-head h2 { margin: 0; font-size: 16px; flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.chat-stream { flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 6px; background: var(--panel-2); overflow-y: auto; max-height: 65vh; }
-.chat-day { align-self: center; font-size: 12px; color: var(--muted); background: var(--panel); border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; margin: 6px 0; }
-.bubble { max-width: min(80%, 520px); align-self: flex-start; background: var(--panel); border: 1px solid var(--border); border-radius: 12px 12px 12px 4px; padding: 6px 10px 4px; overflow-wrap: anywhere; }
-.bubble.mine { align-self: flex-end; background: var(--tint); border-color: transparent; border-radius: 12px 12px 4px 12px; }
+.chat-stream { flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 6px; background: var(--chat-pattern), var(--chat-wallpaper); overflow-y: auto; max-height: 65vh; }
+.chat-day { position: sticky; top: 6px; z-index: 2; align-self: center; font-size: 12px; color: var(--muted); background: var(--panel); border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; margin: 6px 0; }
+.bubble { position: relative; max-width: min(80%, 520px); align-self: flex-start; background: var(--chat-in); border-radius: 8px; box-shadow: 0 1px 0.5px var(--chat-shadow); padding: 6px 9px 4px; overflow-wrap: anywhere; }
+.bubble.mine { align-self: flex-end; background: var(--chat-out); }
 .bubble .who { display: block; font-size: 12px; font-weight: 600; color: var(--tint-text); }
-.bubble .text { white-space: pre-wrap; }
-.bubble .meta { display: flex; justify-content: flex-end; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); margin-top: 2px; }
-.bubble .ticks.read { color: var(--info); }
-.bubble .quote { display: block; border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 6px; padding: 4px 8px; margin-bottom: 4px; font-size: 13px; color: var(--muted); }
-.bubble.card-bubble { border-left: 3px solid var(--accent); }
+.bubble .text { white-space: pre-wrap; font-size: 14.2px; line-height: 1.38; }
+.bubble .ticks { display: inline-flex; }
+.bubble .ticks svg { width: 16px; height: 16px; stroke-width: 2; }
+.bubble .ticks.read { color: var(--chat-tick-read); }
+.bubble .quote { display: block; border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 6px; padding: 4px 8px; margin-bottom: 4px; font-size: 13px; color: color-mix(in srgb, var(--text) 75%, var(--muted)); }
+.bubble.card-bubble { box-shadow: 0 1px 0.5px var(--chat-shadow), inset 3px 0 0 var(--accent); }
 .bubble.card-bubble .card-title { font-weight: 600; }
 .bubble .reply-btn { background: none; border: 0; padding: 0; margin-right: auto; color: var(--muted); font-size: 12px; cursor: pointer; }
 .bubble .reply-btn:hover, .bubble .reply-btn:focus-visible { color: var(--text); text-decoration: underline; }
 .composer { display: flex; gap: 8px; align-items: flex-end; padding: 10px; border-top: 1px solid var(--border); }
-.composer textarea { flex: 1; min-height: 40px; max-height: 160px; resize: vertical; }
+.composer textarea { flex: 1; min-height: 40px; max-height: 160px; resize: none; line-height: 1.4; }
 .composer-reply { display: flex; align-items: center; gap: 8px; padding: 6px 10px 0; font-size: 13px; color: var(--muted); }
 .composer-reply .quote { flex: 1; min-width: 0; border-left: 3px solid var(--accent); padding-left: 8px; overflow-wrap: anywhere; }
 .composer .icon-button { flex: none; width: 40px; height: 40px; }
@@ -1700,23 +1705,12 @@ fieldset.path-set legend { font-size: 12.5px; font-weight: 600; padding: 0 4px; 
 .bubble .chat-file { display: flex; align-items: center; gap: 8px; padding: 8px; margin: 2px 0 4px; border-radius: 8px; background: var(--panel-2); color: var(--text); text-decoration: none; }
 .bubble .chat-file svg { width: 22px; height: 22px; flex: none; }
 .bubble .chat-file .name { flex: 1; min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
-.bubble .meta .reply-btn { margin-right: 0; }
-.bubble .meta .reply-btn:first-child { margin-right: 8px; }
-.bubble .meta .reply-btn:last-of-type { margin-right: auto; }
+
+
 .bubble { touch-action: pan-y; }
 @media (prefers-reduced-motion: no-preference) { .bubble { transition: transform .12s ease-out; } }
 .bubble .forwarded { display: block; font-size: 12px; font-style: italic; color: var(--muted); }
 .bubble .bubble-more { margin-top: 4px; flex-wrap: wrap; }
-/* More shows on hover where there is a pointer (WhatsApp Web's way), and
-   stays reachable by keyboard; on a touch screen the menu opens by holding
-   the bubble, and the button is there for the keyboard alone. */
-@media (hover: hover) and (pointer: fine) {
-  .bubble .more-btn { opacity: 0; }
-  .bubble:hover .more-btn, .bubble:focus-within .more-btn, .bubble .more-btn[aria-expanded="true"] { opacity: 1; }
-}
-@media (hover: none) {
-  .bubble .more-btn:not(:focus-visible):not([aria-expanded="true"]) { position: absolute; width: 1px; height: 1px; margin: 0; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-}
 .bubble .chat-preview { display: flex; flex-direction: column; gap: 2px; margin: 4px 0; padding: 6px 8px; border-left: 3px solid var(--accent); border-radius: 6px; background: var(--panel-2); color: var(--text); text-decoration: none; overflow-wrap: anywhere; }
 .bubble .chat-preview .host { font-size: 12px; color: var(--muted); }
 .bubble .chat-preview .title { font-weight: 600; }
@@ -1733,3 +1727,228 @@ fieldset.path-set legend { font-size: 12.5px; font-weight: 600; padding: 0 4px; 
 .mention-list button:hover, .mention-list button:focus-visible { background: var(--panel-2); }
 .mention-list .name { font-weight: 600; overflow-wrap: anywhere; }
 .bubble .mention { font-weight: 600; color: var(--tint-text); }
+
+/* The chat fills the window, as WhatsApp Web does: the menu is a rail, the
+   list and the open conversation each scroll inside, the composer stays at
+   the bottom. On a phone the bars give way (builder-mode) and the thread is
+   full screen with a back arrow. */
+.shell.chat-mode { height: 100dvh; min-height: 0; overflow: hidden; }
+.chat-mode .main { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+.chat-mode .main > .page { flex: 1; min-height: 0; height: auto; }
+.chat-mode .chat-layout { height: 100%; gap: 0; grid-template-rows: minmax(0, 1fr); align-items: stretch; }
+.chat-mode .chat-list-pane { overflow-y: auto; min-height: 0; background: var(--panel); }
+.chat-mode .chat-pane { border: 0; border-radius: 0; min-height: 0; height: 100%; }
+.chat-mode .chat-stream { max-height: none; min-height: 0; }
+.chat-list-head { display: flex; align-items: center; gap: 8px; padding: 14px 14px 6px; flex-wrap: wrap; }
+.chat-list-head h2 { flex: 1; margin: 0; font-size: 20px; }
+.chat-mode .chat-list-pane > :not(.chat-list-head) { margin-left: 14px; margin-right: 14px; }
+.chat-mode .chat-list-pane { padding-bottom: 16px; }
+.chat-head h2 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
+.chat-menu-wrap { position: relative; flex: none; }
+.chat-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; min-width: 160px; display: flex; flex-direction: column; padding: 4px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-md); }
+.chat-menu button { text-align: left; justify-content: flex-start; background: none; border: 0; border-radius: 6px; padding: 10px 12px; min-height: 40px; }
+.chat-menu button:hover:not(:disabled), .chat-menu button:focus-visible { background: var(--chat-select); }
+@media (min-width: 900px) {
+  .chat-mode .chat-layout { grid-template-columns: minmax(300px, 400px) minmax(0, 1fr); }
+  .chat-mode .chat-list-pane { border-right: 1px solid var(--border); }
+  .chat-mode .chat-layout:not(.open)::after { content: "Open a chat, or find a business to trade with."; grid-column: 2; grid-row: 1; display: grid; place-items: center; background: var(--chat-wallpaper); color: var(--muted); padding: 24px; text-align: center; }
+}
+.chat-avatar { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--tint); color: var(--tint-text); font-weight: 600; }
+.chat-head .chat-back { flex: none; width: 40px; height: 40px; }
+.chat-head .chat-back svg { width: 20px; height: 20px; }
+@media (max-width: 860px) {
+  .chat-mode .main { padding-top: env(safe-area-inset-top); }
+  .composer textarea { font-size: 16px; }
+}
+.chat-chips { display: flex; gap: 8px; flex-wrap: wrap; padding: 4px 0 8px; }
+.chat-chip { border-radius: 999px; padding: 4px 12px; font-size: 13px; background: var(--panel); border: 1px solid var(--border); color: var(--text); min-height: 32px; }
+.chat-chip[aria-pressed="true"] { background: var(--tint); color: var(--tint-text); border-color: transparent; font-weight: 600; }
+button.chat-avatar { border: 0; padding: 0; cursor: pointer; }
+.chat-pane { position: relative; }
+.chat-info { position: absolute; inset: 0 0 0 auto; width: min(360px, 100%); z-index: 10; background: var(--panel); border-left: 1px solid var(--border); display: flex; flex-direction: column; box-shadow: var(--shadow-md); }
+.chat-info-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.chat-info-head h3 { margin: 0; flex: 1; font-size: 16px; }
+.chat-info-body { padding: 20px 16px; display: flex; flex-direction: column; align-items: center; gap: 4px; overflow-y: auto; }
+.chat-avatar.big { width: 96px; height: 96px; font-size: 36px; }
+.chat-info-name { margin: 8px 0 0; font-size: 18px; font-weight: 600; text-align: center; overflow-wrap: anywhere; }
+.chat-info-body .hint { text-align: center; }
+.chat-info-actions { align-self: stretch; display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+.chat-info-actions button { justify-content: center; min-height: 44px; }
+.chat-info-card { align-self: stretch; text-align: center; margin-top: 8px; }
+.chat-info-card p { margin: 0 0 4px; }
+.chat-info-items { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.chat-info-items li { background: var(--panel-2); border-radius: 999px; padding: 2px 10px; font-size: 13px; }
+.chat-info-media { align-self: stretch; margin-top: 20px; border-top: 1px solid var(--border); padding-top: 12px; }
+.chat-info-media h4 { margin: 0 0 8px; font-size: 14px; }
+.chat-info-media ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+.chat-info-media li { min-width: 0; }
+.chat-info-media .chat-photo img { width: 100%; height: 96px; object-fit: cover; }
+.chat-info-media .chat-voice { width: 100%; }
+.chat-info-media .chat-file { margin: 0; flex-wrap: wrap; }
+.chat-info-media .chat-photo { display: block; }
+.chat-info-media .chat-file { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 8px; background: var(--panel-2); color: var(--text); text-decoration: none; }
+.chat-info-media .chat-file svg { width: 22px; height: 22px; flex: none; }
+.chat-info-media .chat-file .name { flex: 1; min-width: 0; overflow-wrap: anywhere; font-weight: 600; font-size: 13px; }
+.chat-info-media li:has(.chat-file, .chat-voice) { grid-column: 1 / -1; }
+.bubble.mine .hint, .bubble.mine .quote { color: var(--chat-out-meta); }
+
+/* The thread (Phase 2): a day's messages group so its chip sticks while they
+   scroll; "N unread messages"; the jump button; a quote that goes to its message. */
+.chat-stream-wrap { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.chat-stream-wrap > .chat-stream { flex: 1; min-height: 0; }
+.chat-group { display: flex; flex-direction: column; gap: 2px; }
+.chat-group > .bubble.first { margin-top: 6px; }
+.chat-top { height: 1px; flex: none; }
+.chat-unread { align-self: stretch; text-align: center; font-size: 12px; font-weight: 600; color: var(--tint-text); background: var(--tint); border-radius: 8px; padding: 4px 10px; margin: 6px 0; }
+.chat-jump { position: absolute; right: 16px; bottom: 16px; width: 44px; height: 44px; padding: 0; border-radius: 50%; display: grid; place-items: center; background: var(--chat-in); border: 1px solid var(--border); box-shadow: var(--shadow-md); z-index: 3; }
+.chat-jump svg { width: 20px; height: 20px; }
+.chat-jump .unread-count { position: absolute; top: -6px; right: -4px; }
+.bubble button.quote-btn { display: block; width: 100%; text-align: left; font: inherit; font-size: 13px; cursor: pointer; border-top: 0; border-right: 0; border-bottom: 0; min-height: 0; }
+@keyframes chat-flash { 0%, 60% { box-shadow: 0 0 0 3px var(--accent); } 100% { box-shadow: 0 0 0 3px transparent; } }
+.bubble.flash { animation: chat-flash 1.8s ease-out; }
+@media (prefers-reduced-motion: reduce) { .bubble.flash { animation: none; box-shadow: 0 0 0 3px var(--accent); } }
+
+/* The bubbles (Phase 3): a tail on the first of a run, Reply and More on
+   hover at the corner (a swipe or a hold on a touch screen), the type 14.2px
+   on a computer and 16px on a phone. */
+.bubble.first::before { content: ""; position: absolute; top: 0; width: 9px; height: 13px; background: inherit; }
+.bubble.first:not(.mine) { border-top-left-radius: 0; }
+.bubble.first:not(.mine)::before { left: -8px; clip-path: polygon(100% 0, 100% 100%, 0 0); }
+.bubble.first.mine { border-top-right-radius: 0; }
+.bubble.first.mine::before { right: -8px; clip-path: polygon(0 0, 100% 0, 0 100%); }
+@media (max-width: 860px) { .bubble .text { font-size: 16px; } }
+.chat-mode .chat-layout:not(.open)::after { background: var(--chat-pattern), var(--chat-wallpaper); }
+.bubble .reply-btn { min-height: 24px; min-width: 24px; padding: 0 4px; line-height: 16px; }
+
+/* The chat list's rows (Phase 3): avatar, name and time, preview with a tick
+   before ours, unread count, pin and mute marks; the open one highlighted. */
+.chat-rows { list-style: none; margin: 0; padding: 0; }
+.chat-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; margin: 0 -12px; border-radius: 0; color: var(--text); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
+.chat-row:hover { background: var(--chat-select); text-decoration: none; }
+.chat-row.selected { background: var(--chat-select); }
+.chat-row .chat-avatar { width: 48px; height: 48px; font-size: 19px; }
+.chat-avatar.accent { background: var(--brand); color: var(--brand-dark); }
+.chat-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.chat-row-top, .chat-row-sub { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.chat-row-top .title { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-row-time { flex: none; font-size: 12px; color: var(--muted); }
+.chat-row-time.unread { color: var(--ok); font-weight: 600; }
+.chat-row-sub .preview { flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-row-sub .preview.typing { color: var(--ok); }
+.chat-row-sub .ticks { display: inline-flex; flex: none; }
+.chat-row-sub .ticks svg { width: 16px; height: 16px; stroke-width: 2; }
+.chat-row-sub .ticks.read { color: var(--chat-tick-read); }
+.chat-row-tags { flex: none; display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.chat-row-tags .tag svg { width: 15px; height: 15px; display: block; }
+.chat-row-sub .preview-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.chat-mode .chat-list-pane > section[data-testid="link-findable-ask"] { margin-top: 14px; }
+
+/* The time and ticks in the corner, inline with the last line (a gap the
+   size of the stamp is left at the end of the text); the chevron at the top
+   corner opens the menu, on hover or focus (a hold on a touch screen). */
+.bubble { padding: 6px 9px 6px; }
+.bubble .stamp { display: flex; justify-content: flex-end; align-items: center; gap: 4px; font-size: 11px; line-height: 16px; color: var(--muted); margin-top: 1px; }
+.bubble.mine .stamp, .bubble.mine .reply-btn { color: var(--chat-out-meta); }
+.bubble .stamp.inline { position: absolute; right: 9px; bottom: 5px; margin: 0; }
+.bubble .stamp-gap { display: inline-block; width: 52px; height: 1px; }
+.bubble .stamp-gap.mine { width: 74px; }
+.bubble-chevron { position: absolute; top: 2px; right: 3px; width: 26px; height: 26px; min-height: 26px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--chat-in) 85%, transparent); color: var(--muted); z-index: 1; opacity: 0; cursor: pointer; }
+.bubble.mine .bubble-chevron { background: color-mix(in srgb, var(--chat-out) 85%, transparent); color: var(--chat-out-meta); }
+.bubble-chevron svg { width: 18px; height: 18px; }
+@media (hover: hover) and (pointer: fine) {
+  .bubble:hover .bubble-chevron, .bubble-chevron[aria-expanded="true"] { opacity: 1; }
+}
+.bubble-chevron:focus-visible { opacity: 1; }
+@media (hover: none) {
+  .bubble-chevron:not(:focus-visible):not([aria-expanded="true"]) { position: absolute; width: 1px; height: 1px; margin: 0; padding: 0; overflow: hidden; clip: rect(0 0 0 0); }
+}
+.bubble .block { display: block; }
+.bubble-chevron { width: 22px; height: 22px; min-height: 22px; top: 1px; right: 2px; }
+.bubble-chevron svg { width: 16px; height: 16px; }
+
+/* Instant send (Phase 4): a clock while it is sent; "Not sent" with Retry
+   and Delete when it cannot be. */
+.bubble .ticks.pending svg { width: 14px; height: 14px; stroke-width: 2; }
+.chat-failed { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 4px; font-size: 13px; color: var(--danger); }
+.bubble.mine .chat-failed { color: var(--chat-out-danger); }
+.chat-failed .bang { flex: none; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; background: var(--danger); color: var(--panel); font-weight: 700; font-size: 12px; }
+.chat-failed .why { flex: 1 1 160px; min-width: 0; }
+.chat-failed button { min-height: 28px; }
+
+/* The composer (Phase 4): the emoji panel above it, the clip's menu, a drop
+   target, the camera. */
+.emoji-panel { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-top: 1px solid var(--border); background: var(--panel); max-height: 280px; }
+.emoji-search { width: 100%; }
+.emoji-tabs { display: flex; gap: 2px; overflow-x: auto; }
+.emoji-tab { flex: none; width: 36px; height: 34px; min-height: 34px; padding: 0; border: 0; background: none; font-size: 18px; border-radius: 8px; filter: grayscale(1); opacity: .7; }
+.emoji-tab[aria-pressed="true"] { background: var(--chat-select); filter: none; opacity: 1; }
+.emoji-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(38px, 1fr)); gap: 2px; overflow-y: auto; min-height: 0; }
+.emoji { height: 38px; min-height: 38px; padding: 0; border: 0; background: none; font-size: 24px; line-height: 1; border-radius: 8px; }
+.emoji:hover, .emoji:focus-visible { background: var(--chat-select); }
+.attach-wrap { position: relative; flex: none; }
+.attach-menu { position: absolute; left: 0; bottom: calc(100% + 6px); z-index: 20; min-width: 170px; display: flex; flex-direction: column; padding: 4px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-md); }
+.attach-menu button { display: flex; align-items: center; gap: 10px; justify-content: flex-start; text-align: left; background: none; border: 0; border-radius: 6px; padding: 10px 12px; min-height: 40px; }
+.attach-menu button:hover, .attach-menu button:focus-visible { background: var(--chat-select); }
+.attach-menu svg { width: 18px; height: 18px; }
+.chat-drop { position: absolute; inset: 0; z-index: 30; display: grid; place-items: center; background: color-mix(in srgb, var(--panel) 88%, transparent); border: 3px dashed var(--accent); font-weight: 600; font-size: 18px; pointer-events: none; }
+.camera-video { width: 100%; max-height: 60vh; background: #000; border-radius: var(--radius); }
+.chat-row-sub .draft { color: var(--ok); font-weight: 600; }
+
+/* A file waiting for its caption: the picture, its name, Remove. */
+.pending-file { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; padding: 8px 12px; border-top: 1px solid var(--border); background: var(--panel); }
+.pending-photo { display: block; max-width: 100%; max-height: 200px; border-radius: 8px; flex-basis: 100%; object-fit: contain; background: var(--panel-2); }
+.pending-icon { flex: none; width: 36px; height: 36px; border-radius: 8px; display: grid; place-items: center; background: var(--tint); color: var(--tint-text); }
+.pending-icon svg { width: 20px; height: 20px; }
+.pending-file .quote { flex: 1; min-width: 0; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.emoji-tones { display: flex; gap: 2px; }
+.emoji-tone { width: 32px; height: 30px; min-height: 30px; padding: 0; border: 0; background: none; border-radius: 8px; font-size: 16px; opacity: .75; }
+.emoji-tone[aria-pressed="true"] { background: var(--chat-select); opacity: 1; box-shadow: inset 0 0 0 2px var(--accent); }
+.emoji:focus-visible, .emoji-tab:focus-visible, .emoji-tone:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* The camera beside the microphone, as on a phone (WhatsApp's): where the
+   screen is touched; a computer has the clip's menu. */
+.camera-quick { display: none; }
+@media (pointer: coarse) { .camera-quick { display: grid; } }
+
+/* Reactions and stars (Phase 5): the six emoji above the bubble's menu, a
+   chip under the bubble for each emoji given, a star by the time. */
+.reaction-picker { display: flex; gap: 2px; flex-basis: 100%; padding: 2px 0 4px; }
+.react-pick { width: 36px; height: 36px; min-height: 36px; padding: 0; border: 0; background: none; border-radius: 50%; font-size: 22px; line-height: 1; }
+.react-pick:hover, .react-pick:focus-visible { background: var(--chat-select); }
+.react-pick[aria-pressed="true"] { background: var(--chat-select); box-shadow: inset 0 0 0 2px var(--accent); }
+.bubble.has-reactions { margin-bottom: 20px; }
+.bubble .reactions { position: absolute; bottom: -19px; left: 8px; display: flex; gap: 3px; z-index: 1; }
+.bubble.mine .reactions { left: auto; right: 8px; }
+.reaction-chip { display: inline-flex; align-items: center; gap: 3px; min-height: 24px; padding: 0 7px; border-radius: 999px; background: var(--chat-in); border: 1px solid var(--border); box-shadow: 0 1px 1px var(--chat-shadow); font-size: 14px; line-height: 1; color: var(--text); }
+.reaction-chip .count { font-size: 12px; color: var(--muted); }
+.reaction-chip[aria-pressed="true"] { border-color: var(--accent); background: var(--chat-select); }
+.reaction-chip:disabled { opacity: 1; cursor: default; }
+.bubble .stamp .starred { display: inline-flex; }
+.bubble .stamp .starred svg { width: 12px; height: 12px; fill: currentColor; stroke: none; }
+.info-times { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 8px 0 14px; }
+.info-times dt { color: var(--muted); }
+.info-times dd { margin: 0; font-weight: 600; }
+.info-reactions { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.notify-ask { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; padding: 10px 16px; background: var(--tint); color: var(--tint-text); border-bottom: 1px solid var(--border); font-size: 14px; }
+
+/* Keyboard (Chat, phase 7): the shortcuts sheet, and a visible ring on rows. */
+.keys { margin: 0 0 12px; }
+.keys-row { display: flex; align-items: baseline; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.keys-row dt { flex: none; min-width: 110px; }
+.keys-row dd { margin: 0; color: var(--muted); }
+.keys kbd { display: inline-block; min-width: 22px; padding: 1px 6px; text-align: center; font: inherit; font-size: 13px; color: var(--text); background: var(--panel-2); border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: 6px; }
+@media (hover: none) { .kbd-only { display: none; } }
+.chat-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--accent); }
+.bubble-chevron:focus-visible, .chat-jump:focus-visible, .icon-button:focus-visible { box-shadow: var(--ring); }
+.nav .nav-toggle:focus-visible, .nav button.signout:focus-visible { box-shadow: var(--ring); }
+
+/* Taskiem's reply buttons, as WhatsApp's: one row under the bubble, the one pressed marked. */
+.bubble .reply-buttons { display: flex; flex-direction: column; margin: 8px -6px -2px; border-top: 1px solid var(--border); }
+.bubble .reply-button { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; min-height: 36px; padding: 6px 10px; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: none; box-shadow: none; color: var(--accent); font-weight: 600; font-size: 14px; cursor: pointer; }
+.bubble .reply-button:last-child { border-bottom: 0; }
+.bubble .reply-button:hover:not(:disabled) { background: var(--chat-select); }
+.bubble .reply-button:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+.bubble span.reply-button { cursor: default; color: var(--muted); font-weight: 500; }
+.bubble span.reply-button.pressed { color: var(--text); font-weight: 600; }
+.bubble span.reply-button svg { width: 16px; height: 16px; stroke-width: 2.2; }
+.bubble .channel-mark { margin-right: 4px; }
