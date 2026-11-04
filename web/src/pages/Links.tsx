@@ -38,6 +38,7 @@ import {
 import { ConversationPane } from "./Conversation";
 import { TaskiemPane } from "./TaskiemChat";
 import { ChatRow } from "./ChatRow";
+import { useDrafts } from "../lib/drafts";
 import { Ticks } from "./Conversation";
 import {
   EmptyState,
@@ -283,6 +284,7 @@ export function ChatPage() {
   const g = groupLinks(view.data);
   const searching = query.length >= 2;
   const all = convs.data?.conversations ?? [];
+  const drafts = useDrafts();
   const openID = params.get("with");
   const open = all.find((c) => c.link === openID);
   // The person's own conversation with Taskiem, pinned at the top (§5.5).
@@ -365,7 +367,15 @@ export function ChatPage() {
                 letter="T"
                 accent
                 title="Taskiem"
-                preview="Your own conversation with Taskiem, as on your phone"
+                preview={
+                  drafts.taskiem ? (
+                    <>
+                      <span className="draft">Draft:</span> {drafts.taskiem}
+                    </>
+                  ) : (
+                    "Your own conversation with Taskiem, as on your phone"
+                  )
+                }
                 selected={taskiemOpen}
                 testid="taskiem-chat"
               />
@@ -565,18 +575,25 @@ export function ChatPage() {
                           ) : undefined
                         }
                         preview={
-                          c.typing
-                            ? "typing…"
-                            : c.last
-                              ? previewLine(c.last, c.name).replace(
-                                  c.last.mine && c.last.kind !== "card"
-                                    ? /^You: /
-                                    : /^$/,
-                                  "",
-                                )
-                              : c.state === "active"
-                                ? `Linked · ${roleOf(c.link)}`
-                                : "The link has ended"
+                          drafts[c.link] ? (
+                            <>
+                              <span className="draft">Draft:</span>{" "}
+                              {drafts[c.link]}
+                            </>
+                          ) : c.typing ? (
+                            "typing…"
+                          ) : c.last ? (
+                            previewLine(c.last, c.name).replace(
+                              c.last.mine && c.last.kind !== "card"
+                                ? /^You: /
+                                : /^$/,
+                              "",
+                            )
+                          ) : c.state === "active" ? (
+                            `Linked · ${roleOf(c.link)}`
+                          ) : (
+                            "The link has ended"
+                          )
                         }
                         typing={c.typing}
                         unread={c.unread}

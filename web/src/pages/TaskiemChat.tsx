@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useThread } from "../lib/useThread";
 import { ThreadJump } from "./ThreadParts";
+import { EmojiPanel } from "./EmojiPanel";
+import { insertAt } from "../lib/emoji";
+import { getDraft, setDraft } from "../lib/drafts";
+import { useAutoGrow } from "../lib/useAutoGrow";
 import { get, post, upload } from "../api";
 import type { Conversation } from "../lib/linkchat";
 import { priceWords, type SupplierPrices } from "../lib/pricelists";
@@ -36,6 +40,14 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
   const [error, setError] = useState<unknown>();
   const [text, setText] = useState("");
   const textBox = useRef<HTMLTextAreaElement>(null);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  useAutoGrow(textBox, text);
+  // An unsent message is kept (and shown in the list).
+  useEffect(() => setText(getDraft("taskiem")), []);
+  useEffect(() => {
+    setDraft("taskiem", text);
+  }, [text]);
   // "@" a linked business, "#" an item of a supplier's price list.
   const convs = useLoad(
     () =>
@@ -192,7 +204,22 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
     setFileError(undefined);
     if (f && f.size > 10 * 1024 * 1024)
       return setFileError(new Error(`${f.name} is larger than 10 MB.`));
+    if (f && !/^image\/(jpeg|png|webp)$/.test(f.type))
+      return setFileError(
+        new Error("Send a photo (JPEG, PNG or WebP) or a voice note."),
+      );
     if (f) setFile(f);
+  };
+  const addEmoji = (c: string) => {
+    const el = textBox.current;
+    const start = el?.selectionStart ?? text.length;
+    const r = insertAt(text, start, el?.selectionEnd ?? start, c);
+    setText(r.text);
+    mentions.update(r.text, r.caret);
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(r.caret, r.caret);
+    });
   };
 
   return (
@@ -200,7 +227,30 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
       className="chat-pane"
       aria-label="Conversation with Taskiem"
       data-testid="taskiem-pane"
+      onDragEnter={(e) => {
+        if (e.dataTransfer.types.includes("Files")) {
+          e.preventDefault();
+          setDragging(true);
+        }
+      }}
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes("Files")) e.preventDefault();
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null))
+          setDragging(false);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragging(false);
+        choose(e.dataTransfer.files[0]);
+      }}
     >
+      {dragging && (
+        <div className="chat-drop" aria-hidden="true">
+          Drop a photo to send it
+        </div>
+      )}
       <div className="chat-head">
         <button
           type="button"
@@ -359,6 +409,9 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
           e.target.value = "";
         }}
       />
+      {emojiOpen && (
+        <EmojiPanel onPick={addEmoji} onClose={() => setEmojiOpen(false)} />
+      )}
       <MentionList m={mentions} />
       {voice.secs !== undefined || voice.holding ? (
         <RecordingBar voice={voice} />
@@ -370,6 +423,16 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
             send();
           }}
         >
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="Emoji"
+            title="Emoji"
+            aria-expanded={emojiOpen}
+            onClick={() => setEmojiOpen(!emojiOpen)}
+          >
+            <Icon name="emoji" />
+          </button>
           <button
             type="button"
             className="icon-button"
@@ -402,8 +465,22 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
               setText(e.target.value);
               mentions.update(e.target.value, e.target.selectionStart);
             }}
+            onPaste={(e) => {
+              const f = Array.from(e.clipboardData.files).find((x) =>
+                x.type.startsWith("image/"),
+              );
+              if (f) {
+                e.preventDefault();
+                choose(f);
+              }
+            }}
             onKeyDown={(e) => {
               if (mentions.onKeyDown(e)) return;
+              if (e.key === "Escape") {
+                if (emojiOpen) setEmojiOpen(false);
+                else if (file) setFile(undefined);
+                return;
+              }
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 send();

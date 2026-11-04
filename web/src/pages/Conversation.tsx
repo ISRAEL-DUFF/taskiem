@@ -40,6 +40,12 @@ import {
   type Outgoing,
 } from "../lib/outbox";
 import { ThreadJump } from "./ThreadParts";
+import { EmojiPanel } from "./EmojiPanel";
+import { AttachMenu } from "./AttachMenu";
+import { CameraSheet } from "./CameraSheet";
+import { insertAt } from "../lib/emoji";
+import { getDraft, setDraft } from "../lib/drafts";
+import { useAutoGrow } from "../lib/useAutoGrow";
 import { roleLine, type BusinessLink, type LinkCard } from "../lib/links";
 import { ErrorBox, fmtTime, Modal, Skeleton, useAction, useLoad } from "../ui";
 
@@ -466,7 +472,8 @@ function Bubble({
   // The time and ticks sit in the corner of the last line of text (the text
   // keeps room for them); with a photo only, a link preview or a card they
   // have a row of their own.
-  const inline = !card && !!m.body && !m.preview && !onShow;
+  const inline =
+    !card && !!m.body && !m.preview && !onShow && local !== "failed";
   return (
     <div
       className={`bubble${m.mine ? " mine" : ""}${first ? " first" : ""}${card ? " card-bubble" : ""}${flash ? " flash" : ""}`}
@@ -714,6 +721,20 @@ export function ConversationPane({
   const [error, setError] = useState<unknown>();
   const [text, setText] = useState("");
   const textBox = useRef<HTMLTextAreaElement>(null);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  useAutoGrow(textBox, text);
+  // An unsent message is kept per conversation (and shown in the list).
+  useEffect(() => {
+    setText(getDraft(conv.link));
+    setEmojiOpen(false);
+  }, [conv.link]);
+  useEffect(() => {
+    setDraft(conv.link, text);
+    // Only a change of the words is kept: a switch of conversation loads one.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text]);
   const items = useLoad(
     () =>
       get<{ items: PriceItem[] }>(`/v1/link-chats/${conv.link}/items`).then(
@@ -926,7 +947,39 @@ export function ConversationPane({
       setFileError(new Error(`${f.name} is larger than 25 MB.`));
       return;
     }
+    if (!/^(image\/(jpeg|png|webp)|application\/pdf|audio\/)/.test(f.type)) {
+      setFileError(
+        new Error("Send a photo (JPEG, PNG or WebP), a PDF or a voice note."),
+      );
+      return;
+    }
     setFile(f);
+  };
+  // The clip's menu: a photo, a document, or the camera (the computer's
+  // webcam, or on a phone the camera app).
+  const attach = (what: "photo" | "document" | "camera") => {
+    if (what === "camera") {
+      const touch = window.matchMedia?.("(pointer: coarse)").matches;
+      if (!touch && typeof navigator.mediaDevices?.getUserMedia === "function")
+        setCameraOpen(true);
+      else snap.current?.click();
+      return;
+    }
+    const el = pick.current;
+    if (!el) return;
+    el.accept =
+      what === "photo" ? "image/jpeg,image/png,image/webp" : "application/pdf";
+    el.click();
+  };
+  const addEmoji = (c: string) => {
+    const el = textBox.current;
+    const start = el?.selectionStart ?? text.length;
+    const r = insertAt(text, start, el?.selectionEnd ?? start, c);
+    typed(r.text);
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(r.caret, r.caret);
+    });
   };
   // Sent at once: it shows in the thread with a clock, the box is cleared,
   // and the server's copy takes its place; if it cannot be sent it stays,
@@ -1065,6 +1118,25 @@ export function ConversationPane({
       className="chat-pane"
       aria-label={`Conversation with ${conv.name}`}
       data-testid="chat-pane"
+      onDragEnter={(e) => {
+        if (write && e.dataTransfer.types.includes("Files")) {
+          e.preventDefault();
+          setDragging(true);
+        }
+      }}
+      onDragOver={(e) => {
+        if (write && e.dataTransfer.types.includes("Files")) e.preventDefault();
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null))
+          setDragging(false);
+      }}
+      onDrop={(e) => {
+        if (!write) return;
+        e.preventDefault();
+        setDragging(false);
+        choose(e.dataTransfer.files[0]);
+      }}
     >
       <div className="chat-head">
         <button
@@ -1310,6 +1382,9 @@ export function ConversationPane({
               e.target.value = "";
             }}
           />
+          {emojiOpen && (
+            <EmojiPanel onPick={addEmoji} onClose={() => setEmojiOpen(false)} />
+          )}
           <MentionList m={mentions} />
           {voice.secs !== undefined || voice.holding ? (
             <RecordingBar voice={voice} />
@@ -1324,21 +1399,15 @@ export function ConversationPane({
               <button
                 type="button"
                 className="icon-button"
-                aria-label="Attach a photo or a PDF"
-                title="Attach a photo or a PDF"
-                onClick={() => pick.current?.click()}
+                aria-label="Emoji"
+                title="Emoji"
+                aria-expanded={emojiOpen}
+                data-testid="emoji-button"
+                onClick={() => setEmojiOpen(!emojiOpen)}
               >
-                <Icon name="attach" />
+                <Icon name="emoji" />
               </button>
-              <button
-                type="button"
-                className="icon-button"
-                aria-label="Take a photo"
-                title="Take a photo"
-                onClick={() => snap.current?.click()}
-              >
-                <Icon name="camera" />
-              </button>
+              <AttachMenu onChoose={attach} />
               <label className="sr-only" htmlFor="chat-text">
                 Message
               </label>
@@ -1353,8 +1422,26 @@ export function ConversationPane({
                   typed(e.target.value);
                   mentions.update(e.target.value, e.target.selectionStart);
                 }}
+                onPaste={(e) => {
+                  // A pasted picture is a photo to send, with a caption.
+                  const f = Array.from(e.clipboardData.files).find((x) =>
+                    x.type.startsWith("image/"),
+                  );
+                  if (f) {
+                    e.preventDefault();
+                    choose(f);
+                  }
+                }}
                 onKeyDown={(e) => {
                   if (mentions.onKeyDown(e)) return;
+                  if (e.key === "Escape") {
+                    // Esc gives up what is being prepared: the panel, a
+                    // photo waiting for its caption, then a reply.
+                    if (emojiOpen) setEmojiOpen(false);
+                    else if (file) setFile(undefined);
+                    else if (reply) setReply(undefined);
+                    return;
+                  }
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
                     send();
@@ -1384,6 +1471,20 @@ export function ConversationPane({
             ? "You can read this conversation. Someone who writes to linked businesses for your business can reply."
             : "This link has ended. The conversation stays."}
         </p>
+      )}
+      {dragging && (
+        <div className="chat-drop" data-testid="chat-drop" aria-hidden="true">
+          Drop a photo or a PDF to send it
+        </div>
+      )}
+      {cameraOpen && (
+        <CameraSheet
+          onClose={() => setCameraOpen(false)}
+          onTake={(f) => {
+            setCameraOpen(false);
+            choose(f);
+          }}
+        />
       )}
       {forwarding && (
         <ForwardSheet
