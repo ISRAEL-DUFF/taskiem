@@ -30,7 +30,7 @@ import { Icon } from "../icons";
 import { MicButton, RecordingBar, useVoiceNote } from "./VoiceNote";
 import { MentionList, MentionText, useMentions } from "./Mentions";
 import { priceWords, type PriceItem } from "../lib/pricelists";
-import { firstUnread } from "../lib/thread";
+import { firstUnread, startsRun } from "../lib/thread";
 import { useThread } from "../lib/useThread";
 import { ThreadJump } from "./ThreadParts";
 import { roleLine, type BusinessLink, type LinkCard } from "../lib/links";
@@ -321,6 +321,20 @@ function PreviewCard({ p }: { p: LinkPreview }) {
   );
 }
 
+/** The ticks under a message of ours: two when it is delivered, blue once
+ * they have read it. */
+export function Ticks({ read }: { read: boolean }) {
+  return (
+    <span
+      className={`ticks${read ? " read" : ""}`}
+      role="img"
+      aria-label={read ? "Read" : "Delivered"}
+    >
+      <Icon name="tick-double" />
+    </span>
+  );
+}
+
 function Bubble({
   m,
   other,
@@ -333,6 +347,7 @@ function Bubble({
   onJump,
   flash = false,
   onShow,
+  first = true,
 }: {
   m: LinkMessage;
   other: string;
@@ -348,6 +363,8 @@ function Bubble({
   flash?: boolean;
   /** A search result: shows it in the conversation, around it. */
   onShow?: (id: string) => void;
+  /** Starts a run of one sender's messages: it has the tail and the name. */
+  first?: boolean;
 }) {
   const card = m.kind === "card" ? m.card : undefined;
   const [more, setMore] = useState(false);
@@ -418,14 +435,14 @@ function Bubble({
   const what = card ? cardLine(card, m.mine, other) : previewLine(m, other);
   return (
     <div
-      className={`bubble${m.mine ? " mine" : ""}${card ? " card-bubble" : ""}${flash ? " flash" : ""}`}
+      className={`bubble${m.mine ? " mine" : ""}${first ? " first" : ""}${card ? " card-bubble" : ""}${flash ? " flash" : ""}`}
       data-msg={m.id}
       data-testid={card ? "chat-card" : "chat-message"}
       data-mine={m.mine}
       style={dx ? { transform: `translateX(${dx}px)` } : undefined}
       {...touch}
     >
-      {!m.mine && !card && m.sender_name && (
+      {first && !m.mine && !card && m.sender_name && (
         <span className="who">{m.sender_name}</span>
       )}
       {m.forwarded && (
@@ -526,6 +543,30 @@ function Bubble({
         </span>
       )}
       <span className="meta">
+        {(canReply || hasMenu) && !onShow && (
+          <span className="bubble-actions">
+            {canReply && (
+              <button
+                type="button"
+                className="reply-btn"
+                onClick={() => onReply(m)}
+              >
+                Reply
+                <span className="sr-only"> to {what}</span>
+              </button>
+            )}
+            {hasMenu && (
+              <button
+                type="button"
+                className="reply-btn more-btn"
+                aria-expanded={more}
+                onClick={() => (setMore(!more), setCopied(false))}
+              >
+                More<span className="sr-only"> for {what}</span>
+              </button>
+            )}
+          </span>
+        )}
         {onShow && (
           <button
             type="button"
@@ -537,41 +578,13 @@ function Bubble({
             <span className="sr-only"> in the conversation</span>
           </button>
         )}
-        {canReply && (
-          <button
-            type="button"
-            className="reply-btn"
-            onClick={() => onReply(m)}
-          >
-            Reply
-            <span className="sr-only"> to {what}</span>
-          </button>
-        )}
-        {hasMenu && (
-          <button
-            type="button"
-            className="reply-btn more-btn"
-            aria-expanded={more}
-            onClick={() => (setMore(!more), setCopied(false))}
-          >
-            More<span className="sr-only"> for {what}</span>
-          </button>
-        )}
         <time dateTime={m.created_at} title={fmtTime(m.created_at)}>
           {clock(m.created_at)}
         </time>
         {/* Our message is written in the other business's conversation in
             the same transaction it is sent, so it is delivered as soon as
             it is here: two ticks, coloured once they have read it. */}
-        {m.mine && !card && (
-          <span
-            className={`ticks${m.read_at ? " read" : ""}`}
-            aria-label={m.read_at ? "Read" : "Delivered"}
-            role="img"
-          >
-            ✓✓
-          </span>
-        )}
+        {m.mine && !card && <Ticks read={!!m.read_at} />}
       </span>
     </div>
   );
@@ -1069,7 +1082,7 @@ export function ConversationPane({
             byDay(shown).map((g) => (
               <div key={g.day} className="chat-group">
                 <span className="chat-day">{g.day}</span>
-                {g.messages.map((m) => (
+                {g.messages.map((m, i) => (
                   <Fragment key={m.id}>
                     {!found && unread?.id === m.id && (
                       <div
@@ -1089,6 +1102,7 @@ export function ConversationPane({
                       onReply={setReply}
                       onJump={found ? undefined : jump}
                       onShow={found ? showFound : undefined}
+                      first={startsRun(g.messages[i - 1], m)}
                       flash={flashId === m.id}
                       latest={newest.has(m.id)}
                       onDone={() => pull(last).catch(setError)}

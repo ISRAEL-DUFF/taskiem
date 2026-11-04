@@ -66,3 +66,15 @@ export function scrollWithin(
   const gap = block === "start" ? 8 : Math.max(0, (s.height - t.height) / 2);
   thread.scrollTop += t.top - s.top - gap;
 }
+
+/** Whether a message starts a run: the first of its day, or after one from
+ * the other side or another sender, or a document card. The first of a run
+ * has the bubble's tail and the sender's name; the rest sit close under it. */
+export function startsRun(
+  prev: Pick<LinkMessage, "mine" | "kind" | "sender_name"> | undefined,
+  m: Pick<LinkMessage, "mine" | "kind" | "sender_name">,
+): boolean {
+  if (!prev) return true;
+  if (prev.kind === "card" || m.kind === "card") return true;
+  return prev.mine !== m.mine || prev.sender_name !== m.sender_name;
+}

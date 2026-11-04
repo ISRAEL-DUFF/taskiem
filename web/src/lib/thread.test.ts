@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { atBottom, firstUnread, followNew } from "./thread";
+import { atBottom, firstUnread, followNew, startsRun } from "./thread";
 import type { LinkMessage } from "./linkchat";
 
 const msg = (
@@ -105,5 +105,24 @@ describe("followNew", () => {
       kind: "none",
     });
     expect(followNew(undefined, withNew, false)).toEqual({ kind: "none" });
+  });
+});
+
+describe("startsRun", () => {
+  const m = (
+    mine: boolean,
+    sender?: string,
+    kind: "text" | "card" = "text",
+  ) => ({ mine, sender_name: sender, kind });
+  it("starts with the first of a day and when the sender changes", () => {
+    expect(startsRun(undefined, m(false, "Musa"))).toBe(true);
+    expect(startsRun(m(false, "Musa"), m(false, "Musa"))).toBe(false);
+    expect(startsRun(m(false, "Musa"), m(false, "Ada"))).toBe(true);
+    expect(startsRun(m(false, "Musa"), m(true, "Owner"))).toBe(true);
+    expect(startsRun(m(true, "Owner"), m(true, "Owner"))).toBe(false);
+  });
+  it("gives a document card its own run", () => {
+    expect(startsRun(m(false, "Musa"), m(false, undefined, "card"))).toBe(true);
+    expect(startsRun(m(false, undefined, "card"), m(false, "Musa"))).toBe(true);
   });
 });

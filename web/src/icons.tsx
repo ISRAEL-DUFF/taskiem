@@ -48,6 +48,8 @@ const paths: Record<string, string> = {
   emoji: "M12 21a9 9 0 100-18 9 9 0 000 18zM8.5 14a4.5 4.5 0 007 0M9 9.5v.01M15 9.5v.01",
   send: "M21 3L3 11l7 3 3 7zM10 14L21 3",
   down: "M6 9l6 6 6-6",
+  pin: "M9 3h6l-1 6 3 3H7l3-3zM12 12v9",
+  mute: "M6 16V11a6 6 0 019-5.2M18 11v5l2 2H8M4 4l16 16",
   // The workflow builder's.
   chat: "M21 12a8 8 0 01-11.6 7.1L4 20l1.1-4.4A8 8 0 1121 12z",
   mail: "M3 5h18v14H3zM3 7l9 6 9-6",

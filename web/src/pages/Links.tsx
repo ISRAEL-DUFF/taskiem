@@ -37,6 +37,8 @@ import {
 } from "../lib/linkchat";
 import { ConversationPane } from "./Conversation";
 import { TaskiemPane } from "./TaskiemChat";
+import { ChatRow } from "./ChatRow";
+import { Ticks } from "./Conversation";
 import {
   EmptyState,
   ErrorBox,
@@ -333,7 +335,10 @@ export function ChatPage() {
               {(
                 [
                   ["all", "All"],
-                  ["unread", unreadCount ? `Unread (${unreadCount})` : "Unread"],
+                  [
+                    "unread",
+                    unreadCount ? `Unread (${unreadCount})` : "Unread",
+                  ],
                   ["archived", `Archived (${archivedCount})`],
                 ] as const
               ).map(([key, label]) => (
@@ -351,15 +356,20 @@ export function ChatPage() {
           )}
           <ErrorBox error={view.error ?? act.error ?? searchError} />
           {!searching && !archived && (
-            <Items label="Your conversation with Taskiem">
-              <Item
+            <ul
+              className="chat-rows"
+              aria-label="Your conversation with Taskiem"
+            >
+              <ChatRow
                 to="/chat?with=taskiem"
-                icon="sparkle"
+                letter="T"
+                accent
                 title="Taskiem"
-                sub="Your own conversation with Taskiem, as on your phone"
+                preview="Your own conversation with Taskiem, as on your phone"
+                selected={taskiemOpen}
                 testid="taskiem-chat"
               />
-            </Items>
+            </ul>
           )}
           {searching ? (
             <section aria-label="Search results" data-testid="link-results">
@@ -404,7 +414,9 @@ export function ChatPage() {
                   <Row
                     icon="chat"
                     title={`Send a link request to ${blind.shown}`}
-                    sub={<span className="sub">{blindRowLine(blind.kind)}</span>}
+                    sub={
+                      <span className="sub">{blindRowLine(blind.kind)}</span>
+                    }
                     testid="link-blind"
                   >
                     {manage && (
@@ -427,7 +439,10 @@ export function ChatPage() {
               ) : (
                 <Items label="Businesses on Taskiem">
                   {others.map((c) => {
-                    const pending = requestTo(view.data?.links ?? [], c.business);
+                    const pending = requestTo(
+                      view.data?.links ?? [],
+                      c.business,
+                    );
                     return (
                       <FoundRow
                         key={c.business}
@@ -516,42 +531,45 @@ export function ChatPage() {
                           : "No chats."}
                     </p>
                   )}
-                  <Items label={archived ? "Archived chats" : "Chats"}>
+                  <ul
+                    className="chat-rows"
+                    aria-label={archived ? "Archived chats" : "Chats"}
+                  >
                     {listed.map((c) => (
-                      <Item
+                      <ChatRow
                         key={c.link}
                         to={`/chat?with=${c.link}`}
-                        icon="chat"
-                        tone={c.state === "active" ? "ok" : "muted"}
+                        letter={c.name}
                         title={c.name}
-                        sub={
+                        time={c.last ? listTime(c.last.created_at) : undefined}
+                        lead={
+                          c.last?.mine && c.last.kind !== "card" ? (
+                            <Ticks read={!!c.last.read_at} />
+                          ) : undefined
+                        }
+                        preview={
                           c.typing
                             ? "typing…"
                             : c.last
-                              ? previewLine(c.last, c.name)
+                              ? previewLine(c.last, c.name).replace(
+                                  c.last.mine && c.last.kind !== "card"
+                                    ? /^You: /
+                                    : /^$/,
+                                  "",
+                                )
                               : c.state === "active"
                                 ? `Linked · ${roleOf(c.link)}`
                                 : "The link has ended"
                         }
-                        side={c.last ? listTime(c.last.created_at) : undefined}
-                        sideSub={
-                          c.unread > 0 ? (
-                            <span
-                              className="unread-count"
-                              aria-label={`${c.unread} unread`}
-                            >
-                              {c.unread}
-                            </span>
-                          ) : c.pinned ? (
-                            <span className="hint">Pinned</span>
-                          ) : c.muted ? (
-                            <span className="hint">Muted</span>
-                          ) : undefined
-                        }
+                        typing={c.typing}
+                        unread={c.unread}
+                        pinned={c.pinned}
+                        muted={c.muted}
+                        selected={openID === c.link}
                         testid="link-linked"
                       />
                     ))}
-                  </Items>
+                  </ul>
                 </section>
               )}
               {g.waiting.length + g.sent.length > 0 && (

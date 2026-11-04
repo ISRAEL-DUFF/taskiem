@@ -255,12 +255,14 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
                   return (
                     <div
                       key={`${m.id}-${i}`}
-                      className={`bubble${m.inbound ? " mine" : ""}`}
+                      className={`bubble${m.inbound ? " mine" : ""}${i === 0 || g.messages[i - 1]?.inbound !== m.inbound ? " first" : ""}`}
                       data-msg={m.id}
                       data-testid="taskiem-message"
                       data-mine={m.inbound}
                     >
-                      {!m.inbound && <span className="who">Taskiem</span>}
+                      {!m.inbound && (i === 0 || g.messages[i - 1]?.inbound) && (
+                      <span className="who">Taskiem</span>
+                    )}
                       <span className="text">
                         {boldParts(m.text).map((p, k) =>
                           p.bold ? <strong key={k}>{p.text}</strong> : p.text,
