@@ -16,7 +16,6 @@ import {
   cardSub,
   findableLine,
   groupLinks,
-  matchLinked,
   requestTo,
   roleLine,
   ROLE_CHOICES,
@@ -32,6 +31,7 @@ import {
 } from "../lib/links";
 import {
   listTime,
+  matchChats,
   previewLine,
   type Conversation,
   type LinkMessage,
@@ -287,13 +287,16 @@ export function ChatPage() {
         (r) => live && setFoundMessages(r.messages),
         () => undefined,
       );
-    }, 250);
+    }, 150);
     return () => {
       live = false;
       clearTimeout(t);
     };
   }, [query, searchTick, linksOn]);
   const g = groupLinks(view.data);
+  // From the first letter the list narrows to what matches, as WhatsApp's
+  // does; from two, other businesses and messages are looked for too.
+  const typed = linksOn && query.length >= 1;
   const searching = linksOn && query.length >= 2;
   const all = convs.data?.conversations ?? [];
   const openID = params.get("with");
@@ -307,10 +310,42 @@ export function ChatPage() {
     const l = view.data?.links.find((x) => x.id === link);
     return l ? roleLine(l.role) : "";
   };
-  const chats = searching ? matchLinked(view.data?.links ?? [], query) : [];
+  const mine = typed ? matchChats(all, query) : [];
+  const taskiemMatches = typed && "taskiem".includes(query.toLowerCase());
   const blind = found?.blind;
-  const others = (found?.results ?? []).filter(
-    (c) => !chats.some((l) => l.business === c.business),
+  // Businesses already linked are in Chats, not offered again.
+  const others = (found?.results ?? []).filter((c) => !all.some((x) => x.business === c.business));
+  // One row of a conversation, in the list and in what a search finds.
+  const chatRow = (c: Conversation) => (
+    <Item
+      key={c.link}
+      to={`/chat?with=${c.link}`}
+      icon="chat"
+      tone={c.state === "active" ? "ok" : "muted"}
+      title={c.name}
+      sub={
+        c.typing
+          ? "typing…"
+          : c.last
+            ? previewLine(c.last, c.name)
+            : c.state === "active"
+              ? `Linked · ${roleOf(c.link)}`
+              : "The link has ended"
+      }
+      side={c.last ? listTime(c.last.created_at) : undefined}
+      sideSub={
+        c.unread > 0 ? (
+          <span className="unread-count" aria-label={`${c.unread} unread`}>
+            {c.unread}
+          </span>
+        ) : c.pinned ? (
+          <span className="hint">Pinned</span>
+        ) : c.muted ? (
+          <span className="hint">Muted</span>
+        ) : undefined
+      }
+      testid="link-linked"
+    />
   );
   return (
     <>
@@ -362,7 +397,7 @@ export function ChatPage() {
               }
             />
           )}
-          {!searching && !archived && (
+          {!typed && !archived && (
             <Items label="Your conversation with Taskiem">
               <Item
                 to="/chat?with=taskiem"
@@ -373,25 +408,32 @@ export function ChatPage() {
               />
             </Items>
           )}
-          {searching ? (
+          {typed ? (
             <section aria-label="Search results" data-testid="link-results">
-              {chats.length > 0 && (
+              {(mine.length > 0 || taskiemMatches) && (
                 <>
                   <h2>Chats</h2>
-                  <Items label="Linked businesses found">
-                    {chats.map((l) => (
-                      <Row
-                        key={l.id}
-                        letter={l.name}
-                        title={l.name}
-                        side={<StateBadge state={l.state} />}
-                        sub={<span className="sub">{roleLine(l.role)}</span>}
-                        testid="link-chat"
+                  <Items label="Chats found">
+                    {taskiemMatches && (
+                      <Item
+                        to="/chat?with=taskiem"
+                        icon="sparkle"
+                        title="Taskiem"
+                        sub="Your own conversation with Taskiem"
+                        testid="taskiem-chat"
                       />
-                    ))}
+                    )}
+                    {mine.map(chatRow)}
                   </Items>
                 </>
               )}
+              {!searching && mine.length === 0 && !taskiemMatches && (
+                <EmptyState icon="search">
+                  No chat matches “{query}”. Keep typing to look for other businesses.
+                </EmptyState>
+              )}
+              {searching && (
+                <>
               {(foundMessages?.length ?? 0) > 0 && (
                 <>
                   <h2>Messages</h2>
@@ -411,58 +453,55 @@ export function ChatPage() {
                 </>
               )}
               <h2>Businesses on Taskiem</h2>
-              {blind ? (
-                <Items label="Send a request">
-                  <Row
-                    icon="chat"
-                    title={`Send a link request to ${blind.shown}`}
-                    sub={<span className="sub">{blindRowLine(blind.kind)}</span>}
-                    testid="link-blind"
-                  >
-                    {manage && (
-                      <button
-                        type="button"
-                        className="small"
-                        onClick={() => setAsking(blindRequest(blind, query))}
-                      >
-                        Send request
-                      </button>
-                    )}
-                  </Row>
-                </Items>
-              ) : !found ? (
+              {!found && !blind ? (
                 <Skeleton rows={2} label="Searching businesses…" />
-              ) : others.length === 0 ? (
-                <EmptyState icon="search">
-                  No business that lets others find it matches “{query}”.
-                </EmptyState>
               ) : (
-                <Items label="Businesses on Taskiem">
-                  {others.map((c) => {
-                    const pending = requestTo(view.data?.links ?? [], c.business);
-                    return (
-                      <FoundRow
-                        key={c.business}
-                        card={c}
-                        manage={manage}
-                        busy={act.busy}
-                        onAsk={() =>
-                          setAsking({ business: c.business, name: c.name })
-                        }
-                        onCancel={
-                          pending
-                            ? () =>
-                                void act.run(async () => {
-                                  await post(`/v1/links/${pending.id}/cancel`);
-                                  view.reload();
-                                  setSearchTick((n) => n + 1);
-                                }, "Request withdrawn")
-                            : undefined
-                        }
-                      />
-                    );
-                  })}
-                </Items>
+                <>
+                  {others.length > 0 && (
+                    <Items label="Businesses on Taskiem">
+                      {others.map((c) => {
+                        const pending = requestTo(view.data?.links ?? [], c.business);
+                        return (
+                          <FoundRow
+                            key={c.business}
+                            card={c}
+                            manage={manage}
+                            busy={act.busy}
+                            onAsk={() => setAsking({ business: c.business, name: c.name })}
+                            onCancel={
+                              pending
+                                ? () =>
+                                    void act.run(async () => {
+                                      await post(`/v1/links/${pending.id}/cancel`);
+                                      view.reload();
+                                      setSearchTick((n) => n + 1);
+                                    }, "Request withdrawn")
+                                : undefined
+                            }
+                          />
+                        );
+                      })}
+                    </Items>
+                  )}
+                  {/* What was typed may be a phone number, an email or a page
+                      address: offered after what was found, never instead of it. */}
+                  {blind && (
+                    <Items label="Send a request">
+                      <Row icon="chat" title={`Send a link request to ${blind.shown}`} sub={<span className="sub">{blindRowLine(blind.kind)}</span>} testid="link-blind">
+                        {manage && (
+                          <button type="button" className="small" onClick={() => setAsking(blindRequest(blind, query))}>
+                            Send request
+                          </button>
+                        )}
+                      </Row>
+                    </Items>
+                  )}
+                  {others.length === 0 && !blind && (
+                    <EmptyState icon="search">No business that lets others find it matches “{query}”.</EmptyState>
+                  )}
+                </>
+              )}
+                </>
               )}
             </section>
           ) : !view.data ? (
@@ -531,40 +570,7 @@ export function ChatPage() {
                     )}
                   </div>
                   <Items label={archived ? "Archived chats" : "Chats"}>
-                    {listed.map((c) => (
-                      <Item
-                        key={c.link}
-                        to={`/chat?with=${c.link}`}
-                        icon="chat"
-                        tone={c.state === "active" ? "ok" : "muted"}
-                        title={c.name}
-                        sub={
-                          c.typing
-                            ? "typing…"
-                            : c.last
-                              ? previewLine(c.last, c.name)
-                              : c.state === "active"
-                                ? `Linked · ${roleOf(c.link)}`
-                                : "The link has ended"
-                        }
-                        side={c.last ? listTime(c.last.created_at) : undefined}
-                        sideSub={
-                          c.unread > 0 ? (
-                            <span
-                              className="unread-count"
-                              aria-label={`${c.unread} unread`}
-                            >
-                              {c.unread}
-                            </span>
-                          ) : c.pinned ? (
-                            <span className="hint">Pinned</span>
-                          ) : c.muted ? (
-                            <span className="hint">Muted</span>
-                          ) : undefined
-                        }
-                        testid="link-linked"
-                      />
-                    ))}
+                    {listed.map(chatRow)}
                   </Items>
                 </section>
               )}

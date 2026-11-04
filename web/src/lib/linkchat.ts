@@ -190,6 +190,20 @@ export function clock(iso: string): string {
 }
 
 /** The list's time: today's clock, else the day. */
+/** The conversations a search narrows the list to, as WhatsApp does from the
+ * first letter: every word typed begins a word in the business's name or in
+ * its last message. Archived ones are searched too. */
+export function matchChats(convs: Conversation[], q: string): Conversation[] {
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [];
+  return convs.filter((c) => {
+    // Each word typed begins a word of the name or of the last message,
+    // so "d" finds Dangote and not Ada.
+    const hay = `${c.name} ${c.last ? previewLine(c.last, c.name) : ""}`.toLowerCase().split(/[^\p{L}\p{N}']+/u).filter(Boolean);
+    return words.every((w) => hay.some((h) => h.startsWith(w)));
+  });
+}
+
 export function listTime(iso: string, now: Date = new Date()): string {
   const label = dayLabel(iso, now);
   return label === "Today" ? clock(iso) : label;

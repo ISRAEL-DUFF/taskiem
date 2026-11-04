@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { attachmentLabel, byDay, cardHref, cardLine, cardSub, dayLabel, fileSize, fileURL, listTime, merge, previewLine, type LinkMessage } from "./linkchat";
+import { attachmentLabel, byDay, cardHref, cardLine, cardSub, dayLabel, fileSize, fileURL, listTime, matchChats, merge, previewLine, type Conversation, type LinkMessage } from "./linkchat";
 
 const msg = (id: string, at: string, extra: Partial<LinkMessage> = {}): LinkMessage => ({ id, link: "l1", mine: false, kind: "text", body: id, created_at: at, ...extra });
 
@@ -56,5 +56,29 @@ describe("files in the conversation", () => {
     expect(fileSize(820 * 1024)).toBe("820 KB");
     expect(fileSize(1.4 * 1024 * 1024)).toBe("1.4 MB");
     expect(fileURL({ link: "L1", id: "M1" })).toBe("/v1/link-chats/L1/files/M1");
+  });
+});
+
+describe("narrowing the chat list as the person types", () => {
+  const conv = (link: string, name: string, last?: LinkMessage): Conversation => ({ link, business: "b" + link, name, state: "active", last, unread: 0, muted: false, archived: false, pinned: false, typing: false });
+  const list = [
+    conv("1", "Dangote Depot", msg("m1", "2026-10-31T10:00:00", { body: "Rice is back in stock" })),
+    conv("2", "Ada's Bakery"),
+    conv("3", "Danfo Logistics", msg("m3", "2026-10-30T09:00:00", { body: "Your delivery is on its way" })),
+  ];
+  it("matches from the first letter, by name", () => {
+    expect(matchChats(list, "d").map((c) => c.link)).toEqual(["1", "3"]);
+    expect(matchChats(list, "dan").map((c) => c.link)).toEqual(["1", "3"]);
+    expect(matchChats(list, "danf").map((c) => c.link)).toEqual(["3"]);
+    expect(matchChats(list, "ADA").map((c) => c.link)).toEqual(["2"]);
+  });
+  it("matches the last message too, and every word typed", () => {
+    expect(matchChats(list, "rice").map((c) => c.link)).toEqual(["1"]);
+    expect(matchChats(list, "dangote rice").map((c) => c.link)).toEqual(["1"]);
+    expect(matchChats(list, "dangote delivery")).toEqual([]);
+  });
+  it("matches nothing for nothing typed", () => {
+    expect(matchChats(list, "")).toEqual([]);
+    expect(matchChats(list, "   ")).toEqual([]);
   });
 });

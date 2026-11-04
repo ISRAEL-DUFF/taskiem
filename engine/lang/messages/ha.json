@@ -1852,6 +1852,18 @@
       "text": "In aika wa {name} ({to}) takardar kuɗi ta {amount}: {for}?",
       "reviewed": false
     },
+    "wa.invoice.confirm_linked": {
+      "text": "Send {name}, a business on Taskiem you are linked with, an invoice for {amount}: {for}? It goes into their bills.",
+      "reviewed": false
+    },
+    "wa.invoice.sent_linked": {
+      "text": "Sent {number} to {name}'s bills on Taskiem for {amount}. You can see it under Invoices in the web app.",
+      "reviewed": false
+    },
+    "wa.invoice.pick_linked": {
+      "text": "Which {name} do you mean?\n{list}\nReply with its number, or send a phone number or email to invoice someone else.",
+      "reviewed": false
+    },
     "wa.invoice.confirm_reminder": {
       "text": "Ku amsa *yes* in aika takardar kuɗin ko *no* mu bar ta.",
       "reviewed": false
