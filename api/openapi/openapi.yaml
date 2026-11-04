@@ -6789,7 +6789,7 @@ paths:
       tags:
       - Links
       summary: A page of a conversation
-      description: Oldest first; before (older), after (newer, to follow an open conversation), q (the messages saying it).
+      description: Oldest first; before (older), after (newer, oldest first and a page at a time, to follow an open conversation), around (a message and those either side of it; 404 when it is not in this conversation), q (the messages saying it).
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -6811,6 +6811,11 @@ paths:
         schema:
           type: string
           format: date-time
+      - name: around
+        in: query
+        schema:
+          type: string
+          format: uuid
       - name: q
         in: query
         schema:
@@ -6845,7 +6850,7 @@ paths:
       tags:
       - Links
       summary: Send a message to a linked business
-      description: Written in both businesses at once; its people who write to linked businesses are told on their phones unless they muted the conversation. reply_to quotes a message, and a card's makes it a reply about that card's document.
+      description: Written in both businesses at once; its people who write to linked businesses are told on their phones unless they muted the conversation. reply_to quotes a message, and a card's makes it a reply about that card's document. client_id is an id the sender made, and the same send repeated (a retry after a dropped connection) is answered with the first message (200), never sent again.
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -6874,6 +6879,9 @@ paths:
                 reply_to:
                   type: string
                   format: uuid
+                client_id:
+                  type: string
+                  format: uuid
                 mentions:
                   type: array
                   maxItems: 10
@@ -6894,6 +6902,17 @@ paths:
       responses:
         '201':
           description: Sent
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [message]
+                properties:
+                  message:
+                    $ref: '#/components/schemas/LinkMessage'
+        '200':
+          description: The same send repeated (its client_id), answered with the first message and not sent again
           content:
             application/json:
               schema:
@@ -7602,9 +7621,24 @@ paths:
                 reply_to:
                   type: string
                   format: uuid
+                client_id:
+                  type: string
+                  format: uuid
+                  description: An id the sender made; the same send repeated is answered with the first message and stores nothing again.
       responses:
         '201':
           description: Sent
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [message]
+                properties:
+                  message:
+                    $ref: '#/components/schemas/LinkMessage'
+        '200':
+          description: The same send repeated (its client_id), answered with the first message and not sent again
           content:
             application/json:
               schema:

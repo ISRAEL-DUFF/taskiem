@@ -205,12 +205,22 @@ func (s *Server) sendLinkMessage(w http.ResponseWriter, r *http.Request) {
 		Text     string       `json:"text"`
 		ReplyTo  *uuid.UUID   `json:"reply_to"`
 		Mentions []mentionRef `json:"mentions"`
+		// ClientID is an id the sender made: the same send repeated (a retry
+		// after a dropped connection) is answered with the first message.
+		ClientID *uuid.UUID `json:"client_id"`
 	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	p := principalFrom(r.Context())
+	if m, err := s.sentWith(r.Context(), p, link, in.ClientID); err != nil {
+		s.fail(w, r, linkMessageErr(err))
+		return
+	} else if m != nil {
+		writeJSON(w, http.StatusOK, linkMessageOut{Message: *m})
+		return
+	}
 	var ments []links.Mention
 	if len(in.Mentions) > 0 {
 		if err := s.tx(r, func(tx pgx.Tx) error {
@@ -222,12 +232,37 @@ func (s *Server) sendLinkMessage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	m, err := s.sendLink(r.Context(), p, link, in.Text, links.SendOpts{ReplyTo: in.ReplyTo, Mentions: ments})
+	m, err := s.sendLink(r.Context(), p, link, in.Text, links.SendOpts{ReplyTo: in.ReplyTo, Mentions: ments, ClientID: in.ClientID})
+	if errors.Is(err, links.ErrDuplicate) {
+		// The same send, repeated while the first was being written.
+		if first, ferr := s.sentWith(r.Context(), p, link, in.ClientID); ferr == nil && first != nil {
+			writeJSON(w, http.StatusOK, linkMessageOut{Message: *first})
+			return
+		}
+	}
 	if err != nil {
 		s.fail(w, r, linkMessageErr(err))
 		return
 	}
 	writeJSON(w, http.StatusCreated, linkMessageOut{Message: m})
+}
+
+// sentWith is the message already sent with a client id, or nil (none, or
+// no id): a repeated send is the same message, never a second one.
+func (s *Server) sentWith(ctx context.Context, p *Principal, link uuid.UUID, client *uuid.UUID) (*links.Message, error) {
+	if client == nil {
+		return nil, nil
+	}
+	var m *links.Message
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+		if _, err := links.GetTx(ctx, tx, link); err != nil {
+			return err
+		}
+		var err error
+		m, err = links.MessageByClientTx(ctx, tx, p.TenantID, link, *client)
+		return err
+	})
+	return m, err
 }
 
 func linkMessageErr(err error) error {
@@ -669,6 +704,23 @@ func (s *Server) sendLinkFile(w http.ResponseWriter, r *http.Request) {
 	}
 	p := principalFrom(r.Context())
 	ctx := r.Context()
+	var clientID *uuid.UUID
+	if v := r.FormValue("client_id"); v != "" {
+		id, err := uuid.Parse(v)
+		if err != nil {
+			s.fail(w, r, fmt.Errorf("%w: client_id is an id", errBadRequest))
+			return
+		}
+		clientID = &id
+	}
+	// The same send repeated: answered with the first, nothing stored again.
+	if m, err := s.sentWith(ctx, p, link, clientID); err != nil {
+		s.fail(w, r, linkMessageErr(err))
+		return
+	} else if m != nil {
+		writeJSON(w, http.StatusOK, linkMessageOut{Message: *m})
+		return
+	}
 	// Before anything is stored: only to an active link, and only a file
 	// the scanner passes.
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
@@ -712,11 +764,17 @@ func (s *Server) sendLinkFile(w http.ResponseWriter, r *http.Request) {
 		theirs, other = att(f), business
 		return theirs, nil
 	}
-	m, err := s.sendLink(ctx, p, link, r.FormValue("text"), links.SendOpts{ReplyTo: replyTo, Ours: att(mine), TheirCopy: theirCopy})
+	m, err := s.sendLink(ctx, p, link, r.FormValue("text"), links.SendOpts{ReplyTo: replyTo, Ours: att(mine), TheirCopy: theirCopy, ClientID: clientID})
 	if err != nil {
 		s.dropChatFile(ctx, p.TenantID, mine.Path)
 		if theirs != nil {
 			s.dropChatFile(ctx, other, theirs.Path)
+		}
+		if errors.Is(err, links.ErrDuplicate) {
+			if first, ferr := s.sentWith(ctx, p, link, clientID); ferr == nil && first != nil {
+				writeJSON(w, http.StatusOK, linkMessageOut{Message: *first})
+				return
+			}
 		}
 		s.fail(w, r, linkMessageErr(err))
 		return

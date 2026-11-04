@@ -251,3 +251,68 @@ func TestLinkMessagesAround(t *testing.T) {
 	buyer.must(404, "GET", "/v1/link-chats/"+link+"/messages?around=0192e2e0-0000-7000-8000-000000000999", nil)
 	buyer.must(400, "GET", "/v1/link-chats/"+link+"/messages?around=nope", nil)
 }
+
+// A send repeated with the same client id (the chat's Retry after a dropped
+// connection) is the same message: answered with the first, never sent
+// again: one message in each conversation, one told to the phone, and, for
+// a file, one copy stored on each side.
+func TestLinkSendClientID(t *testing.T) {
+	w := newWAWorld(t)
+	store := newProjectStorage(t)
+	w.srv.Media = store.service()
+	w.srv.Media.Scanner = chatScanner{}
+	seller, buyer, sellerID, buyerID := linkedPair(t, w)
+	const buyerOn = "+2348010000394"
+	w.bind(t, buyer, buyerOn)
+	w.say(t, buyerOn, "links")
+	link := buyer.must(200, "GET", "/v1/link-chats", nil)["conversations"].([]any)[0].(map[string]any)["link"].(string)
+	count := func(c *client) int {
+		return len(c.must(200, "GET", "/v1/link-chats/"+link+"/messages", nil)["messages"].([]any))
+	}
+
+	const id = "0192e2e0-0000-7000-8000-0000000000a1"
+	before := len(w.graph.Sent(buyerOn))
+	first := seller.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Ten bags", "client_id": id})["message"].(map[string]any)
+	again := seller.must(200, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Ten bags", "client_id": id})["message"].(map[string]any)
+	if again["id"] != first["id"] {
+		t.Fatalf("the repeat is the same message: %v then %v", first["id"], again["id"])
+	}
+	if a, b := count(seller), count(buyer); a != 1 || b != 1 {
+		t.Fatalf("one message each side: seller %d, buyer %d", a, b)
+	}
+	if told := w.lastTo(t, buyerOn, before); len(told) != 1 {
+		t.Errorf("the phone is told once: %+v", told)
+	}
+	// Another id is another message; no id, as before.
+	seller.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Ten bags", "client_id": "0192e2e0-0000-7000-8000-0000000000a2"})
+	seller.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Ten bags"})
+	if a := count(seller); a != 3 {
+		t.Errorf("three messages: %d", a)
+	}
+	// Not an id.
+	seller.must(400, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "x", "client_id": "nope"})
+
+	// A file: one copy stored each side however many times it is sent.
+	const fid = "0192e2e0-0000-7000-8000-0000000000b1"
+	fields := map[string]string{"text": "The new bags", "client_id": fid}
+	code, out := seller.sendFile(t, link, "bags.jpg", photo(t), fields)
+	if code != 201 {
+		t.Fatalf("file: %d %v", code, out)
+	}
+	code, again2 := seller.sendFile(t, link, "bags.jpg", photo(t), fields)
+	if code != 200 || again2["message"].(map[string]any)["id"] != out["message"].(map[string]any)["id"] {
+		t.Fatalf("the file repeated: %d %v", code, again2)
+	}
+	if s, b := store.in("prj_"+sellerID), store.in("prj_"+buyerID); len(s) != 1 || len(b) != 1 {
+		t.Errorf("one copy each side: seller %v, buyer %v", s, b)
+	}
+	if a, b := count(seller), count(buyer); a != 4 || b != 4 {
+		t.Errorf("four messages each: seller %d, buyer %d", a, b)
+	}
+	// The buyer cannot use the seller's id to learn of the message: its own
+	// client ids are its own.
+	buyer.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Thanks", "client_id": id})
+	if b := count(buyer); b != 5 {
+		t.Errorf("the buyer's id is its own: %d", b)
+	}
+}

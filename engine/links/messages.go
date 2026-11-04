@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // The conversation (L3, docs/spec/business-links.md §5.5, §8): what two
@@ -431,6 +432,28 @@ type SendOpts struct {
 	// Mentions are the message's structured references (checked by the
 	// caller); the other side's copy names a business without our link.
 	Mentions []Mention
+	// ClientID is an id the sender made for this message: a send repeated
+	// with the same one is the same message (see MessageByClientTx).
+	ClientID *uuid.UUID
+}
+
+// ErrDuplicate is a message with this client id already sent: a send
+// repeated while the first was still being written.
+var ErrDuplicate = errors.New("links: message already sent")
+
+// MessageByClientTx is the message this business sent in a conversation
+// with a client id, or nil when there is none: a repeated send answers the
+// first rather than sending again.
+func MessageByClientTx(ctx context.Context, tx pgx.Tx, tenant, link, client uuid.UUID) (*Message, error) {
+	m, err := scanMessage(tx.QueryRow(ctx, `SELECT `+messageCols+messageFrom+`
+		WHERE m.tenant_id = $1 AND m.link_id = $2 AND m.client_id = $3 AND m.hidden_at IS NULL`, tenant, link, client))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &m, nil
 }
 
 // SendWithTx is SendTx with what o carries.
@@ -489,8 +512,12 @@ func SendWithTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body str
 	}
 	name := cutRunes(strings.TrimSpace(from.FirstName), 80)
 	pair := uuid.Must(uuid.NewV7())
-	if _, err := tx.Exec(ctx, `INSERT INTO link_messages (id, tenant_id, link_id, pair_id, mine, kind, body, sender_name, sender_id, reply_to, attachment, forwarded, preview, mentions)
-		VALUES ($1, $2, $3, $4, true, 'text', $5, $6, $7, $8, $9, $10, $11, $12)`, uuid.Must(uuid.NewV7()), tenant, link, pair, body, name, from.ID, replyTo, jsonOf(ourFile), o.Forwarded, preview, ours); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO link_messages (id, tenant_id, link_id, pair_id, mine, kind, body, sender_name, sender_id, reply_to, attachment, forwarded, preview, mentions, client_id)
+		VALUES ($1, $2, $3, $4, true, 'text', $5, $6, $7, $8, $9, $10, $11, $12, $13)`, uuid.Must(uuid.NewV7()), tenant, link, pair, body, name, from.ID, replyTo, jsonOf(ourFile), o.Forwarded, preview, ours, o.ClientID); err != nil {
+		var pe *pgconn.PgError
+		if errors.As(err, &pe) && pe.Code == "23505" && pe.ConstraintName == "link_messages_client" {
+			return Message{}, uuid.Nil, ErrDuplicate
+		}
 		return Message{}, uuid.Nil, err
 	}
 	m, err := scanMessage(tx.QueryRow(ctx, `SELECT `+messageCols+messageFrom+` WHERE m.tenant_id = $1 AND m.pair_id = $2`, tenant, pair))
