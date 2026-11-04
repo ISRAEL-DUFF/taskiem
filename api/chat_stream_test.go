@@ -313,3 +313,88 @@ func TestChatStreamLoad(t *testing.T) {
 		t.Errorf("the median is over two seconds: %v", took[len(took)/2])
 	}
 }
+
+// A bulk change (a conversation of hundreds read at once, or hundreds of
+// messages arriving together) is sent in full: a batch that fills the
+// look is followed at once by the next, not repeated.
+func TestChatStreamBulkChange(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	_, buyer, _, _ := linkedPair(t, w)
+	link := buyer.must(200, "GET", "/v1/link-chats", nil)["conversations"].([]any)[0].(map[string]any)["link"].(string)
+	if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO link_messages (id, tenant_id, link_id, pair_id, mine, kind, body)
+		SELECT gen_random_uuid(), $1, $2, gen_random_uuid(), false, 'text', 'bulk ' || n FROM generate_series(1, 450) AS n`, tenantID(t, buyer), link); err != nil {
+		t.Fatal(err)
+	}
+	events, closeStream := chatStream(t, buyer, "")
+	defer closeStream()
+	got := map[string]bool{}
+	deadline := time.After(15 * time.Second)
+	for len(got) < 450 {
+		select {
+		case e := <-events:
+			if e.Event == "message" {
+				got[e.Data["message"].(map[string]any)["id"].(string)] = true
+			}
+		case <-deadline:
+			t.Fatalf("heard %d of 450", len(got))
+		}
+	}
+}
+
+// A change that commits a few seconds after it was written (a long
+// transaction) is still sent, once: the stream looks back over the last ten
+// seconds and remembers what it has sent.
+func TestChatStreamLateCommit(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	_, buyer, _, _ := linkedPair(t, w)
+	link := buyer.must(200, "GET", "/v1/link-chats", nil)["conversations"].([]any)[0].(map[string]any)["link"].(string)
+	events, closeStream := chatStream(t, buyer, "")
+	defer closeStream()
+	next(events, "ready", 3*time.Second, nil)
+	insert := `INSERT INTO link_messages (id, tenant_id, link_id, pair_id, mine, kind, body) VALUES (gen_random_uuid(), $1, $2, gen_random_uuid(), false, 'text', $3)`
+	// A transaction writes a message and stays open.
+	slow, err := w.env.DB.Admin.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := slow.Exec(ctx, insert, tenantID(t, buyer), link, "written first, committed late"); err != nil {
+		t.Fatal(err)
+	}
+	// Meanwhile another is written and committed: the stream moves on past it.
+	if _, err := w.env.DB.Admin.Exec(ctx, insert, tenantID(t, buyer), link, "written second, committed at once"); err != nil {
+		t.Fatal(err)
+	}
+	if next(events, "message", 4*time.Second, func(e streamEvent) bool {
+		return e.Data["message"].(map[string]any)["body"] == "written second, committed at once"
+	}) == nil {
+		t.Fatal("the second did not arrive")
+	}
+	time.Sleep(3 * time.Second)
+	if err := slow.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	late := 0
+	deadline := time.After(5 * time.Second)
+	for late == 0 {
+		select {
+		case e := <-events:
+			if e.Event == "message" && e.Data["message"].(map[string]any)["body"] == "written first, committed late" {
+				late++
+			}
+		case <-deadline:
+			t.Fatal("the late commit never arrived")
+		}
+	}
+	// And only once.
+	time.Sleep(3 * time.Second)
+	for len(events) > 0 {
+		if e := <-events; e.Event == "message" && e.Data["message"].(map[string]any)["body"] == "written first, committed late" {
+			late++
+		}
+	}
+	if late != 1 {
+		t.Errorf("the late commit was sent %d times", late)
+	}
+}

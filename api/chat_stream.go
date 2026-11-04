@@ -51,6 +51,8 @@ const (
 	// how many this server holds in all.
 	chatStreamsPerTenant = 12
 	chatStreamsTotal     = 2000
+	// How many changes one look takes up; a full batch is followed at once by another.
+	chatStreamBatch = 200
 )
 
 type chatStreamGate struct {
@@ -139,8 +141,9 @@ func (s *Server) chatStream(w http.ResponseWriter, r *http.Request) {
 	defer tick.Stop()
 	for time.Now().Before(deadline) {
 		var sends []func() error
+		more := false
 		err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
-			refs, err := links.ChangedRefsTx(ctx, tx, p.TenantID, since, 200)
+			refs, err := links.ChangedRefsTx(ctx, tx, p.TenantID, since, chatStreamBatch)
 			if err != nil {
 				return err
 			}
@@ -157,9 +160,18 @@ func (s *Server) chatStream(w http.ResponseWriter, r *http.Request) {
 					pairs = append(pairs, c.Pair)
 				}
 			}
-			if len(refs) > 0 {
-				// The window slides to just before the newest change.
-				if edge := refs[len(refs)-1].At.Add(-chatStreamLookBack); edge.After(since) {
+			if n := len(refs); n > 0 {
+				if n == chatStreamBatch {
+					// A full batch: more may be waiting, so go on from the
+					// last of them (a bulk change, a conversation read at
+					// once) rather than from the look-back, which could
+					// not get past a batch that fills it.
+					more = true
+					if at := refs[n-1].At; at.After(since) {
+						since = at.Add(-time.Microsecond)
+					}
+				} else if edge := refs[n-1].At.Add(-chatStreamLookBack); edge.After(since) {
+					// The window slides to just before the newest change.
 					since = edge
 				}
 			}
@@ -250,6 +262,9 @@ func (s *Server) chatStream(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			lastWrite = time.Now()
+		}
+		if more {
+			continue // a full batch: the next straight away
 		}
 		select {
 		case <-ctx.Done():
