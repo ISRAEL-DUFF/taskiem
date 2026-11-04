@@ -470,3 +470,17 @@ test("arrows reach a search's results too, and Esc in an empty search box leaves
   await buyer.keyboard.press("Escape");
   await expect(search).not.toBeFocused();
 });
+
+test("a reply that quotes a message passes axe in both themes (the quote's colour on its tint)", async ({
+  browser,
+}) => {
+  const { seller, buyer, link } = await linked(browser);
+  const first = await (await say(seller, link, "Rice is 45k")).json();
+  await seller.request.post(`/v1/link-chats/${link}/messages`, {
+    headers: H,
+    data: { text: "Done. Invoice follows.", reply_to: first.message.id },
+  });
+  await buyer.goto(`/chat?with=${link}`);
+  await expect(buyer.getByTestId("chat-quote").first()).toBeVisible();
+  await axeBoth(buyer, "a quoted reply");
+});
