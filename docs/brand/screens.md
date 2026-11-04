@@ -220,7 +220,17 @@ The rules of the [no-technical-steps plan](../spec/no-technical-steps.md) apply 
 
 ## Icons
 
-Use the line icons in `web/src/icons.tsx` by name: `home`, `money`, `invoices`, `orders`, `storefront`, `workflows`, `runs`, `activity`, `approvals`, `forms`, `tables`, `schools`, `members`, `keys`, `lock`, `bell`, `alerts`, `clock`, `start`, `refund`, `connections`, `settings`, `billing`, `reports`, `audit`, `inbox`, `templates`, `search`, `plus`, `close`, `chevron`, `info`, `sparkle`, `bolt`, `back`, `more`, `menu`, `dashboard`, `catalogue`, `policies`. One icon per row; the same thing always has the same icon. Add a new icon to `icons.tsx` in the same 24-unit line style rather than using an emoji or another set.
+Use the line icons in `web/src/icons.tsx` by name: `home`, `money`, `invoices`, `orders`, `storefront`, `workflows`, `runs`, `activity`, `approvals`, `forms`, `tables`, `schools`, `members`, `keys`, `lock`, `bell`, `alerts`, `clock`, `start`, `refund`, `connections`, `settings`, `billing`, `reports`, `audit`, `inbox`, `templates`, `search`, `plus`, `close`, `chevron`, `info`, `sparkle`, `bolt`, `back`, `more`, `menu`, `tick`, `tick-double`, `emoji`, `send`, `down`, `dashboard`, `catalogue`, `policies`. One icon per row; the same thing always has the same icon. Add a new icon to `icons.tsx` in the same 24-unit line style rather than using an emoji or another set.
+
+## The Chat page
+
+The Chat page is the one screen that does **not** follow Taskiem's look. Business links §5.5 makes it WhatsApp Web's look, feel and way of working, deliberately and in detail, so a person who knows WhatsApp has nothing to learn. Copy it for any other conversation screen.
+
+- **It fills the window.** `/chat` sets `chat-mode` on the shell (`App.tsx`), which reuses the builder's rail: a 64px menu on a computer, no top or tab bar on a phone. There is no page title or padding; a visually hidden `h1` stays for screen readers. The list pane and the open conversation each scroll inside; the composer stays at the bottom. On a phone one pane shows at a time and the thread has an arrow back to the list.
+- **Chat colours are tokens**, not brand colours: `--chat-wallpaper`, `--chat-in`, `--chat-out`, `--chat-out-meta`, `--chat-tick-read`, `--chat-select`, each with a light and a dark value in `styles.css`. Use them for bubbles, the wallpaper, read ticks and the selected row; never a hex colour in a component.
+- **What stays Taskiem's:** the name and logo (the chat never carries WhatsApp's name, logo or traced icon artwork), the type, the document cards, and the business's card where a contact's profile would be.
+- **Icons** are our own line icons in `icons.tsx`: `tick`, `tick-double`, `clock`, `emoji`, `send`, `down`, `attach`, `camera`, `mic`, `back`, `more`, `search`.
+- **Tests:** `e2e/link-chat.spec.ts` runs axe in both themes at 390px; `accessibility.spec.ts` covers `/chat`.
 
 ## Accessibility
 

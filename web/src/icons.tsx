@@ -42,6 +42,12 @@ const paths: Record<string, string> = {
   money: "M3 6h18v12H3zM12 9a3 3 0 100 6 3 3 0 000-6zM6.5 9.5v.01M17.5 14.5v.01",
   info: "M12 21a9 9 0 100-18 9 9 0 000 18zM12 11v5M12 8v.01",
   back: "M15 6l-6 6 6 6",
+  // The chat's: ticks (sent, delivered), the emoji panel, send, and "to the newest".
+  tick: "M5 13l4 4L19 7",
+  "tick-double": "M1.5 13l4 4L14 8M9.5 16.5l.5.5L20 7",
+  emoji: "M12 21a9 9 0 100-18 9 9 0 000 18zM8.5 14a4.5 4.5 0 007 0M9 9.5v.01M15 9.5v.01",
+  send: "M21 3L3 11l7 3 3 7zM10 14L21 3",
+  down: "M6 9l6 6 6-6",
   // The workflow builder's.
   chat: "M21 12a8 8 0 01-11.6 7.1L4 20l1.1-4.4A8 8 0 1121 12z",
   mail: "M3 5h18v14H3zM3 7l9 6 9-6",

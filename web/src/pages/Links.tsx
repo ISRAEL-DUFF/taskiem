@@ -298,10 +298,11 @@ export function ChatPage() {
   );
   return (
     <>
+      <h1 className="sr-only">Chat</h1>
       <div className={`chat-layout${open || taskiemOpen ? " open" : ""}`}>
         <div className="chat-list-pane">
           <div className="chat-list-head">
-            <h1>Chat</h1>
+            <h2>Chat</h2>
             <Link className="button small" to="/home">
               Home
             </Link>
