@@ -2040,3 +2040,34 @@ button.chat-avatar { border: 0; padding: 0; cursor: pointer; }
 .bubble .read-more { display: inline; background: none; border: 0; padding: 0; min-height: 0; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; }
 .bubble .read-more:hover { text-decoration: underline; }
 .bubble .read-more:focus-visible { box-shadow: var(--ring); border-radius: 3px; }
+
+/* A message's menu, WhatsApp's way: it floats over the chat (the bubble keeps
+   its size): the reactions in a pill above the bubble, the actions in a card
+   by it, one to a row with an icon, the destructive one after a rule. */
+.bubble-pop { position: fixed; inset: 0; z-index: 70; pointer-events: none; }
+.bubble-pop > * { position: fixed; pointer-events: auto; }
+.pop-pill { display: flex; align-items: center; gap: 2px; padding: 6px 8px; max-width: calc(100vw - 16px); background: var(--panel); border-radius: 999px; box-shadow: 0 2px 12px var(--chat-shadow); animation: pop-in 0.12s ease-out; }
+.pop-pill .reaction-picker { flex-basis: auto; padding: 0; gap: 2px; }
+.pop-pill .react-pick { width: 38px; height: 38px; min-height: 38px; font-size: 24px; }
+.pop-card { display: flex; flex-direction: column; min-width: 220px; max-width: calc(100vw - 16px); padding: 6px 0; background: var(--panel); border-radius: 14px; box-shadow: 0 4px 18px var(--chat-shadow); animation: pop-in 0.12s ease-out; }
+.pop-item { display: flex; align-items: center; gap: 16px; width: 100%; min-height: 44px; padding: 8px 20px; border: 0; border-radius: 0; background: none; box-shadow: none; color: var(--text); font-size: 15px; text-align: left; justify-content: flex-start; }
+.pop-item svg { flex: none; width: 20px; height: 20px; color: var(--muted); }
+.pop-item:hover:not(:disabled), .pop-item:focus-visible { background: var(--chat-select); }
+.pop-item:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+.pop-item.danger, .pop-item.danger svg { color: var(--danger-text, var(--danger)); }
+.pop-sep { height: 1px; margin: 6px 12px; background: var(--border); }
+@keyframes pop-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .pop-pill, .pop-card { animation: none; } }
+/* The smiley beside a bubble on a computer, for a quick reaction. */
+.bubble-react { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  .bubble-react { position: absolute; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 30px; height: 30px; min-height: 30px; padding: 0; border: 0; border-radius: 50%; background: var(--panel); color: var(--muted); box-shadow: 0 1px 3px var(--chat-shadow); opacity: 0; transition: opacity 0.12s; }
+  .bubble.mine .bubble-react { right: calc(100% + 8px); }
+  .bubble:not(.mine) .bubble-react { left: calc(100% + 8px); }
+  .bubble:hover .bubble-react, .bubble-react:focus-visible { opacity: 1; }
+  .bubble-react svg { width: 18px; height: 18px; }
+}
+.pop-picker { width: min(360px, calc(100vw - 16px)); background: var(--panel); border-radius: 14px; box-shadow: 0 4px 18px var(--chat-shadow); overflow: hidden; animation: pop-in 0.12s ease-out; }
+.pop-picker .emoji-panel { border-top: 0; max-height: 330px; }
+.pop-pill .react-more { background: var(--chat-select); color: var(--muted); }
+.pop-pill .react-more svg { width: 20px; height: 20px; }

@@ -57,7 +57,7 @@ import {
 import { ThreadJump } from "./ThreadParts";
 import { ChatStream } from "./ChatStream";
 import { ChatHead } from "./ChatHead";
-import { BubbleShell, CopyItem, Ticks } from "./BubbleShell";
+import { BubbleShell, CopyItem, PopItem, Ticks } from "./BubbleShell";
 import { ReadMore, useFold } from "./ReadMore";
 import { useChatLive } from "./ChatLive";
 import { roleLine, type BusinessLink, type LinkCard } from "../lib/links";
@@ -491,79 +491,84 @@ function Bubble({
       what={what}
       asResult={!!onShow}
       onReply={canReply ? () => onReply(m) : undefined}
+      quickReact={!!onReact}
       menu={
         hasMenu
-          ? (close) => (
-              <>
-                {onReact && (
-                  <span
-                    className="reaction-picker"
-                    role="group"
-                    aria-label="React"
+          ? (close, more) => ({
+              onPick: onReact
+                ? (e: string) => (close(), onReact(m, e))
+                : undefined,
+              reactions: onReact ? (
+                <span
+                  className="reaction-picker"
+                  role="group"
+                  aria-label="React"
+                >
+                  {REACTIONS.map((e) => (
+                    <button
+                      key={e}
+                      type="button"
+                      className="react-pick"
+                      aria-pressed={mineEmoji === e}
+                      aria-label={`React with ${REACTION_NAMES[e]}`}
+                      title={REACTION_NAMES[e]}
+                      onClick={() => (close(), onReact(m, e))}
+                    >
+                      {e}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className="react-pick react-more"
+                    aria-label="More reactions"
+                    title="More reactions"
+                    onClick={more.pick}
                   >
-                    {REACTIONS.map((e) => (
-                      <button
-                        key={e}
-                        type="button"
-                        className="react-pick"
-                        aria-pressed={mineEmoji === e}
-                        aria-label={`React with ${REACTION_NAMES[e]}`}
-                        title={REACTION_NAMES[e]}
-                        onClick={() => (close(), onReact(m, e))}
+                    <Icon name="plus" />
+                  </button>
+                </span>
+              ) : undefined,
+              actions: (
+                <>
+                  {onInfo && (
+                    <PopItem icon="info" onClick={() => (close(), onInfo(m))}>
+                      Message info
+                    </PopItem>
+                  )}
+                  {canReply && (
+                    <PopItem icon="reply" onClick={() => (close(), onReply(m))}>
+                      Reply
+                    </PopItem>
+                  )}
+                  {!card && m.body && <CopyItem text={m.body} />}
+                  {!card && onForward && (
+                    <PopItem
+                      icon="forward"
+                      onClick={() => (close(), onForward(m))}
+                    >
+                      Forward
+                    </PopItem>
+                  )}
+                  {onStar && (
+                    <PopItem icon="star" onClick={() => (close(), onStar(m))}>
+                      {m.starred ? "Unstar" : "Star"}
+                    </PopItem>
+                  )}
+                  {!card && onHide && (
+                    <>
+                      <div className="pop-sep" role="separator" />
+                      <PopItem
+                        icon="trash"
+                        danger
+                        onClick={() => (close(), onHide(m))}
                       >
-                        {e}
-                      </button>
-                    ))}
-                  </span>
-                )}
-                {canReply && (
-                  <button
-                    type="button"
-                    className="small"
-                    onClick={() => (close(), onReply(m))}
-                  >
-                    Reply
-                  </button>
-                )}
-                {!card && m.body && <CopyItem text={m.body} />}
-                {!card && onForward && (
-                  <button
-                    type="button"
-                    className="small"
-                    onClick={() => (close(), onForward(m))}
-                  >
-                    Forward
-                  </button>
-                )}
-                {onStar && (
-                  <button
-                    type="button"
-                    className="small"
-                    onClick={() => (close(), onStar(m))}
-                  >
-                    {m.starred ? "Unstar" : "Star"}
-                  </button>
-                )}
-                {onInfo && (
-                  <button
-                    type="button"
-                    className="small"
-                    onClick={() => (close(), onInfo(m))}
-                  >
-                    Info
-                  </button>
-                )}
-                {!card && onHide && (
-                  <button
-                    type="button"
-                    className="small danger"
-                    onClick={() => (close(), onHide(m))}
-                  >
-                    Delete for me
-                  </button>
-                )}
-              </>
-            )
+                        Delete for me
+                      </PopItem>
+                    </>
+                  )}
+                </>
+              ),
+            })
           : undefined
       }
       after={

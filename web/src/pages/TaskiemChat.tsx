@@ -380,7 +380,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
               what={m.text.split("\n")[0]?.slice(0, 60) ?? "message"}
               menu={
                 !m.local && m.text
-                  ? () => <CopyItem text={m.text} />
+                  ? () => ({ actions: <CopyItem text={m.text} /> })
                   : undefined
               }
               after={
