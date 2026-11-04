@@ -1,7 +1,5 @@
 import {
   Fragment,
-  Suspense,
-  lazy,
   useCallback,
   useEffect,
   useMemo,
@@ -34,8 +32,13 @@ import {
   type Reaction,
 } from "../lib/linkchat";
 import { Icon } from "../icons";
-import { MicButton, RecordingBar, useVoiceNote } from "./VoiceNote";
-import { MentionList, MentionText, useMentions } from "./Mentions";
+import { MentionText } from "./Mentions";
+import {
+  BUSINESS_FILES,
+  ComposerView,
+  useComposer,
+  type Sending,
+} from "./ChatComposer";
 import { priceWords, type PriceItem } from "../lib/pricelists";
 import { firstUnread, startsRun } from "../lib/thread";
 import { useThread } from "../lib/useThread";
@@ -55,15 +58,7 @@ import {
 } from "../lib/outboxStore";
 import { ThreadJump } from "./ThreadParts";
 import { useChatLive } from "./ChatLive";
-import { isHeic, preparePhoto } from "../lib/photo";
-import { PendingFile } from "./PendingFile";
-import { AttachMenu } from "./AttachMenu";
-import { CameraSheet } from "./CameraSheet";
-import { insertAt } from "../lib/emoji";
-import { useComposerFocus } from "../lib/composerFocus";
 import { KEYS_EVENT } from "../lib/chatKeys";
-import { getDraft, setDraft } from "../lib/drafts";
-import { useAutoGrow } from "../lib/useAutoGrow";
 import { roleLine, type BusinessLink, type LinkCard } from "../lib/links";
 import { ErrorBox, fmtTime, Modal, Skeleton, useAction, useLoad } from "../ui";
 
@@ -73,11 +68,6 @@ import { ErrorBox, fmtTime, Modal, Skeleton, useAction, useLoad } from "../ui";
 // documents between the two businesses as cards; the composer at the
 // bottom. As WhatsApp works, deliberately (§5.5): a bubble's corner shows
 // the clock, as WhatsApp's does, with the time in words on hover.
-
-// The emoji list is large: it is loaded when the panel is first opened.
-const EmojiPanel = lazy(() =>
-  import("./EmojiPanel").then((m) => ({ default: m.EmojiPanel })),
-);
 
 const EVERY_MS = 3000;
 /** The six reactions, in words (for the screen reader and the tooltip). */
@@ -97,8 +87,6 @@ const SWIPE_REPLY_PX = 60;
 const HOLD_MS = 500;
 
 /** What can be attached: a photo or a PDF (a voice note is recorded). */
-const ATTACH = "image/jpeg,image/png,image/webp,application/pdf";
-const MAX_FILE = 25 * 1024 * 1024;
 
 /** What can be done from a card, while it is its document's newest:
  * accept or decline a new order, accept a change, say all came, settle a
@@ -940,17 +928,6 @@ export function ConversationPane({
   const [forwarding, setForwarding] = useState<LinkMessage>();
   const typedAt = useRef(0);
   const [error, setError] = useState<unknown>();
-  const [text, setText] = useState(() => getDraft(conv.link));
-  const textBox = useRef<HTMLTextAreaElement>(null);
-  const [emojiOpen, setEmojiOpen] = useState(false);
-  const [cameraOpen, setCameraOpen] = useState(false);
-  const [dragging, setDragging] = useState(false);
-  useAutoGrow(textBox, text);
-  // An unsent message is kept per conversation (and shown in the list).
-  useEffect(() => {
-    setDraft(conv.link, text);
-    // Only a change of the words is kept: a switch of conversation loads one.
-  }, [text]);
   const items = useLoad(
     () =>
       get<{ items: PriceItem[] }>(`/v1/link-chats/${conv.link}/items`).then(
@@ -959,31 +936,36 @@ export function ConversationPane({
       ),
     [conv.link],
   );
-  const mentions = useMentions(text, setText, textBox, {
-    "@": others
-      .filter((o) => o.state === "active")
-      .map((o) => ({ kind: "business" as const, id: o.link, name: o.name })),
-    "#": (items.data ?? [])
-      .filter((it) => it.available)
-      .map((it) => ({
-        kind: "item" as const,
-        id: it.item_id,
-        name: it.name,
-        sub: priceWords(it),
-      })),
+  const c = useComposer<LinkMessage>({
+    draftKey: conv.link,
+    rules: BUSINESS_FILES,
+    enabled: write,
+    sources: {
+      "@": others
+        .filter((o) => o.state === "active")
+        .map((o) => ({ kind: "business" as const, id: o.link, name: o.name })),
+      "#": (items.data ?? [])
+        .filter((it) => it.available)
+        .map((it) => ({
+          kind: "item" as const,
+          id: it.item_id,
+          name: it.name,
+          sub: priceWords(it),
+        })),
+    },
+    replyLine: (r) => previewLine(r, conv.name),
+    closes: [infoOpen, !!forwarding],
+    // We are typing: the other side's typing line, told at most every 3 s.
+    onType: (v) => {
+      const now = Date.now();
+      if (v.trim() && now - typedAt.current > 3000) {
+        typedAt.current = now;
+        post(`${path}/typing`).catch(() => undefined);
+      }
+    },
+    onSend: (s) => sendMessage(s),
   });
-  const [reply, setReply] = useState<LinkMessage>();
-  const [pending, setFile] = useState<File>();
-  const file = pending;
-  const [fileError, setFileError] = useState<unknown>();
-  const pick = useRef<HTMLInputElement>(null);
-  const snap = useRef<HTMLInputElement>(null);
-  // A voice note held and released goes at once; one tapped waits for Send.
-  const sendRef = useRef<(f?: File) => void>(() => undefined);
-  const voice = useVoiceNote(
-    (f, now) => (now ? sendRef.current(f) : setFile(f)),
-    setFileError,
-  );
+  const { setReply } = c;
   const [q, setQ] = useState("");
   const [found, setFound] = useState<LinkMessage[]>();
   const act = useAction();
@@ -1189,57 +1171,6 @@ export function ConversationPane({
     );
     return () => clearInterval(t);
   }, [messages, path, detached, connected]);
-  const choose = async (picked: File | undefined) => {
-    setFileError(undefined);
-    let f = picked;
-    if (!f) return;
-    if (isHeic(f)) {
-      // An iPhone's photo: a JPEG where the browser can read it.
-      try {
-        f = await preparePhoto(f);
-      } catch (e) {
-        setFileError(e);
-        return;
-      }
-    }
-    if (f.size > MAX_FILE) {
-      setFileError(new Error(`${f.name} is larger than 25 MB.`));
-      return;
-    }
-    if (!/^(image\/(jpeg|png|webp)|application\/pdf|audio\/)/.test(f.type)) {
-      setFileError(
-        new Error("Send a photo (JPEG, PNG or WebP), a PDF or a voice note."),
-      );
-      return;
-    }
-    setFile(f);
-  };
-  // The clip's menu: a photo, a document, or the camera (the computer's
-  // webcam, or on a phone the camera app).
-  const attach = (what: "photo" | "document" | "camera") => {
-    if (what === "camera") {
-      const touch = window.matchMedia?.("(pointer: coarse)").matches;
-      if (!touch && typeof navigator.mediaDevices?.getUserMedia === "function")
-        setCameraOpen(true);
-      else snap.current?.click();
-      return;
-    }
-    const el = pick.current;
-    if (!el) return;
-    el.accept =
-      what === "photo" ? "image/jpeg,image/png,image/webp" : "application/pdf";
-    el.click();
-  };
-  const addEmoji = (c: string) => {
-    const el = textBox.current;
-    const start = el?.selectionStart ?? text.length;
-    const r = insertAt(text, start, el?.selectionEnd ?? start, c);
-    typed(r.text);
-    requestAnimationFrame(() => {
-      el?.focus();
-      el?.setSelectionRange(r.caret, r.caret);
-    });
-  };
   // Sent at once: it shows in the thread with a clock, the box is cleared,
   // and the server's copy takes its place; if it cannot be sent it stays,
   // with Retry and Delete. The client id makes a retry the same message.
@@ -1253,29 +1184,11 @@ export function ConversationPane({
       }),
     [conv.link, onChanged],
   );
-  // The cursor goes back to the box: after sending, and when a panel, the
-  // sheet, a waiting photo or a reply is closed; a reply to write or a
-  // photo to caption asks for it.
-  useComposerFocus(
-    textBox,
-    [
-      emojiOpen,
-      infoOpen,
-      !!forwarding,
-      !!pending,
-      !!reply,
-      voice.secs !== undefined,
-    ],
-    [!!reply, !!pending],
-  );
-  const send = (held?: File) => {
-    const file = held ?? pending;
-    const body = held ? "" : text.trim();
-    if (!body && !file) return;
-    requestAnimationFrame(() => textBox.current?.focus());
+  const sendMessage = (s: Sending<LinkMessage>) => {
+    const { file, reply } = s;
     const o: Outgoing = {
       clientId: newClientId(),
-      body,
+      body: s.text,
       replyTo: reply?.id,
       quote: reply
         ? {
@@ -1288,16 +1201,10 @@ export function ConversationPane({
           }
         : undefined,
       file,
-      mentions: file ? undefined : mentions.refs(),
+      mentions: s.mentions,
       state: "sending",
       at: new Date().toISOString(),
     };
-    if (!held) {
-      setText("");
-      setFile(undefined);
-      mentions.reset();
-    }
-    setReply(undefined);
     sendOutgoing(conv.link, o);
     if (detached) void openNewest();
     if (file?.type.startsWith("image/")) {
@@ -1350,20 +1257,10 @@ export function ConversationPane({
     );
   };
   const [info, setInfo] = useState<LinkMessage>();
-  sendRef.current = send;
   const settings = (
     body: { muted?: boolean; archived?: boolean; pinned?: boolean },
     done: string,
   ) => void act.run(async () => (await put(path, body), onChanged()), done);
-  // We are typing: the other side's typing line, told at most every 3 s.
-  const typed = (v: string) => {
-    setText(v);
-    const now = Date.now();
-    if (v.trim() && now - typedAt.current > 3000) {
-      typedAt.current = now;
-      post(`${path}/typing`).catch(() => undefined);
-    }
-  };
   const hide = (m: LinkMessage) => {
     if (!confirm("Delete this message for your business? They keep theirs."))
       return;
@@ -1396,49 +1293,8 @@ export function ConversationPane({
       className="chat-pane"
       aria-label={`Conversation with ${conv.name}`}
       data-testid="chat-pane"
-      onKeyDown={(e) => {
-        // Esc gives up what is being prepared from anywhere in the chat that
-        // is not an open menu, sheet or panel (they close themselves):
-        // the emoji panel, then a waiting file, then a reply.
-        if (e.key !== "Escape" || e.defaultPrevented) return;
-        if (
-          e.currentTarget.querySelector(
-            '[data-testid="chat-more"], .chat-menu, .attach-menu, .chat-info, .modal',
-          )
-        )
-          return;
-        const gave = emojiOpen || !!file || !!reply;
-        if (emojiOpen) setEmojiOpen(false);
-        else if (file) setFile(undefined);
-        else if (reply) setReply(undefined);
-        if (gave) e.preventDefault();
-      }}
-      onDragEnter={(e) => {
-        if (write && e.dataTransfer.types.includes("Files")) {
-          e.preventDefault();
-          setDragging(true);
-        }
-      }}
-      onDragOver={(e) => {
-        if (write && e.dataTransfer.types.includes("Files")) e.preventDefault();
-      }}
-      onDragLeave={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node | null))
-          setDragging(false);
-      }}
-      onDrop={(e) => {
-        if (!write) return;
-        e.preventDefault();
-        setDragging(false);
-        choose(e.dataTransfer.files[0]);
-        // One file goes at a time, with its caption: say so.
-        if (e.dataTransfer.files.length > 1)
-          setFileError(
-            new Error(
-              "Only one file can be sent at a time: the first was taken. Send the others after it.",
-            ),
-          );
-      }}
+      onKeyDown={c.onPaneKeyDown}
+      {...c.dropProps}
     >
       <div className="chat-head">
         <button
@@ -1562,7 +1418,7 @@ export function ConversationPane({
           />
         </label>
       </div>
-      <ErrorBox error={error ?? act.error ?? fileError} />
+      <ErrorBox error={error ?? act.error ?? c.fileError} />
       <div className="chat-stream-wrap">
         <div
           className="chat-stream"
@@ -1645,178 +1501,19 @@ export function ConversationPane({
         )}
       </div>
       {write ? (
-        <>
-          {reply && (
-            <div
-              className="composer-reply"
-              data-testid="chat-replying"
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  e.preventDefault();
-                  setReply(undefined);
-                }
-              }}
-            >
-              <span className="quote">
-                Replying to {previewLine(reply, conv.name)}
-              </span>
-              <button
-                type="button"
-                className="small"
-                onClick={() => setReply(undefined)}
-              >
-                Cancel<span className="sr-only"> the reply</span>
-              </button>
-            </div>
-          )}
-          {file && (
-            <PendingFile file={file} onRemove={() => setFile(undefined)} />
-          )}
-          <input
-            ref={pick}
-            type="file"
-            accept={ATTACH}
-            hidden
-            data-testid="chat-file"
-            onChange={(e) => {
-              choose(e.target.files?.[0]);
-              e.target.value = "";
-            }}
-          />
-          <input
-            ref={snap}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            capture="environment"
-            hidden
-            onChange={(e) => {
-              choose(e.target.files?.[0]);
-              e.target.value = "";
-            }}
-          />
-          {emojiOpen && (
-            <Suspense
-              fallback={<div className="emoji-panel" aria-busy="true" />}
-            >
-              <EmojiPanel
-                onPick={addEmoji}
-                onClose={() => setEmojiOpen(false)}
-              />
-            </Suspense>
-          )}
-          <MentionList m={mentions} />
-          {voice.secs !== undefined || voice.holding ? (
-            <RecordingBar voice={voice} />
-          ) : (
-            <form
-              className="composer"
-              onSubmit={(e) => {
-                e.preventDefault();
-                send();
-              }}
-            >
-              <button
-                type="button"
-                className="icon-button"
-                aria-label="Emoji"
-                title="Emoji"
-                aria-expanded={emojiOpen}
-                data-testid="emoji-button"
-                onClick={() => setEmojiOpen(!emojiOpen)}
-              >
-                <Icon name="emoji" />
-              </button>
-              <AttachMenu onChoose={attach} />
-              <label className="sr-only" htmlFor="chat-text">
-                Message
-              </label>
-              <textarea
-                id="chat-text"
-                ref={textBox}
-                rows={1}
-                maxLength={4000}
-                placeholder={file ? "Add a caption" : "Type a message"}
-                value={text}
-                onChange={(e) => {
-                  typed(e.target.value);
-                  mentions.update(e.target.value, e.target.selectionStart);
-                }}
-                onPaste={(e) => {
-                  // A pasted picture is a photo to send, with a caption.
-                  const f = Array.from(e.clipboardData.files).find((x) =>
-                    x.type.startsWith("image/"),
-                  );
-                  if (f) {
-                    e.preventDefault();
-                    choose(f);
-                  }
-                }}
-                onKeyDown={(e) => {
-                  if (mentions.onKeyDown(e)) return;
-                  if (e.key === "Escape") {
-                    // Esc gives up what is being prepared: the panel, a
-                    // photo waiting for its caption, then a reply.
-                    if (emojiOpen || file || reply) e.preventDefault();
-                    if (emojiOpen) setEmojiOpen(false);
-                    else if (file) setFile(undefined);
-                    else if (reply) setReply(undefined);
-                    return;
-                  }
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    send();
-                  }
-                }}
-              />
-              {!text.trim() && !file && (
-                <button
-                  type="button"
-                  className="icon-button camera-quick"
-                  aria-label="Take a photo"
-                  title="Take a photo"
-                  data-testid="camera-quick"
-                  onClick={() => attach("camera")}
-                >
-                  <Icon name="camera" />
-                </button>
-              )}
-              {!text.trim() && !file && voice.can ? (
-                <MicButton
-                  voice={voice}
-                  onStart={() => setFileError(undefined)}
-                />
-              ) : (
-                <button
-                  type="submit"
-                  className="primary"
-                  disabled={act.busy || (!text.trim() && !file)}
-                >
-                  {act.busy && file ? "Sending…" : "Send"}
-                </button>
-              )}
-            </form>
-          )}
-        </>
+        <ComposerView
+          c={c}
+          busy={act.busy}
+          prefix="chat"
+          textId="chat-text"
+          textLabel="Message"
+        />
       ) : (
         <p className="hint" style={{ padding: "10px 14px" }}>
           {conv.state === "active"
             ? "You can read this conversation. Someone who writes to linked businesses for your business can reply."
             : "This link has ended. The conversation stays."}
         </p>
-      )}
-      {dragging && (
-        <div className="chat-drop" data-testid="chat-drop" aria-hidden="true">
-          Drop a photo or a PDF to send it
-        </div>
-      )}
-      {cameraOpen && (
-        <CameraSheet
-          onClose={() => setCameraOpen(false)}
-          onTake={(f) => {
-            setCameraOpen(false);
-            choose(f);
-          }}
-        />
       )}
       {info && (
         <InfoSheet

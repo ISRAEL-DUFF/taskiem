@@ -12,8 +12,11 @@ import { Icon } from "../icons";
  */
 export function AttachMenu({
   onChoose,
+  documents = true,
 }: {
   onChoose: (what: "photo" | "document" | "camera") => void;
+  /** A document may be attached (a business's chat, not Taskiem's). */
+  documents?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLSpanElement>(null);
@@ -61,7 +64,11 @@ export function AttachMenu({
         type="button"
         className="icon-button"
         aria-label="Attach"
-        title="Attach a photo, a document or take a photo"
+        title={
+          documents
+            ? "Attach a photo, a document or take a photo"
+            : "Attach a photo: with its name and price as the caption, it is added as a product"
+        }
         aria-expanded={open}
         aria-haspopup="true"
         data-testid="attach"
@@ -81,10 +88,12 @@ export function AttachMenu({
             <Icon name="image" />
             Photo
           </button>
-          <button type="button" onClick={() => choose("document")}>
-            <Icon name="file" />
-            Document
-          </button>
+          {documents && (
+            <button type="button" onClick={() => choose("document")}>
+              <Icon name="file" />
+              Document
+            </button>
+          )}
           <button type="button" onClick={() => choose("camera")}>
             <Icon name="camera" />
             Camera
