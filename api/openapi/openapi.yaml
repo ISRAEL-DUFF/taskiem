@@ -25428,6 +25428,11 @@ components:
         schools:
           type: boolean
           description: Whether the business has the Schools area on (docs/schools.md).
+        areas:
+          type: object
+          description: Which parts of Taskiem the business uses, by area name (storefront, orders, stock, money, links, schools), each true when on (docs/spec/business-areas.md). GET /v1/settings/areas has them in plain words.
+          additionalProperties:
+            type: boolean
         gate_only:
           type: boolean
           description: "A gate session: the gate role's school.gate and nothing else. Every route but GET /v1/me and sign-out answers 403 with gate_only."

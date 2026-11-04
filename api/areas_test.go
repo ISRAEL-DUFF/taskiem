@@ -79,6 +79,27 @@ func TestBusinessAreas(t *testing.T) {
 	}
 	owner.must(409, "PUT", "/v1/settings/areas", map[string]any{"areas": map[string]bool{"money": false}})
 
+	// The Schools switch's own endpoint keeps the rule too: with money off,
+	// turning schools on there turns money on.
+	owner.must(200, "PUT", "/v1/settings/areas", map[string]any{"areas": map[string]bool{"schools": false, "money": false}})
+	if st := areaState(t, owner); st["money"] || st["schools"] {
+		t.Errorf("money and schools off: %v", st)
+	}
+	owner.must(200, "PUT", "/v1/settings/schools", map[string]any{"enabled": true})
+	if st := areaState(t, owner); !st["money"] || !st["schools"] {
+		t.Errorf("schools on through its own endpoint: %v", st)
+	}
+
+	// Only an owner changes areas; any member reads them.
+	viewer := addMember(t, w, owner, "vic", "viewer")
+	if st := areaState(t, viewer); !st["stock"] {
+		t.Errorf("a viewer's view: %v", st)
+	}
+	viewer.must(403, "PUT", "/v1/settings/areas", map[string]any{"areas": map[string]bool{"stock": false}})
+	if !areaState(t, owner)["stock"] {
+		t.Error("a viewer turned stock off")
+	}
+
 	// Bad requests.
 	owner.must(400, "PUT", "/v1/settings/areas", map[string]any{"areas": map[string]bool{"billing": false}})
 	owner.must(400, "PUT", "/v1/settings/areas", map[string]any{"areas": map[string]bool{}})

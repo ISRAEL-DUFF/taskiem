@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -166,6 +167,9 @@ func (s *Server) putAreas(w http.ResponseWriter, r *http.Request) {
 	var after areas.State
 	err := s.tx(r, func(tx pgx.Tx) error {
 		ctx := r.Context()
+		if err := lockAreas(ctx, tx, p.TenantID); err != nil {
+			return err
+		}
 		before, err := areas.Load(ctx, tx, p.TenantID)
 		if err != nil {
 			return err
@@ -222,4 +226,35 @@ func (s *Server) putAreas(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"areas": areaRows(after)})
+}
+
+// lockAreas serialises changes to one business's areas, so two requests
+// cannot each pass the dependency check and together leave an area on
+// without what it needs.
+func lockAreas(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) error {
+	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('business_areas:' || $1::text, 0))`, tenant.String())
+	return err
+}
+
+// schoolsNeedMoney keeps the rule that Schools needs Money when the Schools
+// switch is turned on through its own endpoint (PUT /v1/settings/schools)
+// rather than through the areas API: Money is turned on with it.
+func schoolsNeedMoney(r *http.Request, tx pgx.Tx, p *Principal) error {
+	ctx := r.Context()
+	if err := lockAreas(ctx, tx, p.TenantID); err != nil {
+		return err
+	}
+	before, err := areas.Load(ctx, tx, p.TenantID)
+	if err != nil {
+		return err
+	}
+	after, err := areas.Apply(before, map[areas.Area]bool{areas.Schools: true})
+	if err != nil {
+		return err
+	}
+	changed, err := areas.Save(ctx, tx, p.TenantID, before, after, p.Actor())
+	if err != nil || len(changed) == 0 {
+		return err
+	}
+	return auditTx(r, tx, "settings.areas", p.TenantID.String(), map[string]any{"changes": map[string]bool{string(areas.Money): true}, "because": "schools"})
 }
