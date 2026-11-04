@@ -487,7 +487,12 @@ type opsTenantRow struct {
 }
 
 func (s *Server) opsTenants(w http.ResponseWriter, r *http.Request) {
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	// No limit (or a bad one) means the list's default of 100, not 0: the
+	// database clamps a limit up to at least 1, which showed only the newest tenant.
+	limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
+	if err != nil || limit < 1 {
+		limit = 100
+	}
 	rows, err := s.Store.Pool.Query(r.Context(), `SELECT * FROM taskiem_ops_tenants($1, $2)`, strings.TrimSpace(r.URL.Query().Get("q")), limit)
 	if err != nil {
 		s.fail(w, r, err)
