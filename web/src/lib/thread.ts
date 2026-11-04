@@ -63,7 +63,8 @@ export function scrollWithin(
 ): void {
   const t = target.getBoundingClientRect();
   const s = thread.getBoundingClientRect();
-  const gap = block === "start" ? 8 : Math.max(0, (s.height - t.height) / 2);
+  // At the top, clear of the sticky day chip.
+  const gap = block === "start" ? 40 : Math.max(0, (s.height - t.height) / 2);
   thread.scrollTop += t.top - s.top - gap;
 }
 

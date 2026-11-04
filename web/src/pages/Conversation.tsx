@@ -433,6 +433,10 @@ function Bubble({
     },
   };
   const what = card ? cardLine(card, m.mine, other) : previewLine(m, other);
+  // The time and ticks sit in the corner of the last line of text (the text
+  // keeps room for them); with a photo only, a link preview or a card they
+  // have a row of their own.
+  const inline = !card && !!m.body && !m.preview && !onShow;
   return (
     <div
       className={`bubble${m.mine ? " mine" : ""}${first ? " first" : ""}${card ? " card-bubble" : ""}${flash ? " flash" : ""}`}
@@ -487,6 +491,12 @@ function Bubble({
           {m.body && (
             <span className="text">
               <MentionText text={m.body} mentions={m.mentions} />
+              {inline && (
+                <span
+                  className={`stamp-gap${m.mine ? " mine" : ""}`}
+                  aria-hidden="true"
+                />
+              )}
             </span>
           )}
           {m.preview && <PreviewCard p={m.preview} />}
@@ -542,31 +552,18 @@ function Bubble({
           )}
         </span>
       )}
-      <span className="meta">
-        {(canReply || hasMenu) && !onShow && (
-          <span className="bubble-actions">
-            {canReply && (
-              <button
-                type="button"
-                className="reply-btn"
-                onClick={() => onReply(m)}
-              >
-                Reply
-                <span className="sr-only"> to {what}</span>
-              </button>
-            )}
-            {hasMenu && (
-              <button
-                type="button"
-                className="reply-btn more-btn"
-                aria-expanded={more}
-                onClick={() => (setMore(!more), setCopied(false))}
-              >
-                More<span className="sr-only"> for {what}</span>
-              </button>
-            )}
-          </span>
-        )}
+      {(canReply || hasMenu) && !onShow && (
+        <button
+          type="button"
+          className="bubble-chevron"
+          aria-expanded={more}
+          onClick={() => (setMore(!more), setCopied(false))}
+        >
+          <Icon name="down" />
+          <span className="sr-only">More for {what}</span>
+        </button>
+      )}
+      <span className={`stamp${inline ? " inline" : ""}`}>
         {onShow && (
           <button
             type="button"

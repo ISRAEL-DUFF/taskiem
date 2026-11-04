@@ -252,6 +252,10 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
                 <span className="chat-day">{g.day}</span>
                 {g.messages.map((m, i) => {
                   const pressable = live === `${m.id}@${m.created_at}`;
+                  // The time sits in the corner of the last line when there
+                  // are no buttons and it came from here.
+                  const inline =
+                    m.channel === "web" && !(m.buttons && m.buttons.length > 0);
                   return (
                     <div
                       key={`${m.id}-${i}`}
@@ -260,12 +264,16 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
                       data-testid="taskiem-message"
                       data-mine={m.inbound}
                     >
-                      {!m.inbound && (i === 0 || g.messages[i - 1]?.inbound) && (
-                      <span className="who">Taskiem</span>
-                    )}
+                      {!m.inbound &&
+                        (i === 0 || g.messages[i - 1]?.inbound) && (
+                          <span className="who">Taskiem</span>
+                        )}
                       <span className="text">
                         {boldParts(m.text).map((p, k) =>
                           p.bold ? <strong key={k}>{p.text}</strong> : p.text,
+                        )}
+                        {inline && (
+                          <span className="stamp-gap" aria-hidden="true" />
                         )}
                       </span>
                       {m.buttons && m.buttons.length > 0 && (
@@ -291,7 +299,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
                           )}
                         </span>
                       )}
-                      <span className="meta">
+                      <span className={`stamp${inline ? " inline" : ""}`}>
                         {m.channel !== "web" && (
                           <span>on {CHANNEL[m.channel] ?? m.channel} ·</span>
                         )}

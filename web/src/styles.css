@@ -1681,11 +1681,9 @@ fieldset.path-set legend { font-size: 12.5px; font-weight: 600; padding: 0 4px; 
 .bubble.mine { align-self: flex-end; background: var(--chat-out); }
 .bubble .who { display: block; font-size: 12px; font-weight: 600; color: var(--tint-text); }
 .bubble .text { white-space: pre-wrap; font-size: 14.2px; line-height: 1.38; }
-.bubble .meta { display: flex; justify-content: flex-end; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); margin-top: 1px; }
 .bubble .ticks { display: inline-flex; }
 .bubble .ticks svg { width: 16px; height: 16px; stroke-width: 2; }
 .bubble .ticks.read { color: var(--chat-tick-read); }
-.bubble.mine .meta, .bubble.mine .reply-btn { color: var(--chat-out-meta); }
 .bubble .quote { display: block; border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 6px; padding: 4px 8px; margin-bottom: 4px; font-size: 13px; color: var(--muted); }
 .bubble.card-bubble { box-shadow: 0 1px 0.5px var(--chat-shadow), inset 3px 0 0 var(--accent); }
 .bubble.card-bubble .card-title { font-weight: 600; }
@@ -1708,7 +1706,6 @@ fieldset.path-set legend { font-size: 12.5px; font-weight: 600; padding: 0 4px; 
 .bubble .chat-file .name { flex: 1; min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
 
 
-.bubble .meta .reply-btn { margin-right: auto; }
 .bubble { touch-action: pan-y; }
 @media (prefers-reduced-motion: no-preference) { .bubble { transition: transform .12s ease-out; } }
 .bubble .forwarded { display: block; font-size: 12px; font-style: italic; color: var(--muted); }
@@ -1818,19 +1815,9 @@ button.chat-avatar { border: 0; padding: 0; cursor: pointer; }
 .bubble.first:not(.mine)::before { left: -8px; clip-path: polygon(100% 0, 100% 100%, 0 0); }
 .bubble.first.mine { border-top-right-radius: 0; }
 .bubble.first.mine::before { right: -8px; clip-path: polygon(0 0, 100% 0, 0 100%); }
-.bubble-actions { display: flex; gap: 10px; margin-right: auto; }
-@media (hover: hover) and (pointer: fine) {
-  .bubble-actions { opacity: 0; }
-  .bubble:hover .bubble-actions, .bubble:focus-within .bubble-actions, .bubble-actions:has([aria-expanded="true"]) { opacity: 1; }
-}
-@media (hover: none) {
-  .bubble-actions { opacity: 0; }
-  .bubble-actions:focus-within { opacity: 1; }
-}
 @media (max-width: 860px) { .bubble .text { font-size: 16px; } }
 .chat-mode .chat-layout:not(.open)::after { background: var(--chat-pattern), var(--chat-wallpaper); }
 .bubble .reply-btn { min-height: 24px; min-width: 24px; padding: 0 4px; line-height: 16px; }
-.bubble .meta { line-height: 16px; min-height: 22px; margin-bottom: -4px; }
 
 /* The chat list's rows (Phase 3): avatar, name and time, preview with a tick
    before ours, unread count, pin and mute marks; the open one highlighted. */
@@ -1854,3 +1841,26 @@ button.chat-avatar { border: 0; padding: 0; cursor: pointer; }
 .chat-row-tags .tag svg { width: 15px; height: 15px; display: block; }
 .chat-row-sub .preview-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .chat-mode .chat-list-pane > section[data-testid="link-findable-ask"] { margin-top: 14px; }
+
+/* The time and ticks in the corner, inline with the last line (a gap the
+   size of the stamp is left at the end of the text); the chevron at the top
+   corner opens the menu, on hover or focus (a hold on a touch screen). */
+.bubble { padding: 6px 9px 6px; }
+.bubble .stamp { display: flex; justify-content: flex-end; align-items: center; gap: 4px; font-size: 11px; line-height: 16px; color: var(--muted); margin-top: 1px; }
+.bubble.mine .stamp, .bubble.mine .reply-btn { color: var(--chat-out-meta); }
+.bubble .stamp.inline { position: absolute; right: 9px; bottom: 5px; margin: 0; }
+.bubble .stamp-gap { display: inline-block; width: 52px; height: 1px; }
+.bubble .stamp-gap.mine { width: 74px; }
+.bubble-chevron { position: absolute; top: 2px; right: 3px; width: 26px; height: 26px; min-height: 26px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--chat-in) 85%, transparent); color: var(--muted); z-index: 1; opacity: 0; cursor: pointer; }
+.bubble.mine .bubble-chevron { background: color-mix(in srgb, var(--chat-out) 85%, transparent); color: var(--chat-out-meta); }
+.bubble-chevron svg { width: 18px; height: 18px; }
+@media (hover: hover) and (pointer: fine) {
+  .bubble:hover .bubble-chevron, .bubble-chevron[aria-expanded="true"] { opacity: 1; }
+}
+.bubble-chevron:focus-visible { opacity: 1; }
+@media (hover: none) {
+  .bubble-chevron:not(:focus-visible):not([aria-expanded="true"]) { position: absolute; width: 1px; height: 1px; margin: 0; padding: 0; overflow: hidden; clip: rect(0 0 0 0); }
+}
+.bubble .block { display: block; }
+.bubble-chevron { width: 22px; height: 22px; min-height: 22px; top: 1px; right: 2px; }
+.bubble-chevron svg { width: 16px; height: 16px; }

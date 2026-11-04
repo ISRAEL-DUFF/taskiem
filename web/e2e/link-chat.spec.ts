@@ -156,7 +156,16 @@ test("two linked businesses talk", async ({ browser }) => {
   await expect(pane.getByTestId("chat-replying")).toHaveCount(0);
 
   // A reply quoting it, sent with Enter.
-  await pane.getByRole("button", { name: /^Reply/ }).click();
+  // Reply, from the menu at the bubble's corner.
+  await pane
+    .getByTestId("chat-message")
+    .first()
+    .getByRole("button", { name: /^More/ })
+    .click();
+  await pane
+    .getByTestId("chat-more")
+    .getByRole("button", { name: "Reply" })
+    .click();
   await expect(pane.getByTestId("chat-replying")).toContainText("Good morning");
   await pane.getByLabel("Message").fill("Send 20 bags, please");
   await pane.getByLabel("Message").press("Enter");

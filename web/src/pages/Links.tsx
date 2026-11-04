@@ -376,36 +376,53 @@ export function ChatPage() {
               {chats.length > 0 && (
                 <>
                   <h2>Chats</h2>
-                  <Items label="Linked businesses found">
-                    {chats.map((l) => (
-                      <Row
-                        key={l.id}
-                        letter={l.name}
-                        title={l.name}
-                        side={<StateBadge state={l.state} />}
-                        sub={<span className="sub">{roleLine(l.role)}</span>}
-                        testid="link-chat"
-                      />
-                    ))}
-                  </Items>
+                  <ul
+                    className="chat-rows"
+                    aria-label="Linked businesses found"
+                  >
+                    {chats.map((l) => {
+                      const conv = all.find((c) => c.business === l.business);
+                      return conv ? (
+                        <ChatRow
+                          key={l.id}
+                          to={`/chat?with=${conv.link}`}
+                          letter={l.name}
+                          title={l.name}
+                          preview={roleLine(l.role)}
+                          unread={conv.unread}
+                          selected={openID === conv.link}
+                          testid="link-chat"
+                        />
+                      ) : (
+                        <Row
+                          key={l.id}
+                          letter={l.name}
+                          title={l.name}
+                          side={<StateBadge state={l.state} />}
+                          sub={<span className="sub">{roleLine(l.role)}</span>}
+                          testid="link-chat"
+                        />
+                      );
+                    })}
+                  </ul>
                 </>
               )}
               {(foundMessages?.length ?? 0) > 0 && (
                 <>
                   <h2>Messages</h2>
-                  <Items label="Messages found">
+                  <ul className="chat-rows" aria-label="Messages found">
                     {foundMessages?.map((m) => (
-                      <Item
+                      <ChatRow
                         key={m.id}
                         to={`/chat?with=${m.link}&msg=${m.id}`}
-                        icon="chat"
+                        letter={nameOf(m.link)}
                         title={nameOf(m.link)}
-                        sub={previewLine(m, nameOf(m.link))}
-                        side={listTime(m.created_at)}
+                        time={listTime(m.created_at)}
+                        preview={previewLine(m, nameOf(m.link))}
                         testid="chat-found-message"
                       />
                     ))}
-                  </Items>
+                  </ul>
                 </>
               )}
               <h2>Businesses on Taskiem</h2>
