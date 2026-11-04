@@ -60,6 +60,8 @@ import (
 
 // Server serves the API.
 type Server struct {
+	// chatGate caps the open Chat page streams (chat_stream.go).
+	chatGate chatStreamGate
 	Store    *runtime.Store
 	Vault    *secrets.Vault
 	Registry *connector.Registry

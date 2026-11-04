@@ -39,6 +39,7 @@ const PermChatTrade = access.ChatTrade
 func (s *Server) linkChatRoutes(r chi.Router) {
 	write := s.need(PermChatTrade)
 	paced := s.linkWriteLimit
+	r.Get("/chat/stream", s.chatStream)
 	r.Get("/link-chats", s.listLinkChats)
 	r.Get("/link-chats/search", s.searchLinkChats)
 	r.Get("/link-chats/thread", s.linkThread)
