@@ -1,6 +1,8 @@
 import {
+  Fragment,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -29,6 +31,7 @@ import { Icon } from "../icons";
 import { MicButton, RecordingBar, useVoiceNote } from "./VoiceNote";
 import { MentionList, MentionText, useMentions } from "./Mentions";
 import { priceWords, type PriceItem } from "../lib/pricelists";
+import { atBottom, firstUnread, followNew, scrollWithin } from "../lib/thread";
 import { roleLine, type BusinessLink, type LinkCard } from "../lib/links";
 import { ErrorBox, fmtTime, Modal, Skeleton, useAction, useLoad } from "../ui";
 
@@ -40,6 +43,8 @@ import { ErrorBox, fmtTime, Modal, Skeleton, useAction, useLoad } from "../ui";
 // the clock, as WhatsApp's does, with the time in words on hover.
 
 const EVERY_MS = 3000;
+/** A page of the conversation, as the API gives it. */
+const PAGE = 50;
 /** A swipe this far right replies. */
 const SWIPE_REPLY_PX = 60;
 /** A finger held this long on a bubble opens its menu, as WhatsApp's. */
@@ -324,6 +329,8 @@ function Bubble({
   onDone = () => undefined,
   onForward,
   onHide,
+  onJump,
+  flash = false,
 }: {
   m: LinkMessage;
   other: string;
@@ -333,6 +340,10 @@ function Bubble({
   onDone?: () => void;
   onForward?: (m: LinkMessage) => void;
   onHide?: (m: LinkMessage) => void;
+  /** Goes to the message a quote quotes. */
+  onJump?: (id: string) => void;
+  /** Shown for a moment after a jump lands on it. */
+  flash?: boolean;
 }) {
   const card = m.kind === "card" ? m.card : undefined;
   const [more, setMore] = useState(false);
@@ -352,7 +363,8 @@ function Bubble({
   const touch = {
     onPointerDown: (e: React.PointerEvent) => {
       if (e.pointerType === "mouse") return;
-      if (canReply) drag.current = { x: e.clientX, y: e.clientY, id: e.pointerId };
+      if (canReply)
+        drag.current = { x: e.clientX, y: e.clientY, id: e.pointerId };
       if (!hasMenu) return;
       endHold();
       hold.current = window.setTimeout(() => {
@@ -402,7 +414,8 @@ function Bubble({
   const what = card ? cardLine(card, m.mine, other) : previewLine(m, other);
   return (
     <div
-      className={`bubble${m.mine ? " mine" : ""}${card ? " card-bubble" : ""}`}
+      className={`bubble${m.mine ? " mine" : ""}${card ? " card-bubble" : ""}${flash ? " flash" : ""}`}
+      data-msg={m.id}
       data-testid={card ? "chat-card" : "chat-message"}
       data-mine={m.mine}
       style={dx ? { transform: `translateX(${dx}px)` } : undefined}
@@ -416,7 +429,19 @@ function Bubble({
           Forwarded
         </span>
       )}
-      {m.reply && (
+      {m.reply && onJump && (
+        <button
+          type="button"
+          className="quote quote-btn"
+          data-testid="chat-quote"
+          title="Go to the message"
+          onClick={() => onJump(m.reply?.pair_id ?? "")}
+        >
+          {m.reply.mine ? "You" : other}:{" "}
+          {previewLine({ ...m.reply, mine: m.reply.mine }, other)}
+        </button>
+      )}
+      {m.reply && !onJump && (
         <span className="quote" data-testid="chat-quote">
           {m.reply.mine ? "You" : other}:{" "}
           {previewLine({ ...m.reply, mine: m.reply.mine }, other)}
@@ -546,6 +571,7 @@ export function ConversationPane({
   others = [],
   link,
   onEndLink,
+  focus,
 }: {
   conv: Conversation;
   onBack: () => void;
@@ -554,6 +580,8 @@ export function ConversationPane({
   link?: BusinessLink;
   /** Ends the link (only for a member who may manage links). */
   onEndLink?: (l: BusinessLink) => void;
+  /** A message to open the conversation at (a search result). */
+  focus?: string;
   /** The other conversations, to forward to. */
   others?: Conversation[];
 }) {
@@ -573,7 +601,8 @@ export function ConversationPane({
     get<{ results: LinkCard[] }>(
       `/v1/links/search?q=${encodeURIComponent(conv.name)}`,
     ).then(
-      (r) => live && setCard(r.results.find((c) => c.business === conv.business)),
+      (r) =>
+        live && setCard(r.results.find((c) => c.business === conv.business)),
       () => undefined,
     );
     return () => {
@@ -639,11 +668,39 @@ export function ConversationPane({
   const [q, setQ] = useState("");
   const [found, setFound] = useState<LinkMessage[]>();
   const act = useAction();
-  const end = useRef<HTMLDivElement>(null);
   const path = `/v1/link-chats/${conv.link}`;
+  // The thread's scrolling, as WhatsApp Web's: older messages load as the
+  // reader nears the top; the view follows new messages only while the
+  // reader is at the bottom; "N unread messages" marks where they begin;
+  // a quote, or a search result, jumps to its message.
+  const stream = useRef<HTMLDivElement>(null);
+  const topMark = useRef<HTMLDivElement>(null);
+  const stick = useRef(true);
+  const placed = useRef(false);
+  const anchor = useRef<{ h: number; top: number } | null>(null);
+  const prevNewest = useRef<string>(undefined);
+  const jumpTo = useRef<string>(undefined);
+  const loadingOlder = useRef(false);
+  const [hasOlder, setHasOlder] = useState(false);
+  const [detached, setDetached] = useState(false); // not at the newest page
+  const [away, setAway] = useState(false);
+  const [newCount, setNewCount] = useState(0);
+  const [unread, setUnread] = useState<{ id: string; count: number }>();
+  const [flashId, setFlashId] = useState<string>();
   const last = messages?.[messages.length - 1]?.created_at;
 
-  // The newest page, then what is newer every few seconds; read while seen.
+  // What is newer, every few seconds (while the newest page is the one
+  // shown); read while seen.
+  const markRead = useCallback(
+    async (list: LinkMessage[]) => {
+      if (
+        list.some((m) => !m.mine && !m.read_at) &&
+        document.visibilityState === "visible"
+      )
+        await post(`${path}/read`).then(onChanged, () => undefined);
+    },
+    [path, onChanged],
+  );
   const pull = useCallback(
     async (after?: string) => {
       const out = await get<{ messages: LinkMessage[]; typing?: boolean }>(
@@ -652,32 +709,123 @@ export function ConversationPane({
       setTyping(!!out.typing);
       if (after && out.messages.length === 0) return;
       setMessages((cur) => merge(cur ?? [], out.messages));
-      if (
-        out.messages.some((m) => !m.mine && !m.read_at) &&
-        document.visibilityState === "visible"
-      ) {
-        await post(`${path}/read`).then(onChanged, () => undefined);
-      }
+      await markRead(out.messages);
     },
-    [path, onChanged],
+    [path, markRead],
+  );
+  // Open at the newest page (the first unread is marked), or, from a
+  // search result or a quote, at that message.
+  const openNewest = useCallback(async () => {
+    const out = await get<{ messages: LinkMessage[]; typing?: boolean }>(
+      `${path}/messages`,
+    );
+    setTyping(!!out.typing);
+    placed.current = false;
+    prevNewest.current = undefined;
+    setDetached(false);
+    setHasOlder(out.messages.length >= PAGE);
+    setUnread(firstUnread(out.messages));
+    setNewCount(0);
+    setMessages(out.messages);
+    await markRead(out.messages);
+  }, [path, markRead]);
+  const openAt = useCallback(
+    async (id: string) => {
+      const out = await get<{ messages: LinkMessage[] }>(
+        `${path}/messages?around=${encodeURIComponent(id)}&limit=${PAGE}`,
+      );
+      const at = out.messages.findIndex((m) => m.id === id);
+      placed.current = false;
+      prevNewest.current = undefined;
+      jumpTo.current = id;
+      // Newer messages beyond this window: the view is detached from the
+      // newest page until the reader jumps to the latest.
+      // (A full half of newer ones, or of older ones, means there may be more.)
+      const half = Math.floor(PAGE / 2);
+      setDetached(at >= 0 && out.messages.length - at - 1 >= PAGE - half);
+      setHasOlder(at >= half);
+      setUnread(undefined);
+      setNewCount(0);
+      setMessages(out.messages);
+    },
+    [path],
   );
   useEffect(() => {
     setMessages(undefined);
     setReply(undefined);
-    pull().catch(setError);
-  }, [pull]);
+    if (focus) openAt(focus).catch(() => openNewest().catch(setError));
+    else openNewest().catch(setError);
+  }, [openNewest, openAt, focus]);
+  const loadOlder = useCallback(async () => {
+    const first = messages?.[0];
+    const el = stream.current;
+    if (!first || !el || loadingOlder.current) return;
+    loadingOlder.current = true;
+    try {
+      const out = await get<{ messages: LinkMessage[] }>(
+        `${path}/messages?before=${encodeURIComponent(first.created_at)}&limit=${PAGE}`,
+      );
+      if (out.messages.length < PAGE) setHasOlder(false);
+      if (out.messages.length > 0) {
+        anchor.current = { h: el.scrollHeight, top: el.scrollTop };
+        setMessages((cur) => merge(cur ?? [], out.messages));
+      }
+    } catch (e) {
+      setError(e);
+    } finally {
+      loadingOlder.current = false;
+    }
+  }, [messages, path]);
+  // The top of the thread comes into view: the next page.
+  const hasMessages = (messages?.length ?? 0) > 0;
+  useEffect(() => {
+    const mark = topMark.current;
+    if (
+      !mark ||
+      !hasOlder ||
+      !hasMessages ||
+      typeof IntersectionObserver === "undefined"
+    )
+      return;
+    const io = new IntersectionObserver(
+      ([e]) => e?.isIntersecting && void loadOlder(),
+      { root: stream.current, rootMargin: "200px 0px 0px 0px" },
+    );
+    io.observe(mark);
+    return () => io.disconnect();
+  }, [hasOlder, hasMessages, loadOlder]);
+  const toLatest = () => {
+    setError(undefined);
+    openNewest().catch(setError);
+  };
+  const jump = (id: string) => {
+    const el = stream.current?.querySelector(`[data-msg="${id}"]`);
+    if (el) {
+      if (stream.current) scrollWithin(stream.current, el, "center");
+      setFlashId(id);
+    } else
+      openAt(id).catch(() =>
+        setError(new Error("That message is no longer here.")),
+      );
+  };
+  useEffect(() => {
+    if (!flashId) return;
+    const t = setTimeout(() => setFlashId(undefined), 1800);
+    return () => clearTimeout(t);
+  }, [flashId]);
   useEffect(() => {
     const t = setInterval(() => {
-      if (document.visibilityState === "visible")
+      if (document.visibilityState === "visible" && !detached)
         pull(last).catch(() => undefined);
     }, EVERY_MS);
     return () => clearInterval(t);
-  }, [pull, last]);
+  }, [pull, last, detached]);
   // Our own ticks follow theirs reading: the page's read marks change in place.
   useEffect(() => {
     const t = setInterval(() => {
       if (
         document.visibilityState !== "visible" ||
+        detached ||
         !messages?.some((m) => m.mine && !m.read_at)
       )
         return;
@@ -687,10 +835,51 @@ export function ConversationPane({
       );
     }, EVERY_MS * 3);
     return () => clearInterval(t);
-  }, [messages, path]);
-  useEffect(() => {
-    end.current?.scrollIntoView?.({ block: "end" });
-  }, [messages?.length]);
+  }, [messages, path, detached]);
+  // Where the view goes when the messages change: after a page of older
+  // ones, where the reader was; at the first showing, to the message jumped
+  // to, the first unread, or the end; later, to the end only if the reader
+  // was there (or sent the message), else a count on the button.
+  useLayoutEffect(() => {
+    const el = stream.current;
+    if (!el || !messages) return;
+    if (anchor.current) {
+      el.scrollTop = anchor.current.top + (el.scrollHeight - anchor.current.h);
+      anchor.current = null;
+      return;
+    }
+    const newest = messages[messages.length - 1]?.created_at;
+    if (!placed.current) {
+      placed.current = true;
+      const id = jumpTo.current;
+      jumpTo.current = undefined;
+      const target = id
+        ? el.querySelector(`[data-msg="${id}"]`)
+        : el.querySelector("[data-unread]");
+      if (target) {
+        scrollWithin(el, target, id ? "center" : "start");
+        if (id) setFlashId(id);
+      } else el.scrollTop = el.scrollHeight;
+      stick.current = atBottom(el);
+      setAway(!stick.current);
+      prevNewest.current = newest;
+      return;
+    }
+    const f = followNew(prevNewest.current, messages, stick.current);
+    if (f.kind === "bottom") {
+      el.scrollTop = el.scrollHeight;
+      setNewCount(0);
+    } else if (f.kind === "pill") setNewCount((n) => n + f.count);
+    prevNewest.current = newest;
+  }, [messages]);
+  const onScroll = () => {
+    const el = stream.current;
+    if (!el) return;
+    const near = atBottom(el);
+    stick.current = near;
+    setAway(!near);
+    if (near) setNewCount(0);
+  };
 
   const choose = (f: File | undefined) => {
     setFileError(undefined);
@@ -722,7 +911,8 @@ export function ConversationPane({
             mentions: refs.length > 0 ? refs : undefined,
           });
         }
-        setMessages((cur) => merge(cur ?? [], [out.message]));
+        if (detached) await openNewest();
+        else setMessages((cur) => merge(cur ?? [], [out.message]));
         if (!held) {
           setText("");
           setFile(undefined);
@@ -889,40 +1079,97 @@ export function ConversationPane({
         </label>
       </div>
       <ErrorBox error={error ?? act.error ?? fileError} />
-      <div className="chat-stream" aria-live="polite" data-testid="chat-stream">
-        {!shown ? (
-          <Skeleton rows={3} label="Loading the conversation…" />
-        ) : shown.length === 0 ? (
-          <p className="hint" style={{ alignSelf: "center" }}>
-            {found
-              ? "No messages say that."
-              : `No messages yet. Say hello to ${conv.name}.`}
-          </p>
-        ) : (
-          byDay(shown).map((g) => (
-            <div key={g.day} style={{ display: "contents" }}>
-              <span className="chat-day">{g.day}</span>
-              {g.messages.map((m) => (
-                <Bubble
-                  key={m.id}
-                  m={m}
-                  other={conv.name}
-                  canReply={write}
-                  onReply={setReply}
-                  latest={newest.has(m.id)}
-                  onDone={() => pull(last).catch(setError)}
-                  onForward={
-                    write && others.some((o) => o.state === "active")
-                      ? setForwarding
-                      : undefined
-                  }
-                  onHide={can("chat.trade") ? hide : undefined}
-                />
-              ))}
-            </div>
-          ))
+      <div className="chat-stream-wrap">
+        <div
+          className="chat-stream"
+          aria-live="polite"
+          data-testid="chat-stream"
+          ref={stream}
+          onScroll={onScroll}
+        >
+          {hasOlder && !found && shown && shown.length > 0 && (
+            <div
+              ref={topMark}
+              className="chat-top"
+              data-testid="chat-top"
+              aria-hidden="true"
+            />
+          )}
+          {!shown ? (
+            <Skeleton rows={3} label="Loading the conversation…" />
+          ) : shown.length === 0 ? (
+            <p className="hint" style={{ alignSelf: "center" }}>
+              {found
+                ? "No messages say that."
+                : `No messages yet. Say hello to ${conv.name}.`}
+            </p>
+          ) : (
+            byDay(shown).map((g) => (
+              <div key={g.day} className="chat-group">
+                <span className="chat-day">{g.day}</span>
+                {g.messages.map((m) => (
+                  <Fragment key={m.id}>
+                    {!found && unread?.id === m.id && (
+                      <div
+                        className="chat-unread"
+                        data-unread
+                        data-testid="chat-unread"
+                      >
+                        {unread.count === 1
+                          ? "1 unread message"
+                          : `${unread.count} unread messages`}
+                      </div>
+                    )}
+                    <Bubble
+                      m={m}
+                      other={conv.name}
+                      canReply={write}
+                      onReply={setReply}
+                      onJump={found ? undefined : jump}
+                      flash={flashId === m.id}
+                      latest={newest.has(m.id)}
+                      onDone={() => pull(last).catch(setError)}
+                      onForward={
+                        write && others.some((o) => o.state === "active")
+                          ? setForwarding
+                          : undefined
+                      }
+                      onHide={can("chat.trade") ? hide : undefined}
+                    />
+                  </Fragment>
+                ))}
+              </div>
+            ))
+          )}
+        </div>
+        {!found && (away || detached) && (
+          <button
+            type="button"
+            className="chat-jump"
+            data-testid="chat-jump"
+            onClick={() => {
+              if (detached) toLatest();
+              else {
+                stream.current?.scrollTo({ top: stream.current.scrollHeight });
+                setNewCount(0);
+              }
+            }}
+          >
+            <Icon name="down" />
+            <span className="sr-only">
+              {detached
+                ? "Jump to the latest messages"
+                : newCount > 0
+                  ? `${newCount} new ${newCount === 1 ? "message" : "messages"}: scroll to the newest`
+                  : "Scroll to the newest messages"}
+            </span>
+            {newCount > 0 && (
+              <span className="unread-count" aria-hidden="true">
+                {newCount}
+              </span>
+            )}
+          </button>
         )}
-        <div ref={end} />
       </div>
       {write ? (
         <>
@@ -1094,7 +1341,10 @@ export function ConversationPane({
               <p className="hint">Linked {fmtTime(link.answered_at)}</p>
             )}
             {card && (card.area || card.tagline || card.items.length > 0) && (
-              <section className="chat-info-card" aria-label="About the business">
+              <section
+                className="chat-info-card"
+                aria-label="About the business"
+              >
                 {card.tagline && <p>{card.tagline}</p>}
                 {card.area && <p className="hint">{card.area}</p>}
                 {card.items.length > 0 && (

@@ -102,7 +102,8 @@ type linkMessagesOut struct {
 
 // linkMessages is GET /v1/link-chats/{link}/messages: a page of the
 // conversation, oldest first: ?before= (older), ?after= (newer, for the
-// open conversation to follow), ?q= (the messages saying it).
+// open conversation to follow), ?around= (a message and those either side
+// of it), ?q= (the messages saying it).
 func (s *Server) linkMessages(w http.ResponseWriter, r *http.Request) {
 	link, err := linkParam(r)
 	if err != nil {
@@ -119,6 +120,14 @@ func (s *Server) linkMessages(w http.ResponseWriter, r *http.Request) {
 			}
 			*to = &t
 		}
+	}
+	if v := r.URL.Query().Get("around"); v != "" {
+		id, err := uuid.Parse(v)
+		if err != nil {
+			s.fail(w, r, fmt.Errorf("%w: around is a message id", errBadRequest))
+			return
+		}
+		p.Around = &id
 	}
 	p.Q = r.URL.Query().Get("q")
 	if v := r.URL.Query().Get("limit"); v != "" {

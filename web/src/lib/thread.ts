@@ -1,0 +1,67 @@
+// How a conversation's thread scrolls (the Chat page, as WhatsApp Web's):
+// stay at the bottom only when the reader is there, mark where the unread
+// messages begin, and count what arrived while they read further up.
+
+import type { LinkMessage } from "./linkchat";
+
+/** How close to the bottom still counts as "at the bottom", in pixels. */
+export const NEAR_BOTTOM = 80;
+
+/** Whether a scroll position is at (or near) the bottom of its content. */
+export function atBottom(m: {
+  scrollTop: number;
+  scrollHeight: number;
+  clientHeight: number;
+}): boolean {
+  return m.scrollHeight - m.scrollTop - m.clientHeight <= NEAR_BOTTOM;
+}
+
+/** The first message the other side sent that this side has not read, and how
+ * many there are: where "N unread messages" goes. */
+export function firstUnread(
+  messages: LinkMessage[],
+): { id: string; count: number } | undefined {
+  const unread = messages.filter((m) => !m.mine && !m.read_at);
+  const first = unread[0];
+  return first ? { id: first.id, count: unread.length } : undefined;
+}
+
+/** What a thread does when its messages change. */
+export type Follow =
+  | { kind: "none" }
+  | { kind: "bottom" }
+  | { kind: "pill"; count: number };
+
+/**
+ * `prevNewest` is the newest message's time before the change. Messages that
+ * arrived after it are new (older ones paged in above, or a message changing
+ * in place, are not). The reader is taken to the bottom when they were there
+ * or when they sent the new one; otherwise a count is shown for the pill.
+ */
+export function followNew(
+  prevNewest: string | undefined,
+  messages: LinkMessage[],
+  wasAtBottom: boolean,
+): Follow {
+  if (!prevNewest) return { kind: "none" };
+  const arrived = messages.filter((m) => m.created_at > prevNewest);
+  if (arrived.length === 0) return { kind: "none" };
+  if (wasAtBottom || arrived.some((m) => m.mine)) return { kind: "bottom" };
+  return { kind: "pill", count: arrived.filter((m) => !m.mine).length };
+}
+
+/**
+ * Scrolls the thread (and only the thread) so that `target` is at its top
+ * or its middle. `scrollIntoView` also scrolls every page around it, which
+ * pushes the header of a full-window chat out of sight.
+ */
+export function scrollWithin(
+  thread: HTMLElement,
+  target: Element,
+  block: "start" | "center",
+): void {
+  const t = target.getBoundingClientRect();
+  const s = thread.getBoundingClientRect();
+  const gap = block === "start" ? 8 : Math.max(0, (s.height - t.height) / 2);
+  thread.scrollTop += t.top - s.top - gap;
+}

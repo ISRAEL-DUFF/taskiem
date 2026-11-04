@@ -201,3 +201,43 @@ func TestLinkConversation(t *testing.T) {
 		t.Errorf("ended: %v", c)
 	}
 }
+
+// A conversation is shown around one message (a quote, a search result):
+// that message and those either side of it, oldest first; a message that
+// is not in this conversation is not found.
+func TestLinkMessagesAround(t *testing.T) {
+	w := newWAWorld(t)
+	seller, buyer, _, _ := linkedPair(t, w)
+	link := buyer.must(200, "GET", "/v1/link-chats", nil)["conversations"].([]any)[0].(map[string]any)["link"].(string)
+	var ids []string
+	for _, text := range []string{"one", "two", "three", "four", "five", "six", "seven"} {
+		m := seller.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": text})["message"].(map[string]any)
+		ids = append(ids, m["id"].(string))
+	}
+	bodies := func(out map[string]any) []string {
+		var got []string
+		for _, m := range out["messages"].([]any) {
+			got = append(got, m.(map[string]any)["body"].(string))
+		}
+		return got
+	}
+	// Centred on "four" with room for four: two older, it, and two newer
+	// (limit 4: half 2, so "two", "three", "four", "five", "six").
+	got := bodies(buyer.must(200, "GET", "/v1/link-chats/"+link+"/messages?around="+ids[3]+"&limit=4", nil))
+	if want := "two three four five six"; strings.Join(got, " ") != want {
+		t.Errorf("around four: %v, want %s", got, want)
+	}
+	// Near the start: nothing older to show.
+	got = bodies(buyer.must(200, "GET", "/v1/link-chats/"+link+"/messages?around="+ids[0]+"&limit=4", nil))
+	if want := "one two three"; strings.Join(got, " ") != want {
+		t.Errorf("around one: %v, want %s", got, want)
+	}
+	// The seller's own copy has the same message by the same id.
+	got = bodies(seller.must(200, "GET", "/v1/link-chats/"+link+"/messages?around="+ids[6]+"&limit=4", nil))
+	if want := "five six seven"; strings.Join(got, " ") != want {
+		t.Errorf("seller around seven: %v, want %s", got, want)
+	}
+	// Not a message here, and not an id.
+	buyer.must(404, "GET", "/v1/link-chats/"+link+"/messages?around=0192e2e0-0000-7000-8000-000000000999", nil)
+	buyer.must(400, "GET", "/v1/link-chats/"+link+"/messages?around=nope", nil)
+}

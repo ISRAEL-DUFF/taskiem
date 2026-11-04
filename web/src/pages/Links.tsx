@@ -387,7 +387,7 @@ export function ChatPage() {
                     {foundMessages?.map((m) => (
                       <Item
                         key={m.id}
-                        to={`/chat?with=${m.link}`}
+                        to={`/chat?with=${m.link}&msg=${m.id}`}
                         icon="chat"
                         title={nameOf(m.link)}
                         sub={previewLine(m, nameOf(m.link))}
@@ -623,6 +623,7 @@ export function ChatPage() {
             others={all}
             onBack={() => setParams({})}
             onChanged={reloadConvs}
+            focus={params.get("msg") ?? undefined}
             link={view.data?.links.find((l) => l.id === open.link)}
             onEndLink={
               manage

@@ -286,6 +286,10 @@ func ConversationsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]Conver
 type Page struct {
 	Before *time.Time
 	After  *time.Time
+	// Around is a message (its id, the pair): the page is the messages
+	// either side of it, and it, so a quote or a search result can be
+	// shown in place. Before, After and Q are not used with it.
+	Around *uuid.UUID
 	Q      string
 	Limit  int
 }
@@ -295,6 +299,9 @@ type Page struct {
 func MessagesTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, p Page) ([]Message, error) {
 	if p.Limit <= 0 || p.Limit > 200 {
 		p.Limit = 50
+	}
+	if p.Around != nil {
+		return messagesAroundTx(ctx, tx, tenant, link, *p.Around, p.Limit)
 	}
 	q := strings.TrimSpace(p.Q)
 	rows, err := tx.Query(ctx, `SELECT `+messageCols+messageFrom+`
@@ -310,6 +317,43 @@ func MessagesTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, p Page) 
 	}
 	slices.Reverse(out) // the newest page, oldest first
 	return out, err
+}
+
+// messagesAroundTx is up to limit messages centred on one (the older half,
+// it, and the newer half), oldest first.
+func messagesAroundTx(ctx context.Context, tx pgx.Tx, tenant, link, pair uuid.UUID, limit int) ([]Message, error) {
+	var at time.Time
+	var id uuid.UUID
+	err := tx.QueryRow(ctx, `SELECT created_at, id FROM link_messages WHERE tenant_id = $1 AND link_id = $2 AND pair_id = $3 AND hidden_at IS NULL`, tenant, link, pair).Scan(&at, &id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	half := limit / 2
+	collect := func(sql string, args ...any) ([]Message, error) {
+		rows, err := tx.Query(ctx, sql, args...)
+		if err != nil {
+			return nil, err
+		}
+		return pgx.CollectRows(rows, func(r pgx.CollectableRow) (Message, error) { return scanMessage(r) })
+	}
+	// It and the older ones, newest first; then the newer ones, oldest first.
+	older, err := collect(`SELECT `+messageCols+messageFrom+`
+		WHERE m.tenant_id = $1 AND m.link_id = $2 AND m.hidden_at IS NULL AND (m.created_at, m.id) <= ($3, $4)
+		ORDER BY m.created_at DESC, m.id DESC LIMIT $5`, tenant, link, at, id, half+1)
+	if err != nil {
+		return nil, err
+	}
+	newer, err := collect(`SELECT `+messageCols+messageFrom+`
+		WHERE m.tenant_id = $1 AND m.link_id = $2 AND m.hidden_at IS NULL AND (m.created_at, m.id) > ($3, $4)
+		ORDER BY m.created_at, m.id LIMIT $5`, tenant, link, at, id, limit-half)
+	if err != nil {
+		return nil, err
+	}
+	slices.Reverse(older)
+	return append(older, newer...), nil
 }
 
 // likeSafe takes the wildcards out of a search's words.
