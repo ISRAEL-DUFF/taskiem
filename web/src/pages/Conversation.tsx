@@ -527,6 +527,19 @@ export function ConversationPane({
   const write = can("chat.trade") && conv.state === "active";
   const [messages, setMessages] = useState<LinkMessage[]>();
   const [typing, setTyping] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setMenuOpen(false);
+    const away = (e: MouseEvent) =>
+      !(e.target as Element).closest?.(".chat-menu-wrap") && setMenuOpen(false);
+    document.addEventListener("keydown", esc);
+    document.addEventListener("mousedown", away);
+    return () => {
+      document.removeEventListener("keydown", esc);
+      document.removeEventListener("mousedown", away);
+    };
+  }, [menuOpen]);
   const [forwarding, setForwarding] = useState<LinkMessage>();
   const typedAt = useRef(0);
   const [error, setError] = useState<unknown>();
@@ -730,47 +743,61 @@ export function ConversationPane({
           )}
         </h2>
         {can("chat.trade") && (
-          <>
+          <div className="chat-menu-wrap">
             <button
               type="button"
-              className="small"
-              disabled={act.busy}
-              onClick={() =>
-                settings(
-                  { pinned: !conv.pinned },
-                  conv.pinned ? "Unpinned" : "Pinned",
-                )
-              }
+              className="icon-button"
+              aria-label="More about this conversation"
+              aria-expanded={menuOpen}
+              aria-haspopup="true"
+              onClick={() => setMenuOpen(!menuOpen)}
             >
-              {conv.pinned ? "Unpin" : "Pin"}
+              <Icon name="more" />
             </button>
-            <button
-              type="button"
-              className="small"
-              disabled={act.busy}
-              onClick={() =>
-                settings(
-                  { muted: !conv.muted },
-                  conv.muted ? "Unmuted" : "Muted",
-                )
-              }
-            >
-              {conv.muted ? "Unmute" : "Mute"}
-            </button>
-            <button
-              type="button"
-              className="small"
-              disabled={act.busy}
-              onClick={() =>
-                settings(
-                  { archived: !conv.archived },
-                  conv.archived ? "Unarchived" : "Archived",
-                )
-              }
-            >
-              {conv.archived ? "Unarchive" : "Archive"}
-            </button>
-          </>
+            {menuOpen && (
+              <div className="chat-menu" data-testid="chat-menu">
+                <button
+                  type="button"
+                  disabled={act.busy}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    settings(
+                      { pinned: !conv.pinned },
+                      conv.pinned ? "Unpinned" : "Pinned",
+                    );
+                  }}
+                >
+                  {conv.pinned ? "Unpin" : "Pin"}
+                </button>
+                <button
+                  type="button"
+                  disabled={act.busy}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    settings(
+                      { muted: !conv.muted },
+                      conv.muted ? "Unmuted" : "Muted",
+                    );
+                  }}
+                >
+                  {conv.muted ? "Unmute" : "Mute"}
+                </button>
+                <button
+                  type="button"
+                  disabled={act.busy}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    settings(
+                      { archived: !conv.archived },
+                      conv.archived ? "Unarchived" : "Archived",
+                    );
+                  }}
+                >
+                  {conv.archived ? "Unarchive" : "Archive"}
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </div>
       <div
@@ -781,6 +808,7 @@ export function ConversationPane({
       >
         <label className="search">
           <span className="sr-only">Search this conversation</span>
+          <Icon name="search" />
           <input
             type="search"
             placeholder="Search"

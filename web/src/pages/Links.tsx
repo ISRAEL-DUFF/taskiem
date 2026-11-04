@@ -324,21 +324,6 @@ export function ChatPage() {
             </label>
           </div>
           <ErrorBox error={view.error ?? act.error ?? searchError} />
-          {manage && settings.data && !settings.data.asked_at && !searching && (
-            <FindableQuestion
-              settings={settings.data}
-              busy={act.busy}
-              answer={(findable) =>
-                void act.run(
-                  async () => (
-                    await put("/v1/link-settings", { findable }),
-                    settings.reload()
-                  ),
-                  findable ? "Other businesses can find you" : false,
-                )
-              }
-            />
-          )}
           {!searching && !archived && (
             <Items label="Your conversation with Taskiem">
               <Item
@@ -583,6 +568,21 @@ export function ChatPage() {
                 </section>
               )}
             </>
+          )}
+          {manage && settings.data && !settings.data.asked_at && !searching && (
+            <FindableQuestion
+              settings={settings.data}
+              busy={act.busy}
+              answer={(findable) =>
+                void act.run(
+                  async () => (
+                    await put("/v1/link-settings", { findable }),
+                    settings.reload()
+                  ),
+                  findable ? "Other businesses can find you" : false,
+                )
+              }
+            />
           )}
           {asking && (
             <RequestSheet

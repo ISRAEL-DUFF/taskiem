@@ -1749,7 +1749,13 @@ fieldset.path-set legend { font-size: 12.5px; font-weight: 600; padding: 0 4px; 
 .chat-mode .chat-stream { max-height: none; min-height: 0; }
 .chat-list-head { display: flex; align-items: center; gap: 8px; padding: 14px 14px 6px; flex-wrap: wrap; }
 .chat-list-head h2 { flex: 1; margin: 0; font-size: 20px; }
-.chat-mode .chat-list-pane .filters { padding: 0 14px; }
+.chat-mode .chat-list-pane > :not(.chat-list-head) { margin-left: 14px; margin-right: 14px; }
+.chat-mode .chat-list-pane { padding-bottom: 16px; }
+.chat-head h2 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
+.chat-menu-wrap { position: relative; flex: none; }
+.chat-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; min-width: 160px; display: flex; flex-direction: column; padding: 4px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-md); }
+.chat-menu button { text-align: left; justify-content: flex-start; background: none; border: 0; border-radius: 6px; padding: 10px 12px; min-height: 40px; }
+.chat-menu button:hover:not(:disabled), .chat-menu button:focus-visible { background: var(--chat-select); }
 @media (min-width: 900px) {
   .chat-mode .chat-layout { grid-template-columns: minmax(300px, 400px) minmax(0, 1fr); }
   .chat-mode .chat-list-pane { border-right: 1px solid var(--border); }

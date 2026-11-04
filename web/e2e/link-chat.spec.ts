@@ -98,6 +98,7 @@ test("two linked businesses talk", async ({ browser }) => {
   await pane.getByTestId("chat-search").fill("bags");
   await expect(pane.getByTestId("chat-message")).toHaveCount(1);
   await pane.getByTestId("chat-search").fill("");
+  await pane.getByRole("button", { name: "More about this conversation" }).click();
   await pane.getByRole("button", { name: "Archive" }).click();
   await pane.getByRole("button", { name: "Back to the chats" }).click();
   await expect(buyer.getByRole("button", { name: "Archived (1)" })).toBeVisible();
@@ -206,8 +207,12 @@ test("pin, the typing line, forward and delete for me", async ({ browser }) => {
   }).toPass({ timeout: 20_000 });
 
   // Pinned.
+  await pane.getByRole("button", { name: "More about this conversation" }).click();
   await pane.getByRole("button", { name: "Pin" }).click();
+  await pane.getByRole("button", { name: "More about this conversation" }).click();
   await expect(pane.getByRole("button", { name: "Unpin" })).toBeVisible();
+  await buyer.keyboard.press("Escape");
+  await expect(pane.getByTestId("chat-menu")).toHaveCount(0);
 
   // Held on a phone: the menu (reply, copy, forward, delete for me); a
   // finger that moves is not a hold.
