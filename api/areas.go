@@ -13,7 +13,9 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/areas"
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/schools"
+	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
 // Business areas (docs/spec/business-areas.md): which parts of Taskiem a
@@ -204,6 +206,19 @@ func (s *Server) putAreas(w http.ResponseWriter, r *http.Request) {
 		if _, err := areas.Save(ctx, tx, p.TenantID, before, after, p.Actor()); err != nil {
 			return err
 		}
+		// The public page follows the shop: closed while it is off, open
+		// again when it comes back (if the area was what closed it).
+		if before.On(areas.Storefront) != after.On(areas.Storefront) {
+			var err error
+			if after.On(areas.Storefront) {
+				err = storefront.ReopenForArea(ctx, tx, p.TenantID)
+			} else {
+				err = storefront.CloseForArea(ctx, tx, p.TenantID)
+			}
+			if err != nil {
+				return err
+			}
+		}
 		if before.On(areas.Schools) != after.On(areas.Schools) {
 			if _, err := schools.SetEnabled(ctx, tx, p.TenantID, after.On(areas.Schools), p.Actor()); err != nil {
 				return err
@@ -257,4 +272,40 @@ func schoolsNeedMoney(r *http.Request, tx pgx.Tx, p *Principal) error {
 		return err
 	}
 	return auditTx(r, tx, "settings.areas", p.TenantID.String(), map[string]any{"changes": map[string]bool{string(areas.Money): true}, "because": "schools"})
+}
+
+// chatAreas says which parts of Taskiem the business behind a chat uses,
+// read once for a message. A read that fails shows everything: the
+// handlers behind it still refuse what is off.
+func (s *Server) chatAreas(ctx context.Context, c *chat) areas.State {
+	if c.areaState != nil {
+		return c.areaState
+	}
+	st := areas.State{}
+	for _, a := range areas.All {
+		st[a] = true
+	}
+	if c.tenant.ID != uuid.Nil {
+		var loaded areas.State
+		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) (err error) {
+			loaded, err = areas.Load(ctx, tx, c.tenant.ID)
+			return err
+		}); err == nil {
+			st = loaded
+		}
+	}
+	c.areaState = st
+	return st
+}
+
+// chatIntentOn reports whether the part of Taskiem a command in the
+// person's language belongs to is on.
+func chatIntentOn(on areas.State, in lang.Intent) bool {
+	switch in {
+	case lang.IntentInvoice, lang.IntentExpense, lang.IntentCashIn, lang.IntentCashOut:
+		return on.On(areas.Money)
+	case lang.IntentSold, lang.IntentCount, lang.IntentStock, lang.IntentTakeOff, lang.IntentReceived:
+		return on.On(areas.Stock)
+	}
+	return true
 }

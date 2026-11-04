@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -167,5 +168,54 @@ func TestAreasWarnBeforeTurningOffWhatWorkflowsUse(t *testing.T) {
 	owner.must(200, "PUT", "/v1/settings/areas", map[string]any{"areas": map[string]bool{"stock": true}})
 	if got := runOnce(); strings.Contains(toJSON(got["events"]), off) {
 		t.Fatalf("with stock back on: %v", toJSON(got["events"]))
+	}
+}
+
+// TestAreasOtherDoors: with the shop off, its public page closes and its
+// chat words are not understood; back on, both return (a page the owner
+// closed stays closed).
+func TestAreasOtherDoors(t *testing.T) {
+	w := shopWorld(t)
+	owner := w.tenant(t, "Ada's Kitchen", "ada@ada.test")
+	verifyPhone(t, w.world, owner, "phone", "business")
+	const on = "+2348010000049"
+	w.bind(t, owner, on)
+	owner.must(200, "PUT", "/v1/storefront", map[string]any{"slug": "ada-kitchen", "draft": map[string]any{"name": "Ada's Kitchen"}})
+	owner.must(200, "POST", "/v1/storefront/publish", nil)
+	page := func() (string, string) {
+		var status, msg string
+		if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT status, COALESCE(closed_message, '') FROM storefronts WHERE slug = 'ada-kitchen'`).Scan(&status, &msg); err != nil {
+			t.Fatal(err)
+		}
+		return status, msg
+	}
+	if r := w.say(t, on, "fronts"); !strings.Contains(r, "Your fronts:") {
+		t.Fatalf("fronts with the shop on: %q", r)
+	}
+
+	// The shop off: the page closes, and "fronts" is no longer a command.
+	owner.must(200, "PUT", "/v1/settings/areas", map[string]any{"areas": map[string]bool{"storefront": false, "orders": false}})
+	if st, msg := page(); st != "closed" || !strings.Contains(msg, "not taking orders") {
+		t.Errorf("page with the shop off: %s %q", st, msg)
+	}
+	if r := w.say(t, on, "fronts"); strings.Contains(r, "Your fronts:") || strings.Contains(r, "no page yet") {
+		t.Errorf("fronts with the shop off: %q", r)
+	}
+
+	// Back on: the page opens again, and the words work.
+	owner.must(200, "PUT", "/v1/settings/areas", map[string]any{"areas": map[string]bool{"storefront": true}})
+	if st, _ := page(); st != "published" {
+		t.Errorf("page with the shop back on: %s", st)
+	}
+	if r := w.say(t, on, "fronts"); !strings.Contains(r, "Your fronts:") {
+		t.Errorf("fronts with the shop back on: %q", r)
+	}
+
+	// A page its owner closed stays closed through off and on.
+	owner.must(200, "POST", "/v1/storefront/close", map[string]any{"message": "Back Monday"})
+	owner.must(200, "PUT", "/v1/settings/areas", map[string]any{"areas": map[string]bool{"storefront": false, "orders": false}})
+	owner.must(200, "PUT", "/v1/settings/areas", map[string]any{"areas": map[string]bool{"storefront": true}})
+	if st, msg := page(); st != "closed" || msg != "Back Monday" {
+		t.Errorf("page after the owner's own close and an off-on: %s %q", st, msg)
 	}
 }
