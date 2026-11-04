@@ -1098,6 +1098,13 @@ export function ConversationPane({
         e.preventDefault();
         setDragging(false);
         choose(e.dataTransfer.files[0]);
+        // One file goes at a time, with its caption: say so.
+        if (e.dataTransfer.files.length > 1)
+          setFileError(
+            new Error(
+              "Only one file can be sent at a time: the first was taken. Send the others after it.",
+            ),
+          );
       }}
     >
       <div className="chat-head">
@@ -1290,7 +1297,13 @@ export function ConversationPane({
       {write ? (
         <>
           {reply && (
-            <div className="composer-reply" data-testid="chat-replying">
+            <div
+              className="composer-reply"
+              data-testid="chat-replying"
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setReply(undefined);
+              }}
+            >
               <span className="quote">
                 Replying to {previewLine(reply, conv.name)}
               </span>
@@ -1320,7 +1333,7 @@ export function ConversationPane({
           <input
             ref={snap}
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/png,image/webp"
             capture="environment"
             hidden
             onChange={(e) => {
@@ -1394,6 +1407,18 @@ export function ConversationPane({
                   }
                 }}
               />
+              {!text.trim() && !file && (
+                <button
+                  type="button"
+                  className="icon-button camera-quick"
+                  aria-label="Take a photo"
+                  title="Take a photo"
+                  data-testid="camera-quick"
+                  onClick={() => attach("camera")}
+                >
+                  <Icon name="camera" />
+                </button>
+              )}
               {!text.trim() && !file && voice.can ? (
                 <MicButton
                   voice={voice}

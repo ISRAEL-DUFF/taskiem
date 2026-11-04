@@ -24,12 +24,18 @@ async function signUp(page: Page, tenant: string) {
 }
 
 /** Two linked businesses; Ada (the buyer) is the page under test. */
-async function linked(browser: Browser) {
+async function linked(
+  browser: Browser,
+  ctxOptions: Parameters<Browser["newContext"]>[0] = {},
+) {
   const stamp = letters();
   const seller = await (await browser.newContext()).newPage();
   await signUp(seller, `Dangote Depot ${stamp}`);
   const buyer = await (
-    await browser.newContext({ viewport: { width: 390, height: 844 } })
+    await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      ...ctxOptions,
+    })
   ).newPage();
   await signUp(buyer, `Ada Kitchen ${stamp}`);
   await seller.request.put("/v1/link-settings", {
@@ -754,6 +760,122 @@ test("the emoji panel works from the keyboard, and the hands take a skin tone", 
   // The flags are there too.
   await panel.getByLabel("Search emoji").fill("nigeria");
   await expect(panel.getByRole("button", { name: "Nigeria" })).toHaveText("🇳🇬");
+});
+
+test("the attach menu works from the keyboard, and Esc gives up a waiting file or a reply from where focus is", async ({
+  browser,
+}) => {
+  const { seller, buyer, link } = await linked(browser);
+  await seller.request.post(`/v1/link-chats/${link}/messages`, {
+    headers: H,
+    data: { text: "Rice is back" },
+  });
+  await buyer.goto(`/chat?with=${link}`);
+  const pane = buyer.getByTestId("chat-pane");
+  const focused = () =>
+    buyer.evaluate(
+      () =>
+        document.activeElement?.textContent?.trim() ||
+        document.activeElement?.getAttribute("aria-label"),
+    );
+  // The clip: Enter opens, focus is on Photo, the arrows move, Esc closes and gives focus back.
+  await pane.getByTestId("attach").focus();
+  await buyer.keyboard.press("Enter");
+  await expect(pane.getByTestId("attach-menu")).toBeVisible();
+  expect(await focused()).toBe("Photo");
+  await buyer.keyboard.press("ArrowDown");
+  expect(await focused()).toBe("Document");
+  await buyer.keyboard.press("ArrowUp");
+  await buyer.keyboard.press("ArrowUp");
+  expect(await focused()).toBe("Camera"); // round the end
+  await buyer.keyboard.press("Escape");
+  await expect(pane.getByTestId("attach-menu")).toHaveCount(0);
+  expect(await focused()).toBe("Attach");
+
+  // A waiting file: Esc from its Remove button gives it up.
+  await pane
+    .getByTestId("chat-file")
+    .setInputFiles({ name: "bags.png", mimeType: "image/png", buffer: PNG });
+  await expect(pane.getByTestId("chat-attaching")).toBeVisible();
+  await pane
+    .getByTestId("chat-attaching")
+    .getByRole("button", { name: "Remove" })
+    .focus();
+  await buyer.keyboard.press("Escape");
+  await expect(pane.getByTestId("chat-attaching")).toHaveCount(0);
+
+  // A reply: Esc from its Cancel button gives it up.
+  await pane
+    .getByTestId("chat-message")
+    .first()
+    .getByRole("button", { name: /^More/ })
+    .click();
+  await pane
+    .getByTestId("chat-more")
+    .getByRole("button", { name: "Reply" })
+    .click();
+  await expect(pane.getByTestId("chat-replying")).toBeVisible();
+  await pane
+    .getByTestId("chat-replying")
+    .getByRole("button", { name: /Cancel/ })
+    .focus();
+  await buyer.keyboard.press("Escape");
+  await expect(pane.getByTestId("chat-replying")).toHaveCount(0);
+});
+
+test("more than one file dropped: the first is taken, and it says so", async ({
+  browser,
+}) => {
+  const { buyer, link } = await linked(browser);
+  await buyer.goto(`/chat?with=${link}`);
+  const pane = buyer.getByTestId("chat-pane");
+  await pane.evaluate((el, b64) => {
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    const dt = new DataTransfer();
+    dt.items.add(new File([bytes], "one.png", { type: "image/png" }));
+    dt.items.add(new File([bytes], "two.png", { type: "image/png" }));
+    el.dispatchEvent(
+      new DragEvent("dragenter", {
+        dataTransfer: dt,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    el.dispatchEvent(
+      new DragEvent("drop", {
+        dataTransfer: dt,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  }, PNG.toString("base64"));
+  await expect(pane.getByTestId("chat-attaching")).toContainText("one.png");
+  await expect(
+    pane.getByText(/Only one file can be sent at a time/),
+  ).toBeVisible();
+});
+
+test("on a phone the camera sits beside the microphone; on a computer it is in the clip's menu", async ({
+  browser,
+}) => {
+  const phone = await linked(browser, { hasTouch: true, isMobile: true });
+  await phone.buyer.goto(`/chat?with=${phone.link}`);
+  const quick = phone.buyer
+    .getByTestId("chat-pane")
+    .getByTestId("camera-quick");
+  await expect(quick).toBeVisible();
+  const chooser = phone.buyer.waitForEvent("filechooser");
+  await quick.click();
+  await chooser; // the camera app, through the file input
+  // It goes once words are typed (the Send button takes over).
+  await phone.buyer.getByTestId("chat-pane").getByLabel("Message").fill("hi");
+  await expect(quick).toBeHidden();
+
+  const computer = await linked(browser);
+  await computer.buyer.goto(`/chat?with=${computer.link}`);
+  await expect(
+    computer.buyer.getByTestId("chat-pane").getByTestId("camera-quick"),
+  ).toBeHidden();
 });
 
 declare global {

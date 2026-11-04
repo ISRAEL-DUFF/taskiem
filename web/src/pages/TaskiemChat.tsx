@@ -244,6 +244,12 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
         e.preventDefault();
         setDragging(false);
         choose(e.dataTransfer.files[0]);
+        if (e.dataTransfer.files.length > 1)
+          setFileError(
+            new Error(
+              "Only one photo can be sent at a time: the first was taken. Send the others after it.",
+            ),
+          );
       }}
     >
       {dragging && (

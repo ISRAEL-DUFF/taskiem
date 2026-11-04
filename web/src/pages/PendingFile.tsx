@@ -32,7 +32,13 @@ export function PendingFile({
   const voice = file.type.startsWith("audio/");
   const photo = file.type.startsWith("image/");
   return (
-    <div className="pending-file" data-testid={testid}>
+    <div
+      className="pending-file"
+      data-testid={testid}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onRemove();
+      }}
+    >
       {photo && src && (
         <img
           src={src}

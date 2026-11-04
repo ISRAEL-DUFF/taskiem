@@ -1,4 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyEvent,
+} from "react";
 import { Icon } from "../icons";
 
 /**
@@ -12,9 +17,22 @@ export function AttachMenu({
 }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLSpanElement>(null);
+  const clip = useRef<HTMLButtonElement>(null);
+  const items = () =>
+    Array.from(
+      box.current?.querySelectorAll<HTMLButtonElement>(".attach-menu button") ??
+        [],
+    );
+  // Opened by the keyboard or a click, focus goes to its first item; Esc
+  // closes it and gives focus back to the clip.
   useEffect(() => {
     if (!open) return;
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    items()[0]?.focus();
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setOpen(false);
+      clip.current?.focus();
+    };
     const away = (e: MouseEvent) =>
       !box.current?.contains(e.target as Node) && setOpen(false);
     document.addEventListener("keydown", esc);
@@ -28,9 +46,18 @@ export function AttachMenu({
     setOpen(false);
     onChoose(what);
   };
+  const arrows = (e: ReactKeyEvent) => {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    e.preventDefault();
+    const list = items();
+    const here = list.findIndex((b) => b === document.activeElement);
+    const step = e.key === "ArrowDown" ? 1 : list.length - 1;
+    list[(here + step) % list.length]?.focus();
+  };
   return (
     <span className="attach-wrap" ref={box}>
       <button
+        ref={clip}
         type="button"
         className="icon-button"
         aria-label="Attach"
@@ -48,6 +75,7 @@ export function AttachMenu({
           data-testid="attach-menu"
           role="group"
           aria-label="Attach"
+          onKeyDown={arrows}
         >
           <button type="button" onClick={() => choose("photo")}>
             <Icon name="image" />

@@ -1903,3 +1903,8 @@ button.chat-avatar { border: 0; padding: 0; cursor: pointer; }
 .emoji-tone { width: 32px; height: 30px; min-height: 30px; padding: 0; border: 0; background: none; border-radius: 8px; font-size: 16px; opacity: .75; }
 .emoji-tone[aria-pressed="true"] { background: var(--chat-select); opacity: 1; box-shadow: inset 0 0 0 2px var(--accent); }
 .emoji:focus-visible, .emoji-tab:focus-visible, .emoji-tone:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* The camera beside the microphone, as on a phone (WhatsApp's): where the
+   screen is touched; a computer has the clip's menu. */
+.camera-quick { display: none; }
+@media (pointer: coarse) { .camera-quick { display: grid; } }
