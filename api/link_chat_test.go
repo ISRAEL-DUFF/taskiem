@@ -3,6 +3,7 @@ package api_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -199,5 +200,166 @@ func TestLinkConversation(t *testing.T) {
 	buyer.must(409, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "hello?"})
 	if c := buyer.must(200, "GET", "/v1/link-chats", nil)["conversations"].([]any); len(c) != 1 || c[0].(map[string]any)["state"] != "ended" {
 		t.Errorf("ended: %v", c)
+	}
+}
+
+// A conversation is shown around one message (a quote, a search result):
+// that message and those either side of it, oldest first; a message that
+// is not in this conversation is not found.
+func TestLinkMessagesAround(t *testing.T) {
+	w := newWAWorld(t)
+	seller, buyer, _, _ := linkedPair(t, w)
+	link := buyer.must(200, "GET", "/v1/link-chats", nil)["conversations"].([]any)[0].(map[string]any)["link"].(string)
+	var ids []string
+	for _, text := range []string{"one", "two", "three", "four", "five", "six", "seven"} {
+		m := seller.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": text})["message"].(map[string]any)
+		ids = append(ids, m["id"].(string))
+	}
+	bodies := func(out map[string]any) []string {
+		var got []string
+		for _, m := range out["messages"].([]any) {
+			got = append(got, m.(map[string]any)["body"].(string))
+		}
+		return got
+	}
+	// Centred on "four" with room for four: two older, it, and two newer
+	// (limit 4: half 2, so "two", "three", "four", "five", "six").
+	got := bodies(buyer.must(200, "GET", "/v1/link-chats/"+link+"/messages?around="+ids[3]+"&limit=4", nil))
+	if want := "two three four five six"; strings.Join(got, " ") != want {
+		t.Errorf("around four: %v, want %s", got, want)
+	}
+	// Near the start: nothing older to show.
+	got = bodies(buyer.must(200, "GET", "/v1/link-chats/"+link+"/messages?around="+ids[0]+"&limit=4", nil))
+	if want := "one two three"; strings.Join(got, " ") != want {
+		t.Errorf("around one: %v, want %s", got, want)
+	}
+	// The seller's own copy has the same message by the same id.
+	got = bodies(seller.must(200, "GET", "/v1/link-chats/"+link+"/messages?around="+ids[6]+"&limit=4", nil))
+	if want := "five six seven"; strings.Join(got, " ") != want {
+		t.Errorf("seller around seven: %v, want %s", got, want)
+	}
+	// Following: what is newer than a message, oldest first, a page at a
+	// time, so a reader away for longer than a page misses none of it.
+	var times []string
+	for _, m := range buyer.must(200, "GET", "/v1/link-chats/"+link+"/messages", nil)["messages"].([]any) {
+		times = append(times, m.(map[string]any)["created_at"].(string))
+	}
+	got = bodies(buyer.must(200, "GET", "/v1/link-chats/"+link+"/messages?after="+times[1]+"&limit=2", nil))
+	if want := "three four"; strings.Join(got, " ") != want {
+		t.Errorf("after two, two at a time: %v, want %s", got, want)
+	}
+	// Not a message here, and not an id.
+	buyer.must(404, "GET", "/v1/link-chats/"+link+"/messages?around=0192e2e0-0000-7000-8000-000000000999", nil)
+	buyer.must(400, "GET", "/v1/link-chats/"+link+"/messages?around=nope", nil)
+}
+
+// A send repeated with the same client id (the chat's Retry after a dropped
+// connection) is the same message: answered with the first, never sent
+// again: one message in each conversation, one told to the phone, and, for
+// a file, one copy stored on each side.
+func TestLinkSendClientID(t *testing.T) {
+	w := newWAWorld(t)
+	store := newProjectStorage(t)
+	w.srv.Media = store.service()
+	w.srv.Media.Scanner = chatScanner{}
+	seller, buyer, sellerID, buyerID := linkedPair(t, w)
+	const buyerOn = "+2348010000394"
+	w.bind(t, buyer, buyerOn)
+	w.say(t, buyerOn, "links")
+	link := buyer.must(200, "GET", "/v1/link-chats", nil)["conversations"].([]any)[0].(map[string]any)["link"].(string)
+	count := func(c *client) int {
+		return len(c.must(200, "GET", "/v1/link-chats/"+link+"/messages", nil)["messages"].([]any))
+	}
+
+	const id = "0192e2e0-0000-7000-8000-0000000000a1"
+	before := len(w.graph.Sent(buyerOn))
+	first := seller.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Ten bags", "client_id": id})["message"].(map[string]any)
+	again := seller.must(200, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Ten bags", "client_id": id})["message"].(map[string]any)
+	if again["id"] != first["id"] {
+		t.Fatalf("the repeat is the same message: %v then %v", first["id"], again["id"])
+	}
+	if a, b := count(seller), count(buyer); a != 1 || b != 1 {
+		t.Fatalf("one message each side: seller %d, buyer %d", a, b)
+	}
+	if told := w.lastTo(t, buyerOn, before); len(told) != 1 {
+		t.Errorf("the phone is told once: %+v", told)
+	}
+	// Another id is another message; no id, as before.
+	seller.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Ten bags", "client_id": "0192e2e0-0000-7000-8000-0000000000a2"})
+	seller.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Ten bags"})
+	if a := count(seller); a != 3 {
+		t.Errorf("three messages: %d", a)
+	}
+	// Not an id.
+	seller.must(400, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "x", "client_id": "nope"})
+
+	// A file: one copy stored each side however many times it is sent.
+	const fid = "0192e2e0-0000-7000-8000-0000000000b1"
+	fields := map[string]string{"text": "The new bags", "client_id": fid}
+	code, out := seller.sendFile(t, link, "bags.jpg", photo(t), fields)
+	if code != 201 {
+		t.Fatalf("file: %d %v", code, out)
+	}
+	code, again2 := seller.sendFile(t, link, "bags.jpg", photo(t), fields)
+	if code != 200 || again2["message"].(map[string]any)["id"] != out["message"].(map[string]any)["id"] {
+		t.Fatalf("the file repeated: %d %v", code, again2)
+	}
+	if s, b := store.in("prj_"+sellerID), store.in("prj_"+buyerID); len(s) != 1 || len(b) != 1 {
+		t.Errorf("one copy each side: seller %v, buyer %v", s, b)
+	}
+	if a, b := count(seller), count(buyer); a != 4 || b != 4 {
+		t.Errorf("four messages each: seller %d, buyer %d", a, b)
+	}
+	// (Checked again below, after the refusals: they sent nothing.)
+	// An id reused for other words is refused, not answered with the wrong
+	// message; and a repeat of a send whose message was since deleted for
+	// this side is a conflict in plain words, not an error.
+	if out := seller.must(409, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Twenty bags", "client_id": id}); !strings.Contains(out["error"].(string), "different message") {
+		t.Errorf("another message under the same id: %v", out)
+	}
+	const hid = "0192e2e0-0000-7000-8000-0000000000c1"
+	gone := seller.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Delete me", "client_id": hid})["message"].(map[string]any)
+	seller.must(204, "POST", "/v1/link-chats/"+link+"/messages/"+gone["id"].(string)+"/hide", nil)
+	if out := seller.must(409, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Delete me", "client_id": hid}); !strings.Contains(out["error"].(string), "already sent") {
+		t.Errorf("a repeat of a message deleted for this side: %v", out)
+	}
+	if code, out := seller.sendFile(t, link, "bags.jpg", photo(t), map[string]string{"text": "Other words", "client_id": fid}); code != 409 || !strings.Contains(out["error"].(string), "different message") {
+		t.Errorf("a file under the same id with other words: %d %v", code, out)
+	}
+	// The buyer cannot use the seller's id to learn of the message: its own
+	// client ids are its own.
+	buyer.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Thanks", "client_id": id})
+	// (The seller's deleted copy is not shown to it, the buyer's is kept; "Thanks" is in both.)
+	if a, b := count(seller), count(buyer); a != 5 || b != 6 {
+		t.Errorf("the refusals sent nothing, the buyer's id is its own: seller %d, buyer %d", a, b)
+	}
+}
+
+// A repeat of a send (the chat's Retry) is answered however fast the person
+// has been sending: only new sends are paced.
+func TestLinkReplayIsNotPaced(t *testing.T) {
+	w := newWAWorld(t)
+	seller, buyer, _, _ := linkedPair(t, w)
+	link := buyer.must(200, "GET", "/v1/link-chats", nil)["conversations"].([]any)[0].(map[string]any)["link"].(string)
+	id := func(n int) string { return fmt.Sprintf("0192e2e0-0000-7000-8000-%012d", n) }
+	// The burst: twenty sends, then the person is told to slow down.
+	for n := 1; n <= 20; n++ {
+		seller.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": fmt.Sprintf("Message %d", n), "client_id": id(n)})
+	}
+	if code, out := seller.do("POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "One too many", "client_id": id(21)}); code != 429 {
+		t.Fatalf("the twenty-first send: %d %v", code, out)
+	}
+	// A repeat of one already sent is answered, not paced.
+	again := seller.must(200, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Message 3", "client_id": id(3)})["message"].(map[string]any)
+	if again["body"] != "Message 3" {
+		t.Errorf("the repeat: %v", again)
+	}
+	// The same id for other words is refused as that, not as too fast.
+	if code, out := seller.do("POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Other words", "client_id": id(3)}); code != 409 {
+		t.Errorf("other words under a used id: %d %v", code, out)
+	}
+	// And still only twenty messages exist.
+	if n := len(buyer.must(200, "GET", "/v1/link-chats/"+link+"/messages?limit=200", nil)["messages"].([]any)); n != 20 {
+		t.Errorf("messages: %d", n)
 	}
 }

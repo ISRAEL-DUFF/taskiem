@@ -153,6 +153,7 @@ channel_languages.source
 channel_languages.updated_at
 chat_history.expires_at
 chat_history.id
+chat_live_buttons.expires_at
 chat_invites.address
 chat_invites.answered_at
 chat_invites.channel

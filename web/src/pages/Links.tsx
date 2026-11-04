@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Link,
   useNavigate,
@@ -37,11 +37,22 @@ import {
 } from "../lib/linkchat";
 import { ConversationPane } from "./Conversation";
 import { TaskiemPane } from "./TaskiemChat";
+import { ChatRow } from "./ChatRow";
+import { useChatLive } from "./ChatLive";
+import { useDrafts } from "../lib/drafts";
+import { useTaskiemUnread } from "../lib/taskiemSeen";
+import {
+  isTyping,
+  KEYS_EVENT,
+  shortcutOf,
+  SHORTCUTS,
+  step,
+} from "../lib/chatKeys";
+import { Ticks } from "./BubbleShell";
 import {
   EmptyState,
   ErrorBox,
   fmtTime,
-  Item,
   Items,
   Modal,
   PageHeader,
@@ -231,19 +242,48 @@ export function ChatPage() {
   // The list follows the conversations every few seconds while the page
   // is seen (the typing line, the unread counts, the last message), as
   // the open conversation follows itself; 30 s otherwise (useLiveRefresh).
+  const live = useChatLive();
+  const connected = live.connected;
   useEffect(() => {
     const t = setInterval(
       () => document.visibilityState === "visible" && reloadConvs(),
-      5_000,
+      connected ? 20_000 : 5_000,
     );
     return () => clearInterval(t);
-  }, [reloadConvs]);
+  }, [reloadConvs, connected]);
+  // The stream says when a conversation changed: the list follows at once.
+  useEffect(() => {
+    let soon: number | undefined;
+    const off = live.subscribe(() => {
+      window.clearTimeout(soon);
+      soon = window.setTimeout(reloadConvs, 300);
+    });
+    return () => {
+      off();
+      window.clearTimeout(soon);
+    };
+  }, [live, reloadConvs]);
   // A link accepted or ended here changes the chats too.
   const linksSeen = view.data;
   useEffect(() => {
     if (linksSeen) reloadConvs();
   }, [linksSeen, reloadConvs]);
-  const [archived, setArchived] = useState(false);
+  const [filter, setFilter] = useState<
+    "all" | "unread" | "starred" | "archived"
+  >("all");
+  // The messages this person starred, when that view is chosen (again: a
+  // star may have changed since).
+  const [starTick, setStarTick] = useState(0);
+  const starredMsgs = useLoad(
+    () =>
+      filter === "starred"
+        ? get<{ messages: LinkMessage[] }>("/v1/link-chats/starred").then(
+            (r) => r.messages,
+          )
+        : Promise.resolve([] as LinkMessage[]),
+    [filter, starTick],
+  );
+  const archived = filter === "archived";
   const [foundMessages, setFoundMessages] = useState<LinkMessage[]>();
   const settings = useLoad(() => get<LinkSettings>("/v1/link-settings"), []);
   const [q, setQ] = useState("");
@@ -280,11 +320,110 @@ export function ChatPage() {
   const g = groupLinks(view.data);
   const searching = query.length >= 2;
   const all = convs.data?.conversations ?? [];
+  const drafts = useDrafts();
+  const taskiemUnread = useTaskiemUnread();
   const openID = params.get("with");
   const open = all.find((c) => c.link === openID);
   // The person's own conversation with Taskiem, pinned at the top (§5.5).
   const taskiemOpen = openID === "taskiem";
-  const listed = all.filter((c) => c.archived === archived);
+  const unreadCount = all.filter((c) => !c.archived && c.unread > 0).length;
+  const archivedCount = all.filter((c) => c.archived).length;
+  const listed = all.filter(
+    (c) => c.archived === archived && (filter !== "unread" || c.unread > 0),
+  );
+  // The keyboard (a desktop reader's hands): shortcuts that are off while a
+  // field has the focus, arrows through the list, and Esc, which closes the
+  // chat after whatever panel is open has closed.
+  const searchBox = useRef<HTMLInputElement>(null);
+  const [keysOpen, setKeysOpen] = useState(false);
+  const [hint, setHint] = useState("");
+  const order = ["taskiem", ...listed.map((c) => c.link)];
+  const keys = useRef({ order, openID: openID ?? undefined, setParams });
+  keys.current = { order, openID: openID ?? undefined, setParams };
+  useEffect(() => {
+    const focusSearch = () =>
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          searchBox.current?.focus();
+          searchBox.current?.select();
+        }),
+      );
+    const onKey = (e: KeyboardEvent) => {
+      const k = keys.current;
+      if (e.key === "Escape") {
+        // The panel, the menu, the sheet or the reply is closed first, by
+        // whatever owns it (it says so by taking the key).
+        if (e.defaultPrevented || !k.openID) return;
+        if (
+          document.querySelector(
+            '[data-testid="chat-more"], [data-testid="chat-recording"], .chat-menu, .attach-menu, .chat-info, .modal, .mention-list, .emoji-panel',
+          )
+        )
+          return;
+        if (e.target === searchBox.current) return;
+        const id = k.openID;
+        k.setParams({});
+        requestAnimationFrame(() =>
+          document
+            .querySelector<HTMLElement>(`.chat-list-pane a[href$="with=${id}"]`)
+            ?.focus(),
+        );
+        return;
+      }
+      // Not under an open menu, sheet or panel: the letters are theirs.
+      const covered = !!document.querySelector(
+        '[data-testid="chat-more"], [data-testid="chat-recording"], .chat-menu, .attach-menu, .chat-info, .modal, .mention-list, .emoji-panel',
+      );
+      const what = shortcutOf(e, covered || isTyping(document.activeElement));
+      if (!what || e.defaultPrevented) return;
+      e.preventDefault();
+      if (what === "help") setKeysOpen(true);
+      else if (what === "search" || what === "new") {
+        if (what === "new")
+          setHint(
+            "Type the business's name or phone number, then choose Request link.",
+          );
+        k.setParams({});
+        focusSearch();
+      } else {
+        const to = step(k.order, k.openID, what === "next" ? 1 : -1);
+        if (to) k.setParams({ with: to });
+      }
+    };
+    const showKeys = () => setKeysOpen(true);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener(KEYS_EVENT, showKeys);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener(KEYS_EVENT, showKeys);
+    };
+  }, []);
+  // Arrows in the list: down from the search box to the first chat, then
+  // chat to chat; up from the first back to the box. Enter opens (a link).
+  const onListKey = (e: React.KeyboardEvent) => {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    const box = searchBox.current;
+    // Everything that can be pressed below the search box and the chips: the
+    // chats, and the results, requests and asks the lists hold.
+    const rows = Array.from(
+      e.currentTarget.querySelectorAll<HTMLElement>(
+        ":is(section, ul.chat-rows) :is(a[href], button:not(:disabled))",
+      ),
+    ).filter((x) => !x.closest(".chat-chips, .chat-list-head, .card"));
+    const at = rows.indexOf(e.target as HTMLElement);
+    if (at < 0 && e.target !== box) return;
+    const next =
+      e.target === box
+        ? e.key === "ArrowDown"
+          ? rows[0]
+          : undefined
+        : e.key === "ArrowDown"
+          ? rows[at + 1]
+          : (rows[at - 1] ?? box ?? undefined);
+    if (!next) return;
+    e.preventDefault();
+    next.focus();
+  };
   const nameOf = (link: string) =>
     all.find((c) => c.link === link)?.name ?? "They";
   const roleOf = (link: string) => {
@@ -298,92 +437,158 @@ export function ChatPage() {
   );
   return (
     <>
-      <PageHeader
-        title="Chat"
-        description="The businesses on Taskiem you trade with. Find another by its name, what it sells or its area, and ask to link."
-        actions={
-          <Link className="button" to="/settings/links">
-            Linked businesses
-          </Link>
-        }
-      />
+      <h1 className="sr-only">Chat</h1>
       <div className={`chat-layout${open || taskiemOpen ? " open" : ""}`}>
-        <div className="chat-list-pane">
+        <div className="chat-list-pane" onKeyDown={onListKey}>
+          <div className="chat-list-head">
+            <h2>Chat</h2>
+            <Link className="button small" to="/home">
+              Home
+            </Link>
+            <Link className="button small" to="/settings/links">
+              Linked businesses
+            </Link>
+            <button
+              type="button"
+              className="button small kbd-only"
+              onClick={() => setKeysOpen(true)}
+            >
+              Keyboard
+            </button>
+          </div>
           <div className="filters" role="search" aria-label="Find a business">
             <label className="search">
               <span className="sr-only">Find a business</span>
               <Icon name="search" />
               <input
                 type="search"
+                ref={searchBox}
                 placeholder="Cement, catering in Ikeja, Dangote…"
                 value={q}
-                onChange={(e) => setQ(e.target.value)}
+                onChange={(e) => (setQ(e.target.value), setHint(""))}
+                onKeyDown={(e) => {
+                  // Esc empties the box; with it empty, the key goes on.
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    if (q) {
+                      setQ("");
+                      setHint("");
+                    } else e.currentTarget.blur();
+                  }
+                }}
                 data-testid="link-search"
               />
             </label>
           </div>
-          <ErrorBox error={view.error ?? act.error ?? searchError} />
-          {manage && settings.data && !settings.data.asked_at && !searching && (
-            <FindableQuestion
-              settings={settings.data}
-              busy={act.busy}
-              answer={(findable) =>
-                void act.run(
-                  async () => (
-                    await put("/v1/link-settings", { findable }),
-                    settings.reload()
-                  ),
-                  findable ? "Other businesses can find you" : false,
-                )
-              }
-            />
+          <p className="sr-only" role="status">
+            {hint}
+          </p>
+          {!searching && all.length > 0 && (
+            <div className="chat-chips" role="group" aria-label="Show">
+              {(
+                [
+                  ["all", "All"],
+                  [
+                    "unread",
+                    unreadCount ? `Unread (${unreadCount})` : "Unread",
+                  ],
+                  ["starred", "Starred"],
+                  ["archived", `Archived (${archivedCount})`],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  className="chat-chip"
+                  aria-pressed={filter === key}
+                  onClick={() => {
+                    setFilter(key);
+                    if (key === "starred") setStarTick((n) => n + 1);
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           )}
-          {!searching && !archived && (
-            <Items label="Your conversation with Taskiem">
-              <Item
+          <ErrorBox error={view.error ?? act.error ?? searchError} />
+          {!searching && !archived && filter !== "starred" && (
+            <ul
+              className="chat-rows"
+              aria-label="Your conversation with Taskiem"
+            >
+              <ChatRow
                 to="/chat?with=taskiem"
-                icon="sparkle"
+                letter="T"
+                accent
                 title="Taskiem"
-                sub="Your own conversation with Taskiem, as on your phone"
+                preview={
+                  drafts.taskiem ? (
+                    <>
+                      <span className="draft">Draft:</span> {drafts.taskiem}
+                    </>
+                  ) : (
+                    "Your own conversation with Taskiem, as on your phone"
+                  )
+                }
+                selected={taskiemOpen}
+                unread={taskiemUnread}
                 testid="taskiem-chat"
               />
-            </Items>
+            </ul>
           )}
           {searching ? (
             <section aria-label="Search results" data-testid="link-results">
               {chats.length > 0 && (
                 <>
                   <h2>Chats</h2>
-                  <Items label="Linked businesses found">
-                    {chats.map((l) => (
-                      <Row
-                        key={l.id}
-                        letter={l.name}
-                        title={l.name}
-                        side={<StateBadge state={l.state} />}
-                        sub={<span className="sub">{roleLine(l.role)}</span>}
-                        testid="link-chat"
-                      />
-                    ))}
-                  </Items>
+                  <ul
+                    className="chat-rows"
+                    aria-label="Linked businesses found"
+                  >
+                    {chats.map((l) => {
+                      const conv = all.find((c) => c.business === l.business);
+                      return conv ? (
+                        <ChatRow
+                          key={l.id}
+                          to={`/chat?with=${conv.link}`}
+                          letter={l.name}
+                          title={l.name}
+                          preview={roleLine(l.role)}
+                          unread={conv.unread}
+                          selected={openID === conv.link}
+                          testid="link-chat"
+                        />
+                      ) : (
+                        <Row
+                          key={l.id}
+                          letter={l.name}
+                          title={l.name}
+                          side={<StateBadge state={l.state} />}
+                          sub={<span className="sub">{roleLine(l.role)}</span>}
+                          testid="link-chat"
+                        />
+                      );
+                    })}
+                  </ul>
                 </>
               )}
               {(foundMessages?.length ?? 0) > 0 && (
                 <>
                   <h2>Messages</h2>
-                  <Items label="Messages found">
+                  <ul className="chat-rows" aria-label="Messages found">
                     {foundMessages?.map((m) => (
-                      <Item
+                      <ChatRow
                         key={m.id}
-                        to={`/chat?with=${m.link}`}
-                        icon="chat"
+                        to={`/chat?with=${m.link}&msg=${m.id}`}
+                        letter={nameOf(m.link)}
                         title={nameOf(m.link)}
-                        sub={previewLine(m, nameOf(m.link))}
-                        side={listTime(m.created_at)}
+                        time={listTime(m.created_at)}
+                        preview={previewLine(m, nameOf(m.link))}
                         testid="chat-found-message"
                       />
                     ))}
-                  </Items>
+                  </ul>
                 </>
               )}
               <h2>Businesses on Taskiem</h2>
@@ -392,7 +597,9 @@ export function ChatPage() {
                   <Row
                     icon="chat"
                     title={`Send a link request to ${blind.shown}`}
-                    sub={<span className="sub">{blindRowLine(blind.kind)}</span>}
+                    sub={
+                      <span className="sub">{blindRowLine(blind.kind)}</span>
+                    }
                     testid="link-blind"
                   >
                     {manage && (
@@ -415,7 +622,10 @@ export function ChatPage() {
               ) : (
                 <Items label="Businesses on Taskiem">
                   {others.map((c) => {
-                    const pending = requestTo(view.data?.links ?? [], c.business);
+                    const pending = requestTo(
+                      view.data?.links ?? [],
+                      c.business,
+                    );
                     return (
                       <FoundRow
                         key={c.business}
@@ -488,60 +698,97 @@ export function ChatPage() {
                   </Items>
                 </section>
               )}
-              {all.length > 0 && (
+              {filter === "starred" && (
+                <section aria-label="Starred messages">
+                  <h2>Starred messages</h2>
+                  {!starredMsgs.data ? (
+                    <Skeleton rows={2} label="Loading your starred messages…" />
+                  ) : starredMsgs.data.length === 0 ? (
+                    <p className="hint">
+                      Nothing starred yet. Open a message’s menu and choose Star
+                      to keep it here.
+                    </p>
+                  ) : (
+                    <ul className="chat-rows" aria-label="Starred messages">
+                      {starredMsgs.data.map((m) => (
+                        <ChatRow
+                          key={m.id}
+                          to={`/chat?with=${m.link}&msg=${m.id}`}
+                          letter={nameOf(m.link)}
+                          title={nameOf(m.link)}
+                          time={listTime(m.created_at)}
+                          preview={previewLine(m, nameOf(m.link))}
+                          testid="starred-message"
+                        />
+                      ))}
+                    </ul>
+                  )}
+                </section>
+              )}
+              {filter !== "starred" && all.length > 0 && (
                 <section aria-label="Chats">
                   <div className="toolbar" style={{ marginBottom: 6 }}>
                     <h2 className="grow" style={{ margin: 0 }}>
                       {archived ? "Archived" : "Chats"}
                     </h2>
-                    {(archived || all.some((c) => c.archived)) && (
-                      <button
-                        type="button"
-                        className="small"
-                        onClick={() => setArchived(!archived)}
-                      >
-                        {archived
-                          ? "Back to chats"
-                          : `Archived (${all.filter((c) => c.archived).length})`}
-                      </button>
-                    )}
                   </div>
-                  <Items label={archived ? "Archived chats" : "Chats"}>
+                  {listed.length === 0 && (
+                    <p className="hint">
+                      {archived
+                        ? "No archived chats."
+                        : filter === "unread"
+                          ? "Nothing unread."
+                          : "No chats."}
+                    </p>
+                  )}
+                  <ul
+                    className="chat-rows"
+                    aria-label={archived ? "Archived chats" : "Chats"}
+                  >
                     {listed.map((c) => (
-                      <Item
+                      <ChatRow
                         key={c.link}
                         to={`/chat?with=${c.link}`}
-                        icon="chat"
-                        tone={c.state === "active" ? "ok" : "muted"}
+                        letter={c.name}
                         title={c.name}
-                        sub={
-                          c.typing
-                            ? "typing…"
-                            : c.last
-                              ? previewLine(c.last, c.name)
-                              : c.state === "active"
-                                ? `Linked · ${roleOf(c.link)}`
-                                : "The link has ended"
-                        }
-                        side={c.last ? listTime(c.last.created_at) : undefined}
-                        sideSub={
-                          c.unread > 0 ? (
-                            <span
-                              className="unread-count"
-                              aria-label={`${c.unread} unread`}
-                            >
-                              {c.unread}
-                            </span>
-                          ) : c.pinned ? (
-                            <span className="hint">Pinned</span>
-                          ) : c.muted ? (
-                            <span className="hint">Muted</span>
+                        time={c.last ? listTime(c.last.created_at) : undefined}
+                        lead={
+                          c.last?.mine && c.last.kind !== "card" ? (
+                            <Ticks read={!!c.last.read_at} />
                           ) : undefined
                         }
+                        preview={
+                          drafts[c.link] ? (
+                            <>
+                              <span className="draft">Draft:</span>{" "}
+                              {drafts[c.link]}
+                            </>
+                          ) : (
+                              connected ? live.typing.has(c.link) : c.typing
+                            ) ? (
+                            "typing…"
+                          ) : c.last ? (
+                            previewLine(c.last, c.name).replace(
+                              c.last.mine && c.last.kind !== "card"
+                                ? /^You: /
+                                : /^$/,
+                              "",
+                            )
+                          ) : c.state === "active" ? (
+                            `Linked · ${roleOf(c.link)}`
+                          ) : (
+                            "The link has ended"
+                          )
+                        }
+                        typing={connected ? live.typing.has(c.link) : c.typing}
+                        unread={c.unread}
+                        pinned={c.pinned}
+                        muted={c.muted}
+                        selected={openID === c.link}
                         testid="link-linked"
                       />
                     ))}
-                  </Items>
+                  </ul>
                 </section>
               )}
               {g.waiting.length + g.sent.length > 0 && (
@@ -583,6 +830,26 @@ export function ChatPage() {
               )}
             </>
           )}
+          {manage &&
+            settings.data &&
+            !settings.data.asked_at &&
+            !searching &&
+            filter !== "starred" && (
+              <FindableQuestion
+                settings={settings.data}
+                busy={act.busy}
+                answer={(findable) =>
+                  void act.run(
+                    async () => (
+                      await put("/v1/link-settings", { findable }),
+                      settings.reload()
+                    ),
+                    findable ? "Other businesses can find you" : false,
+                  )
+                }
+              />
+            )}
+          {keysOpen && <KeysSheet onClose={() => setKeysOpen(false)} />}
           {asking && (
             <RequestSheet
               asking={asking}
@@ -594,10 +861,21 @@ export function ChatPage() {
         {taskiemOpen && <TaskiemPane onBack={() => setParams({})} />}
         {open && (
           <ConversationPane
+            key={open.link}
             conv={open}
             others={all}
             onBack={() => setParams({})}
             onChanged={reloadConvs}
+            focus={params.get("msg") ?? undefined}
+            link={view.data?.links.find((l) => l.id === open.link)}
+            onEndLink={
+              manage
+                ? (l) => {
+                    answer(l, "end", "Link ended");
+                    reloadConvs();
+                  }
+                : undefined
+            }
           />
         )}
       </div>
@@ -1076,5 +1354,34 @@ function FindableQuestion({
         </button>
       </div>
     </section>
+  );
+}
+
+/** The keys of the Chat page, for a reader who has a keyboard. */
+function KeysSheet({ onClose }: { onClose: () => void }) {
+  return (
+    <Modal title="Keyboard" onClose={onClose}>
+      <dl className="keys" data-testid="keys-sheet">
+        {SHORTCUTS.map((s) => (
+          <div key={s.does} className="keys-row">
+            <dt>
+              {s.keys.map((k, i) => (
+                <span key={k}>
+                  {i > 0 && <span className="sr-only"> then </span>}
+                  <kbd>{k}</kbd>{" "}
+                </span>
+              ))}
+            </dt>
+            <dd>{s.does}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="hint">The letters work when no box is being typed in.</p>
+      <div className="row-actions">
+        <button type="button" onClick={onClose}>
+          Close
+        </button>
+      </div>
+    </Modal>
   );
 }

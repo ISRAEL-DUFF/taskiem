@@ -1,0 +1,143 @@
+#!/usr/bin/env node
+// Writes src/lib/emojiData.ts, the emoji panel's characters, from Unicode's
+// emoji-test.txt (the characters, their groups and names, and which take a
+// skin tone) and CLDR's English annotations (the words that find them).
+//
+//   curl -o /tmp/emoji-test.txt https://unicode.org/Public/emoji/latest/emoji-test.txt
+//   curl -o /tmp/annotations.json https://raw.githubusercontent.com/unicode-org/cldr-json/main/cldr-json/cldr-annotations-full/annotations/en/annotations.json
+//   node scripts/gen-emoji.mjs /tmp/emoji-test.txt /tmp/annotations.json
+//
+// Emoji newer than Unicode 14 (2022) are left out: a phone a few years old
+// draws them as an empty box. Both files are under the Unicode License v3
+// (https://www.unicode.org/license.txt), which the generated file repeats.
+/* global process, console, URL */
+import { readFileSync, writeFileSync } from "node:fs";
+
+const [testFile, annFile] = process.argv.slice(2);
+if (!testFile || !annFile) {
+  console.error("usage: gen-emoji.mjs emoji-test.txt annotations.json");
+  process.exit(1);
+}
+const MAX_VERSION = 14.0;
+const GROUPS = {
+  "Smileys & Emotion": ["smileys", "Smileys and emotion", "😀"],
+  "People & Body": ["people", "People", "👋"],
+  "Animals & Nature": ["nature", "Animals and nature", "🐶"],
+  "Food & Drink": ["food", "Food and drink", "🍚"],
+  "Travel & Places": ["travel", "Travel and places", "🚚"],
+  Activities: ["activity", "Activities", "⚽"],
+  Objects: ["objects", "Objects", "💡"],
+  Symbols: ["symbols", "Symbols", "✅"],
+  Flags: ["flags", "Flags", "🏳️"],
+};
+// Words the annotations lack, as people here look for things.
+const EXTRA = {
+  "🏍️": "okada bike motorbike",
+  "🚚": "lorry delivery van",
+  "🚛": "lorry trailer",
+  "🚌": "danfo bus",
+  "🛺": "keke tricycle",
+  "💰": "cash naira money",
+  "💵": "naira cash",
+  "🧾": "invoice bill receipt",
+  "📦": "order parcel delivery",
+  "🛒": "buy shopping",
+  "🏪": "shop store kiosk",
+  "🍛": "jollof curry",
+  "🍚": "jollof rice",
+  "🍲": "stew soup pepper",
+  "🍠": "yam potato",
+  "🥭": "mango fruit",
+  "🍌": "plantain banana",
+  "🤣": "lol haha",
+  "😂": "lol haha",
+  "🙏": "please thanks pray",
+  "👍": "ok yes good approve",
+  "🤝": "deal agree handshake",
+  "💯": "perfect hundred",
+  "🔥": "hot lit",
+  "✅": "done correct yes",
+  "❌": "no wrong cancel",
+  "📞": "call phone",
+  "📱": "phone mobile",
+  "🇳🇬": "nigeria naija",
+};
+
+const strip = (s) => s.replace(/️/g, "");
+const MOD = /[\u{1F3FB}-\u{1F3FF}]/u;
+const lines = readFileSync(testFile, "utf8").split("\n");
+const ann = JSON.parse(readFileSync(annFile, "utf8")).annotations.annotations;
+
+const byGroup = new Map();
+const toned = new Map(); // base key -> {tone n: key}
+const baseOf = new Map(); // key (no FE0F) -> char
+let group = "";
+const items = [];
+for (const line of lines) {
+  const g = /^# group: (.+)$/.exec(line);
+  if (g) {
+    group = g[1];
+    continue;
+  }
+  const m = /^([0-9A-F ]+?)\s*;\s*fully-qualified\s*#\s*(\S+)\s+E(\d+\.\d+)\s+(.+)$/.exec(line);
+  if (!m || !GROUPS[group]) continue;
+  const char = m[2];
+  if (parseFloat(m[3]) > MAX_VERSION) continue;
+  const name = m[4];
+  const mods = [...char].filter((c) => MOD.test(c));
+  if (mods.length > 0) {
+    // A skin tone variant: not listed, but it shows which emoji take one.
+    if (mods.length === 1) {
+      const tone = mods[0].codePointAt(0) - 0x1f3fa;
+      const key = strip([...char].filter((c) => !MOD.test(c)).join(""));
+      if (!toned.has(key)) toned.set(key, {});
+      toned.get(key)[tone] = [...strip(char)].join("");
+    }
+    continue;
+  }
+  items.push({ group, char, name });
+  baseOf.set(strip(char), char);
+}
+
+// The rule the page uses to put a tone on an emoji: after its first
+// character, the rest as it is (a selector right after the first goes).
+const insertTone = (char, tone) => {
+  const cps = [...char];
+  const first = cps.shift();
+  if (cps[0] === "️") cps.shift();
+  return first + String.fromCodePoint(0x1f3fa + tone) + cps.join("");
+};
+const toneable = [];
+for (const it of items) {
+  const variants = toned.get(strip(it.char));
+  if (!variants || Object.keys(variants).length !== 5) continue;
+  // Only if the rule gives exactly Unicode's own sequences.
+  if ([1, 2, 3, 4, 5].every((t) => strip(insertTone(it.char, t)) === variants[t])) toneable.push(it.char);
+}
+
+const words = (it) => {
+  const e = ann[it.char] ?? ann[strip(it.char)] ?? ann[it.char + "️"];
+  const have = new Set(it.name.toLowerCase().split(/[^a-z0-9]+/));
+  const found = (e?.default ?? []).filter((w) => /[a-z]/i.test(w) && !have.has(w.toLowerCase()));
+  const extra = (EXTRA[it.char] ?? "").split(" ").filter(Boolean);
+  return [...new Set([...found, ...extra])].join(" ");
+};
+for (const it of items) {
+  if (!byGroup.has(it.group)) byGroup.set(it.group, []);
+  byGroup.get(it.group).push(`${it.char} ${it.name.replace(/\|/g, "")}|${words(it).replace(/\|/g, "")}`);
+}
+
+const q = (s) => "`" + s.replace(/\\/g, "\\\\").replace(/`/g, "\\`") + "`";
+let out = `// Generated by scripts/gen-emoji.mjs from Unicode's emoji-test.txt and CLDR's
+// English annotations (Unicode 14 and older). Do not edit by hand.
+// Unicode data files and software: Copyright © 1991-2025 Unicode, Inc.,
+// under the Unicode License v3 (https://www.unicode.org/license.txt).
+
+/** One group: its id, its name, its icon, and its emoji a line: "😀 grinning face|words that find it". */
+export const EMOJI_SOURCE: [string, string, string, string][] = [\n`;
+for (const [name, [id, label, icon]] of Object.entries(GROUPS)) {
+  out += `  [${JSON.stringify(id)}, ${JSON.stringify(label)}, ${JSON.stringify(icon)}, ${q((byGroup.get(name) ?? []).join("\n"))}],\n`;
+}
+out += `];\n\n/** The emoji that take a skin tone, by the rule of insertTone (lib/emoji.ts). */\nexport const TONEABLE_SOURCE = ${q(toneable.join(" "))};\n`;
+writeFileSync(new URL("../src/lib/emojiData.ts", import.meta.url), out);
+console.log(`${items.length} emoji in ${byGroup.size} groups; ${toneable.length} take a skin tone`);

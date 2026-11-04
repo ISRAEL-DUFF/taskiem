@@ -3,6 +3,7 @@
 // message, a card and the list read, in WhatsApp's words.
 
 import { naira } from "./invoices";
+import { cmpTime } from "./stamp";
 import type { Mention } from "./mentions";
 
 export type DocKind = "order" | "purchase" | "invoice" | "bill";
@@ -15,6 +16,56 @@ export interface DocCard {
   id?: string;
   amount_kobo?: number;
   note?: string;
+}
+
+/** One emoji on a message: how many gave it, whether you did, and who (first names). */
+export interface Reaction {
+  emoji: string;
+  count: number;
+  mine?: boolean;
+  by?: string[];
+}
+
+/** The six emoji a message may be reacted to with. */
+export const REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"] as const;
+
+/** The reactions with `emoji` given or taken back by us, as the server will answer. */
+export function toggleReaction(
+  list: Reaction[] | undefined,
+  emoji: string,
+  mine: boolean,
+  me = "You",
+): Reaction[] {
+  // Our own reaction (one at most) comes off wherever it was.
+  const out: Reaction[] = [];
+  for (const r of list ?? []) {
+    if (!r.mine) out.push(r);
+    else if (r.count > 1)
+      out.push({
+        ...r,
+        count: r.count - 1,
+        mine: false,
+        by: r.by?.filter((n) => n !== me),
+      });
+  }
+  if (!mine) return out;
+  const at = out.findIndex((r) => r.emoji === emoji);
+  if (at >= 0) {
+    const r = out[at] as Reaction;
+    out[at] = {
+      ...r,
+      count: r.count + 1,
+      mine: true,
+      by: [...(r.by ?? []), me],
+    };
+  } else out.push({ emoji, count: 1, mine: true, by: [me] });
+  return out;
+}
+
+/** The words for a reaction chip: "👍 2: Owner, Ada". */
+export function reactionWords(r: Reaction): string {
+  const who = (r.by ?? []).join(", ");
+  return `${r.emoji} ${r.count}${who ? `: ${who}` : ""}`;
 }
 
 export interface Quote {
@@ -58,6 +109,16 @@ export interface LinkMessage {
   reply?: Quote;
   read_at?: string;
   created_at: string;
+  /** The people's emoji on it, from both businesses (see Reaction). */
+  reactions?: Reaction[];
+  /** You starred it (a star is yours alone). */
+  starred?: boolean;
+  /** Only in the browser: a message still being sent, or not sent (Retry). */
+  local?: "sending" | "failed";
+  /** Why a local message was not sent, in words. */
+  localError?: string;
+  /** A local photo's preview (a data URL: the page shows no blob URLs). */
+  localPreview?: string;
 }
 
 export interface Conversation {
@@ -216,6 +277,6 @@ export function merge(a: LinkMessage[], b: LinkMessage[]): LinkMessage[] {
   for (const m of [...a, ...b]) seen.set(m.id, m);
   return [...seen.values()].sort(
     (x, y) =>
-      x.created_at.localeCompare(y.created_at) || x.id.localeCompare(y.id),
+      cmpTime(x.created_at, y.created_at) || x.id.localeCompare(y.id),
   );
 }
