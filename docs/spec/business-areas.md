@@ -88,7 +88,9 @@ The rule: **permission and area must both pass.** A permission alone no longer o
 3. **Other doors.** WhatsApp and chat commands, public storefront pages, background jobs, workflow steps and connectors.
 4. **Signup question.** "What does your business do?" with a shop, a school, a service business, or "just workflows", each switching on its areas; new signups start with the rest off. Ops shows areas on the tenant page.
 
-Phases 1 and 2 are the first change to review; 3 and 4 follow.
+5. **Service businesses.** The templates, signup choice and decisions in §9, with an ISP as the first test: build its monthly billing, reminder, cut-off and outage workflows from the templates and fix what gets in the way.
+
+Phases 1 and 2 are the first change to review; 3, 4 and 5 follow.
 
 ## 8. Tests
 
@@ -96,7 +98,31 @@ Phases 1 and 2 are the first change to review; 3 and 4 follow.
 - Web: `lib/areas.test.ts`; nav and tab bar with each area off; route guard; Home with nothing on; Settings page switches; accessibility and plain-words lists.
 - e2e: a business with nothing on sees workflows only, turns Stock on, sees it appear, uses it, turns it off, and the data is still there when it is turned back on.
 
-## 9. Risks and open questions
+## 9. A service business as the test: an ISP or cloud provider
+
+The point of the switches is that businesses that do not sell goods can use Taskiem cleanly. An internet provider is the test case: it bills subscribers monthly, chases late payers, cuts off and reconnects service, and tells customers about outages. This section records what the code already gives such a business and what is missing. It was checked on 4 November 2026 by reading the workflow schema, the connector manifests, the template library and decision 0013; nothing was run, and no ISP workflow was built.
+
+**What exists today**
+
+- **Steps** (`schemas/wd-v1.schema.json`): `connector`, `code`, `container`, a generic **`http`** step (method, URL, headers, query, body), `branch`, `parallel`, `foreach`, `wait`, `signal`, `approval`, `subflow`, `transform`, `ai`, `form`, `template`, `callback`, `respond`. So calling a provider's own system over HTTPS, looping over customers and asking a person to approve are all there.
+- **Triggers**: `webhook`, **`schedule`** (a cron expression and a timezone), `connector_event`, `polling`, `ussd`, `storefront`, **`invoice`** (a run starts when an invoice is paid in full, or on each payment), `link` and `form`. A schedule drives the monthly run; a webhook takes a monitoring tool's outage alert; the invoice trigger can reconnect a customer when payment lands.
+- **Invoices connector** (`connectors/invoices/manifest.yaml`): `create`, `send`, `get`, `void`, `list`, `notify_customer`, `customer_link`, `register_account`. Customers pay to their own account number, and payments are matched to the oldest invoice. No action marks an invoice paid; only a counted payment does, which is the right rule for a billing business.
+- **Messages and payments**: SMS (Termii, Africa's Talking), WhatsApp, email, Telegram, Slack; Paystack, Flutterwave, Opay, Moniepoint, Interswitch, Lenco and others. KYC and BVN checks (Prembly, Dojah, Youverify).
+- **Patterns to copy**: `chase-overdue-invoices` (schedule, foreach, connector and transform steps), `debtor-reminder-sms` and `debtor-reminder-whatsapp`, `invoice-paid-receipt`, `payment-received-tell-owner`, `failed-transfer-alert`.
+
+**What is missing or unverified**
+
+1. **No recurring invoices.** Nothing in the invoices connector, its docs or the templates bills a subscriber every month. It can be built from a schedule trigger, a foreach over a customers table and `invoices.create` and `send`, but the business has to assemble it, and it needs a dependable "who is due this month" query over a table. There is no template for it.
+2. **A provider's private systems are unreachable.** The egress guard (`engine/egress`) refuses private, loopback and link-local addresses, so a billing panel, RADIUS server or database on a private IP (the usual place for an ISP's subscriber system) cannot be called by the `http` step or the Postgres and MySQL connectors. Decision 0013 designs an SSH tunnel through the customer's bastion, and its header says "Proposed (design; not built)". That date is October 2026, so whether it has been built since has to be checked in the code. Until it is, only systems with a public HTTPS API are reachable.
+3. **No cut-off and reconnect pattern.** The pieces exist (schedule or invoice trigger, `branch`, `approval`, `http`), but there is no template that suspends service after a set number of days overdue, with an optional approval, and reconnects on payment.
+4. **No outage notice.** Messaging a list of customers exists, but there is no template that takes an alert from a monitoring tool by webhook and texts or messages every affected customer.
+5. **Templates and words are retail- and school-flavoured**: `dispatch-orders`, `low-stock-alert`, `daily-sales-summary`, the school templates. A service business finds nothing aimed at it, and `docs/spec/new-business.md` and `no-technical-steps.md` do not mention service businesses.
+6. **The `http` step's name and form** for a non-technical owner ("call another system") are unchecked against the plain-words rules.
+7. **Not checked:** whether a data table can hold subscriber, plan and expiry fields comfortably, and how a workflow reads "everyone whose plan ends within seven days".
+
+**Work this adds**, as phase 5 below: service-business templates (monthly invoices to subscribers, renewal reminders before expiry, suspend on overdue with an optional approval and reconnect on payment, an outage notice to customers), a "service business" choice in the signup question, a decision on whether recurring invoices become a first-class invoices action or stay a documented recipe, and a check of whether the private-network tunnel exists.
+
+## 10. Risks and open questions
 
 - **Missed doors.** The worst bug is an area that looks off but still takes orders or sends money reminders. Hence group-level middleware, the router-walk test and phase 3 being its own phase.
 - **Existing workflows** that use a step from an area the business later turns off. **Decided: warn.** Turning an area off checks the tenant's published workflows (and deployed versions) for steps that belong to the area. If any do, `PUT /v1/settings/areas` answers 409 with the list (workflow name, step, environment) and changes nothing; the web app shows that list in its confirmation ("These workflows use Stock and will stop at that step: ...") and resends with `confirm: true` if the owner still wants it off. After confirming, those steps fail with the plain sentence rather than silently skip. The step-to-area map is built in phase 3, from the connector registry; phase 1 ships the 409 and `confirm` contract with an empty map so the API does not change later.
