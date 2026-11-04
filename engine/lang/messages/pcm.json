@@ -5148,6 +5148,14 @@
       "text": "File",
       "reviewed": false
     },
+    "chat.link.reacted": {
+      "text": "{name} react {emoji} to “{what}”",
+      "reviewed": false
+    },
+    "chat.link.reacted_plain": {
+      "text": "{name} react {emoji} to one message",
+      "reviewed": false
+    },
     "wa.prices.list": {
       "text": "*{name}* price for you:\n{items}\n\nOrder like *order 20 bags of rice from {name}*.",
       "reviewed": false

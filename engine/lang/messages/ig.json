@@ -5148,6 +5148,14 @@
       "text": "Faịlụ",
       "reviewed": false
     },
+    "chat.link.reacted": {
+      "text": "{name} zara {emoji} na “{what}”",
+      "reviewed": false
+    },
+    "chat.link.reacted_plain": {
+      "text": "{name} zara {emoji} n'otu ozi",
+      "reviewed": false
+    },
     "wa.prices.list": {
       "text": "Ọnụahịa *{name}* maka gị:\n{items}\n\nNye iwu dịka: *order 20 bags of rice from {name}*.",
       "reviewed": false

@@ -110,6 +110,9 @@ type Message struct {
 	Reply      *Quote      `json:"reply,omitempty"`
 	ReadAt     *time.Time  `json:"read_at,omitempty"`
 	CreatedAt  time.Time   `json:"created_at"`
+	// Reactions on it, and whether the person reading starred it (see DecorateTx).
+	Reactions []Reaction `json:"reactions,omitempty"`
+	Starred   bool       `json:"starred,omitempty"`
 }
 
 // Conversation is one linked business's conversation, as the list shows
@@ -559,8 +562,12 @@ func SendWithTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body str
 // businesses this UTC day (its plan's messages per day, §13).
 func SentTodayTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (int64, error) {
 	var n int64
-	err := tx.QueryRow(ctx, `SELECT count(*) FROM link_messages WHERE tenant_id = $1 AND mine AND kind = 'text'
-		AND created_at >= date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'`, tenant).Scan(&n)
+	// A reaction counts as a message, when it is first given.
+	err := tx.QueryRow(ctx, `SELECT
+		(SELECT count(*) FROM link_messages WHERE tenant_id = $1 AND mine AND kind = 'text'
+			AND created_at >= date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')
+		+ (SELECT count(*) FROM link_message_reactions WHERE tenant_id = $1 AND mine
+			AND created_at >= date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')`, tenant).Scan(&n)
 	return n, err
 }
 

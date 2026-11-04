@@ -42,6 +42,7 @@ func (s *Server) linkChatRoutes(r chi.Router) {
 	r.Get("/link-chats", s.listLinkChats)
 	r.Get("/link-chats/search", s.searchLinkChats)
 	r.Get("/link-chats/thread", s.linkThread)
+	r.Get("/link-chats/starred", s.starredLinkMessages)
 	r.Get("/link-chats/{link}/messages", s.linkMessages)
 	r.With(write, s.tenantWide, paced).Post("/link-chats/{link}/messages", s.sendLinkMessage)
 	r.With(write, s.tenantWide, paced).Post("/link-chats/{link}/files", s.sendLinkFile)
@@ -51,6 +52,10 @@ func (s *Server) linkChatRoutes(r chi.Router) {
 	r.With(write, s.tenantWide).Post("/link-chats/{link}/typing", s.linkTyping)
 	r.With(write, s.tenantWide, paced).Post("/link-chats/{link}/forward", s.forwardLinkMessage)
 	r.With(write, s.tenantWide).Post("/link-chats/{link}/messages/{id}/hide", s.hideLinkMessage)
+	r.With(write, s.tenantWide, paced).Put("/link-chats/{link}/messages/{id}/reaction", s.reactLinkMessage)
+	r.With(write, s.tenantWide).Delete("/link-chats/{link}/messages/{id}/reaction", s.unreactLinkMessage)
+	r.With(s.tenantWide).Put("/link-chats/{link}/messages/{id}/star", s.starLinkMessage)
+	r.With(s.tenantWide).Delete("/link-chats/{link}/messages/{id}/star", s.unstarLinkMessage)
 	r.With(write, s.tenantWide).Put("/link-chats/{link}", s.putLinkChat)
 }
 
@@ -142,6 +147,9 @@ func (s *Server) linkMessages(w http.ResponseWriter, r *http.Request) {
 		if out.Messages, err = links.MessagesTx(r.Context(), tx, principalFrom(r.Context()).TenantID, link, p); err != nil {
 			return err
 		}
+		if err = links.DecorateTx(r.Context(), tx, principalFrom(r.Context()).TenantID, viewerOf(principalFrom(r.Context())), out.Messages); err != nil {
+			return err
+		}
 		out.Typing, err = links.TypingOfTx(r.Context(), tx, link)
 		return err
 	}); err != nil {
@@ -158,7 +166,10 @@ func (s *Server) searchLinkChats(w http.ResponseWriter, r *http.Request) {
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
 		out.Messages, err = links.SearchMessagesTx(r.Context(), tx, principalFrom(r.Context()).TenantID, r.URL.Query().Get("q"), 20)
-		return err
+		if err != nil {
+			return err
+		}
+		return links.DecorateTx(r.Context(), tx, principalFrom(r.Context()).TenantID, viewerOf(principalFrom(r.Context())), out.Messages)
 	}); err != nil {
 		s.fail(w, r, err)
 		return
@@ -180,7 +191,10 @@ func (s *Server) linkThread(w http.ResponseWriter, r *http.Request) {
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
 		out.Messages, err = links.ThreadTx(r.Context(), tx, principalFrom(r.Context()).TenantID, doc, ref)
-		return err
+		if err != nil {
+			return err
+		}
+		return links.DecorateTx(r.Context(), tx, principalFrom(r.Context()).TenantID, viewerOf(principalFrom(r.Context())), out.Messages)
 	}); err != nil {
 		s.fail(w, r, err)
 		return

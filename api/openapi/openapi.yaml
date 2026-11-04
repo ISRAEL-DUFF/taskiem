@@ -7857,6 +7857,205 @@ paths:
           description: Hidden
         default:
           $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/messages/{id}/reaction:
+    put:
+      operationId: reactLinkMessage
+      tags:
+      - Links
+      summary: React to a message
+      description: Your emoji on a message, one of 👍 ❤️ 😂 😮 😢 🙏, replacing the one you gave, seen by both businesses. One reaction per member per message. The other side's people are told on their phones unless they muted the conversation, and a first reaction counts against the plan's messages per day. Refused once the link has ended (409).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: chat.trade
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [emoji]
+              properties:
+                emoji:
+                  type: string
+                  enum: ['👍', '❤️', '😂', '😮', '😢', '🙏']
+      responses:
+        '200':
+          description: The reactions on the message, as this business sees them
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [reactions]
+                properties:
+                  reactions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LinkReaction'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: unreactLinkMessage
+      tags:
+      - Links
+      summary: Take a reaction back
+      description: Your reaction is taken off the message, on both sides. Nothing is told, and taking back one you did not give is nothing.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: chat.trade
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The reactions on the message, as this business sees them
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [reactions]
+                properties:
+                  reactions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LinkReaction'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/messages/{id}/star:
+    put:
+      operationId: starLinkMessage
+      tags:
+      - Links
+      summary: Star a message
+      description: Kept for you alone, so no one is told and no one else can see it. An API key has no stars of its own (403).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Whether it is starred now
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [starred]
+                properties:
+                  starred:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: unstarLinkMessage
+      tags:
+      - Links
+      summary: Unstar a message
+      description: The star is taken off.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Whether it is starred now
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [starred]
+                properties:
+                  starred:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/starred:
+    get:
+      operationId: starredLinkMessages
+      tags:
+      - Links
+      summary: Your starred messages
+      description: The messages you starred, across conversations, the most recently starred first (up to 100).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The messages
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [messages]
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LinkMessage'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/link-chats/{link}/read:
     post:
       operationId: readLinkChat
@@ -29710,6 +29909,25 @@ components:
           type: string
         price_kobo:
           type: integer
+    LinkReaction:
+      type: object
+      additionalProperties: false
+      required: [emoji, count]
+      properties:
+        emoji:
+          type: string
+          enum: ['👍', '❤️', '😂', '😮', '😢', '🙏']
+        count:
+          type: integer
+          description: How many people gave it, on both sides
+        mine:
+          type: boolean
+          description: You gave it
+        by:
+          type: array
+          items:
+            type: string
+          description: Their first names
     LinkMessage:
       type: object
       additionalProperties: false
@@ -29773,6 +29991,13 @@ components:
           maxItems: 10
           items:
             $ref: '#/components/schemas/LinkMention'
+        reactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/LinkReaction'
+        starred:
+          type: boolean
+          description: You starred it
         reply:
           type: object
           additionalProperties: false
