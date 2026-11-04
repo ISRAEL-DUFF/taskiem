@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ApiError, del, get, post, postOnce, put } from "../api";
+import { ApiError, del, get, post, postOnce, put, whenOff } from "../api";
 import type { LinksView } from "../lib/links";
 import { feeInput, feeKobo } from "../lib/orders";
 import {
@@ -38,7 +38,7 @@ export function StorefrontPriceLists() {
     () => get<{ lists: PriceList[] }>("/v1/price-lists"),
     [],
   );
-  const links = useLoad(() => get<LinksView>("/v1/links"), []);
+  const links = useLoad(() => whenOff(get<LinksView>("/v1/links"), { links: [], sent: [] }), []);
   const act = useAction();
   const [name, setName] = useState("");
   const [editing, setEditing] = useState<PriceList>();

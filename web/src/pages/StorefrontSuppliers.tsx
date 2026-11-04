@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ApiError, get, patch, post, put } from "../api";
+import { ApiError, get, patch, post, put, whenOff } from "../api";
 import {
   EmptyState,
   ErrorBox,
@@ -338,7 +338,7 @@ function LinkSupplierModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const list = useLoad(() => get<LinksView>("/v1/links"), []);
+  const list = useLoad(() => whenOff(get<LinksView>("/v1/links"), { links: [], sent: [] }), []);
   const [link, setLink] = useState(supplier.link_id ?? "");
   const act = useAction();
   const linked = (list.data?.links ?? []).filter(

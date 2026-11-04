@@ -1,5 +1,6 @@
 import {
   BrowserRouter,
+  Link,
   Navigate,
   NavLink,
   Route,
@@ -108,6 +109,8 @@ import {
 } from "./pages/SchoolClearance";
 import { SchoolOverviewPage } from "./pages/SchoolOverview";
 import { showSchools } from "./lib/schools";
+import { areaOffFor, areaOn, AREA_NAMES, type AreaKey } from "./lib/areas";
+import { Areas } from "./pages/Areas";
 import { FormSubmissions, Forms } from "./pages/Forms";
 import {
   FormRequestPage,
@@ -139,6 +142,24 @@ export function App() {
 
 /** An administrator held to passkeys, signed in with a password, adds one
  * and then signs in with it; nothing else is open to them until then. */
+/** A page of a part of Taskiem the business turned off: say so, and where to turn it on. */
+function AreaOff({ area, owner }: { area: AreaKey; owner: boolean }) {
+  return (
+    <EmptyState
+      icon="settings"
+      action={
+        owner ? (
+          <Link className="button primary" to="/settings/areas">
+            Turn it on
+          </Link>
+        ) : undefined
+      }
+    >
+      {AREA_NAMES[area]} is not turned on for your business.{owner ? "" : " Ask an owner to turn it on."}
+    </EmptyState>
+  );
+}
+
 function EnrolPasskey() {
   const { logout, loginWithPasskey } = useAuth();
   const [added, setAdded] = useState(false);
@@ -375,13 +396,13 @@ function SignedIn() {
     ],
     ["/home", "Home", "home", true],
     ["/workflows", "Workflows", "workflows", can("workflow.read")],
-    ["/storefront/orders", "Orders", "orders", can("storefront.manage")],
-    ["/invoices", "Invoices", "invoices", invoiceAccess(can).see],
-    ["/money", "Money", "money", invoiceAccess(can).see],
+    ["/storefront/orders", "Orders", "orders", can("storefront.manage") && areaOn(me.areas, "orders")],
+    ["/invoices", "Invoices", "invoices", invoiceAccess(can).see && areaOn(me.areas, "money")],
+    ["/money", "Money", "money", invoiceAccess(can).see && areaOn(me.areas, "money")],
     // Linked suppliers' invoices (business links, pages/Bills.tsx).
-    ["/bills", "Bills", "invoices", invoiceAccess(can).see],
+    ["/bills", "Bills", "invoices", invoiceAccess(can).see && areaOn(me.areas, "money")],
     ["/schools", "Schools", "schools", showSchools(me.schools, can)],
-    ["/storefront", "Storefront", "storefront", can("storefront.manage")],
+    ["/storefront", "Storefront", "storefront", can("storefront.manage") && areaOn(me.areas, "storefront")],
     ["/forms", "Forms", "forms", can("workflow.read")],
     ["/forms/requests", "To fill in", "inbox", toFill > 0, String(toFill)],
     ["/runs", "Activity", "activity", can("run.read")],
@@ -421,7 +442,8 @@ function SignedIn() {
       can("secret.manage") || can("workflow.read"),
     ],
     ["/policies", "Approval policies", "policies", can("workflow.read")],
-    ["/settings/links", "Linked businesses", "connections", can("link.manage")],
+    ["/settings/links", "Linked businesses", "connections", can("link.manage") && areaOn(me.areas, "links")],
+    ["/settings/areas", "What your business uses", "settings", me.roles.includes("owner")],
     ["/settings/notifications", "Notifications", "bell", !!me.user],
     ["/alerts", "Alerts", "alerts", can("alert.manage")],
     ["/audit", "Audit log", "audit", can("audit.read")],
@@ -447,8 +469,8 @@ function SignedIn() {
   const quick = (
     [
       ["/home", "Home", "home", true],
-      ["/money", "Money", "money", invoiceAccess(can).see],
-      ["/storefront/orders", "Orders", "orders", can("storefront.manage")],
+      ["/money", "Money", "money", invoiceAccess(can).see && areaOn(me.areas, "money")],
+      ["/storefront/orders", "Orders", "orders", can("storefront.manage") && areaOn(me.areas, "orders")],
       ["/workflows", "Workflows", "workflows", can("workflow.read")],
       ["/runs", "Activity", "activity", can("run.read")],
     ] as Item[]
@@ -586,6 +608,9 @@ function SignedIn() {
         <TermsBanner />
         <div className="page" key={`${pathname}#${fresh}`}>
           <PageBoundary>
+            {areaOffFor(pathname, me.areas) ? (
+              <AreaOff area={areaOffFor(pathname, me.areas)!} owner={me.roles.includes("owner")} />
+            ) : (
             <Routes>
               <Route path="/" element={<Navigate to="/home" replace />} />
               <Route path="/home" element={<Home />} />
@@ -730,6 +755,7 @@ function SignedIn() {
               <Route path="/settings" element={<Settings />} />
               <Route path="/settings/billing" element={<Billing />} />
               <Route path="/settings/payments" element={<PaymentsSettings />} />
+              <Route path="/settings/areas" element={<Areas />} />
               <Route path="/settings/keys" element={<Keys />} />
               <Route
                 path="/settings/notifications"
@@ -751,6 +777,7 @@ function SignedIn() {
                 }
               />
             </Routes>
+            )}
           </PageBoundary>
         </div>
       </main>

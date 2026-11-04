@@ -41,6 +41,7 @@ const PAGES = [
   "/storefront/suppliers",
   "/storefront/price-lists",
   "/chat",
+  "/settings/areas",
   "/settings/links",
   "/bills",
   "/trade-orders",
