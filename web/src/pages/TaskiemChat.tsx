@@ -35,11 +35,6 @@ import { ErrorBox, fmtTime, useAction, useLoad } from "../ui";
 // an answer.
 
 const EVERY_MS = 5000;
-/** Which answer's buttons press. A stored message is known by its id (the
- *  stream gives its time to the microsecond, the page may hold it to less);
- *  one not stored yet, by its id and time. */
-const liveKey = (m: TaskiemMessage) =>
-  m.id === NIL ? `${m.id}@${m.created_at}` : m.id;
 /** The newest page, and a page older, as the API gives them. */
 const PAGE = 50;
 const CHANNEL: Record<string, string> = {
@@ -63,7 +58,6 @@ const startsRun = (
 
 export function TaskiemPane({ onBack }: { onBack: () => void }) {
   const [messages, setMessages] = useState<TaskiemMessage[]>();
-  const [live, setLive] = useState<string>(); // the answer whose buttons press
   const [error, setError] = useState<unknown>();
   // "@" a linked business, "#" an item of a supplier's price list.
   const convs = useLoad(
@@ -254,10 +248,6 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
             out.messages,
           ),
         );
-        const answer = [...out.messages]
-          .reverse()
-          .find((m) => !m.inbound && m.buttons?.some((b) => b.id));
-        setLive(answer ? liveKey(answer) : undefined);
       }, false)
       .then((ok) => {
         // The page going away fails the request: that is not a message that
@@ -283,17 +273,13 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
           form,
         );
         setMessages((cur) => mergeTaskiem(cur ?? [], out.messages));
-        const answer = [...out.messages]
-          .reverse()
-          .find((m) => !m.inbound && m.buttons?.some((b) => b.id));
-        setLive(answer ? liveKey(answer) : undefined);
       }, false)
       .then(() => undefined);
 
   // For each of Taskiem's answers with buttons: the one pressed (the
   // person's next message, when it is the button's title); and which of the
   // person's messages Taskiem has answered (their ticks go blue).
-  const { pressed, answered } = useMemo(() => {
+  const { pressed, answered, pressableId } = useMemo(() => {
     const pressed = new Map<string, string>();
     const answered = new Set<string>();
     const list = messages ?? [];
@@ -304,7 +290,20 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
       if (m.inbound && list.slice(i + 1).some((x) => !x.inbound))
         answered.add(m.id);
     });
-    return { pressed, answered };
+    // The buttons that press: those of the newest answer that has their ids
+    // (the server gives them for an answer not yet answered, even after a
+    // reload), if the person has said nothing since.
+    let pressableId: string | undefined;
+    for (let i = list.length - 1; i >= 0; i--) {
+      const m = list[i];
+      if (!m) continue;
+      if (m.inbound) break;
+      if (m.buttons?.some((b) => b.id)) {
+        pressableId = m.id;
+        break;
+      }
+    }
+    return { pressed, answered, pressableId };
   }, [messages]);
 
   return (
@@ -352,7 +351,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
         }
         render={(m, { first }) => {
           const choice = pressed.get(m.id);
-          const pressable = live === liveKey(m);
+          const pressable = m.id === pressableId;
           // The time sits in the corner of the last line when there are no
           // buttons and it came from here.
           const inline =

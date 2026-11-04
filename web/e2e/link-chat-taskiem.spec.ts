@@ -431,3 +431,64 @@ test("on a computer the clip's Camera opens the webcam for Taskiem too", async (
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
+
+test("a question not yet answered can still be answered after a reload, and from another tab; an answered one cannot", async ({
+  browser,
+}) => {
+  const page = await person(browser);
+  await page.goto("/chat?with=taskiem");
+  await pane(page).locator("#taskiem-text").fill("cash in 5,000 till");
+  await pane(page).locator("#taskiem-text").press("Enter");
+  await expect(theirs(page).last()).toContainText("₦5,000");
+
+  // Reloaded: its buttons are still there to press.
+  await page.reload();
+  const asking = theirs(page).last();
+  await expect(asking).toContainText("₦5,000");
+  const yes = asking.getByRole("button", { name: "Yes", exact: true });
+  await expect(yes).toBeVisible();
+  await axeBoth(page, "an unanswered question after a reload");
+  await yes.click();
+  await expect(theirs(page).last()).toContainText("Recorded");
+  // Answered: none of its buttons press, now or after another reload.
+  await expect(
+    pane(page).getByRole("button", { name: "Yes", exact: true }),
+  ).toHaveCount(0);
+  await page.reload();
+  await expect(theirs(page).last()).toContainText("Recorded");
+  await expect(
+    pane(page).getByRole("button", { name: "Yes", exact: true }),
+  ).toHaveCount(0);
+
+  // Asked from another tab (the same person): this tab can answer it.
+  const other = await page.context().newPage();
+  await other.request.post("/v1/taskiem-chat", {
+    headers: H,
+    data: { text: "cash in 6,000 till" },
+  });
+  const second = pane(page)
+    .locator('[data-testid="taskiem-message"]', { hasText: "₦6,000" })
+    .last();
+  await expect(second).toBeVisible({ timeout: 8000 });
+  await second.getByRole("button", { name: "Yes", exact: true }).click();
+  await expect(theirs(page).last()).toContainText("₦6,000");
+  await expect(theirs(page).last()).toContainText("Recorded");
+});
+
+test("moving on from a question (saying something else) ends its buttons", async ({
+  browser,
+}) => {
+  const page = await person(browser);
+  await page.goto("/chat?with=taskiem");
+  await pane(page).locator("#taskiem-text").fill("cash in 5,000 till");
+  await pane(page).locator("#taskiem-text").press("Enter");
+  await expect(theirs(page).last()).toContainText("₦5,000");
+  await pane(page).locator("#taskiem-text").fill("status");
+  await pane(page).locator("#taskiem-text").press("Enter");
+  await expect(theirs(page).last()).not.toContainText("₦5,000");
+  await expect(
+    pane(page)
+      .locator('[data-testid="taskiem-message"]', { hasText: "₦5,000" })
+      .getByRole("button", { name: "Yes", exact: true }),
+  ).toHaveCount(0);
+});

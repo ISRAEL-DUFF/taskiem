@@ -155,3 +155,102 @@ func TestTaskiemConversation(t *testing.T) {
 		t.Errorf("purged: %d %v", left, err)
 	}
 }
+
+// A question Taskiem asked on the web can still be answered after the page
+// is reloaded or opened elsewhere: the ids of its buttons are kept for the
+// step's life, only for the newest answer, only for that person.
+func TestTaskiemLiveButtons(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	owner := w.tenant(t, "Ada's Kitchen", "ada@live.test")
+	hist := func(c *client) []any { return c.must(200, "GET", "/v1/taskiem-chat", nil)["messages"].([]any) }
+	buttonsOf := func(m any) []any { b, _ := m.(map[string]any)["buttons"].([]any); return b }
+
+	posted := owner.must(200, "POST", "/v1/taskiem-chat", map[string]any{"text": "cash in 7,000 till"})["messages"].([]any)
+	asked := posted[1].(map[string]any)
+
+	// Reloaded: the question's buttons come with their ids.
+	got := hist(owner)
+	last := got[len(got)-1].(map[string]any)
+	if last["id"] != asked["id"] {
+		t.Fatalf("the newest message is the question: %v", last)
+	}
+	bs := buttonsOf(last)
+	if len(bs) == 0 || bs[0].(map[string]any)["id"] == nil || bs[0].(map[string]any)["id"] == "" {
+		t.Fatalf("a button of the unanswered question has its id after a reload: %v", last)
+	}
+	// And following it (the stream's look and ?after=).
+	since := got[0].(map[string]any)["created_at"].(string)
+	newer := owner.must(200, "GET", "/v1/taskiem-chat?after="+since, nil)["messages"].([]any)
+	if b := buttonsOf(newer[len(newer)-1]); len(b) == 0 || b[0].(map[string]any)["id"] == nil {
+		t.Errorf("following it: %v", newer[len(newer)-1])
+	}
+	// It is pressable from the reloaded page: the step is still there.
+	yes := bs[0].(map[string]any)
+	done := owner.must(200, "POST", "/v1/taskiem-chat", map[string]any{"reply": yes["id"], "text": yes["title"]})["messages"].([]any)
+	if !strings.Contains(done[len(done)-1].(map[string]any)["text"].(string), "₦7,000") {
+		t.Fatalf("pressed after a reload: %v", done)
+	}
+	var recorded int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM money_entries WHERE amount_kobo = 700000`).Scan(&recorded); err != nil || recorded != 1 {
+		t.Errorf("recorded: %d %v", recorded, err)
+	}
+
+	// Answered: the buttons are by title only again, and nothing is kept.
+	for _, m := range hist(owner) {
+		for _, b := range buttonsOf(m) {
+			if b.(map[string]any)["id"] != nil {
+				t.Errorf("an answered question keeps no ids: %v", m)
+			}
+		}
+	}
+	var kept int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM chat_live_buttons`).Scan(&kept); err != nil || kept != 0 {
+		t.Errorf("rows kept after the answer: %d %v", kept, err)
+	}
+	// While it is kept it is sealed: the ids are not in the row.
+	owner.must(200, "POST", "/v1/taskiem-chat", map[string]any{"text": "cash in 5,500 till"})
+	var clear int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM chat_live_buttons WHERE buttons::text LIKE '%"id"%'`).Scan(&clear); err != nil || clear != 0 {
+		t.Errorf("sealed: %d %v", clear, err)
+	}
+
+	// A newer question replaces the older; anything said on the web moves the
+	// step on, and the older question's buttons are no longer to be pressed.
+	asked8 := owner.must(200, "POST", "/v1/taskiem-chat", map[string]any{"text": "cash in 8,000 till"})["messages"].([]any)[1].(map[string]any)
+	owner.must(200, "POST", "/v1/taskiem-chat", map[string]any{"text": "status"})
+	for _, m := range hist(owner) {
+		if m.(map[string]any)["id"] == asked8["id"] {
+			for _, b := range buttonsOf(m) {
+				if b.(map[string]any)["id"] != nil {
+					t.Errorf("a question the person has moved past keeps its ids: %v", m)
+				}
+			}
+		}
+	}
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM chat_live_buttons`).Scan(&kept); err != nil || kept > 1 {
+		t.Errorf("one row at most: %d %v", kept, err)
+	}
+
+	// Only the person's own, and only while the step lives.
+	owner.must(200, "POST", "/v1/taskiem-chat", map[string]any{"text": "cash in 9,000 till"})
+	viewer := addMember(t, w.world, owner, "vee", "viewer")
+	if got := hist(viewer); len(got) != 0 {
+		t.Errorf("another member's: %v", got)
+	}
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE chat_live_buttons SET expires_at = now() - interval '1 second'`); err != nil {
+		t.Fatal(err)
+	}
+	got = hist(owner)
+	for _, b := range buttonsOf(got[len(got)-1]) {
+		if b.(map[string]any)["id"] != nil {
+			t.Errorf("an expired step keeps no ids: %v", got[len(got)-1])
+		}
+	}
+	if err := w.srv.WhatsAppTick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM chat_live_buttons`).Scan(&kept); err != nil || kept != 0 {
+		t.Errorf("purged: %d %v", kept, err)
+	}
+}
