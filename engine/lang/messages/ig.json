@@ -228,6 +228,14 @@
       "text": "{name}: iwu gị {reference} adịla njikere.",
       "reviewed": false
     },
+    "invoice.pay_unavailable_title": {
+      "text": "A customer could not pay online",
+      "reviewed": false
+    },
+    "invoice.pay_unavailable": {
+      "text": "A customer tried to pay {what} by {how}, but no payments service of yours can do that, so they were asked to pay you directly. Connect Paystack, Flutterwave, OPay or another payments service under Connections, and they can pay online.",
+      "reviewed": false
+    },
     "invoice.chat.account": {
       "text": "Kwụọ {amount} maka invoice {number} site na bank transfer gaa na:\nNọmba akaụntụ: {account}\nBank: {bank}\nAha akaụntụ: {name}\nỌ ga-arụ ọrụ ruo {until}. Jiri ya maka ịkwụ ụgwọ a naanị.",
       "reviewed": false

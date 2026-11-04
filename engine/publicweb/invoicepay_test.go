@@ -58,6 +58,8 @@ func TestInvoicePayOptions(t *testing.T) {
 			[]string{"has expired", "Get a new account number"}, []string{"9900112233"}, "", ""},
 		{"limits", []PayOption{{Kind: "transfer", Status: "failed", LastHour: 5, Issued: 5}},
 			[]string{"Too many account numbers", "contact Ada Kitchen"}, []string{`value="transfer"`}, "", ""},
+		{"no payments connection", []PayOption{{Kind: "transfer", Status: "unavailable", LastHour: 1, Issued: 1}, {Kind: "link", Status: "unavailable", LastHour: 1, Issued: 1}},
+			[]string{"Online payment is not set up for this invoice yet. Please pay Ada Kitchen directly, or try again later.", `value="transfer">Try again`, `value="link">Try card payment again`}, []string{"could not get an account number"}, "", ""},
 		{"card link", []PayOption{{Kind: "transfer"}, {Kind: "link", Status: "open", PaymentURL: "https://checkout.example/abc"}},
 			[]string{`href="https://checkout.example/abc"`, "Continue to card payment"}, nil, "", ""},
 		{"part payments", []PayOption{{Kind: "transfer", PartPayments: true}},

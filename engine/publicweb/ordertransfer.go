@@ -133,6 +133,8 @@ func (s *Server) payByTransfer(d *statusData, ref, key, prefix string) {
 		t.Note, t.Label = "The last account number has expired. If you already paid into it, this page will show your payment.", "Get a new account number"
 	case p.Status == "failed":
 		t.Note = "We could not get an account number just now. Please try again in a few minutes."
+	case p.Status == "unavailable":
+		t.Note, t.Label = unavailableNote("this order", d.Business), "Try again"
 	}
 	if p.LastHour >= invoicing.MaxPerHour || p.Issued >= invoicing.MaxPerInvoice {
 		t.Label = ""

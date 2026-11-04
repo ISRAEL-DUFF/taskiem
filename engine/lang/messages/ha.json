@@ -228,6 +228,14 @@
       "text": "{name}: odar ku {reference} ta shirya.",
       "reviewed": false
     },
+    "invoice.pay_unavailable_title": {
+      "text": "A customer could not pay online",
+      "reviewed": false
+    },
+    "invoice.pay_unavailable": {
+      "text": "A customer tried to pay {what} by {how}, but no payments service of yours can do that, so they were asked to pay you directly. Connect Paystack, Flutterwave, OPay or another payments service under Connections, and they can pay online.",
+      "reviewed": false
+    },
     "invoice.chat.account": {
       "text": "Ku biya {amount} na invoice {number} ta bank transfer zuwa:\nLambar asusu: {account}\nBanki: {bank}\nSunan asusu: {name}\nTana aiki har zuwa {until}. Ku yi amfani da ita don wannan biyan kawai.",
       "reviewed": false

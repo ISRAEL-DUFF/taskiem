@@ -228,6 +228,14 @@
       "text": "{name}: your order {reference} don ready.",
       "reviewed": false
     },
+    "invoice.pay_unavailable_title": {
+      "text": "A customer could not pay online",
+      "reviewed": false
+    },
+    "invoice.pay_unavailable": {
+      "text": "A customer tried to pay {what} by {how}, but no payments service of yours can do that, so they were asked to pay you directly. Connect Paystack, Flutterwave, OPay or another payments service under Connections, and they can pay online.",
+      "reviewed": false
+    },
     "invoice.chat.account": {
       "text": "Pay {amount} for invoice {number} with bank transfer to:\nAccount number: {account}\nBank: {bank}\nAccount name: {name}\nE go work reach {until}. Use am for dis payment only.",
       "reviewed": false

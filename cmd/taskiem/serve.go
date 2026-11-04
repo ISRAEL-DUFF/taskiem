@@ -1246,6 +1246,8 @@ func serve(ctx context.Context, args []string) error {
 			// A linked business's terms set its invoices' due dates, and a
 			// reminder reaches it in its own business (business links L5).
 			e.invoices.DueFor, e.invoices.Reminded = srv.InvoiceDueFor, srv.InvoiceReminded
+			// A customer who could not pay online tells the business to connect payments.
+			e.invoices.PayUnavailable = srv.InvoicePayUnavailable
 		}
 		srv.Forms = e.forms
 		if e.forms != nil {
