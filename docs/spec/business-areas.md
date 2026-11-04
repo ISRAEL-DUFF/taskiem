@@ -21,22 +21,23 @@ The Schools switch already works this way for one area (a settings row, `schools
 | Area key | What it covers | Depends on |
 | --- | --- | --- |
 | `storefront` | The storefront and its look, fronts, bookings, riders, deliveries, trust and verification, the public page | `orders` |
-| `orders` | Storefront orders, refunds and quotes; purchase orders to and from linked businesses | none |
-| `stock` | Stock, suppliers, price lists and item links, stock by chat | none |
-| `money` | Invoices, the money log and matching, bills, payments settings, reports, linked-business chat and links that carry documents | none |
+| `orders` | Storefront orders, refunds and quotes; purchase orders to and from linked businesses (a link carries them only where both businesses have `orders` on) | none |
+| `stock` | Stock, suppliers, price lists and item links, stock by chat (price lists cross a link only where both businesses have `stock` on) | none |
+| `money` | Invoices, the money log and matching, bills, payments settings and reports (invoices and bills cross a link only where both businesses have `money` on) | none |
+| `links` | Business links (decision 0061): finding and linking businesses, the Linked businesses page, and the conversations between linked businesses. A link carries each kind of document only where both sides have that document's area on | none |
 | `schools` | The Schools area (unchanged behaviour) | `money` (fees are invoices) |
 
 Always on, never switchable, since they are the product: workflows, forms, tables, runs and activity, approvals, connections, chat, templates, members, billing, audit, alerts and settings.
 
 Turning an area on turns its dependencies on; turning one off is refused while another on area depends on it, with a plain sentence naming it. Turning an area off **hides and refuses; it never deletes**. Data stays, and turning it back on restores everything (as `schools.SetEnabled` already promises).
 
-**Decided:** `orders` is its own switch (founder, 4 November). **Still to decide:** whether business links belong under `money` or get their own `links` area (see §9); the table above assumes `money`.
+**Decided:** `orders` is its own switch (founder, 4 November). `links` is its own switch (founder, 4 November), with each document type following its own area (§9).
 
 ## 3. Storage
 
 One table, `business_areas (tenant_id, area, enabled, updated_by, updated_at, PRIMARY KEY (tenant_id, area))`, under the same row-level security as other tenant tables.
 
-- **Backfill, in the same migration:** for every existing tenant, insert `enabled = true` for `storefront`, `orders`, `stock` and `money`, and `schools` copied from `school_settings.enabled`. No existing business changes behaviour.
+- **Backfill, in the same migration:** for every existing tenant, insert `enabled = true` for `storefront`, `orders`, `stock`, `money` and `links`, and `schools` copied from `school_settings.enabled`. No existing business changes behaviour.
 - **New tenants** get no rows, which reads as off. The signup question (phase 4) inserts rows.
 - **Schools:** keep `school_settings.enabled` as the source for `schools` in phase 1, and have the areas API read and write it, so the existing endpoint, the chasing job's `taskiem_schools_enabled_tenants()` and the bursar role keep working. Folding it into `business_areas` can be a later clean-up.
 - **A definer for background jobs.** Scheduled work runs outside a tenant's session (money digest, bill and payout ticks, chasing). Add `taskiem_area_enabled_tenants(area text)` as a SECURITY DEFINER read returning tenant ids only, modelled on `taskiem_schools_enabled_tenants()` (migration 00219). It needs an entry in `engine/db/definers.tsv`, or `TestDefinersAllowList` fails.
@@ -46,7 +47,7 @@ One table, `business_areas (tenant_id, area, enabled, updated_by, updated_at, PR
 
 - `GET /v1/settings/areas` returns every area with its state, what it covers in plain words and what it depends on. Any signed-in member may read it.
 - `PUT /v1/settings/areas` takes `{ "storefront": true, ... }` and applies the dependency rules. **Only an owner** changes it, as for the Schools switch. Each change is audited (`settings.areas`, with the area and the new state) in the tenant's chain.
-- `GET /v1/me` gains `areas: { storefront, orders, stock, money, schools }` (booleans). `schools` stays in `/me` for the old client.
+- `GET /v1/me` gains `areas: { storefront, orders, stock, money, links, schools }` (booleans). `schools` stays in `/me` for the old client.
 - Taskiem Ops: the tenant page shows each tenant's areas, read-only, as it is read-only today.
 
 ## 5. Server enforcement
@@ -58,7 +59,9 @@ The rule: **permission and area must both pass.** A permission alone no longer o
   - `storefront`: the `/storefront/*` routes except orders, `/riders*`, bookings, deliveries, fronts.
   - `orders`: `/storefront/orders*`, `linkOrderRoutes`.
   - `stock`: stock and supplier routes, `priceListRoutes`.
-  - `money`: `invoiceRoutes`, `billRoutes`, money and reports routes, `linkRoutes` and `linkChatRoutes`.
+  - `money`: `invoiceRoutes`, `billRoutes`, money and reports routes.
+  - `links`: `linkRoutes` and `linkChatRoutes`. `linkOrderRoutes` sit under `orders` and `priceListRoutes` under `stock`, so an off area refuses its documents even over a live link.
+  - Cross-business writes (the `taskiem_link_enter` path of decision 0061) also check the area on **both** sides, so a mirror is never written into a business that has turned the area off; the sender is told in plain words that the other business does not use it.
   - `schools`: already enforced by `schools.need`; leave as is.
 - **Other doors into the same data** must be gated too, or the switch leaks:
   - WhatsApp and chat commands that act on an area (`whatsapp_storefront.go`, `whatsapp_stock.go`, `whatsapp_bookings.go`, `invoice_chat.go`, the money chat words): reply with a plain "turn on Stock in Settings" when it is off.
@@ -98,6 +101,6 @@ Phases 1 and 2 are the first change to review; 3 and 4 follow.
 - **Missed doors.** The worst bug is an area that looks off but still takes orders or sends money reminders. Hence group-level middleware, the router-walk test and phase 3 being its own phase.
 - **Existing workflows** that use a step from an area the business later turns off. **Decided: warn.** Turning an area off checks the tenant's published workflows (and deployed versions) for steps that belong to the area. If any do, `PUT /v1/settings/areas` answers 409 with the list (workflow name, step, environment) and changes nothing; the web app shows that list in its confirmation ("These workflows use Stock and will stop at that step: ...") and resends with `confirm: true` if the owner still wants it off. After confirming, those steps fail with the plain sentence rather than silently skip. The step-to-area map is built in phase 3, from the connector registry; phase 1 ships the 409 and `confirm` contract with an empty map so the API does not change later.
 - **Backfill assumption:** "existing businesses keep everything on" is applied literally, including businesses that never used stock or storefronts. They can turn areas off themselves; Ops could later flag tenants with no data in an area.
-- **Business links: under `money`, or their own `links` area?** Business links (decision 0061) let two businesses on Taskiem trade as mirrored records: an invoice one issues is a bill for the other, a purchase order is an order for the seller, price lists are shared, and the two talk in one conversation. That is four different areas of the product in one feature. If links sit under `money`, a business that wants to chat with a supplier or customer on Taskiem but never issues invoices cannot link at all, and a business that turns Money off would lose its linked chats. If links are their own `links` area, the plan becomes: `links` gates the Linked businesses page, finding and linking businesses, and the linked conversations; each document type then follows its own area, so bills and invoices need `money`, purchase orders need `orders` and price lists need `stock`. A link between two businesses carries only the documents both sides have the area on for. This is more switches but matches how the code is already split (`linkRoutes`, `billRoutes`, `linkOrderRoutes`, `linkChatRoutes`, `priceListRoutes`). Recommendation: a separate `links` area. Not applied to the plan yet.
+- **Business links** (decided): `links` is its own area. Business links let two businesses trade as mirrored records (an invoice becomes the other side's bill, a purchase order their order, price lists are shared, and the two talk in one conversation), which spans money, orders, stock and chat. Tying links to `money` would stop a business that never issues invoices from linking at all, and would take linked chats away when Money is turned off. So `links` gates finding and linking businesses and their conversations; each document type follows its own area, and a link carries a document only where both sides have its area on. Turning `links` off ends nothing: existing links and mirrors stay as they are and come back when it is turned on; while it is off, no new link or message crosses and nothing is mirrored.
 - **Embedding and partners:** settled in §5.
 - **Naming:** the owner-facing words ("What your business uses", the area names) need a pass against the plain-words rules and, ideally, a Nigerian small-business owner's ear.
