@@ -5,7 +5,16 @@ import { axe, describe } from "./a11y";
 // typing, arrows through the list, Esc closing the panel and then the chat,
 // right click on a bubble, focus going back to the message box, and words
 // for the unread count and the ticks.
-test.use({ bypassCSP: true, viewport: { width: 1280, height: 800 } });
+test.use({
+  bypassCSP: true,
+  viewport: { width: 1280, height: 800 },
+  launchOptions: {
+    args: [
+      "--use-fake-device-for-media-stream",
+      "--use-fake-ui-for-media-stream",
+    ],
+  },
+});
 
 const H = { "X-Taskiem-Request": "1" };
 const letters = () =>
@@ -281,4 +290,183 @@ test("a screen reader hears the unread count and the ticks in words", async ({
   await expect(
     buyer.getByTestId("chat-pane").getByRole("img", { name: /Delivered|Read/ }),
   ).toBeVisible();
+});
+
+/** What a keyboard user sees on the focused element: a ring (outline or shadow), not clipped away. */
+const ringOf = (p: Page) =>
+  p.evaluate(() => {
+    const el = document.activeElement as HTMLElement | null;
+    if (!el || el === document.body) return null;
+    const cs = getComputedStyle(el);
+    const shadow = cs.boxShadow !== "none" && cs.boxShadow !== "";
+    const outline =
+      cs.outlineStyle !== "none" && parseFloat(cs.outlineWidth) > 0;
+    const r = el.getBoundingClientRect();
+    const name =
+      el.getAttribute("aria-label") ??
+      el.textContent?.trim().slice(0, 30) ??
+      el.tagName;
+    return {
+      name: `${el.tagName} ${name}`,
+      ring: shadow || outline,
+      visible: r.width > 0 && r.height > 0,
+    };
+  });
+
+test("every control reached with Tab shows a ring: the list, the conversation and its composer", async ({
+  browser,
+}) => {
+  const { seller, buyer, link } = await linked(browser);
+  await say(seller, link, "Rice is 45k");
+  for (const path of ["/chat", `/chat?with=${link}`]) {
+    await buyer.goto(path);
+    await expect(buyer.getByTestId("link-linked")).toHaveCount(1);
+    await buyer.locator("body").click({ position: { x: 5, y: 5 } });
+    const seen: string[] = [];
+    const bare: string[] = [];
+    for (let i = 0; i < 45; i++) {
+      await buyer.keyboard.press("Tab");
+      const r = await ringOf(buyer);
+      if (!r) continue;
+      if (seen.includes(r.name) && seen.length > 10) break;
+      seen.push(r.name);
+      if (r.visible && !r.ring) bare.push(r.name);
+    }
+    expect(seen.length).toBeGreaterThan(8);
+    expect(bare, `no ring on: ${bare.join(", ")} (${path})`).toEqual([]);
+  }
+});
+
+test("Esc cancels a recording and leaves the chat open; Caps Lock does not turn the keys off", async ({
+  browser,
+}) => {
+  const { buyer, link, seller } = await linked(browser, {
+    permissions: ["microphone"],
+  });
+  await say(seller, link, "Hello");
+  await buyer.goto(`/chat?with=${link}`);
+  await buyer.getByRole("button", { name: "Record a voice note" }).click();
+  await expect(buyer.getByTestId("chat-recording")).toBeVisible();
+  await buyer.keyboard.press("Escape");
+  await expect(buyer.getByTestId("chat-recording")).toHaveCount(0);
+  await expect(buyer.getByTestId("chat-pane")).toBeVisible();
+  expect(withParam(buyer)).toBe(link);
+  await expect(buyer.locator("#chat-text")).toBeFocused();
+  // Nothing was sent.
+  await expect(buyer.getByTestId("chat-message")).toHaveCount(1);
+
+  await buyer.locator("h2", { hasText: "Chat" }).first().click();
+  await buyer.keyboard.press("Shift+K"); // k with Caps Lock on: previous chat
+  await expect.poll(() => withParam(buyer)).toBe("taskiem");
+});
+
+test("a right click keeps the browser's menu on the bubble's own selected text, not for a selection elsewhere", async ({
+  browser,
+}) => {
+  const { seller, buyer, link } = await linked(browser);
+  await say(seller, link, "Rice is 45k a bag");
+  await buyer.goto(`/chat?with=${link}`);
+  const b = buyer.locator('[data-testid="chat-message"]', {
+    hasText: "Rice is 45k",
+  });
+  const text = b.locator(".text");
+  await expect(text).toBeVisible();
+  await text.evaluate((el) => {
+    const r = document.createRange();
+    r.selectNodeContents(el);
+    getSelection()?.removeAllRanges();
+    getSelection()?.addRange(r);
+  });
+  await text.dispatchEvent("contextmenu", { button: 2, cancelable: true });
+  await expect(b.getByTestId("chat-more")).toHaveCount(0);
+  // The selection is elsewhere: the menu opens.
+  await buyer.evaluate(() => {
+    const h = document.querySelector('[data-testid="chat-pane"] h2');
+    const r = document.createRange();
+    if (h) r.selectNodeContents(h);
+    getSelection()?.removeAllRanges();
+    getSelection()?.addRange(r);
+  });
+  await text.dispatchEvent("contextmenu", { button: 2, cancelable: true });
+  await expect(b.getByTestId("chat-more")).toBeVisible();
+});
+
+test("the cursor goes back to the message box when the info sheet, a waiting photo or a menu is closed; j and k stay out of an open menu", async ({
+  browser,
+}) => {
+  const { seller, buyer, link, name } = await linked(browser);
+  await say(seller, link, "Hello");
+  await buyer.goto(`/chat?with=${link}`);
+  const box = buyer.locator("#chat-text");
+  await expect(buyer.getByTestId("chat-message")).toHaveCount(1);
+
+  await buyer.getByRole("button", { name: `About ${name}` }).click();
+  await expect(buyer.locator(".chat-info")).toBeVisible();
+  await buyer.keyboard.press("Escape");
+  await expect(buyer.locator(".chat-info")).toHaveCount(0);
+  await expect(box).toBeFocused();
+  expect(withParam(buyer)).toBe(link);
+
+  await buyer
+    .locator('input[type="file"]')
+    .first()
+    .setInputFiles({
+      name: "p.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        "base64",
+      ),
+    });
+  await expect(buyer.getByTestId("chat-attaching")).toBeVisible();
+  await expect(box).toBeFocused(); // to write its caption
+  await buyer.keyboard.press("Escape");
+  await expect(buyer.getByTestId("chat-attaching")).toHaveCount(0);
+  await expect(box).toBeFocused();
+
+  // The conversation's menu: the keys of the list are not typed into it, Esc gives the focus back.
+  const more = buyer.getByRole("button", {
+    name: "More about this conversation",
+  });
+  await more.click();
+  await expect(buyer.getByTestId("chat-menu")).toBeVisible();
+  await buyer.locator("body").click({ position: { x: 5, y: 5 } });
+  await more.click();
+  await buyer.keyboard.press("j");
+  await buyer.waitForTimeout(300);
+  expect(withParam(buyer)).toBe(link);
+  await buyer.keyboard.press("Escape");
+  await expect(buyer.getByTestId("chat-menu")).toHaveCount(0);
+  await expect(more).toBeFocused();
+  expect(withParam(buyer)).toBe(link);
+
+  // The menu lists the keys.
+  await more.click();
+  await buyer
+    .getByTestId("chat-menu")
+    .getByRole("button", { name: "Keyboard" })
+    .click();
+  await expect(buyer.getByRole("dialog", { name: "Keyboard" })).toBeVisible();
+});
+
+test("arrows reach a search's results too, and Esc in an empty search box leaves it", async ({
+  browser,
+}) => {
+  const { buyer, name } = await linked(browser);
+  await buyer.goto("/chat");
+  const search = buyer.getByTestId("link-search");
+  await search.fill(name.slice(0, 14));
+  await expect(
+    buyer.locator(".chat-list-pane section :is(a[href], button)").first(),
+  ).toBeVisible();
+  await buyer.keyboard.press("ArrowDown");
+  const inResults = await buyer.evaluate(
+    () => !!document.activeElement?.closest(".chat-list-pane section"),
+  );
+  expect(inResults).toBe(true);
+  await buyer.keyboard.press("ArrowUp");
+  await expect(search).toBeFocused();
+  await search.fill("");
+  await buyer.keyboard.press("Escape");
+  await expect(search).not.toBeFocused();
 });

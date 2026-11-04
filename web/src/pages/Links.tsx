@@ -40,7 +40,13 @@ import { TaskiemPane } from "./TaskiemChat";
 import { ChatRow } from "./ChatRow";
 import { useChatLive } from "./ChatLive";
 import { useDrafts } from "../lib/drafts";
-import { isTyping, shortcutOf, SHORTCUTS, step } from "../lib/chatKeys";
+import {
+  isTyping,
+  KEYS_EVENT,
+  shortcutOf,
+  SHORTCUTS,
+  step,
+} from "../lib/chatKeys";
 import { Ticks } from "./Conversation";
 import {
   EmptyState,
@@ -348,7 +354,7 @@ export function ChatPage() {
         if (e.defaultPrevented || !k.openID) return;
         if (
           document.querySelector(
-            '[data-testid="chat-more"], .chat-menu, .attach-menu, .chat-info, .modal, .mention-list, .emoji-panel',
+            '[data-testid="chat-more"], [data-testid="chat-recording"], .chat-menu, .attach-menu, .chat-info, .modal, .mention-list, .emoji-panel',
           )
         )
           return;
@@ -362,13 +368,19 @@ export function ChatPage() {
         );
         return;
       }
-      const what = shortcutOf(e, isTyping(document.activeElement));
+      // Not under an open menu, sheet or panel: the letters are theirs.
+      const covered = !!document.querySelector(
+        '[data-testid="chat-more"], [data-testid="chat-recording"], .chat-menu, .attach-menu, .chat-info, .modal, .mention-list, .emoji-panel',
+      );
+      const what = shortcutOf(e, covered || isTyping(document.activeElement));
       if (!what || e.defaultPrevented) return;
       e.preventDefault();
       if (what === "help") setKeysOpen(true);
       else if (what === "search" || what === "new") {
         if (what === "new")
-          setHint("Type the business's name or phone number, then choose Request link.");
+          setHint(
+            "Type the business's name or phone number, then choose Request link.",
+          );
         k.setParams({});
         focusSearch();
       } else {
@@ -376,17 +388,26 @@ export function ChatPage() {
         if (to) k.setParams({ with: to });
       }
     };
+    const showKeys = () => setKeysOpen(true);
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    window.addEventListener(KEYS_EVENT, showKeys);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener(KEYS_EVENT, showKeys);
+    };
   }, []);
   // Arrows in the list: down from the search box to the first chat, then
   // chat to chat; up from the first back to the box. Enter opens (a link).
   const onListKey = (e: React.KeyboardEvent) => {
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
     const box = searchBox.current;
+    // Everything that can be pressed below the search box and the chips: the
+    // chats, and the results, requests and asks the lists hold.
     const rows = Array.from(
-      e.currentTarget.querySelectorAll<HTMLElement>("a.chat-row"),
-    );
+      e.currentTarget.querySelectorAll<HTMLElement>(
+        ":is(section, ul.chat-rows) :is(a[href], button:not(:disabled))",
+      ),
+    ).filter((x) => !x.closest(".chat-chips, .chat-list-head, .card"));
     const at = rows.indexOf(e.target as HTMLElement);
     if (at < 0 && e.target !== box) return;
     const next =
@@ -445,10 +466,12 @@ export function ChatPage() {
                 onChange={(e) => (setQ(e.target.value), setHint(""))}
                 onKeyDown={(e) => {
                   // Esc empties the box; with it empty, the key goes on.
-                  if (e.key === "Escape" && q) {
+                  if (e.key === "Escape") {
                     e.preventDefault();
-                    setQ("");
-                    setHint("");
+                    if (q) {
+                      setQ("");
+                      setHint("");
+                    } else e.currentTarget.blur();
                   }
                 }}
                 data-testid="link-search"
@@ -1350,9 +1373,7 @@ function KeysSheet({ onClose }: { onClose: () => void }) {
           </div>
         ))}
       </dl>
-      <p className="hint">
-        The letters work when no box is being typed in.
-      </p>
+      <p className="hint">The letters work when no box is being typed in.</p>
       <div className="row-actions">
         <button type="button" onClick={onClose}>
           Close

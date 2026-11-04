@@ -61,6 +61,7 @@ import { AttachMenu } from "./AttachMenu";
 import { CameraSheet } from "./CameraSheet";
 import { insertAt } from "../lib/emoji";
 import { useComposerFocus } from "../lib/composerFocus";
+import { KEYS_EVENT } from "../lib/chatKeys";
 import { getDraft, setDraft } from "../lib/drafts";
 import { useAutoGrow } from "../lib/useAutoGrow";
 import { roleLine, type BusinessLink, type LinkCard } from "../lib/links";
@@ -449,6 +450,14 @@ export function Ticks({ read }: { read: boolean }) {
   );
 }
 
+/** True where some of the bubble's own text is selected (a right click then
+ * keeps the browser's menu, to copy it); a selection elsewhere does not. */
+function selectedIn(el: Element | null): boolean {
+  const sel = window.getSelection();
+  if (!el || !sel || sel.isCollapsed || sel.toString() === "") return false;
+  return !!sel.anchorNode && el.contains(sel.anchorNode);
+}
+
 function Bubble({
   m,
   other,
@@ -573,7 +582,7 @@ function Bubble({
         onShow ||
         e.shiftKey ||
         t.closest?.("a, audio, video, input, textarea") ||
-        window.getSelection()?.toString()
+        selectedIn(bubbleEl.current)
       )
         return;
       e.preventDefault();
@@ -886,6 +895,7 @@ export function ConversationPane({
   const [messages, setMessages] = useState<LinkMessage[]>();
   const [typing, setTyping] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuButton = useRef<HTMLButtonElement>(null);
   const [infoOpen, setInfoOpen] = useState(false);
   // The business's card (area, what it sells), as its public page shows
   // it: found by the same search, so only a business that lets others find
@@ -913,7 +923,11 @@ export function ConversationPane({
   }, [infoOpen]);
   useEffect(() => {
     if (!menuOpen) return;
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && setMenuOpen(false);
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setMenuOpen(false);
+      menuButton.current?.focus();
+    };
     const away = (e: MouseEvent) =>
       !(e.target as Element).closest?.(".chat-menu-wrap") && setMenuOpen(false);
     document.addEventListener("keydown", esc);
@@ -1244,7 +1258,14 @@ export function ConversationPane({
   // photo to caption asks for it.
   useComposerFocus(
     textBox,
-    [emojiOpen, infoOpen, !!forwarding, !!pending, !!reply],
+    [
+      emojiOpen,
+      infoOpen,
+      !!forwarding,
+      !!pending,
+      !!reply,
+      voice.secs !== undefined,
+    ],
     [!!reply, !!pending],
   );
   const send = (held?: File) => {
@@ -1445,11 +1466,12 @@ export function ConversationPane({
             </span>
           )}
         </h2>
-        {can("chat.trade") && (
+        {
           <div className="chat-menu-wrap">
             <button
               type="button"
               className="icon-button"
+              ref={menuButton}
               aria-label="More about this conversation"
               aria-expanded={menuOpen}
               aria-haspopup="true"
@@ -1465,49 +1487,62 @@ export function ConversationPane({
                 >
                   Contact info
                 </button>
+                {can("chat.trade") && (
+                  <>
+                    <button
+                      type="button"
+                      disabled={act.busy}
+                      onClick={() => {
+                        setMenuOpen(false);
+                        settings(
+                          { pinned: !conv.pinned },
+                          conv.pinned ? "Unpinned" : "Pinned",
+                        );
+                      }}
+                    >
+                      {conv.pinned ? "Unpin" : "Pin"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={act.busy}
+                      onClick={() => {
+                        setMenuOpen(false);
+                        settings(
+                          { muted: !conv.muted },
+                          conv.muted ? "Unmuted" : "Muted",
+                        );
+                      }}
+                    >
+                      {conv.muted ? "Unmute" : "Mute"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={act.busy}
+                      onClick={() => {
+                        setMenuOpen(false);
+                        settings(
+                          { archived: !conv.archived },
+                          conv.archived ? "Unarchived" : "Archived",
+                        );
+                      }}
+                    >
+                      {conv.archived ? "Unarchive" : "Archive"}
+                    </button>
+                  </>
+                )}
                 <button
                   type="button"
-                  disabled={act.busy}
                   onClick={() => {
                     setMenuOpen(false);
-                    settings(
-                      { pinned: !conv.pinned },
-                      conv.pinned ? "Unpinned" : "Pinned",
-                    );
+                    window.dispatchEvent(new Event(KEYS_EVENT));
                   }}
                 >
-                  {conv.pinned ? "Unpin" : "Pin"}
-                </button>
-                <button
-                  type="button"
-                  disabled={act.busy}
-                  onClick={() => {
-                    setMenuOpen(false);
-                    settings(
-                      { muted: !conv.muted },
-                      conv.muted ? "Unmuted" : "Muted",
-                    );
-                  }}
-                >
-                  {conv.muted ? "Unmute" : "Mute"}
-                </button>
-                <button
-                  type="button"
-                  disabled={act.busy}
-                  onClick={() => {
-                    setMenuOpen(false);
-                    settings(
-                      { archived: !conv.archived },
-                      conv.archived ? "Unarchived" : "Archived",
-                    );
-                  }}
-                >
-                  {conv.archived ? "Unarchive" : "Archive"}
+                  Keyboard
                 </button>
               </div>
             )}
           </div>
-        )}
+        }
       </div>
       <div
         className="filters"

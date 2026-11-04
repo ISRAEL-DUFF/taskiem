@@ -3,6 +3,9 @@
 // left alone) that do nothing while a field has the focus, so typing a "j"
 // in a message is only ever a "j".
 
+/** Said on the window by the conversation's menu: show the list of keys. */
+export const KEYS_EVENT = "taskiem:keys";
+
 export type Shortcut = "search" | "new" | "next" | "previous" | "help";
 
 export type KeyLike = {
@@ -16,7 +19,8 @@ export type KeyLike = {
  * a dialog) has the focus. */
 export function shortcutOf(e: KeyLike, typing: boolean): Shortcut | undefined {
   if (typing || e.ctrlKey || e.metaKey || e.altKey) return undefined;
-  switch (e.key) {
+  // Caps Lock makes "J" of "j": the same key.
+  switch (e.key.length === 1 ? e.key.toLowerCase() : e.key) {
     case "/":
       return "search";
     case "n":
@@ -59,7 +63,10 @@ export const SHORTCUTS: { keys: string[]; does: string }[] = [
   { keys: ["n"], does: "Ask a business to link" },
   { keys: ["j"], does: "Next chat" },
   { keys: ["k"], does: "Previous chat" },
-  { keys: ["↑", "↓"], does: "Move through the chats (in the list), Enter opens one" },
+  {
+    keys: ["↑", "↓"],
+    does: "Move through the chats (in the list), Enter opens one",
+  },
   { keys: ["Esc"], does: "Close the panel, then the chat" },
   { keys: ["Enter"], does: "Send the message" },
   { keys: ["Shift", "Enter"], does: "A new line in the message" },

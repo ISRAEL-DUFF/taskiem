@@ -230,7 +230,11 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
       }, false)
       .then(() => undefined);
   sendFileRef.current = (f) => sendFile(f);
-  useComposerFocus(textBox, [emojiOpen, !!file], [!!file]);
+  useComposerFocus(
+    textBox,
+    [emojiOpen, !!file, voice.secs !== undefined],
+    [!!file],
+  );
   const send = () => {
     const body = text.trim();
     if (body || file) requestAnimationFrame(() => textBox.current?.focus());

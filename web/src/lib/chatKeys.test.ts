@@ -18,6 +18,10 @@ describe("shortcutOf", () => {
     expect(shortcutOf({ key: "k", metaKey: true }, false)).toBeUndefined();
     expect(shortcutOf({ key: "j", altKey: true }, false)).toBeUndefined();
   });
+  it("is the same with Caps Lock on", () => {
+    expect(shortcutOf({ key: "J" }, false)).toBe("next");
+    expect(shortcutOf({ key: "N" }, false)).toBe("new");
+  });
   it("ignores other keys", () => {
     expect(shortcutOf({ key: "x" }, false)).toBeUndefined();
   });
