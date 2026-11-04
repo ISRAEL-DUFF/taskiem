@@ -42,6 +42,7 @@ func chatStream(t *testing.T, c *client, lastID string) (<-chan streamEvent, fun
 		t.Fatal(err)
 	}
 	if resp.StatusCode != 200 || resp.Header.Get("Content-Type") != "text/event-stream" {
+		_ = resp.Body.Close()
 		cancel()
 		t.Fatalf("the stream: %d %s", resp.StatusCode, resp.Header.Get("Content-Type"))
 	}

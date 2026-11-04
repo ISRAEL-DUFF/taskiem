@@ -1,40 +1,13 @@
 import { useState, type ReactNode } from "react";
-import {
-  Link,
-  NavLink,
-  useNavigate,
-  useParams,
-  useSearchParams,
-} from "react-router-dom";
+import { Link, NavLink, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ApiError, get, patch, post, put } from "../api";
 import { useAuth } from "../auth";
-import {
-  EmptyState,
-  ErrorBox,
-  Field,
-  PageHeader,
-  Skeleton,
-  fmtTime,
-  useAction,
-  useLoad,
-  Item,
-  Items,
-  Row,
-} from "../ui";
+import { EmptyState, ErrorBox, Field, PageHeader, Skeleton, fmtTime, useAction, useLoad, Item, Items, Row } from "../ui";
 import { StudentFeesPanel } from "./SchoolFees";
 import { IssuingSettings, StudentAccountPanel } from "./SchoolAccountParts";
 import { StudentReceiptsPanel } from "./SchoolReceipts";
-import {
-  FamilyLinkDays,
-  SendFamilyLink,
-  StudentClaimsPanel,
-  StudentPlansPanel,
-} from "./SchoolFamily";
-import {
-  PlanGrace,
-  ReminderWording,
-  StudentChasingPanel,
-} from "./SchoolDebtors";
+import { FamilyLinkDays, SendFamilyLink, StudentClaimsPanel, StudentPlansPanel } from "./SchoolFamily";
+import { PlanGrace, ReminderWording, StudentChasingPanel } from "./SchoolDebtors";
 import { StudentClearancePanel } from "./SchoolClearance";
 import {
   PROMOTION_ACTIONS,
@@ -91,8 +64,7 @@ async function plainly<T>(p: Promise<T>): Promise<T> {
   try {
     return await p;
   } catch (e) {
-    if (e instanceof ApiError && (e.status === 400 || e.status === 409))
-      e.message = plainMessage(e.message);
+    if (e instanceof ApiError && (e.status === 400 || e.status === 409)) e.message = plainMessage(e.message);
     throw e;
   }
 }
@@ -118,9 +90,7 @@ export function SchoolTabs() {
       <NavLink to="/schools/receipts">Receipts</NavLink>
       <NavLink to="/schools/debtors">Debtors</NavLink>
       <NavLink to="/schools/clearance">Clearance</NavLink>
-      {me?.roles.includes("owner") && (
-        <NavLink to="/settings/schools">Settings</NavLink>
-      )}
+      {me?.roles.includes("owner") && <NavLink to="/settings/schools">Settings</NavLink>}
     </nav>
   );
 }
@@ -131,26 +101,15 @@ function AreaOff({ title }: { title: string }) {
   return (
     <>
       <PageHeader title={title} />
-      <EmptyState
-        icon="schools"
-        action={
-          me?.roles.includes("owner") ? (
-            <Link to="/settings/schools">Turn Schools on</Link>
-          ) : undefined
-        }
-      >
-        The Schools area is off for this business. An owner turns it on in
-        Settings &gt; Schools.
+      <EmptyState icon="schools" action={me?.roles.includes("owner") ? <Link to="/settings/schools">Turn Schools on</Link> : undefined}>
+        The Schools area is off for this business. An owner turns it on in Settings &gt; Schools.
       </EmptyState>
     </>
   );
 }
 
 function useClasses() {
-  return useLoad(
-    () => get<{ classes: SchoolClass[] }>("/v1/schools/classes"),
-    [],
-  );
+  return useLoad(() => get<{ classes: SchoolClass[] }>("/v1/schools/classes"), []);
 }
 
 // --- students ---
@@ -161,21 +120,10 @@ export function Schools() {
   const may = schoolAccess(can);
   const [params, setParams] = useSearchParams();
   const shown = params.get("status") ?? "active";
-  const filter = {
-    class: params.get("class") ?? "",
-    status: shown === "all" ? "" : shown,
-    q: params.get("q") ?? "",
-    reveal: params.get("reveal") === "true",
-  };
+  const filter = { class: params.get("class") ?? "", status: shown === "all" ? "" : shown, q: params.get("q") ?? "", reveal: params.get("reveal") === "true" };
   const [q, setQ] = useState(filter.q);
   const classes = useClasses();
-  const list = useLoad(
-    () =>
-      get<{ students: SchoolStudent[]; total: number; revealed: boolean }>(
-        studentsPath(filter),
-      ),
-    [filter.class, filter.status, filter.q, filter.reveal],
-  );
+  const list = useLoad(() => get<{ students: SchoolStudent[]; total: number; revealed: boolean }>(studentsPath(filter)), [filter.class, filter.status, filter.q, filter.reveal]);
   if (!me?.schools) return <AreaOff title="Students" />;
   const set = (k: string, v: string) => {
     const next = new URLSearchParams(params);
@@ -196,11 +144,7 @@ export function Schools() {
   const students = list.data?.students;
   return (
     <>
-      <PageHeader
-        title="Students"
-        description="Every student of the school by admission number, with their class and status. Names are hidden unless you may see personal data and show them."
-        actions={actions}
-      />
+      <PageHeader title="Students" description="Every student of the school by admission number, with their class and status. Names are hidden unless you may see personal data and show them." actions={actions} />
       <SchoolTabs />
       <form
         className="filters"
@@ -213,10 +157,7 @@ export function Schools() {
       >
         <label>
           Class{" "}
-          <select
-            value={filter.class}
-            onChange={(e) => set("class", e.target.value)}
-          >
+          <select value={filter.class} onChange={(e) => set("class", e.target.value)}>
             <option value="">Every class</option>
             {(classes.data?.classes ?? []).map((c) => (
               <option key={c.id} value={c.id}>
@@ -227,12 +168,7 @@ export function Schools() {
         </label>
         <label>
           Status{" "}
-          <select
-            value={shown}
-            onChange={(e) =>
-              set("status", e.target.value === "active" ? "" : e.target.value)
-            }
-          >
+          <select value={shown} onChange={(e) => set("status", e.target.value === "active" ? "" : e.target.value)}>
             {STATUS_FILTERS.map((f) => (
               <option key={f.label} value={f.value}>
                 {f.label}
@@ -242,51 +178,26 @@ export function Schools() {
         </label>
         <label>
           Search{" "}
-          <input
-            type="search"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder={
-              filter.reveal ? "Admission number or name" : "Admission number"
-            }
-          />
+          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={filter.reveal ? "Admission number or name" : "Admission number"} />
         </label>
         <button type="submit">Search</button>
         {may.reveal && (
           <label className="row">
-            <input
-              type="checkbox"
-              checked={filter.reveal}
-              onChange={(e) => set("reveal", e.target.checked ? "true" : "")}
-            />{" "}
-            Show names
+            <input type="checkbox" checked={filter.reveal} onChange={(e) => set("reveal", e.target.checked ? "true" : "")} /> Show names
           </label>
         )}
       </form>
       <ErrorBox error={list.error} />
-      {students === undefined && !list.error && (
-        <Skeleton rows={5} label="Loading students…" />
-      )}
+      {students === undefined && !list.error && <Skeleton rows={5} label="Loading students…" />}
       {students && students.length === 0 && (
-        <EmptyState
-          icon="schools"
-          action={
-            !filter.q && !filter.class && may.manage ? (
-              <Link to="/schools/import">Import students</Link>
-            ) : undefined
-          }
-        >
-          {filter.q || filter.class
-            ? "No students match."
-            : "No students yet. Import them from a spreadsheet, or add them one by one."}
+        <EmptyState icon="schools" action={!filter.q && !filter.class && may.manage ? <Link to="/schools/import">Import students</Link> : undefined}>
+          {filter.q || filter.class ? "No students match." : "No students yet. Import them from a spreadsheet, or add them one by one."}
         </EmptyState>
       )}
       {students && students.length > 0 && (
         <>
           <p className="hint" data-testid="students-total">
-            {list.data?.total === 1
-              ? "1 student"
-              : `${list.data?.total ?? 0} students`}
+            {list.data?.total === 1 ? "1 student" : `${list.data?.total ?? 0} students`}
           </p>
           <Items label="Students">
             {students.map((st) => (
@@ -309,52 +220,21 @@ export function Schools() {
   );
 }
 
-function GuardianFields({
-  value,
-  onChange,
-  optional,
-}: {
-  value: StudentForm["guardian"];
-  onChange: (g: StudentForm["guardian"]) => void;
-  optional?: boolean;
-}) {
+function GuardianFields({ value, onChange, optional }: { value: StudentForm["guardian"]; onChange: (g: StudentForm["guardian"]) => void; optional?: boolean }) {
   const opt = optional ? " (optional)" : "";
   return (
     <>
       <Field label={`Guardian's name${opt}`}>
-        <input
-          value={value.name}
-          autoComplete="off"
-          onChange={(e) => onChange({ ...value, name: e.target.value })}
-        />
+        <input value={value.name} autoComplete="off" onChange={(e) => onChange({ ...value, name: e.target.value })} />
       </Field>
-      <Field
-        label={`Guardian's phone${opt}`}
-        hint="Families are known by their guardians' phones: a phone is in one family."
-      >
-        <input
-          value={value.phone}
-          type="tel"
-          autoComplete="off"
-          onChange={(e) => onChange({ ...value, phone: e.target.value })}
-          placeholder="08031234567"
-        />
+      <Field label={`Guardian's phone${opt}`} hint="Families are known by their guardians' phones: a phone is in one family.">
+        <input value={value.phone} type="tel" autoComplete="off" onChange={(e) => onChange({ ...value, phone: e.target.value })} placeholder="08031234567" />
       </Field>
       <Field label="Guardian's email (optional)">
-        <input
-          value={value.email}
-          type="email"
-          autoComplete="off"
-          onChange={(e) => onChange({ ...value, email: e.target.value })}
-        />
+        <input value={value.email} type="email" autoComplete="off" onChange={(e) => onChange({ ...value, email: e.target.value })} />
       </Field>
       <Field label="Relationship (optional)">
-        <input
-          value={value.relationship}
-          autoComplete="off"
-          onChange={(e) => onChange({ ...value, relationship: e.target.value })}
-          placeholder="Mother, Father, Uncle"
-        />
+        <input value={value.relationship} autoComplete="off" onChange={(e) => onChange({ ...value, relationship: e.target.value })} placeholder="Mother, Father, Uncle" />
       </Field>
     </>
   );
@@ -373,27 +253,17 @@ export function SchoolStudentNew() {
     return (
       <>
         <PageHeader title="Add a student" />
-        <p className="hint">
-          You can see students, but not add them. Someone who manages the school
-          can.
-        </p>
+        <p className="hint">You can see students, but not add them. Someone who manages the school can.</p>
       </>
     );
   const problem = studentProblem(form);
   const list = classes.data?.classes ?? [];
   return (
     <>
-      <PageHeader
-        title="Add a student"
-        description="One student at a time. While a term runs, they are enrolled in it at once."
-        actions={<Link to="/schools">All students</Link>}
-      />
+      <PageHeader title="Add a student" description="One student at a time. While a term runs, they are enrolled in it at once." actions={<Link to="/schools">All students</Link>} />
       <ErrorBox error={classes.error} />
       {classes.data && list.length === 0 && (
-        <EmptyState
-          icon="schools"
-          action={<Link to="/schools/classes">Add classes</Link>}
-        >
+        <EmptyState icon="schools" action={<Link to="/schools/classes">Add classes</Link>}>
           Add the school's classes first: every student is in one.
         </EmptyState>
       )}
@@ -406,41 +276,19 @@ export function SchoolStudentNew() {
             setTried(true);
             if (problem) return;
             void act.run(async () => {
-              const d = await plainly(
-                post<SchoolStudentDetail>(
-                  "/v1/schools/students",
-                  studentRequest(form),
-                ),
-              );
+              const d = await plainly(post<SchoolStudentDetail>("/v1/schools/students", studentRequest(form)));
               nav(`/schools/students/${d.id}`);
             }, "Student added");
           }}
         >
           <Field label="Name">
-            <input
-              value={form.name}
-              autoComplete="off"
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-            />
+            <input value={form.name} autoComplete="off" onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </Field>
-          <Field
-            label="Admission number"
-            hint="Unique in the school, such as GCA/2026/014."
-          >
-            <input
-              value={form.admission_number}
-              autoComplete="off"
-              spellCheck={false}
-              onChange={(e) =>
-                setForm({ ...form, admission_number: e.target.value })
-              }
-            />
+          <Field label="Admission number" hint="Unique in the school, such as GCA/2026/014.">
+            <input value={form.admission_number} autoComplete="off" spellCheck={false} onChange={(e) => setForm({ ...form, admission_number: e.target.value })} />
           </Field>
           <Field label="Class">
-            <select
-              value={form.class_id}
-              onChange={(e) => setForm({ ...form, class_id: e.target.value })}
-            >
+            <select value={form.class_id} onChange={(e) => setForm({ ...form, class_id: e.target.value })}>
               <option value="">Choose a class</option>
               {list.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -450,25 +298,12 @@ export function SchoolStudentNew() {
             </select>
           </Field>
           <Field label="Date of birth (optional)">
-            <input
-              type="date"
-              value={form.date_of_birth}
-              onChange={(e) =>
-                setForm({ ...form, date_of_birth: e.target.value })
-              }
-            />
+            <input type="date" value={form.date_of_birth} onChange={(e) => setForm({ ...form, date_of_birth: e.target.value })} />
           </Field>
           <fieldset className="sf-choices">
             <legend>Their family</legend>
-            <p className="hint">
-              A guardian makes a new family. A brother or sister of a student
-              already here: add them from the Families page instead.
-            </p>
-            <GuardianFields
-              optional
-              value={form.guardian}
-              onChange={(guardian) => setForm({ ...form, guardian })}
-            />
+            <p className="hint">A guardian makes a new family. A brother or sister of a student already here: add them from the Families page instead.</p>
+            <GuardianFields optional value={form.guardian} onChange={(guardian) => setForm({ ...form, guardian })} />
           </fieldset>
           {tried && problem && (
             <div className="error" role="alert">
@@ -501,22 +336,14 @@ export function SchoolImport() {
     return (
       <>
         <PageHeader title="Import students" />
-        <p className="hint">
-          You can see students, but not import them. Someone who manages the
-          school can.
-        </p>
+        <p className="hint">You can see students, but not import them. Someone who manages the school can.</p>
       </>
     );
   const send = (confirm?: string) =>
     act.run(async () => {
       setRefusal(null);
       try {
-        const r = await plainly(
-          post<ImportPlan>(
-            "/v1/schools/students/import",
-            confirm ? { csv: text, confirm } : { csv: text },
-          ),
-        );
+        const r = await plainly(post<ImportPlan>("/v1/schools/students/import", confirm ? { csv: text, confirm } : { csv: text }));
         if (r.saved) {
           setSaid(savedLine(r));
           setPlan(null);
@@ -526,10 +353,7 @@ export function SchoolImport() {
           setPlan(r);
         }
       } catch (e) {
-        const why =
-          e instanceof ApiError
-            ? importRefusal(e.status, e.body, e.message)
-            : null;
+        const why = e instanceof ApiError ? importRefusal(e.status, e.body, e.message) : null;
         if (!why) throw e;
         setRefusal(why);
         setPlan(null);
@@ -584,39 +408,25 @@ export function SchoolImport() {
                 ))}
               </ul>
             )}
-            {refusal.total > refusal.problems.length && (
-              <div>And {refusal.total - refusal.problems.length} more.</div>
-            )}
+            {refusal.total > refusal.problems.length && <div>And {refusal.total - refusal.problems.length} more.</div>}
           </div>
         )}
         <ErrorBox error={act.error} />
         <div className="toolbar">
-          <button
-            type="submit"
-            className={plan ? "" : "primary"}
-            disabled={act.busy || !text}
-          >
+          <button type="submit" className={plan ? "" : "primary"} disabled={act.busy || !text}>
             Check the file
           </button>
         </div>
       </form>
       {plan && (
-        <section
-          className="card"
-          aria-labelledby="import-plan"
-          data-testid="import-plan"
-        >
+        <section className="card" aria-labelledby="import-plan" data-testid="import-plan">
           <h2 id="import-plan">Check before saving</h2>
           <p>{planLine(plan)}</p>
           <h3>Families, by guardians' phones</h3>
           <ul className="plain-list">
             {plan.families.map((f) => (
               <li key={f.index} data-testid="import-family">
-                <strong>
-                  {f.existing ? "A family already here" : "A new family"}
-                </strong>
-                : {f.guardians.map(guardianLine).join("; ")}. Students:{" "}
-                {f.students.join(", ")}.
+                <strong>{f.existing ? "A family already here" : "A new family"}</strong>: {f.guardians.map(guardianLine).join("; ")}. Students: {f.students.join(", ")}.
               </li>
             ))}
           </ul>
@@ -640,30 +450,16 @@ export function SchoolImport() {
                   </td>
                   <td data-label="Name">{s.name}</td>
                   <td data-label="Class">{s.class}</td>
-                  <td data-label="What happens">
-                    {s.action === "add" ? "Added" : "Updated"}
-                  </td>
+                  <td data-label="What happens">{s.action === "add" ? "Added" : "Updated"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
           <div className="toolbar">
-            <button
-              type="button"
-              className="primary"
-              disabled={act.busy}
-              onClick={() => void send(plan.hash)}
-            >
-              Save{" "}
-              {plan.students.length === 1
-                ? "1 student"
-                : `${plan.students.length} students`}
+            <button type="button" className="primary" disabled={act.busy} onClick={() => void send(plan.hash)}>
+              Save {plan.students.length === 1 ? "1 student" : `${plan.students.length} students`}
             </button>
-            <button
-              type="button"
-              disabled={act.busy}
-              onClick={() => setPlan(null)}
-            >
+            <button type="button" disabled={act.busy} onClick={() => setPlan(null)}>
               Not now
             </button>
           </div>
@@ -679,13 +475,7 @@ export function SchoolStudentPage() {
   const { me, can } = useAuth();
   const may = schoolAccess(can);
   const [reveal, setReveal] = useState(false);
-  const one = useLoad(
-    () =>
-      get<{ student: SchoolStudentDetail; revealed: boolean }>(
-        studentPath(id, reveal),
-      ),
-    [id, reveal],
-  );
+  const one = useLoad(() => get<{ student: SchoolStudentDetail; revealed: boolean }>(studentPath(id, reveal)), [id, reveal]);
   const classes = useClasses();
   const act = useAction();
   const [said, setSaid] = useState("");
@@ -693,27 +483,18 @@ export function SchoolStudentPage() {
   const s = one.data?.student;
   const change = (body: Record<string, unknown>, line: string) =>
     act.run(async () => {
-      await plainly(
-        patch(`/v1/schools/students/${encodeURIComponent(s?.id ?? id)}`, body),
-      );
+      await plainly(patch(`/v1/schools/students/${encodeURIComponent(s?.id ?? id)}`, body));
       setSaid(line);
       one.reload();
     }, false);
   return (
     <>
-      <PageHeader
-        title={
-          s ? `${s.admission_number}${s.name ? `: ${s.name}` : ""}` : "Student"
-        }
-        actions={<Link to="/schools">All students</Link>}
-      />
+      <PageHeader title={s ? `${s.admission_number}${s.name ? `: ${s.name}` : ""}` : "Student"} actions={<Link to="/schools">All students</Link>} />
       <ErrorBox error={one.error} />
       {!s && !one.error && <Skeleton rows={4} label="Loading the student…" />}
       {s && (
         <>
-          <div role="status">
-            {said && <div className="notice">{said}</div>}
-          </div>
+          <div role="status">{said && <div className="notice">{said}</div>}</div>
           <section className="card" aria-labelledby="student-details">
             <h2 id="student-details">Details</h2>
             <dl className="kv">
@@ -739,12 +520,7 @@ export function SchoolStudentPage() {
                 Show personal details
               </button>
             )}
-            {!one.data?.revealed && !may.reveal && (
-              <p className="hint">
-                Names and dates of birth are hidden. Someone who may see
-                personal data can show them.
-              </p>
-            )}
+            {!one.data?.revealed && !may.reveal && <p className="hint">Names and dates of birth are hidden. Someone who may see personal data can show them.</p>}
             {may.manage && (
               <div className="toolbar" style={{ marginTop: 16 }}>
                 <label>
@@ -753,11 +529,8 @@ export function SchoolStudentPage() {
                     value={s.class_id}
                     disabled={act.busy}
                     onChange={(e) => {
-                      const c = classes.data?.classes.find(
-                        (x) => x.id === e.target.value,
-                      );
-                      if (c)
-                        void change({ class_id: c.id }, `Moved to ${c.label}.`);
+                      const c = classes.data?.classes.find((x) => x.id === e.target.value);
+                      if (c) void change({ class_id: c.id }, `Moved to ${c.label}.`);
                     }}
                   >
                     {(classes.data?.classes ?? []).map((c) => (
@@ -769,16 +542,7 @@ export function SchoolStudentPage() {
                 </label>
                 <label>
                   Status{" "}
-                  <select
-                    value={s.status}
-                    disabled={act.busy}
-                    onChange={(e) =>
-                      void change(
-                        { status: e.target.value },
-                        `Now ${studentStatus(e.target.value).label.toLowerCase()}.`,
-                      )
-                    }
-                  >
+                  <select value={s.status} disabled={act.busy} onChange={(e) => void change({ status: e.target.value }, `Now ${studentStatus(e.target.value).label.toLowerCase()}.`)}>
                     <option value="active">Active</option>
                     <option value="withdrawn">Withdrawn</option>
                     <option value="graduated">Graduated</option>
@@ -790,31 +554,19 @@ export function SchoolStudentPage() {
           </section>
           <section className="card" aria-labelledby="student-family">
             <h2 id="student-family">Family</h2>
-            {s.family ? (
-              <FamilyCard family={s.family} />
-            ) : (
-              <p className="hint">
-                No family yet: add one on the Families page.
-              </p>
-            )}
+            {s.family ? <FamilyCard family={s.family} /> : <p className="hint">No family yet: add one on the Families page.</p>}
           </section>
           <StudentAccountPanel studentID={s.id} />
           <StudentFeesPanel studentID={s.id} />
           <StudentReceiptsPanel studentID={s.id} />
           <StudentChasingPanel studentID={s.id} manage={may.manage} />
-          <StudentClearancePanel
-            studentID={s.id}
-            approve={can("school.approve")}
-          />
+          <StudentClearancePanel studentID={s.id} approve={can("school.approve")} />
           <StudentClaimsPanel studentID={s.id} manage={may.manage} />
           <StudentPlansPanel studentID={s.id} />
           <section className="card" aria-labelledby="student-history">
             <h2 id="student-history">Class history</h2>
             {s.enrollments.length === 0 ? (
-              <p className="hint">
-                Not enrolled in any term yet: starting a term enrols every
-                active student.
-              </p>
+              <p className="hint">Not enrolled in any term yet: starting a term enrols every active student.</p>
             ) : (
               <table className="cards">
                 <thead>
@@ -845,13 +597,7 @@ export function SchoolStudentPage() {
   );
 }
 
-function FamilyCard({
-  family,
-  top,
-}: {
-  family: SchoolFamily;
-  top?: boolean;
-}): ReactNode {
+function FamilyCard({ family, top }: { family: SchoolFamily; top?: boolean }): ReactNode {
   const Heading = top ? "h2" : "h3";
   return (
     <div data-testid="family">
@@ -863,23 +609,17 @@ function FamilyCard({
         {family.guardians.map((g) => (
           <li key={g.id}>{guardianLine(g)}</li>
         ))}
-        {family.guardians.length === 0 && (
-          <li className="hint">No guardian yet.</li>
-        )}
+        {family.guardians.length === 0 && <li className="hint">No guardian yet.</li>}
       </ul>
       <p className="hint">Students</p>
       <ul className="plain-list">
         {family.students.map((st) => (
           <li key={st.id}>
-            <Link to={`/schools/students/${st.id}`}>{st.admission_number}</Link>{" "}
-            {st.name}, {st.class}
-            {st.status !== "active" &&
-              ` (${studentStatus(st.status).label.toLowerCase()})`}
+            <Link to={`/schools/students/${st.id}`}>{st.admission_number}</Link> {st.name}, {st.class}
+            {st.status !== "active" && ` (${studentStatus(st.status).label.toLowerCase()})`}
           </li>
         ))}
-        {family.students.length === 0 && (
-          <li className="hint">No student yet.</li>
-        )}
+        {family.students.length === 0 && <li className="hint">No student yet.</li>}
       </ul>
     </div>
   );
@@ -892,44 +632,23 @@ export function SchoolFamilies() {
   const { me, can } = useAuth();
   const may = schoolAccess(can);
   const [reveal, setReveal] = useState(false);
-  const list = useLoad(
-    () =>
-      get<{ families: SchoolFamily[]; revealed: boolean }>(
-        `/v1/schools/families${reveal ? "?reveal=true" : ""}`,
-      ),
-    [reveal],
-  );
+  const list = useLoad(() => get<{ families: SchoolFamily[]; revealed: boolean }>(`/v1/schools/families${reveal ? "?reveal=true" : ""}`), [reveal]);
   if (!me?.schools) return <AreaOff title="Families" />;
   const families = list.data?.families;
   return (
     <>
-      <PageHeader
-        title="Families"
-        description="The guardians of one or more students, who pay together. A guardian, known by their phone, is in one family."
-      />
+      <PageHeader title="Families" description="The guardians of one or more students, who pay together. A guardian, known by their phone, is in one family." />
       <SchoolTabs />
       {may.reveal && (
         <div className="filters">
           <label className="row">
-            <input
-              type="checkbox"
-              checked={reveal}
-              onChange={(e) => setReveal(e.target.checked)}
-            />{" "}
-            Show names and phones
+            <input type="checkbox" checked={reveal} onChange={(e) => setReveal(e.target.checked)} /> Show names and phones
           </label>
         </div>
       )}
       <ErrorBox error={list.error} />
-      {families === undefined && !list.error && (
-        <Skeleton rows={4} label="Loading families…" />
-      )}
-      {families && families.length === 0 && (
-        <EmptyState icon="members">
-          No families yet. Importing students groups them into families by their
-          guardians' phones.
-        </EmptyState>
-      )}
+      {families === undefined && !list.error && <Skeleton rows={4} label="Loading families…" />}
+      {families && families.length === 0 && <EmptyState icon="members">No families yet. Importing students groups them into families by their guardians' phones.</EmptyState>}
       {families?.map((f) => (
         <section className="card" key={f.id}>
           <FamilyCard family={f} top />
@@ -947,31 +666,19 @@ export function SchoolClasses() {
   const { me, can } = useAuth();
   const may = schoolAccess(can);
   const classes = useClasses();
-  const sessions = useLoad(
-    () => get<{ sessions: SchoolSession[] }>("/v1/schools/sessions"),
-    [],
-  );
+  const sessions = useLoad(() => get<{ sessions: SchoolSession[] }>("/v1/schools/sessions"), []);
   if (!me?.schools) return <AreaOff title="Classes and terms" />;
   const list = classes.data?.classes;
   const current = currentTerm(sessions.data?.sessions);
   return (
     <>
-      <PageHeader
-        title="Classes and terms"
-        description="The school's classes in the order students go up through them, and its sessions and terms. Starting a term enrols every active student in their class."
-      />
+      <PageHeader title="Classes and terms" description="The school's classes in the order students go up through them, and its sessions and terms. Starting a term enrols every active student in their class." />
       <SchoolTabs />
       <section className="card" aria-labelledby="classes-heading">
         <h2 id="classes-heading">Classes</h2>
         <ErrorBox error={classes.error} />
-        {list === undefined && !classes.error && (
-          <Skeleton rows={3} label="Loading classes…" />
-        )}
-        {list && list.length === 0 && (
-          <p className="hint">
-            No classes yet. Add them in order: JSS 1 first, then JSS 2 and up.
-          </p>
-        )}
+        {list === undefined && !classes.error && <Skeleton rows={3} label="Loading classes…" />}
+        {list && list.length === 0 && <p className="hint">No classes yet. Add them in order: JSS 1 first, then JSS 2 and up.</p>}
         {list && list.length > 0 && (
           <Items label="Classes">
             {list.map((c) => (
@@ -987,51 +694,31 @@ export function SchoolClasses() {
             ))}
           </Items>
         )}
-        {may.manage && list && (
-          <AddClass next={nextOrder(list)} onAdded={classes.reload} />
-        )}
+        {may.manage && list && <AddClass next={nextOrder(list)} onAdded={classes.reload} />}
       </section>
       <section className="card" aria-labelledby="sessions-heading">
         <h2 id="sessions-heading">Sessions and terms</h2>
         {current ? (
           <p data-testid="current-term">
-            Current term: <strong>{current.name}</strong> {current.session},{" "}
-            {dateLabel(current.starts_on)} to {dateLabel(current.ends_on)}; fees
-            due {dateLabel(current.fees_due_on)}.
+            Current term: <strong>{current.name}</strong> {current.session}, {dateLabel(current.starts_on)} to {dateLabel(current.ends_on)}; fees due {dateLabel(current.fees_due_on)}.
           </p>
         ) : (
           <p className="hint" data-testid="current-term">
-            No term is running. Add a session and its terms, then start the
-            first.
+            No term is running. Add a session and its terms, then start the first.
           </p>
         )}
         <ErrorBox error={sessions.error} />
         {sessions.data?.sessions.map((s) => (
-          <SessionBlock
-            key={s.id}
-            session={s}
-            manage={may.manage}
-            onChange={sessions.reload}
-            onStarted={classes.reload}
-          />
+          <SessionBlock key={s.id} session={s} manage={may.manage} onChange={sessions.reload} onStarted={classes.reload} />
         ))}
-        {may.manage && sessions.data && (
-          <AddSession
-            suggested={nextSessionLabel(sessions.data.sessions)}
-            onAdded={sessions.reload}
-          />
-        )}
+        {may.manage && sessions.data && <AddSession suggested={nextSessionLabel(sessions.data.sessions)} onAdded={sessions.reload} />}
       </section>
     </>
   );
 }
 
 function AddClass({ next, onAdded }: { next: number; onAdded: () => void }) {
-  const [form, setForm] = useState<ClassForm>({
-    name: "",
-    arm: "",
-    order: String(next),
-  });
+  const [form, setForm] = useState<ClassForm>({ name: "", arm: "", order: String(next) });
   const [tried, setTried] = useState(false);
   const act = useAction();
   const problem = classProblem(form);
@@ -1045,11 +732,7 @@ function AddClass({ next, onAdded }: { next: number; onAdded: () => void }) {
         if (problem) return;
         void act.run(async () => {
           await plainly(post("/v1/schools/classes", classRequest(form)));
-          setForm({
-            name: "",
-            arm: form.arm,
-            order: String(Number(form.order) + (form.arm ? 0 : 1)),
-          });
+          setForm({ name: "", arm: form.arm, order: String(Number(form.order) + (form.arm ? 0 : 1)) });
           setTried(false);
           onAdded();
         }, "Class added");
@@ -1058,25 +741,13 @@ function AddClass({ next, onAdded }: { next: number; onAdded: () => void }) {
       <h3>Add a class</h3>
       <div className="row" style={{ flexWrap: "wrap" }}>
         <Field label="Name">
-          <input
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            placeholder="JSS 1"
-          />
+          <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="JSS 1" />
         </Field>
         <Field label="Arm (optional)">
-          <input
-            value={form.arm}
-            onChange={(e) => setForm({ ...form, arm: e.target.value })}
-            placeholder="A"
-          />
+          <input value={form.arm} onChange={(e) => setForm({ ...form, arm: e.target.value })} placeholder="A" />
         </Field>
         <Field label="Order" hint="Arms of one class share its order.">
-          <input
-            value={form.order}
-            inputMode="numeric"
-            onChange={(e) => setForm({ ...form, order: e.target.value })}
-          />
+          <input value={form.order} inputMode="numeric" onChange={(e) => setForm({ ...form, order: e.target.value })} />
         </Field>
       </div>
       {tried && problem && (
@@ -1092,13 +763,7 @@ function AddClass({ next, onAdded }: { next: number; onAdded: () => void }) {
   );
 }
 
-function AddSession({
-  suggested,
-  onAdded,
-}: {
-  suggested: string;
-  onAdded: () => void;
-}) {
+function AddSession({ suggested, onAdded }: { suggested: string; onAdded: () => void }) {
   const [label, setLabel] = useState(suggested);
   const [tried, setTried] = useState(false);
   const act = useAction();
@@ -1135,17 +800,7 @@ function AddSession({
   );
 }
 
-function SessionBlock({
-  session,
-  manage,
-  onChange,
-  onStarted,
-}: {
-  session: SchoolSession;
-  manage: boolean;
-  onChange: () => void;
-  onStarted: () => void;
-}) {
+function SessionBlock({ session, manage, onChange, onStarted }: { session: SchoolSession; manage: boolean; onChange: () => void; onStarted: () => void }) {
   const act = useAction();
   const [said, setSaid] = useState("");
   const [confirm, setConfirm] = useState<string | null>(null);
@@ -1161,104 +816,64 @@ function SessionBlock({
               key={t.id}
               testid="term"
               icon="clock"
-              tone={
-                t.state === "current"
-                  ? "ok"
-                  : t.state === "planned"
-                    ? undefined
-                    : "muted"
-              }
+              tone={t.state === "current" ? "ok" : t.state === "planned" ? undefined : "muted"}
               title={t.name}
-              side={
-                <span className="badge muted">{termStateWords(t.state)}</span>
-              }
+              side={<span className="badge muted">{termStateWords(t.state)}</span>}
               sub={
                 <span className="sub">
-                  {dateLabel(t.starts_on)} to {dateLabel(t.ends_on)} · fees due{" "}
-                  {dateLabel(t.fees_due_on)} ·{" "}
-                  {t.enrolled === 1 ? "1 enrolled" : `${t.enrolled} enrolled`}
+                  {dateLabel(t.starts_on)} to {dateLabel(t.ends_on)} · fees due {dateLabel(t.fees_due_on)} · {t.enrolled === 1 ? "1 enrolled" : `${t.enrolled} enrolled`}
                 </span>
               }
             >
-              <Link
-                className="button"
-                to={`/schools/terms/${t.id}/fees`}
-                aria-label={`Fees for ${t.name} ${session.label}`}
-              >
+              <Link className="button" to={`/schools/terms/${t.id}/fees`} aria-label={`Fees for ${t.name} ${session.label}`}>
                 Fees
               </Link>
               {t.state !== "planned" && (
-                <Link
-                  className="button"
-                  to={`/schools/terms/${t.id}/invoices`}
-                  aria-label={`Invoices for ${t.name} ${session.label}`}
-                >
+                <Link className="button" to={`/schools/terms/${t.id}/invoices`} aria-label={`Invoices for ${t.name} ${session.label}`}>
                   Invoices
                 </Link>
               )}
               {manage &&
                 t.state === "planned" &&
                 (confirm === t.id ? (
-                  <span className="row" style={{ flexWrap: "wrap" }}>
-                    <button
-                      type="button"
-                      className="primary"
-                      disabled={act.busy}
-                      onClick={() =>
-                        void act.run(async () => {
-                          const r = await plainly(
-                            post<{ term: SchoolTerm; enrolled: number }>(
-                              `/v1/schools/terms/${t.id}/start`,
-                            ),
-                          );
-                          setSaid(
-                            startedLine(
-                              r.term.name,
-                              r.term.session,
-                              r.enrolled,
-                            ),
-                          );
-                          setConfirm(null);
-                          onChange();
-                          onStarted();
-                        }, false)
-                      }
-                    >
-                      Start {t.name} now
-                    </button>
-                    <button type="button" onClick={() => setConfirm(null)}>
-                      Cancel
-                    </button>
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setConfirm(t.id)}
-                    aria-label={`Start ${t.name} ${session.label}`}
-                  >
-                    Start…
-                  </button>
-                ))}
+                        <span className="row" style={{ flexWrap: "wrap" }}>
+                          <button
+                            type="button"
+                            className="primary"
+                            disabled={act.busy}
+                            onClick={() =>
+                              void act.run(async () => {
+                                const r = await plainly(post<{ term: SchoolTerm; enrolled: number }>(`/v1/schools/terms/${t.id}/start`));
+                                setSaid(startedLine(r.term.name, r.term.session, r.enrolled));
+                                setConfirm(null);
+                                onChange();
+                                onStarted();
+                              }, false)
+                            }
+                          >
+                            Start {t.name} now
+                          </button>
+                          <button type="button" onClick={() => setConfirm(null)}>
+                            Cancel
+                          </button>
+                        </span>
+                      ) : (
+                        <button type="button" onClick={() => setConfirm(t.id)} aria-label={`Start ${t.name} ${session.label}`}>
+                          Start…
+                        </button>
+                      ))}
             </Row>
           ))}
         </ul>
       )}
-      {confirm && (
-        <p className="hint">
-          Starting a term makes it the current one and enrols every active
-          student in their class. The term before becomes past and read-only.
-        </p>
-      )}
+      {confirm && <p className="hint">Starting a term makes it the current one and enrols every active student in their class. The term before becomes past and read-only.</p>}
       <ErrorBox error={act.error} />
       {manage && <AddTerm session={session} onAdded={onChange} />}
       <p>
         {session.promoted_at ? (
           <span className="hint">Promoted {fmtTime(session.promoted_at)}.</span>
         ) : (
-          <Link
-            className="button"
-            to={`/schools/sessions/${session.id}/promotion`}
-          >
+          <Link className="button" to={`/schools/sessions/${session.id}/promotion`}>
             Promotion at the end of {session.label}
           </Link>
         )}
@@ -1267,19 +882,8 @@ function SessionBlock({
   );
 }
 
-function AddTerm({
-  session,
-  onAdded,
-}: {
-  session: SchoolSession;
-  onAdded: () => void;
-}) {
-  const [form, setForm] = useState<TermForm>({
-    name: nextTermName(session.terms),
-    starts_on: "",
-    ends_on: "",
-    fees_due_on: "",
-  });
+function AddTerm({ session, onAdded }: { session: SchoolSession; onAdded: () => void }) {
+  const [form, setForm] = useState<TermForm>({ name: nextTermName(session.terms), starts_on: "", ends_on: "", fees_due_on: "" });
   const [tried, setTried] = useState(false);
   const act = useAction();
   const problem = termProblem(form);
@@ -1303,32 +907,16 @@ function AddTerm({
       <h4>Add a term</h4>
       <div className="row" style={{ flexWrap: "wrap" }}>
         <Field label="Term">
-          <input
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            placeholder="First term"
-          />
+          <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="First term" />
         </Field>
         <Field label="Starts">
-          <input
-            type="date"
-            value={form.starts_on}
-            onChange={(e) => setForm({ ...form, starts_on: e.target.value })}
-          />
+          <input type="date" value={form.starts_on} onChange={(e) => setForm({ ...form, starts_on: e.target.value })} />
         </Field>
         <Field label="Ends">
-          <input
-            type="date"
-            value={form.ends_on}
-            onChange={(e) => setForm({ ...form, ends_on: e.target.value })}
-          />
+          <input type="date" value={form.ends_on} onChange={(e) => setForm({ ...form, ends_on: e.target.value })} />
         </Field>
         <Field label="Fees due">
-          <input
-            type="date"
-            value={form.fees_due_on}
-            onChange={(e) => setForm({ ...form, fees_due_on: e.target.value })}
-          />
+          <input type="date" value={form.fees_due_on} onChange={(e) => setForm({ ...form, fees_due_on: e.target.value })} />
         </Field>
       </div>
       {tried && problem && (
@@ -1349,16 +937,8 @@ export function SchoolPromotionPage() {
   const { id = "" } = useParams();
   const { me, can } = useAuth();
   const may = schoolAccess(can);
-  const plan = useLoad(
-    () =>
-      get<SchoolPromotion>(
-        `/v1/schools/sessions/${encodeURIComponent(id)}/promotion`,
-      ),
-    [id],
-  );
-  const [exceptions, setExceptions] = useState<Record<string, PromotionAction>>(
-    {},
-  );
+  const plan = useLoad(() => get<SchoolPromotion>(`/v1/schools/sessions/${encodeURIComponent(id)}/promotion`), [id]);
+  const [exceptions, setExceptions] = useState<Record<string, PromotionAction>>({});
   const [confirm, setConfirm] = useState(false);
   const [said, setSaid] = useState("");
   const act = useAction();
@@ -1372,18 +952,11 @@ export function SchoolPromotionPage() {
         actions={<Link to="/schools/classes">Classes and terms</Link>}
       />
       <ErrorBox error={plan.error} />
-      {!p && !plan.error && (
-        <Skeleton rows={4} label="Loading the promotion…" />
-      )}
+      {!p && !plan.error && <Skeleton rows={4} label="Loading the promotion…" />}
       <div role="status" data-testid="promotion-status">
         {said && <div className="notice">{said}</div>}
       </div>
-      {p?.done && !said && (
-        <div className="notice">
-          {p.session} was promoted {fmtTime(p.promoted_at)}:{" "}
-          {promotionLine(p.counts)}
-        </div>
-      )}
+      {p?.done && !said && <div className="notice">{p.session} was promoted {fmtTime(p.promoted_at)}: {promotionLine(p.counts)}</div>}
       {p && !p.done && (
         <>
           <section className="card" aria-labelledby="promotion-classes">
@@ -1391,17 +964,14 @@ export function SchoolPromotionPage() {
             <ul className="plain-list">
               {p.classes.map((c) => (
                 <li key={c.class_id}>
-                  {c.class} → {c.next || "graduate"} (
-                  {c.students === 1 ? "1 student" : `${c.students} students`})
+                  {c.class} → {c.next || "graduate"} ({c.students === 1 ? "1 student" : `${c.students} students`})
                 </li>
               ))}
             </ul>
           </section>
           <section className="card" aria-labelledby="promotion-students">
             <h2 id="promotion-students">Students</h2>
-            <p data-testid="promotion-counts">
-              {promotionLine(promotionCounts(p, exceptions))}
-            </p>
+            <p data-testid="promotion-counts">{promotionLine(promotionCounts(p, exceptions))}</p>
             <table className="cards">
               <thead>
                 <tr>
@@ -1424,26 +994,16 @@ export function SchoolPromotionPage() {
                         <select
                           aria-label={`What happens to ${s.admission_number}`}
                           value={exceptions[s.id] ?? s.action}
-                          onChange={(e) =>
-                            setExceptions({
-                              ...exceptions,
-                              [s.id]: e.target.value as PromotionAction,
-                            })
-                          }
+                          onChange={(e) => setExceptions({ ...exceptions, [s.id]: e.target.value as PromotionAction })}
                         >
-                          {PROMOTION_ACTIONS.filter(
-                            (a) => a.value !== "promote" || s.next_id,
-                          ).map((a) => (
+                          {PROMOTION_ACTIONS.filter((a) => a.value !== "promote" || s.next_id).map((a) => (
                             <option key={a.value} value={a.value}>
-                              {a.value === "promote"
-                                ? `Move up to ${s.next}`
-                                : a.label}
+                              {a.value === "promote" ? `Move up to ${s.next}` : a.label}
                             </option>
                           ))}
                         </select>
                       ) : (
-                        PROMOTION_ACTIONS.find((a) => a.value === s.action)
-                          ?.label
+                        PROMOTION_ACTIONS.find((a) => a.value === s.action)?.label
                       )}
                     </td>
                   </tr>
@@ -1461,15 +1021,8 @@ export function SchoolPromotionPage() {
                       disabled={act.busy}
                       onClick={() =>
                         void act.run(async () => {
-                          const r = await plainly(
-                            post<SchoolPromotion>(
-                              `/v1/schools/sessions/${encodeURIComponent(id)}/promotion`,
-                              promotionRequest(p, exceptions),
-                            ),
-                          );
-                          setSaid(
-                            `${r.session} promoted: ${promotionLine(r.counts)}`,
-                          );
+                          const r = await plainly(post<SchoolPromotion>(`/v1/schools/sessions/${encodeURIComponent(id)}/promotion`, promotionRequest(p, exceptions)));
+                          setSaid(`${r.session} promoted: ${promotionLine(r.counts)}`);
                           setConfirm(false);
                           plan.reload();
                         }, false)
@@ -1480,17 +1033,10 @@ export function SchoolPromotionPage() {
                     <button type="button" onClick={() => setConfirm(false)}>
                       Cancel
                     </button>
-                    <span className="hint">
-                      This happens once and cannot be undone here.
-                    </span>
+                    <span className="hint">This happens once and cannot be undone here.</span>
                   </>
                 ) : (
-                  <button
-                    type="button"
-                    className="primary"
-                    disabled={p.students.length === 0}
-                    onClick={() => setConfirm(true)}
-                  >
+                  <button type="button" className="primary" disabled={p.students.length === 0} onClick={() => setConfirm(true)}>
                     Promote…
                   </button>
                 )}
@@ -1508,10 +1054,7 @@ export function SchoolPromotionPage() {
 /** Settings > Schools (PUT /v1/settings/schools): only an owner turns the area on or off. */
 export function SchoolsSwitch() {
   const { me, refresh } = useAuth();
-  const settings = useLoad(
-    () => get<SchoolSettings>("/v1/settings/schools"),
-    [],
-  );
+  const settings = useLoad(() => get<SchoolSettings>("/v1/settings/schools"), []);
   const [bursar, setBursar] = useState(true);
   const act = useAction();
   const owner = !!me?.roles.includes("owner");
@@ -1522,9 +1065,7 @@ export function SchoolsSwitch() {
         Schools
       </h2>
       <p className="hint">
-        For a school: its students, families, classes and terms, beside Invoices
-        and Money. People who may see the school's record find it in the menu.
-        Turning it off hides it; nothing is deleted.
+        For a school: its students, families, classes and terms, beside Invoices and Money. People who may see the school's record find it in the menu. Turning it off hides it; nothing is deleted.
       </p>
       <ErrorBox error={settings.error} />
       {owner ? (
@@ -1536,45 +1077,24 @@ export function SchoolsSwitch() {
               disabled={act.busy || !settings.data}
               onChange={(e) => {
                 const enabled = e.target.checked;
-                void act.run(
-                  async () => {
-                    await put("/v1/settings/schools", {
-                      enabled,
-                      bursar_role:
-                        enabled && bursar && !settings.data?.bursar_role,
-                    });
-                    settings.reload();
-                    await refresh();
-                  },
-                  enabled ? "Schools turned on" : "Schools turned off",
-                );
+                void act.run(async () => {
+                  await put("/v1/settings/schools", { enabled, bursar_role: enabled && bursar && !settings.data?.bursar_role });
+                  settings.reload();
+                  await refresh();
+                }, enabled ? "Schools turned on" : "Schools turned off");
               }}
             />{" "}
             Turn on Schools
           </label>
           {!on && !settings.data?.bursar_role && (
             <label className="row">
-              <input
-                type="checkbox"
-                checked={bursar}
-                onChange={(e) => setBursar(e.target.checked)}
-              />{" "}
-              Also add a Bursar role (students, families, classes and invoices),
-              to give whoever runs the fees office
+              <input type="checkbox" checked={bursar} onChange={(e) => setBursar(e.target.checked)} /> Also add a Bursar role (students, families, classes and invoices), to give whoever runs the fees office
             </label>
           )}
-          {settings.data?.bursar_role && (
-            <p className="hint">
-              The Bursar role is ready: give it to people under Members &amp;
-              keys.
-            </p>
-          )}
+          {settings.data?.bursar_role && <p className="hint">The Bursar role is ready: give it to people under Members &amp; keys.</p>}
         </>
       ) : (
-        <p data-testid="schools-state">
-          {on ? "Schools is on." : "Schools is off."} Only an owner turns it on
-          or off.
-        </p>
+        <p data-testid="schools-state">{on ? "Schools is on." : "Schools is off."} Only an owner turns it on or off.</p>
       )}
       <ErrorBox error={act.error} />
     </section>
@@ -1585,10 +1105,7 @@ export function SchoolSettingsPage() {
   const { me } = useAuth();
   return (
     <>
-      <PageHeader
-        title="Schools settings"
-        description="Turn the Schools area on or off for the business, choose who issues students' account numbers, set the thresholds, the family page links, the reminder ladder's wording and the payment plan grace."
-      />
+      <PageHeader title="Schools settings" description="Turn the Schools area on or off for the business, choose who issues students' account numbers, set the thresholds, the family page links, the reminder ladder's wording and the payment plan grace." />
       {me?.schools && <SchoolTabs />}
       <SchoolsSwitch />
       {me?.schools && me.roles.includes("owner") && <IssuingSettings />}
@@ -1603,30 +1120,23 @@ export function SchoolSettingsPage() {
 
 /** The owner's cash threshold, in naira: postings at or above it wait for a second person; 0 makes every posting wait; none leaves postings to the bursar. */
 function CashThreshold() {
-  const settings = useLoad(
-    () => get<SchoolSettings>("/v1/settings/schools"),
-    [],
-  );
+  const settings = useLoad(() => get<SchoolSettings>("/v1/settings/schools"), []);
   const [mode, setMode] = useState<"none" | "amount">();
   const [value, setValue] = useState<string>();
   const act = useAction();
   const current = settings.data?.cash_threshold_naira;
-  const shownMode =
-    mode ?? (current === null || current === undefined ? "none" : "amount");
+  const shownMode = mode ?? (current === null || current === undefined ? "none" : "amount");
   const shown = value ?? String(current ?? "");
   const n = Number(shown.replace(/[,₦\s]/g, "") || "0");
-  const bad =
-    shownMode === "amount" &&
-    (!Number.isInteger(n) || n < 0 || shown.trim() === "");
+  const bad = shownMode === "amount" && (!Number.isInteger(n) || n < 0 || shown.trim() === "");
   return (
     <section className="card" aria-labelledby="cash-threshold">
       <h2 id="cash-threshold" style={{ marginTop: 0 }}>
         Cash threshold
       </h2>
       <p className="hint">
-        A cash or transfer posting at or above this amount waits for a second
-        person (someone who may approve for the school, never the person who
-        posted it) before it reaches a child's fees. 0 makes every posting wait.
+        A cash or transfer posting at or above this amount waits for a second person (someone who may approve for the school, never the person who posted it) before it reaches a child's
+        fees. 0 makes every posting wait.
       </p>
       <ErrorBox error={settings.error} />
       <form
@@ -1634,10 +1144,7 @@ function CashThreshold() {
           e.preventDefault();
           if (bad || !settings.data) return;
           void act.run(async () => {
-            await put("/v1/settings/schools", {
-              enabled: settings.data?.enabled ?? true,
-              cash_threshold_naira: shownMode === "none" ? null : n,
-            });
+            await put("/v1/settings/schools", { enabled: settings.data?.enabled ?? true, cash_threshold_naira: shownMode === "none" ? null : n });
             setMode(undefined);
             setValue(undefined);
             settings.reload();
@@ -1645,36 +1152,17 @@ function CashThreshold() {
         }}
       >
         <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
-          <legend className="sr-only">
-            When a posting needs a second person
-          </legend>
+          <legend className="sr-only">When a posting needs a second person</legend>
           <label className="row">
-            <input
-              type="radio"
-              name="cash-threshold-mode"
-              checked={shownMode === "none"}
-              onChange={() => setMode("none")}
-            />{" "}
-            No second person needed for cash postings
+            <input type="radio" name="cash-threshold-mode" checked={shownMode === "none"} onChange={() => setMode("none")} /> No second person needed for cash postings
           </label>
           <label className="row">
-            <input
-              type="radio"
-              name="cash-threshold-mode"
-              checked={shownMode === "amount"}
-              onChange={() => setMode("amount")}
-            />{" "}
-            A second person at or above an amount
+            <input type="radio" name="cash-threshold-mode" checked={shownMode === "amount"} onChange={() => setMode("amount")} /> A second person at or above an amount
           </label>
         </fieldset>
         {shownMode === "amount" && (
           <Field label="Cash threshold (₦)" hint="0: every posting waits">
-            <input
-              inputMode="numeric"
-              value={shown}
-              onChange={(e) => setValue(e.target.value)}
-              placeholder="50,000"
-            />
+            <input inputMode="numeric" value={shown} onChange={(e) => setValue(e.target.value)} placeholder="50,000" />
           </Field>
         )}
         {bad && (
@@ -1693,10 +1181,7 @@ function CashThreshold() {
 
 /** The owner's discount threshold, in naira: discounts at or above it need a second person (refused until approvals arrive). */
 function DiscountThreshold() {
-  const settings = useLoad(
-    () => get<SchoolSettings>("/v1/settings/schools"),
-    [],
-  );
+  const settings = useLoad(() => get<SchoolSettings>("/v1/settings/schools"), []);
   const [value, setValue] = useState<string>();
   const act = useAction();
   const shown = value ?? String(settings.data?.discount_threshold_naira ?? "");
@@ -1708,9 +1193,8 @@ function DiscountThreshold() {
         Discount threshold
       </h2>
       <p className="hint">
-        A discount at or above this amount waits for a second person (someone
-        who may approve for the school, never the person who asked) before it
-        reaches a child's fees. 0 or empty: no threshold.
+        A discount at or above this amount waits for a second person (someone who may approve for the school, never the person who asked) before it reaches a child's fees. 0 or empty: no
+        threshold.
       </p>
       <ErrorBox error={settings.error} />
       <form
@@ -1719,22 +1203,14 @@ function DiscountThreshold() {
           e.preventDefault();
           if (bad || !settings.data) return;
           void act.run(async () => {
-            await put("/v1/settings/schools", {
-              enabled: settings.data?.enabled ?? true,
-              discount_threshold_naira: n,
-            });
+            await put("/v1/settings/schools", { enabled: settings.data?.enabled ?? true, discount_threshold_naira: n });
             setValue(undefined);
             settings.reload();
           }, "Discount threshold saved");
         }}
       >
         <Field label="Threshold (₦)">
-          <input
-            inputMode="numeric"
-            value={shown}
-            onChange={(e) => setValue(e.target.value)}
-            placeholder="50,000"
-          />
+          <input inputMode="numeric" value={shown} onChange={(e) => setValue(e.target.value)} placeholder="50,000" />
         </Field>
         <button type="submit" disabled={act.busy || bad || !settings.data}>
           Save the threshold

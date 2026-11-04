@@ -23,9 +23,7 @@ describe("field agents", () => {
     // Anything else in a session is refused in the business, not done in the agent's own workspace.
     expect(agentHeaderApplies("/v1/workflows/x/versions/1/publish")).toBe(true);
     expect(agentHeaderApplies("/v1/agent/sessions/abc")).toBe(false);
-    expect(
-      agentHeaderApplies("/v1/agent/sessions/abc/attest?lat=1&lng=2"),
-    ).toBe(false);
+    expect(agentHeaderApplies("/v1/agent/sessions/abc/attest?lat=1&lng=2")).toBe(false);
     expect(agentHeaderApplies("/v1/auth/logout")).toBe(false);
     expect(agentHeaderApplies("/v1/me")).toBe(false);
     expect(agentHeaderApplies("/v1/me/invitations")).toBe(false);
@@ -34,33 +32,19 @@ describe("field agents", () => {
   });
   it("adds the header without touching the others", () => {
     const base = { "X-Taskiem-Request": "1" };
-    expect(withAgentHeader("/v1/storefront", base, "s1")).toEqual({
-      "X-Taskiem-Request": "1",
-      [AGENT_SESSION_HEADER]: "s1",
-    });
+    expect(withAgentHeader("/v1/storefront", base, "s1")).toEqual({ "X-Taskiem-Request": "1", [AGENT_SESSION_HEADER]: "s1" });
     expect(withAgentHeader("/v1/storefront", base, null)).toBe(base);
     expect(withAgentHeader("/v1/agent/me", base, "s1")).toBe(base);
     expect(base).toEqual({ "X-Taskiem-Request": "1" });
   });
   it("knows a refusal that ends the session", () => {
-    expect(sessionEnded(403, { error: "x", agent_session_ended: true })).toBe(
-      true,
-    );
-    expect(
-      sessionEnded(403, {
-        error: "in a business, a field agent works on its page",
-      }),
-    ).toBe(false);
+    expect(sessionEnded(403, { error: "x", agent_session_ended: true })).toBe(true);
+    expect(sessionEnded(403, { error: "in a business, a field agent works on its page" })).toBe(false);
     expect(sessionEnded(401, { agent_session_ended: true })).toBe(false);
     expect(sessionEnded(403, undefined)).toBe(false);
   });
   it("reads a stored session, and nothing else", () => {
-    const s = {
-      id: "a",
-      business: "Mama Put",
-      kind: "onboarding",
-      expires_at: "2026-10-20T10:00:00Z",
-    };
+    const s = { id: "a", business: "Mama Put", kind: "onboarding", expires_at: "2026-10-20T10:00:00Z" };
     expect(parseSession(JSON.stringify(s))).toEqual(s);
     expect(parseSession(null)).toBeNull();
     expect(parseSession("not json")).toBeNull();
@@ -87,12 +71,8 @@ describe("field agents", () => {
     expect(endReason("something_new")).toBe("something new");
   });
   it("puts the place and note in the attest query", () => {
-    expect(attestPath("s 1", 6.5244, 3.3792, "  ")).toBe(
-      "/v1/agent/sessions/s%201/attest?lat=6.524400&lng=3.379200",
-    );
-    expect(attestPath("s1", -1, 2, " Blue door ")).toBe(
-      "/v1/agent/sessions/s1/attest?lat=-1.000000&lng=2.000000&note=Blue+door",
-    );
+    expect(attestPath("s 1", 6.5244, 3.3792, "  ")).toBe("/v1/agent/sessions/s%201/attest?lat=6.524400&lng=3.379200");
+    expect(attestPath("s1", -1, 2, " Blue door ")).toBe("/v1/agent/sessions/s1/attest?lat=-1.000000&lng=2.000000&note=Blue+door");
   });
   it("scales a photo down, never up", () => {
     expect(fitWithin(4000, 3000, 1600)).toEqual({ width: 1600, height: 1200 });
@@ -112,16 +92,8 @@ describe("field agents", () => {
   });
 
   it("offers WhatsApp, Telegram or both for consent", () => {
-    expect(
-      consentChannels({
-        link: "https://wa.me/1",
-        qr: "data:",
-        telegram_link: "https://t.me/bot?start=agree_123456",
-      }),
-    ).toEqual(["whatsapp", "telegram"]);
-    expect(
-      consentChannels({ telegram_link: "https://t.me/bot?start=agree_123456" }),
-    ).toEqual(["telegram"]);
+    expect(consentChannels({ link: "https://wa.me/1", qr: "data:", telegram_link: "https://t.me/bot?start=agree_123456" })).toEqual(["whatsapp", "telegram"]);
+    expect(consentChannels({ telegram_link: "https://t.me/bot?start=agree_123456" })).toEqual(["telegram"]);
     expect(consentChannels({ link: "https://wa.me/1" })).toEqual(["whatsapp"]);
     expect(consentChannels({})).toEqual(["whatsapp"]);
   });

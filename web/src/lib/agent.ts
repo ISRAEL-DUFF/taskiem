@@ -8,11 +8,7 @@ export const AGENT_SESSION_HEADER = "X-Taskiem-Agent-Session";
  * see it: the page and the tables behind it (api/agents.go). The server
  * also grants workflow permissions for the storefront's own steps, but
  * refuses the workflow routes to an agent, so the console hides them. */
-export const AGENT_PERMISSIONS = [
-  "storefront.manage",
-  "table.read",
-  "table.edit",
-];
+export const AGENT_PERMISSIONS = ["storefront.manage", "table.read", "table.edit"];
 
 /** A business session the agent is working in, as the app keeps it. */
 export interface AgentSession {
@@ -28,30 +24,17 @@ export interface AgentSession {
  * is refused there rather than made in the agent's own workspace. */
 export function agentHeaderApplies(path: string): boolean {
   const p = path.split("?")[0] ?? path;
-  return !(
-    p === "/v1/agent" ||
-    p.startsWith("/v1/agent/") ||
-    p.startsWith("/v1/auth/") ||
-    p === "/v1/me" ||
-    p.startsWith("/v1/me/")
-  );
+  return !(p === "/v1/agent" || p.startsWith("/v1/agent/") || p.startsWith("/v1/auth/") || p === "/v1/me" || p.startsWith("/v1/me/"));
 }
 
 /** The request's headers, with the session header when one applies. */
-export function withAgentHeader(
-  path: string,
-  headers: Record<string, string>,
-  session: string | null | undefined,
-): Record<string, string> {
+export function withAgentHeader(path: string, headers: Record<string, string>, session: string | null | undefined): Record<string, string> {
   if (!session || !agentHeaderApplies(path)) return headers;
   return { ...headers, [AGENT_SESSION_HEADER]: session };
 }
 
 /** Whether a refusal says the agent's session in the business is over. */
-export function sessionEnded(
-  status: number,
-  body: Record<string, unknown> | undefined,
-): boolean {
+export function sessionEnded(status: number, body: Record<string, unknown> | undefined): boolean {
   return status === 403 && body?.agent_session_ended === true;
 }
 
@@ -60,19 +43,9 @@ export function parseSession(text: string | null): AgentSession | null {
   if (!text) return null;
   try {
     const v = JSON.parse(text) as Partial<AgentSession>;
-    if (
-      typeof v.id !== "string" ||
-      typeof v.business !== "string" ||
-      typeof v.expires_at !== "string"
-    )
-      return null;
+    if (typeof v.id !== "string" || typeof v.business !== "string" || typeof v.expires_at !== "string") return null;
     if (v.kind !== "onboarding" && v.kind !== "support") return null;
-    return {
-      id: v.id,
-      business: v.business,
-      kind: v.kind,
-      expires_at: v.expires_at,
-    };
+    return { id: v.id, business: v.business, kind: v.kind, expires_at: v.expires_at };
   } catch {
     return null;
   }
@@ -122,23 +95,14 @@ export function endReason(reason: string | null | undefined): string {
 }
 
 /** The attest request's path: the place and the note go in the query. */
-export function attestPath(
-  session: string,
-  lat: number,
-  lng: number,
-  note: string,
-): string {
+export function attestPath(session: string, lat: number, lng: number, note: string): string {
   const q = new URLSearchParams({ lat: lat.toFixed(6), lng: lng.toFixed(6) });
   if (note.trim()) q.set("note", note.trim());
   return `/v1/agent/sessions/${encodeURIComponent(session)}/attest?${q.toString()}`;
 }
 
 /** A photo's size scaled down to fit `max` on its longer side (never up). */
-export function fitWithin(
-  width: number,
-  height: number,
-  max: number,
-): { width: number; height: number } {
+export function fitWithin(width: number, height: number, max: number): { width: number; height: number } {
   const long = Math.max(width, height);
   if (long <= max || long === 0) return { width, height };
   const k = max / long;
@@ -161,11 +125,7 @@ export type ConsentChannel = "whatsapp" | "telegram";
 /** Where the owner can agree from, by what the consent offers: WhatsApp
  * (a wa.me link or its QR) and Telegram (a t.me link). With neither link,
  * WhatsApp: the owner sends the message to the number shown. */
-export function consentChannels(c: {
-  link?: string;
-  qr?: string;
-  telegram_link?: string;
-}): ConsentChannel[] {
+export function consentChannels(c: { link?: string; qr?: string; telegram_link?: string }): ConsentChannel[] {
   const out: ConsentChannel[] = [];
   if (c.link || c.qr || !c.telegram_link) out.push("whatsapp");
   if (c.telegram_link) out.push("telegram");

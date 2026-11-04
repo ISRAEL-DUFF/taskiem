@@ -3,13 +3,7 @@
 // standing discounts, invoicing a term and its invoices, and the logic the
 // pages share, kept here so it is tested.
 
-import {
-  koboInput,
-  naira,
-  toKobo,
-  type InvoiceLine,
-  type InvoiceStatus,
-} from "./invoices";
+import { koboInput, naira, toKobo, type InvoiceLine, type InvoiceStatus } from "./invoices";
 import type { SchoolTerm } from "./schools";
 
 export type FeeKind = "required" | "optional";
@@ -38,12 +32,7 @@ export interface FeesSet {
   drafts_updated: number;
 }
 
-export type DiscountKind =
-  | "sibling"
-  | "staff_child"
-  | "scholarship"
-  | "hardship"
-  | "other";
+export type DiscountKind = "sibling" | "staff_child" | "scholarship" | "hardship" | "other";
 
 export const DISCOUNT_KINDS: { value: DiscountKind; label: string }[] = [
   { value: "sibling", label: "Sibling" },
@@ -79,12 +68,7 @@ export interface TermPlan {
   to_invoice: number;
   total_kobo: number;
   pass_through_kobo: number;
-  classes: {
-    class_id: string;
-    class: string;
-    students: number;
-    total_kobo: number;
-  }[];
+  classes: { class_id: string; class: string; students: number; total_kobo: number }[];
   already_invoiced: number;
   no_contact: PlanStudent[];
   no_fees: PlanStudent[];
@@ -144,12 +128,7 @@ export function emptyFeeRow(): FeeRow {
 }
 
 export function feeRows(items: FeeItem[]): FeeRow[] {
-  return items.map((it) => ({
-    name: it.name,
-    amount: koboInput(it.amount_kobo),
-    kind: it.kind,
-    passThroughFor: it.pass_through_for ?? "",
-  }));
+  return items.map((it) => ({ name: it.name, amount: koboInput(it.amount_kobo), kind: it.kind, passThroughFor: it.pass_through_for ?? "" }));
 }
 
 /** Why the structure would be refused here, or null. Empty rows are left out. */
@@ -164,50 +143,27 @@ export function feeRowsProblem(rows: FeeRow[]): string | null {
     if (seen.has(name.toLowerCase())) return `The class has ${name} twice.`;
     seen.add(name.toLowerCase());
     const k = toKobo(r.amount);
-    if (k === undefined || Number.isNaN(k) || k < 100)
-      return `${name} needs an amount, at least ₦1.`;
-    if (r.passThroughFor.trim().length > 60)
-      return `${name}: who it is collected for is at most 60 characters.`;
+    if (k === undefined || Number.isNaN(k) || k < 100) return `${name} needs an amount, at least ₦1.`;
+    if (r.passThroughFor.trim().length > 60) return `${name}: who it is collected for is at most 60 characters.`;
   }
   return null;
 }
 
 /** The PUT /v1/schools/terms/{id}/fees/{class} body. */
-export function feeRowsRequest(rows: FeeRow[]): {
-  items: {
-    name: string;
-    amount_kobo: number;
-    kind: FeeKind;
-    pass_through_for?: string;
-  }[];
-} {
+export function feeRowsRequest(rows: FeeRow[]): { items: { name: string; amount_kobo: number; kind: FeeKind; pass_through_for?: string }[] } {
   return {
     items: rows
       .filter((r) => r.name.trim() || r.amount.trim())
       .map((r) => {
-        const it: {
-          name: string;
-          amount_kobo: number;
-          kind: FeeKind;
-          pass_through_for?: string;
-        } = {
-          name: r.name.trim(),
-          amount_kobo: toKobo(r.amount) ?? 0,
-          kind: r.kind,
-        };
-        if (r.passThroughFor.trim())
-          it.pass_through_for = r.passThroughFor.trim();
+        const it: { name: string; amount_kobo: number; kind: FeeKind; pass_through_for?: string } = { name: r.name.trim(), amount_kobo: toKobo(r.amount) ?? 0, kind: r.kind };
+        if (r.passThroughFor.trim()) it.pass_through_for = r.passThroughFor.trim();
         return it;
       }),
   };
 }
 
 /** What every student of the class pays before optional items and discounts, and of it what is collected for others. */
-export function feeRowsTotals(rows: FeeRow[]): {
-  required: number;
-  passThrough: number;
-  optional: number;
-} {
+export function feeRowsTotals(rows: FeeRow[]): { required: number; passThrough: number; optional: number } {
   let required = 0;
   let passThrough = 0;
   let optional = 0;
@@ -245,45 +201,33 @@ export function emptyDiscount(): DiscountForm {
 export function discountProblem(f: DiscountForm): string | null {
   if (f.by === "percent") {
     const n = Number(f.value.trim());
-    if (!Number.isInteger(n) || n < 1 || n > 100)
-      return "A percent is a whole number from 1 to 100.";
+    if (!Number.isInteger(n) || n < 1 || n > 100) return "A percent is a whole number from 1 to 100.";
   } else {
     const k = toKobo(f.value);
-    if (k === undefined || Number.isNaN(k) || k < 100)
-      return "Give the amount, at least ₦1.";
+    if (k === undefined || Number.isNaN(k) || k < 100) return "Give the amount, at least ₦1.";
   }
   if (!f.reason.trim()) return "Say why the discount is given.";
-  if (f.reason.trim().length > 200)
-    return "The reason is at most 200 characters.";
+  if (f.reason.trim().length > 200) return "The reason is at most 200 characters.";
   return null;
 }
 
 export function discountRequest(f: DiscountForm): Record<string, unknown> {
-  const body: Record<string, unknown> = {
-    kind: f.kind,
-    reason: f.reason.trim(),
-  };
+  const body: Record<string, unknown> = { kind: f.kind, reason: f.reason.trim() };
   if (f.by === "percent") body.percent = Number(f.value.trim());
   else body.amount_kobo = toKobo(f.value);
   return body;
 }
 
 /** A discount in words: "Sibling, 10% of the school's own fees". */
-export function discountWords(
-  d: Pick<Discount, "kind" | "percent" | "amount_kobo">,
-): string {
+export function discountWords(d: Pick<Discount, "kind" | "percent" | "amount_kobo">): string {
   const kind = DISCOUNT_KINDS.find((k) => k.value === d.kind)?.label ?? d.kind;
   if (d.percent) return `${kind}, ${d.percent}% of the school's own fees`;
   return `${kind}, ${naira(d.amount_kobo ?? 0)} off`;
 }
 
 /** A refusal that waits for a second person (409 needs_approval): its words, else null. */
-export function needsApproval(
-  status: number,
-  body: Record<string, unknown> | undefined,
-): string | null {
-  if ((status !== 409 && status !== 202) || body?.code !== "needs_approval")
-    return null;
+export function needsApproval(status: number, body: Record<string, unknown> | undefined): string | null {
+  if ((status !== 409 && status !== 202) || body?.code !== "needs_approval") return null;
   return "This discount is at or above the school's discount threshold, so it waits for a second person to approve it: it is recorded, and given once someone who may approve for the school does. They are told in the app and on the chat app they linked.";
 }
 
@@ -292,56 +236,31 @@ export function needsApproval(
 /** The plan in sentences, for the preview. */
 export function planSummary(p: TermPlan): string[] {
   const out: string[] = [];
-  if (p.to_invoice === 0)
-    out.push(
-      p.already_invoiced > 0
-        ? "Every student who can be invoiced has their invoice for the term."
-        : "Nobody can be invoiced yet.",
-    );
+  if (p.to_invoice === 0) out.push(p.already_invoiced > 0 ? "Every student who can be invoiced has their invoice for the term." : "Nobody can be invoiced yet.");
   else {
-    out.push(
-      `${p.to_invoice} ${p.to_invoice === 1 ? "student" : "students"} to invoice, ${naira(p.total_kobo)} in all.`,
-    );
-    if (p.pass_through_kobo)
-      out.push(
-        `${naira(p.pass_through_kobo)} of it is collected for others (such as exam bodies), not the school's own.`,
-      );
+    out.push(`${p.to_invoice} ${p.to_invoice === 1 ? "student" : "students"} to invoice, ${naira(p.total_kobo)} in all.`);
+    if (p.pass_through_kobo) out.push(`${naira(p.pass_through_kobo)} of it is collected for others (such as exam bodies), not the school's own.`);
   }
-  if (p.already_invoiced)
-    out.push(
-      `${p.already_invoiced} already invoiced for the term: they are not invoiced again.`,
-    );
-  const left = (n: number, why: string) =>
-    n && out.push(`${n} left out: ${why}.`);
-  left(
-    p.no_contact.length,
-    "no guardian to send it to (add one on the Families page)",
-  );
+  if (p.already_invoiced) out.push(`${p.already_invoiced} already invoiced for the term: they are not invoiced again.`);
+  const left = (n: number, why: string) => n && out.push(`${n} left out: ${why}.`);
+  left(p.no_contact.length, "no guardian to send it to (add one on the Families page)");
   left(p.no_fees.length, "their class has no fees for the term");
   left(p.nothing_to_pay.length, "nothing to pay after discounts");
-  left(
-    p.needs_approval.length,
-    "a standing discount waits for a second person",
-  );
+  left(p.needs_approval.length, "a standing discount waits for a second person");
   return out;
 }
 
 export function invoicedLine(r: TermInvoiced): string {
-  if (r.created === 0 && !r.send)
-    return "Nobody new to invoice: every student has their invoice for the term.";
-  if (r.created === 0)
-    return `Nobody new to invoice; ${r.sent} ${r.sent === 1 ? "draft" : "drafts"} sent${r.failed ? `, ${r.failed} could not be` : ""}.`;
+  if (r.created === 0 && !r.send) return "Nobody new to invoice: every student has their invoice for the term.";
+  if (r.created === 0) return `Nobody new to invoice; ${r.sent} ${r.sent === 1 ? "draft" : "drafts"} sent${r.failed ? `, ${r.failed} could not be` : ""}.`;
   const made = `${r.created} ${r.created === 1 ? "invoice" : "invoices"} made`;
-  if (!r.send)
-    return `${made} as drafts: check them, then send them from here.`;
+  if (!r.send) return `${made} as drafts: check them, then send them from here.`;
   const failed = r.failed ? `; ${r.failed} could not be sent` : "";
   return `${made}; ${r.sent} sent${failed}.`;
 }
 
 /** The term invoices' totals: billed, paid, still due. */
-export function termTotals(
-  list: Pick<TermInvoice, "total_kobo" | "paid_kobo" | "due_kobo" | "status">[],
-): { total: number; paid: number; due: number } {
+export function termTotals(list: Pick<TermInvoice, "total_kobo" | "paid_kobo" | "due_kobo" | "status">[]): { total: number; paid: number; due: number } {
   let total = 0;
   let paid = 0;
   let due = 0;

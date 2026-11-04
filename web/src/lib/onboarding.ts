@@ -18,21 +18,10 @@ export interface Onboarding {
   seconds_to_first_run: number | null;
 }
 
-export type ChecklistId =
-  | "verify_email"
-  | "chat"
-  | "page"
-  | "connection"
-  | "workflow"
-  | "publish"
-  | "first_run"
-  | "invite";
+export type ChecklistId = "verify_email" | "chat" | "page" | "connection" | "workflow" | "publish" | "first_run" | "invite";
 
 /** Each checklist step: what it says, and where it is done. */
-export const CHECKLIST: Record<
-  ChecklistId,
-  { title: string; text: string; href: string; action: string }
-> = {
+export const CHECKLIST: Record<ChecklistId, { title: string; text: string; href: string; action: string }> = {
   verify_email: {
     title: "Confirm your email",
     text: "Open the link we emailed you. Until then you can build and run, but not invite people or make API keys.",
@@ -97,10 +86,7 @@ export const STARTERS = [
   "stock-reorder-alert",
 ];
 
-export function starterTemplates(
-  list: Template[],
-  connected: string[] = [],
-): Template[] {
+export function starterTemplates(list: Template[], connected: string[] = []): Template[] {
   // A template around a product (Payrolla), or working with a service a
   // business connects (Slack, QuickBooks or Zoho Books, Mailchimp), is
   // for businesses that connected it, and comes first for them.
@@ -109,17 +95,10 @@ export function starterTemplates(
     if (t.product || services(t).length > 0) return -1;
     const i = STARTERS.indexOf(t.id);
     if (i >= 0) return i;
-    return (
-      STARTERS.length + t.connectors.length + (t.needs_developer ? 100 : 0)
-    );
+    return STARTERS.length + t.connectors.length + (t.needs_developer ? 100 : 0);
   };
   return [...list]
-    .filter(
-      (t) =>
-        t.available &&
-        (!t.product || connected.includes(t.product)) &&
-        services(t).every((s) => s.some((c) => connected.includes(c))),
-    )
+    .filter((t) => t.available && (!t.product || connected.includes(t.product)) && services(t).every((s) => s.some((c) => connected.includes(c))))
     .sort((a, b) => rank(a) - rank(b) || a.title.localeCompare(b.title));
 }
 
@@ -163,10 +142,8 @@ export function firstThings(can: (perm: string) => boolean): FirstThing[] {
 export function formatDuration(seconds: number): string {
   const s = Math.max(0, Math.round(seconds));
   if (s < 60) return `${s} s`;
-  if (s < 3600)
-    return `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, "0")} s`;
-  if (s < 86400)
-    return `${Math.floor(s / 3600)} h ${Math.floor((s % 3600) / 60)} min`;
+  if (s < 3600) return `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, "0")} s`;
+  if (s < 86400) return `${Math.floor(s / 3600)} h ${Math.floor((s % 3600) / 60)} min`;
   const d = Math.floor(s / 86400);
   return d === 1 ? "1 day" : `${d} days`;
 }
@@ -174,11 +151,7 @@ export function formatDuration(seconds: number): string {
 /** A sample input for a workflow's inputs schema, for a first test run:
  * each property's default, example or first enum value, else a plain
  * value of its type. Only required properties are filled. */
-export function sampleInput(
-  schema: JSONSchema | undefined,
-  types: Record<string, JSONSchema> = {},
-  depth = 0,
-): unknown {
+export function sampleInput(schema: JSONSchema | undefined, types: Record<string, JSONSchema> = {}, depth = 0): unknown {
   if (!schema || depth > 5) return {};
   if (schema.$ref) {
     const name = schema.$ref.replace(/^#\/types\//, "");
@@ -192,8 +165,7 @@ export function sampleInput(
   switch (t) {
     case "object": {
       const out: Record<string, unknown> = {};
-      for (const k of s.required ?? [])
-        out[k] = sampleInput(s.properties?.[k], types, depth + 1);
+      for (const k of s.required ?? []) out[k] = sampleInput(s.properties?.[k], types, depth + 1);
       return out;
     }
     case "array":
@@ -213,17 +185,9 @@ export function sampleInput(
 
 /** In-product help: a few plain sentences per page, and the docs page for
  * more when the deployment has a docs site. */
-export type HelpTopic =
-  | "start"
-  | "templates"
-  | "connections"
-  | "variables"
-  | "tables";
+export type HelpTopic = "start" | "templates" | "connections" | "variables" | "tables";
 
-export const HELP: Record<
-  HelpTopic,
-  { title: string; body: string[]; doc: string }
-> = {
+export const HELP: Record<HelpTopic, { title: string; body: string[]; doc: string }> = {
   start: {
     title: "How Taskiem works",
     body: [
@@ -270,9 +234,6 @@ export const HELP: Record<
 };
 
 /** The docs page for a help topic, or null without a docs site. */
-export function helpLink(
-  docsURL: string | undefined,
-  doc: string,
-): string | null {
+export function helpLink(docsURL: string | undefined, doc: string): string | null {
   return docsURL ? `${docsURL.replace(/\/+$/, "")}/${doc}` : null;
 }

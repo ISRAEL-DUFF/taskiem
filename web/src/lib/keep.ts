@@ -28,11 +28,7 @@ function store(): Storage | undefined {
 }
 
 /** Keeps the unsaved edits for a workflow, replacing any kept before. */
-export function keepDraft<D>(
-  workflow: string,
-  draft: KeptDraft<D>,
-  s: Storage | undefined = store(),
-): void {
+export function keepDraft<D>(workflow: string, draft: KeptDraft<D>, s: Storage | undefined = store()): void {
   try {
     s?.setItem(key(workflow), JSON.stringify(draft));
   } catch {
@@ -41,39 +37,20 @@ export function keepDraft<D>(
 }
 
 /** The edits kept for a workflow, or undefined. */
-export function keptDraft<D = unknown>(
-  workflow: string,
-  s: Storage | undefined = store(),
-): KeptDraft<D> | undefined {
+export function keptDraft<D = unknown>(workflow: string, s: Storage | undefined = store()): KeptDraft<D> | undefined {
   try {
     const raw = s?.getItem(key(workflow));
     if (!raw) return undefined;
     const v = JSON.parse(raw) as Partial<KeptDraft<D>> | null;
-    if (
-      !v ||
-      typeof v !== "object" ||
-      typeof v.definition !== "object" ||
-      v.definition === null ||
-      typeof v.version !== "number"
-    )
-      return undefined;
-    return {
-      definition: v.definition,
-      layout: v.layout && typeof v.layout === "object" ? v.layout : {},
-      version: v.version,
-      digest: typeof v.digest === "string" ? v.digest : undefined,
-      at: typeof v.at === "string" ? v.at : "",
-    };
+    if (!v || typeof v !== "object" || typeof v.definition !== "object" || v.definition === null || typeof v.version !== "number") return undefined;
+    return { definition: v.definition, layout: v.layout && typeof v.layout === "object" ? v.layout : {}, version: v.version, digest: typeof v.digest === "string" ? v.digest : undefined, at: typeof v.at === "string" ? v.at : "" };
   } catch {
     return undefined;
   }
 }
 
 /** Forgets the edits kept for a workflow: saved, or thrown away. */
-export function dropDraft(
-  workflow: string,
-  s: Storage | undefined = store(),
-): void {
+export function dropDraft(workflow: string, s: Storage | undefined = store()): void {
   try {
     s?.removeItem(key(workflow));
   } catch {

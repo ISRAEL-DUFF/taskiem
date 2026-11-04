@@ -3,11 +3,7 @@
 
 import { whenWords } from "./time";
 
-export type Provider =
-  | "vault_transit"
-  | "aws_kms"
-  | "gcp_kms"
-  | "azure_key_vault";
+export type Provider = "vault_transit" | "aws_kms" | "gcp_kms" | "azure_key_vault";
 
 export interface BYOKKey {
   id: string;
@@ -44,15 +40,7 @@ export interface KeyStatus {
   versions: KeyVersion[];
   byok?: BYOKKey;
   retired_byok?: BYOKKey[];
-  rewrap?: {
-    phase: "rewrap" | "destroy";
-    reason: string;
-    since: string;
-    not_before: string;
-    secrets: number;
-    subject_keys: number;
-    last_error?: string;
-  };
+  rewrap?: { phase: "rewrap" | "destroy"; reason: string; since: string; not_before: string; secrets: number; subject_keys: number; last_error?: string };
   parked_steps: number;
   cache_ttl_seconds: number;
 }
@@ -83,46 +71,20 @@ export const providerNames: Record<Provider, string> = {
 
 /** The configuration and credential fields each provider takes. Vault
  * takes either a token or an AppRole; `auth` picks which. */
-export function providerFields(
-  p: Provider,
-  auth: "token" | "approle" = "token",
-): { config: FieldSpec[]; credentials: FieldSpec[] } {
+export function providerFields(p: Provider, auth: "token" | "approle" = "token"): { config: FieldSpec[]; credentials: FieldSpec[] } {
   switch (p) {
     case "vault_transit":
       return {
         config: [
-          {
-            key: "address",
-            label: "Address",
-            placeholder: "https://bao.example.com:8200",
-            hint: "HTTPS, reachable from Taskiem's egress IPs",
-          },
-          {
-            key: "mount",
-            label: "Transit mount",
-            optional: true,
-            placeholder: "transit",
-          },
+          { key: "address", label: "Address", placeholder: "https://bao.example.com:8200", hint: "HTTPS, reachable from Taskiem's egress IPs" },
+          { key: "mount", label: "Transit mount", optional: true, placeholder: "transit" },
           { key: "key", label: "Key name" },
           { key: "namespace", label: "Namespace", optional: true },
-          {
-            key: "ca_cert",
-            label: "CA certificate (PEM)",
-            optional: true,
-            multiline: true,
-            hint: "Only for a private CA; added to the system roots",
-          },
+          { key: "ca_cert", label: "CA certificate (PEM)", optional: true, multiline: true, hint: "Only for a private CA; added to the system roots" },
         ],
         credentials:
           auth === "token"
-            ? [
-                {
-                  key: "token",
-                  label: "Token",
-                  secret: true,
-                  hint: "A token whose policy allows only encrypt and decrypt on this key",
-                },
-              ]
+            ? [{ key: "token", label: "Token", secret: true, hint: "A token whose policy allows only encrypt and decrypt on this key" }]
             : [
                 { key: "role_id", label: "AppRole role id", secret: true },
                 { key: "secret_id", label: "AppRole secret id", secret: true },
@@ -132,59 +94,25 @@ export function providerFields(
       return {
         config: [
           { key: "region", label: "Region", placeholder: "af-south-1" },
-          {
-            key: "key",
-            label: "Key",
-            placeholder: "arn:aws:kms:…:key/… or alias/…",
-          },
+          { key: "key", label: "Key", placeholder: "arn:aws:kms:…:key/… or alias/…" },
         ],
         credentials: [
           { key: "access_key_id", label: "Access key id", secret: true },
-          {
-            key: "secret_access_key",
-            label: "Secret access key",
-            secret: true,
-          },
-          {
-            key: "session_token",
-            label: "Session token",
-            secret: true,
-            optional: true,
-          },
+          { key: "secret_access_key", label: "Secret access key", secret: true },
+          { key: "session_token", label: "Session token", secret: true, optional: true },
         ],
       };
     case "gcp_kms":
       return {
-        config: [
-          {
-            key: "key",
-            label: "Crypto key",
-            placeholder: "projects/P/locations/L/keyRings/R/cryptoKeys/K",
-          },
-        ],
-        credentials: [
-          {
-            key: "service_account_json",
-            label: "Service account key (JSON)",
-            secret: true,
-            multiline: true,
-          },
-        ],
+        config: [{ key: "key", label: "Crypto key", placeholder: "projects/P/locations/L/keyRings/R/cryptoKeys/K" }],
+        credentials: [{ key: "service_account_json", label: "Service account key (JSON)", secret: true, multiline: true }],
       };
     case "azure_key_vault":
       return {
         config: [
-          {
-            key: "address",
-            label: "Vault URL",
-            placeholder: "https://NAME.vault.azure.net",
-          },
+          { key: "address", label: "Vault URL", placeholder: "https://NAME.vault.azure.net" },
           { key: "key", label: "Key name" },
-          {
-            key: "key_version",
-            label: "Key version",
-            hint: "32 characters, from the portal or az keyvault key show",
-          },
+          { key: "key_version", label: "Key version", hint: "32 characters, from the portal or az keyvault key show" },
         ],
         credentials: [
           { key: "tenant_id", label: "Directory (tenant) id", secret: true },
@@ -196,11 +124,7 @@ export function providerFields(
 }
 
 /** The PUT /v1/keys/byok body: trimmed, empty optional fields left out. */
-export function byokRequest(
-  p: Provider,
-  values: Record<string, string>,
-  auth: "token" | "approle" = "token",
-): Record<string, unknown> {
+export function byokRequest(p: Provider, values: Record<string, string>, auth: "token" | "approle" = "token"): Record<string, unknown> {
   const f = providerFields(p, auth);
   const body: Record<string, unknown> = { provider: p };
   for (const c of f.config) {
@@ -209,9 +133,7 @@ export function byokRequest(
   }
   const credentials: Record<string, string> = {};
   for (const c of f.credentials) {
-    const v = c.multiline
-      ? (values[c.key] ?? "")
-      : (values[c.key] ?? "").trim();
+    const v = c.multiline ? (values[c.key] ?? "") : (values[c.key] ?? "").trim();
     if (v.trim()) credentials[c.key] = v;
   }
   body.credentials = credentials;
@@ -219,15 +141,9 @@ export function byokRequest(
 }
 
 /** What is missing before the form can be sent. */
-export function missingFields(
-  p: Provider,
-  values: Record<string, string>,
-  auth: "token" | "approle" = "token",
-): string[] {
+export function missingFields(p: Provider, values: Record<string, string>, auth: "token" | "approle" = "token"): string[] {
   const f = providerFields(p, auth);
-  return [...f.config, ...f.credentials]
-    .filter((x) => !x.optional && !(values[x.key] ?? "").trim())
-    .map((x) => x.label);
+  return [...f.config, ...f.credentials].filter((x) => !x.optional && !(values[x.key] ?? "").trim()).map((x) => x.label);
 }
 
 /** A sentence for the key's health. */
@@ -235,11 +151,8 @@ export function healthLine(k: BYOKKey): string {
   if (k.status === "unavailable") {
     return `Unavailable since ${k.failing_since ? whenWords(new Date(k.failing_since)) : "recently"}: steps that need secrets are paused and resume when it works again.`;
   }
-  if (k.check_failures > 0)
-    return `The last ${k.check_failures === 1 ? "check" : `${k.check_failures} checks`} failed; it is marked unavailable after two in a row.`;
-  return k.last_ok_at
-    ? `Working; last checked ${whenWords(new Date(k.last_ok_at))}.`
-    : "Working.";
+  if (k.check_failures > 0) return `The last ${k.check_failures === 1 ? "check" : `${k.check_failures} checks`} failed; it is marked unavailable after two in a row.`;
+  return k.last_ok_at ? `Working; last checked ${whenWords(new Date(k.last_ok_at))}.` : "Working.";
 }
 
 /** The state of a tenant key version, for the versions table. */

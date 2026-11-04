@@ -9,10 +9,7 @@ export type AfterAnswer = "tell" | "collect";
  * phone number, and, for "tell", a step that tells the owner of each
  * answer on WhatsApp or by email (Tell me).
  */
-export function formWorkflow(
-  title: string,
-  after: AfterAnswer,
-): WorkflowDefinition {
+export function formWorkflow(title: string, after: AfterAnswer): WorkflowDefinition {
   const name = title.trim();
   const def: WorkflowDefinition = {
     schema: "wd/v1",
@@ -39,20 +36,10 @@ export function formWorkflow(
               name: "Tell me about the answer",
               connector: "notify@1",
               action: "tell",
-              input: {
-                title: `New answer to ${name}`,
-                message: "=trigger.body.full_name + ' filled in the form.'",
-              },
+              input: { title: `New answer to ${name}`, message: "=trigger.body.full_name + ' filled in the form.'" },
             },
           ]
-        : [
-            {
-              id: "keep",
-              type: "transform",
-              name: "Keep the answer",
-              config: { output: { received: true } },
-            },
-          ],
+        : [{ id: "keep", type: "transform", name: "Keep the answer", config: { output: { received: true } } }],
   } as WorkflowDefinition;
   return def;
 }

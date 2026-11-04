@@ -120,29 +120,18 @@ export const FIELD_TYPES: [FieldType, string][] = [
   ["hidden", "Hidden"],
 ];
 
-const STRING_FORMATS: Partial<Record<FieldType, string>> = {
-  email: "email",
-  phone: "phone-ng",
-  url: "uri",
-  date: "date",
-  time: "time",
-  date_time: "date-time",
-  file: "file",
-};
+const STRING_FORMATS: Partial<Record<FieldType, string>> = { email: "email", phone: "phone-ng", url: "uri", date: "date", time: "time", date_time: "date-time", file: "file" };
 
 /** The editor's type for a schema property. */
 export function fieldTypeOf(p: FieldSchema): FieldType {
   const h = p["x-form"] ?? {};
   if (h.hidden === true) return "hidden";
   if (p.format === "file") return "file";
-  if (p.type === "boolean")
-    return h.widget === "consent" ? "consent" : "yes_no";
+  if (p.type === "boolean") return h.widget === "consent" ? "consent" : "yes_no";
   if (p.type === "array" && p.items?.enum) return "choices";
   if (p.enum) return "choice";
-  if (p.type === "integer" || p.type === "number")
-    return h.unit === "naira" ? "money" : "number";
-  for (const [t, f] of Object.entries(STRING_FORMATS))
-    if (p.format === f) return t as FieldType;
+  if (p.type === "integer" || p.type === "number") return h.unit === "naira" ? "money" : "number";
+  for (const [t, f] of Object.entries(STRING_FORMATS)) if (p.format === f) return t as FieldType;
   if (h.widget === "textarea") return "long_text";
   return "text";
 }
@@ -167,17 +156,14 @@ export function suggestPii(name: string, type?: FieldType): string {
   const word = (re: string) => new RegExp(`(^|_)(${re})($|_)`).test(n);
   if (word("bvn")) return "bvn";
   if (word("nin")) return "nin";
-  if (word("account_?number|account_?no|acct_?no|nuban"))
-    return "account_number";
-  if (type === "phone" || word("phone|mobile|msisdn|tel|telephone"))
-    return "phone";
+  if (word("account_?number|account_?no|acct_?no|nuban")) return "account_number";
+  if (type === "phone" || word("phone|mobile|msisdn|tel|telephone")) return "phone";
   if (type === "email" || word("e?mail")) return "email";
   if (word("passport")) return "passport";
   if (word("drivers?_?licen[cs]e")) return "drivers_licence";
   if (word("dob|date_of_birth|birthday")) return "dob";
   if (word("address|home_address")) return "address";
-  if (word("name|full_name|first_name|last_name|surname|other_names"))
-    return "name";
+  if (word("name|full_name|first_name|last_name|surname|other_names")) return "name";
   return "";
 }
 
@@ -214,36 +200,11 @@ export interface FieldDraft {
   helpInDescription: boolean;
 }
 
-const MANAGED = new Set([
-  "type",
-  "title",
-  "description",
-  "format",
-  "enum",
-  "items",
-  "x-pii",
-  "x-form",
-]);
-const MANAGED_X = new Set([
-  "label",
-  "help",
-  "placeholder",
-  "widget",
-  "text",
-  "prefill",
-  "hidden",
-  "from",
-  "accept",
-  "max_mb",
-  "unit",
-]);
+const MANAGED = new Set(["type", "title", "description", "format", "enum", "items", "x-pii", "x-form"]);
+const MANAGED_X = new Set(["label", "help", "placeholder", "widget", "text", "prefill", "hidden", "from", "accept", "max_mb", "unit"]);
 
 /** A new field of a type, with an x-pii suggestion. */
-export function newField(
-  name: string,
-  type: FieldType = "text",
-  label = "",
-): FieldDraft {
+export function newField(name: string, type: FieldType = "text", label = ""): FieldDraft {
   return {
     name,
     label,
@@ -253,8 +214,7 @@ export function newField(
     placeholder: "",
     prefill: type === "hidden",
     from: "",
-    choices:
-      type === "choice" || type === "choices" ? ["Option 1", "Option 2"] : [],
+    choices: type === "choice" || type === "choices" ? ["Option 1", "Option 2"] : [],
     consentText: "",
     accept: type === "file" ? ["application/pdf", "image/*"] : [],
     pii: suggestPii(name, type),
@@ -268,11 +228,7 @@ export function newField(
 }
 
 /** A field draft of one schema property. */
-export function fieldOf(
-  name: string,
-  p: FieldSchema,
-  required: boolean,
-): FieldDraft {
+export function fieldOf(name: string, p: FieldSchema, required: boolean): FieldDraft {
   const h = p["x-form"] ?? {};
   const type = fieldTypeOf(p);
   const rest: Json = {};
@@ -336,12 +292,7 @@ export function propertyOf(f: FieldDraft): FieldSchema {
       break;
     case "choices":
       p.type = "array";
-      p.items = {
-        type: f.choices.some((c) => typeof c !== "string")
-          ? undefined
-          : "string",
-        enum: f.choices,
-      };
+      p.items = { type: f.choices.some((c) => typeof c !== "string") ? undefined : "string", enum: f.choices };
       if (p.items.type === undefined) delete p.items.type;
       break;
     case "yes_no":
@@ -399,8 +350,7 @@ export function schemaOrder(schema: FormSchema | undefined): string[] {
     const oa = order(a);
     const ob = order(b);
     if (oa !== undefined && ob !== undefined && oa !== ob) return oa - ob;
-    if ((oa !== undefined) !== (ob !== undefined))
-      return oa !== undefined ? -1 : 1;
+    if ((oa !== undefined) !== (ob !== undefined)) return oa !== undefined ? -1 : 1;
     if (req.has(a) !== req.has(b)) return req.has(a) ? -1 : 1;
     return a < b ? -1 : a > b ? 1 : 0;
   });
@@ -412,10 +362,7 @@ export interface PageDraft {
 }
 
 /** The editor's fields (and pages) of a schema and a form's pages: fields in the order asked, page by page. */
-export function loadFields(
-  schema: FormSchema | undefined,
-  pages?: FormPage[],
-): { fields: FieldDraft[]; pages: PageDraft[] } {
+export function loadFields(schema: FormSchema | undefined, pages?: FormPage[]): { fields: FieldDraft[]; pages: PageDraft[] } {
   const props = schema?.properties ?? {};
   const req = new Set(schema?.required ?? []);
   const pageOf = new Map<string, number>();
@@ -433,21 +380,11 @@ export function loadFields(
     f.page = pageOf.get(n);
     return f;
   });
-  return {
-    fields,
-    pages: (pages ?? []).map((p) => ({
-      title: p.title ?? "",
-      show_if: p.show_if ?? "",
-    })),
-  };
+  return { fields, pages: (pages ?? []).map((p) => ({ title: p.title ?? "", show_if: p.show_if ?? "" })) };
 }
 
 /** The schema (and pages) the editor's fields write; base keeps the schema's other keys. */
-export function saveFields(
-  fields: FieldDraft[],
-  base?: FormSchema,
-  pageDrafts?: PageDraft[],
-): { schema: FormSchema; pages?: FormPage[] } {
+export function saveFields(fields: FieldDraft[], base?: FormSchema, pageDrafts?: PageDraft[]): { schema: FormSchema; pages?: FormPage[] } {
   const rest: Json = { ...(base ?? {}) };
   delete rest.properties;
   delete rest.required;
@@ -455,24 +392,12 @@ export function saveFields(
   for (const f of fields) properties[f.name] = propertyOf(f);
   // Required in the order the schema had it, new ones after.
   const want = fields.filter((f) => f.required).map((f) => f.name);
-  const required = [
-    ...(base?.required ?? []).filter((n) => want.includes(n)),
-    ...want.filter((n) => !(base?.required ?? []).includes(n)),
-  ];
-  const schema: FormSchema = {
-    ...rest,
-    type: "object",
-    ...(required.length && { required }),
-    properties,
-  };
+  const required = [...(base?.required ?? []).filter((n) => want.includes(n)), ...want.filter((n) => !(base?.required ?? []).includes(n))];
+  const schema: FormSchema = { ...rest, type: "object", ...(required.length && { required }), properties };
   // Pages list their fields in the editor's order.
   const pages = pageDrafts?.length
     ? pageDrafts.map((p, i) => {
-        const pg: FormPage = {
-          fields: fields
-            .filter((f) => f.page === i && f.type !== "hidden")
-            .map((f) => f.name),
-        };
+        const pg: FormPage = { fields: fields.filter((f) => f.page === i && f.type !== "hidden").map((f) => f.name) };
         if (p.title) pg.title = p.title;
         if (p.show_if.trim()) pg.show_if = p.show_if.trim();
         return pg;
@@ -494,9 +419,7 @@ export function saveFields(
 
 // Every non-hidden field is on a page: their order is the pages'.
 function pagesOnly(pages: FormPage[], fields: FieldDraft[]): boolean {
-  return fields.every(
-    (f) => f.type === "hidden" || pages.some((p) => p.fields.includes(f.name)),
-  );
+  return fields.every((f) => f.type === "hidden" || pages.some((p) => p.fields.includes(f.name)));
 }
 
 /** A field name from a label: lower-case words joined by _, unique among taken. */
@@ -509,8 +432,7 @@ export function nameFromLabel(label: string, taken: string[]): string {
     .slice(0, 40);
   if (!base || !/^[a-z]/.test(base)) base = "field" + (base ? "_" + base : "");
   if (!taken.includes(base)) return base;
-  for (let i = 2; ; i++)
-    if (!taken.includes(`${base}_${i}`)) return `${base}_${i}`;
+  for (let i = 2; ; i++) if (!taken.includes(`${base}_${i}`)) return `${base}_${i}`;
 }
 
 export const FIELD_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,62}$/;
@@ -582,23 +504,10 @@ export function labelOf(name: string, p: FieldSchema): string {
 }
 
 /** A form's pages: its own, or one page with every field that is not hidden. */
-export function pagesOf(
-  pages: FormPage[] | undefined | null,
-  schema: FormSchema | undefined,
-): FormPage[] {
+export function pagesOf(pages: FormPage[] | undefined | null, schema: FormSchema | undefined): FormPage[] {
   const props = schema?.properties ?? {};
-  if (pages?.length)
-    return pages.map((p) => ({
-      ...p,
-      fields: p.fields.filter((n) => n in props),
-    }));
-  return [
-    {
-      fields: schemaOrder(schema).filter(
-        (n) => props[n]?.["x-form"]?.hidden !== true,
-      ),
-    },
-  ];
+  if (pages?.length) return pages.map((p) => ({ ...p, fields: p.fields.filter((n) => n in props) }));
+  return [{ fields: schemaOrder(schema).filter((n) => props[n]?.["x-form"]?.hidden !== true) }];
 }
 
 /** Fields on pages before page i: what its show_if may read. */
@@ -634,10 +543,7 @@ const PHONE_NG = /^(\+?234|0)?[789]\d{9}$/;
 const EMAIL = /^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$/;
 
 /** A local date-time (from an input) as RFC 3339 with the browser's offset. */
-export function localToRFC3339(
-  local: string,
-  offsetMinutes = new Date(local).getTimezoneOffset(),
-): string {
+export function localToRFC3339(local: string, offsetMinutes = new Date(local).getTimezoneOffset()): string {
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(local)) return local;
   const base = local.length === 16 ? local + ":00" : local;
   const off = -offsetMinutes;
@@ -650,8 +556,7 @@ export function localToRFC3339(
 export function coerceAnswer(p: FieldSchema, raw: unknown): unknown {
   if (raw === undefined || raw === null || raw === "") return undefined;
   const w = widgetOf(p);
-  if (typeof raw !== "string")
-    return Array.isArray(raw) && raw.length === 0 ? undefined : raw;
+  if (typeof raw !== "string") return Array.isArray(raw) && raw.length === 0 ? undefined : raw;
   switch (w) {
     case "number": {
       const n = Number(raw.replace(/,/g, ""));
@@ -666,57 +571,33 @@ export function coerceAnswer(p: FieldSchema, raw: unknown): unknown {
     case "datetime-local":
       return localToRFC3339(raw);
     default:
-      return p.type === "integer" || p.type === "number"
-        ? Number.isFinite(Number(raw))
-          ? Number(raw)
-          : raw
-        : raw;
+      return p.type === "integer" || p.type === "number" ? (Number.isFinite(Number(raw)) ? Number(raw) : raw) : raw;
   }
 }
 
 /** A friendly problem with one answer, or "". */
-export function answerProblem(
-  p: FieldSchema,
-  value: unknown,
-  required: boolean,
-): string {
+export function answerProblem(p: FieldSchema, value: unknown, required: boolean): string {
   const w = widgetOf(p);
-  const empty =
-    value === undefined ||
-    (Array.isArray(value) && value.length === 0) ||
-    ((w === "checkbox" || w === "consent") && value !== true && required);
+  const empty = value === undefined || (Array.isArray(value) && value.length === 0) || ((w === "checkbox" || w === "consent") && value !== true && required);
   if (empty) {
     if (!required) return "";
-    return w === "consent"
-      ? "Tick the box to agree."
-      : "This question needs an answer.";
+    return w === "consent" ? "Tick the box to agree." : "This question needs an answer.";
   }
   if (w === "number" || w === "money") {
     if (typeof value !== "number") return "Enter a number.";
-    if (p.type === "integer" && !Number.isInteger(value))
-      return w === "money" ? "Enter whole naira." : "Enter a whole number.";
-    if (typeof p.minimum === "number" && value < p.minimum)
-      return `At least ${w === "money" ? formatNaira(p.minimum) : p.minimum}.`;
-    if (typeof p.maximum === "number" && value > p.maximum)
-      return `At most ${w === "money" ? formatNaira(p.maximum) : p.maximum}.`;
+    if (p.type === "integer" && !Number.isInteger(value)) return w === "money" ? "Enter whole naira." : "Enter a whole number.";
+    if (typeof p.minimum === "number" && value < p.minimum) return `At least ${w === "money" ? formatNaira(p.minimum) : p.minimum}.`;
+    if (typeof p.maximum === "number" && value > p.maximum) return `At most ${w === "money" ? formatNaira(p.maximum) : p.maximum}.`;
   }
   if (typeof value === "string") {
-    if (w === "email" && !EMAIL.test(value))
-      return "Enter an email address, like name@example.com.";
-    if (w === "tel" && !PHONE_NG.test(value))
-      return "Enter a Nigerian phone number, like 0803 123 4567.";
-    if (w === "url" && !/^https?:\/\/\S+\.\S+/.test(value))
-      return "Enter a web address starting with https://.";
-    if (typeof p.maxLength === "number" && value.length > p.maxLength)
-      return `At most ${p.maxLength} characters.`;
-    if (typeof p.minLength === "number" && value.length < p.minLength)
-      return `At least ${p.minLength} characters.`;
+    if (w === "email" && !EMAIL.test(value)) return "Enter an email address, like name@example.com.";
+    if (w === "tel" && !PHONE_NG.test(value)) return "Enter a Nigerian phone number, like 0803 123 4567.";
+    if (w === "url" && !/^https?:\/\/\S+\.\S+/.test(value)) return "Enter a web address starting with https://.";
+    if (typeof p.maxLength === "number" && value.length > p.maxLength) return `At most ${p.maxLength} characters.`;
+    if (typeof p.minLength === "number" && value.length < p.minLength) return `At least ${p.minLength} characters.`;
     if (typeof p.pattern === "string") {
       try {
-        if (!new RegExp(p.pattern).test(value))
-          return p["x-form"]?.help
-            ? `Check the format: ${p["x-form"].help}`
-            : "Check the format of this answer.";
+        if (!new RegExp(p.pattern).test(value)) return p["x-form"]?.help ? `Check the format: ${p["x-form"].help}` : "Check the format of this answer.";
       } catch {
         // a pattern JavaScript cannot read: the server checks it
       }
@@ -726,10 +607,7 @@ export function answerProblem(
 }
 
 /** The answers (coerced) of a raw answer set. */
-export function coerceAnswers(
-  schema: FormSchema | undefined,
-  raw: Record<string, unknown>,
-): Record<string, unknown> {
+export function coerceAnswers(schema: FormSchema | undefined, raw: Record<string, unknown>): Record<string, unknown> {
   const props = schema?.properties ?? {};
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(raw)) {
@@ -742,10 +620,7 @@ export function coerceAnswers(
 }
 
 /** The pages shown for these answers: a show_if the evaluator cannot read shows its page. */
-export function shownPages(
-  pages: FormPage[],
-  answers: Record<string, unknown>,
-): number[] {
+export function shownPages(pages: FormPage[], answers: Record<string, unknown>): number[] {
   const out: number[] = [];
   pages.forEach((p, i) => {
     if (i === 0 || !p.show_if?.trim()) return out.push(i);
@@ -755,19 +630,12 @@ export function shownPages(
 }
 
 /** The answers to send: fields on shown pages, and hidden fields, with values. */
-export function answersToSend(
-  schema: FormSchema | undefined,
-  pages: FormPage[],
-  raw: Record<string, unknown>,
-): Record<string, unknown> {
+export function answersToSend(schema: FormSchema | undefined, pages: FormPage[], raw: Record<string, unknown>): Record<string, unknown> {
   const answers = coerceAnswers(schema, raw);
-  const shown = new Set(
-    shownPages(pages, answers).flatMap((i) => pages[i]?.fields ?? []),
-  );
+  const shown = new Set(shownPages(pages, answers).flatMap((i) => pages[i]?.fields ?? []));
   const props = schema?.properties ?? {};
   const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(answers))
-    if (shown.has(k) || props[k]?.["x-form"]?.hidden === true) out[k] = v;
+  for (const [k, v] of Object.entries(answers)) if (shown.has(k) || props[k]?.["x-form"]?.hidden === true) out[k] = v;
   return out;
 }
 
@@ -777,8 +645,7 @@ type Tok = { t: "num" | "str" | "id" | "op" | "kw"; v: string };
 
 function tokens(src: string): Tok[] {
   const out: Tok[] = [];
-  const re =
-    /\s*(?:(\d+(?:\.\d+)?)|"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|(==|!=|<=|>=|&&|\|\||[<>!()[\],.])|([A-Za-z_][A-Za-z0-9_]*))/y;
+  const re = /\s*(?:(\d+(?:\.\d+)?)|"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|(==|!=|<=|>=|&&|\|\||[<>!()[\],.])|([A-Za-z_][A-Za-z0-9_]*))/y;
   let i = 0;
   const s = src.trim();
   while (i < s.length) {
@@ -787,16 +654,10 @@ function tokens(src: string): Tok[] {
     if (!m || m[0].length === 0) throw new Error("unreadable");
     i = re.lastIndex;
     if (m[1] !== undefined) out.push({ t: "num", v: m[1] });
-    else if (m[2] !== undefined)
-      out.push({ t: "str", v: m[2].replace(/\\(.)/g, "$1") });
-    else if (m[3] !== undefined)
-      out.push({ t: "str", v: m[3].replace(/\\(.)/g, "$1") });
+    else if (m[2] !== undefined) out.push({ t: "str", v: m[2].replace(/\\(.)/g, "$1") });
+    else if (m[3] !== undefined) out.push({ t: "str", v: m[3].replace(/\\(.)/g, "$1") });
     else if (m[4] !== undefined) out.push({ t: "op", v: m[4] });
-    else if (m[5] !== undefined)
-      out.push({
-        t: ["true", "false", "null", "in"].includes(m[5]) ? "kw" : "id",
-        v: m[5],
-      });
+    else if (m[5] !== undefined) out.push({ t: ["true", "false", "null", "in"].includes(m[5]) ? "kw" : "id", v: m[5] });
   }
   return out;
 }
@@ -807,10 +668,7 @@ function tokens(src: string): Tok[] {
  * `in [..]`, joined by && || ! and brackets. Returns undefined for anything
  * beyond that (the page is then shown; the server decides).
  */
-export function evalShowIf(
-  src: string,
-  answers: Record<string, unknown>,
-): boolean | undefined {
+export function evalShowIf(src: string, answers: Record<string, unknown>): boolean | undefined {
   const s = src.trim().replace(/^=/, "");
   if (s === "") return true;
   let toks: Tok[];
@@ -836,14 +694,7 @@ export function evalShowIf(
     if (!t) return fail();
     if (t.t === "num") return Number(t.v);
     if (t.t === "str") return t.v;
-    if (t.t === "kw")
-      return t.v === "true"
-        ? true
-        : t.v === "false"
-          ? false
-          : t.v === "null"
-            ? null
-            : fail();
+    if (t.t === "kw") return t.v === "true" ? true : t.v === "false" ? false : t.v === "null" ? null : fail();
     if (t.t === "op" && t.v === "(") {
       const v = or();
       if (!eat(")")) fail();
@@ -887,11 +738,7 @@ export function evalShowIf(
   const cmp = (): unknown => {
     const a = unary();
     const op = peek();
-    if (
-      op &&
-      (op.t === "op" || op.t === "kw") &&
-      ["==", "!=", "<", "<=", ">", ">=", "in"].includes(op.v)
-    ) {
+    if (op && (op.t === "op" || op.t === "kw") && ["==", "!=", "<", "<=", ">", ">=", "in"].includes(op.v)) {
       i++;
       const b = unary();
       switch (op.v) {
@@ -908,13 +755,7 @@ export function evalShowIf(
       }
       const x = a as number | string;
       const y = b as number | string;
-      return op.v === "<"
-        ? x < y
-        : op.v === "<="
-          ? x <= y
-          : op.v === ">"
-            ? x > y
-            : x >= y;
+      return op.v === "<" ? x < y : op.v === "<=" ? x <= y : op.v === ">" ? x > y : x >= y;
     }
     return a;
   };
@@ -946,54 +787,29 @@ export function evalShowIf(
 }
 
 function same(a: unknown, b: unknown): boolean {
-  if (Array.isArray(a) && Array.isArray(b))
-    return a.length === b.length && a.every((x, i) => same(x, b[i]));
+  if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((x, i) => same(x, b[i]));
   return a === b;
 }
 
 /** The answers a show_if reads (answers.x, answers["x"]). */
 export function answerRefs(src: string): string[] {
   const out: string[] = [];
-  for (const m of src.matchAll(
-    /answers(?:\.([A-Za-z_][A-Za-z0-9_]*)|\[["']([^"']+)["']\])/g,
-  ))
-    out.push(m[1] ?? m[2] ?? "");
+  for (const m of src.matchAll(/answers(?:\.([A-Za-z_][A-Za-z0-9_]*)|\[["']([^"']+)["']\])/g)) out.push(m[1] ?? m[2] ?? "");
   return out;
 }
 
 // --- the deploy checks, mirrored (engine/wd/form.go) ---
 
-const REFUSED_NAME =
-  /(^|_)(password|passwd|passcode|pin|cvv|cvc|otp|token|secret)($|_)|card_?number|card_?no|pan$|internet_?banking|bank_?login/i;
-const REFUSED_PII = [
-  "card",
-  "card_number",
-  "cvv",
-  "pin",
-  "password",
-  "otp",
-  "credential",
-  "bank_login",
-];
-const SENSITIVE_PII = [
-  "bvn",
-  "nin",
-  "account_number",
-  "passport",
-  "drivers_licence",
-];
+const REFUSED_NAME = /(^|_)(password|passwd|passcode|pin|cvv|cvc|otp|token|secret)($|_)|card_?number|card_?no|pan$|internet_?banking|bank_?login/i;
+const REFUSED_PII = ["card", "card_number", "cvv", "pin", "password", "otp", "credential", "bank_login"];
+const SENSITIVE_PII = ["bvn", "nin", "account_number", "passport", "drivers_licence"];
 const SENSITIVE_NAME = /(^|_)(bvn|nin|account_?number|acct_?no|nuban)($|_)/i;
 
 /** Whether a field name is one a form never asks for. */
-export const neverCollected = (name: string, pii = "") =>
-  REFUSED_NAME.test(name) || REFUSED_PII.includes(pii);
+export const neverCollected = (name: string, pii = "") => REFUSED_NAME.test(name) || REFUSED_PII.includes(pii);
 
 /** Problems with a form's fields (FormFieldProblems): anonymous is a public form without verify. */
-export function fieldProblems(
-  schema: FormSchema | undefined,
-  anonymous: boolean,
-  path: string,
-): Problem[] {
+export function fieldProblems(schema: FormSchema | undefined, anonymous: boolean, path: string): Problem[] {
   const out: Problem[] = [];
   const props = schema?.properties ?? {};
   for (const name of schemaOrder(schema)) {
@@ -1001,42 +817,21 @@ export function fieldProblems(
     const at = `${path}/properties/${name}`;
     const cat = p["x-pii"] ?? "";
     if (neverCollected(name, cat)) {
-      out.push({
-        path: at,
-        message: `a form never asks for passwords, PINs, card details or one-time codes ("${name}")`,
-      });
+      out.push({ path: at, message: `a form never asks for passwords, PINs, card details or one-time codes ("${name}")` });
       continue;
     }
     if (SENSITIVE_PII.includes(cat) || SENSITIVE_NAME.test(name)) {
-      if (cat === "")
-        out.push({
-          path: at,
-          message: `"${name}" looks like an identifier: mark it with its x-pii category so it is sealed`,
-        });
-      else if (anonymous)
-        out.push({
-          path: at,
-          message: `"${name}" may be asked only on a link or members form, or a public form with verify on`,
-        });
+      if (cat === "") out.push({ path: at, message: `"${name}" looks like an identifier: mark it with its x-pii category so it is sealed` });
+      else if (anonymous) out.push({ path: at, message: `"${name}" may be asked only on a link or members form, or a public form with verify on` });
     }
     if (p.type === "object" || (p.type === "array" && !p.items?.enum)) {
-      out.push({
-        path: at,
-        message: `"${name}": nested fields and lists are not in forms yet; use plain fields or a list of choices`,
-      });
+      out.push({ path: at, message: `"${name}": nested fields and lists are not in forms yet; use plain fields or a list of choices` });
     }
     if (p.format === "file") {
       const mb = p["x-form"]?.max_mb;
-      if (typeof mb === "number" && (mb < 1 || mb > 25))
-        out.push({
-          path: `${at}/x-form/max_mb`,
-          message: "a file is at most 25 MB",
-        });
+      if (typeof mb === "number" && (mb < 1 || mb > 25)) out.push({ path: `${at}/x-form/max_mb`, message: "a file is at most 25 MB" });
     }
-    if (
-      (p.enum && p.enum.length === 0) ||
-      (p.type === "array" && p.items?.enum?.length === 0)
-    ) {
+    if ((p.enum && p.enum.length === 0) || (p.type === "array" && p.items?.enum?.length === 0)) {
       out.push({ path: at, message: `"${name}" needs at least one choice` });
     }
   }
@@ -1044,25 +839,15 @@ export function fieldProblems(
 }
 
 /** Problems with a form trigger (checkFormTrigger), at the validator's paths. */
-export function formProblems(
-  cfg: FormTriggerConfig,
-  schema: FormSchema | undefined,
-): Problem[] {
+export function formProblems(cfg: FormTriggerConfig, schema: FormSchema | undefined): Problem[] {
   const out: Problem[] = [];
-  const add = (path: string, message: string) =>
-    out.push({ path: "/trigger/config" + path, message });
+  const add = (path: string, message: string) => out.push({ path: "/trigger/config" + path, message });
   const access = cfg.access ?? "public";
   if (!cfg.title?.trim()) add("/title", "a form needs a title");
-  if (cfg.verify && access === "members")
-    add("/verify", "verify is phone or email, and members forms need none");
-  if (cfg.after?.mode === "redirect" && !cfg.after.url?.startsWith("https://"))
-    add(
-      "/after/url",
-      "a redirect needs an https URL on one of the organisation's verified websites",
-    );
+  if (cfg.verify && access === "members") add("/verify", "verify is phone or email, and members forms need none");
+  if (cfg.after?.mode === "redirect" && !cfg.after.url?.startsWith("https://")) add("/after/url", "a redirect needs an https URL on one of the organisation's verified websites");
   const props = schema?.properties ?? {};
-  if (Object.keys(props).length === 0)
-    add("", "a form needs fields: give the workflow an inputs schema");
+  if (Object.keys(props).length === 0) add("", "a form needs fields: give the workflow an inputs schema");
   const seen = new Map<string, number>();
   const pages = pagesOf(cfg.pages, schema);
   const raw = cfg.pages?.length ? cfg.pages : pages;
@@ -1073,8 +858,7 @@ export function formProblems(
         continue;
       }
       const j = seen.get(name);
-      if (j !== undefined)
-        add(`/pages/${i}/fields`, `"${name}" is on page ${j + 1} already`);
+      if (j !== undefined) add(`/pages/${i}/fields`, `"${name}" is on page ${j + 1} already`);
       seen.set(name, i);
     }
     const c = (pg.show_if ?? "").trim().replace(/^=/, "");
@@ -1082,26 +866,14 @@ export function formProblems(
       if (i === 0) add(`/pages/${i}/show_if`, "the first page is always shown");
       else {
         const earlier = earlierFields(raw, i);
-        for (const r of answerRefs(c))
-          if (!earlier.includes(r))
-            add(
-              `/pages/${i}/show_if`,
-              `the condition reads "${r}", which is not on an earlier page`,
-            );
+        for (const r of answerRefs(c)) if (!earlier.includes(r)) add(`/pages/${i}/show_if`, `the condition reads "${r}", which is not on an earlier page`);
       }
     }
   });
   for (const name of Object.keys(props)) {
-    if (!seen.has(name) && props[name]?.["x-form"]?.hidden !== true)
-      add("/pages", `"${name}" is on no page (put it on one, or hide it)`);
+    if (!seen.has(name) && props[name]?.["x-form"]?.hidden !== true) add("/pages", `"${name}" is on no page (put it on one, or hide it)`);
   }
-  out.push(
-    ...fieldProblems(
-      schema,
-      access === "public" && !cfg.verify,
-      "/inputs/schema",
-    ),
-  );
+  out.push(...fieldProblems(schema, access === "public" && !cfg.verify, "/inputs/schema"));
   return out;
 }
 
@@ -1110,34 +882,22 @@ const DURATION = /^(\d+(ms|s|m|h|d))+$/;
 /** A wd/v1 duration in milliseconds ("72h", "1d12h"), or undefined. */
 export function parseDuration(s: string): number | undefined {
   if (!DURATION.test(s)) return undefined;
-  const unit: Record<string, number> = {
-    ms: 1,
-    s: 1000,
-    m: 60_000,
-    h: 3_600_000,
-    d: 86_400_000,
-  };
+  const unit: Record<string, number> = { ms: 1, s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 };
   let total = 0;
-  for (const m of s.matchAll(/(\d+)(ms|s|m|h|d)/g))
-    total += Number(m[1]) * (unit[m[2] as string] ?? 0);
+  for (const m of s.matchAll(/(\d+)(ms|s|m|h|d)/g)) total += Number(m[1]) * (unit[m[2] as string] ?? 0);
   return total;
 }
 
 /** Problems with a form step's config (checkFormStep), at paths under path. */
 export function stepProblems(cfg: FormStepConfig, path = ""): Problem[] {
   const out: Problem[] = [];
-  const add = (sub: string, message: string) =>
-    out.push({ path: path + sub, message });
+  const add = (sub: string, message: string) => out.push({ path: path + sub, message });
   if (!cfg.title?.trim()) add("/title", "a form step needs a title");
   const to = cfg.to ?? {};
-  const set = [to.phone, to.email, to.role].filter(
-    (v) => v !== undefined && v !== "",
-  );
+  const set = [to.phone, to.email, to.role].filter((v) => v !== undefined && v !== "");
   if (set.length !== 1) add("/to", "to is exactly one of phone, email or role");
-  for (const v of cfg.via ?? [])
-    if (v !== "sms" && v !== "email") add("/via", "via is sms and email");
-  if (cfg.verify && to.role)
-    add("/verify", "members are signed in: verify is for a phone or email");
+  for (const v of cfg.via ?? []) if (v !== "sms" && v !== "email") add("/via", "via is sms and email");
+  if (cfg.verify && to.role) add("/verify", "members are signed in: verify is for a phone or email");
   let timeout = 7 * 86_400_000;
   if (cfg.timeout) {
     const d = parseDuration(cfg.timeout);
@@ -1146,11 +906,9 @@ export function stepProblems(cfg: FormStepConfig, path = ""): Problem[] {
   }
   (cfg.remind ?? []).forEach((r, i) => {
     const d = parseDuration(r);
-    if (d === undefined || d <= 0 || d >= timeout)
-      add(`/remind/${i}`, "a reminder is a duration shorter than the timeout");
+    if (d === undefined || d <= 0 || d >= timeout) add(`/remind/${i}`, "a reminder is a duration shorter than the timeout");
   });
-  if (Object.keys(cfg.schema?.properties ?? {}).length === 0)
-    add("/schema", "a form step needs questions: a schema with properties");
+  if (Object.keys(cfg.schema?.properties ?? {}).length === 0) add("/schema", "a form step needs questions: a schema with properties");
   out.push(...fieldProblems(cfg.schema, false, path + "/schema"));
   return out;
 }
@@ -1171,17 +929,14 @@ export function showAnswer(v: unknown, p?: FieldSchema): string {
   if (v === undefined || v === null) return "—";
   if (typeof v === "object" && !Array.isArray(v)) {
     const o = v as Json;
-    if ("masked" in o)
-      return `${String(o.masked)} (${String(o.category ?? "personal")})`;
+    if ("masked" in o) return `${String(o.masked)} (${String(o.category ?? "personal")})`;
     if ("$pii" in o) return `••• (${String(o.$pii)})`;
-    if ("name" in o && "size" in o)
-      return `${String(o.name)} (${Math.max(1, Math.round(Number(o.size) / 1024))} KB)`;
+    if ("name" in o && "size" in o) return `${String(o.name)} (${Math.max(1, Math.round(Number(o.size) / 1024))} KB)`;
     return JSON.stringify(v);
   }
   if (Array.isArray(v)) return v.map((x) => showAnswer(x)).join(", ");
   if (typeof v === "boolean") return v ? "Yes" : "No";
-  if (typeof v === "number" && p && fieldTypeOf(p) === "money")
-    return formatNaira(v);
+  if (typeof v === "number" && p && fieldTypeOf(p) === "money") return formatNaira(v);
   return String(v);
 }
 
@@ -1195,24 +950,13 @@ export function maskContact(v: string): string {
 }
 
 /** Links (one per line) as CSV: url, to, expires_at. */
-export function linksCSV(
-  links: { url: string; to?: string; expires_at: string }[],
-): string {
-  const q = (s: string) =>
-    /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  return (
-    [
-      "url,to,expires_at",
-      ...links.map((l) => [l.url, l.to ?? "", l.expires_at].map(q).join(",")),
-    ].join("\n") + "\n"
-  );
+export function linksCSV(links: { url: string; to?: string; expires_at: string }[]): string {
+  const q = (s: string) => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
+  return ["url,to,expires_at", ...links.map((l) => [l.url, l.to ?? "", l.expires_at].map(q).join(","))].join("\n") + "\n";
 }
 
 /** Recipients pasted one per line (or comma-separated): phones and emails. */
-export function parseRecipients(text: string): {
-  to: ({ phone: string } | { email: string })[];
-  bad: string[];
-} {
+export function parseRecipients(text: string): { to: ({ phone: string } | { email: string })[]; bad: string[] } {
   const to: ({ phone: string } | { email: string })[] = [];
   const bad: string[] = [];
   for (const raw of text.split(/[\n,;]+/)) {

@@ -4,25 +4,14 @@ import type { Trigger } from "@sdk/wd";
 import type { Order } from "./orders";
 import { scheduleOf, scheduleWords } from "./plaincanvas";
 
-const sameDay = (a: Date, b: Date) =>
-  a.getFullYear() === b.getFullYear() &&
-  a.getMonth() === b.getMonth() &&
-  a.getDate() === b.getDate();
+const sameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
 /** Money taken today: orders paid since midnight, local time. */
-export function moneyToday(
-  orders: Pick<Order, "paid_at" | "total_kobo" | "status">[],
-  now = new Date(),
-): { kobo: number; count: number } {
+export function moneyToday(orders: Pick<Order, "paid_at" | "total_kobo" | "status">[], now = new Date()): { kobo: number; count: number } {
   let kobo = 0;
   let count = 0;
   for (const o of orders) {
-    if (
-      !o.paid_at ||
-      o.status === "refunded" ||
-      !sameDay(new Date(o.paid_at), now)
-    )
-      continue;
+    if (!o.paid_at || o.status === "refunded" || !sameDay(new Date(o.paid_at), now)) continue;
     kobo += o.total_kobo;
     count++;
   }
@@ -30,24 +19,13 @@ export function moneyToday(
 }
 
 /** Orders that came in today, and how many of them wait for the owner. */
-export function ordersToday(
-  orders: Pick<Order, "created_at" | "status">[],
-  now = new Date(),
-): { count: number; waiting: number } {
+export function ordersToday(orders: Pick<Order, "created_at" | "status">[], now = new Date()): { count: number; waiting: number } {
   const today = orders.filter((o) => sameDay(new Date(o.created_at), now));
-  return {
-    count: today.length,
-    waiting: orders.filter(
-      (o) =>
-        o.status === "received" ||
-        o.status === "price_changed" ||
-        o.status === "refund_due",
-    ).length,
-  };
+  return { count: today.length, waiting: orders.filter((o) => o.status === "received" || o.status === "price_changed" || o.status === "refund_due").length };
 }
 
 const service = (ref: unknown) => {
-  const id = typeof ref === "string" ? (ref.split("@")[0] ?? "") : "";
+  const id = typeof ref === "string" ? ref.split("@")[0] ?? "" : "";
   return id ? id.charAt(0).toUpperCase() + id.slice(1) : "a service";
 };
 
@@ -62,10 +40,7 @@ export const LINK_EVENTS: { value: string; label: string }[] = [
 ];
 
 function linkEventWords(event: unknown): string {
-  return (
-    LINK_EVENTS.find((e) => e.value === event)?.label ??
-    "A linked business does something"
-  );
+  return LINK_EVENTS.find((e) => e.value === event)?.label ?? "A linked business does something";
 }
 
 /** What starts a workflow, as its list and Home say it. */
@@ -84,9 +59,7 @@ export function triggerWords(t: Trigger | null | undefined): string {
     case "form":
       return "Someone fills in a form";
     case "invoice":
-      return c.event === "payment"
-        ? "A payment is counted towards an invoice"
-        : "An invoice is paid";
+      return c.event === "payment" ? "A payment is counted towards an invoice" : "An invoice is paid";
     case "link":
       return linkEventWords(c.event);
     case "whatsapp":
@@ -137,11 +110,7 @@ export function runWords(status: string): string {
  * what its trigger is ("its schedule", "an order"); an email or a form
  * says so (email:…, form:…), and so does an invoice paid (invoice:…);
  * another id that is no member's is an app or API key. */
-export function startedByWords(
-  startedBy: string | null,
-  triggerType: string | undefined,
-  names: Map<string, string>,
-): string {
+export function startedByWords(startedBy: string | null, triggerType: string | undefined, names: Map<string, string>): string {
   if (startedBy?.startsWith("email:")) return "an email";
   if (startedBy?.startsWith("form:")) return "a form";
   if (startedBy?.startsWith("invoice:")) return "a paid invoice";

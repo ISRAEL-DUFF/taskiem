@@ -71,9 +71,7 @@ export function StorefrontFronts() {
                 <Row
                   key={f.id}
                   letter={f.name}
-                  title={
-                    <Link to={`/storefront/fronts/${f.id}`}>{f.name}</Link>
-                  }
+                  title={<Link to={`/storefront/fronts/${f.id}`}>{f.name}</Link>}
                   side={
                     <span className={`badge ${f.enabled ? "ok" : "muted"}`}>
                       {f.enabled ? "On" : "Off"}
@@ -164,15 +162,8 @@ function AddFront({
           }, false);
         }}
       >
-        <Field
-          label="Name"
-          hint="As customers see it: Snacks, Small chops, Ask us"
-        >
-          <input
-            value={name}
-            maxLength={80}
-            onChange={(e) => setName(e.target.value)}
-          />
+        <Field label="Name" hint="As customers see it: Snacks, Small chops, Ask us">
+          <input value={name} maxLength={80} onChange={(e) => setName(e.target.value)} />
         </Field>
         <fieldset className="choices">
           <legend>What is it for?</legend>
@@ -219,23 +210,13 @@ export function StorefrontFront() {
   const f = view.data?.fronts.find((x) => x.id === id);
   const act = useAction();
   const navigate = useNavigate();
-  const [edit, setEdit] = useState<{
-    name: string;
-    tagline: string;
-    slug: string;
-  } | null>(null);
+  const [edit, setEdit] = useState<{ name: string; tagline: string; slug: string } | null>(null);
   const published = (sf.data?.published_version ?? 0) > 0;
   const base = sf.data ? pageURL(sf.data) : "";
   const home = f?.slug === "";
-  const form =
-    edit ??
-    (f ? { name: f.name, tagline: f.tagline ?? "", slug: f.slug } : null);
+  const form = edit ?? (f ? { name: f.name, tagline: f.tagline ?? "", slug: f.slug } : null);
   const dirty =
-    !!f &&
-    !!edit &&
-    (edit.name !== f.name ||
-      edit.tagline !== (f.tagline ?? "") ||
-      edit.slug !== f.slug);
+    !!f && !!edit && (edit.name !== f.name || edit.tagline !== (f.tagline ?? "") || edit.slug !== f.slug);
   return (
     <>
       <PageHeader
@@ -251,9 +232,7 @@ export function StorefrontFront() {
               onClick={() =>
                 void act.run(
                   async () => (
-                    await patch(`/v1/storefront/fronts/${f.id}`, {
-                      enabled: !f.enabled,
-                    }),
+                    await patch(`/v1/storefront/fronts/${f.id}`, { enabled: !f.enabled }),
                     view.reload()
                   ),
                   f.enabled ? `${f.name} is off` : `${f.name} is on`,
@@ -270,14 +249,8 @@ export function StorefrontFront() {
         <Link to="/storefront/fronts">All fronts</Link>
       </p>
       <ErrorBox error={view.error ?? sf.error ?? act.error} />
-      {!view.data && !view.error && (
-        <Skeleton rows={3} label="Loading the front…" />
-      )}
-      {view.data && !f && (
-        <EmptyState icon="storefront">
-          This front is not there any more.
-        </EmptyState>
-      )}
+      {!view.data && !view.error && <Skeleton rows={3} label="Loading the front…" />}
+      {view.data && !f && <EmptyState icon="storefront">This front is not there any more.</EmptyState>}
       {f && form && (
         <>
           <section className="card" aria-labelledby="front-about">
@@ -308,42 +281,24 @@ export function StorefrontFront() {
                   onChange={(e) => setEdit({ ...form, name: e.target.value })}
                 />
               </Field>
-              <Field
-                label="Line under the name"
-                hint="Optional: what customers find here"
-              >
+              <Field label="Line under the name" hint="Optional: what customers find here">
                 <input
                   value={form.tagline}
                   maxLength={120}
-                  onChange={(e) =>
-                    setEdit({ ...form, tagline: e.target.value })
-                  }
+                  onChange={(e) => setEdit({ ...form, tagline: e.target.value })}
                 />
               </Field>
               {!home && (
-                <Field
-                  label="Address"
-                  hint={
-                    base
-                      ? `${base.replace(/\/+$/, "")}/${form.slug}`
-                      : undefined
-                  }
-                >
+                <Field label="Address" hint={base ? `${base.replace(/\/+$/, "")}/${form.slug}` : undefined}>
                   <input
                     value={form.slug}
                     maxLength={40}
-                    onChange={(e) =>
-                      setEdit({ ...form, slug: e.target.value.toLowerCase() })
-                    }
+                    onChange={(e) => setEdit({ ...form, slug: e.target.value.toLowerCase() })}
                   />
                 </Field>
               )}
               <div className="toolbar">
-                <button
-                  type="submit"
-                  className="primary"
-                  disabled={act.busy || !dirty}
-                >
+                <button type="submit" className="primary" disabled={act.busy || !dirty}>
                   Save
                 </button>
               </div>
@@ -355,22 +310,15 @@ export function StorefrontFront() {
             </h2>
             {home ? (
               <p className="hint">
-                Your home page shows your catalogue: change it under{" "}
-                <Link to="/storefront">Page</Link>.
+                Your home page shows your catalogue: change it under <Link to="/storefront">Page</Link>.
               </p>
             ) : f.table_id ? (
               <p>
-                {f.items === 0
-                  ? "Nothing on this front yet. "
-                  : `${f.items} on this front. `}
-                <Link to={`/tables/${f.table_id}`}>
-                  {f.items === 0 ? "Add your first item" : "Change the items"}
-                </Link>
+                {f.items === 0 ? "Nothing on this front yet. " : `${f.items} on this front. `}
+                <Link to={`/tables/${f.table_id}`}>{f.items === 0 ? "Add your first item" : "Change the items"}</Link>
               </p>
             ) : (
-              <p className="hint">
-                This front has no list of items: it shows its forms.
-              </p>
+              <p className="hint">This front has no list of items: it shows its forms.</p>
             )}
           </section>
           <section className="card sf-links" aria-labelledby="front-forms">
@@ -400,9 +348,7 @@ export function StorefrontFront() {
                 className="danger"
                 disabled={act.busy}
                 onClick={() =>
-                  confirm(
-                    `Remove ${f.name}? A front with orders or a workflow is turned off instead.`,
-                  ) &&
+                  confirm(`Remove ${f.name}? A front with orders or a workflow is turned off instead.`) &&
                   void act.run(async () => {
                     await del(`/v1/storefront/fronts/${f.id}`);
                     navigate("/storefront/fronts");

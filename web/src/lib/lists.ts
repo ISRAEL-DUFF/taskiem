@@ -2,27 +2,16 @@
 // parameter for, applied to what it returned.
 import type { RunSummary, WorkflowSummary } from "../api";
 
-const words = (q: string) =>
-  q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+const words = (q: string) => q.trim().toLowerCase().split(/\s+/).filter(Boolean);
 
 /** Workflows whose name or key holds every word of `q`, and that are
  * published ("published"), not published ("draft") or either (""). */
-export function filterWorkflows(
-  all: WorkflowSummary[],
-  q: string,
-  state: string,
-): WorkflowSummary[] {
+export function filterWorkflows(all: WorkflowSummary[], q: string, state: string): WorkflowSummary[] {
   const ws = words(q);
   return all.filter(
     (w) =>
-      ws.every(
-        (x) =>
-          w.name.toLowerCase().includes(x) || w.key.toLowerCase().includes(x),
-      ) &&
-      (state === "" ||
-        (state === "published"
-          ? w.active_version !== null
-          : w.active_version === null)),
+      ws.every((x) => w.name.toLowerCase().includes(x) || w.key.toLowerCase().includes(x)) &&
+      (state === "" || (state === "published" ? w.active_version !== null : w.active_version === null)),
   );
 }
 
@@ -34,16 +23,11 @@ export function dayAfter(day: string): string {
 }
 
 /** The start of `day` (YYYY-MM-DD, local time) in milliseconds, or 0. */
-export const dayStart = (day: string) =>
-  day ? new Date(`${day}T00:00:00`).getTime() : 0;
+export const dayStart = (day: string) => (day ? new Date(`${day}T00:00:00`).getTime() : 0);
 
 /** Runs started on or after `from` whose workflow, ID or starter holds
  * every word of `q`. */
-export function filterRuns(
-  runs: RunSummary[],
-  q: string,
-  from: string,
-): RunSummary[] {
+export function filterRuns(runs: RunSummary[], q: string, from: string): RunSummary[] {
   const ws = words(q);
   const since = dayStart(from);
   return runs.filter((r) => {
@@ -55,10 +39,7 @@ export function filterRuns(
 
 /** Runs grouped by the day they started, newest first, in the browser's time
  * zone: "Today", "Yesterday", then "Monday 19 October". */
-export function dayGroups<T extends { started_at: string }>(
-  runs: T[],
-  now = new Date(),
-): { label: string; runs: T[] }[] {
+export function dayGroups<T extends { started_at: string }>(runs: T[], now = new Date()): { label: string; runs: T[] }[] {
   const key = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
   const today = key(now);
   const y = new Date(now);
@@ -71,16 +52,7 @@ export function dayGroups<T extends { started_at: string }>(
     const k = key(d);
     let i = at.get(k);
     if (i === undefined) {
-      const label =
-        k === today
-          ? "Today"
-          : k === yesterday
-            ? "Yesterday"
-            : d.toLocaleDateString("en-GB", {
-                weekday: "long",
-                day: "numeric",
-                month: "long",
-              });
+      const label = k === today ? "Today" : k === yesterday ? "Yesterday" : d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
       i = out.push({ label, runs: [] }) - 1;
       at.set(k, i);
     }
@@ -90,10 +62,7 @@ export function dayGroups<T extends { started_at: string }>(
 }
 
 /** A run's icon and its tint, by status. */
-export function runLook(status: string): {
-  icon: string;
-  tone?: "warn" | "danger" | "ok" | "info" | "muted";
-} {
+export function runLook(status: string): { icon: string; tone?: "warn" | "danger" | "ok" | "info" | "muted" } {
   switch (status) {
     case "completed":
       return { icon: "start", tone: "ok" };
@@ -114,27 +83,9 @@ export function runLook(status: string): {
 export function stepCounts(statuses: string[]): string {
   const n: Record<string, number> = {};
   for (const s of statuses) {
-    const k =
-      s === "completed" || s === "skipped"
-        ? "done"
-        : s === "failed" || s === "parked"
-          ? "stuck"
-          : s === "waiting"
-            ? "waiting"
-            : s === "cancelled"
-              ? "stopped"
-              : "going";
+    const k = s === "completed" || s === "skipped" ? "done" : s === "failed" || s === "parked" ? "stuck" : s === "waiting" ? "waiting" : s === "cancelled" ? "stopped" : "going";
     n[k] = (n[k] ?? 0) + 1;
   }
-  const said: Record<string, string> = {
-    done: "done",
-    going: "running",
-    waiting: "waiting",
-    stuck: "stuck",
-    stopped: "stopped",
-  };
-  return ["done", "going", "waiting", "stuck", "stopped"]
-    .filter((k) => n[k])
-    .map((k) => `${n[k]} ${said[k]}`)
-    .join(" · ");
+  const said: Record<string, string> = { done: "done", going: "running", waiting: "waiting", stuck: "stuck", stopped: "stopped" };
+  return ["done", "going", "waiting", "stuck", "stopped"].filter((k) => n[k]).map((k) => `${n[k]} ${said[k]}`).join(" · ");
 }

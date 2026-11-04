@@ -9,43 +9,25 @@ test("add a passkey and sign in with it", async ({ page }) => {
   const cdp = await page.context().newCDPSession(page);
   await cdp.send("WebAuthn.enable");
   await cdp.send("WebAuthn.addVirtualAuthenticator", {
-    options: {
-      protocol: "ctap2",
-      transport: "internal",
-      hasResidentKey: true,
-      hasUserVerification: true,
-      isUserVerified: true,
-      automaticPresenceSimulation: true,
-    },
+    options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true },
   });
 
   await page.goto(`${base}/login`);
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(
-    page.getByRole("heading", {
-      level: 1,
-      name: /^Good (morning|afternoon|evening)/,
-    }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
 
   await page.goto(`${base}/account`);
   await page.getByLabel("Name for this passkey").fill("Virtual key");
-  await page
-    .getByLabel("Your password, to add or remove a passkey")
-    .fill("correct horse battery");
+  await page.getByLabel("Your password, to add or remove a passkey").fill("correct horse battery");
   await page.getByRole("button", { name: "Add a passkey" }).click();
-  await expect(
-    page.getByTestId("passkey").filter({ hasText: "Virtual key" }),
-  ).toBeVisible();
+  await expect(page.getByTestId("passkey").filter({ hasText: "Virtual key" })).toBeVisible();
 
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/login/);
   await page.getByRole("button", { name: "Sign in with a passkey" }).click();
   // Back where the member signed out.
   await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
-  await expect(
-    page.getByTestId("passkey").filter({ hasText: "Virtual key" }),
-  ).toBeVisible();
+  await expect(page.getByTestId("passkey").filter({ hasText: "Virtual key" })).toBeVisible();
 });

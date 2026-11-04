@@ -19,15 +19,7 @@ interface TestOutcome {
 
 interface Evidence {
   classification?: { class: string; certain: boolean; why: string };
-  shadow?: {
-    passed: boolean;
-    status: string;
-    steps: Record<string, string>;
-    replayed: string[];
-    failures?: string[];
-    input_problems?: string[];
-    write_mismatches?: string[];
-  };
+  shadow?: { passed: boolean; status: string; steps: Record<string, string>; replayed: string[]; failures?: string[]; input_problems?: string[]; write_mismatches?: string[] };
   resumable?: boolean;
   regression?: TestOutcome;
   reproduces_failure?: boolean;
@@ -52,15 +44,7 @@ interface Repair {
   step: string | null;
   status: string;
   explanation: string;
-  action: {
-    kind: string;
-    label: string;
-    step?: string;
-    connector?: string;
-    connection?: string;
-    link?: string;
-    reconcile?: { available: boolean; note?: string; result?: unknown };
-  } | null;
+  action: { kind: string; label: string; step?: string; connector?: string; connection?: string; link?: string; reconcile?: { available: boolean; note?: string; result?: unknown } } | null;
   definition: unknown;
   diff: string[] | null;
   evidence: Evidence | null;
@@ -87,14 +71,9 @@ const CLASS: Record<string, string> = {
 export function RepairPanel({ run, status }: { run: string; status: string }) {
   const { can } = useAuth();
   const act = useAction();
-  const relevant = ["failed", "needs_reconciliation", "completed"].includes(
-    status,
-  );
+  const relevant = ["failed", "needs_reconciliation", "completed"].includes(status);
   const { data, reload } = useLoad(
-    () =>
-      relevant
-        ? get<{ repairs: Repair[] }>(`/v1/runs/${run}/repairs`)
-        : Promise.resolve({ repairs: [] as Repair[] }),
+    () => (relevant ? get<{ repairs: Repair[] }>(`/v1/runs/${run}/repairs`) : Promise.resolve({ repairs: [] as Repair[] })),
     [run, relevant],
     relevant,
   );
@@ -103,16 +82,10 @@ export function RepairPanel({ run, status }: { run: string; status: string }) {
   const ev = r.evidence ?? {};
   // A refusal can change the proposal too (superseded by a newer version): reload either way.
   const decide = (path: string) =>
-    void act
-      .run(
-        async () => (await post(`/v1/repairs/${r.id}/${path}`), reload()),
-        "Done",
-      )
-      .then((ok) => {
-        if (!ok) reload();
-      });
-  const canAccept =
-    can("run.resolve") && (r.status !== "proposed" || can("workflow.publish"));
+    void act.run(async () => (await post(`/v1/repairs/${r.id}/${path}`), reload()), "Done").then((ok) => {
+      if (!ok) reload();
+    });
+  const canAccept = can("run.resolve") && (r.status !== "proposed" || can("workflow.publish"));
   return (
     <div className="card" data-testid="repair-panel">
       <div className="toolbar" style={{ marginBottom: 4 }}>
@@ -122,9 +95,7 @@ export function RepairPanel({ run, status }: { run: string; status: string }) {
         {r.class && <Badge value={CLASS[r.class] ?? r.class} />}
         <Badge value={r.status.replace(/_/g, " ")} />
       </div>
-      {r.status === "analysing" && (
-        <p className="hint">Analysing the failure…</p>
-      )}
+      {r.status === "analysing" && <p className="hint">Analysing the failure…</p>}
       {r.explanation && <p>{r.explanation}</p>}
       <p className="hint">
         {r.step && (
@@ -133,9 +104,7 @@ export function RepairPanel({ run, status }: { run: string; status: string }) {
           </>
         )}
         classified by {r.classified_by === "model" ? "the AI" : "rules"}
-        {r.attempts > 0 &&
-          ` · ${r.attempts} AI attempt${r.attempts > 1 ? "s" : ""}, ${r.total_tokens.toLocaleString()} tokens`}{" "}
-        · {fmtTime(r.created_at)}
+        {r.attempts > 0 && ` · ${r.attempts} AI attempt${r.attempts > 1 ? "s" : ""}, ${r.total_tokens.toLocaleString()} tokens`} · {fmtTime(r.created_at)}
       </p>
       {r.error && <div className="notice">{r.error}</div>}
 
@@ -157,18 +126,15 @@ export function RepairPanel({ run, status }: { run: string; status: string }) {
       )}
       {r.status === "proposed" && r.published_since != null && (
         <div className="notice">
-          Version {r.published_since} was published after this run's version{" "}
-          {r.version}. Accepting merges this fix onto version{" "}
-          {r.published_since} and checks the merge again; the version published
-          is that merge, not version {r.version} with the change above.
+          Version {r.published_since} was published after this run's version {r.version}. Accepting merges this fix onto version {r.published_since} and checks the merge again; the
+          version published is that merge, not version {r.version} with the change above.
         </div>
       )}
       {ev.merged && (
         <>
           <h3>Published as a merge</h3>
           <p className="hint">
-            Version {r.draft_version} is this fix merged onto version{" "}
-            {ev.merged.onto}. What it changes in version {ev.merged.onto}:
+            Version {r.draft_version} is this fix merged onto version {ev.merged.onto}. What it changes in version {ev.merged.onto}:
           </p>
           <ul>
             {ev.merged.diff.map((d) => (
@@ -185,41 +151,27 @@ export function RepairPanel({ run, status }: { run: string; status: string }) {
           <h3>Evidence</h3>
           <ul className="evidence">
             <li>
-              Shadow run of this run's recorded data (every write mocked):{" "}
-              <Badge value={ev.shadow.passed ? "passed" : "failed"} />{" "}
+              Shadow run of this run's recorded data (every write mocked): <Badge value={ev.shadow.passed ? "passed" : "failed"} />{" "}
               <span className="hint">
-                {ev.shadow.replayed.length > 0 &&
-                  `replayed ${ev.shadow.replayed.join(", ")}`}
+                {ev.shadow.replayed.length > 0 && `replayed ${ev.shadow.replayed.join(", ")}`}
               </span>
             </li>
             {ev.regression && (
               <li>
-                Test for the failing case:{" "}
-                <Badge value={ev.regression.passed ? "passed" : "failed"} />{" "}
-                {ev.reproduces_failure && (
-                  <span className="hint">
-                    fails on v{r.version}, as the run did
-                  </span>
-                )}
+                Test for the failing case: <Badge value={ev.regression.passed ? "passed" : "failed"} />{" "}
+                {ev.reproduces_failure && <span className="hint">fails on v{r.version}, as the run did</span>}
               </li>
             )}
             {ev.model_test && (
               <li>
-                The AI's test:{" "}
-                <Badge value={ev.model_test.passed ? "passed" : "failed"} />
+                The AI's test: <Badge value={ev.model_test.passed ? "passed" : "failed"} />
               </li>
             )}
             <li>
-              Existing tests:{" "}
-              {ev.existing_tests?.length
-                ? `${ev.existing_tests.filter((t) => t.passed).length} of ${ev.existing_tests.length} pass`
-                : "none yet"}
+              Existing tests: {ev.existing_tests?.length ? `${ev.existing_tests.filter((t) => t.passed).length} of ${ev.existing_tests.length} pass` : "none yet"}
             </li>
             <li>
-              Resume from the failed step:{" "}
-              {ev.resumable
-                ? "safe: completed steps are replayed, not sent again"
-                : "not possible: a completed write would change; publish only"}
+              Resume from the failed step: {ev.resumable ? "safe: completed steps are replayed, not sent again" : "not possible: a completed write would change; publish only"}
             </li>
           </ul>
           {!!ev.feedback?.length && (
@@ -235,53 +187,27 @@ export function RepairPanel({ run, status }: { run: string; status: string }) {
         </>
       )}
 
-      {r.status === "withheld" && (
-        <div className="notice">
-          The AI could not prove a fix in the shadow sandbox, so nothing is
-          proposed. Fix the workflow by hand.
-        </div>
-      )}
-      {r.status === "superseded" && (
-        <div className="notice">
-          A version published after this run's changed what the fix changes, so
-          it can no longer be applied. Fix the workflow by hand.
-        </div>
-      )}
+      {r.status === "withheld" && <div className="notice">The AI could not prove a fix in the shadow sandbox, so nothing is proposed. Fix the workflow by hand.</div>}
+      {r.status === "superseded" && <div className="notice">A version published after this run's changed what the fix changes, so it can no longer be applied. Fix the workflow by hand.</div>}
 
       {r.action?.kind === "reconnect" && (
         <p>
-          Reconnect <code>{r.action.connection || r.action.connector}</code> in{" "}
-          {r.environment}:{" "}
-          <Link to={r.action.link ?? "/connections"}>Connections</Link>
+          Reconnect <code>{r.action.connection || r.action.connector}</code> in {r.environment}: <Link to={r.action.link ?? "/connections"}>Connections</Link>
         </p>
       )}
       {r.action?.kind === "reconcile" && (
         <>
           <h3>What the provider says</h3>
-          {r.action.reconcile?.available ? (
-            <Json value={r.action.reconcile.result} />
-          ) : (
-            <p className="hint">{r.action.reconcile?.note}</p>
-          )}
-          <p className="hint">
-            Check this against the provider, then resolve the parked step below.
-            The AI never resolves it.
-          </p>
+          {r.action.reconcile?.available ? <Json value={r.action.reconcile.result} /> : <p className="hint">{r.action.reconcile?.note}</p>}
+          <p className="hint">Check this against the provider, then resolve the parked step below. The AI never resolves it.</p>
         </>
       )}
       {r.status === "awaiting_publish" && (
         <div className="notice">
-          Version {r.draft_version} waits for a second person to approve
-          publishing it (<Link to="/approvals">publish requests</Link>). The run
-          resumes once it is published.
+          Version {r.draft_version} waits for a second person to approve publishing it (<Link to="/approvals">publish requests</Link>). The run resumes once it is published.
         </div>
       )}
-      {r.status === "awaiting_promotion" && (
-        <div className="notice">
-          Version {r.draft_version} is published but not yet running in{" "}
-          {r.environment}. Promote it, then resume.
-        </div>
-      )}
+      {r.status === "awaiting_promotion" && <div className="notice">Version {r.draft_version} is published but not yet running in {r.environment}. Promote it, then resume.</div>}
       {r.resumed_run_id && (
         <p>
           Resumed as <Link to={`/runs/${r.resumed_run_id}`}>a new run</Link>
@@ -292,47 +218,25 @@ export function RepairPanel({ run, status }: { run: string; status: string }) {
       <ErrorBox error={act.error} />
       <div className="toolbar">
         {r.status === "proposed" && canAccept && (
-          <button
-            className="primary"
-            disabled={act.busy}
-            onClick={() =>
-              confirm(
-                `${r.published_since != null ? `Merge this fix onto version ${r.published_since}, publish the merge` : "Publish the patched version"} and resume this run from ${r.step ?? "the failed step"}? Publishing follows your organisation's approval rules.`,
-              ) && decide("accept")
-            }
-          >
+          <button className="primary" disabled={act.busy} onClick={() => confirm(`${r.published_since != null ? `Merge this fix onto version ${r.published_since}, publish the merge` : "Publish the patched version"} and resume this run from ${r.step ?? "the failed step"}? Publishing follows your organisation's approval rules.`) && decide("accept")}>
             Accept: publish and resume
           </button>
         )}
-        {r.status === "action" &&
-          (r.action?.kind === "retry" || r.action?.kind === "reconnect") &&
-          canAccept &&
-          status === "failed" && (
-            <button
-              className="primary"
-              disabled={act.busy}
-              onClick={() => decide("accept")}
-            >
-              Retry from the failed step
-            </button>
-          )}
+        {r.status === "action" && (r.action?.kind === "retry" || r.action?.kind === "reconnect") && canAccept && status === "failed" && (
+          <button className="primary" disabled={act.busy} onClick={() => decide("accept")}>
+            Retry from the failed step
+          </button>
+        )}
         {r.status === "awaiting_promotion" && canAccept && (
           <button disabled={act.busy} onClick={() => decide("accept")}>
             Resume now
           </button>
         )}
-        {can("run.resolve") &&
-          [
-            "proposed",
-            "action",
-            "withheld",
-            "awaiting_publish",
-            "awaiting_promotion",
-          ].includes(r.status) && (
-            <button disabled={act.busy} onClick={() => decide("dismiss")}>
-              Dismiss
-            </button>
-          )}
+        {can("run.resolve") && ["proposed", "action", "withheld", "awaiting_publish", "awaiting_promotion"].includes(r.status) && (
+          <button disabled={act.busy} onClick={() => decide("dismiss")}>
+            Dismiss
+          </button>
+        )}
       </div>
     </div>
   );

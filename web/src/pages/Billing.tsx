@@ -1,15 +1,6 @@
 import { useState } from "react";
 import { ApiError, get, post } from "../api";
-import {
-  ErrorBox,
-  Items,
-  PageHeader,
-  Row,
-  Skeleton,
-  fmtTime,
-  useAction,
-  useLoad,
-} from "../ui";
+import { ErrorBox, Items, PageHeader, Row, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 import {
   blockerLines,
   featureNames,
@@ -33,21 +24,11 @@ interface Change {
   checkout_url?: string;
 }
 
-const day = (s?: string) =>
-  s
-    ? new Date(s).toLocaleDateString(undefined, {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      })
-    : "—";
+const day = (s?: string) => (s ? new Date(s).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "—");
 
 /** Settings > Billing: plan, usage, invoices and payment (docs/billing.md). */
 export function Billing() {
-  const { data, error, reload } = useLoad(
-    () => get<BillingOverview>("/v1/billing"),
-    [],
-  );
+  const { data, error, reload } = useLoad(() => get<BillingOverview>("/v1/billing"), []);
   const [interval, setInterval] = useState<"monthly" | "annual">("monthly");
   const [blockers, setBlockers] = useState<string[]>([]);
   const [note, setNote] = useState("");
@@ -65,25 +46,15 @@ export function Billing() {
       try {
         if (sub && (sub.status === "trial" || sub.status === "cancelled")) {
           // From a trial or after cancelling, choosing a plan is paying for it.
-          const r = await post<Checkout>("/v1/billing/checkout", {
-            plan: p.id,
-            interval,
-          });
+          const r = await post<Checkout>("/v1/billing/checkout", { plan: p.id, interval });
           if (r.paid) reload();
           else go(r.checkout_url);
           return;
         }
-        const r = await post<Change>("/v1/billing/plan", {
-          plan: p.id,
-          interval,
-        });
+        const r = await post<Change>("/v1/billing/plan", { plan: p.id, interval });
         if (r.effective === "on_payment") go(r.checkout_url);
         else {
-          setNote(
-            r.effective === "period_end"
-              ? `The ${p.name} plan starts at the end of this period (${day(sub?.period_end)}).`
-              : `You are now on ${p.name}.`,
-          );
+          setNote(r.effective === "period_end" ? `The ${p.name} plan starts at the end of this period (${day(sub?.period_end)}).` : `You are now on ${p.name}.`);
           reload();
         }
       } catch (e) {
@@ -96,20 +67,14 @@ export function Billing() {
     }, false);
   const pay = () =>
     act.run(async () => {
-      const r = await post<Checkout>(
-        "/v1/billing/checkout",
-        data.open_invoice ? { invoice: data.open_invoice.id } : {},
-      );
+      const r = await post<Checkout>("/v1/billing/checkout", data.open_invoice ? { invoice: data.open_invoice.id } : {});
       if (r.paid) reload();
       else go(r.checkout_url);
     }, false);
 
   return (
     <>
-      <PageHeader
-        title="Billing"
-        description="Your plan, what you have used this period, and your invoices."
-      />
+      <PageHeader title="Billing" description="Your plan, what you have used this period, and your invoices." />
       {data.banner && <BillingBannerView banner={data.banner} />}
       <ErrorBox error={act.error} />
       {note && <p className="hint">{note}</p>}
@@ -127,14 +92,9 @@ export function Billing() {
       <section className="card">
         <h2 style={{ marginTop: 0 }}>Your plan: {data.plan.name}</h2>
         {!data.enabled ? (
-          <p className="hint">
-            Billing is off on this deployment: every limit is your
-            operator&apos;s and every feature is on.
-          </p>
+          <p className="hint">Billing is off on this deployment: every limit is your operator&apos;s and every feature is on.</p>
         ) : data.inherited ? (
-          <p className="hint">
-            Your organisation runs on its partner&apos;s plan.
-          </p>
+          <p className="hint">Your organisation runs on its partner&apos;s plan.</p>
         ) : sub ? (
           <dl className="kv">
             <dt>Status</dt>
@@ -149,8 +109,7 @@ export function Billing() {
               <>
                 <dt>Period</dt>
                 <dd>
-                  {day(sub.period_start)} to {day(sub.period_end)} (
-                  {sub.interval})
+                  {day(sub.period_start)} to {day(sub.period_end)} ({sub.interval})
                 </dd>
               </>
             )}
@@ -165,18 +124,7 @@ export function Billing() {
                 <dt>Ends</dt>
                 <dd>
                   {day(sub.period_end)}{" "}
-                  <button
-                    disabled={act.busy}
-                    onClick={() =>
-                      void act.run(
-                        async () => (
-                          await post("/v1/billing/cancel", { resume: true }),
-                          reload()
-                        ),
-                        "Subscription resumed",
-                      )
-                    }
-                  >
+                  <button disabled={act.busy} onClick={() => void act.run(async () => (await post("/v1/billing/cancel", { resume: true }), reload()), "Subscription resumed")}>
                     Keep my subscription
                   </button>
                 </dd>
@@ -189,23 +137,13 @@ export function Billing() {
               </>
             )}
             <dt>Payment method</dt>
-            <dd>
-              {data.payment_method
-                ? `${data.payment_method.brand} ending ${data.payment_method.last4} (expires ${data.payment_method.exp})`
-                : "none saved: you pay each invoice"}
-            </dd>
+            <dd>{data.payment_method ? `${data.payment_method.brand} ending ${data.payment_method.last4} (expires ${data.payment_method.exp})` : "none saved: you pay each invoice"}</dd>
           </dl>
         ) : null}
         {data.open_invoice && (
           <p>
-            Invoice {data.open_invoice.number} for{" "}
-            {naira(data.open_invoice.total_kobo)} is due{" "}
-            {day(data.open_invoice.due_at)}.{" "}
-            <button
-              className="primary"
-              disabled={act.busy}
-              onClick={() => void pay()}
-            >
+            Invoice {data.open_invoice.number} for {naira(data.open_invoice.total_kobo)} is due {day(data.open_invoice.due_at)}.{" "}
+            <button className="primary" disabled={act.busy} onClick={() => void pay()}>
               Pay now
             </button>
           </p>
@@ -221,46 +159,21 @@ export function Billing() {
                 <td>{m.label}</td>
                 <td style={{ width: "40%" }}>
                   {m.fraction !== null && (
-                    <div
-                      className="meter"
-                      role="meter"
-                      aria-label={m.label}
-                      aria-valuenow={m.used}
-                      aria-valuemin={0}
-                      aria-valuemax={m.limit}
-                    >
-                      <div
-                        className={`meter-fill ${m.level}`}
-                        style={{ width: `${Math.round(m.fraction * 100)}%` }}
-                      />
+                    <div className="meter" role="meter" aria-label={m.label} aria-valuenow={m.used} aria-valuemin={0} aria-valuemax={m.limit}>
+                      <div className={`meter-fill ${m.level}`} style={{ width: `${Math.round(m.fraction * 100)}%` }} />
                     </div>
                   )}
                 </td>
                 <td className="mono">
-                  {m.used.toLocaleString()}{" "}
-                  {m.limit > 0
-                    ? `of ${m.limit.toLocaleString()}`
-                    : "(no limit)"}
+                  {m.used.toLocaleString()} {m.limit > 0 ? `of ${m.limit.toLocaleString()}` : "(no limit)"}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-        {(data.limits.max_retention_days ?? 0) > 0 && (
-          <p className="hint">
-            Run history is kept for {data.limits.max_retention_days} days after
-            a run ends.
-          </p>
-        )}
-        {data.history.length > 0 && (
-          <History rows={data.history} title="Last days" />
-        )}
-        {data.subtenant_usage && data.subtenant_usage.length > 0 && (
-          <History
-            rows={data.subtenant_usage}
-            title="Your customers (sub-tenants), summed"
-          />
-        )}
+        {(data.limits.max_retention_days ?? 0) > 0 && <p className="hint">Run history is kept for {data.limits.max_retention_days} days after a run ends.</p>}
+        {data.history.length > 0 && <History rows={data.history} title="Last days" />}
+        {data.subtenant_usage && data.subtenant_usage.length > 0 && <History rows={data.subtenant_usage} title="Your customers (sub-tenants), summed" />}
       </section>
 
       {data.enabled && !data.inherited && sub && sub.status !== "comped" && (
@@ -271,62 +184,29 @@ export function Billing() {
             </h2>
             <label>
               Billed{" "}
-              <select
-                aria-label="Billing interval"
-                value={interval}
-                onChange={(e) =>
-                  setInterval(e.target.value as "monthly" | "annual")
-                }
-              >
+              <select aria-label="Billing interval" value={interval} onChange={(e) => setInterval(e.target.value as "monthly" | "annual")}>
                 <option value="monthly">monthly</option>
                 <option value="annual">annually</option>
               </select>
             </label>
           </div>
-          {data.placeholder_prices && (
-            <p className="hint">
-              Prices shown are placeholders while pricing is finalised.
-            </p>
-          )}
+          {data.placeholder_prices && <p className="hint">Prices shown are placeholders while pricing is finalised.</p>}
           <div className="plan-cards">
             {data.plans.map((p) => {
               const current = p.id === sub.plan && interval === sub.interval;
               const up = isUpgrade(tiers, data.plan, sub.interval, p, interval);
               return (
-                <div
-                  key={p.id}
-                  className={`card plan-card${current ? " current" : ""}`}
-                  data-testid={`plan-${p.id}`}
-                >
+                <div key={p.id} className={`card plan-card${current ? " current" : ""}`} data-testid={`plan-${p.id}`}>
                   <h3 style={{ marginTop: 0 }}>{p.name}</h3>
                   <p className="price">
-                    {naira(
-                      interval === "annual" ? p.annual_kobo : p.monthly_kobo,
-                    )}
-                    <span className="hint">
-                      {" "}
-                      / {interval === "annual" ? "year" : "month"} + VAT{" "}
-                      {data.vat_percent}%
-                    </span>
+                    {naira(interval === "annual" ? p.annual_kobo : p.monthly_kobo)}
+                    <span className="hint"> / {interval === "annual" ? "year" : "month"} + VAT {data.vat_percent}%</span>
                   </p>
                   <ul className="hint">
-                    {p.limits.max_running_runs !== undefined && (
-                      <li>
-                        {p.limits.max_running_runs || "Unlimited"} runs at once
-                      </li>
-                    )}
-                    {p.limits.max_workflows !== undefined && (
-                      <li>{p.limits.max_workflows || "Unlimited"} workflows</li>
-                    )}
-                    {p.limits.max_retention_days !== undefined && (
-                      <li>{p.limits.max_retention_days} days of history</li>
-                    )}
-                    {p.limits.whatsapp_templates_monthly !== undefined && (
-                      <li>
-                        {p.limits.whatsapp_templates_monthly.toLocaleString()}{" "}
-                        WhatsApp templates a month
-                      </li>
-                    )}
+                    {p.limits.max_running_runs !== undefined && <li>{p.limits.max_running_runs || "Unlimited"} runs at once</li>}
+                    {p.limits.max_workflows !== undefined && <li>{p.limits.max_workflows || "Unlimited"} workflows</li>}
+                    {p.limits.max_retention_days !== undefined && <li>{p.limits.max_retention_days} days of history</li>}
+                    {p.limits.whatsapp_templates_monthly !== undefined && <li>{p.limits.whatsapp_templates_monthly.toLocaleString()} WhatsApp templates a month</li>}
                     {Object.entries(p.features)
                       .filter(([, on]) => on)
                       .map(([f]) => (
@@ -336,46 +216,27 @@ export function Billing() {
                   {current ? (
                     <strong>Current plan</strong>
                   ) : (
-                    <button
-                      className={up ? "primary" : ""}
-                      disabled={act.busy}
-                      onClick={() => void choose(p)}
-                    >
-                      {sub.status === "trial" || sub.status === "cancelled"
-                        ? `Choose ${p.name}`
-                        : up
-                          ? `Upgrade to ${p.name}`
-                          : `Move to ${p.name} at period end`}
+                    <button className={up ? "primary" : ""} disabled={act.busy} onClick={() => void choose(p)}>
+                      {sub.status === "trial" || sub.status === "cancelled" ? `Choose ${p.name}` : up ? `Upgrade to ${p.name}` : `Move to ${p.name} at period end`}
                     </button>
                   )}
                 </div>
               );
             })}
           </div>
-          {(sub.status === "active" || sub.status === "trial") &&
-            !sub.cancel_at_period_end && (
-              <p>
-                <button
-                  disabled={act.busy}
-                  onClick={() => {
-                    if (
-                      window.confirm(
-                        `Cancel at the end of the period (${day(sub.status === "trial" ? sub.trial_end : sub.period_end)})? New runs stop then; your workflows and history are kept.`,
-                      )
-                    )
-                      void act.run(
-                        async () => (
-                          await post("/v1/billing/cancel", {}),
-                          reload()
-                        ),
-                        "Subscription cancelled",
-                      );
-                  }}
-                >
-                  Cancel subscription
-                </button>
-              </p>
-            )}
+          {(sub.status === "active" || sub.status === "trial") && !sub.cancel_at_period_end && (
+            <p>
+              <button
+                disabled={act.busy}
+                onClick={() => {
+                  if (window.confirm(`Cancel at the end of the period (${day(sub.status === "trial" ? sub.trial_end : sub.period_end)})? New runs stop then; your workflows and history are kept.`))
+                    void act.run(async () => (await post("/v1/billing/cancel", {}), reload()), "Subscription cancelled");
+                }}
+              >
+                Cancel subscription
+              </button>
+            </p>
+          )}
         </section>
       )}
 
@@ -387,36 +248,18 @@ export function Billing() {
               <Row
                 key={i.id}
                 icon="invoices"
-                tone={
-                  i.status === "paid"
-                    ? "ok"
-                    : i.status === "open"
-                      ? "warn"
-                      : "muted"
-                }
+                tone={i.status === "paid" ? "ok" : i.status === "open" ? "warn" : "muted"}
                 title={i.number}
-                side={
-                  <span className="item-figure">{naira(i.total_kobo)}</span>
-                }
+                side={<span className="item-figure">{naira(i.total_kobo)}</span>}
                 sub={
                   <span className="sub">
-                    {day(i.period_start)} to {day(i.period_end)} · issued{" "}
-                    {fmtTime(i.issued_at)} · VAT included{" "}
-                    <span
-                      className={`badge ${i.status === "paid" ? "ok" : i.status === "open" ? "open" : "skipped"}`}
-                    >
-                      {i.status}
-                    </span>
+                    {day(i.period_start)} to {day(i.period_end)} · issued {fmtTime(i.issued_at)} · VAT included{" "}
+                    <span className={`badge ${i.status === "paid" ? "ok" : i.status === "open" ? "open" : "skipped"}`}>{i.status}</span>
                   </span>
                 }
                 testid="billing-invoice"
               >
-                <a
-                  className="button small"
-                  href={`/v1/billing/invoices/${i.id}?format=html`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
+                <a className="button small" href={`/v1/billing/invoices/${i.id}?format=html`} target="_blank" rel="noreferrer">
                   Open {i.number}
                 </a>
               </Row>
@@ -428,13 +271,7 @@ export function Billing() {
   );
 }
 
-function History({
-  rows,
-  title,
-}: {
-  rows: BillingOverview["history"];
-  title: string;
-}) {
+function History({ rows, title }: { rows: BillingOverview["history"]; title: string }) {
   return (
     <>
       <h3>{title}</h3>
@@ -458,9 +295,7 @@ function History({
               <td>{r.running_runs}</td>
               <td>
                 {r.whatsapp_templates.toLocaleString()}
-                {r.whatsapp_overage > 0
-                  ? ` (${r.whatsapp_overage.toLocaleString()} beyond the allowance)`
-                  : ""}
+                {r.whatsapp_overage > 0 ? ` (${r.whatsapp_overage.toLocaleString()} beyond the allowance)` : ""}
               </td>
               <td>{r.ai_tokens.toLocaleString()}</td>
             </tr>
@@ -471,19 +306,9 @@ function History({
   );
 }
 
-export function BillingBannerView({
-  banner,
-  link = false,
-}: {
-  banner: Banner;
-  link?: boolean;
-}) {
+export function BillingBannerView({ banner, link = false }: { banner: Banner; link?: boolean }) {
   return (
-    <div
-      className={banner.level === "error" ? "error" : "warning"}
-      role="status"
-      data-testid="billing-banner"
-    >
+    <div className={banner.level === "error" ? "error" : "warning"} role="status" data-testid="billing-banner">
       {banner.message} {link && <a href="/settings/billing">Billing</a>}
     </div>
   );
@@ -496,13 +321,7 @@ interface BillingStatus {
 
 /** The past-due banner for every member, at the top of every page. */
 export function BillingBanner() {
-  const { data } = useLoad(
-    () =>
-      get<BillingStatus>("/v1/billing/status").catch(
-        () => ({ enabled: false }) as BillingStatus,
-      ),
-    [],
-  );
+  const { data } = useLoad(() => get<BillingStatus>("/v1/billing/status").catch(() => ({ enabled: false }) as BillingStatus), []);
   if (!data?.banner) return null;
   return <BillingBannerView banner={data.banner} link />;
 }

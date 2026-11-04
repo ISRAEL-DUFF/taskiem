@@ -24,32 +24,21 @@ interface HandoffInfo {
  * browser never sends to a server. */
 export function Handoff() {
   const token = window.location.hash.replace(/^#/, "");
-  const info = useLoad(
-    () => get<HandoffInfo>(`/v1/whatsapp/handoff/${encodeURIComponent(token)}`),
-    [token],
-  );
+  const info = useLoad(() => get<HandoffInfo>(`/v1/whatsapp/handoff/${encodeURIComponent(token)}`), [token]);
   const [code, setCode] = useState("");
   const [done, setDone] = useState<string>();
   const act = useAction();
   const d = info.data;
   const send = async (body: object) => {
     try {
-      const r = await post<{ status: string }>(
-        `/v1/whatsapp/handoff/${encodeURIComponent(token)}`,
-        body,
-      );
+      const r = await post<{ status: string }>(`/v1/whatsapp/handoff/${encodeURIComponent(token)}`, body);
       setDone(r.status);
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) info.reload();
       throw e;
     }
   };
-  if (!token)
-    return (
-      <div className="empty card">
-        This page opens from a link Taskiem sends you on WhatsApp.
-      </div>
-    );
+  if (!token) return <div className="empty card">This page opens from a link Taskiem sends you on WhatsApp.</div>;
   return (
     <div className="card" style={{ maxWidth: 720 }}>
       <h1>Confirm your decision</h1>
@@ -57,37 +46,14 @@ export function Handoff() {
       {d && !done && (
         <>
           <p>
-            You chose to{" "}
-            <strong data-testid="handoff-decision">
-              {d.decision === "approved" ? "approve" : "reject"}
-            </strong>{" "}
-            <strong>{d.step_id}</strong> on {d.workflow} ({d.environment}
-            {d.levels > 1 && `, level ${d.level} of ${d.levels}`}) in WhatsApp.
-            This approval needs your{" "}
-            {d.step_up === "passkey"
-              ? "passkey"
-              : "passkey or authenticator code"}
-            . The link works until {fmtTime(d.expires_at)}.
+            You chose to <strong data-testid="handoff-decision">{d.decision === "approved" ? "approve" : "reject"}</strong> <strong>{d.step_id}</strong> on {d.workflow} ({d.environment}
+            {d.levels > 1 && `, level ${d.level} of ${d.levels}`}) in WhatsApp. This approval needs your {d.step_up === "passkey" ? "passkey" : "passkey or authenticator code"}. The link works
+            until {fmtTime(d.expires_at)}.
           </p>
           <Json value={d.subject} />
           {passkeysSupported() && (
             <p>
-              <button
-                className="primary"
-                disabled={act.busy}
-                onClick={() =>
-                  void act.run(
-                    async () =>
-                      send({
-                        passkey: await stepUpAssert(
-                          "approval.decide",
-                          `${d.run_id}/${d.step_id}/${d.decision}`,
-                        ),
-                      }),
-                    "Decision recorded",
-                  )
-                }
-              >
+              <button className="primary" disabled={act.busy} onClick={() => void act.run(async () => send({ passkey: await stepUpAssert("approval.decide", `${d.run_id}/${d.step_id}/${d.decision}`) }), "Decision recorded")}>
                 Confirm with your passkey
               </button>
             </p>
@@ -102,19 +68,9 @@ export function Handoff() {
               }}
             >
               <Field label="Or a code from your authenticator app">
-                <input
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  maxLength={6}
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-                />
+                <input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} />
               </Field>
-              <button
-                className="primary"
-                type="submit"
-                disabled={act.busy || code.length !== 6}
-              >
+              <button className="primary" type="submit" disabled={act.busy || code.length !== 6}>
                 Confirm
               </button>
             </form>
@@ -124,8 +80,7 @@ export function Handoff() {
       )}
       {done && (
         <p data-testid="handoff-done">
-          Recorded. The request is now <strong>{done}</strong>.{" "}
-          <Link to={`/runs/${d?.run_id ?? ""}`}>Open the run</Link>
+          Recorded. The request is now <strong>{done}</strong>. <Link to={`/runs/${d?.run_id ?? ""}`}>Open the run</Link>
         </p>
       )}
     </div>

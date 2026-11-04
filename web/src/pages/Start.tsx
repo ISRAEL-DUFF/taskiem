@@ -1,35 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import {
-  ApiError,
-  get,
-  post,
-  put,
-  type CapabilityInfo,
-  type ConnectorInfo,
-  type JSONSchema,
-  type Problem,
-} from "../api";
+import { ApiError, get, post, put, type CapabilityInfo, type ConnectorInfo, type JSONSchema, type Problem } from "../api";
 import { useAdvanced, useAuth } from "../auth";
 import { Help, useOnboarding } from "../onboarding";
-import {
-  CHECKLIST,
-  firstThings,
-  formatDuration,
-  sampleInput,
-  starterTemplates,
-} from "../lib/onboarding";
+import { CHECKLIST, firstThings, formatDuration, sampleInput, starterTemplates } from "../lib/onboarding";
 import { initialValues, toParams, type Template } from "../lib/templates";
 import { Icon } from "../icons";
-import {
-  Badge,
-  ErrorBox,
-  Field,
-  JsonInput,
-  Skeleton,
-  useAction,
-  useLoad,
-} from "../ui";
+import { Badge, ErrorBox, Field, JsonInput, Skeleton, useAction, useLoad } from "../ui";
 import { ParamField, usesWords } from "./Templates";
 import { NeedsList } from "./Readiness";
 import { ProblemLine } from "../forms/ProblemLine";
@@ -63,61 +40,33 @@ export function Start() {
           Get started
         </h1>
         {!data.dismissed && can("workflow.edit") && (
-          <button
-            onClick={() =>
-              void act.run(
-                async () => (
-                  await post("/v1/onboarding/dismiss"),
-                  reload(),
-                  nav("/home")
-                ),
-                false,
-              )
-            }
-          >
-            Hide this
-          </button>
+          <button onClick={() => void act.run(async () => (await post("/v1/onboarding/dismiss"), reload(), nav("/home")), false)}>Hide this</button>
         )}
       </div>
       <section className="hero" aria-label="Your setup">
         <div className="hero-top">
           <span className="hero-label">Your setup</span>
-          {data.done === data.total && (
-            <span className="hero-tag">All done</span>
-          )}
+          {data.done === data.total && <span className="hero-tag">All done</span>}
         </div>
         <div className="hero-amount words" data-testid="onboarding-progress">
           {data.done} of {data.total} done
         </div>
-        <div
-          className="hero-bar"
-          role="img"
-          aria-label={`${Math.round((100 * data.done) / Math.max(1, data.total))}% done`}
-        >
-          <span
-            style={{ width: `${(100 * data.done) / Math.max(1, data.total)}%` }}
-          />
+        <div className="hero-bar" role="img" aria-label={`${Math.round((100 * data.done) / Math.max(1, data.total))}% done`}>
+          <span style={{ width: `${(100 * data.done) / Math.max(1, data.total)}%` }} />
         </div>
-        {next && (
-          <p className="hero-sub hero-next">Next: {CHECKLIST[next.id].title}</p>
-        )}
+        {next && <p className="hero-sub hero-next">Next: {CHECKLIST[next.id].title}</p>}
       </section>
       <ErrorBox error={act.error} />
       {data.seconds_to_first_run !== null && (
         <div className="notice" role="status" data-testid="first-run-time">
-          Your first successful run came{" "}
-          {formatDuration(data.seconds_to_first_run)} after you signed up.
+          Your first successful run came {formatDuration(data.seconds_to_first_run)} after you signed up.
         </div>
       )}
       <ol className="checklist" aria-label="Checklist">
         {data.items.map((it, i) => {
           const c = CHECKLIST[it.id];
           return (
-            <li
-              key={it.id}
-              className={it.done ? "done" : ""}
-              data-testid={`check-${it.id}`}
-            >
+            <li key={it.id} className={it.done ? "done" : ""} data-testid={`check-${it.id}`}>
               <span className="check" aria-label={it.done ? "done" : "to do"}>
                 {it.done ? "✓" : i + 1}
               </span>
@@ -128,23 +77,7 @@ export function Start() {
               {!it.done &&
                 (it.id === "verify_email" ? (
                   data.can_send_email && (
-                    <button
-                      className="small"
-                      disabled={act.busy}
-                      onClick={() =>
-                        void act.run(
-                          async () =>
-                            setSent(
-                              (
-                                await post<{ status?: string }>(
-                                  "/v1/me/email/verify/resend",
-                                )
-                              ).status ?? "Your email is confirmed.",
-                            ),
-                          false,
-                        )
-                      }
-                    >
+                    <button className="small" disabled={act.busy} onClick={() => void act.run(async () => setSent((await post<{ status?: string }>("/v1/me/email/verify/resend")).status ?? "Your email is confirmed."), false)}>
                       {c.action}
                     </button>
                   )
@@ -181,16 +114,11 @@ export function Start() {
       )}
       {can("invoice.read") && <ReceiveMoneyOffer />}
       {can("table.edit") && can("storefront.manage") && <StockOffer />}
-      {(me?.schools || me?.roles.includes("owner")) && can("school.read") && (
-        <SchoolStart on={!!me?.schools} owner={!!me?.roles.includes("owner")} />
-      )}
+      {(me?.schools || me?.roles.includes("owner")) && can("school.read") && <SchoolStart on={!!me?.schools} owner={!!me?.roles.includes("owner")} />}
       {can("workflow.edit") && (
         <section>
           <h2>Your first workflow</h2>
-          <p>
-            Pick a ready workflow below. We walk you through connecting it,
-            publishing it and running it once.
-          </p>
+          <p>Pick a ready workflow below. We walk you through connecting it, publishing it and running it once.</p>
           <TemplatePicker />
         </section>
       )}
@@ -201,28 +129,15 @@ export function Start() {
 
 /** The schools entry: for a business with the Schools area on, its pages and the school templates; for an owner without it, the offer to turn it on. */
 function SchoolStart({ on, owner }: { on: boolean; owner: boolean }) {
-  const { data, error } = useLoad(
-    () =>
-      on
-        ? get<{ templates: Template[] }>("/v1/templates")
-        : Promise.resolve(undefined),
-    [on],
-  );
-  const list = useMemo(
-    () =>
-      (data?.templates ?? [])
-        .filter((t) => t.available && t.tags.includes("schools"))
-        .sort((a, b) => a.title.localeCompare(b.title)),
-    [data],
-  );
+  const { data, error } = useLoad(() => (on ? get<{ templates: Template[] }>("/v1/templates") : Promise.resolve(undefined)), [on]);
+  const list = useMemo(() => (data?.templates ?? []).filter((t) => t.available && t.tags.includes("schools")).sort((a, b) => a.title.localeCompare(b.title)), [data]);
   if (!on) {
     if (!owner) return null;
     return (
       <section aria-labelledby="school-start" data-testid="school-start-off">
         <h2 id="school-start">Run a school?</h2>
         <p className="hint">
-          Turn Schools on for students, families, term fees, each child's own
-          account number, receipts, chasing, clearance and the daily close.{" "}
+          Turn Schools on for students, families, term fees, each child's own account number, receipts, chasing, clearance and the daily close.{" "}
           <Link to="/settings/schools">Turn Schools on</Link>
         </p>
       </section>
@@ -232,28 +147,16 @@ function SchoolStart({ on, owner }: { on: boolean; owner: boolean }) {
     <section aria-labelledby="school-start" data-testid="school-start">
       <h2 id="school-start">Your school</h2>
       <p className="hint">
-        <Link to="/schools/overview">Overview</Link>: the term's fees as they
-        stand. <Link to="/schools">Students</Link>,{" "}
-        <Link to="/schools/classes">classes and terms</Link>,{" "}
-        <Link to="/schools/accounts">account numbers</Link>,{" "}
-        <Link to="/schools/debtors">debtors</Link> and{" "}
-        <Link to="/schools/clearance">clearance</Link>.
+        <Link to="/schools/overview">Overview</Link>: the term's fees as they stand. <Link to="/schools">Students</Link>, <Link to="/schools/classes">classes and terms</Link>,{" "}
+        <Link to="/schools/accounts">account numbers</Link>, <Link to="/schools/debtors">debtors</Link> and <Link to="/schools/clearance">clearance</Link>.
       </p>
       <ErrorBox error={error} />
       {list.length > 0 && (
         <>
-          <p>
-            Ready workflows for a school. Each walks you through publishing it
-            and running it once.
-          </p>
+          <p>Ready workflows for a school. Each walks you through publishing it and running it once.</p>
           <div className="template-grid">
             {list.map((t) => (
-              <Link
-                key={t.id}
-                className="card template-card"
-                to={`/start/guide?template=${t.id}`}
-                data-testid={`school-template-${t.id}`}
-              >
+              <Link key={t.id} className="card template-card" to={`/start/guide?template=${t.id}`} data-testid={`school-template-${t.id}`}>
                 <strong>{t.title}</strong>
                 <span>{t.summary}</span>
               </Link>
@@ -267,22 +170,9 @@ function SchoolStart({ on, owner }: { on: boolean; owner: boolean }) {
 
 /** The starter templates as cards; a card opens the guide. */
 function TemplatePicker() {
-  const { data, error } = useLoad(
-    () => get<{ templates: Template[] }>("/v1/templates"),
-    [],
-  );
-  const names = useLoad(
-    () => get<{ connections: ConnectionName[] }>("/v1/connection-names"),
-    [],
-  );
-  const list = useMemo(
-    () =>
-      starterTemplates(
-        data?.templates ?? [],
-        (names.data?.connections ?? []).map((c) => c.connector),
-      ),
-    [data, names.data],
-  );
+  const { data, error } = useLoad(() => get<{ templates: Template[] }>("/v1/templates"), []);
+  const names = useLoad(() => get<{ connections: ConnectionName[] }>("/v1/connection-names"), []);
+  const list = useMemo(() => starterTemplates(data?.templates ?? [], (names.data?.connections ?? []).map((c) => c.connector)), [data, names.data]);
   const [all, setAll] = useState(false);
   const advanced = useAdvanced();
   return (
@@ -290,11 +180,7 @@ function TemplatePicker() {
       <ErrorBox error={error} />
       <div className="template-grid">
         {(all ? list : list.slice(0, 6)).map((t) => (
-          <Link
-            key={t.id}
-            className="card template-card"
-            to={`/start/guide?template=${t.id}`}
-          >
+          <Link key={t.id} className="card template-card" to={`/start/guide?template=${t.id}`}>
             <strong>{t.title}</strong>
             <span>{t.summary}</span>
             <span className="hint">
@@ -304,11 +190,7 @@ function TemplatePicker() {
           </Link>
         ))}
       </div>
-      {!all && list.length > 6 && (
-        <button onClick={() => setAll(true)}>
-          Show all {list.length} templates
-        </button>
-      )}
+      {!all && list.length > 6 && <button onClick={() => setAll(true)}>Show all {list.length} templates</button>}
     </>
   );
 }
@@ -325,11 +207,7 @@ const ENV = "prod"; // publishing deploys to every environment; runs default to 
 export function Guide() {
   const [params] = useSearchParams();
   const id = params.get("template");
-  const { data: t, error } = useLoad(
-    () =>
-      id ? get<Template>(`/v1/templates/${id}`) : Promise.resolve(undefined),
-    [id],
-  );
+  const { data: t, error } = useLoad(() => (id ? get<Template>(`/v1/templates/${id}`) : Promise.resolve(undefined)), [id]);
   if (!id) {
     return (
       <>
@@ -352,88 +230,37 @@ export function Guide() {
 function GuideSteps({ t }: { t: Template }) {
   const onboarding = useOnboarding();
   const [values, setValues] = useState(() => initialValues(t.params));
-  const conns = useLoad(
-    () => get<{ connections: Conn[] }>("/v1/connections"),
-    [],
-  );
-  const connectors = useLoad(
-    () => get<{ connectors: ConnectorInfo[] }>("/v1/connectors"),
-    [],
-  );
-  const vars = useLoad(
-    () =>
-      get<{ variables: { environment: string; name: string }[] }>(
-        "/v1/variables",
-      ),
-    [],
-  );
-  const [wf, setWf] = useState<{
-    id: string;
-    published: boolean;
-    problems: Problem[];
-  } | null>(null);
+  const conns = useLoad(() => get<{ connections: Conn[] }>("/v1/connections"), []);
+  const connectors = useLoad(() => get<{ connectors: ConnectorInfo[] }>("/v1/connectors"), []);
+  const vars = useLoad(() => get<{ variables: { environment: string; name: string }[] }>("/v1/variables"), []);
+  const [wf, setWf] = useState<{ id: string; published: boolean; problems: Problem[] } | null>(null);
 
   // Which connection each connector uses: the template's connection
   // parameter for it, else "main". A connector without auth (notify)
   // needs none.
   // A template that runs on any rail (capability:pay_bank) needs one
   // connection whose payments account can do all it does.
-  const caps = useLoad(
-    () =>
-      templateCapabilities(t.connectors).length > 0
-        ? get<{ capabilities: CapabilityInfo[] }>("/v1/capabilities")
-        : Promise.resolve({ capabilities: [] }),
-    [t.id],
-  );
+  const caps = useLoad(() => (templateCapabilities(t.connectors).length > 0 ? get<{ capabilities: CapabilityInfo[] }>("/v1/capabilities") : Promise.resolve({ capabilities: [] })), [t.id]);
   const railNeed = (() => {
     const uses = templateCapabilities(t.connectors);
     if (uses.length === 0) return undefined;
     const rails = railsForAll(caps.data?.capabilities ?? [], uses);
-    const p = t.params.find(
-      (x) => x.type === "connection" && (x.capability?.length ?? 0) > 0,
-    );
+    const p = t.params.find((x) => x.type === "connection" && (x.capability?.length ?? 0) > 0);
     const name = (p ? values[p.name] : "") || "";
-    const capable = (conns.data?.connections ?? []).filter(
-      (c) =>
-        c.environment === ENV &&
-        rails.includes(c.connector) &&
-        (name === "" || c.name === name),
-    );
-    return {
-      rails,
-      name,
-      have: name === "" ? capable.length === 1 : capable.length > 0,
-      using: capable[0],
-    };
+    const capable = (conns.data?.connections ?? []).filter((c) => c.environment === ENV && rails.includes(c.connector) && (name === "" || c.name === name));
+    return { rails, name, have: name === "" ? capable.length === 1 : capable.length > 0, using: capable[0] };
   })();
   const needs = t.connectors
     .filter((ref) => !ref.startsWith("capability:"))
     .map((ref) => {
       const cid = ref.split("@")[0];
-      const p = t.params.find(
-        (x) => x.type === "connection" && x.connector === cid,
-      );
+      const p = t.params.find((x) => x.type === "connection" && x.connector === cid);
       const name = (p ? values[p.name] : "") || "main";
-      const have = !!conns.data?.connections.some(
-        (c) => c.connector === cid && c.name === name && c.environment === ENV,
-      );
-      return {
-        ref,
-        cid,
-        name,
-        have,
-        info: connectors.data?.connectors.find(
-          (c) => c.ref === ref || c.id === cid,
-        ),
-      };
+      const have = !!conns.data?.connections.some((c) => c.connector === cid && c.name === name && c.environment === ENV);
+      return { ref, cid, name, have, info: connectors.data?.connectors.find((c) => c.ref === ref || c.id === cid) };
     })
     .filter((n) => !n.info || needsConnection(n.info));
-  const missingVars = t.variables.filter(
-    (v) =>
-      !vars.data?.variables.some(
-        (x) => x.name === v.name && x.environment === ENV,
-      ),
-  );
+  const missingVars = t.variables.filter((v) => !vars.data?.variables.some((x) => x.name === v.name && x.environment === ENV));
   const connected =
     conns.data !== undefined &&
     connectors.data !== undefined &&
@@ -463,100 +290,47 @@ function GuideSteps({ t }: { t: Template }) {
           ))}
         </li>
         <li>
-          <h2>
-            {needs.length > 0 || railNeed
-              ? `Connect ${[...needs.map((n) => n.info?.name ?? n.cid), ...(railNeed ? ["a payments account"] : [])].join(" and ")}`
-              : "Connect"}
-          </h2>
-          {connectors.data &&
-            needs.length === 0 &&
-            !railNeed &&
-            t.variables.length === 0 && (
-              <p className="hint">Nothing to connect.</p>
-            )}
+          <h2>{needs.length > 0 || railNeed ? `Connect ${[...needs.map((n) => n.info?.name ?? n.cid), ...(railNeed ? ["a payments account"] : [])].join(" and ")}` : "Connect"}</h2>
+          {connectors.data && needs.length === 0 && !railNeed && t.variables.length === 0 && <p className="hint">Nothing to connect.</p>}
           {needs.map((n) =>
             n.have ? (
               <p key={n.ref} data-testid={`connected-${n.cid}`}>
-                <Badge value="ok" /> {n.info?.name ?? n.cid} is connected as{" "}
-                <code>{n.name}</code>.
+                <Badge value="ok" /> {n.info?.name ?? n.cid} is connected as <code>{n.name}</code>.
               </p>
             ) : (
-              n.info && (
-                <ConnectForm
-                  key={n.ref}
-                  info={n.info}
-                  name={n.name}
-                  onDone={conns.reload}
-                />
-              )
+              n.info && <ConnectForm key={n.ref} info={n.info} name={n.name} onDone={conns.reload} />
             ),
           )}
           {railNeed &&
             (railNeed.have && railNeed.using ? (
               <p data-testid="connected-rail">
-                <Badge value="ok" /> Payments go through{" "}
-                {connectors.data?.connectors.find(
-                  (c) => c.id === railNeed.using?.connector,
-                )?.name ?? railNeed.using.connector}
-                , connected as <code>{railNeed.using.name}</code>.
+                <Badge value="ok" /> Payments go through {connectors.data?.connectors.find((c) => c.id === railNeed.using?.connector)?.name ?? railNeed.using.connector}, connected as <code>{railNeed.using.name}</code>.
               </p>
             ) : (
               <div aria-label="Connect a payments account">
                 <p className="hint">
-                  {railNeed.name === "" &&
-                  (conns.data?.connections ?? []).filter(
-                    (c) =>
-                      c.environment === ENV &&
-                      railNeed.rails.includes(c.connector),
-                  ).length > 1
+                  {railNeed.name === "" && (conns.data?.connections ?? []).filter((c) => c.environment === ENV && railNeed.rails.includes(c.connector)).length > 1
                     ? "You have more than one payments account that can do this: choose one under Fill in the details."
                     : "Connect the payments account it should use. Any of these can:"}
                 </p>
                 {railNeed.rails.map((id) => {
-                  const info = connectors.data?.connectors.find(
-                    (c) => c.id === id,
-                  );
-                  return (
-                    info && (
-                      <ConnectForm
-                        key={id}
-                        info={info}
-                        name={railNeed.name || "main"}
-                        onDone={conns.reload}
-                      />
-                    )
-                  );
+                  const info = connectors.data?.connectors.find((c) => c.id === id);
+                  return info && <ConnectForm key={id} info={info} name={railNeed.name || "main"} onDone={conns.reload} />;
                 })}
               </div>
             ))}
           {t.variables.map((v) => (
-            <VariableForm
-              key={v.name}
-              name={v.name}
-              why={v.why}
-              saved={!missingVars.includes(v)}
-              onDone={vars.reload}
-            />
+            <VariableForm key={v.name} name={v.name} why={v.why} saved={!missingVars.includes(v)} onDone={vars.reload} />
           ))}
           <Help topic="connections" />
         </li>
         <li>
           <h2>Create and publish</h2>
-          <CreateAndPublish
-            t={t}
-            values={values}
-            ready={connected}
-            wf={wf}
-            onDone={setWf}
-          />
+          <CreateAndPublish t={t} values={values} ready={connected} wf={wf} onDone={setWf} />
         </li>
         <li>
           <h2>Run it once</h2>
-          {wf?.published ? (
-            <TestRun workflow={wf.id} onDone={onboarding.reload} />
-          ) : (
-            <p className="hint">Publish first.</p>
-          )}
+          {wf?.published ? <TestRun workflow={wf.id} onDone={onboarding.reload} /> : <p className="hint">Publish first.</p>}
         </li>
       </ol>
     </>
@@ -564,15 +338,7 @@ function GuideSteps({ t }: { t: Template }) {
 }
 
 /** Connects the service a template needs, on the guided screen, with its name fixed. */
-function ConnectForm({
-  info,
-  name,
-  onDone,
-}: {
-  info: ConnectorInfo;
-  name: string;
-  onDone: () => void;
-}) {
+function ConnectForm({ info, name, onDone }: { info: ConnectorInfo; name: string; onDone: () => void }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="card" aria-label={`Connect ${info.name}`}>
@@ -580,29 +346,13 @@ function ConnectForm({
         Connect {info.name}
       </button>
       {open && (
-        <NewConnection
-          connectors={[info]}
-          preset={{ connector: info.id, environment: ENV, name }}
-          onClose={() => setOpen(false)}
-          onDone={() => (setOpen(false), onDone())}
-          onLink={startLink}
-        />
+        <NewConnection connectors={[info]} preset={{ connector: info.id, environment: ENV, name }} onClose={() => setOpen(false)} onDone={() => (setOpen(false), onDone())} onLink={startLink} />
       )}
     </div>
   );
 }
 
-function VariableForm({
-  name,
-  why,
-  saved,
-  onDone,
-}: {
-  name: string;
-  why: string;
-  saved: boolean;
-  onDone: () => void;
-}) {
+function VariableForm({ name, why, saved, onDone }: { name: string; why: string; saved: boolean; onDone: () => void }) {
   const [value, setValue] = useState("");
   const act = useAction();
   if (saved) {
@@ -617,23 +367,11 @@ function VariableForm({
       className="card"
       onSubmit={(e) => {
         e.preventDefault();
-        void act.run(
-          async () => (
-            await put(`/v1/variables/${ENV}/${name}`, {
-              value: plainValue(value),
-            }),
-            onDone()
-          ),
-          "Saved",
-        );
+        void act.run(async () => (await put(`/v1/variables/${ENV}/${name}`, { value: plainValue(value) }), onDone()), "Saved");
       }}
     >
       <Field label={name} hint={why}>
-        <input
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          required
-        />
+        <input value={value} onChange={(e) => setValue(e.target.value)} required />
       </Field>
       <ErrorBox error={act.error} />
       <button type="submit" className="primary" disabled={act.busy}>
@@ -659,30 +397,20 @@ function CreateAndPublish({
   const act = useAction();
   // Made, but not ready to publish: what it needs, fixed here.
   const [needs, setNeeds] = useState<{ id: string; needs: ReadyNeed[] }>();
-  const fieldErrors =
-    act.error instanceof ApiError && Array.isArray(act.error.body.params)
-      ? (act.error.body.params as { param: string; message: string }[])
-      : [];
+  const fieldErrors = act.error instanceof ApiError && Array.isArray(act.error.body.params) ? (act.error.body.params as { param: string; message: string }[]) : [];
   if (wf?.published) {
     return (
       <p role="status">
-        <Badge value="published" /> Published.{" "}
-        <Link to={`/workflows/${wf.id}`}>Open it in the editor</Link>
+        <Badge value="published" /> Published. <Link to={`/workflows/${wf.id}`}>Open it in the editor</Link>
       </p>
     );
   }
   return (
     <>
-      {!ready && (
-        <p className="hint">
-          Connect it first: the workflow cannot run without its connection and
-          settings.
-        </p>
-      )}
+      {!ready && <p className="hint">Connect it first: the workflow cannot run without its connection and settings.</p>}
       {wf && wf.problems.length > 0 && (
         <div className="error" role="alert">
-          The draft needs changes before it can be published.{" "}
-          <Link to={`/workflows/${wf.id}`}>Open it in the editor</Link>
+          The draft needs changes before it can be published. <Link to={`/workflows/${wf.id}`}>Open it in the editor</Link>
           <ul>
             {wf.problems.map((p, i) => (
               <li key={i}>
@@ -703,11 +431,7 @@ function CreateAndPublish({
       {needs && (
         <NeedsList
           needs={needs.needs}
-          onChanged={() =>
-            void get<Readiness>(
-              `/v1/workflows/${needs.id}/versions/1/readiness`,
-            ).then((r) => setNeeds({ id: needs.id, needs: r.needs }))
-          }
+          onChanged={() => void get<Readiness>(`/v1/workflows/${needs.id}/versions/1/readiness`).then((r) => setNeeds({ id: needs.id, needs: r.needs }))}
         />
       )}
       <button
@@ -717,10 +441,7 @@ function CreateAndPublish({
           void act.run(async () => {
             let id = wf?.id;
             if (!id) {
-              const r = await post<{ id: string; problems: Problem[] }>(
-                `/v1/templates/${t.id}/instantiate`,
-                { params: toParams(t.params, values) },
-              );
+              const r = await post<{ id: string; problems: Problem[] }>(`/v1/templates/${t.id}/instantiate`, { params: toParams(t.params, values) });
               id = r.id;
               if (r.problems.length > 0) {
                 onDone({ id, published: false, problems: r.problems });
@@ -729,19 +450,10 @@ function CreateAndPublish({
             }
             let p: { state: string };
             try {
-              p = await post<{ state: string }>(
-                `/v1/workflows/${id}/versions/1/publish`,
-              );
+              p = await post<{ state: string }>(`/v1/workflows/${id}/versions/1/publish`);
             } catch (e) {
-              if (
-                e instanceof ApiError &&
-                e.status === 422 &&
-                e.body.code === "not_ready"
-              ) {
-                setNeeds({
-                  id,
-                  needs: (e.body.needs as ReadyNeed[] | undefined) ?? [],
-                });
+              if (e instanceof ApiError && e.status === 422 && e.body.code === "not_ready") {
+                setNeeds({ id, needs: (e.body.needs as ReadyNeed[] | undefined) ?? [] });
                 onDone({ id, published: false, problems: [] });
                 return;
               }
@@ -760,48 +472,17 @@ function CreateAndPublish({
 
 const terminal = ["completed", "failed", "cancelled", "needs_reconciliation"];
 
-function TestRun({
-  workflow,
-  onDone,
-}: {
-  workflow: string;
-  onDone: () => void;
-}) {
-  const version = useLoad(
-    () =>
-      get<{
-        definition: {
-          inputs?: { schema?: JSONSchema };
-          types?: Record<string, JSONSchema>;
-        };
-      }>(`/v1/workflows/${workflow}/versions/1`),
-    [workflow],
-  );
+function TestRun({ workflow, onDone }: { workflow: string; onDone: () => void }) {
+  const version = useLoad(() => get<{ definition: { inputs?: { schema?: JSONSchema }; types?: Record<string, JSONSchema> } }>(`/v1/workflows/${workflow}/versions/1`), [workflow]);
   const [input, setInput] = useState<unknown>(undefined);
   const [advanced, setAdvanced] = useState(false);
-  const schema = resolveSchema(
-    version.data?.definition.inputs?.schema,
-    version.data?.definition.types,
-  );
+  const schema = resolveSchema(version.data?.definition.inputs?.schema, version.data?.definition.types);
   const [run, setRun] = useState<string | null>(null);
   const act = useAction();
   useEffect(() => {
-    if (version.data && input === undefined)
-      setInput(
-        sampleInput(
-          version.data.definition.inputs?.schema,
-          version.data.definition.types,
-        ),
-      );
+    if (version.data && input === undefined) setInput(sampleInput(version.data.definition.inputs?.schema, version.data.definition.types));
   }, [version.data, input]);
-  const status = useLoad(
-    () =>
-      run
-        ? get<{ run: { status: string } }>(`/v1/runs/${run}`)
-        : Promise.resolve(undefined),
-    [run],
-    !!run,
-  );
+  const status = useLoad(() => (run ? get<{ run: { status: string } }>(`/v1/runs/${run}`) : Promise.resolve(undefined)), [run], !!run);
   const st = status.data?.run.status;
   const finished = st !== undefined && terminal.includes(st);
   useEffect(() => {
@@ -811,33 +492,17 @@ function TestRun({
     <>
       {schema?.properties && !advanced ? (
         <>
-          <p className="hint">
-            What the run starts with, filled in with an example. Change it if
-            you like.
-          </p>
-          <SchemaForm
-            schema={schema}
-            value={input as Record<string, unknown> | undefined}
-            onChange={setInput}
-            expressions={false}
-          />
+          <p className="hint">What the run starts with, filled in with an example. Change it if you like.</p>
+          <SchemaForm schema={schema} value={input as Record<string, unknown> | undefined} onChange={setInput} expressions={false} />
         </>
       ) : (
-        <Field
-          label="Test input"
-          hint="What the trigger would send. Change it if you like."
-        >
+        <Field label="Test input" hint="What the trigger would send. Change it if you like.">
           <JsonInput value={input} onChange={setInput} rows={6} />
         </Field>
       )}
       {schema?.properties && (
         <label className="inline hint" data-technical>
-          <input
-            type="checkbox"
-            checked={advanced}
-            onChange={(e) => setAdvanced(e.target.checked)}
-          />{" "}
-          Advanced: enter JSON
+          <input type="checkbox" checked={advanced} onChange={(e) => setAdvanced(e.target.checked)} /> Advanced: enter JSON
         </label>
       )}
       <ErrorBox error={act.error ?? version.error} />
@@ -845,27 +510,13 @@ function TestRun({
         <button
           className="primary"
           disabled={act.busy || (!!run && !finished)}
-          onClick={() =>
-            void act.run(
-              async () =>
-                setRun(
-                  (
-                    await post<{ run_id: string }>(
-                      `/v1/workflows/${workflow}/runs`,
-                      { input: input ?? {}, environment: ENV },
-                    )
-                  ).run_id,
-                ),
-              "Run started",
-            )
-          }
+          onClick={() => void act.run(async () => setRun((await post<{ run_id: string }>(`/v1/workflows/${workflow}/runs`, { input: input ?? {}, environment: ENV })).run_id), "Run started")}
         >
           Run it now
         </button>
         {run && (
           <span data-testid="guide-run-status">
-            <Badge value={st ?? "queued"} />{" "}
-            <Link to={`/runs/${run}`}>See every step</Link>
+            <Badge value={st ?? "queued"} /> <Link to={`/runs/${run}`}>See every step</Link>
           </span>
         )}
       </div>
@@ -874,11 +525,7 @@ function TestRun({
           It worked. Your workflow is live: it runs on its own from now on.
         </p>
       )}
-      {finished && st !== "completed" && (
-        <p className="error">
-          The run did not complete. Open it to see which step stopped and why.
-        </p>
-      )}
+      {finished && st !== "completed" && <p className="error">The run did not complete. Open it to see which step stopped and why.</p>}
     </>
   );
 }

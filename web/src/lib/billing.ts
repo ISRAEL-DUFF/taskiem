@@ -106,12 +106,7 @@ export interface BillingOverview {
   banner?: Banner;
   vat_percent: number;
   providers: string[] | null;
-  payment_method?: {
-    provider: string;
-    brand: string;
-    last4: string;
-    exp: string;
-  };
+  payment_method?: { provider: string; brand: string; last4: string; exp: string };
 }
 
 /** Kobo as naira: ₦12,500.00. */
@@ -133,57 +128,32 @@ export interface Meter {
   level: "ok" | "warn" | "full";
 }
 
-const meterDefs: [
-  key: string,
-  label: string,
-  used: (u: BillingOverview["usage"]) => number,
-][] = [
+const meterDefs: [key: string, label: string, used: (u: BillingOverview["usage"]) => number][] = [
   ["max_running_runs", "Runs running now", (u) => u.running_runs],
   ["max_workflows", "Workflows", (u) => u.workflows],
   ["max_queued_runs", "Runs queued", (u) => u.queued_runs],
   ["runs_per_month", "Runs this month", (u) => u.runs_this_month],
   ["ai_monthly_tokens", "AI tokens this month", (u) => u.ai_tokens_this_month],
-  [
-    "whatsapp_templates_monthly",
-    "WhatsApp templates this month",
-    (u) => u.whatsapp_templates_this_month?.sent ?? 0,
-  ],
+  ["whatsapp_templates_monthly", "WhatsApp templates this month", (u) => u.whatsapp_templates_this_month?.sent ?? 0],
   ["max_secrets", "Secrets", (u) => u.secrets],
   ["max_connections", "Connections", (u) => u.connections],
 ];
 
 /** Usage against the plan's limits, one meter per counted limit. */
-export function meters(
-  limits: Record<string, number>,
-  usage: BillingOverview["usage"],
-): Meter[] {
+export function meters(limits: Record<string, number>, usage: BillingOverview["usage"]): Meter[] {
   return meterDefs.map(([key, label, used]) => {
     const limit = limits[key] ?? 0;
     const n = used(usage);
     const fraction = limit > 0 ? Math.min(n / limit, 1) : null;
-    const level =
-      fraction === null
-        ? "ok"
-        : n >= limit
-          ? "full"
-          : fraction >= 0.8
-            ? "warn"
-            : "ok";
+    const level = fraction === null ? "ok" : n >= limit ? "full" : fraction >= 0.8 ? "warn" : "ok";
     return { key, label, used: n, limit, fraction, level };
   });
 }
 
 /** Whether moving from one plan to another is an upgrade (paid now) or a
  * downgrade (at period end), as the server decides it. */
-export function isUpgrade(
-  tiers: string[],
-  from: Plan,
-  fromInterval: string,
-  to: Plan,
-  toInterval: string,
-): boolean {
-  if (from.id === to.id)
-    return fromInterval === "monthly" && toInterval === "annual";
+export function isUpgrade(tiers: string[], from: Plan, fromInterval: string, to: Plan, toInterval: string): boolean {
+  if (from.id === to.id) return fromInterval === "monthly" && toInterval === "annual";
   const a = tiers.indexOf(from.tier);
   const b = tiers.indexOf(to.tier);
   if (a !== b) return b > a;
@@ -191,14 +161,7 @@ export function isUpgrade(
 }
 
 // The order engine/billing.Tiers gives, cheapest first (shop came with S8).
-export const tiers = [
-  "internal",
-  "shop",
-  "starter",
-  "growth",
-  "business",
-  "enterprise",
-];
+export const tiers = ["internal", "shop", "starter", "growth", "business", "enterprise"];
 
 export const featureNames: Record<string, string> = {
   sso: "Single sign-on",

@@ -1,13 +1,7 @@
 import { useState } from "react";
 import { del, get, post, put, type WorkflowSummary } from "../api";
 import { useAuth } from "../auth";
-import {
-  canSubmit,
-  statusWords,
-  summaryLine,
-  type TemplatesView,
-  type TemplateView,
-} from "../lib/whatsappTemplates";
+import { canSubmit, statusWords, summaryLine, type TemplatesView, type TemplateView } from "../lib/whatsappTemplates";
 import { ErrorBox, Field, fmtTime, useAction, useLoad } from "../ui";
 
 interface NumberView {
@@ -32,37 +26,18 @@ interface NumberView {
 export function WhatsAppNumber() {
   const { can } = useAuth();
   const view = useLoad(() => get<NumberView>("/v1/whatsapp/number"), []);
-  const [form, setForm] = useState({
-    phone_number_id: "",
-    waba_id: "",
-    access_token: "",
-    app_secret: "",
-    verify_token: "",
-    own_app: true,
-  });
+  const [form, setForm] = useState({ phone_number_id: "", waba_id: "", access_token: "", app_secret: "", verify_token: "", own_app: true });
   const [notice, setNotice] = useState("");
   const act = useAction();
   const v = view.data;
   if (!v) return view.error ? <ErrorBox error={view.error} /> : null;
-  const set =
-    (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
-      setForm({
-        ...form,
-        [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value,
-      });
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value });
   return (
     <section className="card" data-testid="whatsapp-own-number">
       <h2 style={{ marginTop: 0 }}>WhatsApp number</h2>
       <p className="hint">
-        Messages to your people come from{" "}
-        {v.shared_number ? (
-          <strong>{v.shared_number}</strong>
-        ) : (
-          "Taskiem's shared number"
-        )}{" "}
-        with your organisation's name in brackets, unless you connect your own
-        WhatsApp Business number. Template messages count against your plan's
-        allowance.
+        Messages to your people come from {v.shared_number ? <strong>{v.shared_number}</strong> : "Taskiem's shared number"} with your organisation's name in
+        brackets, unless you connect your own WhatsApp Business number. Template messages count against your plan's allowance.
       </p>
       <ErrorBox error={act.error} />
       {notice && <p className="hint">{notice}</p>}
@@ -70,39 +45,18 @@ export function WhatsAppNumber() {
       {v.connected ? (
         <>
           <p>
-            Connected: <strong>{v.display_number}</strong>{" "}
-            <span className="hint">
-              (phone number id {v.phone_number_id}, WABA {v.waba_id}
-              {v.created_at && `, since ${fmtTime(v.created_at)}`})
-            </span>
+            Connected: <strong>{v.display_number}</strong> <span className="hint">(phone number id {v.phone_number_id}, WABA {v.waba_id}{v.created_at && `, since ${fmtTime(v.created_at)}`})</span>
           </p>
           <p className="hint">
-            In your Meta app, set the webhook callback to{" "}
-            <code>{v.webhook_path}</code> and the WhatsApp Flows endpoint to{" "}
-            <code>{v.flows_endpoint_path}</code> on Taskiem's channel address
-            {v.own_app ? ", with the verify token you entered" : ""}. Publish
-            the <code>taskiem_inputs</code> and <code>taskiem_pin</code> Flows
+            In your Meta app, set the webhook callback to <code>{v.webhook_path}</code> and the WhatsApp Flows endpoint to <code>{v.flows_endpoint_path}</code> on
+            Taskiem's channel address{v.own_app ? ", with the verify token you entered" : ""}. Publish the <code>taskiem_inputs</code> and <code>taskiem_pin</code> Flows
             and the templates in your WhatsApp Business Account.
           </p>
-          <button
-            className="danger"
-            disabled={act.busy}
-            onClick={() =>
-              confirm(
-                "Disconnect this number? Messages go from the shared number again.",
-              ) &&
-              void act.run(
-                async () => (await del("/v1/whatsapp/number"), view.reload()),
-                "Disconnected",
-              )
-            }
-          >
+          <button className="danger" disabled={act.busy} onClick={() => confirm("Disconnect this number? Messages go from the shared number again.") && void act.run(async () => (await del("/v1/whatsapp/number"), view.reload()), "Disconnected")}>
             Disconnect
           </button>
           <Templates />
-          {can("workflow.publish") && (
-            <PublicMenu view={v} onSaved={view.reload} />
-          )}
+          {can("workflow.publish") && <PublicMenu view={v} onSaved={view.reload} />}
         </>
       ) : (
         <form
@@ -111,76 +65,32 @@ export function WhatsAppNumber() {
             void act.run(async () => {
               const out = await put<NumberView>("/v1/whatsapp/number", form);
               setNotice(out.flows_key_error ?? "");
-              setForm({
-                ...form,
-                access_token: "",
-                app_secret: "",
-                verify_token: "",
-              });
+              setForm({ ...form, access_token: "", app_secret: "", verify_token: "" });
               view.reload();
             }, "Connected");
           }}
         >
           <div className="row">
             <Field label="Phone number id">
-              <input
-                value={form.phone_number_id}
-                onChange={set("phone_number_id")}
-                inputMode="numeric"
-                required
-              />
+              <input value={form.phone_number_id} onChange={set("phone_number_id")} inputMode="numeric" required />
             </Field>
             <Field label="WhatsApp Business Account id">
-              <input
-                value={form.waba_id}
-                onChange={set("waba_id")}
-                inputMode="numeric"
-                required
-              />
+              <input value={form.waba_id} onChange={set("waba_id")} inputMode="numeric" required />
             </Field>
           </div>
-          <Field
-            label="System user access token"
-            hint="With whatsapp_business_messaging; kept in your vault"
-          >
-            <input
-              type="password"
-              value={form.access_token}
-              onChange={set("access_token")}
-              autoComplete="off"
-              required
-            />
+          <Field label="System user access token" hint="With whatsapp_business_messaging; kept in your vault">
+            <input type="password" value={form.access_token} onChange={set("access_token")} autoComplete="off" required />
           </Field>
           <label className="row">
-            <input
-              type="checkbox"
-              checked={form.own_app}
-              onChange={set("own_app")}
-            />{" "}
-            The number is on our own Meta app
+            <input type="checkbox" checked={form.own_app} onChange={set("own_app")} /> The number is on our own Meta app
           </label>
           {form.own_app && (
             <div className="row">
               <Field label="App secret">
-                <input
-                  type="password"
-                  value={form.app_secret}
-                  onChange={set("app_secret")}
-                  autoComplete="off"
-                  required
-                />
+                <input type="password" value={form.app_secret} onChange={set("app_secret")} autoComplete="off" required />
               </Field>
-              <Field
-                label="Verify token"
-                hint="Any random string of 16 or more characters"
-              >
-                <input
-                  type="password"
-                  value={form.verify_token}
-                  onChange={set("verify_token")}
-                  autoComplete="off"
-                  required
-                />
+              <Field label="Verify token" hint="Any random string of 16 or more characters">
+                <input type="password" value={form.verify_token} onChange={set("verify_token")} autoComplete="off" required />
               </Field>
             </div>
           )}
@@ -196,48 +106,24 @@ export function WhatsAppNumber() {
 /** The templates in the number's WhatsApp Business Account: what Meta
  * approved, with Submit and Check now (docs/whatsapp.md#templates). */
 function Templates() {
-  const view = useLoad(
-    () => get<TemplatesView>("/v1/whatsapp/number/templates"),
-    [],
-  );
+  const view = useLoad(() => get<TemplatesView>("/v1/whatsapp/number/templates"), []);
   const act = useAction();
   const v = view.data;
   if (!v) return view.error ? <ErrorBox error={view.error} /> : null;
   const submit = (t: TemplateView) =>
-    void act.run(
-      async () => (
-        await post(
-          `/v1/whatsapp/number/templates/${encodeURIComponent(t.name)}/submit`,
-        ),
-        view.reload()
-      ),
-      `Submitted ${t.name} to Meta`,
-    );
+    void act.run(async () => (await post(`/v1/whatsapp/number/templates/${encodeURIComponent(t.name)}/submit`), view.reload()), `Submitted ${t.name} to Meta`);
   return (
     <div data-testid="whatsapp-templates">
       <h3>Templates</h3>
       <p className="hint">
-        WhatsApp delivers a message outside a person's 24-hour window only as a
-        template Meta approved in your WhatsApp Business Account. Submit each
-        one from here (the token needs whatsapp_business_management), or in
-        WhatsApp Manager under the same name; Meta's answer arrives by itself,
-        and <strong>Check now</strong> asks at once.
+        WhatsApp delivers a message outside a person's 24-hour window only as a template Meta approved in your WhatsApp Business Account. Submit each one from
+        here (the token needs whatsapp_business_management), or in WhatsApp Manager under the same name; Meta's answer arrives by itself, and <strong>Check now</strong> asks
+        at once.
       </p>
       <p data-testid="whatsapp-templates-summary">{summaryLine(v)}</p>
       <ErrorBox error={act.error} />
       <div className="toolbar">
-        <button
-          disabled={act.busy}
-          onClick={() =>
-            void act.run(
-              async () => (
-                await post("/v1/whatsapp/number/templates/check"),
-                view.reload()
-              ),
-              "Checked with Meta",
-            )
-          }
-        >
+        <button disabled={act.busy} onClick={() => void act.run(async () => (await post("/v1/whatsapp/number/templates/check"), view.reload()), "Checked with Meta")}>
           Check now
         </button>
       </div>
@@ -259,9 +145,7 @@ function Templates() {
               <td>
                 <span data-testid="status">{statusWords(t.status)}</span>
                 {t.reason && <div className="hint">{t.reason}</div>}
-                {t.checked_at && (
-                  <div className="hint">checked {fmtTime(t.checked_at)}</div>
-                )}
+                {t.checked_at && <div className="hint">checked {fmtTime(t.checked_at)}</div>}
               </td>
               <td className="hint">{t.purpose}</td>
               <td>
@@ -280,65 +164,28 @@ function Templates() {
 }
 
 /** The public self-service menu: workflows anyone may start by writing to the number. */
-function PublicMenu({
-  view,
-  onSaved,
-}: {
-  view: NumberView;
-  onSaved: () => void;
-}) {
-  const wfs = useLoad(
-    () => get<{ workflows: WorkflowSummary[] }>("/v1/workflows"),
-    [],
-  );
+function PublicMenu({ view, onSaved }: { view: NumberView; onSaved: () => void }) {
+  const wfs = useLoad(() => get<{ workflows: WorkflowSummary[] }>("/v1/workflows"), []);
   const [enabled, setEnabled] = useState(view.public_menu);
-  const [items, setItems] = useState(
-    view.public_workflows.map((p) => ({
-      workflow_id: p.workflow_id,
-      label: p.label,
-    })),
-  );
+  const [items, setItems] = useState(view.public_workflows.map((p) => ({ workflow_id: p.workflow_id, label: p.label })));
   const act = useAction();
   const chosen = new Set(items.map((i) => i.workflow_id));
   return (
     <div data-testid="whatsapp-public-menu">
       <h3>Public menu</h3>
       <p className="hint">
-        Anyone who writes to this number without a linked account sees these
-        workflows and can start them, after filling in a WhatsApp form and
-        confirming. They run as <code>whatsapp_public:&lt;number&gt;</code>{" "}
-        under your plan limits, with strict rate limits. Offer only what is safe
-        for anyone to start.
+        Anyone who writes to this number without a linked account sees these workflows and can start them, after filling in a WhatsApp form and confirming. They
+        run as <code>whatsapp_public:&lt;number&gt;</code> under your plan limits, with strict rate limits. Offer only what is safe for anyone to start.
       </p>
       <ErrorBox error={act.error ?? wfs.error} />
       <label className="row">
-        <input
-          type="checkbox"
-          checked={enabled}
-          onChange={(e) => setEnabled(e.target.checked)}
-        />{" "}
-        Offer the menu
+        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> Offer the menu
       </label>
       {items.map((it, i) => (
         <div className="row" key={it.workflow_id}>
-          <span className="grow">
-            {wfs.data?.workflows.find((w) => w.id === it.workflow_id)?.name ??
-              it.workflow_id}
-          </span>
-          <input
-            value={it.label}
-            maxLength={24}
-            onChange={(e) =>
-              setItems(
-                items.map((x, j) =>
-                  j === i ? { ...x, label: e.target.value } : x,
-                ),
-              )
-            }
-          />
-          <button onClick={() => setItems(items.filter((_, j) => j !== i))}>
-            Remove
-          </button>
+          <span className="grow">{wfs.data?.workflows.find((w) => w.id === it.workflow_id)?.name ?? it.workflow_id}</span>
+          <input value={it.label} maxLength={24} onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} />
+          <button onClick={() => setItems(items.filter((_, j) => j !== i))}>Remove</button>
         </div>
       ))}
       {items.length < 9 && (
@@ -346,11 +193,7 @@ function PublicMenu({
           value=""
           onChange={(e) => {
             const w = wfs.data?.workflows.find((x) => x.id === e.target.value);
-            if (w)
-              setItems([
-                ...items,
-                { workflow_id: w.id, label: w.name.slice(0, 24) },
-              ]);
+            if (w) setItems([...items, { workflow_id: w.id, label: w.name.slice(0, 24) }]);
           }}
         >
           <option value="">Add a workflow…</option>
@@ -364,22 +207,7 @@ function PublicMenu({
         </select>
       )}
       <div className="toolbar" style={{ marginTop: 8 }}>
-        <button
-          className="primary"
-          disabled={act.busy}
-          onClick={() =>
-            void act.run(
-              async () => (
-                await put("/v1/whatsapp/public-menu", {
-                  enabled,
-                  workflows: items,
-                }),
-                onSaved()
-              ),
-              "Saved",
-            )
-          }
-        >
+        <button className="primary" disabled={act.busy} onClick={() => void act.run(async () => (await put("/v1/whatsapp/public-menu", { enabled, workflows: items }), onSaved()), "Saved")}>
           Save menu
         </button>
       </div>
@@ -392,50 +220,16 @@ function OwnNumberGuide() {
   return (
     <details className="help">
       <summary>How to use your own WhatsApp number</summary>
-      <p className="hint">
-        Most businesses never need this: the shared number works from the start.
-        Use your own number when customers should see your name as the sender.
-        It takes about half an hour and a phone number not already on the
-        WhatsApp app.
-      </p>
+      <p className="hint">Most businesses never need this: the shared number works from the start. Use your own number when customers should see your name as the sender. It takes about half an hour and a phone number not already on the WhatsApp app.</p>
       <ol>
-        <li>
-          Open business.facebook.com and sign in with the Facebook account that
-          runs your business page. Create a business portfolio if it asks.
-        </li>
-        <li>
-          Go to developers.facebook.com, choose My Apps, then Create App. Choose
-          Business as the type and pick your business portfolio.
-        </li>
-        <li>
-          In the app, add the WhatsApp product. Under WhatsApp, open API Setup,
-          choose Add phone number, and follow the steps: your business name, the
-          number, and the code Meta texts or calls it with.
-        </li>
-        <li>
-          On the same API Setup page, copy the Phone number ID and the WhatsApp
-          Business Account ID into the boxes below.
-        </li>
-        <li>
-          In business.facebook.com, open Settings, then Users, then System
-          users. Add a system user with the Admin role, choose Generate new
-          token, pick your app, tick whatsapp_business_messaging and
-          whatsapp_business_management, and choose Never for when it expires.
-          Copy the token into the box below.
-        </li>
-        <li>
-          In the app's Settings, then Basic, copy the App secret into the box
-          below (Show reveals it). Type any long word you like as the Verify
-          token.
-        </li>
-        <li>
-          Press Connect. Taskiem then shows the two addresses to paste back into
-          the app, under WhatsApp, then Configuration.
-        </li>
-        <li>
-          Meta reviews your business name before messages show it; until then
-          they come from the number alone.
-        </li>
+        <li>Open business.facebook.com and sign in with the Facebook account that runs your business page. Create a business portfolio if it asks.</li>
+        <li>Go to developers.facebook.com, choose My Apps, then Create App. Choose Business as the type and pick your business portfolio.</li>
+        <li>In the app, add the WhatsApp product. Under WhatsApp, open API Setup, choose Add phone number, and follow the steps: your business name, the number, and the code Meta texts or calls it with.</li>
+        <li>On the same API Setup page, copy the Phone number ID and the WhatsApp Business Account ID into the boxes below.</li>
+        <li>In business.facebook.com, open Settings, then Users, then System users. Add a system user with the Admin role, choose Generate new token, pick your app, tick whatsapp_business_messaging and whatsapp_business_management, and choose Never for when it expires. Copy the token into the box below.</li>
+        <li>In the app's Settings, then Basic, copy the App secret into the box below (Show reveals it). Type any long word you like as the Verify token.</li>
+        <li>Press Connect. Taskiem then shows the two addresses to paste back into the app, under WhatsApp, then Configuration.</li>
+        <li>Meta reviews your business name before messages show it; until then they come from the number alone.</li>
       </ol>
     </details>
   );

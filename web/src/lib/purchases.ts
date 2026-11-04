@@ -81,17 +81,7 @@ export interface Purchase {
   /** Sent to a linked supplier through this link; the supplier's side,
    * mirrored, and our own cancel request and Not all came. */
   link_id?: string;
-  seller_status?:
-    | "proposed"
-    | "received"
-    | "changed"
-    | "accepted"
-    | "ready"
-    | "dispatched"
-    | "delivered"
-    | "declined"
-    | "cancelled"
-    | null;
+  seller_status?: "proposed" | "received" | "changed" | "accepted" | "ready" | "dispatched" | "delivered" | "declined" | "cancelled" | null;
   seller_note?: string;
   change?: PurchaseLine[];
   delivered_at?: string;
@@ -117,8 +107,7 @@ export const STATUS: Record<PurchaseStatus, { label: string; tone: string }> = {
 export function reachedLine(s: Supplier): string {
   if (s.reached === "whatsapp") return "Gets orders on WhatsApp";
   if (s.reached === "telegram") return "Gets orders on Telegram";
-  if (s.reached === "link")
-    return "Linked on Taskiem: orders go straight to their business";
+  if (s.reached === "link") return "Linked on Taskiem: orders go straight to their business";
   return "Gets orders by text message until they tap the link";
 }
 
@@ -184,9 +173,7 @@ export function purchaseActions(p: Purchase) {
     answerDelivery: answersDelivery(p),
     pay: p.status !== "drafted" && p.status !== "cancelled",
     cancel:
-      (p.status === "drafted" ||
-        p.status === "sent" ||
-        p.status === "confirmed") &&
+      (p.status === "drafted" || p.status === "sent" || p.status === "confirmed") &&
       !(p.link_id && (p.cancel_asked_at || p.seller_status === "delivered")),
   };
 }

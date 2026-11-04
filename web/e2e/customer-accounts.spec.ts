@@ -21,9 +21,7 @@ function dsn(): string {
 }
 
 function sql(text: string): string {
-  return execFileSync("psql", [dsn(), "-v", "ON_ERROR_STOP=1", "-tAqc", text], {
-    encoding: "utf8",
-  }).trim();
+  return execFileSync("psql", [dsn(), "-v", "ON_ERROR_STOP=1", "-tAqc", text], { encoding: "utf8" }).trim();
 }
 
 async function signIn(page: Page) {
@@ -31,12 +29,7 @@ async function signIn(page: Page) {
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(
-    page.getByRole("heading", {
-      level: 1,
-      name: /^Good (morning|afternoon|evening)/,
-    }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
 }
 
 /**
@@ -46,43 +39,30 @@ async function signIn(page: Page) {
  * account numbers: then the form offers it first, and by hand is a choice.
  */
 async function byHand(form: ReturnType<Page["getByRole"]>) {
-  await expect(
-    form.getByRole("button", {
-      name: /Register this account|Issue the account number/,
-    }),
-  ).toBeVisible();
+  await expect(form.getByRole("button", { name: /Register this account|Issue the account number/ })).toBeVisible();
   const where = form.getByRole("combobox", { name: "Where from" });
   if (await where.count()) {
     await expect(form).toContainText("Issue one with");
     await where.selectOption("by_hand");
   } else {
-    await expect(form).toContainText(
-      "None of your connections can issue account numbers",
-    );
+    await expect(form).toContainText("None of your connections can issue account numbers");
   }
   await expect(form.getByLabel("Connection")).toBeVisible();
 }
 
 /** An invoice for ₦25,000, made in the API and marked sent in the database. */
-async function sentInvoice(
-  page: Page,
-  customer: { name: string; phone: string },
-): Promise<{ id: string; number: string }> {
+async function sentInvoice(page: Page, customer: { name: string; phone: string }): Promise<{ id: string; number: string }> {
   const r = await page.request.post("/v1/invoices", {
     headers: { ...H, "Idempotency-Key": `e2e:${randomUUID()}` },
     data: { customer, amount_kobo: 2500000, description: "Catering" },
   });
   expect(r.ok(), await r.text()).toBeTruthy();
   const x = (await r.json()) as { id: string; number: string };
-  sql(
-    `UPDATE customer_invoices SET sent_at = now(), updated_at = now() WHERE id = '${x.id}'`,
-  );
+  sql(`UPDATE customer_invoices SET sent_at = now(), updated_at = now() WHERE id = '${x.id}'`);
   return x;
 }
 
-test("a customer is given an account number from their invoice, and it shows on the panel", async ({
-  page,
-}) => {
+test("a customer is given an account number from their invoice, and it shows on the panel", async ({ page }) => {
   test.setTimeout(120_000);
   await signIn(page);
   const ngozi = { name: "Ngozi Eze", phone: "+2348031230009" };
@@ -92,87 +72,50 @@ test("a customer is given an account number from their invoice, and it shows on 
 
   await page.goto(`/invoices/${first.number}`);
   const money = page.getByTestId("customer-money");
-  await expect(money).toContainText(
-    "None. Money into an account number of the customer's own",
-  );
-  await money
-    .getByRole("button", { name: "Give this customer an account number" })
-    .click();
-  const form = money.getByRole("form", {
-    name: "Give this customer an account number",
-  });
+  await expect(money).toContainText("None. Money into an account number of the customer's own");
+  await money.getByRole("button", { name: "Give this customer an account number" }).click();
+  const form = money.getByRole("form", { name: "Give this customer an account number" });
   await byHand(form);
 
   // Nothing is sent without the connection, number and reference.
   await form.getByRole("button", { name: "Register this account" }).click();
-  await expect(form.getByRole("alert")).toContainText(
-    "Name the connection the account is on, like paystack/main.",
-  );
+  await expect(form.getByRole("alert")).toContainText("Name the connection the account is on, like paystack/main.");
   await form.getByLabel("Connection").fill("paystack/main");
   await form.getByLabel("Account number").fill(number);
   await form.getByRole("button", { name: "Register this account" }).click();
-  await expect(form.getByRole("alert")).toContainText(
-    "The account's reference is required",
-  );
+  await expect(form.getByRole("alert")).toContainText("The account's reference is required");
   await form.getByLabel("Reference").fill(`CUS_e2e_${number}`);
   await form.getByLabel("Bank").fill("Titan Trust Bank");
   for (const scheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
     const vs = await axe(page);
-    expect(
-      vs,
-      describe(
-        `/invoices/${first.number} giving an account number (${scheme})`,
-        vs,
-      ),
-    ).toEqual([]);
+    expect(vs, describe(`/invoices/${first.number} giving an account number (${scheme})`, vs)).toEqual([]);
   }
   await form.getByRole("button", { name: "Register this account" }).click();
-  await expect(
-    page.locator(".toast").filter({ hasText: "Account number registered" }),
-  ).toBeVisible();
+  await expect(page.locator(".toast").filter({ hasText: "Account number registered" })).toBeVisible();
 
   // The panel lists it with its reference, and the form is closed.
   const accounts = money.getByTestId("customer-account");
   await expect(accounts).toHaveCount(1);
-  await expect(accounts.first()).toHaveText(
-    `${number} · Titan Trust Bank (paystack/main), reference CUS_e2e_${number}`,
-  );
+  await expect(accounts.first()).toHaveText(`${number} · Titan Trust Bank (paystack/main), reference CUS_e2e_${number}`);
   await expect(form).toHaveCount(0);
-  expect(
-    sql(
-      `SELECT account_number || ' ' || channel FROM customer_accounts WHERE reference = 'CUS_e2e_${number}'`,
-    ),
-  ).toBe(`${number} paystack/main`);
+  expect(sql(`SELECT account_number || ' ' || channel FROM customer_accounts WHERE reference = 'CUS_e2e_${number}'`)).toBe(`${number} paystack/main`);
 
   // The customer's other invoice shows the same account.
   await page.goto(`/invoices/${second.number}`);
-  await expect(
-    page.getByTestId("customer-money").getByTestId("customer-account"),
-  ).toHaveText(new RegExp(`^${number} `));
+  await expect(page.getByTestId("customer-money").getByTestId("customer-account")).toHaveText(new RegExp(`^${number} `));
 
   // Another customer cannot be given the same account.
-  const other = await sentInvoice(page, {
-    name: "Bola Ade",
-    phone: "+2348031230010",
-  });
+  const other = await sentInvoice(page, { name: "Bola Ade", phone: "+2348031230010" });
   await page.goto(`/invoices/${other.number}`);
   const otherMoney = page.getByTestId("customer-money");
-  await otherMoney
-    .getByRole("button", { name: "Give this customer an account number" })
-    .click();
-  const otherForm = otherMoney.getByRole("form", {
-    name: "Give this customer an account number",
-  });
+  await otherMoney.getByRole("button", { name: "Give this customer an account number" }).click();
+  const otherForm = otherMoney.getByRole("form", { name: "Give this customer an account number" });
   await byHand(otherForm);
   await otherForm.getByLabel("Connection").fill("paystack/main");
   await otherForm.getByLabel("Account number").fill(number);
   await otherForm.getByLabel("Reference").fill(`CUS_e2e_${number}`);
-  await otherForm
-    .getByRole("button", { name: "Register this account" })
-    .click();
-  await expect(otherForm).toContainText(
-    "That account is already another customer's.",
-  );
+  await otherForm.getByRole("button", { name: "Register this account" }).click();
+  await expect(otherForm).toContainText("That account is already another customer's.");
   await expect(otherMoney.getByTestId("customer-account")).toHaveCount(0);
 });

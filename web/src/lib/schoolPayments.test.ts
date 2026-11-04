@@ -34,17 +34,7 @@ const posting: Posting = {
   requested_by: "u1",
   requested_email: "bursar@school.test",
   requested_at: "2026-10-23T09:00:00Z",
-  result: {
-    parts: [
-      {
-        invoice_id: "i1",
-        number: "INV-0007",
-        amount_kobo: 300000000,
-        receipt_number: "RCT-2026T1-0003",
-      },
-    ],
-    credit_kobo: 100000000,
-  },
+  result: { parts: [{ invoice_id: "i1", number: "INV-0007", amount_kobo: 300000000, receipt_number: "RCT-2026T1-0003" }], credit_kobo: 100000000 },
 };
 
 describe("the payment form", () => {
@@ -56,52 +46,20 @@ describe("the payment form", () => {
   });
   it("says what is missing", () => {
     expect(paymentProblem(emptyPayment())).toMatch(/which student/);
-    expect(
-      paymentProblem({ ...emptyPayment("GCA/001"), amount: "0.50" }),
-    ).toMatch(/at least ₦1/);
-    expect(
-      paymentProblem({
-        ...emptyPayment("GCA/001"),
-        amount: "500",
-        date: "23/10/2026",
-      }),
-    ).toMatch(/2026-10-23/);
-    expect(
-      paymentProblem({
-        ...emptyPayment("GCA/001"),
-        amount: "500",
-        note: "x".repeat(201),
-      }),
-    ).toMatch(/200 characters/);
-    expect(
-      paymentProblem({ ...emptyPayment("GCA/001"), amount: "500" }),
-    ).toBeNull();
+    expect(paymentProblem({ ...emptyPayment("GCA/001"), amount: "0.50" })).toMatch(/at least ₦1/);
+    expect(paymentProblem({ ...emptyPayment("GCA/001"), amount: "500", date: "23/10/2026" })).toMatch(/2026-10-23/);
+    expect(paymentProblem({ ...emptyPayment("GCA/001"), amount: "500", note: "x".repeat(201) })).toMatch(/200 characters/);
+    expect(paymentProblem({ ...emptyPayment("GCA/001"), amount: "500" })).toBeNull();
   });
   it("builds the request", () => {
-    expect(
-      paymentRequest({
-        student: " GCA/001 ",
-        amount: "5,000",
-        how: "transfer",
-        date: "2026-10-23",
-        note: " paid at the bank ",
-      }),
-    ).toEqual({
+    expect(paymentRequest({ student: " GCA/001 ", amount: "5,000", how: "transfer", date: "2026-10-23", note: " paid at the bank " })).toEqual({
       student: "GCA/001",
       amount_kobo: 500000,
       how: "transfer",
       date: "2026-10-23",
       note: "paid at the bank",
     });
-    expect(
-      paymentRequest({
-        student: "GCA/001",
-        amount: "500",
-        how: "cash",
-        date: "",
-        note: "",
-      }),
-    ).toEqual({ student: "GCA/001", amount_kobo: 50000, how: "cash" });
+    expect(paymentRequest({ student: "GCA/001", amount: "500", how: "cash", date: "", note: "" })).toEqual({ student: "GCA/001", amount_kobo: 50000, how: "cash" });
   });
 });
 
@@ -110,122 +68,44 @@ describe("words", () => {
     expect(kindWords("cash_posting")).toBe("Cash posting");
     expect(kindWords("term_invoice")).toBe("Term invoice with a discount");
     expect(howWords("pos")).toBe("POS");
-    expect(postingStatus("pending")).toEqual({
-      label: "Waiting for a second person",
-      tone: "pending",
-    });
+    expect(postingStatus("pending")).toEqual({ label: "Waiting for a second person", tone: "pending" });
     expect(postingStatus("declined").label).toBe("Declined");
   });
   it("says what a posting did", () => {
-    expect(postedLine(posting)).toBe(
-      "₦4,000,000 posted: ₦3,000,000 towards INV-0007 (receipt RCT-2026T1-0003); ₦1,000,000 kept as the family's credit.",
-    );
-    expect(postedLine({ ...posting, result: { parts: [] } })).toMatch(
-      /family's credit/,
-    );
-    expect(
-      postedLine({
-        ...posting,
-        result: {
-          parts: [
-            { invoice_id: "a", number: "INV-1", amount_kobo: 100 },
-            { invoice_id: "b", number: "INV-2", amount_kobo: 200 },
-          ],
-        },
-      }),
-    ).toMatch(/2 invoices paid: INV-1 ₦1, INV-2 ₦2/);
+    expect(postedLine(posting)).toBe("₦4,000,000 posted: ₦3,000,000 towards INV-0007 (receipt RCT-2026T1-0003); ₦1,000,000 kept as the family's credit.");
+    expect(postedLine({ ...posting, result: { parts: [] } })).toMatch(/family's credit/);
+    expect(postedLine({ ...posting, result: { parts: [{ invoice_id: "a", number: "INV-1", amount_kobo: 100 }, { invoice_id: "b", number: "INV-2", amount_kobo: 200 }] } })).toMatch(/2 invoices paid: INV-1 ₦1, INV-2 ₦2/);
   });
   it("describes a request for the second person", () => {
-    expect(requestTitle(posting)).toBe(
-      "Cash posting of ₦4,000,000 for GCA/001 (JSS 1 A)",
-    );
-    expect(requestDetails(posting)).toEqual([
-      "Paid cash on 2026-10-23.",
-      "Note: Term fees",
-      "Asked by bursar@school.test.",
-    ]);
-    const disc: Posting = {
-      ...posting,
-      kind: "discount",
-      details: { kind: "staff_child", percent: 50, reason: "Teacher's son" },
-    };
-    expect(requestDetails(disc)[0]).toBe(
-      "A staff child discount, 50% of the school's own fees: Teacher's son",
-    );
-    const am: Posting = {
-      ...posting,
-      kind: "discount_amendment",
-      admission_number: undefined,
-      invoice_number: "INV-0009",
-      details: { reason: "Hardship" },
-    };
-    expect(requestTitle(am)).toBe(
-      "Discount on an invoice of ₦4,000,000 on INV-0009",
-    );
-    const held: Posting = {
-      ...posting,
-      kind: "term_invoice",
-      details: { send: true },
-    };
+    expect(requestTitle(posting)).toBe("Cash posting of ₦4,000,000 for GCA/001 (JSS 1 A)");
+    expect(requestDetails(posting)).toEqual(["Paid cash on 2026-10-23.", "Note: Term fees", "Asked by bursar@school.test."]);
+    const disc: Posting = { ...posting, kind: "discount", details: { kind: "staff_child", percent: 50, reason: "Teacher's son" } };
+    expect(requestDetails(disc)[0]).toBe("A staff child discount, 50% of the school's own fees: Teacher's son");
+    const am: Posting = { ...posting, kind: "discount_amendment", admission_number: undefined, invoice_number: "INV-0009", details: { reason: "Hardship" } };
+    expect(requestTitle(am)).toBe("Discount on an invoice of ₦4,000,000 on INV-0009");
+    const held: Posting = { ...posting, kind: "term_invoice", details: { send: true } };
     expect(requestDetails(held)[0]).toMatch(/sent on approval/);
   });
   it("says how it was decided", () => {
-    expect(
-      decisionLine({ ...posting, decided_email: "owner@school.test" }),
-    ).toBe("Approved by owner@school.test.");
-    expect(
-      decisionLine({
-        ...posting,
-        status: "declined",
-        decided_by: "u2",
-        decision_reason: "No cash",
-      }),
-    ).toBe("Declined by u2: No cash");
+    expect(decisionLine({ ...posting, decided_email: "owner@school.test" })).toBe("Approved by owner@school.test.");
+    expect(decisionLine({ ...posting, status: "declined", decided_by: "u2", decision_reason: "No cash" })).toBe("Declined by u2: No cash");
     expect(decisionLine({ ...posting, status: "pending" })).toBe("");
   });
   it("recognises a request recorded for approval", () => {
-    expect(
-      isApprovalNeeded({
-        code: "needs_approval",
-        error: "x",
-        request: posting,
-      }),
-    ).toBe(true);
+    expect(isApprovalNeeded({ code: "needs_approval", error: "x", request: posting })).toBe(true);
     expect(isApprovalNeeded({ posting })).toBe(false);
     expect(isApprovalNeeded(null)).toBe(false);
   });
   it("words a match of money entered by hand that waits for a second person", () => {
-    const req: Posting = {
-      ...posting,
-      kind: "cash_match",
-      status: "pending",
-      invoice_number: "INV-0101",
-      amount_kobo: 6_000_000,
-      details: { entry_id: "e1" },
-    };
-    expect(
-      heldMatchLine({ code: "needs_approval", error: "x", request: req }),
-    ).toContain("waits for a second person");
+    const req: Posting = { ...posting, kind: "cash_match", status: "pending", invoice_number: "INV-0101", amount_kobo: 6_000_000, details: { entry_id: "e1" } };
+    expect(heldMatchLine({ code: "needs_approval", error: "x", request: req })).toContain("waits for a second person");
     expect(heldMatchLine({ parts: [] })).toBeNull();
-    expect(kindWords("cash_match")).toBe(
-      "Money entered by hand, matched to an invoice",
-    );
+    expect(kindWords("cash_match")).toBe("Money entered by hand, matched to an invoice");
     expect(requestDetails(req)[0]).toContain("INV-0101");
   });
   it("says a line taken out is what waits", () => {
-    const req: Posting = {
-      ...posting,
-      kind: "discount_amendment",
-      status: "pending",
-      invoice_number: "INV-0101",
-      details: {
-        amendment: { kind: "remove", line: 0 },
-        reason: "Left the bus",
-      },
-    };
-    expect(requestDetails(req)[0]).toBe(
-      "A line taken out of invoice INV-0101: Left the bus",
-    );
+    const req: Posting = { ...posting, kind: "discount_amendment", status: "pending", invoice_number: "INV-0101", details: { amendment: { kind: "remove", line: 0 }, reason: "Left the bus" } };
+    expect(requestDetails(req)[0]).toBe("A line taken out of invoice INV-0101: Left the bus");
   });
 });
 

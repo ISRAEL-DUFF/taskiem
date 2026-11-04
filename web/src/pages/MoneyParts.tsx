@@ -7,27 +7,11 @@ import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { naira, channelWords } from "../lib/invoices";
 import type { ChannelSummary } from "../lib/money";
-import {
-  bucketLong,
-  bucketShort,
-  dayLine,
-  hourWords,
-  linePath,
-  openBucket,
-  type MoneyBucket,
-} from "../lib/moneyChart";
+import { bucketLong, bucketShort, dayLine, hourWords, linePath, openBucket, type MoneyBucket } from "../lib/moneyChart";
 import { useCountUp } from "../ui";
 
 /** Home's card: money in today, the day's line, money out and what waits to be matched. */
-export function MoneyCard({
-  inKobo,
-  payments,
-  outKobo,
-  buckets,
-  toMatch,
-  label = "Money in today",
-  to = "/money",
-}: {
+export function MoneyCard({ inKobo, payments, outKobo, buckets, toMatch, label = "Money in today", to = "/money" }: {
   inKobo: number;
   payments: number;
   outKobo?: number;
@@ -48,24 +32,12 @@ export function MoneyCard({
       <Link className="money-card-amount" to={to}>
         {naira(shown)}
       </Link>
-      <p className="money-card-sub">
-        {payments === 1 ? "1 payment" : `${payments} payments`}
-      </p>
+      <p className="money-card-sub">{payments === 1 ? "1 payment" : `${payments} payments`}</p>
       {line && path && (
         <>
-          <svg
-            className="money-line"
-            role="img"
-            aria-label={`Money in through the day, ${naira(line.points[line.points.length - 1] ?? 0)} by ${hourWords(line.end + 1)}`}
-            viewBox="0 0 300 56"
-            preserveAspectRatio="none"
-          >
+          <svg className="money-line" role="img" aria-label={`Money in through the day, ${naira(line.points[line.points.length - 1] ?? 0)} by ${hourWords(line.end + 1)}`} viewBox="0 0 300 56" preserveAspectRatio="none">
             <path d={path.area} className="area" />
-            <polyline
-              points={path.line}
-              className="stroke"
-              vectorEffect="non-scaling-stroke"
-            />
+            <polyline points={path.line} className="stroke" vectorEffect="non-scaling-stroke" />
           </svg>
           <div className="money-line-ends" aria-hidden="true">
             <span>{hourWords(line.start)}</span>
@@ -85,10 +57,7 @@ export function MoneyCard({
             <div>
               <dt>To match</dt>
               <dd>
-                <Link
-                  to="/invoices/match"
-                  className={toMatch > 0 ? "lime" : undefined}
-                >
+                <Link to="/invoices/match" className={toMatch > 0 ? "lime" : undefined}>
                   {toMatch === 1 ? "1 payment" : `${toMatch} payments`}
                 </Link>
               </dd>
@@ -101,25 +70,13 @@ export function MoneyCard({
 }
 
 /** A period's money in and out as bars, one pair per day (or hour); pressing a bar shows its figures. Up to 14 bars can be pressed; more are drawn, with the figures in the table under them. */
-export function MoneyBars({
-  buckets,
-  unit,
-  caption,
-}: {
-  buckets: MoneyBucket[];
-  unit: string;
-  caption: string;
-}) {
+export function MoneyBars({ buckets, unit, caption }: { buckets: MoneyBucket[]; unit: string; caption: string }) {
   const [picked, setPicked] = useState(() => openBucket(buckets));
   if (buckets.length === 0) return null;
-  const max = Math.max(
-    1,
-    ...buckets.map((b) => Math.max(b.in_settled_kobo, b.out_settled_kobo)),
-  );
+  const max = Math.max(1, ...buckets.map((b) => Math.max(b.in_settled_kobo, b.out_settled_kobo)));
   const pressable = buckets.length <= 14;
   const at = buckets[picked] ?? buckets[buckets.length - 1];
-  const h = (k: number) =>
-    `${Math.max(k > 0 ? 3 : 0, Math.round((112 * k) / max))}px`;
+  const h = (k: number) => `${Math.max(k > 0 ? 3 : 0, Math.round((112 * k) / max))}px`;
   const bars = (b: MoneyBucket): ReactNode => (
     <>
       <span className="bar in" style={{ height: h(b.in_settled_kobo) }} />
@@ -136,23 +93,10 @@ export function MoneyBars({
           </span>
         </p>
       )}
-      <div
-        className={`money-bars-plot${pressable ? "" : " many"}`}
-        style={{
-          gridTemplateColumns: `repeat(${buckets.length}, minmax(0, 1fr))`,
-        }}
-        aria-hidden={pressable ? undefined : true}
-      >
+      <div className={`money-bars-plot${pressable ? "" : " many"}`} style={{ gridTemplateColumns: `repeat(${buckets.length}, minmax(0, 1fr))` }} aria-hidden={pressable ? undefined : true}>
         {buckets.map((b, i) =>
           pressable ? (
-            <button
-              key={b.from}
-              type="button"
-              className="money-bar"
-              aria-pressed={i === picked}
-              aria-label={`${bucketLong(b, unit)}: in ${naira(b.in_settled_kobo)}, out ${naira(b.out_settled_kobo)}`}
-              onClick={() => setPicked(i)}
-            >
+            <button key={b.from} type="button" className="money-bar" aria-pressed={i === picked} aria-label={`${bucketLong(b, unit)}: in ${naira(b.in_settled_kobo)}, out ${naira(b.out_settled_kobo)}`} onClick={() => setPicked(i)}>
               {bars(b)}
             </button>
           ) : (
@@ -162,21 +106,10 @@ export function MoneyBars({
           ),
         )}
       </div>
-      <div
-        className="money-bars-days"
-        aria-hidden="true"
-        style={{
-          gridTemplateColumns: `repeat(${buckets.length}, minmax(0, 1fr))`,
-        }}
-      >
+      <div className="money-bars-days" aria-hidden="true" style={{ gridTemplateColumns: `repeat(${buckets.length}, minmax(0, 1fr))` }}>
         {buckets.map((b, i) => (
-          <span
-            key={b.from}
-            className={i === picked && pressable ? "on" : undefined}
-          >
-            {buckets.length > 14 && i % Math.ceil(buckets.length / 7) !== 0
-              ? ""
-              : bucketShort(b, unit)}
+          <span key={b.from} className={i === picked && pressable ? "on" : undefined}>
+            {buckets.length > 14 && i % Math.ceil(buckets.length / 7) !== 0 ? "" : bucketShort(b, unit)}
           </span>
         ))}
       </div>
@@ -209,13 +142,7 @@ export function MoneyBars({
 }
 
 /** Where a period's money in came from: each account's share of it. */
-export function MoneySources({
-  channels,
-  total,
-}: {
-  channels: ChannelSummary[];
-  total: number;
-}) {
+export function MoneySources({ channels, total }: { channels: ChannelSummary[]; total: number }) {
   const from = channels.filter((c) => c.in_settled_kobo > 0);
   if (from.length === 0 || total <= 0) return null;
   return (
@@ -230,11 +157,7 @@ export function MoneySources({
                 <span>{channelWords(c.channel)}</span>
                 <span className="num">{naira(c.in_settled_kobo)}</span>
               </div>
-              <div
-                className="share"
-                role="img"
-                aria-label={`${share}% of the money in`}
-              >
+              <div className="share" role="img" aria-label={`${share}% of the money in`}>
                 <span style={{ width: `${Math.max(2, share)}%` }} />
               </div>
             </li>

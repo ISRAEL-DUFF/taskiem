@@ -1,30 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import {
-  currentAgentSession,
-  del,
-  get,
-  patch,
-  post,
-  put,
-  upload,
-} from "../api";
+import { currentAgentSession, del, get, patch, post, put, upload } from "../api";
 import { useAuth } from "../auth";
 import { Help } from "../onboarding";
-import {
-  Badge,
-  EmptyState,
-  ErrorBox,
-  Field,
-  Modal,
-  PageHeader,
-  Skeleton,
-  fmtTime,
-  useAction,
-  useLoad,
-  Item,
-  Items,
-} from "../ui";
+import { Badge, EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad, Item, Items } from "../ui";
 import { Icon } from "../icons";
 import {
   COLUMN_TYPES,
@@ -75,11 +54,7 @@ export function Tables() {
         actions={
           edit && (
             <>
-              <button
-                className="primary"
-                disabled={!!unavailable}
-                onClick={() => setAdding(true)}
-              >
+              <button className="primary" disabled={!!unavailable} onClick={() => setAdding(true)}>
                 <Icon name="plus" />
                 New table
               </button>
@@ -91,9 +66,7 @@ export function Tables() {
       <Help topic="tables" />
       {unavailable && (
         <div className="notice">
-          Data tables are not available on this Taskiem: no Xenibase is
-          configured. An owner can bring the organisation's own Xenibase project
-          below.
+          Data tables are not available on this Taskiem: no Xenibase is configured. An owner can bring the organisation's own Xenibase project below.
         </div>
       )}
       <ErrorBox error={list.error} />
@@ -110,9 +83,7 @@ export function Tables() {
             )
           }
         >
-          A table holds rows of records, such as your debtors with their phone
-          numbers and balances. Workflows read and write it like any Xenibase
-          table.
+          A table holds rows of records, such as your debtors with their phone numbers and balances. Workflows read and write it like any Xenibase table.
         </EmptyState>
       )}
       {list.data && list.data.tables.length > 0 && (
@@ -125,13 +96,7 @@ export function Tables() {
               icon="tables"
               tone={isKept(t) ? "muted" : undefined}
               title={t.title || t.name}
-              side={
-                t.row_count === undefined
-                  ? undefined
-                  : t.row_count === 1
-                    ? "1 row"
-                    : `${t.row_count.toLocaleString()} rows`
-              }
+              side={t.row_count === undefined ? undefined : t.row_count === 1 ? "1 row" : `${t.row_count.toLocaleString()} rows`}
               sub={t.columns.map((c) => c.name).join(", ")}
               sideSub={
                 <>
@@ -144,70 +109,28 @@ export function Tables() {
           ))}
         </Items>
       )}
-      {adding && (
-        <NewTable
-          onClose={() => setAdding(false)}
-          onDone={() => (setAdding(false), list.reload(), status.reload())}
-        />
-      )}
-      {can("connection.manage") && status.data && (
-        <ProjectSettings
-          status={status.data}
-          tables={list.data?.tables.length ?? 0}
-          onChange={() => (status.reload(), list.reload())}
-        />
-      )}
+      {adding && <NewTable onClose={() => setAdding(false)} onDone={() => (setAdding(false), list.reload(), status.reload())} />}
+      {can("connection.manage") && status.data && <ProjectSettings status={status.data} tables={list.data?.tables.length ?? 0} onChange={() => (status.reload(), list.reload())} />}
     </>
   );
 }
 
 /** The columns builder, shared by the new-table form and the add-column form. */
-function ColumnsEditor({
-  columns,
-  onChange,
-  errors,
-}: {
-  columns: Column[];
-  onChange: (c: Column[]) => void;
-  errors: Map<number, string>;
-}) {
-  const set = (i: number, patchValue: Partial<Column>) =>
-    onChange(columns.map((c, j) => (j === i ? { ...c, ...patchValue } : c)));
+function ColumnsEditor({ columns, onChange, errors }: { columns: Column[]; onChange: (c: Column[]) => void; errors: Map<number, string> }) {
+  const set = (i: number, patchValue: Partial<Column>) => onChange(columns.map((c, j) => (j === i ? { ...c, ...patchValue } : c)));
   return (
     <div>
       {columns.map((c, i) => (
         <div key={i} className="card" style={{ marginBottom: 8, padding: 12 }}>
-          <div
-            className="row"
-            style={{ alignItems: "flex-end", flexWrap: "wrap", gap: 8 }}
-          >
+          <div className="row" style={{ alignItems: "flex-end", flexWrap: "wrap", gap: 8 }}>
             <Field label="Name" hint={errors.get(i)}>
-              <input
-                value={c.name}
-                placeholder="balance_kobo"
-                onChange={(e) => set(i, { name: e.target.value.trim() })}
-                required
-              />
+              <input value={c.name} placeholder="balance_kobo" onChange={(e) => set(i, { name: e.target.value.trim() })} required />
             </Field>
             <Field label="Title">
-              <input
-                value={c.title}
-                placeholder="Balance (kobo)"
-                onChange={(e) => set(i, { title: e.target.value })}
-              />
+              <input value={c.title} placeholder="Balance (kobo)" onChange={(e) => set(i, { title: e.target.value })} />
             </Field>
             <Field label="Type" hint={TYPE_HELP[c.type]}>
-              <select
-                value={c.type}
-                onChange={(e) =>
-                  set(i, {
-                    type: e.target.value as Column["type"],
-                    personal: personalByDefault(
-                      e.target.value as Column["type"],
-                    ),
-                  })
-                }
-              >
+              <select value={c.type} onChange={(e) => set(i, { type: e.target.value as Column["type"], personal: personalByDefault(e.target.value as Column["type"]) })}>
                 {COLUMN_TYPES.map((t) => (
                   <option key={t} value={t}>
                     {t}
@@ -215,35 +138,14 @@ function ColumnsEditor({
                 ))}
               </select>
             </Field>
-            <label
-              className="hint"
-              style={{ display: "flex", gap: 4, alignItems: "center" }}
-            >
-              <input
-                type="checkbox"
-                checked={c.required}
-                onChange={(e) => set(i, { required: e.target.checked })}
-              />{" "}
-              required
+            <label className="hint" style={{ display: "flex", gap: 4, alignItems: "center" }}>
+              <input type="checkbox" checked={c.required} onChange={(e) => set(i, { required: e.target.checked })} /> required
             </label>
-            <label
-              className="hint"
-              style={{ display: "flex", gap: 4, alignItems: "center" }}
-            >
-              <input
-                type="checkbox"
-                checked={c.personal}
-                onChange={(e) => set(i, { personal: e.target.checked })}
-              />{" "}
-              personal data
+            <label className="hint" style={{ display: "flex", gap: 4, alignItems: "center" }}>
+              <input type="checkbox" checked={c.personal} onChange={(e) => set(i, { personal: e.target.checked })} /> personal data
             </label>
             {columns.length > 1 && (
-              <button
-                type="button"
-                className="icon-button"
-                aria-label={`Remove column ${c.name || i + 1}`}
-                onClick={() => onChange(columns.filter((_, j) => j !== i))}
-              >
+              <button type="button" className="icon-button" aria-label={`Remove column ${c.name || i + 1}`} onClick={() => onChange(columns.filter((_, j) => j !== i))}>
                 <Icon name="close" />
               </button>
             )}
@@ -258,24 +160,14 @@ function ColumnsEditor({
   );
 }
 
-function NewTable({
-  onClose,
-  onDone,
-}: {
-  onClose: () => void;
-  onDone: () => void;
-}) {
+function NewTable({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [columns, setColumns] = useState<Column[]>([
-    { ...newColumn(), name: "name", title: "Name", required: true },
-  ]);
+  const [columns, setColumns] = useState<Column[]>([{ ...newColumn(), name: "name", title: "Name", required: true }]);
   const act = useAction();
   const problems = columnErrors(columns);
-  const errors = new Map(
-    problems.filter((p) => p.index >= 0).map((p) => [p.index, p.message]),
-  );
+  const errors = new Map(problems.filter((p) => p.index >= 0).map((p) => [p.index, p.message]));
   const nameBad = name ? nameError(name) : null;
   const ok = !nameBad && name !== "" && problems.length === 0;
   return (
@@ -284,61 +176,28 @@ function NewTable({
         onSubmit={(e) => {
           e.preventDefault();
           if (!ok) return;
-          void act.run(
-            async () => (
-              await post("/v1/tables", { name, title, description, columns }),
-              onDone()
-            ),
-            "Table made",
-          );
+          void act.run(async () => (await post("/v1/tables", { name, title, description, columns }), onDone()), "Table made");
         }}
       >
-        <p className="hint">
-          The first table makes your organisation's data project, which takes a
-          minute or two. Every table gets an id, created_at and updated_at.
-        </p>
+        <p className="hint">The first table makes your organisation's data project, which takes a minute or two. Every table gets an id, created_at and updated_at.</p>
         <div className="row">
-          <Field
-            label="Name"
-            hint={
-              nameBad ??
-              "Lower-case letters, digits and underscores, e.g. debtors"
-            }
-          >
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value.trim())}
-              required
-              autoFocus
-            />
+          <Field label="Name" hint={nameBad ?? "Lower-case letters, digits and underscores, e.g. debtors"}>
+            <input value={name} onChange={(e) => setName(e.target.value.trim())} required autoFocus />
           </Field>
           <Field label="Title">
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Debtors"
-            />
+            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Debtors" />
           </Field>
         </div>
         <Field label="Description">
-          <input
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-          />
+          <input value={description} onChange={(e) => setDescription(e.target.value)} />
         </Field>
         <h3>Columns</h3>
-        <ColumnsEditor
-          columns={columns}
-          onChange={setColumns}
-          errors={errors}
-        />
-        {problems
-          .filter((p) => p.index < 0)
-          .map((p) => (
-            <div key={p.message} className="error-text">
-              {p.message}
-            </div>
-          ))}
+        <ColumnsEditor columns={columns} onChange={setColumns} errors={errors} />
+        {problems.filter((p) => p.index < 0).map((p) => (
+          <div key={p.message} className="error-text">
+            {p.message}
+          </div>
+        ))}
         <ErrorBox error={act.error} />
         <div className="toolbar">
           <button type="submit" className="primary" disabled={act.busy || !ok}>
@@ -354,53 +213,27 @@ function NewTable({
 }
 
 /** Settings > Data tables: the project's state and "use my own Xenibase project". */
-function ProjectSettings({
-  status,
-  tables,
-  onChange,
-}: {
-  status: TablesStatus;
-  tables: number;
-  onChange: () => void;
-}) {
-  const conns = useLoad(
-    () => get<{ connections: Conn[] }>("/v1/connections"),
-    [],
-  );
+function ProjectSettings({ status, tables, onChange }: { status: TablesStatus; tables: number; onChange: () => void }) {
+  const conns = useLoad(() => get<{ connections: Conn[] }>("/v1/connections"), []);
   const [chosen, setChosen] = useState("");
   const act = useAction();
-  const own =
-    conns.data?.connections.filter(
-      (c) =>
-        c.connector === "xenibase" &&
-        c.environment === "prod" &&
-        !c.provisioned_by,
-    ) ?? [];
+  const own = conns.data?.connections.filter((c) => c.connector === "xenibase" && c.environment === "prod" && !c.provisioned_by) ?? [];
   return (
     <section className="card" style={{ marginTop: 24 }}>
       <h2>Data project</h2>
       <p className="hint">
-        Tables live in a Xenibase project, one per organisation. Taskiem makes
-        it on the first table in the platform's Xenibase and keeps its
-        connection, named <code>data_tables</code>, up to date. You may bring
-        your own project instead, before any table exists.
+        Tables live in a Xenibase project, one per organisation. Taskiem makes it on the first table in the platform's Xenibase and keeps its connection, named <code>data_tables</code>, up to date. You may bring your own project instead, before any table exists.
       </p>
       <dl className="kv">
         <dt>State</dt>
         <dd>
-          <Badge value={status.status === "ready" ? "ok" : status.status} />{" "}
-          {status.own
-            ? "your own project"
-            : status.status === "none"
-              ? "made on the first table"
-              : "provisioned by Taskiem"}
+          <Badge value={status.status === "ready" ? "ok" : status.status} /> {status.own ? "your own project" : status.status === "none" ? "made on the first table" : "provisioned by Taskiem"}
         </dd>
         {status.project_ref && (
           <>
             <dt>Project</dt>
             <dd>
-              <code>{status.project_ref}</code>{" "}
-              {status.api_url && <span className="hint">{status.api_url}</span>}
+              <code>{status.project_ref}</code> {status.api_url && <span className="hint">{status.api_url}</span>}
             </dd>
           </>
         )}
@@ -408,12 +241,7 @@ function ProjectSettings({
           <>
             <dt>Token expires</dt>
             <dd>
-              {fmtTime(status.token_expires_at)}{" "}
-              {!status.own && (
-                <span className="hint">
-                  (renewed by Taskiem two weeks before)
-                </span>
-              )}
+              {fmtTime(status.token_expires_at)} {!status.own && <span className="hint">(renewed by Taskiem two weeks before)</span>}
             </dd>
           </>
         )}
@@ -431,19 +259,10 @@ function ProjectSettings({
           onSubmit={(e) => {
             e.preventDefault();
             if (!chosen) return;
-            void act.run(
-              async () => (
-                await put("/v1/tables/project", { connection_id: chosen }),
-                onChange()
-              ),
-              "Saved",
-            );
+            void act.run(async () => (await put("/v1/tables/project", { connection_id: chosen }), onChange()), "Saved");
           }}
         >
-          <Field
-            label="Use my own Xenibase project"
-            hint="A xenibase connection in prod with the project's secret key and data API URL; it is tested first."
-          >
+          <Field label="Use my own Xenibase project" hint="A xenibase connection in prod with the project's secret key and data API URL; it is tested first.">
             <select value={chosen} onChange={(e) => setChosen(e.target.value)}>
               <option value="">Choose a connection…</option>
               {own.map((c) => (
@@ -488,9 +307,7 @@ export function TablePage() {
           <>
             <code>{t.name}</code>
             {t.description ? ` · ${t.description}` : ""}
-            {t.row_count !== undefined
-              ? ` · about ${t.row_count.toLocaleString()} rows`
-              : ""}
+            {t.row_count !== undefined ? ` · about ${t.row_count.toLocaleString()} rows` : ""}
           </>
         }
         actions={
@@ -527,60 +344,31 @@ export function TablePage() {
               <th>Type</th>
               <th>Required</th>
               <th>Personal</th>
-              {edit && (
-                <th>
-                  <span className="sr-only">Actions</span>
-                </th>
-              )}
+              {edit && <th><span className="sr-only">Actions</span></th>}
             </tr>
           </thead>
           <tbody>
             {t.columns.map((c) => (
-              <ColumnRow
-                key={c.name}
-                table={t}
-                column={c}
-                edit={edit}
-                onChanged={table.reload}
-              />
+              <ColumnRow key={c.name} table={t} column={c} edit={edit} onChanged={table.reload} />
             ))}
           </tbody>
         </table>
       </section>
       <UseInWorkflow table={t} />
-      {adding && (
-        <AddColumn
-          table={t}
-          onClose={() => setAdding(false)}
-          onDone={() => (setAdding(false), table.reload())}
-        />
-      )}
+      {adding && <AddColumn table={t} onClose={() => setAdding(false)} onDone={() => (setAdding(false), table.reload())} />}
       {deleting && (
         <ConfirmDelete
           what={`the table ${t.name} and every row`}
           name={t.name}
           onClose={() => setDeleting(false)}
-          run={async () => (
-            await del(`/v1/tables/${t.id}`, { confirm: t.name }),
-            navigate("/tables")
-          )}
+          run={async () => (await del(`/v1/tables/${t.id}`, { confirm: t.name }), navigate("/tables"))}
         />
       )}
     </>
   );
 }
 
-function ColumnRow({
-  table,
-  column,
-  edit,
-  onChanged,
-}: {
-  table: Table;
-  column: Column;
-  edit: boolean;
-  onChanged: () => void;
-}) {
+function ColumnRow({ table, column, edit, onChanged }: { table: Table; column: Column; edit: boolean; onChanged: () => void }) {
   const [dropping, setDropping] = useState(false);
   return (
     <tr>
@@ -599,13 +387,7 @@ function ColumnRow({
               what={`the column ${column.name} and its data`}
               name={column.name}
               onClose={() => setDropping(false)}
-              run={async () => (
-                await del(`/v1/tables/${table.id}/columns/${column.name}`, {
-                  confirm: column.name,
-                }),
-                setDropping(false),
-                onChanged()
-              )}
+              run={async () => (await del(`/v1/tables/${table.id}/columns/${column.name}`, { confirm: column.name }), setDropping(false), onChanged())}
             />
           )}
         </td>
@@ -614,53 +396,24 @@ function ColumnRow({
   );
 }
 
-function AddColumn({
-  table,
-  onClose,
-  onDone,
-}: {
-  table: Table;
-  onClose: () => void;
-  onDone: () => void;
-}) {
+function AddColumn({ table, onClose, onDone }: { table: Table; onClose: () => void; onDone: () => void }) {
   const [column, setColumn] = useState<Column>(newColumn());
   const act = useAction();
-  const bad = column.name
-    ? (nameError(column.name) ??
-      (table.columns.some((c) => c.name === column.name)
-        ? "the table already has this column"
-        : null))
-    : null;
+  const bad = column.name ? (nameError(column.name) ?? (table.columns.some((c) => c.name === column.name) ? "the table already has this column" : null)) : null;
   return (
     <Modal title="Add a column" onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
           if (bad || !column.name) return;
-          void act.run(
-            async () => (
-              await post(`/v1/tables/${table.id}/columns`, column),
-              onDone()
-            ),
-            "Column added",
-          );
+          void act.run(async () => (await post(`/v1/tables/${table.id}/columns`, column), onDone()), "Column added");
         }}
       >
-        <p className="hint">
-          A required column cannot be added once the table has rows.
-        </p>
-        <ColumnsEditor
-          columns={[column]}
-          onChange={(cs) => setColumn(cs[0] ?? newColumn())}
-          errors={new Map(bad ? [[0, bad]] : [])}
-        />
+        <p className="hint">A required column cannot be added once the table has rows.</p>
+        <ColumnsEditor columns={[column]} onChange={(cs) => setColumn(cs[0] ?? newColumn())} errors={new Map(bad ? [[0, bad]] : [])} />
         <ErrorBox error={act.error} />
         <div className="toolbar">
-          <button
-            type="submit"
-            className="primary"
-            disabled={act.busy || !!bad || !column.name}
-          >
+          <button type="submit" className="primary" disabled={act.busy || !!bad || !column.name}>
             Add
           </button>
           <button type="button" onClick={onClose}>
@@ -673,24 +426,13 @@ function AddColumn({
 }
 
 /** A typed confirmation, as Xenibase's own editor asks for drops. */
-function ConfirmDelete({
-  what,
-  name,
-  onClose,
-  run,
-}: {
-  what: string;
-  name: string;
-  onClose: () => void;
-  run: () => Promise<unknown>;
-}) {
+function ConfirmDelete({ what, name, onClose, run }: { what: string; name: string; onClose: () => void; run: () => Promise<unknown> }) {
   const [typed, setTyped] = useState("");
   const act = useAction();
   return (
     <Modal title="Delete" onClose={onClose}>
       <p>
-        This deletes {what}. There is no undo. Type <code>{name}</code> to
-        confirm.
+        This deletes {what}. There is no undo. Type <code>{name}</code> to confirm.
       </p>
       <form
         onSubmit={(e) => {
@@ -700,19 +442,11 @@ function ConfirmDelete({
         }}
       >
         <Field label="Name">
-          <input
-            value={typed}
-            onChange={(e) => setTyped(e.target.value)}
-            autoFocus
-          />
+          <input value={typed} onChange={(e) => setTyped(e.target.value)} autoFocus />
         </Field>
         <ErrorBox error={act.error} />
         <div className="toolbar">
-          <button
-            type="submit"
-            className="primary danger"
-            disabled={act.busy || typed !== name}
-          >
+          <button type="submit" className="primary danger" disabled={act.busy || typed !== name}>
             Delete
           </button>
           <button type="button" onClick={onClose}>
@@ -725,24 +459,13 @@ function ConfirmDelete({
 }
 
 /** The rows grid: pages, search, inline add, edit and delete, CSV import and export. */
-function Rows({
-  table,
-  edit,
-  onChanged,
-}: {
-  table: Table;
-  edit: boolean;
-  onChanged: () => void;
-}) {
+function Rows({ table, edit, onChanged }: { table: Table; edit: boolean; onChanged: () => void }) {
   const [q, setQ] = useState("");
   const [search, setSearch] = useState("");
   const [cursors, setCursors] = useState<string[]>([]); // the cursors of the pages before this one
   const cursor = cursors[cursors.length - 1] ?? "";
   const page = useLoad(
-    () =>
-      get<{ rows: Row[]; next_cursor: string | null }>(
-        `/v1/tables/${table.id}/rows?limit=50${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}${search ? `&q=${encodeURIComponent(search)}` : ""}`,
-      ),
+    () => get<{ rows: Row[]; next_cursor: string | null }>(`/v1/tables/${table.id}/rows?limit=50${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}${search ? `&q=${encodeURIComponent(search)}` : ""}`),
     [table.id, cursor, search, table.updated_at],
   );
   const [editing, setEditing] = useState<Row | null>(null);
@@ -754,9 +477,7 @@ function Rows({
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const act = useAction();
   const reload = () => (page.reload(), onChanged());
-  const textColumns = table.columns.filter(
-    (c) => c.type === "text" || c.type === "phone" || c.type === "email",
-  );
+  const textColumns = table.columns.filter((c) => c.type === "text" || c.type === "phone" || c.type === "email");
   const header = ["id", ...table.columns.map((c) => c.name)];
   useEffect(() => {
     setFileError(null);
@@ -780,17 +501,7 @@ function Rows({
             setSearch(q);
           }}
         >
-          <input
-            type="search"
-            value={q}
-            placeholder={
-              textColumns.length > 0
-                ? `Search ${textColumns[0]?.name} (or column:text)`
-                : "Search column:text"
-            }
-            onChange={(e) => setQ(e.target.value)}
-            aria-label="Search rows"
-          />
+          <input type="search" value={q} placeholder={textColumns.length > 0 ? `Search ${textColumns[0]?.name} (or column:text)` : "Search column:text"} onChange={(e) => setQ(e.target.value)} aria-label="Search rows" />
           <button>Search</button>
         </form>
         {edit && (
@@ -801,11 +512,7 @@ function Rows({
         )}
         {/* Agents may not export a business's table (docs/agents.md). */}
         {!currentAgentSession() && (
-          <a
-            className="button"
-            href={`/v1/tables/${table.id}/export`}
-            download={`${table.name}.csv`}
-          >
+          <a className="button" href={`/v1/tables/${table.id}/export`} download={`${table.name}.csv`}>
             Export CSV
           </a>
         )}
@@ -817,13 +524,9 @@ function Rows({
               if (!file || fileError) return;
               const form = new FormData();
               form.append("file", file);
-              if (Object.keys(mapping).length > 0)
-                form.append("mapping", JSON.stringify(mapping));
+              if (Object.keys(mapping).length > 0) form.append("mapping", JSON.stringify(mapping));
               void act.run(async () => {
-                const out = await upload<{ imported: number; rows: number }>(
-                  `/v1/tables/${table.id}/import`,
-                  form,
-                );
+                const out = await upload<{ imported: number; rows: number }>(`/v1/tables/${table.id}/import`, form);
                 setFile(null);
                 (e.target as HTMLFormElement).reset();
                 reload();
@@ -831,27 +534,12 @@ function Rows({
               }, "Imported");
             }}
           >
-            <Field
-              label="Import CSV"
-              hint={
-                fileError ??
-                "A header row naming the columns, in any case; up to 5,000 rows"
-              }
-            >
-              <input
-                type="file"
-                accept=".csv,text/csv"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              />
+            <Field label="Import CSV" hint={fileError ?? "A header row naming the columns, in any case; up to 5,000 rows"}>
+              <input type="file" accept=".csv,text/csv" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
             </Field>
             {unmatched.map((h) => (
               <Field key={h} label={`“${h}” goes in`}>
-                <select
-                  value={mapping[h] ?? "__ask"}
-                  onChange={(e) =>
-                    setMapping({ ...mapping, [h]: e.target.value })
-                  }
-                >
+                <select value={mapping[h] ?? "__ask"} onChange={(e) => setMapping({ ...mapping, [h]: e.target.value })}>
                   <option value="__ask" disabled>
                     Choose a column…
                   </option>
@@ -870,11 +558,7 @@ function Rows({
       </div>
       <ErrorBox error={page.error ?? act.error} />
       {!page.data && !page.error && <Skeleton />}
-      {page.data && page.data.rows.length === 0 && (
-        <div className="empty">
-          {search ? "No rows match." : "No rows yet."}
-        </div>
-      )}
+      {page.data && page.data.rows.length === 0 && <div className="empty">{search ? "No rows match." : "No rows yet."}</div>}
       {page.data && page.data.rows.length > 0 && (
         <table>
           <thead>
@@ -882,11 +566,7 @@ function Rows({
               {header.map((h) => (
                 <th key={h}>{h}</th>
               ))}
-              {edit && (
-                <th>
-                  <span className="sr-only">Actions</span>
-                </th>
-              )}
+              {edit && <th><span className="sr-only">Actions</span></th>}
             </tr>
           </thead>
           <tbody>
@@ -901,17 +581,8 @@ function Rows({
                     <button
                       disabled={act.busy}
                       onClick={() => {
-                        if (!window.confirm(`Delete row ${String(r.id)}?`))
-                          return;
-                        void act.run(
-                          async () => (
-                            await del(
-                              `/v1/tables/${table.id}/rows/${String(r.id)}`,
-                            ),
-                            reload()
-                          ),
-                          "Row deleted",
-                        );
+                        if (!window.confirm(`Delete row ${String(r.id)}?`)) return;
+                        void act.run(async () => (await del(`/v1/tables/${table.id}/rows/${String(r.id)}`), reload()), "Row deleted");
                       }}
                     >
                       Delete
@@ -925,19 +596,10 @@ function Rows({
       )}
       {page.data && (cursors.length > 0 || page.data.next_cursor) && (
         <div className="toolbar">
-          <button
-            disabled={cursors.length === 0}
-            onClick={() => setCursors(cursors.slice(0, -1))}
-          >
+          <button disabled={cursors.length === 0} onClick={() => setCursors(cursors.slice(0, -1))}>
             Previous
           </button>
-          <button
-            disabled={!page.data.next_cursor}
-            onClick={() =>
-              page.data?.next_cursor &&
-              setCursors([...cursors, page.data.next_cursor])
-            }
-          >
+          <button disabled={!page.data.next_cursor} onClick={() => page.data?.next_cursor && setCursors([...cursors, page.data.next_cursor])}>
             Next
           </button>
         </div>
@@ -955,80 +617,36 @@ function Rows({
 }
 
 /** Add or edit one row; values typed as text and turned into the column's type. */
-function RowForm({
-  table,
-  row,
-  onClose,
-  onDone,
-}: {
-  table: Table;
-  row: Row | null;
-  onClose: () => void;
-  onDone: () => void;
-}) {
-  const [values, setValues] = useState<Record<string, string>>(
-    Object.fromEntries(
-      table.columns.map((c) => [c.name, row ? cellText(row[c.name]) : ""]),
-    ),
-  );
+function RowForm({ table, row, onClose, onDone }: { table: Table; row: Row | null; onClose: () => void; onDone: () => void }) {
+  const [values, setValues] = useState<Record<string, string>>(Object.fromEntries(table.columns.map((c) => [c.name, row ? cellText(row[c.name]) : ""])));
   const act = useAction();
   return (
-    <Modal
-      title={row ? `Edit row ${String(row.id)}` : "Add a row"}
-      onClose={onClose}
-    >
+    <Modal title={row ? `Edit row ${String(row.id)}` : "Add a row"} onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          const body = Object.fromEntries(
-            table.columns.map((c) => [
-              c.name,
-              cellValue(c.type, values[c.name] ?? ""),
-            ]),
-          );
+          const body = Object.fromEntries(table.columns.map((c) => [c.name, cellValue(c.type, values[c.name] ?? "")]));
           void act.run(async () => {
-            if (row)
-              await patch(`/v1/tables/${table.id}/rows/${String(row.id)}`, {
-                set: body,
-              });
+            if (row) await patch(`/v1/tables/${table.id}/rows/${String(row.id)}`, { set: body });
             else await post(`/v1/tables/${table.id}/rows`, { row: body });
             onDone();
           }, "Saved");
         }}
       >
         {table.columns.map((c) => (
-          <Field
-            key={c.name}
-            label={(c.title || c.name) + (c.required ? " *" : "")}
-            hint={TYPE_HELP[c.type]}
-          >
+          <Field key={c.name} label={(c.title || c.name) + (c.required ? " *" : "")} hint={TYPE_HELP[c.type]}>
             {c.type === "boolean" ? (
-              <select
-                value={values[c.name] ?? ""}
-                onChange={(e) =>
-                  setValues({ ...values, [c.name]: e.target.value })
-                }
-              >
+              <select value={values[c.name] ?? ""} onChange={(e) => setValues({ ...values, [c.name]: e.target.value })}>
                 <option value="">—</option>
                 <option value="true">yes</option>
                 <option value="false">no</option>
               </select>
             ) : (
               <input
-                type={
-                  c.type === "date"
-                    ? "date"
-                    : c.type === "email"
-                      ? "email"
-                      : c.type === "phone"
-                        ? "tel"
-                        : "text"
-                }
+                type={c.type === "date" ? "date" : c.type === "email" ? "email" : c.type === "phone" ? "tel" : "text"}
                 value={values[c.name] ?? ""}
                 required={c.required}
-                onChange={(e) =>
-                  setValues({ ...values, [c.name]: e.target.value })
-                }
+                onChange={(e) => setValues({ ...values, [c.name]: e.target.value })}
               />
             )}
           </Field>
@@ -1053,11 +671,8 @@ function UseInWorkflow({ table }: { table: Table }) {
     <section className="card" style={{ marginTop: 24 }}>
       <h2>Use in a workflow</h2>
       <p className="hint">
-        Workflows reach this table like any Xenibase table: connector{" "}
-        <code>xenibase@1</code>, connection <code>{table.connection}</code>,
-        table <code>{table.name}</code>. The AI builder knows its columns.
-        {isKept(table) &&
-          " Taskiem keeps it, so workflows only read it: a step that adds, changes or deletes its rows fails."}
+        Workflows reach this table like any Xenibase table: connector <code>xenibase@1</code>, connection <code>{table.connection}</code>, table <code>{table.name}</code>. The AI builder knows its columns.
+        {isKept(table) && " Taskiem keeps it, so workflows only read it: a step that adds, changes or deletes its rows fails."}
       </p>
       <dl className="kv">
         {tableActions(table).map((a) => (
@@ -1075,13 +690,7 @@ function UseInWorkflow({ table }: { table: Table }) {
 }
 
 /** Make a table from this file (N5): a column per header, typed from its values, then the rows imported. */
-function TableFromFile({
-  disabled,
-  onDone,
-}: {
-  disabled: boolean;
-  onDone: () => void;
-}) {
+function TableFromFile({ disabled, onDone }: { disabled: boolean; onDone: () => void }) {
   const nav = useNavigate();
   const act = useAction();
   return (
@@ -1098,23 +707,11 @@ function TableFromFile({
           if (!file) return;
           void act.run(async () => {
             const { header, rows } = parseCSV(await file.text());
-            const spec = tableFromCSV(
-              file.name.replace(/\.csv$/i, ""),
-              header,
-              rows,
-            );
-            const made = await post<{ id: string }>("/v1/tables", {
-              ...spec,
-              columns: spec.columns.map((c) => ({ ...c, required: false })),
-            });
+            const spec = tableFromCSV(file.name.replace(/\.csv$/i, ""), header, rows);
+            const made = await post<{ id: string }>("/v1/tables", { ...spec, columns: spec.columns.map((c) => ({ ...c, required: false })) });
             const form = new FormData();
             form.append("file", file);
-            const mapping = Object.fromEntries(
-              header.map((h) => [
-                h,
-                spec.columns.find((c) => c.title === h.trim())?.name ?? "",
-              ]),
-            );
+            const mapping = Object.fromEntries(header.map((h) => [h, spec.columns.find((c) => c.title === h.trim())?.name ?? ""]));
             form.append("mapping", JSON.stringify(mapping));
             await upload(`/v1/tables/${made.id}/import`, form);
             onDone();

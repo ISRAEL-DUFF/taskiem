@@ -16,28 +16,15 @@ export interface SubjectWords {
 }
 
 const AMOUNT = ["amount_kobo", "total_kobo", "amount", "total"];
-const TO = [
-  "to",
-  "payee",
-  "recipient",
-  "beneficiary",
-  "account_name",
-  "supplier",
-  "customer",
-  "name",
-];
+const TO = ["to", "payee", "recipient", "beneficiary", "account_name", "supplier", "customer", "name"];
 const BANK = ["bank", "bank_name"];
 const ACCOUNT = ["account_number", "account", "nuban"];
 
-const plain = (v: unknown): v is string | number | boolean =>
-  typeof v === "string" || typeof v === "number" || typeof v === "boolean";
+const plain = (v: unknown): v is string | number | boolean => typeof v === "string" || typeof v === "number" || typeof v === "boolean";
 
 /** "amount_kobo" → "Amount", "due_date" → "Due date". */
 export function fieldLabel(key: string): string {
-  const words = key
-    .replace(/_kobo$/, "")
-    .replace(/[_-]+/g, " ")
-    .trim();
+  const words = key.replace(/_kobo$/, "").replace(/[_-]+/g, " ").trim();
   return words ? words.charAt(0).toUpperCase() + words.slice(1) : key;
 }
 
@@ -52,15 +39,11 @@ export function fieldValue(key: string, v: string | number | boolean): string {
 /** The subject's amount, payee, account and other fields; nothing for a subject that is not an object of fields. */
 export function subjectWords(subject: unknown): SubjectWords {
   const out: SubjectWords = { rest: [] };
-  if (!subject || typeof subject !== "object" || Array.isArray(subject))
-    return out;
+  if (!subject || typeof subject !== "object" || Array.isArray(subject)) return out;
   const s = subject as Record<string, unknown>;
   const used = new Set<string>();
-  const first = (keys: string[], ok: (v: unknown) => boolean) =>
-    keys.find((k) => k in s && ok(s[k]));
-  const amountKey =
-    first(AMOUNT, (v) => typeof v === "number") ??
-    Object.keys(s).find((k) => /_kobo$/.test(k) && typeof s[k] === "number");
+  const first = (keys: string[], ok: (v: unknown) => boolean) => keys.find((k) => k in s && ok(s[k]));
+  const amountKey = first(AMOUNT, (v) => typeof v === "number") ?? Object.keys(s).find((k) => /_kobo$/.test(k) && typeof s[k] === "number");
   if (amountKey) {
     out.amount = fieldValue(amountKey, s[amountKey] as number);
     used.add(amountKey);
@@ -71,12 +54,7 @@ export function subjectWords(subject: unknown): SubjectWords {
     used.add(toKey);
   }
   const bankKey = first(BANK, (v) => typeof v === "string" && v.trim() !== "");
-  const accKey = first(
-    ACCOUNT,
-    (v) =>
-      (typeof v === "string" || typeof v === "number") &&
-      String(v).replace(/\D/g, "").length >= 4,
-  );
+  const accKey = first(ACCOUNT, (v) => (typeof v === "string" || typeof v === "number") && String(v).replace(/\D/g, "").length >= 4);
   if (accKey) {
     const digits = String(s[accKey]).replace(/\D/g, "");
     out.account = `${bankKey ? `${String(s[bankKey])} ` : ""}••${digits.slice(-4)}`;

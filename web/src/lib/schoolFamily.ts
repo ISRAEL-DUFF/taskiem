@@ -61,27 +61,17 @@ export interface FamilySent {
   nobody?: boolean;
 }
 
-export const CLAIM_HOW_WORDS: Record<ClaimHow, string> = {
-  transfer: "bank transfer",
-  cash: "cash",
-  pos: "POS",
-  other: "another way",
-};
+export const CLAIM_HOW_WORDS: Record<ClaimHow, string> = { transfer: "bank transfer", cash: "cash", pos: "POS", other: "another way" };
 
 /** "₦40,000 by bank transfer on 20 Oct 2026, ref GTB/1". */
-export function claimLine(
-  c: Pick<Claim, "amount_kobo" | "how" | "paid_on" | "reference">,
-): string {
+export function claimLine(c: Pick<Claim, "amount_kobo" | "how" | "paid_on" | "reference">): string {
   let s = `${naira(c.amount_kobo)} by ${CLAIM_HOW_WORDS[c.how] ?? c.how} on ${dateLabel(c.paid_on)}`;
   if (c.reference) s += `, ref ${c.reference}`;
   return s;
 }
 
 /** A claim's state, for a pill. */
-export function claimStatus(s: ClaimStatus | undefined): {
-  label: string;
-  tone: string;
-} {
+export function claimStatus(s: ClaimStatus | undefined): { label: string; tone: string } {
   switch (s) {
     case "matched":
       return { label: "Found and counted", tone: "ok" };
@@ -107,13 +97,9 @@ export function planStatus(s: PlanStatus): { label: string; tone: string } {
 /** "₦50,000 by 24 Nov 2026; ₦68,000 by 24 Dec 2026 (₦118,000 in all)". */
 export function instalmentsLine(list: Instalment[] | undefined): string {
   if (!list || list.length === 0) return "";
-  const parts = list.map(
-    (i) => `${naira(i.amount_kobo)} by ${dateLabel(i.due_on)}`,
-  );
+  const parts = list.map((i) => `${naira(i.amount_kobo)} by ${dateLabel(i.due_on)}`);
   const total = list.reduce((n, i) => n + i.amount_kobo, 0);
-  return list.length === 1
-    ? (parts[0] ?? "")
-    : `${parts.join("; ")} (${naira(total)} in all)`;
+  return list.length === 1 ? (parts[0] ?? "") : `${parts.join("; ")} (${naira(total)} in all)`;
 }
 
 /** An instalment row as typed: naira and a date. */
@@ -128,10 +114,7 @@ export function emptyRows(n: number): InstalmentRow[] {
 
 /** Rows from a plan's instalments, to change before approving. */
 export function rowsOf(list: Instalment[]): InstalmentRow[] {
-  return list.map((i) => ({
-    amount: String(i.amount_kobo / 100),
-    due_on: i.due_on,
-  }));
+  return list.map((i) => ({ amount: String(i.amount_kobo / 100), due_on: i.due_on }));
 }
 
 function kobo(s: string): number | null {
@@ -147,10 +130,8 @@ export function instalmentProblem(rows: InstalmentRow[]): string | null {
   if (filled.length > 6) return "A plan has at most six instalments.";
   let last = "";
   for (const r of filled) {
-    if (kobo(r.amount) === null)
-      return "Each instalment needs an amount in naira.";
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(r.due_on))
-      return "Each instalment needs a date.";
+    if (kobo(r.amount) === null) return "Each instalment needs an amount in naira.";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(r.due_on)) return "Each instalment needs a date.";
     if (r.due_on < last) return "Instalments are in date order.";
     last = r.due_on;
   }
@@ -159,35 +140,24 @@ export function instalmentProblem(rows: InstalmentRow[]): string | null {
 
 /** The instalments to send, from rows that pass instalmentProblem. */
 export function instalmentsRequest(rows: InstalmentRow[]): Instalment[] {
-  return rows
-    .filter((r) => r.amount.trim() || r.due_on)
-    .map((r) => ({ amount_kobo: kobo(r.amount) ?? 0, due_on: r.due_on }));
+  return rows.filter((r) => r.amount.trim() || r.due_on).map((r) => ({ amount_kobo: kobo(r.amount) ?? 0, due_on: r.due_on }));
 }
 
 /** "Sent on WhatsApp to 1 guardian and by SMS to 1; the link works until 27 Oct 2026." */
 export function sentLine(s: FamilySent): string {
   const parts: string[] = [];
-  const words: Record<string, string> = {
-    whatsapp: "on WhatsApp",
-    telegram: "on Telegram",
-    sms: "by SMS",
-  };
+  const words: Record<string, string> = { whatsapp: "on WhatsApp", telegram: "on Telegram", sms: "by SMS" };
   for (const [ch, n] of Object.entries(s.channels ?? {})) {
-    if (n > 0)
-      parts.push(`${words[ch] ?? ch} to ${n} guardian${n === 1 ? "" : "s"}`);
+    if (n > 0) parts.push(`${words[ch] ?? ch} to ${n} guardian${n === 1 ? "" : "s"}`);
   }
-  const until = s.expires_at
-    ? ` The link works until ${dateLabel(s.expires_at.slice(0, 10))}.`
-    : "";
-  if (parts.length === 0)
-    return `Nobody could be reached (no phone on file, or too many messages this hour). Copy the link below to pass it on.${until}`;
+  const until = s.expires_at ? ` The link works until ${dateLabel(s.expires_at.slice(0, 10))}.` : "";
+  if (parts.length === 0) return `Nobody could be reached (no phone on file, or too many messages this hour). Copy the link below to pass it on.${until}`;
   return `Sent ${parts.join(" and ")}.${until}`;
 }
 
 /** Why a link life cannot be saved, or null: a whole number of days from 1 to 30. */
 export function linkDaysProblem(v: string): string | null {
   const n = Number(v);
-  if (!v.trim() || !Number.isInteger(n) || n < 1 || n > 30)
-    return "Links work for 1 to 30 days.";
+  if (!v.trim() || !Number.isInteger(n) || n < 1 || n > 30) return "Links work for 1 to 30 days.";
   return null;
 }

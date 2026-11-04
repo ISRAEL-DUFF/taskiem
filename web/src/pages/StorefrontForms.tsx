@@ -200,7 +200,11 @@ export function FormCard({
         {published && saved.enabled && previewURL && (
           <>
             {" "}
-            <a href={formURL(previewURL, ref)} target="_blank" rel="noreferrer">
+            <a
+              href={formURL(previewURL, ref)}
+              target="_blank"
+              rel="noreferrer"
+            >
               Open the form
               <span className="sr-only"> for {info.title.toLowerCase()}</span>
             </a>
@@ -445,8 +449,8 @@ function OrderOptions({
             checked={form.payOnDelivery}
             onChange={(e) => set({ payOnDelivery: e.target.checked })}
           />
-          Customers may pay at the door: by bank transfer to an account number
-          the rider gets for the order, or in cash
+          Customers may pay at the door: by bank transfer to an account
+          number the rider gets for the order, or in cash
         </label>
       )}
     </>
@@ -469,9 +473,9 @@ function DeliveryAreas({
     <fieldset className="sf-choices">
       <legend>Areas you deliver to</legend>
       <p className="hint" style={{ marginTop: 0 }}>
-        Customers choose their area and see its delivery fee before they order;
-        the fee is added to the total. Leave the fee empty for free delivery.
-        Your riders cover these areas.
+        Customers choose their area and see its delivery fee before they
+        order; the fee is added to the total. Leave the fee empty for free
+        delivery. Your riders cover these areas.
       </p>
       {rows.map((r, i) => (
         <div key={i} className="toolbar" style={{ alignItems: "flex-end" }}>

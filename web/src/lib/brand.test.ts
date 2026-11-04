@@ -8,24 +8,13 @@ describe("normalizeHex", () => {
     expect(normalizeHex(" #abc ")).toBe("#aabbcc");
   });
   it("refuses what is not a colour", () => {
-    for (const s of ["", "#12345", "red", "#gggggg", "url(x)"])
-      expect(normalizeHex(s)).toBeNull();
+    for (const s of ["", "#12345", "red", "#gggggg", "url(x)"]) expect(normalizeHex(s)).toBeNull();
   });
 });
 
 describe("requestOf", () => {
   it("sends images by id, empty when there is none", () => {
-    expect(requestOf({ theme: "bold", color: "#c2410c" })).toEqual({
-      theme: "bold",
-      color: "#c2410c",
-      logo: "",
-      cover: "",
-    });
-    expect(
-      sameLook(
-        requestOf({ theme: "bold", color: "#c2410c", logo: "m1" }),
-        requestOf({ theme: "bold", color: "#c2410c" }),
-      ),
-    ).toBe(false);
+    expect(requestOf({ theme: "bold", color: "#c2410c" })).toEqual({ theme: "bold", color: "#c2410c", logo: "", cover: "" });
+    expect(sameLook(requestOf({ theme: "bold", color: "#c2410c", logo: "m1" }), requestOf({ theme: "bold", color: "#c2410c" }))).toBe(false);
   });
 });

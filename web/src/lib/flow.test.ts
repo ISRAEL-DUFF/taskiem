@@ -21,31 +21,19 @@ import {
   type FlowNode,
 } from "./flow";
 
-const t = (id: string, needs?: string[]): Step =>
-  ({
-    id,
-    type: "transform",
-    config: { output: {} },
-    ...(needs ? { needs } : {}),
-  }) as Step;
+const t = (id: string, needs?: string[]): Step => ({ id, type: "transform", config: { output: {} }, ...(needs ? { needs } : {}) }) as Step;
 
 // An order comes in: check the stock; if it is in stock send a link and
 // tell the customer, else say it is sold out.
 const order = (): Step[] => {
-  const choice = newChoice("in_stock") as Step & {
-    config: { paths: { steps: Step[] }[]; default: { steps: Step[] } };
-  };
+  const choice = newChoice("in_stock") as Step & { config: { paths: { steps: Step[] }[]; default: { steps: Step[] } } };
   choice.needs = ["check"];
-  choice.config.paths[0] = {
-    ...choice.config.paths[0],
-    steps: [t("link"), t("tell", ["link"])],
-  };
+  choice.config.paths[0] = { ...choice.config.paths[0], steps: [t("link"), t("tell", ["link"])] };
   choice.config.default.steps = [t("sold_out")];
   return [t("check"), choice];
 };
 
-const node = (nodes: FlowNode[], id: string) =>
-  nodes.find((n) => n.id === id) as FlowNode;
+const node = (nodes: FlowNode[], id: string) => nodes.find((n) => n.id === id) as FlowNode;
 
 describe("lists at every depth", () => {
   it("finds a step and its list anywhere", () => {
@@ -53,17 +41,12 @@ describe("lists at every depth", () => {
     expect(locate(steps, "tell")?.list).toBe("in_stock/paths/0");
     expect(locate(steps, "sold_out")?.list).toBe("in_stock/default");
     expect(locate(steps, "check")?.list).toBe("");
-    expect(listAt(steps, "in_stock/paths/0").map((s) => s.id)).toEqual([
-      "link",
-      "tell",
-    ]);
+    expect(listAt(steps, "in_stock/paths/0").map((s) => s.id)).toEqual(["link", "tell"]);
   });
 
   it("renames a step and the needs that point at it, in its own list", () => {
     const steps = renameAnywhere(order(), "link", "pay_link");
-    expect(
-      listAt(steps, "in_stock/paths/0").map((s) => [s.id, s.needs]),
-    ).toEqual([
+    expect(listAt(steps, "in_stock/paths/0").map((s) => [s.id, s.needs])).toEqual([
       ["pay_link", undefined],
       ["tell", ["pay_link"]],
     ]);
@@ -72,14 +55,8 @@ describe("lists at every depth", () => {
 
 describe("adding a step where the + is", () => {
   it("between two steps", () => {
-    const steps = insertStep(
-      order(),
-      { list: "in_stock/paths/0", after: "link", before: "tell" },
-      t("wait"),
-    );
-    expect(
-      listAt(steps, "in_stock/paths/0").map((s) => [s.id, s.needs]),
-    ).toEqual([
+    const steps = insertStep(order(), { list: "in_stock/paths/0", after: "link", before: "tell" }, t("wait"));
+    expect(listAt(steps, "in_stock/paths/0").map((s) => [s.id, s.needs])).toEqual([
       ["link", undefined],
       ["wait", ["link"]],
       ["tell", ["wait"]],
@@ -87,11 +64,7 @@ describe("adding a step where the + is", () => {
   });
 
   it("after the last step, at the start, and into an empty path", () => {
-    let steps = insertStep(
-      order(),
-      { list: "in_stock/default", after: "sold_out" },
-      t("note"),
-    );
+    let steps = insertStep(order(), { list: "in_stock/default", after: "sold_out" }, t("note"));
     expect(locate(steps, "note")?.step.needs).toEqual(["sold_out"]);
     steps = insertStep(steps, { list: "", before: "check" }, t("first"));
     expect(locate(steps, "first")?.step.needs).toBeUndefined();
@@ -102,11 +75,7 @@ describe("adding a step where the + is", () => {
   });
 
   it("before a step that already comes after another", () => {
-    const steps = insertStep(
-      [t("a"), t("b", ["a"])],
-      { list: "", before: "b" },
-      t("mid"),
-    );
+    const steps = insertStep([t("a"), t("b", ["a"])], { list: "", before: "b" }, t("mid"));
     expect(steps.map((s) => [s.id, s.needs])).toEqual([
       ["a", undefined],
       ["mid", ["a"]],
@@ -126,9 +95,7 @@ describe("removing and joining", () => {
 
   it("removes inside a path, and a choice with everything in it", () => {
     let steps = removeAnywhere(order(), "link");
-    expect(
-      listAt(steps, "in_stock/paths/0").map((s) => [s.id, s.needs]),
-    ).toEqual([["tell", undefined]]);
+    expect(listAt(steps, "in_stock/paths/0").map((s) => [s.id, s.needs])).toEqual([["tell", undefined]]);
     steps = removeAnywhere(order(), "in_stock");
     expect(steps.map((s) => s.id)).toEqual(["check"]);
     expect(locate(steps, "tell")).toBeUndefined();
@@ -144,48 +111,16 @@ describe("removing and joining", () => {
 describe("the picture", () => {
   it("draws a choice's paths as cards with Yes and No, and a place after it", () => {
     const { nodes, edges } = flowGraph({ steps: order() });
-    expect(nodes.map((n) => n.id)).toEqual([
-      TRIGGER,
-      "check",
-      "in_stock",
-      "link",
-      "tell",
-      "sold_out",
-      "then:in_stock",
-    ]);
-    const byPair = Object.fromEntries(
-      edges.map((e) => [`${e.source}->${e.target}`, e]),
-    );
-    expect(byPair[`${TRIGGER}->check`]?.at).toEqual({
-      list: "",
-      before: "check",
-    });
-    expect(byPair["check->in_stock"]?.at).toEqual({
-      list: "",
-      after: "check",
-      before: "in_stock",
-    });
-    expect(byPair["in_stock->link"]).toMatchObject({
-      label: "Yes",
-      tone: "yes",
-      sourceHandle: "p0",
-      at: { list: "in_stock/paths/0", before: "link" },
-    });
-    expect(byPair["in_stock->sold_out"]).toMatchObject({
-      label: "No",
-      tone: "no",
-      sourceHandle: "p1",
-    });
-    expect(byPair["tell->then:in_stock"]?.at).toEqual({
-      list: "",
-      after: "in_stock",
-    });
+    expect(nodes.map((n) => n.id)).toEqual([TRIGGER, "check", "in_stock", "link", "tell", "sold_out", "then:in_stock"]);
+    const byPair = Object.fromEntries(edges.map((e) => [`${e.source}->${e.target}`, e]));
+    expect(byPair[`${TRIGGER}->check`]?.at).toEqual({ list: "", before: "check" });
+    expect(byPair["check->in_stock"]?.at).toEqual({ list: "", after: "check", before: "in_stock" });
+    expect(byPair["in_stock->link"]).toMatchObject({ label: "Yes", tone: "yes", sourceHandle: "p0", at: { list: "in_stock/paths/0", before: "link" } });
+    expect(byPair["in_stock->sold_out"]).toMatchObject({ label: "No", tone: "no", sourceHandle: "p1" });
+    expect(byPair["tell->then:in_stock"]?.at).toEqual({ list: "", after: "in_stock" });
     expect(byPair["sold_out->then:in_stock"]).toBeDefined();
     const choice = node(nodes, "in_stock");
-    expect(choice.kind === "step" && choice.ports.map((p) => p.label)).toEqual([
-      "Yes",
-      "No",
-    ]);
+    expect(choice.kind === "step" && choice.ports.map((p) => p.label)).toEqual(["Yes", "No"]);
     // The last card of a path offers "add after"; a card with one after it does not.
     expect((node(nodes, "tell") as { last: boolean }).last).toBe(true);
     expect((node(nodes, "link") as { last: boolean }).last).toBe(false);
@@ -198,23 +133,13 @@ describe("the picture", () => {
     const into = edges.filter((e) => e.target === "thank");
     expect(into.map((e) => e.source).sort()).toEqual(["sold_out", "tell"]);
     expect(into[0]?.need).toEqual({ source: "in_stock", target: "thank" });
-    expect(into[0]?.at).toEqual({
-      list: "",
-      after: "in_stock",
-      before: "thank",
-    });
+    expect(into[0]?.at).toEqual({ list: "", after: "in_stock", before: "thank" });
   });
 
   it("shows an empty path as a place to add its first step", () => {
     const { nodes, edges } = flowGraph({ steps: [newChoice("c")] });
-    expect(node(nodes, "empty:c/paths/0")).toMatchObject({
-      kind: "empty",
-      at: { list: "c/paths/0" },
-    });
-    expect(node(nodes, "empty:c/default")).toMatchObject({
-      kind: "empty",
-      label: "Nothing yet",
-    });
+    expect(node(nodes, "empty:c/paths/0")).toMatchObject({ kind: "empty", at: { list: "c/paths/0" } });
+    expect(node(nodes, "empty:c/default")).toMatchObject({ kind: "empty", label: "Nothing yet" });
     expect(edges.find((e) => e.target === "empty:c/default")?.label).toBe("No");
   });
 
@@ -236,68 +161,40 @@ describe("the picture", () => {
 
 describe("notes and tidying up", () => {
   it("keeps notes in the layout, and tidying keeps them", () => {
-    const layout = withNotes({ check: { x: 1, y: 2 } }, [
-      { id: "n1", x: 5, y: 6, text: "Ask Tunde" },
-    ]);
-    expect(notesOf(layout)).toEqual([
-      { id: "n1", x: 5, y: 6, text: "Ask Tunde" },
-    ]);
-    expect(tidy(layout)).toEqual({
-      __notes: [{ id: "n1", x: 5, y: 6, text: "Ask Tunde" }],
-    });
+    const layout = withNotes({ check: { x: 1, y: 2 } }, [{ id: "n1", x: 5, y: 6, text: "Ask Tunde" }]);
+    expect(notesOf(layout)).toEqual([{ id: "n1", x: 5, y: 6, text: "Ask Tunde" }]);
+    expect(tidy(layout)).toEqual({ __notes: [{ id: "n1", x: 5, y: 6, text: "Ask Tunde" }] });
     expect(notesOf(withNotes(layout, []))).toEqual([]);
   });
 });
 
 describe("saving an If", () => {
   it("leaves out a No with nothing in it, and still shows it", () => {
-    const choice = newChoice("ok") as Step & {
-      config: { paths: { steps: Step[] }[] };
-    };
+    const choice = newChoice("ok") as Step & { config: { paths: { steps: Step[] }[] } };
     choice.config.paths[0] = { ...choice.config.paths[0], steps: [t("tell")] };
-    const saved = forSaving({ steps: [choice] }).steps[0] as Step & {
-      config: Record<string, unknown>;
-    };
+    const saved = forSaving({ steps: [choice] }).steps[0] as Step & { config: Record<string, unknown> };
     expect(saved.config.default).toBeUndefined();
     expect(childLists(saved).map((c) => c.label)).toEqual(["Yes", "No"]);
-    expect(
-      listAt(
-        insertStep([saved], { list: "ok/default" }, t("sorry")),
-        "ok/default",
-      ).map((s) => s.id),
-    ).toEqual(["sorry"]);
+    expect(listAt(insertStep([saved], { list: "ok/default" }, t("sorry")), "ok/default").map((s) => s.id)).toEqual(["sorry"]);
   });
 
   it("names the paths that still need a step; an empty No is fine", () => {
-    expect(emptyPaths([newChoice("ok")], (s) => s.name ?? s.id)).toEqual([
-      "Yes of “Is it so?”",
-    ]);
+    expect(emptyPaths([newChoice("ok")], (s) => s.name ?? s.id)).toEqual(["Yes of “Is it so?”"]);
     expect(emptyPaths(order(), (s) => s.id)).toEqual([]);
   });
 });
 
 describe("a step edited as JSON", () => {
   it("keeps its id: renaming goes through the ID field", () => {
-    expect(stepFromJson(t("a"), { id: "b", type: "transform" })).toMatch(
-      /stays "a"/,
-    );
+    expect(stepFromJson(t("a"), { id: "b", type: "transform" })).toMatch(/stays "a"/);
     expect(stepFromJson(t("a"), [])).toMatch(/must be an object/);
     expect(stepFromJson(t("a"), { id: "a" })).toMatch(/needs a "type"/);
-    expect(
-      stepFromJson(t("a"), { id: "a", type: "transform", name: "Renamed" }),
-    ).toEqual({ id: "a", type: "transform", name: "Renamed" });
+    expect(stepFromJson(t("a"), { id: "a", type: "transform", name: "Renamed" })).toEqual({ id: "a", type: "transform", name: "Renamed" });
   });
 });
 
 describe("what the JSON tab accepts", () => {
-  const def = (steps: unknown) => ({
-    schema: "wd/v1",
-    id: "wf_x",
-    version: 1,
-    name: "x",
-    trigger: { type: "manual" },
-    steps,
-  });
+  const def = (steps: unknown) => ({ schema: "wd/v1", id: "wf_x", version: 1, name: "x", trigger: { type: "manual" }, steps });
   it("takes a definition the builder can draw, at every depth", () => {
     expect(definitionProblem(def(order()))).toBeUndefined();
     expect(definitionProblem(def([]))).toBeUndefined();
@@ -305,41 +202,13 @@ describe("what the JSON tab accepts", () => {
   it("says what is wrong with anything else", () => {
     expect(definitionProblem([])).toMatch(/must be an object/);
     expect(definitionProblem({ steps: [] })).toMatch(/trigger/);
-    expect(definitionProblem({ trigger: { type: "manual" } })).toMatch(
-      /"steps" must be a list/,
-    );
+    expect(definitionProblem({ trigger: { type: "manual" } })).toMatch(/"steps" must be a list/);
     expect(definitionProblem(def([1]))).toMatch(/step 1 must be an object/);
-    expect(definitionProblem(def([{ type: "transform" }]))).toMatch(
-      /needs an "id"/,
-    );
-    expect(
-      definitionProblem(def([{ id: "a", type: "transform", needs: "b" }])),
-    ).toMatch(/"needs" must be a list/);
-    expect(
-      definitionProblem(
-        def([
-          {
-            id: "c",
-            type: "branch",
-            config: { paths: [{ name: "yes", steps: [null] }] },
-          },
-        ]),
-      ),
-    ).toMatch(/Step "c", paths 1: step 1 must be an object/);
-    expect(
-      definitionProblem(
-        def([{ id: "c", type: "branch", config: { default: { steps: {} } } }]),
-      ),
-    ).toMatch(/otherwise must be a list/);
-    expect(
-      definitionProblem(
-        def([{ id: "p", type: "parallel", config: { branches: {} } }]),
-      ),
-    ).toMatch(/"branches" must be a list/);
-    expect(
-      definitionProblem(
-        def([{ id: "e", type: "foreach", config: { steps: [{ id: "x" }] } }]),
-      ),
-    ).toMatch(/Step "x" needs a "type"/);
+    expect(definitionProblem(def([{ type: "transform" }]))).toMatch(/needs an "id"/);
+    expect(definitionProblem(def([{ id: "a", type: "transform", needs: "b" }]))).toMatch(/"needs" must be a list/);
+    expect(definitionProblem(def([{ id: "c", type: "branch", config: { paths: [{ name: "yes", steps: [null] }] } }]))).toMatch(/Step "c", paths 1: step 1 must be an object/);
+    expect(definitionProblem(def([{ id: "c", type: "branch", config: { default: { steps: {} } } }]))).toMatch(/otherwise must be a list/);
+    expect(definitionProblem(def([{ id: "p", type: "parallel", config: { branches: {} } }]))).toMatch(/"branches" must be a list/);
+    expect(definitionProblem(def([{ id: "e", type: "foreach", config: { steps: [{ id: "x" }] } }]))).toMatch(/Step "x" needs a "type"/);
   });
 });

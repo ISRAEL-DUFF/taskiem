@@ -142,12 +142,10 @@ export function StorefrontOrders() {
   // A 404: this Taskiem takes no storefront orders (no public host key).
   const list = useLoad(
     () =>
-      get<{ orders: Order[] }>(ordersPath(status, front)).catch(
-        (e: unknown) => {
-          if (e instanceof ApiError && e.status === 404) return null;
-          throw e;
-        },
-      ),
+      get<{ orders: Order[] }>(ordersPath(status, front)).catch((e: unknown) => {
+        if (e instanceof ApiError && e.status === 404) return null;
+        throw e;
+      }),
     [status, front],
   );
   // The fronts, to filter by and to name each submission's (fronts F3);
@@ -573,21 +571,12 @@ export function StorefrontOrder() {
             )}
           </section>
           {o.kind === "trade" && (
-            <section
-              className="card"
-              aria-labelledby="order-linked"
-              data-testid="order-linked"
-            >
+            <section className="card" aria-labelledby="order-linked" data-testid="order-linked">
               <h2 id="order-linked">From a linked business</h2>
               <p className="hint">
-                {o.customer.name || "A business"} ordered on Taskiem. Its items,
-                a change to them, and what was delivered of each are on the
-                linked order.
+                {o.customer.name || "A business"} ordered on Taskiem. Its items, a change to them, and what was delivered of each are on the linked order.
               </p>
-              <Link
-                className="button"
-                to={`/trade-orders/${encodeURIComponent(o.reference)}`}
-              >
+              <Link className="button" to={`/trade-orders/${encodeURIComponent(o.reference)}`}>
                 Open the linked order
               </Link>
             </section>
@@ -644,8 +633,7 @@ export function StorefrontOrder() {
 /** The top of an order's or a booking's page, on pine: its total, how it is
  * paid, the customer and when. Questions and call-backs carry no money and have none. */
 function OrderHero({ o }: { o: Order }) {
-  if (o.kind !== "order" && o.kind !== "booking" && o.kind !== "trade")
-    return null;
+  if (o.kind !== "order" && o.kind !== "booking" && o.kind !== "trade") return null;
   const booking = o.kind === "booking";
   const total = orderTotal(o);
   return (

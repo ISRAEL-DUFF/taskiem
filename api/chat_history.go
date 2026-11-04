@@ -764,7 +764,11 @@ func (s *Server) attachLiveButtons(ctx context.Context, tx pgx.Tx, p *Principal,
 	}
 	text, _ := v.(string)
 	var live []TaskiemButton
-	if json.Unmarshal([]byte(text), &live) != nil || len(live) == 0 {
+	if err := json.Unmarshal([]byte(text), &live); err != nil {
+		s.Logger.Warn("chat history: live buttons unreadable", "tenant", p.TenantID, "err", err)
+		return nil
+	}
+	if len(live) == 0 {
 		return nil
 	}
 	for i := range msgs {

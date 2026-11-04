@@ -6,16 +6,7 @@
 import { whenLabel } from "./bookings";
 import { formatPrice } from "./storefront";
 
-export type FormKind =
-  | "order"
-  | "enquiry"
-  | "callback"
-  | "booking"
-  | "hire"
-  | "space"
-  | "tickets"
-  | "class"
-  | "quote";
+export type FormKind = "order" | "enquiry" | "callback" | "booking" | "hire" | "space" | "tickets" | "class" | "quote";
 export type PaymentMode = "after_accept" | "at_order" | "none";
 
 export interface ActionOptions {
@@ -41,11 +32,7 @@ export interface DeliveryZone {
 }
 
 /** The limits the server holds delivery areas to (storefront.CleanZones). */
-export const ZONE_LIMITS = {
-  zones: 30,
-  name: 40,
-  feeKobo: 10_000_000,
-} as const;
+export const ZONE_LIMITS = { zones: 30, name: 40, feeKobo: 10_000_000 } as const;
 
 /** One of the storefront's forms (StorefrontAction). */
 export interface StorefrontAction {
@@ -421,24 +408,16 @@ export function feeKobo(text: string): number {
 }
 
 /** The areas typed, as the server takes them: named rows only. */
-export function zoneList(
-  rows: { name: string; fee: string }[],
-): DeliveryZone[] {
+export function zoneList(rows: { name: string; fee: string }[]): DeliveryZone[] {
   return rows
-    .map((r) => ({
-      name: r.name.trim().replace(/\s+/g, " "),
-      fee_kobo: feeKobo(r.fee),
-    }))
+    .map((r) => ({ name: r.name.trim().replace(/\s+/g, " "), fee_kobo: feeKobo(r.fee) }))
     .filter((z) => z.name !== "");
 }
 
 /** Why the delivery areas will be refused, or null. */
-export function zoneProblem(
-  rows: { name: string; fee: string }[],
-): string | null {
+export function zoneProblem(rows: { name: string; fee: string }[]): string | null {
   const zones = zoneList(rows);
-  if (zones.length > ZONE_LIMITS.zones)
-    return `Up to ${ZONE_LIMITS.zones} delivery areas.`;
+  if (zones.length > ZONE_LIMITS.zones) return `Up to ${ZONE_LIMITS.zones} delivery areas.`;
   const seen = new Set<string>();
   for (const z of zones) {
     if (z.name.length > ZONE_LIMITS.name || z.name.includes(","))
@@ -485,10 +464,7 @@ export const ORDER_STATUS: Record<OrderStatus, { label: string; tone: Tone }> =
     on_the_way: { label: "On the way", tone: "info" },
     arrived: { label: "At the door", tone: "info" },
     proposed: { label: "Waiting for the business to confirm", tone: "info" },
-    changed: {
-      label: "Waiting for the business to accept your change",
-      tone: "info",
-    },
+    changed: { label: "Waiting for the business to accept your change", tone: "info" },
   };
 
 /** A status as the list shows it, with the badge's colour. */
@@ -619,8 +595,7 @@ export function paymentSummary(
       : "";
     return `${when}${deposit} · ${o.paid_at ? "paid" : "not paid"}`;
   }
-  if (o.kind === "order" && o.payment === "on_delivery")
-    return `Pays at the door · ${o.paid_at ? "paid" : "not paid"}`;
+  if (o.kind === "order" && o.payment === "on_delivery") return `Pays at the door · ${o.paid_at ? "paid" : "not paid"}`;
   if (o.kind !== "order" || o.payment === "none") return "No online payment";
   const when =
     o.payment === "at_order" ? "Pays when ordering" : "Pays after you accept";

@@ -5,40 +5,18 @@ import { useAdvanced, useAuth } from "../auth";
 import { startedByWords } from "../lib/home";
 import { RunCanvas } from "../canvas/RunCanvas";
 import { RepairPanel } from "./RepairPanel";
-import {
-  duration,
-  templateGroups,
-  timeline,
-  type StepRow,
-} from "../lib/timeline";
+import { duration, templateGroups, timeline, type StepRow } from "../lib/timeline";
 import { respondentText } from "./Forms";
 import { Icon } from "../icons";
 import { runLook, stepCounts } from "../lib/lists";
-import {
-  Badge,
-  ErrorBox,
-  Field,
-  Json,
-  JsonInput,
-  Modal,
-  Skeleton,
-  fmtTime,
-  useAction,
-  useLoad,
-} from "../ui";
+import { Badge, ErrorBox, Field, Json, JsonInput, Modal, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 
 interface RunDoc {
   run: RunSummary;
   events: RunEvent[];
   revealed: boolean;
   /** The run this one resumed from a failed step (or whose subflow step started it: parent_step), the runs that resumed it, and the child runs its subflow steps started. */
-  forks?: {
-    parent_run_id: string | null;
-    resumed_step: string | null;
-    parent_step?: string | null;
-    resumed_by: string[];
-    subflows?: string[];
-  };
+  forks?: { parent_run_id: string | null; resumed_step: string | null; parent_step?: string | null; resumed_by: string[]; subflows?: string[] };
   /** Each failed step's error in plain words (no-technical-steps N5). */
   plain_errors?: Record<string, string>;
 }
@@ -64,10 +42,7 @@ export function RunPage() {
   // Revealed history is fetched once, and again only when asked (each
   // reveal is audited); sealed history streams as it is recorded (spec
   // 15.1, live view).
-  const { data, error, reload } = useLoad(
-    () => get<RunDoc>(`/v1/runs/${id}${reveal ? "?reveal=true" : ""}`),
-    [id, reveal],
-  );
+  const { data, error, reload } = useLoad(() => get<RunDoc>(`/v1/runs/${id}${reveal ? "?reveal=true" : ""}`), [id, reveal]);
   const [streamed, setStreamed] = useState<RunEvent[]>([]);
   const [view, setView] = useState<"canvas" | "timeline">("canvas");
   const [resolving, setResolving] = useState<string | null>(null);
@@ -76,26 +51,13 @@ export function RunPage() {
   const advanced = useAdvanced();
   const { me } = useAuth();
   // Who started it, by name, for whoever may list the members.
-  const members = useLoad(
-    () =>
-      can("member.manage")
-        ? get<{ members: { user_id: string; name: string; email: string }[] }>(
-            "/v1/members",
-          )
-        : Promise.resolve({ members: [] }),
-    [],
-  );
-  const names = new Map(
-    (members.data?.members ?? []).map((m) => [m.user_id, m.name || m.email]),
-  );
+  const members = useLoad(() => (can("member.manage") ? get<{ members: { user_id: string; name: string; email: string }[] }>("/v1/members") : Promise.resolve({ members: [] })), []);
+  const names = new Map((members.data?.members ?? []).map((m) => [m.user_id, m.name || m.email]));
   if (me?.user) names.set(me.user.id, me.user.name || me.user.email);
   const status = data?.run.status;
   // Which secrets and connections each step decrypted (audit.read only).
   const reads = useLoad(
-    () =>
-      can("audit.read")
-        ? get<{ reads: SecretRead[] }>(`/v1/secrets/reads?run=${id}&limit=1000`)
-        : Promise.resolve({ reads: [] as SecretRead[] }),
+    () => (can("audit.read") ? get<{ reads: SecretRead[] }>(`/v1/secrets/reads?run=${id}&limit=1000`) : Promise.resolve({ reads: [] as SecretRead[] })),
     [id, status],
   );
   const readsByStep = useMemo(() => {
@@ -108,22 +70,9 @@ export function RunPage() {
   }, [reads.data]);
   useEffect(() => {
     setStreamed([]);
-    if (
-      !data ||
-      reveal ||
-      TERMINAL.has(data.run.status) ||
-      typeof EventSource === "undefined"
-    )
-      return;
-    const es = new EventSource(
-      `/v1/runs/${id}/stream?after=${data.events.at(-1)?.seq ?? 0}`,
-    );
-    es.addEventListener("run_event", (m) =>
-      setStreamed((prev) => [
-        ...prev,
-        JSON.parse((m as MessageEvent<string>).data) as RunEvent,
-      ]),
-    );
+    if (!data || reveal || TERMINAL.has(data.run.status) || typeof EventSource === "undefined") return;
+    const es = new EventSource(`/v1/runs/${id}/stream?after=${data.events.at(-1)?.seq ?? 0}`);
+    es.addEventListener("run_event", (m) => setStreamed((prev) => [...prev, JSON.parse((m as MessageEvent<string>).data) as RunEvent]));
     es.addEventListener("end", () => {
       es.close();
       reload();
@@ -139,20 +88,12 @@ export function RunPage() {
   if (!data) return <Skeleton />;
   const r = data.run;
   const rows = timeline(events);
-  const ended = events.find((e) =>
-    ["RunCompleted", "RunFailed", "RunCancelled"].includes(e.type),
-  );
-  const ENDED: Record<string, string> = {
-    RunCompleted: "completed",
-    RunFailed: "failed",
-    RunCancelled: "cancelled",
-  };
+  const ended = events.find((e) => ["RunCompleted", "RunFailed", "RunCancelled"].includes(e.type));
+  const ENDED: Record<string, string> = { RunCompleted: "completed", RunFailed: "failed", RunCancelled: "cancelled" };
   const shownStatus = (ended && ENDED[ended.type]) || r.status;
   const reversing = events.some((e) => e.type === "CancelRequested");
   // A run a form started: the submission, masked (trigger.form).
-  const started = events.find((e) => e.type === "RunStarted")?.payload as
-    | { trigger?: { type?: string; form?: Record<string, unknown> } }
-    | undefined;
+  const started = events.find((e) => e.type === "RunStarted")?.payload as { trigger?: { type?: string; form?: Record<string, unknown> } } | undefined;
   const form = started?.trigger?.form;
   const look = runLook(shownStatus);
   const steps = stepCounts(rows.map((x) => x.status));
@@ -172,13 +113,10 @@ export function RunPage() {
             <div className="run-card-title">
               <h1 id="run-title">{r.workflow}</h1>
               <Badge value={shownStatus} />
-              {!reveal && !TERMINAL.has(shownStatus) && (
-                <span className="hint live-dot">live</span>
-              )}
+              {!reveal && !TERMINAL.has(shownStatus) && <span className="hint live-dot">live</span>}
             </div>
             <p className="run-summary">
-              Started {fmtTime(r.started_at)} by{" "}
-              {startedByWords(r.started_by, started?.trigger?.type, names)}
+              Started {fmtTime(r.started_at)} by {startedByWords(r.started_by, started?.trigger?.type, names)}
               {r.ended_at && ` · took ${duration(r.started_at, r.ended_at)}`}
             </p>
           </div>
@@ -189,38 +127,18 @@ export function RunPage() {
             <>
               <dt>Form answers</dt>
               <dd data-testid="run-form">
-                Reference{" "}
-                <strong>
-                  {String(form.reference ?? form.submission_id ?? "—")}
-                </strong>
-                {typeof form.submitted_at === "string" && (
-                  <span className="hint">
-                    {" "}
-                    · sent {fmtTime(form.submitted_at)}
-                  </span>
-                )}
-                <div className="hint">
-                  From:{" "}
-                  {respondentText(
-                    (form.respondent ?? {}) as Record<string, unknown>,
-                    typeof form.channel === "string" ? form.channel : undefined,
-                  )}
-                </div>
+                Reference <strong>{String(form.reference ?? form.submission_id ?? "—")}</strong>
+                {typeof form.submitted_at === "string" && <span className="hint"> · sent {fmtTime(form.submitted_at)}</span>}
+                <div className="hint">From: {respondentText((form.respondent ?? {}) as Record<string, unknown>, typeof form.channel === "string" ? form.channel : undefined)}</div>
               </dd>
             </>
           )}
           <dt>Ended</dt>
-          <dd>
-            {r.ended_at
-              ? `${fmtTime(r.ended_at)} (${duration(r.started_at, r.ended_at)})`
-              : "Not yet"}
-          </dd>
+          <dd>{r.ended_at ? `${fmtTime(r.ended_at)} (${duration(r.started_at, r.ended_at)})` : "Not yet"}</dd>
           <dt>Version</dt>
           <dd>
             {r.version}
-            {(advanced || r.environment !== "prod") && (
-              <span className="hint"> · {r.environment}</span>
-            )}
+            {(advanced || r.environment !== "prod") && <span className="hint"> · {r.environment}</span>}
           </dd>
           <dt>Run</dt>
           <dd>
@@ -256,12 +174,7 @@ export function RunPage() {
                 <Link to={`/runs/${data.forks.parent_run_id}`}>
                   <code>{data.forks.parent_run_id}</code>
                 </Link>
-                {data.forks.resumed_step && (
-                  <span className="hint">
-                    {" "}
-                    at step {data.forks.resumed_step}
-                  </span>
-                )}
+                {data.forks.resumed_step && <span className="hint"> at step {data.forks.resumed_step}</span>}
               </dd>
             </>
           )}
@@ -287,38 +200,22 @@ export function RunPage() {
         )}
         {r.status === "needs_reconciliation" && (
           <div className="notice">
-            A step's outcome is unknown and cannot be safely retried. Check with
-            the provider, then resolve the parked step below.
+            A step's outcome is unknown and cannot be safely retried. Check with the provider, then resolve the parked step below.
           </div>
         )}
       </section>
       <div className="run-actions">
-        <Link
-          className="button"
-          to={`/workflows/${r.workflow_id}?v=${r.version}`}
-        >
+        <Link className="button" to={`/workflows/${r.workflow_id}?v=${r.version}`}>
           Open the workflow
         </Link>
         {can("run.cancel") && !TERMINAL.has(shownStatus) && !reversing && (
-          <button
-            className="danger"
-            disabled={act.busy}
-            onClick={() => setCancelling(true)}
-          >
+          <button className="danger" disabled={act.busy} onClick={() => setCancelling(true)}>
             Cancel run
           </button>
         )}
         {can("pii.reveal") && (
-          <label
-            className="inline"
-            title="Decrypt personal data for this view; the access is audited"
-          >
-            <input
-              type="checkbox"
-              checked={reveal}
-              onChange={(e) => setReveal(e.target.checked)}
-            />{" "}
-            Reveal personal data
+          <label className="inline" title="Decrypt personal data for this view; the access is audited">
+            <input type="checkbox" checked={reveal} onChange={(e) => setReveal(e.target.checked)} /> Reveal personal data
           </label>
         )}
         {reveal && !TERMINAL.has(shownStatus) && (
@@ -335,70 +232,28 @@ export function RunPage() {
       <div className="toolbar">
         <h2 className="grow">Steps</h2>
         <div className="tabs" role="tablist">
-          <button
-            role="tab"
-            aria-selected={view === "canvas"}
-            className={view === "canvas" ? "active" : ""}
-            onClick={() => setView("canvas")}
-          >
+          <button role="tab" aria-selected={view === "canvas"} className={view === "canvas" ? "active" : ""} onClick={() => setView("canvas")}>
             Canvas
           </button>
-          <button
-            role="tab"
-            aria-selected={view === "timeline"}
-            className={view === "timeline" ? "active" : ""}
-            onClick={() => setView("timeline")}
-          >
+          <button role="tab" aria-selected={view === "timeline"} className={view === "timeline" ? "active" : ""} onClick={() => setView("timeline")}>
             Timeline
           </button>
         </div>
       </div>
-      {view === "canvas" && (
-        <RunCanvas
-          workflow={r.workflow_id}
-          version={r.version}
-          rows={rows}
-          ended={TERMINAL.has(shownStatus)}
-          onSelect={(step) => (
-            setView("timeline"),
-            setTimeout(
-              () =>
-                document
-                  .querySelector(`[data-testid="step-${CSS.escape(step)}"]`)
-                  ?.scrollIntoView({ block: "center" }),
-              0,
-            )
-          )}
-        />
-      )}
+      {view === "canvas" && <RunCanvas workflow={r.workflow_id} version={r.version} rows={rows} ended={TERMINAL.has(shownStatus)} onSelect={(step) => (setView("timeline"), setTimeout(() => document.querySelector(`[data-testid="step-${CSS.escape(step)}"]`)?.scrollIntoView({ block: "center" }), 0))} />}
       <div className="timeline" hidden={view !== "timeline"}>
         {rows.length === 0 && <div className="empty">No steps yet.</div>}
         {templateGroups(rows).map((g) => {
           const cards = g.rows.map((s) => (
-            <StepCard
-              key={s.id}
-              row={s}
-              plainError={data.plain_errors?.[s.id]}
-              reads={readsByStep.get(s.id) ?? []}
-              canResolve={can("run.resolve") && s.status === "parked"}
-              onResolve={() => setResolving(s.id)}
-            />
+            <StepCard key={s.id} row={s} plainError={data.plain_errors?.[s.id]} reads={readsByStep.get(s.id) ?? []} canResolve={can("run.resolve") && s.status === "parked"} onResolve={() => setResolving(s.id)} />
           ));
           if (g.template === null) return cards;
           // A template step's own steps, under it (decision 0047).
           const own = g.rows.find((r) => r.id === g.template);
           return (
-            <details
-              key={`template-${g.template}`}
-              className="template-group"
-              open={g.rows.some(
-                (r) => !["completed", "skipped"].includes(r.status),
-              )}
-              data-testid={`template-${g.template}`}
-            >
+            <details key={`template-${g.template}`} className="template-group" open={g.rows.some((r) => !["completed", "skipped"].includes(r.status))} data-testid={`template-${g.template}`}>
               <summary>
-                Template step <strong>{g.template}</strong>: {g.rows.length}{" "}
-                steps{own ? ` · ${own.status}` : ""}
+                Template step <strong>{g.template}</strong>: {g.rows.length} steps{own ? ` · ${own.status}` : ""}
               </summary>
               {cards}
             </details>
@@ -447,50 +302,21 @@ export function RunPage() {
           </tbody>
         </table>
       </details>
-      {resolving && (
-        <Resolve
-          run={id}
-          step={resolving}
-          onClose={() => setResolving(null)}
-          onDone={() => (setResolving(null), reload())}
-        />
-      )}
-      {cancelling && (
-        <CancelRun
-          run={id}
-          onClose={() => setCancelling(false)}
-          onDone={() => (setCancelling(false), reload())}
-        />
-      )}
+      {resolving && <Resolve run={id} step={resolving} onClose={() => setResolving(null)} onDone={() => (setResolving(null), reload())} />}
+      {cancelling && <CancelRun run={id} onClose={() => setCancelling(false)} onDone={() => (setCancelling(false), reload())} />}
     </>
   );
 }
 
-function StepCard({
-  row,
-  plainError,
-  reads,
-  canResolve,
-  onResolve,
-}: {
-  row: StepRow;
-  plainError?: string;
-  reads: SecretRead[];
-  canResolve: boolean;
-  onResolve: () => void;
-}) {
+function StepCard({ row, plainError, reads, canResolve, onResolve }: { row: StepRow; plainError?: string; reads: SecretRead[]; canResolve: boolean; onResolve: () => void }) {
   return (
     <div className={`step ${row.status}`} data-testid={`step-${row.id}`}>
       <div className="toolbar" style={{ marginBottom: 2 }}>
         <strong>{row.id}</strong>
         <Badge value={row.status} />
-        {row.attempts > 1 && (
-          <span className="hint">{row.attempts} attempts</span>
-        )}
+        {row.attempts > 1 && <span className="hint">{row.attempts} attempts</span>}
         <span className="hint">{duration(row.firstAt, row.lastAt)}</span>
-        {row.waitingFor && row.status === "waiting" && (
-          <span className="hint">waiting for {row.waitingFor}</span>
-        )}
+        {row.waitingFor && row.status === "waiting" && <span className="hint">waiting for {row.waitingFor}</span>}
         {canResolve && (
           <button className="primary" onClick={onResolve}>
             Resolve
@@ -515,12 +341,7 @@ function StepCard({
         </details>
       )}
       {row.output !== undefined && (
-        <details
-          open={
-            row.status === "completed" &&
-            JSON.stringify(row.output).length < 400
-          }
-        >
+        <details open={row.status === "completed" && JSON.stringify(row.output).length < 400}>
           <summary>output</summary>
           <Json value={row.output} />
         </details>
@@ -539,10 +360,7 @@ function StepCard({
               {reads.map((r) => (
                 <tr key={r.id}>
                   <td>
-                    <code>
-                      {r.connector ? `${r.connector}/${r.name}` : r.name}
-                    </code>{" "}
-                    <span className="hint">{r.kind}</span>
+                    <code>{r.connector ? `${r.connector}/${r.name}` : r.name}</code> <span className="hint">{r.kind}</span>
                   </td>
                   <td className="hint">attempt {r.attempt}</td>
                   <td className="hint">{fmtTime(r.at)}</td>
@@ -558,41 +376,19 @@ function StepCard({
 
 // Cancelling reverses what the run did by default (decision 0054): its
 // completed steps' compensations run, newest first, before it ends.
-function CancelRun({
-  run,
-  onClose,
-  onDone,
-}: {
-  run: string;
-  onClose: () => void;
-  onDone: () => void;
-}) {
+function CancelRun({ run, onClose, onDone }: { run: string; onClose: () => void; onDone: () => void }) {
   const act = useAction();
-  const cancel = (reverse: boolean) =>
-    void act.run(
-      async () => (await post(`/v1/runs/${run}/cancel`, { reverse }), onDone()),
-      reverse ? "Cancelling the run" : "Run cancelled",
-    );
+  const cancel = (reverse: boolean) => void act.run(async () => (await post(`/v1/runs/${run}/cancel`, { reverse }), onDone()), reverse ? "Cancelling the run" : "Run cancelled");
   return (
     <Modal title="Cancel this run?" onClose={onClose}>
+      <p>Nothing new starts. Steps already sent to a provider finish and record their results.</p>
       <p>
-        Nothing new starts. Steps already sent to a provider finish and record
-        their results.
-      </p>
-      <p>
-        <strong>Cancel and reverse</strong> then runs the reversal of every
-        completed step that has one (a refund for a payment, for example),
-        newest first, and ends the run.{" "}
-        <strong>Cancel without reversing</strong> ends it now and leaves what it
-        did as it is.
+        <strong>Cancel and reverse</strong> then runs the reversal of every completed step that has one (a refund for a payment, for example), newest first, and ends the run.{" "}
+        <strong>Cancel without reversing</strong> ends it now and leaves what it did as it is.
       </p>
       <ErrorBox error={act.error} />
       <div className="toolbar">
-        <button
-          className="danger"
-          disabled={act.busy}
-          onClick={() => cancel(true)}
-        >
+        <button className="danger" disabled={act.busy} onClick={() => cancel(true)}>
           Cancel and reverse
         </button>
         <button disabled={act.busy} onClick={() => cancel(false)}>
@@ -604,17 +400,7 @@ function CancelRun({
   );
 }
 
-function Resolve({
-  run,
-  step,
-  onClose,
-  onDone,
-}: {
-  run: string;
-  step: string;
-  onClose: () => void;
-  onDone: () => void;
-}) {
+function Resolve({ run, step, onClose, onDone }: { run: string; step: string; onClose: () => void; onDone: () => void }) {
   const [resolution, setResolution] = useState("completed");
   const [note, setNote] = useState("");
   const [output, setOutput] = useState<unknown>({});
@@ -623,26 +409,15 @@ function Resolve({
   return (
     <Modal title={`Resolve ${step}`} onClose={onClose}>
       <Field label="What the provider shows">
-        <select
-          value={resolution}
-          onChange={(e) => setResolution(e.target.value)}
-        >
+        <select value={resolution} onChange={(e) => setResolution(e.target.value)}>
           <option value="completed">It happened: record it as completed</option>
-          <option value="retry">
-            It did not happen: send it again, under a new reference
-          </option>
+          <option value="retry">It did not happen: send it again, under a new reference</option>
           <option value="failed">It did not happen: fail the step</option>
         </select>
       </Field>
       {resolution === "retry" && (
         <label className="inline">
-          <input
-            type="checkbox"
-            checked={checked}
-            onChange={(e) => setChecked(e.target.checked)}
-          />{" "}
-          I checked with the provider that this did not happen. It is sent again
-          under a new reference, so if it did happen it happens twice.
+          <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} /> I checked with the provider that this did not happen. It is sent again under a new reference, so if it did happen it happens twice.
         </label>
       )}
       {resolution === "completed" && (
@@ -650,37 +425,15 @@ function Resolve({
           <JsonInput value={output} onChange={setOutput} rows={5} />
         </Field>
       )}
-      <Field
-        label="Note (required, audited)"
-        hint="e.g. Paystack dashboard shows TRF_x successful at 10:42"
-      >
-        <textarea
-          rows={3}
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-        />
+      <Field label="Note (required, audited)" hint="e.g. Paystack dashboard shows TRF_x successful at 10:42">
+        <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} />
       </Field>
       <ErrorBox error={act.error} />
       <div className="toolbar">
         <button
           className="primary"
           disabled={act.busy || !note || (resolution === "retry" && !checked)}
-          onClick={() =>
-            void act.run(
-              async () => (
-                await post(
-                  `/v1/runs/${run}/steps/${encodeURIComponent(step)}/resolve`,
-                  {
-                    resolution,
-                    note,
-                    ...(resolution === "completed" && { output }),
-                  },
-                ),
-                onDone()
-              ),
-              "Step resolved",
-            )
-          }
+          onClick={() => void act.run(async () => (await post(`/v1/runs/${run}/steps/${encodeURIComponent(step)}/resolve`, { resolution, note, ...(resolution === "completed" && { output }) }), onDone()), "Step resolved")}
         >
           Resolve
         </button>

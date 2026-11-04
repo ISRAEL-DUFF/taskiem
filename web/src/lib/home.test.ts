@@ -1,11 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  moneyToday,
-  ordersToday,
-  runWords,
-  startedByWords,
-  triggerWords,
-} from "./home";
+import { moneyToday, ordersToday, runWords, startedByWords, triggerWords } from "./home";
 
 const now = new Date(2026, 9, 21, 12, 0);
 const at = (h: number, day = 21) => new Date(2026, 9, day, h).toISOString();
@@ -36,32 +30,17 @@ describe("ordersToday", () => {
 
 describe("triggerWords", () => {
   it("says what starts a workflow", () => {
-    expect(
-      triggerWords({ type: "schedule", config: { cron: "0 8 * * *" } }),
-    ).toBe("Every day at 08:00");
+    expect(triggerWords({ type: "schedule", config: { cron: "0 8 * * *" } })).toBe("Every day at 08:00");
     expect(triggerWords({ type: "storefront" })).toBe("An order comes in");
-    expect(triggerWords({ type: "invoice", config: { event: "paid" } })).toBe(
-      "An invoice is paid",
-    );
-    expect(
-      triggerWords({ type: "invoice", config: { event: "payment" } }),
-    ).toBe("A payment is counted towards an invoice");
-    expect(
-      triggerWords({ type: "link", config: { event: "bill.received" } }),
-    ).toBe("A linked supplier sends a bill");
-    expect(
-      triggerWords({
-        type: "connector_event",
-        config: { connector: "paystack@1" },
-      }),
-    ).toBe("Paystack tells it something happened");
+    expect(triggerWords({ type: "invoice", config: { event: "paid" } })).toBe("An invoice is paid");
+    expect(triggerWords({ type: "invoice", config: { event: "payment" } })).toBe("A payment is counted towards an invoice");
+    expect(triggerWords({ type: "link", config: { event: "bill.received" } })).toBe("A linked supplier sends a bill");
+    expect(triggerWords({ type: "connector_event", config: { connector: "paystack@1" } })).toBe("Paystack tells it something happened");
     expect(triggerWords({ type: "manual" })).toBe("When someone starts it");
     expect(triggerWords(null)).toBe("Not set up yet");
   });
   it("falls back for a schedule it cannot read", () => {
-    expect(
-      triggerWords({ type: "schedule", config: { cron: "*/7 3-5 * * *" } }),
-    ).toBe("On a schedule");
+    expect(triggerWords({ type: "schedule", config: { cron: "*/7 3-5 * * *" } })).toBe("On a schedule");
   });
 });
 
@@ -80,12 +59,8 @@ describe("startedByWords", () => {
     expect(startedByWords(null, "schedule", names)).toBe("its schedule");
     expect(startedByWords(null, "storefront", names)).toBe("an order");
     expect(startedByWords(null, undefined, names)).toBe("Taskiem");
-    expect(startedByWords("email:firstbank.ng", "email", names)).toBe(
-      "an email",
-    );
+    expect(startedByWords("email:firstbank.ng", "email", names)).toBe("an email");
     expect(startedByWords("form:F-1A2B", "form", names)).toBe("a form");
-    expect(startedByWords("invoice:INV-0007", "invoice", names)).toBe(
-      "a paid invoice",
-    );
+    expect(startedByWords("invoice:INV-0007", "invoice", names)).toBe("a paid invoice");
   });
 });

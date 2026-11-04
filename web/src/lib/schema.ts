@@ -2,14 +2,7 @@
 // inputs, workflow inputs). Values may be literals or "=..." expressions.
 import type { JSONSchema } from "../api";
 
-export type FieldKind =
-  | "string"
-  | "number"
-  | "integer"
-  | "boolean"
-  | "enum"
-  | "object"
-  | "json";
+export type FieldKind = "string" | "number" | "integer" | "boolean" | "enum" | "object" | "json";
 
 export function kindOf(s: JSONSchema | undefined): FieldKind {
   if (!s) return "json";
@@ -27,8 +20,7 @@ export function kindOf(s: JSONSchema | undefined): FieldKind {
   return "json";
 }
 
-export const isExpression = (v: unknown): v is string =>
-  typeof v === "string" && v.startsWith("=") && v.length > 1;
+export const isExpression = (v: unknown): v is string => typeof v === "string" && v.startsWith("=") && v.length > 1;
 
 /** Parses a form field's text into the value the schema wants. */
 export function coerce(kind: FieldKind, text: string): unknown {
@@ -38,9 +30,7 @@ export function coerce(kind: FieldKind, text: string): unknown {
     case "integer": {
       if (text.trim() === "") return undefined;
       const n = Number(text);
-      return Number.isFinite(n) && (kind === "number" || Number.isInteger(n))
-        ? n
-        : text;
+      return Number.isFinite(n) && (kind === "number" || Number.isInteger(n)) ? n : text;
     }
     case "boolean":
       return text === "true";
@@ -55,23 +45,12 @@ export function coerce(kind: FieldKind, text: string): unknown {
 }
 
 /** Sets or removes key in obj, returning a new object. */
-export function setKey(
-  obj: Record<string, unknown> | undefined,
-  key: string,
-  value: unknown,
-): Record<string, unknown> {
+export function setKey(obj: Record<string, unknown> | undefined, key: string, value: unknown): Record<string, unknown> {
   return merge(obj, { [key]: value });
 }
 
 /** obj with patch applied; keys the patch sets to undefined or "" are removed. */
-export function merge<T extends object>(
-  obj: T | undefined,
-  patch: Record<string, unknown>,
-): T {
+export function merge<T extends object>(obj: T | undefined, patch: Record<string, unknown>): T {
   const blank = (v: unknown) => v === undefined || v === "";
-  return Object.fromEntries(
-    Object.entries({ ...(obj ?? {}), ...patch }).filter(
-      ([k, v]) => !(k in patch && blank(v)),
-    ),
-  ) as T;
+  return Object.fromEntries(Object.entries({ ...(obj ?? {}), ...patch }).filter(([k, v]) => !(k in patch && blank(v)))) as T;
 }

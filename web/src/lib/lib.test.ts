@@ -1,22 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Step } from "@sdk/wd";
-import {
-  autoLayout,
-  connect,
-  disconnect,
-  freshId,
-  removeStep,
-  renameStep,
-  toGraph,
-} from "./graph";
+import { autoLayout, connect, disconnect, freshId, removeStep, renameStep, toGraph } from "./graph";
 import { coerce, kindOf } from "./schema";
-import {
-  redact,
-  templateGroups,
-  timeline,
-  topLevelStatus,
-  type StepRow,
-} from "./timeline";
+import { redact, templateGroups, timeline, topLevelStatus, type StepRow } from "./timeline";
 
 const steps: Step[] = [
   { id: "a", type: "transform", config: { output: 1 } },
@@ -32,42 +18,20 @@ describe("graph", () => {
     expect(l.c?.x).toBe(560);
   });
   it("builds edges from needs", () => {
-    expect(toGraph({ steps }).edges.map((e) => e.id)).toEqual([
-      "a->b",
-      "a->c",
-      "b->c",
-    ]);
+    expect(toGraph({ steps }).edges.map((e) => e.id)).toEqual(["a->b", "a->c", "b->c"]);
   });
   it("refuses cycles and self edges", () => {
     expect(connect(steps, "c", "a")).toBeNull();
     expect(connect(steps, "a", "a")).toBeNull();
-    expect(
-      connect(
-        [...steps, { id: "d", type: "wait", config: { duration: "1s" } }],
-        "c",
-        "d",
-      )?.find((s) => s.id === "d")?.needs,
-    ).toEqual(["c"]);
+    expect(connect([...steps, { id: "d", type: "wait", config: { duration: "1s" } }], "c", "d")?.find((s) => s.id === "d")?.needs).toEqual(["c"]);
   });
   it("removes, disconnects and renames consistently", () => {
-    expect(removeStep(steps, "a").map((s) => [s.id, s.needs])).toEqual([
-      ["b", undefined],
-      ["c", ["b"]],
-    ]);
+    expect(removeStep(steps, "a").map((s) => [s.id, s.needs])).toEqual([["b", undefined], ["c", ["b"]]]);
     expect(disconnect(steps, "a", "b")[1]?.needs).toBeUndefined();
     expect(renameStep(steps, "a", "start")[2]?.needs).toEqual(["start", "b"]);
   });
   it("finds fresh ids, including nested steps", () => {
-    const nested: Step[] = [
-      {
-        id: "loop",
-        type: "foreach",
-        config: {
-          items: "=x",
-          steps: [{ id: "pay", type: "wait", config: { duration: "1s" } }],
-        },
-      },
-    ];
+    const nested: Step[] = [{ id: "loop", type: "foreach", config: { items: "=x", steps: [{ id: "pay", type: "wait", config: { duration: "1s" } }] } }];
     expect(freshId(nested, "pay")).toBe("pay_2");
     expect(freshId(nested, "new")).toBe("new");
   });
@@ -92,202 +56,66 @@ describe("schema fields", () => {
 describe("timeline", () => {
   it("derives step status from events", () => {
     const rows = timeline([
-      {
-        seq: 1,
-        type: "RunStarted",
-        recorded_at: "2026-10-05T10:00:00Z",
-        origin: "ingest",
-      },
-      {
-        seq: 2,
-        type: "StepScheduled",
-        step_id: "pay",
-        attempt: 1,
-        payload: { kind: "task", input: { amount: 1 } },
-        recorded_at: "2026-10-05T10:00:00Z",
-        origin: "decide",
-      },
-      {
-        seq: 3,
-        type: "StepFailed",
-        step_id: "pay",
-        attempt: 1,
-        payload: { error: { kind: "transient", next: "retry" } },
-        recorded_at: "2026-10-05T10:00:01Z",
-        origin: "worker",
-      },
-      {
-        seq: 4,
-        type: "StepScheduled",
-        step_id: "pay",
-        attempt: 2,
-        payload: { kind: "task" },
-        recorded_at: "2026-10-05T10:00:03Z",
-        origin: "decide",
-      },
-      {
-        seq: 5,
-        type: "StepCompleted",
-        step_id: "pay",
-        attempt: 2,
-        payload: { output: { ok: true } },
-        recorded_at: "2026-10-05T10:00:04Z",
-        origin: "worker",
-      },
-      {
-        seq: 6,
-        type: "ApprovalRequested",
-        step_id: "ok",
-        payload: { role: "cfo" },
-        recorded_at: "2026-10-05T10:00:04Z",
-        origin: "decide",
-      },
+      { seq: 1, type: "RunStarted", recorded_at: "2026-10-05T10:00:00Z", origin: "ingest" },
+      { seq: 2, type: "StepScheduled", step_id: "pay", attempt: 1, payload: { kind: "task", input: { amount: 1 } }, recorded_at: "2026-10-05T10:00:00Z", origin: "decide" },
+      { seq: 3, type: "StepFailed", step_id: "pay", attempt: 1, payload: { error: { kind: "transient", next: "retry" } }, recorded_at: "2026-10-05T10:00:01Z", origin: "worker" },
+      { seq: 4, type: "StepScheduled", step_id: "pay", attempt: 2, payload: { kind: "task" }, recorded_at: "2026-10-05T10:00:03Z", origin: "decide" },
+      { seq: 5, type: "StepCompleted", step_id: "pay", attempt: 2, payload: { output: { ok: true } }, recorded_at: "2026-10-05T10:00:04Z", origin: "worker" },
+      { seq: 6, type: "ApprovalRequested", step_id: "ok", payload: { role: "cfo" }, recorded_at: "2026-10-05T10:00:04Z", origin: "decide" },
     ]);
-    expect(rows.map((r) => [r.id, r.status, r.attempts])).toEqual([
-      ["pay", "completed", 2],
-      ["ok", "waiting", 0],
-    ]);
+    expect(rows.map((r) => [r.id, r.status, r.attempts])).toEqual([["pay", "completed", 2], ["ok", "waiting", 0]]);
     expect(rows[1]?.waitingFor).toBe("approval by cfo");
   });
   it("says a form step waits for the form", () => {
     const rows = timeline([
-      {
-        seq: 2,
-        type: "StepScheduled",
-        step_id: "ask",
-        attempt: 1,
-        payload: {
-          kind: "signal",
-          event: "form.submitted",
-          form: { title: "Bank" },
-        },
-        recorded_at: "2026-10-05T10:00:00Z",
-        origin: "decide",
-      },
-      {
-        seq: 3,
-        type: "StepScheduled",
-        step_id: "paid",
-        attempt: 1,
-        payload: { kind: "signal", event: "paystack@1:charge" },
-        recorded_at: "2026-10-05T10:00:00Z",
-        origin: "decide",
-      },
+      { seq: 2, type: "StepScheduled", step_id: "ask", attempt: 1, payload: { kind: "signal", event: "form.submitted", form: { title: "Bank" } }, recorded_at: "2026-10-05T10:00:00Z", origin: "decide" },
+      { seq: 3, type: "StepScheduled", step_id: "paid", attempt: 1, payload: { kind: "signal", event: "paystack@1:charge" }, recorded_at: "2026-10-05T10:00:00Z", origin: "decide" },
     ]);
-    expect(rows.map((r) => [r.status, r.waitingFor])).toEqual([
-      ["waiting", "the form to be filled in"],
-      ["waiting", "signal paystack@1:charge"],
-    ]);
+    expect(rows.map((r) => [r.status, r.waitingFor])).toEqual([["waiting", "the form to be filled in"], ["waiting", "signal paystack@1:charge"]]);
   });
   it("redacts sealed values", () => {
-    expect(
-      redact({ bvn: { $pii: "bvn", ct: "x", subject: "s" }, n: [1] }),
-    ).toEqual({ bvn: "🔒 bvn", n: [1] });
+    expect(redact({ bvn: { $pii: "bvn", ct: "x", subject: "s" }, n: [1] })).toEqual({ bvn: "🔒 bvn", n: [1] });
   });
 });
 
 describe("merge", () => {
   it("applies a patch and drops blanked keys", async () => {
     const { merge } = await import("./schema");
-    expect(merge({ a: 1, b: 2, c: 3 }, { b: undefined, c: "", d: 4 })).toEqual({
-      a: 1,
-      d: 4,
-    });
+    expect(merge({ a: 1, b: 2, c: 3 }, { b: undefined, c: "", d: 4 })).toEqual({ a: 1, d: 4 });
   });
 });
 
 describe("topLevelStatus", () => {
-  const row = (id: string, status: StepRow["status"]): StepRow => ({
-    id,
-    status,
-    attempts: 1,
-    firstAt: "",
-    lastAt: "",
-    events: [],
-  });
+  const row = (id: string, status: StepRow["status"]): StepRow => ({ id, status, attempts: 1, firstAt: "", lastAt: "", events: [] });
   it("rolls nested instances up to their top-level step", () => {
     const got = topLevelStatus(
-      [
-        row("a", "completed"),
-        row("pay_all", "running"),
-        row("pay_all[0].pay", "completed"),
-        row("pay_all[1].pay", "failed"),
-        row("x", "skipped"),
-      ],
+      [row("a", "completed"), row("pay_all", "running"), row("pay_all[0].pay", "completed"), row("pay_all[1].pay", "failed"), row("x", "skipped")],
       ["a", "pay_all", "c", "x"],
     );
     expect(got).toEqual({ a: "completed", pay_all: "failed", x: "skipped" });
   });
   it("lets a finished step speak for itself", () => {
-    expect(
-      topLevelStatus(
-        [row("loop", "completed"), row("loop[0].s", "failed")],
-        ["loop"],
-      ),
-    ).toEqual({ loop: "completed" });
+    expect(topLevelStatus([row("loop", "completed"), row("loop[0].s", "failed")], ["loop"])).toEqual({ loop: "completed" });
   });
   it("counts a template step's expanded steps as its own", () => {
-    const got = topLevelStatus(
-      [
-        row("pay__body", "running"),
-        row("pay__input", "completed"),
-        row("pay__approve", "waiting"),
-        row("pay__pay_all[0].pay__pay", "completed"),
-      ],
-      ["pay"],
-    );
+    const got = topLevelStatus([row("pay__body", "running"), row("pay__input", "completed"), row("pay__approve", "waiting"), row("pay__pay_all[0].pay__pay", "completed")], ["pay"]);
     expect(got).toEqual({ pay: "running" });
   });
 });
 
 describe("templateGroups", () => {
-  const row = (
-    id: string,
-    status: StepRow["status"] = "completed",
-  ): StepRow => ({
-    id,
-    status,
-    attempts: 1,
-    firstAt: "",
-    lastAt: "",
-    events: [],
-  });
+  const row = (id: string, status: StepRow["status"] = "completed"): StepRow => ({ id, status, attempts: 1, firstAt: "", lastAt: "", events: [] });
   it("puts a template step's rows under it, in order", () => {
-    const rows = [
-      row("names"),
-      row("pay__body"),
-      row("pay__input"),
-      row("pay__read_list"),
-      row("pay__pay_all[0].pay__pay"),
-      row("pay"),
-      row("after"),
-      row("pay_extra"),
-    ];
-    const got = templateGroups(rows).map((g) => [
-      g.template,
-      g.rows.map((r) => r.id),
-    ]);
+    const rows = [row("names"), row("pay__body"), row("pay__input"), row("pay__read_list"), row("pay__pay_all[0].pay__pay"), row("pay"), row("after"), row("pay_extra")];
+    const got = templateGroups(rows).map((g) => [g.template, g.rows.map((r) => r.id)]);
     expect(got).toEqual([
       [null, ["names"]],
-      [
-        "pay",
-        [
-          "pay__body",
-          "pay__input",
-          "pay__read_list",
-          "pay__pay_all[0].pay__pay",
-          "pay",
-        ],
-      ],
+      ["pay", ["pay__body", "pay__input", "pay__read_list", "pay__pay_all[0].pay__pay", "pay"]],
       [null, ["after"]],
       [null, ["pay_extra"]],
     ]);
   });
   it("leaves a capability step's composite rows alone", () => {
-    expect(
-      templateGroups([row("pay__recipient"), row("pay")]).every(
-        (g) => g.template === null,
-      ),
-    ).toBe(true);
+    expect(templateGroups([row("pay__recipient"), row("pay")]).every((g) => g.template === null)).toBe(true);
   });
 });

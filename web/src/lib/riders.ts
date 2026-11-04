@@ -16,12 +16,7 @@ export interface Rider {
   /** The chat app they tapped in on, or sms until they do. */
   reached: "whatsapp" | "telegram" | "sms";
   /** What they said to Taskiem, whichever business they ride for. */
-  presence: {
-    state: "free" | "busy" | "off";
-    until?: string;
-    since?: string;
-    open?: number;
-  };
+  presence: { state: "free" | "busy" | "off"; until?: string; since?: string; open?: number };
   /** Three offers unanswered today: passed over until they tap anything. */
   not_answering?: boolean;
   /** Their bank account as it may be shown; unset until added under Pay riders. */
@@ -49,10 +44,7 @@ export const RIDER_LIMITS = { name: 60 } as const;
 export function stateLine(r: Rider): string {
   if (!r.active) return "On leave";
   if (r.presence.state === "off") return "Off";
-  if (r.presence.state === "busy")
-    return r.presence.until
-      ? `Busy till ${lagosTime(r.presence.until)}`
-      : "Busy";
+  if (r.presence.state === "busy") return r.presence.until ? `Busy till ${lagosTime(r.presence.until)}` : "Busy";
   return "Free";
 }
 
@@ -74,15 +66,13 @@ export function riderSub(r: Rider): string {
   const parts = [r.zones.length > 0 ? r.zones.join(", ") : "All areas"];
   if (r.fee_kobo > 0) parts.push(`${formatPrice(r.fee_kobo)} a delivery`);
   parts.push(reachedLine(r));
-  if (r.rating != null && r.ratings)
-    parts.push(`rated ${r.rating.toFixed(1)} of 5 (${r.ratings})`);
+  if (r.rating != null && r.ratings) parts.push(`rated ${r.rating.toFixed(1)} of 5 (${r.ratings})`);
   if (r.not_answering) parts.push("not answering offers today");
   return parts.join(" · ");
 }
 
 /** What the link says when the owner shares it with a rider themselves. */
-export const shareRiderText = (url: string) =>
-  `Tap to get our deliveries on WhatsApp: ${url}`;
+export const shareRiderText = (url: string) => `Tap to get our deliveries on WhatsApp: ${url}`;
 
 /** A rider as the add or change form holds them. */
 export interface RiderForm {
@@ -92,31 +82,13 @@ export interface RiderForm {
   fee: string;
 }
 
-export const emptyRider = (): RiderForm => ({
-  name: "",
-  phone: "",
-  zones: [],
-  fee: "",
-});
+export const emptyRider = (): RiderForm => ({ name: "", phone: "", zones: [], fee: "" });
 
-export const riderForm = (r: Rider): RiderForm => ({
-  name: r.name,
-  phone: r.phone,
-  zones: [...r.zones],
-  fee: r.fee_kobo ? feeInput(r.fee_kobo) : "",
-});
+export const riderForm = (r: Rider): RiderForm => ({ name: r.name, phone: r.phone, zones: [...r.zones], fee: r.fee_kobo ? feeInput(r.fee_kobo) : "" });
 
 /** The POST /v1/riders body (with the phone) or PATCH body (without). */
-export function riderRequest(
-  f: RiderForm,
-  adding: boolean,
-): { name: string; phone?: string; zones: string[]; fee_kobo: number } {
-  const out: {
-    name: string;
-    phone?: string;
-    zones: string[];
-    fee_kobo: number;
-  } = {
+export function riderRequest(f: RiderForm, adding: boolean): { name: string; phone?: string; zones: string[]; fee_kobo: number } {
+  const out: { name: string; phone?: string; zones: string[]; fee_kobo: number } = {
     name: f.name.trim().replace(/\s+/g, " "),
     zones: f.zones,
     fee_kobo: feeKobo(f.fee),
@@ -129,12 +101,9 @@ export function riderRequest(
 export function riderProblem(f: RiderForm, adding: boolean): string | null {
   const name = f.name.trim();
   if (!name) return "Enter the rider's name.";
-  if (name.length > RIDER_LIMITS.name)
-    return `A name is up to ${RIDER_LIMITS.name} characters.`;
-  if (adding && f.phone.replace(/[^\d]/g, "").length < 10)
-    return "Enter the rider's mobile number, like 0803 123 4567.";
+  if (name.length > RIDER_LIMITS.name) return `A name is up to ${RIDER_LIMITS.name} characters.`;
+  if (adding && f.phone.replace(/[^\d]/g, "").length < 10) return "Enter the rider's mobile number, like 0803 123 4567.";
   const fee = feeKobo(f.fee);
-  if (Number.isNaN(fee) || fee > 10_000_000)
-    return "The fee per delivery is an amount from ₦0 to ₦100,000.";
+  if (Number.isNaN(fee) || fee > 10_000_000) return "The fee per delivery is an amount from ₦0 to ₦100,000.";
   return null;
 }

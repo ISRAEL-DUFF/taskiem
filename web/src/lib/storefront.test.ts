@@ -1,28 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  cleanColumns,
-  formFrom,
-  requestFrom,
-  sameRequest,
-  tidyMessage,
-  columnsFor,
-  catalogueTables,
-  formatPrice,
-  guessColumns,
-  hoursErrors,
-  hoursFromForm,
-  hoursToForm,
-  imageProblem,
-  pastMidnight,
-  sameAsMonday,
-  slugError,
-  slugify,
-  thumb,
-  type Hours,
-  itemRow,
-  openNow,
-  type HoursForm,
-} from "./storefront";
+import { cleanColumns, formFrom, requestFrom, sameRequest, tidyMessage, columnsFor, catalogueTables, formatPrice, guessColumns, hoursErrors, hoursFromForm, hoursToForm, imageProblem, pastMidnight, sameAsMonday, slugError, slugify, thumb, type Hours, itemRow, openNow, type HoursForm } from "./storefront";
 import type { Column, Table } from "./tables";
 
 /** a[i], which the test knows is there. */
@@ -32,13 +9,7 @@ function at<T>(a: T[] | undefined, i: number): T {
   return v;
 }
 
-const col = (name: string, type: Column["type"], personal = false): Column => ({
-  name,
-  title: "",
-  type,
-  required: false,
-  personal,
-});
+const col = (name: string, type: Column["type"], personal = false): Column => ({ name, title: "", type, required: false, personal });
 
 const table = (columns: Column[]): Table => ({
   id: "t1",
@@ -74,63 +45,32 @@ describe("addresses", () => {
   });
   it("checks a slug's shape", () => {
     expect(slugError("mama-put")).toBeNull();
-    for (const bad of [
-      "",
-      "ab",
-      "Mama",
-      "a_b_c",
-      "-abc",
-      "abc-",
-      "a--b",
-      "a".repeat(31),
-    ])
-      expect(slugError(bad), bad).not.toBeNull();
+    for (const bad of ["", "ab", "Mama", "a_b_c", "-abc", "abc-", "a--b", "a".repeat(31)]) expect(slugError(bad), bad).not.toBeNull();
   });
 });
 
 describe("opening hours", () => {
   const api: Hours = {
-    days: [
-      [{ open: "08:00", close: "18:30" }],
-      [
-        { open: "08:00", close: "12:00" },
-        { open: "13:00", close: "18:00" },
-      ],
-      null,
-      [],
-      null,
-      null,
-      null,
-    ],
+    days: [[{ open: "08:00", close: "18:30" }], [{ open: "08:00", close: "12:00" }, { open: "13:00", close: "18:00" }], null, [], null, null, null],
     note: "Closed on public holidays",
   };
 
   it("turns the API's hours into seven days and back", () => {
     const f = hoursToForm(api);
     expect(f.days).toHaveLength(7);
-    expect(at(f.days, 0)).toEqual({
-      open: true,
-      spans: [{ open: "08:00", close: "18:30" }],
-    });
+    expect(at(f.days, 0)).toEqual({ open: true, spans: [{ open: "08:00", close: "18:30" }] });
     expect(at(f.days, 1).spans).toHaveLength(2);
     expect(at(f.days, 2).open).toBe(false);
     expect(at(f.days, 3).open).toBe(false);
     expect(f.note).toBe("Closed on public holidays");
-    expect(hoursFromForm(f)).toEqual({
-      ...api,
-      days: api.days.map((d) => (d && d.length ? d : null)),
-    });
+    expect(hoursFromForm(f)).toEqual({ ...api, days: api.days.map((d) => (d && d.length ? d : null)) });
   });
 
   it("fills in missing or short hours", () => {
     const f = hoursToForm(undefined);
     expect(f.days.every((d) => !d.open && d.spans.length === 1)).toBe(true);
-    expect(hoursFromForm(f)).toEqual({
-      days: [null, null, null, null, null, null, null],
-    });
-    expect(
-      hoursToForm({ days: [[{ open: "09:00", close: "10:00" }]] }).days,
-    ).toHaveLength(7);
+    expect(hoursFromForm(f)).toEqual({ days: [null, null, null, null, null, null, null] });
+    expect(hoursToForm({ days: [[{ open: "09:00", close: "10:00" }]] }).days).toHaveLength(7);
   });
 
   it("drops the openings of a closed day and trims the note", () => {
@@ -180,52 +120,21 @@ describe("catalogue columns", () => {
   ];
 
   it("offers only columns of allowed types that are not personal", () => {
-    expect(columnsFor(cols, ["text"]).map((c) => c.name)).toEqual([
-      "name",
-      "image",
-    ]);
-    expect(columnsFor(cols, ["integer", "number"]).map((c) => c.name)).toEqual([
-      "price_kobo",
-      "cost",
-    ]);
-    expect(columnsFor(cols, ["boolean"]).map((c) => c.name)).toEqual([
-      "in_stock",
-    ]);
-    expect(columnsFor([col("secret", "boolean", true)], ["boolean"])).toEqual(
-      [],
-    );
+    expect(columnsFor(cols, ["text"]).map((c) => c.name)).toEqual(["name", "image"]);
+    expect(columnsFor(cols, ["integer", "number"]).map((c) => c.name)).toEqual(["price_kobo", "cost"]);
+    expect(columnsFor(cols, ["boolean"]).map((c) => c.name)).toEqual(["in_stock"]);
+    expect(columnsFor([col("secret", "boolean", true)], ["boolean"])).toEqual([]);
   });
 
   it("lists the tables that can be a catalogue", () => {
-    expect(
-      catalogueTables([
-        table(cols),
-        table([col("who", "text", true), col("n", "integer")]),
-      ]),
-    ).toHaveLength(1);
+    expect(catalogueTables([table(cols), table([col("who", "text", true), col("n", "integer")])])).toHaveLength(1);
   });
 
   it("guesses a mapping from column names", () => {
-    expect(guessColumns(table(cols))).toEqual({
-      name: "name",
-      price: "price_kobo",
-      price_unit: "kobo",
-      photo: "image",
-      available: "in_stock",
-    });
-    expect(
-      guessColumns(table([col("dish", "text"), col("price", "number")])),
-    ).toEqual({ name: "dish", price: "price", price_unit: "naira" });
+    expect(guessColumns(table(cols))).toEqual({ name: "name", price: "price_kobo", price_unit: "kobo", photo: "image", available: "in_stock" });
+    expect(guessColumns(table([col("dish", "text"), col("price", "number")]))).toEqual({ name: "dish", price: "price", price_unit: "naira" });
     // A count of what is left is stock; a yes/no in_stock stays availability.
-    expect(
-      guessColumns(
-        table([
-          col("dish", "text"),
-          col("qty", "integer"),
-          col("in_stock", "boolean"),
-        ]),
-      ),
-    ).toEqual({
+    expect(guessColumns(table([col("dish", "text"), col("qty", "integer"), col("in_stock", "boolean")]))).toEqual({
       name: "dish",
       price_unit: "naira",
       available: "in_stock",
@@ -234,34 +143,19 @@ describe("catalogue columns", () => {
   });
 
   it("leaves out empty fields", () => {
-    expect(
-      cleanColumns({
-        name: "name",
-        price: "",
-        price_unit: "kobo",
-        photo: "image",
-      }),
-    ).toEqual({ name: "name", photo: "image" });
-    expect(
-      cleanColumns({ name: "name", price: "cost", price_unit: "" }),
-    ).toEqual({ name: "name", price: "cost", price_unit: "naira" });
+    expect(cleanColumns({ name: "name", price: "", price_unit: "kobo", photo: "image" })).toEqual({ name: "name", photo: "image" });
+    expect(cleanColumns({ name: "name", price: "cost", price_unit: "" })).toEqual({ name: "name", price: "cost", price_unit: "naira" });
   });
 });
 
 describe("images", () => {
   it("checks type and size before uploading", () => {
     expect(imageProblem({ type: "image/png", size: 1000 })).toBeNull();
-    expect(imageProblem({ type: "image/gif", size: 1000 })).toMatch(
-      /JPEG, PNG or WebP/,
-    );
-    expect(imageProblem({ type: "image/jpeg", size: 11 << 20 })).toMatch(
-      /10 MB/,
-    );
+    expect(imageProblem({ type: "image/gif", size: 1000 })).toMatch(/JPEG, PNG or WebP/);
+    expect(imageProblem({ type: "image/jpeg", size: 11 << 20 })).toMatch(/10 MB/);
   });
   it("picks the thumbnail", () => {
-    expect(thumb({ "2000": "big", "320": "https://ref.xb.test/s.jpg" })).toBe(
-      "/v1/storefront/image?src=https%3A%2F%2Fref.xb.test%2Fs.jpg",
-    );
+    expect(thumb({ "2000": "big", "320": "https://ref.xb.test/s.jpg" })).toBe("/v1/storefront/image?src=https%3A%2F%2Fref.xb.test%2Fs.jpg");
     expect(thumb(undefined)).toBeUndefined();
   });
 });
@@ -271,12 +165,7 @@ describe("the editor's form", () => {
     const f = formFrom(null);
     expect(requestFrom(f)).toEqual({
       slug: "",
-      draft: {
-        name: "",
-        hours: { days: [null, null, null, null, null, null, null] },
-        template: "classic",
-        accent: "green",
-      },
+      draft: { name: "", hours: { days: [null, null, null, null, null, null, null] }, template: "classic", accent: "green" },
       catalogue_table: null,
       catalogue_columns: {},
     });
@@ -285,85 +174,37 @@ describe("the editor's form", () => {
   it("saves what it loaded unchanged, and notices a change", () => {
     const sf = {
       slug: "mama-put",
-      draft: {
-        name: "Mama Put",
-        tagline: "Hot food",
-        hours: {
-          days: [
-            [{ open: "08:00", close: "18:00" }],
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-          ],
-        },
-        template: "bold" as const,
-        accent: "red",
-        language: "en",
-      },
+      draft: { name: "Mama Put", tagline: "Hot food", hours: { days: [[{ open: "08:00", close: "18:00" }], null, null, null, null, null, null] }, template: "bold" as const, accent: "red", language: "en" },
       catalogue_table: "t1",
-      catalogue_columns: {
-        name: "name",
-        price: "price",
-        price_unit: "naira" as const,
-      },
+      catalogue_columns: { name: "name", price: "price", price_unit: "naira" as const },
     };
     const f = formFrom(sf);
     expect(requestFrom(f)).toEqual(sf);
     expect(sameRequest(f, formFrom(sf))).toBe(true);
-    expect(sameRequest({ ...f, text: { ...f.text, about: "  " } }, f)).toBe(
-      true,
-    );
-    expect(
-      sameRequest({ ...f, text: { ...f.text, about: "Since 1999" } }, f),
-    ).toBe(false);
+    expect(sameRequest({ ...f, text: { ...f.text, about: "  " } }, f)).toBe(true);
+    expect(sameRequest({ ...f, text: { ...f.text, about: "Since 1999" } }, f)).toBe(false);
     // No table: no mapping.
     expect(requestFrom({ ...f, table: null }).catalogue_columns).toEqual({});
   });
 
   it("tidies the server's refusals", () => {
-    expect(tidyMessage("storefront: invalid: the name: too short")).toBe(
-      "The name: too short",
-    );
-    expect(tidyMessage("storefront: the address is taken: mama")).toBe(
-      "The address is taken: mama",
-    );
-    expect(
-      tidyMessage('storefront: invalid: publicnames: reserved name: "www"'),
-    ).toBe('Reserved name: "www"');
-    expect(tidyMessage("an image is at most 5 MB")).toBe(
-      "An image is at most 5 MB",
-    );
+    expect(tidyMessage("storefront: invalid: the name: too short")).toBe("The name: too short");
+    expect(tidyMessage("storefront: the address is taken: mama")).toBe("The address is taken: mama");
+    expect(tidyMessage('storefront: invalid: publicnames: reserved name: "www"')).toBe('Reserved name: "www"');
+    expect(tidyMessage("an image is at most 5 MB")).toBe("An image is at most 5 MB");
   });
 });
 
 describe("catalogue items typed in the editor", () => {
-  const cols = {
-    name: "name",
-    price: "price",
-    price_unit: "naira" as const,
-    available: "available",
-  };
+  const cols = { name: "name", price: "price", price_unit: "naira" as const, available: "available" };
   it("makes the row in naira, or kobo when the table counts in kobo", () => {
-    expect(itemRow(cols, " Jollof rice ", "₦1,500")).toEqual({
-      row: { name: "Jollof rice", price: 1500, available: true },
-    });
-    expect(itemRow({ ...cols, price_unit: "kobo" }, "Rice", "1500.50")).toEqual(
-      { row: { name: "Rice", price: 150050, available: true } },
-    );
-    expect(itemRow(cols, "Rice", "")).toEqual({
-      row: { name: "Rice", available: true },
-    });
+    expect(itemRow(cols, " Jollof rice ", "₦1,500")).toEqual({ row: { name: "Jollof rice", price: 1500, available: true } });
+    expect(itemRow({ ...cols, price_unit: "kobo" }, "Rice", "1500.50")).toEqual({ row: { name: "Rice", price: 150050, available: true } });
+    expect(itemRow(cols, "Rice", "")).toEqual({ row: { name: "Rice", available: true } });
   });
   it("says what is wrong", () => {
-    expect(itemRow(cols, "", "100")).toEqual({
-      error: "Give the item a name.",
-    });
-    expect(itemRow(cols, "Rice", "a lot")).toEqual({
-      error: "Write the price as a number of naira, such as 1500.",
-    });
+    expect(itemRow(cols, "", "100")).toEqual({ error: "Give the item a name." });
+    expect(itemRow(cols, "Rice", "a lot")).toEqual({ error: "Write the price as a number of naira, such as 1500." });
   });
 });
 
@@ -371,42 +212,21 @@ const closedDay = { open: false, spans: [{ open: "09:00", close: "17:00" }] };
 const hours: HoursForm = {
   note: "",
   days: [
-    {
-      open: true,
-      spans: [
-        { open: "09:00", close: "13:00" },
-        { open: "15:00", close: "20:00" },
-      ],
-    },
-    closedDay,
-    closedDay,
-    closedDay,
-    closedDay,
-    closedDay,
-    closedDay,
+    { open: true, spans: [{ open: "09:00", close: "13:00" }, { open: "15:00", close: "20:00" }] },
+    closedDay, closedDay, closedDay, closedDay, closedDay, closedDay,
   ],
 };
 
 describe("openNow", () => {
   // 19 October 2026 is a Monday.
   it("is open inside an opening, until its close", () => {
-    expect(openNow(hours, new Date(2026, 9, 19, 10, 30))).toEqual({
-      open: true,
-      until: "13:00",
-    });
+    expect(openNow(hours, new Date(2026, 9, 19, 10, 30))).toEqual({ open: true, until: "13:00" });
   });
   it("says when it opens again today", () => {
-    expect(openNow(hours, new Date(2026, 9, 19, 14, 0))).toEqual({
-      open: false,
-      opens: "15:00",
-    });
+    expect(openNow(hours, new Date(2026, 9, 19, 14, 0))).toEqual({ open: false, opens: "15:00" });
   });
   it("is closed after the last opening and on closed days", () => {
-    expect(openNow(hours, new Date(2026, 9, 19, 21, 0))).toEqual({
-      open: false,
-    });
-    expect(openNow(hours, new Date(2026, 9, 20, 10, 0))).toEqual({
-      open: false,
-    });
+    expect(openNow(hours, new Date(2026, 9, 19, 21, 0))).toEqual({ open: false });
+    expect(openNow(hours, new Date(2026, 9, 20, 10, 0))).toEqual({ open: false });
   });
 });

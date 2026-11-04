@@ -10,9 +10,7 @@ test("an owner drafts a storefront", async ({ page }) => {
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await page.getByRole("link", { name: "Storefront" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Storefront", exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Storefront", exact: true })).toBeVisible();
   await expect(page.getByText("You have no storefront yet.")).toBeVisible();
 
   // The address follows the name until one is typed.
@@ -32,16 +30,12 @@ test("an owner drafts a storefront", async ({ page }) => {
   expect(vs, describe("/storefront", vs)).toEqual([]);
 
   await page.getByRole("button", { name: "Save draft" }).click();
-  await expect(
-    page.getByRole("status").filter({ hasText: "Draft saved." }),
-  ).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Draft saved." })).toBeVisible();
   await expect(page.getByText("Not published yet")).toBeVisible();
 
   // It comes back as saved.
   await page.reload();
-  await expect(page.getByLabel("Business name")).toHaveValue(
-    "Mama Put Kitchen",
-  );
+  await expect(page.getByLabel("Business name")).toHaveValue("Mama Put Kitchen");
   await expect(page.getByLabel("Tuesday opens")).toHaveValue("08:00");
 });
 
@@ -58,20 +52,14 @@ test("an owner picks the look of their public pages", async ({ page }) => {
   await page.getByRole("radio", { name: /Bold/ }).check();
   await page.getByRole("button", { name: "#1d4ed8" }).click();
   await expect(page.getByLabel("Colour code")).toHaveValue("#1d4ed8");
-  await expect(
-    page.getByText("You have changes that are not saved."),
-  ).toBeVisible();
+  await expect(page.getByText("You have changes that are not saved.")).toBeVisible();
 
   const vs = await axe(page);
   expect(vs, describe("/storefront/look", vs)).toEqual([]);
 
   await page.getByRole("button", { name: "Save the look" }).click();
-  await expect(
-    page.getByText("Saved. Your pages show the new look within a minute."),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Save the look" }),
-  ).toBeDisabled();
+  await expect(page.getByText("Saved. Your pages show the new look within a minute.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save the look" })).toBeDisabled();
 
   // It comes back as saved, and the storefront page says so.
   await page.reload();
@@ -81,9 +69,7 @@ test("an owner picks the look of their public pages", async ({ page }) => {
   await expect(page.getByText("theme, in #1d4ed8")).toBeVisible();
 });
 
-test("an owner sets up the question form and finds the orders", async ({
-  page,
-}) => {
+test("an owner sets up the question form and finds the orders", async ({ page }) => {
   await page.goto("/login");
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
@@ -93,33 +79,21 @@ test("an owner sets up the question form and finds the orders", async ({
   const forms = page.getByRole("region", { name: "Forms" });
   const questions = forms.getByRole("article", { name: "Questions" });
   await expect(questions.getByText("No workflow set up yet.")).toBeVisible();
-  await expect(
-    forms
-      .getByRole("article", { name: "Orders" })
-      .getByRole("button", { name: "Set up orders" }),
-  ).toBeVisible();
+  await expect(forms.getByRole("article", { name: "Orders" }).getByRole("button", { name: "Set up orders" })).toBeVisible();
 
   // Set up adds the default workflow and publishes it to prod.
   await questions.getByRole("button", { name: "Set up questions" }).click();
-  await expect(
-    questions.getByRole("link", { name: "Open its workflow for questions" }),
-  ).toBeVisible();
-  await questions
-    .getByRole("switch", { name: "Show this form on your page" })
-    .check();
+  await expect(questions.getByRole("link", { name: "Open its workflow for questions" })).toBeVisible();
+  await questions.getByRole("switch", { name: "Show this form on your page" }).check();
   await questions.getByLabel("Button label").fill("Ask us anything");
   await questions.getByRole("button", { name: "Save questions" }).click();
-  await expect(questions.getByRole("status")).toHaveText(
-    "Saved. It shows on your page once you publish it.",
-  );
+  await expect(questions.getByRole("status")).toHaveText("Saved. It shows on your page once you publish it.");
   await expect(questions.getByText("On", { exact: true })).toBeVisible();
 
   // An order offers payment, the Paystack connection and how it is collected.
   const orders = forms.getByRole("article", { name: "Orders" });
   await orders.getByRole("button", { name: "Set up orders" }).click();
-  await expect(
-    orders.getByRole("radio", { name: /Customer pays after you accept/ }),
-  ).toBeChecked();
+  await expect(orders.getByRole("radio", { name: /Customer pays after you accept/ })).toBeChecked();
   await orders.getByRole("checkbox", { name: "Delivery" }).check();
   await orders.getByLabel("Delivery note").fill("Yaba and Surulere only");
   await orders.getByRole("radio", { name: /No online payment/ }).check();
@@ -130,28 +104,17 @@ test("an owner sets up the question form and finds the orders", async ({
 
   // It comes back as saved.
   await page.reload();
-  await expect(questions.getByLabel("Button label")).toHaveValue(
-    "Ask us anything",
-  );
-  await expect(
-    questions.getByRole("switch", { name: "Show this form on your page" }),
-  ).toBeChecked();
+  await expect(questions.getByLabel("Button label")).toHaveValue("Ask us anything");
+  await expect(questions.getByRole("switch", { name: "Show this form on your page" })).toBeChecked();
 
-  await page
-    .getByRole("navigation", { name: "Storefront" })
-    .getByRole("link", { name: "Orders" })
-    .click();
-  await expect(
-    page.getByRole("heading", { name: "Orders", exact: true }),
-  ).toBeVisible();
+  await page.getByRole("navigation", { name: "Storefront" }).getByRole("link", { name: "Orders" }).click();
+  await expect(page.getByRole("heading", { name: "Orders", exact: true })).toBeVisible();
   await expect(page.getByText("No orders yet.")).toBeVisible();
   await page.getByLabel("Show").selectOption("All");
   await expect(page).toHaveURL(/status=all/);
 });
 
-test("a second workflow on a form offers to replace the first", async ({
-  page,
-}) => {
+test("a second workflow on a form offers to replace the first", async ({ page }) => {
   // One workflow per form (docs/spec/fronts.md F0): the question form's
   // workflow, set up above, is copied as another workflow, whose publish is
   // refused with Replace it with this one.
@@ -162,21 +125,12 @@ test("a second workflow on a form offers to replace the first", async ({
   await expect(page).not.toHaveURL(/login/);
   const h = { headers: { "X-Taskiem-Request": "1" } };
   type List = { workflows: { id: string; name: string }[] };
-  const all = ((await (await page.request.get("/v1/workflows")).json()) as List)
-    .workflows;
+  const all = ((await (await page.request.get("/v1/workflows")).json()) as List).workflows;
   const first = all.find((w) => /question/i.test(w.name));
   expect(first, "the question form's workflow").toBeTruthy();
-  const v1 = (await (
-    await page.request.get(`/v1/workflows/${first?.id ?? ""}/versions/1`)
-  ).json()) as { definition: { name: string } };
+  const v1 = (await (await page.request.get(`/v1/workflows/${first?.id ?? ""}/versions/1`)).json()) as { definition: { name: string } };
   const made = (await (
-    await page.request.post("/v1/workflows", {
-      ...h,
-      data: {
-        name: "Questions, answered by Bisi",
-        definition: { ...v1.definition, name: "Questions, answered by Bisi" },
-      },
-    })
+    await page.request.post("/v1/workflows", { ...h, data: { name: "Questions, answered by Bisi", definition: { ...v1.definition, name: "Questions, answered by Bisi" } } })
   ).json()) as { id: string };
 
   await page.goto(`/workflows/${made.id}`);
@@ -190,17 +144,11 @@ test("a second workflow on a form offers to replace the first", async ({
   expect(vs, describe("/workflows/:id (a form held)", vs)).toEqual([]);
 
   await held.getByRole("button", { name: "Replace it with this one" }).click();
-  await expect(
-    page
-      .getByRole("status")
-      .filter({ hasText: "The form starts this workflow now." }),
-  ).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "The form starts this workflow now." })).toBeVisible();
   await expect(held).toHaveCount(0);
 });
 
-test("a second workflow on a form can have a new form of its own", async ({
-  page,
-}) => {
+test("a second workflow on a form can have a new form of its own", async ({ page }) => {
   // Make a new action for this workflow (docs/spec/fronts.md F2): another
   // copy of the question form's workflow gets its own question form, off,
   // and the first keeps the form it has.
@@ -211,42 +159,23 @@ test("a second workflow on a form can have a new form of its own", async ({
   await expect(page).not.toHaveURL(/login/);
   const h = { headers: { "X-Taskiem-Request": "1" } };
   type List = { workflows: { id: string; name: string }[] };
-  const all = ((await (await page.request.get("/v1/workflows")).json()) as List)
-    .workflows;
-  type Actions = {
-    actions: { kind: string; builtin?: boolean; workflow_id: string | null }[];
-  };
-  const forms = (
-    (await (await page.request.get("/v1/storefront/actions")).json()) as Actions
-  ).actions;
-  const holder = forms.find(
-    (a) => a.kind === "enquiry" && a.builtin !== false,
-  )?.workflow_id;
+  const all = ((await (await page.request.get("/v1/workflows")).json()) as List).workflows;
+  type Actions = { actions: { kind: string; builtin?: boolean; workflow_id: string | null }[] };
+  const forms = ((await (await page.request.get("/v1/storefront/actions")).json()) as Actions).actions;
+  const holder = forms.find((a) => a.kind === "enquiry" && a.builtin !== false)?.workflow_id;
   const first = all.find((w) => w.id === holder);
   expect(first, "the question form's workflow").toBeTruthy();
-  const v1 = (await (
-    await page.request.get(`/v1/workflows/${first?.id ?? ""}/versions/1`)
-  ).json()) as { definition: { name: string } };
+  const v1 = (await (await page.request.get(`/v1/workflows/${first?.id ?? ""}/versions/1`)).json()) as { definition: { name: string } };
   const made = (await (
-    await page.request.post("/v1/workflows", {
-      ...h,
-      data: {
-        name: "Questions for the bakery",
-        definition: { ...v1.definition, name: "Questions for the bakery" },
-      },
-    })
+    await page.request.post("/v1/workflows", { ...h, data: { name: "Questions for the bakery", definition: { ...v1.definition, name: "Questions for the bakery" } } })
   ).json()) as { id: string };
 
   await page.goto(`/workflows/${made.id}`);
   await page.getByRole("button", { name: "Publish", exact: true }).click();
   const held = page.getByTestId("action-taken");
   await expect(held).toContainText("Or make a new action for this workflow");
-  await held
-    .getByRole("button", { name: "Make a new action for this workflow" })
-    .click();
-  await expect(
-    page.getByRole("status").filter({ hasText: "It starts on a new form" }),
-  ).toBeVisible();
+  await held.getByRole("button", { name: "Make a new action for this workflow" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "It starts on a new form" })).toBeVisible();
   await expect(held).toHaveCount(0);
 
   await page.goto("/storefront");
@@ -257,9 +186,7 @@ test("a second workflow on a form can have a new form of its own", async ({
   expect(vs, describe("/storefront (a second question form)", vs)).toEqual([]);
 });
 
-test("an owner adds a front of questions with its own form", async ({
-  page,
-}) => {
+test("an owner adds a front of questions with its own form", async ({ page }) => {
   // Fronts (docs/spec/fronts.md F3): a Questions front, made from its kind
   // with its form, off; its form is set up with a workflow of its own and
   // the front turned on. (A Food front makes its menu table, which needs
@@ -271,17 +198,13 @@ test("an owner adds a front of questions with its own form", async ({
   await expect(page).not.toHaveURL(/login/);
 
   await page.goto("/storefront/fronts");
-  await expect(page.getByTestId("front").first()).toContainText(
-    "Your home page",
-  );
+  await expect(page.getByTestId("front").first()).toContainText("Your home page");
   await page.getByRole("button", { name: "Add a front" }).click();
   const dialog = page.getByRole("dialog", { name: "Add a front" });
   await dialog.getByLabel("Name").fill("Ask the baker");
   await dialog.getByRole("radio", { name: /Questions/ }).check();
   await dialog.getByRole("button", { name: "Add the front" }).click();
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Ask the baker" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Ask the baker" })).toBeVisible();
   await expect(page.getByText("This front has no list of items")).toBeVisible();
 
   const vs = await axe(page);
@@ -289,9 +212,7 @@ test("an owner adds a front of questions with its own form", async ({
 
   const forms = page.getByRole("region", { name: "Forms" });
   await forms.getByRole("button", { name: /^Set up/ }).click();
-  await expect(
-    forms.getByRole("link", { name: /Open its workflow/ }),
-  ).toBeVisible();
+  await expect(forms.getByRole("link", { name: /Open its workflow/ })).toBeVisible();
   await page.getByRole("button", { name: "Turn on" }).click();
   await expect(page.getByRole("button", { name: "Turn off" })).toBeVisible();
 
@@ -307,20 +228,10 @@ test("an owner sets booking hours and the booking form", async ({ page }) => {
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await page.getByRole("link", { name: "Storefront", exact: true }).click();
-  await page
-    .getByRole("navigation", { name: "Storefront" })
-    .getByRole("link", { name: "Bookings" })
-    .click();
-  await expect(
-    page.getByRole("heading", { name: "Bookings", exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("No bookings in the next 30 days."),
-  ).toBeVisible();
-  await page
-    .getByRole("search", { name: "Filter bookings" })
-    .getByLabel("Show")
-    .selectOption("This week");
+  await page.getByRole("navigation", { name: "Storefront" }).getByRole("link", { name: "Bookings" }).click();
+  await expect(page.getByRole("heading", { name: "Bookings", exact: true })).toBeVisible();
+  await expect(page.getByText("No bookings in the next 30 days.")).toBeVisible();
+  await page.getByRole("search", { name: "Filter bookings" }).getByLabel("Show").selectOption("This week");
   await expect(page).toHaveURL(/range=week/);
   await expect(page.getByText("No bookings this week.")).toBeVisible();
 
@@ -332,21 +243,13 @@ test("an owner sets booking hours and the booking form", async ({ page }) => {
   await same.uncheck();
   await hours.getByLabel("Monday bookings from").fill("09:00");
   await hours.getByLabel("Monday bookings until").fill("13:00");
-  await hours
-    .getByRole("button", { name: "Add a booking period on Monday" })
-    .click();
+  await hours.getByRole("button", { name: "Add a booking period on Monday" }).click();
   await hours.getByLabel("Monday bookings from (period 2)").fill("14:00");
   await hours.getByLabel("Monday bookings until (period 2)").fill("18:00");
-  await hours
-    .getByRole("checkbox", { name: "Saturday takes bookings" })
-    .check();
+  await hours.getByRole("checkbox", { name: "Saturday takes bookings" }).check();
   // A period must end after it starts.
   await hours.getByLabel("Saturday bookings until").fill("08:00");
-  await expect(
-    page.getByText(
-      "Booking hours on Saturday must end after they start, the same day.",
-    ),
-  ).toBeVisible();
+  await expect(page.getByText("Booking hours on Saturday must end after they start, the same day.")).toBeVisible();
   await hours.getByLabel("Saturday bookings until").fill("15:00");
   await hours.getByLabel("Add a day off").fill("2026-12-25");
   await hours.getByRole("button", { name: "Add day off" }).click();
@@ -355,9 +258,7 @@ test("an owner sets booking hours and the booking form", async ({ page }) => {
   const rules = page.getByRole("region", { name: "Booking rules" });
   await rules.getByLabel("How far ahead (days)").fill("60");
   await rules.getByLabel("How soon, amount").fill("1");
-  await rules
-    .getByRole("switch", { name: /Confirm bookings automatically/ })
-    .check();
+  await rules.getByRole("switch", { name: /Confirm bookings automatically/ }).check();
 
   const vs = await axe(page);
   expect(vs, describe("/storefront/bookings", vs)).toEqual([]);
@@ -367,50 +268,27 @@ test("an owner sets booking hours and the booking form", async ({ page }) => {
 
   // It comes back as saved.
   await page.reload();
-  await expect(
-    hours.getByRole("switch", { name: /Same as opening hours/ }),
-  ).not.toBeChecked();
-  await expect(hours.getByLabel("Monday bookings from (period 2)")).toHaveValue(
-    "14:00",
-  );
-  await expect(hours.getByLabel("Saturday bookings until")).toHaveValue(
-    "15:00",
-  );
+  await expect(hours.getByRole("switch", { name: /Same as opening hours/ })).not.toBeChecked();
+  await expect(hours.getByLabel("Monday bookings from (period 2)")).toHaveValue("14:00");
+  await expect(hours.getByLabel("Saturday bookings until")).toHaveValue("15:00");
   await expect(hours.getByText("Fri 25 Dec")).toBeVisible();
   await expect(rules.getByLabel("How far ahead (days)")).toHaveValue("60");
   await expect(rules.getByLabel("How soon, amount")).toHaveValue("1");
-  await expect(
-    rules.getByRole("switch", { name: /Confirm bookings automatically/ }),
-  ).toBeChecked();
+  await expect(rules.getByRole("switch", { name: /Confirm bookings automatically/ })).toBeChecked();
 
   // The booking form: payment said for appointments, a deposit, and the
   // server's refusal without a services table.
-  await page
-    .getByRole("navigation", { name: "Storefront" })
-    .getByRole("link", { name: "Page" })
-    .click();
-  const booking = page
-    .getByRole("region", { name: "Forms" })
-    .getByRole("article", { name: "Bookings" });
+  await page.getByRole("navigation", { name: "Storefront" }).getByRole("link", { name: "Page" }).click();
+  const booking = page.getByRole("region", { name: "Forms" }).getByRole("article", { name: "Bookings" });
   await booking.getByRole("button", { name: "Set up bookings" }).click();
-  await expect(
-    booking.getByRole("radio", { name: /Pay after I confirm/ }),
-  ).toBeChecked();
+  await expect(booking.getByRole("radio", { name: /Pay after I confirm/ })).toBeChecked();
   await booking.getByRole("radio", { name: /Pay when booking/ }).check();
   await booking.getByLabel("Deposit (per cent)").fill("150");
-  await expect(
-    booking.getByText(
-      "The deposit is 1 to 100 per cent, or leave it empty for the full price.",
-    ),
-  ).toBeVisible();
+  await expect(booking.getByText("The deposit is 1 to 100 per cent, or leave it empty for the full price.")).toBeVisible();
   await booking.getByLabel("Deposit (per cent)").fill("30");
   await booking.getByRole("radio", { name: /Pay at the appointment/ }).check();
   await expect(booking.getByLabel("Deposit (per cent)")).toHaveCount(0);
-  await booking
-    .getByRole("switch", { name: "Show this form on your page" })
-    .check();
+  await booking.getByRole("switch", { name: "Show this form on your page" }).check();
   await booking.getByRole("button", { name: "Save bookings" }).click();
-  await expect(booking.getByRole("alert")).toContainText(
-    "Choose the services table before taking bookings",
-  );
+  await expect(booking.getByRole("alert")).toContainText("Choose the services table before taking bookings");
 });

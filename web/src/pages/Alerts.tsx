@@ -1,17 +1,7 @@
 import { useState } from "react";
 import { del, get, post, put } from "../api";
 import { useEnvironments } from "../environments";
-import {
-  EmptyState,
-  ErrorBox,
-  Field,
-  PageHeader,
-  Skeleton,
-  fmtTime,
-  useAction,
-  useLoad,
-  Row,
-} from "../ui";
+import { EmptyState, ErrorBox, Field, PageHeader, Skeleton, fmtTime, useAction, useLoad, Row } from "../ui";
 
 interface Channel {
   id: string;
@@ -36,14 +26,7 @@ interface AlertInfo {
   body: string;
   link: string | null;
   created_at: string;
-  deliveries: {
-    channel: string;
-    kind: string;
-    status: string;
-    attempts: number;
-    last_error: string | null;
-    sent_at: string | null;
-  }[];
+  deliveries: { channel: string; kind: string; status: string; attempts: number; last_error: string | null; sent_at: string | null }[];
 }
 
 const KIND_LABELS: Record<string, string> = {
@@ -58,60 +41,24 @@ const KIND_LABELS: Record<string, string> = {
   repair_proposed: "A fix is proposed for a failed run (AI repair)",
   key_health: "Your own encryption key (BYOK) is unavailable, or works again",
 };
-const THRESHOLDS: Record<string, string> = {
-  slow_run: "1h",
-  stuck_approval: "24h",
-  credential_expiry: "168h",
-};
+const THRESHOLDS: Record<string, string> = { slow_run: "1h", stuck_approval: "24h", credential_expiry: "168h" };
 
 export function Alerts() {
-  const channels = useLoad(
-    () =>
-      get<{ channels: Channel[]; email_configured: boolean }>(
-        "/v1/alerts/channels",
-      ),
-    [],
-  );
-  const rules = useLoad(
-    () => get<{ rules: Rule[]; kinds: string[] }>("/v1/alerts/rules"),
-    [],
-  );
-  const recent = useLoad(
-    () => get<{ alerts: AlertInfo[] }>("/v1/alerts"),
-    [],
-    true,
-  );
+  const channels = useLoad(() => get<{ channels: Channel[]; email_configured: boolean }>("/v1/alerts/channels"), []);
+  const rules = useLoad(() => get<{ rules: Rule[]; kinds: string[] }>("/v1/alerts/rules"), []);
+  const recent = useLoad(() => get<{ alerts: AlertInfo[] }>("/v1/alerts"), [], true);
   const act = useAction();
   const [notice, setNotice] = useState("");
   const chans = channels.data?.channels ?? [];
-  const name = (id: string) =>
-    chans.find((c) => c.id === id)?.name ?? "deleted";
+  const name = (id: string) => chans.find((c) => c.id === id)?.name ?? "deleted";
   return (
     <>
-      <PageHeader
-        title="Alerts"
-        description="Tell your team when a run fails, an approval waits too long, or a credential is about to expire."
-      />
-      <ErrorBox
-        error={channels.error ?? rules.error ?? recent.error ?? act.error}
-      />
+      <PageHeader title="Alerts" description="Tell your team when a run fails, an approval waits too long, or a credential is about to expire." />
+      <ErrorBox error={channels.error ?? rules.error ?? recent.error ?? act.error} />
       {!channels.data && !channels.error && <Skeleton rows={3} />}
       {channels.data && chans.length === 0 && (
-        <EmptyState
-          icon="alerts"
-          action={
-            <button
-              className="primary"
-              onClick={() =>
-                document.getElementById("new-channel-kind")?.focus()
-              }
-            >
-              Add a channel
-            </button>
-          }
-        >
-          Alerts go to channels: an email list, Slack, a webhook or members'
-          WhatsApp. Add a channel, then the rules that send to it.
+        <EmptyState icon="alerts" action={<button className="primary" onClick={() => document.getElementById("new-channel-kind")?.focus()}>Add a channel</button>}>
+          Alerts go to channels: an email list, Slack, a webhook or members' WhatsApp. Add a channel, then the rules that send to it.
         </EmptyState>
       )}
       {notice && (
@@ -121,25 +68,14 @@ export function Alerts() {
       )}
       <section className="card">
         <h2 style={{ marginTop: 0 }}>Channels</h2>
-        {channels.data && !channels.data.email_configured && (
-          <p className="hint">
-            Email is not configured on this deployment (TASKIEM_SMTP_URL); email
-            channels will show their deliveries as failing.
-          </p>
-        )}
+        {channels.data && !channels.data.email_configured && <p className="hint">Email is not configured on this deployment (TASKIEM_SMTP_URL); email channels will show their deliveries as failing.</p>}
         {chans.length > 0 && (
           <ul className="items" aria-label="Channels">
             {chans.map((c) => (
               <Row
                 key={c.id}
                 testid="channel"
-                icon={
-                  c.kind === "email"
-                    ? "inbox"
-                    : c.kind === "webhook"
-                      ? "connections"
-                      : "bell"
-                }
+                icon={c.kind === "email" ? "inbox" : c.kind === "webhook" ? "connections" : "bell"}
                 title={c.name}
                 side={<span className="badge muted">{c.kind}</span>}
                 sub={
@@ -156,56 +92,19 @@ export function Alerts() {
                   </span>
                 }
               >
-                <button
-                  onClick={() =>
-                    void act.run(
-                      async () => (
-                        await post(`/v1/alerts/channels/${c.id}/test`),
-                        setNotice(`A test message reached ${c.name}.`)
-                      ),
-                      false,
-                    )
-                  }
-                >
-                  Send test
-                </button>
-                <button
-                  className="danger"
-                  onClick={() =>
-                    void act.run(
-                      async () => (
-                        await del(`/v1/alerts/channels/${c.id}`),
-                        channels.reload(),
-                        rules.reload()
-                      ),
-                      "Channel deleted",
-                    )
-                  }
-                >
+                <button onClick={() => void act.run(async () => (await post(`/v1/alerts/channels/${c.id}/test`), setNotice(`A test message reached ${c.name}.`)), false)}>Send test</button>
+                <button className="danger" onClick={() => void act.run(async () => (await del(`/v1/alerts/channels/${c.id}`), channels.reload(), rules.reload()), "Channel deleted")}>
                   Delete
                 </button>
               </Row>
             ))}
           </ul>
         )}
-        <AddChannel
-          onAdded={(key) => (
-            channels.reload(),
-            key &&
-              setNotice(
-                `Signing key (shown once; verify the Taskiem-Signature header with it): ${key}`,
-              )
-          )}
-        />
+        <AddChannel onAdded={(key) => (channels.reload(), key && setNotice(`Signing key (shown once; verify the Taskiem-Signature header with it): ${key}`))} />
       </section>
       <section className="card">
         <h2 style={{ marginTop: 0 }}>Rules</h2>
-        {(rules.data?.rules ?? []).length === 0 && (
-          <p className="hint">
-            No rules yet. A rule says what to alert on and which channels hear
-            about it.
-          </p>
-        )}
+        {(rules.data?.rules ?? []).length === 0 && <p className="hint">No rules yet. A rule says what to alert on and which channels hear about it.</p>}
         {(rules.data?.rules ?? []).length > 0 && (
           <ul className="items" aria-label="Rules">
             {(rules.data?.rules ?? []).map((r) => (
@@ -221,21 +120,7 @@ export function Alerts() {
                       type="checkbox"
                       aria-label={`Rule ${r.name} on`}
                       checked={r.enabled}
-                      onChange={(e) =>
-                        void act.run(
-                          async () => (
-                            await put(`/v1/alerts/rules/${r.id}`, {
-                              name: r.name,
-                              kind: r.kind,
-                              config: r.config,
-                              channel_ids: r.channel_ids,
-                              enabled: e.target.checked,
-                            }),
-                            rules.reload()
-                          ),
-                          "Saved",
-                        )
-                      }
+                      onChange={(e) => void act.run(async () => (await put(`/v1/alerts/rules/${r.id}`, { name: r.name, kind: r.kind, config: r.config, channel_ids: r.channel_ids, enabled: e.target.checked }), rules.reload()), "Saved")}
                     />
                     On
                   </label>
@@ -244,57 +129,32 @@ export function Alerts() {
                   <span className="sub">
                     {KIND_LABELS[r.kind] ?? r.kind}
                     {r.config.threshold && ` ${r.config.threshold}`}
-                    {r.config.environment && ` · ${r.config.environment}`} · to{" "}
-                    {r.channel_ids.map(name).join(", ")}
+                    {r.config.environment && ` · ${r.config.environment}`} · to {r.channel_ids.map(name).join(", ")}
                   </span>
                 }
               >
-                <button
-                  className="danger"
-                  onClick={() =>
-                    void act.run(
-                      async () => (
-                        await del(`/v1/alerts/rules/${r.id}`),
-                        rules.reload()
-                      ),
-                      "Rule deleted",
-                    )
-                  }
-                >
+                <button className="danger" onClick={() => void act.run(async () => (await del(`/v1/alerts/rules/${r.id}`), rules.reload()), "Rule deleted")}>
                   Delete
                 </button>
               </Row>
             ))}
           </ul>
         )}
-        {chans.length > 0 ? (
-          <AddRule channels={chans} onAdded={rules.reload} />
-        ) : (
-          <p className="hint">Add a channel first.</p>
-        )}
+        {chans.length > 0 ? <AddRule channels={chans} onAdded={rules.reload} /> : <p className="hint">Add a channel first.</p>}
       </section>
       <section className="card">
         <h2 style={{ marginTop: 0 }}>Recent alerts</h2>
-        {(recent.data?.alerts ?? []).length === 0 && (
-          <p className="hint">
-            Nothing yet. Alerts your rules send show here with where each one
-            went.
-          </p>
-        )}
+        {(recent.data?.alerts ?? []).length === 0 && <p className="hint">Nothing yet. Alerts your rules send show here with where each one went.</p>}
         {(recent.data?.alerts ?? []).map((a) => (
           <div key={a.id} className="alert-row">
             <div>
-              <strong>{a.title}</strong>{" "}
-              <span className="hint">{fmtTime(a.created_at)}</span>{" "}
-              {a.link && <a href={a.link}>open</a>}
+              <strong>{a.title}</strong> <span className="hint">{fmtTime(a.created_at)}</span> {a.link && <a href={a.link}>open</a>}
             </div>
             <div className="hint">
               {a.deliveries.map((d) => (
                 <span key={d.channel} title={d.last_error ?? ""}>
                   {d.channel}: {d.status}
-                  {d.status !== "sent" &&
-                    d.last_error &&
-                    ` (${d.last_error})`}{" "}
+                  {d.status !== "sent" && d.last_error && ` (${d.last_error})`}{" "}
                 </span>
               ))}
             </div>
@@ -306,9 +166,7 @@ export function Alerts() {
 }
 
 function AddChannel({ onAdded }: { onAdded: (signingKey?: string) => void }) {
-  const [kind, setKind] = useState<
-    "email" | "slack" | "webhook" | "whatsapp" | "telegram"
-  >("email");
+  const [kind, setKind] = useState<"email" | "slack" | "webhook" | "whatsapp" | "telegram">("email");
   const members = kind === "whatsapp" || kind === "telegram";
   const [name, setName] = useState("");
   const [dest, setDest] = useState("");
@@ -320,14 +178,8 @@ function AddChannel({ onAdded }: { onAdded: (signingKey?: string) => void }) {
       onSubmit={(e) => {
         e.preventDefault();
         void act.run(async () => {
-          const body =
-            kind === "email" || members
-              ? { kind, name, to: dest.split(/[,\s]+/).filter(Boolean) }
-              : { kind, name, url: dest };
-          const r = await post<{ signing_key?: string }>(
-            "/v1/alerts/channels",
-            body,
-          );
+          const body = kind === "email" || members ? { kind, name, to: dest.split(/[,\s]+/).filter(Boolean) } : { kind, name, url: dest };
+          const r = await post<{ signing_key?: string }>("/v1/alerts/channels", body);
           setName("");
           setDest("");
           onAdded(r.signing_key);
@@ -335,11 +187,7 @@ function AddChannel({ onAdded }: { onAdded: (signingKey?: string) => void }) {
       }}
     >
       <Field label="Kind">
-        <select
-          id="new-channel-kind"
-          value={kind}
-          onChange={(e) => setKind(e.target.value as typeof kind)}
-        >
+        <select id="new-channel-kind" value={kind} onChange={(e) => setKind(e.target.value as typeof kind)}>
           <option value="email">Email</option>
           <option value="slack">Slack</option>
           <option value="webhook">Webhook</option>
@@ -348,33 +196,13 @@ function AddChannel({ onAdded }: { onAdded: (signingKey?: string) => void }) {
         </select>
       </Field>
       <Field label="Channel name">
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-        />
+        <input value={name} onChange={(e) => setName(e.target.value)} required />
       </Field>
-      <Field
-        label={
-          kind === "email"
-            ? "Recipients"
-            : members
-              ? "Members' emails"
-              : kind === "slack"
-                ? "Incoming webhook URL"
-                : "HTTPS URL"
-        }
-      >
+      <Field label={kind === "email" ? "Recipients" : members ? "Members' emails" : kind === "slack" ? "Incoming webhook URL" : "HTTPS URL"}>
         <input
           value={dest}
           onChange={(e) => setDest(e.target.value)}
-          placeholder={
-            kind === "email" || members
-              ? "ops@bank.com, oncall@bank.com"
-              : kind === "slack"
-                ? "https://hooks.slack.com/services/…"
-                : "https://"
-          }
+          placeholder={kind === "email" || members ? "ops@bank.com, oncall@bank.com" : kind === "slack" ? "https://hooks.slack.com/services/…" : "https://"}
           required
         />
       </Field>
@@ -386,13 +214,7 @@ function AddChannel({ onAdded }: { onAdded: (signingKey?: string) => void }) {
   );
 }
 
-function AddRule({
-  channels,
-  onAdded,
-}: {
-  channels: Channel[];
-  onAdded: () => void;
-}) {
+function AddRule({ channels, onAdded }: { channels: Channel[]; onAdded: () => void }) {
   const envs = useEnvironments();
   const [name, setName] = useState("");
   const [kind, setKind] = useState("run_failed");
@@ -405,15 +227,7 @@ function AddRule({
       onSubmit={(e) => {
         e.preventDefault();
         void act.run(async () => {
-          await post("/v1/alerts/rules", {
-            name,
-            kind,
-            config: {
-              environment: env || undefined,
-              threshold: threshold || undefined,
-            },
-            channel_ids: picked,
-          });
+          await post("/v1/alerts/rules", { name, kind, config: { environment: env || undefined, threshold: threshold || undefined }, channel_ids: picked });
           setName("");
           setPicked([]);
           onAdded();
@@ -422,17 +236,10 @@ function AddRule({
     >
       <div className="row" style={{ alignItems: "flex-end" }}>
         <Field label="Rule name">
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-          />
+          <input value={name} onChange={(e) => setName(e.target.value)} required />
         </Field>
         <Field label="When">
-          <select
-            value={kind}
-            onChange={(e) => (setKind(e.target.value), setThreshold(""))}
-          >
+          <select value={kind} onChange={(e) => (setKind(e.target.value), setThreshold(""))}>
             {Object.entries(KIND_LABELS).map(([k, l]) => (
               <option key={k} value={k}>
                 {l}
@@ -442,20 +249,10 @@ function AddRule({
         </Field>
         {THRESHOLDS[kind] && (
           <Field label="Threshold">
-            <input
-              value={threshold}
-              onChange={(e) => setThreshold(e.target.value)}
-              placeholder={THRESHOLDS[kind]}
-            />
+            <input value={threshold} onChange={(e) => setThreshold(e.target.value)} placeholder={THRESHOLDS[kind]} />
           </Field>
         )}
-        {[
-          "run_failed",
-          "slow_run",
-          "stuck_approval",
-          "needs_reconciliation",
-          "repair_proposed",
-        ].includes(kind) && (
+        {["run_failed", "slow_run", "stuck_approval", "needs_reconciliation", "repair_proposed"].includes(kind) && (
           <Field label="Environment">
             <select value={env} onChange={(e) => setEnv(e.target.value)}>
               <option value="">any</option>
@@ -471,18 +268,7 @@ function AddRule({
       <div className="row">
         {channels.map((c) => (
           <label key={c.id} className="inline">
-            <input
-              type="checkbox"
-              checked={picked.includes(c.id)}
-              onChange={(e) =>
-                setPicked(
-                  e.target.checked
-                    ? [...picked, c.id]
-                    : picked.filter((x) => x !== c.id),
-                )
-              }
-            />{" "}
-            {c.name}
+            <input type="checkbox" checked={picked.includes(c.id)} onChange={(e) => setPicked(e.target.checked ? [...picked, c.id] : picked.filter((x) => x !== c.id))} /> {c.name}
           </label>
         ))}
         <button type="submit" disabled={act.busy || picked.length === 0}>

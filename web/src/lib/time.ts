@@ -4,23 +4,9 @@
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const MONTHS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-const startOfDay = (d: Date) =>
-  new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 
 /** The calendar day of `d`, as `whenWords` names it. */
 export function dayWords(d: Date, now = new Date()): string {
@@ -28,8 +14,7 @@ export function dayWords(d: Date, now = new Date()): string {
   if (days === 0) return "Today";
   if (days === 1) return "Yesterday";
   const date = `${d.getDate()} ${MONTHS[d.getMonth()]}`;
-  if (d.getFullYear() !== now.getFullYear())
-    return `${date} ${d.getFullYear()}`;
+  if (d.getFullYear() !== now.getFullYear()) return `${date} ${d.getFullYear()}`;
   if (days > 1 && days < 7) return `${DAYS[d.getDay()]} ${date}`;
   return date;
 }
@@ -41,9 +26,7 @@ export function whenWords(d: Date, now = new Date()): string {
 
 /** Only the clock time when it is today, else `whenWords`: for lists. */
 export function shortWhen(d: Date, now = new Date()): string {
-  return dayWords(d, now) === "Today"
-    ? `${pad(d.getHours())}:${pad(d.getMinutes())}`
-    : whenWords(d, now);
+  return dayWords(d, now) === "Today" ? `${pad(d.getHours())}:${pad(d.getMinutes())}` : whenWords(d, now);
 }
 
 /** A greeting for the hour. */

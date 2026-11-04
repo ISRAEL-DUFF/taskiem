@@ -1,15 +1,7 @@
 import { useState } from "react";
 import { del, get, put } from "../api";
 import { useEnvironments } from "../environments";
-import {
-  ErrorBox,
-  Field,
-  Item,
-  Items,
-  fmtTime,
-  useAction,
-  useLoad,
-} from "../ui";
+import { ErrorBox, Field, Item, Items, fmtTime, useAction, useLoad } from "../ui";
 
 interface Channel {
   provider: string;
@@ -64,22 +56,15 @@ export function USSDChannels() {
     <section className="card" data-testid="ussd-channels">
       <h2 style={{ marginTop: 0 }}>USSD channels</h2>
       <p className="hint">
-        Connect a USSD aggregator so people who dial your service code reach the
-        workflow published with a <code>ussd</code> trigger for it. Each
-        callback must carry the channel's token, and may also have to come from
-        listed addresses.
+        Connect a USSD aggregator so people who dial your service code reach the workflow published with a <code>ussd</code> trigger for it. Each callback must
+        carry the channel's token, and may also have to come from listed addresses.
       </p>
       <ErrorBox error={act.error} />
       {issued && (
         <div className="notice" data-testid="ussd-issued">
-          Register this callback URL with {providerLabel(issued.provider)}. It
-          holds the channel's token and is shown once; keep it out of logs and
-          tickets.
+          Register this callback URL with {providerLabel(issued.provider)}. It holds the channel's token and is shown once; keep it out of logs and tickets.
           <br />
-          <code
-            data-testid="ussd-callback-url"
-            style={{ wordBreak: "break-all" }}
-          >
+          <code data-testid="ussd-callback-url" style={{ wordBreak: "break-all" }}>
             {issued.callback_url}
           </code>
           <br />
@@ -87,17 +72,9 @@ export function USSDChannels() {
         </div>
       )}
       {v.channels.map((c) => (
-        <ChannelRow
-          key={c.provider}
-          channel={c}
-          onSaved={saved}
-          onRemoved={() => (setIssued(undefined), view.reload())}
-          act={act}
-        />
+        <ChannelRow key={c.provider} channel={c} onSaved={saved} onRemoved={() => (setIssued(undefined), view.reload())} act={act} />
       ))}
-      {free.length > 0 && (
-        <NewChannel providers={free} onSaved={saved} act={act} />
-      )}
+      {free.length > 0 && <NewChannel providers={free} onSaved={saved} act={act} />}
       <h3>Service codes</h3>
       {v.routes.length === 0 ? (
         <p className="hint">No workflow with a USSD trigger is deployed yet.</p>
@@ -126,15 +103,7 @@ function providerLabel(id: string) {
 
 type Act = ReturnType<typeof useAction>;
 
-function NewChannel({
-  providers: options,
-  onSaved,
-  act,
-}: {
-  providers: { id: string; label: string }[];
-  onSaved: (c: Channel) => void;
-  act: Act;
-}) {
+function NewChannel({ providers: options, onSaved, act }: { providers: { id: string; label: string }[]; onSaved: (c: Channel) => void; act: Act }) {
   const envs = useEnvironments();
   const [provider, setProvider] = useState(options[0]?.id ?? "");
   const [environment, setEnvironment] = useState("prod");
@@ -144,10 +113,7 @@ function NewChannel({
       onSubmit={(e) => {
         e.preventDefault();
         void act.run(async () => {
-          const c = await put<Channel>(`/v1/ussd/channels/${provider}`, {
-            environment,
-            allowed_cidrs: parseCIDRs(cidrs),
-          });
+          const c = await put<Channel>(`/v1/ussd/channels/${provider}`, { environment, allowed_cidrs: parseCIDRs(cidrs) });
           setCIDRs("");
           onSaved(c);
         }, "Channel added");
@@ -155,10 +121,7 @@ function NewChannel({
     >
       <div className="row">
         <Field label="Aggregator">
-          <select
-            value={provider}
-            onChange={(e) => setProvider(e.target.value)}
-          >
+          <select value={provider} onChange={(e) => setProvider(e.target.value)}>
             {options.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.label}
@@ -166,17 +129,9 @@ function NewChannel({
             ))}
           </select>
         </Field>
-        <Field
-          label="Channel environment"
-          hint="Callbacks reach the workflow deployed in this environment"
-        >
-          <select
-            value={environment}
-            onChange={(e) => setEnvironment(e.target.value)}
-          >
-            {(
-              envs.data?.environments.map((x) => x.name) ?? ["prod", "dev"]
-            ).map((n) => (
+        <Field label="Channel environment" hint="Callbacks reach the workflow deployed in this environment">
+          <select value={environment} onChange={(e) => setEnvironment(e.target.value)}>
+            {(envs.data?.environments.map((x) => x.name) ?? ["prod", "dev"]).map((n) => (
               <option key={n} value={n}>
                 {n}
               </option>
@@ -184,17 +139,8 @@ function NewChannel({
           </select>
         </Field>
       </div>
-      <Field
-        label="Allowed addresses"
-        hint="Optional: addresses or ranges (CIDR) callbacks must come from, one per line"
-      >
-        <textarea
-          className="mono"
-          rows={2}
-          value={cidrs}
-          onChange={(e) => setCIDRs(e.target.value)}
-          placeholder="192.0.2.0/24"
-        />
+      <Field label="Allowed addresses" hint="Optional: addresses or ranges (CIDR) callbacks must come from, one per line">
+        <textarea className="mono" rows={2} value={cidrs} onChange={(e) => setCIDRs(e.target.value)} placeholder="192.0.2.0/24" />
       </Field>
       <button className="primary" type="submit" disabled={act.busy}>
         Connect
@@ -203,47 +149,17 @@ function NewChannel({
   );
 }
 
-function ChannelRow({
-  channel: c,
-  onSaved,
-  onRemoved,
-  act,
-}: {
-  channel: Channel;
-  onSaved: (c: Channel) => void;
-  onRemoved: () => void;
-  act: Act;
-}) {
+function ChannelRow({ channel: c, onSaved, onRemoved, act }: { channel: Channel; onSaved: (c: Channel) => void; onRemoved: () => void; act: Act }) {
   const envs = useEnvironments();
   const [environment, setEnvironment] = useState(c.environment);
   const [cidrs, setCIDRs] = useState(c.allowed_cidrs.join("\n"));
   const [disabled, setDisabled] = useState(c.status === "disabled");
   const save = (rotate: boolean) =>
-    act.run(
-      async () =>
-        onSaved(
-          await put<Channel>(`/v1/ussd/channels/${c.provider}`, {
-            environment,
-            allowed_cidrs: parseCIDRs(cidrs),
-            disabled,
-            rotate_token: rotate,
-          }),
-        ),
-      "Saved",
-    );
+    act.run(async () => onSaved(await put<Channel>(`/v1/ussd/channels/${c.provider}`, { environment, allowed_cidrs: parseCIDRs(cidrs), disabled, rotate_token: rotate })), "Saved");
   return (
-    <div
-      className="card"
-      data-testid={`ussd-channel-${c.provider}`}
-      style={{ marginBottom: 10 }}
-    >
+    <div className="card" data-testid={`ussd-channel-${c.provider}`} style={{ marginBottom: 10 }}>
       <p>
-        <strong>{providerLabel(c.provider)}</strong>{" "}
-        <span
-          className={`badge ${c.status === "active" ? "completed" : "cancelled"}`}
-        >
-          {c.status}
-        </span>{" "}
+        <strong>{providerLabel(c.provider)}</strong> <span className={`badge ${c.status === "active" ? "completed" : "cancelled"}`}>{c.status}</span>{" "}
         <span className="hint">since {fmtTime(c.created_at)}</span>
         <br />
         <span className="hint">
@@ -252,72 +168,32 @@ function ChannelRow({
       </p>
       <div className="row">
         <Field label={`Environment for ${c.provider}`}>
-          <select
-            value={environment}
-            onChange={(e) => setEnvironment(e.target.value)}
-          >
-            {(
-              envs.data?.environments.map((x) => x.name) ?? [c.environment]
-            ).map((n) => (
+          <select value={environment} onChange={(e) => setEnvironment(e.target.value)}>
+            {(envs.data?.environments.map((x) => x.name) ?? [c.environment]).map((n) => (
               <option key={n} value={n}>
                 {n}
               </option>
             ))}
           </select>
         </Field>
-        <Field
-          label={`Allowed addresses for ${c.provider}`}
-          hint="Empty: any address with the token"
-        >
-          <textarea
-            className="mono"
-            rows={2}
-            value={cidrs}
-            onChange={(e) => setCIDRs(e.target.value)}
-          />
+        <Field label={`Allowed addresses for ${c.provider}`} hint="Empty: any address with the token">
+          <textarea className="mono" rows={2} value={cidrs} onChange={(e) => setCIDRs(e.target.value)} />
         </Field>
       </div>
       <label className="row">
-        <input
-          type="checkbox"
-          checked={disabled}
-          onChange={(e) => setDisabled(e.target.checked)}
-        />{" "}
-        Turned off (callbacks get 404)
+        <input type="checkbox" checked={disabled} onChange={(e) => setDisabled(e.target.checked)} /> Turned off (callbacks get 404)
       </label>
       <div className="toolbar">
-        <button
-          className="primary"
-          disabled={act.busy}
-          onClick={() => void save(false)}
-        >
+        <button className="primary" disabled={act.busy} onClick={() => void save(false)}>
           Save
         </button>
-        <button
-          disabled={act.busy}
-          onClick={() =>
-            confirm(
-              "Make a new token? The current callback URL stops working at once.",
-            ) && void save(true)
-          }
-        >
+        <button disabled={act.busy} onClick={() => confirm("Make a new token? The current callback URL stops working at once.") && void save(true)}>
           Rotate token
         </button>
         <button
           className="danger"
           disabled={act.busy}
-          onClick={() =>
-            confirm(
-              `Disconnect ${providerLabel(c.provider)}? Its callbacks get 404.`,
-            ) &&
-            void act.run(
-              async () => (
-                await del(`/v1/ussd/channels/${c.provider}`),
-                onRemoved()
-              ),
-              "Channel removed",
-            )
-          }
+          onClick={() => confirm(`Disconnect ${providerLabel(c.provider)}? Its callbacks get 404.`) && void act.run(async () => (await del(`/v1/ussd/channels/${c.provider}`), onRemoved()), "Channel removed")}
         >
           Disconnect
         </button>

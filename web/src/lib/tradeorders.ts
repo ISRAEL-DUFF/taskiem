@@ -5,16 +5,7 @@
 
 import { answersDelivery, type Purchase } from "./purchases";
 
-export type TradeStatus =
-  | "proposed"
-  | "received"
-  | "changed"
-  | "accepted"
-  | "ready"
-  | "dispatched"
-  | "delivered"
-  | "declined"
-  | "cancelled";
+export type TradeStatus = "proposed" | "received" | "changed" | "accepted" | "ready" | "dispatched" | "delivered" | "declined" | "cancelled";
 
 export interface TradeLine {
   item: string;
@@ -107,16 +98,8 @@ export function tradeStatus(s: TradeStatus): { label: string; tone: Tone } {
 }
 
 /** The steps the seller may take on an order in its status. */
-export function sellerSteps(
-  o: Pick<
-    TradeOrder,
-    "status" | "cancel_asked_at" | "short_at" | "short_agreed_at"
-  >,
-) {
-  const live =
-    o.status === "accepted" ||
-    o.status === "ready" ||
-    o.status === "dispatched";
+export function sellerSteps(o: Pick<TradeOrder, "status" | "cancel_asked_at" | "short_at" | "short_agreed_at">) {
+  const live = o.status === "accepted" || o.status === "ready" || o.status === "dispatched";
   return {
     accept: o.status === "received",
     change: o.status === "received" || o.status === "changed",
@@ -133,24 +116,15 @@ export function sellerSteps(
 /** What still needs the seller, in words; empty when nothing does. */
 export function sellerAsk(o: TradeOrder): string {
   if (o.status === "received") return "Accept it, change it, or decline it.";
-  if (o.cancel_asked_at)
-    return `${o.buyer_name} asks to cancel it. Cancel it, or keep it.`;
-  if (o.status === "delivered" && o.short_at && !o.short_agreed_at)
-    return `${o.buyer_name} says not all of it came. Agree their count, or talk to them.`;
-  if (o.status === "changed")
-    return `Waiting for ${o.buyer_name} to accept your change.`;
-  if (o.status === "proposed")
-    return `You drafted it for ${o.buyer_name}: waiting for them to confirm it.`;
+  if (o.cancel_asked_at) return `${o.buyer_name} asks to cancel it. Cancel it, or keep it.`;
+  if (o.status === "delivered" && o.short_at && !o.short_agreed_at) return `${o.buyer_name} says not all of it came. Agree their count, or talk to them.`;
+  if (o.status === "changed") return `Waiting for ${o.buyer_name} to accept your change.`;
+  if (o.status === "proposed") return `You drafted it for ${o.buyer_name}: waiting for them to confirm it.`;
   return "";
 }
 
 /** The seller's side of a purchase order to a linked supplier, in words. */
-export function sellerLine(
-  p: Pick<
-    Purchase,
-    "supplier" | "seller_status" | "link_id" | "cancel_asked_at"
-  >,
-): string {
+export function sellerLine(p: Pick<Purchase, "supplier" | "seller_status" | "link_id" | "cancel_asked_at">): string {
   if (!p.link_id) return "";
   switch (p.seller_status) {
     case undefined:
@@ -159,15 +133,11 @@ export function sellerLine(
     case "proposed":
       return `${p.supplier} drafted this order for you. Confirm it, saying which of your items each line is, or cancel it.`;
     case "received":
-      return p.cancel_asked_at
-        ? ""
-        : `${p.supplier} has it, and has not answered yet.`;
+      return p.cancel_asked_at ? "" : `${p.supplier} has it, and has not answered yet.`;
     case "changed":
       return `${p.supplier} asks to change it.`;
     case "accepted":
-      return p.cancel_asked_at
-        ? `You asked ${p.supplier} to cancel it.`
-        : `${p.supplier} accepted it.`;
+      return p.cancel_asked_at ? `You asked ${p.supplier} to cancel it.` : `${p.supplier} accepted it.`;
     case "ready":
       return `${p.supplier} has it ready.`;
     case "dispatched":
@@ -182,45 +152,23 @@ export function sellerLine(
 }
 
 /** What the buyer may do on a purchase order to a linked supplier. */
-export function buyerSteps(
-  p: Pick<
-    Purchase,
-    | "status"
-    | "seller_status"
-    | "link_id"
-    | "cancel_asked_at"
-    | "short_at"
-    | "change"
-  >,
-) {
+export function buyerSteps(p: Pick<Purchase, "status" | "seller_status" | "link_id" | "cancel_asked_at" | "short_at" | "change">) {
   const open = p.status === "sent" || p.status === "confirmed";
-  const proposed =
-    !!p.link_id && p.status === "drafted" && p.seller_status === "proposed";
+  const proposed = !!p.link_id && p.status === "drafted" && p.seller_status === "proposed";
   return {
     confirmProposed: proposed,
-    acceptChange:
-      !!p.link_id && open && p.seller_status === "changed" && !!p.change,
-    cancel:
-      proposed ||
-      (!!p.link_id &&
-        open &&
-        !p.cancel_asked_at &&
-        p.seller_status !== "delivered"),
+    acceptChange: !!p.link_id && open && p.seller_status === "changed" && !!p.change,
+    cancel: proposed || (!!p.link_id && open && !p.cancel_asked_at && p.seller_status !== "delivered"),
     answerDelivery: answersDelivery(p),
   };
 }
 
 /** The buyer's own item a supplier's line most likely is: the one of the
  * same name, case aside; "" when none is. */
-export function sameName(
-  items: { id: string; name: string }[],
-  name: string,
-): string {
+export function sameName(items: { id: string; name: string }[], name: string): string {
   const k = name.trim().toLowerCase();
   return items.find((it) => it.name.trim().toLowerCase() === k)?.id ?? "";
 }
 
 /** The order's total at a set of lines. */
-export const linesTotal = (
-  lines: Pick<TradeLine, "quantity" | "price_kobo">[],
-) => lines.reduce((n, l) => n + l.quantity * l.price_kobo, 0);
+export const linesTotal = (lines: Pick<TradeLine, "quantity" | "price_kobo">[]) => lines.reduce((n, l) => n + l.quantity * l.price_kobo, 0);
