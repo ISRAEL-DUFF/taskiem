@@ -218,6 +218,10 @@ func (s *Server) sendLinkMessage(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, linkMessageErr(err))
 		return
 	} else if m != nil {
+		if !sameSend(m, in.Text) {
+			s.fail(w, r, fmt.Errorf("%w: that client_id was used for a different message", errConflict))
+			return
+		}
 		writeJSON(w, http.StatusOK, linkMessageOut{Message: *m})
 		return
 	}
@@ -247,6 +251,13 @@ func (s *Server) sendLinkMessage(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, linkMessageOut{Message: m})
 }
 
+// sameSend reports whether a repeated send says what the first did: the same
+// words (a file's caption included), so a client id reused for another
+// message is refused rather than answered with the wrong one.
+func sameSend(first *links.Message, text string) bool {
+	return first.Body == strings.TrimSpace(text)
+}
+
 // sentWith is the message already sent with a client id, or nil (none, or
 // no id): a repeated send is the same message, never a second one.
 func (s *Server) sentWith(ctx context.Context, p *Principal, link uuid.UUID, client *uuid.UUID) (*links.Message, error) {
@@ -273,6 +284,9 @@ func linkMessageErr(err error) error {
 		return fmt.Errorf("%w: %s", errConflict, strings.TrimPrefix(err.Error(), links.ErrState.Error()+": "))
 	case errors.Is(err, links.ErrNotFound):
 		return pgx.ErrNoRows
+	case errors.Is(err, links.ErrDuplicate):
+		// A repeat of a send whose first message was since deleted for this side.
+		return fmt.Errorf("%w: that message was already sent", errConflict)
 	case errors.Is(err, links.ErrLimit):
 		// As every other plan limit is refused (429, limit_exceeded).
 		return &runtime.LimitError{Limit: "link_messages_daily", Code: "limit_exceeded", Message: strings.TrimPrefix(err.Error(), links.ErrLimit.Error()+": ")}
@@ -718,6 +732,10 @@ func (s *Server) sendLinkFile(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, linkMessageErr(err))
 		return
 	} else if m != nil {
+		if !sameSend(m, r.FormValue("text")) {
+			s.fail(w, r, fmt.Errorf("%w: that client_id was used for a different message", errConflict))
+			return
+		}
 		writeJSON(w, http.StatusOK, linkMessageOut{Message: *m})
 		return
 	}

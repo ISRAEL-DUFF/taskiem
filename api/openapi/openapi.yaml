@@ -6850,7 +6850,7 @@ paths:
       tags:
       - Links
       summary: Send a message to a linked business
-      description: Written in both businesses at once; its people who write to linked businesses are told on their phones unless they muted the conversation. reply_to quotes a message, and a card's makes it a reply about that card's document. client_id is an id the sender made, and the same send repeated (a retry after a dropped connection) is answered with the first message (200), never sent again.
+      description: Written in both businesses at once; its people who write to linked businesses are told on their phones unless they muted the conversation. reply_to quotes a message, and a card's makes it a reply about that card's document. client_id is an id the sender made, and the same send repeated (a retry after a dropped connection) is answered with the first message (200), never sent again. A client_id reused for different words, or for a message since deleted for your side, is refused (409).
       security:
       - sessionCookie: []
       - sessionToken: []

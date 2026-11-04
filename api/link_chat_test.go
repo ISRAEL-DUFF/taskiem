@@ -309,10 +309,27 @@ func TestLinkSendClientID(t *testing.T) {
 	if a, b := count(seller), count(buyer); a != 4 || b != 4 {
 		t.Errorf("four messages each: seller %d, buyer %d", a, b)
 	}
+	// (Checked again below, after the refusals: they sent nothing.)
+	// An id reused for other words is refused, not answered with the wrong
+	// message; and a repeat of a send whose message was since deleted for
+	// this side is a conflict in plain words, not an error.
+	if out := seller.must(409, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Twenty bags", "client_id": id}); !strings.Contains(out["error"].(string), "different message") {
+		t.Errorf("another message under the same id: %v", out)
+	}
+	const hid = "0192e2e0-0000-7000-8000-0000000000c1"
+	gone := seller.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Delete me", "client_id": hid})["message"].(map[string]any)
+	seller.must(204, "POST", "/v1/link-chats/"+link+"/messages/"+gone["id"].(string)+"/hide", nil)
+	if out := seller.must(409, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Delete me", "client_id": hid}); !strings.Contains(out["error"].(string), "already sent") {
+		t.Errorf("a repeat of a message deleted for this side: %v", out)
+	}
+	if code, out := seller.sendFile(t, link, "bags.jpg", photo(t), map[string]string{"text": "Other words", "client_id": fid}); code != 409 || !strings.Contains(out["error"].(string), "different message") {
+		t.Errorf("a file under the same id with other words: %d %v", code, out)
+	}
 	// The buyer cannot use the seller's id to learn of the message: its own
 	// client ids are its own.
 	buyer.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Thanks", "client_id": id})
-	if b := count(buyer); b != 5 {
-		t.Errorf("the buyer's id is its own: %d", b)
+	// (The seller's deleted copy is not shown to it, the buyer's is kept; "Thanks" is in both.)
+	if a, b := count(seller), count(buyer); a != 5 || b != 6 {
+		t.Errorf("the refusals sent nothing, the buyer's id is its own: seller %d, buyer %d", a, b)
 	}
 }
