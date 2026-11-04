@@ -58,6 +58,7 @@ import { ThreadJump } from "./ThreadParts";
 import { ChatStream } from "./ChatStream";
 import { ChatHead } from "./ChatHead";
 import { BubbleShell, CopyItem, Ticks } from "./BubbleShell";
+import { ReadMore, useFold } from "./ReadMore";
 import { useChatLive } from "./ChatLive";
 import { roleLine, type BusinessLink, type LinkCard } from "../lib/links";
 import { ErrorBox, fmtTime, Modal, useAction, useLoad } from "../ui";
@@ -466,6 +467,7 @@ function Bubble({
   onDiscard?: (clientId: string) => void;
 }) {
   const card = m.kind === "card" ? m.card : undefined;
+  const fold = useFold(m.body ?? "");
   const local = m.local;
   const hasMenu =
     !local &&
@@ -664,14 +666,18 @@ function Bubble({
           title="Go to the message"
           onClick={() => onJump(m.reply?.pair_id ?? "")}
         >
-          {m.reply.mine ? "You" : other}:{" "}
-          {previewLine({ ...m.reply, mine: m.reply.mine }, other)}
+          <span className="quote-who">{m.reply.mine ? "You" : other}</span>
+          <span className="quote-text">
+            {previewLine({ ...m.reply, mine: m.reply.mine }, other)}
+          </span>
         </button>
       )}
       {m.reply && !onJump && (
         <span className="quote" data-testid="chat-quote">
-          {m.reply.mine ? "You" : other}:{" "}
-          {previewLine({ ...m.reply, mine: m.reply.mine }, other)}
+          <span className="quote-who">{m.reply.mine ? "You" : other}</span>
+          <span className="quote-text">
+            {previewLine({ ...m.reply, mine: m.reply.mine }, other)}
+          </span>
         </span>
       )}
       {card ? (
@@ -692,7 +698,8 @@ function Bubble({
           )}
           {m.body && (
             <span className="text">
-              <MentionText text={m.body} mentions={m.mentions} />
+              <MentionText text={fold.shown} mentions={m.mentions} />
+              {fold.folded && <ReadMore onClick={fold.more} />}
               {inline && (
                 <span
                   className={`stamp-gap${m.mine ? " mine" : ""}`}
@@ -802,6 +809,7 @@ export function ConversationPane({
   });
   const { setReply } = c;
   const [q, setQ] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
   const [found, setFound] = useState<LinkMessage[]>();
   const act = useAction();
   const path = `/v1/link-chats/${conv.link}`;
@@ -1145,15 +1153,30 @@ export function ConversationPane({
             {conv.name.slice(0, 1).toUpperCase()}
           </button>
         }
-        title={
-          <>
-            {conv.name}
-            {(connected ? live.typing.has(conv.link) : typing) && (
-              <span className="typing" data-testid="chat-typing">
-                typing…
-              </span>
-            )}
-          </>
+        title={conv.name}
+        subtitle={
+          (connected ? live.typing.has(conv.link) : typing) ? (
+            <span className="typing" data-testid="chat-typing">
+              typing…
+            </span>
+          ) : link ? (
+            roleLine(link.role)
+          ) : undefined
+        }
+        actions={
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="Search this conversation"
+            aria-expanded={searchOpen}
+            data-testid="chat-search-open"
+            onClick={() => {
+              setSearchOpen(!searchOpen);
+              if (searchOpen) search("");
+            }}
+          >
+            <Icon name="search" />
+          </button>
         }
         items={(close) => (
           <>
@@ -1206,24 +1229,33 @@ export function ConversationPane({
           </>
         )}
       />
-      <div
-        className="filters"
-        role="search"
-        aria-label={`Search the conversation with ${conv.name}`}
-        style={{ padding: "8px 12px 0" }}
-      >
-        <label className="search">
-          <span className="sr-only">Search this conversation</span>
-          <Icon name="search" />
-          <input
-            type="search"
-            placeholder="Search"
-            value={q}
-            onChange={(e) => search(e.target.value)}
-            data-testid="chat-search"
-          />
-        </label>
-      </div>
+      {(searchOpen || q) && (
+        <div
+          className="filters chat-search-bar"
+          role="search"
+          aria-label={`Search the conversation with ${conv.name}`}
+        >
+          <label className="search">
+            <span className="sr-only">Search this conversation</span>
+            <Icon name="search" />
+            <input
+              type="search"
+              placeholder="Search"
+              value={q}
+              autoFocus
+              onChange={(e) => search(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  search("");
+                  setSearchOpen(false);
+                }
+              }}
+              data-testid="chat-search"
+            />
+          </label>
+        </div>
+      )}
       <ErrorBox error={error ?? act.error ?? c.fileError} />
       <ChatStream
         items={shown}

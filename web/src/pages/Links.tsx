@@ -40,6 +40,7 @@ import {
 import { ConversationPane } from "./Conversation";
 import { TaskiemPane } from "./TaskiemChat";
 import { ChatRow } from "./ChatRow";
+import { HeadMenu } from "./ChatHead";
 import { useChatLive } from "./ChatLive";
 import { useDrafts } from "../lib/drafts";
 import { useTaskiemUnread } from "../lib/taskiemSeen";
@@ -371,6 +372,9 @@ export function ChatPage() {
   const order = ["taskiem", ...listed.map((c) => c.link)];
   const keys = useRef({ order, openID: openID ?? undefined, setParams });
   keys.current = { order, openID: openID ?? undefined, setParams };
+  // Asking a business to link starts at the search box (the "n" key, and the
+  // round button of the list).
+  const startNew = useRef<() => void>(() => undefined);
   useEffect(() => {
     const focusSearch = () =>
       requestAnimationFrame(() =>
@@ -379,6 +383,13 @@ export function ChatPage() {
           searchBox.current?.select();
         }),
       );
+    startNew.current = () => {
+      setHint(
+        "Type the business's name or phone number, then choose Request link.",
+      );
+      keys.current.setParams({});
+      focusSearch();
+    };
     const onKey = (e: KeyboardEvent) => {
       const k = keys.current;
       if (e.key === "Escape") {
@@ -410,10 +421,7 @@ export function ChatPage() {
       e.preventDefault();
       if (what === "help") setKeysOpen(true);
       else if (what === "search" || what === "new") {
-        if (what === "new")
-          setHint(
-            "Type the business's name or phone number, then choose Request link.",
-          );
+        if (what === "new") return startNew.current();
         k.setParams({});
         focusSearch();
       } else {
@@ -481,19 +489,30 @@ export function ChatPage() {
         <div className="chat-list-pane" onKeyDown={onListKey}>
           <div className="chat-list-head">
             <h2>Chat</h2>
-            <Link className="button small" to="/home">
-              Home
-            </Link>
-            <Link className="button small" to="/settings/links">
-              Linked businesses
-            </Link>
-            <button
-              type="button"
-              className="button small kbd-only"
-              onClick={() => setKeysOpen(true)}
-            >
-              Keyboard
-            </button>
+            {linksOn && (
+              <button
+                type="button"
+                className="new-chat"
+                data-testid="new-chat"
+                aria-label="Find a business to link with"
+                onClick={() => startNew.current()}
+              >
+                <Icon name="plus" />
+                <span className="fab-label">Find a business</span>
+              </button>
+            )}
+            <HeadMenu
+              label="More about the chats"
+              items={(close) => (
+                <Link
+                  className="menu-link"
+                  to="/settings/links"
+                  onClick={close}
+                >
+                  Linked businesses
+                </Link>
+              )}
+            />
           </div>
           {linksOn && (
             <div className="filters" role="search" aria-label="Find a business">
@@ -503,7 +522,7 @@ export function ChatPage() {
                 <input
                   type="search"
                   ref={searchBox}
-                  placeholder="Cement, catering in Ikeja, Dangote…"
+                  placeholder="Search or find a business"
                   value={q}
                   onChange={(e) => (setQ(e.target.value), setHint(""))}
                   onKeyDown={(e) => {
@@ -773,7 +792,10 @@ export function ChatPage() {
               {filter !== "starred" && all.length > 0 && (
                 <section aria-label="Chats">
                   <div className="toolbar" style={{ marginBottom: 6 }}>
-                    <h2 className="grow" style={{ margin: 0 }}>
+                    <h2
+                      className={archived ? "grow" : "grow sr-only"}
+                      style={{ margin: 0 }}
+                    >
                       {archived ? "Archived" : "Chats"}
                     </h2>
                   </div>
