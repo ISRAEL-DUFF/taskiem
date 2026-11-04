@@ -24,6 +24,7 @@ taskiem_agent_sessions_end_for_owner(uuid)	@ISRAEL-DUFF (agents)	The owner ends 
 taskiem_alert_tenants()	@ISRAEL-DUFF (messaging)	Tenants the alerter has work for, before any tenant scope exists (00025)
 taskiem_app_event_dropped(text,text)	@ISRAEL-DUFF (connectors)	part of: Platform apps (decision 0051; connector/v1 rule 18) (00228)
 taskiem_app_route_event(text,text)	@ISRAEL-DUFF (connectors)	The active connections, in tenants that are not deleted, holding a provider account for a connector (00228)
+taskiem_area_rows(text)	@ISRAEL-DUFF (business areas)	Which businesses have an area on or off, for the jobs that message owners on their own; tenant ids and a flag only (00306)
 taskiem_audit_append(uuid,text,text,text,text,jsonb)	@ISRAEL-DUFF (engine)	Runs as its owner (taskiem_dispatch) and checks the caller's scope itself (00030)
 taskiem_audit_heads_due(interval)	@ISRAEL-DUFF (engine)	Tenants whose chain moved since their last anchor, and whose last anchor is older than the interval (or who have none) (00017)
 taskiem_auth_api_key(bytea)	@ISRAEL-DUFF (identity)	part of: Governance hardening (spec 9.1, 10.3, 13.3) (00028)

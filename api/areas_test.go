@@ -5,7 +5,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
+
 	stockconn "github.com/israel-duff/taskiem/connectors/stock"
+	"github.com/israel-duff/taskiem/engine/areas"
 )
 
 // areaState reads GET /v1/settings/areas as area name to on or off.
@@ -217,5 +220,24 @@ func TestAreasOtherDoors(t *testing.T) {
 	owner.must(200, "PUT", "/v1/settings/areas", map[string]any{"areas": map[string]bool{"storefront": true}})
 	if st, msg := page(); st != "closed" || msg != "Back Monday" {
 		t.Errorf("page after the owner's own close and an off-on: %s %q", st, msg)
+	}
+}
+
+// TestAreasOnlyForJobs: the jobs that message owners on their own skip a
+// business that has the area off, and keep one that has not chosen.
+func TestAreasOnlyForJobs(t *testing.T) {
+	w := newWorld(t)
+	a := w.tenant(t, "Acme", "owner@acme.test")
+	b := w.tenant(t, "Beta", "owner@beta.test")
+	ida, idb := uuid.MustParse(tenantOf(t, a)), uuid.MustParse(tenantOf(t, b))
+	a.must(200, "PUT", "/v1/settings/areas", map[string]any{"areas": map[string]bool{"money": false}})
+	got, err := areas.Only(context.Background(), w.env.DB.App, []uuid.UUID{ida, idb}, areas.Money)
+	if err != nil || len(got) != 1 || got[0] != idb {
+		t.Fatalf("money: %v %v", got, err)
+	}
+	// Stock is still on for both.
+	got, err = areas.Only(context.Background(), w.env.DB.App, []uuid.UUID{ida, idb}, areas.Stock)
+	if err != nil || len(got) != 2 {
+		t.Fatalf("stock: %v %v", got, err)
 	}
 }

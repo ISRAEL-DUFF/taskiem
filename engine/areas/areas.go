@@ -299,3 +299,41 @@ func Affected(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, a Area) ([]UsedB
 	}
 	return out, rows.Err()
 }
+
+// Querier is what Only asks the database with: a pool.
+type Querier interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+}
+
+// Only keeps the tenants that have the area on, for the jobs that message
+// owners on their own. A business with no row follows DefaultOn.
+func Only(ctx context.Context, db Querier, tenants []uuid.UUID, a Area) ([]uuid.UUID, error) {
+	rows, err := db.Query(ctx, `SELECT tenant_id, enabled FROM taskiem_area_rows($1)`, string(a))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	explicit := map[uuid.UUID]bool{}
+	for rows.Next() {
+		var t uuid.UUID
+		var on bool
+		if err := rows.Scan(&t, &on); err != nil {
+			return nil, err
+		}
+		explicit[t] = on
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	out := make([]uuid.UUID, 0, len(tenants))
+	for _, t := range tenants {
+		on, ok := explicit[t]
+		if !ok {
+			on = DefaultOn(a)
+		}
+		if on {
+			out = append(out, t)
+		}
+	}
+	return out, nil
+}
