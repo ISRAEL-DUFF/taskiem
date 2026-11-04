@@ -60,3 +60,39 @@ describe("addRecent", () => {
     expect(addRecent([], "x")).toEqual(["x"]);
   });
 });
+
+import { stripTone, takesTone, withTone } from "./emoji";
+
+describe("skin tones", () => {
+  it("adds a tone to a hand that takes one", () => {
+    expect(withTone("👍", 3)).toBe("👍🏽");
+    expect(withTone("🙏", 5)).toBe("🙏🏿");
+    expect(withTone("✌️", 2)).toBe("✌🏼"); // the text-style selector gives way to the tone
+  });
+  it("leaves alone what takes none, and the default tone", () => {
+    expect(withTone("😀", 3)).toBe("😀");
+    expect(withTone("👍", 0)).toBe("👍");
+    expect(withTone("👍🏽", 0)).toBe("👍");
+    expect(takesTone("👍")).toBe(true);
+    expect(takesTone("🔥")).toBe(false);
+  });
+  it("puts a tone back to the plain emoji", () => {
+    expect(stripTone("👍🏾")).toBe("👍");
+    expect(stripTone("🔥")).toBe("🔥");
+  });
+  it("is searchable by the plain emoji's name", () => {
+    expect(searchEmoji("thumbs up").some((e) => takesTone(e.char))).toBe(true);
+  });
+});
+
+describe("the wider list", () => {
+  it("has flags and more people and hearts", () => {
+    expect(
+      EMOJI_GROUPS.some(
+        (g) => g.id === "flags" && g.items.some((i) => i.char === "🇳🇬"),
+      ),
+    ).toBe(true);
+    expect(searchEmoji("hug").length).toBeGreaterThan(0);
+    expect(searchEmoji("nigeria")[0]?.char).toBe("🇳🇬");
+  });
+});

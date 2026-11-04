@@ -116,7 +116,50 @@ const SOURCE: [string, string, string, string][] = [
 🔥 fire|hot lit
 ✨ sparkles|new shiny
 🎉 party popper|celebrate congratulations
-🎊 confetti|celebrate`,
+🎊 confetti|celebrate
+🥹 holding back tears|touched grateful
+🫠 melting face|embarrassed
+🤭 hand over mouth|giggle oops
+🤗 hugging face|hug
+🥳 partying face|celebrate party
+🤤 drooling|hungry want
+🤑 money mouth|rich cash
+🤯 exploding head|mind blown shocked
+🥱 yawning|bored tired
+😪 sleepy|tired
+😈 smiling devil|naughty
+😹 cat tears of joy|lol
+🙈 see no evil|shy monkey
+🙉 hear no evil|monkey
+🙊 speak no evil|oops monkey
+🫶 heart hands|love thanks
+🤲 palms up|please prayer give
+🤙 call me|phone hang loose
+🫰 finger heart|love
+🤌 pinched fingers|italian what
+🤏 pinching|small little
+👐 open hands|hug
+🖐️ raised hand fingers|stop hello
+✍️ writing hand|sign write
+💃 woman dancing|dance party
+🕺 man dancing|dance party
+🧎 kneeling|pray
+🚶 walking|walk
+🏃 running|run hurry
+👶 baby|child
+👴 old man|elder
+👵 old woman|elder
+👮 police|officer
+💂 guard|security
+👑 crown|king queen
+💎 gem|diamond precious
+💝 heart with ribbon|gift love
+💖 sparkling heart|love
+💗 growing heart|love
+💞 revolving hearts|love
+❣️ heart exclamation|love
+🩷 pink heart|love
+🩵 light blue heart|love`,
   ],
   [
     "nature",
@@ -384,6 +427,39 @@ const SOURCE: [string, string, string, string][] = [
 〰️ wavy dash|
 ➰ curly loop|`,
   ],
+  [
+    "flags",
+    "Flags",
+    "🏳️",
+    `🇳🇬 Nigeria|nigerian
+🇬🇭 Ghana|ghanaian
+🇰🇪 Kenya|kenyan
+🇿🇦 South Africa|south african
+🇨🇲 Cameroon|cameroonian
+🇸🇳 Senegal|senegalese
+🇨🇮 Ivory Coast|cote divoire
+🇧🇯 Benin|beninese
+🇹🇬 Togo|togolese
+🇪🇹 Ethiopia|ethiopian
+🇪🇬 Egypt|egyptian
+🇲🇦 Morocco|moroccan
+🇹🇿 Tanzania|tanzanian
+🇺🇬 Uganda|ugandan
+🇷🇼 Rwanda|rwandan
+🇬🇧 United Kingdom|britain uk
+🇺🇸 United States|america usa
+🇨🇦 Canada|canadian
+🇫🇷 France|french
+🇩🇪 Germany|german
+🇨🇳 China|chinese
+🇮🇳 India|indian
+🇦🇪 United Arab Emirates|dubai uae
+🇸🇦 Saudi Arabia|saudi
+🇧🇷 Brazil|brazilian
+🏳️ white flag|surrender
+🏴 black flag|
+🏁 chequered flag|finish race`,
+  ],
 ];
 
 function parse(): EmojiGroup[] {
@@ -437,4 +513,29 @@ export function insertAt(
 /** The recent emoji with `char` first, no repeats, at most `max`. */
 export function addRecent(list: string[], char: string, max = 24): string[] {
   return [char, ...list.filter((c) => c !== char)].slice(0, max);
+}
+
+// Skin tones: the hand and person emoji that take one, and the five modifiers
+// (U+1F3FB to U+1F3FF) that follow them. Tone 0 is the default (yellow).
+const TONEABLE = new Set([
+  ..."👍👎👌✌🤞👏🙌🙏💪👋✋👈👉👆👇☝🤷🤦💁🙋🫶🤲🤙🫰🤌🤏👐🖐✍💃🕺🧎🚶🏃👶👴👵👮💂",
+]);
+const FE0F = "\uFE0F";
+const MODIFIER = /[\u{1F3FB}-\u{1F3FF}]/gu;
+
+/** The emoji without any skin tone modifier. */
+export function stripTone(char: string): string {
+  return char.replace(MODIFIER, "");
+}
+
+/** The emoji in skin tone `tone` (1 to 5; 0 for none), if it takes one. */
+export function withTone(char: string, tone: number): string {
+  const base = stripTone(char).replace(FE0F, "");
+  if (!TONEABLE.has(base) || tone < 1 || tone > 5) return stripTone(char);
+  return base + String.fromCodePoint(0x1f3fa + tone);
+}
+
+/** Whether an emoji takes a skin tone. */
+export function takesTone(char: string): boolean {
+  return TONEABLE.has(stripTone(char).replace(FE0F, ""));
 }

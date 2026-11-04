@@ -699,6 +699,63 @@ test("signing out forgets what was half written", async ({ browser }) => {
   ).toHaveLength(0);
 });
 
+test("the emoji panel works from the keyboard, and the hands take a skin tone", async ({
+  browser,
+}) => {
+  const { buyer, link } = await linked(browser);
+  await buyer.goto(`/chat?with=${link}`);
+  const pane = buyer.getByTestId("chat-pane");
+  const box = pane.getByLabel("Message");
+  await pane.getByTestId("emoji-button").click();
+  const panel = pane.getByTestId("emoji-panel");
+  // One emoji is in the tab order, not hundreds.
+  await expect(panel.locator('.emoji[tabindex="0"]')).toHaveCount(1);
+  expect(await panel.locator(".emoji").count()).toBeGreaterThan(40);
+  expect(
+    await panel
+      .locator('.emoji:not([tabindex="0"])')
+      .evaluateAll((els) =>
+        els.every((e) => e.getAttribute("tabindex") === "-1"),
+      ),
+  ).toBe(true);
+  // Down from the search box goes into the grid; the arrows move about it.
+  await panel.getByLabel("Search emoji").press("ArrowDown");
+  const focused = () =>
+    buyer.evaluate(() => document.activeElement?.getAttribute("aria-label"));
+  expect(await focused()).toBe("grinning face");
+  await buyer.keyboard.press("ArrowRight");
+  expect(await focused()).toBe("smiling face");
+  await buyer.keyboard.press("ArrowDown"); // a row down
+  const down = await focused();
+  expect(down).not.toBe("smiling face");
+  await buyer.keyboard.press("ArrowUp");
+  expect(await focused()).toBe("smiling face");
+  await buyer.keyboard.press("End");
+  const last = await focused();
+  await buyer.keyboard.press("Home");
+  expect(await focused()).toBe("grinning face");
+  expect(last).not.toBe("grinning face");
+  // Enter picks it, and the box has it.
+  await buyer.keyboard.press("Enter");
+  await expect(box).toHaveValue("😀");
+  await axeBoth(buyer, "the emoji panel from the keyboard");
+
+  // The hands take a tone, and keep it.
+  await box.fill(""); // the panel stays open after one is picked
+  await expect(panel).toBeVisible();
+  await panel.getByLabel("Search emoji").fill("thumbs up");
+  await panel.getByRole("button", { name: "Medium skin tone" }).click();
+  await expect(panel.getByRole("button", { name: "thumbs up" })).toHaveText(
+    "👍🏽",
+  );
+  await axeBoth(buyer, "the emoji panel with skin tones");
+  await panel.getByRole("button", { name: "thumbs up" }).click();
+  await expect(box).toHaveValue("👍🏽");
+  // The flags are there too.
+  await panel.getByLabel("Search emoji").fill("nigeria");
+  await expect(panel.getByRole("button", { name: "Nigeria" })).toHaveText("🇳🇬");
+});
+
 declare global {
   interface Window {
     __dt: DataTransfer;

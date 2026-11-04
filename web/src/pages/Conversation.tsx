@@ -44,6 +44,7 @@ import {
 } from "../lib/outboxStore";
 import { ThreadJump } from "./ThreadParts";
 import { EmojiPanel } from "./EmojiPanel";
+import { PendingFile } from "./PendingFile";
 import { AttachMenu } from "./AttachMenu";
 import { CameraSheet } from "./CameraSheet";
 import { insertAt } from "../lib/emoji";
@@ -1303,23 +1304,7 @@ export function ConversationPane({
             </div>
           )}
           {file && (
-            <div className="composer-reply" data-testid="chat-attaching">
-              <span className="quote">
-                {file.type.startsWith("audio/")
-                  ? "Voice note"
-                  : file.type.startsWith("image/")
-                    ? `Photo: ${file.name}`
-                    : file.name}{" "}
-                · {fileSize(file.size)}
-              </span>
-              <button
-                type="button"
-                className="small"
-                onClick={() => setFile(undefined)}
-              >
-                Remove<span className="sr-only"> the file</span>
-              </button>
-            </div>
+            <PendingFile file={file} onRemove={() => setFile(undefined)} />
           )}
           <input
             ref={pick}

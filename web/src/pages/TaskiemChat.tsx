@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useThread } from "../lib/useThread";
 import { ThreadJump } from "./ThreadParts";
 import { EmojiPanel } from "./EmojiPanel";
+import { PendingFile } from "./PendingFile";
 import { insertAt } from "../lib/emoji";
 import { getDraft, setDraft } from "../lib/drafts";
 import { useAutoGrow } from "../lib/useAutoGrow";
@@ -371,20 +372,11 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
         )}
       </div>
       {file && (
-        <div className="composer-reply" data-testid="taskiem-attaching">
-          <span className="quote">
-            {file.type.startsWith("audio/")
-              ? "Voice note"
-              : `Photo: ${file.name}`}
-          </span>
-          <button
-            type="button"
-            className="small"
-            onClick={() => setFile(undefined)}
-          >
-            Remove<span className="sr-only"> the file</span>
-          </button>
-        </div>
+        <PendingFile
+          file={file}
+          testid="taskiem-attaching"
+          onRemove={() => setFile(undefined)}
+        />
       )}
       <input
         ref={pick}
