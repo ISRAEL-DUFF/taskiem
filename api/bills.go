@@ -400,6 +400,11 @@ func (s *Server) mirrorInvoice(ctx context.Context, seller, invoice uuid.UUID) (
 		created, err = links.MirrorBillTx(ctx, tx, buyer, bill)
 		return err
 	})
+	if errors.As(err, new(*links.OtherOffError)) {
+		// The buyer has turned Money off: nothing crosses, and the invoice
+		// stays due to be mirrored, which it is when they turn it back on.
+		return false, nil
+	}
 	if err != nil || link == uuid.Nil {
 		return false, err
 	}

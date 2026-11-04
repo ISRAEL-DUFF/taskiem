@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"bytes"
 	"context"
 	"strings"
 	"testing"
@@ -9,6 +10,8 @@ import (
 
 	stockconn "github.com/israel-duff/taskiem/connectors/stock"
 	"github.com/israel-duff/taskiem/engine/areas"
+	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/sender"
 )
 
 // areaState reads GET /v1/settings/areas as area name to on or off.
@@ -239,5 +242,42 @@ func TestAreasOnlyForJobs(t *testing.T) {
 	got, err = areas.Only(context.Background(), w.env.DB.App, []uuid.UUID{ida, idb}, areas.Stock)
 	if err != nil || len(got) != 2 {
 		t.Fatalf("stock: %v %v", got, err)
+	}
+}
+
+// TestAreasAcrossALink: a document does not cross a link into a business
+// that has turned its part off; it waits, and crosses when it is back on.
+func TestAreasAcrossALink(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	w.srv.Invoices = &invoicing.Invoices{Pool: w.env.DB.App, Vault: w.env.Vault, PageBase: "https://forms.taskiem.test",
+		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}, Signal: w.env.Store.DeliverSignalOnce}
+	w.srv.AccountRails = &linkRails{}
+	seller, buyer, _, buyerID := linkedPair(t, w)
+	tick := func(want int) {
+		t.Helper()
+		n, err := w.srv.LinkMirrorTick(ctx)
+		if err != nil || n != want {
+			t.Fatalf("mirrored %d, want %d: %v", n, want, err)
+		}
+		w.srv.WaitBackground()
+	}
+	buyer.must(200, "PUT", "/v1/settings/areas", map[string]any{"areas": map[string]bool{"money": false}})
+	draft := map[string]any{"customer": map[string]any{"name": "Ada's Kitchen", "key": "link:" + buyerID},
+		"lines": []map[string]any{{"description": "Rice, 50kg", "quantity": 5, "unit_kobo": 8500000}}, "due_on": "2099-01-31"}
+	x := seller.must(201, "POST", "/v1/invoices", draft, "Idempotency-Key", "b-1")
+	seller.must(200, "POST", "/v1/invoices/"+x["id"].(string)+"/send", nil, "Idempotency-Key", "s-1")
+	tick(0) // the buyer does not use Money: nothing crosses
+	if st, out := buyer.do("GET", "/v1/bills", nil); st != 404 || out["area_off"] != "money" {
+		t.Errorf("the buyer's bills with Money off: %d %v", st, out)
+	}
+	buyer.must(200, "PUT", "/v1/settings/areas", map[string]any{"areas": map[string]bool{"money": true}})
+	// It was waiting, with a longer wait after each try; the wait is over.
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE link_mirrors_due SET due_at = now()`); err != nil {
+		t.Fatal(err)
+	}
+	tick(1)
+	if bills := buyer.must(200, "GET", "/v1/bills", nil)["bills"].([]any); len(bills) != 1 {
+		t.Fatalf("the bill after Money is back on: %v", bills)
 	}
 }

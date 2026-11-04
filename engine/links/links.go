@@ -25,6 +25,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/israel-duff/taskiem/engine/areas"
 )
 
 // Errors.
@@ -372,9 +374,41 @@ func AnswerTx(ctx context.Context, tx pgx.Tx, id uuid.UUID, answer string, by Ac
 	return other, nil
 }
 
+// OtherOffError is a document that cannot cross a link because the other
+// business has turned off the part of Taskiem it belongs to
+// (docs/spec/business-areas.md): an invoice needs Money on the other side, a
+// purchase order Orders, a price list Stock, a message Linked businesses.
+type OtherOffError struct{ Area areas.Area }
+
+func (e *OtherOffError) Error() string {
+	for _, i := range areas.Catalogue() {
+		if i.Area == e.Area {
+			return "that business does not use " + i.Name + " on Taskiem"
+		}
+	}
+	return "that business does not use this part of Taskiem"
+}
+
+// actionArea is the part of Taskiem a link action's document belongs to.
+func actionArea(action string) (areas.Area, bool) {
+	switch {
+	case action == "link.prices":
+		return areas.Stock, true
+	case strings.HasPrefix(action, "link.order"):
+		return areas.Orders, true
+	case strings.HasPrefix(action, "link.bill"):
+		return areas.Money, true
+	case action == "link.message", action == "link.read":
+		return areas.Links, true
+	}
+	return "", false
+}
+
 // EnterTx narrows tx to the other side of an active link for the rest of
 // the transaction, audited in both chains as action (link.*). The caller
-// writes its own side's rows first.
+// writes its own side's rows first. The other side must have the part of
+// Taskiem the document belongs to turned on: if not, nothing crosses and
+// the answer is an *OtherOffError (the caller's transaction is undone).
 func EnterTx(ctx context.Context, tx pgx.Tx, id uuid.UUID, action string, detail []byte, by Actor) (uuid.UUID, error) {
 	if detail == nil {
 		detail = []byte("{}")
@@ -382,6 +416,16 @@ func EnterTx(ctx context.Context, tx pgx.Tx, id uuid.UUID, action string, detail
 	var other uuid.UUID
 	if err := tx.QueryRow(ctx, `SELECT taskiem_link_enter($1, $2, $3, $4, $5)`, id, by.Type, by.ID, action, detail).Scan(&other); err != nil {
 		return uuid.Nil, pgErr(err)
+	}
+	if area, ok := actionArea(action); ok {
+		// The scope is now the other side's alone.
+		on, err := areas.Enabled(ctx, tx, other, area)
+		if err != nil {
+			return uuid.Nil, err
+		}
+		if !on {
+			return uuid.Nil, &OtherOffError{Area: area}
+		}
 	}
 	return other, nil
 }

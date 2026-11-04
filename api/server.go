@@ -866,6 +866,10 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 		writeErr(w, http.StatusBadRequest, strings.TrimPrefix(err.Error(), "bad request: "))
 	case errors.Is(err, errForbidden):
 		writeErr(w, http.StatusForbidden, strings.TrimPrefix(err.Error(), "forbidden: "))
+	case errors.As(err, new(*links.OtherOffError)):
+		var oo *links.OtherOffError
+		errors.As(err, &oo)
+		writeErr(w, http.StatusConflict, oo.Error())
 	case errors.Is(err, errConflict):
 		writeErr(w, http.StatusConflict, strings.TrimPrefix(err.Error(), "conflict: "))
 	case errors.Is(err, errGone):
