@@ -298,17 +298,17 @@ export function ChatPage() {
   );
   return (
     <>
-      <PageHeader
-        title="Chat"
-        description="The businesses on Taskiem you trade with. Find another by its name, what it sells or its area, and ask to link."
-        actions={
-          <Link className="button" to="/settings/links">
-            Linked businesses
-          </Link>
-        }
-      />
       <div className={`chat-layout${open || taskiemOpen ? " open" : ""}`}>
         <div className="chat-list-pane">
+          <div className="chat-list-head">
+            <h1>Chat</h1>
+            <Link className="button small" to="/home">
+              Home
+            </Link>
+            <Link className="button small" to="/settings/links">
+              Linked businesses
+            </Link>
+          </div>
           <div className="filters" role="search" aria-label="Find a business">
             <label className="search">
               <span className="sr-only">Find a business</span>

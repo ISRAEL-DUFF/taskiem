@@ -710,9 +710,17 @@ export function ConversationPane({
       data-testid="chat-pane"
     >
       <div className="chat-head">
-        <button type="button" className="small chat-back" onClick={onBack}>
-          Back<span className="sr-only"> to the chats</span>
+        <button
+          type="button"
+          className="icon-button chat-back"
+          onClick={onBack}
+          aria-label="Back to the chats"
+        >
+          <Icon name="back" />
         </button>
+        <span className="chat-avatar" aria-hidden="true">
+          {conv.name.slice(0, 1).toUpperCase()}
+        </span>
         <h2>
           {conv.name}
           {typing && (

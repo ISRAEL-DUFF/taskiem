@@ -459,8 +459,18 @@ function SignedIn() {
   // icons on a computer, and the top and tab bars give way on a phone.
   const building =
     /^\/workflows\/[^/]+$/.test(pathname) && pathname !== "/workflows/new";
+  // The chat fills the window the same way, as WhatsApp Web does.
+  const chatting = pathname === "/chat";
   return (
-    <div className={building ? "shell builder-mode" : "shell"}>
+    <div
+      className={
+        chatting
+          ? "shell builder-mode chat-mode"
+          : building
+            ? "shell builder-mode"
+            : "shell"
+      }
+    >
       <a className="skip-link" href="#main">
         Skip to content
       </a>
@@ -576,7 +586,7 @@ function SignedIn() {
         </div>
       </nav>
       <main
-        className={building ? "main wide" : "main"}
+        className={building || chatting ? "main wide" : "main"}
         id="main"
         tabIndex={-1}
         ref={mainRef}

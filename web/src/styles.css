@@ -7,6 +7,7 @@
   --bg: #f1f4ef;
   --panel: #ffffff;
   --panel-2: #f6f8f4;
+  --chat-wallpaper: #efeae2; --chat-in: #ffffff; --chat-out: #d9fdd3; --chat-out-meta: #4a5a52; --chat-tick-read: #0b66b8; --chat-select: #f0f2f5;
   --text: #0e1a14;
   --muted: #55615a;
   --border: #e2e7df;
@@ -80,6 +81,7 @@
     --nav-bg: #0d0e0c; --nav-text: #c9cbc4; --nav-muted: #8a8d85; --nav-hover: rgba(255, 255, 255, 0.05); --nav-active: rgba(255, 255, 255, 0.08);
     --shadow: none; --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35); --shadow-lg: 0 24px 48px rgba(0, 0, 0, 0.5);
     --tint: rgba(200, 241, 105, 0.12); --tint-text: var(--brand-dark); --tint-warn: rgba(253, 176, 34, 0.14); --tint-warn-text: #fdb022;
+    --chat-wallpaper: #0e1512; --chat-in: #1f2a26; --chat-out: #0f4a37; --chat-out-meta: #c9d6cf; --chat-tick-read: #8fd0ff; --chat-select: #232f2a;
     color-scheme: dark;
   }
 }
@@ -1671,14 +1673,15 @@ fieldset.path-set legend { font-size: 12.5px; font-weight: 600; padding: 0 4px; 
 .chat-pane { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); display: flex; flex-direction: column; min-height: 60vh; }
 .chat-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
 .chat-head h2 { margin: 0; font-size: 16px; flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.chat-stream { flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 6px; background: var(--panel-2); overflow-y: auto; max-height: 65vh; }
+.chat-stream { flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 6px; background: var(--chat-wallpaper); overflow-y: auto; max-height: 65vh; }
 .chat-day { align-self: center; font-size: 12px; color: var(--muted); background: var(--panel); border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; margin: 6px 0; }
-.bubble { max-width: min(80%, 520px); align-self: flex-start; background: var(--panel); border: 1px solid var(--border); border-radius: 12px 12px 12px 4px; padding: 6px 10px 4px; overflow-wrap: anywhere; }
-.bubble.mine { align-self: flex-end; background: var(--tint); border-color: transparent; border-radius: 12px 12px 4px 12px; }
+.bubble { max-width: min(80%, 520px); align-self: flex-start; background: var(--chat-in); border: 1px solid var(--border); border-radius: 12px 12px 12px 4px; padding: 6px 10px 4px; overflow-wrap: anywhere; }
+.bubble.mine { align-self: flex-end; background: var(--chat-out); border-color: transparent; border-radius: 12px 12px 4px 12px; }
 .bubble .who { display: block; font-size: 12px; font-weight: 600; color: var(--tint-text); }
 .bubble .text { white-space: pre-wrap; }
 .bubble .meta { display: flex; justify-content: flex-end; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); margin-top: 2px; }
-.bubble .ticks.read { color: var(--info); }
+.bubble .ticks.read { color: var(--chat-tick-read); }
+.bubble.mine .meta, .bubble.mine .reply-btn { color: var(--chat-out-meta); }
 .bubble .quote { display: block; border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 6px; padding: 4px 8px; margin-bottom: 4px; font-size: 13px; color: var(--muted); }
 .bubble.card-bubble { border-left: 3px solid var(--accent); }
 .bubble.card-bubble .card-title { font-weight: 600; }
@@ -1732,3 +1735,30 @@ fieldset.path-set legend { font-size: 12.5px; font-weight: 600; padding: 0 4px; 
 .mention-list button:hover, .mention-list button:focus-visible { background: var(--panel-2); }
 .mention-list .name { font-weight: 600; overflow-wrap: anywhere; }
 .bubble .mention { font-weight: 600; color: var(--tint-text); }
+
+/* The chat fills the window, as WhatsApp Web does: the menu is a rail, the
+   list and the open conversation each scroll inside, the composer stays at
+   the bottom. On a phone the bars give way (builder-mode) and the thread is
+   full screen with a back arrow. */
+.shell.chat-mode { height: 100dvh; min-height: 0; overflow: hidden; }
+.chat-mode .main { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+.chat-mode .main > .page { flex: 1; min-height: 0; height: auto; }
+.chat-mode .chat-layout { height: 100%; gap: 0; grid-template-rows: minmax(0, 1fr); align-items: stretch; }
+.chat-mode .chat-list-pane { overflow-y: auto; min-height: 0; background: var(--panel); }
+.chat-mode .chat-pane { border: 0; border-radius: 0; min-height: 0; height: 100%; }
+.chat-mode .chat-stream { max-height: none; min-height: 0; }
+.chat-list-head { display: flex; align-items: center; gap: 8px; padding: 14px 14px 6px; flex-wrap: wrap; }
+.chat-list-head h1 { flex: 1; margin: 0; font-size: 20px; }
+.chat-mode .chat-list-pane .filters { padding: 0 14px; }
+@media (min-width: 900px) {
+  .chat-mode .chat-layout { grid-template-columns: minmax(300px, 400px) minmax(0, 1fr); }
+  .chat-mode .chat-list-pane { border-right: 1px solid var(--border); }
+  .chat-mode .chat-layout:not(.open)::after { content: "Open a chat, or find a business to trade with."; grid-column: 2; grid-row: 1; display: grid; place-items: center; background: var(--chat-wallpaper); color: var(--muted); padding: 24px; text-align: center; }
+}
+.chat-avatar { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--tint); color: var(--tint-text); font-weight: 600; }
+.chat-head .chat-back { flex: none; width: 40px; height: 40px; }
+.chat-head .chat-back svg { width: 20px; height: 20px; }
+@media (max-width: 860px) {
+  .chat-mode .main { padding-top: env(safe-area-inset-top); }
+  .composer textarea { font-size: 16px; }
+}

@@ -157,9 +157,17 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
       data-testid="taskiem-pane"
     >
       <div className="chat-head">
-        <button type="button" className="small chat-back" onClick={onBack}>
-          Back<span className="sr-only"> to the chats</span>
+        <button
+          type="button"
+          className="icon-button chat-back"
+          onClick={onBack}
+          aria-label="Back to the chats"
+        >
+          <Icon name="back" />
         </button>
+        <span className="chat-avatar" aria-hidden="true">
+          T
+        </span>
         <h2>Taskiem</h2>
       </div>
       <p className="hint" style={{ padding: "8px 14px 0", margin: 0 }}>
