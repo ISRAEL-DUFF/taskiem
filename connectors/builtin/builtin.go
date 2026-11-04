@@ -34,6 +34,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/paystack"
 	"github.com/israel-duff/taskiem/connectors/postgres"
 	"github.com/israel-duff/taskiem/connectors/prembly"
+	"github.com/israel-duff/taskiem/connectors/privatehttp"
 	"github.com/israel-duff/taskiem/connectors/quickbooks"
 	"github.com/israel-duff/taskiem/connectors/remita"
 	"github.com/israel-duff/taskiem/connectors/resend"
@@ -178,6 +179,7 @@ func Register(r *connector.Registry, o Options) error {
 		mysql.New(),
 		s3.New(s3.Options{BaseURL: o.S3URL}),
 		sftp.New(),
+		privatehttp.New(),
 		storefront.New(o.Storefront),
 		riders.New(o.Riders),
 		bills.New(o.Bills),

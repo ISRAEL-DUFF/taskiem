@@ -2167,6 +2167,35 @@ export const prembly = {
   verify_voters_card: (input: PremblyVerifyVotersCardInput, extra?: ConnectorExtra): StepSpec => connector("prembly@1", "verify_voters_card", input, extra),
 };
 
+// Your own network (HTTP) (privatehttp@1)
+export interface PrivatehttpGetInput {
+  /** Extra request headers (not Host, Authorization or Content-Length) */
+  headers?: Value;
+  /** Largest answer to keep; a bigger one is cut and marked truncated */
+  max_bytes?: Val<number>;
+  /** The path on the equipment, starting with /, such as /rest/ip/address */
+  path?: Val<string>;
+  /** Query parameters, added to the path */
+  query?: Value;
+}
+export interface PrivatehttpSendInput {
+  /** Sent as JSON, unless it is a string, which is sent as it is */
+  body?: Value;
+  /** Extra request headers (not Host, Authorization or Content-Length) */
+  headers?: Value;
+  max_bytes?: Val<number>;
+  method: Val<"POST" | "PUT" | "PATCH" | "DELETE">;
+  /** The path on the equipment, starting with / */
+  path: Val<string>;
+  query?: Value;
+}
+export const privatehttp = {
+  /** Read from the equipment (read) */
+  get: (input?: PrivatehttpGetInput, extra?: ConnectorExtra): StepSpec => connector("privatehttp@1", "get", input, extra),
+  /** Send to the equipment (unsafe_write) */
+  send: (input: PrivatehttpSendInput, extra?: ConnectorExtra): StepSpec => connector("privatehttp@1", "send", input, extra),
+};
+
 // QuickBooks (quickbooks@1)
 export interface QuickbooksChangesSinceInput {
   entities: Value;
@@ -3872,6 +3901,7 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "paystack@1": "paystack",
   "postgres@1": "postgres",
   "prembly@1": "prembly",
+  "privatehttp@1": "privatehttp",
   "quickbooks@1": "quickbooks",
   "remita@1": "remita",
   "resend@1": "resend",
@@ -3926,6 +3956,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "paystack@1": ["check_balance", "create_dedicated_account", "create_recipient", "initialize_transaction", "list_banks", "list_payments", "list_transactions", "list_transfers", "pay_with_transfer", "refund_status", "refund_transaction", "resolve_account", "transfer", "verify_charge", "verify_transfer"],
   "postgres@1": ["execute", "query"],
   "prembly@1": ["check_liveness", "compare_faces", "get_wallet_balance", "lookup_bvn", "lookup_bvn_basic", "lookup_bvn_by_phone", "lookup_cac", "lookup_nin", "lookup_nin_basic", "lookup_phone", "lookup_phone_basic", "resolve_bank_account", "verify_bvn_with_face", "verify_drivers_license", "verify_nin_with_face", "verify_passport", "verify_voters_card"],
+  "privatehttp@1": ["get", "send"],
   "quickbooks@1": ["changes_since", "create_bill", "create_customer", "create_invoice", "create_payment", "create_purchase", "create_sales_receipt", "create_vendor", "find_customer", "find_vendor", "get_company", "get_entity", "get_invoice", "list_accounts", "list_items", "list_tax_codes", "query_invoices"],
   "remita@1": ["bulk_transfer", "cancel_invoice", "generate_invoice", "get_bulk_transfer", "get_invoice", "get_transfer", "list_banks", "resolve_account", "transfer"],
   "resend@1": ["get_email", "list_domains", "send_email"],
