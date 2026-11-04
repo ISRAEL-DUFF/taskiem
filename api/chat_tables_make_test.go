@@ -25,7 +25,7 @@ func TestChatMakesAndChangesTables(t *testing.T) {
 	}
 
 	// A known one, picked by number.
-	if r := w.say(t, on, "new table"); !strings.Contains(r, "1. Customers") || !strings.Contains(r, "2. Staff") || !strings.Contains(r, "3. Something else") {
+	if r := w.say(t, on, "new table"); !strings.Contains(r, "1. Customers") || !strings.Contains(r, "2. Staff") || !strings.Contains(r, "3. Subscribers") || !strings.Contains(r, "4. Something else") {
 		t.Fatalf("pick: %q", r)
 	}
 	r := w.say(t, on, "1")
@@ -49,7 +49,7 @@ func TestChatMakesAndChangesTables(t *testing.T) {
 	if r := w.say(t, on, "new table"); !strings.Contains(r, "1. Staff") || strings.Contains(r, "Customers") {
 		t.Fatalf("made ones are not offered again: %q", r)
 	}
-	if r := w.say(t, on, "2"); !strings.Contains(r, "What is the list called?") {
+	if r := w.say(t, on, "3"); !strings.Contains(r, "What is the list called?") {
 		t.Fatalf("something else: %q", r)
 	}
 	if r := w.say(t, on, "Debtors"); !strings.Contains(r, "What do you write down for each one in Debtors?") {

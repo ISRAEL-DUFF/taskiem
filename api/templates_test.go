@@ -250,6 +250,8 @@ func TestTemplateServices(t *testing.T) {
 		t.Fatal(err)
 	}
 	owner := w.tenant(t, "Ada Cakes", "owner@adacakes.test")
+	// A school's template is offered once the business has Schools on.
+	owner.must(200, "PUT", "/v1/settings/areas", map[string]any{"areas": map[string]bool{"schools": true}})
 	byID := map[string]map[string]any{}
 	for _, x := range owner.must(200, "GET", "/v1/templates", nil)["templates"].([]any) {
 		m := x.(map[string]any)
