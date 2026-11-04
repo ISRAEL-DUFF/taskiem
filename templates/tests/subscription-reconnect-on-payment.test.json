@@ -79,7 +79,7 @@
             "table": "subscribers",
             "set": {
               "status": "active",
-              "renews_on": "2026-02-04T09:00:00Z"
+              "renews_on": "2026-02-04"
             }
           },
           "thank_off": {
@@ -145,7 +145,7 @@
           "renew_on": {
             "set": {
               "status": "active",
-              "renews_on": "2026-02-19T00:00:00Z"
+              "renews_on": "2026-02-19"
             }
           }
         }
@@ -220,6 +220,117 @@
         "status": "completed",
         "steps": {
           "nothing_to_do": "completed"
+        }
+      }
+    },
+    {
+      "name": "a payment smaller than the monthly price renews no one",
+      "trigger": {
+        "type": "invoice",
+        "event": "paid",
+        "body": {
+          "event": "paid",
+          "number": "INV-0011",
+          "status": "paid",
+          "amount_kobo": 50000,
+          "customer": {
+            "name": "Chidi Eze",
+            "phone": "+2348030000003"
+          }
+        }
+      },
+      "mocks": {
+        "find": {
+          "output": {
+            "rows": [
+              {
+                "name": "Chidi Eze",
+                "phone": "+2348030000003",
+                "plan": "Home 5Mbps",
+                "monthly_naira": 8000,
+                "renews_on": "2025-12-20T00:00:00Z",
+                "status": "suspended",
+                "account_ref": "acct-77",
+                "area": "Yaba"
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "renewal": "skipped",
+          "restore": "skipped"
+        }
+      }
+    },
+    {
+      "name": "a subscriber typed in with a local number is found by the invoice's international one",
+      "trigger": {
+        "type": "invoice",
+        "event": "paid",
+        "body": {
+          "event": "paid",
+          "number": "INV-0012",
+          "status": "paid",
+          "amount_kobo": 800000,
+          "customer": {
+            "name": "Chidi Eze",
+            "phone": "+2348030000003"
+          }
+        }
+      },
+      "mocks": {
+        "find": {
+          "output": {
+            "rows": [
+              {
+                "name": "Chidi Eze",
+                "phone": "08030000003",
+                "plan": "Home 5Mbps",
+                "monthly_naira": 8000,
+                "renews_on": "2026-01-20",
+                "status": "active",
+                "account_ref": "acct-77"
+              }
+            ]
+          }
+        },
+        "renew_on": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "thank_on": {
+          "output": {
+            "queued": [
+              "sms"
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "find": {
+            "filters": [
+              {
+                "column": "phone",
+                "op": "like",
+                "value": "%8030000003"
+              }
+            ]
+          },
+          "renew_on": {
+            "filters": [
+              {
+                "column": "phone",
+                "op": "eq",
+                "value": "08030000003"
+              }
+            ]
+          }
         }
       }
     }

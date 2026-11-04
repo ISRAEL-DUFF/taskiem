@@ -2,7 +2,7 @@
   "id": "subscription-suspend-expired",
   "title": "Switch off subscribers who have not renewed",
   "summary": "Every day, list the active subscribers whose renewal date passed by your grace days, ask you to approve, then switch them off on your system and tell them.",
-  "description": "Once a day, finds the active subscribers whose 'Renews on' date is past by more than the grace days you choose. If there are any, you get one request listing them, and nothing happens until you approve it. When you approve, each one is switched off by calling the address your system gives for that, marked suspended in your subscribers table, and sent a text saying why and how to pay. Put the key your system gives you in Settings as a secret named billing_system_key, and allow your system's address there first (both are under Settings: turn Advanced on to see the list of allowed addresses). Your system must be reachable on the internet.",
+  "description": "Once a day, finds the active subscribers whose 'Renews on' date is past by more than the grace days you choose. If there are any, you get one request listing them, and nothing happens until you approve it. When you approve, each one is switched off by calling the address your system gives for that, marked suspended in your subscribers table, and sent a text saying why and how to pay. Put the key your system gives you in Settings as a secret named billing_system_key, and allow your system's address there first (both are under Settings: turn Advanced on to see the list of allowed addresses). Your system must be reachable on the internet. If the call to your system fails for one subscriber, you are told, they stay marked active, and the others carry on. One run covers up to 1,000 subscribers: if you have more, you are told.",
   "category": "subscriptions",
   "tags": [
     "subscriptions",
@@ -150,7 +150,7 @@
           "filters": [
             {
               "column": "status",
-              "op": "eq",
+              "op": "ilike",
               "value": "active"
             }
           ],
@@ -171,7 +171,7 @@
         ],
         "config": {
           "output": {
-            "people": "=(has(steps.read_subscribers.output.rows) ? steps.read_subscribers.output.rows : []).filter(r, has(r.renews_on) && r.renews_on != null && timestamp(string(r.renews_on)) + duration(string({{grace_days}} * 24) + 'h') < timestamp(has(trigger.scheduled_time) ? trigger.scheduled_time : run.started_at))"
+            "people": "=(has(steps.read_subscribers.output.rows) ? steps.read_subscribers.output.rows : []).filter(r, has(r.renews_on) && r.renews_on != null && timestamp(string(r.renews_on).substring(0, 10) + 'T00:00:00Z') + duration(string({{grace_days}} * 24) + 'h') < timestamp(has(trigger.scheduled_time) ? trigger.scheduled_time : run.started_at))"
           }
         }
       },
@@ -228,7 +228,25 @@
               },
               "when": "=has(item.account_ref) && item.account_ref != null && string(item.account_ref) != ''",
               "effect": {
-                "idempotency_seed": "='suspend:' + string(item.phone) + ':' + string(item.renews_on)"
+                "idempotency_seed": "='suspend:' + string(item.name) + ':' + string(item.phone) + ':' + string(item.renews_on)"
+              },
+              "on_error": {
+                "steps": [
+                  {
+                    "id": "switch_off_failed",
+                    "type": "connector",
+                    "name": "Tell you this one could not be switched off",
+                    "connector": "notify@1",
+                    "action": "tell",
+                    "input": {
+                      "title": "Could not switch a subscriber off",
+                      "message": "='Could not switch off ' + string(item.name) + ' on your system: ' + steps.switch_off.error.message + ' They are still marked active; the next run asks you again.'"
+                    },
+                    "effect": {
+                      "idempotency_seed": "='suspend-failed:' + string(item.name) + ':' + string(item.phone) + ':' + string(item.renews_on)"
+                    }
+                  }
+                ]
               }
             },
             {
@@ -256,7 +274,7 @@
                 }
               },
               "effect": {
-                "idempotency_seed": "='suspended:' + string(item.phone) + ':' + string(item.renews_on)"
+                "idempotency_seed": "='suspended:' + string(item.name) + ':' + string(item.phone) + ':' + string(item.renews_on)"
               }
             },
             {
@@ -274,10 +292,28 @@
                 "message": "=steps.settings.output.business_name + ': Hello ' + string(item.name) + ', your service has been switched off because it was not renewed. ' + steps.settings.output.payment_details"
               },
               "effect": {
-                "idempotency_seed": "='suspended-text:' + string(item.phone) + ':' + string(item.renews_on)"
+                "idempotency_seed": "='suspended-text:' + string(item.name) + ':' + string(item.phone) + ':' + string(item.renews_on)"
               }
             }
           ]
+        }
+      },
+      {
+        "id": "warn_more",
+        "type": "connector",
+        "name": "Tell you if there are more subscribers than one run covers",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "read_subscribers"
+        ],
+        "when": "=has(steps.read_subscribers.output.next_cursor) && steps.read_subscribers.output.next_cursor != null && string(steps.read_subscribers.output.next_cursor) != ''",
+        "input": {
+          "title": "More subscribers than one run covers",
+          "message": "This run covered the first 1,000 subscribers in your table. The rest were left out: they were not looked at, so nobody past their date among the rest is asked about."
+        },
+        "effect": {
+          "idempotency_seed": "='more-subscribers:' + string(run.started_at)"
         }
       }
     ],

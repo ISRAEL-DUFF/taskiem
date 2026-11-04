@@ -1,8 +1,8 @@
 {
   "id": "subscription-reconnect-on-payment",
   "title": "Switch a subscriber back on when they pay",
-  "summary": "When an invoice is paid in full, find the subscriber by phone, switch them back on if they were off, move their renewal date on, and thank them.",
-  "description": "Starts the moment one of your invoices is paid in full. Looks the customer up in your subscribers table by their phone number. If they are there, their renewal date moves on by the days you choose (from today, or from their current date if it is later), they are marked active, and, if they had been switched off, they are switched back on by calling the address your system gives for that. Then they get a text saying they are back. Invoices for people who are not subscribers do nothing, and neither does a switched-off subscriber with no account on your system filled in. Put the key your system gives you in Settings as a secret named billing_system_key, and allow your system's address there first (both are under Settings: turn Advanced on to see the list of allowed addresses).",
+  "summary": "When an invoice that covers a month is paid in full, find the subscriber by phone, switch them back on if they were off, move their renewal date on, and thank them.",
+  "description": "Starts the moment one of your invoices is paid in full. Looks the customer up in your subscribers table by their phone number (the last ten digits, so +234 and 0 numbers match). If they are there, their renewal date moves on by the days you choose (from today, or from their current date if it is later), they are marked active, and, if they had been switched off, they are switched back on by calling the address your system gives for that. Then they get a text saying they are back. A payment smaller than the subscriber's monthly price (an equipment sale, a part-payment that finished an old invoice) renews no one. Invoices for people who are not subscribers do nothing, and neither does a switched-off subscriber with no account on your system filled in. Put the key your system gives you in Settings as a secret named billing_system_key, and allow your system's address there first (both are under Settings: turn Advanced on to see the list of allowed addresses).",
   "category": "subscriptions",
   "tags": [
     "subscriptions",
@@ -113,14 +113,14 @@
         "connector": "xenibase@1",
         "action": "read_rows",
         "connection": "data_tables",
-        "when": "=has(trigger.body.customer.phone) && trigger.body.customer.phone != null && string(trigger.body.customer.phone) != ''",
+        "when": "=has(trigger.body.customer.phone) && trigger.body.customer.phone != null && size(string(trigger.body.customer.phone)) >= 10",
         "input": {
           "table": "{{subscribers_table}}",
           "filters": [
             {
               "column": "phone",
-              "op": "eq",
-              "value": "=string(trigger.body.customer.phone)"
+              "op": "like",
+              "value": "='%' + string(trigger.body.customer.phone).substring(size(string(trigger.body.customer.phone)) - 10)"
             }
           ],
           "limit": 1
@@ -133,10 +133,10 @@
         "needs": [
           "find"
         ],
-        "when": "=has(steps.find.output.rows) && size(steps.find.output.rows) > 0",
+        "when": "=has(steps.find.output.rows) && size(steps.find.output.rows) > 0 && has(steps.find.output.rows[0].monthly_naira) && steps.find.output.rows[0].monthly_naira != null && int(trigger.body.amount_kobo) >= int(double(steps.find.output.rows[0].monthly_naira) * 100.0)",
         "config": {
           "output": {
-            "renews_on": "=string((has(steps.find.output.rows[0].renews_on) && steps.find.output.rows[0].renews_on != null && timestamp(string(steps.find.output.rows[0].renews_on)) > timestamp(run.started_at) ? timestamp(string(steps.find.output.rows[0].renews_on)) : timestamp(run.started_at)) + duration(string({{extend_days}} * 24) + 'h'))"
+            "renews_on": "=string((has(steps.find.output.rows[0].renews_on) && steps.find.output.rows[0].renews_on != null && timestamp(string(steps.find.output.rows[0].renews_on).substring(0, 10) + 'T00:00:00Z') > timestamp(run.started_at) ? timestamp(string(steps.find.output.rows[0].renews_on).substring(0, 10) + 'T00:00:00Z') : timestamp(run.started_at)) + duration(string({{extend_days}} * 24) + 'h')).substring(0, 10)"
           }
         }
       },
@@ -188,7 +188,7 @@
                       {
                         "column": "phone",
                         "op": "eq",
-                        "value": "=string(trigger.body.customer.phone)"
+                        "value": "=string(steps.find.output.rows[0].phone)"
                       }
                     ],
                     "max_affected": 1,
@@ -240,7 +240,7 @@
                       {
                         "column": "phone",
                         "op": "eq",
-                        "value": "=string(trigger.body.customer.phone)"
+                        "value": "=string(steps.find.output.rows[0].phone)"
                       }
                     ],
                     "max_affected": 1,

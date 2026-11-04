@@ -2,7 +2,7 @@
   "id": "subscription-outage-notice",
   "title": "Tell your subscribers about an outage",
   "summary": "When your network tool reports a problem, text every active subscriber (or just one area) what is wrong.",
-  "description": "Your monitoring or network tool calls this workflow's web address with a message, and optionally an area. Every active subscriber in your subscribers table (only those in that area, when you name one) gets the message by SMS from your business. Call it again to say it is fixed. Each call is sent once, even if your tool repeats it.",
+  "description": "Your monitoring or network tool calls this workflow's web address with a message, and optionally an area, sending the key Taskiem shows with the workflow. Every active subscriber in your subscribers table (only those in that area, when you name one) gets the message by SMS from your business. Call it again to say it is fixed. Each call is sent once, even if your tool repeats it. One run covers up to 1,000 subscribers: if you have more, you are told.",
   "category": "subscriptions",
   "tags": [
     "subscriptions",
@@ -86,7 +86,7 @@
       "type": "webhook",
       "config": {
         "path": "{{path}}",
-        "auth": "hmac",
+        "auth": "bearer",
         "dedup": "=trigger.body.id"
       }
     },
@@ -138,7 +138,7 @@
           "filters": [
             {
               "column": "status",
-              "op": "eq",
+              "op": "ilike",
               "value": "active"
             }
           ],
@@ -175,10 +175,28 @@
                 "message": "=steps.settings.output.business_name + ': ' + trigger.body.message"
               },
               "effect": {
-                "idempotency_seed": "='outage:' + trigger.body.id + ':' + string(item.phone)"
+                "idempotency_seed": "='outage:' + trigger.body.id + ':' + string(item.name) + ':' + string(item.phone)"
               }
             }
           ]
+        }
+      },
+      {
+        "id": "warn_more",
+        "type": "connector",
+        "name": "Tell you if there are more subscribers than one run covers",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "read_subscribers"
+        ],
+        "when": "=has(steps.read_subscribers.output.next_cursor) && steps.read_subscribers.output.next_cursor != null && string(steps.read_subscribers.output.next_cursor) != ''",
+        "input": {
+          "title": "More subscribers than one run covers",
+          "message": "This run covered the first 1,000 subscribers in your table. The rest were left out: they were not told. Call again with an area, or ask for help."
+        },
+        "effect": {
+          "idempotency_seed": "='more-subscribers:' + string(run.started_at)"
         }
       }
     ],

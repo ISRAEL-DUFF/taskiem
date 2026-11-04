@@ -165,6 +165,88 @@
           "suspend_each": "skipped"
         }
       }
+    },
+    {
+      "name": "when the call to your system fails for one subscriber, you are told and the others carry on",
+      "trigger": {
+        "scheduled_time": "2026-11-10T07:30:00Z"
+      },
+      "mocks": {
+        "read_subscribers": {
+          "output": {
+            "rows": [
+              {
+                "name": "Chidi Eze",
+                "phone": "+2348030000003",
+                "plan": "Home 5Mbps",
+                "monthly_naira": 8000,
+                "renews_on": "2026-11-02T00:00:00Z",
+                "status": "active",
+                "account_ref": "acct-77",
+                "area": "Yaba"
+              },
+              {
+                "name": "Tunde Bello",
+                "phone": "+2348030000002",
+                "plan": "Office",
+                "monthly_naira": 40000,
+                "renews_on": "2026-11-01T00:00:00Z",
+                "status": "active",
+                "account_ref": "acct-78",
+                "area": "Yaba"
+              }
+            ]
+          }
+        },
+        "suspend_each[0].switch_off": {
+          "error": {
+            "kind": "fatal",
+            "message": "the system answered 500"
+          }
+        },
+        "suspend_each[0].switch_off_failed": {
+          "output": {
+            "people": 1
+          }
+        },
+        "suspend_each[1].switch_off": {
+          "output": {
+            "status": 200
+          }
+        },
+        "suspend_each[1].mark_suspended": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "suspend_each[1].tell_them": {
+          "output": {
+            "queued": [
+              "sms"
+            ]
+          }
+        }
+      },
+      "approvals": {
+        "ask": {
+          "decision": "approved",
+          "by": "owner"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "suspend_each[0].mark_suspended": "skipped",
+          "suspend_each[0].tell_them": "skipped",
+          "suspend_each[1].mark_suspended": "completed",
+          "suspend_each[1].tell_them": "completed"
+        },
+        "inputs": {
+          "suspend_each[0].switch_off_failed": {
+            "title": "Could not switch a subscriber off"
+          }
+        }
+      }
     }
   ]
 }

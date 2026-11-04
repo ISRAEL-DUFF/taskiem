@@ -2,7 +2,7 @@
   "id": "subscription-renewal-reminder",
   "title": "Remind subscribers before they renew",
   "summary": "Every morning, text each active subscriber whose plan renews in the next few days, with the date and how to pay.",
-  "description": "Once a day, reads your active subscribers and texts each one whose renewal date is within the days you choose, with their plan, the date and how to pay. Each subscriber gets one reminder for each renewal date. Keep the 'Renews on' column of your subscribers table up to date (the monthly invoices workflow and the reconnect-on-payment workflow do not change it; set it when you add a subscriber or when they pay).",
+  "description": "Once a day, reads your active subscribers and texts each one whose renewal date is within the days you choose, with their plan, the date and how to pay. Each subscriber gets one reminder for each renewal date. Keep the 'Renews on' column of your subscribers table up to date (the monthly invoices workflow and the reconnect-on-payment workflow do not change it; set it when you add a subscriber or when they pay). One run covers up to 1,000 subscribers: if you have more, you are told.",
   "category": "subscriptions",
   "tags": [
     "subscriptions",
@@ -129,7 +129,7 @@
           "filters": [
             {
               "column": "status",
-              "op": "eq",
+              "op": "ilike",
               "value": "active"
             }
           ],
@@ -160,16 +160,34 @@
               "name": "Text the subscriber a reminder",
               "connector": "notify@1",
               "action": "text",
-              "when": "=has(item.phone) && item.phone != null && string(item.phone) != '' && has(item.renews_on) && item.renews_on != null && timestamp(string(item.renews_on)) > timestamp(has(trigger.scheduled_time) ? trigger.scheduled_time : run.started_at) && timestamp(string(item.renews_on)) - timestamp(has(trigger.scheduled_time) ? trigger.scheduled_time : run.started_at) <= duration(string({{days_before}} * 24) + 'h')",
+              "when": "=has(item.phone) && item.phone != null && string(item.phone) != '' && has(item.renews_on) && item.renews_on != null && timestamp(string(item.renews_on).substring(0, 10) + 'T00:00:00Z') > timestamp(has(trigger.scheduled_time) ? trigger.scheduled_time : run.started_at) && timestamp(string(item.renews_on).substring(0, 10) + 'T00:00:00Z') - timestamp(has(trigger.scheduled_time) ? trigger.scheduled_time : run.started_at) <= duration(string({{days_before}} * 24) + 'h')",
               "input": {
                 "to": "=string(item.phone)",
                 "message": "=steps.settings.output.business_name + ': Hello ' + string(item.name) + ', your ' + (has(item.plan) && item.plan != null ? string(item.plan) + ' plan ' : 'plan ') + 'renews on ' + string(item.renews_on).substring(0, 10) + ' (NGN ' + string(item.monthly_naira) + '). ' + steps.settings.output.payment_details"
               },
               "effect": {
-                "idempotency_seed": "='renew-reminder:' + string(item.phone) + ':' + string(item.renews_on)"
+                "idempotency_seed": "='renew-reminder:' + string(item.name) + ':' + string(item.phone) + ':' + string(item.renews_on)"
               }
             }
           ]
+        }
+      },
+      {
+        "id": "warn_more",
+        "type": "connector",
+        "name": "Tell you if there are more subscribers than one run covers",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "read_subscribers"
+        ],
+        "when": "=has(steps.read_subscribers.output.next_cursor) && steps.read_subscribers.output.next_cursor != null && string(steps.read_subscribers.output.next_cursor) != ''",
+        "input": {
+          "title": "More subscribers than one run covers",
+          "message": "This run covered the first 1,000 subscribers in your table. The rest were left out: the others got no reminder."
+        },
+        "effect": {
+          "idempotency_seed": "='more-subscribers:' + string(run.started_at)"
         }
       }
     ],
