@@ -357,7 +357,7 @@ export function Tenants() {
 export function Tenant() {
   const { id = "" } = useParams();
   const { data, error } = useLoad(
-    () => opsGet<{ tenant: TenantRow; subscription: Record<string, unknown> | null; limits: { limits: Record<string, unknown>; overrides: Record<string, unknown>; usage: Record<string, unknown> } }>(`/tenants/${id}`),
+    () => opsGet<{ tenant: TenantRow; subscription: Record<string, unknown> | null; limits: { limits: Record<string, unknown>; overrides: Record<string, unknown>; usage: Record<string, unknown> }; areas?: { area: string; name: string; enabled: boolean }[] }>(`/tenants/${id}`),
     [id],
   );
   if (error) return <ErrorBox error={error} />;
@@ -378,6 +378,16 @@ export function Tenant() {
         <dd>{data.tenant.status}</dd>
         <dt>Worker pool</dt>
         <dd>{data.tenant.pool}</dd>
+      </dl>
+      <h2>Parts of Taskiem it uses</h2>
+      <p className="hint">Read-only. The business's owner turns these on and off (What your business uses).</p>
+      <dl className="kv">
+        {(data.areas ?? []).map((a) => (
+          <div key={a.area} style={{ display: "contents" }}>
+            <dt>{a.name}</dt>
+            <dd>{a.enabled ? "On" : "Off"}</dd>
+          </div>
+        ))}
       </dl>
       <h2>Subscription</h2>
       {data.subscription ? <Json value={data.subscription} /> : <p className="hint">No subscription (billing off, or never set up).</p>}

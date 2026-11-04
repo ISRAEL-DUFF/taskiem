@@ -337,3 +337,52 @@ func Only(ctx context.Context, db Querier, tenants []uuid.UUID, a Area) ([]uuid.
 	}
 	return out, nil
 }
+
+// Kind is what a business says it does when it signs up: each switches on
+// the parts of Taskiem that go with it. None chosen is "just workflows":
+// every part off.
+type Kind struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Areas []Area `json:"-"`
+}
+
+// Kinds are the choices the signup question offers, in order.
+var Kinds = []Kind{
+	{ID: "shop", Name: "I sell things", Areas: []Area{Storefront, Orders, Stock, Money, Links}},
+	{ID: "service", Name: "I bill customers for a service", Areas: []Area{Money, Links}},
+	{ID: "school", Name: "I run a school", Areas: []Area{Schools}},
+}
+
+// FromKinds is the state a new business starts with, given the kinds it
+// chose: the parts of each kind, and what those need. An unknown kind is an
+// error.
+func FromKinds(ids []string) (State, error) {
+	want := map[Area]bool{}
+	for _, id := range ids {
+		i := slices.IndexFunc(Kinds, func(k Kind) bool { return k.ID == id })
+		if i < 0 {
+			return nil, fmt.Errorf("areas: %q is not one of shop, service or school", id)
+		}
+		for _, a := range Kinds[i].Areas {
+			want[a] = true
+		}
+	}
+	return Apply(State{}, want)
+}
+
+// SaveAll writes every stored area's state, on or off, as the business's
+// own choice (not Schools, whose switch is school_settings). The signup
+// question uses it, so a business that chose has a row for each part.
+func SaveAll(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, st State, by string) error {
+	for _, a := range All {
+		if a == Schools {
+			continue
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO business_areas (tenant_id, area, enabled, updated_by) VALUES ($1, $2, $3, $4)
+			ON CONFLICT (tenant_id, area) DO UPDATE SET enabled = $3, updated_by = $4, updated_at = now()`, tenant, string(a), st[a], by); err != nil {
+			return err
+		}
+	}
+	return nil
+}

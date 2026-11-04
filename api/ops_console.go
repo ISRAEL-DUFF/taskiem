@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"github.com/israel-duff/taskiem/engine/areas"
 	"github.com/israel-duff/taskiem/engine/audit"
 	"github.com/israel-duff/taskiem/engine/catalogue"
 	"github.com/israel-duff/taskiem/engine/db"
@@ -626,9 +627,15 @@ func (s *Server) opsTenant(w http.ResponseWriter, r *http.Request) {
 		PendingPlan       *string    `json:"pending_plan"`
 	}
 	var sub *subscription
+	var parts areas.State
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{id}, func(tx pgx.Tx) error {
+		// Which parts of Taskiem the business uses (docs/spec/business-areas.md).
+		var err error
+		if parts, err = areas.Load(ctx, tx, id); err != nil {
+			return err
+		}
 		var x subscription
-		err := tx.QueryRow(ctx, `SELECT plan_id, billing_interval, status, period_start, period_end, trial_end, comp_until, past_due_since,
+		err = tx.QueryRow(ctx, `SELECT plan_id, billing_interval, status, period_start, period_end, trial_end, comp_until, past_due_since,
 			cancel_at_period_end, pending_plan_id FROM subscriptions WHERE tenant_id = $1`, id).
 			Scan(&x.Plan, &x.Interval, &x.Status, &x.PeriodStart, &x.PeriodEnd, &x.TrialEnd, &x.CompUntil, &x.PastDueSince, &x.CancelAtPeriodEnd, &x.PendingPlan)
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -651,7 +658,7 @@ func (s *Server) opsTenant(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"tenant": list[0], "subscription": sub, "limits": limits})
+	writeJSON(w, http.StatusOK, map[string]any{"tenant": list[0], "subscription": sub, "limits": limits, "areas": areaRows(parts)})
 }
 
 // --- the platform audit chain ---

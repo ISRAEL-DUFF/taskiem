@@ -3,6 +3,7 @@ package api_test
 import (
 	"bytes"
 	"context"
+	"sort"
 	"strings"
 	"testing"
 
@@ -280,4 +281,67 @@ func TestAreasAcrossALink(t *testing.T) {
 	if bills := buyer.must(200, "GET", "/v1/bills", nil)["bills"].([]any); len(bills) != 1 {
 		t.Fatalf("the bill after Money is back on: %v", bills)
 	}
+}
+
+// TestSignupKinds: what a business says it does at signup decides which
+// parts it starts with; left out, it has every part; unknown words are
+// refused.
+func TestSignupKinds(t *testing.T) {
+	w := newWorld(t)
+	signUp := func(name, email string, kinds any) *client {
+		t.Helper()
+		body := map[string]any{"tenant": name, "email": email, "name": "Owner", "password": "correct horse battery", "accept_terms": true, "bearer": true}
+		if kinds != nil {
+			body["kinds"] = kinds
+		}
+		anon := &client{t: t, base: w.base}
+		out := anon.must(201, "POST", "/v1/signup", body)
+		return &client{t: t, base: w.base, token: out["token"].(string)}
+	}
+	state := func(c *client) string {
+		on := []string{}
+		for a, v := range areaState(t, c) {
+			if v {
+				on = append(on, a)
+			}
+		}
+		sort.Strings(on)
+		return strings.Join(on, ",")
+	}
+
+	if got := state(signUp("Plain Ltd", "a@signup.test", nil)); got != "links,money,orders,stock,storefront" {
+		t.Errorf("no kinds: %s", got)
+	}
+	if got := state(signUp("Workflows Ltd", "b@signup.test", []string{})); got != "" {
+		t.Errorf("just workflows: %q", got)
+	}
+	if got := state(signUp("Shop Ltd", "c@signup.test", []string{"shop"})); got != "links,money,orders,stock,storefront" {
+		t.Errorf("shop: %s", got)
+	}
+	if got := state(signUp("ISP Ltd", "d@signup.test", []string{"service"})); got != "links,money" {
+		t.Errorf("service: %s", got)
+	}
+	school := signUp("School Ltd", "e@signup.test", []string{"school"})
+	if got := state(school); got != "money,schools" {
+		t.Errorf("school: %s", got)
+	}
+	if got := school.must(200, "GET", "/v1/settings/schools", nil); got["enabled"] != true {
+		t.Errorf("school settings: %v", got)
+	}
+	if got := state(signUp("Both Ltd", "f@signup.test", []string{"service", "school"})); got != "links,money,schools" {
+		t.Errorf("service and school: %s", got)
+	}
+
+	// A business with nothing on is refused the parts, and can turn one on.
+	bare := signUp("Bare Ltd", "g@signup.test", []string{})
+	if st, out := bare.do("GET", "/v1/invoices", nil); st != 404 || out["area_off"] != "money" {
+		t.Errorf("a bare business's invoices: %d %v", st, out)
+	}
+	bare.must(200, "PUT", "/v1/settings/areas", map[string]any{"areas": map[string]bool{"money": true}})
+	if st, out := bare.do("GET", "/v1/invoices", nil); st == 404 && out["area_off"] != nil {
+		t.Errorf("after turning Money on: %d %v", st, out)
+	}
+
+	anon := &client{t: t, base: w.base}
+	anon.must(400, "POST", "/v1/signup", map[string]any{"tenant": "Odd Ltd", "email": "h@signup.test", "password": "correct horse battery", "accept_terms": true, "kinds": []string{"bank"}})
 }

@@ -84,3 +84,28 @@ test("Chat still opens, and the shop's tabs follow, when parts are off", async (
   await expect(tabs.getByRole("link", { name: "Suppliers" })).toHaveCount(0);
   await expect(tabs.getByRole("link", { name: "Price lists" })).toHaveCount(0);
 });
+
+test("signup asks what the business does, and starts with those parts", async ({ page }) => {
+  const stamp = letters();
+  await page.goto("/login");
+  await page.getByRole("link", { name: "Create an account" }).click();
+  await expect(page.getByTestId("signup-kind")).toContainText("What does your business do?");
+  await axeBoth(page, "Signup");
+  await page.getByLabel("Business or organisation name").fill(`Fibre ${stamp}`);
+  await page.getByLabel("Your name").fill("Tunde");
+  await page.getByLabel("Email").fill(`isp-${stamp}-${Math.random().toString(36).slice(2, 6)}@areas.test`);
+  await page.getByLabel("Password").fill("correct horse battery");
+  // The question is asked, not guessed: signup waits for an answer.
+  await page.getByRole("button", { name: "Create account" }).click();
+  await expect(page.getByRole("heading", { name: "Start with Taskiem" })).toBeVisible();
+  await page.getByLabel("I bill customers for a service").check();
+  await page.getByRole("button", { name: "Create account" }).click();
+
+  // Money is there; the shop's Orders is not; the checklist has no shop page.
+  await expect(page.getByRole("heading", { name: "Get started" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Money", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Orders", exact: true })).toHaveCount(0);
+  await expect(page.getByTestId("check-page")).toHaveCount(0);
+  const me = await (await page.request.get("/v1/me", { headers: H })).json();
+  expect(me.areas).toMatchObject({ money: true, links: true, storefront: false, orders: false, stock: false });
+});

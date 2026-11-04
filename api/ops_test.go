@@ -385,6 +385,10 @@ func TestOperatorConsoleWork(t *testing.T) {
 	if one["limits"] == nil || one["tenant"].(map[string]any)["name"] != "Acme" {
 		t.Errorf("tenant: %v", one)
 	}
+	// Which parts of Taskiem the business uses are shown, read-only.
+	if parts, _ := one["areas"].([]any); len(parts) != 6 || parts[0].(map[string]any)["area"] != "storefront" || parts[0].(map[string]any)["enabled"] != true {
+		t.Errorf("tenant areas: %v", one["areas"])
+	}
 	c.must(404, "GET", "/v1/ops/tenants/"+uuid.NewString(), nil)
 	if st, _ := c.do("PUT", "/v1/ops/tenants/"+acmeID.String(), map[string]any{}); st != 405 {
 		t.Errorf("a write to tenants: %d", st)

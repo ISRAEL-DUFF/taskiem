@@ -27496,6 +27496,12 @@ components:
           type: boolean
           description: The person agrees to the terms and privacy notice (`terms` on GET /v1/signup). Required
             true when the deployment has them.
+        kinds:
+          type: array
+          description: What the business does. Each kind switches on the parts of Taskiem that go with it (shop - the online shop, orders, stock, money and linked businesses; service - money and linked businesses; school - schools, with money). An empty list is just workflows - every part off. Left out, the business has every part. 400 for any other word. The owner changes them later with PUT /v1/settings/areas.
+          items:
+            type: string
+            enum: [shop, service, school]
     SignupResult:
       type: object
       required:

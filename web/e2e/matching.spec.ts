@@ -215,6 +215,7 @@ test("money is matched to storefront orders from To match, and undone on the ord
   const name = `Ada Shop ${Date.now()}`;
   await page.goto("/login");
   await page.getByRole("link", { name: "Create an account" }).click();
+  await page.getByLabel("I sell things").check();
   await page.getByLabel("Business or organisation name").fill(name);
   await page.getByLabel("Your name").fill("Ada Obi");
   await page.getByLabel("Email").fill(`shop-${Date.now()}@stores.test`);
