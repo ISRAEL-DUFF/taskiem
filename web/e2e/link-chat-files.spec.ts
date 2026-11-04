@@ -24,6 +24,12 @@ async function signUp(page: Page, tenant: string) {
 async function axeBoth(page: Page, where: string) {
   for (const scheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+    // The theme is the app's own (data-theme), not the browser's: set it, so dark is checked for real.
+    await page.evaluate((t) => {
+      if (t === "dark") document.documentElement.dataset.theme = "dark";
+      else delete document.documentElement.dataset.theme;
+    }, scheme);
+    await page.waitForTimeout(400); // colours ease between themes: wait for them to settle
     const vs = await axe(page);
     expect(vs, describe(`${where} (${scheme})`, vs)).toEqual([]);
   }
@@ -123,6 +129,13 @@ test("a photo with a caption, a PDF and a voice note", async ({ browser }) => {
   await buyer.waitForTimeout(500);
   expect(sent).toHaveLength(4);
   await axeBoth(buyer, "a photo, a PDF and a voice note");
+
+  // The contact panel lists them: Media and files.
+  await pane.getByRole("button", { name: /^About / }).click();
+  const media = pane.getByRole("region", { name: "Media and files" });
+  await expect(media).toContainText("Media and files (4)");
+  await expect(media.getByRole("link", { name: /waybill\.pdf/ })).toBeVisible();
+  await axeBoth(buyer, "the contact info with its media");
 });
 
 test("a voice note and a photo to Taskiem on the web", async ({ browser }) => {

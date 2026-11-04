@@ -64,6 +64,7 @@
   --nav-bg: #0d0e0c; --nav-text: #c9cbc4; --nav-muted: #8a8d85; --nav-hover: rgba(255, 255, 255, 0.05); --nav-active: rgba(255, 255, 255, 0.08);
   --shadow: none; --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35); --shadow-lg: 0 24px 48px rgba(0, 0, 0, 0.5);
   --tint: rgba(200, 241, 105, 0.12); --tint-text: var(--brand-dark); --tint-warn: rgba(253, 176, 34, 0.14); --tint-warn-text: #fdb022;
+  --chat-wallpaper: #0e1512; --chat-in: #1f2a26; --chat-out: #0f4a37; --chat-out-meta: #c9d6cf; --chat-tick-read: #8fd0ff; --chat-select: #232f2a;
   color-scheme: dark;
 }
 :root[data-brand="seal"] {
@@ -1782,3 +1783,20 @@ button.chat-avatar { border: 0; padding: 0; cursor: pointer; }
 .chat-info-body .hint { text-align: center; }
 .chat-info-actions { align-self: stretch; display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
 .chat-info-actions button { justify-content: center; min-height: 44px; }
+.chat-info-card { align-self: stretch; text-align: center; margin-top: 8px; }
+.chat-info-card p { margin: 0 0 4px; }
+.chat-info-items { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.chat-info-items li { background: var(--panel-2); border-radius: 999px; padding: 2px 10px; font-size: 13px; }
+.chat-info-media { align-self: stretch; margin-top: 20px; border-top: 1px solid var(--border); padding-top: 12px; }
+.chat-info-media h4 { margin: 0 0 8px; font-size: 14px; }
+.chat-info-media ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+.chat-info-media li { min-width: 0; }
+.chat-info-media .chat-photo img { width: 100%; height: 96px; object-fit: cover; }
+.chat-info-media .chat-voice { width: 100%; }
+.chat-info-media .chat-file { margin: 0; flex-wrap: wrap; }
+.chat-info-media .chat-photo { display: block; }
+.chat-info-media .chat-file { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 8px; background: var(--panel-2); color: var(--text); text-decoration: none; }
+.chat-info-media .chat-file svg { width: 22px; height: 22px; flex: none; }
+.chat-info-media .chat-file .name { flex: 1; min-width: 0; overflow-wrap: anywhere; font-weight: 600; font-size: 13px; }
+.chat-info-media li:has(.chat-file, .chat-voice) { grid-column: 1 / -1; }
+.bubble.mine .hint, .bubble.mine .quote { color: var(--chat-out-meta); }

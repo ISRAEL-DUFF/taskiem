@@ -22,6 +22,12 @@ async function signUp(page: Page, tenant: string) {
 async function axeBoth(page: Page, where: string) {
   for (const scheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+    // The theme is the app's own (data-theme), not the browser's: set it, so dark is checked for real.
+    await page.evaluate((t) => {
+      if (t === "dark") document.documentElement.dataset.theme = "dark";
+      else delete document.documentElement.dataset.theme;
+    }, scheme);
+    await page.waitForTimeout(400); // colours ease between themes: wait for them to settle
     const vs = await axe(page);
     expect(vs, describe(`${where} (${scheme})`, vs)).toEqual([]);
   }

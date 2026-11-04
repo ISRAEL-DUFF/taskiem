@@ -29,7 +29,7 @@ import { Icon } from "../icons";
 import { MicButton, RecordingBar, useVoiceNote } from "./VoiceNote";
 import { MentionList, MentionText, useMentions } from "./Mentions";
 import { priceWords, type PriceItem } from "../lib/pricelists";
-import { roleLine, type BusinessLink } from "../lib/links";
+import { roleLine, type BusinessLink, type LinkCard } from "../lib/links";
 import { ErrorBox, fmtTime, Modal, Skeleton, useAction, useLoad } from "../ui";
 
 // The conversation with a linked business (business links L3; §5.5): the
@@ -196,6 +196,33 @@ function AttachmentView({
       <span className="name">{attachmentLabel(a)}</span>
       <span className="hint">{fileSize(a.size)}</span>
     </a>
+  );
+}
+
+/** The photos, files and voice notes in the conversation (those loaded),
+ * newest first: WhatsApp's "Media, links and docs". */
+function MediaAndFiles({
+  messages,
+  other,
+}: {
+  messages: LinkMessage[];
+  other: string;
+}) {
+  const kept = messages.filter((m) => m.attachment).reverse();
+  if (kept.length === 0) return null;
+  return (
+    <section className="chat-info-media" aria-label="Media and files">
+      <h4>Media and files ({kept.length})</h4>
+      <ul>
+        {kept.map((m) => (
+          <li key={m.id}>
+            {m.attachment && (
+              <AttachmentView m={m} a={m.attachment} other={other} />
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -536,6 +563,23 @@ export function ConversationPane({
   const [typing, setTyping] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
+  // The business's card (area, what it sells), as its public page shows
+  // it: found by the same search, so only a business that lets others find
+  // it has one.
+  const [card, setCard] = useState<LinkCard>();
+  useEffect(() => {
+    if (!infoOpen || card) return;
+    let live = true;
+    get<{ results: LinkCard[] }>(
+      `/v1/links/search?q=${encodeURIComponent(conv.name)}`,
+    ).then(
+      (r) => live && setCard(r.results.find((c) => c.business === conv.business)),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [infoOpen, card, conv.name, conv.business]);
   useEffect(() => {
     if (!infoOpen) return;
     const esc = (e: KeyboardEvent) => e.key === "Escape" && setInfoOpen(false);
@@ -1049,6 +1093,19 @@ export function ConversationPane({
             {link?.state === "active" && link.answered_at && (
               <p className="hint">Linked {fmtTime(link.answered_at)}</p>
             )}
+            {card && (card.area || card.tagline || card.items.length > 0) && (
+              <section className="chat-info-card" aria-label="About the business">
+                {card.tagline && <p>{card.tagline}</p>}
+                {card.area && <p className="hint">{card.area}</p>}
+                {card.items.length > 0 && (
+                  <ul className="chat-info-items">
+                    {card.items.slice(0, 5).map((it) => (
+                      <li key={it.name}>{it.name}</li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            )}
             {conv.state !== "active" && (
               <p className="hint">The link has ended.</p>
             )}
@@ -1106,6 +1163,7 @@ export function ConversationPane({
                 )}
               </div>
             )}
+            <MediaAndFiles messages={messages ?? []} other={conv.name} />
           </div>
         </aside>
       )}
