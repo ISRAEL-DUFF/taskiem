@@ -58,6 +58,12 @@ export interface LinkMessage {
   reply?: Quote;
   read_at?: string;
   created_at: string;
+  /** Only in the browser: a message still being sent, or not sent (Retry). */
+  local?: "sending" | "failed";
+  /** Why a local message was not sent, in words. */
+  localError?: string;
+  /** A local photo's preview (a data URL: the page shows no blob URLs). */
+  localPreview?: string;
 }
 
 export interface Conversation {

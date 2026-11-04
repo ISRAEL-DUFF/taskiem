@@ -2,6 +2,7 @@ import {
   Fragment,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -32,6 +33,12 @@ import { MentionList, MentionText, useMentions } from "./Mentions";
 import { priceWords, type PriceItem } from "../lib/pricelists";
 import { firstUnread, startsRun } from "../lib/thread";
 import { useThread } from "../lib/useThread";
+import {
+  asMessage,
+  newClientId,
+  sendError,
+  type Outgoing,
+} from "../lib/outbox";
 import { ThreadJump } from "./ThreadParts";
 import { roleLine, type BusinessLink, type LinkCard } from "../lib/links";
 import { ErrorBox, fmtTime, Modal, Skeleton, useAction, useLoad } from "../ui";
@@ -175,6 +182,22 @@ function AttachmentView({
   a: Attachment;
   other: string;
 }) {
+  if (m.local) {
+    // Still being sent: this device's own copy (a preview, or the name).
+    if (a.kind === "photo" && m.localPreview)
+      return (
+        <span className="chat-photo">
+          <img src={m.localPreview} alt="Your photo" />
+        </span>
+      );
+    return (
+      <span className="chat-file">
+        <Icon name="file" />
+        <span className="name">{attachmentLabel(a)}</span>
+        <span className="hint">{fileSize(a.size)}</span>
+      </span>
+    );
+  }
   const src = fileURL(m);
   if (a.kind === "photo")
     return (
@@ -348,6 +371,8 @@ function Bubble({
   flash = false,
   onShow,
   first = true,
+  onRetry,
+  onDiscard,
 }: {
   m: LinkMessage;
   other: string;
@@ -365,11 +390,16 @@ function Bubble({
   onShow?: (id: string) => void;
   /** Starts a run of one sender's messages: it has the tail and the name. */
   first?: boolean;
+  /** Not sent: tries again, or gives up on the message. */
+  onRetry?: (clientId: string) => void;
+  onDiscard?: (clientId: string) => void;
 }) {
   const card = m.kind === "card" ? m.card : undefined;
   const [more, setMore] = useState(false);
   const [copied, setCopied] = useState(false);
-  const hasMenu = !card && !!(onForward || onHide || m.body || canReply);
+  const local = m.local;
+  const hasMenu =
+    !local && !card && !!(onForward || onHide || m.body || canReply);
   // Swipe right to reply, and a finger held to open the menu (reply,
   // copy, forward, delete for me), on a touch screen, as WhatsApp's; the
   // hold is let go by a move or a scroll.
@@ -563,6 +593,28 @@ function Bubble({
           <span className="sr-only">More for {what}</span>
         </button>
       )}
+      {local === "failed" && (
+        <span className="chat-failed" role="alert" data-testid="chat-failed">
+          <span className="bang" aria-hidden="true">
+            !
+          </span>
+          <span className="why">Not sent. {m.localError}</span>
+          <button
+            type="button"
+            className="small"
+            onClick={() => onRetry?.(m.id.replace("local-", ""))}
+          >
+            Retry
+          </button>
+          <button
+            type="button"
+            className="small"
+            onClick={() => onDiscard?.(m.id.replace("local-", ""))}
+          >
+            Delete
+          </button>
+        </span>
+      )}
       <span className={`stamp${inline ? " inline" : ""}`}>
         {onShow && (
           <button
@@ -581,7 +633,12 @@ function Bubble({
         {/* Our message is written in the other business's conversation in
             the same transaction it is sent, so it is delivered as soon as
             it is here: two ticks, coloured once they have read it. */}
-        {m.mine && !card && <Ticks read={!!m.read_at} />}
+        {local === "sending" && (
+          <span className="ticks pending" role="img" aria-label="Sending">
+            <Icon name="clock" />
+          </span>
+        )}
+        {m.mine && !card && !local && <Ticks read={!!m.read_at} />}
       </span>
     </div>
   );
@@ -704,8 +761,19 @@ export function ConversationPane({
   const [hasOlder, setHasOlder] = useState(false);
   const [detached, setDetached] = useState(false); // not at the newest page
   const [unread, setUnread] = useState<{ id: string; count: number }>();
+  // Messages being sent, shown at the end of the thread until the server has
+  // them (lib/outbox.ts).
+  const [outbox, setOutbox] = useState<Outgoing[]>([]);
+  const outgoing = useMemo(
+    () => outbox.map((o) => asMessage(o, conv.link)),
+    [outbox, conv.link],
+  );
+  const threadItems = useMemo(
+    () => (messages ? [...messages, ...(detached ? [] : outgoing)] : undefined),
+    [messages, outgoing, detached],
+  );
   const thread = useThread({
-    items: messages,
+    items: threadItems,
     isMine: (m) => m.mine,
     hasOlder,
     loadOlder: olderCb,
@@ -778,6 +846,7 @@ export function ConversationPane({
   useEffect(() => {
     setMessages(undefined);
     setReply(undefined);
+    setOutbox([]);
     if (focus) openAt(focus).catch(() => openNewest().catch(setError));
     else openNewest().catch(setError);
   }, [openNewest, openAt, focus]);
@@ -859,39 +928,97 @@ export function ConversationPane({
     }
     setFile(f);
   };
+  // Sent at once: it shows in the thread with a clock, the box is cleared,
+  // and the server's copy takes its place; if it cannot be sent it stays,
+  // with Retry and Delete. The client id makes a retry the same message.
+  const transmit = async (o: Outgoing) => {
+    setOutbox((cur) =>
+      cur.map((x) =>
+        x.clientId === o.clientId
+          ? { ...x, state: "sending", error: undefined }
+          : x,
+      ),
+    );
+    try {
+      let out: { message: LinkMessage };
+      if (o.file) {
+        const form = new FormData();
+        form.append("file", o.file, o.file.name);
+        if (o.body) form.append("text", o.body);
+        if (o.replyTo) form.append("reply_to", o.replyTo);
+        form.append("client_id", o.clientId);
+        out = await upload<{ message: LinkMessage }>(`${path}/files`, form);
+      } else {
+        out = await post<{ message: LinkMessage }>(`${path}/messages`, {
+          text: o.body,
+          reply_to: o.replyTo,
+          mentions:
+            o.mentions && o.mentions.length > 0 ? o.mentions : undefined,
+          client_id: o.clientId,
+        });
+      }
+      setMessages((cur) => merge(cur ?? [], [out.message]));
+      setOutbox((cur) => cur.filter((x) => x.clientId !== o.clientId));
+      onChanged();
+    } catch (e) {
+      setOutbox((cur) =>
+        cur.map((x) =>
+          x.clientId === o.clientId
+            ? { ...x, state: "failed", error: sendError(e) }
+            : x,
+        ),
+      );
+    }
+  };
   const send = (held?: File) => {
     const file = held ?? pending;
     const body = held ? "" : text.trim();
     if (!body && !file) return;
-    void act
-      .run(async () => {
-        let out: { message: LinkMessage };
-        if (file) {
-          const form = new FormData();
-          form.append("file", file, file.name);
-          if (body) form.append("text", body);
-          if (reply) form.append("reply_to", reply.id);
-          out = await upload<{ message: LinkMessage }>(`${path}/files`, form);
-        } else {
-          const refs = mentions.refs();
-          out = await post<{ message: LinkMessage }>(`${path}/messages`, {
-            text: body,
-            reply_to: reply?.id,
-            mentions: refs.length > 0 ? refs : undefined,
-          });
-        }
-        if (detached) await openNewest();
-        else setMessages((cur) => merge(cur ?? [], [out.message]));
-        if (!held) {
-          setText("");
-          setFile(undefined);
-          mentions.reset();
-        }
-        setReply(undefined);
-        onChanged();
-      }, false)
-      .then(() => undefined);
+    const o: Outgoing = {
+      clientId: newClientId(),
+      body,
+      replyTo: reply?.id,
+      quote: reply
+        ? {
+            pair_id: reply.id,
+            mine: reply.mine,
+            kind: reply.kind,
+            body: reply.body,
+            card: reply.card,
+            attachment: reply.attachment,
+          }
+        : undefined,
+      file,
+      mentions: file ? undefined : mentions.refs(),
+      state: "sending",
+      at: new Date().toISOString(),
+    };
+    if (!held) {
+      setText("");
+      setFile(undefined);
+      mentions.reset();
+    }
+    setReply(undefined);
+    setOutbox((cur) => [...cur, o]);
+    if (detached) void openNewest();
+    if (file?.type.startsWith("image/")) {
+      const r = new FileReader();
+      r.onload = () =>
+        setOutbox((cur) =>
+          cur.map((x) =>
+            x.clientId === o.clientId ? { ...x, preview: String(r.result) } : x,
+          ),
+        );
+      r.readAsDataURL(file);
+    }
+    void transmit(o);
   };
+  const retry = (clientId: string) => {
+    const o = outbox.find((x) => x.clientId === clientId);
+    if (o) void transmit(o);
+  };
+  const discard = (clientId: string) =>
+    setOutbox((cur) => cur.filter((x) => x.clientId !== clientId));
   sendRef.current = send;
   const settings = (
     body: { muted?: boolean; archived?: boolean; pinned?: boolean },
@@ -922,7 +1049,7 @@ export function ConversationPane({
       `${path}/messages?q=${encodeURIComponent(v.trim())}`,
     ).then((r) => setFound(r.messages), setError);
   };
-  const shown = found ?? messages;
+  const shown = found ?? threadItems;
   // A card's actions are offered on its document's newest card only.
   const newest = new Set<string>();
   const seen = new Set<string>();
@@ -1095,7 +1222,9 @@ export function ConversationPane({
                     <Bubble
                       m={m}
                       other={conv.name}
-                      canReply={write}
+                      canReply={write && !m.local}
+                      onRetry={retry}
+                      onDiscard={discard}
                       onReply={setReply}
                       onJump={found ? undefined : jump}
                       onShow={found ? showFound : undefined}
