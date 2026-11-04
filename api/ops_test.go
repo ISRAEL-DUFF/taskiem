@@ -364,6 +364,23 @@ func TestOperatorConsoleWork(t *testing.T) {
 	if len(ts) != 1 || ts[0].(map[string]any)["id"] != acmeID.String() || ts[0].(map[string]any)["pool"] != "shared" {
 		t.Fatalf("tenants: %v", ts)
 	}
+	// The list pages: no limit lists every tenant (it once showed only the
+	// newest), and limit/offset walk the same order with has_more.
+	whole := c.must(200, "GET", "/v1/ops/tenants", nil)
+	tenantList := whole["tenants"].([]any)
+	if len(tenantList) > 1 {
+		if whole["has_more"] != false {
+			t.Errorf("tenants: has_more with the whole tenantList: %v", whole["has_more"])
+		}
+		first := c.must(200, "GET", "/v1/ops/tenants?limit=1", nil)
+		if len(first["tenants"].([]any)) != 1 || first["has_more"] != true || first["tenants"].([]any)[0].(map[string]any)["id"] != tenantList[0].(map[string]any)["id"] {
+			t.Errorf("tenants limit=1: %v", first)
+		}
+		next := c.must(200, "GET", "/v1/ops/tenants?limit=1&offset=1", nil)["tenants"].([]any)
+		if len(next) != 1 || next[0].(map[string]any)["id"] != tenantList[1].(map[string]any)["id"] {
+			t.Errorf("tenants offset=1: %v", next)
+		}
+	}
 	one := c.must(200, "GET", "/v1/ops/tenants/"+acmeID.String(), nil)
 	if one["limits"] == nil || one["tenant"].(map[string]any)["name"] != "Acme" {
 		t.Errorf("tenant: %v", one)

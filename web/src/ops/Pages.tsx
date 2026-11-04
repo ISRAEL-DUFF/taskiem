@@ -275,7 +275,9 @@ export function Tenants() {
   const [loading, setLoading] = useState(false);
   const [moreError, setMoreError] = useState<unknown>();
   const extra = more && more.query === query ? more : null;
-  const rows = data ? [...data.tenants, ...(extra?.rows ?? [])] : [];
+  // A tenant registered while the list is open shifts the pages by one, so a
+  // row can arrive twice: keep the first.
+  const rows = data ? [...new Map([...data.tenants, ...(extra?.rows ?? [])].map((t) => [t.id, t])).values()] : [];
   const hasMore = data ? (extra ? extra.hasMore : data.has_more) : false;
   async function loadMore() {
     setLoading(true);
@@ -297,6 +299,8 @@ export function Tenants() {
         className="toolbar"
         onSubmit={(e) => {
           e.preventDefault();
+          setMore(null);
+          setMoreError(undefined);
           setQuery(q.trim());
         }}
       >
