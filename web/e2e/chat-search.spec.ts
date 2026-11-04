@@ -36,21 +36,20 @@ test("the chat list narrows as the person types", async ({ browser }) => {
   const box = buyer.getByTestId("link-search");
   await expect(buyer.getByTestId("link-linked")).toHaveCount(1);
 
-  // One letter: the chat that fits stays, found in the results at once; the
+  // One letter: the list narrows to the chat that fits; the
   // Taskiem conversation, which does not fit "d", steps aside.
   await box.pressSequentially("d");
-  await expect(buyer.getByTestId("link-results")).toBeVisible();
   await expect(buyer.getByTestId("link-linked")).toHaveCount(1);
   await expect(buyer.getByTestId("link-linked")).toContainText("Dangote Depot");
   await expect(buyer.getByTestId("taskiem-chat")).toHaveCount(0);
   // A letter that fits nothing says so, and does not look for businesses yet.
   await box.fill("q");
-  await expect(buyer.getByTestId("link-results")).toContainText("No chat matches");
+  await expect(buyer.getByText("No chat matches")).toBeVisible();
 
-  // Two letters: the other business that fits is offered to link with.
+  // Two letters: the results show the chat that fits, and the other business to link with.
   await box.fill("");
   await box.pressSequentially("da");
-  await expect(buyer.getByTestId("link-linked")).toContainText("Dangote Depot");
+  await expect(buyer.getByTestId("link-chat")).toContainText("Dangote Depot");
   await expect(buyer.getByTestId("link-found").filter({ hasText: `Danfo Bakery ${stamp}` })).toHaveCount(0);
   await box.pressSequentially("n");
   await expect(buyer.getByTestId("link-found").filter({ hasText: `Danfo Bakery ${stamp}` })).toBeVisible();
@@ -58,10 +57,10 @@ test("the chat list narrows as the person types", async ({ browser }) => {
 
   // A word from the last message finds the chat and the message.
   await box.fill("rice");
-  await expect(buyer.getByTestId("link-linked")).toContainText("Dangote Depot");
+  await expect(buyer.getByTestId("link-chat")).toContainText("Dangote Depot");
   await expect(buyer.getByTestId("chat-found-message")).toContainText("Rice is back in stock");
 
   // Pressing the chat found opens the conversation.
-  await buyer.getByTestId("link-linked").click();
+  await buyer.getByTestId("link-chat").click();
   await expect(buyer.getByTestId("chat-pane")).toContainText("Rice is back in stock");
 });

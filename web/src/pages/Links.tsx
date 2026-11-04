@@ -461,7 +461,15 @@ export function ChatPage() {
     const l = view.data?.links.find((x) => x.id === link);
     return l ? roleLine(l.role) : "";
   };
-  const chats = searching ? matchLinked(view.data?.links ?? [], query) : [];
+  // A chat is found by its name or by a word of its last message.
+  const chatHits = searching ? matchChats(all, query) : [];
+  const chats = searching
+    ? (view.data?.links ?? []).filter(
+        (l) =>
+          matchLinked([l], query).length > 0 ||
+          chatHits.some((c) => c.business === l.business),
+      )
+    : [];
   const blind = found?.blind;
   const others = (found?.results ?? []).filter(
     (c) => !chats.some((l) => l.business === c.business),
@@ -487,30 +495,32 @@ export function ChatPage() {
               Keyboard
             </button>
           </div>
-          <div className="filters" role="search" aria-label="Find a business">
-            <label className="search">
-              <span className="sr-only">Find a business</span>
-              <Icon name="search" />
-              <input
-                type="search"
-                ref={searchBox}
-                placeholder="Cement, catering in Ikeja, Dangote…"
-                value={q}
-                onChange={(e) => (setQ(e.target.value), setHint(""))}
-                onKeyDown={(e) => {
-                  // Esc empties the box; with it empty, the key goes on.
-                  if (e.key === "Escape") {
-                    e.preventDefault();
-                    if (q) {
-                      setQ("");
-                      setHint("");
-                    } else e.currentTarget.blur();
-                  }
-                }}
-                data-testid="link-search"
-              />
-            </label>
-          </div>
+          {linksOn && (
+            <div className="filters" role="search" aria-label="Find a business">
+              <label className="search">
+                <span className="sr-only">Find a business</span>
+                <Icon name="search" />
+                <input
+                  type="search"
+                  ref={searchBox}
+                  placeholder="Cement, catering in Ikeja, Dangote…"
+                  value={q}
+                  onChange={(e) => (setQ(e.target.value), setHint(""))}
+                  onKeyDown={(e) => {
+                    // Esc empties the box; with it empty, the key goes on.
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      if (q) {
+                        setQ("");
+                        setHint("");
+                      } else e.currentTarget.blur();
+                    }
+                  }}
+                  data-testid="link-search"
+                />
+              </label>
+            </div>
+          )}
           <p className="sr-only" role="status">
             {hint}
           </p>
@@ -543,31 +553,35 @@ export function ChatPage() {
             </div>
           )}
           <ErrorBox error={view.error ?? act.error ?? searchError} />
-          {!searching && !archived && filter !== "starred" && (
-            <ul
-              className="chat-rows"
-              aria-label="Your conversation with Taskiem"
-            >
-              <ChatRow
-                to="/chat?with=taskiem"
-                letter="T"
-                accent
-                title="Taskiem"
-                preview={
-                  drafts.taskiem ? (
-                    <>
-                      <span className="draft">Draft:</span> {drafts.taskiem}
-                    </>
-                  ) : (
-                    "Your own conversation with Taskiem, as on your phone"
-                  )
-                }
-                selected={taskiemOpen}
-                unread={taskiemUnread}
-                testid="taskiem-chat"
-              />
-            </ul>
-          )}
+          {!searching &&
+            !archived &&
+            filter !== "starred" &&
+            (query.length === 0 ||
+              "taskiem".startsWith(query.toLowerCase())) && (
+              <ul
+                className="chat-rows"
+                aria-label="Your conversation with Taskiem"
+              >
+                <ChatRow
+                  to="/chat?with=taskiem"
+                  letter="T"
+                  accent
+                  title="Taskiem"
+                  preview={
+                    drafts.taskiem ? (
+                      <>
+                        <span className="draft">Draft:</span> {drafts.taskiem}
+                      </>
+                    ) : (
+                      "Your own conversation with Taskiem, as on your phone"
+                    )
+                  }
+                  selected={taskiemOpen}
+                  unread={taskiemUnread}
+                  testid="taskiem-chat"
+                />
+              </ul>
+            )}
           {searching ? (
             <section aria-label="Search results" data-testid="link-results">
               {chats.length > 0 && (
@@ -765,11 +779,13 @@ export function ChatPage() {
                   </div>
                   {listed.length === 0 && (
                     <p className="hint">
-                      {archived
-                        ? "No archived chats."
-                        : filter === "unread"
-                          ? "Nothing unread."
-                          : "No chats."}
+                      {query.length === 1
+                        ? `No chat matches “${query}”.`
+                        : archived
+                          ? "No archived chats."
+                          : filter === "unread"
+                            ? "Nothing unread."
+                            : "No chats."}
                     </p>
                   )}
                   <ul
