@@ -630,3 +630,44 @@ func (s *Server) taskiemHistory(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, out)
 }
+
+// taskiemSince is the person's own conversation with Taskiem, every channel,
+// after a time, oldest first (the live stream's look): the same rows and
+// words as GET /v1/taskiem-chat.
+func (s *Server) taskiemSince(ctx context.Context, tx pgx.Tx, p *Principal, since time.Time, limit int) ([]TaskiemMessage, error) {
+	rows, err := tx.Query(ctx, `SELECT id, channel, inbound, kind, body, buttons, created_at FROM chat_history
+		WHERE tenant_id = $1 AND user_id = $2 AND expires_at > now() AND created_at > $3 ORDER BY created_at, id LIMIT $4`, p.TenantID, p.UserID, since, limit)
+	if err != nil {
+		return nil, err
+	}
+	type row struct {
+		m       TaskiemMessage
+		env     map[string]any
+		buttons []string
+	}
+	got, err := pgx.CollectRows(rows, func(rr pgx.CollectableRow) (row, error) {
+		var x row
+		err := rr.Scan(&x.m.ID, &x.m.Channel, &x.m.Inbound, &x.m.Kind, &x.env, &x.buttons, &x.m.CreatedAt)
+		return x, err
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]TaskiemMessage, 0, len(got))
+	for _, x := range got {
+		v, err := s.Store.PII.OpenTx(ctx, tx, p.TenantID, x.env)
+		switch {
+		case errors.Is(err, pii.ErrErased):
+			x.m.Text = pii.Erased
+		case err != nil:
+			return nil, err
+		default:
+			x.m.Text, _ = v.(string)
+		}
+		for _, b := range x.buttons {
+			x.m.Buttons = append(x.m.Buttons, TaskiemButton{Title: b})
+		}
+		out = append(out, x.m)
+	}
+	return out, nil
+}

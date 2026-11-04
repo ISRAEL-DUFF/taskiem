@@ -398,6 +398,7 @@ test("the Taskiem conversation loads older messages and follows new ones only at
   ).newPage();
   await signUp(page, `Ada Kitchen ${stamp}`);
   const all = taskiemChat(120);
+  await page.route("**/v1/chat/stream", (route) => route.abort());
   await page.route(/\/v1\/taskiem-chat(\?.*)?$/, serveTaskiem(all));
   await page.goto("/chat?with=taskiem");
   const pane = page.getByTestId("taskiem-pane");

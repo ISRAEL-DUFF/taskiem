@@ -1072,6 +1072,8 @@ export function ConversationPane({
   // page polls as it did.
   const live = useChatLive();
   const connected = live.connected;
+  const readSoon = useRef<number>(undefined);
+  useEffect(() => () => window.clearTimeout(readSoon.current), []);
   const detachedNow = useRef(detached);
   detachedNow.current = detached;
   useEffect(
@@ -1082,8 +1084,20 @@ export function ConversationPane({
           // Not into a window away from the newest page: it would leave a gap.
           if (!detachedNow.current)
             setMessages((cur) => (cur ? merge(cur, [m]) : cur));
-          if (!m.mine && !m.read_at && document.visibilityState === "visible")
-            post(`${path}/read`).then(onChanged, () => undefined);
+          // Read (once for a burst of them: a conversation of hundreds arriving
+          // together asks once, not hundreds of times).
+          if (
+            !m.mine &&
+            !m.read_at &&
+            document.visibilityState === "visible" &&
+            document.hasFocus()
+          ) {
+            window.clearTimeout(readSoon.current);
+            readSoon.current = window.setTimeout(
+              () => post(`${path}/read`).then(onChanged, () => undefined),
+              400,
+            );
+          }
         } else if (e.type === "gone" && e.link === conv.link)
           setMessages((cur) => cur?.filter((x) => x.id !== e.id));
       }),

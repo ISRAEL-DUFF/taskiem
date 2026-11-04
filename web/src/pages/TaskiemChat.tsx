@@ -8,6 +8,7 @@ import {
 } from "react";
 import { useThread } from "../lib/useThread";
 import { ThreadJump } from "./ThreadParts";
+import { useChatLive } from "./ChatLive";
 import { isHeic, preparePhoto } from "../lib/photo";
 import { PendingFile } from "./PendingFile";
 import { insertAt } from "../lib/emoji";
@@ -23,6 +24,7 @@ import { clock, dayLabel } from "../lib/linkchat";
 import {
   boldParts,
   mergeTaskiem,
+  NIL,
   type TaskiemMessage,
 } from "../lib/taskiemchat";
 import { ErrorBox, fmtTime, Skeleton, useAction, useLoad } from "../ui";
@@ -39,6 +41,11 @@ const EmojiPanel = lazy(() =>
 );
 
 const EVERY_MS = 5000;
+/** Which answer's buttons press. A stored message is known by its id (the
+ *  stream gives its time to the microsecond, the page may hold it to less);
+ *  one not stored yet, by its id and time. */
+const liveKey = (m: TaskiemMessage) =>
+  m.id === NIL ? `${m.id}@${m.created_at}` : m.id;
 /** The newest page, and a page older, as the API gives them. */
 const PAGE = 50;
 const CHANNEL: Record<string, string> = {
@@ -159,13 +166,29 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
     }
   };
   loadOlderRef.current = () => void loadOlder();
+  // What the live stream brings (a message by another channel, the answer to
+  // one sent from another tab) joins the conversation as it comes; with it
+  // open the polling only reconciles.
+  const chat = useChatLive();
+  const connected = chat.connected;
+  useEffect(
+    () =>
+      chat.subscribe((e) => {
+        if (e.type === "taskiem")
+          setMessages((cur) => mergeTaskiem(cur ?? [], e.messages));
+      }),
+    [chat],
+  );
   useEffect(() => {
-    const t = setInterval(() => {
-      if (document.visibilityState === "visible")
-        pull(last).catch(() => undefined);
-    }, EVERY_MS);
+    const t = setInterval(
+      () => {
+        if (document.visibilityState === "visible")
+          pull(last).catch(() => undefined);
+      },
+      connected ? EVERY_MS * 4 : EVERY_MS,
+    );
     return () => clearInterval(t);
-  }, [pull, last]);
+  }, [pull, last, connected]);
 
   const say = (body: { text?: string; reply?: string }) =>
     void act
@@ -178,7 +201,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
         const answer = [...out.messages]
           .reverse()
           .find((m) => !m.inbound && m.buttons?.some((b) => b.id));
-        setLive(answer ? `${answer.id}@${answer.created_at}` : undefined);
+        setLive(answer ? liveKey(answer) : undefined);
         if (body.text !== undefined && !body.reply) {
           setText("");
           mentions.reset();
@@ -200,7 +223,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
         const answer = [...out.messages]
           .reverse()
           .find((m) => !m.inbound && m.buttons?.some((b) => b.id));
-        setLive(answer ? `${answer.id}@${answer.created_at}` : undefined);
+        setLive(answer ? liveKey(answer) : undefined);
         setFile(undefined);
         if (caption) setText("");
       }, false)
@@ -332,7 +355,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
               <div key={g.day} className="chat-group">
                 <span className="chat-day">{g.day}</span>
                 {g.messages.map((m, i) => {
-                  const pressable = live === `${m.id}@${m.created_at}`;
+                  const pressable = live === liveKey(m);
                   // The time sits in the corner of the last line when there
                   // are no buttons and it came from here.
                   const inline =

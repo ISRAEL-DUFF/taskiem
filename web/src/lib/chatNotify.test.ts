@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { decideNotify, notifyLine, type NotifyInput } from "./chatNotify";
+import { beforeEach, vi } from "vitest";
+import {
+  claimMessage,
+  decideNotify,
+  notifyLine,
+  type NotifyInput,
+} from "./chatNotify";
 
 const NOW = Date.parse("2026-11-04T10:00:00Z");
 const input = (o: Partial<NotifyInput> = {}): NotifyInput => ({
@@ -175,5 +181,44 @@ describe("decideNotify", () => {
     expect(
       decideNotify(input({ prefs: fresh, permission: "unsupported" })).ask,
     ).toBe(false);
+  });
+});
+
+describe("claimMessage", () => {
+  beforeEach(() => {
+    const m = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      getItem: (k: string) => m.get(k) ?? null,
+      setItem: (k: string, v: string) => void m.set(k, v),
+    });
+    vi.stubGlobal("navigator", {}); // no Web Locks: the shared record alone
+  });
+  it("gives a message to the first that asks, and to no one after", async () => {
+    expect(await claimMessage("m1", 1000)).toBe(true);
+    expect(await claimMessage("m1", 1001)).toBe(false);
+    expect(await claimMessage("m2", 1002)).toBe(true);
+  });
+  it("gives it up after ten minutes, and keeps only the recent", async () => {
+    expect(await claimMessage("m1", 0)).toBe(true);
+    expect(await claimMessage("m1", 11 * 60_000)).toBe(true);
+    for (let i = 0; i < 300; i++) await claimMessage(`x${i}`, 20 * 60_000 + i);
+    const kept = Object.keys(
+      JSON.parse(localStorage.getItem("taskiem-chat-handled") ?? "{}"),
+    );
+    expect(kept.length).toBeLessThanOrEqual(200);
+    expect(kept).toContain("x299");
+  });
+  it("is the one at a time through the Web Locks API where there is one", async () => {
+    const order: string[] = [];
+    vi.stubGlobal("navigator", {
+      locks: {
+        request: async (_name: string, fn: () => unknown) => {
+          order.push("lock");
+          return fn();
+        },
+      },
+    });
+    expect(await claimMessage("m9", 5)).toBe(true);
+    expect(order).toEqual(["lock"]);
   });
 });

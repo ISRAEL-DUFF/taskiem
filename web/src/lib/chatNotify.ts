@@ -44,10 +44,60 @@ export function writePrefs(p: NotifyPrefs): void {
   window.dispatchEvent(new Event(KEY));
 }
 
-/** Hears of a change of the prefs (from the settings page or the banner). */
+/** Hears of a change of the prefs (from the settings page or the banner), in this tab or another. */
 export function onPrefs(fn: () => void): () => void {
+  const other = (e: StorageEvent) => e.key === KEY && fn();
   window.addEventListener(KEY, fn);
-  return () => window.removeEventListener(KEY, fn);
+  window.addEventListener("storage", other);
+  return () => {
+    window.removeEventListener(KEY, fn);
+    window.removeEventListener("storage", other);
+  };
+}
+
+/**
+ * Whether the person is not looking at this tab: it is in the background, or
+ * its window is not the one they are using (another monitor, another window
+ * in front). A tab that is visible but unfocused is away.
+ */
+export function isAway(): boolean {
+  return document.visibilityState !== "visible" || !document.hasFocus();
+}
+
+const HANDLED = "taskiem-chat-handled";
+
+/**
+ * Takes a message to be told of (a notification, a ping), once across every
+ * tab of this browser and every page load: the first to ask gets it. Tabs
+ * share a record in localStorage, and the Web Locks API makes the asking one
+ * at a time where the browser has it.
+ */
+export async function claimMessage(
+  id: string,
+  now = Date.now(),
+): Promise<boolean> {
+  const take = (): boolean => {
+    try {
+      const seen = JSON.parse(localStorage.getItem(HANDLED) ?? "{}") as Record<
+        string,
+        number
+      >;
+      if (seen[id] && now - seen[id] < 10 * 60_000) return false;
+      seen[id] = now;
+      const fresh = Object.entries(seen)
+        .filter(([, at]) => now - at < 10 * 60_000)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 200);
+      localStorage.setItem(HANDLED, JSON.stringify(Object.fromEntries(fresh)));
+      return true;
+    } catch {
+      return true; // no storage: this tab tells
+    }
+  };
+  const locks = (navigator as Navigator & { locks?: LockManager }).locks;
+  if (locks?.request)
+    return locks.request("taskiem-chat-handled", () => take());
+  return take();
 }
 
 const CARD_WORDS: Record<string, string> = {
@@ -121,15 +171,39 @@ export function decideNotify(i: NotifyInput): NotifyDecision {
   };
 }
 
-/** A short two-note ping (no sound file: nothing to load). */
-export function playPing(): void {
+let audio: AudioContext | undefined;
+function context(): AudioContext | undefined {
   try {
     const Ctx =
       window.AudioContext ??
       (window as unknown as { webkitAudioContext?: typeof AudioContext })
         .webkitAudioContext;
-    if (!Ctx) return;
-    const ctx = new Ctx();
+    if (!Ctx) return undefined;
+    audio ??= new Ctx();
+    if (audio.state === "suspended") void audio.resume();
+    return audio;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Browsers keep sound off until the person has used the page: the first
+ * click or key makes (and resumes) the audio context, so the ping that
+ * comes later can be heard.
+ */
+export function unlockAudio(): () => void {
+  const once = () => void context();
+  const ev = ["pointerdown", "keydown"] as const;
+  ev.forEach((e) => window.addEventListener(e, once, { once: true }));
+  return () => ev.forEach((e) => window.removeEventListener(e, once));
+}
+
+/** A short two-note ping (no sound file: nothing to load). */
+export function playPing(): void {
+  try {
+    const ctx = context();
+    if (!ctx) return;
     const at = ctx.currentTime;
     for (const [i, hz] of [660, 880].entries()) {
       const osc = ctx.createOscillator();
@@ -142,8 +216,7 @@ export function playPing(): void {
       osc.start(at + i * 0.12);
       osc.stop(at + i * 0.12 + 0.12);
     }
-    setTimeout(() => void ctx.close(), 600);
   } catch {
-    // Blocked until the person has used the page: then it is silent.
+    // Blocked: it is silent.
   }
 }

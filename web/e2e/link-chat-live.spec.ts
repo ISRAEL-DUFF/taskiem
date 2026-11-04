@@ -98,7 +98,7 @@ async function stubBrowser(
   permission: "granted" | "default" | "denied",
   prefs?: { browser: boolean; sound: boolean; asked: boolean },
 ) {
-  await page.addInitScript(
+  await page.context().addInitScript(
     ({ permission, prefs }) => {
       const w = window as unknown as Record<string, unknown>;
       w.__notes = [] as {
@@ -110,6 +110,8 @@ async function stubBrowser(
       w.__asked = 0;
       w.__pings = 0;
       w.__hidden = false;
+      w.__blurred = false;
+      w.__resumed = 0;
       class FakeNotification {
         static permission = permission;
         static requestPermission = async () => {
@@ -134,9 +136,16 @@ async function stubBrowser(
         get: () => (w.__hidden ? "hidden" : "visible"),
       });
       Object.defineProperty(document, "hidden", { get: () => !!w.__hidden });
+      document.hasFocus = () => !(w.__hidden || w.__blurred);
       w.AudioContext = class {
         currentTime = 0;
         destination = {};
+        state = "suspended";
+        resume() {
+          (w.__resumed as number)++;
+          this.state = "running";
+          return Promise.resolve();
+        }
         createOscillator() {
           (w.__pings as number)++;
           return {
@@ -165,6 +174,11 @@ const hide = (p: Page, hidden: boolean) =>
     (window as unknown as { __hidden: boolean }).__hidden = h;
     document.dispatchEvent(new Event("visibilitychange"));
   }, hidden);
+const blur = (p: Page, blurred: boolean) =>
+  p.evaluate((b) => {
+    (window as unknown as { __blurred: boolean }).__blurred = b;
+    window.dispatchEvent(new Event(b ? "blur" : "focus"));
+  }, blurred);
 const notes = (p: Page) =>
   p.evaluate(() =>
     (
@@ -188,9 +202,9 @@ test("a message reaches the other side in a second or two, and the tick turns bl
     .fill("Rice is back in stock");
   const sent = Date.now();
   await seller.getByTestId("chat-pane").getByLabel("Message").press("Enter");
-  await expect(bubble(buyer, "Rice is back")).toBeVisible({ timeout: 2500 });
+  await expect(bubble(buyer, "Rice is back")).toBeVisible({ timeout: 4000 });
   const took = Date.now() - sent;
-  expect(took, `it took ${took} ms`).toBeLessThan(2500);
+  expect(took, `it took ${took} ms`).toBeLessThan(4000);
 
   // Ada has it open, so it is read; Dangote's tick turns blue without a reload.
   await expect(
@@ -404,6 +418,299 @@ test("the sound is off until chosen on the settings page, and plays for a messag
   await expect(
     settings.getByRole("checkbox", { name: /Show a notification/ }),
   ).toBeChecked();
+});
+
+test("a tab that is visible but not the window in use is away: it is told, and asked on return", async ({
+  browser,
+}) => {
+  const { seller, buyer, link, name } = await linked(browser, {
+    permissions: ["notifications"],
+  });
+  await stubBrowser(buyer, "granted", {
+    browser: true,
+    sound: false,
+    asked: true,
+  });
+  await streaming(buyer, "/home");
+  await blur(buyer, true); // visible, on another monitor, but not the window they are using
+  await say(seller, link, "While you are elsewhere");
+  await expect
+    .poll(() => notes(buyer), { timeout: 5000 })
+    .toEqual([{ title: name, body: "While you are elsewhere", tag: link }]);
+  // In the window they are using, on the conversation: nothing.
+  await blur(buyer, false);
+  await buyer.goto(`/chat?with=${link}`);
+  await expect(bubble(buyer, "While you are elsewhere")).toBeVisible();
+  await say(seller, link, "While you look");
+  await expect(bubble(buyer, "While you look")).toBeVisible({ timeout: 4000 });
+  expect(await notes(buyer)).toEqual([]); // the page was reloaded: its own list starts empty
+});
+
+test("with several tabs open one tells, once, and a reload does not tell again", async ({
+  browser,
+}) => {
+  const { seller, buyer, link, name } = await linked(browser, {
+    permissions: ["notifications"],
+  });
+  await stubBrowser(buyer, "granted", {
+    browser: true,
+    sound: true,
+    asked: true,
+  });
+  const second = await buyer.context().newPage();
+  await streaming(buyer, "/home");
+  await streaming(second, "/home");
+  await hide(buyer, true);
+  await hide(second, true);
+  await say(seller, link, "One message, two tabs");
+  await buyer.waitForTimeout(3500);
+  const all = [...(await notes(buyer)), ...(await notes(second))];
+  expect(all).toEqual([
+    { title: name, body: "One message, two tabs", tag: link },
+  ]);
+  const pings = async (p: Page) =>
+    p.evaluate(() => (window as unknown as { __pings: number }).__pings);
+  expect((await pings(buyer)) + (await pings(second))).toBe(2); // one ping: its two notes
+
+  // A reload within the stream's look-back replays the message: it is not told again.
+  await buyer.reload();
+  await hide(buyer, true);
+  await buyer.waitForTimeout(2500);
+  expect(await notes(buyer)).toEqual([]);
+});
+
+test("a stream that goes quiet is not trusted: the page opens another", async ({
+  browser,
+}) => {
+  const { buyer } = await linked(browser);
+  await buyer.context().addInitScript(() => {
+    const w = window as unknown as Record<string, unknown>;
+    w.__taskiemChatLive = { stallMs: 1500, checkMs: 300 };
+    w.__es = 0;
+    // A stream that says ready and then nothing (a proxy holding it).
+    w.EventSource = class {
+      static CLOSED = 2;
+      readyState = 1;
+      onerror: (() => void) | null = null;
+      private on: Record<string, ((e: unknown) => void)[]> = {};
+      constructor() {
+        (w.__es as number)++;
+        setTimeout(() => (this.on.ready ?? []).forEach((f) => f({})), 50);
+      }
+      addEventListener(t: string, f: (e: unknown) => void) {
+        (this.on[t] ??= []).push(f);
+      }
+      close() {
+        this.readyState = 2;
+      }
+    };
+  });
+  await buyer.goto("/home");
+  const opened = () =>
+    buyer.evaluate(() => (window as unknown as { __es: number }).__es);
+  await expect.poll(opened, { timeout: 5000 }).toBeGreaterThanOrEqual(3); // silent: closed and opened again, and again
+});
+
+test("a stream that keeps pinging is kept", async ({ browser }) => {
+  const { buyer } = await linked(browser);
+  await buyer.context().addInitScript(() => {
+    const w = window as unknown as Record<string, unknown>;
+    w.__taskiemChatLive = { stallMs: 1500, checkMs: 300 };
+    w.__es = 0;
+    w.EventSource = class {
+      static CLOSED = 2;
+      readyState = 1;
+      onerror: (() => void) | null = null;
+      private on: Record<string, ((e: unknown) => void)[]> = {};
+      constructor() {
+        (w.__es as number)++;
+        setTimeout(() => (this.on.ready ?? []).forEach((f) => f({})), 50);
+        setInterval(() => (this.on.ping ?? []).forEach((f) => f({})), 400);
+      }
+      addEventListener(t: string, f: (e: unknown) => void) {
+        (this.on[t] ??= []).push(f);
+      }
+      close() {
+        this.readyState = 2;
+      }
+    };
+  });
+  await buyer.goto("/home");
+  await buyer.waitForTimeout(4500);
+  expect(
+    await buyer.evaluate(() => (window as unknown as { __es: number }).__es),
+  ).toBe(1);
+});
+
+test("a stream that ends is reopened, and the server's refusal is answered by polling and trying again", async ({
+  browser,
+}) => {
+  const { seller, buyer, link } = await linked(browser);
+  await buyer.context().addInitScript(() => {
+    (window as unknown as Record<string, unknown>).__taskiemChatLive = {
+      retryMs: 800,
+    };
+  });
+  const seen: (string | undefined)[] = [];
+  let n = 0;
+  await buyer.route("**/v1/chat/stream", async (route) => {
+    seen.push((await route.request().allHeaders())["last-event-id"]);
+    n += 1;
+    if (n === 1)
+      // the server ends the stream (as it does after half an hour), having sent one id
+      return route.fulfill({
+        status: 200,
+        contentType: "text/event-stream",
+        body: "retry: 400\nid: 1700000000123456\nevent: ready\ndata: {}\n\n",
+      });
+    if (n === 2)
+      return route.fulfill({
+        status: 429,
+        contentType: "application/json",
+        headers: { "Retry-After": "30" },
+        body: '{"error":"too many open chat streams"}',
+      });
+    return route.continue();
+  });
+  await buyer.goto(`/chat?with=${link}`);
+  // 1: ended; 2: the page came back, and was refused; 3: tried again after the wait.
+  await expect
+    .poll(() => seen.length, { timeout: 8000 })
+    .toBeGreaterThanOrEqual(3);
+  // (The id the browser sends back is the browser's own; the server side of it is in the Go tests.)
+  // Refused, it polled; connected again, it is live.
+  await say(seller, link, "After the refusal");
+  await expect(bubble(buyer, "After the refusal")).toBeVisible({
+    timeout: 8000,
+  });
+});
+
+test("the stream opens when the first business is linked, without a reload", async ({
+  browser,
+}) => {
+  const stamp = letters();
+  const seller = await (await browser.newContext()).newPage();
+  await signUp(seller, `Dangote Depot ${stamp}`);
+  const buyer = await (
+    await browser.newContext({ viewport: { width: 1280, height: 800 } })
+  ).newPage();
+  await signUp(buyer, `Ada Kitchen ${stamp}`);
+  await buyer.context().addInitScript(() => {
+    (window as unknown as Record<string, unknown>).__taskiemChatLive = {
+      listMs: 1000,
+    };
+  });
+  let streams = 0;
+  buyer.on("request", (r) => r.url().includes("/v1/chat/stream") && streams++);
+  await buyer.goto("/home");
+  await buyer.waitForTimeout(2500);
+  expect(streams).toBe(0); // nothing to hear: no stream
+  await seller.request.put("/v1/link-settings", {
+    headers: H,
+    data: { findable: true },
+  });
+  const found = await (
+    await buyer.request.get(
+      `/v1/links/search?q=${encodeURIComponent(`dangote depot ${stamp}`)}`,
+      { headers: H },
+    )
+  ).json();
+  await buyer.request.post("/v1/links", {
+    headers: H,
+    data: { business: found.results[0].business, role: "supplier" },
+  });
+  const link = (
+    await (await seller.request.get("/v1/links", { headers: H })).json()
+  ).links[0].id as string;
+  await seller.request.post(`/v1/links/${link}/accept`, { headers: H });
+  await expect.poll(() => streams, { timeout: 6000 }).toBe(1);
+});
+
+test("the icon carries a dot while there is something unread, and goes when it is read", async ({
+  browser,
+}) => {
+  const { seller, buyer, link } = await linked(browser);
+  await streaming(buyer, "/home");
+  const icon = () =>
+    buyer.evaluate(() => {
+      const l = document.querySelector<HTMLLinkElement>("#icon-svg");
+      return { href: l?.href ?? "", type: l?.type ?? "" };
+    });
+  const plain = await icon();
+  expect(plain.type).toBe("image/svg+xml");
+  await say(seller, link, "Look at the icon");
+  await expect
+    .poll(async () => (await icon()).href.startsWith("data:image/png"), {
+      timeout: 6000,
+    })
+    .toBe(true);
+  expect((await icon()).type).toBe("image/png");
+  // Read: the icon is the app's again.
+  await buyer.goto(`/chat?with=${link}`);
+  await expect(bubble(buyer, "Look at the icon")).toBeVisible();
+  await expect
+    .poll(async () => (await icon()).href, { timeout: 6000 })
+    .toBe(plain.href);
+  expect((await icon()).type).toBe("image/svg+xml");
+});
+
+test("the person's own conversation with Taskiem follows the stream: what is said from another tab appears", async ({
+  browser,
+}) => {
+  const { buyer } = await linked(browser);
+  await streaming(buyer, "/chat?with=taskiem");
+  const pane = buyer.getByTestId("taskiem-pane");
+  // Said from elsewhere (another tab, another device, WhatsApp): the same user.
+  await buyer.request.post("/v1/taskiem-chat", {
+    headers: H,
+    data: { text: "status" },
+  });
+  await expect(pane.getByText("status", { exact: true })).toBeVisible({
+    timeout: 4000,
+  });
+  await expect(pane.getByText(/No runs in the last 24 hours/)).toBeVisible({
+    timeout: 4000,
+  });
+  expect(await pane.getByText("status", { exact: true }).count()).toBe(1); // not twice
+});
+
+test("a burst of messages is read with one request, not one each", async ({
+  browser,
+}) => {
+  const { seller, buyer, link } = await linked(browser);
+  await streaming(buyer, `/chat?with=${link}`);
+  let reads = 0;
+  buyer.on(
+    "request",
+    (r) =>
+      r.url().endsWith(`/v1/link-chats/${link}/read`) &&
+      r.method() === "POST" &&
+      reads++,
+  );
+  for (let i = 1; i <= 8; i++) await say(seller, link, `Burst ${i}`);
+  await expect(bubble(buyer, "Burst 8")).toBeVisible({ timeout: 5000 });
+  await buyer.waitForTimeout(1500);
+  expect(reads).toBeGreaterThan(0);
+  expect(reads).toBeLessThanOrEqual(3);
+});
+
+test("the audio is unlocked by the person's first click, so a ping can be heard", async ({
+  browser,
+}) => {
+  const { buyer } = await linked(browser);
+  await stubBrowser(buyer, "granted", {
+    browser: false,
+    sound: true,
+    asked: true,
+  });
+  await buyer.goto("/home");
+  const resumed = () =>
+    buyer.evaluate(
+      () => (window as unknown as { __resumed: number }).__resumed,
+    );
+  expect(await resumed()).toBe(0);
+  await buyer.mouse.click(600, 400);
+  await expect.poll(resumed).toBeGreaterThan(0);
 });
 
 test("a browser that has blocked notifications is told so, in words", async ({

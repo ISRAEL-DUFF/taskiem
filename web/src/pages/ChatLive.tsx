@@ -13,13 +13,17 @@ import { get } from "../api";
 import { useAuth } from "../auth";
 import { brandFile } from "../brand";
 import {
+  claimMessage,
   decideNotify,
+  isAway,
   notifyLine,
   onPrefs,
   playPing,
   readPrefs,
+  unlockAudio,
   writePrefs,
 } from "../lib/chatNotify";
+import type { TaskiemMessage } from "../lib/taskiemchat";
 import type { Conversation, LinkMessage } from "../lib/linkchat";
 import { stripBadge, withBadge } from "../lib/tabBadge";
 
@@ -32,7 +36,32 @@ import { stripBadge, withBadge } from "../lib/tabBadge";
 // count in the tab's title and icon, and the notification and the ping for a
 // message that comes while the tab is in the background.
 
+/**
+ * How long the stream may be silent before the page stops trusting it (the
+ * server says something at least every ten seconds), how often it looks,
+ * how long it waits to try again after a refusal, and how often it looks for
+ * a first linked business. A page of the tests may change them
+ * (window.__taskiemChatLive) so as not to wait for minutes.
+ */
+function timing() {
+  const t =
+    (
+      window as unknown as {
+        __taskiemChatLive?: Partial<
+          Record<"stallMs" | "checkMs" | "retryMs" | "listMs", number>
+        >;
+      }
+    ).__taskiemChatLive ?? {};
+  return {
+    stallMs: t.stallMs ?? 30_000,
+    checkMs: t.checkMs ?? 5_000,
+    retryMs: t.retryMs ?? 30_000,
+    listMs: t.listMs ?? 60_000,
+  };
+}
+
 export type LiveEvent =
+  | { type: "taskiem"; messages: TaskiemMessage[] }
   | { type: "message"; message: LinkMessage }
   | { type: "gone"; id: string; link: string }
   | {
@@ -105,32 +134,67 @@ export function ChatLiveProvider({ children }: { children: ReactNode }) {
     load();
     const t = setInterval(
       () => document.visibilityState === "visible" && load(),
-      60_000,
+      timing().listMs,
     );
     return () => clearInterval(t);
   }, [signedIn, load]);
 
+  // A first linked business (accepted, or found on the Chat page): look again
+  // when the person comes to where they are, not only every minute.
+  const where = loc.pathname;
+  useEffect(() => {
+    if (signedIn && (where === "/chat" || where === "/settings/links")) load();
+  }, [signedIn, where, load]);
+
   // A business with no linked business has nothing to hear.
-  const worthOpening = (convs?.length ?? 0) > 0;
+  // (Except on the Chat page itself: the person's own conversation with
+  // Taskiem is there, on every channel, and follows the stream too.)
+  const worthOpening = (convs?.length ?? 0) > 0 || where === "/chat";
   useEffect(() => {
     if (!signedIn || !worthOpening || typeof EventSource === "undefined")
       return;
     let es: EventSource | undefined;
     let retry: number | undefined;
+    let watch: number | undefined;
+    let heard = Date.now();
     let stopped = false;
     const emit = (e: LiveEvent) => subs.current.forEach((fn) => fn(e));
+    const hear = () => {
+      heard = Date.now();
+    };
+    const close = () => {
+      window.clearInterval(watch);
+      es?.close();
+      es = undefined;
+      setConnected(false);
+      setTyping(EMPTY);
+    };
     const open = () => {
+      hear();
       es = new EventSource("/v1/chat/stream");
-      es.addEventListener("ready", () => setConnected(true));
+      // A stream that says nothing (a proxy holding it, a network that has
+      // gone) is not a stream: after a silence the page closes it and opens
+      // another, polling as before in the meantime.
+      window.clearInterval(watch);
+      watch = window.setInterval(() => {
+        if (Date.now() - heard > timing().stallMs) {
+          close();
+          if (!stopped) open();
+        }
+      }, timing().checkMs);
+      es.addEventListener("ready", () => (hear(), setConnected(true)));
+      es.addEventListener("ping", hear);
       es.addEventListener("message", (ev) => {
+        hear();
         const { message } = JSON.parse((ev as MessageEvent<string>).data) as {
           message: LinkMessage;
         };
         emit({ type: "message", message });
-        incoming(message);
+        void incoming(message);
         reloadSoon();
       });
       es.addEventListener("gone", (ev) => {
+        hear();
         const d = JSON.parse((ev as MessageEvent<string>).data) as {
           id: string;
           link: string;
@@ -139,6 +203,7 @@ export function ChatLiveProvider({ children }: { children: ReactNode }) {
         reloadSoon();
       });
       es.addEventListener("conversation", (ev) => {
+        hear();
         emit({
           type: "conversation",
           ...(JSON.parse((ev as MessageEvent<string>).data) as {
@@ -150,7 +215,19 @@ export function ChatLiveProvider({ children }: { children: ReactNode }) {
         });
         reloadSoon();
       });
+      es.addEventListener("taskiem", (ev) => {
+        hear();
+        emit({
+          type: "taskiem",
+          messages: (
+            JSON.parse((ev as MessageEvent<string>).data) as {
+              messages: TaskiemMessage[];
+            }
+          ).messages,
+        });
+      });
       es.addEventListener("typing", (ev) => {
+        hear();
         const d = JSON.parse((ev as MessageEvent<string>).data) as {
           typing: string[];
         };
@@ -163,37 +240,47 @@ export function ChatLiveProvider({ children }: { children: ReactNode }) {
         // many streams open, a proxy that will not stream): try again later.
         if (es?.readyState === EventSource.CLOSED && !stopped) {
           es.close();
-          retry = window.setTimeout(open, 30_000);
+          window.clearInterval(watch);
+          retry = window.setTimeout(open, timing().retryMs);
         }
       };
     };
     open();
     return () => {
       stopped = true;
-      es?.close();
+      close();
       window.clearTimeout(retry);
-      setConnected(false);
-      setTyping(EMPTY);
     };
     // incoming reads refs only; the stream is opened once while it is worth it.
   }, [signedIn, worthOpening, reloadSoon]);
 
   // A message came: a notification, a ping, or a question about them.
-  const incoming = (m: LinkMessage) => {
+  const incoming = async (m: LinkMessage) => {
     if (m.mine || handled.current.has(m.id)) return;
     handled.current.add(m.id);
     if (handled.current.size > 500)
       handled.current = new Set([...handled.current].slice(-200));
-    const c = conv.current?.find((x) => x.link === m.link);
+    let c = conv.current?.find((x) => x.link === m.link);
+    if (!c) {
+      // A conversation the list has not seen yet: its name, and whether it is muted.
+      const r = await get<{ conversations: Conversation[] }>(
+        "/v1/link-chats",
+      ).catch(() => undefined);
+      if (r) {
+        setConvs(r.conversations);
+        c = r.conversations.find((x) => x.link === m.link);
+      }
+    }
+    const away = isAway();
     const viewing =
-      document.visibilityState === "visible" &&
+      !away &&
       here.current.pathname === "/chat" &&
       new URLSearchParams(here.current.search).get("with") === m.link;
     const d = decideNotify({
       m,
       muted: !!c?.muted,
       viewing,
-      hidden: document.visibilityState !== "visible",
+      hidden: away,
       prefs: readPrefs(),
       permission:
         typeof Notification === "undefined"
@@ -201,6 +288,10 @@ export function ChatLiveProvider({ children }: { children: ReactNode }) {
           : Notification.permission,
       now: Date.now(),
     });
+    if (d.ask) askLater.current = true;
+    if (!d.sound && !d.notify) return;
+    // One tab of this browser tells, once (not each tab, not again after a reload).
+    if (!(await claimMessage(m.id))) return;
     if (d.sound) playPing();
     if (d.notify) {
       const n = new Notification(c?.name ?? "New message", {
@@ -214,20 +305,25 @@ export function ChatLiveProvider({ children }: { children: ReactNode }) {
         n.close();
       };
     }
-    if (d.ask) askLater.current = true;
   };
 
-  // The question is asked when the person is looking at the tab again.
+  // The question is asked when the person is looking at the tab again (in
+  // front, and the window they are using), once.
   useEffect(() => {
     const seen = () => {
-      if (document.visibilityState === "visible" && askLater.current) {
+      if (!isAway() && askLater.current) {
         askLater.current = false;
-        setAsking(true);
+        if (!readPrefs().asked) setAsking(true);
       }
     };
     document.addEventListener("visibilitychange", seen);
-    return () => document.removeEventListener("visibilitychange", seen);
+    window.addEventListener("focus", seen);
+    return () => {
+      document.removeEventListener("visibilitychange", seen);
+      window.removeEventListener("focus", seen);
+    };
   }, []);
+  useEffect(() => unlockAudio(), []);
   const answer = useCallback((yes: boolean) => {
     setAsking(false);
     const prefs = readPrefs();
@@ -286,7 +382,9 @@ function useTabBadge(n: number) {
   useEffect(() => {
     // The icon the browser prefers is the SVG one; while there is a count it
     // is a PNG with a red dot, drawn from the PNG icon, and then put back.
-    const link = document.querySelector<HTMLLinkElement>("#icon-svg") ?? document.querySelector<HTMLLinkElement>('link[rel~="icon"]');
+    const link =
+      document.querySelector<HTMLLinkElement>("#icon-svg") ??
+      document.querySelector<HTMLLinkElement>('link[rel~="icon"]');
     const base = document.querySelector<HTMLLinkElement>("#icon-png");
     if (!link) return;
     link.dataset.href ??= link.href;

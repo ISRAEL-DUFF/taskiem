@@ -12,6 +12,11 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
+
+	"github.com/israel-duff/taskiem/engine/telemetry"
 )
 
 // streamEvent is one event of the Chat page's live stream.
@@ -397,4 +402,193 @@ func TestChatStreamLateCommit(t *testing.T) {
 	if late != 1 {
 		t.Errorf("the late commit was sent %d times", late)
 	}
+}
+
+// A stream says something at least every ping interval, so a page can tell a
+// quiet stream from a stalled one.
+func TestChatStreamPings(t *testing.T) {
+	w := newWAWorld(t)
+	w.srv.ChatStreamPing = 700 * time.Millisecond
+	seller, _, _, _ := linkedPair(t, w)
+	events, closeStream := chatStream(t, seller, "")
+	defer closeStream()
+	if next(events, "ready", 3*time.Second, nil) == nil {
+		t.Fatal("no ready event")
+	}
+	for i := 0; i < 3; i++ {
+		if next(events, "ping", 3*time.Second, nil) == nil {
+			t.Fatalf("ping %d did not come", i+1)
+		}
+	}
+}
+
+// Reconnecting after an old Last-Event-ID is not the whole history again:
+// only the last hour is sent.
+func TestChatStreamReplayIsBounded(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	_, buyer, _, _ := linkedPair(t, w)
+	link := buyer.must(200, "GET", "/v1/link-chats", nil)["conversations"].([]any)[0].(map[string]any)["link"].(string)
+	insert := `INSERT INTO link_messages (id, tenant_id, link_id, pair_id, mine, kind, body, updated_at)
+		VALUES (gen_random_uuid(), $1, $2, gen_random_uuid(), false, 'text', $3, now() - $4::interval)`
+	for body, ago := range map[string]string{"two hours ago": "2 hours", "yesterday": "26 hours", "ten minutes ago": "10 minutes"} {
+		if _, err := w.env.DB.Admin.Exec(ctx, insert, tenantID(t, buyer), link, body, ago); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// An id from the beginning of time, and one from the future.
+	for _, id := range []string{"1", strconv.FormatInt(time.Now().Add(24*time.Hour).UnixMicro(), 10)} {
+		events, closeStream := chatStream(t, buyer, id)
+		heard := map[string]bool{}
+		deadline := time.After(3 * time.Second)
+	collect:
+		for {
+			select {
+			case e := <-events:
+				if e.Event == "message" {
+					heard[e.Data["message"].(map[string]any)["body"].(string)] = true
+				}
+			case <-deadline:
+				break collect
+			}
+		}
+		closeStream()
+		if id == "1" && (!heard["ten minutes ago"] || heard["two hours ago"] || heard["yesterday"]) {
+			t.Errorf("an old id replays only the last hour: %v", heard)
+		}
+		if id != "1" && len(heard) != 0 {
+			t.Errorf("an id from the future is not trusted: %v", heard)
+		}
+	}
+}
+
+// The person's own conversation with Taskiem, on every channel, comes on the
+// stream: what they send from the web and what Taskiem answers, and a message
+// that came by WhatsApp; the ids are the history's, so a page that has the
+// answer already does not show it twice.
+func TestChatStreamTaskiemConversation(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	_, buyer, _, _ := linkedPair(t, w)
+	other := w.tenant(t, "Someone Else", "else@stream.test")
+	events, closeStream := chatStream(t, buyer, "")
+	defer closeStream()
+	otherEvents, closeOther := chatStream(t, other, "")
+	defer closeOther()
+	next(events, "ready", 3*time.Second, nil)
+
+	sent := buyer.must(200, "POST", "/v1/taskiem-chat", map[string]any{"text": "status"})["messages"].([]any)
+	if len(sent) == 0 {
+		t.Fatal("no answer")
+	}
+	heard := map[string]map[string]any{}
+	deadline := time.After(5 * time.Second)
+	for len(heard) < len(sent) { // the response has what was said and the answer
+		select {
+		case e := <-events:
+			if e.Event == "taskiem" {
+				for _, m := range e.Data["messages"].([]any) {
+					heard[m.(map[string]any)["id"].(string)] = m.(map[string]any)
+				}
+			}
+		case <-deadline:
+			t.Fatalf("heard %d of %d: %v", len(heard), len(sent), heard)
+		}
+	}
+	for _, m := range sent {
+		if got := heard[m.(map[string]any)["id"].(string)]; got == nil || got["text"] != m.(map[string]any)["text"] {
+			t.Errorf("an answer the page has, as the stream tells it: %v vs %v", m, got)
+		}
+	}
+	var inbound int
+	for _, m := range heard {
+		if m["inbound"] == true && m["text"] == "status" && m["channel"] == "web" {
+			inbound++
+		}
+	}
+	if inbound != 1 {
+		t.Errorf("what the person sent, once: %d in %v", inbound, heard)
+	}
+	// Another person's stream hears none of it, nor does one for another business.
+	if e := next(otherEvents, "taskiem", 500*time.Millisecond, nil); e != nil {
+		t.Errorf("another business heard the conversation: %v", e.Data)
+	}
+	// A message that came by WhatsApp (a row of the history, another channel).
+	var user, tenant string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT user_id::text, tenant_id::text FROM chat_history ORDER BY created_at DESC LIMIT 1`).Scan(&user, &tenant); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO chat_history (id, tenant_id, user_id, channel, inbound, kind, body, buttons, expires_at)
+		SELECT gen_random_uuid(), tenant_id, user_id, 'whatsapp', true, kind, body, buttons, expires_at FROM chat_history WHERE tenant_id = $1 AND user_id = $2 AND inbound ORDER BY created_at DESC LIMIT 1`, tenant, user); err != nil {
+		t.Fatal(err)
+	}
+	if e := next(events, "taskiem", 4*time.Second, func(e streamEvent) bool {
+		ms := e.Data["messages"].([]any)
+		return len(ms) == 1 && ms[0].(map[string]any)["channel"] == "whatsapp"
+	}); e == nil {
+		t.Error("a message by another channel did not come")
+	}
+}
+
+// What the streams cost and send is counted, for the people who run it.
+func TestChatStreamMetrics(t *testing.T) {
+	w := newWAWorld(t)
+	seller, buyer, _, _ := linkedPair(t, w)
+	link := buyer.must(200, "GET", "/v1/link-chats", nil)["conversations"].([]any)[0].(map[string]any)["link"].(string)
+	open0 := metricValue(telemetry.ChatStreamsOpen)
+	polls0 := metricValue(telemetry.ChatStreamPolls)
+	msgs0 := metricValue(telemetry.ChatStreamEvents.WithLabelValues("message"))
+	events, closeBuyer := chatStream(t, buyer, "")
+	_, closeSeller := chatStream(t, seller, "")
+	next(events, "ready", 3*time.Second, nil)
+	if got := metricValue(telemetry.ChatStreamsOpen) - open0; got != 2 {
+		t.Errorf("open streams: %v more", got)
+	}
+	seller.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Counted"})
+	next(events, "message", 4*time.Second, nil)
+	time.Sleep(1500 * time.Millisecond)
+	if metricValue(telemetry.ChatStreamPolls)-polls0 < 3 {
+		t.Errorf("polls: %v", metricValue(telemetry.ChatStreamPolls)-polls0)
+	}
+	if got := metricValue(telemetry.ChatStreamEvents.WithLabelValues("message")) - msgs0; got < 2 {
+		t.Errorf("message events counted: %v", got) // one to each side
+	}
+	closeBuyer()
+	closeSeller()
+	time.Sleep(500 * time.Millisecond)
+	if got := metricValue(telemetry.ChatStreamsOpen) - open0; got != 0 {
+		t.Errorf("after closing: %v still open", got)
+	}
+	// Turned away for the cap, by which cap.
+	refused0 := metricValue(telemetry.ChatStreamRefused.WithLabelValues("business"))
+	var closers []func()
+	for i := 0; i < 12; i++ {
+		_, c := chatStream(t, seller, "")
+		closers = append(closers, c)
+	}
+	req, _ := http.NewRequest("GET", seller.base+"/v1/chat/stream", nil)
+	req.Header.Set("Authorization", "Bearer "+seller.token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if got := metricValue(telemetry.ChatStreamRefused.WithLabelValues("business")) - refused0; got != 1 {
+		t.Errorf("refused for the business's cap: %v", got)
+	}
+	for _, c := range closers {
+		c()
+	}
+}
+
+// metricValue is a counter's or a gauge's value now.
+func metricValue(m prometheus.Metric) float64 {
+	var out dto.Metric
+	if err := m.Write(&out); err != nil {
+		return 0
+	}
+	if out.Gauge != nil {
+		return out.Gauge.GetValue()
+	}
+	return out.Counter.GetValue()
 }

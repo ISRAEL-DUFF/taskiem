@@ -49,3 +49,20 @@ describe("the Taskiem conversation", () => {
     ]);
   });
 });
+
+describe("mergeTaskiem keeps the ids that press the buttons", () => {
+  const base = {
+    id: "11111111-1111-1111-1111-111111111111",
+    inbound: false,
+    text: "Record it?",
+    channel: "web",
+    created_at: "2026-01-01T10:00:00Z",
+  };
+  it("a copy from the history, with titles only, does not take them away", () => {
+    const given = { ...base, buttons: [{ id: "yes", title: "Yes" }] };
+    const kept = { ...base, buttons: [{ title: "Yes" }] };
+    const out = mergeTaskiem([given as never], [kept as never]);
+    expect(out).toHaveLength(1);
+    expect(out[0]?.buttons?.[0]?.id).toBe("yes");
+  });
+});

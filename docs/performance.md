@@ -165,6 +165,10 @@ Measured with `TASKIEM_STREAM_LOAD=<businesses> go test ./api -run TestChatStrea
 | 482 | 495 | 1.03 | 0.30 s | 1.00 s |
 | 1,202 | 1,175 | 0.98 | 0.30 s | 1.00 s |
 
+What the stream sends: `ready`, `ping` (every ten seconds of silence, so a page can tell a held-up stream from a quiet one and reopen it), `message`, `gone`, `conversation`, `typing`, and `taskiem` (the person's own conversation with Taskiem, from the same lookup, with its own cursor). A page that reconnects with `Last-Event-ID` is caught up from that id, but never from further back than an hour. A batch is at most 200 changes; a full batch is followed at once by the next, without waiting. Read marks are folded into the `message` event of the message they concern, so a page sees one event for a message and its tick turning blue.
+
+Metrics: `taskiem_chat_streams_open` (gauge), `taskiem_chat_stream_polls_total`, `taskiem_chat_stream_poll_duration_seconds`, `taskiem_chat_stream_events_total{event}` and `taskiem_chat_stream_refused_total{cap}` (`business` or `server`). `/v1/chat/stream` is left out of the availability and latency objectives, as the run stream is: a stream open for half an hour is not a slow request.
+
 The cost is one transaction per stream per second, linear in the streams and independent of the messages; the 95th percentile is the polling interval. At the plan's two seconds for the median this has a wide margin. What to watch on the target hardware: the transactions per second from open streams against the runs' own, and the number of streams (tabs left open on a business's side); if either grows, the interval can lengthen for streams that have been idle, or one poller per business can serve all of its streams (each stream then only filters), neither of which changes the page. A longer-term option is a table of changes written with each message, read by sequence.
 
 ## How to rerun
