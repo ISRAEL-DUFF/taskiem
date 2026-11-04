@@ -61,3 +61,26 @@ test("an owner turns Money off and on again", async ({ page }) => {
   await page.goto("/invoices");
   await expect(page.getByText("is not turned on for your business.")).toHaveCount(0);
 });
+
+test("Chat still opens, and the shop's tabs follow, when parts are off", async ({ page }) => {
+  await signUp(page, `Areas Chat ${letters()}`);
+  const off = await page.request.put("/v1/settings/areas", { headers: H, data: { areas: { links: false, stock: false } } });
+  expect(off.status(), await off.text()).toBe(200);
+
+  // Chat is also the owner's own conversation with Taskiem: it opens with no
+  // error and no search for other businesses.
+  await page.goto("/chat");
+  await expect(page.getByRole("heading", { level: 1, name: "Chat" })).toBeVisible();
+  await expect(page.getByTestId("taskiem-chat")).toBeVisible();
+  await expect(page.getByTestId("link-search")).toHaveCount(0);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await axeBoth(page, "Chat with Linked businesses off");
+
+  // The shop's tabs leave out the stock pages, and keep Orders.
+  await page.goto("/storefront");
+  const tabs = page.getByRole("navigation", { name: "Storefront" });
+  await expect(tabs.getByRole("link", { name: "Orders" })).toBeVisible();
+  await expect(tabs.getByRole("link", { name: "Stock" })).toHaveCount(0);
+  await expect(tabs.getByRole("link", { name: "Suppliers" })).toHaveCount(0);
+  await expect(tabs.getByRole("link", { name: "Price lists" })).toHaveCount(0);
+});

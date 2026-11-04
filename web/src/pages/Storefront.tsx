@@ -12,6 +12,7 @@ import {
   uploadFile,
 } from "../api";
 import { useAuth } from "../auth";
+import { areaOn } from "../lib/areas";
 import {
   EmptyState,
   ErrorBox,
@@ -1373,6 +1374,9 @@ function CloseDialog({
 
 /** The storefront's pages: the page itself, the orders it brings, and its bookings. */
 export function StorefrontTabs() {
+  const { me } = useAuth();
+  const orders = areaOn(me?.areas, "orders");
+  const stock = areaOn(me?.areas, "stock");
   // A field agent never sees customers' orders or bookings (docs/agents.md).
   if (currentAgentSession()) return null;
   return (
@@ -1382,15 +1386,15 @@ export function StorefrontTabs() {
       </NavLink>
       <NavLink to="/storefront/look">Look</NavLink>
       <NavLink to="/storefront/fronts">Fronts</NavLink>
-      <NavLink to="/storefront/orders">Orders</NavLink>
+      {orders && <NavLink to="/storefront/orders">Orders</NavLink>}
       <NavLink to="/storefront/bookings">Bookings</NavLink>
       <NavLink to="/storefront/riders" end>
         Riders
       </NavLink>
       <NavLink to="/storefront/deliveries">Deliveries</NavLink>
-      <NavLink to="/storefront/stock">Stock</NavLink>
-      <NavLink to="/storefront/suppliers">Suppliers</NavLink>
-      <NavLink to="/storefront/price-lists">Price lists</NavLink>
+      {stock && <NavLink to="/storefront/stock">Stock</NavLink>}
+      {stock && <NavLink to="/storefront/suppliers">Suppliers</NavLink>}
+      {stock && <NavLink to="/storefront/price-lists">Price lists</NavLink>}
     </nav>
   );
 }

@@ -5,7 +5,8 @@ import {
   useParams,
   useSearchParams,
 } from "react-router-dom";
-import { del, get, getBlob, post, put } from "../api";
+import { del, get, getBlob, post, put, whenOff } from "../api";
+import { areaOn } from "../lib/areas";
 import { useAuth } from "../auth";
 import { Icon } from "../icons";
 import {
@@ -194,8 +195,13 @@ function AnswerButtons({
   );
 }
 
+const NO_LINKS: LinksView = { links: [], sent: [] };
+
 function useLinks() {
-  const view = useLoad(() => get<LinksView>("/v1/links"), []);
+  // With Linked businesses turned off there is nothing to ask for.
+  const { me } = useAuth();
+  const on = areaOn(me?.areas, "links");
+  const view = useLoad(() => (on ? whenOff(get<LinksView>("/v1/links"), NO_LINKS) : Promise.resolve(NO_LINKS)), [on]);
   const act = useAction();
   const answer = (
     l: BusinessLink | BlindLinkRequest,
@@ -218,13 +224,19 @@ function useLinks() {
  * that sends a request to it.
  */
 export function ChatPage() {
-  const { can } = useAuth();
-  const manage = can("link.manage");
+  const { me, can } = useAuth();
+  // Chat is also the person's own conversation with Taskiem: with Linked
+  // businesses off it shows that alone, and asks for no business's chats.
+  const linksOn = areaOn(me?.areas, "links");
+  const manage = can("link.manage") && linksOn;
   const { view, act, answer } = useLinks();
   const [params, setParams] = useSearchParams();
   const convs = useLoad(
-    () => get<{ conversations: Conversation[] }>("/v1/link-chats"),
-    [],
+    () =>
+      linksOn
+        ? whenOff(get<{ conversations: Conversation[] }>("/v1/link-chats"), { conversations: [] })
+        : Promise.resolve({ conversations: [] as Conversation[] }),
+    [linksOn],
   );
   useLiveRefresh(convs.reload);
   const reloadConvs = convs.reload; // stable
@@ -232,12 +244,13 @@ export function ChatPage() {
   // is seen (the typing line, the unread counts, the last message), as
   // the open conversation follows itself; 30 s otherwise (useLiveRefresh).
   useEffect(() => {
+    if (!linksOn) return;
     const t = setInterval(
       () => document.visibilityState === "visible" && reloadConvs(),
       5_000,
     );
     return () => clearInterval(t);
-  }, [reloadConvs]);
+  }, [reloadConvs, linksOn]);
   // A link accepted or ended here changes the chats too.
   const linksSeen = view.data;
   useEffect(() => {
@@ -245,7 +258,10 @@ export function ChatPage() {
   }, [linksSeen, reloadConvs]);
   const [archived, setArchived] = useState(false);
   const [foundMessages, setFoundMessages] = useState<LinkMessage[]>();
-  const settings = useLoad(() => get<LinkSettings>("/v1/link-settings"), []);
+  const settings = useLoad(
+    () => (linksOn ? get<LinkSettings>("/v1/link-settings") : Promise.resolve(undefined)),
+    [linksOn],
+  );
   const [q, setQ] = useState("");
   const [found, setFound] = useState<LinkSearch>();
   const [searchError, setSearchError] = useState<unknown>();
@@ -255,7 +271,7 @@ export function ChatPage() {
   const [searchTick, setSearchTick] = useState(0);
   const query = q.trim();
   useEffect(() => {
-    if (query.length < 2) {
+    if (!linksOn || query.length < 2) {
       setFound(undefined);
       return;
     }
@@ -276,9 +292,9 @@ export function ChatPage() {
       live = false;
       clearTimeout(t);
     };
-  }, [query, searchTick]);
+  }, [query, searchTick, linksOn]);
   const g = groupLinks(view.data);
-  const searching = query.length >= 2;
+  const searching = linksOn && query.length >= 2;
   const all = convs.data?.conversations ?? [];
   const openID = params.get("with");
   const open = all.find((c) => c.link === openID);
@@ -300,28 +316,36 @@ export function ChatPage() {
     <>
       <PageHeader
         title="Chat"
-        description="The businesses on Taskiem you trade with. Find another by its name, what it sells or its area, and ask to link."
+        description={
+          linksOn
+            ? "The businesses on Taskiem you trade with. Find another by its name, what it sells or its area, and ask to link."
+            : "Your own conversation with Taskiem."
+        }
         actions={
-          <Link className="button" to="/settings/links">
-            Linked businesses
-          </Link>
+          linksOn ? (
+            <Link className="button" to="/settings/links">
+              Linked businesses
+            </Link>
+          ) : undefined
         }
       />
       <div className={`chat-layout${open || taskiemOpen ? " open" : ""}`}>
         <div className="chat-list-pane">
-          <div className="filters" role="search" aria-label="Find a business">
-            <label className="search">
-              <span className="sr-only">Find a business</span>
-              <Icon name="search" />
-              <input
-                type="search"
-                placeholder="Cement, catering in Ikeja, Dangote…"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                data-testid="link-search"
-              />
-            </label>
-          </div>
+          {linksOn && (
+            <div className="filters" role="search" aria-label="Find a business">
+              <label className="search">
+                <span className="sr-only">Find a business</span>
+                <Icon name="search" />
+                <input
+                  type="search"
+                  placeholder="Cement, catering in Ikeja, Dangote…"
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  data-testid="link-search"
+                />
+              </label>
+            </div>
+          )}
           <ErrorBox error={view.error ?? act.error ?? searchError} />
           {manage && settings.data && !settings.data.asked_at && !searching && (
             <FindableQuestion

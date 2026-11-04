@@ -88,11 +88,16 @@ export function Areas() {
                         checked={r.enabled}
                         disabled={act.busy || (r.enabled && needs.length > 0)}
                         aria-label={r.name}
+                        aria-describedby={lock ? `${r.area}-locked` : undefined}
                         onChange={(e) => (e.target.checked ? void act.run(() => send({ [r.area]: true }, false), false) : setAsking({ row: r }))}
                       />
                       <span>{r.enabled ? "On" : "Off"}</span>
                     </label>
-                    {lock && <span className="hint">{lock}</span>}
+                    {lock && (
+                      <span className="hint" id={`${r.area}-locked`}>
+                        {lock}
+                      </span>
+                    )}
                   </>
                 ) : null}
               </Row>

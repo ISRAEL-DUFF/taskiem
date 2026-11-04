@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { get } from "./api";
 import { useAuth } from "./auth";
@@ -20,7 +20,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
   const loc = useLocation();
   const { me } = useAuth();
   const { data: loaded, reload } = useLoad(() => get<Onboarding>("/v1/onboarding"), [loc.pathname]);
-  const data = loaded && forAreas(loaded, me?.areas);
+  const data = useMemo(() => loaded && forAreas(loaded, me?.areas), [loaded, me?.areas]);
   return <OnboardingCtx.Provider value={{ data, reload }}>{children}</OnboardingCtx.Provider>;
 }
 
