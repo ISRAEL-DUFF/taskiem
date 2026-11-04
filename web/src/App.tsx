@@ -29,6 +29,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Icon } from "./icons";
 import {
   EmptyState,
+  PageHeader,
   ErrorBox,
   Skeleton,
   useAction,
@@ -145,18 +146,21 @@ export function App() {
 /** A page of a part of Taskiem the business turned off: say so, and where to turn it on. */
 function AreaOff({ area, owner }: { area: AreaKey; owner: boolean }) {
   return (
-    <EmptyState
-      icon="settings"
-      action={
-        owner ? (
-          <Link className="button primary" to="/settings/areas">
-            Turn it on
-          </Link>
-        ) : undefined
-      }
-    >
-      {AREA_NAMES[area]} is not turned on for your business.{owner ? "" : " Ask an owner to turn it on."}
-    </EmptyState>
+    <>
+      <PageHeader title={AREA_NAMES[area]} />
+      <EmptyState
+        icon="settings"
+        action={
+          owner ? (
+            <Link className="button primary" to="/settings/areas">
+              Turn it on
+            </Link>
+          ) : undefined
+        }
+      >
+        {AREA_NAMES[area]} is not turned on for your business.{owner ? "" : " Ask an owner to turn it on."}
+      </EmptyState>
+    </>
   );
 }
 
