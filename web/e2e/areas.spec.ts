@@ -39,7 +39,8 @@ test("an owner turns Money off and on again", async ({ page }) => {
   await expect(page.getByLabel("Orders")).toBeDisabled();
 
   // Money off: asked first, then its pages say so.
-  await page.getByLabel("Money and invoices").uncheck();
+  // Unchecking asks first, so the box stays on until the answer.
+  await page.getByLabel("Money and invoices").click();
   const ask = page.getByRole("dialog");
   await expect(ask).toContainText("Nothing is deleted");
   await ask.getByRole("button", { name: "Turn off" }).click();
@@ -55,7 +56,7 @@ test("an owner turns Money off and on again", async ({ page }) => {
 
   // And on again: the page is back.
   await page.getByRole("link", { name: "Turn it on" }).click();
-  await page.getByLabel("Money and invoices").check();
+  await page.getByLabel("Money and invoices").click();
   await expect(money).toHaveAttribute("data-on", "true");
   await page.goto("/invoices");
   await expect(page.getByText("is not turned on for your business.")).toHaveCount(0);
