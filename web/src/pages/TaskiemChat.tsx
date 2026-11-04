@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useThread } from "../lib/useThread";
 import { ThreadJump } from "./ThreadParts";
 import { EmojiPanel } from "./EmojiPanel";
+import { isHeic, preparePhoto } from "../lib/photo";
 import { PendingFile } from "./PendingFile";
 import { insertAt } from "../lib/emoji";
 import { getDraft, setDraft } from "../lib/drafts";
@@ -200,8 +201,16 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
     if (file) sendFile(file, body);
     else if (body) say({ text: body });
   };
-  const choose = (f: File | undefined) => {
+  const choose = async (picked: File | undefined) => {
     setFileError(undefined);
+    let f = picked;
+    if (f && isHeic(f)) {
+      try {
+        f = await preparePhoto(f);
+      } catch (e) {
+        return setFileError(e);
+      }
+    }
     if (f && f.size > 10 * 1024 * 1024)
       return setFileError(new Error(`${f.name} is larger than 10 MB.`));
     if (f && !/^image\/(jpeg|png|webp)$/.test(f.type))
@@ -227,6 +236,12 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
       className="chat-pane"
       aria-label="Conversation with Taskiem"
       data-testid="taskiem-pane"
+      onKeyDown={(e) => {
+        // Esc gives up the emoji panel, then a waiting photo, from anywhere.
+        if (e.key !== "Escape" || e.defaultPrevented) return;
+        if (emojiOpen) setEmojiOpen(false);
+        else if (file) setFile(undefined);
+      }}
       onDragEnter={(e) => {
         if (e.dataTransfer.types.includes("Files")) {
           e.preventDefault();

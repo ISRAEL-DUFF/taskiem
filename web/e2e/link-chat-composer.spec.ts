@@ -878,6 +878,105 @@ test("on a phone the camera sits beside the microphone; on a computer it is in t
   ).toBeHidden();
 });
 
+test("Esc gives up a reply from anywhere in the chat, but closes an open menu first", async ({
+  browser,
+}) => {
+  const { seller, buyer, link } = await linked(browser);
+  await seller.request.post(`/v1/link-chats/${link}/messages`, {
+    headers: H,
+    data: { text: "Rice is back" },
+  });
+  await buyer.goto(`/chat?with=${link}`);
+  const pane = buyer.getByTestId("chat-pane");
+  await pane
+    .getByTestId("chat-message")
+    .first()
+    .getByRole("button", { name: /^More/ })
+    .click();
+  await pane
+    .getByTestId("chat-more")
+    .getByRole("button", { name: "Reply" })
+    .click();
+  await expect(pane.getByTestId("chat-replying")).toBeVisible();
+  // Focus is on the thread, not the box: Esc still gives the reply up.
+  await pane.getByTestId("chat-stream").focus();
+  await buyer.keyboard.press("Escape");
+  await expect(pane.getByTestId("chat-replying")).toHaveCount(0);
+
+  // With a menu open, Esc closes the menu and leaves the reply alone.
+  await pane
+    .getByTestId("chat-message")
+    .first()
+    .getByRole("button", { name: /^More/ })
+    .click();
+  await pane
+    .getByTestId("chat-more")
+    .getByRole("button", { name: "Reply" })
+    .click();
+  await pane
+    .getByTestId("chat-message")
+    .first()
+    .getByRole("button", { name: /^More/ })
+    .click();
+  await expect(pane.getByTestId("chat-more")).toBeVisible();
+  await buyer.keyboard.press("Escape");
+  await expect(pane.getByTestId("chat-more")).toHaveCount(0);
+  await expect(pane.getByTestId("chat-replying")).toBeVisible();
+  await buyer.keyboard.press("Escape");
+  await expect(pane.getByTestId("chat-replying")).toHaveCount(0);
+
+  // A waiting file, with focus on the thread.
+  await pane
+    .getByTestId("chat-file")
+    .setInputFiles({ name: "bags.png", mimeType: "image/png", buffer: PNG });
+  await expect(pane.getByTestId("chat-attaching")).toBeVisible();
+  await pane.getByTestId("chat-stream").focus();
+  await buyer.keyboard.press("Escape");
+  await expect(pane.getByTestId("chat-attaching")).toHaveCount(0);
+});
+
+test("an iPhone's HEIC photo is made a JPEG where the browser can read it, and explained where it cannot", async ({
+  browser,
+}) => {
+  const { buyer, link } = await linked(browser);
+  await buyer.goto(`/chat?with=${link}`);
+  const pane = buyer.getByTestId("chat-pane");
+  const heic = {
+    name: "IMG_0042.HEIC",
+    mimeType: "image/heic",
+    buffer: Buffer.from("not really a picture"),
+  };
+
+  // This browser cannot read HEIC: what to do, in words.
+  await pane.getByTestId("chat-file").setInputFiles(heic);
+  await expect(pane.getByText(/cannot read HEIC photos/)).toBeVisible();
+  await expect(pane.getByTestId("chat-attaching")).toHaveCount(0);
+
+  // Safari can: here the decoder is stood in for, and the photo is a JPEG.
+  await buyer.evaluate(() => {
+    const real = window.createImageBitmap.bind(window);
+    window.createImageBitmap = (src: ImageBitmapSource) => {
+      if (src instanceof File && /hei[cf]/i.test(src.type)) {
+        const c = document.createElement("canvas");
+        c.width = 40;
+        c.height = 30;
+        c.getContext("2d")!.fillRect(0, 0, 40, 30);
+        return real(c);
+      }
+      return real(src);
+    };
+  });
+  await pane.getByTestId("chat-file").setInputFiles(heic);
+  await expect(pane.getByTestId("chat-attaching")).toContainText(
+    "Photo: IMG_0042.jpg",
+  );
+  await expect(
+    pane
+      .getByTestId("chat-attaching")
+      .getByRole("img", { name: "Preview of IMG_0042.jpg" }),
+  ).toBeVisible();
+});
+
 declare global {
   interface Window {
     __dt: DataTransfer;

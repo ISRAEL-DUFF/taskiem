@@ -44,8 +44,10 @@ func (s *Server) linkChatRoutes(r chi.Router) {
 	r.Get("/link-chats/thread", s.linkThread)
 	r.Get("/link-chats/starred", s.starredLinkMessages)
 	r.Get("/link-chats/{link}/messages", s.linkMessages)
-	r.With(write, s.tenantWide, paced).Post("/link-chats/{link}/messages", s.sendLinkMessage)
-	r.With(write, s.tenantWide, paced).Post("/link-chats/{link}/files", s.sendLinkFile)
+	// A send is paced inside its handler, after a repeat of it has been
+	// answered (a retry costs the person nothing).
+	r.With(write, s.tenantWide).Post("/link-chats/{link}/messages", s.sendLinkMessage)
+	r.With(write, s.tenantWide).Post("/link-chats/{link}/files", s.sendLinkFile)
 	r.Get("/link-chats/{link}/files/{id}", s.linkFile)
 	r.Get("/link-chats/{link}/items", s.linkChatItems)
 	r.Post("/link-chats/{link}/read", s.readLinkChat)
@@ -64,12 +66,23 @@ func (s *Server) linkChatRoutes(r chi.Router) {
 // (chat_history.go): a burst, then one every two seconds.
 func (s *Server) linkWriteLimit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if p := principalFrom(r.Context()); !s.limiter("link-chat:"+p.Actor(), 2*time.Second, 20).Allow() {
-			writeErr(w, http.StatusTooManyRequests, "slow down: a moment between messages")
+		if !s.allowLinkWrite(w, r) {
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// allowLinkWrite takes one of the person's writes into conversations, or
+// answers 429 and says false. A message or a file takes it after a repeat of
+// the send has been answered, so a Retry is never refused as too fast.
+func (s *Server) allowLinkWrite(w http.ResponseWriter, r *http.Request) bool {
+	p := principalFrom(r.Context())
+	if !s.limiter("link-chat:"+p.Actor(), 2*time.Second, 20).Allow() {
+		writeErr(w, http.StatusTooManyRequests, "slow down: a moment between messages")
+		return false
+	}
+	return true
 }
 
 func linkParam(r *http.Request) (uuid.UUID, error) {
@@ -237,6 +250,9 @@ func (s *Server) sendLinkMessage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, linkMessageOut{Message: *m})
+		return
+	}
+	if !s.allowLinkWrite(w, r) {
 		return
 	}
 	var ments []links.Mention
@@ -751,6 +767,9 @@ func (s *Server) sendLinkFile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, linkMessageOut{Message: *m})
+		return
+	}
+	if !s.allowLinkWrite(w, r) {
 		return
 	}
 	// Before anything is stored: only to an active link, and only a file

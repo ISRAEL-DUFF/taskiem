@@ -3,6 +3,7 @@ package api_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -331,5 +332,34 @@ func TestLinkSendClientID(t *testing.T) {
 	// (The seller's deleted copy is not shown to it, the buyer's is kept; "Thanks" is in both.)
 	if a, b := count(seller), count(buyer); a != 5 || b != 6 {
 		t.Errorf("the refusals sent nothing, the buyer's id is its own: seller %d, buyer %d", a, b)
+	}
+}
+
+// A repeat of a send (the chat's Retry) is answered however fast the person
+// has been sending: only new sends are paced.
+func TestLinkReplayIsNotPaced(t *testing.T) {
+	w := newWAWorld(t)
+	seller, buyer, _, _ := linkedPair(t, w)
+	link := buyer.must(200, "GET", "/v1/link-chats", nil)["conversations"].([]any)[0].(map[string]any)["link"].(string)
+	id := func(n int) string { return fmt.Sprintf("0192e2e0-0000-7000-8000-%012d", n) }
+	// The burst: twenty sends, then the person is told to slow down.
+	for n := 1; n <= 20; n++ {
+		seller.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": fmt.Sprintf("Message %d", n), "client_id": id(n)})
+	}
+	if code, out := seller.do("POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "One too many", "client_id": id(21)}); code != 429 {
+		t.Fatalf("the twenty-first send: %d %v", code, out)
+	}
+	// A repeat of one already sent is answered, not paced.
+	again := seller.must(200, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Message 3", "client_id": id(3)})["message"].(map[string]any)
+	if again["body"] != "Message 3" {
+		t.Errorf("the repeat: %v", again)
+	}
+	// The same id for other words is refused as that, not as too fast.
+	if code, out := seller.do("POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Other words", "client_id": id(3)}); code != 409 {
+		t.Errorf("other words under a used id: %d %v", code, out)
+	}
+	// And still only twenty messages exist.
+	if n := len(buyer.must(200, "GET", "/v1/link-chats/"+link+"/messages?limit=200", nil)["messages"].([]any)); n != 20 {
+		t.Errorf("messages: %d", n)
 	}
 }

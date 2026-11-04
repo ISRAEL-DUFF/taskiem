@@ -53,6 +53,7 @@ import {
 } from "../lib/outboxStore";
 import { ThreadJump } from "./ThreadParts";
 import { EmojiPanel } from "./EmojiPanel";
+import { isHeic, preparePhoto } from "../lib/photo";
 import { PendingFile } from "./PendingFile";
 import { AttachMenu } from "./AttachMenu";
 import { CameraSheet } from "./CameraSheet";
@@ -1083,9 +1084,19 @@ export function ConversationPane({
     }, EVERY_MS * 3);
     return () => clearInterval(t);
   }, [messages, path, detached]);
-  const choose = (f: File | undefined) => {
+  const choose = async (picked: File | undefined) => {
     setFileError(undefined);
+    let f = picked;
     if (!f) return;
+    if (isHeic(f)) {
+      // An iPhone's photo: a JPEG where the browser can read it.
+      try {
+        f = await preparePhoto(f);
+      } catch (e) {
+        setFileError(e);
+        return;
+      }
+    }
     if (f.size > MAX_FILE) {
       setFileError(new Error(`${f.name} is larger than 25 MB.`));
       return;
@@ -1264,6 +1275,21 @@ export function ConversationPane({
       className="chat-pane"
       aria-label={`Conversation with ${conv.name}`}
       data-testid="chat-pane"
+      onKeyDown={(e) => {
+        // Esc gives up what is being prepared from anywhere in the chat that
+        // is not an open menu, sheet or panel (they close themselves):
+        // the emoji panel, then a waiting file, then a reply.
+        if (e.key !== "Escape" || e.defaultPrevented) return;
+        if (
+          e.currentTarget.querySelector(
+            '[data-testid="chat-more"], .chat-menu, .attach-menu, .chat-info, .modal',
+          )
+        )
+          return;
+        if (emojiOpen) setEmojiOpen(false);
+        else if (file) setFile(undefined);
+        else if (reply) setReply(undefined);
+      }}
       onDragEnter={(e) => {
         if (write && e.dataTransfer.types.includes("Files")) {
           e.preventDefault();
