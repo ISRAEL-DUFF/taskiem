@@ -60,6 +60,9 @@ func (s *State) Decide() ([]NewEvent, error) {
 	for pass := 0; pass < MaxPasses; pass++ {
 		before := len(d.out)
 		d.run()
+		if d.fault != nil {
+			return nil, d.fault
+		}
 		if len(d.out) == before || d.terminal {
 			return d.out, nil
 		}
@@ -79,6 +82,7 @@ func (d *decider) clone() *decider {
 	c.order = slices.Clone(d.order)
 	c.complSeq = maps.Clone(d.complSeq)
 	c.out = nil
+	c.fault = nil
 	c.memo = nil
 	return &c
 }

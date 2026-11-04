@@ -137,3 +137,22 @@ func TestResolveReportsOneErrorEveryTime(t *testing.T) {
 		}
 	}
 }
+
+// Infinity and NaN are not JSON, so an expression cannot return them: a
+// division of doubles by zero is an error of the expression, as integer
+// division is, and finite doubles are as before.
+func TestNonFiniteDoublesAreErrors(t *testing.T) {
+	e := MustNew()
+	for _, src := range []string{"1.0/0.0", "-1.0/0.0", "double(0)/double(0)", "[1.0, 1.0/0.0]", "{'x': 1.0/0.0}"} {
+		if v, err := e.Eval(src, map[string]any{}); err == nil {
+			t.Errorf("%s = %v, want an error", src, v)
+		} else if !strings.Contains(err.Error(), "not a finite number") {
+			t.Errorf("%s: %v", src, err)
+		}
+	}
+	for src, want := range map[string]any{"10.0/4.0": 2.5, "1.5+1.0": 2.5} {
+		if v, err := e.Eval(src, map[string]any{}); err != nil || v != want {
+			t.Errorf("%s = %v, %v; want %v", src, v, err, want)
+		}
+	}
+}
