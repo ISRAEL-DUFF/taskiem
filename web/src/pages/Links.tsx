@@ -5,7 +5,8 @@ import {
   useParams,
   useSearchParams,
 } from "react-router-dom";
-import { del, get, getBlob, post, put } from "../api";
+import { del, get, getBlob, post, put, whenOff } from "../api";
+import { areaOn } from "../lib/areas";
 import { useAuth } from "../auth";
 import { Icon } from "../icons";
 import {
@@ -31,6 +32,7 @@ import {
 } from "../lib/links";
 import {
   listTime,
+  matchChats,
   previewLine,
   type Conversation,
   type LinkMessage,
@@ -205,8 +207,19 @@ function AnswerButtons({
   );
 }
 
+const NO_LINKS: LinksView = { links: [], sent: [] };
+
 function useLinks() {
-  const view = useLoad(() => get<LinksView>("/v1/links"), []);
+  // With Linked businesses turned off there is nothing to ask for.
+  const { me } = useAuth();
+  const on = areaOn(me?.areas, "links");
+  const view = useLoad(
+    () =>
+      on
+        ? whenOff(get<LinksView>("/v1/links"), NO_LINKS)
+        : Promise.resolve(NO_LINKS),
+    [on],
+  );
   const act = useAction();
   const answer = (
     l: BusinessLink | BlindLinkRequest,
@@ -229,13 +242,21 @@ function useLinks() {
  * that sends a request to it.
  */
 export function ChatPage() {
-  const { can } = useAuth();
-  const manage = can("link.manage");
+  const { me, can } = useAuth();
+  // Chat is also the person's own conversation with Taskiem: with Linked
+  // businesses off it shows that alone, and asks for no business's chats.
+  const linksOn = areaOn(me?.areas, "links");
+  const manage = can("link.manage") && linksOn;
   const { view, act, answer } = useLinks();
   const [params, setParams] = useSearchParams();
   const convs = useLoad(
-    () => get<{ conversations: Conversation[] }>("/v1/link-chats"),
-    [],
+    () =>
+      linksOn
+        ? whenOff(get<{ conversations: Conversation[] }>("/v1/link-chats"), {
+            conversations: [],
+          })
+        : Promise.resolve({ conversations: [] as Conversation[] }),
+    [linksOn],
   );
   useLiveRefresh(convs.reload);
   const reloadConvs = convs.reload; // stable
@@ -245,12 +266,13 @@ export function ChatPage() {
   const live = useChatLive();
   const connected = live.connected;
   useEffect(() => {
+    if (!linksOn) return;
     const t = setInterval(
       () => document.visibilityState === "visible" && reloadConvs(),
       connected ? 20_000 : 5_000,
     );
     return () => clearInterval(t);
-  }, [reloadConvs, connected]);
+  }, [reloadConvs, connected, linksOn]);
   // The stream says when a conversation changed: the list follows at once.
   useEffect(() => {
     let soon: number | undefined;
@@ -285,7 +307,13 @@ export function ChatPage() {
   );
   const archived = filter === "archived";
   const [foundMessages, setFoundMessages] = useState<LinkMessage[]>();
-  const settings = useLoad(() => get<LinkSettings>("/v1/link-settings"), []);
+  const settings = useLoad(
+    () =>
+      linksOn
+        ? get<LinkSettings>("/v1/link-settings")
+        : Promise.resolve(undefined),
+    [linksOn],
+  );
   const [q, setQ] = useState("");
   const [found, setFound] = useState<LinkSearch>();
   const [searchError, setSearchError] = useState<unknown>();
@@ -295,7 +323,7 @@ export function ChatPage() {
   const [searchTick, setSearchTick] = useState(0);
   const query = q.trim();
   useEffect(() => {
-    if (query.length < 2) {
+    if (!linksOn || query.length < 2) {
       setFound(undefined);
       return;
     }
@@ -311,14 +339,16 @@ export function ChatPage() {
         (r) => live && setFoundMessages(r.messages),
         () => undefined,
       );
-    }, 250);
+    }, 150);
     return () => {
       live = false;
       clearTimeout(t);
     };
-  }, [query, searchTick]);
+  }, [query, searchTick, linksOn]);
   const g = groupLinks(view.data);
-  const searching = query.length >= 2;
+  // From the first letter the list narrows to what matches, as WhatsApp's
+  // does; from two, other businesses and messages are looked for too.
+  const searching = linksOn && query.length >= 2;
   const all = convs.data?.conversations ?? [];
   const drafts = useDrafts();
   const taskiemUnread = useTaskiemUnread();
@@ -328,7 +358,8 @@ export function ChatPage() {
   const taskiemOpen = openID === "taskiem";
   const unreadCount = all.filter((c) => !c.archived && c.unread > 0).length;
   const archivedCount = all.filter((c) => c.archived).length;
-  const listed = all.filter(
+  const narrowed = linksOn && query.length === 1 ? matchChats(all, query) : all;
+  const listed = narrowed.filter(
     (c) => c.archived === archived && (filter !== "unread" || c.unread > 0),
   );
   // The keyboard (a desktop reader's hands): shortcuts that are off while a
@@ -430,7 +461,15 @@ export function ChatPage() {
     const l = view.data?.links.find((x) => x.id === link);
     return l ? roleLine(l.role) : "";
   };
-  const chats = searching ? matchLinked(view.data?.links ?? [], query) : [];
+  // A chat is found by its name or by a word of its last message.
+  const chatHits = searching ? matchChats(all, query) : [];
+  const chats = searching
+    ? (view.data?.links ?? []).filter(
+        (l) =>
+          matchLinked([l], query).length > 0 ||
+          chatHits.some((c) => c.business === l.business),
+      )
+    : [];
   const blind = found?.blind;
   const others = (found?.results ?? []).filter(
     (c) => !chats.some((l) => l.business === c.business),
@@ -456,30 +495,32 @@ export function ChatPage() {
               Keyboard
             </button>
           </div>
-          <div className="filters" role="search" aria-label="Find a business">
-            <label className="search">
-              <span className="sr-only">Find a business</span>
-              <Icon name="search" />
-              <input
-                type="search"
-                ref={searchBox}
-                placeholder="Cement, catering in Ikeja, Dangote…"
-                value={q}
-                onChange={(e) => (setQ(e.target.value), setHint(""))}
-                onKeyDown={(e) => {
-                  // Esc empties the box; with it empty, the key goes on.
-                  if (e.key === "Escape") {
-                    e.preventDefault();
-                    if (q) {
-                      setQ("");
-                      setHint("");
-                    } else e.currentTarget.blur();
-                  }
-                }}
-                data-testid="link-search"
-              />
-            </label>
-          </div>
+          {linksOn && (
+            <div className="filters" role="search" aria-label="Find a business">
+              <label className="search">
+                <span className="sr-only">Find a business</span>
+                <Icon name="search" />
+                <input
+                  type="search"
+                  ref={searchBox}
+                  placeholder="Cement, catering in Ikeja, Dangote…"
+                  value={q}
+                  onChange={(e) => (setQ(e.target.value), setHint(""))}
+                  onKeyDown={(e) => {
+                    // Esc empties the box; with it empty, the key goes on.
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      if (q) {
+                        setQ("");
+                        setHint("");
+                      } else e.currentTarget.blur();
+                    }
+                  }}
+                  data-testid="link-search"
+                />
+              </label>
+            </div>
+          )}
           <p className="sr-only" role="status">
             {hint}
           </p>
@@ -512,31 +553,35 @@ export function ChatPage() {
             </div>
           )}
           <ErrorBox error={view.error ?? act.error ?? searchError} />
-          {!searching && !archived && filter !== "starred" && (
-            <ul
-              className="chat-rows"
-              aria-label="Your conversation with Taskiem"
-            >
-              <ChatRow
-                to="/chat?with=taskiem"
-                letter="T"
-                accent
-                title="Taskiem"
-                preview={
-                  drafts.taskiem ? (
-                    <>
-                      <span className="draft">Draft:</span> {drafts.taskiem}
-                    </>
-                  ) : (
-                    "Your own conversation with Taskiem, as on your phone"
-                  )
-                }
-                selected={taskiemOpen}
-                unread={taskiemUnread}
-                testid="taskiem-chat"
-              />
-            </ul>
-          )}
+          {!searching &&
+            !archived &&
+            filter !== "starred" &&
+            (query.length === 0 ||
+              "taskiem".startsWith(query.toLowerCase())) && (
+              <ul
+                className="chat-rows"
+                aria-label="Your conversation with Taskiem"
+              >
+                <ChatRow
+                  to="/chat?with=taskiem"
+                  letter="T"
+                  accent
+                  title="Taskiem"
+                  preview={
+                    drafts.taskiem ? (
+                      <>
+                        <span className="draft">Draft:</span> {drafts.taskiem}
+                      </>
+                    ) : (
+                      "Your own conversation with Taskiem, as on your phone"
+                    )
+                  }
+                  selected={taskiemOpen}
+                  unread={taskiemUnread}
+                  testid="taskiem-chat"
+                />
+              </ul>
+            )}
           {searching ? (
             <section aria-label="Search results" data-testid="link-results">
               {chats.length > 0 && (
@@ -734,11 +779,13 @@ export function ChatPage() {
                   </div>
                   {listed.length === 0 && (
                     <p className="hint">
-                      {archived
-                        ? "No archived chats."
-                        : filter === "unread"
-                          ? "Nothing unread."
-                          : "No chats."}
+                      {query.length === 1
+                        ? `No chat matches “${query}”.`
+                        : archived
+                          ? "No archived chats."
+                          : filter === "unread"
+                            ? "Nothing unread."
+                            : "No chats."}
                     </p>
                   )}
                   <ul

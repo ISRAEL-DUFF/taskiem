@@ -1329,6 +1329,204 @@ paths:
                       type: string
         default:
           $ref: '#/components/responses/Error'
+  /v1/storefront/fronts/{id}/items:
+    get:
+      operationId: listStorefrontFrontItems
+      tags:
+      - Storefront
+      summary: A front's items
+      description: The rows of the table the front's list shows, as the table has them now, with their photos, and which of price, description, category, availability and photo the list takes (takes). 400 for a front with no list.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The front's id
+      responses:
+        '200':
+          description: The items
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FrontItems'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: addStorefrontFrontItem
+      tags:
+      - Storefront
+      summary: Add an item to a front
+      description: A row in the front's table, checked by its columns (a name is needed; the price is in naira; an item starts available). The page's copy is refreshed. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The front's id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FrontItemRequest'
+      responses:
+        '201':
+          description: Added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/fronts/{id}/items/{row}:
+    patch:
+      operationId: patchStorefrontFrontItem
+      tags:
+      - Storefront
+      summary: Change an item on a front
+      description: Only what is sent changes. 404 for an item that is not there, 400 when nothing is sent. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The front's id
+      - name: row
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: The item's row id in the front's table
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FrontItemRequest'
+      responses:
+        '200':
+          description: Changed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteStorefrontFrontItem
+      tags:
+      - Storefront
+      summary: Remove an item from a front
+      description: Deletes its row from the front's table. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The front's id
+      - name: row
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: The item's row id in the front's table
+      responses:
+        '204':
+          description: Removed
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/fronts/{id}/items/{row}/photo:
+    post:
+      operationId: setStorefrontFrontItemPhoto
+      tags:
+      - Storefront
+      summary: Store a photo and set it on a front's item
+      description: As the catalogue's photos are, for any front whose list has a photo column (400 otherwise).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The front's id
+      - name: row
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: The item's row id in the front's table
+      requestBody:
+        required: true
+        content:
+          image/jpeg:
+            schema:
+              type: string
+              format: binary
+          image/png:
+            schema:
+              type: string
+              format: binary
+          image/webp:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: Stored, and the item updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorefrontMedia'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/storefront/fronts/{id}:
     patch:
       operationId: patchStorefrontFront
@@ -20717,6 +20915,63 @@ paths:
                 $ref: '#/components/schemas/Withdrawal'
         default:
           $ref: '#/components/responses/Error'
+  /v1/settings/areas:
+    get:
+      operationId: getAreas
+      tags:
+      - Account
+      summary: Which parts of Taskiem the business uses
+      description: Any member. Every area (storefront, orders, stock, money, links, schools) in plain words, whether it is on, and which areas it needs. A business that has never chosen has everything but Schools on. An area that is off is refused on its routes with 404 and area_off; nothing in it is deleted.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AreaSettings'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putAreas
+      tags:
+      - Account
+      summary: Turn parts of Taskiem on or off
+      description: Owners only (403 otherwise). Turning an area on turns on the areas it needs (the shop needs orders; schools need money). Turning one off is refused with 409 while an area that needs it stays on. When published workflows use an area being turned off, the answer is 409 with affected and nothing changes until the request is sent again with confirm. Off hides and refuses; nothing is deleted, and turning it back on restores everything. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [areas]
+              properties:
+                areas:
+                  type: object
+                  description: Area name to on (true) or off (false). Only the areas named change.
+                  additionalProperties:
+                    type: boolean
+                confirm:
+                  type: boolean
+                  description: Turn an area off although published workflows use it.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AreaSettings'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/settings/schools:
     get:
       operationId: getSchoolSettings
@@ -25630,6 +25885,11 @@ components:
         schools:
           type: boolean
           description: Whether the business has the Schools area on (docs/schools.md).
+        areas:
+          type: object
+          description: Which parts of Taskiem the business uses, by area name (storefront, orders, stock, money, links, schools), each true when on (docs/spec/business-areas.md). GET /v1/settings/areas has them in plain words.
+          additionalProperties:
+            type: boolean
         gate_only:
           type: boolean
           description: "A gate session: the gate role's school.gate and nothing else. Every route but GET /v1/me and sign-out answers 403 with gate_only."
@@ -27563,6 +27823,29 @@ components:
                 type: array
                 items: *id002
         saved: *id001
+    AreaSettings:
+      type: object
+      required: [areas]
+      properties:
+        areas:
+          type: array
+          items:
+            type: object
+            required: [area, name, covers, depends_on, enabled]
+            properties:
+              area:
+                type: string
+                enum: [storefront, orders, stock, money, links, schools]
+              name:
+                type: string
+              covers:
+                type: string
+              depends_on:
+                type: array
+                items:
+                  type: string
+              enabled:
+                type: boolean
     AdvancedSetting:
       type: object
       required: [advanced, chosen]
@@ -27670,6 +27953,12 @@ components:
           type: boolean
           description: The person agrees to the terms and privacy notice (`terms` on GET /v1/signup). Required
             true when the deployment has them.
+        kinds:
+          type: array
+          description: What the business does. Each kind switches on the parts of Taskiem that go with it (shop - the online shop, orders, stock, money and linked businesses; service - money and linked businesses; school - schools, with money). An empty list is just workflows - every part off. Left out, the business has every part. 400 for any other word. The owner changes them later with PUT /v1/settings/areas.
+          items:
+            type: string
+            enum: [shop, service, school]
     SignupResult:
       type: object
       required:
@@ -29160,6 +29449,56 @@ components:
           type:
           - string
           - 'null'
+    FrontItemRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          maxLength: 120
+        price_naira:
+          type: number
+          minimum: 0
+        description:
+          type: string
+          maxLength: 1000
+        category:
+          type: string
+          maxLength: 60
+        available:
+          type: boolean
+    FrontItems:
+      type: object
+      required: [table_id, items, takes]
+      properties:
+        table_id:
+          type: string
+        items:
+          type: array
+          items:
+            type: object
+            required: [id, name, available]
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+              price_kobo:
+                type: integer
+              description:
+                type: string
+              category:
+                type: string
+              available:
+                type: boolean
+              photo:
+                type: object
+                additionalProperties:
+                  type: string
+        takes:
+          type: object
+          additionalProperties:
+            type: boolean
     StorefrontMedia:
       type: object
       required: [id, width, height, urls, moderation]

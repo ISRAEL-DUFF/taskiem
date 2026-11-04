@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/areas"
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/media"
@@ -126,12 +127,22 @@ func (s *Server) waShopCommand(ctx context.Context, c *chat, text, cmd string) (
 	if len(words) == 0 {
 		return false, nil
 	}
+	// A part the business turned off has no words here: the shop's, then the
+	// stock's (docs/spec/business-areas.md).
+	on := s.chatAreas(ctx, c)
 	// Fronts first: "sold out <dish>" is not a sale.
-	if done, err := s.waFrontCommand(ctx, c, text, cmd); done || err != nil {
-		return done, err
+	if on.On(areas.Storefront) {
+		if done, err := s.waFrontCommand(ctx, c, text, cmd); done || err != nil {
+			return done, err
+		}
 	}
-	if done, err := s.waStockCommand(ctx, c, text, cmd); done || err != nil {
-		return done, err
+	if on.On(areas.Stock) {
+		if done, err := s.waStockCommand(ctx, c, text, cmd); done || err != nil {
+			return done, err
+		}
+	}
+	if !on.On(areas.Storefront) {
+		return false, nil
 	}
 	args := func(n int) string {
 		f := strings.Fields(text)

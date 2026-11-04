@@ -1,5 +1,6 @@
 import {
   BrowserRouter,
+  Link,
   Navigate,
   NavLink,
   Route,
@@ -28,6 +29,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Icon } from "./icons";
 import {
   EmptyState,
+  PageHeader,
   ErrorBox,
   Skeleton,
   useAction,
@@ -108,6 +110,8 @@ import {
 } from "./pages/SchoolClearance";
 import { SchoolOverviewPage } from "./pages/SchoolOverview";
 import { showSchools } from "./lib/schools";
+import { areaOffFor, areaOn, AREA_NAMES, type AreaKey } from "./lib/areas";
+import { Areas } from "./pages/Areas";
 import { FormSubmissions, Forms } from "./pages/Forms";
 import {
   FormRequestPage,
@@ -140,6 +144,28 @@ export function App() {
 
 /** An administrator held to passkeys, signed in with a password, adds one
  * and then signs in with it; nothing else is open to them until then. */
+/** A page of a part of Taskiem the business turned off: say so, and where to turn it on. */
+function AreaOff({ area, owner }: { area: AreaKey; owner: boolean }) {
+  return (
+    <>
+      <PageHeader title={AREA_NAMES[area]} />
+      <EmptyState
+        icon="settings"
+        action={
+          owner ? (
+            <Link className="button primary" to="/settings/areas">
+              Turn it on
+            </Link>
+          ) : undefined
+        }
+      >
+        {AREA_NAMES[area]} is not turned on for your business.
+        {owner ? "" : " Ask an owner to turn it on."}
+      </EmptyState>
+    </>
+  );
+}
+
 function EnrolPasskey() {
   const { logout, loginWithPasskey } = useAuth();
   const [added, setAdded] = useState(false);
@@ -300,6 +326,7 @@ function SignedIn() {
   const mainRef = useRef<HTMLElement>(null);
   useScrollableTables(mainRef);
   const { pathname } = useLocation();
+  const off = areaOffFor(pathname, me?.areas);
   useEffect(() => setDrawer(false), [pathname]);
   // A row of tabs wider than a phone scrolls sideways: bring the open one into view.
   useEffect(() => {
@@ -376,13 +403,38 @@ function SignedIn() {
     ],
     ["/home", "Home", "home", true],
     ["/workflows", "Workflows", "workflows", can("workflow.read")],
-    ["/storefront/orders", "Orders", "orders", can("storefront.manage")],
-    ["/invoices", "Invoices", "invoices", invoiceAccess(can).see],
-    ["/money", "Money", "money", invoiceAccess(can).see],
+    [
+      "/storefront/orders",
+      "Orders",
+      "orders",
+      can("storefront.manage") && areaOn(me.areas, "orders"),
+    ],
+    [
+      "/invoices",
+      "Invoices",
+      "invoices",
+      invoiceAccess(can).see && areaOn(me.areas, "money"),
+    ],
+    [
+      "/money",
+      "Money",
+      "money",
+      invoiceAccess(can).see && areaOn(me.areas, "money"),
+    ],
     // Linked suppliers' invoices (business links, pages/Bills.tsx).
-    ["/bills", "Bills", "invoices", invoiceAccess(can).see],
+    [
+      "/bills",
+      "Bills",
+      "invoices",
+      invoiceAccess(can).see && areaOn(me.areas, "money"),
+    ],
     ["/schools", "Schools", "schools", showSchools(me.schools, can)],
-    ["/storefront", "Storefront", "storefront", can("storefront.manage")],
+    [
+      "/storefront",
+      "Storefront",
+      "storefront",
+      can("storefront.manage") && areaOn(me.areas, "storefront"),
+    ],
     ["/forms", "Forms", "forms", can("workflow.read")],
     ["/forms/requests", "To fill in", "inbox", toFill > 0, String(toFill)],
     ["/runs", "Activity", "activity", can("run.read")],
@@ -422,7 +474,18 @@ function SignedIn() {
       can("secret.manage") || can("workflow.read"),
     ],
     ["/policies", "Approval policies", "policies", can("workflow.read")],
-    ["/settings/links", "Linked businesses", "connections", can("link.manage")],
+    [
+      "/settings/links",
+      "Linked businesses",
+      "connections",
+      can("link.manage") && areaOn(me.areas, "links"),
+    ],
+    [
+      "/settings/areas",
+      "What your business uses",
+      "settings",
+      me.roles.includes("owner"),
+    ],
     ["/settings/notifications", "Notifications", "bell", !!me.user],
     ["/alerts", "Alerts", "alerts", can("alert.manage")],
     ["/audit", "Audit log", "audit", can("audit.read")],
@@ -448,8 +511,18 @@ function SignedIn() {
   const quick = (
     [
       ["/home", "Home", "home", true],
-      ["/money", "Money", "money", invoiceAccess(can).see],
-      ["/storefront/orders", "Orders", "orders", can("storefront.manage")],
+      [
+        "/money",
+        "Money",
+        "money",
+        invoiceAccess(can).see && areaOn(me.areas, "money"),
+      ],
+      [
+        "/storefront/orders",
+        "Orders",
+        "orders",
+        can("storefront.manage") && areaOn(me.areas, "orders"),
+      ],
       ["/workflows", "Workflows", "workflows", can("workflow.read")],
       ["/runs", "Activity", "activity", can("run.read")],
     ] as Item[]
@@ -599,192 +672,209 @@ function SignedIn() {
           <NotifyBanner />
           <div className="page" key={`${pathname}#${fresh}`}>
             <PageBoundary>
-              <Routes>
-                <Route path="/" element={<Navigate to="/home" replace />} />
-                <Route path="/home" element={<Home />} />
-                <Route path="/workflows" element={<Workflows />} />
-                <Route path="/workflows/new" element={<NewWorkflow />} />
-                <Route path="/workflows/:id" element={<Editor />} />
-                <Route path="/templates" element={<Templates />} />
-                <Route path="/tables" element={<Tables />} />
-                <Route path="/tables/:id" element={<TablePage />} />
-                <Route path="/storefront" element={<Storefront />} />
-                <Route path="/storefront/look" element={<Look />} />
-                <Route
-                  path="/storefront/fronts"
-                  element={<StorefrontFronts />}
-                />
-                <Route
-                  path="/storefront/fronts/:id"
-                  element={<StorefrontFront />}
-                />
-                <Route
-                  path="/storefront/orders"
-                  element={<StorefrontOrders />}
-                />
-                <Route
-                  path="/storefront/orders/:reference"
-                  element={<StorefrontOrder />}
-                />
-                <Route
-                  path="/storefront/bookings"
-                  element={<StorefrontBookings />}
-                />
-                <Route
-                  path="/storefront/riders"
-                  element={<StorefrontRiders />}
-                />
-                <Route
-                  path="/storefront/riders/pay"
-                  element={<RidersPayPage />}
-                />
-                <Route
-                  path="/storefront/deliveries"
-                  element={<StorefrontDeliveries />}
-                />
-                <Route path="/storefront/stock" element={<StorefrontStock />} />
-                <Route path="/chat" element={<ChatPage />} />
-                <Route
-                  path="/settings/links"
-                  element={<LinkedBusinessesPage />}
-                />
-                <Route path="/l/:code" element={<LinkCodePage />} />
-                <Route path="/bills" element={<BillsPage />} />
-                <Route path="/bills/:id" element={<BillPage />} />
-                <Route path="/trade-orders" element={<TradeOrdersPage />} />
-                <Route path="/trade-orders/:id" element={<TradeOrderPage />} />
-                <Route path="/purchases/:id" element={<PurchasePage />} />
-                <Route
-                  path="/links/:id/statement"
-                  element={<StatementPage />}
-                />
-                <Route
-                  path="/storefront/price-lists"
-                  element={<StorefrontPriceLists />}
-                />
-                <Route
-                  path="/storefront/suppliers/:link/prices"
-                  element={<SupplierPricesPage />}
-                />
-                <Route
-                  path="/storefront/suppliers"
-                  element={<StorefrontSuppliers />}
-                />
-                <Route path="/invoices" element={<Invoices />} />
-                <Route path="/invoices/new" element={<InvoiceNew />} />
-                <Route
-                  path="/invoices/settings"
-                  element={<InvoiceSettingsPage />}
-                />
-                <Route path="/invoices/match" element={<InvoiceMatch />} />
-                <Route path="/invoices/:id" element={<InvoicePage />} />
-                <Route path="/invoices/:id/edit" element={<InvoiceEdit />} />
-                <Route path="/money" element={<MoneyOverview />} />
-                <Route path="/money/leaks" element={<MoneyLeaks />} />
-                <Route path="/money/statements" element={<MoneyStatements />} />
-                <Route path="/money/entries" element={<MoneyEntries />} />
-                <Route path="/money/fees" element={<MoneyFees />} />
-                <Route path="/schools" element={<Schools />} />
-                <Route path="/schools/import" element={<SchoolImport />} />
-                <Route
-                  path="/schools/students/new"
-                  element={<SchoolStudentNew />}
-                />
-                <Route
-                  path="/schools/students/:id"
-                  element={<SchoolStudentPage />}
-                />
-                <Route path="/schools/families" element={<SchoolFamilies />} />
-                <Route path="/schools/classes" element={<SchoolClasses />} />
-                <Route
-                  path="/schools/sessions/:id/promotion"
-                  element={<SchoolPromotionPage />}
-                />
-                <Route
-                  path="/schools/terms/:id/fees"
-                  element={<SchoolTermFees />}
-                />
-                <Route
-                  path="/schools/terms/:id/invoices"
-                  element={<SchoolTermInvoices />}
-                />
-                <Route
-                  path="/schools/accounts"
-                  element={<SchoolAccountsPage />}
-                />
-                <Route
-                  path="/schools/payments"
-                  element={<SchoolPaymentsPage />}
-                />
-                <Route
-                  path="/schools/receipts"
-                  element={<SchoolReceiptsPage />}
-                />
-                <Route
-                  path="/schools/debtors"
-                  element={<SchoolDebtorsPage />}
-                />
-                <Route
-                  path="/schools/clearance"
-                  element={<SchoolClearancePage />}
-                />
-                <Route
-                  path="/schools/overview"
-                  element={<SchoolOverviewPage />}
-                />
-                <Route path="/schools/gate" element={<SchoolGatePage />} />
-                <Route
-                  path="/settings/schools"
-                  element={<SchoolSettingsPage />}
-                />
-                <Route path="/forms" element={<Forms />} />
-                <Route path="/forms/requests" element={<FormRequests />} />
-                <Route
-                  path="/forms/requests/:id"
-                  element={<FormRequestPage />}
-                />
-                <Route path="/forms/:id" element={<MemberForm />} />
-                <Route
-                  path="/forms/:id/submissions"
-                  element={<FormSubmissions />}
-                />
-                <Route path="/start" element={<Start />} />
-                <Route path="/start/guide" element={<Guide />} />
-                <Route path="/verify-email" element={<VerifyEmail />} />
-                <Route path="/link-chat" element={<LinkChat />} />
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/runs" element={<Runs />} />
-                <Route path="/runs/:id" element={<RunPage />} />
-                <Route path="/approvals" element={<Approvals />} />
-                <Route path="/connections" element={<Connections />} />
-                <Route path="/catalogue" element={<Catalogue />} />
-                <Route path="/settings" element={<Settings />} />
-                <Route path="/settings/billing" element={<Billing />} />
-                <Route
-                  path="/settings/payments"
-                  element={<PaymentsSettings />}
-                />
-                <Route path="/settings/keys" element={<Keys />} />
-                <Route
-                  path="/settings/notifications"
-                  element={<NotificationSettings />}
-                />
-                <Route path="/alerts" element={<Alerts />} />
-                <Route path="/audit" element={<Audit />} />
-                <Route path="/members" element={<Members />} />
-                <Route path="/policies" element={<Policies />} />
-                <Route path="/account" element={<Account />} />
-                <Route path="/handoff" element={<Handoff />} />
-                <Route path="/reports" element={<Reports />} />
-                <Route
-                  path="*"
-                  element={
-                    <EmptyState icon="search">
-                      There is no page at this address.
-                    </EmptyState>
-                  }
-                />
-              </Routes>
+              {off ? (
+                <AreaOff area={off} owner={me.roles.includes("owner")} />
+              ) : (
+                <Routes>
+                  <Route path="/" element={<Navigate to="/home" replace />} />
+                  <Route path="/home" element={<Home />} />
+                  <Route path="/workflows" element={<Workflows />} />
+                  <Route path="/workflows/new" element={<NewWorkflow />} />
+                  <Route path="/workflows/:id" element={<Editor />} />
+                  <Route path="/templates" element={<Templates />} />
+                  <Route path="/tables" element={<Tables />} />
+                  <Route path="/tables/:id" element={<TablePage />} />
+                  <Route path="/storefront" element={<Storefront />} />
+                  <Route path="/storefront/look" element={<Look />} />
+                  <Route
+                    path="/storefront/fronts"
+                    element={<StorefrontFronts />}
+                  />
+                  <Route
+                    path="/storefront/fronts/:id"
+                    element={<StorefrontFront />}
+                  />
+                  <Route
+                    path="/storefront/orders"
+                    element={<StorefrontOrders />}
+                  />
+                  <Route
+                    path="/storefront/orders/:reference"
+                    element={<StorefrontOrder />}
+                  />
+                  <Route
+                    path="/storefront/bookings"
+                    element={<StorefrontBookings />}
+                  />
+                  <Route
+                    path="/storefront/riders"
+                    element={<StorefrontRiders />}
+                  />
+                  <Route
+                    path="/storefront/riders/pay"
+                    element={<RidersPayPage />}
+                  />
+                  <Route
+                    path="/storefront/deliveries"
+                    element={<StorefrontDeliveries />}
+                  />
+                  <Route
+                    path="/storefront/stock"
+                    element={<StorefrontStock />}
+                  />
+                  <Route path="/chat" element={<ChatPage />} />
+                  <Route
+                    path="/settings/links"
+                    element={<LinkedBusinessesPage />}
+                  />
+                  <Route path="/l/:code" element={<LinkCodePage />} />
+                  <Route path="/bills" element={<BillsPage />} />
+                  <Route path="/bills/:id" element={<BillPage />} />
+                  <Route path="/trade-orders" element={<TradeOrdersPage />} />
+                  <Route
+                    path="/trade-orders/:id"
+                    element={<TradeOrderPage />}
+                  />
+                  <Route path="/purchases/:id" element={<PurchasePage />} />
+                  <Route
+                    path="/links/:id/statement"
+                    element={<StatementPage />}
+                  />
+                  <Route
+                    path="/storefront/price-lists"
+                    element={<StorefrontPriceLists />}
+                  />
+                  <Route
+                    path="/storefront/suppliers/:link/prices"
+                    element={<SupplierPricesPage />}
+                  />
+                  <Route
+                    path="/storefront/suppliers"
+                    element={<StorefrontSuppliers />}
+                  />
+                  <Route path="/invoices" element={<Invoices />} />
+                  <Route path="/invoices/new" element={<InvoiceNew />} />
+                  <Route
+                    path="/invoices/settings"
+                    element={<InvoiceSettingsPage />}
+                  />
+                  <Route path="/invoices/match" element={<InvoiceMatch />} />
+                  <Route path="/invoices/:id" element={<InvoicePage />} />
+                  <Route path="/invoices/:id/edit" element={<InvoiceEdit />} />
+                  <Route path="/money" element={<MoneyOverview />} />
+                  <Route path="/money/leaks" element={<MoneyLeaks />} />
+                  <Route
+                    path="/money/statements"
+                    element={<MoneyStatements />}
+                  />
+                  <Route path="/money/entries" element={<MoneyEntries />} />
+                  <Route path="/money/fees" element={<MoneyFees />} />
+                  <Route path="/schools" element={<Schools />} />
+                  <Route path="/schools/import" element={<SchoolImport />} />
+                  <Route
+                    path="/schools/students/new"
+                    element={<SchoolStudentNew />}
+                  />
+                  <Route
+                    path="/schools/students/:id"
+                    element={<SchoolStudentPage />}
+                  />
+                  <Route
+                    path="/schools/families"
+                    element={<SchoolFamilies />}
+                  />
+                  <Route path="/schools/classes" element={<SchoolClasses />} />
+                  <Route
+                    path="/schools/sessions/:id/promotion"
+                    element={<SchoolPromotionPage />}
+                  />
+                  <Route
+                    path="/schools/terms/:id/fees"
+                    element={<SchoolTermFees />}
+                  />
+                  <Route
+                    path="/schools/terms/:id/invoices"
+                    element={<SchoolTermInvoices />}
+                  />
+                  <Route
+                    path="/schools/accounts"
+                    element={<SchoolAccountsPage />}
+                  />
+                  <Route
+                    path="/schools/payments"
+                    element={<SchoolPaymentsPage />}
+                  />
+                  <Route
+                    path="/schools/receipts"
+                    element={<SchoolReceiptsPage />}
+                  />
+                  <Route
+                    path="/schools/debtors"
+                    element={<SchoolDebtorsPage />}
+                  />
+                  <Route
+                    path="/schools/clearance"
+                    element={<SchoolClearancePage />}
+                  />
+                  <Route
+                    path="/schools/overview"
+                    element={<SchoolOverviewPage />}
+                  />
+                  <Route path="/schools/gate" element={<SchoolGatePage />} />
+                  <Route
+                    path="/settings/schools"
+                    element={<SchoolSettingsPage />}
+                  />
+                  <Route path="/forms" element={<Forms />} />
+                  <Route path="/forms/requests" element={<FormRequests />} />
+                  <Route
+                    path="/forms/requests/:id"
+                    element={<FormRequestPage />}
+                  />
+                  <Route path="/forms/:id" element={<MemberForm />} />
+                  <Route
+                    path="/forms/:id/submissions"
+                    element={<FormSubmissions />}
+                  />
+                  <Route path="/start" element={<Start />} />
+                  <Route path="/start/guide" element={<Guide />} />
+                  <Route path="/verify-email" element={<VerifyEmail />} />
+                  <Route path="/link-chat" element={<LinkChat />} />
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/runs" element={<Runs />} />
+                  <Route path="/runs/:id" element={<RunPage />} />
+                  <Route path="/approvals" element={<Approvals />} />
+                  <Route path="/connections" element={<Connections />} />
+                  <Route path="/catalogue" element={<Catalogue />} />
+                  <Route path="/settings" element={<Settings />} />
+                  <Route path="/settings/billing" element={<Billing />} />
+                  <Route path="/settings/areas" element={<Areas />} />
+                  <Route
+                    path="/settings/payments"
+                    element={<PaymentsSettings />}
+                  />
+                  <Route path="/settings/keys" element={<Keys />} />
+                  <Route
+                    path="/settings/notifications"
+                    element={<NotificationSettings />}
+                  />
+                  <Route path="/alerts" element={<Alerts />} />
+                  <Route path="/audit" element={<Audit />} />
+                  <Route path="/members" element={<Members />} />
+                  <Route path="/policies" element={<Policies />} />
+                  <Route path="/account" element={<Account />} />
+                  <Route path="/handoff" element={<Handoff />} />
+                  <Route path="/reports" element={<Reports />} />
+                  <Route
+                    path="*"
+                    element={
+                      <EmptyState icon="search">
+                        There is no page at this address.
+                      </EmptyState>
+                    }
+                  />
+                </Routes>
+              )}
             </PageBoundary>
           </div>
         </main>

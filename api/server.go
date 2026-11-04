@@ -478,6 +478,12 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/fronts", s.addFront)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Patch("/storefront/fronts/{id}", s.patchFront)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Delete("/storefront/fronts/{id}", s.deleteFront)
+			// A front's items, edited in place (storefront_front_items.go).
+			r.With(s.need(PermStorefrontManage)).Get("/storefront/fronts/{id}/items", s.listFrontItems)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/fronts/{id}/items", s.addFrontItem)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Patch("/storefront/fronts/{id}/items/{row}", s.patchFrontItem)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Delete("/storefront/fronts/{id}/items/{row}", s.deleteFrontItem)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/fronts/{id}/items/{row}/photo", s.setFrontItemPhoto)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/fronts/{id}/actions", s.addFrontAction)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/storefront/actions/{id}/form", s.putActionForm)
 			r.With(s.need(PermStorefrontManage), s.need(PermWorkflowEdit), s.tenantWide).Post("/storefront/actions/{kind}/setup", s.setupAction)
@@ -623,6 +629,8 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermWorkflowEdit)).Post("/sheets/resolve", s.resolveSpreadsheet)
 			r.Get("/settings/advanced", s.getAdvanced) // the Advanced switch (advanced.go)
 			r.With(s.need(PermMemberManage)).Put("/settings/advanced", s.putAdvanced)
+			r.Get("/settings/areas", s.getAreas) // which parts of Taskiem the business uses (areas.go)
+			r.With(s.tenantWide).Put("/settings/areas", s.putAreas)
 			r.Get("/settings/schools", s.getSchoolSettings) // the Schools area's switch (schools.go)
 			r.With(s.tenantWide).Put("/settings/schools", s.putSchoolSettings)
 			r.With(s.tenantWide).Post("/settings/schools/wallet", s.createSchoolWallet) // the school's wallet (schools_wallet.go)
@@ -869,6 +877,10 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 		writeErr(w, http.StatusBadRequest, strings.TrimPrefix(err.Error(), "bad request: "))
 	case errors.Is(err, errForbidden):
 		writeErr(w, http.StatusForbidden, strings.TrimPrefix(err.Error(), "forbidden: "))
+	case errors.As(err, new(*links.OtherOffError)):
+		var oo *links.OtherOffError
+		errors.As(err, &oo)
+		writeErr(w, http.StatusConflict, oo.Error())
 	case errors.Is(err, errConflict):
 		writeErr(w, http.StatusConflict, strings.TrimPrefix(err.Error(), "conflict: "))
 	case errors.Is(err, errGone):

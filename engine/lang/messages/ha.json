@@ -228,6 +228,14 @@
       "text": "{name}: odar ku {reference} ta shirya.",
       "reviewed": false
     },
+    "invoice.pay_unavailable_title": {
+      "text": "A customer could not pay online",
+      "reviewed": false
+    },
+    "invoice.pay_unavailable": {
+      "text": "A customer tried to pay {what} by {how}, but no payments service of yours can do that, so they were asked to pay you directly. Connect Paystack, Flutterwave, OPay or another payments service under Connections, and they can pay online.",
+      "reviewed": false
+    },
     "invoice.chat.account": {
       "text": "Ku biya {amount} na invoice {number} ta bank transfer zuwa:\nLambar asusu: {account}\nBanki: {bank}\nSunan asusu: {name}\nTana aiki har zuwa {until}. Ku yi amfani da ita don wannan biyan kawai.",
       "reviewed": false
@@ -1850,6 +1858,18 @@
     },
     "wa.invoice.confirm": {
       "text": "In aika wa {name} ({to}) takardar kuɗi ta {amount}: {for}?",
+      "reviewed": false
+    },
+    "wa.invoice.confirm_linked": {
+      "text": "Send {name}, a business on Taskiem you are linked with, an invoice for {amount}: {for}? It goes into their bills.",
+      "reviewed": false
+    },
+    "wa.invoice.sent_linked": {
+      "text": "Sent {number} to {name}'s bills on Taskiem for {amount}. You can see it under Invoices in the web app.",
+      "reviewed": false
+    },
+    "wa.invoice.pick_linked": {
+      "text": "Which {name} do you mean?\n{list}\nReply with its number, or send a phone number or email to invoice someone else.",
       "reviewed": false
     },
     "wa.invoice.confirm_reminder": {

@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/areas"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/links"
@@ -195,6 +196,9 @@ type chat struct {
 	lang langChoice
 	// note goes before the next reply (a voice note's transcript).
 	note string
+	// areaState is which parts of Taskiem the business uses, read once for
+	// a message (chatAreas).
+	areaState areas.State
 	// blocked is the draft waiting for a connection, while this message is
 	// read (connect_links.go).
 	blocked uuid.UUID
@@ -719,12 +723,17 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		return c.say(ctx, s, c.t("wa.confirm_reminder", "workflow", c.data.Name), confirmButtons(c)...)
 	}
 	if c.state == stateIdle {
-		if done, err := s.waBookingCommand(ctx, c, cmd); done || err != nil {
+		// What the business turned off is not a command here: its words pass
+		// on as ordinary chat (docs/spec/business-areas.md).
+		on := s.chatAreas(ctx, c)
+		if !on.On(areas.Storefront) {
+			// no booking words
+		} else if done, err := s.waBookingCommand(ctx, c, cmd); done || err != nil {
 			return err
 		}
 		// A message to a linked business (link_chat.go): "ask Dangote …",
 		// before the tables' "ask …": words naming no linked business pass on.
-		if f := strings.Fields(text); len(f) > 1 && strings.EqualFold(f[0], "ask") {
+		if f := strings.Fields(text); len(f) > 1 && strings.EqualFold(f[0], "ask") && on.On(areas.Links) {
 			if done, err := s.waAskLinked(ctx, c, strings.Join(f[1:], " ")); done || err != nil {
 				return err
 			}
@@ -735,26 +744,32 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		if done, err := s.waAskCommand(ctx, c, text, cmd); done || err != nil {
 			return err
 		}
-		if done, err := s.waShopCommand(ctx, c, text, cmd); done || err != nil {
-			return err
+		if on.On(areas.Storefront) || on.On(areas.Stock) {
+			if done, err := s.waShopCommand(ctx, c, text, cmd); done || err != nil {
+				return err
+			}
 		}
-		if done, err := s.waRidersCommand(ctx, c, text, cmd); done || err != nil {
-			return err
+		if on.On(areas.Storefront) {
+			if done, err := s.waRidersCommand(ctx, c, text, cmd); done || err != nil {
+				return err
+			}
 		}
-		// A linked supplier's bills (bills.go): "bill INV-0042" before the
-		// invoice words, which need a name and an amount.
-		if done, err := s.waBillCommand(ctx, c, text, cmd); done || err != nil {
-			return err
-		}
-		if done, err := s.waInvoiceCommand(ctx, c, text, cmd); done || err != nil {
-			return err
-		}
-		// The debtor book: owes, paid, who owes me (chat_debtors.go).
-		if done, err := s.waDebtCommand(ctx, c, text, cmd); done || err != nil {
-			return err
-		}
-		if done, err := s.waMoneyCommand(ctx, c, text); done || err != nil {
-			return err
+		if on.On(areas.Money) {
+			// A linked supplier's bills (bills.go): "bill INV-0042" before the
+			// invoice words, which need a name and an amount.
+			if done, err := s.waBillCommand(ctx, c, text, cmd); done || err != nil {
+				return err
+			}
+			if done, err := s.waInvoiceCommand(ctx, c, text, cmd); done || err != nil {
+				return err
+			}
+			// The debtor book: owes, paid, who owes me (chat_debtors.go).
+			if done, err := s.waDebtCommand(ctx, c, text, cmd); done || err != nil {
+				return err
+			}
+			if done, err := s.waMoneyCommand(ctx, c, text); done || err != nil {
+				return err
+			}
 		}
 		if done, err := s.waReceiveCommand(ctx, c, cmd); done || err != nil {
 			return err
@@ -764,7 +779,7 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 			return err
 		}
 		// The same in the person's language (English's are read above).
-		if matched && m.Language != lang.EN {
+		if matched && m.Language != lang.EN && chatIntentOn(on, m.Intent) {
 			switch m.Intent {
 			case lang.IntentInvoice:
 				if done, err := s.waInvoiceWords(ctx, c, m); done || err != nil {
@@ -838,8 +853,10 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 			return s.waInvite(ctx, c, text)
 		}
 		// Other businesses on Taskiem (chat_links.go).
-		if done, err := s.waLinkCommand(ctx, c, text, cmd); done || err != nil {
-			return err
+		if on.On(areas.Links) {
+			if done, err := s.waLinkCommand(ctx, c, text, cmd); done || err != nil {
+				return err
+			}
 		}
 		// An email of one's own, and paying with one (chat_doors.go).
 		if f := strings.Fields(text); len(f) == 2 && strings.Contains(f[1], "@") {
@@ -894,6 +911,11 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 // waIntent does what a recognised command asks; false when it is not one
 // to act on here (yes or no with nothing to confirm, run without a name).
 func (s *Server) waIntent(ctx context.Context, c *chat, m lang.Match) (bool, error) {
+	// A command of a part of Taskiem the business turned off is not one
+	// (docs/spec/business-areas.md).
+	if !chatIntentOn(s.chatAreas(ctx, c), m.Intent) {
+		return false, nil
+	}
 	arg := strings.TrimSpace(m.Arg)
 	switch m.Intent {
 	case lang.IntentHelp:

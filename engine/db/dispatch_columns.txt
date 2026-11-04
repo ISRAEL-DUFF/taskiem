@@ -87,6 +87,9 @@ bills.source_id
 bills.supplier_tenant
 bills.tenant_id
 bills.voided
+business_areas.area
+business_areas.enabled
+business_areas.tenant_id
 business_links.a_blocked
 business_links.a_tenant
 business_links.answered_actor

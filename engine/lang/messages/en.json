@@ -284,6 +284,16 @@
       "reviewed": true,
       "context": "SMS to a customer: the owner said the order is ready"
     },
+    "invoice.pay_unavailable_title": {
+      "text": "A customer could not pay online",
+      "reviewed": true,
+      "context": "the bell and chat: a customer tried to pay an invoice online and no payments connection could do it"
+    },
+    "invoice.pay_unavailable": {
+      "text": "A customer tried to pay {what} by {how}, but no payments service of yours can do that, so they were asked to pay you directly. Connect Paystack, Flutterwave, OPay or another payments service under Connections, and they can pay online.",
+      "reviewed": true,
+      "context": "what the business must do about it; {what} is the invoice or order, {how} bank transfer or card"
+    },
     "invoice.chat.account": {
       "text": "Pay {amount} for invoice {number} by bank transfer to:\nAccount number: {account}\nBank: {bank}\nAccount name: {name}\nValid until {until}. Use it for this payment only.",
       "reviewed": true,
@@ -2313,6 +2323,21 @@
       "text": "Send {name} ({to}) an invoice for {amount}: {for}?",
       "reviewed": true,
       "context": "the invoice shown before sending; {to} is masked"
+    },
+    "wa.invoice.confirm_linked": {
+      "text": "Send {name}, a business on Taskiem you are linked with, an invoice for {amount}: {for}? It goes into their bills.",
+      "reviewed": true,
+      "context": "the invoice shown before sending to a linked business, no address needed"
+    },
+    "wa.invoice.sent_linked": {
+      "text": "Sent {number} to {name}'s bills on Taskiem for {amount}. You can see it under Invoices in the web app.",
+      "reviewed": true,
+      "context": "the invoice was sent to a linked business"
+    },
+    "wa.invoice.pick_linked": {
+      "text": "Which {name} do you mean?\n{list}\nReply with its number, or send a phone number or email to invoice someone else.",
+      "reviewed": true,
+      "context": "several linked businesses fit the name"
     },
     "wa.invoice.confirm_reminder": {
       "text": "Reply *yes* to send the invoice or *no* to leave it.",

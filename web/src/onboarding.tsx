@@ -1,7 +1,8 @@
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { get } from "./api";
-import { HELP, helpLink, type HelpTopic, type Onboarding } from "./lib/onboarding";
+import { useAuth } from "./auth";
+import { forAreas, HELP, helpLink, type HelpTopic, type Onboarding } from "./lib/onboarding";
 import { useLoad } from "./ui";
 
 // The tenant's getting-started state (GET /v1/onboarding), shared by the
@@ -17,7 +18,9 @@ const OnboardingCtx = createContext<Ctx>({ data: undefined, reload: () => undefi
 
 export function OnboardingProvider({ children }: { children: ReactNode }) {
   const loc = useLocation();
-  const { data, reload } = useLoad(() => get<Onboarding>("/v1/onboarding"), [loc.pathname]);
+  const { me } = useAuth();
+  const { data: loaded, reload } = useLoad(() => get<Onboarding>("/v1/onboarding"), [loc.pathname]);
+  const data = useMemo(() => loaded && forAreas(loaded, me?.areas), [loaded, me?.areas]);
   return <OnboardingCtx.Provider value={{ data, reload }}>{children}</OnboardingCtx.Provider>;
 }
 

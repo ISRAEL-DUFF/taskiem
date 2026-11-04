@@ -143,6 +143,9 @@ func (s *Server) listTemplates(w http.ResponseWriter, r *http.Request) {
 	// The sheet-based stock and sales templates give way, for a business
 	// keeping stock in a table or recording sales, to stock's own (K5).
 	list = templates.For(list, s.templateHolds(r.Context(), principalFrom(r.Context()).TenantID))
+	// A template of a part of Taskiem the business turned off is not offered
+	// (docs/spec/business-areas.md): it would stop at its first step.
+	list = s.templatesOfAreasOn(r.Context(), principalFrom(r.Context()).TenantID, list)
 	if r.URL.Query().Get("callable") == "true" {
 		var kept []*templates.Template
 		for _, t := range list {

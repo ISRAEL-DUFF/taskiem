@@ -255,6 +255,10 @@ type Invoices struct {
 	// OrderReceived counts a payment the checker found into an order's
 	// account towards the order. Without them, orders' requests are
 	// dropped and their accounts only checked.
+	// PayUnavailable, when set, tells the business that a customer asked to
+	// pay online and no payments connection could do it (once for each
+	// invoice, order or customer page and kind): they have to connect one.
+	PayUnavailable func(ctx context.Context, q Request, cause error)
 	OrderRequested func(ctx context.Context, tenant, order uuid.UUID) error
 	OrderReceived  func(ctx context.Context, tenant, order uuid.UUID, r Received) error
 	// LinkReceived counts a payment the checker found through a

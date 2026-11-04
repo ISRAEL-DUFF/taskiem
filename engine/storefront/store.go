@@ -278,6 +278,27 @@ func CloseUntil(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, message string
 	return s, err
 }
 
+// AreaClosedMessage is what the page says while the business has the
+// online shop turned off (docs/spec/business-areas.md).
+const AreaClosedMessage = "This shop is not taking orders at the moment."
+
+// CloseForArea closes the page because the shop was turned off, with
+// AreaClosedMessage; a business with no published page has nothing to close.
+func CloseForArea(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) error {
+	// Only a page that is open: one its owner closed keeps its own message.
+	_, err := tx.Exec(ctx, `UPDATE storefronts SET status = 'closed', closed_message = $2, reopen_at = NULL, updated_at = now()
+		WHERE tenant_id = $1 AND status = 'published'`, tenant, AreaClosedMessage)
+	return err
+}
+
+// ReopenForArea opens the page again when the shop is turned back on, but
+// only if the area closed it: a page its owner closed stays closed.
+func ReopenForArea(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) error {
+	_, err := tx.Exec(ctx, `UPDATE storefronts SET status = 'published', closed_message = NULL, reopen_at = NULL, updated_at = now()
+		WHERE tenant_id = $1 AND status = 'closed' AND closed_message = $2`, tenant, AreaClosedMessage)
+	return err
+}
+
 // Reopen undoes Close.
 func Reopen(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (Storefront, error) {
 	s, err := scan(tx.QueryRow(ctx, `UPDATE storefronts SET status = 'published', closed_message = NULL, reopen_at = NULL, updated_at = now()

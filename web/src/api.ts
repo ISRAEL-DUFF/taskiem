@@ -189,6 +189,12 @@ async function request<T>(
   return data as T;
 }
 
+/** A part of Taskiem the business turned off answers 404 with area_off.
+ * For a request that is only an extra on a page, that reads as `fallback`. */
+export function whenOff<T>(p: Promise<T>, fallback: T): Promise<T> {
+  return p.catch((e: unknown) => (e instanceof ApiError && e.status === 404 && e.body.area_off ? fallback : Promise.reject(e)));
+}
+
 /** A unit both an edit and a newer version changed (409 from saving a version). */
 export interface MergeConflict {
   path: string;
@@ -286,6 +292,8 @@ export interface Me {
   tenant_name?: string;
   /** Whether the business has the Schools area on (docs/schools.md). */
   schools?: boolean;
+  /** Which parts of Taskiem the business uses, by area (docs/spec/business-areas.md). */
+  areas?: Partial<Record<"storefront" | "orders" | "stock" | "money" | "links" | "schools", boolean>>;
   /** A gate session: the gate screen only; the server refuses the rest. */
   gate_only?: boolean;
   /** Terms the person has not answered yet: asked once (POST /v1/me/terms). */

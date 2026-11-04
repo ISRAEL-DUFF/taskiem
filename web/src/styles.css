@@ -448,6 +448,7 @@ a.list-row:hover { background: var(--panel-2); text-decoration: none; }
 .list-icon { width: 40px; height: 40px; border-radius: 12px; flex: none; display: grid; place-items: center; background: var(--tint); color: var(--tint-text); }
 .list-icon.warn { background: var(--tint-warn); color: var(--tint-warn-text); }
 .list-icon svg { width: 20px; height: 20px; }
+.list-icon img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block; }
 .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--ok); }
 .dot.failed { background: var(--danger); }
 .dot.waiting, .dot.running, .dot.queued { background: var(--info); }

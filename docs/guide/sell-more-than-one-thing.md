@@ -37,7 +37,7 @@ The words are the same for the others: *add dish …* for Food, *turn on booking
 
 ## On the web
 
-**Storefront > Fronts** shows your fronts. **Add a front** asks the name and the kind; each front has its own page with its items, its forms (**Set up** makes a form's workflow) and **Turn on**.
+**Storefront > Fronts** shows your fronts. **Add a front** asks the name and the kind; each front has its own page where you **Add an item** (name, price, photo), hide, change or remove items, and its forms (**Set up** makes a form's workflow) and **Turn on**. Customers tap an item to see it and **Add to order**; if orders are not on yet, the front's page shows **Turn on orders**.
 
 ## Good to know
 

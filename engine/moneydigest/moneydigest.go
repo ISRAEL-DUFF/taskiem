@@ -41,6 +41,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/access"
 	"github.com/israel-duff/taskiem/engine/alerts"
+	"github.com/israel-duff/taskiem/engine/areas"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/lang"
@@ -164,6 +165,10 @@ func (d *Digester) Tick(ctx context.Context) (Report, error) {
 	}
 	tenants, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
 	if err != nil {
+		return r, err
+	}
+	// Only businesses that use Money (docs/spec/business-areas.md).
+	if tenants, err = areas.Only(ctx, d.Pool, tenants, areas.Money); err != nil {
 		return r, err
 	}
 	// One business's failure is logged and tried again at the next look;

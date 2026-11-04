@@ -162,6 +162,8 @@ func (s *Server) payWays(ctx context.Context, pay InvoicePay, tokenHash []byte, 
 				v.Note, v.TransferLabel = "The last account number has expired. If you already paid into it, your payment will still show here.", "Get a new account number"
 			case o.Status == "failed":
 				v.Note = "We could not get an account number just now. Please try again in a few minutes."
+			case o.Status == "unavailable":
+				v.Note, v.TransferLabel = unavailableNote(what, business), "Try again"
 			}
 			if limited {
 				v.TransferLabel = ""
@@ -179,6 +181,11 @@ func (s *Server) payWays(ctx context.Context, pay InvoicePay, tokenHash []byte, 
 				v.CardURL, v.CardLabel = o.PaymentURL, "Continue to card payment"
 			case o.Status == "failed" && v.Note == "":
 				v.Note = "Card payment is not available for " + what + " just now."
+			case o.Status == "unavailable":
+				if v.Note == "" {
+					v.Note = unavailableNote(what, business)
+				}
+				v.CardLabel = "Try card payment again"
 			}
 			if limited && v.CardURL == "" {
 				v.CardLabel = ""
@@ -199,6 +206,13 @@ func (s *Server) payWays(ctx context.Context, pay InvoicePay, tokenHash []byte, 
 		}
 	}
 	return v, refresh, nil
+}
+
+// unavailableNote is what a page says when the business has no payments
+// connection that can open an account number or a card page: said, rather
+// than leaving the customer wondering whether the button worked.
+func unavailableNote(what, business string) string {
+	return "Online payment is not set up for " + what + " yet. Please pay " + business + " directly, or try again later."
 }
 
 var lateWords = map[string]string{

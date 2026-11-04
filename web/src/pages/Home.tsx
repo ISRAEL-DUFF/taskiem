@@ -9,6 +9,7 @@ import { moneyToday, ordersToday, runWords, triggerWords } from "../lib/home";
 import type { Order } from "../lib/orders";
 import { formatPrice } from "../lib/storefront";
 import { greeting, shortWhen } from "../lib/time";
+import { areaOn } from "../lib/areas";
 import { ErrorBox, Skeleton, useCountUp, useLiveRefresh, useLoad } from "../ui";
 import type { FormRequest } from "./FormFill";
 import { Decide } from "./Approvals";
@@ -27,7 +28,8 @@ const orNull = <T,>(p: Promise<T>) => p.catch((e: unknown) => (e instanceof ApiE
 export function Home() {
   const { me, can } = useAuth();
   const onboarding = useOnboarding().data;
-  const shop = can("storefront.manage");
+  // A part the business turned off is not asked for (docs/spec/business-areas.md).
+  const shop = can("storefront.manage") && areaOn(me?.areas, "orders");
   const runsOK = can("run.read");
   const orders = useLoad(() => (shop ? orNull(get<{ orders: Order[] }>("/v1/storefront/orders?limit=200")) : none<{ orders: Order[] }>()), [shop]);
   const runs = useLoad(() => (runsOK ? get<{ runs: RunSummary[] }>("/v1/runs?limit=6") : none<{ runs: RunSummary[] }>()), [runsOK]);
@@ -40,7 +42,7 @@ export function Home() {
   const toFill = useLoad(() => get<{ requests: FormRequest[] }>("/v1/form-requests").catch(() => ({ requests: [] })), []);
   const workflows = useLoad(() => (can("workflow.read") ? get<{ workflows: WorkflowSummary[] }>(`/v1/workflows?tz=${encodeURIComponent(tz)}`) : none<{ workflows: WorkflowSummary[] }>()), []);
   // Money in today from the money log, for people who may see the business's money.
-  const moneyOK = invoiceAccess(can).see;
+  const moneyOK = invoiceAccess(can).see && areaOn(me?.areas, "money");
   const day = useLoad(() => (moneyOK ? get<MoneySummary>(SUMMARY_PATH) : none<MoneySummary>()), [moneyOK]);
   const unmatched = useLoad(
     () => (moneyOK ? get<{ payments: UnmatchedMoney[] | null }>(UNMATCHED_PATH).catch(() => ({ payments: [] })) : none<{ payments: UnmatchedMoney[] | null }>()),

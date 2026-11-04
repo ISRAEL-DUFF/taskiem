@@ -708,6 +708,9 @@ test("the audio is unlocked by the person's first click, so a ping can be heard"
       () => (window as unknown as { __resumed: number }).__resumed,
     );
   expect(await resumed()).toBe(0);
+  // The first click counts once the page has started: wait for it to show.
+  await expect(buyer.locator("#main")).toBeVisible();
+  await expect(buyer.getByRole("heading", { level: 1 }).first()).toBeVisible();
   await buyer.mouse.click(600, 400);
   await expect.poll(resumed).toBeGreaterThan(0);
 });
