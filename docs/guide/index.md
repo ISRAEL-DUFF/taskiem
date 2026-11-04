@@ -15,6 +15,7 @@ Plain how-tos for running your business on Taskiem: no code and no technical ste
 - [Keep your records in chat](keep-your-records-in-chat.md): your lists, who owes you, and questions about them, from WhatsApp or Telegram, in your language.
 - [Changing a workflow](changing-a-workflow.md): when it runs, values from earlier steps, and "run only when".
 - [What your business uses](what-your-business-uses.md): turn on only the parts you need (shop, orders, stock, money and invoices, linked businesses, schools), and what happens when you turn one off.
+- [Bill subscribers every month](bill-subscribers.md): for an internet provider or any service paid monthly: invoices, renewal reminders, switching off and on, and outage notices.
 - [Settings](settings.md): the settings your workflows read, and the Advanced switch.
 - [Your own domain](own-domain.md): your page on a domain you own, step by step for your registrar.
 - [On your website](your-website.md): your page on a website you already have, and sending the details to your web designer.

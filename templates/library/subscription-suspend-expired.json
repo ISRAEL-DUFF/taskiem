@@ -1,0 +1,288 @@
+{
+  "id": "subscription-suspend-expired",
+  "title": "Switch off subscribers who have not renewed",
+  "summary": "Every day, list the active subscribers whose renewal date passed by your grace days, ask you to approve, then switch them off on your system and tell them.",
+  "description": "Once a day, finds the active subscribers whose 'Renews on' date is past by more than the grace days you choose. If there are any, you get one request listing them, and nothing happens until you approve it. When you approve, each one is switched off by calling the address your system gives for that, marked suspended in your subscribers table, and sent a text saying why and how to pay. Put the key your system gives you in Settings as a secret named billing_system_key, and allow your system's address there first (both are under Settings: turn Advanced on to see the list of allowed addresses). Your system must be reachable on the internet.",
+  "category": "subscriptions",
+  "tags": [
+    "subscriptions",
+    "suspend",
+    "approval",
+    "overdue",
+    "customers"
+  ],
+  "keywords": [
+    "suspend",
+    "switch off",
+    "cut off",
+    "disconnect",
+    "expired",
+    "expiry",
+    "overdue",
+    "unpaid",
+    "subscription",
+    "subscriber",
+    "internet",
+    "isp",
+    "broadband",
+    "grace"
+  ],
+  "requires": [
+    "subscribers",
+    "suspend",
+    "disconnect",
+    "switch off"
+  ],
+  "connectors": [
+    "xenibase@1",
+    "notify@1"
+  ],
+  "params": [
+    {
+      "name": "business_name",
+      "type": "string",
+      "title": "Business name",
+      "description": "How your customers know you; it starts every message.",
+      "required": true,
+      "example": "Fibre Link",
+      "max_length": 60
+    },
+    {
+      "name": "grace_days",
+      "type": "integer",
+      "title": "Grace days",
+      "description": "How many days after the renewal date a subscriber keeps their service before you are asked to switch them off.",
+      "required": true,
+      "default": 3,
+      "example": 3,
+      "minimum": 0,
+      "maximum": 60
+    },
+    {
+      "name": "suspend_address",
+      "type": "string",
+      "title": "Address on your system",
+      "description": "The address your system gives for switching one customer off. Taskiem sends it the customer's account.",
+      "required": true,
+      "example": "https://billing.example.com/api/suspend",
+      "max_length": 200
+    },
+    {
+      "name": "approver_role",
+      "type": "string",
+      "title": "Who approves",
+      "description": "The role that approves switching people off, such as manager.",
+      "required": false,
+      "default": "owner",
+      "example": "manager",
+      "picker": "role"
+    },
+    {
+      "name": "payment_details",
+      "type": "string",
+      "title": "How to pay",
+      "description": "Added to the text each person gets, for example your account number and bank.",
+      "required": true,
+      "example": "Pay to 0123456789, GTBank, and your service comes back.",
+      "max_length": 160
+    },
+    {
+      "name": "send_time",
+      "type": "time",
+      "title": "Time",
+      "description": "When it looks for expired subscribers, Lagos time.",
+      "required": true,
+      "default": "08:30",
+      "example": "08:30"
+    },
+    {
+      "name": "subscribers_table",
+      "type": "string",
+      "title": "Subscribers table",
+      "description": "Your subscribers: name, phone, plan, price each month, when it renews and whether they are active. Taskiem makes it for you if it does not exist.",
+      "required": false,
+      "default": "subscribers",
+      "example": "subscribers",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$",
+      "picker": "table"
+    }
+  ],
+  "tables": [
+    {
+      "known": "subscribers",
+      "name": "{{subscribers_table}}"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_subscriptionSuspendExpired",
+    "version": 1,
+    "name": "Switch off subscribers who have not renewed",
+    "description": "After your approval, switches off the subscribers whose plan expired and tells them.",
+    "trigger": {
+      "type": "schedule",
+      "config": {
+        "cron": "{{send_time:minute}} {{send_time:hour}} * * *",
+        "timezone": "Africa/Lagos"
+      }
+    },
+    "steps": [
+      {
+        "id": "settings",
+        "type": "transform",
+        "name": "Use your business name and payment details",
+        "config": {
+          "output": {
+            "business_name": "{{business_name}}",
+            "payment_details": "{{payment_details}}"
+          }
+        }
+      },
+      {
+        "id": "read_subscribers",
+        "type": "connector",
+        "name": "Read the active subscribers",
+        "connector": "xenibase@1",
+        "action": "read_rows",
+        "connection": "data_tables",
+        "input": {
+          "table": "{{subscribers_table}}",
+          "filters": [
+            {
+              "column": "status",
+              "op": "eq",
+              "value": "active"
+            }
+          ],
+          "order": [
+            {
+              "column": "name"
+            }
+          ],
+          "limit": 1000
+        }
+      },
+      {
+        "id": "late",
+        "type": "transform",
+        "name": "Find who is past the grace days",
+        "needs": [
+          "read_subscribers"
+        ],
+        "config": {
+          "output": {
+            "people": "=(has(steps.read_subscribers.output.rows) ? steps.read_subscribers.output.rows : []).filter(r, has(r.renews_on) && r.renews_on != null && timestamp(string(r.renews_on)) + duration(string({{grace_days}} * 24) + 'h') < timestamp(has(trigger.scheduled_time) ? trigger.scheduled_time : run.started_at))"
+          }
+        }
+      },
+      {
+        "id": "ask",
+        "type": "approval",
+        "name": "Ask you to approve switching them off",
+        "needs": [
+          "late"
+        ],
+        "when": "=size(steps.late.output.people) > 0",
+        "config": {
+          "role": "{{approver_role}}",
+          "count": 1,
+          "timeout": "24h",
+          "on_timeout": "reject",
+          "subject": {
+            "switch_off": "=string(size(steps.late.output.people)) + ' subscribers'",
+            "who": "=steps.late.output.people.map(p, string(p.name)).join(', ')"
+          }
+        }
+      },
+      {
+        "id": "suspend_each",
+        "type": "foreach",
+        "name": "For each approved subscriber",
+        "needs": [
+          "settings",
+          "late",
+          "ask"
+        ],
+        "when": "=has(steps.ask.output.decision) && steps.ask.output.decision == 'approved'",
+        "config": {
+          "items": "=steps.late.output.people",
+          "max_concurrency": 2,
+          "max_items": 1000,
+          "steps": [
+            {
+              "id": "switch_off",
+              "type": "http",
+              "name": "Switch the customer off on your system",
+              "config": {
+                "method": "POST",
+                "url": "{{suspend_address}}",
+                "headers": {
+                  "Authorization": "='Bearer ' + secrets.billing_system_key"
+                },
+                "body": {
+                  "account": "=string(item.account_ref)",
+                  "action": "suspend"
+                },
+                "class": "idempotent_write",
+                "idempotency_header": "Idempotency-Key"
+              },
+              "when": "=has(item.account_ref) && item.account_ref != null && string(item.account_ref) != ''",
+              "effect": {
+                "idempotency_seed": "='suspend:' + string(item.phone) + ':' + string(item.renews_on)"
+              }
+            },
+            {
+              "id": "mark_suspended",
+              "type": "connector",
+              "name": "Mark them suspended in your table",
+              "connector": "xenibase@1",
+              "action": "update_rows",
+              "connection": "data_tables",
+              "needs": [
+                "switch_off"
+              ],
+              "input": {
+                "table": "{{subscribers_table}}",
+                "filters": [
+                  {
+                    "column": "phone",
+                    "op": "eq",
+                    "value": "=string(item.phone)"
+                  }
+                ],
+                "max_affected": 1,
+                "set": {
+                  "status": "suspended"
+                }
+              },
+              "effect": {
+                "idempotency_seed": "='suspended:' + string(item.phone) + ':' + string(item.renews_on)"
+              }
+            },
+            {
+              "id": "tell_them",
+              "type": "connector",
+              "name": "Text them why, and how to pay",
+              "connector": "notify@1",
+              "action": "text",
+              "needs": [
+                "mark_suspended"
+              ],
+              "when": "=has(item.phone) && item.phone != null && string(item.phone) != ''",
+              "input": {
+                "to": "=string(item.phone)",
+                "message": "=steps.settings.output.business_name + ': Hello ' + string(item.name) + ', your service has been switched off because it was not renewed. ' + steps.settings.output.payment_details"
+              },
+              "effect": {
+                "idempotency_seed": "='suspended-text:' + string(item.phone) + ':' + string(item.renews_on)"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "6h"
+    }
+  }
+}

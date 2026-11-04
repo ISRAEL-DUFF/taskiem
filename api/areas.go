@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/schools"
 	"github.com/israel-duff/taskiem/engine/storefront"
+	"github.com/israel-duff/taskiem/templates"
 )
 
 // Business areas (docs/spec/business-areas.md): which parts of Taskiem a
@@ -313,4 +315,39 @@ func chatIntentOn(on areas.State, in lang.Intent) bool {
 		return on.On(areas.Stock)
 	}
 	return true
+}
+
+// templatesOfAreasOn keeps the templates whose connectors and trigger belong
+// only to parts of Taskiem the business has on. A read that fails offers all.
+func (s *Server) templatesOfAreasOn(ctx context.Context, tenant uuid.UUID, list []*templates.Template) []*templates.Template {
+	var on areas.State
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) (err error) {
+		on, err = areas.Load(ctx, tx, tenant)
+		return err
+	}); err != nil {
+		return list
+	}
+	kept := make([]*templates.Template, 0, len(list))
+	for _, t := range list {
+		ok := true
+		for _, c := range t.Connectors {
+			if a, has := areas.ConnectorArea(c); has && !on.On(a) {
+				ok = false
+			}
+		}
+		var head struct {
+			Trigger struct {
+				Type string `json:"type"`
+			} `json:"trigger"`
+		}
+		if json.Unmarshal(t.Definition, &head) == nil {
+			if a, has := areas.TriggerArea(head.Trigger.Type); has && !on.On(a) {
+				ok = false
+			}
+		}
+		if ok {
+			kept = append(kept, t)
+		}
+	}
+	return kept
 }

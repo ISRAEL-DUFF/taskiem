@@ -1,0 +1,189 @@
+{
+  "id": "subscription-outage-notice",
+  "title": "Tell your subscribers about an outage",
+  "summary": "When your network tool reports a problem, text every active subscriber (or just one area) what is wrong.",
+  "description": "Your monitoring or network tool calls this workflow's web address with a message, and optionally an area. Every active subscriber in your subscribers table (only those in that area, when you name one) gets the message by SMS from your business. Call it again to say it is fixed. Each call is sent once, even if your tool repeats it.",
+  "category": "subscriptions",
+  "tags": [
+    "subscriptions",
+    "outage",
+    "sms",
+    "alerts",
+    "customers"
+  ],
+  "keywords": [
+    "outage",
+    "down",
+    "network",
+    "fault",
+    "problem",
+    "service",
+    "interruption",
+    "internet",
+    "isp",
+    "broadband",
+    "maintenance",
+    "notice",
+    "announce",
+    "announcement",
+    "subscribers",
+    "everyone"
+  ],
+  "requires": [
+    "subscribers",
+    "outage",
+    "network down"
+  ],
+  "connectors": [
+    "xenibase@1",
+    "notify@1"
+  ],
+  "params": [
+    {
+      "name": "business_name",
+      "type": "string",
+      "title": "Business name",
+      "description": "How your customers know you; it starts every message.",
+      "required": true,
+      "example": "Fibre Link",
+      "max_length": 60
+    },
+    {
+      "name": "path",
+      "type": "string",
+      "title": "Web address path",
+      "description": "The path your network tool calls.",
+      "required": false,
+      "default": "/network/notice",
+      "example": "/network/notice",
+      "pattern": "^/[A-Za-z0-9/_.-]{1,80}$"
+    },
+    {
+      "name": "subscribers_table",
+      "type": "string",
+      "title": "Subscribers table",
+      "description": "Your subscribers: name, phone, plan, price each month, when it renews and whether they are active. Taskiem makes it for you if it does not exist.",
+      "required": false,
+      "default": "subscribers",
+      "example": "subscribers",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$",
+      "picker": "table"
+    }
+  ],
+  "tables": [
+    {
+      "known": "subscribers",
+      "name": "{{subscribers_table}}"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_subscriptionOutageNotice",
+    "version": 1,
+    "name": "Tell your subscribers about an outage",
+    "description": "Texts every active subscriber, or those in one area, the message your network tool sends.",
+    "trigger": {
+      "type": "webhook",
+      "config": {
+        "path": "{{path}}",
+        "auth": "hmac",
+        "dedup": "=trigger.body.id"
+      }
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "id",
+          "message"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "area": {
+            "type": "string",
+            "maxLength": 80
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "settings",
+        "type": "transform",
+        "name": "Use your business name",
+        "config": {
+          "output": {
+            "business_name": "{{business_name}}"
+          }
+        }
+      },
+      {
+        "id": "read_subscribers",
+        "type": "connector",
+        "name": "Read the active subscribers",
+        "connector": "xenibase@1",
+        "action": "read_rows",
+        "connection": "data_tables",
+        "input": {
+          "table": "{{subscribers_table}}",
+          "filters": [
+            {
+              "column": "status",
+              "op": "eq",
+              "value": "active"
+            }
+          ],
+          "order": [
+            {
+              "column": "name"
+            }
+          ],
+          "limit": 1000
+        }
+      },
+      {
+        "id": "tell_each",
+        "type": "foreach",
+        "name": "For each subscriber",
+        "needs": [
+          "settings",
+          "read_subscribers"
+        ],
+        "config": {
+          "items": "=has(steps.read_subscribers.output.rows) ? steps.read_subscribers.output.rows : []",
+          "max_concurrency": 5,
+          "max_items": 1000,
+          "steps": [
+            {
+              "id": "send_notice",
+              "type": "connector",
+              "name": "Text the subscriber the notice",
+              "connector": "notify@1",
+              "action": "text",
+              "when": "=has(item.phone) && item.phone != null && string(item.phone) != '' && (!has(trigger.body.area) || trigger.body.area == '' || (has(item.area) && item.area != null && item.area == trigger.body.area))",
+              "input": {
+                "to": "=string(item.phone)",
+                "message": "=steps.settings.output.business_name + ': ' + trigger.body.message"
+              },
+              "effect": {
+                "idempotency_seed": "='outage:' + trigger.body.id + ':' + string(item.phone)"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "1h"
+    }
+  }
+}

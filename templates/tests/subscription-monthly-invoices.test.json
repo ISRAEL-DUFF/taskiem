@@ -1,0 +1,82 @@
+{
+  "schema": "wd-test/v1",
+  "template": "subscription-monthly-invoices",
+  "params": {
+    "day_of_month": 1,
+    "send_time": "08:00",
+    "subscribers_table": "subscribers"
+  },
+  "cases": [
+    {
+      "name": "each active subscriber is invoiced for their price; one with no price is skipped",
+      "trigger": {
+        "scheduled_time": "2026-11-01T07:00:00Z"
+      },
+      "mocks": {
+        "read_subscribers": {
+          "output": {
+            "rows": [
+              {
+                "name": "Ada Obi",
+                "phone": "+2348031234567",
+                "plan": "Home 10Mbps",
+                "monthly_naira": 15000,
+                "renews_on": "2026-11-03T00:00:00Z",
+                "status": "active",
+                "account_ref": "acct-1",
+                "area": "Yaba"
+              },
+              {
+                "name": "Tunde",
+                "phone": "+2348030000002",
+                "status": "active"
+              }
+            ]
+          }
+        },
+        "invoice_each[0].make_invoice": {
+          "output": {
+            "number": "INV-0001",
+            "status": "draft",
+            "total_kobo": 1500000,
+            "total": "₦15,000"
+          }
+        },
+        "invoice_each[0].send_invoice": {
+          "output": {
+            "number": "INV-0001",
+            "status": "sent",
+            "queued": [
+              "sms"
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "invoice_each[0].make_invoice": "completed",
+          "invoice_each[0].send_invoice": "completed",
+          "invoice_each[1].make_invoice": "skipped"
+        },
+        "inputs": {
+          "invoice_each[0].make_invoice": {
+            "customer": {
+              "name": "Ada Obi",
+              "phone": "+2348031234567"
+            },
+            "amount_kobo": 1500000,
+            "description": "Monthly subscription: Home 10Mbps, 2026-11"
+          },
+          "invoice_each[0].send_invoice": {
+            "number": "INV-0001"
+          }
+        },
+        "calls": {
+          "invoice_each[0].make_invoice": 1,
+          "invoice_each[0].send_invoice": 1
+        }
+      }
+    }
+  ]
+}

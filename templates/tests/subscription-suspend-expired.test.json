@@ -1,0 +1,170 @@
+{
+  "schema": "wd-test/v1",
+  "template": "subscription-suspend-expired",
+  "params": {
+    "business_name": "Fibre Link",
+    "grace_days": 3,
+    "suspend_address": "https://billing.example.com/api/suspend",
+    "approver_role": "owner",
+    "payment_details": "Pay to 0123456789, GTBank, and your service comes back.",
+    "send_time": "08:30",
+    "subscribers_table": "subscribers"
+  },
+  "cases": [
+    {
+      "name": "after approval, the expired subscriber is switched off, marked, and told; the one inside the grace days is left",
+      "trigger": {
+        "scheduled_time": "2026-11-10T07:30:00Z"
+      },
+      "mocks": {
+        "read_subscribers": {
+          "output": {
+            "rows": [
+              {
+                "name": "Chidi Eze",
+                "phone": "+2348030000003",
+                "plan": "Home 5Mbps",
+                "monthly_naira": 8000,
+                "renews_on": "2026-11-02T00:00:00Z",
+                "status": "active",
+                "account_ref": "acct-77",
+                "area": "Yaba"
+              },
+              {
+                "name": "Ada Obi",
+                "phone": "+2348031234567",
+                "plan": "Home 10Mbps",
+                "monthly_naira": 15000,
+                "renews_on": "2026-11-09T00:00:00Z",
+                "status": "active",
+                "account_ref": "acct-1",
+                "area": "Yaba"
+              }
+            ]
+          }
+        },
+        "suspend_each[0].switch_off": {
+          "output": {
+            "status": 200
+          }
+        },
+        "suspend_each[0].mark_suspended": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "suspend_each[0].tell_them": {
+          "output": {
+            "queued": [
+              "sms"
+            ]
+          }
+        }
+      },
+      "approvals": {
+        "ask": {
+          "decision": "approved",
+          "by": "owner"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "ask": "completed",
+          "suspend_each[0].switch_off": "completed",
+          "suspend_each[0].mark_suspended": "completed",
+          "suspend_each[0].tell_them": "completed"
+        },
+        "inputs": {
+          "suspend_each[0].switch_off": {
+            "method": "POST",
+            "url": "https://billing.example.com/api/suspend",
+            "body": {
+              "account": "acct-77",
+              "action": "suspend"
+            }
+          },
+          "suspend_each[0].mark_suspended": {
+            "table": "subscribers",
+            "set": {
+              "status": "suspended"
+            }
+          },
+          "suspend_each[0].tell_them": {
+            "to": "+2348030000003"
+          }
+        },
+        "calls": {
+          "suspend_each[0].switch_off": 1
+        }
+      }
+    },
+    {
+      "name": "nothing is asked when nobody has expired",
+      "trigger": {
+        "scheduled_time": "2026-11-10T07:30:00Z"
+      },
+      "mocks": {
+        "read_subscribers": {
+          "output": {
+            "rows": [
+              {
+                "name": "Ada Obi",
+                "phone": "+2348031234567",
+                "plan": "Home 10Mbps",
+                "monthly_naira": 15000,
+                "renews_on": "2026-11-09T00:00:00Z",
+                "status": "active",
+                "account_ref": "acct-1",
+                "area": "Yaba"
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "ask": "skipped",
+          "suspend_each": "skipped"
+        }
+      }
+    },
+    {
+      "name": "nobody is switched off when the request is rejected",
+      "trigger": {
+        "scheduled_time": "2026-11-10T07:30:00Z"
+      },
+      "mocks": {
+        "read_subscribers": {
+          "output": {
+            "rows": [
+              {
+                "name": "Chidi Eze",
+                "phone": "+2348030000003",
+                "plan": "Home 5Mbps",
+                "monthly_naira": 8000,
+                "renews_on": "2026-11-02T00:00:00Z",
+                "status": "active",
+                "account_ref": "acct-77",
+                "area": "Yaba"
+              }
+            ]
+          }
+        }
+      },
+      "approvals": {
+        "ask": {
+          "decision": "rejected",
+          "by": "owner"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "suspend_each": "skipped"
+        }
+      }
+    }
+  ]
+}

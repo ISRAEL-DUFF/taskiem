@@ -1,0 +1,130 @@
+{
+  "schema": "wd-test/v1",
+  "template": "subscription-outage-notice",
+  "params": {
+    "business_name": "Fibre Link",
+    "path": "/network/notice",
+    "subscribers_table": "subscribers"
+  },
+  "cases": [
+    {
+      "name": "a notice for one area reaches only that area",
+      "trigger": {
+        "body": {
+          "id": "inc-1",
+          "message": "A fibre cut in Yaba has cut the internet. We are fixing it.",
+          "area": "Yaba"
+        }
+      },
+      "mocks": {
+        "read_subscribers": {
+          "output": {
+            "rows": [
+              {
+                "name": "Ada Obi",
+                "phone": "+2348031234567",
+                "plan": "Home",
+                "monthly_naira": 15000,
+                "renews_on": "2026-11-03T00:00:00Z",
+                "status": "active",
+                "account_ref": "acct-1",
+                "area": "Yaba"
+              },
+              {
+                "name": "Tunde Bello",
+                "phone": "+2348030000002",
+                "plan": "Home",
+                "monthly_naira": 15000,
+                "renews_on": "2026-11-03T00:00:00Z",
+                "status": "active",
+                "account_ref": "acct-1",
+                "area": "Ikeja"
+              }
+            ]
+          }
+        },
+        "tell_each[0].send_notice": {
+          "output": {
+            "queued": [
+              "sms"
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "tell_each[0].send_notice": "completed",
+          "tell_each[1].send_notice": "skipped"
+        },
+        "inputs": {
+          "tell_each[0].send_notice": {
+            "to": "+2348031234567",
+            "message": "Fibre Link: A fibre cut in Yaba has cut the internet. We are fixing it."
+          }
+        },
+        "calls": {
+          "tell_each[0].send_notice": 1
+        }
+      }
+    },
+    {
+      "name": "a notice with no area reaches everyone",
+      "trigger": {
+        "body": {
+          "id": "inc-2",
+          "message": "The service is back."
+        }
+      },
+      "mocks": {
+        "read_subscribers": {
+          "output": {
+            "rows": [
+              {
+                "name": "Ada Obi",
+                "phone": "+2348031234567",
+                "plan": "Home",
+                "monthly_naira": 15000,
+                "renews_on": "2026-11-03T00:00:00Z",
+                "status": "active",
+                "account_ref": "acct-1",
+                "area": "Yaba"
+              },
+              {
+                "name": "Tunde Bello",
+                "phone": "+2348030000002",
+                "plan": "Home",
+                "monthly_naira": 15000,
+                "renews_on": "2026-11-03T00:00:00Z",
+                "status": "active",
+                "account_ref": "acct-1",
+                "area": "Ikeja"
+              }
+            ]
+          }
+        },
+        "tell_each[0].send_notice": {
+          "output": {
+            "queued": [
+              "sms"
+            ]
+          }
+        },
+        "tell_each[1].send_notice": {
+          "output": {
+            "queued": [
+              "sms"
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "calls": {
+          "tell_each[0].send_notice": 1,
+          "tell_each[1].send_notice": 1
+        }
+      }
+    }
+  ]
+}

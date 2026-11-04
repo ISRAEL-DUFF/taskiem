@@ -400,3 +400,34 @@ func TestAreasReviewFixes(t *testing.T) {
 		t.Errorf("cash in, Money on: %q, off: %q", on, off)
 	}
 }
+
+// TestTemplatesFollowTheSwitches: a template of a part that is off is not
+// offered, and comes back with it.
+func TestTemplatesFollowTheSwitches(t *testing.T) {
+	w := newWorld(t)
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	has := func(id string) bool {
+		for _, x := range owner.must(200, "GET", "/v1/templates", nil)["templates"].([]any) {
+			if x.(map[string]any)["id"] == id {
+				return true
+			}
+		}
+		return false
+	}
+	for _, id := range []string{"subscription-monthly-invoices", "subscription-reconnect-on-payment", "subscription-outage-notice"} {
+		if !has(id) {
+			t.Errorf("%s is not offered with every part on", id)
+		}
+	}
+	owner.must(200, "PUT", "/v1/settings/areas", map[string]any{"areas": map[string]bool{"money": false}})
+	if has("subscription-monthly-invoices") || has("subscription-reconnect-on-payment") || has("chase-overdue-invoices") {
+		t.Error("invoice templates are offered with Money off")
+	}
+	if !has("subscription-outage-notice") {
+		t.Error("a template that needs no part that is off disappeared")
+	}
+	owner.must(200, "PUT", "/v1/settings/areas", map[string]any{"areas": map[string]bool{"money": true}})
+	if !has("subscription-monthly-invoices") {
+		t.Error("not offered again with Money back on")
+	}
+}
