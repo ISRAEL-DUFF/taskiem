@@ -269,7 +269,26 @@ function IncidentCard({ incident: i, onChange }: { incident: Incident; onChange:
 export function Tenants() {
   const [q, setQ] = useState("");
   const [query, setQuery] = useState("");
-  const { data, error } = useLoad(() => opsGet<{ tenants: TenantRow[] }>(`/tenants?q=${encodeURIComponent(query)}`), [query]);
+  const { data, error } = useLoad(() => opsGet<{ tenants: TenantRow[]; has_more: boolean }>(`/tenants?q=${encodeURIComponent(query)}`), [query]);
+  // Pages after the first, fetched by "Load more"; a new search starts over.
+  const [more, setMore] = useState<{ query: string; rows: TenantRow[]; hasMore: boolean } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [moreError, setMoreError] = useState<unknown>();
+  const extra = more && more.query === query ? more : null;
+  const rows = data ? [...data.tenants, ...(extra?.rows ?? [])] : [];
+  const hasMore = data ? (extra ? extra.hasMore : data.has_more) : false;
+  async function loadMore() {
+    setLoading(true);
+    setMoreError(undefined);
+    try {
+      const page = await opsGet<{ tenants: TenantRow[]; has_more: boolean }>(`/tenants?q=${encodeURIComponent(query)}&offset=${rows.length}`);
+      setMore({ query, rows: [...(extra?.rows ?? []), ...page.tenants], hasMore: page.has_more });
+    } catch (e) {
+      setMoreError(e);
+    } finally {
+      setLoading(false);
+    }
+  }
   return (
     <>
       <h1>Tenants</h1>
@@ -298,7 +317,7 @@ export function Tenants() {
             </tr>
           </thead>
           <tbody>
-            {data.tenants.map((t) => (
+            {rows.map((t) => (
               <tr key={t.id}>
                 <td>
                   <Link to={`/ops/tenants/${t.id}`}>{t.name}</Link>
@@ -318,6 +337,14 @@ export function Tenants() {
             ))}
           </tbody>
         </table>
+      )}
+      <ErrorBox error={moreError} />
+      {hasMore && (
+        <p>
+          <button type="button" onClick={() => void loadMore()} disabled={loading}>
+            {loading ? "Loading…" : "Load more"}
+          </button>
+        </p>
       )}
     </>
   );

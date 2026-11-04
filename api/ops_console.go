@@ -487,13 +487,20 @@ type opsTenantRow struct {
 }
 
 func (s *Server) opsTenants(w http.ResponseWriter, r *http.Request) {
-	// No limit (or a bad one) means the list's default of 100, not 0: the
-	// database clamps a limit up to at least 1, which showed only the newest tenant.
+	// The list pages: limit defaults to 50 (up to 200), offset to 0. One row
+	// more than the limit is read to know whether "load more" has anything.
+	// A limit of 0 must not reach the database: it clamps up to 1, which once
+	// showed only the newest tenant.
 	limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
 	if err != nil || limit < 1 {
-		limit = 100
+		limit = 50
 	}
-	rows, err := s.Store.Pool.Query(r.Context(), `SELECT * FROM taskiem_ops_tenants($1, $2)`, strings.TrimSpace(r.URL.Query().Get("q")), limit)
+	limit = min(limit, 200)
+	offset, err := strconv.Atoi(r.URL.Query().Get("offset"))
+	if err != nil || offset < 0 {
+		offset = 0
+	}
+	rows, err := s.Store.Pool.Query(r.Context(), `SELECT * FROM taskiem_ops_tenants($1, $2, $3)`, strings.TrimSpace(r.URL.Query().Get("q")), limit+1, offset)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -503,7 +510,11 @@ func (s *Server) opsTenants(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"tenants": nonNil(out)})
+	more := len(out) > limit
+	if more {
+		out = out[:limit]
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tenants": nonNil(out), "has_more": more})
 }
 
 // opsTenantAction suspends or resumes a tenant (decision 0027; Atlas part D
@@ -588,7 +599,7 @@ func (s *Server) opsTenant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	rows, err := s.Store.Pool.Query(ctx, `SELECT * FROM taskiem_ops_tenants($1, 1)`, id.String())
+	rows, err := s.Store.Pool.Query(ctx, `SELECT * FROM taskiem_ops_tenants($1, 1, 0)`, id.String())
 	if err != nil {
 		s.fail(w, r, err)
 		return
