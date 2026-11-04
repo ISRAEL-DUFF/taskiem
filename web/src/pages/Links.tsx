@@ -38,6 +38,7 @@ import {
 import { ConversationPane } from "./Conversation";
 import { TaskiemPane } from "./TaskiemChat";
 import { ChatRow } from "./ChatRow";
+import { useChatLive } from "./ChatLive";
 import { useDrafts } from "../lib/drafts";
 import { Ticks } from "./Conversation";
 import {
@@ -233,13 +234,27 @@ export function ChatPage() {
   // The list follows the conversations every few seconds while the page
   // is seen (the typing line, the unread counts, the last message), as
   // the open conversation follows itself; 30 s otherwise (useLiveRefresh).
+  const live = useChatLive();
+  const connected = live.connected;
   useEffect(() => {
     const t = setInterval(
       () => document.visibilityState === "visible" && reloadConvs(),
-      5_000,
+      connected ? 20_000 : 5_000,
     );
     return () => clearInterval(t);
-  }, [reloadConvs]);
+  }, [reloadConvs, connected]);
+  // The stream says when a conversation changed: the list follows at once.
+  useEffect(() => {
+    let soon: number | undefined;
+    const off = live.subscribe(() => {
+      window.clearTimeout(soon);
+      soon = window.setTimeout(reloadConvs, 300);
+    });
+    return () => {
+      off();
+      window.clearTimeout(soon);
+    };
+  }, [live, reloadConvs]);
   // A link accepted or ended here changes the chats too.
   const linksSeen = view.data;
   useEffect(() => {
@@ -624,7 +639,9 @@ export function ChatPage() {
                               <span className="draft">Draft:</span>{" "}
                               {drafts[c.link]}
                             </>
-                          ) : c.typing ? (
+                          ) : (
+                              connected ? live.typing.has(c.link) : c.typing
+                            ) ? (
                             "typing…"
                           ) : c.last ? (
                             previewLine(c.last, c.name).replace(
@@ -639,7 +656,7 @@ export function ChatPage() {
                             "The link has ended"
                           )
                         }
-                        typing={c.typing}
+                        typing={connected ? live.typing.has(c.link) : c.typing}
                         unread={c.unread}
                         pinned={c.pinned}
                         muted={c.muted}

@@ -141,6 +141,11 @@ async function linked(browser: Browser) {
     await (await seller.request.get("/v1/links", { headers: H })).json()
   ).links[0].id as string;
   await seller.request.post(`/v1/links/${link}/accept`, { headers: H });
+  // These specs stand in for the messages API and change what it answers: the
+  // page polls (the live stream is link-chat-live.spec.ts's).
+  await buyer.route("**/v1/chat/stream", (route) =>
+    route.abort("connectionfailed"),
+  );
   return { buyer, link };
 }
 

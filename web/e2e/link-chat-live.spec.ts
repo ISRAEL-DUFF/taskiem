@@ -1,0 +1,420 @@
+import { expect, test, type Browser, type Page } from "@playwright/test";
+import { axe, describe } from "./a11y";
+
+// Live delivery and notifications (business links, L3): a message reaches the
+// other side in a second or two over the live stream, a tick turns blue when
+// it is read, the tab says how many are unread, a message that comes while
+// the tab is in the background is a notification (once chosen, never for a
+// muted chat or the one in front) and a ping, and with the stream blocked the
+// page polls as before.
+test.use({ bypassCSP: true, viewport: { width: 1280, height: 800 } });
+
+const H = { "X-Taskiem-Request": "1" };
+const letters = () =>
+  String(Date.now()).replace(/\d/g, (d) => "abcdefghij".charAt(Number(d)));
+
+async function signUp(page: Page, tenant: string) {
+  const r = await page.request.post("/v1/signup", {
+    headers: H,
+    data: {
+      tenant,
+      email: `${letters()}-${Math.random().toString(36).slice(2, 8)}@chat.test`,
+      name: `${tenant.split(" ")[0]} Owner`,
+      password: "correct horse battery",
+    },
+  });
+  expect(r.status(), await r.text()).toBe(201);
+}
+
+type Ctx = Parameters<Browser["newContext"]>[0];
+async function linked(browser: Browser, buyerOptions: Ctx = {}) {
+  const stamp = letters();
+  const seller = await (
+    await browser.newContext({ viewport: { width: 1280, height: 800 } })
+  ).newPage();
+  await signUp(seller, `Dangote Depot ${stamp}`);
+  const buyer = await (
+    await browser.newContext({
+      viewport: { width: 1280, height: 800 },
+      ...buyerOptions,
+    })
+  ).newPage();
+  await signUp(buyer, `Ada Kitchen ${stamp}`);
+  await seller.request.put("/v1/link-settings", {
+    headers: H,
+    data: { findable: true },
+  });
+  const found = await (
+    await buyer.request.get(
+      `/v1/links/search?q=${encodeURIComponent(`dangote depot ${stamp}`)}`,
+      { headers: H },
+    )
+  ).json();
+  await buyer.request.post("/v1/links", {
+    headers: H,
+    data: { business: found.results[0].business, role: "supplier" },
+  });
+  const link = (
+    await (await seller.request.get("/v1/links", { headers: H })).json()
+  ).links[0].id as string;
+  await seller.request.post(`/v1/links/${link}/accept`, { headers: H });
+  return { seller, buyer, link, name: `Dangote Depot ${stamp}` };
+}
+
+const say = (p: Page, link: string, text: string) =>
+  p.request.post(`/v1/link-chats/${link}/messages`, {
+    headers: H,
+    data: { text },
+  });
+const bubble = (p: Page, text: string) =>
+  p
+    .getByTestId("chat-pane")
+    .locator('[data-testid="chat-message"]', { hasText: text });
+
+/** The page is open and its stream is up (the first thing the stream says is ready). */
+async function streaming(page: Page, path: string) {
+  const req = page.waitForRequest("**/v1/chat/stream");
+  await page.goto(path);
+  await req;
+  await page.waitForTimeout(600);
+}
+
+async function axeBoth(page: Page, where: string) {
+  for (const scheme of ["light", "dark"] as const) {
+    await page.evaluate((t) => {
+      if (t === "dark") document.documentElement.dataset.theme = "dark";
+      else delete document.documentElement.dataset.theme;
+    }, scheme);
+    await page.waitForTimeout(400);
+    const vs = await axe(page);
+    expect(vs, describe(`${where} (${scheme})`, vs)).toEqual([]);
+  }
+  await page.evaluate(() => delete document.documentElement.dataset.theme);
+}
+
+/** A browser with notifications and sound that the test can see and the tab in front or hidden at will. */
+async function stubBrowser(
+  page: Page,
+  permission: "granted" | "default" | "denied",
+  prefs?: { browser: boolean; sound: boolean; asked: boolean },
+) {
+  await page.addInitScript(
+    ({ permission, prefs }) => {
+      const w = window as unknown as Record<string, unknown>;
+      w.__notes = [] as {
+        title: string;
+        body?: string;
+        tag?: string;
+        onclick?: () => void;
+      }[];
+      w.__asked = 0;
+      w.__pings = 0;
+      w.__hidden = false;
+      class FakeNotification {
+        static permission = permission;
+        static requestPermission = async () => {
+          (w.__asked as number)++;
+          FakeNotification.permission = "granted";
+          return "granted";
+        };
+        title: string;
+        body?: string;
+        tag?: string;
+        onclick?: () => void;
+        constructor(title: string, o?: { body?: string; tag?: string }) {
+          this.title = title;
+          this.body = o?.body;
+          this.tag = o?.tag;
+          (w.__notes as unknown[]).push(this);
+        }
+        close() {}
+      }
+      w.Notification = FakeNotification;
+      Object.defineProperty(document, "visibilityState", {
+        get: () => (w.__hidden ? "hidden" : "visible"),
+      });
+      Object.defineProperty(document, "hidden", { get: () => !!w.__hidden });
+      w.AudioContext = class {
+        currentTime = 0;
+        destination = {};
+        createOscillator() {
+          (w.__pings as number)++;
+          return {
+            frequency: { value: 0 },
+            connect: () => ({ connect: () => undefined }),
+            start() {},
+            stop() {},
+          };
+        }
+        createGain() {
+          return {
+            gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} },
+            connect: () => ({}),
+          };
+        }
+        close() {}
+      };
+      if (prefs)
+        localStorage.setItem("taskiem-chat-notify", JSON.stringify(prefs));
+    },
+    { permission, prefs },
+  );
+}
+const hide = (p: Page, hidden: boolean) =>
+  p.evaluate((h) => {
+    (window as unknown as { __hidden: boolean }).__hidden = h;
+    document.dispatchEvent(new Event("visibilitychange"));
+  }, hidden);
+const notes = (p: Page) =>
+  p.evaluate(() =>
+    (
+      window as unknown as {
+        __notes: { title: string; body?: string; tag?: string }[];
+      }
+    ).__notes.map((n) => ({ title: n.title, body: n.body, tag: n.tag })),
+  );
+
+test("a message reaches the other side in a second or two, and the tick turns blue as it is read", async ({
+  browser,
+}) => {
+  const { seller, buyer, link } = await linked(browser);
+  await streaming(buyer, `/chat?with=${link}`);
+  await streaming(seller, `/chat?with=${link}`);
+
+  // Dangote writes (from the page); Ada's open conversation has it, fast.
+  await seller
+    .getByTestId("chat-pane")
+    .getByLabel("Message")
+    .fill("Rice is back in stock");
+  const sent = Date.now();
+  await seller.getByTestId("chat-pane").getByLabel("Message").press("Enter");
+  await expect(bubble(buyer, "Rice is back")).toBeVisible({ timeout: 2500 });
+  const took = Date.now() - sent;
+  expect(took, `it took ${took} ms`).toBeLessThan(2500);
+
+  // Ada has it open, so it is read; Dangote's tick turns blue without a reload.
+  await expect(
+    bubble(seller, "Rice is back").getByRole("img", { name: "Read" }),
+  ).toBeVisible({ timeout: 3500 });
+
+  // Typing shows on the other side, and the list follows.
+  await seller.request.post(`/v1/link-chats/${link}/typing`, { headers: H });
+  await expect(buyer.getByTestId("chat-typing")).toBeVisible({ timeout: 4000 });
+  await expect(buyer.getByTestId("chat-typing")).toBeHidden({
+    timeout: 10_000,
+  });
+
+  // A reaction arrives the same way.
+  await bubble(buyer, "Rice is back")
+    .getByRole("button", { name: /^More/ })
+    .click();
+  await buyer
+    .getByTestId("chat-more")
+    .getByRole("button", { name: "React with thumbs up" })
+    .click();
+  await expect(
+    bubble(seller, "Rice is back").getByRole("button", { name: /^👍 1/ }),
+  ).toBeVisible({ timeout: 3500 });
+});
+
+test("with the stream blocked the page polls as before", async ({
+  browser,
+}) => {
+  const { seller, buyer, link } = await linked(browser);
+  await buyer.route("**/v1/chat/stream", (route) =>
+    route.abort("connectionfailed"),
+  );
+  await buyer.goto(`/chat?with=${link}`);
+  await expect(buyer.getByTestId("chat-pane")).toBeVisible();
+  await say(seller, link, "Still gets through");
+  await expect(bubble(buyer, "Still gets through")).toBeVisible({
+    timeout: 9000,
+  });
+  // And the list follows too.
+  await buyer.goto("/chat");
+  await expect(buyer.getByTestId("link-linked")).toContainText(
+    "Still gets through",
+  );
+});
+
+test("the tab says how many messages are unread, wherever you are in the app", async ({
+  browser,
+}) => {
+  const { seller, buyer, link } = await linked(browser);
+  await streaming(buyer, "/home");
+  await expect(buyer).not.toHaveTitle(/^\(/);
+  await say(seller, link, "One");
+  await say(seller, link, "Two");
+  await expect(buyer).toHaveTitle(/^\(2\) /, { timeout: 5000 });
+  // Opening the conversation reads them: the count goes.
+  await buyer.goto(`/chat?with=${link}`);
+  await expect(bubble(buyer, "Two")).toBeVisible();
+  await expect(buyer).not.toHaveTitle(/^\(/, { timeout: 5000 });
+});
+
+test("a message that comes while the tab is in the background is a notification, once chosen", async ({
+  browser,
+}) => {
+  const { seller, buyer, link, name } = await linked(browser, {
+    permissions: ["notifications"],
+  });
+  await stubBrowser(buyer, "granted", {
+    browser: true,
+    sound: false,
+    asked: true,
+  });
+  await streaming(buyer, "/home");
+
+  // In front: nothing.
+  await say(seller, link, "While you are looking");
+  await expect(buyer).toHaveTitle(/^\(1\) /, { timeout: 5000 });
+  expect(await notes(buyer)).toEqual([]);
+
+  // In the background: the business and the first line, one per message.
+  await hide(buyer, true);
+  await say(seller, link, "Ten bags of rice\nand a bag of beans");
+  await expect
+    .poll(() => notes(buyer), { timeout: 5000 })
+    .toEqual([{ title: name, body: "Ten bags of rice", tag: link }]);
+
+  // A muted chat is quiet.
+  await buyer.request.put(`/v1/link-chats/${link}`, {
+    headers: H,
+    data: { muted: true },
+  });
+  await buyer.waitForTimeout(1500);
+  await say(seller, link, "Muted, so quiet");
+  await buyer.waitForTimeout(2500);
+  expect((await notes(buyer)).length).toBe(1);
+  await buyer.request.put(`/v1/link-chats/${link}`, {
+    headers: H,
+    data: { muted: false },
+  });
+
+  // Clicking it takes the person to the conversation.
+  await buyer.evaluate(() =>
+    (
+      window as unknown as { __notes: { onclick?: () => void }[] }
+    ).__notes[0]?.onclick?.(),
+  );
+  await expect(buyer).toHaveURL(new RegExp(`/chat\\?with=${link}`));
+});
+
+test("it is silent until chosen: no notification, no sound", async ({
+  browser,
+}) => {
+  const { seller, buyer, link } = await linked(browser, {
+    permissions: ["notifications"],
+  });
+  await stubBrowser(buyer, "granted"); // nothing chosen
+  await streaming(buyer, "/home");
+  await hide(buyer, true);
+  await say(seller, link, "Hello");
+  await expect(buyer).toHaveTitle(/^\(1\) /, { timeout: 5000 });
+  expect(await notes(buyer)).toEqual([]);
+  expect(
+    await buyer.evaluate(
+      () => (window as unknown as { __pings: number }).__pings,
+    ),
+  ).toBe(0);
+});
+
+test("the person is asked once, when they are back at the tab after a message came, never on load", async ({
+  browser,
+}) => {
+  const { seller, buyer, link } = await linked(browser);
+  await stubBrowser(buyer, "default");
+  await streaming(buyer, "/home");
+  const asked = () =>
+    buyer.evaluate(() => (window as unknown as { __asked: number }).__asked);
+  expect(await asked()).toBe(0);
+  await expect(buyer.getByTestId("notify-ask")).toHaveCount(0);
+  // A message while the tab is in front does not ask either.
+  await say(seller, link, "In front");
+  await expect(buyer).toHaveTitle(/^\(1\) /, { timeout: 5000 });
+  await expect(buyer.getByTestId("notify-ask")).toHaveCount(0);
+  // One while it is hidden: not asked then (no one is looking), but on return.
+  await hide(buyer, true);
+  await say(seller, link, "In the background");
+  await buyer.waitForTimeout(2500);
+  expect(await asked()).toBe(0);
+  await hide(buyer, false);
+  const banner = buyer.getByTestId("notify-ask");
+  await expect(banner).toBeVisible();
+  await axeBoth(buyer, "the question about notifications");
+  expect(await asked()).toBe(0); // the browser is asked only when they say yes
+  await banner.getByRole("button", { name: "Turn on notifications" }).click();
+  await expect.poll(asked).toBe(1);
+  await expect(banner).toHaveCount(0);
+  expect(
+    await buyer.evaluate(() =>
+      JSON.parse(localStorage.getItem("taskiem-chat-notify") ?? "{}"),
+    ),
+  ).toMatchObject({ browser: true, asked: true });
+});
+
+test("Not now is remembered: the question does not come again", async ({
+  browser,
+}) => {
+  const { seller, buyer, link } = await linked(browser);
+  await stubBrowser(buyer, "default");
+  await streaming(buyer, "/home");
+  await hide(buyer, true);
+  await say(seller, link, "First");
+  await buyer.waitForTimeout(2500);
+  await hide(buyer, false);
+  await buyer
+    .getByTestId("notify-ask")
+    .getByRole("button", { name: "Not now" })
+    .click();
+  await hide(buyer, true);
+  await say(seller, link, "Second");
+  await buyer.waitForTimeout(2500);
+  await hide(buyer, false);
+  await expect(buyer.getByTestId("notify-ask")).toHaveCount(0);
+});
+
+test("the sound is off until chosen on the settings page, and plays for a message in another page of the app", async ({
+  browser,
+}) => {
+  const { seller, buyer, link } = await linked(browser, {
+    permissions: ["notifications"],
+  });
+  await stubBrowser(buyer, "granted");
+  await buyer.goto("/settings/notifications");
+  const settings = buyer.getByTestId("chat-notify-setting");
+  await expect(
+    settings.getByRole("checkbox", { name: /Play a short sound/ }),
+  ).not.toBeChecked();
+  await expect(
+    settings.getByRole("checkbox", { name: /Show a notification/ }),
+  ).not.toBeChecked();
+  await axeBoth(buyer, "the chat notification settings");
+  await settings.getByRole("checkbox", { name: /Play a short sound/ }).check();
+  const pings = () =>
+    buyer.evaluate(() => (window as unknown as { __pings: number }).__pings);
+  expect(await pings()).toBe(2); // the two notes of the sample
+  // A message while on this page, in front: the ping.
+  await streaming(buyer, "/settings/notifications");
+  expect(await pings()).toBe(0); // (the page was loaded afresh)
+  await say(seller, link, "Ping");
+  await expect.poll(pings, { timeout: 5000 }).toBe(2);
+  // Turning on the notification asks the browser (the click is the person's).
+  await settings.getByRole("checkbox", { name: /Show a notification/ }).check();
+  await expect(
+    settings.getByRole("checkbox", { name: /Show a notification/ }),
+  ).toBeChecked();
+});
+
+test("a browser that has blocked notifications is told so, in words", async ({
+  browser,
+}) => {
+  const { buyer } = await linked(browser);
+  await stubBrowser(buyer, "denied");
+  await buyer.goto("/settings/notifications");
+  const settings = buyer.getByTestId("chat-notify-setting");
+  await expect(settings).toContainText("blocked notifications");
+  await expect(
+    settings.getByRole("checkbox", { name: /Show a notification/ }),
+  ).toBeDisabled();
+});

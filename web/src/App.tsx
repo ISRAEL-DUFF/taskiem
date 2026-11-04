@@ -123,6 +123,7 @@ import { Toaster } from "./toast";
 import { NotificationSettings } from "./pages/NotificationSettings";
 import { PaymentsSettings } from "./pages/ReceiveMoney";
 import { brandFile } from "./brand";
+import { ChatLiveProvider, NotifyBanner } from "./pages/ChatLive";
 import { standalone, useInstall } from "./install";
 import { PULL_AT, pullRefreshes, pullShown } from "./lib/pull";
 
@@ -462,337 +463,361 @@ function SignedIn() {
   // The chat fills the window the same way, as WhatsApp Web does.
   const chatting = pathname === "/chat";
   return (
-    <div
-      className={
-        chatting
-          ? "shell builder-mode chat-mode"
-          : building
-            ? "shell builder-mode"
-            : "shell"
-      }
-    >
-      <a className="skip-link" href="#main">
-        Skip to content
-      </a>
-      {/* Narrow screens: a top bar, a tab bar, and the sidebar as a drawer. */}
-      <header className="topbar" inert={drawer || undefined}>
-        <span className="brand">
-          <img
-            className="brand-mark"
-            src={brandFile("mark.svg")}
-            alt=""
-            width={26}
-            height={26}
-          />
-          <span>{business}</span>
-        </span>
-        {me.user && <Bell count={bell} onChange={bell.reload} />}
-      </header>
-      {drawer && (
-        <div
-          className="nav-scrim"
-          aria-hidden="true"
-          onClick={() => setDrawer(false)}
-        />
-      )}
-      <nav
-        id="main-nav"
-        ref={navRef}
-        className={`nav drawer${drawer ? " open" : ""}`}
-        aria-label="Main"
-        tabIndex={-1}
+    <ChatLiveProvider>
+      <div
+        className={
+          chatting
+            ? "shell builder-mode chat-mode"
+            : building
+              ? "shell builder-mode"
+              : "shell"
+        }
       >
-        <div className="brand">
-          <img
-            className="brand-mark"
-            src={brandFile("mark.svg")}
-            alt=""
-            width={26}
-            height={26}
-          />
-          <span className="brand-name">
-            <strong>{business}</strong>
-            <span>Taskiem</span>
+        <a className="skip-link" href="#main">
+          Skip to content
+        </a>
+        {/* Narrow screens: a top bar, a tab bar, and the sidebar as a drawer. */}
+        <header className="topbar" inert={drawer || undefined}>
+          <span className="brand">
+            <img
+              className="brand-mark"
+              src={brandFile("mark.svg")}
+              alt=""
+              width={26}
+              height={26}
+            />
+            <span>{business}</span>
           </span>
-          {me.user && (
-            <span className="nav-bell">
-              <Bell count={bell} onChange={bell.reload} />
-            </span>
-          )}
-          <button
-            className="icon-button nav-close"
-            aria-label="Close menu"
+          {me.user && <Bell count={bell} onChange={bell.reload} />}
+        </header>
+        {drawer && (
+          <div
+            className="nav-scrim"
+            aria-hidden="true"
             onClick={() => setDrawer(false)}
-          >
-            <Icon name="close" />
-          </button>
-        </div>
-        {daily.filter(([, , , ok]) => ok).map(link)}
-        {more.length > 0 && (
-          <>
+          />
+        )}
+        <nav
+          id="main-nav"
+          ref={navRef}
+          className={`nav drawer${drawer ? " open" : ""}`}
+          aria-label="Main"
+          tabIndex={-1}
+        >
+          <div className="brand">
+            <img
+              className="brand-mark"
+              src={brandFile("mark.svg")}
+              alt=""
+              width={26}
+              height={26}
+            />
+            <span className="brand-name">
+              <strong>{business}</strong>
+              <span>Taskiem</span>
+            </span>
+            {me.user && (
+              <span className="nav-bell">
+                <Bell count={bell} onChange={bell.reload} />
+              </span>
+            )}
+            <button
+              className="icon-button nav-close"
+              aria-label="Close menu"
+              onClick={() => setDrawer(false)}
+            >
+              <Icon name="close" />
+            </button>
+          </div>
+          {daily.filter(([, , , ok]) => ok).map(link)}
+          {more.length > 0 && (
+            <>
+              <button
+                type="button"
+                className="nav-toggle"
+                aria-expanded={moreOpen || inMore}
+                aria-controls="nav-more"
+                onClick={() => setMoreOpen(!(moreOpen || inMore))}
+              >
+                <Icon name="more" />
+                More
+                <svg
+                  className="chev"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M9 6l6 6-6 6" />
+                </svg>
+              </button>
+              <div
+                id="nav-more"
+                hidden={!(moreOpen || inMore)}
+                style={{ display: moreOpen || inMore ? "contents" : undefined }}
+              >
+                {more.map(link)}
+              </div>
+            </>
+          )}
+          {install && (
             <button
               type="button"
-              className="nav-toggle"
-              aria-expanded={moreOpen || inMore}
-              aria-controls="nav-more"
-              onClick={() => setMoreOpen(!(moreOpen || inMore))}
+              className="nav-toggle nav-install"
+              onClick={() => void install()}
             >
-              <Icon name="more" />
-              More
-              <svg
-                className="chev"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M9 6l6 6-6 6" />
-              </svg>
+              <Icon name="plus" />
+              Install the app
             </button>
-            <div
-              id="nav-more"
-              hidden={!(moreOpen || inMore)}
-              style={{ display: moreOpen || inMore ? "contents" : undefined }}
-            >
-              {more.map(link)}
+          )}
+          <div className="spacer" />
+          <div className="who">
+            <span className="avatar" aria-hidden="true">
+              {initials(name)}
+            </span>
+            <div>
+              <NavLink to="/account">{name}</NavLink>
+              <div className="roles">{me.roles.join(", ")}</div>
             </div>
-          </>
-        )}
-        {install && (
+            <button className="signout" onClick={() => void logout()}>
+              Sign out
+            </button>
+          </div>
+        </nav>
+        <main
+          className={building || chatting ? "main wide" : "main"}
+          id="main"
+          tabIndex={-1}
+          ref={mainRef}
+          inert={drawer || undefined}
+        >
+          <BillingBanner />
+          <TermsBanner />
+          <NotifyBanner />
+          <div className="page" key={`${pathname}#${fresh}`}>
+            <PageBoundary>
+              <Routes>
+                <Route path="/" element={<Navigate to="/home" replace />} />
+                <Route path="/home" element={<Home />} />
+                <Route path="/workflows" element={<Workflows />} />
+                <Route path="/workflows/new" element={<NewWorkflow />} />
+                <Route path="/workflows/:id" element={<Editor />} />
+                <Route path="/templates" element={<Templates />} />
+                <Route path="/tables" element={<Tables />} />
+                <Route path="/tables/:id" element={<TablePage />} />
+                <Route path="/storefront" element={<Storefront />} />
+                <Route path="/storefront/look" element={<Look />} />
+                <Route
+                  path="/storefront/fronts"
+                  element={<StorefrontFronts />}
+                />
+                <Route
+                  path="/storefront/fronts/:id"
+                  element={<StorefrontFront />}
+                />
+                <Route
+                  path="/storefront/orders"
+                  element={<StorefrontOrders />}
+                />
+                <Route
+                  path="/storefront/orders/:reference"
+                  element={<StorefrontOrder />}
+                />
+                <Route
+                  path="/storefront/bookings"
+                  element={<StorefrontBookings />}
+                />
+                <Route
+                  path="/storefront/riders"
+                  element={<StorefrontRiders />}
+                />
+                <Route
+                  path="/storefront/riders/pay"
+                  element={<RidersPayPage />}
+                />
+                <Route
+                  path="/storefront/deliveries"
+                  element={<StorefrontDeliveries />}
+                />
+                <Route path="/storefront/stock" element={<StorefrontStock />} />
+                <Route path="/chat" element={<ChatPage />} />
+                <Route
+                  path="/settings/links"
+                  element={<LinkedBusinessesPage />}
+                />
+                <Route path="/l/:code" element={<LinkCodePage />} />
+                <Route path="/bills" element={<BillsPage />} />
+                <Route path="/bills/:id" element={<BillPage />} />
+                <Route path="/trade-orders" element={<TradeOrdersPage />} />
+                <Route path="/trade-orders/:id" element={<TradeOrderPage />} />
+                <Route path="/purchases/:id" element={<PurchasePage />} />
+                <Route
+                  path="/links/:id/statement"
+                  element={<StatementPage />}
+                />
+                <Route
+                  path="/storefront/price-lists"
+                  element={<StorefrontPriceLists />}
+                />
+                <Route
+                  path="/storefront/suppliers/:link/prices"
+                  element={<SupplierPricesPage />}
+                />
+                <Route
+                  path="/storefront/suppliers"
+                  element={<StorefrontSuppliers />}
+                />
+                <Route path="/invoices" element={<Invoices />} />
+                <Route path="/invoices/new" element={<InvoiceNew />} />
+                <Route
+                  path="/invoices/settings"
+                  element={<InvoiceSettingsPage />}
+                />
+                <Route path="/invoices/match" element={<InvoiceMatch />} />
+                <Route path="/invoices/:id" element={<InvoicePage />} />
+                <Route path="/invoices/:id/edit" element={<InvoiceEdit />} />
+                <Route path="/money" element={<MoneyOverview />} />
+                <Route path="/money/leaks" element={<MoneyLeaks />} />
+                <Route path="/money/statements" element={<MoneyStatements />} />
+                <Route path="/money/entries" element={<MoneyEntries />} />
+                <Route path="/money/fees" element={<MoneyFees />} />
+                <Route path="/schools" element={<Schools />} />
+                <Route path="/schools/import" element={<SchoolImport />} />
+                <Route
+                  path="/schools/students/new"
+                  element={<SchoolStudentNew />}
+                />
+                <Route
+                  path="/schools/students/:id"
+                  element={<SchoolStudentPage />}
+                />
+                <Route path="/schools/families" element={<SchoolFamilies />} />
+                <Route path="/schools/classes" element={<SchoolClasses />} />
+                <Route
+                  path="/schools/sessions/:id/promotion"
+                  element={<SchoolPromotionPage />}
+                />
+                <Route
+                  path="/schools/terms/:id/fees"
+                  element={<SchoolTermFees />}
+                />
+                <Route
+                  path="/schools/terms/:id/invoices"
+                  element={<SchoolTermInvoices />}
+                />
+                <Route
+                  path="/schools/accounts"
+                  element={<SchoolAccountsPage />}
+                />
+                <Route
+                  path="/schools/payments"
+                  element={<SchoolPaymentsPage />}
+                />
+                <Route
+                  path="/schools/receipts"
+                  element={<SchoolReceiptsPage />}
+                />
+                <Route
+                  path="/schools/debtors"
+                  element={<SchoolDebtorsPage />}
+                />
+                <Route
+                  path="/schools/clearance"
+                  element={<SchoolClearancePage />}
+                />
+                <Route
+                  path="/schools/overview"
+                  element={<SchoolOverviewPage />}
+                />
+                <Route path="/schools/gate" element={<SchoolGatePage />} />
+                <Route
+                  path="/settings/schools"
+                  element={<SchoolSettingsPage />}
+                />
+                <Route path="/forms" element={<Forms />} />
+                <Route path="/forms/requests" element={<FormRequests />} />
+                <Route
+                  path="/forms/requests/:id"
+                  element={<FormRequestPage />}
+                />
+                <Route path="/forms/:id" element={<MemberForm />} />
+                <Route
+                  path="/forms/:id/submissions"
+                  element={<FormSubmissions />}
+                />
+                <Route path="/start" element={<Start />} />
+                <Route path="/start/guide" element={<Guide />} />
+                <Route path="/verify-email" element={<VerifyEmail />} />
+                <Route path="/link-chat" element={<LinkChat />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/runs" element={<Runs />} />
+                <Route path="/runs/:id" element={<RunPage />} />
+                <Route path="/approvals" element={<Approvals />} />
+                <Route path="/connections" element={<Connections />} />
+                <Route path="/catalogue" element={<Catalogue />} />
+                <Route path="/settings" element={<Settings />} />
+                <Route path="/settings/billing" element={<Billing />} />
+                <Route
+                  path="/settings/payments"
+                  element={<PaymentsSettings />}
+                />
+                <Route path="/settings/keys" element={<Keys />} />
+                <Route
+                  path="/settings/notifications"
+                  element={<NotificationSettings />}
+                />
+                <Route path="/alerts" element={<Alerts />} />
+                <Route path="/audit" element={<Audit />} />
+                <Route path="/members" element={<Members />} />
+                <Route path="/policies" element={<Policies />} />
+                <Route path="/account" element={<Account />} />
+                <Route path="/handoff" element={<Handoff />} />
+                <Route path="/reports" element={<Reports />} />
+                <Route
+                  path="*"
+                  element={
+                    <EmptyState icon="search">
+                      There is no page at this address.
+                    </EmptyState>
+                  }
+                />
+              </Routes>
+            </PageBoundary>
+          </div>
+        </main>
+        <PullToRefresh
+          onRefresh={() => {
+            setFresh((n) => n + 1);
+            bell.reload();
+          }}
+        />
+        <nav className="tabbar" aria-label="Quick" inert={drawer || undefined}>
+          {quick.slice(0, 4).map(([to, label, icon]) => (
+            <NavLink key={to} to={to}>
+              <span className="tab-icon">
+                <Icon name={icon} />
+              </span>
+              {label}
+            </NavLink>
+          ))}
           <button
             type="button"
-            className="nav-toggle nav-install"
-            onClick={() => void install()}
+            aria-label="Open menu"
+            aria-expanded={drawer}
+            aria-controls="main-nav"
+            onClick={() => setDrawer(true)}
           >
-            <Icon name="plus" />
-            Install the app
-          </button>
-        )}
-        <div className="spacer" />
-        <div className="who">
-          <span className="avatar" aria-hidden="true">
-            {initials(name)}
-          </span>
-          <div>
-            <NavLink to="/account">{name}</NavLink>
-            <div className="roles">{me.roles.join(", ")}</div>
-          </div>
-          <button className="signout" onClick={() => void logout()}>
-            Sign out
-          </button>
-        </div>
-      </nav>
-      <main
-        className={building || chatting ? "main wide" : "main"}
-        id="main"
-        tabIndex={-1}
-        ref={mainRef}
-        inert={drawer || undefined}
-      >
-        <BillingBanner />
-        <TermsBanner />
-        <div className="page" key={`${pathname}#${fresh}`}>
-          <PageBoundary>
-            <Routes>
-              <Route path="/" element={<Navigate to="/home" replace />} />
-              <Route path="/home" element={<Home />} />
-              <Route path="/workflows" element={<Workflows />} />
-              <Route path="/workflows/new" element={<NewWorkflow />} />
-              <Route path="/workflows/:id" element={<Editor />} />
-              <Route path="/templates" element={<Templates />} />
-              <Route path="/tables" element={<Tables />} />
-              <Route path="/tables/:id" element={<TablePage />} />
-              <Route path="/storefront" element={<Storefront />} />
-              <Route path="/storefront/look" element={<Look />} />
-              <Route path="/storefront/fronts" element={<StorefrontFronts />} />
-              <Route
-                path="/storefront/fronts/:id"
-                element={<StorefrontFront />}
-              />
-              <Route path="/storefront/orders" element={<StorefrontOrders />} />
-              <Route
-                path="/storefront/orders/:reference"
-                element={<StorefrontOrder />}
-              />
-              <Route
-                path="/storefront/bookings"
-                element={<StorefrontBookings />}
-              />
-              <Route path="/storefront/riders" element={<StorefrontRiders />} />
-              <Route
-                path="/storefront/riders/pay"
-                element={<RidersPayPage />}
-              />
-              <Route
-                path="/storefront/deliveries"
-                element={<StorefrontDeliveries />}
-              />
-              <Route path="/storefront/stock" element={<StorefrontStock />} />
-              <Route path="/chat" element={<ChatPage />} />
-              <Route
-                path="/settings/links"
-                element={<LinkedBusinessesPage />}
-              />
-              <Route path="/l/:code" element={<LinkCodePage />} />
-              <Route path="/bills" element={<BillsPage />} />
-              <Route path="/bills/:id" element={<BillPage />} />
-              <Route path="/trade-orders" element={<TradeOrdersPage />} />
-              <Route path="/trade-orders/:id" element={<TradeOrderPage />} />
-              <Route path="/purchases/:id" element={<PurchasePage />} />
-              <Route path="/links/:id/statement" element={<StatementPage />} />
-              <Route
-                path="/storefront/price-lists"
-                element={<StorefrontPriceLists />}
-              />
-              <Route
-                path="/storefront/suppliers/:link/prices"
-                element={<SupplierPricesPage />}
-              />
-              <Route
-                path="/storefront/suppliers"
-                element={<StorefrontSuppliers />}
-              />
-              <Route path="/invoices" element={<Invoices />} />
-              <Route path="/invoices/new" element={<InvoiceNew />} />
-              <Route
-                path="/invoices/settings"
-                element={<InvoiceSettingsPage />}
-              />
-              <Route path="/invoices/match" element={<InvoiceMatch />} />
-              <Route path="/invoices/:id" element={<InvoicePage />} />
-              <Route path="/invoices/:id/edit" element={<InvoiceEdit />} />
-              <Route path="/money" element={<MoneyOverview />} />
-              <Route path="/money/leaks" element={<MoneyLeaks />} />
-              <Route path="/money/statements" element={<MoneyStatements />} />
-              <Route path="/money/entries" element={<MoneyEntries />} />
-              <Route path="/money/fees" element={<MoneyFees />} />
-              <Route path="/schools" element={<Schools />} />
-              <Route path="/schools/import" element={<SchoolImport />} />
-              <Route
-                path="/schools/students/new"
-                element={<SchoolStudentNew />}
-              />
-              <Route
-                path="/schools/students/:id"
-                element={<SchoolStudentPage />}
-              />
-              <Route path="/schools/families" element={<SchoolFamilies />} />
-              <Route path="/schools/classes" element={<SchoolClasses />} />
-              <Route
-                path="/schools/sessions/:id/promotion"
-                element={<SchoolPromotionPage />}
-              />
-              <Route
-                path="/schools/terms/:id/fees"
-                element={<SchoolTermFees />}
-              />
-              <Route
-                path="/schools/terms/:id/invoices"
-                element={<SchoolTermInvoices />}
-              />
-              <Route
-                path="/schools/accounts"
-                element={<SchoolAccountsPage />}
-              />
-              <Route
-                path="/schools/payments"
-                element={<SchoolPaymentsPage />}
-              />
-              <Route
-                path="/schools/receipts"
-                element={<SchoolReceiptsPage />}
-              />
-              <Route path="/schools/debtors" element={<SchoolDebtorsPage />} />
-              <Route
-                path="/schools/clearance"
-                element={<SchoolClearancePage />}
-              />
-              <Route
-                path="/schools/overview"
-                element={<SchoolOverviewPage />}
-              />
-              <Route path="/schools/gate" element={<SchoolGatePage />} />
-              <Route
-                path="/settings/schools"
-                element={<SchoolSettingsPage />}
-              />
-              <Route path="/forms" element={<Forms />} />
-              <Route path="/forms/requests" element={<FormRequests />} />
-              <Route path="/forms/requests/:id" element={<FormRequestPage />} />
-              <Route path="/forms/:id" element={<MemberForm />} />
-              <Route
-                path="/forms/:id/submissions"
-                element={<FormSubmissions />}
-              />
-              <Route path="/start" element={<Start />} />
-              <Route path="/start/guide" element={<Guide />} />
-              <Route path="/verify-email" element={<VerifyEmail />} />
-              <Route path="/link-chat" element={<LinkChat />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/runs" element={<Runs />} />
-              <Route path="/runs/:id" element={<RunPage />} />
-              <Route path="/approvals" element={<Approvals />} />
-              <Route path="/connections" element={<Connections />} />
-              <Route path="/catalogue" element={<Catalogue />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="/settings/billing" element={<Billing />} />
-              <Route path="/settings/payments" element={<PaymentsSettings />} />
-              <Route path="/settings/keys" element={<Keys />} />
-              <Route
-                path="/settings/notifications"
-                element={<NotificationSettings />}
-              />
-              <Route path="/alerts" element={<Alerts />} />
-              <Route path="/audit" element={<Audit />} />
-              <Route path="/members" element={<Members />} />
-              <Route path="/policies" element={<Policies />} />
-              <Route path="/account" element={<Account />} />
-              <Route path="/handoff" element={<Handoff />} />
-              <Route path="/reports" element={<Reports />} />
-              <Route
-                path="*"
-                element={
-                  <EmptyState icon="search">
-                    There is no page at this address.
-                  </EmptyState>
-                }
-              />
-            </Routes>
-          </PageBoundary>
-        </div>
-      </main>
-      <PullToRefresh
-        onRefresh={() => {
-          setFresh((n) => n + 1);
-          bell.reload();
-        }}
-      />
-      <nav className="tabbar" aria-label="Quick" inert={drawer || undefined}>
-        {quick.slice(0, 4).map(([to, label, icon]) => (
-          <NavLink key={to} to={to}>
             <span className="tab-icon">
-              <Icon name={icon} />
+              <Icon name="menu" />
             </span>
-            {label}
-          </NavLink>
-        ))}
-        <button
-          type="button"
-          aria-label="Open menu"
-          aria-expanded={drawer}
-          aria-controls="main-nav"
-          onClick={() => setDrawer(true)}
-        >
-          <span className="tab-icon">
-            <Icon name="menu" />
-          </span>
-          Menu
-        </button>
-      </nav>
-    </div>
+            Menu
+          </button>
+        </nav>
+      </div>
+    </ChatLiveProvider>
   );
 }
 

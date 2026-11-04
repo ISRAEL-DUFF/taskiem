@@ -54,6 +54,7 @@ import {
   useOutbox,
 } from "../lib/outboxStore";
 import { ThreadJump } from "./ThreadParts";
+import { useChatLive } from "./ChatLive";
 import { isHeic, preparePhoto } from "../lib/photo";
 import { PendingFile } from "./PendingFile";
 import { AttachMenu } from "./AttachMenu";
@@ -1066,25 +1067,53 @@ export function ConversationPane({
     jump(showing);
     // jump is stable enough: it reads the thread's refs and openAt.
   }, [showing, found]);
+  // The live stream brings what changes as it happens; while it is open the
+  // polling only reconciles (and says so by being slow), and without it the
+  // page polls as it did.
+  const live = useChatLive();
+  const connected = live.connected;
+  const detachedNow = useRef(detached);
+  detachedNow.current = detached;
+  useEffect(
+    () =>
+      live.subscribe((e) => {
+        if (e.type === "message" && e.message.link === conv.link) {
+          const m = e.message;
+          // Not into a window away from the newest page: it would leave a gap.
+          if (!detachedNow.current)
+            setMessages((cur) => (cur ? merge(cur, [m]) : cur));
+          if (!m.mine && !m.read_at && document.visibilityState === "visible")
+            post(`${path}/read`).then(onChanged, () => undefined);
+        } else if (e.type === "gone" && e.link === conv.link)
+          setMessages((cur) => cur?.filter((x) => x.id !== e.id));
+      }),
+    [live, conv.link, path, onChanged],
+  );
   useEffect(() => {
-    const t = setInterval(() => {
-      if (document.visibilityState === "visible" && !detached)
-        pull(last).catch(() => undefined);
-    }, EVERY_MS);
+    const t = setInterval(
+      () => {
+        if (document.visibilityState === "visible" && !detached)
+          pull(last).catch(() => undefined);
+      },
+      connected ? EVERY_MS * 5 : EVERY_MS,
+    );
     return () => clearInterval(t);
-  }, [pull, last, detached]);
+  }, [pull, last, detached, connected]);
   // Our own ticks follow theirs reading: the page's read marks change in place.
   useEffect(() => {
-    const t = setInterval(() => {
-      // The newest page again: our ticks, and the other side's reactions.
-      if (document.visibilityState !== "visible" || detached) return;
-      get<{ messages: LinkMessage[] }>(`${path}/messages`).then(
-        (out) => setMessages((cur) => merge(cur ?? [], out.messages)),
-        () => undefined,
-      );
-    }, EVERY_MS * 3);
+    const t = setInterval(
+      () => {
+        // The newest page again: our ticks, and the other side's reactions.
+        if (document.visibilityState !== "visible" || detached) return;
+        get<{ messages: LinkMessage[] }>(`${path}/messages`).then(
+          (out) => setMessages((cur) => merge(cur ?? [], out.messages)),
+          () => undefined,
+        );
+      },
+      connected ? EVERY_MS * 10 : EVERY_MS * 3,
+    );
     return () => clearInterval(t);
-  }, [messages, path, detached]);
+  }, [messages, path, detached, connected]);
   const choose = async (picked: File | undefined) => {
     setFileError(undefined);
     let f = picked;
@@ -1338,7 +1367,7 @@ export function ConversationPane({
         </button>
         <h2>
           {conv.name}
-          {typing && (
+          {(connected ? live.typing.has(conv.link) : typing) && (
             <span className="typing" data-testid="chat-typing">
               typing…
             </span>

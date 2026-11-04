@@ -1928,3 +1928,4 @@ button.chat-avatar { border: 0; padding: 0; cursor: pointer; }
 .info-times dt { color: var(--muted); }
 .info-times dd { margin: 0; font-weight: 600; }
 .info-reactions { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.notify-ask { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; padding: 10px 16px; background: var(--tint); color: var(--tint-text); border-bottom: 1px solid var(--border); font-size: 14px; }
