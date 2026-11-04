@@ -18,6 +18,8 @@ export interface Outgoing {
   mentions?: unknown[];
   state: "sending" | "failed";
   error?: string;
+  /** Failed for want of a connection: it goes again when it is back. */
+  retryOnline?: boolean;
   at: string;
 }
 

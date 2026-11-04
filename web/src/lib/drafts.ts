@@ -26,6 +26,21 @@ export function setDraft(key: string, text: string): void {
   window.dispatchEvent(new Event(EVENT));
 }
 
+/** Forgets every draft (sign-out). */
+export function clearDrafts(): void {
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const k = sessionStorage.key(i);
+      if (k?.startsWith(PREFIX)) keys.push(k);
+    }
+    keys.forEach((k) => sessionStorage.removeItem(k));
+  } catch {
+    // Storage may be blocked: there is then nothing kept.
+  }
+  window.dispatchEvent(new Event(EVENT));
+}
+
 /** The drafts, by conversation key, following changes. */
 export function useDrafts(): Record<string, string> {
   const read = (): Record<string, string> => {

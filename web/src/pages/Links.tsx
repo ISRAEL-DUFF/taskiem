@@ -671,6 +671,7 @@ export function ChatPage() {
         {taskiemOpen && <TaskiemPane onBack={() => setParams({})} />}
         {open && (
           <ConversationPane
+            key={open.link}
             conv={open}
             others={all}
             onBack={() => setParams({})}

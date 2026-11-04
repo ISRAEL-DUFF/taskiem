@@ -516,6 +516,189 @@ test("the Taskiem conversation has the emoji panel, a growing box and a kept dra
   ).toHaveValue("status👍");
 });
 
+/** The buyer of a first linked pair, linked to a second supplier too. */
+async function twoSuppliers(browser: Browser) {
+  const a = await linked(browser);
+  const stamp = letters();
+  const seller2 = await (await browser.newContext()).newPage();
+  await signUp(seller2, `Eko Sacks ${stamp}`);
+  await seller2.request.put("/v1/link-settings", {
+    headers: H,
+    data: { findable: true },
+  });
+  const found = await (
+    await a.buyer.request.get(
+      `/v1/links/search?q=${encodeURIComponent(`eko sacks ${stamp}`)}`,
+      { headers: H },
+    )
+  ).json();
+  await a.buyer.request.post("/v1/links", {
+    headers: H,
+    data: { business: found.results[0].business, role: "supplier" },
+  });
+  const link2 = (
+    await (await seller2.request.get("/v1/links", { headers: H })).json()
+  ).links[0].id as string;
+  await seller2.request.post(`/v1/links/${link2}/accept`, { headers: H });
+  await a.buyer.setViewportSize({ width: 1280, height: 800 });
+  return { ...a, seller2, link2 };
+}
+
+test("a message still being sent stays with its own conversation when you switch to another", async ({
+  browser,
+}) => {
+  const { buyer, link, link2 } = await twoSuppliers(browser);
+  let release: () => void = () => undefined;
+  const gate = new Promise<void>((r) => (release = r));
+  await buyer.route(`**/v1/link-chats/${link}/messages`, async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    await gate;
+    await route.continue();
+  });
+  await buyer.goto(`/chat?with=${link}`);
+  const pane = buyer.getByTestId("chat-pane");
+  await pane.getByLabel("Message").fill("For the first business");
+  await pane.getByLabel("Message").press("Enter");
+  await expect(pane.getByTestId("chat-message")).toContainText(
+    "For the first business",
+  );
+  // Straight to the other conversation (the list is beside it on a computer).
+  await buyer
+    .getByTestId("link-linked")
+    .filter({ hasText: "Eko Sacks" })
+    .click();
+  await expect(buyer.getByTestId("chat-pane")).toContainText("Eko Sacks");
+  release();
+  await buyer.waitForTimeout(1500);
+  await expect(buyer.getByTestId("chat-message")).toHaveCount(0); // not here
+  // It is where it was sent.
+  await buyer.getByTestId("link-linked").filter({ hasText: "Dangote" }).click();
+  const mine = buyer
+    .getByTestId("chat-pane")
+    .locator('[data-testid="chat-message"][data-mine="true"]');
+  await expect(mine).toHaveCount(1);
+  await expect(mine).toContainText("For the first business");
+  await expect(mine.getByRole("img", { name: "Delivered" })).toBeVisible();
+  expect(link2).not.toBe(link);
+});
+
+test("a message that was not sent is still there when you come back, and goes again when the connection is", async ({
+  browser,
+}) => {
+  const { buyer, link } = await twoSuppliers(browser);
+  const ids: string[] = [];
+  let up = false;
+  await buyer.route(`**/v1/link-chats/${link}/messages`, async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    ids.push(JSON.parse(route.request().postData() ?? "{}").client_id);
+    return up ? route.continue() : route.abort("connectionfailed");
+  });
+  await buyer.goto(`/chat?with=${link}`);
+  const pane = buyer.getByTestId("chat-pane");
+  await pane.getByLabel("Message").fill("Send 20 bags");
+  await pane.getByLabel("Message").press("Enter");
+  await expect(pane.getByTestId("chat-failed")).toContainText("Not sent");
+  // Away and back: not lost.
+  await buyer
+    .getByTestId("link-linked")
+    .filter({ hasText: "Eko Sacks" })
+    .click();
+  await expect(buyer.getByTestId("chat-pane")).toContainText("Eko Sacks");
+  await buyer.getByTestId("link-linked").filter({ hasText: "Dangote" }).click();
+  await expect(
+    buyer.getByTestId("chat-pane").getByTestId("chat-failed"),
+  ).toContainText("Not sent");
+  // The connection is back: it goes by itself, once.
+  up = true;
+  await buyer.evaluate(() => window.dispatchEvent(new Event("online")));
+  const mine = buyer
+    .getByTestId("chat-pane")
+    .locator('[data-testid="chat-message"][data-mine="true"]');
+  await expect(mine.getByRole("img", { name: "Delivered" })).toBeVisible();
+  await expect(mine).toHaveCount(1);
+  expect(await messagesOf(buyer, link)).toEqual(["Send 20 bags"]);
+  expect(new Set(ids).size).toBe(1);
+});
+
+test("a photo that was not sent can be sent again without a second copy", async ({
+  browser,
+}) => {
+  const { buyer, link } = await linked(browser);
+  const sent = await mockFiles(buyer, link);
+  const ids: string[] = [];
+  let up = false;
+  await buyer.unroute(`**/v1/link-chats/${link}/files`);
+  await buyer.route(`**/v1/link-chats/${link}/files`, async (route) => {
+    const body = route.request().postDataBuffer()?.toString("latin1") ?? "";
+    ids.push(/name="client_id"\r\n\r\n([^\r]*)/.exec(body)?.[1] ?? "");
+    if (!up) return route.abort("connectionreset");
+    sent.push({ body });
+    await route.fulfill({
+      status: 201,
+      contentType: "application/json",
+      body: JSON.stringify({
+        message: {
+          id: "0192e2e0-0000-7000-8000-0000000000f1",
+          link,
+          mine: true,
+          kind: "text",
+          body: "The new bags",
+          attachment: {
+            kind: "photo",
+            type: "image/png",
+            size: PNG.length,
+            name: "bags.png",
+          },
+          created_at: new Date().toISOString(),
+        },
+      }),
+    });
+  });
+  await buyer.goto(`/chat?with=${link}`);
+  const pane = buyer.getByTestId("chat-pane");
+  await pane
+    .getByTestId("chat-file")
+    .setInputFiles({ name: "bags.png", mimeType: "image/png", buffer: PNG });
+  await pane.getByLabel("Message").fill("The new bags");
+  await pane.getByLabel("Message").press("Enter");
+  const failed = pane.getByTestId("chat-failed");
+  await expect(failed).toContainText("Not sent");
+  await expect(pane.getByRole("img", { name: "Your photo" })).toBeVisible(); // its own preview, meanwhile
+  up = true;
+  await failed.getByRole("button", { name: "Retry" }).click();
+  const mine = pane.locator('[data-testid="chat-message"][data-mine="true"]');
+  await expect(mine.getByRole("img", { name: "Delivered" })).toBeVisible();
+  await expect(mine).toHaveCount(1);
+  expect(sent).toHaveLength(1);
+  expect(ids.length).toBe(2);
+  expect(new Set(ids).size).toBe(1);
+});
+
+test("signing out forgets what was half written", async ({ browser }) => {
+  const { buyer, link } = await linked(browser);
+  await buyer.setViewportSize({ width: 1280, height: 800 });
+  await buyer.goto(`/chat?with=${link}`);
+  await buyer
+    .getByTestId("chat-pane")
+    .getByLabel("Message")
+    .fill("Not for the next person");
+  await buyer.goto("/home"); // the draft is kept for this tab
+  expect(
+    await buyer.evaluate(() =>
+      Object.keys(sessionStorage).filter((k) => k.startsWith("taskiem-draft:")),
+    ),
+  ).toHaveLength(1);
+  await buyer.getByRole("button", { name: "Sign out" }).click();
+  await expect(
+    buyer.getByRole("heading", { name: "Sign in to Taskiem" }),
+  ).toBeVisible();
+  expect(
+    await buyer.evaluate(() =>
+      Object.keys(sessionStorage).filter((k) => k.startsWith("taskiem-draft:")),
+    ),
+  ).toHaveLength(0);
+});
+
 declare global {
   interface Window {
     __dt: DataTransfer;

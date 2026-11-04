@@ -33,12 +33,15 @@ import { MentionList, MentionText, useMentions } from "./Mentions";
 import { priceWords, type PriceItem } from "../lib/pricelists";
 import { firstUnread, startsRun } from "../lib/thread";
 import { useThread } from "../lib/useThread";
+import { asMessage, newClientId, type Outgoing } from "../lib/outbox";
 import {
-  asMessage,
-  newClientId,
-  sendError,
-  type Outgoing,
-} from "../lib/outbox";
+  discardOutgoing,
+  onSent,
+  retryOutgoing,
+  sendOutgoing,
+  updateOutgoing,
+  useOutbox,
+} from "../lib/outboxStore";
 import { ThreadJump } from "./ThreadParts";
 import { EmojiPanel } from "./EmojiPanel";
 import { AttachMenu } from "./AttachMenu";
@@ -719,17 +722,13 @@ export function ConversationPane({
   const [forwarding, setForwarding] = useState<LinkMessage>();
   const typedAt = useRef(0);
   const [error, setError] = useState<unknown>();
-  const [text, setText] = useState("");
+  const [text, setText] = useState(() => getDraft(conv.link));
   const textBox = useRef<HTMLTextAreaElement>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   useAutoGrow(textBox, text);
   // An unsent message is kept per conversation (and shown in the list).
-  useEffect(() => {
-    setText(getDraft(conv.link));
-    setEmojiOpen(false);
-  }, [conv.link]);
   useEffect(() => {
     setDraft(conv.link, text);
     // Only a change of the words is kept: a switch of conversation loads one.
@@ -784,7 +783,7 @@ export function ConversationPane({
   const [unread, setUnread] = useState<{ id: string; count: number }>();
   // Messages being sent, shown at the end of the thread until the server has
   // them (lib/outbox.ts).
-  const [outbox, setOutbox] = useState<Outgoing[]>([]);
+  const outbox = useOutbox(conv.link);
   const outgoing = useMemo(
     () => outbox.map((o) => asMessage(o, conv.link)),
     [outbox, conv.link],
@@ -867,7 +866,6 @@ export function ConversationPane({
   useEffect(() => {
     setMessages(undefined);
     setReply(undefined);
-    setOutbox([]);
     if (focus) openAt(focus).catch(() => openNewest().catch(setError));
     else openNewest().catch(setError);
   }, [openNewest, openAt, focus]);
@@ -984,45 +982,16 @@ export function ConversationPane({
   // Sent at once: it shows in the thread with a clock, the box is cleared,
   // and the server's copy takes its place; if it cannot be sent it stays,
   // with Retry and Delete. The client id makes a retry the same message.
-  const transmit = async (o: Outgoing) => {
-    setOutbox((cur) =>
-      cur.map((x) =>
-        x.clientId === o.clientId
-          ? { ...x, state: "sending", error: undefined }
-          : x,
-      ),
-    );
-    try {
-      let out: { message: LinkMessage };
-      if (o.file) {
-        const form = new FormData();
-        form.append("file", o.file, o.file.name);
-        if (o.body) form.append("text", o.body);
-        if (o.replyTo) form.append("reply_to", o.replyTo);
-        form.append("client_id", o.clientId);
-        out = await upload<{ message: LinkMessage }>(`${path}/files`, form);
-      } else {
-        out = await post<{ message: LinkMessage }>(`${path}/messages`, {
-          text: o.body,
-          reply_to: o.replyTo,
-          mentions:
-            o.mentions && o.mentions.length > 0 ? o.mentions : undefined,
-          client_id: o.clientId,
-        });
-      }
-      setMessages((cur) => merge(cur ?? [], [out.message]));
-      setOutbox((cur) => cur.filter((x) => x.clientId !== o.clientId));
-      onChanged();
-    } catch (e) {
-      setOutbox((cur) =>
-        cur.map((x) =>
-          x.clientId === o.clientId
-            ? { ...x, state: "failed", error: sendError(e) }
-            : x,
-        ),
-      );
-    }
-  };
+  // What the server accepts of ours (from here, or from a conversation we
+  // have since left) joins this thread only if it belongs to it.
+  useEffect(
+    () =>
+      onSent((link, m) => {
+        if (link === conv.link) setMessages((cur) => merge(cur ?? [], [m]));
+        onChanged();
+      }),
+    [conv.link, onChanged],
+  );
   const send = (held?: File) => {
     const file = held ?? pending;
     const body = held ? "" : text.trim();
@@ -1052,26 +1021,18 @@ export function ConversationPane({
       mentions.reset();
     }
     setReply(undefined);
-    setOutbox((cur) => [...cur, o]);
+    sendOutgoing(conv.link, o);
     if (detached) void openNewest();
     if (file?.type.startsWith("image/")) {
       const r = new FileReader();
+      const link = conv.link;
       r.onload = () =>
-        setOutbox((cur) =>
-          cur.map((x) =>
-            x.clientId === o.clientId ? { ...x, preview: String(r.result) } : x,
-          ),
-        );
+        updateOutgoing(link, o.clientId, { preview: String(r.result) });
       r.readAsDataURL(file);
     }
-    void transmit(o);
   };
-  const retry = (clientId: string) => {
-    const o = outbox.find((x) => x.clientId === clientId);
-    if (o) void transmit(o);
-  };
-  const discard = (clientId: string) =>
-    setOutbox((cur) => cur.filter((x) => x.clientId !== clientId));
+  const retry = (clientId: string) => retryOutgoing(conv.link, clientId);
+  const discard = (clientId: string) => discardOutgoing(conv.link, clientId);
   sendRef.current = send;
   const settings = (
     body: { muted?: boolean; archived?: boolean; pinned?: boolean },

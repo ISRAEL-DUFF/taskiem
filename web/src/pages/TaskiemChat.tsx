@@ -38,13 +38,12 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
   const [messages, setMessages] = useState<TaskiemMessage[]>();
   const [live, setLive] = useState<string>(); // the answer whose buttons press
   const [error, setError] = useState<unknown>();
-  const [text, setText] = useState("");
+  const [text, setText] = useState(() => getDraft("taskiem"));
   const textBox = useRef<HTMLTextAreaElement>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   useAutoGrow(textBox, text);
   // An unsent message is kept (and shown in the list).
-  useEffect(() => setText(getDraft("taskiem")), []);
   useEffect(() => {
     setDraft("taskiem", text);
   }, [text]);
