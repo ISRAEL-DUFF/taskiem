@@ -21,6 +21,7 @@ import (
 	"golang.org/x/crypto/argon2"
 
 	"github.com/israel-duff/taskiem/engine/access"
+	"github.com/israel-duff/taskiem/engine/areas"
 	"github.com/israel-duff/taskiem/engine/db"
 )
 
@@ -284,6 +285,11 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 		// Cookie sessions must prove the request came from our own pages.
 		if p.viaCookie && r.Method != http.MethodGet && r.Method != http.MethodHead && r.Header.Get(csrfHeader) == "" {
 			writeErr(w, http.StatusForbidden, "missing "+csrfHeader+" header")
+			return
+		}
+		// A part of Taskiem the business has turned off is refused here, for
+		// every route under its paths (areas.go).
+		if !s.areaGate(w, r, p) {
 			return
 		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ctxKey{}, p)))
@@ -580,6 +586,12 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 		}
 		// The Schools area, when the business turned it on (schools.go).
 		out["schools"] = s.schoolsOn(r.Context(), tx, p.TenantID)
+		// Which parts of Taskiem the business uses (areas.go).
+		st, err := areas.Load(r.Context(), tx, p.TenantID)
+		if err != nil {
+			return err
+		}
+		out["areas"] = st
 		out["gate_only"] = access.GateOnly(p.Permissions)
 		return nil
 	})

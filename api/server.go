@@ -618,6 +618,8 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermWorkflowEdit)).Post("/sheets/resolve", s.resolveSpreadsheet)
 			r.Get("/settings/advanced", s.getAdvanced) // the Advanced switch (advanced.go)
 			r.With(s.need(PermMemberManage)).Put("/settings/advanced", s.putAdvanced)
+			r.Get("/settings/areas", s.getAreas) // which parts of Taskiem the business uses (areas.go)
+			r.With(s.tenantWide).Put("/settings/areas", s.putAreas)
 			r.Get("/settings/schools", s.getSchoolSettings) // the Schools area's switch (schools.go)
 			r.With(s.tenantWide).Put("/settings/schools", s.putSchoolSettings)
 			r.With(s.tenantWide).Post("/settings/schools/wallet", s.createSchoolWallet) // the school's wallet (schools_wallet.go)

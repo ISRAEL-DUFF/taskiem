@@ -1,6 +1,6 @@
 # Business areas: each business turns on only what it uses
 
-Status: **Plan** (drafted 4 November 2026; nothing built) · Builds on: the Schools switch (`api/schools.go`, `engine/schools`), [storefronts](../storefronts.md), [stock](stock.md), [invoices and the money log](invoices-and-money-log.md), [business links](business-links.md)
+Status: **Plan** (drafted 4 November 2026; phase 1 built, the rest not) · Builds on: the Schools switch (`api/schools.go`, `engine/schools`), [storefronts](../storefronts.md), [stock](stock.md), [invoices and the money log](invoices-and-money-log.md), [business links](business-links.md)
 
 ## 1. Why
 
@@ -42,13 +42,14 @@ One table, `business_areas (tenant_id, area, enabled, updated_by, updated_at, PR
 - **Backfill, in the same migration:** for every existing tenant, insert `enabled = true` for `storefront`, `orders`, `stock`, `money` and `links`, and `schools` copied from `school_settings.enabled`. No existing business changes behaviour.
 - **New tenants** get no rows, which reads as off. The signup question (phase 4) inserts rows.
 - **Schools:** keep `school_settings.enabled` as the source for `schools` in phase 1, and have the areas API read and write it, so the existing endpoint, the chasing job's `taskiem_schools_enabled_tenants()` and the bursar role keep working. Folding it into `business_areas` can be a later clean-up.
-- **A definer for background jobs.** Scheduled work runs outside a tenant's session (money digest, bill and payout ticks, chasing). Add `taskiem_area_enabled_tenants(area text)` as a SECURITY DEFINER read returning tenant ids only, modelled on `taskiem_schools_enabled_tenants()` (migration 00219). It needs an entry in `engine/db/definers.tsv`, or `TestDefinersAllowList` fails.
-- Next migration number is `00305`.
+- **A definer for background jobs** (`taskiem_area_enabled_tenants(area)`, modelled on `taskiem_schools_enabled_tenants()` in migration 00219, with an entry in `engine/db/definers.tsv`) is built in phase 3 with the jobs that use it, not in phase 1. It has to apply the same default as the code (below).
+- **Default for a business with no row:** a single function, `areas.DefaultOn` in `engine/areas`, says on for everything but Schools. Phase 1 ships with it on, so a business made between phase 1 and phase 4 still has everything and nothing is stranded before the Settings page exists (phase 2). Phase 4 first writes "on" rows for every business that has none, then flips the default to off; field-agent sign-ups (`POST /v1/agent/businesses`) and partner-created sub-tenants need their rows written at creation by then.
+- Built as migration `00305_business_areas.sql`; the backfill runs before row-level security is turned on for the table, so it does not depend on the migration role.
 
 ## 4. API
 
 - `GET /v1/settings/areas` returns every area with its state, what it covers in plain words and what it depends on. Any signed-in member may read it.
-- `PUT /v1/settings/areas` takes `{ "storefront": true, ... }` and applies the dependency rules. **Only an owner** changes it, as for the Schools switch. Each change is audited (`settings.areas`, with the area and the new state) in the tenant's chain.
+- `PUT /v1/settings/areas` takes `{ "areas": { "stock": true, "money": false }, "confirm": false }` and applies the dependency rules. **Only an owner** changes it, as for the Schools switch. It is atomic: all the changes apply or none. Each change is audited (`settings.areas`, with what changed) in the tenant's chain; the Schools switch is written through the existing `schools.SetEnabled` and audited as `settings.schools`. Turning one off that another on area needs, or asking for an area on and its need off at once, is 409. The answer is the same list `GET` gives.
 - `GET /v1/me` gains `areas: { storefront, orders, stock, money, links, schools }` (booleans). `schools` stays in `/me` for the old client.
 - Taskiem Ops: the tenant page shows each tenant's areas, read-only, as it is read-only today.
 
@@ -56,7 +57,7 @@ One table, `business_areas (tenant_id, area, enabled, updated_by, updated_at, PR
 
 The rule: **permission and area must both pass.** A permission alone no longer opens an area that is off.
 
-- Add `s.area(key)` middleware beside `s.need(perm)` in `api/server.go`. It reads the tenant's row inside the request's transaction and refuses with **404** and a plain body ("this business has not turned on Stock") when the area is off. 404, not 403, so an off area looks the way a feature that was never there looks (the web app already treats a 404 as "not turned on", see `Home.tsx`).
+- **Built as one central gate, not per-route middleware.** `areaGate` runs in `authenticate` (`api/auth.go`), after the caller is known, and refuses a request whose path is in an area that is off. `areaPaths` in `api/areas.go` maps path prefixes to areas, longest prefix first, so `/v1/storefront/orders` is Orders and `/v1/storefront` the shop. This is how the gate role is already refused (`gateAllowed`), and it means a route added later under a mapped path is covered without anyone remembering. The answer is **404** with a plain sentence and `area_off`, so an off area looks the way a part that was never there looks. One extra indexed read per request to a mapped path (not cached, so a switch takes effect at once).
 - Apply it to whole route groups, not route by route, so a new route cannot be forgotten:
   - `storefront`: the `/storefront/*` routes except orders, `/riders*`, bookings, deliveries, fronts.
   - `orders`: `/storefront/orders*`, `linkOrderRoutes`.
@@ -71,7 +72,7 @@ The rule: **permission and area must both pass.** A permission alone no longer o
   - Background jobs: the money digest, bill and payout ticks and reminders skip tenants without `money`, through the new definer.
   - Workflow steps and connectors that read or write an area (storefront, stock, invoice, link steps): refuse with the same sentence when the area is off, so a workflow cannot reach into an area the business turned off. The list of such steps has to be found in the connector registry first.
   - Embedded sub-tenants (partners), checked against the code: a partner creates one with `POST /v1/partner/sub-tenants` (`createSubTenant`, `api/partner.go`), which inserts the tenant, a workspace and the `dev` and `prod` environments. A sub-tenant is an ordinary tenant (decision 0015), so it gets its own `business_areas` rows and starts with none on. Embedded end users reach a sub-tenant only through `/v1/embed/{app}/...`, a separate route tree whose end-user permissions are capped at `workflow.*` and `run.*`, so they can never reach storefront, stock or money routes; the switches change nothing for them. What the switches do affect is members a partner invites to a sub-tenant (`inviteToSubTenant`), who sign in to the web app like anyone else and would otherwise see shop screens. So: sub-tenants default off; `createSubTenant` takes an optional `areas` list so a partner can start one with areas on; existing sub-tenants are backfilled on like every existing tenant; and a partner changes a sub-tenant's areas only by entering it (`taskiem_partner_enter`), the same way it does everything else there, with both audit trails written.
-- A test walks the router and fails if a route that belongs to an area is mounted outside its `s.area` group, in the spirit of `TestGateResponsesCarryNoAmount`.
+- `TestAreaRoutesAreMapped` walks the router and fails for a route whose path names an area's family (storefront, stock, invoice, money, bill, link, rider, deliver, dispatch, price, trade, supplier) but is in no area, unless it is listed as always on with the reason. The first run found the routes left out on purpose: Taskiem's own `/v1/billing/*`, `/v1/receive-money/*` and `/v1/settings/receive-money` (whether receiving money with Taskiem belongs to Money is open, phase 3), the Schools routes, form links and a person's own chat link.
 
 ## 6. Web app
 
@@ -85,7 +86,7 @@ The rule: **permission and area must both pass.** A permission alone no longer o
 
 ## 7. Phases
 
-1. **Switches and enforcement.** Migration `00305` with backfill and the definer, the areas API, `/me.areas`, `s.area` on the route groups, and tests. Ships with no visible change for existing businesses, because everything is backfilled on.
+1. **Switches and enforcement.** **Built:** migration `00305` with the backfill, the areas API, `/me.areas`, the central `areaGate`, the `engine/areas` package and tests. Ships with no visible change for existing businesses, because everything is backfilled on.
 2. **Web.** `lib/areas.ts`, nav and tab bar, route guard, Home, the Settings page, the checklist. Existing businesses still see no change; a business that switches an area off sees it disappear.
 3. **Other doors.** WhatsApp and chat commands, public storefront pages, background jobs, workflow steps and connectors.
 4. **Signup question.** "What does your business do?" with a shop, a school, a service business, or "just workflows", each switching on its areas; new signups start with the rest off. Ops shows areas on the tenant page.
