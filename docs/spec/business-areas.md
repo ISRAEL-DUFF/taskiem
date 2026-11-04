@@ -18,6 +18,8 @@ The Schools switch already works this way for one area (a settings row, `schools
 
 ## 2. The areas
 
+**Principle: blocks are built in, recipes are assembled** (founder, 4 November). Taskiem is a workflow tool in the way n8n and Zapier are, so a feature that is a joining-together of existing triggers and actions ships as a **recipe** (a template in `templates/library` that an owner installs by answering a few plain questions), not as new built-in code. Built in, and kept small and solid, are the things where a mistake costs money or leaks data and so must not depend on how a business wired its steps: payment matching (a payment counts only when matched; no action marks an invoice paid), tenant isolation, audit, the outbound-traffic guard, approvals, and the connectors themselves. Before building any new feature, ask whether it can be a recipe over existing blocks; add a block only when it cannot. A recipe is installed without editing steps (`docs/spec/no-technical-steps.md`).
+
 | Area key | What it covers | Depends on |
 | --- | --- | --- |
 | `storefront` | The storefront and its look, fronts, bookings, riders, deliveries, trust and verification, the public page | `orders` |
@@ -112,7 +114,7 @@ The point of the switches is that businesses that do not sell goods can use Task
 
 **What is missing or unverified**
 
-1. **No recurring invoices.** Nothing in the invoices connector, its docs or the templates bills a subscriber every month. It can be built from a schedule trigger, a foreach over a customers table and `invoices.create` and `send`, but the business has to assemble it, and it needs a dependable "who is due this month" query over a table. There is no template for it.
+1. **No recurring invoices, and they will be a recipe (decided).** Nothing in the invoices connector, its docs or the templates bills a subscriber every month. The recipe is a schedule trigger, a foreach over a customers table, and `invoices.create` then `send` for each one due. Recurring billing does not become a built-in invoices action; if the recipe shows a gap in the blocks (for example, a dependable "who is due this month" read over a table), only that block is added. The recipe asks the owner in plain words which table holds the customers, how much and how often, and installs without editing steps.
 2. **A provider's private systems are unreachable.** The egress guard (`engine/egress`) refuses private, loopback and link-local addresses, so a billing panel, RADIUS server or database on a private IP (the usual place for an ISP's subscriber system) cannot be called by the `http` step or the Postgres and MySQL connectors. Decision 0013 designs an SSH tunnel through the customer's bastion, and its header says "Proposed (design; not built)". That date is October 2026, so whether it has been built since has to be checked in the code. Until it is, only systems with a public HTTPS API are reachable.
 3. **No cut-off and reconnect pattern.** The pieces exist (schedule or invoice trigger, `branch`, `approval`, `http`), but there is no template that suspends service after a set number of days overdue, with an optional approval, and reconnects on payment.
 4. **No outage notice.** Messaging a list of customers exists, but there is no template that takes an alert from a monitoring tool by webhook and texts or messages every affected customer.
@@ -120,7 +122,7 @@ The point of the switches is that businesses that do not sell goods can use Task
 6. **The `http` step's name and form** for a non-technical owner ("call another system") are unchecked against the plain-words rules.
 7. **Not checked:** whether a data table can hold subscriber, plan and expiry fields comfortably, and how a workflow reads "everyone whose plan ends within seven days".
 
-**Work this adds**, as phase 5 below: service-business templates (monthly invoices to subscribers, renewal reminders before expiry, suspend on overdue with an optional approval and reconnect on payment, an outage notice to customers), a "service business" choice in the signup question, a decision on whether recurring invoices become a first-class invoices action or stay a documented recipe, and a check of whether the private-network tunnel exists.
+**Work this adds**, as phase 5 below: service-business recipes (monthly invoices to subscribers, renewal reminders before expiry, suspend on overdue with an optional approval and reconnect on payment, an outage notice to customers), a "service business" choice in the signup question, and a check of whether the private-network tunnel exists.
 
 ## 10. Risks and open questions
 
