@@ -1034,3 +1034,20 @@ declare global {
     __dt: DataTransfer;
   }
 }
+
+test("an emoji put in the box tells the other side we are typing, as typing does (the shared composer)", async ({
+  browser,
+}) => {
+  const { buyer, link } = await linked(browser);
+  await buyer.goto(`/chat?with=${link}`);
+  let told = 0;
+  await buyer.route(`**/v1/link-chats/${link}/typing`, (route) => {
+    told++;
+    return route.fulfill({ status: 204 });
+  });
+  const pane = buyer.getByTestId("chat-pane");
+  await pane.getByTestId("emoji-button").click();
+  await pane.getByTestId("emoji-panel").locator(".emoji").first().click();
+  await expect.poll(() => told).toBe(1);
+  await expect(pane.getByLabel("Message")).not.toHaveValue("");
+});

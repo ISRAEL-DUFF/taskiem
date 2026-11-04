@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { boldParts, mergeTaskiem, type TaskiemMessage } from "./taskiemchat";
+import {
+  boldParts,
+  inflightOutcome,
+  mergeTaskiem,
+  type TaskiemMessage,
+} from "./taskiemchat";
 
 const msg = (id: string, at: string, text = "x"): TaskiemMessage => ({
   id,
@@ -64,5 +69,75 @@ describe("mergeTaskiem keeps the ids that press the buttons", () => {
     const out = mergeTaskiem([given as never], [kept as never]);
     expect(out).toHaveLength(1);
     expect(out[0]?.buttons?.[0]?.id).toBe("yes");
+  });
+});
+
+describe("a message being sent", () => {
+  const web = (id: string, text: string, at: string, local = false) =>
+    ({
+      id,
+      channel: "web",
+      inbound: true,
+      kind: "text",
+      text,
+      created_at: at,
+      local,
+    }) as TaskiemMessage;
+  it("is replaced by its stored copy when that comes first, not shown twice", () => {
+    const local = web("local-1", "status", "2026-01-01T10:00:00Z", true);
+    const stored = web(
+      "22222222-2222-2222-2222-222222222222",
+      "status",
+      "2026-01-01T10:00:00.4Z",
+    );
+    const out = mergeTaskiem([local], [stored]);
+    expect(out.map((m) => m.id)).toEqual([stored.id]);
+  });
+  it("is kept while nothing like it has come, and one stored copy takes only one", () => {
+    const a = web("local-1", "status", "2026-01-01T10:00:00Z", true);
+    const b = web("local-2", "status", "2026-01-01T10:00:01Z", true);
+    const stored = web(
+      "33333333-3333-3333-3333-333333333333",
+      "status",
+      "2026-01-01T10:00:02Z",
+    );
+    expect(mergeTaskiem([a], [])).toHaveLength(1);
+    expect(mergeTaskiem([a, b], [stored])).toHaveLength(2);
+  });
+  it("a copy already known does not take a local one away", () => {
+    const stored = web(
+      "44444444-4444-4444-4444-444444444444",
+      "status",
+      "2026-01-01T09:00:00Z",
+    );
+    const local = web("local-1", "status", "2026-01-01T10:00:00Z", true);
+    expect(mergeTaskiem([stored, local], [stored])).toHaveLength(2);
+  });
+});
+
+describe("inflightOutcome", () => {
+  const f = { text: "cash in 5,000 till", at: "2026-01-01T10:00:00Z" };
+  it("is sent when the history has it", () => {
+    const m = {
+      id: "x",
+      channel: "web",
+      inbound: true,
+      kind: "text",
+      text: f.text,
+      created_at: "2026-01-01T10:00:01Z",
+    } as TaskiemMessage;
+    expect(inflightOutcome([m], f)).toBe("sent");
+  });
+  it("is not sent when it is not there, or only an old one with the same words is", () => {
+    expect(inflightOutcome([], f)).toBe("not-sent");
+    const old = {
+      id: "y",
+      channel: "web",
+      inbound: true,
+      kind: "text",
+      text: f.text,
+      created_at: "2025-12-01T10:00:00Z",
+    } as TaskiemMessage;
+    expect(inflightOutcome([old], f)).toBe("not-sent");
   });
 });

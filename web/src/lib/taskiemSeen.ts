@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import type { TaskiemMessage } from "./taskiemchat";
+import { isAfter } from "./stamp";
 
 // What Taskiem has said that the person has not yet seen on the web. The
 // conversation has no read marks on the server (Taskiem reads at once), so
@@ -17,9 +18,20 @@ export function seenAt(): string | undefined {
   }
 }
 
+// The unread ones are kept by id (with their time), not as a number: the same
+// message told twice (the stream's look-back after a reload, the count read
+// on loading) is one message. Another tab seeing them moves the seen time
+// (a "storage" event), which clears what it passed.
+let unread = new Map<string, string>();
 let count = 0;
 const subs = new Set<() => void>();
-const tell = () => subs.forEach((f) => f());
+const set = (next: Map<string, string>) => {
+  unread = next;
+  if (next.size !== count) {
+    count = next.size;
+    subs.forEach((f) => f());
+  }
+};
 
 /** Said by Taskiem after `seen`: where the unread begin and how many. */
 export function unreadAfter(
@@ -27,7 +39,9 @@ export function unreadAfter(
   seen: string | undefined,
 ): { id: string; count: number } | undefined {
   if (!seen) return undefined;
-  const later = messages.filter((m) => !m.inbound && m.created_at > seen);
+  const later = messages.filter(
+    (m) => !m.inbound && isAfter(m.created_at, seen),
+  );
   const first = later[0];
   return first ? { id: first.id, count: later.length } : undefined;
 }
@@ -36,14 +50,11 @@ export function unreadAfter(
 export function markSeen(iso: string): void {
   const was = seenAt();
   try {
-    if (!was || iso > was) localStorage.setItem(KEY, iso);
+    if (!was || isAfter(iso, was)) localStorage.setItem(KEY, iso);
   } catch {
     // Storage may be blocked: the count is then only kept while the page lives.
   }
-  if (count !== 0) {
-    count = 0;
-    tell();
-  }
+  set(new Map());
 }
 
 /** A first visit begins at now. */
@@ -51,12 +62,19 @@ export function beginSeen(now = new Date().toISOString()): void {
   if (!seenAt()) markSeen(now);
 }
 
-export function setTaskiemUnread(n: number): void {
-  if (n === count) return;
-  count = n;
-  tell();
+/** More unread ones, told by the stream (the ones already known are not counted again). */
+export function addTaskiemUnread(messages: TaskiemMessage[]): void {
+  const next = new Map(unread);
+  for (const m of messages) next.set(m.id, m.created_at);
+  set(next);
 }
-export const addTaskiemUnread = (n: number) => setTaskiemUnread(count + n);
+
+if (typeof window !== "undefined")
+  window.addEventListener("storage", (e) => {
+    if (e.key !== KEY || !e.newValue) return;
+    const seen = e.newValue;
+    set(new Map([...unread].filter(([, at]) => isAfter(at, seen))));
+  });
 
 export function useTaskiemUnread(): number {
   return useSyncExternalStore(

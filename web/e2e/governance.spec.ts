@@ -40,13 +40,11 @@ test("a policy routes an approval that needs an authenticator code", async ({
   // The owner writes the policy on the Policies page.
   await page.getByRole("link", { name: "Approval policies" }).click();
   await page.getByLabel("Name").fill("treasury_payouts");
-  await page
-    .locator("textarea.mono")
-    .fill(
-      JSON.stringify({
-        rules: [{ levels: [{ role: "treasury" }], step_up: "totp" }],
-      }),
-    );
+  await page.locator("textarea.mono").fill(
+    JSON.stringify({
+      rules: [{ levels: [{ role: "treasury" }], step_up: "totp" }],
+    }),
+  );
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByTestId("policy-treasury_payouts-1")).toContainText(
     "active",

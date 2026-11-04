@@ -323,7 +323,9 @@ test("the Taskiem conversation on the web", async ({ browser }) => {
   await page.reload();
   await expect(page.getByTestId("taskiem-message")).toHaveCount(4);
   await expect(
-    page.getByTestId("taskiem-pane").getByRole("button", { name: "Yes" }),
+    page
+      .getByTestId("taskiem-pane")
+      .getByRole("button", { name: "Yes", exact: true }),
   ).toHaveCount(0);
   await axeBoth(page, "the Taskiem conversation's history");
 });

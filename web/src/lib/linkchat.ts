@@ -3,6 +3,7 @@
 // message, a card and the list read, in WhatsApp's words.
 
 import { naira } from "./invoices";
+import { cmpTime } from "./stamp";
 import type { Mention } from "./mentions";
 
 export type DocKind = "order" | "purchase" | "invoice" | "bill";
@@ -276,6 +277,6 @@ export function merge(a: LinkMessage[], b: LinkMessage[]): LinkMessage[] {
   for (const m of [...a, ...b]) seen.set(m.id, m);
   return [...seen.values()].sort(
     (x, y) =>
-      x.created_at.localeCompare(y.created_at) || x.id.localeCompare(y.id),
+      cmpTime(x.created_at, y.created_at) || x.id.localeCompare(y.id),
   );
 }

@@ -15,7 +15,16 @@ import { axe, describe } from "./a11y";
 // same scrolling, composer and look, with its own content: reply buttons,
 // the channel a message came from, ticks, "typing…" while an answer is made,
 // and an unread cue.
-test.use({ bypassCSP: true, viewport: { width: 1280, height: 800 } });
+test.use({
+  bypassCSP: true,
+  viewport: { width: 1280, height: 800 },
+  launchOptions: {
+    args: [
+      "--use-fake-device-for-media-stream",
+      "--use-fake-ui-for-media-stream",
+    ],
+  },
+});
 
 const H = { "X-Taskiem-Request": "1" };
 const letters = () =>
@@ -244,4 +253,181 @@ test("the Taskiem conversation has the same menu: the keys are listed from it", 
     .click();
   await pane(page).getByRole("button", { name: "Keyboard" }).click();
   await expect(page.getByRole("dialog", { name: "Keyboard" })).toBeVisible();
+});
+
+const phoneOf = async (browser: Browser) => {
+  const page = await (
+    await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      hasTouch: true,
+      isMobile: true,
+      permissions: ["camera"],
+    })
+  ).newPage();
+  await signUp(page, `Chioma Cakes ${letters()}`);
+  return page;
+};
+
+test("Taskiem's bubbles have the menu a business's have: right click, Copy, Esc", async ({
+  browser,
+}) => {
+  const page = await (
+    await browser.newContext({
+      permissions: ["clipboard-read", "clipboard-write"],
+    })
+  ).newPage();
+  await signUp(page, `Chioma Cakes ${letters()}`);
+  await page.goto("/chat?with=taskiem");
+  await pane(page).locator("#taskiem-text").fill("status");
+  await pane(page).locator("#taskiem-text").press("Enter");
+  await expect(theirs(page).last()).toBeVisible();
+  const b = ours(page).first();
+  await b.click({ button: "right" });
+  const menu = b.getByTestId("chat-more");
+  await expect(menu).toBeVisible();
+  await menu.getByRole("button", { name: "Copy" }).click();
+  await expect(menu.getByRole("button", { name: "Copied" })).toBeVisible();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+    "status",
+  );
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+  await expect(page).toHaveURL(/with=taskiem/);
+  await expect(b.getByRole("button", { name: /More for/ })).toBeFocused();
+});
+
+test("a message on its way when the page goes away is not lost: its words come back to the box", async ({
+  browser,
+}) => {
+  const page = await person(browser);
+  await page.goto("/chat?with=taskiem");
+  await page.route("**/v1/taskiem-chat", async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    await new Promise(() => undefined); // held: never sent, never answered
+  });
+  await pane(page).locator("#taskiem-text").fill("cash in 7,000 till");
+  await pane(page).locator("#taskiem-text").press("Enter");
+  await expect(ours(page)).toHaveCount(1);
+  await page.reload();
+  await page.waitForTimeout(1500);
+  await expect(pane(page).locator("#taskiem-text")).toHaveValue(
+    "cash in 7,000 till",
+  );
+  await expect(page.getByText(/may not have been sent/)).toBeVisible();
+  await expect(ours(page)).toHaveCount(0);
+});
+
+test("a message the server has, when the page was away, is not put back", async ({
+  browser,
+}) => {
+  const page = await person(browser);
+  await page.goto("/chat?with=taskiem");
+  // The server gets it; the page goes away before the answer.
+  await page.route("**/v1/taskiem-chat", async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    await route.fetch(); // the server has it
+    await new Promise(() => undefined); // and the answer is never given
+  });
+  await pane(page).locator("#taskiem-text").fill("status");
+  await pane(page).locator("#taskiem-text").press("Enter");
+  await expect(ours(page)).toHaveCount(1);
+  await page.waitForTimeout(500);
+  await page.reload();
+  await expect(ours(page)).toHaveCount(1);
+  await expect(pane(page).locator("#taskiem-text")).toHaveValue("");
+  await expect(page.getByText(/may not have been sent/)).toHaveCount(0);
+});
+
+test("the stored copy arriving by the stream before the answer does not show the message twice", async ({
+  browser,
+}) => {
+  const page = await person(browser);
+  await page.goto("/chat?with=taskiem");
+  await page.waitForTimeout(800);
+  await page.route("**/v1/taskiem-chat", async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    const response = await route.fetch(); // the server has it now
+    await new Promise((r) => setTimeout(r, 3000)); // the answer comes late
+    await route.fulfill({ response });
+  });
+  await pane(page).locator("#taskiem-text").fill("status");
+  await pane(page).locator("#taskiem-text").press("Enter");
+  // By the time the stream has told of it, there is one, and never two.
+  const counts: number[] = [];
+  for (let i = 0; i < 7; i++) {
+    await page.waitForTimeout(500);
+    counts.push(await ours(page).count());
+  }
+  expect(Math.max(...counts)).toBe(1);
+  await expect(theirs(page).last()).toBeVisible({ timeout: 8000 });
+  await expect(ours(page)).toHaveCount(1);
+});
+
+test("what Taskiem says from another tab while you are elsewhere is counted once, even after a reload, and seeing it clears it in the other tab", async ({
+  browser,
+}) => {
+  const page = await person(browser);
+  const req = page.waitForRequest("**/v1/chat/stream");
+  await page.goto("/chat"); // the list: Taskiem's conversation is not in front
+  await req;
+  await page.waitForTimeout(800);
+  const other = await page.context().newPage();
+  await other.request.post("/v1/taskiem-chat", {
+    headers: H,
+    data: { text: "status" },
+  });
+  await expect(page).toHaveTitle(/^\(1\)/, { timeout: 8000 });
+  // A reload: the count is read again, and the stream's look-back tells of
+  // the same message: still one.
+  await page.reload();
+  await page.waitForTimeout(3500);
+  await expect(page).toHaveTitle(/^\(1\)/);
+  // The other tab opens the conversation and sees it: this tab follows.
+  await other.goto("/chat?with=taskiem");
+  await expect(theirs(other).last()).toBeVisible();
+  await other.bringToFront();
+  await other.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(page).not.toHaveTitle(/^\(\d/, { timeout: 8000 });
+});
+
+test("on a phone: the Taskiem conversation fits at 390 and 360, passes axe in both themes, and the camera is beside the microphone", async ({
+  browser,
+}) => {
+  const page = await phoneOf(browser);
+  await page.goto("/chat?with=taskiem");
+  await pane(page).locator("#taskiem-text").fill("cash in 5,000 till");
+  await pane(page).locator("#taskiem-text").press("Enter");
+  await expect(theirs(page).last()).toContainText("₦5,000");
+  for (const width of [390, 360]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.waitForTimeout(300);
+    const wide = await page.evaluate(
+      () => document.documentElement.scrollWidth > window.innerWidth,
+    );
+    expect(wide, `sideways scroll at ${width}`).toBe(false);
+    await axeBoth(page, `the Taskiem conversation at ${width}`);
+  }
+  await theirs(page).last().getByRole("button", { name: "Yes" }).click();
+  await expect(theirs(page).last()).toContainText("Recorded");
+  await axeBoth(page, "the Taskiem conversation, answered, on a phone");
+  const quick = pane(page).getByTestId("camera-quick");
+  await expect(quick).toBeVisible();
+  const chooser = page.waitForEvent("filechooser");
+  await quick.click();
+  await chooser; // the camera app, through the file input
+});
+
+test("on a computer the clip's Camera opens the webcam for Taskiem too", async ({
+  browser,
+}) => {
+  const page = await (
+    await browser.newContext({ permissions: ["camera"] })
+  ).newPage();
+  await signUp(page, `Chioma Cakes ${letters()}`);
+  await page.goto("/chat?with=taskiem");
+  await pane(page).getByTestId("attach").click();
+  await pane(page).getByRole("button", { name: "Camera" }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 });

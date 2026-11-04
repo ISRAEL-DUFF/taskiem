@@ -48,7 +48,7 @@ import {
   SHORTCUTS,
   step,
 } from "../lib/chatKeys";
-import { Ticks } from "./Conversation";
+import { Ticks } from "./BubbleShell";
 import {
   EmptyState,
   ErrorBox,

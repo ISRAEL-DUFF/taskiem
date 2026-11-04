@@ -665,13 +665,12 @@ test("the person's own conversation with Taskiem follows the stream: what is sai
     headers: H,
     data: { text: "status" },
   });
-  await expect(pane.getByText("status", { exact: true })).toBeVisible({
-    timeout: 4000,
-  });
-  await expect(pane.getByText(/No runs in the last 24 hours/)).toBeVisible({
-    timeout: 4000,
-  });
-  expect(await pane.getByText("status", { exact: true }).count()).toBe(1); // not twice
+  const said = pane.locator(".text", { hasText: /^status$/ });
+  await expect(said).toBeVisible({ timeout: 4000 });
+  await expect(
+    pane.locator(".text", { hasText: /No runs in the last 24 hours/ }),
+  ).toBeVisible({ timeout: 4000 });
+  expect(await said.count()).toBe(1); // not twice
 });
 
 test("a burst of messages is read with one request, not one each", async ({

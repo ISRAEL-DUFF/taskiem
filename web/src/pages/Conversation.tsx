@@ -57,6 +57,7 @@ import {
 import { ThreadJump } from "./ThreadParts";
 import { ChatStream } from "./ChatStream";
 import { ChatHead } from "./ChatHead";
+import { BubbleShell, CopyItem, Ticks } from "./BubbleShell";
 import { useChatLive } from "./ChatLive";
 import { roleLine, type BusinessLink, type LinkCard } from "../lib/links";
 import { ErrorBox, fmtTime, Modal, useAction, useLoad } from "../ui";
@@ -80,10 +81,6 @@ const REACTION_NAMES: Record<string, string> = {
 };
 /** A page of the conversation, as the API gives it. */
 const PAGE = 50;
-/** A swipe this far right replies. */
-const SWIPE_REPLY_PX = 60;
-/** A finger held this long on a bubble opens its menu, as WhatsApp's. */
-const HOLD_MS = 500;
 
 /** What can be attached: a photo or a PDF (a voice note is recorded). */
 
@@ -423,28 +420,6 @@ function PreviewCard({ p }: { p: LinkPreview }) {
   );
 }
 
-/** The ticks under a message of ours: two when it is delivered, blue once
- * they have read it. */
-export function Ticks({ read }: { read: boolean }) {
-  return (
-    <span
-      className={`ticks${read ? " read" : ""}`}
-      role="img"
-      aria-label={read ? "Read" : "Delivered"}
-    >
-      <Icon name="tick-double" />
-    </span>
-  );
-}
-
-/** True where some of the bubble's own text is selected (a right click then
- * keeps the browser's menu, to copy it); a selection elsewhere does not. */
-function selectedIn(el: Element | null): boolean {
-  const sel = window.getSelection();
-  if (!el || !sel || sel.isCollapsed || sel.toString() === "") return false;
-  return !!sel.anchorNode && el.contains(sel.anchorNode);
-}
-
 function Bubble({
   m,
   other,
@@ -491,10 +466,6 @@ function Bubble({
   onDiscard?: (clientId: string) => void;
 }) {
   const card = m.kind === "card" ? m.card : undefined;
-  const [more, setMore] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const bubbleEl = useRef<HTMLDivElement>(null);
-  const chevron = useRef<HTMLButtonElement>(null);
   const local = m.local;
   const hasMenu =
     !local &&
@@ -502,125 +473,180 @@ function Bubble({
       canReply ||
       (!card && !!(onForward || onHide || m.body)));
   const mineEmoji = m.reactions?.find((r) => r.mine)?.emoji;
-  // Swipe right to reply, and a finger held to open the menu (reply,
-  // copy, forward, delete for me), on a touch screen, as WhatsApp's; the
-  // hold is let go by a move or a scroll.
-  const drag = useRef<{ x: number; y: number; id: number } | null>(null);
-  const hold = useRef<number>(undefined);
-  const held = useRef(false);
-  const [dx, setDx] = useState(0);
-  const endHold = () => {
-    window.clearTimeout(hold.current);
-    hold.current = undefined;
-  };
-  const touch = {
-    onPointerDown: (e: React.PointerEvent) => {
-      if (e.pointerType === "mouse") return;
-      if (canReply)
-        drag.current = { x: e.clientX, y: e.clientY, id: e.pointerId };
-      if (!hasMenu) return;
-      endHold();
-      hold.current = window.setTimeout(() => {
-        hold.current = undefined;
-        held.current = true;
-        drag.current = null;
-        setDx(0);
-        setCopied(false);
-        setMore(true);
-      }, HOLD_MS);
-    },
-    onPointerMove: (e: React.PointerEvent) => {
-      const d = drag.current;
-      if (d && e.pointerId === d.id) {
-        const x = e.clientX - d.x;
-        if (Math.abs(x) > 10 || Math.abs(e.clientY - d.y) > 10) endHold();
-        if (Math.abs(e.clientY - d.y) > 30 && x < 20) {
-          drag.current = null;
-          setDx(0);
-          return;
-        }
-        setDx(Math.max(0, Math.min(x, 80)));
-      } else if (e.pointerType !== "mouse") endHold();
-    },
-    onPointerUp: () => {
-      endHold();
-      if (drag.current && dx >= SWIPE_REPLY_PX) onReply(m);
-      drag.current = null;
-      setDx(0);
-    },
-    onPointerCancel: () => {
-      endHold();
-      drag.current = null;
-      setDx(0);
-    },
-    // A long press on a touch screen also asks for the browser's own menu.
-    onContextMenu: (e: React.MouseEvent) => {
-      if (held.current) {
-        e.preventDefault();
-        held.current = false;
-        return;
-      }
-      // A right click opens the menu the hover's chevron opens, as on
-      // WhatsApp Web. A link, a player or a selection keeps the browser's own
-      // menu (copy, open in a new tab), and so does Shift + right click.
-      const t = e.target as Element;
-      if (
-        !hasMenu ||
-        onShow ||
-        e.shiftKey ||
-        t.closest?.("a, audio, video, input, textarea") ||
-        selectedIn(bubbleEl.current)
-      )
-        return;
-      e.preventDefault();
-      setCopied(false);
-      setMore(true);
-      requestAnimationFrame(() =>
-        bubbleEl.current
-          ?.querySelector<HTMLElement>('[data-testid="chat-more"] button')
-          ?.focus(),
-      );
-    },
-    onKeyDown: (e: React.KeyboardEvent) => {
-      if (e.key === "Escape" && more) {
-        e.preventDefault();
-        setMore(false);
-        chevron.current?.focus();
-      }
-    },
-  };
   const what = card ? cardLine(card, m.mine, other) : previewLine(m, other);
   // The time and ticks sit in the corner of the last line of text (the text
   // keeps room for them); with a photo only, a link preview or a card they
   // have a row of their own.
   const inline =
     !card && !!m.body && !m.preview && !onShow && local !== "failed";
-  // An open menu closes on a click elsewhere, and on Esc from anywhere.
-  useEffect(() => {
-    if (!more) return;
-    const away = (e: MouseEvent) =>
-      !bubbleEl.current?.contains(e.target as Node) && setMore(false);
-    const esc = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || e.defaultPrevented) return;
-      e.preventDefault();
-      setMore(false);
-    };
-    document.addEventListener("mousedown", away);
-    document.addEventListener("keydown", esc);
-    return () => {
-      document.removeEventListener("mousedown", away);
-      document.removeEventListener("keydown", esc);
-    };
-  }, [more]);
   return (
-    <div
-      ref={bubbleEl}
-      className={`bubble${m.mine ? " mine" : ""}${first ? " first" : ""}${card ? " card-bubble" : ""}${flash ? " flash" : ""}${m.reactions?.length ? " has-reactions" : ""}`}
-      data-msg={m.id}
-      data-testid={card ? "chat-card" : "chat-message"}
-      data-mine={m.mine}
-      style={dx ? { transform: `translateX(${dx}px)` } : undefined}
-      {...touch}
+    <BubbleShell
+      id={m.id}
+      mine={m.mine}
+      first={first}
+      testid={card ? "chat-card" : "chat-message"}
+      className={`${card ? "card-bubble" : ""}${flash ? " flash" : ""}${m.reactions?.length ? " has-reactions" : ""}`.trim()}
+      what={what}
+      asResult={!!onShow}
+      onReply={canReply ? () => onReply(m) : undefined}
+      menu={
+        hasMenu
+          ? (close) => (
+              <>
+                {onReact && (
+                  <span
+                    className="reaction-picker"
+                    role="group"
+                    aria-label="React"
+                  >
+                    {REACTIONS.map((e) => (
+                      <button
+                        key={e}
+                        type="button"
+                        className="react-pick"
+                        aria-pressed={mineEmoji === e}
+                        aria-label={`React with ${REACTION_NAMES[e]}`}
+                        title={REACTION_NAMES[e]}
+                        onClick={() => (close(), onReact(m, e))}
+                      >
+                        {e}
+                      </button>
+                    ))}
+                  </span>
+                )}
+                {canReply && (
+                  <button
+                    type="button"
+                    className="small"
+                    onClick={() => (close(), onReply(m))}
+                  >
+                    Reply
+                  </button>
+                )}
+                {!card && m.body && <CopyItem text={m.body} />}
+                {!card && onForward && (
+                  <button
+                    type="button"
+                    className="small"
+                    onClick={() => (close(), onForward(m))}
+                  >
+                    Forward
+                  </button>
+                )}
+                {onStar && (
+                  <button
+                    type="button"
+                    className="small"
+                    onClick={() => (close(), onStar(m))}
+                  >
+                    {m.starred ? "Unstar" : "Star"}
+                  </button>
+                )}
+                {onInfo && (
+                  <button
+                    type="button"
+                    className="small"
+                    onClick={() => (close(), onInfo(m))}
+                  >
+                    Info
+                  </button>
+                )}
+                {!card && onHide && (
+                  <button
+                    type="button"
+                    className="small danger"
+                    onClick={() => (close(), onHide(m))}
+                  >
+                    Delete for me
+                  </button>
+                )}
+              </>
+            )
+          : undefined
+      }
+      after={
+        <>
+          {local === "failed" && (
+            <span
+              className="chat-failed"
+              role="alert"
+              data-testid="chat-failed"
+            >
+              <span className="bang" aria-hidden="true">
+                !
+              </span>
+              <span className="why">Not sent. {m.localError}</span>
+              <button
+                type="button"
+                className="small"
+                onClick={() => onRetry?.(m.id.replace("local-", ""))}
+              >
+                Retry
+              </button>
+              <button
+                type="button"
+                className="small"
+                onClick={() => onDiscard?.(m.id.replace("local-", ""))}
+              >
+                Delete
+              </button>
+            </span>
+          )}
+          <span className={`stamp${inline ? " inline" : ""}`}>
+            {onShow && (
+              <button
+                type="button"
+                className="reply-btn"
+                data-testid="chat-show"
+                onClick={() => onShow(m.id)}
+              >
+                Show
+                <span className="sr-only"> in the conversation</span>
+              </button>
+            )}
+            {m.starred && (
+              <span className="starred" role="img" aria-label="Starred">
+                <Icon name="star" />
+              </span>
+            )}
+            <time dateTime={m.created_at} title={fmtTime(m.created_at)}>
+              {clock(m.created_at)}
+            </time>
+            {/* Our message is written in the other business's conversation in
+            the same transaction it is sent, so it is delivered as soon as
+            it is here: two ticks, coloured once they have read it. */}
+            {local === "sending" && (
+              <span className="ticks pending" role="img" aria-label="Sending">
+                <Icon name="clock" />
+              </span>
+            )}
+            {m.mine && !card && !local && <Ticks read={!!m.read_at} />}
+          </span>
+          {m.reactions && m.reactions.length > 0 && !local && (
+            <span className="reactions" role="group" aria-label="Reactions">
+              {m.reactions.map((r) => (
+                <button
+                  key={r.emoji}
+                  type="button"
+                  className="reaction-chip"
+                  aria-pressed={!!r.mine}
+                  aria-label={`${reactionWords(r)}. ${r.mine ? "Tap to take yours back." : "Tap to react the same."}`}
+                  title={reactionWords(r)}
+                  disabled={!onReact}
+                  onClick={() => onReact?.(m, r.emoji)}
+                >
+                  <span aria-hidden="true">{r.emoji}</span>
+                  {r.count > 1 && (
+                    <span className="count" aria-hidden="true">
+                      {r.count}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </span>
+          )}{" "}
+        </>
+      }
     >
       {first && !m.mine && !card && m.sender_name && (
         <span className="who">{m.sender_name}</span>
@@ -678,179 +704,7 @@ function Bubble({
           {m.preview && <PreviewCard p={m.preview} />}
         </>
       )}
-      {more && (
-        <span
-          className="row-actions bubble-more"
-          data-testid="chat-more"
-          role="group"
-          aria-label={`Options for ${what}`}
-        >
-          {onReact && (
-            <span className="reaction-picker" role="group" aria-label="React">
-              {REACTIONS.map((e) => (
-                <button
-                  key={e}
-                  type="button"
-                  className="react-pick"
-                  aria-pressed={mineEmoji === e}
-                  aria-label={`React with ${REACTION_NAMES[e]}`}
-                  title={REACTION_NAMES[e]}
-                  onClick={() => (setMore(false), onReact(m, e))}
-                >
-                  {e}
-                </button>
-              ))}
-            </span>
-          )}
-          {canReply && (
-            <button
-              type="button"
-              className="small"
-              onClick={() => (setMore(false), onReply(m))}
-            >
-              Reply
-            </button>
-          )}
-          {!card && m.body && (
-            <button
-              type="button"
-              className="small"
-              onClick={() =>
-                void navigator.clipboard?.writeText(m.body ?? "").then(
-                  () => setCopied(true),
-                  () => undefined,
-                )
-              }
-            >
-              {copied ? "Copied" : "Copy"}
-            </button>
-          )}
-          {!card && onForward && (
-            <button
-              type="button"
-              className="small"
-              onClick={() => (setMore(false), onForward(m))}
-            >
-              Forward
-            </button>
-          )}
-          {onStar && (
-            <button
-              type="button"
-              className="small"
-              onClick={() => (setMore(false), onStar(m))}
-            >
-              {m.starred ? "Unstar" : "Star"}
-            </button>
-          )}
-          {onInfo && (
-            <button
-              type="button"
-              className="small"
-              onClick={() => (setMore(false), onInfo(m))}
-            >
-              Info
-            </button>
-          )}
-          {!card && onHide && (
-            <button
-              type="button"
-              className="small danger"
-              onClick={() => (setMore(false), onHide(m))}
-            >
-              Delete for me
-            </button>
-          )}
-        </span>
-      )}
-      {(canReply || hasMenu) && !onShow && (
-        <button
-          type="button"
-          className="bubble-chevron"
-          ref={chevron}
-          aria-expanded={more}
-          onClick={() => (setMore(!more), setCopied(false))}
-        >
-          <Icon name="down" />
-          <span className="sr-only">More for {what}</span>
-        </button>
-      )}
-      {local === "failed" && (
-        <span className="chat-failed" role="alert" data-testid="chat-failed">
-          <span className="bang" aria-hidden="true">
-            !
-          </span>
-          <span className="why">Not sent. {m.localError}</span>
-          <button
-            type="button"
-            className="small"
-            onClick={() => onRetry?.(m.id.replace("local-", ""))}
-          >
-            Retry
-          </button>
-          <button
-            type="button"
-            className="small"
-            onClick={() => onDiscard?.(m.id.replace("local-", ""))}
-          >
-            Delete
-          </button>
-        </span>
-      )}
-      <span className={`stamp${inline ? " inline" : ""}`}>
-        {onShow && (
-          <button
-            type="button"
-            className="reply-btn"
-            data-testid="chat-show"
-            onClick={() => onShow(m.id)}
-          >
-            Show
-            <span className="sr-only"> in the conversation</span>
-          </button>
-        )}
-        {m.starred && (
-          <span className="starred" role="img" aria-label="Starred">
-            <Icon name="star" />
-          </span>
-        )}
-        <time dateTime={m.created_at} title={fmtTime(m.created_at)}>
-          {clock(m.created_at)}
-        </time>
-        {/* Our message is written in the other business's conversation in
-            the same transaction it is sent, so it is delivered as soon as
-            it is here: two ticks, coloured once they have read it. */}
-        {local === "sending" && (
-          <span className="ticks pending" role="img" aria-label="Sending">
-            <Icon name="clock" />
-          </span>
-        )}
-        {m.mine && !card && !local && <Ticks read={!!m.read_at} />}
-      </span>
-      {m.reactions && m.reactions.length > 0 && !local && (
-        <span className="reactions" role="group" aria-label="Reactions">
-          {m.reactions.map((r) => (
-            <button
-              key={r.emoji}
-              type="button"
-              className="reaction-chip"
-              aria-pressed={!!r.mine}
-              aria-label={`${reactionWords(r)}. ${r.mine ? "Tap to take yours back." : "Tap to react the same."}`}
-              title={reactionWords(r)}
-              disabled={!onReact}
-              onClick={() => onReact?.(m, r.emoji)}
-            >
-              <span aria-hidden="true">{r.emoji}</span>
-              {r.count > 1 && (
-                <span className="count" aria-hidden="true">
-                  {r.count}
-                </span>
-              )}
-            </button>
-          ))}
-        </span>
-      )}
-    </div>
+    </BubbleShell>
   );
 }
 

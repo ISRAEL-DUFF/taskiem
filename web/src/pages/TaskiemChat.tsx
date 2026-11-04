@@ -4,7 +4,7 @@ import { ThreadJump } from "./ThreadParts";
 import { ChatStream } from "./ChatStream";
 import { ChatHead } from "./ChatHead";
 import { ComposerView, TASKIEM_FILES, useComposer } from "./ChatComposer";
-import { Ticks } from "./Conversation";
+import { BubbleShell, CopyItem, Ticks } from "./BubbleShell";
 import { useChatLive } from "./ChatLive";
 import { get, post, upload } from "../api";
 import type { Conversation } from "../lib/linkchat";
@@ -13,11 +13,16 @@ import { Icon } from "../icons";
 import { clock } from "../lib/linkchat";
 import {
   boldParts,
+  inflight,
+  inflightOutcome,
+  keepInflight,
   mergeTaskiem,
   NIL,
   type TaskiemMessage,
 } from "../lib/taskiemchat";
 import { markSeen, seenAt, unreadAfter } from "../lib/taskiemSeen";
+import { setDraft } from "../lib/drafts";
+import { toast } from "../toast";
 import { ErrorBox, fmtTime, useAction, useLoad } from "../ui";
 
 // The Taskiem conversation on the web (business links L3, §5.5): the
@@ -42,6 +47,14 @@ const CHANNEL: Record<string, string> = {
   telegram: "Telegram",
   slack: "Slack",
 };
+
+/** The page is being left (a reload, a closed tab): its requests fail. */
+let leaving = false;
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeunload", () => (leaving = true));
+  window.addEventListener("pagehide", () => (leaving = true));
+  window.addEventListener("pageshow", () => (leaving = false));
+}
 
 const startsRun = (
   prev: TaskiemMessage | undefined,
@@ -131,6 +144,22 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
         setHasOlder(out.messages.length >= PAGE);
         setUnread(unreadAfter(out.messages, seenAt()));
         setMessages(mergeTaskiem([], out.messages));
+        // A message that was on its way when the page went away: Taskiem
+        // has it, or the words come back to the box, for the person to check.
+        const f = inflight();
+        if (f) {
+          keepInflight(undefined);
+          if (inflightOutcome(out.messages, f) === "not-sent") {
+            // Kept as the draft too: the pane may be shown again (a page
+            // that is drawn twice as it loads) before this is read.
+            setDraft("taskiem", f.text);
+            c.setText((cur) => (cur === "" ? f.text : cur));
+            toast(
+              "Your last message may not have been sent. It is back in the box: look above, then send it again if it is not there.",
+              "error",
+            );
+          }
+        }
       })
       .catch(setError);
     // The thread's reset is stable.
@@ -208,7 +237,11 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
           local: true,
         }
       : undefined;
-    if (mine) setMessages((cur) => mergeTaskiem(cur ?? [], [mine]));
+    if (mine) {
+      setMessages((cur) => mergeTaskiem(cur ?? [], [mine]));
+      // If the page goes away before the answer, it is known on coming back.
+      keepInflight({ text: mine.text, at: mine.created_at });
+    }
     void act
       .run(async () => {
         const out = await post<{ messages: TaskiemMessage[] }>(
@@ -227,6 +260,10 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
         setLive(answer ? liveKey(answer) : undefined);
       }, false)
       .then((ok) => {
+        // The page going away fails the request: that is not a message that
+        // did not go, and what is kept for the next page stays.
+        if (leaving) return;
+        keepInflight(undefined);
         // Not sent: what was typed comes back to the box to be sent again.
         if (ok || !mine) return;
         setMessages((cur) => cur?.filter((x) => x.id !== mine.id));
@@ -297,10 +334,6 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
           </>
         }
       />
-      <p className="hint" style={{ padding: "8px 14px 0", margin: 0 }}>
-        The same conversation you have with Taskiem on your phone: say{" "}
-        <strong>help</strong> to see what it can do.
-      </p>
       <ErrorBox error={error ?? act.error ?? c.fileError} />
       <ChatStream
         items={messages}
@@ -312,8 +345,9 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
         unread={unread}
         empty={
           <>
-            Nothing yet. Say <strong>status</strong> to see how the business is
-            doing.
+            This is the conversation you have with Taskiem on your phone. Say{" "}
+            <strong>help</strong> to see what it can do, or{" "}
+            <strong>status</strong> to see how the business is doing.
           </>
         }
         render={(m, { first }) => {
@@ -324,11 +358,46 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
           const inline =
             m.channel === "web" && !(m.buttons && m.buttons.length > 0);
           return (
-            <div
-              className={`bubble${m.inbound ? " mine" : ""}${first ? " first" : ""}`}
-              data-msg={m.id}
-              data-testid="taskiem-message"
-              data-mine={m.inbound}
+            <BubbleShell
+              id={m.id}
+              mine={m.inbound}
+              first={first}
+              testid="taskiem-message"
+              what={m.text.split("\n")[0]?.slice(0, 60) ?? "message"}
+              menu={
+                !m.local && m.text
+                  ? () => <CopyItem text={m.text} />
+                  : undefined
+              }
+              after={
+                <span className={`stamp${inline ? " inline" : ""}`}>
+                  {m.channel !== "web" && (
+                    <span
+                      className="channel-mark"
+                      data-testid="taskiem-channel"
+                      title={`Sent on ${CHANNEL[m.channel] ?? m.channel}`}
+                    >
+                      <span className="sr-only">Sent </span>
+                      on {CHANNEL[m.channel] ?? m.channel} ·
+                    </span>
+                  )}
+                  <time dateTime={m.created_at} title={fmtTime(m.created_at)}>
+                    {clock(m.created_at)}
+                  </time>
+                  {m.inbound &&
+                    (m.local ? (
+                      <span
+                        className="ticks pending"
+                        role="img"
+                        aria-label="Sending"
+                      >
+                        <Icon name="clock" />
+                      </span>
+                    ) : (
+                      <Ticks read={answered.has(m.id)} />
+                    ))}
+                </span>
+              }
             >
               {!m.inbound && first && <span className="who">Taskiem</span>}
               <span className="text">
@@ -371,34 +440,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
                   )}
                 </span>
               )}
-              <span className={`stamp${inline ? " inline" : ""}`}>
-                {m.channel !== "web" && (
-                  <span
-                    className="channel-mark"
-                    data-testid="taskiem-channel"
-                    title={`Sent on ${CHANNEL[m.channel] ?? m.channel}`}
-                  >
-                    <span className="sr-only">Sent </span>
-                    on {CHANNEL[m.channel] ?? m.channel} ·
-                  </span>
-                )}
-                <time dateTime={m.created_at} title={fmtTime(m.created_at)}>
-                  {clock(m.created_at)}
-                </time>
-                {m.inbound &&
-                  (m.local ? (
-                    <span
-                      className="ticks pending"
-                      role="img"
-                      aria-label="Sending"
-                    >
-                      <Icon name="clock" />
-                    </span>
-                  ) : (
-                    <Ticks read={answered.has(m.id)} />
-                  ))}
-              </span>
-            </div>
+            </BubbleShell>
           );
         }}
         overlay={

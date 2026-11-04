@@ -6,7 +6,6 @@ import {
   useState,
   type DragEvent,
   type KeyboardEvent,
-  type ReactNode,
 } from "react";
 import { Icon } from "../icons";
 import { insertAt } from "../lib/emoji";
@@ -284,7 +283,6 @@ export function ComposerView<R>({
   prefix,
   textId,
   textLabel,
-  error,
 }: {
   c: ReturnType<typeof useComposer<R>>;
   busy: boolean;
@@ -292,12 +290,10 @@ export function ComposerView<R>({
   prefix: string;
   textId: string;
   textLabel: string;
-  error?: ReactNode;
 }) {
   const { voice, file, text, reply } = c;
   return (
     <>
-      {error}
       {reply && c.o.replyLine && (
         <div
           className="composer-reply"

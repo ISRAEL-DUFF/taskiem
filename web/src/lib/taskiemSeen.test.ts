@@ -29,6 +29,14 @@ describe("unreadAfter", () => {
     expect(unreadAfter(list, "2026-01-01T10:06:00Z")).toBeUndefined();
     expect(unreadAfter(list, undefined)).toBeUndefined();
   });
+  it("compares times, not strings (a time with fewer digits is not later)", () => {
+    const x = [m("a", false, "2026-01-01T10:00:00.50123Z")];
+    expect(unreadAfter(x, "2026-01-01T10:00:00.5Z")).toEqual({
+      id: "a",
+      count: 1,
+    });
+    expect(unreadAfter(x, "2026-01-01T10:00:00.50123Z")).toBeUndefined();
+  });
   it("does not count the person's own", () => {
     expect(unreadAfter(list, "2026-01-01T10:00:01Z")?.count).toBe(2);
   });

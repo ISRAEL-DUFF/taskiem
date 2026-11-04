@@ -165,13 +165,11 @@ test("a photo with a caption, a PDF and a voice note", async ({ browser }) => {
   expect(sent[0]).toContain('filename="bags.png"');
 
   // A PDF, with no words: Send without a caption.
-  await pane
-    .getByTestId("chat-file")
-    .setInputFiles({
-      name: "waybill.pdf",
-      mimeType: "application/pdf",
-      buffer: Buffer.from("%PDF-1.4\n%%EOF\n"),
-    });
+  await pane.getByTestId("chat-file").setInputFiles({
+    name: "waybill.pdf",
+    mimeType: "application/pdf",
+    buffer: Buffer.from("%PDF-1.4\n%%EOF\n"),
+  });
   await expect(pane.getByTestId("chat-attaching")).toContainText("waybill.pdf");
   await pane.getByRole("button", { name: "Send" }).click();
   await expect(mine.getByRole("link", { name: /waybill\.pdf/ })).toBeVisible();

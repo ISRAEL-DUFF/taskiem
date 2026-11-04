@@ -3,6 +3,7 @@
 // messages begin, and count what arrived while they read further up.
 
 import type { LinkMessage } from "./linkchat";
+import { isAfter } from "./stamp";
 
 /** How close to the bottom still counts as "at the bottom", in pixels. */
 export const NEAR_BOTTOM = 80;
@@ -45,7 +46,7 @@ export function followNew<T extends { created_at: string }>(
   isMine: (m: T) => boolean = (m) => (m as { mine?: boolean }).mine === true,
 ): Follow {
   if (!prevNewest) return { kind: "none" };
-  const arrived = messages.filter((m) => m.created_at > prevNewest);
+  const arrived = messages.filter((m) => isAfter(m.created_at, prevNewest));
   if (arrived.length === 0) return { kind: "none" };
   if (wasAtBottom || arrived.some(isMine)) return { kind: "bottom" };
   return { kind: "pill", count: arrived.filter((m) => !isMine(m)).length };

@@ -10,6 +10,7 @@ import {
 } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { get } from "../api";
+import { isAfter } from "../lib/stamp";
 import { useAuth } from "../auth";
 import { brandFile } from "../brand";
 import {
@@ -29,7 +30,6 @@ import {
   beginSeen,
   markSeen,
   seenAt,
-  setTaskiemUnread,
   useTaskiemUnread,
 } from "../lib/taskiemSeen";
 import type { Conversation, LinkMessage } from "../lib/linkchat";
@@ -177,9 +177,8 @@ export function ChatLiveProvider({ children }: { children: ReactNode }) {
       setConnected(false);
       setTyping(EMPTY);
     };
-    // What Taskiem says that the person is not looking at is unread (each
-    // message counted once, though the stream may say it again).
-    const counted = new Set<string>();
+    // What Taskiem says that the person is not looking at is unread (a
+    // message told again, by the stream's look-back, is the same one).
     const taskiemHeard = (messages: TaskiemMessage[]) => {
       const seen = seenAt();
       if (!seen) return;
@@ -187,13 +186,13 @@ export function ChatLiveProvider({ children }: { children: ReactNode }) {
         !isAway() &&
         here.current.pathname === "/chat" &&
         new URLSearchParams(here.current.search).get("with") === "taskiem";
-      const said = messages.filter((m) => !m.inbound && m.created_at > seen);
+      const said = messages.filter(
+        (m) => !m.inbound && isAfter(m.created_at, seen),
+      );
       const newest = said[said.length - 1];
       if (!newest) return;
       if (viewing) return markSeen(newest.created_at);
-      const fresh = said.filter((m) => !counted.has(m.id));
-      fresh.forEach((m) => counted.add(m.id));
-      if (fresh.length > 0) addTaskiemUnread(fresh.length);
+      addTaskiemUnread(said);
     };
     const open = () => {
       hear();
@@ -372,11 +371,12 @@ export function ChatLiveProvider({ children }: { children: ReactNode }) {
     ).then(
       (r) => {
         if (!live || seenAt() !== seen) return;
-        const n = r.messages.filter((m) => !m.inbound).length;
+        const said = r.messages.filter((m) => !m.inbound);
         const viewing =
           here.current.pathname === "/chat" &&
           new URLSearchParams(here.current.search).get("with") === "taskiem";
-        setTaskiemUnread(viewing ? 0 : n);
+        // Added to what the stream may already have told (it is the same set).
+        if (!viewing) addTaskiemUnread(said);
       },
       () => undefined,
     );
