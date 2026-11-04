@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/time/rate"
 
+	"github.com/israel-duff/taskiem/engine/brand"
 	"github.com/israel-duff/taskiem/engine/formguard"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
@@ -982,5 +983,53 @@ func TestQuoteAndBlankForms(t *testing.T) {
 	w = e.post("/repairs/a/form", url.Values{"token": {tok}, "website": {""}, "name": {"Bola"}, "phone": {"0803 123 4567"}, "a.device": {"Fridge"}})
 	if w.Code != http.StatusSeeOther {
 		t.Fatalf("a blank form: %d %s", w.Code, w.Body.String())
+	}
+}
+
+// An item is opened by its name (an own view, with no script): with the
+// order form on it offers Add to order; with no form at all the page and
+// the item say that orders are not open yet, and where to ask, instead of
+// leaving the item doing nothing. In every theme.
+func TestItemsOpenAndSayWhenOrdersAreNotOpen(t *testing.T) {
+	order := uuid.New()
+	for _, theme := range brand.Themes {
+		p := orderPage()
+		home := storefront.PublicFront{Slug: "", Kind: "shop", Name: "Ada's Kitchen"}
+		snacks := storefront.PublicFront{Slug: "snacks", Kind: "food", Name: "Snacks",
+			Blocks:  []storefront.PublicBlock{{Kind: "list", Config: json.RawMessage(`{"table": "00000000-0000-0000-0000-000000000001", "table_name": "menu", "columns": {"name": "name"}}`)}},
+			Actions: []storefront.PublicAction{{ID: &order, Slug: "order", Kind: "order", Label: "Order snacks", Payment: "after_accept", Pickup: true, Form: storefront.BuiltinForm("order")}}}
+		cold := storefront.PublicFront{Slug: "cold", Kind: "food", Name: "Cold drinks", Blocks: snacks.Blocks}
+		p.Model.Fronts = []storefront.PublicFront{home, snacks, cold}
+		p.Model.WhatsLink = "https://wa.me/2348031234567"
+		p.Lists = map[string][]storefront.Item{"menu": {{ID: "1", Name: "Puff puff", PriceKobo: kobo(50000), Description: "Fried fresh", Available: true},
+			{ID: "2", Name: "Zobo", PriceKobo: kobo(30000), Available: false}}}
+		e := formServer(t, p)
+		withBrand(e.s, brand.Brand{Theme: theme})
+		e.h = e.s.Handler()
+
+		// With the order form on: the name opens the item, which offers Add to order.
+		page := get(e.h, "GET", sfHost, "/snacks").Body.String()
+		for _, want := range []string{`class="item-open" href="#i-1"`, `id="i-1"`, `href="/snacks/a/order?item=1"`, "Add to order", "Unavailable for now."} {
+			if !strings.Contains(page, want) {
+				t.Errorf("%s: with the order form on, missing %q", theme, want)
+			}
+		}
+		if strings.Contains(page, "Orders are not open on this page yet") {
+			t.Errorf("%s: the page says orders are not open while they are", theme)
+		}
+
+		// With no form: the page and each item say so, and where to ask.
+		page = get(e.h, "GET", sfHost, "/cold").Body.String()
+		for _, want := range []string{`href="#i-1"`, "Orders are not open on this page yet.", `href="https://wa.me/2348031234567"`, "on WhatsApp"} {
+			if !strings.Contains(page, want) {
+				t.Errorf("%s: with no form, missing %q", theme, want)
+			}
+		}
+		if strings.Contains(page, "Add to order") || strings.Contains(page, `class="add"`) {
+			t.Errorf("%s: an order button on a front that takes no orders", theme)
+		}
+		if !strings.Contains(page, "/_static/item-sheet.") {
+			t.Errorf("%s: the item view's stylesheet is not linked", theme)
+		}
 	}
 }

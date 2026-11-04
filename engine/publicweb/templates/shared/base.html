@@ -5,7 +5,26 @@ link preview, and a form's hidden fields. Each theme draws the rest. */}}
 <meta name="referrer" content="no-referrer">
 <link rel="stylesheet" href="{{asset .Brand.ThemeCSS}}">
 <link rel="stylesheet" href="{{.Brand.CSS}}">
+<link rel="stylesheet" href="{{asset "item-sheet.css"}}">
 {{end}}
+
+{{/* An item's own view, opened by its name (no script: the address's #fragment
+     is what shows it): the large photo, the words, the price, and either Add to
+     order or why there is nothing to press. */}}
+{{define "itemsheet"}}<div class="sheet" id="i-{{.It.ID}}" role="dialog" aria-labelledby="i-{{.It.ID}}-h">
+  <a class="sheet-back" href="#" tabindex="-1" aria-hidden="true"></a>
+  <div class="sheet-card">
+    <a class="sheet-close" href="#" aria-label="Close">×</a>
+    {{if .It.Large}}<img class="sheet-img" src="{{.It.Large}}" alt="{{.It.Name}}" loading="lazy" decoding="async">{{end}}
+    <h3 id="i-{{.It.ID}}-h">{{.It.Name}}</h3>
+    {{with .It.Price}}<p class="sheet-price">{{.}}</p>{{end}}
+    {{with .It.Description}}<p>{{.}}</p>{{end}}
+    {{if not .It.Available}}<p class="sheet-note">Unavailable for now.</p>
+    {{else if .It.SoldOut}}<p class="sheet-note">Sold out.</p>
+    {{else if and .Open .It.Orderable}}<a class="btn btn-primary sheet-add" href="{{.Base}}/a/order?item={{.It.ID}}">Add to order</a>
+    {{else if .Closed}}<p class="sheet-note">Orders are not open on this page yet.{{with .Whats}} <a href="{{.}}" rel="noopener">Message {{$.Business}} on WhatsApp</a> to order.{{else}}{{with .Phone}} Call <a href="tel:{{.}}">{{.}}</a> to order.{{end}}{{end}}</p>{{end}}
+  </div>
+</div>{{end}}
 
 {{define "og"}}<title>{{.M.Card.Name}}</title>
 {{with .Description}}<meta name="description" content="{{.}}">{{end}}

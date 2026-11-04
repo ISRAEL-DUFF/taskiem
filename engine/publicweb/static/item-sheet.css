@@ -1,0 +1,22 @@
+/* An item's own view on a storefront or front page: opened by its name, with
+   no script (the #fragment of the address shows it, Close or Escape's back
+   button hides it). Colours come from the theme's own variables. */
+.item, .row, .tile { position: relative; }
+.item-open { color: inherit; text-decoration: none; }
+.item-open::after { content: ""; position: absolute; inset: 0; z-index: 0; }
+.item .add, .row .btn, .item .btn, .tile .add { position: relative; z-index: 1; }
+.sheet { display: none; position: fixed; inset: 0; z-index: 50; align-items: flex-end; justify-content: center; }
+.sheet:target { display: flex; }
+.sheet-back { position: absolute; inset: 0; background: rgba(0, 0, 0, .5); }
+.sheet-card { position: relative; width: 100%; max-width: 32rem; max-height: 90vh; overflow: auto; padding: 1rem 1rem 1.25rem;
+  background: var(--card, var(--bg, #fff)); color: var(--fg, #141414); border-radius: 18px 18px 0 0; box-shadow: 0 -8px 30px rgba(0, 0, 0, .25); }
+.sheet-card h3 { margin: .25rem 0 0; font-size: 1.15rem; }
+.sheet-img { display: block; width: 100%; max-height: 18rem; object-fit: cover; border-radius: 12px; margin: 0 0 .75rem; }
+.sheet-price { margin: .25rem 0 .5rem; font-weight: 700; }
+.sheet-note { color: var(--muted, #55524d); }
+.sheet-close { position: absolute; top: .5rem; right: .5rem; z-index: 2; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px;
+  border-radius: 50%; background: rgba(0, 0, 0, .6); color: #fff; font-size: 1.5rem; line-height: 1; text-decoration: none; }
+.sheet-add { display: block; margin-top: .75rem; text-align: center; }
+@media (min-width: 40rem) { .sheet { align-items: center; } .sheet-card { border-radius: 18px; } }
+@media (prefers-reduced-motion: no-preference) { .sheet:target .sheet-card { animation: sheet-up .18s ease-out; } }
+@keyframes sheet-up { from { transform: translateY(1.5rem); opacity: .6; } to { transform: none; opacity: 1; } }

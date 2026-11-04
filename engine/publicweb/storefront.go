@@ -174,6 +174,25 @@ type item struct {
 	Orderable bool
 }
 
+// sheetData is what an item's own view is given: the item, and what a
+// customer can do from it (add it to an order, or why not).
+type sheetData struct {
+	It       item
+	Open     bool // the page takes orders: an Add link
+	Base     string
+	Business string
+	Whats    string
+	Phone    string
+	// Closed is true when the page has items but no form at all: orders
+	// are not open yet, and the customer is told rather than left with
+	// an item that does nothing.
+	Closed bool
+}
+
+func sheetFor(it item, d storefrontData) sheetData {
+	return sheetData{It: it, Open: d.Ordering, Base: d.Base, Business: d.M.Card.Name, Whats: d.M.WhatsLink, Phone: d.Phone, Closed: len(d.Forms) == 0}
+}
+
 type hoursRow struct {
 	Day   string
 	Spans string
