@@ -324,6 +324,7 @@ function SignedIn() {
   const mainRef = useRef<HTMLElement>(null);
   useScrollableTables(mainRef);
   const { pathname } = useLocation();
+  const off = areaOffFor(pathname, me?.areas);
   useEffect(() => setDrawer(false), [pathname]);
   // A row of tabs wider than a phone scrolls sideways: bring the open one into view.
   useEffect(() => {
@@ -612,8 +613,8 @@ function SignedIn() {
         <TermsBanner />
         <div className="page" key={`${pathname}#${fresh}`}>
           <PageBoundary>
-            {areaOffFor(pathname, me.areas) ? (
-              <AreaOff area={areaOffFor(pathname, me.areas)!} owner={me.roles.includes("owner")} />
+            {off ? (
+              <AreaOff area={off} owner={me.roles.includes("owner")} />
             ) : (
             <Routes>
               <Route path="/" element={<Navigate to="/home" replace />} />
