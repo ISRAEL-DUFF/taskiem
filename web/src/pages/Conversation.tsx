@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { Link } from "react-router-dom";
-import { get, post, put, upload } from "../api";
+import { del, get, post, put, upload } from "../api";
 import { useAuth } from "../auth";
 import {
   attachmentLabel,
@@ -21,11 +21,15 @@ import {
   fileURL,
   merge,
   previewLine,
+  REACTIONS,
+  reactionWords,
+  toggleReaction,
   type Attachment,
   type Conversation,
   type DocCard,
   type LinkMessage,
   type LinkPreview,
+  type Reaction,
 } from "../lib/linkchat";
 import { Icon } from "../icons";
 import { MicButton, RecordingBar, useVoiceNote } from "./VoiceNote";
@@ -33,7 +37,12 @@ import { MentionList, MentionText, useMentions } from "./Mentions";
 import { priceWords, type PriceItem } from "../lib/pricelists";
 import { firstUnread, startsRun } from "../lib/thread";
 import { useThread } from "../lib/useThread";
-import { asMessage, newClientId, type Outgoing } from "../lib/outbox";
+import {
+  actionError,
+  asMessage,
+  newClientId,
+  type Outgoing,
+} from "../lib/outbox";
 import {
   discardOutgoing,
   onSent,
@@ -61,6 +70,15 @@ import { ErrorBox, fmtTime, Modal, Skeleton, useAction, useLoad } from "../ui";
 // the clock, as WhatsApp's does, with the time in words on hover.
 
 const EVERY_MS = 3000;
+/** The six reactions, in words (for the screen reader and the tooltip). */
+const REACTION_NAMES: Record<string, string> = {
+  "👍": "thumbs up",
+  "❤️": "heart",
+  "😂": "laughing",
+  "😮": "surprise",
+  "😢": "sad",
+  "🙏": "thanks",
+};
 /** A page of the conversation, as the API gives it. */
 const PAGE = 50;
 /** A swipe this far right replies. */
@@ -337,6 +355,60 @@ function ForwardSheet({
   );
 }
 
+/** When a message was sent and read, and who reacted (WhatsApp's "Message
+ * info"): the times the two businesses' copies carry. */
+function InfoSheet({
+  m,
+  other,
+  onClose,
+}: {
+  m: LinkMessage;
+  other: string;
+  onClose: () => void;
+}) {
+  return (
+    <Modal title="Message info" onClose={onClose}>
+      <p className="hint" data-testid="info-what">
+        “
+        {m.kind === "card" && m.card
+          ? cardLine(m.card, m.mine, other)
+          : previewLine(m, other)}
+        ”
+      </p>
+      <dl className="info-times" data-testid="chat-info-times">
+        <dt>{m.mine ? "Sent" : "Received"}</dt>
+        <dd>{fmtTime(m.created_at)}</dd>
+        {m.mine ? (
+          <>
+            <dt>Read by {other}</dt>
+            <dd>{m.read_at ? fmtTime(m.read_at) : "Not yet"}</dd>
+          </>
+        ) : (
+          <>
+            <dt>Read by you</dt>
+            <dd>{m.read_at ? fmtTime(m.read_at) : "Not yet"}</dd>
+          </>
+        )}
+      </dl>
+      {m.reactions && m.reactions.length > 0 && (
+        <>
+          <h3 style={{ marginBottom: 4 }}>Reactions</h3>
+          <ul className="info-reactions">
+            {m.reactions.map((r) => (
+              <li key={r.emoji}>{reactionWords(r)}</li>
+            ))}
+          </ul>
+        </>
+      )}
+      <div className="row-actions">
+        <button type="button" onClick={onClose}>
+          Close
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 /** A link's preview in its bubble: the page's host, title and words. */
 function PreviewCard({ p }: { p: LinkPreview }) {
   return (
@@ -381,6 +453,9 @@ function Bubble({
   flash = false,
   onShow,
   first = true,
+  onReact,
+  onStar,
+  onInfo,
   onRetry,
   onDiscard,
 }: {
@@ -400,6 +475,12 @@ function Bubble({
   onShow?: (id: string) => void;
   /** Starts a run of one sender's messages: it has the tail and the name. */
   first?: boolean;
+  /** React to it with an emoji (the same one again takes the reaction back). */
+  onReact?: (m: LinkMessage, emoji: string) => void;
+  /** Star it, or take the star off. */
+  onStar?: (m: LinkMessage) => void;
+  /** Show when it was sent and read. */
+  onInfo?: (m: LinkMessage) => void;
   /** Not sent: tries again, or gives up on the message. */
   onRetry?: (clientId: string) => void;
   onDiscard?: (clientId: string) => void;
@@ -409,7 +490,11 @@ function Bubble({
   const [copied, setCopied] = useState(false);
   const local = m.local;
   const hasMenu =
-    !local && !card && !!(onForward || onHide || m.body || canReply);
+    !local &&
+    (!!(onReact || onStar || onInfo) ||
+      canReply ||
+      (!card && !!(onForward || onHide || m.body)));
+  const mineEmoji = m.reactions?.find((r) => r.mine)?.emoji;
   // Swipe right to reply, and a finger held to open the menu (reply,
   // copy, forward, delete for me), on a touch screen, as WhatsApp's; the
   // hold is let go by a move or a scroll.
@@ -480,7 +565,7 @@ function Bubble({
     !card && !!m.body && !m.preview && !onShow && local !== "failed";
   return (
     <div
-      className={`bubble${m.mine ? " mine" : ""}${first ? " first" : ""}${card ? " card-bubble" : ""}${flash ? " flash" : ""}`}
+      className={`bubble${m.mine ? " mine" : ""}${first ? " first" : ""}${card ? " card-bubble" : ""}${flash ? " flash" : ""}${m.reactions?.length ? " has-reactions" : ""}`}
       data-msg={m.id}
       data-testid={card ? "chat-card" : "chat-message"}
       data-mine={m.mine}
@@ -550,6 +635,23 @@ function Bubble({
           role="group"
           aria-label={`Options for ${what}`}
         >
+          {onReact && (
+            <span className="reaction-picker" role="group" aria-label="React">
+              {REACTIONS.map((e) => (
+                <button
+                  key={e}
+                  type="button"
+                  className="react-pick"
+                  aria-pressed={mineEmoji === e}
+                  aria-label={`React with ${REACTION_NAMES[e]}`}
+                  title={REACTION_NAMES[e]}
+                  onClick={() => (setMore(false), onReact(m, e))}
+                >
+                  {e}
+                </button>
+              ))}
+            </span>
+          )}
           {canReply && (
             <button
               type="button"
@@ -580,6 +682,24 @@ function Bubble({
               onClick={() => (setMore(false), onForward(m))}
             >
               Forward
+            </button>
+          )}
+          {onStar && (
+            <button
+              type="button"
+              className="small"
+              onClick={() => (setMore(false), onStar(m))}
+            >
+              {m.starred ? "Unstar" : "Star"}
+            </button>
+          )}
+          {onInfo && (
+            <button
+              type="button"
+              className="small"
+              onClick={() => (setMore(false), onInfo(m))}
+            >
+              Info
             </button>
           )}
           {!card && onHide && (
@@ -638,6 +758,11 @@ function Bubble({
             <span className="sr-only"> in the conversation</span>
           </button>
         )}
+        {m.starred && (
+          <span className="starred" role="img" aria-label="Starred">
+            <Icon name="star" />
+          </span>
+        )}
         <time dateTime={m.created_at} title={fmtTime(m.created_at)}>
           {clock(m.created_at)}
         </time>
@@ -651,6 +776,29 @@ function Bubble({
         )}
         {m.mine && !card && !local && <Ticks read={!!m.read_at} />}
       </span>
+      {m.reactions && m.reactions.length > 0 && !local && (
+        <span className="reactions" role="group" aria-label="Reactions">
+          {m.reactions.map((r) => (
+            <button
+              key={r.emoji}
+              type="button"
+              className="reaction-chip"
+              aria-pressed={!!r.mine}
+              aria-label={`${reactionWords(r)}. ${r.mine ? "Tap to take yours back." : "Tap to react the same."}`}
+              title={reactionWords(r)}
+              disabled={!onReact}
+              onClick={() => onReact?.(m, r.emoji)}
+            >
+              <span aria-hidden="true">{r.emoji}</span>
+              {r.count > 1 && (
+                <span className="count" aria-hidden="true">
+                  {r.count}
+                </span>
+              )}
+            </button>
+          ))}
+        </span>
+      )}
     </div>
   );
 }
@@ -926,12 +1074,8 @@ export function ConversationPane({
   // Our own ticks follow theirs reading: the page's read marks change in place.
   useEffect(() => {
     const t = setInterval(() => {
-      if (
-        document.visibilityState !== "visible" ||
-        detached ||
-        !messages?.some((m) => m.mine && !m.read_at)
-      )
-        return;
+      // The newest page again: our ticks, and the other side's reactions.
+      if (document.visibilityState !== "visible" || detached) return;
       get<{ messages: LinkMessage[] }>(`${path}/messages`).then(
         (out) => setMessages((cur) => merge(cur ?? [], out.messages)),
         () => undefined,
@@ -1034,6 +1178,46 @@ export function ConversationPane({
   };
   const retry = (clientId: string) => retryOutgoing(conv.link, clientId);
   const discard = (clientId: string) => discardOutgoing(conv.link, clientId);
+  // A reaction: shown at once, then what the server says (both sides see it).
+  const setReactions = (id: string, reactions: Reaction[]) =>
+    setMessages((cur) =>
+      cur?.map((x) => (x.id === id ? { ...x, reactions } : x)),
+    );
+  const react = (m: LinkMessage, emoji: string) => {
+    const was = m.reactions;
+    const taking = m.reactions?.some((r) => r.mine && r.emoji === emoji);
+    setReactions(m.id, toggleReaction(was, emoji, !taking));
+    const url = `${path}/messages/${m.id}/reaction`;
+    (taking
+      ? del<{ reactions: Reaction[] }>(url)
+      : put<{ reactions: Reaction[] }>(url, { emoji })
+    ).then(
+      (out) => setReactions(m.id, out.reactions),
+      (e: unknown) => {
+        setReactions(m.id, was ?? []);
+        setError(actionError(e));
+      },
+    );
+  };
+  const star = (m: LinkMessage) => {
+    const on = !m.starred;
+    const mark = (starred: boolean) =>
+      setMessages((cur) =>
+        cur?.map((x) => (x.id === m.id ? { ...x, starred } : x)),
+      );
+    mark(on);
+    (on
+      ? put(`${path}/messages/${m.id}/star`)
+      : del(`${path}/messages/${m.id}/star`)
+    ).then(
+      () => undefined,
+      (e: unknown) => {
+        mark(!on);
+        setError(actionError(e));
+      },
+    );
+  };
+  const [info, setInfo] = useState<LinkMessage>();
   sendRef.current = send;
   const settings = (
     body: { muted?: boolean; archived?: boolean; pinned?: boolean },
@@ -1279,6 +1463,9 @@ export function ConversationPane({
                           : undefined
                       }
                       onHide={can("chat.trade") ? hide : undefined}
+                      onReact={write && !m.local ? react : undefined}
+                      onStar={m.local ? undefined : star}
+                      onInfo={m.local ? undefined : setInfo}
                     />
                   </Fragment>
                 ))}
@@ -1455,6 +1642,13 @@ export function ConversationPane({
             setCameraOpen(false);
             choose(f);
           }}
+        />
+      )}
+      {info && (
+        <InfoSheet
+          m={info}
+          other={conv.name}
+          onClose={() => setInfo(undefined)}
         />
       )}
       {forwarding && (

@@ -246,7 +246,21 @@ export function ChatPage() {
   useEffect(() => {
     if (linksSeen) reloadConvs();
   }, [linksSeen, reloadConvs]);
-  const [filter, setFilter] = useState<"all" | "unread" | "archived">("all");
+  const [filter, setFilter] = useState<
+    "all" | "unread" | "starred" | "archived"
+  >("all");
+  // The messages this person starred, when that view is chosen (again: a
+  // star may have changed since).
+  const [starTick, setStarTick] = useState(0);
+  const starredMsgs = useLoad(
+    () =>
+      filter === "starred"
+        ? get<{ messages: LinkMessage[] }>("/v1/link-chats/starred").then(
+            (r) => r.messages,
+          )
+        : Promise.resolve([] as LinkMessage[]),
+    [filter, starTick],
+  );
   const archived = filter === "archived";
   const [foundMessages, setFoundMessages] = useState<LinkMessage[]>();
   const settings = useLoad(() => get<LinkSettings>("/v1/link-settings"), []);
@@ -341,6 +355,7 @@ export function ChatPage() {
                     "unread",
                     unreadCount ? `Unread (${unreadCount})` : "Unread",
                   ],
+                  ["starred", "Starred"],
                   ["archived", `Archived (${archivedCount})`],
                 ] as const
               ).map(([key, label]) => (
@@ -349,7 +364,10 @@ export function ChatPage() {
                   type="button"
                   className="chat-chip"
                   aria-pressed={filter === key}
-                  onClick={() => setFilter(key)}
+                  onClick={() => {
+                    setFilter(key);
+                    if (key === "starred") setStarTick((n) => n + 1);
+                  }}
                 >
                   {label}
                 </button>
@@ -357,7 +375,7 @@ export function ChatPage() {
             </div>
           )}
           <ErrorBox error={view.error ?? act.error ?? searchError} />
-          {!searching && !archived && (
+          {!searching && !archived && filter !== "starred" && (
             <ul
               className="chat-rows"
               aria-label="Your conversation with Taskiem"
@@ -542,7 +560,34 @@ export function ChatPage() {
                   </Items>
                 </section>
               )}
-              {all.length > 0 && (
+              {filter === "starred" && (
+                <section aria-label="Starred messages">
+                  <h2>Starred messages</h2>
+                  {!starredMsgs.data ? (
+                    <Skeleton rows={2} label="Loading your starred messages…" />
+                  ) : starredMsgs.data.length === 0 ? (
+                    <p className="hint">
+                      Nothing starred yet. Open a message’s menu and choose Star
+                      to keep it here.
+                    </p>
+                  ) : (
+                    <ul className="chat-rows" aria-label="Starred messages">
+                      {starredMsgs.data.map((m) => (
+                        <ChatRow
+                          key={m.id}
+                          to={`/chat?with=${m.link}&msg=${m.id}`}
+                          letter={nameOf(m.link)}
+                          title={nameOf(m.link)}
+                          time={listTime(m.created_at)}
+                          preview={previewLine(m, nameOf(m.link))}
+                          testid="starred-message"
+                        />
+                      ))}
+                    </ul>
+                  )}
+                </section>
+              )}
+              {filter !== "starred" && all.length > 0 && (
                 <section aria-label="Chats">
                   <div className="toolbar" style={{ marginBottom: 6 }}>
                     <h2 className="grow" style={{ margin: 0 }}>
@@ -645,21 +690,25 @@ export function ChatPage() {
               )}
             </>
           )}
-          {manage && settings.data && !settings.data.asked_at && !searching && (
-            <FindableQuestion
-              settings={settings.data}
-              busy={act.busy}
-              answer={(findable) =>
-                void act.run(
-                  async () => (
-                    await put("/v1/link-settings", { findable }),
-                    settings.reload()
-                  ),
-                  findable ? "Other businesses can find you" : false,
-                )
-              }
-            />
-          )}
+          {manage &&
+            settings.data &&
+            !settings.data.asked_at &&
+            !searching &&
+            filter !== "starred" && (
+              <FindableQuestion
+                settings={settings.data}
+                busy={act.busy}
+                answer={(findable) =>
+                  void act.run(
+                    async () => (
+                      await put("/v1/link-settings", { findable }),
+                      settings.reload()
+                    ),
+                    findable ? "Other businesses can find you" : false,
+                  )
+                }
+              />
+            )}
           {asking && (
             <RequestSheet
               asking={asking}

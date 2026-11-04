@@ -73,3 +73,18 @@ export function sendError(e: unknown): string {
     return "There is no connection. Tap Retry when you are back online.";
   return "It could not be sent. Tap Retry.";
 }
+
+/** Why a small action (a reaction, a star) failed, in words for the person. */
+export function actionError(e: unknown): Error {
+  const status = (e as { status?: number } | undefined)?.status;
+  const message = e instanceof Error ? e.message : "";
+  if (!status)
+    return new Error(
+      "There is no connection, so that was not done. Try again when you are back online.",
+    );
+  if (status === 429)
+    return new Error(
+      "You are doing that too fast. Wait a moment and try again.",
+    );
+  return new Error(message || "That could not be done. Try again.");
+}

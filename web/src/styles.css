@@ -1908,3 +1908,23 @@ button.chat-avatar { border: 0; padding: 0; cursor: pointer; }
    screen is touched; a computer has the clip's menu. */
 .camera-quick { display: none; }
 @media (pointer: coarse) { .camera-quick { display: grid; } }
+
+/* Reactions and stars (Phase 5): the six emoji above the bubble's menu, a
+   chip under the bubble for each emoji given, a star by the time. */
+.reaction-picker { display: flex; gap: 2px; flex-basis: 100%; padding: 2px 0 4px; }
+.react-pick { width: 36px; height: 36px; min-height: 36px; padding: 0; border: 0; background: none; border-radius: 50%; font-size: 22px; line-height: 1; }
+.react-pick:hover, .react-pick:focus-visible { background: var(--chat-select); }
+.react-pick[aria-pressed="true"] { background: var(--chat-select); box-shadow: inset 0 0 0 2px var(--accent); }
+.bubble.has-reactions { margin-bottom: 20px; }
+.bubble .reactions { position: absolute; bottom: -19px; left: 8px; display: flex; gap: 3px; z-index: 1; }
+.bubble.mine .reactions { left: auto; right: 8px; }
+.reaction-chip { display: inline-flex; align-items: center; gap: 3px; min-height: 24px; padding: 0 7px; border-radius: 999px; background: var(--chat-in); border: 1px solid var(--border); box-shadow: 0 1px 1px var(--chat-shadow); font-size: 14px; line-height: 1; color: var(--text); }
+.reaction-chip .count { font-size: 12px; color: var(--muted); }
+.reaction-chip[aria-pressed="true"] { border-color: var(--accent); background: var(--chat-select); }
+.reaction-chip:disabled { opacity: 1; cursor: default; }
+.bubble .stamp .starred { display: inline-flex; }
+.bubble .stamp .starred svg { width: 12px; height: 12px; fill: currentColor; stroke: none; }
+.info-times { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 8px 0 14px; }
+.info-times dt { color: var(--muted); }
+.info-times dd { margin: 0; font-weight: 600; }
+.info-reactions { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
