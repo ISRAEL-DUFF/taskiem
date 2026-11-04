@@ -1,7 +1,21 @@
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ApiError, get, post, put } from "../api";
-import { EmptyState, ErrorBox, Field, Item, Items, Modal, PageHeader, Row, Skeleton, fmtTime, useAction, useLiveRefresh, useLoad } from "../ui";
+import {
+  EmptyState,
+  ErrorBox,
+  Field,
+  Item,
+  Items,
+  Modal,
+  PageHeader,
+  Row,
+  Skeleton,
+  fmtTime,
+  useAction,
+  useLiveRefresh,
+  useLoad,
+} from "../ui";
 import { feeInput, feeKobo } from "../lib/orders";
 import { formatPrice } from "../lib/storefront";
 import { bankOf, type Bank } from "../lib/receiveMoney";
@@ -43,9 +57,20 @@ const dispatchOff = (e: unknown) => e instanceof ApiError && e.status === 409;
 
 /** An order's delivery on its page: who has it and how far it got, with
  * Offer and Take back. Nothing for pickup orders, or with riders off. */
-export function OrderDelivery({ reference, delivery, onChanged }: { reference: string; delivery: boolean; onChanged: () => void }) {
+export function OrderDelivery({
+  reference,
+  delivery,
+  onChanged,
+}: {
+  reference: string;
+  delivery: boolean;
+  onChanged: () => void;
+}) {
   const ref = encodeURIComponent(reference);
-  const view = useLoad(() => get<OrderDeliveries>(`/v1/storefront/orders/${ref}/deliveries`), [ref]);
+  const view = useLoad(
+    () => get<OrderDeliveries>(`/v1/storefront/orders/${ref}/deliveries`),
+    [ref],
+  );
   useLiveRefresh(view.reload);
   const [choosing, setChoosing] = useState(false);
   const [said, setSaid] = useState("");
@@ -60,13 +85,20 @@ export function OrderDelivery({ reference, delivery, onChanged }: { reference: s
   };
   const offer = (riderId?: string) =>
     act.run(async () => {
-      const out = await post<{ status: string; rider?: string }>(`/v1/storefront/orders/${ref}/offer`, riderId ? { rider_id: riderId } : {});
+      const out = await post<{ status: string; rider?: string }>(
+        `/v1/storefront/orders/${ref}/offer`,
+        riderId ? { rider_id: riderId } : {},
+      );
       setSaid(offerOutcome(out));
       setChoosing(false);
       done();
     }, false);
   return (
-    <section className="card" aria-labelledby="order-delivery" data-testid="order-delivery">
+    <section
+      className="card"
+      aria-labelledby="order-delivery"
+      data-testid="order-delivery"
+    >
       <h2 id="order-delivery">Delivery</h2>
       <ErrorBox error={view.error ?? act.error} />
       {!v && !view.error && <Skeleton rows={2} label="Loading the delivery…" />}
@@ -90,8 +122,17 @@ export function OrderDelivery({ reference, delivery, onChanged }: { reference: s
             </dd>
             <dt>Status</dt>
             <dd>
-              <span className={`badge ${deliveryStatus(cur.status).tone}`}>{deliveryStatus(cur.status).label}</span>
-              {cur.late && <span className="hint"> {cur.late === "pickup" ? "Not picked up in time" : "Not at the door in time"}</span>}
+              <span className={`badge ${deliveryStatus(cur.status).tone}`}>
+                {deliveryStatus(cur.status).label}
+              </span>
+              {cur.late && (
+                <span className="hint">
+                  {" "}
+                  {cur.late === "pickup"
+                    ? "Not picked up in time"
+                    : "Not at the door in time"}
+                </span>
+              )}
             </dd>
             {cur.fee_kobo > 0 && (
               <>
@@ -122,7 +163,15 @@ export function OrderDelivery({ reference, delivery, onChanged }: { reference: s
               )}
               {cur.proof_url && cur.location && " · "}
               {cur.location && (
-                <a href={cur.location.startsWith("https://") ? cur.location : `https://maps.google.com/?q=${encodeURIComponent(cur.location)}`} target="_blank" rel="noreferrer">
+                <a
+                  href={
+                    cur.location.startsWith("https://")
+                      ? cur.location
+                      : `https://maps.google.com/?q=${encodeURIComponent(cur.location)}`
+                  }
+                  target="_blank"
+                  rel="noreferrer"
+                >
                   Where the rider was
                 </a>
               )}
@@ -130,15 +179,30 @@ export function OrderDelivery({ reference, delivery, onChanged }: { reference: s
           )}
         </>
       )}
-      {v && !cur && <p className="hint">{v.not_ready ? `Not ready for a rider: ${v.not_ready}.` : "No rider has it yet."}</p>}
+      {v && !cur && (
+        <p className="hint">
+          {v.not_ready
+            ? `Not ready for a rider: ${v.not_ready}.`
+            : "No rider has it yet."}
+        </p>
+      )}
       {v && (
         <div className="toolbar">
           {!v.not_ready && (!cur || cur.status === "offered") && (
             <>
-              <button type="button" className="primary" disabled={act.busy} onClick={() => void offer()}>
+              <button
+                type="button"
+                className="primary"
+                disabled={act.busy}
+                onClick={() => void offer()}
+              >
                 {cur ? "Offer to the next free rider" : "Offer to a free rider"}
               </button>
-              <button type="button" disabled={act.busy} onClick={() => setChoosing(true)}>
+              <button
+                type="button"
+                disabled={act.busy}
+                onClick={() => setChoosing(true)}
+              >
                 Choose the rider
               </button>
             </>
@@ -149,8 +213,17 @@ export function OrderDelivery({ reference, delivery, onChanged }: { reference: s
               className="danger"
               disabled={act.busy}
               onClick={() =>
-                confirm(`Take ${reference} back from ${cur.rider}? They are told, and you can offer it again.`) &&
-                void act.run(async () => (await post(`/v1/storefront/orders/${ref}/release`), setSaid(""), done()), "Taken back")
+                confirm(
+                  `Take ${reference} back from ${cur.rider}? They are told, and you can offer it again.`,
+                ) &&
+                void act.run(
+                  async () => (
+                    await post(`/v1/storefront/orders/${ref}/release`),
+                    setSaid(""),
+                    done()
+                  ),
+                  "Taken back",
+                )
               }
             >
               Take it back
@@ -163,27 +236,55 @@ export function OrderDelivery({ reference, delivery, onChanged }: { reference: s
           <summary>Earlier offers ({earlier.length})</summary>
           <Items label="Earlier offers">
             {earlier.map((d) => (
-              <Row key={d.id} letter={d.rider} title={d.rider} sub={<span className="sub">{fmtTime(d.offered_at)}</span>} side={<span className={`badge ${deliveryStatus(d.status).tone}`}>{deliveryStatus(d.status).label}</span>} />
+              <Row
+                key={d.id}
+                letter={d.rider}
+                title={d.rider}
+                sub={<span className="sub">{fmtTime(d.offered_at)}</span>}
+                side={
+                  <span className={`badge ${deliveryStatus(d.status).tone}`}>
+                    {deliveryStatus(d.status).label}
+                  </span>
+                }
+              />
             ))}
           </Items>
         </details>
       )}
-      {choosing && <ChooseRider onClose={() => setChoosing(false)} onChoose={(id) => void offer(id)} busy={act.busy} />}
+      {choosing && (
+        <ChooseRider
+          onClose={() => setChoosing(false)}
+          onChoose={(id) => void offer(id)}
+          busy={act.busy}
+        />
+      )}
     </section>
   );
 }
 
 /** The owner's choice of rider for an order: the current riders, free first. */
-function ChooseRider({ onClose, onChoose, busy }: { onClose: () => void; onChoose: (id: string) => void; busy: boolean }) {
+function ChooseRider({
+  onClose,
+  onChoose,
+  busy,
+}: {
+  onClose: () => void;
+  onChoose: (id: string) => void;
+  busy: boolean;
+}) {
   const view = useLoad(() => get<RidersView>("/v1/riders"), []);
   const riders = useMemo(() => {
     const order = { free: 0, busy: 1, off: 2 };
-    return (view.data?.riders ?? []).filter((r) => r.active).sort((a, b) => order[a.presence.state] - order[b.presence.state]);
+    return (view.data?.riders ?? [])
+      .filter((r) => r.active)
+      .sort((a, b) => order[a.presence.state] - order[b.presence.state]);
   }, [view.data]);
   return (
     <Modal title="Choose the rider" onClose={onClose}>
       <ErrorBox error={view.error} />
-      {!view.data && !view.error && <Skeleton rows={3} label="Loading your riders…" />}
+      {!view.data && !view.error && (
+        <Skeleton rows={3} label="Loading your riders…" />
+      )}
       {view.data && riders.length === 0 && (
         <EmptyState icon="members">
           No riders yet. <Link to="/storefront/riders">Add your riders</Link>.
@@ -192,8 +293,20 @@ function ChooseRider({ onClose, onChoose, busy }: { onClose: () => void; onChoos
       {riders.length > 0 && (
         <Items label="Your riders">
           {riders.map((r) => (
-            <Row key={r.id} letter={r.name} title={r.name} sub={<span className="sub">{r.zones.join(", ") || "All areas"}</span>}>
-              <button type="button" className="small" disabled={busy} onClick={() => onChoose(r.id)}>
+            <Row
+              key={r.id}
+              letter={r.name}
+              title={r.name}
+              sub={
+                <span className="sub">{r.zones.join(", ") || "All areas"}</span>
+              }
+            >
+              <button
+                type="button"
+                className="small"
+                disabled={busy}
+                onClick={() => onChoose(r.id)}
+              >
                 Offer<span className="sr-only"> to {r.name}</span>
               </button>
             </Row>
@@ -210,19 +323,31 @@ export function StorefrontDeliveries() {
   const [params, setParams] = useSearchParams();
   const open = params.get("open") === "true";
   const day = params.get("day") ?? "";
-  const path = open ? "/v1/deliveries?open=true" : `/v1/deliveries${day ? `?day=${day}` : ""}`;
+  const path = open
+    ? "/v1/deliveries?open=true"
+    : `/v1/deliveries${day ? `?day=${day}` : ""}`;
   const view = useLoad(() => get<{ deliveries: Delivery[] }>(path), [path]);
   useLiveRefresh(view.reload);
   const [settings, setSettings] = useState(false);
-  const on = useLoad(() => get<{ on: boolean; workflow_id: string | null }>("/v1/dispatch/workflow"), []);
+  const on = useLoad(
+    () =>
+      get<{ on: boolean; workflow_id: string | null }>("/v1/dispatch/workflow"),
+    [],
+  );
   const turnOn = useAction();
   // A workflow the business made itself is replaced only once the owner says so.
   const turnOnDeliveries = async () => {
     try {
       await post("/v1/dispatch/workflow");
     } catch (e) {
-      if (!(e instanceof ApiError) || e.body.code !== "replaces_workflow") throw e;
-      if (!confirm(`Your order form starts your own workflow "${String(e.body.workflow ?? "")}". Turning on deliveries takes it out of use. Go ahead?`)) return;
+      if (!(e instanceof ApiError) || e.body.code !== "replaces_workflow")
+        throw e;
+      if (
+        !confirm(
+          `Your order form starts your own workflow "${String(e.body.workflow ?? "")}". Turning on deliveries takes it out of use. Go ahead?`,
+        )
+      )
+        return;
       await post("/v1/dispatch/workflow", { replace: true });
     }
     on.reload();
@@ -243,34 +368,67 @@ export function StorefrontDeliveries() {
         }
       />
       <StorefrontTabs />
-      {off ? <EmptyState icon="members">Deliveries need text messages, which are not set up on this Taskiem yet.</EmptyState> : <ErrorBox error={view.error} />}
+      {off ? (
+        <EmptyState icon="members">
+          Deliveries need text messages, which are not set up on this Taskiem
+          yet.
+        </EmptyState>
+      ) : (
+        <ErrorBox error={view.error} />
+      )}
       {!off && on.data && !on.data.on && (
         <section className="card" aria-labelledby="deliveries-on">
           <h2 id="deliveries-on" style={{ marginTop: 0 }}>
             Offer orders to your riders by themselves
           </h2>
           <p className="hint">
-            Each order for delivery you confirm then goes to your riders in turn, and the rider's Delivered completes it. Your order form stays as it is; without
-            this, you offer each order from its page.
+            Each order for delivery you confirm then goes to your riders in
+            turn, and the rider's Delivered completes it. Your order form stays
+            as it is; without this, you offer each order from its page.
           </p>
           <ErrorBox error={turnOn.error} />
-          <button type="button" className="primary" disabled={turnOn.busy} onClick={() => void turnOn.run(turnOnDeliveries, "Deliveries are on")}>
+          <button
+            type="button"
+            className="primary"
+            disabled={turnOn.busy}
+            onClick={() =>
+              void turnOn.run(turnOnDeliveries, "Deliveries are on")
+            }
+          >
             Turn on deliveries
           </button>
         </section>
       )}
       {!off && (
         <div className="toolbar">
-          <button type="button" className={open ? "small primary" : "small"} aria-pressed={open} onClick={() => setParams(open ? {} : { open: "true" })}>
+          <button
+            type="button"
+            className={open ? "small primary" : "small"}
+            aria-pressed={open}
+            onClick={() => setParams(open ? {} : { open: "true" })}
+          >
             Under way now
           </button>
           <Field label="Day">
-            <input type="date" value={day} disabled={open} onChange={(e) => setParams(e.target.value ? { day: e.target.value } : {})} />
+            <input
+              type="date"
+              value={day}
+              disabled={open}
+              onChange={(e) =>
+                setParams(e.target.value ? { day: e.target.value } : {})
+              }
+            />
           </Field>
         </div>
       )}
-      {!view.data && !view.error && <Skeleton rows={4} label="Loading deliveries…" />}
-      {view.data && list.length === 0 && <EmptyState icon="orders">{open ? "No delivery is under way." : "No deliveries that day."}</EmptyState>}
+      {!view.data && !view.error && (
+        <Skeleton rows={4} label="Loading deliveries…" />
+      )}
+      {view.data && list.length === 0 && (
+        <EmptyState icon="orders">
+          {open ? "No delivery is under way." : "No deliveries that day."}
+        </EmptyState>
+      )}
       {list.length > 0 && (
         <Items label="Deliveries">
           {list.map((d) => (
@@ -280,7 +438,13 @@ export function StorefrontDeliveries() {
               icon="orders"
               title={d.reference}
               sub={deliverySub(d)}
-              side={<span className={`badge ${d.late ? "danger" : deliveryStatus(d.status).tone}`}>{deliveryStatus(d.status).label}</span>}
+              side={
+                <span
+                  className={`badge ${d.late ? "danger" : deliveryStatus(d.status).tone}`}
+                >
+                  {deliveryStatus(d.status).label}
+                </span>
+              }
               sideSub={fmtTime(d.delivered_at ?? d.offered_at)}
               testid="delivery"
             />
@@ -294,17 +458,28 @@ export function StorefrontDeliveries() {
 
 /** How orders are offered to riders, how long they have, and the marks for cash owed and ratings. */
 function DispatchSettingsModal({ onClose }: { onClose: () => void }) {
-  const view = useLoad(() => get<DispatchSettings>("/v1/dispatch/settings"), []);
+  const view = useLoad(
+    () => get<DispatchSettings>("/v1/dispatch/settings"),
+    [],
+  );
   return (
     <Modal title="How orders are offered" onClose={onClose}>
       <ErrorBox error={view.error} />
       {!view.data && !view.error && <Skeleton rows={4} label="Loading…" />}
-      {view.data && <SettingsFields start={settingsForm(view.data)} onClose={onClose} />}
+      {view.data && (
+        <SettingsFields start={settingsForm(view.data)} onClose={onClose} />
+      )}
     </Modal>
   );
 }
 
-function SettingsFields({ start, onClose }: { start: SettingsForm; onClose: () => void }) {
+function SettingsFields({
+  start,
+  onClose,
+}: {
+  start: SettingsForm;
+  onClose: () => void;
+}) {
   const [f, setF] = useState(start);
   const set = (p: Partial<SettingsForm>) => setF((x) => ({ ...x, ...p }));
   const act = useAction();
@@ -313,43 +488,96 @@ function SettingsFields({ start, onClose }: { start: SettingsForm; onClose: () =
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        void act.run(async () => (await put("/v1/dispatch/settings", settingsRequest(f)), onClose()), "Saved");
+        void act.run(
+          async () => (
+            await put("/v1/dispatch/settings", settingsRequest(f)),
+            onClose()
+          ),
+          "Saved",
+        );
       }}
     >
       <fieldset className="sf-choices">
         <legend>When an order is ready for a rider</legend>
         <label className="sf-radio">
-          <input type="radio" name="mode" checked={f.mode === "rotation"} onChange={() => set({ mode: "rotation" })} />
+          <input
+            type="radio"
+            name="mode"
+            checked={f.mode === "rotation"}
+            onChange={() => set({ mode: "rotation" })}
+          />
           Offer it to free riders in turn, those covering the area first
         </label>
         <label className="sf-radio">
-          <input type="radio" name="mode" checked={f.mode === "ask"} onChange={() => set({ mode: "ask" })} />
+          <input
+            type="radio"
+            name="mode"
+            checked={f.mode === "ask"}
+            onChange={() => set({ mode: "ask" })}
+          />
           Ask me in chat who takes it
         </label>
       </fieldset>
       <Field label="Minutes a rider has to accept">
-        <input value={f.offer} inputMode="numeric" onChange={(e) => set({ offer: e.target.value })} />
+        <input
+          value={f.offer}
+          inputMode="numeric"
+          onChange={(e) => set({ offer: e.target.value })}
+        />
       </Field>
-      <Field label="Minutes to pick up" hint="After this, you are told the rider has not picked it up.">
-        <input value={f.pickup} inputMode="numeric" onChange={(e) => set({ pickup: e.target.value })} />
+      <Field
+        label="Minutes to pick up"
+        hint="After this, you are told the rider has not picked it up."
+      >
+        <input
+          value={f.pickup}
+          inputMode="numeric"
+          onChange={(e) => set({ pickup: e.target.value })}
+        />
       </Field>
-      <Field label="Minutes to get to the customer" hint="After this, you are told the rider has not arrived.">
-        <input value={f.arrive} inputMode="numeric" onChange={(e) => set({ arrive: e.target.value })} />
+      <Field
+        label="Minutes to get to the customer"
+        hint="After this, you are told the rider has not arrived."
+      >
+        <input
+          value={f.arrive}
+          inputMode="numeric"
+          onChange={(e) => set({ arrive: e.target.value })}
+        />
       </Field>
       <label className="sf-radio">
-        <input type="checkbox" checked={f.proof} onChange={(e) => set({ proof: e.target.checked })} />
+        <input
+          type="checkbox"
+          checked={f.proof}
+          onChange={(e) => set({ proof: e.target.checked })}
+        />
         Ask riders for a photo at the door
       </label>
-      <Field label="Cash a rider may owe (₦)" hint="Above this, it shows under Money leaks.">
-        <input value={f.oweLimit} inputMode="decimal" onChange={(e) => set({ oweLimit: e.target.value })} />
+      <Field
+        label="Cash a rider may owe (₦)"
+        hint="Above this, it shows under Money leaks."
+      >
+        <input
+          value={f.oweLimit}
+          inputMode="decimal"
+          onChange={(e) => set({ oweLimit: e.target.value })}
+        />
       </Field>
       <Field label="Tell me when a rider's rating falls below (1 to 5)">
-        <input value={f.ratingMark} inputMode="decimal" onChange={(e) => set({ ratingMark: e.target.value })} />
+        <input
+          value={f.ratingMark}
+          inputMode="decimal"
+          onChange={(e) => set({ ratingMark: e.target.value })}
+        />
       </Field>
       {problem && <p className="error-text">{problem}</p>}
       <ErrorBox error={act.error} />
       <div className="toolbar">
-        <button type="submit" className="primary" disabled={act.busy || !!problem}>
+        <button
+          type="submit"
+          className="primary"
+          disabled={act.busy || !!problem}
+        >
           Save
         </button>
         <button type="button" onClick={onClose}>
@@ -386,23 +614,41 @@ export function RidersPayPage() {
           Riders
         </Link>
       </p>
-      <PageHeader title="Pay riders" description="The cash riders owe you from the door, what you owe them in fees, and their weekly pay." />
-      {off ? <EmptyState icon="members">Riders need text messages, which are not set up on this Taskiem yet.</EmptyState> : <ErrorBox error={owed.error ?? pay.error ?? act.error} />}
+      <PageHeader
+        title="Pay riders"
+        description="The cash riders owe you from the door, what you owe them in fees, and their weekly pay."
+      />
+      {off ? (
+        <EmptyState icon="members">
+          Riders need text messages, which are not set up on this Taskiem yet.
+        </EmptyState>
+      ) : (
+        <ErrorBox error={owed.error ?? pay.error ?? act.error} />
+      )}
       {p && (
         <section className="hero" aria-label="Riders' pay">
           <div className="hero-top">
             <span className="hero-label">Due to riders now</span>
           </div>
           <div className="hero-amount">{formatPrice(due)}</div>
-          <p className="hero-sub">{p.workflow_id ? "Paid weekly, after you approve" : "Weekly pay is not set up yet"}</p>
+          <p className="hero-sub">
+            {p.workflow_id
+              ? "Paid weekly, after you approve"
+              : "Weekly pay is not set up yet"}
+          </p>
           <div className="toolbar">
             <button
               type="button"
               className="primary"
               disabled={act.busy || !p.workflow_id || due === 0}
               onClick={() =>
-                confirm(`Pay your riders ${formatPrice(due)} now? You approve it first in Approvals or in chat.`) &&
-                void act.run(async () => (await post("/v1/riders/pay"), reload()), "Started: approve it in Approvals or in chat")
+                confirm(
+                  `Pay your riders ${formatPrice(due)} now? You approve it first in Approvals or in chat.`,
+                ) &&
+                void act.run(
+                  async () => (await post("/v1/riders/pay"), reload()),
+                  "Started: approve it in Approvals or in chat",
+                )
               }
             >
               Pay riders now
@@ -416,7 +662,10 @@ export function RidersPayPage() {
       {owed.data && (
         <section className="card" aria-labelledby="riders-owed">
           <h2 id="riders-owed">Cash riders owe</h2>
-          <p className="hint">Cash customers paid at the door. A transfer from the rider naming the order counts by itself; record cash handed to you here.</p>
+          <p className="hint">
+            Cash customers paid at the door. A transfer from the rider naming
+            the order counts by itself; record cash handed to you here.
+          </p>
           {owed.data.owed.length === 0 ? (
             <EmptyState icon="money">No rider owes you cash.</EmptyState>
           ) : (
@@ -426,12 +675,23 @@ export function RidersPayPage() {
                   key={o.rider_id}
                   letter={o.rider}
                   title={o.rider}
-                  sub={<span className="sub">{`${o.deliveries} ${o.deliveries === 1 ? "delivery" : "deliveries"}${o.since ? ` since ${fmtTime(o.since)}` : ""}`}</span>}
-                  side={<span className="badge warn">{formatPrice(o.owed_kobo)}</span>}
+                  sub={
+                    <span className="sub">{`${o.deliveries} ${o.deliveries === 1 ? "delivery" : "deliveries"}${o.since ? ` since ${fmtTime(o.since)}` : ""}`}</span>
+                  }
+                  side={
+                    <span className="badge warn">
+                      {formatPrice(o.owed_kobo)}
+                    </span>
+                  }
                   testid="rider-owed"
                 >
-                  <button type="button" className="small" onClick={() => setRemitting(o)}>
-                    Record cash handed in<span className="sr-only"> by {o.rider}</span>
+                  <button
+                    type="button"
+                    className="small"
+                    onClick={() => setRemitting(o)}
+                  >
+                    Record cash handed in
+                    <span className="sr-only"> by {o.rider}</span>
                   </button>
                 </Row>
               ))}
@@ -443,12 +703,27 @@ export function RidersPayPage() {
         <section className="card" aria-labelledby="riders-due">
           <h2 id="riders-due">Due to each rider</h2>
           {p.lines.length === 0 ? (
-            <EmptyState icon="money">Nothing is due: riders' fees show here once they deliver.</EmptyState>
+            <EmptyState icon="money">
+              Nothing is due: riders' fees show here once they deliver.
+            </EmptyState>
           ) : (
             <Items label="Due to each rider">
               {p.lines.map((l) => (
-                <Row key={l.rider_id} letter={l.rider} title={l.rider} sub={<span className="sub">{payLineSub(l)}</span>} side={<span className="sf-price">{formatPrice(l.net_kobo)}</span>} testid="rider-due">
-                  <button type="button" className="small" onClick={() => setBanking(l)}>
+                <Row
+                  key={l.rider_id}
+                  letter={l.rider}
+                  title={l.rider}
+                  sub={<span className="sub">{payLineSub(l)}</span>}
+                  side={
+                    <span className="sf-price">{formatPrice(l.net_kobo)}</span>
+                  }
+                  testid="rider-due"
+                >
+                  <button
+                    type="button"
+                    className="small"
+                    onClick={() => setBanking(l)}
+                  >
                     {l.bank ? "Change bank account" : "Add bank account"}
                     <span className="sr-only"> for {l.rider}</span>
                   </button>
@@ -466,7 +741,11 @@ export function RidersPayPage() {
                     letter={x.rider}
                     title={`${x.rider} · ${formatPrice(x.amount_kobo)}`}
                     sub={<span className="sub">{payoutSub(x)}</span>}
-                    side={<span className={`badge ${PAYOUT_STATUS[x.status].tone}`}>{PAYOUT_STATUS[x.status].label}</span>}
+                    side={
+                      <span className={`badge ${PAYOUT_STATUS[x.status].tone}`}>
+                        {PAYOUT_STATUS[x.status].label}
+                      </span>
+                    }
                     testid="rider-payout"
                   >
                     {x.status === "pending" && (
@@ -476,10 +755,19 @@ export function RidersPayPage() {
                         disabled={act.busy}
                         onClick={() =>
                           confirm(notPaidQuestion(x)) &&
-                          void act.run(async () => (await post(`/v1/riders/payouts/${x.payout_id}/not-paid`), reload()), "Marked not paid: paid in the next payout")
+                          void act.run(
+                            async () => (
+                              await post(
+                                `/v1/riders/payouts/${x.payout_id}/not-paid`,
+                              ),
+                              reload()
+                            ),
+                            "Marked not paid: paid in the next payout",
+                          )
                         }
                       >
-                        Mark not paid<span className="sr-only"> for {x.rider}</span>
+                        Mark not paid
+                        <span className="sr-only"> for {x.rider}</span>
                       </button>
                     )}
                   </Row>
@@ -489,16 +777,44 @@ export function RidersPayPage() {
           )}
         </section>
       )}
-      {!owed.data && !owed.error && <Skeleton rows={4} label="Loading riders' pay…" />}
-      {remitting && <RemitModal owed={remitting} onClose={() => setRemitting(null)} onDone={() => (setRemitting(null), reload())} />}
-      {banking && <BankModal line={banking} request={step.request} onClose={() => setBanking(null)} onDone={() => (setBanking(null), reload())} />}
+      {!owed.data && !owed.error && (
+        <Skeleton rows={4} label="Loading riders' pay…" />
+      )}
+      {remitting && (
+        <RemitModal
+          owed={remitting}
+          onClose={() => setRemitting(null)}
+          onDone={() => (setRemitting(null), reload())}
+        />
+      )}
+      {banking && (
+        <BankModal
+          line={banking}
+          request={step.request}
+          onClose={() => setBanking(null)}
+          onDone={() => (setBanking(null), reload())}
+        />
+      )}
       {step.modal}
-      {setup && <PaySetupModal onClose={() => setSetup(false)} onDone={() => (setSetup(false), reload())} />}
+      {setup && (
+        <PaySetupModal
+          onClose={() => setSetup(false)}
+          onDone={() => (setSetup(false), reload())}
+        />
+      )}
     </>
   );
 }
 
-function RemitModal({ owed, onClose, onDone }: { owed: Owed; onClose: () => void; onDone: () => void }) {
+function RemitModal({
+  owed,
+  onClose,
+  onDone,
+}: {
+  owed: Owed;
+  onClose: () => void;
+  onDone: () => void;
+}) {
   const [amount, setAmount] = useState(feeInput(owed.owed_kobo));
   const act = useAction();
   const problem = remitProblem(amount, owed.owed_kobo);
@@ -507,17 +823,38 @@ function RemitModal({ owed, onClose, onDone }: { owed: Owed; onClose: () => void
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          void act.run(async () => (await post(`/v1/riders/${owed.rider_id}/remit`, { amount_kobo: feeKobo(amount), how: "cash" }), onDone()), "Recorded");
+          void act.run(
+            async () => (
+              await post(`/v1/riders/${owed.rider_id}/remit`, {
+                amount_kobo: feeKobo(amount),
+                how: "cash",
+              }),
+              onDone()
+            ),
+            "Recorded",
+          );
         }}
       >
-        <p className="hint">They owe {formatPrice(owed.owed_kobo)}. The cash is added to your money log.</p>
+        <p className="hint">
+          They owe {formatPrice(owed.owed_kobo)}. The cash is added to your
+          money log.
+        </p>
         <Field label="Amount handed in (₦)">
-          <input value={amount} inputMode="decimal" onChange={(e) => setAmount(e.target.value)} autoFocus />
+          <input
+            value={amount}
+            inputMode="decimal"
+            onChange={(e) => setAmount(e.target.value)}
+            autoFocus
+          />
         </Field>
         {problem && <p className="error-text">{problem}</p>}
         <ErrorBox error={act.error} />
         <div className="toolbar">
-          <button type="submit" className="primary" disabled={act.busy || !!problem}>
+          <button
+            type="submit"
+            className="primary"
+            disabled={act.busy || !!problem}
+          >
             Record it
           </button>
           <button type="button" onClick={onClose}>
@@ -536,12 +873,21 @@ function BankModal({
   onDone,
 }: {
   line: PayLine;
-  request: <T>(title: string, send: (p: StepUpProof) => Promise<T>) => Promise<T>;
+  request: <T>(
+    title: string,
+    send: (p: StepUpProof) => Promise<T>,
+  ) => Promise<T>;
   onClose: () => void;
   onDone: () => void;
 }) {
-  const banks = useLoad(() => get<{ banks: Bank[] }>("/v1/receive-money/banks"), []);
-  const list = useMemo(() => (banks.data?.banks ?? []).map(bankOf).filter((b) => b.code), [banks.data]);
+  const banks = useLoad(
+    () => get<{ banks: Bank[] }>("/v1/receive-money/banks"),
+    [],
+  );
+  const list = useMemo(
+    () => (banks.data?.banks ?? []).map(bankOf).filter((b) => b.code),
+    [banks.data],
+  );
   const [code, setCode] = useState("");
   const [number, setNumber] = useState("");
   const act = useAction();
@@ -552,16 +898,26 @@ function BankModal({
         onSubmit={(e) => {
           e.preventDefault();
           const bank = list.find((b) => b.code === code);
-          const body = { bank_code: code.trim(), bank_name: bank?.name ?? "", account_number: number };
+          const body = {
+            bank_code: code.trim(),
+            bank_name: bank?.name ?? "",
+            account_number: number,
+          };
           void act.run(
-            async () => (await request(`${line.rider}'s bank account`, (p) => put(`/v1/riders/${line.rider_id}/bank`, { ...body, ...p })), onDone()),
+            async () => (
+              await request(`${line.rider}'s bank account`, (p) =>
+                put(`/v1/riders/${line.rider_id}/bank`, { ...body, ...p }),
+              ),
+              onDone()
+            ),
             "Saved",
           );
         }}
       >
         <p className="hint">
-          Their payouts go here. You confirm it is you with your passkey or authenticator code. Their bank confirms the name before the first payout, and you see
-          it when you approve.
+          Their payouts go here. You confirm it is you with your passkey or
+          authenticator code. Their bank confirms the name before the first
+          payout, and you see it when you approve.
         </p>
         {list.length > 0 ? (
           <Field label="Bank">
@@ -575,17 +931,37 @@ function BankModal({
             </select>
           </Field>
         ) : (
-          <Field label="Bank code" hint="The bank's code, such as 058 for GTBank.">
-            <input value={code} inputMode="numeric" onChange={(e) => setCode(e.target.value)} />
+          <Field
+            label="Bank code"
+            hint="The bank's code, such as 058 for GTBank."
+          >
+            <input
+              value={code}
+              inputMode="numeric"
+              onChange={(e) => setCode(e.target.value)}
+            />
           </Field>
         )}
         <Field label="Account number">
-          <input value={number} inputMode="numeric" autoComplete="off" onChange={(e) => setNumber(e.target.value.replace(/\D/g, "").slice(0, 10))} />
+          <input
+            value={number}
+            inputMode="numeric"
+            autoComplete="off"
+            onChange={(e) =>
+              setNumber(e.target.value.replace(/\D/g, "").slice(0, 10))
+            }
+          />
         </Field>
-        {number.length === 10 && problem && <p className="error-text">{problem}</p>}
+        {number.length === 10 && problem && (
+          <p className="error-text">{problem}</p>
+        )}
         <ErrorBox error={act.error} />
         <div className="toolbar">
-          <button type="submit" className="primary" disabled={act.busy || !!problem}>
+          <button
+            type="submit"
+            className="primary"
+            disabled={act.busy || !!problem}
+          >
             Save
           </button>
           <button type="button" onClick={onClose}>
@@ -597,7 +973,13 @@ function BankModal({
   );
 }
 
-function PaySetupModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+function PaySetupModal({
+  onClose,
+  onDone,
+}: {
+  onClose: () => void;
+  onDone: () => void;
+}) {
   const [day, setDay] = useState(5);
   const [time, setTime] = useState("17:00");
   const act = useAction();
@@ -607,15 +989,19 @@ function PaySetupModal({ onClose, onDone }: { onClose: () => void; onDone: () =>
         onSubmit={(e) => {
           e.preventDefault();
           void act.run(async () => {
-            const out = await put<{ waiting: boolean }>("/v1/riders/pay/setup", { pay_day: day, pay_time: time });
+            const out = await put<{ waiting: boolean }>(
+              "/v1/riders/pay/setup",
+              { pay_day: day, pay_time: time },
+            );
             onDone();
             return out;
           }, "Saved: riders are paid weekly after you approve");
         }}
       >
         <p className="hint">
-          Each week, Taskiem adds up each rider's fees, takes off the cash they owe, and checks their bank account names. You approve the list, then each rider is
-          paid once from your Taskiem wallet.
+          Each week, Taskiem adds up each rider's fees, takes off the cash they
+          owe, and checks their bank account names. You approve the list, then
+          each rider is paid once from your Taskiem wallet.
         </p>
         <Field label="Day">
           <select value={day} onChange={(e) => setDay(Number(e.target.value))}>
@@ -627,11 +1013,19 @@ function PaySetupModal({ onClose, onDone }: { onClose: () => void; onDone: () =>
           </select>
         </Field>
         <Field label="Time (Lagos)">
-          <input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+          <input
+            type="time"
+            value={time}
+            onChange={(e) => setTime(e.target.value)}
+          />
         </Field>
         <ErrorBox error={act.error} />
         <div className="toolbar">
-          <button type="submit" className="primary" disabled={act.busy || !/^\d\d:\d\d$/.test(time)}>
+          <button
+            type="submit"
+            className="primary"
+            disabled={act.busy || !/^\d\d:\d\d$/.test(time)}
+          >
             Save
           </button>
           <button type="button" onClick={onClose}>

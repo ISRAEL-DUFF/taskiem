@@ -2,9 +2,25 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { get, post } from "../api";
 import { useAuth } from "../auth";
-import { ErrorBox, Item, Items, PageHeader, fmtTime, useAction, useLoad } from "../ui";
+import {
+  ErrorBox,
+  Item,
+  Items,
+  PageHeader,
+  fmtTime,
+  useAction,
+  useLoad,
+} from "../ui";
 import { schoolAccess } from "../lib/schools";
-import { accountStatus, feeLine, jobLine, jobPercent, planSummary, type AccountJob, type AccountPlan } from "../lib/schoolAccounts";
+import {
+  accountStatus,
+  feeLine,
+  jobLine,
+  jobPercent,
+  planSummary,
+  type AccountJob,
+  type AccountPlan,
+} from "../lib/schoolAccounts";
 import { plainly } from "./SchoolAccountParts";
 import { SchoolTabs } from "./Schools";
 
@@ -20,11 +36,22 @@ export function SchoolAccountsPage() {
   const [plan, setPlan] = useState<AccountPlan>();
   const [job, setJob] = useState<string>();
   const act = useAction();
-  const jobs = useLoad(() => get<{ jobs: AccountJob[] }>("/v1/schools/accounts/jobs"), [job]);
-  const running = job ?? jobs.data?.jobs.find((j) => j.status === "running")?.id;
+  const jobs = useLoad(
+    () => get<{ jobs: AccountJob[] }>("/v1/schools/accounts/jobs"),
+    [job],
+  );
+  const running =
+    job ?? jobs.data?.jobs.find((j) => j.status === "running")?.id;
   // Followed every 2 seconds until it is done.
   const [finished, setFinished] = useState<string>();
-  const live = useLoad(() => (running ? get<AccountJob>(`/v1/schools/accounts/jobs/${running}`) : Promise.resolve(undefined)), [running], !!running && finished !== running);
+  const live = useLoad(
+    () =>
+      running
+        ? get<AccountJob>(`/v1/schools/accounts/jobs/${running}`)
+        : Promise.resolve(undefined),
+    [running],
+    !!running && finished !== running,
+  );
   useEffect(() => {
     if (live.data?.status === "done") setFinished(live.data.id);
   }, [live.data]);
@@ -32,7 +59,9 @@ export function SchoolAccountsPage() {
   const shown = live.data ?? jobs.data?.jobs[0];
   const check = () =>
     act.run(async () => {
-      const r = await plainly(post<{ plan: AccountPlan }>("/v1/schools/accounts/issue", {}));
+      const r = await plainly(
+        post<{ plan: AccountPlan }>("/v1/schools/accounts/issue", {}),
+      );
       setPlan(r.plan);
     }, false);
   return (
@@ -48,9 +77,15 @@ export function SchoolAccountsPage() {
             Issue account numbers
           </h2>
           <p className="hint">
-            Check first: nothing is issued until you confirm. Each student is issued one account once, however often you run it; a batch that stops is picked up where it stopped.
+            Check first: nothing is issued until you confirm. Each student is
+            issued one account once, however often you run it; a batch that
+            stops is picked up where it stopped.
           </p>
-          <button type="button" onClick={() => void check()} disabled={act.busy}>
+          <button
+            type="button"
+            onClick={() => void check()}
+            disabled={act.busy}
+          >
             {plan ? "Check again" : "Check who gets one"}
           </button>
           <ErrorBox error={act.error} />
@@ -75,25 +110,49 @@ export function SchoolAccountsPage() {
       )}
       <ErrorBox error={jobs.error ?? live.error} />
       {shown && <JobView job={shown} />}
-      {jobs.data && jobs.data.jobs.length === 0 && !may.manage && <p className="hint">No account numbers have been issued in a batch yet.</p>}
+      {jobs.data && jobs.data.jobs.length === 0 && !may.manage && (
+        <p className="hint">
+          No account numbers have been issued in a batch yet.
+        </p>
+      )}
     </>
   );
 }
 
-function PlanView({ plan, busy, onConfirm }: { plan: AccountPlan; busy: boolean; onConfirm: () => void }) {
+function PlanView({
+  plan,
+  busy,
+  onConfirm,
+}: {
+  plan: AccountPlan;
+  busy: boolean;
+  onConfirm: () => void;
+}) {
   return (
     <div data-testid="accounts-plan" style={{ marginTop: 16 }}>
       <p>{planSummary(plan)}</p>
       <p className="hint">
         {plan.issuer.requirement} {feeLine(plan.issuer)}
       </p>
-      {plan.running && <div className="notice">A batch is still issuing account numbers: wait for it to finish before starting another.</div>}
+      {plan.running && (
+        <div className="notice">
+          A batch is still issuing account numbers: wait for it to finish before
+          starting another.
+        </div>
+      )}
       {plan.cannot.length > 0 && (
         <>
           <h3>Cannot be issued yet</h3>
           <Items label="Cannot be issued yet">
             {plan.cannot.map((c) => (
-              <Item key={c.student_id} to={`/schools/students/${c.student_id}`} icon="schools" tone="warn" title={c.admission_number} sub={c.reason} />
+              <Item
+                key={c.student_id}
+                to={`/schools/students/${c.student_id}`}
+                icon="schools"
+                tone="warn"
+                title={c.admission_number}
+                sub={c.reason}
+              />
             ))}
           </Items>
         </>
@@ -104,15 +163,26 @@ function PlanView({ plan, busy, onConfirm }: { plan: AccountPlan; busy: boolean;
           <ul className="plain-list">
             {plan.waiting.map((w) => (
               <li key={w.student_id}>
-                <Link to={`/schools/students/${w.student_id}`}>{w.admission_number}</Link>: {w.reason ?? "being issued now"}
+                <Link to={`/schools/students/${w.student_id}`}>
+                  {w.admission_number}
+                </Link>
+                : {w.reason ?? "being issued now"}
               </li>
             ))}
           </ul>
         </>
       )}
       {plan.to_issue > 0 && !plan.running && (
-        <button type="button" className="primary" onClick={onConfirm} disabled={busy}>
-          Issue {plan.to_issue === 1 ? "1 account number" : `${plan.to_issue.toLocaleString("en-NG")} account numbers`}
+        <button
+          type="button"
+          className="primary"
+          onClick={onConfirm}
+          disabled={busy}
+        >
+          Issue{" "}
+          {plan.to_issue === 1
+            ? "1 account number"
+            : `${plan.to_issue.toLocaleString("en-NG")} account numbers`}
         </button>
       )}
     </div>
@@ -122,12 +192,23 @@ function PlanView({ plan, busy, onConfirm }: { plan: AccountPlan; busy: boolean;
 function JobView({ job }: { job: AccountJob }) {
   const pct = jobPercent(job);
   return (
-    <section className="card" aria-labelledby="job-heading" data-testid="accounts-job">
+    <section
+      className="card"
+      aria-labelledby="job-heading"
+      data-testid="accounts-job"
+    >
       <h2 id="job-heading" style={{ marginTop: 0 }}>
         {job.status === "running" ? "Issuing now" : "The last batch"}
       </h2>
       <p role="status">{jobLine(job)}</p>
-      <div className="progress" role="progressbar" aria-label="Account numbers issued" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
+      <div
+        className="progress"
+        role="progressbar"
+        aria-label="Account numbers issued"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={pct}
+      >
         <span style={{ width: `${pct}%` }} />
       </div>
       <p className="hint">
@@ -146,12 +227,21 @@ function JobView({ job }: { job: AccountJob }) {
                 icon="schools"
                 tone="danger"
                 title={p.admission_number}
-                side={<span className={`badge sf-status ${accountStatus(p.status).tone}`}>{accountStatus(p.status).label}</span>}
+                side={
+                  <span
+                    className={`badge sf-status ${accountStatus(p.status).tone}`}
+                  >
+                    {accountStatus(p.status).label}
+                  </span>
+                }
                 sub={`The rail's reason: ${p.reason}`}
               />
             ))}
           </Items>
-          <p className="hint">Fix what the rail says (a guardian's email, the rail's own setup), then check again: the next batch tries them again.</p>
+          <p className="hint">
+            Fix what the rail says (a guardian's email, the rail's own setup),
+            then check again: the next batch tries them again.
+          </p>
         </>
       )}
     </section>

@@ -35,10 +35,15 @@ export function showValue(v: unknown): string {
 }
 
 /** A workflow's inputs schema with its local $refs (#/types/…) resolved, for a form. */
-export function resolveSchema(schema: JSONSchema | undefined, types: Record<string, JSONSchema> = {}, depth = 0): JSONSchema | undefined {
+export function resolveSchema(
+  schema: JSONSchema | undefined,
+  types: Record<string, JSONSchema> = {},
+  depth = 0,
+): JSONSchema | undefined {
   if (!schema || depth > 8) return schema;
   const ref = (schema as { $ref?: string }).$ref;
-  if (ref?.startsWith("#/types/")) return resolveSchema(types[ref.slice("#/types/".length)], types, depth + 1);
+  if (ref?.startsWith("#/types/"))
+    return resolveSchema(types[ref.slice("#/types/".length)], types, depth + 1);
   if (!schema.properties) return schema;
   const props: Record<string, JSONSchema> = {};
   for (const [k, s] of Object.entries(schema.properties)) {

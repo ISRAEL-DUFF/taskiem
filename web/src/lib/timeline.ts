@@ -1,7 +1,16 @@
 // Rebuilds per-step status from a run's events (spec 15.1, run inspector).
 import type { RunEvent } from "../api";
 
-export type StepStatus = "scheduled" | "running" | "completed" | "failed" | "skipped" | "cancelled" | "waiting" | "retrying" | "parked";
+export type StepStatus =
+  | "scheduled"
+  | "running"
+  | "completed"
+  | "failed"
+  | "skipped"
+  | "cancelled"
+  | "waiting"
+  | "retrying"
+  | "parked";
 
 export interface StepRow {
   id: string; // step instance id, e.g. pay_all[2].pay_employee
@@ -36,7 +45,14 @@ export function timeline(events: RunEvent[]): StepRow[] {
     const p = (ev.payload ?? {}) as Payload;
     let r = rows.get(ev.step_id);
     if (!r) {
-      r = { id: ev.step_id, status: "scheduled", attempts: 0, firstAt: ev.recorded_at, lastAt: ev.recorded_at, events: [] };
+      r = {
+        id: ev.step_id,
+        status: "scheduled",
+        attempts: 0,
+        firstAt: ev.recorded_at,
+        lastAt: ev.recorded_at,
+        events: [],
+      };
       rows.set(ev.step_id, r);
     }
     r.events.push(ev);
@@ -45,8 +61,16 @@ export function timeline(events: RunEvent[]): StepRow[] {
       case "StepScheduled":
         r.attempts = Math.max(r.attempts, ev.attempt ?? 1);
         r.input = p.input;
-        r.status = p.kind === "signal" ? "waiting" : p.kind === "timer" ? "waiting" : "scheduled";
-        if (p.kind === "signal") r.waitingFor = p.form ? "the form to be filled in" : `signal ${p.event ?? ""}`;
+        r.status =
+          p.kind === "signal"
+            ? "waiting"
+            : p.kind === "timer"
+              ? "waiting"
+              : "scheduled";
+        if (p.kind === "signal")
+          r.waitingFor = p.form
+            ? "the form to be filled in"
+            : `signal ${p.event ?? ""}`;
         if (p.kind === "timer") r.waitingFor = "timer";
         break;
       case "StepStarted":
@@ -66,7 +90,12 @@ export function timeline(events: RunEvent[]): StepRow[] {
         break;
       case "StepFailed":
         r.error = p.error;
-        r.status = p.error?.next === "retry" || p.error?.next === "reconcile" ? "retrying" : p.error?.next === "park" ? "parked" : "failed";
+        r.status =
+          p.error?.next === "retry" || p.error?.next === "reconcile"
+            ? "retrying"
+            : p.error?.next === "park"
+              ? "parked"
+              : "failed";
         break;
       case "StepSkipped":
         r.status = "skipped";
@@ -77,7 +106,9 @@ export function timeline(events: RunEvent[]): StepRow[] {
         break;
     }
   }
-  return [...rows.values()].sort((a, b) => (a.events[0]?.seq ?? 0) - (b.events[0]?.seq ?? 0));
+  return [...rows.values()].sort(
+    (a, b) => (a.events[0]?.seq ?? 0) - (b.events[0]?.seq ?? 0),
+  );
 }
 
 /** True for values the engine stored sealed (personal data, spec 4.9). */
@@ -89,7 +120,10 @@ export function isSealed(v: unknown): boolean {
 export function redact(v: unknown): unknown {
   if (isSealed(v)) return `🔒 ${(v as { $pii: string }).$pii}`;
   if (Array.isArray(v)) return v.map(redact);
-  if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, redact(x)]));
+  if (v && typeof v === "object")
+    return Object.fromEntries(
+      Object.entries(v).map(([k, x]) => [k, redact(x)]),
+    );
   return v;
 }
 
@@ -105,22 +139,46 @@ export function duration(from: string, to: string): string {
 // Status of each top-level step for the live canvas: a step's own row and
 // those of the instances nested in it (pay_all[2].pay, branch.path.step)
 // combine, the most pressing first.
-const PRIORITY: StepStatus[] = ["failed", "parked", "running", "retrying", "waiting", "scheduled", "completed", "cancelled", "skipped"];
+const PRIORITY: StepStatus[] = [
+  "failed",
+  "parked",
+  "running",
+  "retrying",
+  "waiting",
+  "scheduled",
+  "completed",
+  "cancelled",
+  "skipped",
+];
 
-export function topLevelStatus(rows: StepRow[], ids: string[]): Record<string, StepStatus> {
+export function topLevelStatus(
+  rows: StepRow[],
+  ids: string[],
+): Record<string, StepStatus> {
   const out: Record<string, StepStatus> = {};
   for (const id of ids) {
     // A template or capability step's expanded steps are <id>__<name>.
-    const mine = rows.filter((r) => r.id === id || r.id.startsWith(id + "[") || r.id.startsWith(id + ".") || r.id.startsWith(id + "__"));
+    const mine = rows.filter(
+      (r) =>
+        r.id === id ||
+        r.id.startsWith(id + "[") ||
+        r.id.startsWith(id + ".") ||
+        r.id.startsWith(id + "__"),
+    );
     if (mine.length === 0) continue;
     const own = mine.find((r) => r.id === id);
     // A finished container step is what it says; while it runs, its
     // children show what is happening inside it.
-    if (own && ["completed", "failed", "cancelled", "skipped"].includes(own.status)) {
+    if (
+      own &&
+      ["completed", "failed", "cancelled", "skipped"].includes(own.status)
+    ) {
       out[id] = own.status;
       continue;
     }
-    out[id] = PRIORITY.find((p) => mine.some((r) => r.status === p)) ?? (mine[0] as StepRow).status;
+    out[id] =
+      PRIORITY.find((p) => mine.some((r) => r.status === p)) ??
+      (mine[0] as StepRow).status;
   }
   return out;
 }
@@ -139,12 +197,18 @@ export interface RowGroup {
  * Groups keep the order of their first row.
  */
 export function templateGroups(rows: StepRow[]): RowGroup[] {
-  const templates = new Set(rows.map((r) => /^([a-z][a-z0-9_]*?)__body$/.exec(r.id)?.[1]).filter((t): t is string => t !== undefined && !t.includes("__")));
+  const templates = new Set(
+    rows
+      .map((r) => /^([a-z][a-z0-9_]*?)__body$/.exec(r.id)?.[1])
+      .filter((t): t is string => t !== undefined && !t.includes("__")),
+  );
   const out: RowGroup[] = [];
   const byTemplate = new Map<string, RowGroup>();
   for (const r of rows) {
     const head = r.id.split(".")[0]?.replace(/\[\d+\]$/, "") ?? r.id;
-    const t = [...templates].find((x) => head === x || head.startsWith(x + "__"));
+    const t = [...templates].find(
+      (x) => head === x || head.startsWith(x + "__"),
+    );
     if (t === undefined) {
       out.push({ template: null, rows: [r] });
       continue;

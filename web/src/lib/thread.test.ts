@@ -86,6 +86,8 @@ describe("followNew", () => {
       { id: "a", created_at: "2026-01-01T10:00:00Z", inbound: false },
       { id: "b", created_at: "2026-01-01T10:05:00Z", inbound: true },
     ];
+    const [a, b] = list;
+    if (!a || !b) throw new Error("two");
     const mine = (m: T) => m.inbound;
     expect(followNew("2026-01-01T10:00:00Z", list, false, mine)).toEqual({
       kind: "bottom",
@@ -93,7 +95,7 @@ describe("followNew", () => {
     expect(
       followNew(
         "2026-01-01T10:00:00Z",
-        [list[0]!, { ...list[1]!, inbound: false }],
+        [a, { ...b, inbound: false }],
         false,
         mine,
       ),

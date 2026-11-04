@@ -3,9 +3,29 @@ import { Link, useSearchParams } from "react-router-dom";
 import { ApiError, del, get, post, put } from "../api";
 import { useAuth } from "../auth";
 import { Icon } from "../icons";
-import { EmptyState, ErrorBox, Field, Items, Modal, PageHeader, Row, Skeleton, fmtTime, useAction, useLiveRefresh, useLoad } from "../ui";
+import {
+  EmptyState,
+  ErrorBox,
+  Field,
+  Items,
+  Modal,
+  PageHeader,
+  Row,
+  Skeleton,
+  fmtTime,
+  useAction,
+  useLiveRefresh,
+  useLoad,
+} from "../ui";
 import { isKept, type Table } from "../lib/tables";
-import { DAYS, MAX_OPENINGS, columnsFor, thumb, tidy, type Storefront as SF } from "../lib/storefront";
+import {
+  DAYS,
+  MAX_OPENINGS,
+  columnsFor,
+  thumb,
+  tidy,
+  type Storefront as SF,
+} from "../lib/storefront";
 import { customerLine, orderStatus, type Order } from "../lib/orders";
 import {
   AVAILABILITY_DEFAULTS,
@@ -58,24 +78,38 @@ export function StorefrontBookings() {
       }),
     [],
   );
-  const tables = useLoad(() => (can("table.read") ? get<{ tables: Table[] }>("/v1/tables") : Promise.resolve({ tables: [] as Table[] })), []);
+  const tables = useLoad(
+    () =>
+      can("table.read")
+        ? get<{ tables: Table[] }>("/v1/tables")
+        : Promise.resolve({ tables: [] as Table[] }),
+    [],
+  );
   return (
     <>
       {header}
       <StorefrontTabs />
       <ErrorBox error={sf.error} />
-      {sf.data === undefined && !sf.error && <Skeleton rows={5} label="Loading your storefront…" />}
+      {sf.data === undefined && !sf.error && (
+        <Skeleton rows={5} label="Loading your storefront…" />
+      )}
       {sf.data === null && (
         <EmptyState icon="storefront">
           <span className="sf-links">
-            You have no storefront yet. <Link to="/storefront">Create your storefront</Link> first, then set up bookings here.
+            You have no storefront yet.{" "}
+            <Link to="/storefront">Create your storefront</Link> first, then set
+            up bookings here.
           </span>
         </EmptyState>
       )}
       {sf.data && (
         <>
           <BookingList />
-          <BookingSettings initial={sf.data} tables={tables.data?.tables.filter((t) => !isKept(t))} tablesError={tables.error} />
+          <BookingSettings
+            initial={sf.data}
+            tables={tables.data?.tables.filter((t) => !isKept(t))}
+            tablesError={tables.error}
+          />
         </>
       )}
     </>
@@ -107,13 +141,22 @@ function BookingList() {
     <section className="card" aria-labelledby="sf-upcoming">
       <h2 id="sf-upcoming">Upcoming bookings</h2>
       <p className="hint sf-links">
-        You confirm each booking in the approval request Taskiem sends you in WhatsApp or Telegram, or on the <Link to="/approvals">Approvals</Link> page. Open a
-        booking to see the customer's details.
+        You confirm each booking in the approval request Taskiem sends you in
+        WhatsApp or Telegram, or on the <Link to="/approvals">Approvals</Link>{" "}
+        page. Open a booking to see the customer's details.
       </p>
       <div className="filters" role="search" aria-label="Filter bookings">
         <label>
           Show{" "}
-          <select value={range} onChange={(e) => setParams(e.target.value === "month" ? {} : { range: e.target.value }, { replace: true })}>
+          <select
+            value={range}
+            onChange={(e) =>
+              setParams(
+                e.target.value === "month" ? {} : { range: e.target.value },
+                { replace: true },
+              )
+            }
+          >
             {BOOKING_RANGES.map((r) => (
               <option key={r.value} value={r.value}>
                 {r.label}
@@ -131,9 +174,19 @@ function BookingList() {
         </div>
       )}
       <ErrorBox error={list.error} />
-      {list.data === undefined && !list.error && <Skeleton rows={4} label="Loading bookings…" />}
-      {list.data === null && <EmptyState icon="storefront">This Taskiem does not take storefront bookings yet.</EmptyState>}
-      {groups && groups.length === 0 && <EmptyState icon="storefront">No bookings {range === "week" ? "this week" : "in the next 30 days"}.</EmptyState>}
+      {list.data === undefined && !list.error && (
+        <Skeleton rows={4} label="Loading bookings…" />
+      )}
+      {list.data === null && (
+        <EmptyState icon="storefront">
+          This Taskiem does not take storefront bookings yet.
+        </EmptyState>
+      )}
+      {groups && groups.length === 0 && (
+        <EmptyState icon="storefront">
+          No bookings {range === "week" ? "this week" : "in the next 30 days"}.
+        </EmptyState>
+      )}
       {groups?.map((g) => (
         <div key={g.day} className="sf-booking-day">
           <h3 id={`sf-day-${g.day}`}>{g.label}</h3>
@@ -152,7 +205,12 @@ function BookingList() {
                 side={<StatusBadge status={b.status} />}
                 sub={
                   <span className="sub">
-                    {customerLine(b.customer)} · <Link to={`/storefront/orders/${encodeURIComponent(b.reference)}`}>{b.reference}</Link>
+                    {customerLine(b.customer)} ·{" "}
+                    <Link
+                      to={`/storefront/orders/${encodeURIComponent(b.reference)}`}
+                    >
+                      {b.reference}
+                    </Link>
                   </span>
                 }
               >
@@ -175,7 +233,13 @@ function BookingList() {
 /** Cancel and Move for a booking that still holds its time
  * (POST /v1/storefront/bookings/{reference}/cancel and /move). The run
  * moves on and the customer is told. */
-export function BookingActions({ booking, onChanged }: { booking: Order; onChanged: (message: string, b: Order) => void }) {
+export function BookingActions({
+  booking,
+  onChanged,
+}: {
+  booking: Order;
+  onChanged: (message: string, b: Order) => void;
+}) {
   const [open, setOpen] = useState<"cancel" | "move" | null>(null);
   if (!canChange(booking)) return null;
   const what = `${booking.service_name ?? "booking"} ${booking.reference}`;
@@ -184,7 +248,11 @@ export function BookingActions({ booking, onChanged }: { booking: Order; onChang
       <button type="button" onClick={() => setOpen("move")}>
         Move<span className="sr-only"> {what}</span>
       </button>
-      <button type="button" className="danger" onClick={() => setOpen("cancel")}>
+      <button
+        type="button"
+        className="danger"
+        onClick={() => setOpen("cancel")}
+      >
         Cancel<span className="sr-only"> {what}</span>
       </button>
       {open === "cancel" && (
@@ -193,7 +261,12 @@ export function BookingActions({ booking, onChanged }: { booking: Order; onChang
           onClose={() => setOpen(null)}
           onDone={(b) => {
             setOpen(null);
-            onChanged(b.status === "refund_due" ? `${b.reference} is cancelled. They had paid: refund them in Paystack.` : `${b.reference} is cancelled; the customer is told.`, b);
+            onChanged(
+              b.status === "refund_due"
+                ? `${b.reference} is cancelled. They had paid: refund them in Paystack.`
+                : `${b.reference} is cancelled; the customer is told.`,
+              b,
+            );
           }}
         />
       )}
@@ -203,7 +276,10 @@ export function BookingActions({ booking, onChanged }: { booking: Order; onChang
           onClose={() => setOpen(null)}
           onDone={(b) => {
             setOpen(null);
-            onChanged(`${b.reference} is moved to ${b.starts_at ? whenLabel(b.starts_at) : "its new time"}; the customer is told.`, b);
+            onChanged(
+              `${b.reference} is moved to ${b.starts_at ? whenLabel(b.starts_at) : "its new time"}; the customer is told.`,
+              b,
+            );
           }}
         />
       )}
@@ -211,14 +287,24 @@ export function BookingActions({ booking, onChanged }: { booking: Order; onChang
   );
 }
 
-function CancelDialog({ booking, onClose, onDone }: { booking: Order; onClose: () => void; onDone: (b: Order) => void }) {
+function CancelDialog({
+  booking,
+  onClose,
+  onDone,
+}: {
+  booking: Order;
+  onClose: () => void;
+  onDone: (b: Order) => void;
+}) {
   const act = useAction();
   return (
     <Modal title={`Cancel booking ${booking.reference}?`} onClose={onClose}>
       <p>
         {booking.service_name}
-        {booking.starts_at && `, ${whenLabel(booking.starts_at)}`}. The time is freed and the customer is texted that you cancelled.
-        {booking.paid_at && " They have paid, so the booking shows as Refund due until you refund them in Paystack."}
+        {booking.starts_at && `, ${whenLabel(booking.starts_at)}`}. The time is
+        freed and the customer is texted that you cancelled.
+        {booking.paid_at &&
+          " They have paid, so the booking shows as Refund due until you refund them in Paystack."}
       </p>
       <ErrorBox error={act.error} />
       <div className="toolbar">
@@ -226,7 +312,21 @@ function CancelDialog({ booking, onClose, onDone }: { booking: Order; onClose: (
           type="button"
           className="danger"
           disabled={act.busy}
-          onClick={() => void act.run(async () => onDone((await tidy(post<{ booking: Order }>(`/v1/storefront/bookings/${encodeURIComponent(booking.reference)}/cancel`))).booking), "Booking cancelled")}
+          onClick={() =>
+            void act.run(
+              async () =>
+                onDone(
+                  (
+                    await tidy(
+                      post<{ booking: Order }>(
+                        `/v1/storefront/bookings/${encodeURIComponent(booking.reference)}/cancel`,
+                      ),
+                    )
+                  ).booking,
+                ),
+              "Booking cancelled",
+            )
+          }
         >
           {act.busy ? "Cancelling…" : "Cancel the booking"}
         </button>
@@ -238,43 +338,84 @@ function CancelDialog({ booking, onClose, onDone }: { booking: Order; onClose: (
   );
 }
 
-function MoveDialog({ booking, onClose, onDone }: { booking: Order; onClose: () => void; onDone: (b: Order) => void }) {
-  const [day, setDay] = useState(booking.starts_at ? lagosDay(booking.starts_at) : lagosDay(Date.now()));
-  const [time, setTime] = useState(booking.starts_at ? lagosTime(booking.starts_at) : "");
+function MoveDialog({
+  booking,
+  onClose,
+  onDone,
+}: {
+  booking: Order;
+  onClose: () => void;
+  onDone: (b: Order) => void;
+}) {
+  const [day, setDay] = useState(
+    booking.starts_at ? lagosDay(booking.starts_at) : lagosDay(Date.now()),
+  );
+  const [time, setTime] = useState(
+    booking.starts_at ? lagosTime(booking.starts_at) : "",
+  );
   const act = useAction();
   const problem = moveProblem(day, time);
-  const same = !!booking.starts_at && lagosInstant(day, time) === lagosInstant(lagosDay(booking.starts_at), lagosTime(booking.starts_at));
+  const same =
+    !!booking.starts_at &&
+    lagosInstant(day, time) ===
+      lagosInstant(lagosDay(booking.starts_at), lagosTime(booking.starts_at));
   return (
     <Modal title={`Move booking ${booking.reference}`} onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
           if (problem || same) return;
-          void act.run(async () =>
-            onDone(
-              (await tidy(post<{ booking: Order }>(`/v1/storefront/bookings/${encodeURIComponent(booking.reference)}/move`, { starts_at: lagosInstant(day, time) })))
-                .booking,
-            ),
+          void act.run(
+            async () =>
+              onDone(
+                (
+                  await tidy(
+                    post<{ booking: Order }>(
+                      `/v1/storefront/bookings/${encodeURIComponent(booking.reference)}/move`,
+                      { starts_at: lagosInstant(day, time) },
+                    ),
+                  )
+                ).booking,
+              ),
             "Booking moved",
           );
         }}
       >
         <p className="hint">
           {booking.service_name}
-          {booking.starts_at && `, now ${whenLabel(booking.starts_at)}`}. Choose a free time in Lagos time; the customer is texted the new one.
+          {booking.starts_at && `, now ${whenLabel(booking.starts_at)}`}. Choose
+          a free time in Lagos time; the customer is texted the new one.
         </p>
         <div className="row">
           <Field label="New date">
-            <input type="date" value={day} min={lagosDay(Date.now())} onChange={(e) => setDay(e.target.value)} required />
+            <input
+              type="date"
+              value={day}
+              min={lagosDay(Date.now())}
+              onChange={(e) => setDay(e.target.value)}
+              required
+            />
           </Field>
           <Field label="New time">
-            <input type="time" value={time} step={300} onChange={(e) => setTime(e.target.value)} required />
+            <input
+              type="time"
+              value={time}
+              step={300}
+              onChange={(e) => setTime(e.target.value)}
+              required
+            />
           </Field>
         </div>
-        {day && /^\d{4}-\d{2}-\d{2}$/.test(day) && <p className="hint">{dayLabel(day)}</p>}
+        {day && /^\d{4}-\d{2}-\d{2}$/.test(day) && (
+          <p className="hint">{dayLabel(day)}</p>
+        )}
         <ErrorBox error={act.error} />
         <div className="toolbar">
-          <button type="submit" className="primary" disabled={act.busy || !!problem || same}>
+          <button
+            type="submit"
+            className="primary"
+            disabled={act.busy || !!problem || same}
+          >
             {act.busy ? "Moving…" : "Move"}
           </button>
           <button type="button" onClick={onClose}>
@@ -303,16 +444,30 @@ function settingsFrom(sf: SF): SettingsForm {
 }
 
 function requestOf(f: SettingsForm) {
-  return { services_table: f.table, services_columns: f.table ? cleanServiceColumns(f.columns) : {}, availability: availabilityFromForm(f.availability) };
+  return {
+    services_table: f.table,
+    services_columns: f.table ? cleanServiceColumns(f.columns) : {},
+    availability: availabilityFromForm(f.availability),
+  };
 }
 
-function BookingSettings({ initial, tables, tablesError }: { initial: SF; tables: Table[] | undefined; tablesError: unknown }) {
+function BookingSettings({
+  initial,
+  tables,
+  tablesError,
+}: {
+  initial: SF;
+  tables: Table[] | undefined;
+  tablesError: unknown;
+}) {
   const [saved, setSaved] = useState(initial);
   const [form, setForm] = useState<SettingsForm>(() => settingsFrom(initial));
   const [notice, setNotice] = useState("");
   const [tick, setTick] = useState(0);
   const act = useAction();
-  const dirty = JSON.stringify(requestOf(form)) !== JSON.stringify(requestOf(settingsFrom(saved)));
+  const dirty =
+    JSON.stringify(requestOf(form)) !==
+    JSON.stringify(requestOf(settingsFrom(saved)));
   const avProblems = availabilityErrors(form.availability);
   const mapProblem = servicesProblem(form.table, form.columns);
   const published = saved.published_version > 0;
@@ -332,11 +487,17 @@ function BookingSettings({ initial, tables, tablesError }: { initial: SF; tables
   const save = () =>
     act.run(async () => {
       setNotice("");
-      const out = await tidy(put<SF>("/v1/storefront/bookings", requestOf(form)));
+      const out = await tidy(
+        put<SF>("/v1/storefront/bookings", requestOf(form)),
+      );
       setSaved(out);
       setForm(settingsFrom(out));
       setTick((n) => n + 1);
-      setNotice(published ? "Saved; your page is updated." : "Saved. Bookings show on your page once you publish it and switch on the booking form.");
+      setNotice(
+        published
+          ? "Saved; your page is updated."
+          : "Saved. Bookings show on your page once you publish it and switch on the booking form.",
+      );
     }, false);
 
   /** Makes the services' table and maps it, as chat does. */
@@ -348,7 +509,9 @@ function BookingSettings({ initial, tables, tablesError }: { initial: SF; tables
       setSaved(out);
       setForm(settingsFrom(out));
       setTick((n) => n + 1);
-      setNotice("Your services list is ready: add what customers can book below.");
+      setNotice(
+        "Your services list is ready: add what customers can book below.",
+      );
     }, "Services made");
 
   return (
@@ -362,18 +525,40 @@ function BookingSettings({ initial, tables, tablesError }: { initial: SF; tables
         <h2 id="sf-services">Services</h2>
         {!saved.services_table && (
           <div className="notice">
-            <p style={{ marginTop: 0 }}>List what customers can book, how long each takes and its price. Taskiem keeps the list for you.</p>
-            <button type="button" className="primary" disabled={act.busy} onClick={() => void makeServices()}>
+            <p style={{ marginTop: 0 }}>
+              List what customers can book, how long each takes and its price.
+              Taskiem keeps the list for you.
+            </p>
+            <button
+              type="button"
+              className="primary"
+              disabled={act.busy}
+              onClick={() => void makeServices()}
+            >
               Make my services
             </button>
           </div>
         )}
         {saved.services_table && (
-          <ServicesPreview tick={tick} table={saved.services_table} columns={saved.services_columns ?? {}} stale={dirty && form.table !== saved.services_table} />
+          <ServicesPreview
+            tick={tick}
+            table={saved.services_table}
+            columns={saved.services_columns ?? {}}
+            stale={dirty && form.table !== saved.services_table}
+          />
         )}
         <details open={!saved.services_table && !!form.table}>
-          <summary>{saved.services_table ? "Services settings" : "Use a table you already have"}</summary>
-          <ServicesMapping form={form} setForm={setForm} tables={tables} tablesError={tablesError} />
+          <summary>
+            {saved.services_table
+              ? "Services settings"
+              : "Use a table you already have"}
+          </summary>
+          <ServicesMapping
+            form={form}
+            setForm={setForm}
+            tables={tables}
+            tablesError={tablesError}
+          />
         </details>
         {mapProblem && <p className="error-text">{mapProblem}</p>}
       </section>
@@ -398,13 +583,20 @@ function BookingSettings({ initial, tables, tablesError }: { initial: SF; tables
         )}
         <ErrorBox error={act.error} />
         <div className="toolbar" style={{ marginBottom: 0 }}>
-          <button type="submit" className="primary" disabled={act.busy || !dirty || avProblems.length > 0 || !!mapProblem}>
+          <button
+            type="submit"
+            className="primary"
+            disabled={
+              act.busy || !dirty || avProblems.length > 0 || !!mapProblem
+            }
+          >
             {act.busy ? "Saving…" : "Save booking settings"}
           </button>
           {dirty && <span className="hint">Unsaved changes</span>}
         </div>
         <p className="hint sf-links">
-          Customers book through the booking form: set it up and switch it on under <Link to="/storefront">Page</Link>, Forms.
+          Customers book through the booking form: set it up and switch it on
+          under <Link to="/storefront">Page</Link>, Forms.
         </p>
       </section>
     </form>
@@ -425,7 +617,10 @@ function ServicesMapping({
   if (tablesError) {
     return (
       <>
-        <p className="hint">Your tables could not be loaded, so the services cannot be changed now.</p>
+        <p className="hint">
+          Your tables could not be loaded, so the services cannot be changed
+          now.
+        </p>
         <ErrorBox error={tablesError} />
       </>
     );
@@ -433,12 +628,14 @@ function ServicesMapping({
   if (!tables) return <Skeleton rows={2} label="Loading your tables…" />;
   const usable = servicesTables(tables);
   const table = tables.find((t) => t.id === form.table);
-  const setColumns = (patch: ServiceColumns) => setForm((f) => ({ ...f, columns: { ...f.columns, ...patch } }));
+  const setColumns = (patch: ServiceColumns) =>
+    setForm((f) => ({ ...f, columns: { ...f.columns, ...patch } }));
   return (
     <>
       <p className="hint">
-        What customers book comes from one of your <Link to="/tables">tables</Link>: each row is a service, with how long it takes in minutes. A service with no price
-        shows as priced on the day.
+        What customers book comes from one of your{" "}
+        <Link to="/tables">tables</Link>: each row is a service, with how long
+        it takes in minutes. A service with no price shows as priced on the day.
       </p>
       <Field label="Services table">
         <select
@@ -446,7 +643,11 @@ function ServicesMapping({
           onChange={(e) => {
             const id = e.target.value || null;
             const t = tables.find((x) => x.id === id);
-            setForm((f) => ({ ...f, table: id, columns: t ? guessServiceColumns(t) : { price_unit: "naira" } }));
+            setForm((f) => ({
+              ...f,
+              table: id,
+              columns: t ? guessServiceColumns(t) : { price_unit: "naira" },
+            }));
           }}
         >
           <option value="">No bookings</option>
@@ -455,13 +656,17 @@ function ServicesMapping({
               {t.title || t.name}
             </option>
           ))}
-          {form.table && !table && <option value={form.table}>A table that no longer exists</option>}
+          {form.table && !table && (
+            <option value={form.table}>A table that no longer exists</option>
+          )}
         </select>
       </Field>
       {usable.length === 0 && (
         <p className="hint">
-          None of your tables can hold services yet: it needs a text column for the name and a number column for the duration in minutes, neither personal data.{" "}
-          <Link to="/tables">Create a table</Link> with name, duration and price columns.
+          None of your tables can hold services yet: it needs a text column for
+          the name and a number column for the duration in minutes, neither
+          personal data. <Link to="/tables">Create a table</Link> with name,
+          duration and price columns.
         </p>
       )}
       {table && (
@@ -469,9 +674,24 @@ function ServicesMapping({
           {SERVICE_MAPPING.map((m) => {
             const options = columnsFor(table.columns, m.types);
             return (
-              <Field key={m.key} label={m.required ? `${m.label} column` : `${m.label} column (optional)`} hint={`${m.help} (${m.types.join(" or ")}).`}>
-                <select value={form.columns[m.key] ?? ""} onChange={(e) => setColumns({ [m.key]: e.target.value })} required={m.required} aria-invalid={m.required && !form.columns[m.key]}>
-                  <option value="">{m.required ? "Choose a column" : "None"}</option>
+              <Field
+                key={m.key}
+                label={
+                  m.required
+                    ? `${m.label} column`
+                    : `${m.label} column (optional)`
+                }
+                hint={`${m.help} (${m.types.join(" or ")}).`}
+              >
+                <select
+                  value={form.columns[m.key] ?? ""}
+                  onChange={(e) => setColumns({ [m.key]: e.target.value })}
+                  required={m.required}
+                  aria-invalid={m.required && !form.columns[m.key]}
+                >
+                  <option value="">
+                    {m.required ? "Choose a column" : "None"}
+                  </option>
                   {options.map((c) => (
                     <option key={c.name} value={c.name}>
                       {c.title ? `${c.title} (${c.name})` : c.name}
@@ -482,14 +702,28 @@ function ServicesMapping({
             );
           })}
           {form.columns.price && form.columns.price_unit === "kobo" && (
-            <Field data-technical label="Prices in the table are in" hint="Naira: 1500 is ₦1,500. Kobo: 150000 is ₦1,500.">
-              <select value={form.columns.price_unit || "naira"} onChange={(e) => setColumns({ price_unit: e.target.value as ServiceColumns["price_unit"] })}>
+            <Field
+              data-technical
+              label="Prices in the table are in"
+              hint="Naira: 1500 is ₦1,500. Kobo: 150000 is ₦1,500."
+            >
+              <select
+                value={form.columns.price_unit || "naira"}
+                onChange={(e) =>
+                  setColumns({
+                    price_unit: e.target.value as ServiceColumns["price_unit"],
+                  })
+                }
+              >
                 <option value="naira">Naira</option>
                 <option value="kobo">Kobo</option>
               </select>
             </Field>
           )}
-          <p className="hint sf-mapping-note">Columns holding personal data are never offered: they can never be shown on a public page.</p>
+          <p className="hint sf-mapping-note">
+            Columns holding personal data are never offered: they can never be
+            shown on a public page.
+          </p>
         </div>
       )}
     </>
@@ -497,7 +731,17 @@ function ServicesMapping({
 }
 
 /** The services copy the booking form offers (GET /v1/storefront/services). */
-function ServicesPreview({ tick, table, columns, stale }: { tick: number; table: string; columns: ServiceColumns; stale: boolean }) {
+function ServicesPreview({
+  tick,
+  table,
+  columns,
+  stale,
+}: {
+  tick: number;
+  table: string;
+  columns: ServiceColumns;
+  stale: boolean;
+}) {
   const svc = useLoad(() => get<Services>("/v1/storefront/services"), [tick]);
   const act = useAction();
   const { can } = useAuth();
@@ -540,25 +784,59 @@ function ServicesPreview({ tick, table, columns, stale }: { tick: number; table:
         <h3 style={{ margin: 0 }}>On your page</h3>
         <span className="grow" />
         <span className="hint">Copied {fmtTime(shown?.synced_at)}</span>
-        <button type="button" disabled={act.busy} onClick={() => void refresh()}>
+        <button
+          type="button"
+          disabled={act.busy}
+          onClick={() => void refresh()}
+        >
           {act.busy ? "Refreshing…" : "Refresh"}
           <span className="sr-only"> services</span>
         </button>
       </div>
-      {stale && <p className="hint">Save your booking settings to use the services table above.</p>}
+      {stale && (
+        <p className="hint">
+          Save your booking settings to use the services table above.
+        </p>
+      )}
       <ErrorBox error={svc.error ?? act.error} />
       {shown?.error && (
         <div className="warning" role="status">
           The services could not be read from their table: {shown.error}
         </div>
       )}
-      {!shown && !svc.error && <Skeleton rows={3} label="Loading the services…" />}
+      {!shown && !svc.error && (
+        <Skeleton rows={3} label="Loading the services…" />
+      )}
       {can("table.edit") && (
         <div className="toolbar sf-add-item">
-          <input aria-label="Service" placeholder="A service, such as Haircut" value={name} onChange={(e) => setName(e.target.value)} maxLength={120} />
-          <input aria-label="Minutes it takes" inputMode="numeric" value={minutes} onChange={(e) => setMinutes(e.target.value)} style={{ width: "6em" }} />
-          <input aria-label="Price in naira" placeholder="Price (₦)" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} style={{ width: "9em" }} />
-          <button type="button" className="primary" disabled={act.busy || !name.trim()} onClick={addService}>
+          <input
+            aria-label="Service"
+            placeholder="A service, such as Haircut"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={120}
+          />
+          <input
+            aria-label="Minutes it takes"
+            inputMode="numeric"
+            value={minutes}
+            onChange={(e) => setMinutes(e.target.value)}
+            style={{ width: "6em" }}
+          />
+          <input
+            aria-label="Price in naira"
+            placeholder="Price (₦)"
+            inputMode="decimal"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            style={{ width: "9em" }}
+          />
+          <button
+            type="button"
+            className="primary"
+            disabled={act.busy || !name.trim()}
+            onClick={addService}
+          >
             Add
           </button>
           {problem && (
@@ -568,24 +846,45 @@ function ServicesPreview({ tick, table, columns, stale }: { tick: number; table:
           )}
         </div>
       )}
-      {shown && shown.items.length === 0 && <EmptyState icon="tables">No services yet. Add what customers can book above.</EmptyState>}
+      {shown && shown.items.length === 0 && (
+        <EmptyState icon="tables">
+          No services yet. Add what customers can book above.
+        </EmptyState>
+      )}
       {shown && shown.items.length > 0 && (
         <ul className="sf-items" aria-label="Services">
           {shown.items.map((it) => {
             const src = thumb(it.photo);
             return (
-              <li key={it.id} className={it.available ? undefined : "unavailable"}>
-                {src ? <img src={src} alt="" width={48} height={48} loading="lazy" /> : <span className="sf-noimg" aria-hidden="true" />}
+              <li
+                key={it.id}
+                className={it.available ? undefined : "unavailable"}
+              >
+                {src ? (
+                  <img src={src} alt="" width={48} height={48} loading="lazy" />
+                ) : (
+                  <span className="sf-noimg" aria-hidden="true" />
+                )}
                 <div className="sf-item-text">
                   <strong>{it.name}</strong>
-                  {it.category && <span className="hint"> · {it.category}</span>}
+                  {it.category && (
+                    <span className="hint"> · {it.category}</span>
+                  )}
                   <div className="hint">{serviceLine(it)}</div>
                 </div>
                 <div className="sf-item-side">
                   {!it.available && <span className="badge">unavailable</span>}
-                  {it.available && !it.duration_minutes && <span className="badge">no duration</span>}
+                  {it.available && !it.duration_minutes && (
+                    <span className="badge">no duration</span>
+                  )}
                   {can("table.edit") && (
-                    <button type="button" className="link" disabled={act.busy} aria-label={`Remove ${it.name}`} onClick={() => removeService(it.id, it.name)}>
+                    <button
+                      type="button"
+                      className="link"
+                      disabled={act.busy}
+                      aria-label={`Remove ${it.name}`}
+                      onClick={() => removeService(it.id, it.name)}
+                    >
                       Remove
                     </button>
                   )}
@@ -599,25 +898,46 @@ function ServicesPreview({ tick, table, columns, stale }: { tick: number; table:
   );
 }
 
-function AvailabilityEditor({ value, onChange }: { value: AvailabilityForm; onChange: (p: Partial<AvailabilityForm>) => void }) {
+function AvailabilityEditor({
+  value,
+  onChange,
+}: {
+  value: AvailabilityForm;
+  onChange: (p: Partial<AvailabilityForm>) => void;
+}) {
   const [newOff, setNewOff] = useState("");
   const today = lagosDay(Date.now());
-  const setDay = (i: number, day: BookingDay) => onChange({ days: value.days.map((d, j) => (j === i ? day : d)) });
+  const setDay = (i: number, day: BookingDay) =>
+    onChange({ days: value.days.map((d, j) => (j === i ? day : d)) });
   const { upcoming, past } = upcomingOff(value.off, today);
   const noHours = value.sameAsHours && !value.days.some((d) => d.open);
   return (
     <>
-      <p className="hint">In Lagos time. Times are offered in steps of each service's duration plus its buffer.</p>
+      <p className="hint">
+        In Lagos time. Times are offered in steps of each service's duration
+        plus its buffer.
+      </p>
       <label className="sf-toggle">
-        <input type="checkbox" role="switch" checked={value.sameAsHours} onChange={(e) => onChange({ sameAsHours: e.target.checked })} />
+        <input
+          type="checkbox"
+          role="switch"
+          checked={value.sameAsHours}
+          onChange={(e) => onChange({ sameAsHours: e.target.checked })}
+        />
         <span>
           Same as opening hours
-          <span className="hint"> Take bookings whenever your page shows you open (set on the Page tab).</span>
+          <span className="hint">
+            {" "}
+            Take bookings whenever your page shows you open (set on the Page
+            tab).
+          </span>
         </span>
       </label>
       {noHours && (
         <div className="warning" role="status">
-          Your page has no opening hours, so no times can be booked. Set booking hours here, or opening hours on the <Link to="/storefront">Page</Link> tab.
+          Your page has no opening hours, so no times can be booked. Set booking
+          hours here, or opening hours on the <Link to="/storefront">Page</Link>{" "}
+          tab.
         </div>
       )}
       <div className="sf-hours" aria-disabled={value.sameAsHours}>
@@ -627,7 +947,11 @@ function AvailabilityEditor({ value, onChange }: { value: AvailabilityForm; onCh
             return (
               <div key={day} className="sf-day sf-day-readonly">
                 <span className="sf-day-name">{day}</span>
-                <span className="hint sf-spans">{d.open ? d.spans.map((s) => `${s.open} to ${s.close}`).join(", ") : "Closed"}</span>
+                <span className="hint sf-spans">
+                  {d.open
+                    ? d.spans.map((s) => `${s.open} to ${s.close}`).join(", ")
+                    : "Closed"}
+                </span>
               </div>
             );
           }
@@ -635,22 +959,61 @@ function AvailabilityEditor({ value, onChange }: { value: AvailabilityForm; onCh
             <fieldset key={day} className="sf-day">
               <legend className="sr-only">{day} bookings</legend>
               <label className="sf-day-name">
-                <input type="checkbox" checked={d.open} onChange={(e) => setDay(i, { ...d, open: e.target.checked, spans: d.spans.length ? d.spans : [{ open: "09:00", close: "17:00" }] })} />
+                <input
+                  type="checkbox"
+                  checked={d.open}
+                  onChange={(e) =>
+                    setDay(i, {
+                      ...d,
+                      open: e.target.checked,
+                      spans: d.spans.length
+                        ? d.spans
+                        : [{ open: "09:00", close: "17:00" }],
+                    })
+                  }
+                />
                 {day}
                 <span className="sr-only"> takes bookings</span>
               </label>
               {d.open ? (
                 <div className="sf-spans">
                   {d.spans.map((s, n) => {
-                    const which = d.spans.length > 1 ? ` (period ${n + 1})` : "";
-                    const set = (patch: Partial<typeof s>) => setDay(i, { ...d, spans: d.spans.map((x, m) => (m === n ? { ...x, ...patch } : x)) });
+                    const which =
+                      d.spans.length > 1 ? ` (period ${n + 1})` : "";
+                    const set = (patch: Partial<typeof s>) =>
+                      setDay(i, {
+                        ...d,
+                        spans: d.spans.map((x, m) =>
+                          m === n ? { ...x, ...patch } : x,
+                        ),
+                      });
                     return (
                       <div key={n} className="sf-span">
-                        <input type="time" aria-label={`${day} bookings from${which}`} value={s.open} onChange={(e) => set({ open: e.target.value })} />
+                        <input
+                          type="time"
+                          aria-label={`${day} bookings from${which}`}
+                          value={s.open}
+                          onChange={(e) => set({ open: e.target.value })}
+                        />
                         <span aria-hidden="true">to</span>
-                        <input type="time" aria-label={`${day} bookings until${which}`} value={s.close} onChange={(e) => set({ close: e.target.value })} />
+                        <input
+                          type="time"
+                          aria-label={`${day} bookings until${which}`}
+                          value={s.close}
+                          onChange={(e) => set({ close: e.target.value })}
+                        />
                         {d.spans.length > 1 && (
-                          <button type="button" className="icon-button" aria-label={`Remove ${day} period ${n + 1}`} onClick={() => setDay(i, { ...d, spans: d.spans.filter((_, m) => m !== n) })}>
+                          <button
+                            type="button"
+                            className="icon-button"
+                            aria-label={`Remove ${day} period ${n + 1}`}
+                            onClick={() =>
+                              setDay(i, {
+                                ...d,
+                                spans: d.spans.filter((_, m) => m !== n),
+                              })
+                            }
+                          >
                             <Icon name="close" />
                           </button>
                         )}
@@ -663,7 +1026,16 @@ function AvailabilityEditor({ value, onChange }: { value: AvailabilityForm; onCh
               )}
               <div className="sf-day-actions">
                 {d.open && d.spans.length < MAX_OPENINGS && (
-                  <button type="button" aria-label={`Add a booking period on ${day}`} onClick={() => setDay(i, { ...d, spans: [...d.spans, { open: "", close: "" }] })}>
+                  <button
+                    type="button"
+                    aria-label={`Add a booking period on ${day}`}
+                    onClick={() =>
+                      setDay(i, {
+                        ...d,
+                        spans: [...d.spans, { open: "", close: "" }],
+                      })
+                    }
+                  >
                     <Icon name="plus" />
                     Period
                   </button>
@@ -673,7 +1045,12 @@ function AvailabilityEditor({ value, onChange }: { value: AvailabilityForm; onCh
           );
         })}
       </div>
-      {!value.sameAsHours && <p className="hint">Up to {MAX_OPENINGS} periods a day, such as 09:00 to 13:00 and 14:00 to 18:00 for a lunch break. Each ends the same day.</p>}
+      {!value.sameAsHours && (
+        <p className="hint">
+          Up to {MAX_OPENINGS} periods a day, such as 09:00 to 13:00 and 14:00
+          to 18:00 for a lunch break. Each ends the same day.
+        </p>
+      )}
 
       <h3>Days off</h3>
       <p className="hint">Dates with no bookings, such as public holidays.</p>
@@ -681,8 +1058,16 @@ function AvailabilityEditor({ value, onChange }: { value: AvailabilityForm; onCh
         <ul className="sf-days-off">
           {upcoming.map((d) => (
             <li key={d}>
-              <span>{dayLabel(d)}</span> <span className="hint">{d.slice(0, 4)}</span>
-              <button type="button" className="icon-button" aria-label={`Remove day off ${dayLabel(d)} ${d.slice(0, 4)}`} onClick={() => onChange({ off: value.off.filter((x) => x !== d) })}>
+              <span>{dayLabel(d)}</span>{" "}
+              <span className="hint">{d.slice(0, 4)}</span>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label={`Remove day off ${dayLabel(d)} ${d.slice(0, 4)}`}
+                onClick={() =>
+                  onChange({ off: value.off.filter((x) => x !== d) })
+                }
+              >
                 <Icon name="close" />
               </button>
             </li>
@@ -694,18 +1079,32 @@ function AvailabilityEditor({ value, onChange }: { value: AvailabilityForm; onCh
       {past > 0 && (
         <p className="hint">
           {past === 1 ? "1 past day off is" : `${past} past days off are`} kept.{" "}
-          <button type="button" className="link" onClick={() => onChange({ off: value.off.filter((d) => d >= today) })}>
+          <button
+            type="button"
+            className="link"
+            onClick={() =>
+              onChange({ off: value.off.filter((d) => d >= today) })
+            }
+          >
             Remove past days off
           </button>
         </p>
       )}
       <div className="toolbar">
         <Field label="Add a day off">
-          <input type="date" value={newOff} min={today} max={addDays(today, 730)} onChange={(e) => setNewOff(e.target.value)} />
+          <input
+            type="date"
+            value={newOff}
+            min={today}
+            max={addDays(today, 730)}
+            onChange={(e) => setNewOff(e.target.value)}
+          />
         </Field>
         <button
           type="button"
-          disabled={!/^\d{4}-\d{2}-\d{2}$/.test(newOff) || value.off.includes(newOff)}
+          disabled={
+            !/^\d{4}-\d{2}-\d{2}$/.test(newOff) || value.off.includes(newOff)
+          }
           onClick={() => {
             onChange({ off: [...value.off, newOff].sort() });
             setNewOff("");
@@ -718,8 +1117,23 @@ function AvailabilityEditor({ value, onChange }: { value: AvailabilityForm; onCh
   );
 }
 
-function NoticeInput({ label, hint, value, defaultMinutes, onChange }: { label: string; hint: string; value: Notice; defaultMinutes: number; onChange: (n: Notice) => void }) {
-  const placeholder = value.unit === "hours" ? String(defaultMinutes / 60) : String(defaultMinutes);
+function NoticeInput({
+  label,
+  hint,
+  value,
+  defaultMinutes,
+  onChange,
+}: {
+  label: string;
+  hint: string;
+  value: Notice;
+  defaultMinutes: number;
+  onChange: (n: Notice) => void;
+}) {
+  const placeholder =
+    value.unit === "hours"
+      ? String(defaultMinutes / 60)
+      : String(defaultMinutes);
   return (
     <fieldset className="sf-choices">
       <legend>{label}</legend>
@@ -735,7 +1149,14 @@ function NoticeInput({ label, hint, value, defaultMinutes, onChange }: { label: 
           onChange={(e) => onChange({ ...value, value: e.target.value })}
           style={{ width: "7em" }}
         />
-        <select aria-label={`${label}, unit`} value={value.unit} onChange={(e) => onChange({ ...value, unit: e.target.value as Notice["unit"] })} style={{ width: "auto" }}>
+        <select
+          aria-label={`${label}, unit`}
+          value={value.unit}
+          onChange={(e) =>
+            onChange({ ...value, unit: e.target.value as Notice["unit"] })
+          }
+          style={{ width: "auto" }}
+        >
           <option value="hours">hours</option>
           <option value="minutes">minutes</option>
         </select>
@@ -747,12 +1168,30 @@ function NoticeInput({ label, hint, value, defaultMinutes, onChange }: { label: 
   );
 }
 
-function WindowEditor({ value, onChange }: { value: AvailabilityForm; onChange: (p: Partial<AvailabilityForm>) => void }) {
+function WindowEditor({
+  value,
+  onChange,
+}: {
+  value: AvailabilityForm;
+  onChange: (p: Partial<AvailabilityForm>) => void;
+}) {
   return (
     <>
       <div className="row">
-        <Field label="How far ahead (days)" hint={`How many days ahead customers may book, up to 180. Empty: ${AVAILABILITY_DEFAULTS.ahead_days}.`}>
-          <input type="number" min={1} max={180} step={1} inputMode="numeric" value={value.ahead} placeholder={String(AVAILABILITY_DEFAULTS.ahead_days)} onChange={(e) => onChange({ ahead: e.target.value })} />
+        <Field
+          label="How far ahead (days)"
+          hint={`How many days ahead customers may book, up to 180. Empty: ${AVAILABILITY_DEFAULTS.ahead_days}.`}
+        >
+          <input
+            type="number"
+            min={1}
+            max={180}
+            step={1}
+            inputMode="numeric"
+            value={value.ahead}
+            placeholder={String(AVAILABILITY_DEFAULTS.ahead_days)}
+            onChange={(e) => onChange({ ahead: e.target.value })}
+          />
         </Field>
       </div>
       <div className="row">
@@ -772,10 +1211,19 @@ function WindowEditor({ value, onChange }: { value: AvailabilityForm; onChange: 
         />
       </div>
       <label className="sf-toggle">
-        <input type="checkbox" role="switch" checked={value.autoConfirm} onChange={(e) => onChange({ autoConfirm: e.target.checked })} />
+        <input
+          type="checkbox"
+          role="switch"
+          checked={value.autoConfirm}
+          onChange={(e) => onChange({ autoConfirm: e.target.checked })}
+        />
         <span>
           Confirm bookings automatically
-          <span className="hint"> Otherwise each booking waits for you to accept it in WhatsApp or Telegram.</span>
+          <span className="hint">
+            {" "}
+            Otherwise each booking waits for you to accept it in WhatsApp or
+            Telegram.
+          </span>
         </span>
       </label>
     </>

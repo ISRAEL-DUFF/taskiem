@@ -23,7 +23,14 @@ export interface CloseSum {
   kobo: number;
 }
 
-export type CloseItemKind = "unmatched" | "pending_posting" | "pending_discount" | "claim" | "credit_without_entry" | "receipt_not_voided" | "part_without_receipt";
+export type CloseItemKind =
+  | "unmatched"
+  | "pending_posting"
+  | "pending_discount"
+  | "claim"
+  | "credit_without_entry"
+  | "receipt_not_voided"
+  | "part_without_receipt";
 
 export interface CloseItem {
   kind: CloseItemKind;
@@ -135,14 +142,22 @@ export function percentOf(part: number, whole: number): number {
 }
 
 /** "₦140,000 of ₦300,000 collected (46%)". */
-export function collectedLine(ov: Pick<SchoolOverview, "collected_kobo" | "expected_kobo" | "collected_percent">): string {
+export function collectedLine(
+  ov: Pick<
+    SchoolOverview,
+    "collected_kobo" | "expected_kobo" | "collected_percent"
+  >,
+): string {
   return `${naira(ov.collected_kobo)} of ${naira(ov.expected_kobo)} collected (${ov.collected_percent}%)`;
 }
 
 /** What was due by today and what of it is still unpaid. */
-export function dueByNowLine(ov: Pick<SchoolOverview, "expected_by_now_kobo" | "overdue_kobo">): string {
+export function dueByNowLine(
+  ov: Pick<SchoolOverview, "expected_by_now_kobo" | "overdue_kobo">,
+): string {
   if (ov.expected_by_now_kobo <= 0) return "Nothing is due yet.";
-  if (ov.overdue_kobo <= 0) return `${naira(ov.expected_by_now_kobo)} was due by today, all of it paid.`;
+  if (ov.overdue_kobo <= 0)
+    return `${naira(ov.expected_by_now_kobo)} was due by today, all of it paid.`;
   return `${naira(ov.expected_by_now_kobo)} was due by today; ${naira(ov.overdue_kobo)} of it is still unpaid.`;
 }
 
@@ -158,23 +173,38 @@ export function clearanceLine(c: ClearanceTotals): string {
 }
 
 /** Whether a close reconciles, in words and a tone. */
-export function closeStatus(c: Pick<CloseBrief, "reconciles" | "problems">): { label: string; tone: string } {
+export function closeStatus(c: Pick<CloseBrief, "reconciles" | "problems">): {
+  label: string;
+  tone: string;
+} {
   if (c.reconciles) return { label: "Reconciles", tone: "ok" };
-  return { label: `Does not reconcile: ${c.problems} problem${c.problems === 1 ? "" : "s"}`, tone: "warn" };
+  return {
+    label: `Does not reconcile: ${c.problems} problem${c.problems === 1 ? "" : "s"}`,
+    tone: "warn",
+  };
 }
 
 /** "₦150,000 in on students (2 payments): ₦100,000 into account numbers, ₦50,000 at the desk". */
-export function closeMoneyLine(c: Pick<SchoolClose, "money_in" | "into_accounts" | "at_the_desk">): string {
+export function closeMoneyLine(
+  c: Pick<SchoolClose, "money_in" | "into_accounts" | "at_the_desk">,
+): string {
   return `${naira(c.money_in.kobo)} in on students (${c.money_in.count} payment${c.money_in.count === 1 ? "" : "s"}): ${naira(c.into_accounts.kobo)} into account numbers, ${naira(c.at_the_desk.kobo)} at the desk`;
 }
 
 /** "₦100,000 matched by itself, ₦50,000 by a person; ₦0 not matched". */
-export function closeMatchedLine(c: Pick<SchoolClose, "matched_auto" | "matched_person" | "unmatched">): string {
+export function closeMatchedLine(
+  c: Pick<SchoolClose, "matched_auto" | "matched_person" | "unmatched">,
+): string {
   return `${naira(c.matched_auto.kobo)} matched by itself, ${naira(c.matched_person.kobo)} by a person; ${naira(c.unmatched.kobo)} not matched`;
 }
 
 /** The close's lists, the problems first, each with a heading; empty lists left out. */
-export function closeSections(c: Pick<SchoolClose, "problem_list" | "pending" | "claims" | "unmatched_list">): { head: string; items: CloseItem[]; problem: boolean }[] {
+export function closeSections(
+  c: Pick<
+    SchoolClose,
+    "problem_list" | "pending" | "claims" | "unmatched_list"
+  >,
+): { head: string; items: CloseItem[]; problem: boolean }[] {
   return [
     { head: "Does not reconcile", items: c.problem_list, problem: true },
     { head: "Waiting for a second person", items: c.pending, problem: false },

@@ -25,7 +25,13 @@ describe("fronts", () => {
     );
     expect(
       frontSub(
-        front({ slug: "", kind: "shop", table_id: "t", items: 1, actions: [{} as never] }),
+        front({
+          slug: "",
+          kind: "shop",
+          table_id: "t",
+          items: 1,
+          actions: [{} as never],
+        }),
         kinds,
       ),
     ).toBe("Your home page · Shop · 1 item · 1 form");
@@ -37,7 +43,9 @@ describe("fronts", () => {
   });
   it("checks a new front's name", () => {
     expect(frontNameProblem("  ")).toBe("Give the front a name.");
-    expect(frontNameProblem("x".repeat(81))).toBe("A name is up to 80 characters.");
+    expect(frontNameProblem("x".repeat(81))).toBe(
+      "A name is up to 80 characters.",
+    );
     expect(frontNameProblem("Snacks")).toBe("");
   });
 });

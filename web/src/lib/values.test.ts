@@ -25,7 +25,9 @@ describe("plain values", () => {
     expect(showValue({ a: 1 })).toBe('{"a":1}');
   });
   it("resolves an inputs schema's types for a form", () => {
-    const s = resolveSchema({ $ref: "#/types/Loan" } as never, { Loan: { type: "object", properties: { amount: { type: "integer" } } } });
+    const s = resolveSchema({ $ref: "#/types/Loan" } as never, {
+      Loan: { type: "object", properties: { amount: { type: "integer" } } },
+    });
     expect(s?.properties?.amount?.type).toBe("integer");
   });
 });

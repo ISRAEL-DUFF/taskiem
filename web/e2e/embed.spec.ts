@@ -15,15 +15,26 @@ let partnerKey = "";
 let app = "";
 let sub = "";
 
-async function call<T>(method: string, path: string, token: string, body?: unknown): Promise<T> {
+async function call<T>(
+  method: string,
+  path: string,
+  token: string,
+  body?: unknown,
+): Promise<T> {
   const res = await fetch(taskiem + path, {
     method,
     // An end user's calls come from the partner's page (the app is not headless).
-    headers: { ...(token && { Authorization: `Bearer ${token}` }), ...(path.startsWith("/v1/embed/") && { Origin: partnerOrigin }), "Content-Type": "application/json", "X-Taskiem-Request": "1" },
+    headers: {
+      ...(token && { Authorization: `Bearer ${token}` }),
+      ...(path.startsWith("/v1/embed/") && { Origin: partnerOrigin }),
+      "Content-Type": "application/json",
+      "X-Taskiem-Request": "1",
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data = (await res.json()) as T;
-  if (!res.ok) throw new Error(`${method} ${path}: ${res.status} ${JSON.stringify(data)}`);
+  if (!res.ok)
+    throw new Error(`${method} ${path}: ${res.status} ${JSON.stringify(data)}`);
   return data;
 }
 
@@ -55,16 +66,39 @@ const page = (appID: string) => `<!doctype html>
 </body></html>`;
 
 test.beforeAll(async () => {
-  const login = await call<{ token: string }>("POST", "/v1/auth/login", "", { email: "owner@e2e.test", password: "correct horse battery", bearer: true });
-  partnerKey = (await call<{ key: string }>("POST", "/v1/api-keys", login.token, { name: `partner ${Date.now()}`, permissions: ["partner.read", "partner.manage"] })).key;
-  sub = (await call<{ id: string }>("POST", "/v1/partner/sub-tenants", partnerKey, { name: `Customer ${Date.now()}` })).id;
+  const login = await call<{ token: string }>("POST", "/v1/auth/login", "", {
+    email: "owner@e2e.test",
+    password: "correct horse battery",
+    bearer: true,
+  });
+  partnerKey = (
+    await call<{ key: string }>("POST", "/v1/api-keys", login.token, {
+      name: `partner ${Date.now()}`,
+      permissions: ["partner.read", "partner.manage"],
+    })
+  ).key;
+  sub = (
+    await call<{ id: string }>("POST", "/v1/partner/sub-tenants", partnerKey, {
+      name: `Customer ${Date.now()}`,
+    })
+  ).id;
   app = (
     await call<{ id: string }>("POST", "/v1/partner/embed-apps", partnerKey, {
       name: `web ${Date.now()}`,
       allowed_origins: [partnerOrigin],
-      branding: { colours: { primary, on_primary: "#ffffff" }, radius: "12px", mode: "light" },
+      branding: {
+        colours: { primary, on_primary: "#ffffff" },
+        radius: "12px",
+        mode: "light",
+      },
       allowed_connectors: [],
-      end_user_permissions: ["workflow.read", "workflow.edit", "workflow.publish", "run.read", "run.start"],
+      end_user_permissions: [
+        "workflow.read",
+        "workflow.edit",
+        "workflow.publish",
+        "run.read",
+        "run.start",
+      ],
       white_label: true,
     })
   ).id;
@@ -72,30 +106,60 @@ test.beforeAll(async () => {
     const url = new URL(req.url ?? "/", partnerOrigin);
     if (url.pathname === "/token") {
       // The partner's server mints; the partner key never reaches the browser.
-      call<{ token: string }>("POST", `/v1/partner/embed-apps/${app}/tokens`, partnerKey, {
-        end_user_id: "alice",
-        sub_tenant: sub,
-        permissions: ["workflow.read", "workflow.edit", "workflow.publish", "run.read", "run.start"],
-        ttl: Number(url.searchParams.get("ttl")) || 900,
-      }).then(
-        (t) => res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ token: t.token })),
+      call<{ token: string }>(
+        "POST",
+        `/v1/partner/embed-apps/${app}/tokens`,
+        partnerKey,
+        {
+          end_user_id: "alice",
+          sub_tenant: sub,
+          permissions: [
+            "workflow.read",
+            "workflow.edit",
+            "workflow.publish",
+            "run.read",
+            "run.start",
+          ],
+          ttl: Number(url.searchParams.get("ttl")) || 900,
+        },
+      ).then(
+        (t) =>
+          res
+            .writeHead(200, { "Content-Type": "application/json" })
+            .end(JSON.stringify({ token: t.token })),
         (e: unknown) => res.writeHead(500).end(String(e)),
       );
       return;
     }
-    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" }).end(page(app));
+    res
+      .writeHead(200, { "Content-Type": "text/html; charset=utf-8" })
+      .end(page(app));
   });
-  await new Promise<void>((resolve) => server.listen(partnerPort, "127.0.0.1", resolve));
+  await new Promise<void>((resolve) =>
+    server.listen(partnerPort, "127.0.0.1", resolve),
+  );
 });
 
-test.afterAll(() => new Promise<void>((resolve) => server.close(() => resolve())));
+test.afterAll(
+  () => new Promise<void>((resolve) => server.close(() => resolve())),
+);
 
-test("a partner page embeds the builder and the run view, themed, and runs a workflow", async ({ page }) => {
+test("a partner page embeds the builder and the run view, themed, and runs a workflow", async ({
+  page,
+}) => {
   // Only this app's origin may frame its frame page.
-  const framePage = await page.request.get(`${taskiem}/embed/${app}/frame?view=runs`);
-  expect(framePage.headers()["content-security-policy"]).toContain(`frame-ancestors ${partnerOrigin}`);
+  const framePage = await page.request.get(
+    `${taskiem}/embed/${app}/frame?view=runs`,
+  );
+  expect(framePage.headers()["content-security-policy"]).toContain(
+    `frame-ancestors ${partnerOrigin}`,
+  );
   expect(framePage.headers()["x-frame-options"]).toBeUndefined();
-  expect((await page.request.get(`${taskiem}/login`)).headers()["content-security-policy"]).toContain("frame-ancestors 'none'");
+  expect(
+    (await page.request.get(`${taskiem}/login`)).headers()[
+      "content-security-policy"
+    ],
+  ).toContain("frame-ancestors 'none'");
 
   await page.goto(partnerOrigin + "/");
   const b = page.locator("taskiem-builder");
@@ -104,11 +168,25 @@ test("a partner page embeds the builder and the run view, themed, and runs a wor
   // The app's branding, as custom properties inside the shadow root; no
   // platform branding for a white-label app.
   const root = b.getByTestId("taskiem-root");
-  await expect.poll(() => root.evaluate((el) => getComputedStyle(el).getPropertyValue("--accent").trim())).toBe(primary);
-  expect(await root.evaluate((el) => getComputedStyle(el).getPropertyValue("--tk-radius").trim())).toBe("12px");
+  await expect
+    .poll(() =>
+      root.evaluate((el) =>
+        getComputedStyle(el).getPropertyValue("--accent").trim(),
+      ),
+    )
+    .toBe(primary);
+  expect(
+    await root.evaluate((el) =>
+      getComputedStyle(el).getPropertyValue("--tk-radius").trim(),
+    ),
+  ).toBe("12px");
   await expect(b.getByTestId("taskiem-powered-by")).toHaveCount(0);
   // The partner page's own styles are untouched.
-  expect(await page.evaluate(() => getComputedStyle(document.body).getPropertyValue("--accent"))).toBe("");
+  expect(
+    await page.evaluate(() =>
+      getComputedStyle(document.body).getPropertyValue("--accent"),
+    ),
+  ).toBe("");
 
   // Build, publish and run inside the element.
   await b.getByLabel("New workflow name").fill("Embedded flow");
@@ -119,35 +197,91 @@ test("a partner page embeds the builder and the run view, themed, and runs a wor
   await b.getByRole("button", { name: "Run", exact: true }).click();
   await b.getByRole("button", { name: "Start run" }).click();
   const run = b.getByTestId("taskiem-run");
-  await expect(run.locator(".badge.completed").first()).toBeVisible({ timeout: 30_000 });
+  await expect(run.locator(".badge.completed").first()).toBeVisible({
+    timeout: 30_000,
+  });
 
   // The first token was short-lived: the element asked for the next one.
-  await expect.poll(() => page.evaluate(() => (window as unknown as { events: string[] }).events), { timeout: 20_000 }).toEqual(
-    expect.arrayContaining(["taskiem-loaded", "taskiem-published", "taskiem-run-started", "taskiem-run-completed", "taskiem-token-expiring", "taskiem:ready", "taskiem:loaded"]),
-  );
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => (window as unknown as { events: string[] }).events),
+      { timeout: 20_000 },
+    )
+    .toEqual(
+      expect.arrayContaining([
+        "taskiem-loaded",
+        "taskiem-published",
+        "taskiem-run-started",
+        "taskiem-run-completed",
+        "taskiem-token-expiring",
+        "taskiem:ready",
+        "taskiem:loaded",
+      ]),
+    );
 
   // The iframe got its token by postMessage and shows the same run.
   const f = page.frameLocator("#frame");
   await expect(f.getByRole("heading", { name: "Runs" })).toBeVisible();
   await f.getByRole("button", { name: "Refresh" }).click();
   await f.getByRole("cell", { name: "Embedded flow" }).first().click();
-  await expect(f.getByTestId("taskiem-run").locator(".badge.completed").first()).toBeVisible({ timeout: 30_000 });
-  await expect.poll(() => f.getByTestId("taskiem-root").evaluate((el) => getComputedStyle(el).getPropertyValue("--accent").trim())).toBe(primary);
+  await expect(
+    f.getByTestId("taskiem-run").locator(".badge.completed").first(),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect
+    .poll(() =>
+      f
+        .getByTestId("taskiem-root")
+        .evaluate((el) =>
+          getComputedStyle(el).getPropertyValue("--accent").trim(),
+        ),
+    )
+    .toBe(primary);
   expect(page.url()).not.toContain("tsk_eut_");
-  expect(await page.locator("#frame").getAttribute("src")).not.toContain("tsk_eut_");
+  expect(await page.locator("#frame").getAttribute("src")).not.toContain(
+    "tsk_eut_",
+  );
 });
 
-test("the embedded builder checks a new id at every depth, and keeps edits through a conflicting save", async ({ page }) => {
-  const token = ((await (await fetch(`${partnerOrigin}/token`)).json()) as { token: string }).token;
+test("the embedded builder checks a new id at every depth, and keeps edits through a conflicting save", async ({
+  page,
+}) => {
+  const token = (
+    (await (await fetch(`${partnerOrigin}/token`)).json()) as { token: string }
+  ).token;
   const def = (output: string) => ({
-    schema: "wd/v1", id: "wf_embmerge", version: 1, name: "Embedded merge", trigger: { type: "manual" },
+    schema: "wd/v1",
+    id: "wf_embmerge",
+    version: 1,
+    name: "Embedded merge",
+    trigger: { type: "manual" },
     steps: [
       { id: "start", type: "transform", config: { output } },
-      { id: "pick", type: "branch", needs: ["start"], config: { paths: [{ name: "yes", when: "=true", steps: [{ id: "inner", type: "transform", config: { output: "x" } }] }] } },
+      {
+        id: "pick",
+        type: "branch",
+        needs: ["start"],
+        config: {
+          paths: [
+            {
+              name: "yes",
+              when: "=true",
+              steps: [
+                { id: "inner", type: "transform", config: { output: "x" } },
+              ],
+            },
+          ],
+        },
+      },
     ],
   });
   const name = `Embedded merge ${Date.now()}`;
-  const wf = await call<{ id: string; digest: string }>("POST", `/v1/embed/${app}/workflows`, token, { name, definition: def("first") });
+  const wf = await call<{ id: string; digest: string }>(
+    "POST",
+    `/v1/embed/${app}/workflows`,
+    token,
+    { name, definition: def("first") },
+  );
 
   await page.goto(partnerOrigin + "/");
   const b = page.locator("taskiem-builder");
@@ -161,18 +295,33 @@ test("the embedded builder checks a new id at every depth, and keeps edits throu
   await expect(b.getByText("That id is taken.")).toBeVisible();
 
   // Meanwhile someone else saves version 2 from version 1.
-  await call("POST", `/v1/embed/${app}/workflows/${wf.id}/versions`, token, { definition: def("theirs"), parent_digest: wf.digest });
+  await call("POST", `/v1/embed/${app}/workflows/${wf.id}/versions`, token, {
+    definition: def("theirs"),
+    parent_digest: wf.digest,
+  });
   // This builder changes the same step from version 1, and saves.
   await b.getByLabel("Name", { exact: true }).fill("Mine");
   await b.getByRole("button", { name: "Save", exact: true }).click();
   const merge = b.getByTestId("embed-merge");
   await expect(merge).toBeVisible();
-  await expect(b.getByRole("alert").first()).toContainText("your changes are still here");
-  await expect(merge.getByTestId("conflict-steps/start")).toContainText('"theirs"');
+  await expect(b.getByRole("alert").first()).toContainText(
+    "your changes are still here",
+  );
+  await expect(merge.getByTestId("conflict-steps/start")).toContainText(
+    '"theirs"',
+  );
   await expect(b.getByLabel("Name", { exact: true })).toHaveValue("Mine");
   await merge.getByRole("radio", { name: "Yours" }).check();
   await merge.getByRole("button", { name: "Save merged version" }).click();
   await expect(merge).toBeHidden();
-  const saved = await call<{ definition: { steps: { id: string; name?: string; config?: { output?: string } }[] } }>("GET", `/v1/embed/${app}/workflows/${wf.id}/versions/3`, token);
-  expect(saved.definition.steps[0]).toMatchObject({ id: "start", name: "Mine", config: { output: "first" } });
+  const saved = await call<{
+    definition: {
+      steps: { id: string; name?: string; config?: { output?: string } }[];
+    };
+  }>("GET", `/v1/embed/${app}/workflows/${wf.id}/versions/3`, token);
+  expect(saved.definition.steps[0]).toMatchObject({
+    id: "start",
+    name: "Mine",
+    config: { output: "first" },
+  });
 });

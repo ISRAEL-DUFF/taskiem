@@ -6,7 +6,12 @@ test("a gated environment takes a version by promotion", async ({ page }) => {
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: /^Good (morning|afternoon|evening)/,
+    }),
+  ).toBeVisible();
 
   // uat takes versions only by promotion from dev.
   await page.getByRole("link", { name: /Secrets/ }).click();
@@ -25,7 +30,11 @@ test("a gated environment takes a version by promotion", async ({ page }) => {
 
   const deployments = page.getByLabel("Deployments");
   await expect(deployments).toContainText("uat not deployed");
-  await deployments.getByRole("button", { name: "Promote v2 from dev" }).click();
+  await deployments
+    .getByRole("button", { name: "Promote v2 from dev" })
+    .click();
   await expect(deployments).toContainText("uat v2");
-  await expect(deployments.getByRole("button", { name: /Promote/ })).toHaveCount(0);
+  await expect(
+    deployments.getByRole("button", { name: /Promote/ }),
+  ).toHaveCount(0);
 });

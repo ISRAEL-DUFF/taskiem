@@ -3,21 +3,37 @@ import { addStep, doneWithStep, newWorkflow } from "./builder";
 
 // SCREENSHOT_DIR=... saves screenshots of the main screens for review.
 const shot = async (page: Page, name: string) => {
-  if (process.env.SCREENSHOT_DIR) await page.screenshot({ path: `${process.env.SCREENSHOT_DIR}/${name}.png`, fullPage: true });
+  if (process.env.SCREENSHOT_DIR)
+    await page.screenshot({
+      path: `${process.env.SCREENSHOT_DIR}/${name}.png`,
+      fullPage: true,
+    });
 };
 
-test("sign in, build, publish, run, and verify the audit chain", async ({ page }) => {
+test("sign in, build, publish, run, and verify the audit chain", async ({
+  page,
+}) => {
   await page.goto("/");
   await expect(page).toHaveURL(/\/login/);
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
-  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Workflows" }).click();
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: /^Good (morning|afternoon|evening)/,
+    }),
+  ).toBeVisible();
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Workflows" })
+    .click();
 
   // Create a workflow: what starts it, then the builder with nothing else in it.
   await newWorkflow(page, "Smoke flow");
-  await expect(page.getByTestId("node-trigger")).toContainText("When someone starts it");
+  await expect(page.getByTestId("node-trigger")).toContainText(
+    "When someone starts it",
+  );
   await addStep(page, "change the data", "Change the data");
   await doneWithStep(page);
   await expect(page.getByTestId("node-change")).toBeVisible();
@@ -31,9 +47,16 @@ test("sign in, build, publish, run, and verify the audit chain", async ({ page }
   await page.getByRole("tab", { name: "Code" }).click();
   const code = page.getByLabel("Workflow code");
   await expect(code).toHaveValue(/\.next\("code", code\(/);
-  await code.fill((await code.inputValue()).replace(/name: "([^"]*)"/, 'name: "$1 (from code)"'));
+  await code.fill(
+    (await code.inputValue()).replace(
+      /name: "([^"]*)"/,
+      'name: "$1 (from code)"',
+    ),
+  );
   await page.getByRole("button", { name: "Apply to workflow" }).click();
-  await expect(page.getByRole("button", { name: "Apply to workflow" })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Apply to workflow" }),
+  ).toBeDisabled();
   await expect(page.getByRole("alert")).toHaveCount(0);
   await page.getByRole("tab", { name: "Build" }).click();
   await page.getByRole("button", { name: "Publish" }).click();
@@ -46,13 +69,23 @@ test("sign in, build, publish, run, and verify the audit chain", async ({ page }
   await page.getByRole("dialog").locator("textarea").fill('{"n": 2}');
   await page.getByRole("button", { name: "Start", exact: true }).click();
   await expect(page).toHaveURL(/\/runs\//);
-  await expect(page.getByTestId("step-code").locator(".badge")).toHaveText("completed", { timeout: 30_000 });
-  await expect(page.locator("h1 + .badge, .toolbar > .badge").first()).toHaveText("completed");
+  await expect(page.getByTestId("step-code").locator(".badge")).toHaveText(
+    "completed",
+    { timeout: 30_000 },
+  );
+  await expect(
+    page.locator("h1 + .badge, .toolbar > .badge").first(),
+  ).toHaveText("completed");
   await shot(page, "run");
 
   // The run shows in the list, and the audit chain verifies.
-  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Activity" }).click();
-  await expect(page.getByTestId("run").filter({ hasText: "Smoke flow" }).first()).toBeVisible();
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Activity" })
+    .click();
+  await expect(
+    page.getByTestId("run").filter({ hasText: "Smoke flow" }).first(),
+  ).toBeVisible();
   await page.getByRole("link", { name: "Audit log" }).click();
   await expect(page.getByText("workflow.publish").first()).toBeVisible();
   await page.getByRole("button", { name: "Verify chain" }).click();

@@ -1,18 +1,48 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { passkeysSupported, stepUpAssert } from "../passkeys";
-import { ApiError, del, get, post, type Approval, type Delegation, type PublishRequest } from "../api";
+import {
+  ApiError,
+  del,
+  get,
+  post,
+  type Approval,
+  type Delegation,
+  type PublishRequest,
+} from "../api";
 import { useAuth } from "../auth";
-import { EmptyState, ErrorBox, Field, Json, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
-import { requestDetails, requestTitle, type Posting } from "../lib/schoolPayments";
+import {
+  EmptyState,
+  ErrorBox,
+  Field,
+  Json,
+  Modal,
+  PageHeader,
+  Skeleton,
+  fmtTime,
+  useAction,
+  useLoad,
+} from "../ui";
+import {
+  requestDetails,
+  requestTitle,
+  type Posting,
+} from "../lib/schoolPayments";
 import { subjectWords } from "../lib/approvals";
 import { shortWhen } from "../lib/time";
 import { Icon } from "../icons";
 
 export function Approvals() {
   const { can, me } = useAuth();
-  const { data, error, reload } = useLoad(() => get<{ approvals: Approval[] }>("/v1/approvals"), [], true);
-  const [deciding, setDeciding] = useState<{ a: Approval; decision: "approved" | "rejected" } | null>(null);
+  const { data, error, reload } = useLoad(
+    () => get<{ approvals: Approval[] }>("/v1/approvals"),
+    [],
+    true,
+  );
+  const [deciding, setDeciding] = useState<{
+    a: Approval;
+    decision: "approved" | "rejected";
+  } | null>(null);
   return (
     <>
       <PageHeader
@@ -22,12 +52,20 @@ export function Approvals() {
       <ErrorBox error={error} />
       {!data && !error && <Skeleton rows={2} />}
       {data && data.approvals.length === 0 && (
-        <EmptyState icon="approvals">Nothing waiting for you. When a run reaches an approval step for one of your roles, it waits here for your decision.</EmptyState>
+        <EmptyState icon="approvals">
+          Nothing waiting for you. When a run reaches an approval step for one
+          of your roles, it waits here for your decision.
+        </EmptyState>
       )}
       {data?.approvals.map((a) => {
         const w = subjectWords(a.subject);
         return (
-          <article className="approval-card" key={`${a.run_id}/${a.step_id}`} data-testid="approval" aria-labelledby={`ap-${a.run_id}-${a.step_id}`}>
+          <article
+            className="approval-card"
+            key={`${a.run_id}/${a.step_id}`}
+            data-testid="approval"
+            aria-labelledby={`ap-${a.run_id}-${a.step_id}`}
+          >
             <div className="approval-meta">
               <span>{a.workflow}</span>
               <span>{shortWhen(new Date(a.requested_at))}</span>
@@ -52,8 +90,14 @@ export function Approvals() {
               </div>
             )}
             <ul className="chips">
-              {a.first_payment && <li className="warn">First payment to this account</li>}
-              {a.sole_approver && <li className="warn">You are the only person who can approve this</li>}
+              {a.first_payment && (
+                <li className="warn">First payment to this account</li>
+              )}
+              {a.sole_approver && (
+                <li className="warn">
+                  You are the only person who can approve this
+                </li>
+              )}
               {a.on_behalf_of && <li>Covering for {a.on_behalf_of}</li>}
               {a.step_up && (
                 <li>
@@ -82,7 +126,10 @@ export function Approvals() {
                 </li>
               )}
             </ul>
-            {!w.amount && w.rest.length === 0 && a.subject !== undefined && a.subject !== null && <Json value={a.subject} />}
+            {!w.amount &&
+              w.rest.length === 0 &&
+              a.subject !== undefined &&
+              a.subject !== null && <Json value={a.subject} />}
             {w.rest.length > 0 && (
               <dl className="approval-fields">
                 {w.rest.map(([k, v]) => (
@@ -94,10 +141,16 @@ export function Approvals() {
               </dl>
             )}
             <div className="approval-actions">
-              <button className="danger" onClick={() => setDeciding({ a, decision: "rejected" })}>
+              <button
+                className="danger"
+                onClick={() => setDeciding({ a, decision: "rejected" })}
+              >
                 Reject
               </button>
-              <button className="primary" onClick={() => setDeciding({ a, decision: "approved" })}>
+              <button
+                className="primary"
+                onClick={() => setDeciding({ a, decision: "approved" })}
+              >
                 Approve
               </button>
               <span className="grow" />
@@ -113,7 +166,13 @@ export function Approvals() {
           </article>
         );
       })}
-      {deciding && <Decide {...deciding} onClose={() => setDeciding(null)} onDone={() => (setDeciding(null), reload())} />}
+      {deciding && (
+        <Decide
+          {...deciding}
+          onClose={() => setDeciding(null)}
+          onDone={() => (setDeciding(null), reload())}
+        />
+      )}
       {me?.schools && can("school.approve") && <SchoolRequests />}
       {can("workflow.publish") && <PublishReviews />}
       <Delegations />
@@ -123,17 +182,27 @@ export function Approvals() {
 
 /** A school's cash postings and discounts waiting for a second person (docs/schools.md#cash-and-transfers): never decided by the person who asked. */
 function SchoolRequests() {
-  const { data, error, reload } = useLoad(() => get<{ requests: Posting[] }>("/v1/schools/approvals"), [], true);
+  const { data, error, reload } = useLoad(
+    () => get<{ requests: Posting[] }>("/v1/schools/approvals"),
+    [],
+    true,
+  );
   const [declining, setDeclining] = useState<Posting | null>(null);
   const [reason, setReason] = useState("");
   const act = useAction();
   const decide = (p: Posting, decision: "approved" | "declined") =>
-    act.run(async () => {
-      await post(`/v1/schools/approvals/${p.id}`, { decision, ...(decision === "declined" && { reason }) });
-      setDeclining(null);
-      setReason("");
-      reload();
-    }, decision === "approved" ? "Approved and applied" : "Declined");
+    act.run(
+      async () => {
+        await post(`/v1/schools/approvals/${p.id}`, {
+          decision,
+          ...(decision === "declined" && { reason }),
+        });
+        setDeclining(null);
+        setReason("");
+        reload();
+      },
+      decision === "approved" ? "Approved and applied" : "Declined",
+    );
   if (!data) return error ? <ErrorBox error={error} /> : null;
   return (
     <section className="card" aria-labelledby="school-requests">
@@ -141,13 +210,22 @@ function SchoolRequests() {
         School postings and discounts
       </h2>
       <p className="hint">
-        Cash and transfers posted at the desk, and discounts, at or above the school's thresholds. Approving posts the money (with its receipt) or gives the discount; declining records your reason
-        and changes nothing. The person who asked cannot decide their own.
+        Cash and transfers posted at the desk, and discounts, at or above the
+        school's thresholds. Approving posts the money (with its receipt) or
+        gives the discount; declining records your reason and changes nothing.
+        The person who asked cannot decide their own.
       </p>
       <ErrorBox error={error ?? act.error} />
-      {data.requests.length === 0 && <p className="hint">Nothing is waiting.</p>}
+      {data.requests.length === 0 && (
+        <p className="hint">Nothing is waiting.</p>
+      )}
       {data.requests.map((p) => (
-        <div className="card" key={p.id} data-testid="school-request" data-kind={p.kind}>
+        <div
+          className="card"
+          key={p.id}
+          data-testid="school-request"
+          data-kind={p.kind}
+        >
           <div className="toolbar">
             <strong className="grow">{requestTitle(p)}</strong>
             <span className="hint">asked {fmtTime(p.requested_at)}</span>
@@ -158,19 +236,33 @@ function SchoolRequests() {
             ))}
           </ul>
           {p.yours ? (
-            <p className="hint">You asked for this, so a second person decides it.</p>
+            <p className="hint">
+              You asked for this, so a second person decides it.
+            </p>
           ) : (
             <div className="toolbar">
-              <button className="primary" disabled={act.busy} onClick={() => void decide(p, "approved")}>
+              <button
+                className="primary"
+                disabled={act.busy}
+                onClick={() => void decide(p, "approved")}
+              >
                 Approve
               </button>
-              <button className="danger" disabled={act.busy} onClick={() => setDeclining(p)}>
+              <button
+                className="danger"
+                disabled={act.busy}
+                onClick={() => setDeclining(p)}
+              >
                 Decline
               </button>
               {p.student_id && (
                 <>
                   <span className="grow" />
-                  <Link to={`/schools/students/${encodeURIComponent(p.student_id)}`}>Open the student</Link>
+                  <Link
+                    to={`/schools/students/${encodeURIComponent(p.student_id)}`}
+                  >
+                    Open the student
+                  </Link>
                 </>
               )}
             </div>
@@ -180,14 +272,23 @@ function SchoolRequests() {
       {declining && (
         <Modal title="Decline" onClose={() => setDeclining(null)}>
           <p>
-            Decline <strong>{requestTitle(declining)}</strong>? Nothing reaches the fees; the person who asked is told why.
+            Decline <strong>{requestTitle(declining)}</strong>? Nothing reaches
+            the fees; the person who asked is told why.
           </p>
           <Field label="Why (required, audited)">
-            <textarea rows={3} value={reason} onChange={(e) => setReason(e.target.value)} />
+            <textarea
+              rows={3}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
           </Field>
           <ErrorBox error={act.error} />
           <div className="toolbar">
-            <button className="danger" disabled={act.busy || !reason.trim()} onClick={() => void decide(declining, "declined")}>
+            <button
+              className="danger"
+              disabled={act.busy || !reason.trim()}
+              onClick={() => void decide(declining, "declined")}
+            >
               Decline it
             </button>
             <button onClick={() => setDeclining(null)}>Cancel</button>
@@ -201,41 +302,85 @@ function SchoolRequests() {
 /** Confirms one decision. Opened from somewhere other than this page
  * (Home's Needs you), `showSubject` shows what is being decided too, since
  * the decision records what the person was shown. */
-export function Decide({ a, decision, onClose, onDone, showSubject }: { a: Approval; decision: "approved" | "rejected"; onClose: () => void; onDone: () => void; showSubject?: boolean }) {
+export function Decide({
+  a,
+  decision,
+  onClose,
+  onDone,
+  showSubject,
+}: {
+  a: Approval;
+  decision: "approved" | "rejected";
+  onClose: () => void;
+  onDone: () => void;
+  showSubject?: boolean;
+}) {
   const [comment, setComment] = useState("");
   const [code, setCode] = useState("");
-  const [needsCode, setNeedsCode] = useState(Boolean(a.step_up) && decision === "approved");
+  const [needsCode, setNeedsCode] = useState(
+    Boolean(a.step_up) && decision === "approved",
+  );
   const passkeyOnly = a.step_up === "passkey";
   const act = useAction();
   const send = async (extra: object) => {
     try {
-      await post(`/v1/approvals/${a.run_id}/${encodeURIComponent(a.step_id)}`, { decision, ...(comment && { comment }), ...extra });
+      await post(`/v1/approvals/${a.run_id}/${encodeURIComponent(a.step_id)}`, {
+        decision,
+        ...(comment && { comment }),
+        ...extra,
+      });
     } catch (e) {
       if (e instanceof ApiError && e.body.step_up) setNeedsCode(true);
       throw e;
     }
     onDone();
   };
-  const submit = () => act.run(() => send(code ? { totp: code } : {}), "Decision recorded");
+  const submit = () =>
+    act.run(() => send(code ? { totp: code } : {}), "Decision recorded");
   // The passkey is asked for this decision on this approval only.
-  const withPasskey = () => act.run(async () => send({ passkey: await stepUpAssert("approval.decide", `${a.run_id}/${a.step_id}/${decision}`) }), "Decision recorded");
+  const withPasskey = () =>
+    act.run(
+      async () =>
+        send({
+          passkey: await stepUpAssert(
+            "approval.decide",
+            `${a.run_id}/${a.step_id}/${decision}`,
+          ),
+        }),
+      "Decision recorded",
+    );
   return (
-    <Modal title={decision === "approved" ? "Approve" : "Reject"} onClose={onClose}>
+    <Modal
+      title={decision === "approved" ? "Approve" : "Reject"}
+      onClose={onClose}
+    >
       <p>
-        {decision === "approved" ? "Approve" : "Reject"} <strong>{a.step_name || a.step_id}</strong> on {a.workflow}? Your decision and what you were shown are recorded.
+        {decision === "approved" ? "Approve" : "Reject"}{" "}
+        <strong>{a.step_name || a.step_id}</strong> on {a.workflow}? Your
+        decision and what you were shown are recorded.
       </p>
       {showSubject && <SubjectSummary subject={a.subject} />}
       {a.first_payment && decision === "approved" && (
         <div className="warning" role="note">
-          <strong>First payment to this account.</strong> Your business has not paid it before. Check the account number and name with the person you are paying, by phone or in person, before you approve.
+          <strong>First payment to this account.</strong> Your business has not
+          paid it before. Check the account number and name with the person you
+          are paying, by phone or in person, before you approve.
         </div>
       )}
       <Field label="Comment (optional, audited)">
-        <textarea rows={2} value={comment} onChange={(e) => setComment(e.target.value)} />
+        <textarea
+          rows={2}
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+        />
       </Field>
       {needsCode && passkeysSupported() && (
         <p>
-          <button className="primary" disabled={act.busy} onClick={() => void withPasskey()}>
+          <button
+            className="primary"
+            disabled={act.busy}
+            onClick={() => void withPasskey()}
+          >
             Confirm with your passkey
           </button>{" "}
           <span className="hint">
@@ -244,13 +389,33 @@ export function Decide({ a, decision, onClose, onDone, showSubject }: { a: Appro
         </p>
       )}
       {needsCode && !passkeyOnly && (
-        <Field label="Or an authenticator code" hint={<>No authenticator yet? Enrol one under <Link to="/account">Account</Link>.</>}>
-          <input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} />
+        <Field
+          label="Or an authenticator code"
+          hint={
+            <>
+              No authenticator yet? Enrol one under{" "}
+              <Link to="/account">Account</Link>.
+            </>
+          }
+        >
+          <input
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={6}
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+          />
         </Field>
       )}
       <ErrorBox error={act.error} />
       <div className="decide-actions">
-        <button className={decision === "approved" ? "primary" : "danger"} disabled={act.busy || (needsCode && (passkeyOnly || code.length !== 6))} onClick={() => void submit()}>
+        <button
+          className={decision === "approved" ? "primary" : "danger"}
+          disabled={
+            act.busy || (needsCode && (passkeyOnly || code.length !== 6))
+          }
+          onClick={() => void submit()}
+        >
           Confirm
         </button>
         <button className="quiet" onClick={onClose}>
@@ -270,7 +435,10 @@ function SubjectSummary({ subject }: { subject: unknown }) {
     ...(w.account ? [["Account", w.account] as [string, string]] : []),
     ...w.rest,
   ];
-  if (rows.length === 0) return subject === undefined || subject === null ? null : <Json value={subject} />;
+  if (rows.length === 0)
+    return subject === undefined || subject === null ? null : (
+      <Json value={subject} />
+    );
   return (
     <dl className="sheet-summary">
       {rows.map(([k, v]) => (
@@ -285,15 +453,30 @@ function SubjectSummary({ subject }: { subject: unknown }) {
 
 /** Versions waiting for a second person to publish them (four-eyes). */
 function PublishReviews() {
-  const { data, error, reload } = useLoad(() => get<{ requests: PublishRequest[] }>("/v1/publish-requests"), []);
+  const { data, error, reload } = useLoad(
+    () => get<{ requests: PublishRequest[] }>("/v1/publish-requests"),
+    [],
+  );
   const act = useAction();
-  if (!data || data.requests.length === 0) return error ? <ErrorBox error={error} /> : null;
+  if (!data || data.requests.length === 0)
+    return error ? <ErrorBox error={error} /> : null;
   const decide = (r: PublishRequest, verdict: "approve" | "reject") =>
-    act.run(async () => (await post(`/v1/workflows/${r.workflow_id}/versions/${r.version}/publish/${verdict}`), reload()), "Decision recorded");
+    act.run(
+      async () => (
+        await post(
+          `/v1/workflows/${r.workflow_id}/versions/${r.version}/publish/${verdict}`,
+        ),
+        reload()
+      ),
+      "Decision recorded",
+    );
   return (
     <section className="card">
       <h2 style={{ marginTop: 0 }}>Publishing to review</h2>
-      <p className="hint">Publishing needs a second person. You cannot approve a version you wrote or asked to publish.</p>
+      <p className="hint">
+        Publishing needs a second person. You cannot approve a version you wrote
+        or asked to publish.
+      </p>
       <ErrorBox error={act.error} />
       <table>
         <tbody>
@@ -306,10 +489,18 @@ function PublishReviews() {
               </td>
               <td className="hint">asked {fmtTime(r.requested_at)}</td>
               <td style={{ textAlign: "right" }}>
-                <button className="primary" disabled={act.busy} onClick={() => void decide(r, "approve")}>
+                <button
+                  className="primary"
+                  disabled={act.busy}
+                  onClick={() => void decide(r, "approve")}
+                >
                   Publish
                 </button>{" "}
-                <button className="danger" disabled={act.busy} onClick={() => void decide(r, "reject")}>
+                <button
+                  className="danger"
+                  disabled={act.busy}
+                  onClick={() => void decide(r, "reject")}
+                >
                   Reject
                 </button>
               </td>
@@ -324,14 +515,32 @@ function PublishReviews() {
 /** Time-boxed handover of approval roles, for leave or cover. */
 function Delegations() {
   const { me } = useAuth();
-  const { data, error, reload } = useLoad(() => get<{ delegations: Delegation[] }>("/v1/delegations"), []);
+  const { data, error, reload } = useLoad(
+    () => get<{ delegations: Delegation[] }>("/v1/delegations"),
+    [],
+  );
   const [form, setForm] = useState({ to: "", roles: "", ends: "", reason: "" });
   const act = useAction();
-  const approvalRoles = (me?.roles ?? []).filter((r) => !["owner", "admin", "builder", "operator", "auditor", "viewer", "approver", "gate"].includes(r));
+  const approvalRoles = (me?.roles ?? []).filter(
+    (r) =>
+      ![
+        "owner",
+        "admin",
+        "builder",
+        "operator",
+        "auditor",
+        "viewer",
+        "approver",
+        "gate",
+      ].includes(r),
+  );
   return (
     <section className="card">
       <h2 style={{ marginTop: 0 }}>Delegations</h2>
-      <p className="hint">Hand an approval role to a colleague for a period (at most 90 days). Every delegation and every decision under it is audited.</p>
+      <p className="hint">
+        Hand an approval role to a colleague for a period (at most 90 days).
+        Every delegation and every decision under it is audited.
+      </p>
       <ErrorBox error={error ?? act.error} />
       {data && data.delegations.length > 0 && (
         <table style={{ marginBottom: 10 }}>
@@ -350,7 +559,19 @@ function Delegations() {
                   </td>
                   <td style={{ textAlign: "right" }}>
                     {live && d.from_user === me?.user?.id && (
-                      <button className="danger" disabled={act.busy} onClick={() => void act.run(async () => (await del(`/v1/delegations/${d.id}`), reload()), "Delegation removed")}>
+                      <button
+                        className="danger"
+                        disabled={act.busy}
+                        onClick={() =>
+                          void act.run(
+                            async () => (
+                              await del(`/v1/delegations/${d.id}`),
+                              reload()
+                            ),
+                            "Delegation removed",
+                          )
+                        }
+                      >
                         Revoke
                       </button>
                     )}
@@ -369,7 +590,10 @@ function Delegations() {
             void act.run(async () => {
               await post("/v1/delegations", {
                 to: form.to,
-                roles: form.roles.split(",").map((r) => r.trim()).filter(Boolean),
+                roles: form.roles
+                  .split(",")
+                  .map((r) => r.trim())
+                  .filter(Boolean),
                 ends_at: new Date(form.ends).toISOString(),
                 reason: form.reason,
               });
@@ -378,11 +602,39 @@ function Delegations() {
             }, "Delegation added");
           }}
         >
-          <input placeholder="colleague's email" aria-label="Colleague's email" value={form.to} onChange={(e) => setForm({ ...form, to: e.target.value })} required />
-          <input placeholder={`roles (${approvalRoles.join(", ")})`} aria-label="Roles to hand over" value={form.roles} onChange={(e) => setForm({ ...form, roles: e.target.value })} required />
-          <input type="datetime-local" aria-label="Ends" value={form.ends} onChange={(e) => setForm({ ...form, ends: e.target.value })} required />
-          <input placeholder="reason" aria-label="Reason" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} required />
-          <button type="submit" style={{ flex: "0 0 auto" }} disabled={act.busy}>
+          <input
+            placeholder="colleague's email"
+            aria-label="Colleague's email"
+            value={form.to}
+            onChange={(e) => setForm({ ...form, to: e.target.value })}
+            required
+          />
+          <input
+            placeholder={`roles (${approvalRoles.join(", ")})`}
+            aria-label="Roles to hand over"
+            value={form.roles}
+            onChange={(e) => setForm({ ...form, roles: e.target.value })}
+            required
+          />
+          <input
+            type="datetime-local"
+            aria-label="Ends"
+            value={form.ends}
+            onChange={(e) => setForm({ ...form, ends: e.target.value })}
+            required
+          />
+          <input
+            placeholder="reason"
+            aria-label="Reason"
+            value={form.reason}
+            onChange={(e) => setForm({ ...form, reason: e.target.value })}
+            required
+          />
+          <button
+            type="submit"
+            style={{ flex: "0 0 auto" }}
+            disabled={act.busy}
+          >
             Delegate
           </button>
         </form>

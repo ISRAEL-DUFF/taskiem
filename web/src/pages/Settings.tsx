@@ -3,7 +3,15 @@ import { useState } from "react";
 import { del, get, post, put, type GitConnection, type GitSync } from "../api";
 import { useAdvanced, useAuth } from "../auth";
 import { EnvSelect, useEnvironments } from "../environments";
-import { ErrorBox, Field, JsonInput, PageHeader, fmtTime, useAction, useLoad } from "../ui";
+import {
+  ErrorBox,
+  Field,
+  JsonInput,
+  PageHeader,
+  fmtTime,
+  useAction,
+  useLoad,
+} from "../ui";
 import { WhatsAppNumber } from "./WhatsAppNumber";
 import { PeopleYouMessage } from "./PeopleYouMessage";
 import { USSDChannels } from "./USSDChannels";
@@ -36,11 +44,25 @@ function AdvancedSwitch() {
           type="checkbox"
           checked={!!me?.advanced}
           disabled={act.busy}
-          onChange={(e) => void act.run(async () => (await put("/v1/settings/advanced", { advanced: e.target.checked }), await refresh()), "Saved")}
+          onChange={(e) =>
+            void act.run(
+              async () => (
+                await put("/v1/settings/advanced", {
+                  advanced: e.target.checked,
+                }),
+                await refresh()
+              ),
+              "Saved",
+            )
+          }
         />{" "}
         Show the technical parts
       </label>
-      <p className="hint">For someone who builds workflows by hand: a blank canvas, formulas, the test environment and your own connectors. Everyone in the business sees the same.</p>
+      <p className="hint">
+        For someone who builds workflows by hand: a blank canvas, formulas, the
+        test environment and your own connectors. Everyone in the business sees
+        the same.
+      </p>
       <ErrorBox error={act.error} />
     </div>
   );
@@ -84,7 +106,12 @@ interface LimitsView {
     workflows: number;
     secrets: number;
     connections: number;
-    whatsapp_templates_this_month?: { sent: number; by_category: Record<string, number>; overage: number; blocked: number };
+    whatsapp_templates_this_month?: {
+      sent: number;
+      by_category: Record<string, number>;
+      overage: number;
+      blocked: number;
+    };
     container_seconds_this_month?: number;
   };
   recent_hits: { limit: string; day: string; hits: number }[];
@@ -103,14 +130,20 @@ function PlanLimits() {
     max_workflows: data.usage.workflows,
     max_secrets: data.usage.secrets,
     max_connections: data.usage.connections,
-    whatsapp_templates_monthly: data.usage.whatsapp_templates_this_month?.sent ?? 0,
-    container_minutes_monthly: Math.ceil((data.usage.container_seconds_this_month ?? 0) / 60),
+    whatsapp_templates_monthly:
+      data.usage.whatsapp_templates_this_month?.sent ?? 0,
+    container_minutes_monthly: Math.ceil(
+      (data.usage.container_seconds_this_month ?? 0) / 60,
+    ),
   };
   const wt = data.usage.whatsapp_templates_this_month;
   return (
     <section className="card">
       <h2 style={{ marginTop: 0 }}>Plan limits</h2>
-      <p className="hint">Set by your operator; 0 means no limit. Above the ingest rate deliveries are still accepted and their runs queued.</p>
+      <p className="hint">
+        Set by your operator; 0 means no limit. Above the ingest rate deliveries
+        are still accepted and their runs queued.
+      </p>
       <table>
         <thead>
           <tr>
@@ -121,23 +154,29 @@ function PlanLimits() {
           </tr>
         </thead>
         <tbody>
-          {Object.keys(data.help).sort().map((k) => (
-            <tr key={k}>
-              <td className="mono">{k}</td>
-              <td>
-                {data.limits[k]}
-                {k in data.overrides ? "" : " (default)"}
-              </td>
-              <td>{used[k] ?? ""}</td>
-              <td className="hint">{data.help[k]}</td>
-            </tr>
-          ))}
+          {Object.keys(data.help)
+            .sort()
+            .map((k) => (
+              <tr key={k}>
+                <td className="mono">{k}</td>
+                <td>
+                  {data.limits[k]}
+                  {k in data.overrides ? "" : " (default)"}
+                </td>
+                <td>{used[k] ?? ""}</td>
+                <td className="hint">{data.help[k]}</td>
+              </tr>
+            ))}
         </tbody>
       </table>
       {wt && wt.sent + wt.blocked > 0 && (
         <p className="hint" data-testid="whatsapp-templates">
-          WhatsApp templates this month: {wt.sent} sent ({Object.entries(wt.by_category).map(([c, n]) => `${n} ${c}`).join(", ")}); {wt.overage} beyond the allowance, billed
-          through; {wt.blocked} marketing held back.
+          WhatsApp templates this month: {wt.sent} sent (
+          {Object.entries(wt.by_category)
+            .map(([c, n]) => `${n} ${c}`)
+            .join(", ")}
+          ); {wt.overage} beyond the allowance, billed through; {wt.blocked}{" "}
+          marketing held back.
         </p>
       )}
       {data.recent_hits.length > 0 && (
@@ -166,7 +205,10 @@ function Environments({ editable }: { editable: boolean }) {
     <section className="card">
       <h2 style={{ marginTop: 0 }}>Environments</h2>
       <p className="hint">
-        Each environment has its own secrets, connections, variables and triggers, and runs its own version of each workflow. Publishing deploys to every environment not gated on another; a gated environment runs only what was promoted from the one it names.
+        Each environment has its own secrets, connections, variables and
+        triggers, and runs its own version of each workflow. Publishing deploys
+        to every environment not gated on another; a gated environment runs only
+        what was promoted from the one it names.
       </p>
       <ErrorBox error={envs.error ?? act.error} />
       <table>
@@ -186,7 +228,17 @@ function Environments({ editable }: { editable: boolean }) {
                   <select
                     aria-label={`Gate for ${e.name}`}
                     value={e.promotion_from ?? ""}
-                    onChange={(ev) => void act.run(async () => (await put(`/v1/environments/${e.name}`, { promotion_from: ev.target.value }), envs.reload()), "Saved")}
+                    onChange={(ev) =>
+                      void act.run(
+                        async () => (
+                          await put(`/v1/environments/${e.name}`, {
+                            promotion_from: ev.target.value,
+                          }),
+                          envs.reload()
+                        ),
+                        "Saved",
+                      )
+                    }
                   >
                     <option value="">when published</option>
                     {list
@@ -225,7 +277,12 @@ function Environments({ editable }: { editable: boolean }) {
           }}
         >
           <Field label="New environment">
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="staging" required />
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="staging"
+              required
+            />
           </Field>
           <Field label="Takes versions">
             <select value={gate} onChange={(e) => setGate(e.target.value)}>
@@ -247,7 +304,10 @@ function Environments({ editable }: { editable: boolean }) {
 }
 
 function Secrets({ env }: { env: string }) {
-  const { data, error, reload } = useLoad(() => get<{ secrets: Secret[] }>("/v1/secrets"), []);
+  const { data, error, reload } = useLoad(
+    () => get<{ secrets: Secret[] }>("/v1/secrets"),
+    [],
+  );
   const [name, setName] = useState("");
   const [value, setValue] = useState("");
   const act = useAction();
@@ -255,7 +315,10 @@ function Secrets({ env }: { env: string }) {
   return (
     <section className="card">
       <h2 style={{ marginTop: 0 }}>Secrets</h2>
-      <p className="hint">Values are write-only. Steps read them as secrets.&lt;name&gt;; webhook triggers use webhook_&lt;workflow id&gt;.</p>
+      <p className="hint">
+        Values are write-only. Steps read them as secrets.&lt;name&gt;; webhook
+        triggers use webhook_&lt;workflow id&gt;.
+      </p>
       <ErrorBox error={error ?? act.error} />
       {rows.length > 0 && (
         <table style={{ marginBottom: 10 }}>
@@ -268,9 +331,25 @@ function Secrets({ env }: { env: string }) {
                 <td className="hint">
                   updated {fmtTime(s.updated_at)} by {s.created_by}
                 </td>
-                <td className="hint">{s.last_used_at ? `last used ${fmtTime(s.last_used_at)}` : "never used"}</td>
+                <td className="hint">
+                  {s.last_used_at
+                    ? `last used ${fmtTime(s.last_used_at)}`
+                    : "never used"}
+                </td>
                 <td style={{ textAlign: "right" }}>
-                  <button className="danger" onClick={() => confirm(`Delete ${s.name}?`) && void act.run(async () => (await del(`/v1/secrets/${env}/${s.name}`), reload()), "Secret deleted")}>
+                  <button
+                    className="danger"
+                    onClick={() =>
+                      confirm(`Delete ${s.name}?`) &&
+                      void act.run(
+                        async () => (
+                          await del(`/v1/secrets/${env}/${s.name}`),
+                          reload()
+                        ),
+                        "Secret deleted",
+                      )
+                    }
+                  >
                     Delete
                   </button>
                 </td>
@@ -291,8 +370,21 @@ function Secrets({ env }: { env: string }) {
           }, "Secret saved");
         }}
       >
-        <input className="mono" placeholder="name" value={name} onChange={(e) => setName(e.target.value)} required />
-        <input type="password" placeholder="value" autoComplete="off" value={value} onChange={(e) => setValue(e.target.value)} required />
+        <input
+          className="mono"
+          placeholder="name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+        />
+        <input
+          type="password"
+          placeholder="value"
+          autoComplete="off"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          required
+        />
         <button type="submit" style={{ flex: "0 0 auto" }} disabled={act.busy}>
           Set secret
         </button>
@@ -302,10 +394,23 @@ function Secrets({ env }: { env: string }) {
 }
 
 function Variables({ env, editable }: { env: string; editable: boolean }) {
-  const { data, error, reload } = useLoad(() => get<{ variables: Variable[] }>("/v1/variables"), []);
+  const { data, error, reload } = useLoad(
+    () => get<{ variables: Variable[] }>("/v1/variables"),
+    [],
+  );
   // What each setting is for: the templates that read it say (N5).
-  const tpls = useLoad(() => get<{ templates: { variables: { name: string; why: string }[] }[] }>("/v1/templates"), []);
-  const why = new Map((tpls.data?.templates ?? []).flatMap((t) => t.variables.map((v) => [v.name, v.why] as const)));
+  const tpls = useLoad(
+    () =>
+      get<{ templates: { variables: { name: string; why: string }[] }[] }>(
+        "/v1/templates",
+      ),
+    [],
+  );
+  const why = new Map(
+    (tpls.data?.templates ?? []).flatMap((t) =>
+      t.variables.map((v) => [v.name, v.why] as const),
+    ),
+  );
   const [name, setName] = useState("");
   const [text, setText] = useState("");
   const [advanced, setAdvanced] = useState(false);
@@ -315,7 +420,10 @@ function Variables({ env, editable }: { env: string; editable: boolean }) {
   return (
     <section className="card">
       <h2 style={{ marginTop: 0 }}>Settings your workflows read</h2>
-      <p className="hint">Such as the owner's phone number or a business name. Each run keeps the values it started with.</p>
+      <p className="hint">
+        Such as the owner's phone number or a business name. Each run keeps the
+        values it started with.
+      </p>
       <Help topic="variables" />
       <ErrorBox error={error ?? act.error} />
       {rows.length > 0 && (
@@ -325,7 +433,9 @@ function Variables({ env, editable }: { env: string; editable: boolean }) {
               <tr key={v.name}>
                 <td>
                   <strong>{v.name.replace(/_/g, " ")}</strong>
-                  {why.get(v.name) && <div className="hint">{why.get(v.name)}</div>}
+                  {why.get(v.name) && (
+                    <div className="hint">{why.get(v.name)}</div>
+                  )}
                 </td>
                 <td>{showValue(v.value)}</td>
                 <td className="hint">{fmtTime(v.updated_at)}</td>
@@ -339,7 +449,9 @@ function Variables({ env, editable }: { env: string; editable: boolean }) {
           onSubmit={(e) => {
             e.preventDefault();
             void act.run(async () => {
-              await put(`/v1/variables/${env}/${name}`, { value: advanced ? value : plainValue(text) });
+              await put(`/v1/variables/${env}/${name}`, {
+                value: advanced ? value : plainValue(text),
+              });
               setName("");
               setText("");
               setValue("");
@@ -349,20 +461,37 @@ function Variables({ env, editable }: { env: string; editable: boolean }) {
         >
           <div className="row">
             <Field label="Name">
-              <input className="mono" value={name} onChange={(e) => setName(e.target.value)} required />
+              <input
+                className="mono"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
             </Field>
             {advanced ? (
               <Field label="Value (JSON)">
                 <JsonInput value={value} onChange={setValue} rows={1} />
               </Field>
             ) : (
-              <Field label="Value" hint="Text or a number, as you would write it. A phone number in any form is kept as +234….">
-                <input value={text} onChange={(e) => setText(e.target.value)} required />
+              <Field
+                label="Value"
+                hint="Text or a number, as you would write it. A phone number in any form is kept as +234…."
+              >
+                <input
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  required
+                />
               </Field>
             )}
           </div>
           <label className="inline hint" data-technical>
-            <input type="checkbox" checked={advanced} onChange={(e) => setAdvanced(e.target.checked)} /> Advanced: enter JSON
+            <input
+              type="checkbox"
+              checked={advanced}
+              onChange={(e) => setAdvanced(e.target.checked)}
+            />{" "}
+            Advanced: enter JSON
           </label>
           <button type="submit" disabled={act.busy || !name}>
             Set variable
@@ -374,23 +503,52 @@ function Variables({ env, editable }: { env: string; editable: boolean }) {
 }
 
 function Egress({ env }: { env: string }) {
-  const { data, error, reload } = useLoad(() => get<{ hosts: string[] }>(`/v1/egress?environment=${env}`), [env]);
+  const { data, error, reload } = useLoad(
+    () => get<{ hosts: string[] }>(`/v1/egress?environment=${env}`),
+    [env],
+  );
   const [host, setHost] = useState("");
   const act = useAction();
   return (
     <section className="card">
       <h2 style={{ marginTop: 0 }}>Allowed hosts</h2>
-      <p className="hint">HTTP steps and code may reach only these hosts (connectors use their own declared hosts). Private and metadata addresses are always refused.</p>
+      <p className="hint">
+        HTTP steps and code may reach only these hosts (connectors use their own
+        declared hosts). Private and metadata addresses are always refused.
+      </p>
       <ErrorBox error={error ?? act.error} />
-      <p>{data?.hosts.length ? data.hosts.map((h) => <code key={h} style={{ marginRight: 10 }}>{h}</code>) : <span className="hint">None yet.</span>}</p>
+      <p>
+        {data?.hosts.length ? (
+          data.hosts.map((h) => (
+            <code key={h} style={{ marginRight: 10 }}>
+              {h}
+            </code>
+          ))
+        ) : (
+          <span className="hint">None yet.</span>
+        )}
+      </p>
       <form
         className="row"
         onSubmit={(e) => {
           e.preventDefault();
-          void act.run(async () => (await post("/v1/egress", { environment: env, host }), setHost(""), reload()), "Host allowed");
+          void act.run(
+            async () => (
+              await post("/v1/egress", { environment: env, host }),
+              setHost(""),
+              reload()
+            ),
+            "Host allowed",
+          );
         }}
       >
-        <input className="mono" placeholder="api.example.com or *.example.com" value={host} onChange={(e) => setHost(e.target.value)} required />
+        <input
+          className="mono"
+          placeholder="api.example.com or *.example.com"
+          value={host}
+          onChange={(e) => setHost(e.target.value)}
+          required
+        />
         <button type="submit" style={{ flex: "0 0 auto" }} disabled={act.busy}>
           Allow host
         </button>
@@ -406,26 +564,54 @@ function Egress({ env }: { env: string }) {
  * read-only here.
  */
 function Git({ env }: { env: string }) {
-  const { data, error, reload } = useLoad(() => get<{ connections: GitConnection[] }>("/v1/git"), []);
+  const { data, error, reload } = useLoad(
+    () => get<{ connections: GitConnection[] }>("/v1/git"),
+    [],
+  );
   const conn = data?.connections.find((c) => c.environment === env);
-  const syncs = useLoad(() => (conn?.mode === "git_led" ? get<{ syncs: GitSync[] }>(`/v1/git/${env}/syncs`) : Promise.resolve({ syncs: [] })), [env, conn?.mode]);
+  const syncs = useLoad(
+    () =>
+      conn?.mode === "git_led"
+        ? get<{ syncs: GitSync[] }>(`/v1/git/${env}/syncs`)
+        : Promise.resolve({ syncs: [] }),
+    [env, conn?.mode],
+  );
   const [form, setForm] = useState<Record<string, string>>({});
   const [issued, setIssued] = useState<{ secret: string; url: string }>();
   const act = useAction();
   // The token and Bitbucket username are credentials: never shown again.
   const v = (k: keyof GitConnection | "token" | "username", d = "") =>
-    form[k] ?? (conn && k !== "token" && k !== "username" ? String(conn[k] ?? "") : d);
-  const set = (k: string) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value });
+    form[k] ??
+    (conn && k !== "token" && k !== "username" ? String(conn[k] ?? "") : d);
+  const set = (k: string) => (e: { target: { value: string } }) =>
+    setForm({ ...form, [k]: e.target.value });
   const bitbucket = v("provider", "github") === "bitbucket";
   const save = () =>
     act.run(async () => {
       const body: Record<string, unknown> = {
-        provider: v("provider", "github"), api_url: v("api_url"), repo: v("repo"), branch: v("branch", "main"),
-        path: v("path", "flows"), tests_path: v("tests_path", "tests"), mode: v("mode", "platform_led"),
+        provider: v("provider", "github"),
+        api_url: v("api_url"),
+        repo: v("repo"),
+        branch: v("branch", "main"),
+        path: v("path", "flows"),
+        tests_path: v("tests_path", "tests"),
+        mode: v("mode", "platform_led"),
       };
-      if (form.token) body.auth = { type: "token", token: form.token, ...(bitbucket && form.username ? { username: form.username } : {}) };
-      const r = await put<{ webhook_secret?: string; webhook_url: string }>(`/v1/git/${env}`, body);
-      if (r.webhook_secret) setIssued({ secret: r.webhook_secret, url: location.origin + r.webhook_url });
+      if (form.token)
+        body.auth = {
+          type: "token",
+          token: form.token,
+          ...(bitbucket && form.username ? { username: form.username } : {}),
+        };
+      const r = await put<{ webhook_secret?: string; webhook_url: string }>(
+        `/v1/git/${env}`,
+        body,
+      );
+      if (r.webhook_secret)
+        setIssued({
+          secret: r.webhook_secret,
+          url: location.origin + r.webhook_url,
+        });
       setForm({});
       reload();
     }, "Connected");
@@ -433,13 +619,16 @@ function Git({ env }: { env: string }) {
     <section className="card">
       <h2 style={{ marginTop: 0 }}>Git</h2>
       <p className="hint">
-        Platform-led: publishing here opens a pull request with the workflow's definition and code. Git-led: pushes to the branch deploy, after every
-        workflow test in the repository passes, and those workflows are read-only here.
+        Platform-led: publishing here opens a pull request with the workflow's
+        definition and code. Git-led: pushes to the branch deploy, after every
+        workflow test in the repository passes, and those workflows are
+        read-only here.
       </p>
       <ErrorBox error={error ?? act.error ?? syncs.error} />
       {issued && (
         <div className="notice">
-          Add this webhook to the repository (push events). The secret is shown once.
+          Add this webhook to the repository (push events). The secret is shown
+          once.
           <br />
           URL <code>{issued.url}</code>
           <br />
@@ -454,8 +643,15 @@ function Git({ env }: { env: string }) {
             <option value="bitbucket">Bitbucket Cloud</option>
           </select>
         </Field>
-        <Field label="API URL" hint="Empty for github.com, gitlab.com or bitbucket.org">
-          <input value={v("api_url")} onChange={set("api_url")} placeholder="https://github.example.com/api/v3" />
+        <Field
+          label="API URL"
+          hint="Empty for github.com, gitlab.com or bitbucket.org"
+        >
+          <input
+            value={v("api_url")}
+            onChange={set("api_url")}
+            placeholder="https://github.example.com/api/v3"
+          />
         </Field>
         <Field label="Mode">
           <select value={v("mode", "platform_led")} onChange={set("mode")}>
@@ -466,7 +662,11 @@ function Git({ env }: { env: string }) {
       </div>
       <div className="row">
         <Field label="Repository">
-          <input value={v("repo")} onChange={set("repo")} placeholder={bitbucket ? "workspace/repo_slug" : "owner/name"} />
+          <input
+            value={v("repo")}
+            onChange={set("repo")}
+            placeholder={bitbucket ? "workspace/repo_slug" : "owner/name"}
+          />
         </Field>
         <Field label="Branch">
           <input value={v("branch", "main")} onChange={set("branch")} />
@@ -475,28 +675,73 @@ function Git({ env }: { env: string }) {
           <input value={v("path", "flows")} onChange={set("path")} />
         </Field>
         <Field label="Tests directory">
-          <input value={v("tests_path", "tests")} onChange={set("tests_path")} />
+          <input
+            value={v("tests_path", "tests")}
+            onChange={set("tests_path")}
+          />
         </Field>
       </div>
-      <Field label={conn ? "Access token (leave empty to keep the current one)" : "Access token"} hint="Needs read access to contents, and write access to contents and pull requests for platform-led mode">
-        <input type="password" autoComplete="off" value={form.token ?? ""} onChange={set("token")} />
+      <Field
+        label={
+          conn
+            ? "Access token (leave empty to keep the current one)"
+            : "Access token"
+        }
+        hint="Needs read access to contents, and write access to contents and pull requests for platform-led mode"
+      >
+        <input
+          type="password"
+          autoComplete="off"
+          value={form.token ?? ""}
+          onChange={set("token")}
+        />
       </Field>
       {bitbucket && (
-        <Field label="Atlassian account email" hint="Only for an API token; leave empty for a repository, project or workspace access token">
-          <input type="email" autoComplete="off" value={form.username ?? ""} onChange={set("username")} />
+        <Field
+          label="Atlassian account email"
+          hint="Only for an API token; leave empty for a repository, project or workspace access token"
+        >
+          <input
+            type="email"
+            autoComplete="off"
+            value={form.username ?? ""}
+            onChange={set("username")}
+          />
         </Field>
       )}
       <div className="row">
-        <button className="primary" disabled={act.busy} onClick={() => void save()}>
+        <button
+          className="primary"
+          disabled={act.busy}
+          onClick={() => void save()}
+        >
           {conn ? "Save" : "Connect"}
         </button>
         {conn && (
-          <button className="danger" disabled={act.busy} onClick={() => confirm(`Disconnect ${conn.repo}?`) && void act.run(async () => (await del(`/v1/git/${env}`), reload()), "Disconnected")}>
+          <button
+            className="danger"
+            disabled={act.busy}
+            onClick={() =>
+              confirm(`Disconnect ${conn.repo}?`) &&
+              void act.run(
+                async () => (await del(`/v1/git/${env}`), reload()),
+                "Disconnected",
+              )
+            }
+          >
             Disconnect
           </button>
         )}
         {conn?.mode === "git_led" && (
-          <button disabled={act.busy} onClick={() => void act.run(async () => (await post(`/v1/git/${env}/sync`), syncs.reload()), "Sync started")}>
+          <button
+            disabled={act.busy}
+            onClick={() =>
+              void act.run(
+                async () => (await post(`/v1/git/${env}/sync`), syncs.reload()),
+                "Sync started",
+              )
+            }
+          >
             Deploy from {conn.branch} now
           </button>
         )}
@@ -522,10 +767,13 @@ function Git({ env }: { env: string }) {
                 <td className="hint">
                   {s.report?.error ??
                     [
-                      s.report?.tests && `${s.report.tests.passed} tests passed, ${s.report.tests.failed} failed`,
+                      s.report?.tests &&
+                        `${s.report.tests.passed} tests passed, ${s.report.tests.failed} failed`,
                       ...(s.report?.problems ?? []),
                       ...(s.report?.tests?.failures ?? []),
-                      ...(s.report?.workflows ?? []).filter((w) => w.action !== "unchanged").map((w) => `${w.key} ${w.action} v${w.version}`),
+                      ...(s.report?.workflows ?? [])
+                        .filter((w) => w.action !== "unchanged")
+                        .map((w) => `${w.key} ${w.action} v${w.version}`),
                     ]
                       .filter(Boolean)
                       .join("; ")}
@@ -543,73 +791,158 @@ function Git({ env }: { env: string }) {
 function Governance() {
   const { me } = useAuth();
   const { data, error, reload } = useLoad(
-    () => get<{ four_eyes_publish: boolean; four_eyes_publish_environments?: string[]; four_eyes_policies: boolean; default_retention: string; ai_steps?: boolean }>("/v1/governance"),
+    () =>
+      get<{
+        four_eyes_publish: boolean;
+        four_eyes_publish_environments?: string[];
+        four_eyes_policies: boolean;
+        default_retention: string;
+        ai_steps?: boolean;
+      }>("/v1/governance"),
     [],
   );
   const envs = useEnvironments();
-  const ai = useLoad(() => get<{ enabled: boolean; provider?: string; model?: string; step_models?: string[]; retention?: string; steps_plan: boolean }>("/v1/ai/status"), []);
+  const ai = useLoad(
+    () =>
+      get<{
+        enabled: boolean;
+        provider?: string;
+        model?: string;
+        step_models?: string[];
+        retention?: string;
+        steps_plan: boolean;
+      }>("/v1/ai/status"),
+    [],
+  );
   const [retention, setRetention] = useState<string>();
   const act = useAction();
   const owner = me?.roles.includes("owner") ?? false;
   if (!data) return error ? <ErrorBox error={error} /> : null;
-  const set = (k: "four_eyes_publish" | "four_eyes_publish_environments" | "four_eyes_policies" | "default_retention" | "ai_steps", v: boolean | string | string[]) =>
-    act.run(async () => (await put("/v1/governance", { ...data, [k]: v }), reload()), "Saved");
+  const set = (
+    k:
+      | "four_eyes_publish"
+      | "four_eyes_publish_environments"
+      | "four_eyes_policies"
+      | "default_retention"
+      | "ai_steps",
+    v: boolean | string | string[],
+  ) =>
+    act.run(
+      async () => (await put("/v1/governance", { ...data, [k]: v }), reload()),
+      "Saved",
+    );
   const gated = data.four_eyes_publish_environments ?? [];
-  const toggleEnv = (env: string, on: boolean) => void set("four_eyes_publish_environments", on ? [...gated, env] : gated.filter((e) => e !== env));
+  const toggleEnv = (env: string, on: boolean) =>
+    void set(
+      "four_eyes_publish_environments",
+      on ? [...gated, env] : gated.filter((e) => e !== env),
+    );
   return (
     <section className="card">
       <h2 style={{ marginTop: 0 }}>Four-eyes</h2>
-      <p className="hint">Changes that need a second person. Only owners change these, and every change is audited.</p>
+      <p className="hint">
+        Changes that need a second person. Only owners change these, and every
+        change is audited.
+      </p>
       <ErrorBox error={act.error} />
       <label>
-        <input type="checkbox" checked={data.four_eyes_publish} disabled={!owner || act.busy} onChange={(e) => void set("four_eyes_publish", e.target.checked)} /> Publishing a
-        workflow needs a second publisher, in every environment
+        <input
+          type="checkbox"
+          checked={data.four_eyes_publish}
+          disabled={!owner || act.busy}
+          onChange={(e) => void set("four_eyes_publish", e.target.checked)}
+        />{" "}
+        Publishing a workflow needs a second publisher, in every environment
       </label>
       {!data.four_eyes_publish && (envs.data?.environments.length ?? 0) > 0 && (
-        <fieldset style={{ border: 0, padding: "4px 0 4px 24px", margin: 0 }} data-testid="four-eyes-environments">
+        <fieldset
+          style={{ border: 0, padding: "4px 0 4px 24px", margin: 0 }}
+          data-testid="four-eyes-environments"
+        >
           <legend className="hint" style={{ padding: 0 }}>
             Or only in these environments:
           </legend>
           {envs.data?.environments.map((e) => (
             <label key={e.name} style={{ marginRight: 16 }}>
-              <input type="checkbox" checked={gated.includes(e.name)} disabled={!owner || act.busy} onChange={(ev) => toggleEnv(e.name, ev.target.checked)} /> {e.name}
+              <input
+                type="checkbox"
+                checked={gated.includes(e.name)}
+                disabled={!owner || act.busy}
+                onChange={(ev) => toggleEnv(e.name, ev.target.checked)}
+              />{" "}
+              {e.name}
             </label>
           ))}
           <p className="hint" style={{ margin: "4px 0 0" }}>
-            A publish that reaches a ticked environment waits for a second person, and so does promoting into one. Let production take versions only by promotion from staging, and publishing to
-            the others is never held up.
+            A publish that reaches a ticked environment waits for a second
+            person, and so does promoting into one. Let production take versions
+            only by promotion from staging, and publishing to the others is
+            never held up.
           </p>
         </fieldset>
       )}
       <br />
       <label>
-        <input type="checkbox" checked={data.four_eyes_policies} disabled={!owner || act.busy} onChange={(e) => void set("four_eyes_policies", e.target.checked)} /> A new
-        approval policy version needs a second person
+        <input
+          type="checkbox"
+          checked={data.four_eyes_policies}
+          disabled={!owner || act.busy}
+          onChange={(e) => void set("four_eyes_policies", e.target.checked)}
+        />{" "}
+        A new approval policy version needs a second person
       </label>
       <h2>AI steps</h2>
       <p className="hint">
-        Workflows can ask the AI model at run time: to sort a message, pull details out of text, or draft a reply. Personal data is hidden from the model behind placeholders unless a step lets a field
-        through, and every such step is recorded in the audit log when it is published.
+        Workflows can ask the AI model at run time: to sort a message, pull
+        details out of text, or draft a reply. Personal data is hidden from the
+        model behind placeholders unless a step lets a field through, and every
+        such step is recorded in the audit log when it is published.
       </p>
       <label>
-        <input type="checkbox" checked={data.ai_steps !== false} disabled={!owner || act.busy} onChange={(e) => void set("ai_steps", e.target.checked)} /> Let workflows ask the AI model
+        <input
+          type="checkbox"
+          checked={data.ai_steps !== false}
+          disabled={!owner || act.busy}
+          onChange={(e) => void set("ai_steps", e.target.checked)}
+        />{" "}
+        Let workflows ask the AI model
       </label>
       {ai.data && (
         <p className="hint" data-testid="ai-provider">
           {ai.data.enabled
             ? `Model: ${ai.data.model} (${ai.data.provider})${(ai.data.step_models?.length ?? 0) > 1 ? `; steps may also use ${ai.data.step_models?.slice(1).join(", ")}` : ""}. ${
-                ai.data.retention ? `What the provider keeps: ${ai.data.retention}.` : "This deployment has not stated what the provider keeps; ask its operator."
+                ai.data.retention
+                  ? `What the provider keeps: ${ai.data.retention}.`
+                  : "This deployment has not stated what the provider keeps; ask its operator."
               }`
             : "This deployment has no AI model, so AI steps cannot run."}
-          {ai.data.enabled && !ai.data.steps_plan && " Your plan does not include AI."}
+          {ai.data.enabled &&
+            !ai.data.steps_plan &&
+            " Your plan does not include AI."}
         </p>
       )}
       <h2>Retention</h2>
-      <p className="hint">How long run data is kept after a run ends, when its workflow sets no retention (default 90d). The audit log is kept regardless.</p>
+      <p className="hint">
+        How long run data is kept after a run ends, when its workflow sets no
+        retention (default 90d). The audit log is kept regardless.
+      </p>
       <div className="row">
-        <input value={retention ?? data.default_retention} placeholder="90d" disabled={!owner} onChange={(e) => setRetention(e.target.value)} style={{ maxWidth: 160 }} />
+        <input
+          value={retention ?? data.default_retention}
+          placeholder="90d"
+          disabled={!owner}
+          onChange={(e) => setRetention(e.target.value)}
+          style={{ maxWidth: 160 }}
+        />
         {owner && (
-          <button disabled={act.busy || retention === undefined} onClick={() => void set("default_retention", retention ?? "").then(() => setRetention(undefined))}>
+          <button
+            disabled={act.busy || retention === undefined}
+            onClick={() =>
+              void set("default_retention", retention ?? "").then(() =>
+                setRetention(undefined),
+              )
+            }
+          >
             Save retention
           </button>
         )}

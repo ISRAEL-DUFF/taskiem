@@ -44,7 +44,6 @@ import {
   EmptyState,
   ErrorBox,
   fmtTime,
-  Item,
   Items,
   Modal,
   PageHeader,

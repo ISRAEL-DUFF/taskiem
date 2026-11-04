@@ -20,7 +20,12 @@ export const REGISTRARS: Registrar[] = [
   {
     id: "whogohost",
     name: "Whogohost",
-    open: ["Sign in to your Whogohost client area.", "Open Domains, then My Domains.", "Next to your domain, choose Manage Domain.", "Open DNS Management (or Manage DNS)."],
+    open: [
+      "Sign in to your Whogohost client area.",
+      "Open Domains, then My Domains.",
+      "Next to your domain, choose Manage Domain.",
+      "Open DNS Management (or Manage DNS).",
+    ],
     nameBox: "Host Name",
     valueBox: "Address",
     save: "Save Changes",
@@ -28,7 +33,11 @@ export const REGISTRARS: Registrar[] = [
   {
     id: "qservers",
     name: "Qservers",
-    open: ["Sign in to your Qservers client area.", "Open Domains, then My Domains.", "Choose your domain, then DNS Management."],
+    open: [
+      "Sign in to your Qservers client area.",
+      "Open Domains, then My Domains.",
+      "Choose your domain, then DNS Management.",
+    ],
     nameBox: "Host Name",
     valueBox: "Address",
     save: "Save Changes",
@@ -36,7 +45,11 @@ export const REGISTRARS: Registrar[] = [
   {
     id: "domainking",
     name: "DomainKing",
-    open: ["Sign in to DomainKing.", "Open My Domains and choose your domain.", "Open Manage DNS."],
+    open: [
+      "Sign in to DomainKing.",
+      "Open My Domains and choose your domain.",
+      "Open Manage DNS.",
+    ],
     nameBox: "Host",
     valueBox: "Value",
     save: "Add Record",
@@ -44,7 +57,11 @@ export const REGISTRARS: Registrar[] = [
   {
     id: "godaddy",
     name: "GoDaddy",
-    open: ["Sign in to GoDaddy and open your Domain Portfolio.", "Choose your domain, then open DNS.", "Choose Add New Record."],
+    open: [
+      "Sign in to GoDaddy and open your Domain Portfolio.",
+      "Choose your domain, then open DNS.",
+      "Choose Add New Record.",
+    ],
     nameBox: "Name",
     valueBox: "Value",
     save: "Save",
@@ -64,7 +81,10 @@ export const REGISTRARS: Registrar[] = [
   {
     id: "other",
     name: "Another company",
-    open: ["Sign in where you bought the domain.", "Find the screen called DNS, DNS Management, Zone Editor or Name Servers settings for your domain."],
+    open: [
+      "Sign in where you bought the domain.",
+      "Find the screen called DNS, DNS Management, Zone Editor or Name Servers settings for your domain.",
+    ],
     nameBox: "Name or Host",
     valueBox: "Value, Points to or Address",
     save: "Save",
@@ -74,17 +94,28 @@ export const REGISTRARS: Registrar[] = [
 /** What to type for one record, at a registrar. */
 export function recordSteps(reg: Registrar, r: DomainRecord): string[] {
   const steps = [
-    r.type === "ALIAS" ? "Add a new record of type ALIAS (some call it ANAME or CNAME flattening)." : `Add a new record of type ${r.type}.`,
+    r.type === "ALIAS"
+      ? "Add a new record of type ALIAS (some call it ANAME or CNAME flattening)."
+      : `Add a new record of type ${r.type}.`,
     `In ${reg.nameBox}, type ${r.short || r.name}${r.short === "@" ? " (it means the domain itself; some screens want it left empty)" : ""}.`,
     `In ${reg.valueBox}, paste ${r.value}.`,
   ];
-  if (r.type === "CNAME") steps.push(`If there is already an A or CNAME record for ${r.short || r.name}, delete it first: a name can have only one CNAME.`);
-  if (r.type === "A" || r.type === "AAAA") steps.push(`Delete any other ${r.type} record for ${r.short || r.name} (often one the company added when you bought the domain).`);
+  if (r.type === "CNAME")
+    steps.push(
+      `If there is already an A or CNAME record for ${r.short || r.name}, delete it first: a name can have only one CNAME.`,
+    );
+  if (r.type === "A" || r.type === "AAAA")
+    steps.push(
+      `Delete any other ${r.type} record for ${r.short || r.name} (often one the company added when you bought the domain).`,
+    );
   steps.push(`Leave TTL as it is, and press ${reg.save}.`);
   return steps;
 }
 
 /** The registrar with an id, or the "another company" guide. */
 export function registrarOf(id: string): Registrar {
-  return REGISTRARS.find((r) => r.id === id) ?? (REGISTRARS[REGISTRARS.length - 1] as Registrar);
+  return (
+    REGISTRARS.find((r) => r.id === id) ??
+    (REGISTRARS[REGISTRARS.length - 1] as Registrar)
+  );
 }

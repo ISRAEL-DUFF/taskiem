@@ -20,7 +20,14 @@ import {
   type Finding,
 } from "./trust";
 
-const finding = (verdict: string, category: string): Finding => ({ field: "about", text: "x", verdict, category, reason: "", checker: "words" });
+const finding = (verdict: string, category: string): Finding => ({
+  field: "about",
+  text: "x",
+  verdict,
+  category,
+  reason: "",
+  checker: "words",
+});
 
 describe("storefront trust", () => {
   it("names page statuses, with unknown ones as they are", () => {
@@ -32,7 +39,9 @@ describe("storefront trust", () => {
 
   it("knows when the owner can appeal", () => {
     expect(canAppeal({ status: "suspended" })).toBe(true);
-    expect(canAppeal({ status: "draft", review_note: "Remove the loan offer." })).toBe(true);
+    expect(
+      canAppeal({ status: "draft", review_note: "Remove the loan offer." }),
+    ).toBe(true);
     expect(turnedDown({ status: "draft", review_note: null })).toBe(false);
     expect(canAppeal({ status: "published" })).toBe(false);
     expect(canAppeal({ status: "in_review" })).toBe(false);
@@ -49,8 +58,16 @@ describe("storefront trust", () => {
   it("summarises findings", () => {
     expect(findingsSummary([])).toBe("Nothing found");
     expect(findingsSummary(null)).toBe("Nothing found");
-    expect(findingsSummary([finding("allowed", "other")])).toBe("Nothing found");
-    expect(findingsSummary([finding("blocked", "weapons"), finding("flagged", "price"), finding("flagged", "price")])).toBe("1 blocked, 2 flagged: weapons, price");
+    expect(findingsSummary([finding("allowed", "other")])).toBe(
+      "Nothing found",
+    );
+    expect(
+      findingsSummary([
+        finding("blocked", "weapons"),
+        finding("flagged", "price"),
+        finding("flagged", "price"),
+      ]),
+    ).toBe("1 blocked, 2 flagged: weapons, price");
     expect(findingsSummary([finding("flagged", "")])).toBe("1 flagged");
     expect(categoryLabel("investment_scheme")).toBe("investment scheme");
     expect(categoryLabel("new_one")).toBe("new one");
@@ -59,7 +76,14 @@ describe("storefront trust", () => {
   });
 
   it("reads a review's detail", () => {
-    expect(businessDetail({ legal_name: "Ada Foods Ltd", address: "1 Broad St", cac_number: "RC 1", note: "" })).toEqual({
+    expect(
+      businessDetail({
+        legal_name: "Ada Foods Ltd",
+        address: "1 Broad St",
+        cac_number: "RC 1",
+        note: "",
+      }),
+    ).toEqual({
       legal_name: "Ada Foods Ltd",
       address: "1 Broad St",
       cac_number: "RC 1",
@@ -67,7 +91,9 @@ describe("storefront trust", () => {
     });
     expect(businessDetail({ message: "x" })).toBeNull();
     expect(businessDetail(null)).toBeNull();
-    expect(appealMessage({ message: "I removed it.", page_status: "suspended" })).toBe("I removed it.");
+    expect(
+      appealMessage({ message: "I removed it.", page_status: "suspended" }),
+    ).toBe("I removed it.");
     expect(appealMessage({})).toBeNull();
     expect(reportReason("scam")).toBe("Looks like a scam");
     expect(reportReason("unknown")).toBe("unknown");
@@ -76,8 +102,24 @@ describe("storefront trust", () => {
   it("finds a pending review of a kind", () => {
     const t = {
       reviews: [
-        { id: "1", kind: "business" as const, status: "rejected" as const, findings: [], decision_note: "No", created_at: "", decided_at: "" },
-        { id: "2", kind: "business" as const, status: "pending" as const, findings: [], decision_note: null, created_at: "", decided_at: null },
+        {
+          id: "1",
+          kind: "business" as const,
+          status: "rejected" as const,
+          findings: [],
+          decision_note: "No",
+          created_at: "",
+          decided_at: "",
+        },
+        {
+          id: "2",
+          kind: "business" as const,
+          status: "pending" as const,
+          findings: [],
+          decision_note: null,
+          created_at: "",
+          decided_at: null,
+        },
       ],
     };
     expect(pendingOf(t, "business")?.id).toBe("2");
@@ -86,23 +128,67 @@ describe("storefront trust", () => {
   });
 
   it("classifies refusals", () => {
-    expect(refusalOf(new ApiError(409, "verification needed: publishing needs a verified phone"))).toBe("verification");
-    expect(refusalOf(new ApiError(409, "Verification needed: taking payment when customers order needs a verified business"))).toBe("verification");
-    expect(refusalOf(new ApiError(402, "not on your plan", [], { code: "plan_feature_required" }))).toBe("plan");
-    expect(refusalOf(new ApiError(400, "This cannot go on a public page: \"pistol\" (weapons)"))).toBe("moderation");
-    expect(refusalOf(new ApiError(409, "the page is suspended; reply to Taskiem's message to appeal"))).toBe("suspended");
-    expect(refusalOf(new ApiError(409, "no workflow is deployed in prod"))).toBeNull();
+    expect(
+      refusalOf(
+        new ApiError(
+          409,
+          "verification needed: publishing needs a verified phone",
+        ),
+      ),
+    ).toBe("verification");
+    expect(
+      refusalOf(
+        new ApiError(
+          409,
+          "Verification needed: taking payment when customers order needs a verified business",
+        ),
+      ),
+    ).toBe("verification");
+    expect(
+      refusalOf(
+        new ApiError(402, "not on your plan", [], {
+          code: "plan_feature_required",
+        }),
+      ),
+    ).toBe("plan");
+    expect(
+      refusalOf(
+        new ApiError(
+          400,
+          'This cannot go on a public page: "pistol" (weapons)',
+        ),
+      ),
+    ).toBe("moderation");
+    expect(
+      refusalOf(
+        new ApiError(
+          409,
+          "the page is suspended; reply to Taskiem's message to appeal",
+        ),
+      ),
+    ).toBe("suspended");
+    expect(
+      refusalOf(new ApiError(409, "no workflow is deployed in prod")),
+    ).toBeNull();
     expect(refusalOf(new Error("boom"))).toBeNull();
-    expect(refusalMessage("verification needed: publishing needs a verified phone")).toBe("Publishing needs a verified phone");
+    expect(
+      refusalMessage("verification needed: publishing needs a verified phone"),
+    ).toBe("Publishing needs a verified phone");
   });
 
   it("tells the owner what a publish did", () => {
-    expect(publishNotice({ status: "in_review", published_version: 1 })).toMatch(/^Sent to Taskiem for a quick check/);
-    expect(publishNotice({ status: "published", published_version: 3 })).toBe("Published version 3.");
+    expect(
+      publishNotice({ status: "in_review", published_version: 1 }),
+    ).toMatch(/^Sent to Taskiem for a quick check/);
+    expect(publishNotice({ status: "published", published_version: 3 })).toBe(
+      "Published version 3.",
+    );
   });
 
   it("picks a photo's smallest width", () => {
-    expect(smallest({ "2000": "big", "320": "small", "800": "mid" })).toBe("small");
+    expect(smallest({ "2000": "big", "320": "small", "800": "mid" })).toBe(
+      "small",
+    );
     expect(smallest({})).toBeUndefined();
     expect(smallest(null)).toBeUndefined();
   });

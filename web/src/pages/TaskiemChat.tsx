@@ -1,7 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { useThread } from "../lib/useThread";
 import { ThreadJump } from "./ThreadParts";
-import { EmojiPanel } from "./EmojiPanel";
 import { isHeic, preparePhoto } from "../lib/photo";
 import { PendingFile } from "./PendingFile";
 import { insertAt } from "../lib/emoji";
@@ -26,6 +32,11 @@ import { ErrorBox, fmtTime, Skeleton, useAction, useLoad } from "../ui";
 // with the same words (status, orders, cash in, invoice …) and the same
 // history from every channel. Their messages on the right, Taskiem's on
 // the left; the buttons of Taskiem's newest answer press as on the phone.
+
+// The emoji list is large: it is loaded when the panel is first opened.
+const EmojiPanel = lazy(() =>
+  import("./EmojiPanel").then((m) => ({ default: m.EmojiPanel })),
+);
 
 const EVERY_MS = 5000;
 /** The newest page, and a page older, as the API gives them. */
@@ -127,7 +138,6 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
       })
       .catch(setError);
     // The thread's reset is stable.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const loadOlder = async () => {
     const first = messages?.[0];
@@ -422,7 +432,9 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
         }}
       />
       {emojiOpen && (
-        <EmojiPanel onPick={addEmoji} onClose={() => setEmojiOpen(false)} />
+        <Suspense fallback={<div className="emoji-panel" aria-busy="true" />}>
+          <EmojiPanel onPick={addEmoji} onClose={() => setEmojiOpen(false)} />
+        </Suspense>
       )}
       <MentionList m={mentions} />
       {voice.secs !== undefined || voice.holding ? (

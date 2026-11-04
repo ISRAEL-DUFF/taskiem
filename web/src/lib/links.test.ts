@@ -30,10 +30,16 @@ const link = (over: Partial<BusinessLink>): BusinessLink => ({
 describe("links", () => {
   it("say a state and a role in plain words", () => {
     expect(stateWords("active")).toEqual({ label: "Linked", tone: "ok" });
-    expect(stateWords("asked_us")).toEqual({ label: "Asks to link", tone: "warn" });
+    expect(stateWords("asked_us")).toEqual({
+      label: "Asks to link",
+      tone: "warn",
+    });
     expect(stateWords("requested")?.label).toBe("Asked");
     expect(stateWords("sent")?.label).toBe("Request sent");
-    expect(stateWords("not_accepted")).toEqual({ label: "Not accepted", tone: "muted" });
+    expect(stateWords("not_accepted")).toEqual({
+      label: "Not accepted",
+      tone: "muted",
+    });
     expect(stateWords("none")).toBeNull();
     expect(roleLine("supplier")).toBe("They supply you");
     expect(roleLine("customer")).toBe("They buy from you");
@@ -45,12 +51,27 @@ describe("links", () => {
       links: [
         link({ id: "a", name: "Zed", state: "active" }),
         link({ id: "b", name: "Ada", state: "active" }),
-        link({ id: "c", name: "Cherry", state: "asked_us", asked_by_us: false }),
+        link({
+          id: "c",
+          name: "Cherry",
+          state: "asked_us",
+          asked_by_us: false,
+        }),
         link({ id: "d", name: "Bisi", state: "requested" }),
         link({ id: "e", name: "Old", state: "not_accepted" }),
         link({ id: "f", name: "Gone", state: "ended" }),
       ],
-      sent: [{ id: "s", kind: "phone", shown: "0803…4567", role: "both", state: "sent", created_at: "", expires_at: "" }],
+      sent: [
+        {
+          id: "s",
+          kind: "phone",
+          shown: "0803…4567",
+          role: "both",
+          state: "sent",
+          created_at: "",
+          expires_at: "",
+        },
+      ],
     });
     expect(g.asked.map((l) => l.id)).toEqual(["c"]);
     expect(g.linked.map((l) => l.name)).toEqual(["Ada", "Zed"]);
@@ -61,8 +82,13 @@ describe("links", () => {
   });
 
   it("find linked businesses by every word of their name", () => {
-    const list = [link({ name: "Dangote Stores" }), link({ id: "x", name: "Dangote Cement", state: "requested" })];
-    expect(matchLinked(list, "dangote").map((l) => l.name)).toEqual(["Dangote Stores"]);
+    const list = [
+      link({ name: "Dangote Stores" }),
+      link({ id: "x", name: "Dangote Cement", state: "requested" }),
+    ];
+    expect(matchLinked(list, "dangote").map((l) => l.name)).toEqual([
+      "Dangote Stores",
+    ]);
     expect(matchLinked(list, "stores dan")).toHaveLength(1);
     expect(matchLinked(list, "  ")).toEqual([]);
   });
@@ -76,9 +102,17 @@ describe("links", () => {
   });
 
   it("say a business found in one line, and what can be done", () => {
-    const c: LinkCard = { business: "b", name: "Cherry", area: "Ikeja", items: [{ name: "9 inch blocks", price_kobo: 65000 }, { name: "Sand" }], state: "none" };
+    const c: LinkCard = {
+      business: "b",
+      name: "Cherry",
+      area: "Ikeja",
+      items: [{ name: "9 inch blocks", price_kobo: 65000 }, { name: "Sand" }],
+      state: "none",
+    };
     expect(cardSub(c)).toBe("Ikeja · 9 inch blocks ₦650 · Sand");
-    expect(cardSub({ ...c, area: undefined, items: [], tagline: "Blocks and sand" })).toBe("Blocks and sand");
+    expect(
+      cardSub({ ...c, area: undefined, items: [], tagline: "Blocks and sand" }),
+    ).toBe("Blocks and sand");
     expect(cardSub({ ...c, area: undefined, items: [] })).toBe("On Taskiem");
     expect(cardAction(c)).toBe("request");
     expect(cardAction({ ...c, state: "asked_us" })).toBe("answer");
@@ -87,23 +121,45 @@ describe("links", () => {
   });
 
   it("offer the same blind row for a phone number and for a page address", () => {
-    expect(blindRowLine("phone")).toBe("If a business on Taskiem uses this number, it gets your request.");
-    expect(blindRowLine("address")).toBe("If a business on Taskiem has this page address, it gets your request.");
-    expect(blindRequest({ kind: "phone", shown: "0803…4567" }, "0803 123 4567")).toEqual({ phone: "0803 123 4567", shown: "0803…4567" });
-    expect(blindRequest({ kind: "address", shown: "adas-kitchen" }, "/adas-kitchen/")).toEqual({ address: "adas-kitchen", shown: "adas-kitchen" });
+    expect(blindRowLine("phone")).toBe(
+      "If a business on Taskiem uses this number, it gets your request.",
+    );
+    expect(blindRowLine("address")).toBe(
+      "If a business on Taskiem has this page address, it gets your request.",
+    );
+    expect(
+      blindRequest({ kind: "phone", shown: "0803…4567" }, "0803 123 4567"),
+    ).toEqual({ phone: "0803 123 4567", shown: "0803…4567" });
+    expect(
+      blindRequest(
+        { kind: "address", shown: "adas-kitchen" },
+        "/adas-kitchen/",
+      ),
+    ).toEqual({ address: "adas-kitchen", shown: "adas-kitchen" });
   });
 
   it("find the request a card's Cancel request withdraws", () => {
-    const list = [link({ id: "r", business: "b1", state: "requested" }), link({ id: "t", business: "b2", state: "asked_us", asked_by_us: false })];
+    const list = [
+      link({ id: "r", business: "b1", state: "requested" }),
+      link({ id: "t", business: "b2", state: "asked_us", asked_by_us: false }),
+    ];
     expect(requestTo(list, "b1")?.id).toBe("r");
     expect(requestTo(list, "b2")).toBeUndefined();
     expect(requestTo(list, "b3")).toBeUndefined();
   });
 
   it("say whether others find us", () => {
-    expect(findableLine({ findable: null, findable_now: true })).toMatch(/^On, because your storefront is published/);
-    expect(findableLine({ findable: null, findable_now: false })).toMatch(/^Off until/);
-    expect(findableLine({ findable: false, findable_now: false })).toMatch(/^Off: only someone/);
-    expect(findableLine({ findable: true, findable_now: true })).toMatch(/^On: /);
+    expect(findableLine({ findable: null, findable_now: true })).toMatch(
+      /^On, because your storefront is published/,
+    );
+    expect(findableLine({ findable: null, findable_now: false })).toMatch(
+      /^Off until/,
+    );
+    expect(findableLine({ findable: false, findable_now: false })).toMatch(
+      /^Off: only someone/,
+    );
+    expect(findableLine({ findable: true, findable_now: true })).toMatch(
+      /^On: /,
+    );
   });
 });

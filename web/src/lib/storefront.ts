@@ -85,7 +85,8 @@ export interface Storefront {
 }
 
 /** Where to send people to the published page: its own domain, else the preview address. */
-export const pageURL = (sf: Pick<Storefront, "url" | "preview_url">) => sf.url || sf.preview_url;
+export const pageURL = (sf: Pick<Storefront, "url" | "preview_url">) =>
+  sf.url || sf.preview_url;
 
 /** URLs by width ("320", "800", "2000"). */
 export type Image = Record<string, string>;
@@ -116,7 +117,15 @@ export interface Media {
   moderation: "unreviewed" | "approved" | "rejected";
 }
 
-export const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
+export const DAYS = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+] as const;
 export const MAX_OPENINGS = 3;
 
 /** What each template is for, as the choice cards say it. */
@@ -126,18 +135,34 @@ export const TEMPLATE_HELP: Record<string, { title: string; help: string }> = {
 };
 
 /** The card's text limits, in characters (engine/storefront Card.Check). */
-export const LIMITS = { tagline: 120, about: 1000, area: 80, address: 200, map_query: 200, note: 120, closed: 200 } as const;
+export const LIMITS = {
+  tagline: 120,
+  about: 1000,
+  area: 80,
+  address: 200,
+  map_query: 200,
+  note: 120,
+  closed: 200,
+} as const;
 
 /** A draft for an organisation with no storefront yet. */
 export function emptyCard(): Card {
-  return { name: "", hours: { days: Array.from({ length: 7 }, () => null) }, template: "classic", accent: "green" };
+  return {
+    name: "",
+    hours: { days: Array.from({ length: 7 }, () => null) },
+    template: "classic",
+    accent: "green",
+  };
 }
 
 /** A price in kobo as the page shows it: ₦1,500, or ₦1,500.50 when there are kobo. */
 export function formatPrice(kobo: number): string {
   const neg = kobo < 0;
   const abs = Math.abs(Math.round(kobo));
-  const whole = String(Math.floor(abs / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const whole = String(Math.floor(abs / 100)).replace(
+    /\B(?=(\d{3})+(?!\d))/g,
+    ",",
+  );
   const frac = abs % 100;
   return `${neg ? "-" : ""}₦${whole}${frac ? "." + String(frac).padStart(2, "0") : ""}`;
 }
@@ -158,9 +183,12 @@ export function slugify(name: string): string {
 /** Why a slug will be refused before the server sees it, or null. Reserved names are the server's to say. */
 export function slugError(slug: string): string | null {
   if (slug === "") return "Choose an address for your page.";
-  if (!/^[a-z0-9-]{3,30}$/.test(slug)) return "3 to 30 lower-case letters, digits and hyphens.";
-  if (slug.startsWith("-") || slug.endsWith("-")) return "The address may not start or end with a hyphen.";
-  if (slug.includes("--")) return "The address may not have two hyphens together.";
+  if (!/^[a-z0-9-]{3,30}$/.test(slug))
+    return "3 to 30 lower-case letters, digits and hyphens.";
+  if (slug.startsWith("-") || slug.endsWith("-"))
+    return "The address may not start or end with a hyphen.";
+  if (slug.includes("--"))
+    return "The address may not have two hyphens together.";
   return null;
 }
 
@@ -184,14 +212,27 @@ export const DEFAULT_SPAN: Span = { open: "09:00", close: "17:00" };
 export function hoursToForm(h: Hours | undefined | null): HoursForm {
   const days = Array.from({ length: 7 }, (_, i): DayForm => {
     const spans = h?.days?.[i];
-    return spans && spans.length > 0 ? { open: true, spans: spans.map((s) => ({ open: s.open, close: s.close })) } : { open: false, spans: [{ ...DEFAULT_SPAN }] };
+    return spans && spans.length > 0
+      ? {
+          open: true,
+          spans: spans.map((s) => ({ open: s.open, close: s.close })),
+        }
+      : { open: false, spans: [{ ...DEFAULT_SPAN }] };
   });
   return { days, note: h?.note ?? "" };
 }
 
 /** The editor's hours as the API takes them: a closed day is null. */
 export function hoursFromForm(f: HoursForm): Hours {
-  const days = f.days.slice(0, 7).map((d) => (d.open && d.spans.length > 0 ? d.spans.slice(0, MAX_OPENINGS).map((s) => ({ open: s.open, close: s.close })) : null));
+  const days = f.days
+    .slice(0, 7)
+    .map((d) =>
+      d.open && d.spans.length > 0
+        ? d.spans
+            .slice(0, MAX_OPENINGS)
+            .map((s) => ({ open: s.open, close: s.close }))
+        : null,
+    );
   while (days.length < 7) days.push(null);
   const note = f.note.trim();
   return note ? { days, note } : { days };
@@ -201,7 +242,14 @@ export function hoursFromForm(f: HoursForm): Hours {
 export function sameAsMonday(f: HoursForm, day: number): HoursForm {
   const mon = f.days[0];
   if (!mon) return f;
-  return { ...f, days: f.days.map((d, i) => (i === day ? { open: mon.open, spans: mon.spans.map((s) => ({ ...s })) } : d)) };
+  return {
+    ...f,
+    days: f.days.map((d, i) =>
+      i === day
+        ? { open: mon.open, spans: mon.spans.map((s) => ({ ...s })) }
+        : d,
+    ),
+  };
 }
 
 const HHMM = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
@@ -211,52 +259,122 @@ export function hoursErrors(f: HoursForm): { day: number; message: string }[] {
   const out: { day: number; message: string }[] = [];
   f.days.forEach((d, i) => {
     if (!d.open) return;
-    if (d.spans.length > MAX_OPENINGS) out.push({ day: i, message: `At most ${MAX_OPENINGS} openings a day.` });
+    if (d.spans.length > MAX_OPENINGS)
+      out.push({ day: i, message: `At most ${MAX_OPENINGS} openings a day.` });
     for (const s of d.spans) {
       if (!HHMM.test(s.open) || !HHMM.test(s.close)) {
-        out.push({ day: i, message: `Give ${DAYS[i]}'s opening and closing times.` });
+        out.push({
+          day: i,
+          message: `Give ${DAYS[i]}'s opening and closing times.`,
+        });
         break;
       }
       if (s.open === s.close) {
-        out.push({ day: i, message: `${DAYS[i]} opens and closes at the same time.` });
+        out.push({
+          day: i,
+          message: `${DAYS[i]} opens and closes at the same time.`,
+        });
         break;
       }
     }
   });
-  if (f.note.trim().length > LIMITS.note) out.push({ day: -1, message: `The note is at most ${LIMITS.note} characters.` });
+  if (f.note.trim().length > LIMITS.note)
+    out.push({
+      day: -1,
+      message: `The note is at most ${LIMITS.note} characters.`,
+    });
   return out;
 }
 
 /** "08:00" to "02:00" runs past midnight; the page reads it as closing the next morning. */
-export const pastMidnight = (s: Span) => HHMM.test(s.open) && HHMM.test(s.close) && s.close < s.open;
+export const pastMidnight = (s: Span) =>
+  HHMM.test(s.open) && HHMM.test(s.close) && s.close < s.open;
 
 // --- catalogue mapping ---
 
 export type MappingKey = Exclude<keyof Columns, "price_unit">;
 
 /** The catalogue's fields, the column types each takes, and what it is for. */
-export const MAPPING: { key: MappingKey; label: string; types: ColumnType[]; required?: boolean; help: string }[] = [
-  { key: "name", label: "Name", types: ["text"], required: true, help: "What the item is called" },
-  { key: "price", label: "Price", types: ["integer", "number"], help: "Shown in naira" },
-  { key: "description", label: "Description", types: ["text"], help: "A line about the item" },
-  { key: "category", label: "Category", types: ["text"], help: "Groups items on the page" },
-  { key: "photo", label: "Photo", types: ["text"], help: "Holds the photos you add below" },
-  { key: "available", label: "Available", types: ["boolean"], help: "No hides the item" },
-  { key: "stock", label: "Stock", types: ["integer"], help: "How many are left: orders above it are refused, and accepting an order lowers it" },
-  { key: "sort", label: "Sort", types: ["integer", "number"], help: "Order on the page; otherwise by name" },
+export const MAPPING: {
+  key: MappingKey;
+  label: string;
+  types: ColumnType[];
+  required?: boolean;
+  help: string;
+}[] = [
+  {
+    key: "name",
+    label: "Name",
+    types: ["text"],
+    required: true,
+    help: "What the item is called",
+  },
+  {
+    key: "price",
+    label: "Price",
+    types: ["integer", "number"],
+    help: "Shown in naira",
+  },
+  {
+    key: "description",
+    label: "Description",
+    types: ["text"],
+    help: "A line about the item",
+  },
+  {
+    key: "category",
+    label: "Category",
+    types: ["text"],
+    help: "Groups items on the page",
+  },
+  {
+    key: "photo",
+    label: "Photo",
+    types: ["text"],
+    help: "Holds the photos you add below",
+  },
+  {
+    key: "available",
+    label: "Available",
+    types: ["boolean"],
+    help: "No hides the item",
+  },
+  {
+    key: "stock",
+    label: "Stock",
+    types: ["integer"],
+    help: "How many are left: orders above it are refused, and accepting an order lowers it",
+  },
+  {
+    key: "sort",
+    label: "Sort",
+    types: ["integer", "number"],
+    help: "Order on the page; otherwise by name",
+  },
 ];
 
 /** The columns that may fill a catalogue field: of an allowed type, and never personal. */
-export function columnsFor(columns: Column[], types: readonly ColumnType[]): Column[] {
+export function columnsFor(
+  columns: Column[],
+  types: readonly ColumnType[],
+): Column[] {
   return columns.filter((c) => !c.personal && types.includes(c.type));
 }
 
 /** The tables a catalogue can come from: those with a text column that is not personal. */
-export const catalogueTables = (tables: Table[]) => tables.filter((t) => columnsFor(t.columns, ["text"]).length > 0);
+export const catalogueTables = (tables: Table[]) =>
+  tables.filter((t) => columnsFor(t.columns, ["text"]).length > 0);
 
 const GUESSES: Record<MappingKey, string[]> = {
   name: ["name", "title", "item", "product"],
-  price: ["price", "price_naira", "price_kobo", "amount", "amount_kobo", "cost"],
+  price: [
+    "price",
+    "price_naira",
+    "price_kobo",
+    "amount",
+    "amount_kobo",
+    "cost",
+  ],
   description: ["description", "details", "about"],
   category: ["category", "group", "section", "type"],
   photo: ["photo", "image", "picture"],
@@ -270,8 +388,13 @@ export function guessColumns(table: Table): Columns {
   const out: Columns = { price_unit: "naira" };
   const used = new Set<string>();
   for (const m of MAPPING) {
-    const allowed = columnsFor(table.columns, m.types).filter((c) => !used.has(c.name));
-    const hit = GUESSES[m.key].map((g) => allowed.find((c) => c.name === g)).find(Boolean) ?? (m.required ? allowed[0] : undefined);
+    const allowed = columnsFor(table.columns, m.types).filter(
+      (c) => !used.has(c.name),
+    );
+    const hit =
+      GUESSES[m.key]
+        .map((g) => allowed.find((c) => c.name === g))
+        .find(Boolean) ?? (m.required ? allowed[0] : undefined);
     if (hit) {
       out[m.key] = hit.name;
       used.add(hit.name);
@@ -295,9 +418,14 @@ export const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 export const MAX_IMAGE_BYTES = 10 << 20;
 
 /** Why a file cannot be a storefront image, before it is sent, or null. */
-export function imageProblem(file: { type: string; size: number }): string | null {
-  if (!IMAGE_TYPES.includes(file.type)) return "Choose a JPEG, PNG or WebP photo.";
-  if (file.size > MAX_IMAGE_BYTES) return "That photo is larger than 10 MB. Choose a smaller one.";
+export function imageProblem(file: {
+  type: string;
+  size: number;
+}): string | null {
+  if (!IMAGE_TYPES.includes(file.type))
+    return "Choose a JPEG, PNG or WebP photo.";
+  if (file.size > MAX_IMAGE_BYTES)
+    return "That photo is larger than 10 MB. Choose a smaller one.";
   return null;
 }
 
@@ -312,19 +440,36 @@ export function thumb(img: Image | undefined): string | undefined {
 }
 
 /** A storefront image's URL through GET /v1/storefront/image. */
-export const viaAPI = (url: string) => `/v1/storefront/image?src=${encodeURIComponent(url)}`;
+export const viaAPI = (url: string) =>
+  `/v1/storefront/image?src=${encodeURIComponent(url)}`;
 
 // --- the editor's form ---
 
 /** What a 404 (no storefront yet) leaves the editor to offer: the server's lists (engine/storefront). */
 export const DEFAULT_TEMPLATES = ["classic", "bold"];
 export const DEFAULT_ACCENTS: Record<string, string> = {
-  green: "#0b6e4f", blue: "#1d4ed8", red: "#b91c1c", orange: "#c2410c",
-  purple: "#6d28d9", pink: "#be185d", teal: "#0f766e", black: "#111827",
+  green: "#0b6e4f",
+  blue: "#1d4ed8",
+  red: "#b91c1c",
+  orange: "#c2410c",
+  purple: "#6d28d9",
+  pink: "#be185d",
+  teal: "#0f766e",
+  black: "#111827",
 };
 
 /** The card's text fields, edited as plain strings. */
-export const TEXT_FIELDS = ["name", "tagline", "about", "logo", "area", "address", "map_query", "phone", "whatsapp"] as const;
+export const TEXT_FIELDS = [
+  "name",
+  "tagline",
+  "about",
+  "logo",
+  "area",
+  "address",
+  "map_query",
+  "phone",
+  "whatsapp",
+] as const;
 export type TextField = (typeof TEXT_FIELDS)[number];
 
 export interface Form {
@@ -339,9 +484,16 @@ export interface Form {
 }
 
 /** The editor's form for a storefront, or for a new one. */
-export function formFrom(sf: Pick<Storefront, "slug" | "draft" | "catalogue_table" | "catalogue_columns"> | null): Form {
+export function formFrom(
+  sf: Pick<
+    Storefront,
+    "slug" | "draft" | "catalogue_table" | "catalogue_columns"
+  > | null,
+): Form {
   const card = sf?.draft ?? emptyCard();
-  const text = Object.fromEntries(TEXT_FIELDS.map((k) => [k, card[k] ?? ""])) as Record<TextField, string>;
+  const text = Object.fromEntries(
+    TEXT_FIELDS.map((k) => [k, card[k] ?? ""]),
+  ) as Record<TextField, string>;
   return {
     slug: sf?.slug ?? "",
     text,
@@ -363,17 +515,28 @@ export interface StorefrontRequest {
 
 /** The PUT /v1/storefront body for the form; empty text fields are left out. */
 export function requestFrom(f: Form): StorefrontRequest {
-  const draft: Card = { name: f.text.name.trim(), hours: hoursFromForm(f.hours), template: f.template as Card["template"], accent: f.accent };
+  const draft: Card = {
+    name: f.text.name.trim(),
+    hours: hoursFromForm(f.hours),
+    template: f.template as Card["template"],
+    accent: f.accent,
+  };
   for (const k of TEXT_FIELDS) {
     const v = f.text[k].trim();
     if (k !== "name" && v) draft[k] = v;
   }
   if (f.language) draft.language = f.language;
-  return { slug: f.slug.trim(), draft, catalogue_table: f.table, catalogue_columns: f.table ? cleanColumns(f.columns) : {} };
+  return {
+    slug: f.slug.trim(),
+    draft,
+    catalogue_table: f.table,
+    catalogue_columns: f.table ? cleanColumns(f.columns) : {},
+  };
 }
 
 /** Whether two forms would save the same storefront. */
-export const sameRequest = (a: Form, b: Form) => JSON.stringify(requestFrom(a)) === JSON.stringify(requestFrom(b));
+export const sameRequest = (a: Form, b: Form) =>
+  JSON.stringify(requestFrom(a)) === JSON.stringify(requestFrom(b));
 
 /** A server refusal without the package prefixes it carries ("storefront: invalid: the name: …"). */
 export function tidyMessage(msg: string): string {
@@ -386,7 +549,8 @@ export async function tidy<T>(p: Promise<T>): Promise<T> {
   try {
     return await p;
   } catch (e) {
-    if (e instanceof ApiError) throw new ApiError(e.status, tidyMessage(e.message), e.problems, e.body);
+    if (e instanceof ApiError)
+      throw new ApiError(e.status, tidyMessage(e.message), e.problems, e.body);
     throw e;
   }
 }
@@ -397,17 +561,23 @@ export async function tidy<T>(p: Promise<T>): Promise<T> {
  * "1500.50"), in the table's own columns and price unit. An error says
  * what is wrong, in plain words.
  */
-export function itemRow(columns: Columns, name: string, price: string): { row: Record<string, unknown> } | { error: string } {
+export function itemRow(
+  columns: Columns,
+  name: string,
+  price: string,
+): { row: Record<string, unknown> } | { error: string } {
   const n = name.trim();
   if (!n) return { error: "Give the item a name." };
   if (!columns.name) return { error: "The catalogue has no name column." };
   const row: Record<string, unknown> = { [columns.name]: n };
   const p = price.replace(/[₦,\s]/g, "");
   if (p !== "") {
-    if (!/^\d+(\.\d{1,2})?$/.test(p)) return { error: "Write the price as a number of naira, such as 1500." };
+    if (!/^\d+(\.\d{1,2})?$/.test(p))
+      return { error: "Write the price as a number of naira, such as 1500." };
     if (!columns.price) return { error: "The catalogue has no price column." };
     const naira = Number(p);
-    row[columns.price] = columns.price_unit === "kobo" ? Math.round(naira * 100) : naira;
+    row[columns.price] =
+      columns.price_unit === "kobo" ? Math.round(naira * 100) : naira;
   }
   if (columns.available) row[columns.available] = true;
   return { row };
@@ -415,11 +585,18 @@ export function itemRow(columns: Columns, name: string, price: string): { row: R
 
 /** Whether the page says "Open now" at `now`, local time: open until when,
  * or when it opens next today. Monday is days[0]. */
-export function openNow(h: HoursForm, now = new Date()): { open: boolean; until?: string; opens?: string } {
+export function openNow(
+  h: HoursForm,
+  now = new Date(),
+): { open: boolean; until?: string; opens?: string } {
   const day = h.days[(now.getDay() + 6) % 7];
   if (!day?.open) return { open: false };
   const at = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-  for (const s of day.spans) if (s.open <= at && at < s.close) return { open: true, until: s.close };
-  const next = day.spans.map((s) => s.open).filter((o) => o > at).sort()[0];
+  for (const s of day.spans)
+    if (s.open <= at && at < s.close) return { open: true, until: s.close };
+  const next = day.spans
+    .map((s) => s.open)
+    .filter((o) => o > at)
+    .sort()[0];
   return next ? { open: false, opens: next } : { open: false };
 }

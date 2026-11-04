@@ -34,7 +34,8 @@ export function depths(steps: Step[]): Map<string, number> {
     seen.add(id);
     const s = byId.get(id);
     let d = 0;
-    for (const n of s?.needs ?? []) if (byId.has(n)) d = Math.max(d, visit(n, seen) + 1);
+    for (const n of s?.needs ?? [])
+      if (byId.has(n)) d = Math.max(d, visit(n, seen) + 1);
     out.set(id, d);
     return d;
   };
@@ -56,21 +57,33 @@ export function autoLayout(steps: Step[], saved: Layout = {}): Layout {
   return out;
 }
 
-export function toGraph(def: Pick<WorkflowDefinition, "steps">, saved: Layout = {}): { nodes: GraphNode[]; edges: GraphEdge[] } {
+export function toGraph(
+  def: Pick<WorkflowDefinition, "steps">,
+  saved: Layout = {},
+): { nodes: GraphNode[]; edges: GraphEdge[] } {
   const pos = autoLayout(def.steps, saved);
   const ids = new Set(def.steps.map((s) => s.id));
-  const nodes = def.steps.map((s) => ({ id: s.id, position: pos[s.id] ?? { x: 0, y: 0 }, step: s }));
+  const nodes = def.steps.map((s) => ({
+    id: s.id,
+    position: pos[s.id] ?? { x: 0, y: 0 },
+    step: s,
+  }));
   const edges: GraphEdge[] = [];
   for (const s of def.steps) {
     for (const n of s.needs ?? []) {
-      if (ids.has(n)) edges.push({ id: `${n}->${s.id}`, source: n, target: s.id });
+      if (ids.has(n))
+        edges.push({ id: `${n}->${s.id}`, source: n, target: s.id });
     }
   }
   return { nodes, edges };
 }
 
 /** Adds "target needs source"; refuses self-edges and edges that would make a cycle. */
-export function connect(steps: Step[], source: string, target: string): Step[] | null {
+export function connect(
+  steps: Step[],
+  source: string,
+  target: string,
+): Step[] | null {
   if (source === target) return null;
   // A cycle would appear if source already (transitively) needs target.
   const byId = new Map(steps.map((s) => [s.id, s]));
@@ -83,10 +96,18 @@ export function connect(steps: Step[], source: string, target: string): Step[] |
     seen.add(id);
     for (const n of byId.get(id)?.needs ?? []) stack.push(n);
   }
-  return steps.map((s) => (s.id === target && !(s.needs ?? []).includes(source) ? { ...s, needs: [...(s.needs ?? []), source] } : s));
+  return steps.map((s) =>
+    s.id === target && !(s.needs ?? []).includes(source)
+      ? { ...s, needs: [...(s.needs ?? []), source] }
+      : s,
+  );
 }
 
-export function disconnect(steps: Step[], source: string, target: string): Step[] {
+export function disconnect(
+  steps: Step[],
+  source: string,
+  target: string,
+): Step[] {
   return steps.map((s) => {
     if (s.id !== target) return s;
     const needs = (s.needs ?? []).filter((n) => n !== source);
@@ -98,14 +119,20 @@ export function disconnect(steps: Step[], source: string, target: string): Step[
 
 /** Removes a step and every reference to it in needs. */
 export function removeStep(steps: Step[], id: string): Step[] {
-  return steps.filter((s) => s.id !== id).map((s) => (s.needs?.includes(id) ? disconnect([s], id, s.id)[0] as Step : s));
+  return steps
+    .filter((s) => s.id !== id)
+    .map((s) =>
+      s.needs?.includes(id) ? (disconnect([s], id, s.id)[0] as Step) : s,
+    );
 }
 
 /** Renames a step and the needs that point at it. Expressions are not rewritten. */
 export function renameStep(steps: Step[], from: string, to: string): Step[] {
   return steps.map((s) => {
     const next = s.id === from ? { ...s, id: to } : s;
-    return next.needs?.includes(from) ? { ...next, needs: next.needs.map((n) => (n === from ? to : n)) } : next;
+    return next.needs?.includes(from)
+      ? { ...next, needs: next.needs.map((n) => (n === from ? to : n)) }
+      : next;
   });
 }
 
@@ -115,7 +142,16 @@ export function freshId(steps: Step[], base: string): string {
   const walk = (list: Step[]) => {
     for (const s of list) {
       used.add(s.id);
-      const c = (s as { config?: { steps?: Step[]; paths?: { steps: Step[] }[]; branches?: { steps: Step[] }[]; default?: { steps: Step[] } } }).config;
+      const c = (
+        s as {
+          config?: {
+            steps?: Step[];
+            paths?: { steps: Step[] }[];
+            branches?: { steps: Step[] }[];
+            default?: { steps: Step[] };
+          };
+        }
+      ).config;
       if (c?.steps) walk(c.steps);
       for (const p of c?.paths ?? []) walk(p.steps);
       for (const b of c?.branches ?? []) walk(b.steps);
@@ -145,31 +181,91 @@ export function newStep(type: Step["type"], id: string): Step {
       return {
         id,
         type,
-        config: { prompt: "Summarise the message in one sentence.", output_schema: { type: "object", properties: { summary: { type: "string" } }, required: ["summary"] } },
+        config: {
+          prompt: "Summarise the message in one sentence.",
+          output_schema: {
+            type: "object",
+            properties: { summary: { type: "string" } },
+            required: ["summary"],
+          },
+        },
         input: { message: "=trigger.body.message" },
       };
     case "respond":
       return { id, type, config: { status: 200, body: { ok: true } } };
     case "http":
-      return { id, type, config: { method: "GET", url: "https://example.com" } };
+      return {
+        id,
+        type,
+        config: { method: "GET", url: "https://example.com" },
+      };
     case "code":
-      return { id, type, config: { language: "typescript", source: "export default (input: Record<string, unknown>) => {\n  return { ok: true };\n};\n" } };
+      return {
+        id,
+        type,
+        config: {
+          language: "typescript",
+          source:
+            "export default (input: Record<string, unknown>) => {\n  return { ok: true };\n};\n",
+        },
+      };
     case "transform":
       return { id, type, config: { output: { value: "=trigger.body" } } };
     case "wait":
       return { id, type, config: { duration: "1h" } };
     case "signal":
-      return { id, type, config: { event: "paystack@1:transfer_event", correlation: "=trigger.body.reference", timeout: "24h" } };
+      return {
+        id,
+        type,
+        config: {
+          event: "paystack@1:transfer_event",
+          correlation: "=trigger.body.reference",
+          timeout: "24h",
+        },
+      };
     case "approval":
-      return { id, type, config: { role: "approver", timeout: "24h", on_timeout: "reject" } };
+      return {
+        id,
+        type,
+        config: { role: "approver", timeout: "24h", on_timeout: "reject" },
+      };
     case "form":
-      return { id, type, config: { title: "Tell us more", to: { phone: "" }, schema: { type: "object", properties: { answer: { type: "string", title: "Your answer" } } } } };
+      return {
+        id,
+        type,
+        config: {
+          title: "Tell us more",
+          to: { phone: "" },
+          schema: {
+            type: "object",
+            properties: { answer: { type: "string", title: "Your answer" } },
+          },
+        },
+      };
     case "branch":
-      return { id, type, config: { paths: [{ name: "yes", when: "=true", steps: [] }] } };
+      return {
+        id,
+        type,
+        config: { paths: [{ name: "yes", when: "=true", steps: [] }] },
+      };
     case "foreach":
-      return { id, type, config: { items: "=trigger.body.items", max_concurrency: 5, steps: [] } };
+      return {
+        id,
+        type,
+        config: { items: "=trigger.body.items", max_concurrency: 5, steps: [] },
+      };
     case "parallel":
-      return { id, type, config: { join: "all", branches: [{ name: "a", steps: [] }, { name: "b", steps: [] }] } };
+      return {
+        id,
+        type,
+        config: {
+          join: "all",
+          branches: [
+            { name: "a", steps: [] },
+            { name: "b", steps: [] },
+          ],
+        },
+      };
     default:
       return { id, type: "transform", config: { output: null } };
   }

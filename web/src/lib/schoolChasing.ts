@@ -30,12 +30,22 @@ export const HAS_FILTERS: { value: string; label: string }[] = [
 export const MAX_REMIND = 50;
 
 export const RUNGS: { value: number; label: string; tone: string }[] = [
-  { value: 1, label: "1: gentle", tone: "A reminder of the balance and the account number" },
+  {
+    value: 1,
+    label: "1: gentle",
+    tone: "A reminder of the balance and the account number",
+  },
   { value: 2, label: "2: firmer", tone: "The balance and the due date passed" },
   { value: 3, label: "3: final", tone: "The balance and what happens next" },
 ];
 
-export const PLACEHOLDERS = ["balance", "child", "account_number", "due_date", "link"] as const;
+export const PLACEHOLDERS = [
+  "balance",
+  "child",
+  "account_number",
+  "due_date",
+  "link",
+] as const;
 
 export interface DebtorInvoice {
   invoice_id: string;
@@ -212,12 +222,16 @@ export function bucketLabel(b: string): string {
 
 /** "Not yet due", "Due today", "10 days past due". */
 export function daysWords(d: Pick<Debtor, "days_past_due" | "due_on">): string {
-  if (d.days_past_due <= 0) return d.due_on ? `Due ${dateLabel(d.due_on)}` : "Not yet due";
+  if (d.days_past_due <= 0)
+    return d.due_on ? `Due ${dateLabel(d.due_on)}` : "Not yet due";
   return `${d.days_past_due} day${d.days_past_due === 1 ? "" : "s"} past due`;
 }
 
 /** Adds or removes a student from the selection; null when adding would pass the cap. */
-export function toggleSelection(selected: string[], id: string): string[] | null {
+export function toggleSelection(
+  selected: string[],
+  id: string,
+): string[] | null {
   if (selected.includes(id)) return selected.filter((x) => x !== id);
   if (selected.length >= MAX_REMIND) return null;
   return [...selected, id];
@@ -243,30 +257,47 @@ export function rungLabel(r: number | undefined): string {
 }
 
 /** "Sent by SMS to 1 guardian", "On WhatsApp to 2 guardians", "No guardian could be reached". */
-export function channelsLine(channels: Record<string, number> | undefined, nobody: boolean | undefined): string {
-  const words: Record<string, string> = { whatsapp: "on WhatsApp", telegram: "on Telegram", sms: "by SMS" };
+export function channelsLine(
+  channels: Record<string, number> | undefined,
+  nobody: boolean | undefined,
+): string {
+  const words: Record<string, string> = {
+    whatsapp: "on WhatsApp",
+    telegram: "on Telegram",
+    sms: "by SMS",
+  };
   const parts: string[] = [];
   for (const [ch, n] of Object.entries(channels ?? {})) {
-    if (n > 0) parts.push(`${words[ch] ?? ch} to ${n} guardian${n === 1 ? "" : "s"}`);
+    if (n > 0)
+      parts.push(`${words[ch] ?? ch} to ${n} guardian${n === 1 ? "" : "s"}`);
   }
-  if (parts.length === 0 || nobody) return "No guardian could be reached (no phone, or messages are off)";
+  if (parts.length === 0 || nobody)
+    return "No guardian could be reached (no phone, or messages are off)";
   const s = parts.join(", ");
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 /** "2 sent, 1 skipped." */
-export function remindedLine(r: Pick<Reminded, "sent" | "skipped" | "replayed">): string {
+export function remindedLine(
+  r: Pick<Reminded, "sent" | "skipped" | "replayed">,
+): string {
   const s = `${r.sent} sent, ${r.skipped} skipped.`;
-  return r.replayed ? `${s} (This send was made before: nothing went out again.)` : s;
+  return r.replayed
+    ? `${s} (This send was made before: nothing went out again.)`
+    : s;
 }
 
 /** One student's outcome: "GCA/001: sent (rung 1), by SMS to 1 guardian" or "GCA/003: skipped: a promise to pay by 25 Oct 2026". */
 export function outcomeLine(o: RemindOutcome): string {
-  if (o.status === "sent") return `${o.admission_number}: sent (rung ${o.rung}), ${channelsLine(o.channels, o.nobody).toLowerCase()}`;
+  if (o.status === "sent")
+    return `${o.admission_number}: sent (rung ${o.rung}), ${channelsLine(o.channels, o.nobody).toLowerCase()}`;
   return `${o.admission_number}: skipped: ${o.reason ?? ""}`;
 }
 
-export function promiseStatus(s: PromiseStatus): { label: string; tone: string } {
+export function promiseStatus(s: PromiseStatus): {
+  label: string;
+  tone: string;
+} {
   switch (s) {
     case "kept":
       return { label: "Kept", tone: "ok" };
@@ -280,11 +311,15 @@ export function promiseStatus(s: PromiseStatus): { label: string; tone: string }
 }
 
 /** "Promised by 25 Oct 2026: salary on the 25th". */
-export function promiseLine(p: Pick<PromiseToPay, "promised_on" | "note">): string {
+export function promiseLine(
+  p: Pick<PromiseToPay, "promised_on" | "note">,
+): string {
   return `Promised by ${dateLabel(p.promised_on)}${p.note ? `: ${p.note}` : ""}`;
 }
 
-export function planStateWords(p: PlanStanding | null | undefined): { label: string; tone: string } | null {
+export function planStateWords(
+  p: PlanStanding | null | undefined,
+): { label: string; tone: string } | null {
   if (!p) return null;
   switch (p.state) {
     case "arrears":
@@ -300,31 +335,46 @@ export function planStateWords(p: PlanStanding | null | undefined): { label: str
 export function planLine(p: PlanStanding): string {
   if (p.state === "arrears" && p.missed.length > 0) {
     const m = p.missed[0];
-    if (m) return `Instalment ${m.instalment} of ${naira(m.amount_kobo)} due ${dateLabel(m.due_on)}, ${naira(m.short_kobo)} short (${m.days_past} day${m.days_past === 1 ? "" : "s"})`;
+    if (m)
+      return `Instalment ${m.instalment} of ${naira(m.amount_kobo)} due ${dateLabel(m.due_on)}, ${naira(m.short_kobo)} short (${m.days_past} day${m.days_past === 1 ? "" : "s"})`;
   }
-  if (p.state === "settled") return `${naira(p.paid_since_kobo)} paid since the plan was approved`;
-  if (p.next_due_on) return `Next instalment ${naira(p.next_amount_kobo ?? 0)} by ${dateLabel(p.next_due_on)}`;
+  if (p.state === "settled")
+    return `${naira(p.paid_since_kobo)} paid since the plan was approved`;
+  if (p.next_due_on)
+    return `Next instalment ${naira(p.next_amount_kobo ?? 0)} by ${dateLabel(p.next_due_on)}`;
   return `${naira(p.paid_since_kobo)} paid since the plan was approved`;
 }
 
 /** The flags a Debtors row shows. */
-export function debtorFlags(d: Pick<Debtor, "promise" | "promise_missed" | "plan">): { label: string; tone: string }[] {
+export function debtorFlags(
+  d: Pick<Debtor, "promise" | "promise_missed" | "plan">,
+): { label: string; tone: string }[] {
   const out: { label: string; tone: string }[] = [];
   if (d.promise_missed) out.push({ label: "Promise missed", tone: "danger" });
-  else if (d.promise?.status === "open") out.push({ label: `Promised by ${dateLabel(d.promise.promised_on)}`, tone: "warn" });
+  else if (d.promise?.status === "open")
+    out.push({
+      label: `Promised by ${dateLabel(d.promise.promised_on)}`,
+      tone: "warn",
+    });
   const plan = planStateWords(d.plan);
   if (plan) out.push(plan);
   return out;
 }
 
 /** Why a promise cannot be recorded yet, or null. */
-export function promiseProblem(date: string, note: string, today = new Date()): string | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return "Choose the date the family promised to pay by.";
+export function promiseProblem(
+  date: string,
+  note: string,
+  today = new Date(),
+): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date))
+    return "Choose the date the family promised to pay by.";
   const t = today.toISOString().slice(0, 10);
   if (date < t) return "The date is today or later.";
   const limit = new Date(today);
   limit.setFullYear(limit.getFullYear() + 1);
-  if (date > limit.toISOString().slice(0, 10)) return "The date is within a year.";
+  if (date > limit.toISOString().slice(0, 10))
+    return "The date is within a year.";
   if (note.length > 300) return "A note has up to 300 characters.";
   return null;
 }
@@ -332,25 +382,40 @@ export function promiseProblem(date: string, note: string, today = new Date()): 
 /** Why a rung's wording cannot be saved, or null: unknown placeholders, length. Empty is the default. */
 export function wordingProblem(text: string): string | null {
   if (text.trim() === "") return null;
-  if ([...text].length > 600) return "A rung's wording has up to 600 characters.";
+  if ([...text].length > 600)
+    return "A rung's wording has up to 600 characters.";
   const unknown: string[] = [];
   for (const m of text.matchAll(/\{([a-z_]*)\}/g)) {
     const name = m[1] ?? "";
-    if (!(PLACEHOLDERS as readonly string[]).includes(name)) unknown.push(`{${name}}`);
+    if (!(PLACEHOLDERS as readonly string[]).includes(name))
+      unknown.push(`{${name}}`);
   }
-  if (unknown.length > 0) return `${unknown.join(", ")} is not a placeholder. Use {balance}, {child}, {account_number}, {due_date} or {link}.`;
+  if (unknown.length > 0)
+    return `${unknown.join(", ")} is not a placeholder. Use {balance}, {child}, {account_number}, {due_date} or {link}.`;
   return null;
 }
 
-export const SAMPLE_VARS = { balance: "₦40,000", child: "Ebube", account_number: "0123456789 (Wema Bank)", due_date: "7 Sep 2026", link: "https://pay.example/s/abc" };
+export const SAMPLE_VARS = {
+  balance: "₦40,000",
+  child: "Ebube",
+  account_number: "0123456789 (Wema Bank)",
+  due_date: "7 Sep 2026",
+  link: "https://pay.example/s/abc",
+};
 
 /** A rung's wording as a family would read it, with sample values; the link added when missing, as the server adds it. */
-export function renderPreview(text: string, vars: Record<string, string> = SAMPLE_VARS): string {
+export function renderPreview(
+  text: string,
+  vars: Record<string, string> = SAMPLE_VARS,
+): string {
   let t = text.trim();
   if (t === "") return "";
   if (!t.includes("{link}")) t += " Your fees page: {link}";
   return t
-    .replace(/\{(balance|child|account_number|due_date|link)\}/g, (_, k: string) => vars[k] ?? "")
+    .replace(
+      /\{(balance|child|account_number|due_date|link)\}/g,
+      (_, k: string) => vars[k] ?? "",
+    )
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -358,7 +423,8 @@ export function renderPreview(text: string, vars: Record<string, string> = SAMPL
 /** Why the plan grace cannot be saved, or null. */
 export function graceProblem(v: string): string | null {
   const n = Number(v.trim());
-  if (v.trim() === "" || !Number.isInteger(n) || n < 0 || n > 60) return "The grace is a whole number of days, 0 to 60.";
+  if (v.trim() === "" || !Number.isInteger(n) || n < 0 || n > 60)
+    return "The grace is a whole number of days, 0 to 60.";
   return null;
 }
 
@@ -370,6 +436,10 @@ export function totalLine(t: BucketTotal | undefined): string {
 
 /** What the check did: "1 promise missed, 1 kept; 2 instalments in arrears." */
 export function checkedLine(c: Checked): string {
-  const parts = [`${c.promises_missed} promise${c.promises_missed === 1 ? "" : "s"} missed`, `${c.promises_kept} kept`, `${c.arrears} instalment${c.arrears === 1 ? "" : "s"} newly in arrears`];
+  const parts = [
+    `${c.promises_missed} promise${c.promises_missed === 1 ? "" : "s"} missed`,
+    `${c.promises_kept} kept`,
+    `${c.arrears} instalment${c.arrears === 1 ? "" : "s"} newly in arrears`,
+  ];
   return `Checked: ${parts.join(", ")}.`;
 }

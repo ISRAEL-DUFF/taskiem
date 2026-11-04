@@ -10,7 +10,13 @@ export type LinkRole = "supplier" | "customer" | "both";
 /** A link as our side sees it. A request we made reads "requested" until
  * it is accepted, whatever the other side did, then "not_accepted" after 30
  * days; we never learn of a decline or a block. */
-export type LinkState = "active" | "ended" | "requested" | "not_accepted" | "asked_us" | "blocked";
+export type LinkState =
+  | "active"
+  | "ended"
+  | "requested"
+  | "not_accepted"
+  | "asked_us"
+  | "blocked";
 
 export interface BusinessLink {
   id: string;
@@ -76,14 +82,24 @@ export function blindRowLine(kind: BlindOffer["kind"]): string {
 
 /** The request a tap on the blind row sends: what was typed, as the
  * server takes it. */
-export function blindRequest(blind: BlindOffer, typed: string): { phone: string; shown: string } | { address: string; shown: string } {
-  return blind.kind === "phone" ? { phone: typed, shown: blind.shown } : { address: blind.shown, shown: blind.shown };
+export function blindRequest(
+  blind: BlindOffer,
+  typed: string,
+): { phone: string; shown: string } | { address: string; shown: string } {
+  return blind.kind === "phone"
+    ? { phone: typed, shown: blind.shown }
+    : { address: blind.shown, shown: blind.shown };
 }
 
 /** The pending request we sent to a business a search listed, if any:
  * the one its card's Cancel request withdraws. */
-export function requestTo(links: BusinessLink[], business: string): BusinessLink | undefined {
-  return links.find((l) => l.business === business && l.state === "requested" && l.asked_by_us);
+export function requestTo(
+  links: BusinessLink[],
+  business: string,
+): BusinessLink | undefined {
+  return links.find(
+    (l) => l.business === business && l.state === "requested" && l.asked_by_us,
+  );
 }
 
 export interface LinkSettings {
@@ -93,7 +109,13 @@ export interface LinkSettings {
 }
 
 /** What may be asked of the server about a link. */
-export type LinkAnswer = "accept" | "decline" | "block" | "unblock" | "cancel" | "end";
+export type LinkAnswer =
+  | "accept"
+  | "decline"
+  | "block"
+  | "unblock"
+  | "cancel"
+  | "end";
 
 /** The choices a requester picks from, in their words. */
 export const ROLE_CHOICES: { role: LinkRole; label: string }[] = [
@@ -117,7 +139,9 @@ export function roleLine(role: LinkRole): string {
 type Tone = "ok" | "warn" | "info" | "muted";
 
 /** A link's state in a word or two, with its tone. */
-export function stateWords(state: LinkState | "sent" | "none"): { label: string; tone: Tone } | null {
+export function stateWords(
+  state: LinkState | "sent" | "none",
+): { label: string; tone: Tone } | null {
   switch (state) {
     case "active":
       return { label: "Linked", tone: "ok" };
@@ -148,7 +172,10 @@ export function groupLinks(v: LinksView | undefined): {
   past: BusinessLink[];
 } {
   const links = v?.links ?? [];
-  const by = (s: LinkState[]) => links.filter((l) => s.includes(l.state)).sort((a, b) => a.name.localeCompare(b.name));
+  const by = (s: LinkState[]) =>
+    links
+      .filter((l) => s.includes(l.state))
+      .sort((a, b) => a.name.localeCompare(b.name));
   return {
     asked: links.filter((l) => l.state === "asked_us"),
     linked: by(["active"]),
@@ -163,7 +190,11 @@ export function groupLinks(v: LinksView | undefined): {
 export function matchLinked(links: BusinessLink[], q: string): BusinessLink[] {
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
   if (words.length === 0) return [];
-  return links.filter((l) => l.state === "active" && words.every((w) => l.name.toLowerCase().includes(w)));
+  return links.filter(
+    (l) =>
+      l.state === "active" &&
+      words.every((w) => l.name.toLowerCase().includes(w)),
+  );
 }
 
 /** Whether what was typed is a phone number rather than words: never a
@@ -175,8 +206,12 @@ export function looksLikePhone(q: string): boolean {
 /** A business found, in one line: its area, then the items that matched
  * with the prices its page shows. */
 export function cardSub(c: LinkCard): string {
-  const items = c.items.map((it) => (it.price_kobo != null ? `${it.name} ${naira(it.price_kobo)}` : it.name));
-  return [c.area, ...items].filter(Boolean).join(" · ") || c.tagline || "On Taskiem";
+  const items = c.items.map((it) =>
+    it.price_kobo != null ? `${it.name} ${naira(it.price_kobo)}` : it.name,
+  );
+  return (
+    [c.area, ...items].filter(Boolean).join(" · ") || c.tagline || "On Taskiem"
+  );
 }
 
 /** Whether we may ask a business found to link, or it is ours to answer,
@@ -194,5 +229,7 @@ export function findableLine(s: LinkSettings): string {
       ? "On, because your storefront is published: businesses find you by your name, what you sell and your area."
       : "Off until you publish your storefront or turn it on.";
   }
-  return s.findable ? "On: businesses find you by your name, what you sell and your area." : "Off: only someone who has your phone number or page address can ask.";
+  return s.findable
+    ? "On: businesses find you by your name, what you sell and your area."
+    : "Off: only someone who has your phone number or page address can ask.";
 }

@@ -114,10 +114,18 @@ export function writeLines(c: Consent): string[] {
 export function diffLines(d: Diff): string[] {
   const out: string[] = [];
   for (const h of d.added_hosts ?? []) out.push(`New host: ${h}`);
-  for (const c of d.class_changes ?? []) out.push(`${c.action} changes from ${c.from.replaceAll("_", " ")} to ${c.to.replaceAll("_", " ")}`);
-  for (const a of d.added_writes ?? []) out.push(`New action that changes things: ${a}`);
-  for (const p of d.added_pii ?? []) out.push(`Now treated as personal data: ${p}`);
-  for (const a of (d.added_actions ?? []).filter((x) => !(d.added_writes ?? []).includes(x))) out.push(`New action: ${a}`);
+  for (const c of d.class_changes ?? [])
+    out.push(
+      `${c.action} changes from ${c.from.replaceAll("_", " ")} to ${c.to.replaceAll("_", " ")}`,
+    );
+  for (const a of d.added_writes ?? [])
+    out.push(`New action that changes things: ${a}`);
+  for (const p of d.added_pii ?? [])
+    out.push(`Now treated as personal data: ${p}`);
+  for (const a of (d.added_actions ?? []).filter(
+    (x) => !(d.added_writes ?? []).includes(x),
+  ))
+    out.push(`New action: ${a}`);
   for (const a of d.removed_actions ?? []) out.push(`Removed action: ${a}`);
   for (const f of d.removed_fields ?? []) out.push(`Removed field: ${f}`);
   for (const h of d.removed_hosts ?? []) out.push(`No longer reaches: ${h}`);
@@ -131,9 +139,21 @@ export type Kind = "rail" | "product" | "tool";
 
 /** The groups the catalogue shows Taskiem's own connectors in, in order. */
 export const KINDS: { kind: Kind; title: string; help: string }[] = [
-  { kind: "rail", title: "Payments and banking", help: "Services that move money. Taskiem builds payments, payouts and payroll on them." },
-  { kind: "product", title: "Apps", help: "Apps that run a whole job themselves. Taskiem connects to them and works around them." },
-  { kind: "tool", title: "Messages, records and other tools", help: "Sheets, email, chat and other services your workflows use." },
+  {
+    kind: "rail",
+    title: "Payments and banking",
+    help: "Services that move money. Taskiem builds payments, payouts and payroll on them.",
+  },
+  {
+    kind: "product",
+    title: "Apps",
+    help: "Apps that run a whole job themselves. Taskiem connects to them and works around them.",
+  },
+  {
+    kind: "tool",
+    title: "Messages, records and other tools",
+    help: "Sheets, email, chat and other services your workflows use.",
+  },
 ];
 
 interface Listed {
@@ -169,7 +189,9 @@ const CAPABILITY_WORDS: [string, string][] = [
 /** "Can pay bank accounts, …": what a rail can do, or "" for none. The
  * lookups (get_payout, get_payment, list_banks) go without saying. */
 export function capabilityLine(capabilities: string[] | undefined): string {
-  const words = CAPABILITY_WORDS.filter(([c]) => capabilities?.includes(c)).map(([, w]) => w);
+  const words = CAPABILITY_WORDS.filter(([c]) => capabilities?.includes(c)).map(
+    ([, w]) => w,
+  );
   if (words.length === 0) return "";
   const last = words.pop();
   return `Can ${words.length > 0 ? `${words.join(", ")} and ${last}` : last}.`;
@@ -178,15 +200,22 @@ export function capabilityLine(capabilities: string[] | undefined): string {
 /** Taskiem's own connectors (not an organisation's own `x_` ones nor
  * installed catalogue `p_` ones), matching a search, by kind, each
  * sorted by name. */
-export function builtInByKind<T extends Listed>(connectors: T[], search: string): Record<Kind, T[]> {
+export function builtInByKind<T extends Listed>(
+  connectors: T[],
+  search: string,
+): Record<Kind, T[]> {
   const q = search.trim().toLowerCase();
   const out: Record<Kind, T[]> = { rail: [], product: [], tool: [] };
   for (const c of connectors) {
     if (c.id.startsWith("x_") || c.id.startsWith("p_")) continue;
-    const text = `${c.name} ${c.id} ${c.description ?? ""} ${(c.category ?? "").replaceAll("_", " ")} ${capabilityLine(c.capabilities)}`.toLowerCase();
+    const text =
+      `${c.name} ${c.id} ${c.description ?? ""} ${(c.category ?? "").replaceAll("_", " ")} ${capabilityLine(c.capabilities)}`.toLowerCase();
     if (q && !text.includes(q)) continue;
     out[c.kind ?? "tool"].push(c);
   }
-  for (const k of Object.keys(out) as Kind[]) out[k].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+  for (const k of Object.keys(out) as Kind[])
+    out[k].sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
+    );
   return out;
 }

@@ -23,7 +23,9 @@ export function badSenders(list: string[]): string[] {
 export function messageWords(m: EmailMessage): string {
   switch (m.status) {
     case "started":
-      return m.attachments > 0 ? `Started a run, with ${m.attachments} attachment${m.attachments > 1 ? "s" : ""}` : "Started a run";
+      return m.attachments > 0
+        ? `Started a run, with ${m.attachments} attachment${m.attachments > 1 ? "s" : ""}`
+        : "Started a run";
     case "confirmation":
       return "A request to confirm forwarding";
     default:

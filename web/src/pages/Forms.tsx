@@ -7,8 +7,27 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { formWorkflow, type AfterAnswer } from "../lib/newform";
 import { get, patch, post } from "../api";
 import { useAuth } from "../auth";
-import { embedSnippet, linksCSV, maskContact, parseRecipients, showAnswer } from "../lib/forms";
-import { Badge, EmptyState, ErrorBox, Field, Items, Modal, PageHeader, Row, Skeleton, fmtTime, useAction, useLoad } from "../ui";
+import {
+  embedSnippet,
+  linksCSV,
+  maskContact,
+  parseRecipients,
+  showAnswer,
+} from "../lib/forms";
+import {
+  Badge,
+  EmptyState,
+  ErrorBox,
+  Field,
+  Items,
+  Modal,
+  PageHeader,
+  Row,
+  Skeleton,
+  fmtTime,
+  useAction,
+  useLoad,
+} from "../ui";
 
 export interface FormInfo {
   id: string;
@@ -43,7 +62,13 @@ export interface FormSubmission {
   message: string | null;
   note: string | null;
   created_at: string;
-  files?: { id: string; field: string; name: string; type: string; size: number }[];
+  files?: {
+    id: string;
+    field: string;
+    name: string;
+    type: string;
+    size: number;
+  }[];
 }
 
 interface MintedLink {
@@ -53,10 +78,16 @@ interface MintedLink {
   expires_at: string;
 }
 
-const ACCESS: Record<FormInfo["access"], string> = { public: "Anyone with the link", link: "One-time links", members: "Members, in the app" };
+const ACCESS: Record<FormInfo["access"], string> = {
+  public: "Anyone with the link",
+  link: "One-time links",
+  members: "Members, in the app",
+};
 
 /** The address to open a form at: its own, or the app's for members forms. */
-export const formLink = (f: FormInfo) => f.url || (f.access === "members" ? `${window.location.origin}/forms/${f.id}` : "");
+export const formLink = (f: FormInfo) =>
+  f.url ||
+  (f.access === "members" ? `${window.location.origin}/forms/${f.id}` : "");
 
 export function Copy({ text, label }: { text: string; label: string }) {
   const [done, setDone] = useState(false);
@@ -89,27 +120,58 @@ function NewForm({ onClose }: { onClose: () => void }) {
         onSubmit={(e) => {
           e.preventDefault();
           void act.run(async () => {
-            const r = await post<{ id: string }>("/v1/workflows", { name: title.trim(), definition: formWorkflow(title, after) });
+            const r = await post<{ id: string }>("/v1/workflows", {
+              name: title.trim(),
+              definition: formWorkflow(title, after),
+            });
             nav(`/workflows/${r.id}?tab=settings`);
           }, false);
         }}
       >
-        <Field label="What the form is called" hint="People see it at the top of the form.">
-          <input value={title} maxLength={120} onChange={(e) => setTitle(e.target.value)} required autoFocus placeholder="e.g. Join the waiting list" />
+        <Field
+          label="What the form is called"
+          hint="People see it at the top of the form."
+        >
+          <input
+            value={title}
+            maxLength={120}
+            onChange={(e) => setTitle(e.target.value)}
+            required
+            autoFocus
+            placeholder="e.g. Join the waiting list"
+          />
         </Field>
         <fieldset>
           <legend>When someone fills it in</legend>
           <label className="choice">
-            <input type="radio" name="after" checked={after === "tell"} onChange={() => setAfter("tell")} /> Tell me on WhatsApp (or by email)
+            <input
+              type="radio"
+              name="after"
+              checked={after === "tell"}
+              onChange={() => setAfter("tell")}
+            />{" "}
+            Tell me on WhatsApp (or by email)
           </label>
           <label className="choice">
-            <input type="radio" name="after" checked={after === "collect"} onChange={() => setAfter("collect")} /> Just keep the answers here
+            <input
+              type="radio"
+              name="after"
+              checked={after === "collect"}
+              onChange={() => setAfter("collect")}
+            />{" "}
+            Just keep the answers here
           </label>
         </fieldset>
-        <p className="hint">Next you choose its questions; publish it to get its link.</p>
+        <p className="hint">
+          Next you choose its questions; publish it to get its link.
+        </p>
         <ErrorBox error={act.error} />
         <div className="toolbar">
-          <button type="submit" className="primary" disabled={act.busy || !title.trim()}>
+          <button
+            type="submit"
+            className="primary"
+            disabled={act.busy || !title.trim()}
+          >
             Make the form
           </button>
           <button type="button" onClick={onClose}>
@@ -124,7 +186,10 @@ function NewForm({ onClose }: { onClose: () => void }) {
 export function Forms() {
   const { can } = useAuth();
   const [making, setMaking] = useState(false);
-  const { data, error, reload } = useLoad(() => get<{ forms: FormInfo[] }>("/v1/forms"), []);
+  const { data, error, reload } = useLoad(
+    () => get<{ forms: FormInfo[] }>("/v1/forms"),
+    [],
+  );
   return (
     <>
       <PageHeader
@@ -142,8 +207,18 @@ export function Forms() {
       <ErrorBox error={error} />
       {!data && !error && <Skeleton rows={3} label="Loading your forms…" />}
       {data?.forms.length === 0 && (
-        <EmptyState icon="forms" action={can("workflow.edit") ? <button onClick={() => setMaking(true)}>Make your first form</button> : undefined}>
-          No forms yet. A form collects answers from your customers or team and starts a workflow with them.
+        <EmptyState
+          icon="forms"
+          action={
+            can("workflow.edit") ? (
+              <button onClick={() => setMaking(true)}>
+                Make your first form
+              </button>
+            ) : undefined
+          }
+        >
+          No forms yet. A form collects answers from your customers or team and
+          starts a workflow with them.
         </EmptyState>
       )}
       <div className="form-cards">
@@ -155,14 +230,24 @@ export function Forms() {
   );
 }
 
-function FormCard({ form: f, onChange }: { form: FormInfo; onChange: () => void }) {
+function FormCard({
+  form: f,
+  onChange,
+}: {
+  form: FormInfo;
+  onChange: () => void;
+}) {
   const { can } = useAuth();
   const act = useAction();
   const [settings, setSettings] = useState(false);
   const [links, setLinks] = useState(false);
   const link = formLink(f);
   const headingId = `form-${f.id}`;
-  const setStatus = (status: string) => act.run(async () => (await patch(`/v1/forms/${f.id}`, { status }), onChange()), "Saved");
+  const setStatus = (status: string) =>
+    act.run(
+      async () => (await patch(`/v1/forms/${f.id}`, { status }), onChange()),
+      "Saved",
+    );
   const publish = can("workflow.publish") && f.status !== "suspended";
   return (
     <article className="card form-card" aria-labelledby={headingId}>
@@ -175,7 +260,10 @@ function FormCard({ form: f, onChange }: { form: FormInfo; onChange: () => void 
       <dl className="kv">
         <dt>Workflow</dt>
         <dd>
-          <Link to={`/workflows/${f.workflow_id}?v=${f.version}`}>{f.workflow}</Link> <span className="hint">v{f.version}</span>
+          <Link to={`/workflows/${f.workflow_id}?v=${f.version}`}>
+            {f.workflow}
+          </Link>{" "}
+          <span className="hint">v{f.version}</span>
         </dd>
         <dt>Environment</dt>
         <dd>{f.environment}</dd>
@@ -183,14 +271,18 @@ function FormCard({ form: f, onChange }: { form: FormInfo; onChange: () => void 
         <dd>{ACCESS[f.access]}</dd>
         <dt>Answers</dt>
         <dd>
-          {f.submissions_this_week} this week, {f.submissions} in all{f.max_submissions ? ` (of at most ${f.max_submissions})` : ""} ·{" "}
-          {can("run.read") && <Link to={`/forms/${f.id}/submissions`}>See the answers</Link>}
+          {f.submissions_this_week} this week, {f.submissions} in all
+          {f.max_submissions ? ` (of at most ${f.max_submissions})` : ""} ·{" "}
+          {can("run.read") && (
+            <Link to={`/forms/${f.id}/submissions`}>See the answers</Link>
+          )}
         </dd>
         {(f.opens_at || f.closes_at) && (
           <>
             <dt>Open</dt>
             <dd>
-              {f.opens_at ? `from ${fmtTime(f.opens_at)}` : ""} {f.closes_at ? `until ${fmtTime(f.closes_at)}` : ""}
+              {f.opens_at ? `from ${fmtTime(f.opens_at)}` : ""}{" "}
+              {f.closes_at ? `until ${fmtTime(f.closes_at)}` : ""}
             </dd>
           </>
         )}
@@ -198,8 +290,17 @@ function FormCard({ form: f, onChange }: { form: FormInfo; onChange: () => void 
           <>
             <dt>Link</dt>
             <dd>
-              {f.access === "members" ? <Link to={`/forms/${f.id}`}>{link}</Link> : <code>{link}</code>} <Copy text={link} label={`Copy the link to ${f.title}`} />
-              {f.access === "link" && <div className="hint">This page is reached only through one-time links.</div>}
+              {f.access === "members" ? (
+                <Link to={`/forms/${f.id}`}>{link}</Link>
+              ) : (
+                <code>{link}</code>
+              )}{" "}
+              <Copy text={link} label={`Copy the link to ${f.title}`} />
+              {f.access === "link" && (
+                <div className="hint">
+                  This page is reached only through one-time links.
+                </div>
+              )}
             </dd>
           </>
         )}
@@ -207,13 +308,24 @@ function FormCard({ form: f, onChange }: { form: FormInfo; onChange: () => void 
           <>
             <dt>On your website</dt>
             <dd>
-              <code className="embed-code">{embedSnippet(f.embed_url, f.title)}</code> <Copy text={embedSnippet(f.embed_url, f.title)} label={`Copy the embed code of ${f.title}`} />
+              <code className="embed-code">
+                {embedSnippet(f.embed_url, f.title)}
+              </code>{" "}
+              <Copy
+                text={embedSnippet(f.embed_url, f.title)}
+                label={`Copy the embed code of ${f.title}`}
+              />
               <div className="hint">Works on your verified websites only.</div>
             </dd>
           </>
         )}
       </dl>
-      {f.status === "suspended" && <div className="error">Taskiem's operators suspended this form. Contact support to have it looked at.</div>}
+      {f.status === "suspended" && (
+        <div className="error">
+          Taskiem's operators suspended this form. Contact support to have it
+          looked at.
+        </div>
+      )}
       <ErrorBox error={act.error} />
       <div className="toolbar">
         {publish && f.status !== "live" && (
@@ -227,16 +339,29 @@ function FormCard({ form: f, onChange }: { form: FormInfo; onChange: () => void 
           </button>
         )}
         {publish && f.status !== "closed" && (
-          <button disabled={act.busy} onClick={() => confirm(`Close "${f.title}"? People see its closed message until it is reopened.`) && void setStatus("closed")}>
+          <button
+            disabled={act.busy}
+            onClick={() =>
+              confirm(
+                `Close "${f.title}"? People see its closed message until it is reopened.`,
+              ) && void setStatus("closed")
+            }
+          >
             Close
           </button>
         )}
-        {publish && <button onClick={() => setSettings(true)}>Opening times and limit</button>}
-        {can("form.links") && f.access === "link" && f.status !== "suspended" && (
-          <button className="primary" onClick={() => setLinks(true)}>
-            Make links
+        {publish && (
+          <button onClick={() => setSettings(true)}>
+            Opening times and limit
           </button>
         )}
+        {can("form.links") &&
+          f.access === "link" &&
+          f.status !== "suspended" && (
+            <button className="primary" onClick={() => setLinks(true)}>
+              Make links
+            </button>
+          )}
       </div>
       {settings && (
         <FormSettings
@@ -261,10 +386,20 @@ function toLocal(s: string | null): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-function FormSettings({ form: f, onClose, onSaved }: { form: FormInfo; onClose: () => void; onSaved: () => void }) {
+function FormSettings({
+  form: f,
+  onClose,
+  onSaved,
+}: {
+  form: FormInfo;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const [opens, setOpens] = useState(toLocal(f.opens_at));
   const [closes, setCloses] = useState(toLocal(f.closes_at));
-  const [max, setMax] = useState(f.max_submissions ? String(f.max_submissions) : "");
+  const [max, setMax] = useState(
+    f.max_submissions ? String(f.max_submissions) : "",
+  );
   const [message, setMessage] = useState(f.closed_message ?? "");
   const act = useAction();
   const save = () =>
@@ -277,7 +412,8 @@ function FormSettings({ form: f, onClose, onSaved }: { form: FormInfo; onClose: 
       else if (f.closes_at) clear.push("closes_at");
       if (max) {
         const n = Number(max);
-        if (!Number.isInteger(n) || n < 1) throw new Error("The limit is a whole number, at least 1.");
+        if (!Number.isInteger(n) || n < 1)
+          throw new Error("The limit is a whole number, at least 1.");
         body.max_submissions = n;
       } else if (f.max_submissions) clear.push("max_submissions");
       if (message.trim()) body.closed_message = message.trim();
@@ -290,21 +426,46 @@ function FormSettings({ form: f, onClose, onSaved }: { form: FormInfo; onClose: 
     <Modal title={`Opening times: ${f.title}`} onClose={onClose}>
       <div className="row">
         <Field label="Opens at" hint="Empty: open now">
-          <input type="datetime-local" value={opens} onChange={(e) => setOpens(e.target.value)} />
+          <input
+            type="datetime-local"
+            value={opens}
+            onChange={(e) => setOpens(e.target.value)}
+          />
         </Field>
         <Field label="Closes at" hint="Empty: no end">
-          <input type="datetime-local" value={closes} onChange={(e) => setCloses(e.target.value)} />
+          <input
+            type="datetime-local"
+            value={closes}
+            onChange={(e) => setCloses(e.target.value)}
+          />
         </Field>
       </div>
       <Field label="At most this many answers" hint="Empty: no limit">
-        <input type="number" min={1} value={max} onChange={(e) => setMax(e.target.value)} />
+        <input
+          type="number"
+          min={1}
+          value={max}
+          onChange={(e) => setMax(e.target.value)}
+        />
       </Field>
-      <Field label="Closed message" hint="Shown when the form is closed or paused; up to 300 characters, no links">
-        <textarea rows={2} maxLength={300} value={message} onChange={(e) => setMessage(e.target.value)} />
+      <Field
+        label="Closed message"
+        hint="Shown when the form is closed or paused; up to 300 characters, no links"
+      >
+        <textarea
+          rows={2}
+          maxLength={300}
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+        />
       </Field>
       <ErrorBox error={act.error} />
       <div className="toolbar">
-        <button className="primary" disabled={act.busy} onClick={() => void save()}>
+        <button
+          className="primary"
+          disabled={act.busy}
+          onClick={() => void save()}
+        >
           Save
         </button>
         <button onClick={onClose}>Cancel</button>
@@ -313,7 +474,13 @@ function FormSettings({ form: f, onClose, onSaved }: { form: FormInfo; onClose: 
   );
 }
 
-function MakeLinks({ form: f, onClose }: { form: FormInfo; onClose: () => void }) {
+function MakeLinks({
+  form: f,
+  onClose,
+}: {
+  form: FormInfo;
+  onClose: () => void;
+}) {
   const [mode, setMode] = useState<"count" | "list">("count");
   const [count, setCount] = useState("10");
   const [list, setList] = useState("");
@@ -324,32 +491,57 @@ function MakeLinks({ form: f, onClose }: { form: FormInfo; onClose: () => void }
   const make = () =>
     act.run(async () => {
       const expires_in_days = Number(days);
-      if (!Number.isInteger(expires_in_days) || expires_in_days < 1 || expires_in_days > 30) throw new Error("Links last 1 to 30 days.");
+      if (
+        !Number.isInteger(expires_in_days) ||
+        expires_in_days < 1 ||
+        expires_in_days > 30
+      )
+        throw new Error("Links last 1 to 30 days.");
       let body: Record<string, unknown>;
       if (mode === "count") {
         const n = Number(count);
-        if (!Number.isInteger(n) || n < 1 || n > 500) throw new Error("Make 1 to 500 links at a time.");
+        if (!Number.isInteger(n) || n < 1 || n > 500)
+          throw new Error("Make 1 to 500 links at a time.");
         body = { count: n, expires_in_days };
       } else {
-        if (parsed.bad.length) throw new Error(`These are not phone numbers or email addresses: ${parsed.bad.join(", ")}`);
-        if (parsed.to.length === 0) throw new Error("Paste at least one phone number or email address.");
-        if (parsed.to.length > 500) throw new Error("Up to 500 people at a time.");
+        if (parsed.bad.length)
+          throw new Error(
+            `These are not phone numbers or email addresses: ${parsed.bad.join(", ")}`,
+          );
+        if (parsed.to.length === 0)
+          throw new Error("Paste at least one phone number or email address.");
+        if (parsed.to.length > 500)
+          throw new Error("Up to 500 people at a time.");
         body = { to: parsed.to, expires_in_days };
       }
-      const r = await post<{ links: MintedLink[] }>(`/v1/forms/${f.id}/links`, body);
+      const r = await post<{ links: MintedLink[] }>(
+        `/v1/forms/${f.id}/links`,
+        body,
+      );
       setMade(r.links);
     }, false);
-  const csv = made ? URL.createObjectURL(new Blob([linksCSV(made)], { type: "text/csv" })) : "";
+  const csv = made
+    ? URL.createObjectURL(new Blob([linksCSV(made)], { type: "text/csv" }))
+    : "";
   return (
     <Modal title={`One-time links: ${f.title}`} onClose={onClose}>
       {made ? (
         <div role="status">
           <p>
-            {made.length} link{made.length === 1 ? "" : "s"}, each used once, until {fmtTime(made[0]?.expires_at)}. Copy them now: they are not shown again.
+            {made.length} link{made.length === 1 ? "" : "s"}, each used once,
+            until {fmtTime(made[0]?.expires_at)}. Copy them now: they are not
+            shown again.
           </p>
           <div className="toolbar">
-            <Copy text={made.map((l) => l.url).join("\n")} label="Copy every link" />
-            <a className="button" href={csv} download={`${f.public_id}-links.csv`}>
+            <Copy
+              text={made.map((l) => l.url).join("\n")}
+              label="Copy every link"
+            />
+            <a
+              className="button"
+              href={csv}
+              download={`${f.public_id}-links.csv`}
+            >
               Download CSV
             </a>
           </div>
@@ -370,27 +562,63 @@ function MakeLinks({ form: f, onClose }: { form: FormInfo; onClose: () => void }
           <fieldset>
             <legend>Links</legend>
             <label className="choice">
-              <input type="radio" name="links-mode" checked={mode === "count"} onChange={() => setMode("count")} /> A number of open links, to hand out
+              <input
+                type="radio"
+                name="links-mode"
+                checked={mode === "count"}
+                onChange={() => setMode("count")}
+              />{" "}
+              A number of open links, to hand out
             </label>
             <label className="choice">
-              <input type="radio" name="links-mode" checked={mode === "list"} onChange={() => setMode("list")} /> One for each person: the link also asks for a code sent to them
+              <input
+                type="radio"
+                name="links-mode"
+                checked={mode === "list"}
+                onChange={() => setMode("list")}
+              />{" "}
+              One for each person: the link also asks for a code sent to them
             </label>
           </fieldset>
           {mode === "count" ? (
             <Field label="How many">
-              <input type="number" min={1} max={500} value={count} onChange={(e) => setCount(e.target.value)} />
+              <input
+                type="number"
+                min={1}
+                max={500}
+                value={count}
+                onChange={(e) => setCount(e.target.value)}
+              />
             </Field>
           ) : (
-            <Field label="Phone numbers or email addresses" hint={`One per line. ${parsed.to.length} found${parsed.bad.length ? `; not readable: ${parsed.bad.map(maskContact).join(", ")}` : ""}.`}>
-              <textarea rows={6} value={list} onChange={(e) => setList(e.target.value)} placeholder={"0803 123 4567\nada@example.com"} />
+            <Field
+              label="Phone numbers or email addresses"
+              hint={`One per line. ${parsed.to.length} found${parsed.bad.length ? `; not readable: ${parsed.bad.map(maskContact).join(", ")}` : ""}.`}
+            >
+              <textarea
+                rows={6}
+                value={list}
+                onChange={(e) => setList(e.target.value)}
+                placeholder={"0803 123 4567\nada@example.com"}
+              />
             </Field>
           )}
           <Field label="Days until they expire" hint="1 to 30">
-            <input type="number" min={1} max={30} value={days} onChange={(e) => setDays(e.target.value)} />
+            <input
+              type="number"
+              min={1}
+              max={30}
+              value={days}
+              onChange={(e) => setDays(e.target.value)}
+            />
           </Field>
           <ErrorBox error={act.error} />
           <div className="toolbar">
-            <button className="primary" disabled={act.busy} onClick={() => void make()}>
+            <button
+              className="primary"
+              disabled={act.busy}
+              onClick={() => void make()}
+            >
               Make links
             </button>
             <button onClick={onClose}>Cancel</button>
@@ -405,7 +633,13 @@ function MakeLinks({ form: f, onClose }: { form: FormInfo; onClose: () => void }
 export function FormSubmissions() {
   const { id = "" } = useParams();
   const forms = useLoad(() => get<{ forms: FormInfo[] }>("/v1/forms"), []);
-  const subs = useLoad(() => get<{ submissions: FormSubmission[] }>(`/v1/form-submissions?form=${encodeURIComponent(id)}&limit=100`), [id]);
+  const subs = useLoad(
+    () =>
+      get<{ submissions: FormSubmission[] }>(
+        `/v1/form-submissions?form=${encodeURIComponent(id)}&limit=100`,
+      ),
+    [id],
+  );
   const [open, setOpen] = useState<string | null>(null);
   const form = forms.data?.forms.find((f) => f.id === id);
   return (
@@ -419,8 +653,12 @@ export function FormSubmissions() {
         }
       />
       <ErrorBox error={subs.error ?? forms.error} />
-      {!subs.data && !subs.error && <Skeleton rows={4} label="Loading the answers…" />}
-      {subs.data?.submissions.length === 0 && <EmptyState icon="forms">No answers yet.</EmptyState>}
+      {!subs.data && !subs.error && (
+        <Skeleton rows={4} label="Loading the answers…" />
+      )}
+      {subs.data?.submissions.length === 0 && (
+        <EmptyState icon="forms">No answers yet.</EmptyState>
+      )}
       {subs.data && subs.data.submissions.length > 0 && (
         <Items label="Answers">
           {subs.data.submissions.map((s) => (
@@ -431,18 +669,26 @@ export function FormSubmissions() {
               side={<Badge value={s.status} />}
               sub={
                 <span className="sub">
-                  {respondentText(s.respondent, s.channel)} · {fmtTime(s.created_at)}
+                  {respondentText(s.respondent, s.channel)} ·{" "}
+                  {fmtTime(s.created_at)}
                   {s.note && <span className="block">{s.note}</span>}
                 </span>
               }
               testid="submission"
             >
-              <button type="button" className="small" aria-expanded={open === s.id} onClick={() => setOpen(open === s.id ? null : s.id)}>
-                See the answers<span className="sr-only"> to {s.reference}</span>
+              <button
+                type="button"
+                className="small"
+                aria-expanded={open === s.id}
+                onClick={() => setOpen(open === s.id ? null : s.id)}
+              >
+                See the answers
+                <span className="sr-only"> to {s.reference}</span>
               </button>
               {s.run_id && (
                 <Link className="button small" to={`/runs/${s.run_id}`}>
-                  Open the run<span className="sr-only"> for {s.reference}</span>
+                  Open the run
+                  <span className="sr-only"> for {s.reference}</span>
                 </Link>
               )}
             </Row>
@@ -454,10 +700,19 @@ export function FormSubmissions() {
   );
 }
 
-const KIND: Record<string, string> = { anonymous: "Anonymous", verified: "Verified by a code", link: "A one-time link", request: "A form step's link", member: "A member" };
+const KIND: Record<string, string> = {
+  anonymous: "Anonymous",
+  verified: "Verified by a code",
+  link: "A one-time link",
+  request: "A form step's link",
+  member: "A member",
+};
 
 /** Who sent it, without personal data. */
-export function respondentText(r: Record<string, unknown>, channel?: string): string {
+export function respondentText(
+  r: Record<string, unknown>,
+  channel?: string,
+): string {
   const kind = typeof r.kind === "string" ? (KIND[r.kind] ?? r.kind) : "—";
   const bits = [kind];
   for (const k of ["phone", "email"]) {
@@ -465,19 +720,40 @@ export function respondentText(r: Record<string, unknown>, channel?: string): st
     if (typeof v === "string") bits.push(maskContact(v));
     else if (v) bits.push(showAnswer(v));
   }
-  if (channel && channel !== "direct") bits.push(channel === "embed" ? "on a website" : channel === "app" ? "in the app" : channel);
+  if (channel && channel !== "direct")
+    bits.push(
+      channel === "embed"
+        ? "on a website"
+        : channel === "app"
+          ? "in the app"
+          : channel,
+    );
   return bits.join(" · ");
 }
 
-function SubmissionDetail({ id, onClose }: { id: string; onClose: () => void }) {
+function SubmissionDetail({
+  id,
+  onClose,
+}: {
+  id: string;
+  onClose: () => void;
+}) {
   const { can } = useAuth();
   const [reveal, setReveal] = useState(false);
-  const { data, error } = useLoad(() => get<{ submission: FormSubmission; revealed: boolean }>(`/v1/form-submissions/${id}${reveal ? "?reveal=true" : ""}`), [id, reveal]);
+  const { data, error } = useLoad(
+    () =>
+      get<{ submission: FormSubmission; revealed: boolean }>(
+        `/v1/form-submissions/${id}${reveal ? "?reveal=true" : ""}`,
+      ),
+    [id, reveal],
+  );
   const act = useAction();
   const s = data?.submission;
   const download = (fileId: string) =>
     act.run(async () => {
-      const r = await get<{ url: string; name: string }>(`/v1/form-files/${fileId}`);
+      const r = await get<{ url: string; name: string }>(
+        `/v1/form-files/${fileId}`,
+      );
       window.open(r.url, "_blank", "noopener");
     }, false);
   return (
@@ -511,8 +787,16 @@ function SubmissionDetail({ id, onClose }: { id: string; onClose: () => void }) 
             )}
           </dl>
           {can("pii.reveal") && (
-            <label className="inline" title="Decrypts personal answers for this view; the access is audited">
-              <input type="checkbox" checked={reveal} onChange={(e) => setReveal(e.target.checked)} /> Reveal personal data
+            <label
+              className="inline"
+              title="Decrypts personal answers for this view; the access is audited"
+            >
+              <input
+                type="checkbox"
+                checked={reveal}
+                onChange={(e) => setReveal(e.target.checked)}
+              />{" "}
+              Reveal personal data
             </label>
           )}
           <table>
@@ -539,13 +823,22 @@ function SubmissionDetail({ id, onClose }: { id: string; onClose: () => void }) 
               <ul>
                 {s.files?.map((f) => (
                   <li key={f.id}>
-                    {f.name} <span className="hint">({f.field}, {Math.max(1, Math.round(f.size / 1024))} KB)</span>{" "}
+                    {f.name}{" "}
+                    <span className="hint">
+                      ({f.field}, {Math.max(1, Math.round(f.size / 1024))} KB)
+                    </span>{" "}
                     {can("pii.reveal") ? (
-                      <button className="small" disabled={act.busy} onClick={() => void download(f.id)}>
+                      <button
+                        className="small"
+                        disabled={act.busy}
+                        onClick={() => void download(f.id)}
+                      >
                         Download
                       </button>
                     ) : (
-                      <span className="hint">Downloading needs permission to reveal personal data.</span>
+                      <span className="hint">
+                        Downloading needs permission to reveal personal data.
+                      </span>
                     )}
                   </li>
                 ))}

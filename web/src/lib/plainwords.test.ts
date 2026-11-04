@@ -90,26 +90,52 @@ const OWNER_FILES = [
   "forms/FieldText.tsx",
 ];
 
-const SHOWN_ATTRS = new Set(["label", "hint", "placeholder", "title", "aria-label", "description"]);
+const SHOWN_ATTRS = new Set([
+  "label",
+  "hint",
+  "placeholder",
+  "title",
+  "aria-label",
+  "description",
+]);
 
 function technical(el: ts.JsxOpeningLikeElement): boolean {
   const tag = el.tagName.getText();
-  if (["details", "code", "pre", "Json", "JsonInput"].includes(tag)) return true;
-  return el.attributes.properties.some((a) => ts.isJsxAttribute(a) && a.name.getText() === "data-technical");
+  if (["details", "code", "pre", "Json", "JsonInput"].includes(tag))
+    return true;
+  return el.attributes.properties.some(
+    (a) => ts.isJsxAttribute(a) && a.name.getText() === "data-technical",
+  );
 }
 
 /** Every piece of text a file's JSX shows, outside Details, Advanced and code. */
 export function shownText(file: string, src: string): string[] {
-  const sf = ts.createSourceFile(file, src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const sf = ts.createSourceFile(
+    file,
+    src,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
   const out: string[] = [];
   const visit = (n: ts.Node, hidden: boolean) => {
     // What only Advanced shows: `advanced && …`, and `advanced ? … : …`'s first branch.
-    if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken && n.left.getText().split("&&").some((c) => c.trim() === "advanced")) {
+    if (
+      ts.isBinaryExpression(n) &&
+      n.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken &&
+      n.left
+        .getText()
+        .split("&&")
+        .some((c) => c.trim() === "advanced")
+    ) {
       visit(n.left, hidden);
       visit(n.right, true);
       return;
     }
-    if (ts.isConditionalExpression(n) && /^!?advanced$/.test(n.condition.getText().trim())) {
+    if (
+      ts.isConditionalExpression(n) &&
+      /^!?advanced$/.test(n.condition.getText().trim())
+    ) {
       const neg = n.condition.getText().trim().startsWith("!");
       visit(n.whenTrue, hidden || !neg);
       visit(n.whenFalse, hidden || neg);
@@ -119,11 +145,22 @@ export function shownText(file: string, src: string): string[] {
     if (ts.isJsxSelfClosingElement(n) && technical(n)) hidden = true;
     if (!hidden) {
       if (ts.isJsxText(n) && n.getText().trim()) out.push(n.getText().trim());
-      if ((ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) && n.parent) {
+      if (
+        (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) &&
+        n.parent
+      ) {
         const p = n.parent;
-        const inAttr = ts.isJsxAttribute(p) && SHOWN_ATTRS.has(p.name.getText());
-        const inJsx = ts.isJsxExpression(p) && !!p.parent && (ts.isJsxElement(p.parent) || ts.isJsxFragment(p.parent));
-        const inAttrExpr = ts.isJsxExpression(p) && !!p.parent && ts.isJsxAttribute(p.parent) && SHOWN_ATTRS.has(p.parent.name.getText());
+        const inAttr =
+          ts.isJsxAttribute(p) && SHOWN_ATTRS.has(p.name.getText());
+        const inJsx =
+          ts.isJsxExpression(p) &&
+          !!p.parent &&
+          (ts.isJsxElement(p.parent) || ts.isJsxFragment(p.parent));
+        const inAttrExpr =
+          ts.isJsxExpression(p) &&
+          !!p.parent &&
+          ts.isJsxAttribute(p.parent) &&
+          SHOWN_ATTRS.has(p.parent.name.getText());
         if (inAttr || inJsx || inAttrExpr) out.push(n.text);
       }
     }
@@ -137,7 +174,9 @@ describe("an owner never sees technical words", () => {
   for (const f of OWNER_FILES) {
     it(f, () => {
       const src = readFileSync(resolve(__dirname, "..", f), "utf8");
-      const bad = shownText(f, src).filter((t) => GLOSSARY.some((g) => g.test(t)));
+      const bad = shownText(f, src).filter((t) =>
+        GLOSSARY.some((g) => g.test(t)),
+      );
       expect(bad).toEqual([]);
     });
   }

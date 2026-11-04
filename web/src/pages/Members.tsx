@@ -2,7 +2,18 @@ import { useState } from "react";
 import { del, get, post, put } from "../api";
 import { useAuth } from "../auth";
 import { AgentVisits } from "./AgentVisits";
-import { EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad, Row } from "../ui";
+import {
+  EmptyState,
+  ErrorBox,
+  Field,
+  Modal,
+  PageHeader,
+  Skeleton,
+  fmtTime,
+  useAction,
+  useLoad,
+  Row,
+} from "../ui";
 import { Icon } from "../icons";
 import { roleLabel, roleName, type ApproverRole } from "../forms/RolePicker";
 
@@ -18,7 +29,8 @@ interface Role {
   members: number;
 }
 
-const usePermissions = () => useLoad(() => get<{ permissions: Permission[] }>("/v1/permissions"), []);
+const usePermissions = () =>
+  useLoad(() => get<{ permissions: Permission[] }>("/v1/permissions"), []);
 const useRoles = () => useLoad(() => get<{ roles: Role[] }>("/v1/roles"), []);
 
 interface Member {
@@ -50,13 +62,20 @@ interface PendingInvitation {
 /** People with an account elsewhere who were invited and have not answered:
  * they join when they accept; an admin may withdraw the invitation. */
 function PendingInvitations({ refresh }: { refresh: unknown }) {
-  const list = useLoad(() => get<{ invitations: PendingInvitation[] }>("/v1/invitations"), [refresh]);
+  const list = useLoad(
+    () => get<{ invitations: PendingInvitation[] }>("/v1/invitations"),
+    [refresh],
+  );
   const act = useAction();
-  if (!list.data?.invitations.length) return list.error ? <ErrorBox error={list.error} /> : null;
+  if (!list.data?.invitations.length)
+    return list.error ? <ErrorBox error={list.error} /> : null;
   return (
     <section data-testid="pending-invitations">
       <h2>Pending invitations</h2>
-      <p className="hint">These people already have a Taskiem account. They join, with the roles offered, when they accept.</p>
+      <p className="hint">
+        These people already have a Taskiem account. They join, with the roles
+        offered, when they accept.
+      </p>
       <ErrorBox error={act.error} />
       <ul className="items" aria-label="Pending invitations">
         {list.data.invitations.map((i) => (
@@ -69,14 +88,27 @@ function PendingInvitations({ refresh }: { refresh: unknown }) {
             sub={
               <span className="sub">
                 Offered {i.roles.join(", ")} · invited {fmtTime(i.invited_at)}
-                {i.source === "scim" ? " by SCIM" : i.source === "partner" ? " by your platform partner" : ""}
+                {i.source === "scim"
+                  ? " by SCIM"
+                  : i.source === "partner"
+                    ? " by your platform partner"
+                    : ""}
               </span>
             }
           >
             <button
               className="danger"
               disabled={act.busy}
-              onClick={() => confirm(`Withdraw the invitation to ${i.email}?`) && void act.run(async () => (await del(`/v1/invitations/${i.user_id}`), list.reload()), "Invitation cancelled")}
+              onClick={() =>
+                confirm(`Withdraw the invitation to ${i.email}?`) &&
+                void act.run(
+                  async () => (
+                    await del(`/v1/invitations/${i.user_id}`),
+                    list.reload()
+                  ),
+                  "Invitation cancelled",
+                )
+              }
             >
               Withdraw
             </button>
@@ -111,14 +143,28 @@ export function Members() {
       <ErrorBox error={members.error ?? act.error} />
       {!members.data && !members.error && <Skeleton rows={3} />}
       {members.data && members.data.members.length <= 1 && (
-        <EmptyState icon="members" action={<button onClick={() => setAdding(true)}>Invite a colleague</button>}>
-          {members.data.members.length === 0 ? "No one is a member yet." : "You are the only member so far."} Add colleagues to build, approve and watch runs with you.
+        <EmptyState
+          icon="members"
+          action={
+            <button onClick={() => setAdding(true)}>Invite a colleague</button>
+          }
+        >
+          {members.data.members.length === 0
+            ? "No one is a member yet."
+            : "You are the only member so far."}{" "}
+          Add colleagues to build, approve and watch runs with you.
         </EmptyState>
       )}
       {members.data && members.data.members.length > 0 && (
         <ul className="items" aria-label="Members">
           {members.data.members.map((m) => (
-            <Row key={m.user_id} testid="member" letter={m.name || m.email} title={m.name || m.email} sub={m.name ? <span className="sub">{m.email}</span> : undefined}>
+            <Row
+              key={m.user_id}
+              testid="member"
+              letter={m.name || m.email}
+              title={m.name || m.email}
+              sub={m.name ? <span className="sub">{m.email}</span> : undefined}
+            >
               {m.roles.map((r) => (
                 <span key={r} className="chip">
                   {r}
@@ -126,7 +172,19 @@ export function Members() {
                     className="chip-x"
                     aria-label={`Take ${r} from ${m.email}`}
                     title={`Take ${r} from ${m.email}`}
-                    onClick={() => confirm(`Take ${r} from ${m.email}?`) && void act.run(async () => (await del(`/v1/members/${m.user_id}/roles/${encodeURIComponent(r)}`), members.reload(), roles.reload()), "Role removed")}
+                    onClick={() =>
+                      confirm(`Take ${r} from ${m.email}?`) &&
+                      void act.run(
+                        async () => (
+                          await del(
+                            `/v1/members/${m.user_id}/roles/${encodeURIComponent(r)}`,
+                          ),
+                          members.reload(),
+                          roles.reload()
+                        ),
+                        "Role removed",
+                      )
+                    }
                   >
                     ×
                   </button>
@@ -142,9 +200,14 @@ export function Members() {
         <h2 className="grow" style={{ margin: 0 }}>
           Roles
         </h2>
-        {can("role.manage") && <button onClick={() => setEditing("new")}>New role</button>}
+        {can("role.manage") && (
+          <button onClick={() => setEditing("new")}>New role</button>
+        )}
       </div>
-      <p className="hint">Custom roles are named sets of permissions. No one can create or grant a role with permissions they do not hold themselves.</p>
+      <p className="hint">
+        Custom roles are named sets of permissions. No one can create or grant a
+        role with permissions they do not hold themselves.
+      </p>
       <ErrorBox error={roles.error} />
       {roles.data && (
         <ul className="items" aria-label="Roles">
@@ -156,13 +219,20 @@ export function Members() {
               tone={r.built_in ? "muted" : undefined}
               title={
                 <>
-                  {r.name} {r.built_in && <span className="hint">built-in</span>}
+                  {r.name}{" "}
+                  {r.built_in && <span className="hint">built-in</span>}
                 </>
               }
-              side={<span className="item-figure">{r.members === 1 ? "1 member" : `${r.members} members`}</span>}
+              side={
+                <span className="item-figure">
+                  {r.members === 1 ? "1 member" : `${r.members} members`}
+                </span>
+              }
               sub={
                 <>
-                  {r.description && <span className="sub">{r.description}</span>}
+                  {r.description && (
+                    <span className="sub">{r.description}</span>
+                  )}
                   <span className="perms">
                     {r.permissions.map((p) => (
                       <code key={p}>{p}</code>
@@ -174,7 +244,20 @@ export function Members() {
               {!r.built_in && can("role.manage") && (
                 <>
                   <button onClick={() => setEditing(r)}>Edit</button>
-                  <button className="danger" disabled={r.members > 0} onClick={() => confirm(`Delete ${r.name}?`) && void act.run(async () => (await del(`/v1/roles/${r.name}`), roles.reload()), "Role deleted")}>
+                  <button
+                    className="danger"
+                    disabled={r.members > 0}
+                    onClick={() =>
+                      confirm(`Delete ${r.name}?`) &&
+                      void act.run(
+                        async () => (
+                          await del(`/v1/roles/${r.name}`),
+                          roles.reload()
+                        ),
+                        "Role deleted",
+                      )
+                    }
+                  >
                     Delete
                   </button>
                 </>
@@ -191,8 +274,14 @@ export function Members() {
       </div>
       <ErrorBox error={keys.error ?? act.error} />
       {keys.data && keys.data.api_keys.length === 0 && (
-        <EmptyState icon="keys" action={<button onClick={() => setMinting(true)}>Make an API key</button>}>
-          API keys let your other systems start runs and read results. Each key holds only the permissions you give it.
+        <EmptyState
+          icon="keys"
+          action={
+            <button onClick={() => setMinting(true)}>Make an API key</button>
+          }
+        >
+          API keys let your other systems start runs and read results. Each key
+          holds only the permissions you give it.
         </EmptyState>
       )}
       {keys.data && keys.data.api_keys.length > 0 && (
@@ -208,7 +297,8 @@ export function Members() {
               sub={
                 <>
                   <span className="sub">
-                    Expires {fmtTime(k.expires_at)} · last used {fmtTime(k.last_used_at)}
+                    Expires {fmtTime(k.expires_at)} · last used{" "}
+                    {fmtTime(k.last_used_at)}
                   </span>
                   <span className="perms">
                     {k.permissions.map((p) => (
@@ -221,7 +311,19 @@ export function Members() {
               {k.revoked_at ? (
                 <span className="hint">revoked</span>
               ) : (
-                <button className="danger" onClick={() => confirm(`Revoke ${k.name}?`) && void act.run(async () => (await del(`/v1/api-keys/${k.id}`), keys.reload()), "Key deleted")}>
+                <button
+                  className="danger"
+                  onClick={() =>
+                    confirm(`Revoke ${k.name}?`) &&
+                    void act.run(
+                      async () => (
+                        await del(`/v1/api-keys/${k.id}`),
+                        keys.reload()
+                      ),
+                      "Key deleted",
+                    )
+                  }
+                >
                   Revoke
                 </button>
               )}
@@ -231,14 +333,34 @@ export function Members() {
       )}
       {can("member.manage") && <SingleSignOn />}
       {can("member.manage") && can("scim.provision") && <Provisioning />}
-      {adding && <AddMember roles={roles.data?.roles ?? []} onClose={() => setAdding(false)} onDone={() => (setAdding(false), members.reload(), roles.reload())} />}
-      {editing && <EditRole role={editing === "new" ? null : editing} onClose={() => setEditing(null)} onDone={() => (setEditing(null), roles.reload())} />}
+      {adding && (
+        <AddMember
+          roles={roles.data?.roles ?? []}
+          onClose={() => setAdding(false)}
+          onDone={() => (setAdding(false), members.reload(), roles.reload())}
+        />
+      )}
+      {editing && (
+        <EditRole
+          role={editing === "new" ? null : editing}
+          onClose={() => setEditing(null)}
+          onDone={() => (setEditing(null), roles.reload())}
+        />
+      )}
       {minting && <NewKey onClose={() => (setMinting(false), keys.reload())} />}
     </>
   );
 }
 
-function EditRole({ role, onClose, onDone }: { role: Role | null; onClose: () => void; onDone: () => void }) {
+function EditRole({
+  role,
+  onClose,
+  onDone,
+}: {
+  role: Role | null;
+  onClose: () => void;
+  onDone: () => void;
+}) {
   const { can } = useAuth();
   const perms = usePermissions();
   const [name, setName] = useState(role?.name ?? "");
@@ -250,18 +372,41 @@ function EditRole({ role, onClose, onDone }: { role: Role | null; onClose: () =>
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          void act.run(async () => (await put(`/v1/roles/${name}`, { description, permissions: chosen }), onDone()), "Role saved");
+          void act.run(
+            async () => (
+              await put(`/v1/roles/${name}`, {
+                description,
+                permissions: chosen,
+              }),
+              onDone()
+            ),
+            "Role saved",
+          );
         }}
       >
         {!role && (
-          <Field label="Name" hint="Lowercase letters, digits and underscores, e.g. treasury_ops">
-            <input value={name} onChange={(e) => setName(e.target.value)} pattern="[a-z][a-z0-9_]{1,47}" required />
+          <Field
+            label="Name"
+            hint="Lowercase letters, digits and underscores, e.g. treasury_ops"
+          >
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              pattern="[a-z][a-z0-9_]{1,47}"
+              required
+            />
           </Field>
         )}
         <Field label="Description">
-          <input value={description} onChange={(e) => setDescription(e.target.value)} />
+          <input
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
         </Field>
-        <Field label="Permissions" hint="Only permissions you hold can be given">
+        <Field
+          label="Permissions"
+          hint="Only permissions you hold can be given"
+        >
           <div>
             {perms.data?.permissions.map((p) => (
               <label key={p.name} className="inline" title={p.description}>
@@ -269,7 +414,13 @@ function EditRole({ role, onClose, onDone }: { role: Role | null; onClose: () =>
                   type="checkbox"
                   disabled={!can(p.name)}
                   checked={chosen.includes(p.name)}
-                  onChange={(e) => setChosen(e.target.checked ? [...chosen, p.name] : chosen.filter((x) => x !== p.name))}
+                  onChange={(e) =>
+                    setChosen(
+                      e.target.checked
+                        ? [...chosen, p.name]
+                        : chosen.filter((x) => x !== p.name),
+                    )
+                  }
                 />
                 {p.name}
               </label>
@@ -278,7 +429,11 @@ function EditRole({ role, onClose, onDone }: { role: Role | null; onClose: () =>
         </Field>
         <ErrorBox error={act.error} />
         <div className="toolbar">
-          <button type="submit" className="primary" disabled={act.busy || chosen.length === 0 || !name}>
+          <button
+            type="submit"
+            className="primary"
+            disabled={act.busy || chosen.length === 0 || !name}
+          >
             Save
           </button>
           <button type="button" onClick={onClose}>
@@ -291,8 +446,17 @@ function EditRole({ role, onClose, onDone }: { role: Role | null; onClose: () =>
 }
 
 /** The business roles already in use, to tick instead of typing. */
-function BusinessRoles({ chosen, onChoose }: { chosen: string[]; onChoose: (roles: string[]) => void }) {
-  const roles = useLoad(() => get<{ roles: ApproverRole[] }>("/v1/approver-roles"), []);
+function BusinessRoles({
+  chosen,
+  onChoose,
+}: {
+  chosen: string[];
+  onChoose: (roles: string[]) => void;
+}) {
+  const roles = useLoad(
+    () => get<{ roles: ApproverRole[] }>("/v1/approver-roles"),
+    [],
+  );
   const business = roles.data?.roles.filter((r) => !r.builtin) ?? [];
   if (business.length === 0) return null;
   return (
@@ -300,7 +464,17 @@ function BusinessRoles({ chosen, onChoose }: { chosen: string[]; onChoose: (role
       <div>
         {business.map((r) => (
           <label key={r.name} className="inline">
-            <input type="checkbox" checked={chosen.includes(r.name)} onChange={(e) => onChoose(e.target.checked ? [...chosen, r.name] : chosen.filter((x) => x !== r.name))} />
+            <input
+              type="checkbox"
+              checked={chosen.includes(r.name)}
+              onChange={(e) =>
+                onChoose(
+                  e.target.checked
+                    ? [...chosen, r.name]
+                    : chosen.filter((x) => x !== r.name),
+                )
+              }
+            />
             {roleLabel(r)}
           </label>
         ))}
@@ -309,7 +483,15 @@ function BusinessRoles({ chosen, onChoose }: { chosen: string[]; onChoose: (role
   );
 }
 
-function AddMember({ roles: available, onClose, onDone }: { roles: Role[]; onClose: () => void; onDone: () => void }) {
+function AddMember({
+  roles: available,
+  onClose,
+  onDone,
+}: {
+  roles: Role[];
+  onClose: () => void;
+  onDone: () => void;
+}) {
   const { me, can } = useAuth();
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
@@ -322,12 +504,26 @@ function AddMember({ roles: available, onClose, onDone }: { roles: Role[]; onClo
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          const all = [...roles, ...custom.split(",").map(roleName).filter(Boolean)];
-          void act.run(async () => (await post("/v1/members", { email, name, password, roles: all }), onDone()), "Member added");
+          const all = [
+            ...roles,
+            ...custom.split(",").map(roleName).filter(Boolean),
+          ];
+          void act.run(
+            async () => (
+              await post("/v1/members", { email, name, password, roles: all }),
+              onDone()
+            ),
+            "Member added",
+          );
         }}
       >
         <Field label="Email">
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
         </Field>
         <Field label="Name">
           <input value={name} onChange={(e) => setName(e.target.value)} />
@@ -336,20 +532,44 @@ function AddMember({ roles: available, onClose, onDone }: { roles: Role[]; onClo
           label="Initial password"
           hint="For someone new (12+ characters; leave empty if they sign in with single sign-on). Someone who already has a Taskiem account is invited instead, and appears here once they accept (unless their email is on a domain you verified for single sign-on)."
         >
-          <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <input
+            type="password"
+            autoComplete="new-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
         </Field>
         <Field label="Roles">
           <div>
-            {available.filter((r) => (r.name !== "owner" || me?.roles.includes("owner")) && r.permissions.every(can)).map(({ name: r }) => (
-              <label key={r} className="inline">
-                <input type="checkbox" checked={roles.includes(r)} onChange={(e) => setRoles(e.target.checked ? [...roles, r] : roles.filter((x) => x !== r))} />
-                {r}
-              </label>
-            ))}
+            {available
+              .filter(
+                (r) =>
+                  (r.name !== "owner" || me?.roles.includes("owner")) &&
+                  r.permissions.every(can),
+              )
+              .map(({ name: r }) => (
+                <label key={r} className="inline">
+                  <input
+                    type="checkbox"
+                    checked={roles.includes(r)}
+                    onChange={(e) =>
+                      setRoles(
+                        e.target.checked
+                          ? [...roles, r]
+                          : roles.filter((x) => x !== r),
+                      )
+                    }
+                  />
+                  {r}
+                </label>
+              ))}
           </div>
         </Field>
         <BusinessRoles chosen={roles} onChoose={setRoles} />
-        <Field label="A new business role" hint="In words, e.g. Payroll approver. Approval steps can name it, and its holders decide those approvals.">
+        <Field
+          label="A new business role"
+          hint="In words, e.g. Payroll approver. Approval steps can name it, and its holders decide those approvals."
+        >
           <input value={custom} onChange={(e) => setCustom(e.target.value)} />
         </Field>
         <ErrorBox error={act.error} />
@@ -390,11 +610,27 @@ function NewKey({ onClose }: { onClose: () => void }) {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          void act.run(async () => setShown((await post<{ key: string }>("/v1/api-keys", { name, permissions: perms, ...(env && { environment: env }) })).key), false);
+          void act.run(
+            async () =>
+              setShown(
+                (
+                  await post<{ key: string }>("/v1/api-keys", {
+                    name,
+                    permissions: perms,
+                    ...(env && { environment: env }),
+                  })
+                ).key,
+              ),
+            false,
+          );
         }}
       >
         <Field label="Name">
-          <input value={name} onChange={(e) => setName(e.target.value)} required />
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
         </Field>
         <Field label="Environment">
           <select value={env} onChange={(e) => setEnv(e.target.value)}>
@@ -403,19 +639,38 @@ function NewKey({ onClose }: { onClose: () => void }) {
             <option value="dev">dev only</option>
           </select>
         </Field>
-        <Field label="Permissions" hint="A key cannot have permissions you lack">
+        <Field
+          label="Permissions"
+          hint="A key cannot have permissions you lack"
+        >
           <div>
-            {(all.data?.permissions.map((x) => x.name) ?? []).filter(can).map((p) => (
-              <label key={p} className="inline">
-                <input type="checkbox" checked={perms.includes(p)} onChange={(e) => setPerms(e.target.checked ? [...perms, p] : perms.filter((x) => x !== p))} />
-                {p}
-              </label>
-            ))}
+            {(all.data?.permissions.map((x) => x.name) ?? [])
+              .filter(can)
+              .map((p) => (
+                <label key={p} className="inline">
+                  <input
+                    type="checkbox"
+                    checked={perms.includes(p)}
+                    onChange={(e) =>
+                      setPerms(
+                        e.target.checked
+                          ? [...perms, p]
+                          : perms.filter((x) => x !== p),
+                      )
+                    }
+                  />
+                  {p}
+                </label>
+              ))}
           </div>
         </Field>
         <ErrorBox error={act.error} />
         <div className="toolbar">
-          <button type="submit" className="primary" disabled={act.busy || perms.length === 0}>
+          <button
+            type="submit"
+            className="primary"
+            disabled={act.busy || perms.length === 0}
+          >
             Create
           </button>
           <button type="button" onClick={onClose}>
@@ -451,14 +706,23 @@ interface SSOConnection {
 
 /** Single sign-on: the tenant's OIDC or SAML identity providers. */
 function SingleSignOn() {
-  const list = useLoad(() => get<{ connections: SSOConnection[] }>("/v1/sso"), []);
+  const list = useLoad(
+    () => get<{ connections: SSOConnection[] }>("/v1/sso"),
+    [],
+  );
   const [adding, setAdding] = useState(false);
   const [domain, setDomain] = useState<Record<string, string>>({});
   const act = useAction();
   const update = (c: SSOConnection, change: Partial<SSOConnection>) =>
     act.run(async () => {
       const n = { ...c, ...change };
-      await put(`/v1/sso/${c.id}`, { default_roles: n.default_roles, group_roles: n.group_roles, jit: n.jit, enforce: n.enforce, disabled: n.disabled });
+      await put(`/v1/sso/${c.id}`, {
+        default_roles: n.default_roles,
+        group_roles: n.group_roles,
+        jit: n.jit,
+        enforce: n.enforce,
+        disabled: n.disabled,
+      });
       list.reload();
     }, "Saved");
   return (
@@ -470,22 +734,39 @@ function SingleSignOn() {
         <button onClick={() => setAdding(true)}>Add identity provider</button>
       </div>
       <p className="hint">
-        People sign in through your identity provider when their email is on a domain you have verified. Roles follow their groups; single sign-on only manages the roles it gave. Enforced, members on those domains cannot use passwords or passkeys (owners excepted, so a broken provider cannot lock you out).
+        People sign in through your identity provider when their email is on a
+        domain you have verified. Roles follow their groups; single sign-on only
+        manages the roles it gave. Enforced, members on those domains cannot use
+        passwords or passkeys (owners excepted, so a broken provider cannot lock
+        you out).
       </p>
       <ErrorBox error={list.error ?? act.error} />
       {list.data?.connections.map((c) => (
         <section key={c.id} className="card">
           <div className="toolbar">
             <strong className="grow">
-              {c.name} <span className="hint">{c.protocol.toUpperCase()}</span> {c.disabled && <span className="hint">disabled</span>}
+              {c.name} <span className="hint">{c.protocol.toUpperCase()}</span>{" "}
+              {c.disabled && <span className="hint">disabled</span>}
             </strong>
             <label className="inline">
-              <input type="checkbox" checked={c.enforce} onChange={(e) => void update(c, { enforce: e.target.checked })} /> Enforce
+              <input
+                type="checkbox"
+                checked={c.enforce}
+                onChange={(e) => void update(c, { enforce: e.target.checked })}
+              />{" "}
+              Enforce
             </label>
             <label className="inline">
-              <input type="checkbox" checked={c.jit} onChange={(e) => void update(c, { jit: e.target.checked })} /> Create members on first sign-in
+              <input
+                type="checkbox"
+                checked={c.jit}
+                onChange={(e) => void update(c, { jit: e.target.checked })}
+              />{" "}
+              Create members on first sign-in
             </label>
-            <button onClick={() => void update(c, { disabled: !c.disabled })}>{c.disabled ? "Enable" : "Disable"}</button>
+            <button onClick={() => void update(c, { disabled: !c.disabled })}>
+              {c.disabled ? "Enable" : "Disable"}
+            </button>
           </div>
           <p className="hint">
             {c.protocol === "oidc" ? (
@@ -494,19 +775,26 @@ function SingleSignOn() {
               </>
             ) : (
               <>
-                Entity ID <code>{c.entity_id}</code> · ACS URL <code>{c.acs_url}</code> · <a href={c.metadata_url}>SP metadata</a>
+                Entity ID <code>{c.entity_id}</code> · ACS URL{" "}
+                <code>{c.acs_url}</code> ·{" "}
+                <a href={c.metadata_url}>SP metadata</a>
               </>
             )}
           </p>
           <p className="hint">
-            Default roles: {c.default_roles.join(", ") || "none"} · Groups: {Object.entries(c.group_roles).map(([g, r]) => `${g} → ${r.join(", ")}`).join("; ") || "none"}
+            Default roles: {c.default_roles.join(", ") || "none"} · Groups:{" "}
+            {Object.entries(c.group_roles)
+              .map(([g, r]) => `${g} → ${r.join(", ")}`)
+              .join("; ") || "none"}
           </p>
           <table>
             <thead>
               <tr>
                 <th>Domain</th>
                 <th>Verification</th>
-                <th><span className="sr-only">Actions</span></th>
+                <th>
+                  <span className="sr-only">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -518,26 +806,68 @@ function SingleSignOn() {
                       `verified ${fmtTime(d.verified_at)}`
                     ) : (
                       <>
-                        Add a TXT record <code>{d.txt_record}</code> with value <code>{d.txt_value}</code>
+                        Add a TXT record <code>{d.txt_record}</code> with value{" "}
+                        <code>{d.txt_value}</code>
                       </>
                     )}
                   </td>
-                  <td>{!d.verified_at && <button onClick={() => void act.run(async () => (await post(`/v1/sso/domains/${d.domain}/verify`), list.reload()), "Checked")}>Verify</button>}</td>
+                  <td>
+                    {!d.verified_at && (
+                      <button
+                        onClick={() =>
+                          void act.run(
+                            async () => (
+                              await post(`/v1/sso/domains/${d.domain}/verify`),
+                              list.reload()
+                            ),
+                            "Checked",
+                          )
+                        }
+                      >
+                        Verify
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
           <div className="row" style={{ alignItems: "flex-end" }}>
             <Field label="Add a domain">
-              <input value={domain[c.id] ?? ""} placeholder="bank.com" onChange={(e) => setDomain({ ...domain, [c.id]: e.target.value })} />
+              <input
+                value={domain[c.id] ?? ""}
+                placeholder="bank.com"
+                onChange={(e) =>
+                  setDomain({ ...domain, [c.id]: e.target.value })
+                }
+              />
             </Field>
-            <button disabled={!domain[c.id]} onClick={() => void act.run(async () => (await post(`/v1/sso/${c.id}/domains`, { domain: domain[c.id] }), setDomain({ ...domain, [c.id]: "" }), list.reload()), "Domain added")}>
+            <button
+              disabled={!domain[c.id]}
+              onClick={() =>
+                void act.run(
+                  async () => (
+                    await post(`/v1/sso/${c.id}/domains`, {
+                      domain: domain[c.id],
+                    }),
+                    setDomain({ ...domain, [c.id]: "" }),
+                    list.reload()
+                  ),
+                  "Domain added",
+                )
+              }
+            >
               Add
             </button>
           </div>
         </section>
       ))}
-      {adding && <AddSSO onClose={() => setAdding(false)} onDone={() => (setAdding(false), list.reload())} />}
+      {adding && (
+        <AddSSO
+          onClose={() => setAdding(false)}
+          onDone={() => (setAdding(false), list.reload())}
+        />
+      )}
     </>
   );
 }
@@ -546,13 +876,21 @@ type SCIMConfig = {
   endpoint: string;
   default_roles: string[];
   group_roles: Record<string, string[]>;
-  groups: { id: string; display_name: string; members: number; roles: string[] }[];
+  groups: {
+    id: string;
+    display_name: string;
+    members: number;
+    roles: string[];
+  }[];
   users: { active: number; inactive: number };
 };
 
 function Provisioning() {
   const cfg = useLoad(() => get<SCIMConfig>("/v1/scim"), []);
-  const [edit, setEdit] = useState<{ defaults: string; mapping: string } | null>(null);
+  const [edit, setEdit] = useState<{
+    defaults: string;
+    mapping: string;
+  } | null>(null);
   const [token, setToken] = useState("");
   const act = useAction();
   const c = cfg.data;
@@ -562,15 +900,29 @@ function Provisioning() {
       const group_roles: Record<string, string[]> = {};
       for (const line of edit.mapping.split("\n")) {
         const [g, roles] = line.split("=").map((x) => x.trim());
-        if (g && roles) group_roles[g] = roles.split(",").map((r) => r.trim()).filter(Boolean);
+        if (g && roles)
+          group_roles[g] = roles
+            .split(",")
+            .map((r) => r.trim())
+            .filter(Boolean);
       }
-      await put("/v1/scim", { default_roles: edit.defaults.split(",").map((r) => r.trim()).filter(Boolean), group_roles });
+      await put("/v1/scim", {
+        default_roles: edit.defaults
+          .split(",")
+          .map((r) => r.trim())
+          .filter(Boolean),
+        group_roles,
+      });
       setEdit(null);
       cfg.reload();
     }, "Saved");
   const newToken = () =>
     act.run(async () => {
-      const out = await post<{ key: string }>("/v1/api-keys", { name: "SCIM provisioning", permissions: ["scim.provision"], expires_days: 365 });
+      const out = await post<{ key: string }>("/v1/api-keys", {
+        name: "SCIM provisioning",
+        permissions: ["scim.provision"],
+        expires_days: 365,
+      });
       setToken(out.key);
     }, false);
   return (
@@ -582,29 +934,55 @@ function Provisioning() {
         <button onClick={() => void newToken()}>Create SCIM token</button>
       </div>
       <p className="hint">
-        Your identity provider creates, updates and deactivates members, and moves them between groups. You decide which roles each group carries. Deactivating someone removes all their roles and signs them out; owners are never deprovisioned.
+        Your identity provider creates, updates and deactivates members, and
+        moves them between groups. You decide which roles each group carries.
+        Deactivating someone removes all their roles and signs them out; owners
+        are never deprovisioned.
       </p>
       <ErrorBox error={cfg.error ?? act.error} />
       {token && (
         <p className="card">
-          Token (shown once; give it to your identity provider): <code>{token}</code>
+          Token (shown once; give it to your identity provider):{" "}
+          <code>{token}</code>
         </p>
       )}
       {c && (
         <section className="card">
           <p className="hint">
-            SCIM base URL <code>{c.endpoint}</code> · {c.users.active} active, {c.users.inactive} deactivated
+            SCIM base URL <code>{c.endpoint}</code> · {c.users.active} active,{" "}
+            {c.users.inactive} deactivated
           </p>
           {edit ? (
             <>
-              <Field label="Default roles" hint="Comma-separated; everyone provisioned gets these">
-                <input value={edit.defaults} onChange={(e) => setEdit({ ...edit, defaults: e.target.value })} />
+              <Field
+                label="Default roles"
+                hint="Comma-separated; everyone provisioned gets these"
+              >
+                <input
+                  value={edit.defaults}
+                  onChange={(e) =>
+                    setEdit({ ...edit, defaults: e.target.value })
+                  }
+                />
               </Field>
-              <Field label="Group mapping" hint="One per line: group = role, role">
-                <textarea rows={4} value={edit.mapping} onChange={(e) => setEdit({ ...edit, mapping: e.target.value })} />
+              <Field
+                label="Group mapping"
+                hint="One per line: group = role, role"
+              >
+                <textarea
+                  rows={4}
+                  value={edit.mapping}
+                  onChange={(e) =>
+                    setEdit({ ...edit, mapping: e.target.value })
+                  }
+                />
               </Field>
               <div className="toolbar">
-                <button className="primary" disabled={act.busy} onClick={() => void save()}>
+                <button
+                  className="primary"
+                  disabled={act.busy}
+                  onClick={() => void save()}
+                >
                   Save
                 </button>
                 <button onClick={() => setEdit(null)}>Cancel</button>
@@ -612,7 +990,9 @@ function Provisioning() {
             </>
           ) : (
             <div className="toolbar">
-              <span className="grow hint">Default roles: {c.default_roles.join(", ") || "none"}</span>
+              <span className="grow hint">
+                Default roles: {c.default_roles.join(", ") || "none"}
+              </span>
               <button
                 onClick={() =>
                   setEdit({
@@ -640,7 +1020,11 @@ function Provisioning() {
                 <tr key={g.id}>
                   <td>{g.display_name}</td>
                   <td>{g.members}</td>
-                  <td>{g.roles.join(", ") || <span className="hint">none: map it above</span>}</td>
+                  <td>
+                    {g.roles.join(", ") || (
+                      <span className="hint">none: map it above</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -651,7 +1035,13 @@ function Provisioning() {
   );
 }
 
-function AddSSO({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+function AddSSO({
+  onClose,
+  onDone,
+}: {
+  onClose: () => void;
+  onDone: () => void;
+}) {
   const [protocol, setProtocol] = useState<"oidc" | "saml">("oidc");
   const [name, setName] = useState("");
   const [issuer, setIssuer] = useState("");
@@ -666,7 +1056,11 @@ function AddSSO({ onClose, onDone }: { onClose: () => void; onDone: () => void }
     const out: Record<string, string[]> = {};
     for (const line of mapping.split("\n")) {
       const [g, roles] = line.split("=").map((x) => x.trim());
-      if (g && roles) out[g] = roles.split(",").map((r) => r.trim()).filter(Boolean);
+      if (g && roles)
+        out[g] = roles
+          .split(",")
+          .map((r) => r.trim())
+          .filter(Boolean);
     }
     return out;
   };
@@ -675,48 +1069,123 @@ function AddSSO({ onClose, onDone }: { onClose: () => void; onDone: () => void }
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          const roles = defaults.split(",").map((r) => r.trim()).filter(Boolean);
+          const roles = defaults
+            .split(",")
+            .map((r) => r.trim())
+            .filter(Boolean);
           const body =
             protocol === "oidc"
-              ? { protocol, name, oidc: { issuer, client_id: clientID, client_secret: secret, groups_claim: groupsField }, default_roles: roles, group_roles: parseMapping() }
-              : { protocol, name, saml: { metadata_xml: metadata, name_attr: "name", groups_attr: groupsField }, default_roles: roles, group_roles: parseMapping() };
-          void act.run(async () => (await post("/v1/sso", body), onDone()), "Single sign-on added");
+              ? {
+                  protocol,
+                  name,
+                  oidc: {
+                    issuer,
+                    client_id: clientID,
+                    client_secret: secret,
+                    groups_claim: groupsField,
+                  },
+                  default_roles: roles,
+                  group_roles: parseMapping(),
+                }
+              : {
+                  protocol,
+                  name,
+                  saml: {
+                    metadata_xml: metadata,
+                    name_attr: "name",
+                    groups_attr: groupsField,
+                  },
+                  default_roles: roles,
+                  group_roles: parseMapping(),
+                };
+          void act.run(
+            async () => (await post("/v1/sso", body), onDone()),
+            "Single sign-on added",
+          );
         }}
       >
         <Field label="Protocol">
-          <select value={protocol} onChange={(e) => setProtocol(e.target.value as "oidc" | "saml")}>
+          <select
+            value={protocol}
+            onChange={(e) => setProtocol(e.target.value as "oidc" | "saml")}
+          >
             <option value="oidc">OpenID Connect</option>
             <option value="saml">SAML 2.0</option>
           </select>
         </Field>
         <Field label="Name">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Okta" required />
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Okta"
+            required
+          />
         </Field>
         {protocol === "oidc" ? (
           <>
             <Field label="Issuer URL">
-              <input value={issuer} onChange={(e) => setIssuer(e.target.value)} placeholder="https://login.example.com" required />
+              <input
+                value={issuer}
+                onChange={(e) => setIssuer(e.target.value)}
+                placeholder="https://login.example.com"
+                required
+              />
             </Field>
             <Field label="Client ID">
-              <input value={clientID} onChange={(e) => setClientID(e.target.value)} required />
+              <input
+                value={clientID}
+                onChange={(e) => setClientID(e.target.value)}
+                required
+              />
             </Field>
-            <Field label="Client secret" hint="Encrypted when saved; never shown again">
-              <input type="password" value={secret} onChange={(e) => setSecret(e.target.value)} required />
+            <Field
+              label="Client secret"
+              hint="Encrypted when saved; never shown again"
+            >
+              <input
+                type="password"
+                value={secret}
+                onChange={(e) => setSecret(e.target.value)}
+                required
+              />
             </Field>
           </>
         ) : (
           <Field label="Identity provider metadata (XML)">
-            <textarea rows={6} value={metadata} onChange={(e) => setMetadata(e.target.value)} required />
+            <textarea
+              rows={6}
+              value={metadata}
+              onChange={(e) => setMetadata(e.target.value)}
+              required
+            />
           </Field>
         )}
-        <Field label={protocol === "oidc" ? "Groups claim" : "Groups attribute"}>
-          <input value={groupsField} onChange={(e) => setGroupsField(e.target.value)} />
+        <Field
+          label={protocol === "oidc" ? "Groups claim" : "Groups attribute"}
+        >
+          <input
+            value={groupsField}
+            onChange={(e) => setGroupsField(e.target.value)}
+          />
         </Field>
-        <Field label="Default roles" hint="Comma-separated; everyone who signs in gets these">
-          <input value={defaults} onChange={(e) => setDefaults(e.target.value)} />
+        <Field
+          label="Default roles"
+          hint="Comma-separated; everyone who signs in gets these"
+        >
+          <input
+            value={defaults}
+            onChange={(e) => setDefaults(e.target.value)}
+          />
         </Field>
         <Field label="Group mapping" hint="One per line: group = role, role">
-          <textarea rows={3} value={mapping} onChange={(e) => setMapping(e.target.value)} placeholder={"treasury = operator\npayroll-approvers = approver, payroll_approver"} />
+          <textarea
+            rows={3}
+            value={mapping}
+            onChange={(e) => setMapping(e.target.value)}
+            placeholder={
+              "treasury = operator\npayroll-approvers = approver, payroll_approver"
+            }
+          />
         </Field>
         <ErrorBox error={act.error} />
         <div className="toolbar">

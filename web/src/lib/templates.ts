@@ -3,7 +3,15 @@
 
 export interface TemplateParam {
   name: string;
-  type: "string" | "text" | "integer" | "number" | "boolean" | "time" | "weekday" | "connection";
+  type:
+    | "string"
+    | "text"
+    | "integer"
+    | "number"
+    | "boolean"
+    | "time"
+    | "weekday"
+    | "connection";
   title: string;
   description: string;
   required: boolean;
@@ -18,7 +26,16 @@ export interface TemplateParam {
   /** For a connection: the capabilities its rail must have (pay_bank); any rail that can is offered. */
   capability?: string[];
   /** How the value is chosen instead of typed (no-technical-steps N8). */
-  picker?: "sheet" | "sheet_tab" | "table" | "column" | "role" | "whatsapp_template" | "whatsapp_language" | "slack_channel" | "choice";
+  picker?:
+    | "sheet"
+    | "sheet_tab"
+    | "table"
+    | "column"
+    | "role"
+    | "whatsapp_template"
+    | "whatsapp_language"
+    | "slack_channel"
+    | "choice";
   /** The parameter a picker depends on: a tab's sheet, a column's table, a language's template. */
   from?: string;
   /** With picker choice: the connector's picker it lists from ("mailchimp:audiences"). */
@@ -35,7 +52,13 @@ export interface TemplateTable {
   name: string;
   title?: string;
   description?: string;
-  columns: { name: string; title?: string; type: string; required?: boolean; personal?: boolean }[];
+  columns: {
+    name: string;
+    title?: string;
+    type: string;
+    required?: boolean;
+    personal?: boolean;
+  }[];
 }
 
 export interface Template {
@@ -72,7 +95,13 @@ export interface CallableInterface {
   inputs: Record<string, unknown>;
   /** The parameters a template step fills. */
   params: string[];
-  outputs: { name: string; type: string; title: string; description: string; value: string }[];
+  outputs: {
+    name: string;
+    type: string;
+    title: string;
+    description: string;
+    value: string;
+  }[];
   effect: TemplateEffect;
 }
 
@@ -96,25 +125,43 @@ export interface TemplateEffect {
 
 /** A template's effect in plain words: "Moves money · waits for a person to approve". */
 export function effectWords(e: TemplateEffect): string {
-  const parts = [e.class === "moves_money" ? "Moves money" : e.class === "write" ? "Changes things in your services" : "Only reads"];
+  const parts = [
+    e.class === "moves_money"
+      ? "Moves money"
+      : e.class === "write"
+        ? "Changes things in your services"
+        : "Only reads",
+  ];
   if (e.waits_for_person) parts.push("waits for a person to approve or answer");
-  if (e.waits_for_event) parts.push("waits for something to happen (a payment, a reply)");
+  if (e.waits_for_event)
+    parts.push("waits for something to happen (a payment, a reply)");
   return parts.join(" · ");
 }
 
-export const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+export const WEEKDAYS = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+];
 
 /** The form's starting values: each parameter's default, as text. */
 export function initialValues(params: TemplateParam[]): Record<string, string> {
   const out: Record<string, string> = {};
   for (const p of params) {
-    out[p.name] = p.default === undefined || p.default === null ? "" : String(p.default);
+    out[p.name] =
+      p.default === undefined || p.default === null ? "" : String(p.default);
   }
   return out;
 }
 
 /** The input a parameter is edited with. */
-export function inputKind(p: TemplateParam): "text" | "textarea" | "number" | "time" | "select" | "checkbox" {
+export function inputKind(
+  p: TemplateParam,
+): "text" | "textarea" | "number" | "time" | "select" | "checkbox" {
   if (p.enum && p.enum.length > 0) return "select";
   switch (p.type) {
     case "text":
@@ -136,7 +183,10 @@ export function inputKind(p: TemplateParam): "text" | "textarea" | "number" | "t
 /** Form values to the instantiate request's params: blanks left out (the
  * server applies defaults and names what is missing), numbers as numbers,
  * yes/no as booleans. The server checks every value again. */
-export function toParams(params: TemplateParam[], values: Record<string, string>): Record<string, unknown> {
+export function toParams(
+  params: TemplateParam[],
+  values: Record<string, string>,
+): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const p of params) {
     const raw = (values[p.name] ?? "").trim();

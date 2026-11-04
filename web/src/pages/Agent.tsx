@@ -4,11 +4,47 @@
 // one column, big buttons, few requests.
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams, type NavigateFunction } from "react-router-dom";
-import { ApiError, currentAgentSession, get, post, setAgentSession, subscribeAgentSession, uploadFile } from "../api";
+import {
+  Link,
+  Navigate,
+  NavLink,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+  useParams,
+  type NavigateFunction,
+} from "react-router-dom";
+import {
+  ApiError,
+  currentAgentSession,
+  get,
+  post,
+  setAgentSession,
+  subscribeAgentSession,
+  uploadFile,
+} from "../api";
 import { AgentPermissions, useAuth } from "../auth";
-import { AGENT_PERMISSIONS, attestPath, consentChannels, endReason, fitWithin, formatLeft, msLeft, type AgentSession, type ConsentChannel } from "../lib/agent";
-import { Badge, ErrorBox, Field, Skeleton, fmtTime, useAction, useLoad } from "../ui";
+import {
+  AGENT_PERMISSIONS,
+  attestPath,
+  consentChannels,
+  endReason,
+  fitWithin,
+  formatLeft,
+  msLeft,
+  type AgentSession,
+  type ConsentChannel,
+} from "../lib/agent";
+import {
+  Badge,
+  ErrorBox,
+  Field,
+  Skeleton,
+  fmtTime,
+  useAction,
+  useLoad,
+} from "../ui";
 import { brandFile } from "../brand";
 import { Storefront } from "./Storefront";
 import { Look } from "./Look";
@@ -74,7 +110,9 @@ const ATTESTED_KEY = "taskiem.agent-attested";
 
 function attested(id: string): boolean {
   try {
-    return (JSON.parse(localStorage.getItem(ATTESTED_KEY) ?? "[]") as string[]).includes(id);
+    return (
+      JSON.parse(localStorage.getItem(ATTESTED_KEY) ?? "[]") as string[]
+    ).includes(id);
   } catch {
     return false;
   }
@@ -82,7 +120,11 @@ function attested(id: string): boolean {
 
 function markAttested(id: string) {
   try {
-    const ids = (JSON.parse(localStorage.getItem(ATTESTED_KEY) ?? "[]") as string[]).filter((x) => x !== id).slice(-49);
+    const ids = (
+      JSON.parse(localStorage.getItem(ATTESTED_KEY) ?? "[]") as string[]
+    )
+      .filter((x) => x !== id)
+      .slice(-49);
     localStorage.setItem(ATTESTED_KEY, JSON.stringify([...ids, id]));
   } catch {
     // storage blocked: the banner keeps reminding
@@ -91,9 +133,21 @@ function markAttested(id: string) {
 
 /** Opens the business's page in the session, if the session is live. */
 async function enterSession(id: string, navigate: NavigateFunction) {
-  const { session } = await get<{ session: SessionRow }>(`/v1/agent/sessions/${id}`);
-  if (session.status !== "active") throw new Error(session.status === "pending" ? "The owner has not agreed yet." : "This session has ended.");
-  setAgentSession({ id: session.id, business: session.business, kind: session.kind, expires_at: session.expires_at });
+  const { session } = await get<{ session: SessionRow }>(
+    `/v1/agent/sessions/${id}`,
+  );
+  if (session.status !== "active")
+    throw new Error(
+      session.status === "pending"
+        ? "The owner has not agreed yet."
+        : "This session has ended.",
+    );
+  setAgentSession({
+    id: session.id,
+    business: session.business,
+    kind: session.kind,
+    expires_at: session.expires_at,
+  });
   navigate("/storefront");
 }
 
@@ -106,7 +160,13 @@ export function AgentApp() {
     <div className="agent-app">
       <header className="agent-top">
         <Link to="/agent" className="brand">
-          <img className="brand-mark" src={brandFile("mark.svg")} alt="" width={26} height={26} />
+          <img
+            className="brand-mark"
+            src={brandFile("mark.svg")}
+            alt=""
+            width={26}
+            height={26}
+          />
           Taskiem agent
         </Link>
         <button onClick={() => void logout()}>Sign out</button>
@@ -128,14 +188,23 @@ function AgentHome() {
   const navigate = useNavigate();
   const state = (useLocation().state ?? {}) as HomeState;
   const me = useLoad(() => get<{ agent: AgentMe }>("/v1/agent/me"), []);
-  const sessions = useLoad(() => get<{ sessions: SessionRow[] }>("/v1/agent/sessions"), []);
+  const sessions = useLoad(
+    () => get<{ sessions: SessionRow[] }>("/v1/agent/sessions"),
+    [],
+  );
   const act = useAction();
   if (me.error instanceof ApiError && me.error.status === 403) {
     return (
       <section className="card">
         <h1>Not a field agent</h1>
-        <p>{me.error.message.charAt(0).toUpperCase() + me.error.message.slice(1)}.</p>
-        <p className="hint">Field agents are registered by Taskiem after an in-person check. If you work for a business, use the main app instead.</p>
+        <p>
+          {me.error.message.charAt(0).toUpperCase() + me.error.message.slice(1)}
+          .
+        </p>
+        <p className="hint">
+          Field agents are registered by Taskiem after an in-person check. If
+          you work for a business, use the main app instead.
+        </p>
         <Link className="button" to="/workflows">
           Go to the main app
         </Link>
@@ -150,7 +219,8 @@ function AgentHome() {
     <>
       {state.handedOver && (
         <div className="notice agent-done" role="status">
-          <strong>Handed over.</strong> {state.handedOver} is live. The owner has a WhatsApp message with the page's address and how to change it.
+          <strong>Handed over.</strong> {state.handedOver} is live. The owner
+          has a WhatsApp message with the page's address and how to change it.
         </div>
       )}
       {state.message && (
@@ -171,7 +241,11 @@ function AgentHome() {
       <h2>My businesses</h2>
       <ErrorBox error={sessions.error ?? act.error} />
       {!sessions.data && !sessions.error && <Skeleton rows={2} />}
-      {sessions.data && list.length === 0 && <p className="hint">None yet. Sign up your first business with its owner beside you.</p>}
+      {sessions.data && list.length === 0 && (
+        <p className="hint">
+          None yet. Sign up your first business with its owner beside you.
+        </p>
+      )}
       <ul className="agent-list">
         {list.map((s) => (
           <li key={s.id} className="card">
@@ -181,7 +255,9 @@ function AgentHome() {
             </div>
             <div className="hint">
               {s.kind === "support" ? "Support visit" : "Sign-up"} ·{" "}
-              {s.status === "ended" ? `${endReason(s.end_reason)}, ${fmtTime(s.ended_at ?? s.expires_at)}` : `until ${fmtTime(s.expires_at)}`}
+              {s.status === "ended"
+                ? `${endReason(s.end_reason)}, ${fmtTime(s.ended_at ?? s.expires_at)}`
+                : `until ${fmtTime(s.expires_at)}`}
             </div>
             {s.status === "pending" && (
               <Link className="button" to={`/agent/sessions/${s.id}`}>
@@ -190,7 +266,13 @@ function AgentHome() {
             )}
             {s.status === "active" && (
               <div className="toolbar" style={{ margin: "8px 0 0" }}>
-                <button className="primary" disabled={act.busy} onClick={() => void act.run(() => enterSession(s.id, navigate), false)}>
+                <button
+                  className="primary"
+                  disabled={act.busy}
+                  onClick={() =>
+                    void act.run(() => enterSession(s.id, navigate), false)
+                  }
+                >
                   Work on the page
                 </button>
                 {s.kind === "onboarding" && (
@@ -216,24 +298,55 @@ function NewBusiness() {
   return (
     <section className="card">
       <h1>New business</h1>
-      <p className="hint">Fill this in with the owner beside you. They agree from their own WhatsApp next.</p>
+      <p className="hint">
+        Fill this in with the owner beside you. They agree from their own
+        WhatsApp next.
+      </p>
       <form
         onSubmit={(e) => {
           e.preventDefault();
           void act.run(async () => {
-            const out = await post<{ session: SessionRow; consent: Consent }>("/v1/agent/businesses", { name: name.trim(), owner_name: owner.trim(), owner_phone: phone.trim() });
-            navigate(`/agent/sessions/${out.session.id}`, { state: { consent: out.consent } });
+            const out = await post<{ session: SessionRow; consent: Consent }>(
+              "/v1/agent/businesses",
+              {
+                name: name.trim(),
+                owner_name: owner.trim(),
+                owner_phone: phone.trim(),
+              },
+            );
+            navigate(`/agent/sessions/${out.session.id}`, {
+              state: { consent: out.consent },
+            });
           }, false);
         }}
       >
         <Field label="Business name">
-          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required autoComplete="off" />
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={100}
+            required
+            autoComplete="off"
+          />
         </Field>
         <Field label="Owner's name">
-          <input value={owner} onChange={(e) => setOwner(e.target.value)} maxLength={100} required autoComplete="off" />
+          <input
+            value={owner}
+            onChange={(e) => setOwner(e.target.value)}
+            maxLength={100}
+            required
+            autoComplete="off"
+          />
         </Field>
         <Field label="Owner's WhatsApp number" hint="Such as 0803 123 4567.">
-          <input type="tel" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required autoComplete="off" />
+          <input
+            type="tel"
+            inputMode="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            required
+            autoComplete="off"
+          />
         </Field>
         <ErrorBox error={act.error} />
         <button type="submit" className="primary agent-big" disabled={act.busy}>
@@ -250,7 +363,9 @@ function SessionPage() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
   const loc = useLocation();
-  const [consent, setConsent] = useState<Consent | undefined>((loc.state as { consent?: Consent } | null)?.consent);
+  const [consent, setConsent] = useState<Consent | undefined>(
+    (loc.state as { consent?: Consent } | null)?.consent,
+  );
   const [session, setSession] = useState<SessionRow>();
   const [error, setError] = useState<unknown>();
   const sawPending = useRef(false);
@@ -273,7 +388,10 @@ function SessionPage() {
         (e: unknown) => live && setError(e),
       );
     void load();
-    const t = setInterval(() => document.visibilityState === "visible" && void load(), 3000);
+    const t = setInterval(
+      () => document.visibilityState === "visible" && void load(),
+      3000,
+    );
     return () => {
       live = false;
       clearInterval(t);
@@ -283,11 +401,17 @@ function SessionPage() {
   // Agreed while the agent watched: straight to the page.
   useEffect(() => {
     if (session?.status === "pending") sawPending.current = true;
-    if (session?.status === "active" && sawPending.current) void act.run(() => enterSession(id, navigate), false);
+    if (session?.status === "active" && sawPending.current)
+      void act.run(() => enterSession(id, navigate), false);
     // Only on the status changing: once, on agreeing.
   }, [session?.status]);
 
-  if (!session) return error ? <ErrorBox error={error} /> : <Skeleton rows={3} label="Loading…" />;
+  if (!session)
+    return error ? (
+      <ErrorBox error={error} />
+    ) : (
+      <Skeleton rows={3} label="Loading…" />
+    );
 
   const back = <Link to="/agent">Back to my businesses</Link>;
   if (session.status === "ended") {
@@ -304,10 +428,15 @@ function SessionPage() {
       <section className="card">
         <h1>{session.business}</h1>
         <div className="notice" role="status">
-          The owner agreed. You may work on the page until {fmtTime(session.expires_at)}.
+          The owner agreed. You may work on the page until{" "}
+          {fmtTime(session.expires_at)}.
         </div>
         <ErrorBox error={act.error} />
-        <button className="primary agent-big" disabled={act.busy} onClick={() => void act.run(() => enterSession(id, navigate), false)}>
+        <button
+          className="primary agent-big"
+          disabled={act.busy}
+          onClick={() => void act.run(() => enterSession(id, navigate), false)}
+        >
           Work on the page
         </button>
         {back}
@@ -316,11 +445,17 @@ function SessionPage() {
   }
 
   const left = consent ? msLeft(consent.expires_at, now) : 0;
-  const channels = consent ? consentChannels(consent) : (["whatsapp"] as ConsentChannel[]);
-  const shown: ConsentChannel = channels.includes(channel) ? channel : (channels[0] ?? "whatsapp");
+  const channels = consent
+    ? consentChannels(consent)
+    : (["whatsapp"] as ConsentChannel[]);
+  const shown: ConsentChannel = channels.includes(channel)
+    ? channel
+    : (channels[0] ?? "whatsapp");
   const newCode = () =>
     act.run(async () => {
-      const out = await post<{ session: SessionRow; consent: Consent }>(`/v1/agent/sessions/${id}/code`);
+      const out = await post<{ session: SessionRow; consent: Consent }>(
+        `/v1/agent/sessions/${id}/code`,
+      );
       setConsent(out.consent);
       setSession(out.session);
     }, false);
@@ -328,9 +463,19 @@ function SessionPage() {
     <section className="card">
       <h1>{session.business}</h1>
       {channels.length > 1 && (
-        <div className="tabs agent-channels" role="group" aria-label="Where the owner agrees">
+        <div
+          className="tabs agent-channels"
+          role="group"
+          aria-label="Where the owner agrees"
+        >
           {channels.map((c) => (
-            <button key={c} type="button" className={shown === c ? "active" : ""} aria-pressed={shown === c} onClick={() => setChannel(c)}>
+            <button
+              key={c}
+              type="button"
+              className={shown === c ? "active" : ""}
+              aria-pressed={shown === c}
+              onClick={() => setChannel(c)}
+            >
               {c === "whatsapp" ? "WhatsApp" : "Telegram"}
             </button>
           ))}
@@ -343,7 +488,10 @@ function SessionPage() {
       </p>
       {consent && left > 0 ? (
         <>
-          <div className="agent-code" aria-label={`Code ${consent.code.split("").join(" ")}`}>
+          <div
+            className="agent-code"
+            aria-label={`Code ${consent.code.split("").join(" ")}`}
+          >
             {consent.code}
           </div>
           {shown === "whatsapp" ? (
@@ -359,30 +507,57 @@ function SessionPage() {
                 )}
               </p>
               {consent.qr && (
-                <img className="agent-qr" src={consent.qr} width={240} height={240} alt="QR code: the owner scans it with their own phone to send the message" />
+                <img
+                  className="agent-qr"
+                  src={consent.qr}
+                  width={240}
+                  height={240}
+                  alt="QR code: the owner scans it with their own phone to send the message"
+                />
               )}
               {consent.link && (
                 <>
-                  <a className="button primary agent-big" href={consent.link} target="_blank" rel="noreferrer">
+                  <a
+                    className="button primary agent-big"
+                    href={consent.link}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
                     Open WhatsApp with the message
                   </a>
-                  <p className="hint">Only on the owner's phone: the message must come from their number. Never read the code aloud for someone else to type.</p>
+                  <p className="hint">
+                    Only on the owner's phone: the message must come from their
+                    number. Never read the code aloud for someone else to type.
+                  </p>
                 </>
               )}
             </>
           ) : (
             <>
               {consent.telegram_qr && (
-                <img className="agent-qr" src={consent.telegram_qr} width={240} height={240} alt="QR code: the owner scans it with their own phone to open Taskiem on Telegram" />
+                <img
+                  className="agent-qr"
+                  src={consent.telegram_qr}
+                  width={240}
+                  height={240}
+                  alt="QR code: the owner scans it with their own phone to open Taskiem on Telegram"
+                />
               )}
               {consent.telegram_link && (
-                <a className="button primary agent-big" href={consent.telegram_link} target="_blank" rel="noreferrer">
+                <a
+                  className="button primary agent-big"
+                  href={consent.telegram_link}
+                  target="_blank"
+                  rel="noreferrer"
+                >
                   Open Telegram
                 </a>
               )}
               <p className="hint">
-                The owner taps Start, then “Share my number”: Telegram sends their own number, which must be the one you entered. They can also send{" "}
-                <strong>{consent.text}</strong> to the bot. Only on the owner's phone.
+                The owner taps Start, then “Share my number”: Telegram sends
+                their own number, which must be the one you entered. They can
+                also send <strong>{consent.text}</strong> to the bot. Only on
+                the owner's phone.
               </p>
             </>
           )}
@@ -391,13 +566,21 @@ function SessionPage() {
           </p>
         </>
       ) : (
-        <div className="notice">{consent ? "This code has run out." : "Make a code to show the owner."}</div>
+        <div className="notice">
+          {consent
+            ? "This code has run out."
+            : "Make a code to show the owner."}
+        </div>
       )}
       <p className="hint" role="status">
         Waiting for the owner to agree…
       </p>
       <ErrorBox error={act.error ?? error} />
-      <button className="agent-big" disabled={act.busy} onClick={() => void newCode()}>
+      <button
+        className="agent-big"
+        disabled={act.busy}
+        onClick={() => void newCode()}
+      >
         New code
       </button>
       {back}
@@ -415,7 +598,9 @@ async function shrink(file: File): Promise<Blob> {
     canvas.height = height;
     canvas.getContext("2d")?.drawImage(bmp, 0, 0, width, height);
     bmp.close();
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.8));
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", 0.8),
+    );
     return blob && blob.size < file.size ? blob : file;
   } catch {
     return file; // the server checks it
@@ -426,7 +611,8 @@ function dataURL(b: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
     r.onload = () => resolve(String(r.result));
-    r.onerror = () => reject(r.error ?? new Error("The photo could not be read."));
+    r.onerror = () =>
+      reject(r.error ?? new Error("The photo could not be read."));
     r.readAsDataURL(b);
   });
 }
@@ -456,11 +642,19 @@ function RecordVisit() {
     navigator.geolocation.getCurrentPosition(
       (p) => {
         setFinding(false);
-        setPlace({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy });
+        setPlace({
+          lat: p.coords.latitude,
+          lng: p.coords.longitude,
+          accuracy: p.coords.accuracy,
+        });
       },
       (e) => {
         setFinding(false);
-        setPlaceError(e.code === e.PERMISSION_DENIED ? "Allow location for this site in the browser's settings, then try again." : "The location could not be found. Go outside or near a window and try again.");
+        setPlaceError(
+          e.code === e.PERMISSION_DENIED
+            ? "Allow location for this site in the browser's settings, then try again."
+            : "The location could not be found. Go outside or near a window and try again.",
+        );
       },
       { enableHighAccuracy: true, timeout: 30_000, maximumAge: 60_000 },
     );
@@ -476,7 +670,11 @@ function RecordVisit() {
           The photo and place are saved. The business is now agent onboarded.
         </div>
         <ErrorBox error={act.error} />
-        <button className="primary agent-big" disabled={act.busy} onClick={() => void act.run(() => enterSession(id, navigate), false)}>
+        <button
+          className="primary agent-big"
+          disabled={act.busy}
+          onClick={() => void act.run(() => enterSession(id, navigate), false)}
+        >
           Back to the page
         </button>
         <Link to="/agent">My businesses</Link>
@@ -487,7 +685,10 @@ function RecordVisit() {
   return (
     <section className="card">
       <h1>Record visit</h1>
-      <p className="hint">Take a photo of the shop or stall from outside, standing at it, so its place is right.</p>
+      <p className="hint">
+        Take a photo of the shop or stall from outside, standing at it, so its
+        place is right.
+      </p>
       <Field label="Photo of the shop or stall">
         <input
           type="file"
@@ -504,17 +705,23 @@ function RecordVisit() {
           }}
         />
       </Field>
-      {preview && <img className="agent-photo" src={preview} alt="The photo to send" />}
+      {preview && (
+        <img className="agent-photo" src={preview} alt="The photo to send" />
+      )}
       <div className="field">
         <span>Place</span>
         {place ? (
           <p style={{ margin: "4px 0" }}>
             Found, to within {Math.round(place.accuracy)} m.{" "}
-            {place.accuracy > 100 && <span className="hint">That is rough: try again outside.</span>}
+            {place.accuracy > 100 && (
+              <span className="hint">That is rough: try again outside.</span>
+            )}
           </p>
         ) : (
           <p className="hint" style={{ margin: "4px 0" }}>
-            {finding ? "Finding where you are…" : placeError || "Not found yet."}
+            {finding
+              ? "Finding where you are…"
+              : placeError || "Not found yet."}
           </p>
         )}
         <button type="button" disabled={finding} onClick={locate}>
@@ -522,7 +729,12 @@ function RecordVisit() {
         </button>
       </div>
       <Field label="Note (optional)" hint={`${note.length}/200`}>
-        <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} rows={2} />
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          maxLength={200}
+          rows={2}
+        />
       </Field>
       <ErrorBox error={act.error} />
       <button
@@ -566,13 +778,19 @@ export function AgentWorkspace({ session: s }: { session: AgentSession }) {
   useEffect(() => {
     const ended = () =>
       leaveRef.current(
-        handedOver.current ? { handedOver: s.business } : { message: `Your session with ${s.business} has ended: the owner ended it, or its time ran out.` },
+        handedOver.current
+          ? { handedOver: s.business }
+          : {
+              message: `Your session with ${s.business} has ended: the owner ended it, or its time ran out.`,
+            },
       );
     const published = () => {
       if (s.kind !== "onboarding") return;
       handedOver.current = true;
       get<{ session: SessionRow }>(`/v1/agent/sessions/${s.id}`).then(
-        (r) => r.session.status === "ended" && leaveRef.current({ handedOver: s.business }),
+        (r) =>
+          r.session.status === "ended" &&
+          leaveRef.current({ handedOver: s.business }),
         () => undefined,
       );
     };
@@ -585,7 +803,8 @@ export function AgentWorkspace({ session: s }: { session: AgentSession }) {
   }, [s.id, s.business, s.kind]);
 
   useEffect(() => {
-    if (left === 0) leaveRef.current({ message: `Your time with ${s.business} is up.` });
+    if (left === 0)
+      leaveRef.current({ message: `Your time with ${s.business} is up.` });
   }, [left, s.business]);
 
   return (
@@ -594,9 +813,7 @@ export function AgentWorkspace({ session: s }: { session: AgentSession }) {
         <div className="agent-banner" role="region" aria-label="Agent session">
           <div className="agent-banner-text">
             <strong>{s.business}</strong>
-            <span>
-              Working as agent · {formatLeft(left)} left
-            </span>
+            <span>Working as agent · {formatLeft(left)} left</span>
           </div>
           <div className="agent-banner-actions">
             {s.kind === "onboarding" && (
@@ -621,7 +838,8 @@ export function AgentWorkspace({ session: s }: { session: AgentSession }) {
         <ErrorBox error={act.error} />
         {!recorded && (
           <div className="notice">
-            Record the visit before you publish: publishing hands the page to the owner and ends this session.
+            Record the visit before you publish: publishing hands the page to
+            the owner and ends this session.
           </div>
         )}
         <nav className="tabs" aria-label="Business">

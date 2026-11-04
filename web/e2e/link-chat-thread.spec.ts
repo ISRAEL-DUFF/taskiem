@@ -1,4 +1,10 @@
-import { expect, test, type Page, type Route } from "@playwright/test";
+import {
+  expect,
+  test,
+  type Browser,
+  type Page,
+  type Route,
+} from "@playwright/test";
 import { axe, describe } from "./a11y";
 
 // The thread behaves like WhatsApp Web's: older messages load as the reader
@@ -28,6 +34,25 @@ async function signUp(page: Page, tenant: string) {
 }
 
 type Msg = Record<string, unknown> & { id: string; created_at: string };
+/** The item at an index of a list that has it. */
+function one<T>(list: T[], i: number): T {
+  const x = list[i];
+  if (x === undefined) throw new Error(`no item ${i}`);
+  return x;
+}
+/** Where a thing is on the screen. */
+async function rect(l: {
+  boundingBox(): Promise<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>;
+}) {
+  const b = await l.boundingBox();
+  if (!b) throw new Error("not on the screen");
+  return b;
+}
 const idOf = (i: number) =>
   `0192e2e0-0000-7000-8000-${String(i).padStart(12, "0")}`;
 
@@ -62,7 +87,7 @@ function serve(all: Msg[]) {
     let out: Msg[];
     if (q.get("q"))
       out = all
-        .filter((m) => String(m.body).includes(q.get("q")!))
+        .filter((m) => String(m.body).includes(q.get("q") ?? ""))
         .slice(-limit);
     else if (q.get("around")) {
       const at = all.findIndex((m) => m.id === q.get("around"));
@@ -75,9 +100,13 @@ function serve(all: Msg[]) {
       const half = Math.floor(limit / 2);
       out = all.slice(Math.max(0, at - half), at + 1 + (limit - half));
     } else if (q.get("before"))
-      out = all.filter((m) => m.created_at < q.get("before")!).slice(-limit);
+      out = all
+        .filter((m) => m.created_at < (q.get("before") ?? ""))
+        .slice(-limit);
     else if (q.get("after"))
-      out = all.filter((m) => m.created_at > q.get("after")!).slice(0, limit);
+      out = all
+        .filter((m) => m.created_at > (q.get("after") ?? ""))
+        .slice(0, limit);
     else out = all.slice(-limit);
     await route.fulfill({
       contentType: "application/json",
@@ -86,7 +115,7 @@ function serve(all: Msg[]) {
   };
 }
 
-async function linked(browser: import("@playwright/test").Browser) {
+async function linked(browser: Browser) {
   const stamp = letters();
   const seller = await (await browser.newContext()).newPage();
   await signUp(seller, `Dangote Depot ${stamp}`);
@@ -164,8 +193,8 @@ test("older messages load as the reader scrolls up, and the view holds", async (
   await buyer.getByTestId("chat-stream").evaluate((el) => (el.scrollTop = 0));
   await expect(pane.getByTestId("chat-message")).toHaveCount(100);
   const first = pane.getByText("Message 71", { exact: true }); // the oldest of the first page
-  const box = (await first.boundingBox())!;
-  const stream = (await buyer.getByTestId("chat-stream").boundingBox())!;
+  const box = await rect(first);
+  const stream = await rect(buyer.getByTestId("chat-stream"));
   expect(box.y).toBeGreaterThan(stream.y);
   expect(box.y).toBeLessThan(stream.y + stream.height);
 
@@ -191,7 +220,7 @@ test("a new message does not move a reader looking at older ones", async ({
   await expect(pane.getByText("Message 120", { exact: true })).toBeVisible();
 
   // At the bottom, a new message follows the reader down.
-  all.push(conversation(link, 121)[120]!);
+  all.push(one(conversation(link, 121), 120));
   await expect(pane.getByText("Message 121", { exact: true })).toBeVisible({
     timeout: 10_000,
   });
@@ -202,7 +231,7 @@ test("a new message does not move a reader looking at older ones", async ({
     .getByTestId("chat-stream")
     .evaluate((el) => (el.scrollTop = el.scrollHeight / 2));
   const held = await scrollTop(buyer);
-  all.push(conversation(link, 122)[121]!);
+  all.push(one(conversation(link, 122), 121));
   const jump = pane.getByTestId("chat-jump");
   await expect(jump).toContainText("1 new message", { timeout: 10_000 });
   expect(Math.abs((await scrollTop(buyer)) - held)).toBeLessThan(3);
@@ -236,7 +265,7 @@ test("a quote goes to its message, and a search result opens at its message", as
   const all = conversation(link, 120);
   // 120 quotes 3, which is far above the page that opens.
   all[119] = {
-    ...all[119]!,
+    ...one(all, 119),
     reply: { pair_id: idOf(3), mine: true, kind: "text", body: "Message 3" },
   };
   await buyer.route(
@@ -343,9 +372,11 @@ const serveTaskiem = (all: TMsg[]) => async (route: Route) => {
   const q = new URL(route.request().url()).searchParams;
   let out: TMsg[];
   if (q.get("before"))
-    out = all.filter((m) => m.created_at < q.get("before")!).slice(-50);
+    out = all.filter((m) => m.created_at < (q.get("before") ?? "")).slice(-50);
   else if (q.get("after"))
-    out = all.filter((m) => m.created_at > q.get("after")!).slice(0, 200);
+    out = all
+      .filter((m) => m.created_at > (q.get("after") ?? ""))
+      .slice(0, 200);
   else out = all.slice(-50);
   await route.fulfill({
     contentType: "application/json",

@@ -74,7 +74,8 @@ test("a picture to send, a photo being sent and the camera, under the real conte
       const c = document.createElement("canvas");
       c.width = 320;
       c.height = 240;
-      const ctx = c.getContext("2d")!;
+      const ctx = c.getContext("2d");
+      if (!ctx) throw new Error("no canvas");
       setInterval(() => {
         ctx.fillStyle = "#2f7d5b";
         ctx.fillRect(0, 0, 320, 240);

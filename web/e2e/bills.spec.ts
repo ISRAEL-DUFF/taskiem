@@ -8,12 +8,18 @@ import { axe, describe } from "./a11y";
 test.use({ bypassCSP: true, viewport: { width: 390, height: 844 } });
 
 const H = { "X-Taskiem-Request": "1" };
-const letters = () => String(Date.now()).replace(/\d/g, (d) => "abcdefghij".charAt(Number(d)));
+const letters = () =>
+  String(Date.now()).replace(/\d/g, (d) => "abcdefghij".charAt(Number(d)));
 
 async function signUp(page: Page, tenant: string) {
   const r = await page.request.post("/v1/signup", {
     headers: H,
-    data: { tenant, email: `${letters()}-${Math.random().toString(36).slice(2, 8)}@bills.test`, name: tenant, password: "correct horse battery" },
+    data: {
+      tenant,
+      email: `${letters()}-${Math.random().toString(36).slice(2, 8)}@bills.test`,
+      name: tenant,
+      password: "correct horse battery",
+    },
   });
   expect(r.status(), await r.text()).toBe(201);
 }
@@ -36,19 +42,46 @@ test("a linked supplier's invoice arrives as a bill", async ({ browser }) => {
   await signUp(buyer, buyerName);
 
   // Linked: Ada asks Dangote as a supplier; Dangote accepts.
-  expect((await seller.request.put("/v1/link-settings", { headers: H, data: { findable: true } })).status()).toBe(200);
-  const found = await (await buyer.request.get(`/v1/links/search?q=${encodeURIComponent(`dangote depot ${stamp}`)}`, { headers: H })).json();
-  const asked = await buyer.request.post("/v1/links", { headers: H, data: { business: found.results[0].business, role: "supplier" } });
+  expect(
+    (
+      await seller.request.put("/v1/link-settings", {
+        headers: H,
+        data: { findable: true },
+      })
+    ).status(),
+  ).toBe(200);
+  const found = await (
+    await buyer.request.get(
+      `/v1/links/search?q=${encodeURIComponent(`dangote depot ${stamp}`)}`,
+      { headers: H },
+    )
+  ).json();
+  const asked = await buyer.request.post("/v1/links", {
+    headers: H,
+    data: { business: found.results[0].business, role: "supplier" },
+  });
   expect(asked.status(), await asked.text()).toBe(201);
-  const pending = await (await seller.request.get("/v1/links", { headers: H })).json();
-  expect((await seller.request.post(`/v1/links/${pending.links[0].id}/accept`, { headers: H })).status()).toBe(200);
+  const pending = await (
+    await seller.request.get("/v1/links", { headers: H })
+  ).json();
+  expect(
+    (
+      await seller.request.post(`/v1/links/${pending.links[0].id}/accept`, {
+        headers: H,
+      })
+    ).status(),
+  ).toBe(200);
 
   // Dangote invoices Ada as a linked business: no phone or email asked.
   await seller.goto("/invoices/new");
-  await seller.getByLabel("Who is it for?").selectOption({ label: `${buyerName} (linked)` });
+  await seller
+    .getByLabel("Who is it for?")
+    .selectOption({ label: `${buyerName} (linked)` });
   await expect(seller.getByLabel("Phone number")).toHaveCount(0);
   await seller.getByLabel("Amount (₦)").fill("25,000");
-  await expect(seller.getByText(`Sending puts it in ${buyerName}'s bills on Taskiem.`)).toBeVisible();
+  await expect(
+    seller.getByText(`Sending puts it in ${buyerName}'s bills on Taskiem.`),
+  ).toBeVisible();
   await seller.getByRole("button", { name: "Save and send" }).click();
   await expect(seller).toHaveURL(/\/invoices\/INV-/);
 
@@ -62,12 +95,16 @@ test("a linked supplier's invoice arrives as a bill", async ({ browser }) => {
   await expect(row).toContainText(sellerName);
   await expect(row).toContainText("To pay");
   await axeBoth(buyer, "/bills");
-  expect(await buyer.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  expect(
+    await buyer.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(390);
   await row.click();
   await expect(buyer.getByTestId("bill-hero")).toContainText("₦25,000");
   await expect(buyer.getByTestId("bill-hero")).toContainText(sellerName);
   await axeBoth(buyer, "a bill");
-  expect(await buyer.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  expect(
+    await buyer.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(390);
 
   // What Ada owes Dangote shows on her Suppliers page, from the bill.
   await buyer.goto("/storefront/suppliers");
@@ -88,7 +125,9 @@ test("a linked supplier's invoice arrives as a bill", async ({ browser }) => {
   await seller.reload();
   await expect(seller.getByTestId("invoice-query")).toBeVisible();
   await axeBoth(seller, "a queried invoice");
-  await seller.getByLabel("What you tell them").fill("A credit note is coming.");
+  await seller
+    .getByLabel("What you tell them")
+    .fill("A credit note is coming.");
   await seller.getByRole("button", { name: "Settle the query" }).click();
   await expect(seller.getByTestId("invoice-query")).toBeHidden();
   await buyer.reload();

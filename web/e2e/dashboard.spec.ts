@@ -10,5 +10,7 @@ test("the dashboard shows run health", async ({ page }) => {
   await expect(page.getByLabel("Success rate", { exact: true })).toBeVisible();
   await expect(page.getByRole("img", { name: "Runs per day" })).toBeVisible();
   await page.getByLabel("Period").selectOption("30");
-  await expect(page.getByRole("heading", { name: "Failing connectors" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Failing connectors" }),
+  ).toBeVisible();
 });

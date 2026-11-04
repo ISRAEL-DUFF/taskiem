@@ -3,7 +3,13 @@ import { fieldLabel, fieldValue, subjectWords } from "./approvals";
 
 describe("an approval's subject in words", () => {
   it("leads with the amount in naira, who it goes to and the account", () => {
-    const w = subjectWords({ amount_kobo: 4500000, to: "Kunle Supplies", bank: "GTBank", account_number: "0123454821", note: "Friday run" });
+    const w = subjectWords({
+      amount_kobo: 4500000,
+      to: "Kunle Supplies",
+      bank: "GTBank",
+      account_number: "0123454821",
+      note: "Friday run",
+    });
     expect(w.amount).toBe("₦45,000");
     expect(w.to).toBe("Kunle Supplies");
     expect(w.account).toBe("GTBank ••4821");
@@ -16,7 +22,12 @@ describe("an approval's subject in words", () => {
   });
 
   it("lists the rest by label, and leaves out what is not a plain value", () => {
-    const w = subjectWords({ bvn_checked: true, due_date: "2026-10-31", lines: [1, 2], meta: { a: 1 } });
+    const w = subjectWords({
+      bvn_checked: true,
+      due_date: "2026-10-31",
+      lines: [1, 2],
+      meta: { a: 1 },
+    });
     expect(w.amount).toBeUndefined();
     expect(w.rest).toEqual([
       ["Bvn checked", "Yes"],
@@ -25,7 +36,8 @@ describe("an approval's subject in words", () => {
   });
 
   it("says nothing for a subject that is not fields", () => {
-    for (const s of [null, undefined, "pay", 12, [1]]) expect(subjectWords(s)).toEqual({ rest: [] });
+    for (const s of [null, undefined, "pay", 12, [1]])
+      expect(subjectWords(s)).toEqual({ rest: [] });
   });
 
   it("labels and values", () => {

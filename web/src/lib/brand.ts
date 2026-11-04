@@ -25,13 +25,34 @@ export interface Brand {
 }
 
 export const THEMES: { id: Theme; title: string; help: string }[] = [
-  { id: "clean", title: "Clean", help: "Light cards, a cover photo and soft corners. Suits almost any business." },
-  { id: "bold", title: "Bold", help: "Your colour fills the top, with big type and a photo grid. For food, fashion and beauty." },
-  { id: "editorial", title: "Editorial", help: "Black and white with serif headings and fine lines. Quiet and premium." },
+  {
+    id: "clean",
+    title: "Clean",
+    help: "Light cards, a cover photo and soft corners. Suits almost any business.",
+  },
+  {
+    id: "bold",
+    title: "Bold",
+    help: "Your colour fills the top, with big type and a photo grid. For food, fashion and beauty.",
+  },
+  {
+    id: "editorial",
+    title: "Editorial",
+    help: "Black and white with serif headings and fine lines. Quiet and premium.",
+  },
 ];
 
 /** Colours to start from: the storefront colours offered before any colour could be picked. */
-export const SWATCHES = ["#0b6e4f", "#1d4ed8", "#b91c1c", "#c2410c", "#6d28d9", "#be185d", "#0f766e", "#111827"];
+export const SWATCHES = [
+  "#0b6e4f",
+  "#1d4ed8",
+  "#b91c1c",
+  "#c2410c",
+  "#6d28d9",
+  "#be185d",
+  "#0f766e",
+  "#111827",
+];
 
 /** The pages a preview shows, as its tabs name them. */
 export const PREVIEW_PAGES: { id: string; label: string }[] = [
@@ -57,10 +78,22 @@ export interface BrandRequest {
   cover: string;
 }
 
-export function requestOf(b: Pick<Brand, "theme" | "color" | "logo" | "cover">): BrandRequest {
-  return { theme: b.theme, color: b.color, logo: b.logo ?? "", cover: b.cover ?? "" };
+export function requestOf(
+  b: Pick<Brand, "theme" | "color" | "logo" | "cover">,
+): BrandRequest {
+  return {
+    theme: b.theme,
+    color: b.color,
+    logo: b.logo ?? "",
+    cover: b.cover ?? "",
+  };
 }
 
 export function sameLook(a: BrandRequest, b: BrandRequest): boolean {
-  return a.theme === b.theme && a.color === b.color && a.logo === b.logo && a.cover === b.cover;
+  return (
+    a.theme === b.theme &&
+    a.color === b.color &&
+    a.logo === b.logo &&
+    a.cover === b.cover
+  );
 }

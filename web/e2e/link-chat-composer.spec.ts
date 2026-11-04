@@ -218,7 +218,7 @@ test("the emoji panel inserts at the cursor, finds by word, and remembers", asyn
   const panel = pane.getByTestId("emoji-panel");
   await expect(panel).toBeVisible();
   await expect(
-    panel.getByRole("button", { name: "grinning face" }),
+    panel.getByRole("button", { name: "grinning face", exact: true }),
   ).toBeVisible();
   await axeBoth(buyer, "the emoji panel");
 
@@ -282,8 +282,8 @@ test("a pasted picture and a dropped file wait for a caption, as a photo to send
   await expect(mine).toContainText("The new bags");
   await expect(pane.getByTestId("chat-attaching")).toHaveCount(0);
   expect(sent).toHaveLength(1);
-  expect(sent[0]!.body).toContain('filename="pasted.png"');
-  expect(sent[0]!.body).toMatch(/name="client_id"/);
+  expect(sent[0]?.body).toContain('filename="pasted.png"');
+  expect(sent[0]?.body).toMatch(/name="client_id"/);
 
   // Dropped on the thread: an overlay, then the same waiting for a caption.
   await pane.evaluate((el, b64) => {
@@ -337,7 +337,8 @@ test("the clip offers a photo, a document and the camera, and the camera works o
       const c = document.createElement("canvas");
       c.width = 320;
       c.height = 240;
-      const ctx = c.getContext("2d")!;
+      const ctx = c.getContext("2d");
+      if (!ctx) throw new Error("no canvas");
       setInterval(() => {
         ctx.fillStyle = "#2f7d5b";
         ctx.fillRect(0, 0, 320, 240);
@@ -728,14 +729,20 @@ test("the emoji panel works from the keyboard, and the hands take a skin tone", 
   await panel.getByLabel("Search emoji").press("ArrowDown");
   const focused = () =>
     buyer.evaluate(() => document.activeElement?.getAttribute("aria-label"));
+  const names = await panel
+    .locator(".emoji")
+    .evaluateAll((els) =>
+      els.slice(0, 40).map((e) => e.getAttribute("aria-label")),
+    );
   expect(await focused()).toBe("grinning face");
+  expect(names[0]).toBe("grinning face");
   await buyer.keyboard.press("ArrowRight");
-  expect(await focused()).toBe("smiling face");
+  expect(await focused()).toBe(names[1]);
   await buyer.keyboard.press("ArrowDown"); // a row down
   const down = await focused();
-  expect(down).not.toBe("smiling face");
+  expect(down).not.toBe(names[1]);
   await buyer.keyboard.press("ArrowUp");
-  expect(await focused()).toBe("smiling face");
+  expect(await focused()).toBe(names[1]);
   await buyer.keyboard.press("End");
   const last = await focused();
   await buyer.keyboard.press("Home");
@@ -960,7 +967,7 @@ test("an iPhone's HEIC photo is made a JPEG where the browser can read it, and e
         const c = document.createElement("canvas");
         c.width = 40;
         c.height = 30;
-        c.getContext("2d")!.fillRect(0, 0, 40, 30);
+        c.getContext("2d")?.fillRect(0, 0, 40, 30);
         return real(c);
       }
       return real(src);
@@ -975,6 +982,51 @@ test("an iPhone's HEIC photo is made a JPEG where the browser can read it, and e
       .getByTestId("chat-attaching")
       .getByRole("img", { name: "Preview of IMG_0042.jpg" }),
   ).toBeVisible();
+});
+
+test("the emoji panel has the whole of Unicode's, by group, and finds as people here say it", async ({
+  browser,
+}) => {
+  const { buyer, link } = await linked(browser);
+  await buyer.goto(`/chat?with=${link}`);
+  const pane = buyer.getByTestId("chat-pane");
+  const box = pane.getByLabel("Message");
+  await pane.getByTestId("emoji-button").click();
+  const panel = pane.getByTestId("emoji-panel");
+  await expect(panel.getByLabel("Search emoji")).toBeVisible(); // the list is loaded when it is first opened
+  // Nine groups, and every group is large.
+  const groups = panel
+    .getByRole("group", { name: "Kinds of emoji" })
+    .getByRole("button");
+  await expect(groups).toHaveCount(9);
+  let total = 0;
+  for (let i = 0; i < 9; i++) {
+    await groups.nth(i).click();
+    const n = await panel.locator(".emoji").count();
+    expect(n).toBeGreaterThan(60);
+    total += n;
+  }
+  expect(total).toBeGreaterThan(1700);
+  // The flags, and a big group, pass axe.
+  await panel.getByRole("button", { name: "Flags", exact: true }).click();
+  await expect(
+    panel.getByRole("button", { name: "flag: Nigeria" }),
+  ).toBeVisible();
+  await axeBoth(buyer, "the flags");
+  await panel.getByRole("button", { name: "People", exact: true }).click();
+  await axeBoth(buyer, "people and body");
+  // As people here say it.
+  await panel.getByLabel("Search emoji").fill("okada");
+  await panel.getByRole("button", { name: "motorcycle" }).click();
+  await panel.getByLabel("Search emoji").fill("naija");
+  await panel.getByRole("button", { name: "flag: Nigeria" }).click();
+  await expect(box).toHaveValue("🏍️🇳🇬");
+  // A longer emoji takes its tone after the person.
+  await panel.getByLabel("Search emoji").fill("woman cook");
+  await panel.getByRole("button", { name: "Medium skin tone" }).click();
+  await expect(panel.getByRole("button", { name: "woman cook" })).toHaveText(
+    "👩🏽‍🍳",
+  );
 });
 
 declare global {

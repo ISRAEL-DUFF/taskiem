@@ -1,5 +1,7 @@
 import {
   Fragment,
+  Suspense,
+  lazy,
   useCallback,
   useEffect,
   useMemo,
@@ -8,7 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { Link } from "react-router-dom";
-import { del, get, post, put, upload } from "../api";
+import { del, get, post, put } from "../api";
 import { useAuth } from "../auth";
 import {
   attachmentLabel,
@@ -52,7 +54,6 @@ import {
   useOutbox,
 } from "../lib/outboxStore";
 import { ThreadJump } from "./ThreadParts";
-import { EmojiPanel } from "./EmojiPanel";
 import { isHeic, preparePhoto } from "../lib/photo";
 import { PendingFile } from "./PendingFile";
 import { AttachMenu } from "./AttachMenu";
@@ -69,6 +70,11 @@ import { ErrorBox, fmtTime, Modal, Skeleton, useAction, useLoad } from "../ui";
 // documents between the two businesses as cards; the composer at the
 // bottom. As WhatsApp works, deliberately (§5.5): a bubble's corner shows
 // the clock, as WhatsApp's does, with the time in words on hover.
+
+// The emoji list is large: it is loaded when the panel is first opened.
+const EmojiPanel = lazy(() =>
+  import("./EmojiPanel").then((m) => ({ default: m.EmojiPanel })),
+);
 
 const EVERY_MS = 3000;
 /** The six reactions, in words (for the screen reader and the tooltip). */
@@ -882,7 +888,6 @@ export function ConversationPane({
   useEffect(() => {
     setDraft(conv.link, text);
     // Only a change of the words is kept: a switch of conversation loads one.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text]);
   const items = useLoad(
     () =>
@@ -992,7 +997,6 @@ export function ConversationPane({
     setUnread(firstUnread(out.messages));
     setMessages(out.messages);
     await markRead(out.messages);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path, markRead]);
   const openAt = useCallback(
     async (id: string) => {
@@ -1010,7 +1014,6 @@ export function ConversationPane({
       setUnread(undefined);
       setMessages(out.messages);
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [path],
   );
   useEffect(() => {
@@ -1038,7 +1041,6 @@ export function ConversationPane({
     } finally {
       loadingOlder.current = false;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, path]);
   loadOlderRef.current = () => void loadOlder();
   const toLatest = () => {
@@ -1063,7 +1065,6 @@ export function ConversationPane({
     setShowing(undefined);
     jump(showing);
     // jump is stable enough: it reads the thread's refs and openAt.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showing, found]);
   useEffect(() => {
     const t = setInterval(() => {
@@ -1555,7 +1556,14 @@ export function ConversationPane({
             }}
           />
           {emojiOpen && (
-            <EmojiPanel onPick={addEmoji} onClose={() => setEmojiOpen(false)} />
+            <Suspense
+              fallback={<div className="emoji-panel" aria-busy="true" />}
+            >
+              <EmojiPanel
+                onPick={addEmoji}
+                onClose={() => setEmojiOpen(false)}
+              />
+            </Suspense>
           )}
           <MentionList m={mentions} />
           {voice.secs !== undefined || voice.holding ? (

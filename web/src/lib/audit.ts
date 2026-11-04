@@ -11,7 +11,8 @@ export function shortIds(s: string): string {
 /** An entry's detail as "ip 127.0.0.1 · name Leave request"; long values cut. */
 export function detailWords(detail: unknown): string {
   if (detail === null || detail === undefined) return "";
-  if (typeof detail !== "object" || Array.isArray(detail)) return shortIds(JSON.stringify(detail));
+  if (typeof detail !== "object" || Array.isArray(detail))
+    return shortIds(JSON.stringify(detail));
   return Object.entries(detail as Record<string, unknown>)
     .map(([k, v]) => {
       const text = typeof v === "string" ? v : JSON.stringify(v);

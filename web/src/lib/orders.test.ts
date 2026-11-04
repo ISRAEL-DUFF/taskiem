@@ -240,7 +240,9 @@ describe("order statuses", () => {
   it("asks the API for the filter's status", () => {
     expect(ordersPath("open")).toBe("/v1/storefront/orders?status=open");
     expect(ordersPath("all", "f1")).toBe("/v1/storefront/orders?front=f1");
-    expect(ordersPath("open", "f1")).toBe("/v1/storefront/orders?status=open&front=f1");
+    expect(ordersPath("open", "f1")).toBe(
+      "/v1/storefront/orders?status=open&front=f1",
+    );
     expect(ordersPath("")).toBe("/v1/storefront/orders?status=open");
     expect(ordersPath("all")).toBe("/v1/storefront/orders");
     expect(ordersPath("refund_due")).toBe(

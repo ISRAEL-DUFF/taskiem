@@ -1,6 +1,17 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ApiError, del, get, post, put, upload, type AuthField, type ConnectorInfo, type DriftFinding, type TenantConnector } from "../api";
+import {
+  ApiError,
+  del,
+  get,
+  post,
+  put,
+  upload,
+  type AuthField,
+  type ConnectorInfo,
+  type DriftFinding,
+  type TenantConnector,
+} from "../api";
 import { useAdvanced, useAuth } from "../auth";
 import {
   connectorOf,
@@ -16,7 +27,18 @@ import {
   type MoneyLogWebhook,
 } from "../lib/connections";
 import { Help } from "../onboarding";
-import { Badge, EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
+import {
+  Badge,
+  EmptyState,
+  ErrorBox,
+  Field,
+  Modal,
+  PageHeader,
+  Skeleton,
+  fmtTime,
+  useAction,
+  useLoad,
+} from "../ui";
 import { Icon } from "../icons";
 import { Copy } from "./Forms";
 
@@ -41,7 +63,13 @@ interface Conn {
   remote?: {
     subscriptions: number;
     health: string;
-    problems: { workflow_id: string | null; environment: string; health: string; status_reason: string | null; last_error: string | null }[];
+    problems: {
+      workflow_id: string | null;
+      environment: string;
+      health: string;
+      status_reason: string | null;
+      last_error: string | null;
+    }[];
   };
   /** Addresses to set in the rail's dashboard so the money log hears this prod connection, workflow or not. */
   money_log_webhooks?: MoneyLogWebhook[];
@@ -52,7 +80,12 @@ interface Conn {
 /** The worst state of a connection's remote subscriptions, with what is wrong. */
 function Remote({ remote }: { remote: Conn["remote"] }) {
   if (!remote) return <span className="hint">—</span>;
-  const why = remote.problems.map((p) => `${p.environment}: ${p.health}${p.status_reason ? ` (${p.status_reason})` : ""}${p.last_error ? ` (${p.last_error})` : ""}`).join("\n");
+  const why = remote.problems
+    .map(
+      (p) =>
+        `${p.environment}: ${p.health}${p.status_reason ? ` (${p.status_reason})` : ""}${p.last_error ? ` (${p.last_error})` : ""}`,
+    )
+    .join("\n");
   // A connection's own subscriptions (Taskiem subscribes it, as for
   // iswallet) are repaired by checking the connection; a workflow's by
   // publishing it again.
@@ -60,28 +93,50 @@ function Remote({ remote }: { remote: Conn["remote"] }) {
   const first = remote.problems.find((p) => p.status_reason || p.last_error);
   return (
     <span title={why || undefined}>
-      <Badge value={remote.health} /> <span className="hint">{remote.subscriptions === 1 ? "1 webhook" : `${remote.subscriptions} webhooks`}</span>
-      {first && <div className="hint">{first.status_reason ?? first.last_error}</div>}
+      <Badge value={remote.health} />{" "}
+      <span className="hint">
+        {remote.subscriptions === 1
+          ? "1 webhook"
+          : `${remote.subscriptions} webhooks`}
+      </span>
+      {first && (
+        <div className="hint">{first.status_reason ?? first.last_error}</div>
+      )}
       {remote.health !== "ok" && remote.health !== "pending" && (
-        <div className="hint">{own ? "Press Check to repair it." : "Publish the workflow again to repair it."}</div>
+        <div className="hint">
+          {own
+            ? "Press Check to repair it."
+            : "Publish the workflow again to repair it."}
+        </div>
       )}
     </span>
   );
 }
 
 export function Connections() {
-  const list = useLoad(() => get<{ connections: Conn[] }>("/v1/connections"), []);
-  const connectors = useLoad(() => get<{ connectors: ConnectorInfo[] }>("/v1/connectors"), []);
+  const list = useLoad(
+    () => get<{ connections: Conn[] }>("/v1/connections"),
+    [],
+  );
+  const connectors = useLoad(
+    () => get<{ connectors: ConnectorInfo[] }>("/v1/connectors"),
+    [],
+  );
   const [adding, setAdding] = useState(false);
   const [completing, setCompleting] = useState<Conn | null>(null);
   const [removing, setRemoving] = useState<Conn | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
   const back = linkResult(location.search);
-  const linkable = connectors.data?.connectors.filter((c) => c.oauth_linkable) ?? [];
+  const linkable =
+    connectors.data?.connectors.filter((c) => c.oauth_linkable) ?? [];
   const connect = useAction();
-  const linked = back.linked ? list.data?.connections.find((c) => c.id === back.linked) : undefined;
-  const linkedConnector = linked ? connectorOf(connectors.data?.connectors, linked.connector) : undefined;
+  const linked = back.linked
+    ? list.data?.connections.find((c) => c.id === back.linked)
+    : undefined;
+  const linkedConnector = linked
+    ? connectorOf(connectors.data?.connectors, linked.connector)
+    : undefined;
   const toComplete = fieldsToComplete(linkedConnector) ?? [];
   const dismiss = () => void navigate("/connections", { replace: true });
   // A link from chat or a readiness fix: ?connect=paystack opens that
@@ -96,12 +151,20 @@ export function Connections() {
         actions={
           <>
             {linkable.map((c) => (
-              <button key={c.ref} className="primary" disabled={connect.busy} onClick={() => void connect.run(() => startLink(c), false)}>
+              <button
+                key={c.ref}
+                className="primary"
+                disabled={connect.busy}
+                onClick={() => void connect.run(() => startLink(c), false)}
+              >
                 <Icon name="plus" />
                 Connect {c.name}
               </button>
             ))}
-            <button className={linkable.length ? "" : "primary"} onClick={() => setAdding(true)}>
+            <button
+              className={linkable.length ? "" : "primary"}
+              onClick={() => setAdding(true)}
+            >
               <Icon name="plus" />
               New connection
             </button>
@@ -120,12 +183,17 @@ export function Connections() {
       )}
       {back.linked && linked && (
         <div className="notice" role="status" aria-live="polite">
-          <strong>{linkedConnector?.name ?? linked.connector}</strong> is connected as <code>{linked.name}</code> in {linked.environment}
+          <strong>{linkedConnector?.name ?? linked.connector}</strong> is
+          connected as <code>{linked.name}</code> in {linked.environment}
           {linked.expires_at ? <> until {fmtTime(linked.expires_at)}</> : null}.
           {toComplete.length > 0 && (
             <>
               {" "}
-              {linked.connector === "xenibase" ? "Writes, functions and read_rows also need the project's secret key and data API URL. " : "It may also take: " + toComplete.map((f) => f.label).join(", ") + ". "}
+              {linked.connector === "xenibase"
+                ? "Writes, functions and read_rows also need the project's secret key and data API URL. "
+                : "It may also take: " +
+                  toComplete.map((f) => f.label).join(", ") +
+                  ". "}
               <button className="link" onClick={() => setCompleting(linked)}>
                 Add them now
               </button>{" "}
@@ -153,38 +221,60 @@ export function Connections() {
             </button>
           }
         >
-          A connection holds the credentials a workflow's steps use to reach a service, such as a bank or a messaging provider.
+          A connection holds the credentials a workflow's steps use to reach a
+          service, such as a bank or a messaging provider.
         </EmptyState>
       )}
       {list.data && list.data.connections.length > 0 && (
         <ul className="items" aria-label="Connections">
           {list.data.connections.map((c) => {
             const info = connectorOf(connectors.data?.connectors, c.connector);
-            const fields = c.status !== "expired" && (fieldsToComplete(info)?.length ?? 0) > 0;
+            const fields =
+              c.status !== "expired" &&
+              (fieldsToComplete(info)?.length ?? 0) > 0;
             return (
-              <li key={c.id} className={c.id === back.linked ? "conn highlight" : "conn"} data-testid="connection">
-                <span className={c.status === "active" ? "list-icon" : "list-icon warn"} aria-hidden="true">
+              <li
+                key={c.id}
+                className={c.id === back.linked ? "conn highlight" : "conn"}
+                data-testid="connection"
+              >
+                <span
+                  className={
+                    c.status === "active" ? "list-icon" : "list-icon warn"
+                  }
+                  aria-hidden="true"
+                >
                   {(info?.name ?? c.connector).slice(0, 1).toUpperCase()}
                 </span>
                 <div className="grow">
                   <div className="item-top">
                     <span className="title">{info?.name ?? c.connector}</span>
                     <Badge value={c.status === "active" ? "ok" : c.status} />
-                    {c.mode === "test" && <span className="chip">Test: no real money</span>}
+                    {c.mode === "test" && (
+                      <span className="chip">Test: no real money</span>
+                    )}
                   </div>
                   <span className="sub">
                     {c.provisioned_by === "taskiem:data_tables" ? (
                       <>
-                        <Link to="/tables">Data tables</Link> ({c.name}, kept by Taskiem)
+                        <Link to="/tables">Data tables</Link> ({c.name}, kept by
+                        Taskiem)
                       </>
                     ) : c.platform === "taskiem" ? (
                       <>
-                        <Link to="/settings/payments">Your wallet with Taskiem</Link> ({c.name}, kept by Taskiem)
+                        <Link to="/settings/payments">
+                          Your wallet with Taskiem
+                        </Link>{" "}
+                        ({c.name}, kept by Taskiem)
                       </>
                     ) : (
                       c.name
                     )}{" "}
-                    · {c.environment} · {c.last_used_at ? `last used ${fmtTime(c.last_used_at)}` : "never used"} · added {fmtTime(c.created_at)}
+                    · {c.environment} ·{" "}
+                    {c.last_used_at
+                      ? `last used ${fmtTime(c.last_used_at)}`
+                      : "never used"}{" "}
+                    · added {fmtTime(c.created_at)}
                   </span>
                   {c.remote && (
                     <div className="sub">
@@ -198,7 +288,11 @@ export function Connections() {
                   ))}
                   {!c.provisioned_by && (
                     <span className="conn-actions">
-                      {fields && <button onClick={() => setCompleting(c)}>Add fields</button>}
+                      {fields && (
+                        <button onClick={() => setCompleting(c)}>
+                          Add fields
+                        </button>
+                      )}
                       {c.status === "active" && <CheckConnection id={c.id} />}
                       <button onClick={() => setRemoving(c)}>Disconnect</button>
                     </span>
@@ -209,28 +303,54 @@ export function Connections() {
           })}
         </ul>
       )}
-      {list.data && <MoneyLogWebhooks conns={withMoneyLogWebhooks(list.data.connections)} connectors={connectors.data?.connectors} />}
-      {adding && connectors.data && (
-        <NewConnection connectors={connectors.data.connectors} onClose={() => setAdding(false)} onDone={() => (setAdding(false), list.reload())} onLink={startLink} />
+      {list.data && (
+        <MoneyLogWebhooks
+          conns={withMoneyLogWebhooks(list.data.connections)}
+          connectors={connectors.data?.connectors}
+        />
       )}
-      {!adding && connectID && connectors.data?.connectors.some((c) => c.id === connectID) && (
+      {adding && connectors.data && (
         <NewConnection
           connectors={connectors.data.connectors}
-          preset={{ connector: connectID, environment: "prod", name: "" }}
-          onClose={dismiss}
-          onDone={() => (dismiss(), list.reload())}
+          onClose={() => setAdding(false)}
+          onDone={() => (setAdding(false), list.reload())}
           onLink={startLink}
         />
       )}
+      {!adding &&
+        connectID &&
+        connectors.data?.connectors.some((c) => c.id === connectID) && (
+          <NewConnection
+            connectors={connectors.data.connectors}
+            preset={{ connector: connectID, environment: "prod", name: "" }}
+            onClose={dismiss}
+            onDone={() => (dismiss(), list.reload())}
+            onLink={startLink}
+          />
+        )}
       {completing && (
         <CompleteConnection
           conn={completing}
-          fields={fieldsToComplete(connectorOf(connectors.data?.connectors, completing.connector)) ?? []}
+          fields={
+            fieldsToComplete(
+              connectorOf(connectors.data?.connectors, completing.connector),
+            ) ?? []
+          }
           onClose={() => setCompleting(null)}
           onDone={() => (setCompleting(null), dismiss(), list.reload())}
         />
       )}
-      {removing && <Disconnect conn={removing} connector={connectorOf(connectors.data?.connectors, removing.connector)} onClose={() => setRemoving(null)} onDone={() => (setRemoving(null), list.reload())} />}
+      {removing && (
+        <Disconnect
+          conn={removing}
+          connector={connectorOf(
+            connectors.data?.connectors,
+            removing.connector,
+          )}
+          onClose={() => setRemoving(null)}
+          onDone={() => (setRemoving(null), list.reload())}
+        />
+      )}
       <Drift />
       <OwnConnectors onChange={connectors.reload} />
     </>
@@ -261,9 +381,18 @@ function forgetReturn() {
   }
 }
 
-export async function startLink(c: ConnectorInfo, environment = "prod", name = "", mode = "") {
+export async function startLink(
+  c: ConnectorInfo,
+  environment = "prod",
+  name = "",
+  mode = "",
+) {
   try {
-    if (!window.location.pathname.startsWith("/connections")) sessionStorage.setItem(RETURN_KEY, window.location.pathname + window.location.search);
+    if (!window.location.pathname.startsWith("/connections"))
+      sessionStorage.setItem(
+        RETURN_KEY,
+        window.location.pathname + window.location.search,
+      );
     else sessionStorage.removeItem(RETURN_KEY);
   } catch {
     // storage refused: the person comes back to Connections
@@ -271,33 +400,67 @@ export async function startLink(c: ConnectorInfo, environment = "prod", name = "
   // A connector with modes is linked in the one chosen, else the first this
   // Taskiem can link (QuickBooks: live, or only the sandbox on a test server).
   const m = mode || c.oauth_modes?.[0] || undefined;
-  const out = await post<{ url: string }>("/v1/connections/oauth/start", { connector: c.ref, environment, name, mode: m });
+  const out = await post<{ url: string }>("/v1/connections/oauth/start", {
+    connector: c.ref,
+    environment,
+    name,
+    mode: m,
+  });
   window.location.assign(out.url);
 }
 
 /** Adds the fields a linked connection still wants (Xenibase: the secret
  * key and data API URL), keeping the token. */
-function CompleteConnection({ conn, fields, onClose, onDone }: { conn: Conn; fields: NonNullable<ConnectorInfo["auth"]["fields"]>; onClose: () => void; onDone: () => void }) {
+function CompleteConnection({
+  conn,
+  fields,
+  onClose,
+  onDone,
+}: {
+  conn: Conn;
+  fields: NonNullable<ConnectorInfo["auth"]["fields"]>;
+  onClose: () => void;
+  onDone: () => void;
+}) {
   const [creds, setCreds] = useState<Record<string, string>>({});
   const act = useAction();
-  const given = Object.fromEntries(Object.entries(creds).filter(([, v]) => v !== ""));
+  const given = Object.fromEntries(
+    Object.entries(creds).filter(([, v]) => v !== ""),
+  );
   return (
     <Modal title={`Add to ${conn.name}`} onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          void act.run(async () => (await put(`/v1/connections/${conn.id}/credentials`, { credentials: given }), onDone()), "Credentials saved");
+          void act.run(
+            async () => (
+              await put(`/v1/connections/${conn.id}/credentials`, {
+                credentials: given,
+              }),
+              onDone()
+            ),
+            "Credentials saved",
+          );
         }}
       >
         <p className="hint">The fields you leave empty are not changed.</p>
         {fields.map((f) => (
           <Field key={f.key} label={f.label}>
-            <input type={f.secret ? "password" : "text"} autoComplete="off" value={creds[f.key] ?? ""} onChange={(e) => setCreds({ ...creds, [f.key]: e.target.value })} />
+            <input
+              type={f.secret ? "password" : "text"}
+              autoComplete="off"
+              value={creds[f.key] ?? ""}
+              onChange={(e) => setCreds({ ...creds, [f.key]: e.target.value })}
+            />
           </Field>
         ))}
         <ErrorBox error={act.error} />
         <div className="toolbar">
-          <button type="submit" className="primary" disabled={act.busy || Object.keys(given).length === 0}>
+          <button
+            type="submit"
+            className="primary"
+            disabled={act.busy || Object.keys(given).length === 0}
+          >
             Save
           </button>
           <button type="button" onClick={onClose}>
@@ -313,17 +476,36 @@ function CompleteConnection({ conn, fields, onClose, onDone }: { conn: Conn; fie
  * and, for a rail that issues account numbers through partners, which can. */
 function CheckConnection({ id }: { id: string }) {
   const act = useAction();
-  const [said, setSaid] = useState<{ ok: boolean; message?: string; partners?: string[] }>();
+  const [said, setSaid] = useState<{
+    ok: boolean;
+    message?: string;
+    partners?: string[];
+  }>();
   return (
     <>
-      <button onClick={() => void act.run(async () => setSaid(await post(`/v1/connections/${id}/check`)), false)} disabled={act.busy}>
+      <button
+        onClick={() =>
+          void act.run(
+            async () => setSaid(await post(`/v1/connections/${id}/check`)),
+            false,
+          )
+        }
+        disabled={act.busy}
+      >
         {act.busy ? "Checking…" : "Check"}
       </button>
       <ErrorBox error={act.error} />
       {said && (
-        <span className={said.ok ? "sub" : "sub warn"} role="status" data-testid="connection-check">
+        <span
+          className={said.ok ? "sub" : "sub warn"}
+          role="status"
+          data-testid="connection-check"
+        >
           {said.message}
-          {said.partners && (said.partners.length > 0 ? ` Can issue account numbers through ${said.partners.join(", ")}.` : " No partner can issue account numbers in naira yet.")}
+          {said.partners &&
+            (said.partners.length > 0
+              ? ` Can issue account numbers through ${said.partners.join(", ")}.`
+              : " No partner can issue account numbers in naira yet.")}
         </span>
       )}
     </>
@@ -332,17 +514,39 @@ function CheckConnection({ id }: { id: string }) {
 
 /** Removes a connection. One a deployed workflow names is refused with
  * the workflows, and may be removed anyway. */
-function Disconnect({ conn, connector, onClose, onDone }: { conn: Conn; connector: ConnectorInfo | undefined; onClose: () => void; onDone: () => void }) {
+function Disconnect({
+  conn,
+  connector,
+  onClose,
+  onDone,
+}: {
+  conn: Conn;
+  connector: ConnectorInfo | undefined;
+  onClose: () => void;
+  onDone: () => void;
+}) {
   const act = useAction();
-  const [uses, setUses] = useState<{ id: string; name: string; environment: string }[] | null>(null);
+  const [uses, setUses] = useState<
+    { id: string; name: string; environment: string }[] | null
+  >(null);
   const remove = (force: boolean) =>
     void act.run(async () => {
       try {
         await del(`/v1/connections/${conn.id}${force ? "?force=true" : ""}`);
         onDone();
       } catch (e) {
-        if (e instanceof ApiError && e.status === 409 && e.body.code === "in_use") {
-          setUses((e.body.workflows as { id: string; name: string; environment: string }[]) ?? []);
+        if (
+          e instanceof ApiError &&
+          e.status === 409 &&
+          e.body.code === "in_use"
+        ) {
+          setUses(
+            (e.body.workflows as {
+              id: string;
+              name: string;
+              environment: string;
+            }[]) ?? [],
+          );
           return;
         }
         throw e;
@@ -351,16 +555,24 @@ function Disconnect({ conn, connector, onClose, onDone }: { conn: Conn; connecto
   return (
     <Modal title={`Disconnect ${conn.name}`} onClose={onClose}>
       <p>
-        Removes the {connector?.name ?? conn.connector} connection <code>{conn.name}</code> in {conn.environment} and its credentials.
-        {conn.auth_type === "oauth2" && <> The token is also revoked at {connector?.name ?? "the provider"}.</>}
+        Removes the {connector?.name ?? conn.connector} connection{" "}
+        <code>{conn.name}</code> in {conn.environment} and its credentials.
+        {conn.auth_type === "oauth2" && (
+          <>
+            {" "}
+            The token is also revoked at {connector?.name ?? "the provider"}.
+          </>
+        )}
       </p>
       {uses && (
         <div className="notice" role="alert">
-          Deployed workflows use this connection; their runs will fail at that step:
+          Deployed workflows use this connection; their runs will fail at that
+          step:
           <ul>
             {uses.map((u) => (
               <li key={u.id}>
-                <Link to={`/workflows/${u.id}`}>{u.name}</Link> <span className="hint">({u.environment})</span>
+                <Link to={`/workflows/${u.id}`}>{u.name}</Link>{" "}
+                <span className="hint">({u.environment})</span>
               </li>
             ))}
           </ul>
@@ -369,11 +581,19 @@ function Disconnect({ conn, connector, onClose, onDone }: { conn: Conn; connecto
       <ErrorBox error={act.error} />
       <div className="toolbar">
         {uses ? (
-          <button className="danger" disabled={act.busy} onClick={() => remove(true)}>
+          <button
+            className="danger"
+            disabled={act.busy}
+            onClick={() => remove(true)}
+          >
             Disconnect anyway
           </button>
         ) : (
-          <button className="danger" disabled={act.busy} onClick={() => remove(false)}>
+          <button
+            className="danger"
+            disabled={act.busy}
+            onClick={() => remove(false)}
+          >
             Disconnect
           </button>
         )}
@@ -387,14 +607,29 @@ function Disconnect({ conn, connector, onClose, onDone }: { conn: Conn; connecto
 
 /** Where to paste each rail connection's address so the money log hears
  * every payment on it, even when no workflow uses it (decision 0045). */
-function MoneyLogWebhooks({ conns, connectors }: { conns: Conn[]; connectors: ConnectorInfo[] | undefined }) {
+function MoneyLogWebhooks({
+  conns,
+  connectors,
+}: {
+  conns: Conn[];
+  connectors: ConnectorInfo[] | undefined;
+}) {
   if (conns.length === 0) return null;
   return (
-    <section className="card" style={{ marginTop: 24 }} aria-labelledby="money-log-webhooks">
+    <section
+      className="card"
+      style={{ marginTop: 24 }}
+      aria-labelledby="money-log-webhooks"
+    >
       <h2 id="money-log-webhooks">Webhook for the money log</h2>
-      <p className="hint">Paste each address into the service's dashboard, and Taskiem records every payment and transfer on the account in the money log, whether or not a workflow uses it.</p>
+      <p className="hint">
+        Paste each address into the service's dashboard, and Taskiem records
+        every payment and transfer on the account in the money log, whether or
+        not a workflow uses it.
+      </p>
       {conns.map((c) => {
-        const service = connectorOf(connectors, c.connector)?.name ?? c.connector;
+        const service =
+          connectorOf(connectors, c.connector)?.name ?? c.connector;
         return (
           <div key={c.id} style={{ marginTop: 16 }}>
             <h3>
@@ -405,10 +640,14 @@ function MoneyLogWebhooks({ conns, connectors }: { conns: Conn[]; connectors: Co
                 <strong>{h.title}</strong>
                 <div className="email-address" style={{ marginTop: 4 }}>
                   <code>{h.url}</code>
-                  <Copy text={h.url} label={`Copy the ${h.title} address for ${service} (${c.name})`} />
+                  <Copy
+                    text={h.url}
+                    label={`Copy the ${h.title} address for ${service} (${c.name})`}
+                  />
                 </div>
                 <p className="hint">
-                  Carries {eventsInWords(h.events)}. {h.verification} {pollNote(h.poll_minutes)}
+                  Carries {eventsInWords(h.events)}. {h.verification}{" "}
+                  {pollNote(h.poll_minutes)}
                 </p>
                 <p>Where to paste it: {h.where}</p>
               </div>
@@ -422,14 +661,21 @@ function MoneyLogWebhooks({ conns, connectors }: { conns: Conn[]; connectors: Co
 
 /** Contract drift: providers answering in shapes their manifests do not declare. */
 function Drift() {
-  const list = useLoad(() => get<{ drift: DriftFinding[] }>("/v1/connector-drift"), []);
+  const list = useLoad(
+    () => get<{ drift: DriftFinding[] }>("/v1/connector-drift"),
+    [],
+  );
   const act = useAction();
   if (!list.data || list.data.drift.length === 0) return null;
   const open = list.data.drift.filter((d) => !d.acknowledged_at).length;
   return (
     <section className="card" style={{ marginTop: 24 }}>
       <h2>Contract drift {open > 0 && <Badge value={`${open} new`} />}</h2>
-      <p className="hint">A provider answered in a shape its connector does not declare. Runs carried on with what the provider said; check that the workflows using these fields still do the right thing.</p>
+      <p className="hint">
+        A provider answered in a shape its connector does not declare. Runs
+        carried on with what the provider said; check that the workflows using
+        these fields still do the right thing.
+      </p>
       <ErrorBox error={list.error ?? act.error} />
       <table>
         <thead>
@@ -441,12 +687,16 @@ function Drift() {
             <th>Seen</th>
             <th>Times</th>
             <th>Last</th>
-            <th><span className="sr-only">Actions</span></th>
+            <th>
+              <span className="sr-only">Actions</span>
+            </th>
           </tr>
         </thead>
         <tbody>
           {list.data.drift.map((d) => (
-            <tr key={[d.connector, d.version, d.action, d.path, d.kind].join(" ")}>
+            <tr
+              key={[d.connector, d.version, d.action, d.path, d.kind].join(" ")}
+            >
               <td>
                 {d.connector} <span className="hint">{d.version}</span>
               </td>
@@ -457,7 +707,15 @@ function Drift() {
               <td>{d.kind === "missing" ? "present" : d.expected}</td>
               <td>{d.kind === "missing" ? "absent" : d.observed}</td>
               <td>{d.occurrences}</td>
-              <td>{d.last_run_id ? <Link to={`/runs/${d.last_run_id}`}>{fmtTime(d.last_seen)}</Link> : fmtTime(d.last_seen)}</td>
+              <td>
+                {d.last_run_id ? (
+                  <Link to={`/runs/${d.last_run_id}`}>
+                    {fmtTime(d.last_seen)}
+                  </Link>
+                ) : (
+                  fmtTime(d.last_seen)
+                )}
+              </td>
               <td>
                 {d.acknowledged_at ? (
                   <span className="hint">seen by {d.acknowledged_by}</span>
@@ -465,7 +723,19 @@ function Drift() {
                   <button
                     disabled={act.busy}
                     onClick={() =>
-                      void act.run(async () => (await post("/v1/connector-drift/acknowledge", { connector: d.connector, version: d.version, action: d.action, path: d.path, kind: d.kind }), list.reload()), "Marked as seen")
+                      void act.run(
+                        async () => (
+                          await post("/v1/connector-drift/acknowledge", {
+                            connector: d.connector,
+                            version: d.version,
+                            action: d.action,
+                            path: d.path,
+                            kind: d.kind,
+                          }),
+                          list.reload()
+                        ),
+                        "Marked as seen",
+                      )
                     }
                   >
                     Acknowledge
@@ -483,7 +753,10 @@ function Drift() {
 /** The tenant's own WebAssembly connectors (docs/connector-sdk.md). */
 function OwnConnectors({ onChange }: { onChange: () => void }) {
   const { can } = useAuth();
-  const list = useLoad(() => get<{ connectors: TenantConnector[] }>("/v1/tenant-connectors"), []);
+  const list = useLoad(
+    () => get<{ connectors: TenantConnector[] }>("/v1/tenant-connectors"),
+    [],
+  );
   const [manifest, setManifest] = useState<File | null>(null);
   const [module, setModule] = useState<File | null>(null);
   const act = useAction();
@@ -493,10 +766,14 @@ function OwnConnectors({ onChange }: { onChange: () => void }) {
     <section className="card" style={{ marginTop: 24 }}>
       <h2>Your connectors</h2>
       <p className="hint">
-        Connectors your team writes, compiled to WebAssembly. Each call runs isolated, reaching only the hosts its manifest names. Ids start with <code>x_</code>; a version never changes once uploaded.
+        Connectors your team writes, compiled to WebAssembly. Each call runs
+        isolated, reaching only the hosts its manifest names. Ids start with{" "}
+        <code>x_</code>; a version never changes once uploaded.
       </p>
       <ErrorBox error={list.error ?? act.error} />
-      {list.data && list.data.connectors.length === 0 && <div className="empty">None uploaded.</div>}
+      {list.data && list.data.connectors.length === 0 && (
+        <div className="empty">None uploaded.</div>
+      )}
       {list.data && list.data.connectors.length > 0 && (
         <table>
           <thead>
@@ -506,7 +783,11 @@ function OwnConnectors({ onChange }: { onChange: () => void }) {
               <th>Module</th>
               <th>Uploaded</th>
               <th>State</th>
-              {manage && <th><span className="sr-only">Actions</span></th>}
+              {manage && (
+                <th>
+                  <span className="sr-only">Actions</span>
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -521,12 +802,33 @@ function OwnConnectors({ onChange }: { onChange: () => void }) {
                   {fmtTime(c.uploaded_at)} by {c.uploaded_by}
                 </td>
                 <td>
-                  <Badge value={c.disabled_at ? "disabled" : c.active ? "active" : "superseded"} />
+                  <Badge
+                    value={
+                      c.disabled_at
+                        ? "disabled"
+                        : c.active
+                          ? "active"
+                          : "superseded"
+                    }
+                  />
                 </td>
                 {manage && (
                   <td>
                     {!c.disabled_at && (
-                      <button disabled={act.busy} onClick={() => void act.run(async () => (await post(`/v1/tenant-connectors/${c.id}/${c.version}/disable`), changed()), "Connector disabled")}>
+                      <button
+                        disabled={act.busy}
+                        onClick={() =>
+                          void act.run(
+                            async () => (
+                              await post(
+                                `/v1/tenant-connectors/${c.id}/${c.version}/disable`,
+                              ),
+                              changed()
+                            ),
+                            "Connector disabled",
+                          )
+                        }
+                      >
                         Disable
                       </button>
                     )}
@@ -557,12 +859,23 @@ function OwnConnectors({ onChange }: { onChange: () => void }) {
           }}
         >
           <Field label="Manifest (.yaml)">
-            <input type="file" accept=".yaml,.yml,.json" onChange={(e) => setManifest(e.target.files?.[0] ?? null)} />
+            <input
+              type="file"
+              accept=".yaml,.yml,.json"
+              onChange={(e) => setManifest(e.target.files?.[0] ?? null)}
+            />
           </Field>
           <Field label="Module (.wasm)">
-            <input type="file" accept=".wasm" onChange={(e) => setModule(e.target.files?.[0] ?? null)} />
+            <input
+              type="file"
+              accept=".wasm"
+              onChange={(e) => setModule(e.target.files?.[0] ?? null)}
+            />
           </Field>
-          <button className="primary" disabled={act.busy || !manifest || !module}>
+          <button
+            className="primary"
+            disabled={act.busy || !manifest || !module}
+          >
             Upload
           </button>
         </form>
@@ -588,10 +901,19 @@ export function NewConnection({
   connectors: ConnectorInfo[];
   onClose: () => void;
   onDone: () => void;
-  onLink: (c: ConnectorInfo, environment: string, name: string, mode?: string) => Promise<void>;
+  onLink: (
+    c: ConnectorInfo,
+    environment: string,
+    name: string,
+    mode?: string,
+  ) => Promise<void>;
   preset?: { connector: string; environment: string; name: string };
 }) {
-  const [ref, setRef] = useState((preset && connectors.find((x) => x.id === preset.connector)?.ref) ?? connectors[0]?.ref ?? "");
+  const [ref, setRef] = useState(
+    (preset && connectors.find((x) => x.id === preset.connector)?.ref) ??
+      connectors[0]?.ref ??
+      "",
+  );
   const [env, setEnv] = useState(preset?.environment ?? "prod");
   const advanced = useAdvanced();
   const [name, setName] = useState(preset?.name ?? "");
@@ -609,8 +931,16 @@ export function NewConnection({
   const linkable = !!c?.auth.oauth2 && !!c.oauth_linkable;
   // Linking in a mode needs this Taskiem's OAuth client for it.
   const linkModes = modes.filter((m) => c?.oauth_modes?.includes(m.mode));
-  const linkMode = (linkModes.some((m) => m.mode === mode) ? mode : "") || linkModes[0]?.mode || "";
-  const problems = Object.fromEntries((c?.auth.fields ?? []).map((f) => [f.key, keyProblem(f, creds[f.key] ?? "", chosen)]));
+  const linkMode =
+    (linkModes.some((m) => m.mode === mode) ? mode : "") ||
+    linkModes[0]?.mode ||
+    "";
+  const problems = Object.fromEntries(
+    (c?.auth.fields ?? []).map((f) => [
+      f.key,
+      keyProblem(f, creds[f.key] ?? "", chosen),
+    ]),
+  );
   const blocked = Object.values(problems).some(Boolean);
   const field = (f: AuthField) => (
     <Field
@@ -650,11 +980,17 @@ export function NewConnection({
           autoComplete="off"
           spellCheck={false}
           rows={generated[f.key] ? 2 : 5}
-          value={generated[f.key] ? "(made for you and kept private)" : (creds[f.key] ?? "")}
+          value={
+            generated[f.key]
+              ? "(made for you and kept private)"
+              : (creds[f.key] ?? "")
+          }
           readOnly={!!generated[f.key]}
           required={f.required !== false}
           aria-invalid={!!problems[f.key]}
-          onChange={(e) => setCreds({ ...creds, [f.key]: e.target.value.trim() })}
+          onChange={(e) =>
+            setCreds({ ...creds, [f.key]: e.target.value.trim() })
+          }
         />
       ) : (
         <input
@@ -664,7 +1000,9 @@ export function NewConnection({
           value={creds[f.key] ?? ""}
           required={f.required !== false}
           aria-invalid={!!problems[f.key]}
-          onChange={(e) => setCreds({ ...creds, [f.key]: e.target.value.trim() })}
+          onChange={(e) =>
+            setCreds({ ...creds, [f.key]: e.target.value.trim() })
+          }
         />
       )}
       {f.generate === "rsa_key_pair" && !generated[f.key] && (
@@ -688,15 +1026,24 @@ export function NewConnection({
       {generated[f.key] && (
         <div className="notice">
           <p style={{ marginTop: 0 }}>
-            <strong>Copy this public key now</strong> and paste it where the service asks for your public key{f.where ? <> ({f.where})</> : null}. It is shown only once; to get
-            another, connect again.
+            <strong>Copy this public key now</strong> and paste it where the
+            service asks for your public key{f.where ? <> ({f.where})</> : null}
+            . It is shown only once; to get another, connect again.
           </p>
-          <textarea readOnly rows={6} value={generated[f.key]} onFocus={(e) => e.target.select()} aria-label={`${f.label}: the public key to give the service`} />
+          <textarea
+            readOnly
+            rows={6}
+            value={generated[f.key]}
+            onFocus={(e) => e.target.select()}
+            aria-label={`${f.label}: the public key to give the service`}
+          />
           <p style={{ marginBottom: 0 }}>
             <button
               type="button"
               onClick={() => {
-                void navigator.clipboard?.writeText(generated[f.key] ?? "").then(() => setCopied(f.key));
+                void navigator.clipboard
+                  ?.writeText(generated[f.key] ?? "")
+                  .then(() => setCopied(f.key));
               }}
             >
               {copied === f.key ? "Copied" : "Copy the public key"}
@@ -707,19 +1054,40 @@ export function NewConnection({
     </Field>
   );
   return (
-    <Modal title={c ? `Connect ${c.name}` : "Connect a service"} onClose={onClose}>
+    <Modal
+      title={c ? `Connect ${c.name}` : "Connect a service"}
+      onClose={onClose}
+    >
       <form
         onSubmit={(e) => {
           e.preventDefault();
           void act.run(
-            async () => (await post("/v1/connections", { connector: ref, environment: env, name: name || undefined, credentials: creds, mode: chosen || undefined, check: true }), onDone()),
+            async () => (
+              await post("/v1/connections", {
+                connector: ref,
+                environment: env,
+                name: name || undefined,
+                credentials: creds,
+                mode: chosen || undefined,
+                check: true,
+              }),
+              onDone()
+            ),
             "Connected",
           );
         }}
       >
         {!preset && (
           <Field label="Service">
-            <select value={ref} onChange={(e) => (setRef(e.target.value), setCreds({}), setMode(""), setPaste(false))}>
+            <select
+              value={ref}
+              onChange={(e) => (
+                setRef(e.target.value),
+                setCreds({}),
+                setMode(""),
+                setPaste(false)
+              )}
+            >
               {connectors.map((x) => (
                 <option key={x.ref} value={x.ref}>
                   {x.name}
@@ -732,30 +1100,58 @@ export function NewConnection({
           <div className="notice">
             {linkable ? (
               <>
-                <p style={{ marginTop: 0 }}>Connect {c.name} with one click: you sign in there and approve, and nothing is copied.</p>
+                <p style={{ marginTop: 0 }}>
+                  Connect {c.name} with one click: you sign in there and
+                  approve, and nothing is copied.
+                </p>
                 {!paste && modes.length > 1 && linkModes.length > 0 && (
                   <fieldset className="choice">
                     <legend>Which kind?</legend>
                     {modes.map((m) => (
                       <label key={m.mode} className="inline">
-                        <input type="radio" name="link-mode" checked={linkMode === m.mode} disabled={!linkModes.includes(m)} onChange={() => setMode(m.mode)} />
+                        <input
+                          type="radio"
+                          name="link-mode"
+                          checked={linkMode === m.mode}
+                          disabled={!linkModes.includes(m)}
+                          onChange={() => setMode(m.mode)}
+                        />
                         {m.label}
-                        {!linkModes.includes(m) && <span className="hint"> (not set up on this Taskiem yet)</span>}
+                        {!linkModes.includes(m) && (
+                          <span className="hint">
+                            {" "}
+                            (not set up on this Taskiem yet)
+                          </span>
+                        )}
                       </label>
                     ))}
                   </fieldset>
                 )}
-                <button type="button" className="primary" disabled={act.busy} onClick={() => void act.run(() => onLink(c, env, name, linkMode), false)}>
+                <button
+                  type="button"
+                  className="primary"
+                  disabled={act.busy}
+                  onClick={() =>
+                    void act.run(() => onLink(c, env, name, linkMode), false)
+                  }
+                >
                   Connect {c.name}
                 </button>{" "}
                 {!paste && main.length + more.length > 0 && (
-                  <button type="button" className="link" onClick={() => setPaste(true)}>
+                  <button
+                    type="button"
+                    className="link"
+                    onClick={() => setPaste(true)}
+                  >
                     Paste details instead
                   </button>
                 )}
               </>
             ) : (
-              <>One-click connecting to {c.name} is not set up on this Taskiem yet, so paste its details below.</>
+              <>
+                One-click connecting to {c.name} is not set up on this Taskiem
+                yet, so paste its details below.
+              </>
             )}
           </div>
         )}
@@ -766,9 +1162,20 @@ export function NewConnection({
                 <legend>Which kind?</legend>
                 {modes.map((m) => (
                   <label key={m.mode} className="inline">
-                    <input type="radio" name="mode" checked={chosen === m.mode} disabled={!m.available} onChange={() => setMode(m.mode)} />
+                    <input
+                      type="radio"
+                      name="mode"
+                      checked={chosen === m.mode}
+                      disabled={!m.available}
+                      onChange={() => setMode(m.mode)}
+                    />
                     {m.label}
-                    {!m.available && <span className="hint"> (not set up on this Taskiem yet)</span>}
+                    {!m.available && (
+                      <span className="hint">
+                        {" "}
+                        (not set up on this Taskiem yet)
+                      </span>
+                    )}
                   </label>
                 ))}
               </fieldset>
@@ -781,8 +1188,15 @@ export function NewConnection({
           {(!linkable || paste) && more.map(field)}
           {!preset && (
             <div className="row">
-              <Field label="Name" hint="Leave it empty: it is called main, which templates and the AI use.">
-                <input value={name} placeholder="main" onChange={(e) => setName(e.target.value)} />
+              <Field
+                label="Name"
+                hint="Leave it empty: it is called main, which templates and the AI use."
+              >
+                <input
+                  value={name}
+                  placeholder="main"
+                  onChange={(e) => setName(e.target.value)}
+                />
               </Field>
               {advanced && (
                 <Field label="Environment">
@@ -798,7 +1212,11 @@ export function NewConnection({
         <ErrorBox error={act.error} />
         <div className="toolbar">
           {(!linkable || paste) && (
-            <button type="submit" className="primary" disabled={act.busy || blocked}>
+            <button
+              type="submit"
+              className="primary"
+              disabled={act.busy || blocked}
+            >
               {act.busy ? "Checking…" : "Check and save"}
             </button>
           )}

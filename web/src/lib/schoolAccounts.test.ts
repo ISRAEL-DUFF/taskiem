@@ -38,9 +38,17 @@ const paystack: SchoolIssuer = {
 describe("the issuing connection", () => {
   it("needs the wallet where the rail does, and sends it only there", () => {
     expect(issuingProblem({ connection: "" }, [wallet])).toBeNull();
-    expect(issuingProblem({ connection: "iswallet/main" }, [wallet])).toBe("iswallet needs the wallet the numbers pay into.");
-    expect(issuingProblem({ connection: "iswallet/main", account: " wal_1 " }, [wallet])).toBeNull();
-    expect(issuingProblem({ connection: "monnify/main" }, [wallet])).toBe("Choose one of the connections listed.");
+    expect(issuingProblem({ connection: "iswallet/main" }, [wallet])).toBe(
+      "iswallet needs the wallet the numbers pay into.",
+    );
+    expect(
+      issuingProblem({ connection: "iswallet/main", account: " wal_1 " }, [
+        wallet,
+      ]),
+    ).toBeNull();
+    expect(issuingProblem({ connection: "monnify/main" }, [wallet])).toBe(
+      "Choose one of the connections listed.",
+    );
     expect(
       issuingRequest(
         {
@@ -55,7 +63,12 @@ describe("the issuing connection", () => {
       account: "wal_1",
       siblings_share_credit: true,
     });
-    expect(issuingRequest({ connection: "paystack/main", account: "wal_1" }, [wallet, paystack])).toEqual({ connection: "paystack/main", siblings_share_credit: false });
+    expect(
+      issuingRequest({ connection: "paystack/main", account: "wal_1" }, [
+        wallet,
+        paystack,
+      ]),
+    ).toEqual({ connection: "paystack/main", siblings_share_credit: false });
   });
   it("says the fee, or that none is documented", () => {
     expect(feeLine(wallet)).toBe("No fee per account is documented.");
@@ -74,7 +87,9 @@ describe("a batch", () => {
         cannot: [],
         issuer: wallet,
       }),
-    ).toBe("This issues 2 account numbers on iswallet (iswallet/main). 1 student of 3 already has one.");
+    ).toBe(
+      "This issues 2 account numbers on iswallet (iswallet/main). 1 student of 3 already has one.",
+    );
     expect(
       planSummary({
         to_issue: 500,
@@ -96,7 +111,9 @@ describe("a batch", () => {
         cannot: [],
         issuer: wallet,
       }),
-    ).toBe("Every student who can have an account number on iswallet has one or is waiting. 3 students of 3 already have one.");
+    ).toBe(
+      "Every student who can have an account number on iswallet has one or is waiting. 3 students of 3 already have one.",
+    );
   });
   it("words its progress", () => {
     const j = {
@@ -109,8 +126,14 @@ describe("a batch", () => {
     };
     expect(jobLine(j)).toBe("Issuing: 2 of 4 done, 1 account issued so far.");
     expect(jobPercent(j)).toBe(50);
-    expect(jobLine({ ...j, status: "done", issued: 2, unknown: 1, pending: 0 })).toBe("Done: 2 accounts issued of 4. 1 student not issued. 1 student to check with the rail.");
-    expect(jobPercent({ total: 0, issued: 0, failed: 0, unknown: 0 })).toBe(100);
+    expect(
+      jobLine({ ...j, status: "done", issued: 2, unknown: 1, pending: 0 }),
+    ).toBe(
+      "Done: 2 accounts issued of 4. 1 student not issued. 1 student to check with the rail.",
+    );
+    expect(jobPercent({ total: 0, issued: 0, failed: 0, unknown: 0 })).toBe(
+      100,
+    );
   });
 });
 
@@ -119,9 +142,15 @@ describe("a student's account", () => {
     expect(accountStatus("issued")).toEqual({ label: "Issued", tone: "ok" });
     expect(accountStatus("unknown").label).toBe("Check with the rail");
     expect(accountStatus("odd").label).toBe("odd");
-    expect(nameNote({ named_by_rail: true }, "Paystack")).toMatch(/^Paystack names the account itself/);
-    expect(nameNote({ named_by_rail: false, shortened: true }, "Moniepoint")).toMatch(/shortened/);
-    expect(nameNote({ named_by_rail: false, flagged: true }, "Moniepoint")).toMatch(/was cut/);
+    expect(nameNote({ named_by_rail: true }, "Paystack")).toMatch(
+      /^Paystack names the account itself/,
+    );
+    expect(
+      nameNote({ named_by_rail: false, shortened: true }, "Moniepoint"),
+    ).toMatch(/shortened/);
+    expect(
+      nameNote({ named_by_rail: false, flagged: true }, "Moniepoint"),
+    ).toMatch(/was cut/);
     expect(nameNote({ named_by_rail: false }, "Moniepoint")).toBe("");
     expect(railOf("flutterwave/main")).toBe("Flutterwave");
     expect(railOf("acme/main")).toBe("acme");

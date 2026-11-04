@@ -95,16 +95,23 @@ export function accountStatus(s: string): { label: string; tone: string } {
 }
 
 /** Why the issuing setting cannot be saved, or null. */
-export function issuingProblem(v: SchoolIssuing, issuers: SchoolIssuer[]): string | null {
+export function issuingProblem(
+  v: SchoolIssuing,
+  issuers: SchoolIssuer[],
+): string | null {
   if (!v.connection) return null;
   const i = issuers.find((x) => x.connection === v.connection);
   if (!i) return "Choose one of the connections listed.";
-  if (i.needs_account && !(v.account ?? "").trim()) return `${i.rail} needs the wallet the numbers pay into.`;
+  if (i.needs_account && !(v.account ?? "").trim())
+    return `${i.rail} needs the wallet the numbers pay into.`;
   return null;
 }
 
 /** What the setting sends: the wallet only where the rail takes one. */
-export function issuingRequest(v: SchoolIssuing, issuers: SchoolIssuer[]): SchoolIssuing {
+export function issuingRequest(
+  v: SchoolIssuing,
+  issuers: SchoolIssuer[],
+): SchoolIssuing {
   const i = issuers.find((x) => x.connection === v.connection);
   const out: SchoolIssuing = {
     connection: v.connection,
@@ -119,30 +126,64 @@ function count(n: number, one: string, many = `${one}s`): string {
 }
 
 /** The plan in one sentence. */
-export function planSummary(p: Pick<AccountPlan, "to_issue" | "already_issued" | "active" | "later" | "cannot" | "issuer">): string {
+export function planSummary(
+  p: Pick<
+    AccountPlan,
+    "to_issue" | "already_issued" | "active" | "later" | "cannot" | "issuer"
+  >,
+): string {
   const parts: string[] = [];
-  if (p.to_issue === 0) parts.push(`Every student who can have an account number on ${p.issuer.rail} has one or is waiting.`);
-  else parts.push(`This issues ${count(p.to_issue, "account number")} on ${p.issuer.rail} (${p.issuer.connection}).`);
-  if (p.already_issued > 0) parts.push(`${count(p.already_issued, "student")} of ${p.active.toLocaleString("en-NG")} already ${p.already_issued === 1 ? "has one" : "have one"}.`);
-  if (p.later > 0) parts.push(`${count(p.later, "more student")} can be issued by the next batch (at most 500 at a time).`);
-  if (p.cannot.length > 0) parts.push(`${count(p.cannot.length, "student")} cannot be issued yet: see why below.`);
+  if (p.to_issue === 0)
+    parts.push(
+      `Every student who can have an account number on ${p.issuer.rail} has one or is waiting.`,
+    );
+  else
+    parts.push(
+      `This issues ${count(p.to_issue, "account number")} on ${p.issuer.rail} (${p.issuer.connection}).`,
+    );
+  if (p.already_issued > 0)
+    parts.push(
+      `${count(p.already_issued, "student")} of ${p.active.toLocaleString("en-NG")} already ${p.already_issued === 1 ? "has one" : "have one"}.`,
+    );
+  if (p.later > 0)
+    parts.push(
+      `${count(p.later, "more student")} can be issued by the next batch (at most 500 at a time).`,
+    );
+  if (p.cannot.length > 0)
+    parts.push(
+      `${count(p.cannot.length, "student")} cannot be issued yet: see why below.`,
+    );
   return parts.join(" ");
 }
 
 /** A batch's progress in one line. */
-export function jobLine(j: Pick<AccountJob, "status" | "total" | "issued" | "failed" | "unknown" | "pending">): string {
+export function jobLine(
+  j: Pick<
+    AccountJob,
+    "status" | "total" | "issued" | "failed" | "unknown" | "pending"
+  >,
+): string {
   const done = j.issued + j.failed + j.unknown;
-  if (j.status === "running") return `Issuing: ${done.toLocaleString("en-NG")} of ${j.total.toLocaleString("en-NG")} done, ${count(j.issued, "account")} issued so far.`;
-  const parts = [`Done: ${count(j.issued, "account")} issued of ${j.total.toLocaleString("en-NG")}.`];
+  if (j.status === "running")
+    return `Issuing: ${done.toLocaleString("en-NG")} of ${j.total.toLocaleString("en-NG")} done, ${count(j.issued, "account")} issued so far.`;
+  const parts = [
+    `Done: ${count(j.issued, "account")} issued of ${j.total.toLocaleString("en-NG")}.`,
+  ];
   if (j.failed > 0) parts.push(`${count(j.failed, "student")} not issued.`);
-  if (j.unknown > 0) parts.push(`${count(j.unknown, "student")} to check with the rail.`);
+  if (j.unknown > 0)
+    parts.push(`${count(j.unknown, "student")} to check with the rail.`);
   return parts.join(" ");
 }
 
 /** The share of a batch done, 0 to 100. */
-export function jobPercent(j: Pick<AccountJob, "total" | "issued" | "failed" | "unknown">): number {
+export function jobPercent(
+  j: Pick<AccountJob, "total" | "issued" | "failed" | "unknown">,
+): number {
   if (j.total <= 0) return 100;
-  return Math.min(100, Math.round(((j.issued + j.failed + j.unknown) / j.total) * 100));
+  return Math.min(
+    100,
+    Math.round(((j.issued + j.failed + j.unknown) / j.total) * 100),
+  );
 }
 
 /** Why a BVN or NIN typed in cannot be sent, or null. */
@@ -150,15 +191,22 @@ export function idProblem(bvn: string, nin: string): string | null {
   const b = bvn.trim();
   const n = nin.trim();
   if (!b && !n) return "Give a parent's BVN or NIN.";
-  for (const v of [b, n]) if (v && !/^[0-9]{11}$/.test(v)) return "A BVN or NIN has 11 digits.";
+  for (const v of [b, n])
+    if (v && !/^[0-9]{11}$/.test(v)) return "A BVN or NIN has 11 digits.";
   return null;
 }
 
 /** What parents should expect to see when they check the number. */
-export function nameNote(a: Pick<StudentAccount, "named_by_rail" | "shortened" | "flagged">, rail: string): string {
-  if (a.flagged) return "The child's name alone was too long for the rail and was cut: check what parents see.";
-  if (a.named_by_rail) return `${rail} names the account itself: parents may see its name rather than the school's and the child's.`;
-  if (a.shortened) return "The school's name was shortened to fit the rail's limit; the child's name is whole.";
+export function nameNote(
+  a: Pick<StudentAccount, "named_by_rail" | "shortened" | "flagged">,
+  rail: string,
+): string {
+  if (a.flagged)
+    return "The child's name alone was too long for the rail and was cut: check what parents see.";
+  if (a.named_by_rail)
+    return `${rail} names the account itself: parents may see its name rather than the school's and the child's.`;
+  if (a.shortened)
+    return "The school's name was shortened to fit the rail's limit; the child's name is whole.";
   return "";
 }
 
@@ -177,7 +225,9 @@ export function railOf(connection: string): string {
 
 /** Groups account numbers as banks print them: 0123 456 789. */
 export function spacedNumber(n: string): string {
-  return n.length === 10 ? `${n.slice(0, 4)} ${n.slice(4, 7)} ${n.slice(7)}` : n;
+  return n.length === 10
+    ? `${n.slice(0, 4)} ${n.slice(4, 7)} ${n.slice(7)}`
+    : n;
 }
 
 /** The fee sentence, or a plain one when none is documented. */

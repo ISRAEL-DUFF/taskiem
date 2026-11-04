@@ -7,32 +7,58 @@ test("conflicting edits are resolved in the editor", async ({ page }) => {
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: /^Good (morning|afternoon|evening)/,
+    }),
+  ).toBeVisible();
 
   const api = async (method: string, path: string, data?: unknown) => {
-    const r = await page.request.fetch(path, { method, data, headers: { "X-Taskiem-Request": "1" } });
-    expect(r.ok(), `${method} ${path}: ${r.status()} ${await r.text()}`).toBeTruthy();
+    const r = await page.request.fetch(path, {
+      method,
+      data,
+      headers: { "X-Taskiem-Request": "1" },
+    });
+    expect(
+      r.ok(),
+      `${method} ${path}: ${r.status()} ${await r.text()}`,
+    ).toBeTruthy();
     return (await r.json()) as Record<string, unknown>;
   };
   const def = (output: string) => ({
-    schema: "wd/v1", id: "wf_merge", version: 1, name: "Merge", trigger: { type: "manual" },
+    schema: "wd/v1",
+    id: "wf_merge",
+    version: 1,
+    name: "Merge",
+    trigger: { type: "manual" },
     steps: [{ id: "start", type: "transform", config: { output } }],
   });
-  const wf = await api("POST", "/v1/workflows", { name: "Merge flow", definition: def("first") });
+  const wf = await api("POST", "/v1/workflows", {
+    name: "Merge flow",
+    definition: def("first"),
+  });
 
   await page.goto(`/workflows/${String(wf.id)}`);
   await expect(page.getByTestId("node-start")).toBeVisible();
   // Meanwhile someone else saves version 2 from version 1.
-  await api("POST", `/v1/workflows/${String(wf.id)}/versions`, { definition: def("theirs"), parent_digest: wf.digest });
+  await api("POST", `/v1/workflows/${String(wf.id)}/versions`, {
+    definition: def("theirs"),
+    parent_digest: wf.digest,
+  });
 
   // This editor changes the same step from version 1, and saves.
   await page.getByRole("tab", { name: "JSON" }).click();
   const json = page.locator("textarea.mono");
   await json.fill((await json.inputValue()).replace('"first"', '"mine"'));
   await page.getByRole("button", { name: "Save draft" }).click();
-  const dialog = page.getByRole("dialog", { name: "Resolve conflicting edits" });
+  const dialog = page.getByRole("dialog", {
+    name: "Resolve conflicting edits",
+  });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByTestId("conflict-steps/start")).toContainText('"theirs"');
+  await expect(dialog.getByTestId("conflict-steps/start")).toContainText(
+    '"theirs"',
+  );
   await dialog.getByRole("radio", { name: "Yours" }).check();
   await dialog.getByRole("button", { name: "Save merged version" }).click();
   await expect(dialog).toBeHidden();

@@ -2,7 +2,16 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { get } from "../api";
 import { EnvSelect } from "../environments";
-import { ErrorBox, Item, Items, PageHeader, Row, Skeleton, fmtTime, useLoad } from "../ui";
+import {
+  ErrorBox,
+  Item,
+  Items,
+  PageHeader,
+  Row,
+  Skeleton,
+  fmtTime,
+  useLoad,
+} from "../ui";
 
 interface Day {
   day: string;
@@ -19,7 +28,13 @@ interface Failure {
 }
 interface DashboardData {
   days: number;
-  runs: { total: number; completed: number; failed: number; cancelled: number; active: number };
+  runs: {
+    total: number;
+    completed: number;
+    failed: number;
+    cancelled: number;
+    active: number;
+  };
   success_rate: number | null;
   duration_seconds: { p50: number | null; p95: number | null };
   needs_reconciliation: number;
@@ -27,17 +42,40 @@ interface DashboardData {
   daily: Day[];
   failures_by_step: Failure[];
   failures_by_connector: Failure[];
-  workflows: { id: string; name: string; runs: number; completed: number; failed: number; success_rate: number | null; p95_seconds: number | null }[];
+  workflows: {
+    id: string;
+    name: string;
+    runs: number;
+    completed: number;
+    failed: number;
+    success_rate: number | null;
+    p95_seconds: number | null;
+  }[];
 }
 
-const pct = (v: number | null) => (v === null ? "–" : `${(v * 100).toFixed(1)}%`);
-const dur = (s: number | null) => (s === null ? "–" : s < 60 ? `${s.toFixed(1)}s` : s < 3600 ? `${(s / 60).toFixed(1)}m` : `${(s / 3600).toFixed(1)}h`);
+const pct = (v: number | null) =>
+  v === null ? "–" : `${(v * 100).toFixed(1)}%`;
+const dur = (s: number | null) =>
+  s === null
+    ? "–"
+    : s < 60
+      ? `${s.toFixed(1)}s`
+      : s < 3600
+        ? `${(s / 60).toFixed(1)}m`
+        : `${(s / 3600).toFixed(1)}h`;
 
 export function Dashboard() {
   const [env, setEnv] = useState("prod");
   const [days, setDays] = useState(7);
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const { data, error } = useLoad(() => get<DashboardData>(`/v1/dashboard?environment=${encodeURIComponent(env)}&days=${days}&tz=${encodeURIComponent(tz)}`), [env, days], true);
+  const { data, error } = useLoad(
+    () =>
+      get<DashboardData>(
+        `/v1/dashboard?environment=${encodeURIComponent(env)}&days=${days}&tz=${encodeURIComponent(tz)}`,
+      ),
+    [env, days],
+    true,
+  );
   return (
     <>
       <PageHeader
@@ -46,7 +84,12 @@ export function Dashboard() {
         actions={
           <>
             <EnvSelect value={env} onChange={setEnv} />
-            <select aria-label="Period" style={{ width: "auto" }} value={days} onChange={(e) => setDays(Number(e.target.value))}>
+            <select
+              aria-label="Period"
+              style={{ width: "auto" }}
+              value={days}
+              onChange={(e) => setDays(Number(e.target.value))}
+            >
               <option value={1}>24 hours</option>
               <option value={7}>7 days</option>
               <option value={30}>30 days</option>
@@ -60,14 +103,36 @@ export function Dashboard() {
       {data && (
         <>
           <div className="tiles">
-            <Tile label="Success rate" value={pct(data.success_rate)} hint={`${data.runs.completed} completed, ${data.runs.failed} failed`} />
-            <Tile label="Runs" value={String(data.runs.total)} hint={`${data.runs.active} in progress`} />
-            <Tile label="Duration p95" value={dur(data.duration_seconds.p95)} hint={`p50 ${dur(data.duration_seconds.p50)}`} />
-            <Tile label="Needs reconciliation" value={String(data.needs_reconciliation)} hint="now" warn={data.needs_reconciliation > 0} link="/runs?status=needs_reconciliation" />
+            <Tile
+              label="Success rate"
+              value={pct(data.success_rate)}
+              hint={`${data.runs.completed} completed, ${data.runs.failed} failed`}
+            />
+            <Tile
+              label="Runs"
+              value={String(data.runs.total)}
+              hint={`${data.runs.active} in progress`}
+            />
+            <Tile
+              label="Duration p95"
+              value={dur(data.duration_seconds.p95)}
+              hint={`p50 ${dur(data.duration_seconds.p50)}`}
+            />
+            <Tile
+              label="Needs reconciliation"
+              value={String(data.needs_reconciliation)}
+              hint="now"
+              warn={data.needs_reconciliation > 0}
+              link="/runs?status=needs_reconciliation"
+            />
             <Tile
               label="Approvals pending"
               value={String(data.approvals_pending.count)}
-              hint={data.approvals_pending.oldest ? `oldest ${fmtTime(data.approvals_pending.oldest)}` : "now"}
+              hint={
+                data.approvals_pending.oldest
+                  ? `oldest ${fmtTime(data.approvals_pending.oldest)}`
+                  : "now"
+              }
               link="/approvals"
             />
           </div>
@@ -78,11 +143,17 @@ export function Dashboard() {
           <div className="row" style={{ alignItems: "flex-start" }}>
             <section className="card" style={{ flex: 1, minWidth: 280 }}>
               <h2 style={{ marginTop: 0 }}>Failing steps</h2>
-              <FailureTable rows={data.failures_by_step} cols={["workflow", "step", "connector"]} />
+              <FailureTable
+                rows={data.failures_by_step}
+                cols={["workflow", "step", "connector"]}
+              />
             </section>
             <section className="card" style={{ flex: 1, minWidth: 280 }}>
               <h2 style={{ marginTop: 0 }}>Failing connectors</h2>
-              <FailureTable rows={data.failures_by_connector} cols={["connector", "kind"]} />
+              <FailureTable
+                rows={data.failures_by_connector}
+                cols={["connector", "kind"]}
+              />
             </section>
           </div>
           <section className="card">
@@ -101,7 +172,9 @@ export function Dashboard() {
                 />
               ))}
             </Items>
-            {data.workflows.length === 0 && <p className="hint">No runs in this period.</p>}
+            {data.workflows.length === 0 && (
+              <p className="hint">No runs in this period.</p>
+            )}
           </section>
         </>
       )}
@@ -109,7 +182,19 @@ export function Dashboard() {
   );
 }
 
-function Tile({ label, value, hint, warn, link }: { label: string; value: string; hint: string; warn?: boolean; link?: string }) {
+function Tile({
+  label,
+  value,
+  hint,
+  warn,
+  link,
+}: {
+  label: string;
+  value: string;
+  hint: string;
+  warn?: boolean;
+  link?: string;
+}) {
   const body = (
     <>
       <div className="hint">{label}</div>
@@ -119,10 +204,20 @@ function Tile({ label, value, hint, warn, link }: { label: string; value: string
       <div className="hint">{hint}</div>
     </>
   );
-  return <div className="card tile">{link ? <Link to={link}>{body}</Link> : body}</div>;
+  return (
+    <div className="card tile">
+      {link ? <Link to={link}>{body}</Link> : body}
+    </div>
+  );
 }
 
-function FailureTable({ rows, cols }: { rows: Failure[]; cols: (keyof Failure)[] }) {
+function FailureTable({
+  rows,
+  cols,
+}: {
+  rows: Failure[];
+  cols: (keyof Failure)[];
+}) {
   if (rows.length === 0) return <p className="hint">None in this period.</p>;
   return (
     <Items>
@@ -151,9 +246,23 @@ function DailyChart({ days }: { days: Day[] }) {
   const every = days.length <= 14 ? 1 : Math.ceil(days.length / 10);
   return (
     <div className="chart-wrap">
-      <svg className="chart" viewBox={`0 0 100 ${h}`} preserveAspectRatio="none" role="img" aria-label="Runs per day">
+      <svg
+        className="chart"
+        viewBox={`0 0 100 ${h}`}
+        preserveAspectRatio="none"
+        role="img"
+        aria-label="Runs per day"
+      >
         {[0.25, 0.5, 0.75].map((f) => (
-          <line key={f} className="chart-grid" x1={0} x2={100} y1={h * f} y2={h * f} vectorEffect="non-scaling-stroke" />
+          <line
+            key={f}
+            className="chart-grid"
+            x1={0}
+            x2={100}
+            y1={h * f}
+            y2={h * f}
+            vectorEffect="non-scaling-stroke"
+          />
         ))}
         {days.map((d, i) => {
           const x = i * w + w * 0.2;
@@ -162,7 +271,16 @@ function DailyChart({ days }: { days: Day[] }) {
           const seg = (n: number, cls: string) => {
             const sh = (n / max) * h;
             y -= sh;
-            return n > 0 ? <rect key={cls} className={cls} x={x} y={y} width={bw} height={sh} /> : null;
+            return n > 0 ? (
+              <rect
+                key={cls}
+                className={cls}
+                x={x}
+                y={y}
+                width={bw}
+                height={sh}
+              />
+            ) : null;
           };
           return (
             <g key={d.day}>

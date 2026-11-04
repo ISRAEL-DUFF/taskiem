@@ -15,30 +15,59 @@ async function signIn(page: Page, email: string) {
 
 /** Makes someone with an account who belongs nowhere, then invites them. */
 async function inviteLeaver(page: Page, email: string) {
-  const added = await page.request.post("/v1/members", { headers: H, data: { email, password: "correct horse battery", roles: ["viewer"] } });
+  const added = await page.request.post("/v1/members", {
+    headers: H,
+    data: { email, password: "correct horse battery", roles: ["viewer"] },
+  });
   expect(added.status()).toBe(201);
   const { user_id } = (await added.json()) as { user_id: string };
-  expect((await page.request.delete(`/v1/members/${user_id}/roles/viewer`, { headers: H })).status()).toBe(204);
-  const invited = await page.request.post("/v1/members", { headers: H, data: { email, roles: ["builder"] } });
+  expect(
+    (
+      await page.request.delete(`/v1/members/${user_id}/roles/viewer`, {
+        headers: H,
+      })
+    ).status(),
+  ).toBe(204);
+  const invited = await page.request.post("/v1/members", {
+    headers: H,
+    data: { email, roles: ["builder"] },
+  });
   expect(invited.status()).toBe(201);
 }
 
-test("pending invitations are listed and withdrawn; an invitee with no organisation signs in and joins", async ({ page }) => {
+test("pending invitations are listed and withdrawn; an invitee with no organisation signs in and joins", async ({
+  page,
+}) => {
   const stamp = Date.now();
   const bob = `bob-${stamp}@e2e.test`;
   const carol = `carol-${stamp}@e2e.test`;
   await signIn(page, "owner@e2e.test");
-  await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: /^Good (morning|afternoon|evening)/,
+    }),
+  ).toBeVisible();
   await inviteLeaver(page, bob);
   await inviteLeaver(page, carol);
 
   await page.goto("/members");
   const pending = page.getByTestId("pending-invitations");
-  await expect(pending.getByTestId("invitation").filter({ hasText: bob })).toBeVisible();
-  await expect(pending.getByTestId("invitation").filter({ hasText: carol })).toBeVisible();
+  await expect(
+    pending.getByTestId("invitation").filter({ hasText: bob }),
+  ).toBeVisible();
+  await expect(
+    pending.getByTestId("invitation").filter({ hasText: carol }),
+  ).toBeVisible();
   page.once("dialog", (d) => void d.accept());
-  await pending.getByTestId("invitation").filter({ hasText: carol }).getByRole("button", { name: "Withdraw" }).click();
-  await expect(pending.getByTestId("invitation").filter({ hasText: carol })).toHaveCount(0);
+  await pending
+    .getByTestId("invitation")
+    .filter({ hasText: carol })
+    .getByRole("button", { name: "Withdraw" })
+    .click();
+  await expect(
+    pending.getByTestId("invitation").filter({ hasText: carol }),
+  ).toHaveCount(0);
   await page.request.post("/v1/auth/logout", { headers: H });
   await page.context().clearCookies();
 
@@ -49,12 +78,23 @@ test("pending invitations are listed and withdrawn; an invitee with no organisat
   // Bob signs in to his invitations only.
   await signIn(page, bob);
   const mine = page.getByTestId("my-invitations");
-  await expect(page.getByText("You do not belong to an organisation on Taskiem yet")).toBeVisible();
-  await expect(mine.getByTestId("my-invitation").filter({ hasText: "E2E" })).toBeVisible();
+  await expect(
+    page.getByText("You do not belong to an organisation on Taskiem yet"),
+  ).toBeVisible();
+  await expect(
+    mine.getByTestId("my-invitation").filter({ hasText: "E2E" }),
+  ).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Main" })).toHaveCount(0);
   expect((await page.request.get("/v1/workflows")).status()).toBe(403);
   await mine.getByRole("button", { name: "Accept" }).click();
-  await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Main" }).getByText("builder")).toBeVisible();
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: /^Good (morning|afternoon|evening)/,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("navigation", { name: "Main" }).getByText("builder"),
+  ).toBeVisible();
   expect((await page.request.get("/v1/workflows")).status()).toBe(200);
 });

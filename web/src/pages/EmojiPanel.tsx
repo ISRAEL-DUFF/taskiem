@@ -5,14 +5,14 @@ import {
   useState,
   type KeyboardEvent,
 } from "react";
+import { addRecent } from "../lib/emoji";
 import {
-  addRecent,
   EMOJI_GROUPS,
+  nameOf,
   searchEmoji,
-  stripTone,
   takesTone,
   withTone,
-} from "../lib/emoji";
+} from "../lib/emojiList";
 
 const KEY = "taskiem-emoji-recent";
 const TONE_KEY = "taskiem-emoji-tone";
@@ -71,18 +71,12 @@ export function EmojiPanel({
   useEffect(() => search.current?.focus(), []);
 
   const items = useMemo(() => {
-    const names = new Map(
-      EMOJI_GROUPS.flatMap((g) => g.items).map((i) => [
-        stripTone(i.char).replace("️", ""),
-        i.name,
-      ]),
-    );
-    const nameOf = (c: string) => names.get(stripTone(c).replace("️", "")) ?? c;
+    const nameFor = (c: string) => nameOf(c) ?? c;
     const tone1 = (c: string) => withTone(c, tone);
     if (q.trim())
       return searchEmoji(q).map((e) => ({ char: tone1(e.char), name: e.name }));
     if (group === "recent")
-      return recent.map((c) => ({ char: c, name: nameOf(c) }));
+      return recent.map((c) => ({ char: c, name: nameFor(c) }));
     return (EMOJI_GROUPS.find((g) => g.id === group)?.items ?? []).map((e) => ({
       char: tone1(e.char),
       name: e.name,

@@ -21,14 +21,31 @@ export function leavesPage(href: string, here: string, target = ""): boolean {
 }
 
 /** While when is true, asks before the page is left. */
-export function useLeaveWarning(when: boolean, message = "Leave without saving? Your unsaved changes will be lost.") {
+export function useLeaveWarning(
+  when: boolean,
+  message = "Leave without saving? Your unsaved changes will be lost.",
+) {
   useEffect(() => {
     if (!when) return;
     const unload = (e: BeforeUnloadEvent) => e.preventDefault();
     const click = (e: MouseEvent) => {
-      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-      const a = e.target instanceof Element ? e.target.closest("a[href]") : null;
-      if (!(a instanceof HTMLAnchorElement) || a.hasAttribute("download") || !leavesPage(a.href, window.location.href, a.target)) return;
+      if (
+        e.defaultPrevented ||
+        e.button !== 0 ||
+        e.metaKey ||
+        e.ctrlKey ||
+        e.shiftKey ||
+        e.altKey
+      )
+        return;
+      const a =
+        e.target instanceof Element ? e.target.closest("a[href]") : null;
+      if (
+        !(a instanceof HTMLAnchorElement) ||
+        a.hasAttribute("download") ||
+        !leavesPage(a.href, window.location.href, a.target)
+      )
+        return;
       if (!window.confirm(message)) {
         e.preventDefault();
         e.stopPropagation();

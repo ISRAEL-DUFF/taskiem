@@ -50,7 +50,9 @@ export interface DomainList {
 export function domainState(d: StorefrontDomain): string {
   switch (d.status) {
     case "live":
-      return d.primary ? "Live: your page's address" : "Live: sends visitors to your main domain";
+      return d.primary
+        ? "Live: your page's address"
+        : "Live: sends visitors to your main domain";
     case "unverified":
       return `Stopped: the TXT record was not found for over a day${d.last_check_error ? ` (${d.last_check_error})` : ""}. Put it back and check again.`;
     default:
@@ -59,10 +61,14 @@ export function domainState(d: StorefrontDomain): string {
 }
 
 /** The domains a domain serves, as the owner typed them first. */
-export const domainHosts = (d: StorefrontDomain) => (d.twin ? [d.domain, d.twin] : [d.domain]);
+export const domainHosts = (d: StorefrontDomain) =>
+  d.twin ? [d.domain, d.twin] : [d.domain];
 
 /** The records still to create: the proof first, then those that point the domain. */
-export const recordsInOrder = (d: StorefrontDomain) => [...d.records].sort((a, b) => (a.purpose === b.purpose ? 0 : a.purpose === "proof" ? -1 : 1));
+export const recordsInOrder = (d: StorefrontDomain) =>
+  [...d.records].sort((a, b) =>
+    a.purpose === b.purpose ? 0 : a.purpose === "proof" ? -1 : 1,
+  );
 
 /** A domain the owner typed, tidied for a hint (no scheme, path or trailing dot); "" when empty. */
 export function tidyDomain(raw: string): string {

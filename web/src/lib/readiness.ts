@@ -10,7 +10,15 @@ export interface ReadyNeed {
   connector?: string;
   service?: string;
   /** support: the connection's service must turn a feature on for the business (Paystack's Pay with Transfer); never blocking. */
-  problem: "missing" | "expired" | "disabled" | "ambiguous" | "nobody" | "chat_id" | "cannot" | "support";
+  problem:
+    | "missing"
+    | "expired"
+    | "disabled"
+    | "ambiguous"
+    | "nobody"
+    | "chat_id"
+    | "cannot"
+    | "support";
   environment: string;
   steps: { id: string; name: string }[];
   /** Publishing waits for it: a run would fail at once. */
@@ -36,7 +44,13 @@ export interface Readiness {
 
 /** The fix a need offers, done in place. */
 export type Fix =
-  | { kind: "connect"; connector: string; environment: string; name: string; service: string }
+  | {
+      kind: "connect";
+      connector: string;
+      environment: string;
+      name: string;
+      service: string;
+    }
   | { kind: "connect_rail"; rails: string[]; environment: string; name: string }
   | { kind: "choose_connection"; connector: string; service: string }
   | { kind: "set_variable"; environment: string; name: string }
@@ -52,17 +66,42 @@ export const DEFAULT_CONNECTION = "main";
 export function fixFor(n: ReadyNeed): Fix {
   switch (n.kind) {
     case "connection":
-      if (n.problem === "support") return { kind: "ask_support", service: n.service ?? n.connector ?? "" };
-      if (n.capability && n.problem !== "ambiguous") return { kind: "connect_rail", rails: n.rails ?? [], environment: n.environment, name: n.name || DEFAULT_CONNECTION };
-      if (n.capability) return { kind: "choose_connection", connector: "", service: n.service ?? "" };
-      if (n.problem === "ambiguous") return { kind: "choose_connection", connector: n.connector ?? "", service: n.service ?? n.connector ?? "" };
-      return { kind: "connect", connector: n.connector ?? "", environment: n.environment, name: n.name || DEFAULT_CONNECTION, service: n.service ?? n.connector ?? "" };
+      if (n.problem === "support")
+        return { kind: "ask_support", service: n.service ?? n.connector ?? "" };
+      if (n.capability && n.problem !== "ambiguous")
+        return {
+          kind: "connect_rail",
+          rails: n.rails ?? [],
+          environment: n.environment,
+          name: n.name || DEFAULT_CONNECTION,
+        };
+      if (n.capability)
+        return {
+          kind: "choose_connection",
+          connector: "",
+          service: n.service ?? "",
+        };
+      if (n.problem === "ambiguous")
+        return {
+          kind: "choose_connection",
+          connector: n.connector ?? "",
+          service: n.service ?? n.connector ?? "",
+        };
+      return {
+        kind: "connect",
+        connector: n.connector ?? "",
+        environment: n.environment,
+        name: n.name || DEFAULT_CONNECTION,
+        service: n.service ?? n.connector ?? "",
+      };
     case "variable":
       return { kind: "set_variable", environment: n.environment, name: n.name };
     case "secret":
       return { kind: "set_secret", environment: n.environment, name: n.name };
     case "table":
-      return n.table ? { kind: "make_table", name: n.name, table: n.table } : { kind: "make_table", name: n.name };
+      return n.table
+        ? { kind: "make_table", name: n.name, table: n.table }
+        : { kind: "make_table", name: n.name };
     case "role":
       return { kind: "give_role", role: n.name };
     case "field":
@@ -82,7 +121,11 @@ export function needsToShow(needs: ReadyNeed[], advanced = false): ReadyNeed[] {
   const key = (n: ReadyNeed) => `${n.kind}/${n.name}/${n.connector ?? ""}`;
   const seen = new Set<string>();
   const out: ReadyNeed[] = [];
-  const sorted = [...needs].sort((a, b) => Number(b.blocking) - Number(a.blocking) || Number(b.environment === "prod") - Number(a.environment === "prod"));
+  const sorted = [...needs].sort(
+    (a, b) =>
+      Number(b.blocking) - Number(a.blocking) ||
+      Number(b.environment === "prod") - Number(a.environment === "prod"),
+  );
   for (const n of sorted) {
     if (n.environment !== "prod" && !n.blocking && !advanced) continue;
     if (seen.has(key(n))) continue;

@@ -8,7 +8,13 @@ import type { PlanStanding } from "./schoolChasing";
 // here to be tested.
 
 export type ClearanceStatus = "cleared" | "partly_paid" | "not_paid";
-export type ClearanceReason = "paid" | "plan" | "override" | "no_fees" | "balance" | "no_invoice";
+export type ClearanceReason =
+  | "paid"
+  | "plan"
+  | "override"
+  | "no_fees"
+  | "balance"
+  | "no_invoice";
 export type GateStatus = "cleared" | "see_bursar";
 
 /** An override (GET /v1/schools/clearance-overrides). */
@@ -89,7 +95,10 @@ export interface GateAnswer {
 
 // --- words ---
 
-export const CLEARANCE_STATUS: Record<ClearanceStatus, { label: string; tone: string }> = {
+export const CLEARANCE_STATUS: Record<
+  ClearanceStatus,
+  { label: string; tone: string }
+> = {
   cleared: { label: "Cleared", tone: "ok" },
   partly_paid: { label: "Partly paid", tone: "warn" },
   not_paid: { label: "Not paid", tone: "danger" },
@@ -109,10 +118,14 @@ const REASONS: Record<ClearanceReason, string> = {
 };
 
 /** Why a student stands where they do, in words. */
-export function reasonWords(c: Pick<Clearance, "reason" | "override" | "plan">): string {
+export function reasonWords(
+  c: Pick<Clearance, "reason" | "override" | "plan">,
+): string {
   const base = REASONS[c.reason] ?? c.reason;
-  if (c.reason === "override" && c.override) return `${base} until ${dateLabel(c.override.ends_on)}`;
-  if (c.reason === "plan" && c.plan?.next_due_on) return `${base} (next instalment ${dateLabel(c.plan.next_due_on)})`;
+  if (c.reason === "override" && c.override)
+    return `${base} until ${dateLabel(c.override.ends_on)}`;
+  if (c.reason === "plan" && c.plan?.next_due_on)
+    return `${base} (next instalment ${dateLabel(c.plan.next_due_on)})`;
   return base;
 }
 
@@ -125,7 +138,11 @@ export function totalsLine(t: ClearanceTotals | undefined): string {
 }
 
 /** The path of the clearance list for a term and class, as JSON or CSV. */
-export function clearancePath(filter: { term?: string; class?: string }, format?: "csv", reveal?: boolean): string {
+export function clearancePath(
+  filter: { term?: string; class?: string },
+  format?: "csv",
+  reveal?: boolean,
+): string {
   const q = new URLSearchParams();
   if (filter.term) q.set("term", filter.term);
   if (filter.class) q.set("class", filter.class);
@@ -136,15 +153,28 @@ export function clearancePath(filter: { term?: string; class?: string }, format?
 }
 
 /** What is wrong with an override before it is sent, or "" when nothing. */
-export function overrideProblem(f: { reason: string; ends_on: string }, today = new Date()): string {
+export function overrideProblem(
+  f: { reason: string; ends_on: string },
+  today = new Date(),
+): string {
   const reason = f.reason.trim();
-  if (!reason) return "Give the reason the student is cleared (it is kept with the override).";
+  if (!reason)
+    return "Give the reason the student is cleared (it is kept with the override).";
   if (reason.length > 300) return "The reason has up to 300 characters.";
   if (f.ends_on) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(f.ends_on)) return "The end date is a date, YYYY-MM-DD.";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(f.ends_on))
+      return "The end date is a date, YYYY-MM-DD.";
     const d = new Date(f.ends_on + "T12:00:00");
-    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const limit = new Date(start.getFullYear() + 1, start.getMonth(), start.getDate());
+    const start = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+    );
+    const limit = new Date(
+      start.getFullYear() + 1,
+      start.getMonth(),
+      start.getDate(),
+    );
     if (d < start) return "The override cannot end in the past.";
     if (d > limit) return "The override ends within a year.";
   }
@@ -170,9 +200,17 @@ export function canSearch(q: string): boolean {
 }
 
 /** The gate's two answers, in the words on the screen. */
-export const GATE_WORDS: Record<GateStatus, { label: string; mark: string; tone: string; hint: string }> = {
+export const GATE_WORDS: Record<
+  GateStatus,
+  { label: string; mark: string; tone: string; hint: string }
+> = {
   cleared: { label: "CLEARED", mark: "✓", tone: "ok", hint: "Come in." },
-  see_bursar: { label: "SEE THE BURSAR", mark: "⚠", tone: "warn", hint: "Please see the bursar before class." },
+  see_bursar: {
+    label: "SEE THE BURSAR",
+    mark: "⚠",
+    tone: "warn",
+    hint: "Please see the bursar before class.",
+  },
 };
 
 /** A recent check on the gate screen: who, and the answer. */
@@ -188,25 +226,58 @@ export interface RecentCheck {
 export const RECENT_MAX = 8;
 
 /** Adds a check to the front of the recent list, once per student, at most RECENT_MAX. */
-export function remember(list: RecentCheck[], a: GateAnswer, at = new Date().toISOString()): RecentCheck[] {
+export function remember(
+  list: RecentCheck[],
+  a: GateAnswer,
+  at = new Date().toISOString(),
+): RecentCheck[] {
   const rest = list.filter((r) => r.student_id !== a.student_id);
-  return [{ student_id: a.student_id, name: a.name, class: a.class, status: a.status, at }, ...rest].slice(0, RECENT_MAX);
+  return [
+    {
+      student_id: a.student_id,
+      name: a.name,
+      class: a.class,
+      status: a.status,
+      at,
+    },
+    ...rest,
+  ].slice(0, RECENT_MAX);
 }
 
 const RECENT_KEY = "taskiem-gate-recent";
 
 /** The recent checks kept in this browser tab's session (cleared on sign-out). */
-export function loadRecent(storage: Pick<Storage, "getItem"> | undefined = typeof sessionStorage === "undefined" ? undefined : sessionStorage): RecentCheck[] {
+export function loadRecent(
+  storage: Pick<Storage, "getItem"> | undefined = typeof sessionStorage ===
+  "undefined"
+    ? undefined
+    : sessionStorage,
+): RecentCheck[] {
   try {
     const raw = storage?.getItem(RECENT_KEY);
     const v: unknown = raw ? JSON.parse(raw) : [];
-    return Array.isArray(v) ? (v as RecentCheck[]).filter((r) => r && typeof r.student_id === "string" && (r.status === "cleared" || r.status === "see_bursar")).slice(0, RECENT_MAX) : [];
+    return Array.isArray(v)
+      ? (v as RecentCheck[])
+          .filter(
+            (r) =>
+              r &&
+              typeof r.student_id === "string" &&
+              (r.status === "cleared" || r.status === "see_bursar"),
+          )
+          .slice(0, RECENT_MAX)
+      : [];
   } catch {
     return [];
   }
 }
 
-export function saveRecent(list: RecentCheck[], storage: Pick<Storage, "setItem"> | undefined = typeof sessionStorage === "undefined" ? undefined : sessionStorage): void {
+export function saveRecent(
+  list: RecentCheck[],
+  storage: Pick<Storage, "setItem"> | undefined = typeof sessionStorage ===
+  "undefined"
+    ? undefined
+    : sessionStorage,
+): void {
   try {
     storage?.setItem(RECENT_KEY, JSON.stringify(list));
   } catch {
@@ -214,7 +285,12 @@ export function saveRecent(list: RecentCheck[], storage: Pick<Storage, "setItem"
   }
 }
 
-export function clearRecent(storage: Pick<Storage, "removeItem"> | undefined = typeof sessionStorage === "undefined" ? undefined : sessionStorage): void {
+export function clearRecent(
+  storage: Pick<Storage, "removeItem"> | undefined = typeof sessionStorage ===
+  "undefined"
+    ? undefined
+    : sessionStorage,
+): void {
   try {
     storage?.removeItem(RECENT_KEY);
   } catch {
@@ -231,8 +307,12 @@ export function checkTime(at: string): string {
 
 /** The gate screen never shows an amount: a guard the tests and the screen share. */
 export function hasAmountField(v: unknown): boolean {
-  const bad = /amount|kobo|naira|balance|paid|due|total|percent|invoice|payment/i;
+  const bad =
+    /amount|kobo|naira|balance|paid|due|total|percent|invoice|payment/i;
   if (Array.isArray(v)) return v.some(hasAmountField);
-  if (v && typeof v === "object") return Object.entries(v as Record<string, unknown>).some(([k, child]) => bad.test(k) || hasAmountField(child));
+  if (v && typeof v === "object")
+    return Object.entries(v as Record<string, unknown>).some(
+      ([k, child]) => bad.test(k) || hasAmountField(child),
+    );
   return false;
 }

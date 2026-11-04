@@ -5,7 +5,12 @@ import { naira } from "./invoices";
 // checks the Payments, Receipts and Approvals pages use, kept here so
 // they can be tested.
 
-export type PostingKind = "cash_posting" | "cash_match" | "discount" | "discount_amendment" | "term_invoice";
+export type PostingKind =
+  | "cash_posting"
+  | "cash_match"
+  | "discount"
+  | "discount_amendment"
+  | "term_invoice";
 export type PostingStatus = "pending" | "posted" | "declined";
 export type PaymentHow = "cash" | "transfer" | "pos" | "other";
 
@@ -92,7 +97,8 @@ export const HOWS: { value: PaymentHow; label: string }[] = [
   { value: "other", label: "Another way" },
 ];
 
-export const howWords = (how: string): string => HOWS.find((h) => h.value === how)?.label ?? how;
+export const howWords = (how: string): string =>
+  HOWS.find((h) => h.value === how)?.label ?? how;
 
 export const KIND_WORDS: Record<PostingKind, string> = {
   cash_posting: "Cash posting",
@@ -102,9 +108,13 @@ export const KIND_WORDS: Record<PostingKind, string> = {
   term_invoice: "Term invoice with a discount",
 };
 
-export const kindWords = (kind: string): string => KIND_WORDS[kind as PostingKind] ?? kind;
+export const kindWords = (kind: string): string =>
+  KIND_WORDS[kind as PostingKind] ?? kind;
 
-export function postingStatus(s: PostingStatus): { label: string; tone: string } {
+export function postingStatus(s: PostingStatus): {
+  label: string;
+  tone: string;
+} {
   switch (s) {
     case "pending":
       return { label: "Waiting for a second person", tone: "pending" };
@@ -124,7 +134,13 @@ export interface PaymentForm {
   note: string;
 }
 
-export const emptyPayment = (student = ""): PaymentForm => ({ student, amount: "", how: "cash", date: "", note: "" });
+export const emptyPayment = (student = ""): PaymentForm => ({
+  student,
+  amount: "",
+  how: "cash",
+  date: "",
+  note: "",
+});
 
 /** The amount typed, in kobo; NaN when it is not an amount. */
 export function amountKobo(s: string): number {
@@ -135,16 +151,22 @@ export function amountKobo(s: string): number {
 
 /** Why the form cannot be sent, or null. */
 export function paymentProblem(f: PaymentForm): string | null {
-  if (!f.student.trim()) return "Say which student paid (their admission number).";
+  if (!f.student.trim())
+    return "Say which student paid (their admission number).";
   const k = amountKobo(f.amount);
   if (Number.isNaN(k) || k < 100) return "The amount is in naira, at least ₦1.";
-  if (f.date && !/^\d{4}-\d{2}-\d{2}$/.test(f.date)) return "The date is written 2026-10-23.";
+  if (f.date && !/^\d{4}-\d{2}-\d{2}$/.test(f.date))
+    return "The date is written 2026-10-23.";
   if (f.note.length > 200) return "The note is up to 200 characters.";
   return null;
 }
 
 export function paymentRequest(f: PaymentForm): Record<string, unknown> {
-  const out: Record<string, unknown> = { student: f.student.trim(), amount_kobo: amountKobo(f.amount), how: f.how };
+  const out: Record<string, unknown> = {
+    student: f.student.trim(),
+    amount_kobo: amountKobo(f.amount),
+    how: f.how,
+  };
   if (f.date) out.date = f.date;
   if (f.note.trim()) out.note = f.note.trim();
   return out;
@@ -152,7 +174,12 @@ export function paymentRequest(f: PaymentForm): Record<string, unknown> {
 
 /** Whether an answer is a request recorded for a second person. */
 export function isApprovalNeeded(v: unknown): v is ApprovalNeeded {
-  return typeof v === "object" && v !== null && (v as { code?: string }).code === "needs_approval" && typeof (v as { request?: unknown }).request === "object";
+  return (
+    typeof v === "object" &&
+    v !== null &&
+    (v as { code?: string }).code === "needs_approval" &&
+    typeof (v as { request?: unknown }).request === "object"
+  );
 }
 
 /** What a match answered when it waits for a second person (202): the sentence to show, else null. */
@@ -168,16 +195,28 @@ export function postedLine(p: Posting): string {
   const parts = r.parts ?? [];
   const bits: string[] = [];
   const one = parts[0];
-  if (parts.length === 1 && one) bits.push(`${naira(one.amount_kobo)} towards ${one.number}${one.receipt_number ? ` (receipt ${one.receipt_number})` : ""}`);
-  else if (parts.length > 1) bits.push(`${parts.length} invoices paid: ${parts.map((x) => `${x.number} ${naira(x.amount_kobo)}`).join(", ")}`);
-  if (r.credit_kobo) bits.push(`${naira(r.credit_kobo)} kept as the family's credit`);
-  if (bits.length === 0) return `${naira(p.amount_kobo)} recorded; nothing was open to count it towards, so it is the family's credit.`;
+  if (parts.length === 1 && one)
+    bits.push(
+      `${naira(one.amount_kobo)} towards ${one.number}${one.receipt_number ? ` (receipt ${one.receipt_number})` : ""}`,
+    );
+  else if (parts.length > 1)
+    bits.push(
+      `${parts.length} invoices paid: ${parts.map((x) => `${x.number} ${naira(x.amount_kobo)}`).join(", ")}`,
+    );
+  if (r.credit_kobo)
+    bits.push(`${naira(r.credit_kobo)} kept as the family's credit`);
+  if (bits.length === 0)
+    return `${naira(p.amount_kobo)} recorded; nothing was open to count it towards, so it is the family's credit.`;
   return `${naira(p.amount_kobo)} posted: ${bits.join("; ")}.`;
 }
 
 /** A request's first line: what it asks for and for whom. */
 export function requestTitle(p: Posting): string {
-  const who = p.admission_number ? ` for ${p.admission_number}${p.class ? ` (${p.class})` : ""}` : p.invoice_number ? ` on ${p.invoice_number}` : "";
+  const who = p.admission_number
+    ? ` for ${p.admission_number}${p.class ? ` (${p.class})` : ""}`
+    : p.invoice_number
+      ? ` on ${p.invoice_number}`
+      : "";
   return `${kindWords(p.kind)} of ${naira(p.amount_kobo)}${who}`;
 }
 
@@ -187,25 +226,37 @@ export function requestDetails(p: Posting): string[] {
   const out: string[] = [];
   switch (p.kind) {
     case "cash_posting":
-      out.push(`Paid ${howWords(String(d.how ?? "")).toLowerCase()}${d.date ? ` on ${String(d.date)}` : ""}.`);
+      out.push(
+        `Paid ${howWords(String(d.how ?? "")).toLowerCase()}${d.date ? ` on ${String(d.date)}` : ""}.`,
+      );
       if (d.note) out.push(`Note: ${String(d.note)}`);
       break;
     case "cash_match":
-      out.push(`Money entered by hand on Money, matched to invoice ${p.invoice_number ?? ""}. It counts towards the invoice once approved.`);
+      out.push(
+        `Money entered by hand on Money, matched to invoice ${p.invoice_number ?? ""}. It counts towards the invoice once approved.`,
+      );
       break;
     case "discount": {
       const kind = String(d.kind ?? "").replace(/_/g, " ");
-      const as = d.percent !== undefined ? `${String(d.percent)}% of the school's own fees` : "an amount";
+      const as =
+        d.percent !== undefined
+          ? `${String(d.percent)}% of the school's own fees`
+          : "an amount";
       out.push(`A ${kind} discount, ${as}: ${String(d.reason ?? "")}`);
       break;
     }
     case "discount_amendment": {
-      const removal = (d.amendment as { kind?: string } | undefined)?.kind === "remove";
-      out.push(`${removal ? "A line taken out of" : "A discount on"} invoice ${p.invoice_number ?? ""}: ${String(d.reason ?? "")}`);
+      const removal =
+        (d.amendment as { kind?: string } | undefined)?.kind === "remove";
+      out.push(
+        `${removal ? "A line taken out of" : "A discount on"} invoice ${p.invoice_number ?? ""}: ${String(d.reason ?? "")}`,
+      );
       break;
     }
     case "term_invoice":
-      out.push(`The student's term invoice carries a discount at or above the school's threshold${d.send ? "; it is sent on approval" : "; it is kept as a draft on approval"}.`);
+      out.push(
+        `The student's term invoice carries a discount at or above the school's threshold${d.send ? "; it is sent on approval" : "; it is kept as a draft on approval"}.`,
+      );
       break;
   }
   const by = p.requested_email || p.requested_by;
@@ -216,17 +267,21 @@ export function requestDetails(p: Posting): string[] {
 /** What a decided request did, for the Payments list. */
 export function decisionLine(p: Posting): string {
   const by = p.decided_email || p.decided_by || "";
-  if (p.status === "declined") return `Declined${by ? ` by ${by}` : ""}${p.decision_reason ? `: ${p.decision_reason}` : "."}`;
+  if (p.status === "declined")
+    return `Declined${by ? ` by ${by}` : ""}${p.decision_reason ? `: ${p.decision_reason}` : "."}`;
   if (p.status === "posted" && by) return `Approved by ${by}.`;
   return "";
 }
 
 /** A receipt's state in words. */
 export function receiptStatus(r: Receipt): { label: string; tone: string } {
-  return r.voided ? { label: "Voided", tone: "cancelled" } : { label: "Valid", tone: "ok" };
+  return r.voided
+    ? { label: "Voided", tone: "cancelled" }
+    : { label: "Valid", tone: "ok" };
 }
 
-export const receiptPDF = (r: { id: string }) => `/v1/schools/receipts/${encodeURIComponent(r.id)}/pdf`;
+export const receiptPDF = (r: { id: string }) =>
+  `/v1/schools/receipts/${encodeURIComponent(r.id)}/pdf`;
 
 /** How a receipt's payment was counted, for people. */
 export function receiptHow(how: string): string {

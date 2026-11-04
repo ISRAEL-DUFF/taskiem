@@ -2,9 +2,29 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { del, get, post, type ConnectorInfo } from "../api";
 import { useAuth } from "../auth";
-import { KINDS, builtInByKind, capabilityLine, diffLines, major, newestPerMajor, writeLines, type CatalogueEntry, type CatalogueVersion, type Diff, type Install } from "../lib/catalogue";
+import {
+  KINDS,
+  builtInByKind,
+  capabilityLine,
+  diffLines,
+  major,
+  newestPerMajor,
+  writeLines,
+  type CatalogueEntry,
+  type CatalogueVersion,
+  type Diff,
+  type Install,
+} from "../lib/catalogue";
 import { needsConnection } from "../lib/connections";
-import { Badge, ErrorBox, Modal, PageHeader, fmtTime, useAction, useLoad } from "../ui";
+import {
+  Badge,
+  ErrorBox,
+  Modal,
+  PageHeader,
+  fmtTime,
+  useAction,
+  useLoad,
+} from "../ui";
 
 /** Every service Taskiem connects to: its own connectors, grouped as
  * payments and banking (rails), apps (products) and tools (decision
@@ -13,19 +33,31 @@ import { Badge, ErrorBox, Modal, PageHeader, fmtTime, useAction, useLoad } from 
 export function Catalogue() {
   const { can } = useAuth();
   const manage = can("connector.manage");
-  const catalogue = useLoad(() => get<{ connectors: CatalogueEntry[] }>("/v1/catalogue"), []);
-  const installs = useLoad(() => get<{ installs: Install[] }>("/v1/catalogue/installs"), []);
+  const catalogue = useLoad(
+    () => get<{ connectors: CatalogueEntry[] }>("/v1/catalogue"),
+    [],
+  );
+  const installs = useLoad(
+    () => get<{ installs: Install[] }>("/v1/catalogue/installs"),
+    [],
+  );
   const [installing, setInstalling] = useState<CatalogueVersion | null>(null);
   const [upgrading, setUpgrading] = useState<Install | null>(null);
   const act = useAction();
   const reload = () => (catalogue.reload(), installs.reload());
   return (
     <>
-      <PageHeader title="Connector catalogue" description="Every service Taskiem connects to: the ones Taskiem looks after, and ready-made ones other organisations publish." />
+      <PageHeader
+        title="Connector catalogue"
+        description="Every service Taskiem connects to: the ones Taskiem looks after, and ready-made ones other organisations publish."
+      />
       <BuiltIn />
       <h2 style={{ marginTop: 32 }}>Published by other organisations</h2>
       <p className="hint">
-        Each version is checked automatically and reviewed by Taskiem before it appears here. Installed versions are pinned: nothing changes until you upgrade, and an upgrade that reaches new hosts or makes new kinds of change asks you again.
+        Each version is checked automatically and reviewed by Taskiem before it
+        appears here. Installed versions are pinned: nothing changes until you
+        upgrade, and an upgrade that reaches new hosts or makes new kinds of
+        change asks you again.
       </p>
       <ErrorBox error={catalogue.error ?? installs.error ?? act.error} />
 
@@ -39,7 +71,11 @@ export function Catalogue() {
                 <th>Version</th>
                 <th>State</th>
                 <th>Installed</th>
-                {manage && <th><span className="sr-only">Actions</span></th>}
+                {manage && (
+                  <th>
+                    <span className="sr-only">Actions</span>
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -51,18 +87,41 @@ export function Catalogue() {
                   <td>{i.version}</td>
                   <td>
                     <Badge value={i.state} />
-                    {i.revoke_reason && <div className="hint">Revoked: {i.revoke_reason}. Steps using it fail until you upgrade or uninstall.</div>}
+                    {i.revoke_reason && (
+                      <div className="hint">
+                        Revoked: {i.revoke_reason}. Steps using it fail until
+                        you upgrade or uninstall.
+                      </div>
+                    )}
                   </td>
                   <td>
-                    {fmtTime(i.updated_at ?? i.installed_at)} by {i.installed_by}
+                    {fmtTime(i.updated_at ?? i.installed_at)} by{" "}
+                    {i.installed_by}
                   </td>
                   {manage && (
                     <td>
-                      {i.latest && <button onClick={() => setUpgrading(i)}>Upgrade to {i.latest}</button>}{" "}
+                      {i.latest && (
+                        <button onClick={() => setUpgrading(i)}>
+                          Upgrade to {i.latest}
+                        </button>
+                      )}{" "}
                       <button
                         disabled={act.busy}
                         onClick={() => {
-                          if (window.confirm(`Uninstall ${i.ref}? Workflows that use it stop validating.`)) void act.run(async () => (await del(`/v1/catalogue/installs/${i.connector}/${i.major}`), reload()), "Connector removed");
+                          if (
+                            window.confirm(
+                              `Uninstall ${i.ref}? Workflows that use it stop validating.`,
+                            )
+                          )
+                            void act.run(
+                              async () => (
+                                await del(
+                                  `/v1/catalogue/installs/${i.connector}/${i.major}`,
+                                ),
+                                reload()
+                              ),
+                              "Connector removed",
+                            );
                         }}
                       >
                         Uninstall
@@ -78,20 +137,35 @@ export function Catalogue() {
 
       <section className="card" style={{ marginTop: 24 }}>
         <h2>Available</h2>
-        {catalogue.data && catalogue.data.connectors.length === 0 && <div className="empty">Nothing is published yet.</div>}
+        {catalogue.data && catalogue.data.connectors.length === 0 && (
+          <div className="empty">Nothing is published yet.</div>
+        )}
         {catalogue.data?.connectors.map((c) => (
-          <article key={c.id} className="card" style={{ marginBottom: 12 }} aria-label={c.name}>
+          <article
+            key={c.id}
+            className="card"
+            style={{ marginBottom: 12 }}
+            aria-label={c.name}
+          >
             <h3 style={{ marginTop: 0 }}>
-              {c.name} <span className="hint">by {c.publisher_name} (verified publisher)</span>
+              {c.name}{" "}
+              <span className="hint">
+                by {c.publisher_name} (verified publisher)
+              </span>
             </h3>
             <p>{c.description}</p>
             {newestPerMajor(c.versions).map((v) => {
               const installed = c.installed[major(v.version)];
               return (
-                <div key={v.version} className="row" style={{ alignItems: "flex-start", gap: 24 }}>
+                <div
+                  key={v.version}
+                  className="row"
+                  style={{ alignItems: "flex-start", gap: 24 }}
+                >
                   <div className="grow">
                     <div>
-                      <code>{v.ref}</code> {v.version} <span className="hint">{v.licence}</span>
+                      <code>{v.ref}</code> {v.version}{" "}
+                      <span className="hint">{v.licence}</span>
                     </div>
                     <div className="hint">
                       Reaches {v.hosts.join(", ")}. Actions:{" "}
@@ -105,7 +179,10 @@ export function Catalogue() {
                     <Badge value={`installed ${installed}`} />
                   ) : (
                     manage && (
-                      <button className="primary" onClick={() => setInstalling(v)}>
+                      <button
+                        className="primary"
+                        onClick={() => setInstalling(v)}
+                      >
                         Install {v.ref}
                       </button>
                     )
@@ -116,8 +193,20 @@ export function Catalogue() {
           </article>
         ))}
       </section>
-      {installing && <InstallDialog version={installing} onClose={() => setInstalling(null)} onDone={() => (setInstalling(null), reload())} />}
-      {upgrading && <UpgradeDialog install={upgrading} onClose={() => setUpgrading(null)} onDone={() => (setUpgrading(null), reload())} />}
+      {installing && (
+        <InstallDialog
+          version={installing}
+          onClose={() => setInstalling(null)}
+          onDone={() => (setInstalling(null), reload())}
+        />
+      )}
+      {upgrading && (
+        <UpgradeDialog
+          install={upgrading}
+          onClose={() => setUpgrading(null)}
+          onDone={() => (setUpgrading(null), reload())}
+        />
+      )}
     </>
   );
 }
@@ -125,7 +214,10 @@ export function Catalogue() {
 /** Taskiem's own connectors, by kind, with a way to connect each one. */
 function BuiltIn() {
   const { can } = useAuth();
-  const connectors = useLoad(() => get<{ connectors: ConnectorInfo[] }>("/v1/connectors"), []);
+  const connectors = useLoad(
+    () => get<{ connectors: ConnectorInfo[] }>("/v1/connectors"),
+    [],
+  );
   const [search, setSearch] = useState("");
   const groups = builtInByKind(connectors.data?.connectors ?? [], search);
   const none = KINDS.every((k) => groups[k.kind].length === 0);
@@ -134,27 +226,50 @@ function BuiltIn() {
       <h2 id="builtin-h">Taskiem's connectors</h2>
       <label className="field catalogue-search">
         <span>Find a service</span>
-        <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Paystack, iswallet, Google Sheets…" />
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Paystack, iswallet, Google Sheets…"
+        />
       </label>
       <ErrorBox error={connectors.error} />
-      {connectors.data && none && <div className="empty">Nothing matches “{search}”.</div>}
+      {connectors.data && none && (
+        <div className="empty">Nothing matches “{search}”.</div>
+      )}
       {KINDS.map(
         (k) =>
           groups[k.kind].length > 0 && (
-            <section key={k.kind} className="catalogue-group" aria-labelledby={`kind-${k.kind}`}>
+            <section
+              key={k.kind}
+              className="catalogue-group"
+              aria-labelledby={`kind-${k.kind}`}
+            >
               <h3 id={`kind-${k.kind}`}>{k.title}</h3>
               <p className="hint">{k.help}</p>
               <div className="catalogue-grid">
                 {groups[k.kind].map((c) => (
-                  <article key={c.ref} className="card catalogue-card" aria-label={c.name}>
+                  <article
+                    key={c.ref}
+                    className="card catalogue-card"
+                    aria-label={c.name}
+                  >
                     <h4>{c.name}</h4>
                     {c.description && <p>{c.description}</p>}
-                    {capabilityLine(c.capabilities) && <p className="hint">{capabilityLine(c.capabilities)}</p>}
+                    {capabilityLine(c.capabilities) && (
+                      <p className="hint">{capabilityLine(c.capabilities)}</p>
+                    )}
                     {!needsConnection(c) ? (
-                      <span className="hint">Built in: nothing to connect.</span>
+                      <span className="hint">
+                        Built in: nothing to connect.
+                      </span>
                     ) : (
                       can("connection.manage") && (
-                        <Link className="button" to={`/connections?connect=${encodeURIComponent(c.id)}`} aria-label={`Connect ${c.name}`}>
+                        <Link
+                          className="button"
+                          to={`/connections?connect=${encodeURIComponent(c.id)}`}
+                          aria-label={`Connect ${c.name}`}
+                        >
                           Connect
                         </Link>
                       )
@@ -194,24 +309,56 @@ function ConsentList({ hosts, writes }: { hosts: string[]; writes: string[] }) {
   );
 }
 
-function InstallDialog({ version, onClose, onDone }: { version: CatalogueVersion; onClose: () => void; onDone: () => void }) {
+function InstallDialog({
+  version,
+  onClose,
+  onDone,
+}: {
+  version: CatalogueVersion;
+  onClose: () => void;
+  onDone: () => void;
+}) {
   const [agreed, setAgreed] = useState(false);
   const act = useAction();
   return (
-    <Modal title={`Install ${version.name} ${version.version}`} onClose={onClose}>
+    <Modal
+      title={`Install ${version.name} ${version.version}`}
+      onClose={onClose}
+    >
       <p className="hint">
-        Published by {version.publisher_name}. Package digest <code title={version.digest}>{version.digest.slice(0, 16)}</code>.
+        Published by {version.publisher_name}. Package digest{" "}
+        <code title={version.digest}>{version.digest.slice(0, 16)}</code>.
       </p>
-      <ConsentList hosts={version.consent.hosts} writes={writeLines(version.consent)} />
+      <ConsentList
+        hosts={version.consent.hosts}
+        writes={writeLines(version.consent)}
+      />
       <label className="row">
-        <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} /> I agree to these hosts and changes for this organisation
+        <input
+          type="checkbox"
+          checked={agreed}
+          onChange={(e) => setAgreed(e.target.checked)}
+        />{" "}
+        I agree to these hosts and changes for this organisation
       </label>
       <ErrorBox error={act.error} />
       <div className="row" style={{ marginTop: 12 }}>
         <button
           className="primary"
           disabled={!agreed || act.busy}
-          onClick={() => void act.run(async () => (await post("/v1/catalogue/installs", { connector: version.id, version: version.version, consent: version.consent }), onDone()), "Connector installed")}
+          onClick={() =>
+            void act.run(
+              async () => (
+                await post("/v1/catalogue/installs", {
+                  connector: version.id,
+                  version: version.version,
+                  consent: version.consent,
+                }),
+                onDone()
+              ),
+              "Connector installed",
+            )
+          }
         >
           Install
         </button>
@@ -221,9 +368,23 @@ function InstallDialog({ version, onClose, onDone }: { version: CatalogueVersion
   );
 }
 
-function UpgradeDialog({ install, onClose, onDone }: { install: Install; onClose: () => void; onDone: () => void }) {
+function UpgradeDialog({
+  install,
+  onClose,
+  onDone,
+}: {
+  install: Install;
+  onClose: () => void;
+  onDone: () => void;
+}) {
   const to = install.latest ?? install.version;
-  const diff = useLoad(() => get<{ diff: Diff; version: CatalogueVersion }>(`/v1/catalogue/installs/${install.connector}/${install.major}/upgrade?to=${encodeURIComponent(to)}`), [install.ref, to]);
+  const diff = useLoad(
+    () =>
+      get<{ diff: Diff; version: CatalogueVersion }>(
+        `/v1/catalogue/installs/${install.connector}/${install.major}/upgrade?to=${encodeURIComponent(to)}`,
+      ),
+    [install.ref, to],
+  );
   const [agreed, setAgreed] = useState(false);
   const act = useAction();
   const d = diff.data?.diff;
@@ -241,9 +402,17 @@ function UpgradeDialog({ install, onClose, onDone }: { install: Install; onClose
           </ul>
           {d.needs_consent && (
             <>
-              <ConsentList hosts={v.consent.hosts} writes={writeLines(v.consent)} />
+              <ConsentList
+                hosts={v.consent.hosts}
+                writes={writeLines(v.consent)}
+              />
               <label className="row">
-                <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} /> I agree to these hosts and changes for this organisation
+                <input
+                  type="checkbox"
+                  checked={agreed}
+                  onChange={(e) => setAgreed(e.target.checked)}
+                />{" "}
+                I agree to these hosts and changes for this organisation
               </label>
             </>
           )}
@@ -251,7 +420,18 @@ function UpgradeDialog({ install, onClose, onDone }: { install: Install; onClose
             <button
               className="primary"
               disabled={act.busy || (d.needs_consent && !agreed)}
-              onClick={() => void act.run(async () => (await post(`/v1/catalogue/installs/${install.connector}/${install.major}/upgrade`, { version: to, consent: v.consent }), onDone()), "Connector upgraded")}
+              onClick={() =>
+                void act.run(
+                  async () => (
+                    await post(
+                      `/v1/catalogue/installs/${install.connector}/${install.major}/upgrade`,
+                      { version: to, consent: v.consent },
+                    ),
+                    onDone()
+                  ),
+                  "Connector upgraded",
+                )
+              }
             >
               Upgrade
             </button>

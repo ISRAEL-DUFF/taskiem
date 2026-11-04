@@ -12,18 +12,28 @@ const PATH = /^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*|\[\d+\])*$/;
 const NAIRA = /^double\(([^()]+)\) \/ 100\.0$/;
 
 /** Whether an expression (without its =) is one a field can be: a path, or a kobo path in naira. */
-export const isField = (e: string) => PATH.test(e) || PATH.test(NAIRA.exec(e)?.[1] ?? "");
+export const isField = (e: string) =>
+  PATH.test(e) || PATH.test(NAIRA.exec(e)?.[1] ?? "");
 
-const quote = (s: string) => `'${s.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\n/g, "\\n")}'`;
+const quote = (s: string) =>
+  `'${s.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\n/g, "\\n")}'`;
 
 /** The value text with fields is ("" text and no fields: undefined). */
 export function valueOf(segs: Segment[]): string | undefined {
   const parts = segs.filter((s) => ("text" in s ? s.text !== "" : true));
   if (parts.length === 0) return undefined;
-  if (parts.every((s) => "text" in s)) return parts.map((s) => (s as { text: string }).text).join("");
+  if (parts.every((s) => "text" in s))
+    return parts.map((s) => (s as { text: string }).text).join("");
   const only = parts.length === 1 ? parts[0] : undefined;
   if (only && "expr" in only) return only.expr;
-  return "=" + parts.map((s) => ("text" in s ? quote(s.text) : `string(${s.expr.replace(/^=/, "")})`)).join(" + ");
+  return (
+    "=" +
+    parts
+      .map((s) =>
+        "text" in s ? quote(s.text) : `string(${s.expr.replace(/^=/, "")})`,
+      )
+      .join(" + ")
+  );
 }
 
 /** Splits an expression's top level on +, outside quotes and brackets. */
@@ -59,14 +69,20 @@ function topLevel(e: string): string[] | null {
 function unquote(s: string): string | null {
   const m = /^(['"])((?:[^\\]|\\.)*)\1$/s.exec(s);
   if (!m) return null;
-  return (m[2] ?? "").replace(/\\(.)/g, (_, ch: string) => (ch === "n" ? "\n" : ch));
+  return (m[2] ?? "").replace(/\\(.)/g, (_, ch: string) =>
+    ch === "n" ? "\n" : ch,
+  );
 }
 
 /** The text and fields a value is, or null when it was set up by hand.
  * label names a field by its expression ("=trigger.body.name"). */
-export function segmentsOf(value: unknown, label: (expr: string) => string): Segment[] | null {
+export function segmentsOf(
+  value: unknown,
+  label: (expr: string) => string,
+): Segment[] | null {
   if (value === undefined || value === null || value === "") return [];
-  if (typeof value === "number" || typeof value === "boolean") return [{ text: String(value) }];
+  if (typeof value === "number" || typeof value === "boolean")
+    return [{ text: String(value) }];
   if (typeof value !== "string") return null;
   if (!value.startsWith("=")) return [{ text: value }];
   const parts = topLevel(value.slice(1).trim());

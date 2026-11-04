@@ -2,7 +2,16 @@ import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { get, type WorkflowSummary } from "../api";
 import { useAdvanced, useAuth } from "../auth";
-import { EmptyState, ErrorBox, Item, Items, PageHeader, Skeleton, fmtTime, useLoad } from "../ui";
+import {
+  EmptyState,
+  ErrorBox,
+  Item,
+  Items,
+  PageHeader,
+  Skeleton,
+  fmtTime,
+  useLoad,
+} from "../ui";
 import { Icon } from "../icons";
 import { AIBuilder } from "./AIBuild";
 import { filterWorkflows } from "../lib/lists";
@@ -12,7 +21,13 @@ export function Workflows() {
   const { can } = useAuth();
   const advanced = useAdvanced();
   const nav = useNavigate();
-  const { data, error } = useLoad(() => get<{ workflows: WorkflowSummary[] }>(`/v1/workflows?tz=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)}`), []);
+  const { data, error } = useLoad(
+    () =>
+      get<{ workflows: WorkflowSummary[] }>(
+        `/v1/workflows?tz=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)}`,
+      ),
+    [],
+  );
   const [params, setParams] = useSearchParams();
   const q = params.get("q") ?? "";
   const state = params.get("state") ?? "";
@@ -57,7 +72,9 @@ export function Workflows() {
                 <Link className="button primary" to="/workflows/new">
                   Build your first workflow
                 </Link>
-                <button onClick={() => setAI(true)}>Describe what it should do</button>
+                <button onClick={() => setAI(true)}>
+                  Describe what it should do
+                </button>
                 <Link className="button" to="/templates">
                   Start from a template
                 </Link>
@@ -79,7 +96,12 @@ export function Workflows() {
               }}
             >
               <Icon name="sparkle" />
-              <input aria-label="Describe a new workflow" placeholder="Describe a job, e.g. every Friday, text customers who still owe me" value={goal} onChange={(e) => setGoal(e.target.value)} />
+              <input
+                aria-label="Describe a new workflow"
+                placeholder="Describe a job, e.g. every Friday, text customers who still owe me"
+                value={goal}
+                onChange={(e) => setGoal(e.target.value)}
+              />
               <button type="submit" className="primary" disabled={!goal.trim()}>
                 Draft it
               </button>
@@ -89,11 +111,19 @@ export function Workflows() {
             <label className="search">
               <span className="sr-only">Search workflows</span>
               <Icon name="search" />
-              <input type="search" placeholder="Search by name" value={q} onChange={(e) => setParam("q", e.target.value)} />
+              <input
+                type="search"
+                placeholder="Search by name"
+                value={q}
+                onChange={(e) => setParam("q", e.target.value)}
+              />
             </label>
             <label>
               <span className="sr-only">Published state</span>
-              <select value={state} onChange={(e) => setParam("state", e.target.value)}>
+              <select
+                value={state}
+                onChange={(e) => setParam("state", e.target.value)}
+              >
                 <option value="">Published and drafts</option>
                 <option value="published">Published</option>
                 <option value="draft">Drafts only</option>
@@ -106,7 +136,14 @@ export function Workflows() {
             )}
           </div>
           {shown.length === 0 ? (
-            <EmptyState icon="search" action={<button onClick={() => setParams({}, { replace: true })}>Clear filters</button>}>
+            <EmptyState
+              icon="search"
+              action={
+                <button onClick={() => setParams({}, { replace: true })}>
+                  Clear filters
+                </button>
+              }
+            >
               No workflow matches these filters.
             </EmptyState>
           ) : (
@@ -123,19 +160,39 @@ export function Workflows() {
                   extra={
                     advanced && (
                       <span className="sub">
-                        {w.active_version ? `v${w.active_version} live` : "Not published"} · latest v{w.latest_version} · made {fmtTime(w.created_at)}
+                        {w.active_version
+                          ? `v${w.active_version} live`
+                          : "Not published"}{" "}
+                        · latest v{w.latest_version} · made{" "}
+                        {fmtTime(w.created_at)}
                       </span>
                     )
                   }
-                  side={w.active_version ? <RecentBars days={w.recent ?? []} /> : undefined}
-                  sideSub={w.active_version ? <span className="badge published">Running</span> : <span className="badge draft">Draft</span>}
+                  side={
+                    w.active_version ? (
+                      <RecentBars days={w.recent ?? []} />
+                    ) : undefined
+                  }
+                  sideSub={
+                    w.active_version ? (
+                      <span className="badge published">Running</span>
+                    ) : (
+                      <span className="badge draft">Draft</span>
+                    )
+                  }
                 />
               ))}
             </Items>
           )}
         </>
       )}
-      {ai && <AIBuilder goal={goal} onClose={() => setAI(false)} onSaved={(id, v) => nav(`/workflows/${id}?v=${v}`)} />}
+      {ai && (
+        <AIBuilder
+          goal={goal}
+          onClose={() => setAI(false)}
+          onSaved={(id, v) => nav(`/workflows/${id}?v=${v}`)}
+        />
+      )}
     </>
   );
 }
@@ -145,9 +202,21 @@ function RecentBars({ days }: { days: number[] }) {
   const top = Math.max(1, ...days);
   const total = days.reduce((a, b) => a + b, 0);
   return (
-    <span className="bars" role="img" aria-label={total === 0 ? "No runs in the last 14 days" : `${total} runs in the last 14 days`}>
+    <span
+      className="bars"
+      role="img"
+      aria-label={
+        total === 0
+          ? "No runs in the last 14 days"
+          : `${total} runs in the last 14 days`
+      }
+    >
       {days.map((n, i) => (
-        <span key={i} className={i === days.length - 1 ? "today" : ""} style={{ height: n === 0 ? 2 : 4 + Math.round((16 * n) / top) }} />
+        <span
+          key={i}
+          className={i === days.length - 1 ? "today" : ""}
+          style={{ height: n === 0 ? 2 : 4 + Math.round((16 * n) / top) }}
+        />
       ))}
     </span>
   );

@@ -26,7 +26,13 @@ class Mem implements Storage {
 describe("unsaved builder edits kept in the tab", () => {
   it("keeps, reads back and drops a workflow's edits", () => {
     const s = new Mem();
-    const d = { definition: { steps: [] }, layout: { a: { x: 1 } }, version: 3, digest: "abc", at: "2026-10-28T10:00:00Z" };
+    const d = {
+      definition: { steps: [] },
+      layout: { a: { x: 1 } },
+      version: 3,
+      digest: "abc",
+      at: "2026-10-28T10:00:00Z",
+    };
     keepDraft("wf1", d, s);
     expect(keptDraft("wf1", s)).toEqual(d);
     expect(keptDraft("wf2", s)).toBeUndefined();
@@ -38,7 +44,10 @@ describe("unsaved builder edits kept in the tab", () => {
     const s = new Mem();
     s.setItem("taskiem:draft:wf1", "{not json");
     expect(keptDraft("wf1", s)).toBeUndefined();
-    s.setItem("taskiem:draft:wf1", JSON.stringify({ definition: null, version: 1 }));
+    s.setItem(
+      "taskiem:draft:wf1",
+      JSON.stringify({ definition: null, version: 1 }),
+    );
     expect(keptDraft("wf1", s)).toBeUndefined();
   });
 
@@ -51,7 +60,13 @@ describe("unsaved builder edits kept in the tab", () => {
     refusing.getItem = () => {
       throw new Error("SecurityError");
     };
-    expect(() => keepDraft("wf1", { definition: {}, layout: {}, version: 1, at: "" }, refusing)).not.toThrow();
+    expect(() =>
+      keepDraft(
+        "wf1",
+        { definition: {}, layout: {}, version: 1, at: "" },
+        refusing,
+      ),
+    ).not.toThrow();
     expect(keptDraft("wf1", refusing)).toBeUndefined();
   });
 });

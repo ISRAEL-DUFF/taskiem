@@ -358,7 +358,10 @@ export const PAID_HOW: Record<PaidHow, string> = {
 };
 
 /** How a recorded sale was paid, as a word: the form's ways and on credit. */
-export const SALE_HOW: Record<SaleHow, string> = { ...PAID_HOW, credit: "On credit" };
+export const SALE_HOW: Record<SaleHow, string> = {
+  ...PAID_HOW,
+  credit: "On credit",
+};
 
 /** A day's takings by how they were paid, the ways with none left out. */
 export function byHowLine(d: SalesDay): string {

@@ -96,7 +96,6 @@ export function useThread<T extends { id: string; created_at: string }>(o: {
     } else if (f.kind === "pill") setNewCount((n) => n + f.count);
     prevNewest.current = newest;
     // isMine is a function of the item alone: the items are what change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items]);
 
   useEffect(() => {

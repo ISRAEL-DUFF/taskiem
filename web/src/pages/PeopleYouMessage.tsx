@@ -27,7 +27,8 @@ interface ReachView {
 const APP = { telegram: "Telegram", whatsapp: "WhatsApp" } as const;
 
 /** What the standing link says when shared, e.g. in the staff WhatsApp group. */
-export const shareText = (url: string) => `Get our updates on WhatsApp or Telegram: tap ${url} and choose the app you use.`;
+export const shareText = (url: string) =>
+  `Get our updates on WhatsApp or Telegram: tap ${url} and choose the app you use.`;
 
 /**
  * People outside the business who get its workflows' messages on WhatsApp
@@ -41,26 +42,40 @@ export function PeopleYouMessage() {
   const v = view.data;
   if (!v) return view.error ? <ErrorBox error={view.error} /> : null;
   const on = v.telegram || v.whatsapp;
-  const apps = [v.whatsapp && "WhatsApp", v.telegram && "Telegram"].filter(Boolean).join(" or ");
+  const apps = [v.whatsapp && "WhatsApp", v.telegram && "Telegram"]
+    .filter(Boolean)
+    .join(" or ");
   return (
     <section className="card" data-testid="people-you-message">
       <h2 style={{ marginTop: 0 }}>People you message</h2>
       {!on ? (
-        <p className="hint">Your workflows text people outside the business. Updates on WhatsApp and Telegram are not set up on this Taskiem yet.</p>
+        <p className="hint">
+          Your workflows text people outside the business. Updates on WhatsApp
+          and Telegram are not set up on this Taskiem yet.
+        </p>
       ) : (
         <>
           <p className="hint">
-            Staff who don't use Taskiem, and your customers, can get your workflows' messages on {apps} instead of by text. They tap a link once and choose
-            their app; forms that send people updates offer it on their thank-you page. Nobody needs a chat ID.
+            Staff who don't use Taskiem, and your customers, can get your
+            workflows' messages on {apps} instead of by text. They tap a link
+            once and choose their app; forms that send people updates offer it
+            on their thank-you page. Nobody needs a chat ID.
           </p>
           {v.page_url && (
             <>
               <h3>Your link</h3>
-              <p className="hint">Share it once, for example in your staff WhatsApp group.</p>
+              <p className="hint">
+                Share it once, for example in your staff WhatsApp group.
+              </p>
               <div className="email-address">
                 <code>{v.page_url}</code>
                 <Copy text={v.page_url} label="Copy the link" />
-                <a className="button small" href={`https://wa.me/?text=${encodeURIComponent(shareText(v.page_url))}`} target="_blank" rel="noopener noreferrer">
+                <a
+                  className="button small"
+                  href={`https://wa.me/?text=${encodeURIComponent(shareText(v.page_url))}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   Share on WhatsApp
                 </a>
               </div>
@@ -70,8 +85,13 @@ export function PeopleYouMessage() {
                   className="small"
                   disabled={act.busy}
                   onClick={() =>
-                    confirm("Make a new link? The old one stops working; people who already get your updates keep getting them.") &&
-                    void act.run(async () => (await post("/v1/reach/page"), view.reload()), "New link made")
+                    confirm(
+                      "Make a new link? The old one stops working; people who already get your updates keep getting them.",
+                    ) &&
+                    void act.run(
+                      async () => (await post("/v1/reach/page"), view.reload()),
+                      "New link made",
+                    )
                   }
                 >
                   New link
@@ -109,8 +129,16 @@ export function PeopleYouMessage() {
                   className="danger"
                   disabled={act.busy}
                   onClick={() =>
-                    confirm(`Stop messaging ${c.phone} on chat apps? Your workflows text them instead.`) &&
-                    void act.run(async () => (await del(`/v1/reach/contacts/${c.id}`), view.reload()), "Removed")
+                    confirm(
+                      `Stop messaging ${c.phone} on chat apps? Your workflows text them instead.`,
+                    ) &&
+                    void act.run(
+                      async () => (
+                        await del(`/v1/reach/contacts/${c.id}`),
+                        view.reload()
+                      ),
+                      "Removed",
+                    )
                   }
                 >
                   Remove
@@ -120,7 +148,11 @@ export function PeopleYouMessage() {
           ))}
         </Items>
       )}
-      {on && v.contacts.length === 0 && <p className="hint">Nobody has asked for your updates on a chat app yet.</p>}
+      {on && v.contacts.length === 0 && (
+        <p className="hint">
+          Nobody has asked for your updates on a chat app yet.
+        </p>
+      )}
     </section>
   );
 }

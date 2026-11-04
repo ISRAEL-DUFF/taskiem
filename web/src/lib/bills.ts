@@ -4,7 +4,13 @@
 
 import { naira, type InvoiceLine } from "./invoices";
 
-export type BillStatus = "open" | "paying" | "part_paid" | "paid" | "disputed" | "void";
+export type BillStatus =
+  | "open"
+  | "paying"
+  | "part_paid"
+  | "paid"
+  | "disputed"
+  | "void";
 
 export interface Bill {
   id: string;
@@ -59,28 +65,59 @@ export function billStatus(s: BillStatus): { label: string; tone: Tone } {
 }
 
 /** A bill's hero: the figure that matters, what it is, and the bar. */
-export function billHero(b: Pick<Bill, "status" | "amount_kobo" | "paid_kobo" | "due_kobo" | "supplier_name">): { label: string; kobo: number; sub: string; paid: number } {
-  const paid = b.amount_kobo > 0 ? Math.min(1, Math.max(0, b.paid_kobo / b.amount_kobo)) : 0;
+export function billHero(
+  b: Pick<
+    Bill,
+    "status" | "amount_kobo" | "paid_kobo" | "due_kobo" | "supplier_name"
+  >,
+): { label: string; kobo: number; sub: string; paid: number } {
+  const paid =
+    b.amount_kobo > 0
+      ? Math.min(1, Math.max(0, b.paid_kobo / b.amount_kobo))
+      : 0;
   switch (b.status) {
     case "void":
-      return { label: "Cancelled", kobo: b.amount_kobo, sub: `${b.supplier_name} cancelled this invoice`, paid };
+      return {
+        label: "Cancelled",
+        kobo: b.amount_kobo,
+        sub: `${b.supplier_name} cancelled this invoice`,
+        paid,
+      };
     case "paid":
-      return { label: "Paid in full", kobo: b.amount_kobo, sub: "Nothing left to pay", paid: 1 };
+      return {
+        label: "Paid in full",
+        kobo: b.amount_kobo,
+        sub: "Nothing left to pay",
+        paid: 1,
+      };
     default:
-      return { label: "To pay", kobo: b.due_kobo, sub: `of ${naira(b.amount_kobo)} · ${naira(b.paid_kobo)} paid`, paid };
+      return {
+        label: "To pay",
+        kobo: b.due_kobo,
+        sub: `of ${naira(b.amount_kobo)} · ${naira(b.paid_kobo)} paid`,
+        paid,
+      };
   }
 }
 
 /** What the business sent from Taskiem that the supplier has not counted
  * yet, in words; empty when there is none. */
-export function sentLine(b: Pick<Bill, "sent_kobo" | "paid_kobo" | "supplier_name">): string {
+export function sentLine(
+  b: Pick<Bill, "sent_kobo" | "paid_kobo" | "supplier_name">,
+): string {
   if (b.sent_kobo <= b.paid_kobo) return "";
   return `You sent ${naira(b.sent_kobo)} from Taskiem; ${b.supplier_name} has counted ${naira(b.paid_kobo)} so far.`;
 }
 
 /** Whether Pay from Taskiem is offered on a bill. */
-export function canPay(b: Pick<Bill, "status" | "due_kobo" | "pay_account_number">): boolean {
-  return b.due_kobo > 0 && !!b.pay_account_number && (b.status === "open" || b.status === "part_paid");
+export function canPay(
+  b: Pick<Bill, "status" | "due_kobo" | "pay_account_number">,
+): boolean {
+  return (
+    b.due_kobo > 0 &&
+    !!b.pay_account_number &&
+    (b.status === "open" || b.status === "part_paid")
+  );
 }
 
 export interface BillPaySettings {
@@ -92,19 +129,34 @@ export interface BillPaySettings {
 
 /** What is owed to each linked supplier: the open bills' due, by
  * supplier, most owed first. */
-export function owedBySupplier(list: Bill[] | undefined): { supplier: string; name: string; dueKobo: number; bills: number }[] {
-  const by = new Map<string, { supplier: string; name: string; dueKobo: number; bills: number }>();
+export function owedBySupplier(
+  list: Bill[] | undefined,
+): { supplier: string; name: string; dueKobo: number; bills: number }[] {
+  const by = new Map<
+    string,
+    { supplier: string; name: string; dueKobo: number; bills: number }
+  >();
   for (const b of list ?? []) {
     if (b.status === "void" || b.due_kobo <= 0) continue;
-    const x = by.get(b.supplier) ?? { supplier: b.supplier, name: b.supplier_name, dueKobo: 0, bills: 0 };
+    const x = by.get(b.supplier) ?? {
+      supplier: b.supplier,
+      name: b.supplier_name,
+      dueKobo: 0,
+      bills: 0,
+    };
     x.dueKobo += b.due_kobo;
     x.bills += 1;
     by.set(b.supplier, x);
   }
-  return [...by.values()].sort((a, b) => b.dueKobo - a.dueKobo || a.name.localeCompare(b.name));
+  return [...by.values()].sort(
+    (a, b) => b.dueKobo - a.dueKobo || a.name.localeCompare(b.name),
+  );
 }
 
 /** What is left to pay across bills. */
 export function billsDue(list: Bill[] | undefined): number {
-  return (list ?? []).reduce((n, b) => n + (b.status === "void" ? 0 : b.due_kobo), 0);
+  return (list ?? []).reduce(
+    (n, b) => n + (b.status === "void" ? 0 : b.due_kobo),
+    0,
+  );
 }

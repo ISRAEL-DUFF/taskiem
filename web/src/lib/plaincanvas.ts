@@ -21,9 +21,23 @@ export interface Schedule {
   day: number;
 }
 
-export const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+export const WEEKDAY_NAMES = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
 
-export const DEFAULT_SCHEDULE: Schedule = { every: "weekdays", time: "09:00", minute: 0, weekday: 1, day: 1 };
+export const DEFAULT_SCHEDULE: Schedule = {
+  every: "weekdays",
+  time: "09:00",
+  minute: 0,
+  weekday: 1,
+  day: 1,
+};
 
 const num = (s: string, lo: number, hi: number): number | null => {
   if (!/^\d{1,2}$/.test(s)) return null;
@@ -58,19 +72,26 @@ export function scheduleOf(cron: string): Schedule | null {
   if (mon !== "*") return null;
   const minute = num(mi, 0, 59);
   if (minute === null) return null;
-  if (ho === "*" && dom === "*" && dow === "*") return { ...DEFAULT_SCHEDULE, every: "hour", minute };
+  if (ho === "*" && dom === "*" && dow === "*")
+    return { ...DEFAULT_SCHEDULE, every: "hour", minute };
   const hour = num(ho, 0, 23);
   if (hour === null) return null;
   const time = `${pad(hour)}:${pad(minute)}`;
-  if (dom === "*" && dow === "*") return { ...DEFAULT_SCHEDULE, every: "day", time };
-  if (dom === "*" && dow === "1-5") return { ...DEFAULT_SCHEDULE, every: "weekdays", time };
+  if (dom === "*" && dow === "*")
+    return { ...DEFAULT_SCHEDULE, every: "day", time };
+  if (dom === "*" && dow === "1-5")
+    return { ...DEFAULT_SCHEDULE, every: "weekdays", time };
   if (dom === "*") {
     const weekday = num(dow, 0, 7);
-    return weekday === null ? null : { ...DEFAULT_SCHEDULE, every: "week", time, weekday: weekday % 7 };
+    return weekday === null
+      ? null
+      : { ...DEFAULT_SCHEDULE, every: "week", time, weekday: weekday % 7 };
   }
   if (dow === "*") {
     const day = num(dom, 1, 28);
-    return day === null ? null : { ...DEFAULT_SCHEDULE, every: "month", time, day };
+    return day === null
+      ? null
+      : { ...DEFAULT_SCHEDULE, every: "month", time, day };
   }
   return null;
 }
@@ -79,7 +100,9 @@ export function scheduleOf(cron: string): Schedule | null {
 export function scheduleWords(s: Schedule): string {
   switch (s.every) {
     case "hour":
-      return s.minute === 0 ? "Every hour, on the hour" : `Every hour, at ${s.minute} minutes past`;
+      return s.minute === 0
+        ? "Every hour, on the hour"
+        : `Every hour, at ${s.minute} minutes past`;
     case "day":
       return `Every day at ${s.time}`;
     case "weekdays":
@@ -133,7 +156,8 @@ interface ConnectorLike {
 
 const words = (s: string) => s.replace(/_/g, " ");
 const stepWords = (s: StepLike) => s.name || words(s.id);
-const isNumber = (s?: JSONSchema) => s?.type === "number" || s?.type === "integer";
+const isNumber = (s?: JSONSchema) =>
+  s?.type === "number" || s?.type === "integer";
 
 /** The steps a step comes after: those it needs, and theirs. */
 export function earlierSteps(steps: StepLike[], id: string): StepLike[] {
@@ -152,44 +176,84 @@ export function earlierSteps(steps: StepLike[], id: string): StepLike[] {
 }
 
 /** The values a step can use: what started the run and what the steps before it gave. */
-export function sourcesFor(def: DefLike, id: string, connectors: ConnectorLike[], templates: CallableLike[] = []): Source[] {
+export function sourcesFor(
+  def: DefLike,
+  id: string,
+  connectors: ConnectorLike[],
+  templates: CallableLike[] = [],
+): Source[] {
   const out: Source[] = [];
-  const props = (def.inputs?.schema as JSONSchema | undefined)?.properties ?? {};
+  const props =
+    (def.inputs?.schema as JSONSchema | undefined)?.properties ?? {};
   for (const [k, s] of Object.entries(props)) {
-    out.push({ label: `What was filled in: ${s.title ?? words(k)}`, expr: `=trigger.body.${k}`, number: isNumber(s) });
+    out.push({
+      label: `What was filled in: ${s.title ?? words(k)}`,
+      expr: `=trigger.body.${k}`,
+      number: isNumber(s),
+    });
   }
   for (const s of earlierSteps(def.steps, id)) {
     const from = `From “${stepWords(s)}”`;
     if (s.type === "approval") {
-      out.push({ label: `${from}: the decision (approved or rejected)`, expr: `=steps.${s.id}.output.decision` });
+      out.push({
+        label: `${from}: the decision (approved or rejected)`,
+        expr: `=steps.${s.id}.output.decision`,
+      });
     } else if (s.type === "form") {
-      const fields = ((s.config as { schema?: JSONSchema } | undefined)?.schema?.properties ?? {}) as Record<string, JSONSchema>;
+      const fields = ((s.config as { schema?: JSONSchema } | undefined)?.schema
+        ?.properties ?? {}) as Record<string, JSONSchema>;
       for (const [k, f] of Object.entries(fields)) {
-        out.push({ label: `${from}: ${f.title ?? words(k)}`, expr: `=steps.${s.id}.output.${k}`, number: isNumber(f) });
+        out.push({
+          label: `${from}: ${f.title ?? words(k)}`,
+          expr: `=steps.${s.id}.output.${k}`,
+          number: isNumber(f),
+        });
       }
     } else if (s.type === "transform") {
       const o = (s.config as { output?: unknown } | undefined)?.output;
       if (o && typeof o === "object" && !Array.isArray(o)) {
-        for (const k of Object.keys(o)) out.push({ label: `${from}: ${words(k)}`, expr: `=steps.${s.id}.output.${k}` });
+        for (const k of Object.keys(o))
+          out.push({
+            label: `${from}: ${words(k)}`,
+            expr: `=steps.${s.id}.output.${k}`,
+          });
       }
     } else if (s.type === "template") {
       const t = templates.find((t) => t.id === (s.workflow ?? s.template));
       for (const o of t?.callable?.outputs ?? t?.outputs ?? []) {
-        out.push({ label: `${from}: ${o.title}`, expr: `=steps.${s.id}.output.${o.name}`, number: o.type === "integer" || o.type === "number" });
+        out.push({
+          label: `${from}: ${o.title}`,
+          expr: `=steps.${s.id}.output.${o.name}`,
+          number: o.type === "integer" || o.type === "number",
+        });
       }
     } else if (s.type === "subflow") {
       // The child run's outputs (when it declares any), its id and status.
       const c = s.config as { workflow?: string; wait?: boolean } | undefined;
       if (c?.wait !== false) {
-        for (const o of templates.find((t) => t.id === c?.workflow)?.outputs ?? []) {
-          out.push({ label: `${from}: ${o.title}`, expr: `=steps.${s.id}.output.outputs.${o.name}`, number: o.type === "integer" || o.type === "number" });
+        for (const o of templates.find((t) => t.id === c?.workflow)?.outputs ??
+          []) {
+          out.push({
+            label: `${from}: ${o.title}`,
+            expr: `=steps.${s.id}.output.outputs.${o.name}`,
+            number: o.type === "integer" || o.type === "number",
+          });
         }
       }
-      out.push({ label: `${from}: run id`, expr: `=steps.${s.id}.output.run_id` });
+      out.push({
+        label: `${from}: run id`,
+        expr: `=steps.${s.id}.output.run_id`,
+      });
     } else if (s.type === "connector") {
-      const output = connectors.find((c) => c.ref === s.connector)?.actions[s.action ?? ""]?.output;
+      const output = connectors.find((c) => c.ref === s.connector)?.actions[
+        s.action ?? ""
+      ]?.output;
       for (const [k, p] of Object.entries(output?.properties ?? {})) {
-        out.push({ label: `${from}: ${p.title ?? words(k)}`, expr: `=steps.${s.id}.output.${k}`, number: isNumber(p) });
+        out.push({
+          label: `${from}: ${p.title ?? words(k)}`,
+          expr: `=steps.${s.id}.output.${k}`,
+          number: isNumber(p),
+        });
       }
     }
   }
@@ -197,17 +261,44 @@ export function sourcesFor(def: DefLike, id: string, connectors: ConnectorLike[]
 }
 
 /** The source a value is, when it is one. */
-export function sourceOf(sources: Source[], value: unknown): Source | undefined {
-  return typeof value === "string" ? sources.find((s) => s.expr === value) : undefined;
+export function sourceOf(
+  sources: Source[],
+  value: unknown,
+): Source | undefined {
+  return typeof value === "string"
+    ? sources.find((s) => s.expr === value)
+    : undefined;
 }
 
 // --- Rules ("run only when") ---
 
-export type Op = "is" | "is not" | "more than" | "less than" | "at least" | "at most" | "contains";
+export type Op =
+  | "is"
+  | "is not"
+  | "more than"
+  | "less than"
+  | "at least"
+  | "at most"
+  | "contains";
 
-export const OPS: Op[] = ["is", "is not", "more than", "less than", "at least", "at most", "contains"];
+export const OPS: Op[] = [
+  "is",
+  "is not",
+  "more than",
+  "less than",
+  "at least",
+  "at most",
+  "contains",
+];
 
-const CEL: Record<Exclude<Op, "contains">, string> = { is: "==", "is not": "!=", "more than": ">", "less than": "<", "at least": ">=", "at most": "<=" };
+const CEL: Record<Exclude<Op, "contains">, string> = {
+  is: "==",
+  "is not": "!=",
+  "more than": ">",
+  "less than": "<",
+  "at least": ">=",
+  "at most": "<=",
+};
 
 export interface Rule {
   /** A source's expression ("=steps.approve.output.decision"). */
@@ -241,7 +332,9 @@ export function rulesExpr(r: Rules): string {
     .filter((x) => x.left)
     .map((x) => {
       const left = x.left.replace(/^=/, "");
-      return x.op === "contains" ? `${left}.contains(${literal(x.right)})` : `${left} ${CEL[x.op]} ${literal(x.right)}`;
+      return x.op === "contains"
+        ? `${left}.contains(${literal(x.right)})`
+        : `${left} ${CEL[x.op]} ${literal(x.right)}`;
     });
   return parts.length ? "=" + parts.join(r.all ? " && " : " || ") : "";
 }
@@ -271,7 +364,9 @@ export function rulesOf(expr: string): Rules | null {
     if (!m) return null;
     const [, path = "", cmp = "", lit = ""] = m;
     const right = unliteral(lit);
-    const op = (Object.keys(CEL) as (keyof typeof CEL)[]).find((k) => CEL[k] === cmp);
+    const op = (Object.keys(CEL) as (keyof typeof CEL)[]).find(
+      (k) => CEL[k] === cmp,
+    );
     if (!PATH.test(path) || right === null || !op) return null;
     rules.push({ left: "=" + path, op, right });
   }

@@ -1,7 +1,15 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { currentAgentSession, post } from "../api";
-import { ErrorBox, Field, Items, Row, Skeleton, fmtTime, useAction } from "../ui";
+import {
+  ErrorBox,
+  Field,
+  Items,
+  Row,
+  Skeleton,
+  fmtTime,
+  useAction,
+} from "../ui";
 import { tidy } from "../lib/storefront";
 import {
   REFUSAL_HELP,
@@ -41,13 +49,18 @@ export function RefusalBox({ error }: { error: unknown }) {
   }[kind];
   return (
     <div className="error" role="alert">
-      <strong>{title}.</strong> {kind === "moderation" ? error.message.replace(/^this cannot go on a public page:\s*/i, "") : refusalMessage(error.message)}
+      <strong>{title}.</strong>{" "}
+      {kind === "moderation"
+        ? error.message.replace(/^this cannot go on a public page:\s*/i, "")
+        : refusalMessage(error.message)}
       <div style={{ marginTop: 6 }}>
         {REFUSAL_HELP[kind]}
         {kind === "plan" && (
           <>
             {" "}
-            <Link className="inline-link" to="/settings/billing">Open Billing</Link>
+            <Link className="inline-link" to="/settings/billing">
+              Open Billing
+            </Link>
           </>
         )}
       </div>
@@ -56,7 +69,15 @@ export function RefusalBox({ error }: { error: unknown }) {
 }
 
 /** Why the page is held, turned down, suspended or has orders paused; with an appeal form. */
-export function TrustNotices({ state, trust, onChanged }: { state: TrustState; trust: Trust | undefined; onChanged: () => void }) {
+export function TrustNotices({
+  state,
+  trust,
+  onChanged,
+}: {
+  state: TrustState;
+  trust: Trust | undefined;
+  onChanged: () => void;
+}) {
   const appealing = pendingOf(trust, "appeal");
   const agent = !!currentAgentSession();
   const down = turnedDown(state);
@@ -64,30 +85,42 @@ export function TrustNotices({ state, trust, onChanged }: { state: TrustState; t
     <>
       {state.status === "in_review" && (
         <div className="notice" role="status">
-          <strong>With Taskiem for a check.</strong> {pageStatus("in_review").help} You can keep changing your draft meanwhile.
+          <strong>With Taskiem for a check.</strong>{" "}
+          {pageStatus("in_review").help} You can keep changing your draft
+          meanwhile.
         </div>
       )}
       {state.status === "suspended" && (
         <div className="error" role="status">
-          <strong>Your page is suspended.</strong> {state.suspended_reason || "Taskiem took it down."} Customers see “This page is unavailable” and your forms take
-          nothing until Taskiem restores it.
+          <strong>Your page is suspended.</strong>{" "}
+          {state.suspended_reason || "Taskiem took it down."} Customers see
+          “This page is unavailable” and your forms take nothing until Taskiem
+          restores it.
         </div>
       )}
       {down && (
         <div className="warning" role="status">
-          <strong>Taskiem could not put your page live.</strong> {state.review_note} Change it and publish again, or appeal.
+          <strong>Taskiem could not put your page live.</strong>{" "}
+          {state.review_note} Change it and publish again, or appeal.
         </div>
       )}
       {state.orders_paused && (
         <div className="warning" role="status">
-          <strong>Orders and bookings are paused.</strong> Your page has taken {state.orders_paused}. The forms say you are not taking orders online right now. Change
-          plan under <Link className="inline-link" to="/settings/billing">Billing</Link>, or ask Taskiem to verify your business, to take more.
+          <strong>Orders and bookings are paused.</strong> Your page has taken{" "}
+          {state.orders_paused}. The forms say you are not taking orders online
+          right now. Change plan under{" "}
+          <Link className="inline-link" to="/settings/billing">
+            Billing
+          </Link>
+          , or ask Taskiem to verify your business, to take more.
         </div>
       )}
       {(state.status === "suspended" || down) &&
         !agent &&
         (appealing ? (
-          <p className="hint">Your appeal of {fmtTime(appealing.created_at)} waits for Taskiem.</p>
+          <p className="hint">
+            Your appeal of {fmtTime(appealing.created_at)} waits for Taskiem.
+          </p>
         ) : (
           <AppealForm onDone={onChanged} />
         ))}
@@ -103,7 +136,8 @@ function AppealForm({ onDone }: { onDone: () => void }) {
   if (sent) {
     return (
       <div className="notice" role="status">
-        Your appeal is with Taskiem. You are told on WhatsApp or Telegram when it is decided.
+        Your appeal is with Taskiem. You are told on WhatsApp or Telegram when
+        it is decided.
       </div>
     );
   }
@@ -113,14 +147,28 @@ function AppealForm({ onDone }: { onDone: () => void }) {
       onSubmit={(e) => {
         e.preventDefault();
         void act.run(async () => {
-          await tidy(post("/v1/storefront/appeal", { message: message.trim() }));
+          await tidy(
+            post("/v1/storefront/appeal", { message: message.trim() }),
+          );
           setSent(true);
           onDone();
         }, false);
       }}
     >
-      <Field label="Appeal" hint={<span className={over ? "error-text" : undefined}>{`Say what you changed, or why the page should be live. ${message.length}/1000`}</span>}>
-        <textarea rows={3} value={message} onChange={(e) => setMessage(e.target.value)} aria-invalid={over} />
+      <Field
+        label="Appeal"
+        hint={
+          <span
+            className={over ? "error-text" : undefined}
+          >{`Say what you changed, or why the page should be live. ${message.length}/1000`}</span>
+        }
+      >
+        <textarea
+          rows={3}
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          aria-invalid={over}
+        />
       </Field>
       <ErrorBox error={act.error} />
       <button type="submit" disabled={act.busy || !message.trim() || over}>
@@ -131,7 +179,15 @@ function AppealForm({ onDone }: { onDone: () => void }) {
 }
 
 /** Verification, what each level unlocks, the reviews, and asking Taskiem to verify the business. */
-export function TrustPanel({ trust, error, onChanged }: { trust: Trust | undefined; error: unknown; onChanged: () => void }) {
+export function TrustPanel({
+  trust,
+  error,
+  onChanged,
+}: {
+  trust: Trust | undefined;
+  error: unknown;
+  onChanged: () => void;
+}) {
   const [asking, setAsking] = useState(false);
   const agent = !!currentAgentSession();
   const pendingBusiness = pendingOf(trust, "business");
@@ -139,8 +195,9 @@ export function TrustPanel({ trust, error, onChanged }: { trust: Trust | undefin
     <section className="card" aria-labelledby="sf-trust">
       <h2 id="sf-trust">Trust</h2>
       <p className="hint">
-        What your business has proved to Taskiem, and what waits for a check. Taskiem checks every page's words and prices: no weapons, drugs, fakes, money-doubling
-        schemes, or asking for passwords, PINs or bank details.
+        What your business has proved to Taskiem, and what waits for a check.
+        Taskiem checks every page's words and prices: no weapons, drugs, fakes,
+        money-doubling schemes, or asking for passwords, PINs or bank details.
       </p>
       <ErrorBox error={error} />
       {!trust && !error && <Skeleton rows={2} label="Loading verification…" />}
@@ -151,7 +208,11 @@ export function TrustPanel({ trust, error, onChanged }: { trust: Trust | undefin
               const ok = trust.verification[l.key];
               return (
                 <li key={l.key}>
-                  <ToneBadge label={ok ? "Yes" : "Not yet"} tone={ok ? "ok" : "muted"} /> <strong>{l.label}</strong>
+                  <ToneBadge
+                    label={ok ? "Yes" : "Not yet"}
+                    tone={ok ? "ok" : "muted"}
+                  />{" "}
+                  <strong>{l.label}</strong>
                   <div className="hint">
                     {l.how} Unlocks: {l.unlocks}
                   </div>
@@ -161,14 +222,19 @@ export function TrustPanel({ trust, error, onChanged }: { trust: Trust | undefin
           </ul>
           {!trust.verification.phone && (
             <p className="hint">
-              To publish, link your WhatsApp or Telegram under <Link className="inline-link" to="/account">Account</Link>.
+              To publish, link your WhatsApp or Telegram under{" "}
+              <Link className="inline-link" to="/account">
+                Account
+              </Link>
+              .
             </p>
           )}
           {!trust.verification.business &&
             !agent &&
             (pendingBusiness ? (
               <div className="notice" role="status">
-                You asked Taskiem to verify your business on {fmtTime(pendingBusiness.created_at)}. It waits for a check.
+                You asked Taskiem to verify your business on{" "}
+                {fmtTime(pendingBusiness.created_at)}. It waits for a check.
               </div>
             ) : asking ? (
               <VerifyForm
@@ -179,7 +245,9 @@ export function TrustPanel({ trust, error, onChanged }: { trust: Trust | undefin
                 }}
               />
             ) : (
-              <button onClick={() => setAsking(true)}>Verify your business</button>
+              <button onClick={() => setAsking(true)}>
+                Verify your business
+              </button>
             ))}
           {trust.reviews.length > 0 && (
             <>
@@ -191,14 +259,28 @@ export function TrustPanel({ trust, error, onChanged }: { trust: Trust | undefin
                     <Row
                       key={r.id}
                       icon="lock"
-                      tone={st.tone === "ok" ? "ok" : st.tone === "danger" ? "danger" : st.tone === "warn" ? "warn" : undefined}
+                      tone={
+                        st.tone === "ok"
+                          ? "ok"
+                          : st.tone === "danger"
+                            ? "danger"
+                            : st.tone === "warn"
+                              ? "warn"
+                              : undefined
+                      }
                       title={reviewKind(r.kind)}
                       side={<ToneBadge label={st.label} tone={st.tone} />}
                       sub={
                         <span className="sub">
                           Asked {fmtTime(r.created_at)}
-                          {r.findings.length > 0 && <span className="block">{findingsSummary(r.findings)}</span>}
-                          {r.decision_note && <span className="block">{r.decision_note}</span>}
+                          {r.findings.length > 0 && (
+                            <span className="block">
+                              {findingsSummary(r.findings)}
+                            </span>
+                          )}
+                          {r.decision_note && (
+                            <span className="block">{r.decision_note}</span>
+                          )}
                         </span>
                       }
                       testid="trust-review"
@@ -214,8 +296,19 @@ export function TrustPanel({ trust, error, onChanged }: { trust: Trust | undefin
   );
 }
 
-function VerifyForm({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
-  const [f, setF] = useState({ legal_name: "", address: "", cac_number: "", note: "" });
+function VerifyForm({
+  onClose,
+  onDone,
+}: {
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [f, setF] = useState({
+    legal_name: "",
+    address: "",
+    cac_number: "",
+    note: "",
+  });
   const act = useAction();
   const set = (k: keyof typeof f, v: string) => setF({ ...f, [k]: v });
   return (
@@ -238,22 +331,60 @@ function VerifyForm({ onClose, onDone }: { onClose: () => void; onDone: () => vo
       }}
     >
       <h3 id="sf-verify">Verify your business</h3>
-      <p className="hint">A person at Taskiem checks these, usually within a working day. You are told on WhatsApp or Telegram.</p>
-      <Field label="Legal name" hint="As registered, or your own name for a sole trader.">
-        <input value={f.legal_name} onChange={(e) => set("legal_name", e.target.value)} required maxLength={200} autoComplete="organization" />
+      <p className="hint">
+        A person at Taskiem checks these, usually within a working day. You are
+        told on WhatsApp or Telegram.
+      </p>
+      <Field
+        label="Legal name"
+        hint="As registered, or your own name for a sole trader."
+      >
+        <input
+          value={f.legal_name}
+          onChange={(e) => set("legal_name", e.target.value)}
+          required
+          maxLength={200}
+          autoComplete="organization"
+        />
       </Field>
       <Field label="Address" hint="Where the business is.">
-        <input value={f.address} onChange={(e) => set("address", e.target.value)} required maxLength={300} autoComplete="street-address" />
+        <input
+          value={f.address}
+          onChange={(e) => set("address", e.target.value)}
+          required
+          maxLength={300}
+          autoComplete="street-address"
+        />
       </Field>
-      <Field label="CAC number (optional)" hint="Such as RC 1234567 or BN 1234567.">
-        <input value={f.cac_number} onChange={(e) => set("cac_number", e.target.value)} maxLength={20} autoComplete="off" />
+      <Field
+        label="CAC number (optional)"
+        hint="Such as RC 1234567 or BN 1234567."
+      >
+        <input
+          value={f.cac_number}
+          onChange={(e) => set("cac_number", e.target.value)}
+          maxLength={20}
+          autoComplete="off"
+        />
       </Field>
-      <Field label="Note (optional)" hint={`Anything that helps the check. ${f.note.length}/500`}>
-        <textarea rows={2} value={f.note} onChange={(e) => set("note", e.target.value)} maxLength={500} />
+      <Field
+        label="Note (optional)"
+        hint={`Anything that helps the check. ${f.note.length}/500`}
+      >
+        <textarea
+          rows={2}
+          value={f.note}
+          onChange={(e) => set("note", e.target.value)}
+          maxLength={500}
+        />
       </Field>
       <ErrorBox error={act.error} />
       <div className="toolbar">
-        <button type="submit" className="primary" disabled={act.busy || !f.legal_name.trim() || !f.address.trim()}>
+        <button
+          type="submit"
+          className="primary"
+          disabled={act.busy || !f.legal_name.trim() || !f.address.trim()}
+        >
           Ask Taskiem to verify
         </button>
         <button type="button" onClick={onClose}>

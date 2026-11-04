@@ -16,17 +16,32 @@ async function signIn(page: Page, email: string) {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(PASSWORD);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: /^Good (morning|afternoon|evening)/,
+    }),
+  ).toBeVisible();
 }
 
 async function openSettings(page: Page) {
   await page.goto("/settings/notifications");
-  await expect(page.getByRole("heading", { name: "Notifications", exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Notifications", exact: true }),
+  ).toBeVisible();
   await expect(page.getByText("Failed runs", { exact: true })).toBeVisible();
 }
 
-async function asMember(browser: Browser, owner: Page, email: string, role: string) {
-  const made = await owner.request.post("/v1/members", { headers: H, data: { email, password: PASSWORD, roles: [role] } });
+async function asMember(
+  browser: Browser,
+  owner: Page,
+  email: string,
+  role: string,
+) {
+  const made = await owner.request.post("/v1/members", {
+    headers: H,
+    data: { email, password: PASSWORD, roles: [role] },
+  });
   expect(made.status(), await made.text()).toBe(201);
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
@@ -35,19 +50,28 @@ async function asMember(browser: Browser, owner: Page, email: string, role: stri
   return page;
 }
 
-test("the money summaries can be turned off, and on by others who can see invoices", async ({ page, browser }) => {
+test("the money summaries can be turned off, and on by others who can see invoices", async ({
+  page,
+  browser,
+}) => {
   await signIn(page, "owner@e2e.test");
   await openSettings(page);
 
   // An owner gets both by default, and the page says so.
-  await expect(page.getByText("Money summaries", { exact: true })).toBeVisible();
-  await expect(page.getByText(/Owners get them unless they turn them off/)).toBeVisible();
+  await expect(
+    page.getByText("Money summaries", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/Owners get them unless they turn them off/),
+  ).toBeVisible();
   const daily = page.getByLabel("Daily money summary (chat)");
   const monthly = page.getByLabel("Monthly money email");
   await expect(daily).toBeChecked();
   await expect(monthly).toBeChecked();
   await daily.click();
-  await expect(page.locator(".toast").filter({ hasText: "Saved" })).toBeVisible();
+  await expect(
+    page.locator(".toast").filter({ hasText: "Saved" }),
+  ).toBeVisible();
   await expect(daily).not.toBeChecked();
   await expect(monthly).toBeChecked();
   await page.reload();
@@ -61,18 +85,36 @@ test("the money summaries can be turned off, and on by others who can see invoic
 
   // A viewer can see invoices: the group is there, off until they turn it on.
   const stamp = Date.now();
-  const viewer = await asMember(browser, page, `viewer-${stamp}@e2e.test`, "viewer");
-  await expect(viewer.getByText("Money summaries", { exact: true })).toBeVisible();
-  await expect(viewer.getByLabel("Daily money summary (chat)")).not.toBeChecked();
+  const viewer = await asMember(
+    browser,
+    page,
+    `viewer-${stamp}@e2e.test`,
+    "viewer",
+  );
+  await expect(
+    viewer.getByText("Money summaries", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    viewer.getByLabel("Daily money summary (chat)"),
+  ).not.toBeChecked();
   await expect(viewer.getByLabel("Monthly money email")).not.toBeChecked();
   await viewer.getByLabel("Monthly money email").click();
   await expect(viewer.getByLabel("Monthly money email")).toBeChecked();
   await viewer.context().close();
 
   // A builder cannot: no money group.
-  const builder = await asMember(browser, page, `builder-${stamp}@e2e.test`, "builder");
-  await expect(builder.getByText("Setup problems", { exact: true })).toBeVisible();
-  await expect(builder.getByText("Money summaries", { exact: true })).toHaveCount(0);
+  const builder = await asMember(
+    browser,
+    page,
+    `builder-${stamp}@e2e.test`,
+    "builder",
+  );
+  await expect(
+    builder.getByText("Setup problems", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    builder.getByText("Money summaries", { exact: true }),
+  ).toHaveCount(0);
   await builder.context().close();
 });
 
@@ -92,8 +134,13 @@ test("a group the page does not know is shown plainly", async ({ page }) => {
   );
   await openSettings(page);
   await expect(page.getByText("Late payments", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("Late payments on WhatsApp or Telegram")).not.toBeChecked();
+  await expect(
+    page.getByLabel("Late payments on WhatsApp or Telegram"),
+  ).not.toBeChecked();
   await expect(page.getByLabel("Late payments by email")).toBeChecked();
   const vs = await axe(page);
-  expect(vs, describe("/settings/notifications (an unknown group)", vs)).toEqual([]);
+  expect(
+    vs,
+    describe("/settings/notifications (an unknown group)", vs),
+  ).toEqual([]);
 });
