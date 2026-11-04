@@ -14,6 +14,8 @@ export interface TaskiemMessage {
   text: string;
   buttons?: TaskiemButton[];
   created_at: string;
+  /** Being sent from this page: shown at once, until the answer comes. */
+  local?: boolean;
 }
 
 export const NIL = "00000000-0000-0000-0000-000000000000";

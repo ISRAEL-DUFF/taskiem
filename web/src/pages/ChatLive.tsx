@@ -24,6 +24,14 @@ import {
   writePrefs,
 } from "../lib/chatNotify";
 import type { TaskiemMessage } from "../lib/taskiemchat";
+import {
+  addTaskiemUnread,
+  beginSeen,
+  markSeen,
+  seenAt,
+  setTaskiemUnread,
+  useTaskiemUnread,
+} from "../lib/taskiemSeen";
 import type { Conversation, LinkMessage } from "../lib/linkchat";
 import { stripBadge, withBadge } from "../lib/tabBadge";
 
@@ -169,6 +177,24 @@ export function ChatLiveProvider({ children }: { children: ReactNode }) {
       setConnected(false);
       setTyping(EMPTY);
     };
+    // What Taskiem says that the person is not looking at is unread (each
+    // message counted once, though the stream may say it again).
+    const counted = new Set<string>();
+    const taskiemHeard = (messages: TaskiemMessage[]) => {
+      const seen = seenAt();
+      if (!seen) return;
+      const viewing =
+        !isAway() &&
+        here.current.pathname === "/chat" &&
+        new URLSearchParams(here.current.search).get("with") === "taskiem";
+      const said = messages.filter((m) => !m.inbound && m.created_at > seen);
+      const newest = said[said.length - 1];
+      if (!newest) return;
+      if (viewing) return markSeen(newest.created_at);
+      const fresh = said.filter((m) => !counted.has(m.id));
+      fresh.forEach((m) => counted.add(m.id));
+      if (fresh.length > 0) addTaskiemUnread(fresh.length);
+    };
     const open = () => {
       hear();
       es = new EventSource("/v1/chat/stream");
@@ -217,14 +243,13 @@ export function ChatLiveProvider({ children }: { children: ReactNode }) {
       });
       es.addEventListener("taskiem", (ev) => {
         hear();
-        emit({
-          type: "taskiem",
-          messages: (
-            JSON.parse((ev as MessageEvent<string>).data) as {
-              messages: TaskiemMessage[];
-            }
-          ).messages,
-        });
+        const messages = (
+          JSON.parse((ev as MessageEvent<string>).data) as {
+            messages: TaskiemMessage[];
+          }
+        ).messages;
+        emit({ type: "taskiem", messages });
+        taskiemHeard(messages);
       });
       es.addEventListener("typing", (ev) => {
         hear();
@@ -335,6 +360,31 @@ export function ChatLiveProvider({ children }: { children: ReactNode }) {
   // The prefs changing elsewhere (the settings page) closes the question.
   useEffect(() => onPrefs(() => readPrefs().asked && setAsking(false)), []);
 
+  // What Taskiem said while the person was away (from the phone, say).
+  useEffect(() => {
+    if (!signedIn) return;
+    beginSeen();
+    const seen = seenAt();
+    if (!seen) return;
+    let live = true;
+    get<{ messages: TaskiemMessage[] }>(
+      `/v1/taskiem-chat?after=${encodeURIComponent(seen)}`,
+    ).then(
+      (r) => {
+        if (!live || seenAt() !== seen) return;
+        const n = r.messages.filter((m) => !m.inbound).length;
+        const viewing =
+          here.current.pathname === "/chat" &&
+          new URLSearchParams(here.current.search).get("with") === "taskiem";
+        setTaskiemUnread(viewing ? 0 : n);
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [signedIn]);
+  const taskiemUnread = useTaskiemUnread();
   const unread = useMemo(
     () =>
       (convs ?? [])
@@ -342,7 +392,7 @@ export function ChatLiveProvider({ children }: { children: ReactNode }) {
         .reduce((n, c) => n + c.unread, 0),
     [convs],
   );
-  useTabBadge(unread);
+  useTabBadge(unread + taskiemUnread);
 
   const value = useMemo<ChatLive>(
     () => ({

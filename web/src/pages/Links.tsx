@@ -40,6 +40,7 @@ import { TaskiemPane } from "./TaskiemChat";
 import { ChatRow } from "./ChatRow";
 import { useChatLive } from "./ChatLive";
 import { useDrafts } from "../lib/drafts";
+import { useTaskiemUnread } from "../lib/taskiemSeen";
 import {
   isTyping,
   KEYS_EVENT,
@@ -320,6 +321,7 @@ export function ChatPage() {
   const searching = query.length >= 2;
   const all = convs.data?.conversations ?? [];
   const drafts = useDrafts();
+  const taskiemUnread = useTaskiemUnread();
   const openID = params.get("with");
   const open = all.find((c) => c.link === openID);
   // The person's own conversation with Taskiem, pinned at the top (§5.5).
@@ -530,6 +532,7 @@ export function ChatPage() {
                   )
                 }
                 selected={taskiemOpen}
+                unread={taskiemUnread}
                 testid="taskiem-chat"
               />
             </ul>

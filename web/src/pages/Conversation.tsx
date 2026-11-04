@@ -1,5 +1,4 @@
 import {
-  Fragment,
   useCallback,
   useEffect,
   useMemo,
@@ -12,7 +11,6 @@ import { del, get, post, put } from "../api";
 import { useAuth } from "../auth";
 import {
   attachmentLabel,
-  byDay,
   cardHref,
   cardLine,
   cardSub,
@@ -57,10 +55,11 @@ import {
   useOutbox,
 } from "../lib/outboxStore";
 import { ThreadJump } from "./ThreadParts";
+import { ChatStream } from "./ChatStream";
+import { ChatHead } from "./ChatHead";
 import { useChatLive } from "./ChatLive";
-import { KEYS_EVENT } from "../lib/chatKeys";
 import { roleLine, type BusinessLink, type LinkCard } from "../lib/links";
-import { ErrorBox, fmtTime, Modal, Skeleton, useAction, useLoad } from "../ui";
+import { ErrorBox, fmtTime, Modal, useAction, useLoad } from "../ui";
 
 // The conversation with a linked business (business links L3; §5.5): the
 // stream of bubbles, theirs on the left and ours on the right, grouped by
@@ -882,8 +881,6 @@ export function ConversationPane({
   const write = can("chat.trade") && conv.state === "active";
   const [messages, setMessages] = useState<LinkMessage[]>();
   const [typing, setTyping] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuButton = useRef<HTMLButtonElement>(null);
   const [infoOpen, setInfoOpen] = useState(false);
   // The business's card (area, what it sells), as its public page shows
   // it: found by the same search, so only a business that lets others find
@@ -909,22 +906,6 @@ export function ConversationPane({
     document.addEventListener("keydown", esc);
     return () => document.removeEventListener("keydown", esc);
   }, [infoOpen]);
-  useEffect(() => {
-    if (!menuOpen) return;
-    const esc = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      setMenuOpen(false);
-      menuButton.current?.focus();
-    };
-    const away = (e: MouseEvent) =>
-      !(e.target as Element).closest?.(".chat-menu-wrap") && setMenuOpen(false);
-    document.addEventListener("keydown", esc);
-    document.addEventListener("mousedown", away);
-    return () => {
-      document.removeEventListener("keydown", esc);
-      document.removeEventListener("mousedown", away);
-    };
-  }, [menuOpen]);
   const [forwarding, setForwarding] = useState<LinkMessage>();
   const typedAt = useRef(0);
   const [error, setError] = useState<unknown>();
@@ -997,7 +978,7 @@ export function ConversationPane({
     hasOlder,
     loadOlder: olderCb,
   });
-  const { stream, topMark, flashId } = thread;
+  const { stream, flashId } = thread;
   const last = messages?.[messages.length - 1]?.created_at;
 
   // What is newer, every few seconds (while the newest page is the one
@@ -1296,110 +1277,81 @@ export function ConversationPane({
       onKeyDown={c.onPaneKeyDown}
       {...c.dropProps}
     >
-      <div className="chat-head">
-        <button
-          type="button"
-          className="icon-button chat-back"
-          onClick={onBack}
-          aria-label="Back to the chats"
-        >
-          <Icon name="back" />
-        </button>
-        <button
-          type="button"
-          className="chat-avatar"
-          aria-label={`About ${conv.name}`}
-          aria-expanded={infoOpen}
-          onClick={() => setInfoOpen(!infoOpen)}
-        >
-          {conv.name.slice(0, 1).toUpperCase()}
-        </button>
-        <h2>
-          {conv.name}
-          {(connected ? live.typing.has(conv.link) : typing) && (
-            <span className="typing" data-testid="chat-typing">
-              typing…
-            </span>
-          )}
-        </h2>
-        {
-          <div className="chat-menu-wrap">
-            <button
-              type="button"
-              className="icon-button"
-              ref={menuButton}
-              aria-label="More about this conversation"
-              aria-expanded={menuOpen}
-              aria-haspopup="true"
-              onClick={() => setMenuOpen(!menuOpen)}
-            >
-              <Icon name="more" />
+      <ChatHead
+        onBack={onBack}
+        menuLabel="More about this conversation"
+        avatar={
+          <button
+            type="button"
+            className="chat-avatar"
+            aria-label={`About ${conv.name}`}
+            aria-expanded={infoOpen}
+            onClick={() => setInfoOpen(!infoOpen)}
+          >
+            {conv.name.slice(0, 1).toUpperCase()}
+          </button>
+        }
+        title={
+          <>
+            {conv.name}
+            {(connected ? live.typing.has(conv.link) : typing) && (
+              <span className="typing" data-testid="chat-typing">
+                typing…
+              </span>
+            )}
+          </>
+        }
+        items={(close) => (
+          <>
+            <button type="button" onClick={() => (close(), setInfoOpen(true))}>
+              Contact info
             </button>
-            {menuOpen && (
-              <div className="chat-menu" data-testid="chat-menu">
+            {can("chat.trade") && (
+              <>
                 <button
                   type="button"
-                  onClick={() => (setMenuOpen(false), setInfoOpen(true))}
-                >
-                  Contact info
-                </button>
-                {can("chat.trade") && (
-                  <>
-                    <button
-                      type="button"
-                      disabled={act.busy}
-                      onClick={() => {
-                        setMenuOpen(false);
-                        settings(
-                          { pinned: !conv.pinned },
-                          conv.pinned ? "Unpinned" : "Pinned",
-                        );
-                      }}
-                    >
-                      {conv.pinned ? "Unpin" : "Pin"}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={act.busy}
-                      onClick={() => {
-                        setMenuOpen(false);
-                        settings(
-                          { muted: !conv.muted },
-                          conv.muted ? "Unmuted" : "Muted",
-                        );
-                      }}
-                    >
-                      {conv.muted ? "Unmute" : "Mute"}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={act.busy}
-                      onClick={() => {
-                        setMenuOpen(false);
-                        settings(
-                          { archived: !conv.archived },
-                          conv.archived ? "Unarchived" : "Archived",
-                        );
-                      }}
-                    >
-                      {conv.archived ? "Unarchive" : "Archive"}
-                    </button>
-                  </>
-                )}
-                <button
-                  type="button"
+                  disabled={act.busy}
                   onClick={() => {
-                    setMenuOpen(false);
-                    window.dispatchEvent(new Event(KEYS_EVENT));
+                    close();
+                    settings(
+                      { pinned: !conv.pinned },
+                      conv.pinned ? "Unpinned" : "Pinned",
+                    );
                   }}
                 >
-                  Keyboard
+                  {conv.pinned ? "Unpin" : "Pin"}
                 </button>
-              </div>
+                <button
+                  type="button"
+                  disabled={act.busy}
+                  onClick={() => {
+                    close();
+                    settings(
+                      { muted: !conv.muted },
+                      conv.muted ? "Unmuted" : "Muted",
+                    );
+                  }}
+                >
+                  {conv.muted ? "Unmute" : "Mute"}
+                </button>
+                <button
+                  type="button"
+                  disabled={act.busy}
+                  onClick={() => {
+                    close();
+                    settings(
+                      { archived: !conv.archived },
+                      conv.archived ? "Unarchived" : "Archived",
+                    );
+                  }}
+                >
+                  {conv.archived ? "Unarchive" : "Archive"}
+                </button>
+              </>
             )}
-          </div>
-        }
-      </div>
+          </>
+        )}
+      />
       <div
         className="filters"
         role="search"
@@ -1419,87 +1371,54 @@ export function ConversationPane({
         </label>
       </div>
       <ErrorBox error={error ?? act.error ?? c.fileError} />
-      <div className="chat-stream-wrap">
-        <div
-          className="chat-stream"
-          aria-live="polite"
-          data-testid="chat-stream"
-          role="log"
-          tabIndex={0}
-          aria-label="Chat history"
-          ref={stream}
-          onScroll={thread.onScroll}
-        >
-          {hasOlder && !found && shown && shown.length > 0 && (
-            <div
-              ref={topMark}
-              className="chat-top"
-              data-testid="chat-top"
-              aria-hidden="true"
-            />
-          )}
-          {!shown ? (
-            <Skeleton rows={3} label="Loading the conversation…" />
-          ) : shown.length === 0 ? (
-            <p className="hint" style={{ alignSelf: "center" }}>
-              {found
-                ? "No messages say that."
-                : `No messages yet. Say hello to ${conv.name}.`}
-            </p>
-          ) : (
-            byDay(shown).map((g) => (
-              <div key={g.day} className="chat-group">
-                <span className="chat-day">{g.day}</span>
-                {g.messages.map((m, i) => (
-                  <Fragment key={m.id}>
-                    {!found && unread?.id === m.id && (
-                      <div
-                        className="chat-unread"
-                        data-unread
-                        data-testid="chat-unread"
-                      >
-                        {unread.count === 1
-                          ? "1 unread message"
-                          : `${unread.count} unread messages`}
-                      </div>
-                    )}
-                    <Bubble
-                      m={m}
-                      other={conv.name}
-                      canReply={write && !m.local}
-                      onRetry={retry}
-                      onDiscard={discard}
-                      onReply={setReply}
-                      onJump={found ? undefined : jump}
-                      onShow={found ? showFound : undefined}
-                      first={startsRun(g.messages[i - 1], m)}
-                      flash={flashId === m.id}
-                      latest={newest.has(m.id)}
-                      onDone={() => pull(last).catch(setError)}
-                      onForward={
-                        write && others.some((o) => o.state === "active")
-                          ? setForwarding
-                          : undefined
-                      }
-                      onHide={can("chat.trade") ? hide : undefined}
-                      onReact={write && !m.local ? react : undefined}
-                      onStar={m.local ? undefined : star}
-                      onInfo={m.local ? undefined : setInfo}
-                    />
-                  </Fragment>
-                ))}
-              </div>
-            ))
-          )}
-        </div>
-        {!found && (thread.away || detached) && (
-          <ThreadJump
-            detached={detached}
-            count={thread.newCount}
-            onClick={() => (detached ? toLatest() : thread.toBottom())}
+      <ChatStream
+        items={shown}
+        thread={thread}
+        hasOlder={hasOlder && !found}
+        prefix="chat"
+        keyOf={(m) => m.id}
+        startsRun={startsRun}
+        unread={found ? undefined : unread}
+        empty={
+          found
+            ? "No messages say that."
+            : `No messages yet. Say hello to ${conv.name}.`
+        }
+        render={(m, { first }) => (
+          <Bubble
+            m={m}
+            other={conv.name}
+            canReply={write && !m.local}
+            onRetry={retry}
+            onDiscard={discard}
+            onReply={setReply}
+            onJump={found ? undefined : jump}
+            onShow={found ? showFound : undefined}
+            first={first}
+            flash={flashId === m.id}
+            latest={newest.has(m.id)}
+            onDone={() => pull(last).catch(setError)}
+            onForward={
+              write && others.some((o) => o.state === "active")
+                ? setForwarding
+                : undefined
+            }
+            onHide={can("chat.trade") ? hide : undefined}
+            onReact={write && !m.local ? react : undefined}
+            onStar={m.local ? undefined : star}
+            onInfo={m.local ? undefined : setInfo}
           />
         )}
-      </div>
+        overlay={
+          !found && (thread.away || detached) ? (
+            <ThreadJump
+              detached={detached}
+              count={thread.newCount}
+              onClick={() => (detached ? toLatest() : thread.toBottom())}
+            />
+          ) : undefined
+        }
+      />
       {write ? (
         <ComposerView
           c={c}
