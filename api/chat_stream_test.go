@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"sort"
@@ -47,28 +48,31 @@ func chatStream(t *testing.T, c *client, lastID string) (<-chan streamEvent, fun
 		t.Fatalf("the stream: %d %s", resp.StatusCode, resp.Header.Get("Content-Type"))
 	}
 	events := make(chan streamEvent, 200)
-	go func() {
-		defer func() { _ = resp.Body.Close() }()
-		defer close(events)
-		sc := bufio.NewScanner(resp.Body)
-		sc.Buffer(make([]byte, 1<<20), 1<<20)
-		var ev streamEvent
-		for sc.Scan() {
-			line := sc.Text()
-			switch {
-			case strings.HasPrefix(line, "id: "):
-				ev.ID = strings.TrimPrefix(line, "id: ")
-			case strings.HasPrefix(line, "event: "):
-				ev.Event = strings.TrimPrefix(line, "event: ")
-			case strings.HasPrefix(line, "data: "):
-				_ = json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &ev.Data)
-			case line == "" && ev.Event != "":
-				events <- ev
-				ev = streamEvent{}
-			}
-		}
-	}()
+	go readStream(resp.Body, events)
 	return events, cancel
+}
+
+// readStream sends what the stream says to events, and closes both when it ends.
+func readStream(body io.ReadCloser, events chan<- streamEvent) {
+	defer func() { _ = body.Close() }()
+	defer close(events)
+	sc := bufio.NewScanner(body)
+	sc.Buffer(make([]byte, 1<<20), 1<<20)
+	var ev streamEvent
+	for sc.Scan() {
+		line := sc.Text()
+		switch {
+		case strings.HasPrefix(line, "id: "):
+			ev.ID = strings.TrimPrefix(line, "id: ")
+		case strings.HasPrefix(line, "event: "):
+			ev.Event = strings.TrimPrefix(line, "event: ")
+		case strings.HasPrefix(line, "data: "):
+			_ = json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &ev.Data)
+		case line == "" && ev.Event != "":
+			events <- ev
+			ev = streamEvent{}
+		}
+	}
 }
 
 // next waits for an event of a kind (others pass), up to d; nil if none came.
