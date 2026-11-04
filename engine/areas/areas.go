@@ -13,9 +13,12 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+
+	"github.com/israel-duff/taskiem/engine/wd"
 )
 
 // Area is one switchable part of the product.
@@ -207,6 +210,45 @@ func Save(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, before, after State,
 	return changed, nil
 }
 
+// connectorAreas say which area a connector's steps belong to. A step of
+// one of them is refused when the area is off (the worker checks), and a
+// workflow that has one is listed when the area is about to be turned off.
+var connectorAreas = map[string]Area{
+	"storefront": Storefront,
+	"riders":     Storefront,
+	"stock":      Stock,
+	"invoices":   Money,
+	"bills":      Money,
+	"link":       Links,
+	"schools":    Schools,
+}
+
+// triggerAreas say which area a workflow trigger's events come from.
+var triggerAreas = map[string]Area{
+	"storefront": Storefront,
+	"invoice":    Money,
+	"link":       Links,
+}
+
+// ConnectorArea names the area a connector reference ("stock@1") belongs
+// to, if any.
+func ConnectorArea(ref string) (Area, bool) {
+	id, _, _ := strings.Cut(ref, "@")
+	a, ok := connectorAreas[id]
+	return a, ok
+}
+
+// TriggerArea names the area a trigger type belongs to, if any.
+func TriggerArea(typ string) (Area, bool) {
+	a, ok := triggerAreas[typ]
+	return a, ok
+}
+
+// OffSentence is what a step, a message or a page says when its area is off.
+func OffSentence(a Area) string {
+	return info[a].Name + " is not turned on for this business. An owner turns it on in Settings."
+}
+
 // UsedBy is a published workflow step that belongs to an area.
 type UsedBy struct {
 	Workflow    string `json:"workflow"`
@@ -214,9 +256,46 @@ type UsedBy struct {
 	Environment string `json:"environment"`
 }
 
-// Affected lists the published workflow steps that use the area, so turning
-// it off can warn first. The step-to-area map is built in plan phase 3; until
-// then no step belongs to an area and the list is empty.
+// Affected lists the deployed workflow steps and triggers that use the
+// area, so turning it off can warn first. Only what is deployed counts: a
+// draft or an older version does nothing until it is.
 func Affected(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, a Area) ([]UsedBy, error) {
-	return nil, nil
+	rows, err := tx.Query(ctx, `SELECT w.name, d.environment, v.definition
+		  FROM deployments d
+		  JOIN workflows w ON w.id = d.workflow_id
+		  JOIN workflow_versions v ON v.workflow_id = d.workflow_id AND v.version = d.version
+		 WHERE d.tenant_id = $1
+		 ORDER BY w.name, d.environment`, tenant)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []UsedBy{}
+	for rows.Next() {
+		var name, env string
+		var doc []byte
+		if err := rows.Scan(&name, &env, &doc); err != nil {
+			return nil, err
+		}
+		def, err := wd.Load(doc)
+		if err != nil {
+			continue // a definition that no longer loads does nothing to warn about
+		}
+		if t, ok := TriggerArea(def.Trigger.Type); ok && t == a {
+			out = append(out, UsedBy{Workflow: name, Step: "when it starts", Environment: env})
+		}
+		def.Walk(func(s *wd.Step) {
+			if s.Connector == "" {
+				return
+			}
+			if c, ok := ConnectorArea(s.Connector); ok && c == a {
+				label := s.Name
+				if label == "" {
+					label = s.ID
+				}
+				out = append(out, UsedBy{Workflow: name, Step: label, Environment: env})
+			}
+		})
+	}
+	return out, rows.Err()
 }

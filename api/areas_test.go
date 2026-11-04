@@ -1,7 +1,10 @@
 package api_test
 
 import (
+	"strings"
 	"testing"
+
+	stockconn "github.com/israel-duff/taskiem/connectors/stock"
 )
 
 // areaState reads GET /v1/settings/areas as area name to on or off.
@@ -111,5 +114,58 @@ func TestBusinessAreas(t *testing.T) {
 	}
 	if st := areaState(t, other); !st["stock"] || !st["storefront"] {
 		t.Errorf("another business: %v", st)
+	}
+}
+
+const stockFlow = `{"schema":"wd/v1","id":"wf_lowstock","version":1,"name":"Low stock","trigger":{"type":"manual"},
+  "steps":[{"id":"low","type":"connector","name":"Find the items that are low","connector":"stock@1","action":"low_items","input":{}}]}`
+
+// TestAreasWarnBeforeTurningOffWhatWorkflowsUse: turning an area off while
+// a deployed workflow uses it is refused with the list, until confirmed;
+// and once it is off, a run of that workflow stops at the step, in plain
+// words, and runs again when the area is back.
+func TestAreasWarnBeforeTurningOffWhatWorkflowsUse(t *testing.T) {
+	w := shopWorld(t)
+	if err := w.env.Registry.Register(stockconn.New(withStock(w.world))); err != nil {
+		t.Fatal(err)
+	}
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	wf := publishFlow(t, owner, stockFlow)
+
+	body := map[string]any{"areas": map[string]bool{"stock": false}}
+	st, out := owner.do("PUT", "/v1/settings/areas", body)
+	if st != 409 {
+		t.Fatalf("stock off with a workflow using it: %d %v", st, out)
+	}
+	used, _ := out["affected"].([]any)
+	if len(used) == 0 || used[0].(map[string]any)["workflow"] != "loan" || used[0].(map[string]any)["step"] != "Find the items that are low" {
+		t.Errorf("affected: %v", out["affected"])
+	}
+	if !areaState(t, owner)["stock"] {
+		t.Error("stock went off without confirmation")
+	}
+	// Another part, which nothing uses, is not held up.
+	owner.must(200, "PUT", "/v1/settings/areas", map[string]any{"areas": map[string]bool{"links": false}})
+
+	runOnce := func() map[string]any {
+		run := owner.must(201, "POST", "/v1/workflows/"+wf+"/runs", map[string]any{"input": map[string]any{}})["run_id"].(string)
+		w.env.Drain(t)
+		return owner.must(200, "GET", "/v1/runs/"+run, nil)
+	}
+	const off = "Stock is not turned on for this business"
+	if got := runOnce(); strings.Contains(toJSON(got["events"]), off) {
+		t.Fatalf("with stock on: %v", toJSON(got["events"]))
+	}
+
+	// Confirmed, it goes off, and the step stops in plain words.
+	owner.must(200, "PUT", "/v1/settings/areas", map[string]any{"areas": map[string]bool{"stock": false}, "confirm": true})
+	got := runOnce()
+	if got["run"].(map[string]any)["status"] != "failed" || !strings.Contains(toJSON(got["events"]), off) {
+		t.Fatalf("with stock off: %v %v", got["run"], toJSON(got["events"]))
+	}
+	// And on again, it runs.
+	owner.must(200, "PUT", "/v1/settings/areas", map[string]any{"areas": map[string]bool{"stock": true}})
+	if got := runOnce(); strings.Contains(toJSON(got["events"]), off) {
+		t.Fatalf("with stock back on: %v", toJSON(got["events"]))
 	}
 }
