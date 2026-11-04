@@ -92,9 +92,9 @@ The rule: **permission and area must both pass.** A permission alone no longer o
 
 5. **Service businesses.** The templates, signup choice and decisions in §9, with an ISP as the first test: build its monthly billing, reminder, cut-off and outage workflows from the templates and fix what gets in the way.
 
-6. **Agents assemble workflows for owners.** Today an agent's session is limited to the storefront page and its tables, for 24 hours, as a viewer in a workspace of their own (`docs/agents.md`), so an agent cannot build a workflow in a business at all. This phase adds an agent session that can create, edit and test workflows, install recipes and set a business's areas, with the owner's agreement (the same `AGREE` code), a time limit, an audit trail in the business's chain, and **publishing left to the owner's approval** unless the owner says otherwise. It is security-sensitive and needs its own design and decision before building. Alongside it, the recipe library grows continuously: each business type gets its set (service businesses first, see §9).
+6. **Agents assemble workflows for owners. Status: in review; not to be implemented yet (founder, 4 November), but this is the goal the other phases serve.** Today an agent's session is limited to the storefront page and its tables, for 24 hours, as a viewer in a workspace of their own (`docs/agents.md`), so an agent cannot build a workflow in a business at all. This phase adds an agent session that can create, edit and test workflows, install recipes and set a business's areas, with the owner's agreement (the same `AGREE` code), a time limit, an audit trail in the business's chain, and **publishing left to the owner's approval** unless the owner says otherwise. It is security-sensitive and needs its own design and decision before building. Alongside it, the recipe library grows continuously: each business type gets its set (service businesses first, see §9).
 
-Phases 1 and 2 are the first change to review; 3 to 6 follow.
+Phases 1 and 2 are the first change to review; 3, 4 and 5 follow. Phase 6 stays in review until it has its own design and decision.
 
 ## 8. Tests
 
