@@ -24,7 +24,19 @@
     "internet",
     "isp",
     "plan",
-    "due"
+    "due",
+    "membership",
+    "members",
+    "gym",
+    "club",
+    "monthly",
+    "pay monthly",
+    "dues",
+    "class",
+    "classes",
+    "tuition",
+    "lessons",
+    "subscribers"
   ],
   "requires": [
     "subscribers",
@@ -42,7 +54,7 @@
       "title": "Business name",
       "description": "How your customers know you; it starts every message.",
       "required": true,
-      "example": "Fibre Link",
+      "example": "Sunrise Fitness",
       "max_length": 60
     },
     {

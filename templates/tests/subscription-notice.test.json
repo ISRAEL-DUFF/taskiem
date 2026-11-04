@@ -1,9 +1,9 @@
 {
   "schema": "wd-test/v1",
-  "template": "subscription-outage-notice",
+  "template": "subscription-notice",
   "params": {
     "business_name": "Fibre Link",
-    "path": "/network/notice",
+    "path": "/subscribers/notice",
     "subscribers_table": "subscribers"
   },
   "cases": [

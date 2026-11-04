@@ -1,0 +1,344 @@
+{
+  "schema": "wd-test/v1",
+  "template": "subscription-renew-on-payment",
+  "params": {
+    "business_name": "Sunrise Fitness",
+    "extend_days": 30,
+    "subscribers_table": "subscribers"
+  },
+  "cases": [
+    {
+      "name": "a suspended subscriber who pays is renewed, marked active and told",
+      "trigger": {
+        "type": "invoice",
+        "event": "paid",
+        "body": {
+          "event": "paid",
+          "number": "INV-0007",
+          "status": "paid",
+          "amount_kobo": 800000,
+          "customer": {
+            "name": "X",
+            "phone": "+2348030000003"
+          }
+        }
+      },
+      "mocks": {
+        "find": {
+          "output": {
+            "rows": [
+              {
+                "name": "Chidi Eze",
+                "phone": "+2348030000003",
+                "plan": "Home 5Mbps",
+                "monthly_naira": 8000,
+                "renews_on": "2025-12-20T00:00:00Z",
+                "status": "suspended",
+                "account_ref": "acct-77",
+                "area": "Yaba"
+              }
+            ]
+          }
+        },
+        "renew_on": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "thank_on": {
+          "output": {
+            "queued": [
+              "sms"
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "renew_on": "completed",
+          "thank_on": "completed"
+        },
+        "inputs": {
+          "renew_on": {
+            "table": "subscribers",
+            "set": {
+              "status": "active",
+              "renews_on": "2026-02-04"
+            }
+          },
+          "thank_on": {
+            "to": "+2348030000003",
+            "message": "Sunrise Fitness: Thank you, we received your payment and your plan is active until 2026-02-04."
+          }
+        }
+      }
+    },
+    {
+      "name": "an active subscriber who pays early keeps the days they have: the renewal date moves on from their date",
+      "trigger": {
+        "type": "invoice",
+        "event": "paid",
+        "body": {
+          "event": "paid",
+          "number": "INV-0008",
+          "status": "paid",
+          "amount_kobo": 800000,
+          "customer": {
+            "name": "X",
+            "phone": "+2348030000003"
+          }
+        }
+      },
+      "mocks": {
+        "find": {
+          "output": {
+            "rows": [
+              {
+                "name": "Chidi Eze",
+                "phone": "+2348030000003",
+                "plan": "Home 5Mbps",
+                "monthly_naira": 8000,
+                "renews_on": "2026-01-20T00:00:00Z",
+                "status": "active",
+                "account_ref": "acct-77",
+                "area": "Yaba"
+              }
+            ]
+          }
+        },
+        "renew_on": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "thank_on": {
+          "output": {
+            "queued": [
+              "sms"
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "renew_on": "completed",
+          "thank_on": "completed"
+        },
+        "inputs": {
+          "renew_on": {
+            "set": {
+              "status": "active",
+              "renews_on": "2026-02-19"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "someone who is not a subscriber changes nothing",
+      "trigger": {
+        "type": "invoice",
+        "event": "paid",
+        "body": {
+          "event": "paid",
+          "number": "INV-0009",
+          "status": "paid",
+          "amount_kobo": 800000,
+          "customer": {
+            "name": "X",
+            "phone": "+2348039999999"
+          }
+        }
+      },
+      "mocks": {
+        "find": {
+          "output": {
+            "rows": []
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "renewal": "skipped",
+          "restore": "skipped"
+        }
+      }
+    },
+    {
+      "name": "a switched-off subscriber with no account on your system is renewed without calling it",
+      "trigger": {
+        "type": "invoice",
+        "event": "paid",
+        "body": {
+          "event": "paid",
+          "number": "INV-0010",
+          "status": "paid",
+          "amount_kobo": 800000,
+          "customer": {
+            "name": "X",
+            "phone": "+2348030000003"
+          }
+        }
+      },
+      "mocks": {
+        "find": {
+          "output": {
+            "rows": [
+              {
+                "name": "Chidi Eze",
+                "phone": "+2348030000003",
+                "plan": "Home 5Mbps",
+                "monthly_naira": 8000,
+                "renews_on": "2026-01-20T00:00:00Z",
+                "status": "suspended",
+                "account_ref": "",
+                "area": "Yaba"
+              }
+            ]
+          }
+        },
+        "renew_on": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "thank_on": {
+          "output": {
+            "queued": [
+              "sms"
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "renew_on": "completed",
+          "thank_on": "completed"
+        },
+        "inputs": {
+          "renew_on": {
+            "set": {
+              "status": "active",
+              "renews_on": "2026-02-19"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "a payment smaller than the monthly price renews no one",
+      "trigger": {
+        "type": "invoice",
+        "event": "paid",
+        "body": {
+          "event": "paid",
+          "number": "INV-0011",
+          "status": "paid",
+          "amount_kobo": 50000,
+          "customer": {
+            "name": "Chidi Eze",
+            "phone": "+2348030000003"
+          }
+        }
+      },
+      "mocks": {
+        "find": {
+          "output": {
+            "rows": [
+              {
+                "name": "Chidi Eze",
+                "phone": "+2348030000003",
+                "plan": "Home 5Mbps",
+                "monthly_naira": 8000,
+                "renews_on": "2025-12-20T00:00:00Z",
+                "status": "suspended",
+                "account_ref": "acct-77",
+                "area": "Yaba"
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "renewal": "skipped",
+          "restore": "skipped"
+        }
+      }
+    },
+    {
+      "name": "a subscriber typed in with a local number is found by the invoice's international one",
+      "trigger": {
+        "type": "invoice",
+        "event": "paid",
+        "body": {
+          "event": "paid",
+          "number": "INV-0012",
+          "status": "paid",
+          "amount_kobo": 800000,
+          "customer": {
+            "name": "Chidi Eze",
+            "phone": "+2348030000003"
+          }
+        }
+      },
+      "mocks": {
+        "find": {
+          "output": {
+            "rows": [
+              {
+                "name": "Chidi Eze",
+                "phone": "08030000003",
+                "plan": "Home 5Mbps",
+                "monthly_naira": 8000,
+                "renews_on": "2026-01-20",
+                "status": "active",
+                "account_ref": "acct-77"
+              }
+            ]
+          }
+        },
+        "renew_on": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "thank_on": {
+          "output": {
+            "queued": [
+              "sms"
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "find": {
+            "filters": [
+              {
+                "column": "phone",
+                "op": "like",
+                "value": "%8030000003"
+              }
+            ]
+          },
+          "renew_on": {
+            "filters": [
+              {
+                "column": "phone",
+                "op": "eq",
+                "value": "08030000003"
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}
