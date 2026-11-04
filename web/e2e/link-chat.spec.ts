@@ -54,12 +54,30 @@ test("two linked businesses talk", async ({ browser }) => {
   await expect(row).toContainText("1");
   await axeBoth(buyer, "/chat with a conversation");
 
+  // The filters: Unread shows it, Archived (none yet) does not, All again.
+  await buyer.getByRole("button", { name: "Unread (1)" }).click();
+  await expect(row).toBeVisible();
+  await buyer.getByRole("button", { name: "Archived (0)" }).click();
+  await expect(row).toHaveCount(0);
+  await expect(buyer.getByText("No archived chats.")).toBeVisible();
+  await buyer.getByRole("button", { name: "All", exact: true }).click();
+  await expect(row).toBeVisible();
+
   // Opened: the bubble, read; Dangote's double tick.
   await row.click();
   const pane = buyer.getByTestId("chat-pane");
   await expect(pane.getByTestId("chat-message")).toContainText("Good morning, rice is back in stock");
   await expect(pane.getByTestId("chat-message")).toContainText("Dangote");
   await axeBoth(buyer, "an open conversation");
+
+  // Contact info: the avatar opens the business's panel; Escape closes it.
+  await pane.getByRole("button", { name: `About ${sellerName}` }).click();
+  const info = pane.getByTestId("chat-info");
+  await expect(info).toContainText("They supply you");
+  await expect(info.getByRole("button", { name: "Mute notifications" })).toBeVisible();
+  await axeBoth(buyer, "the contact info");
+  await buyer.keyboard.press("Escape");
+  await expect(info).toHaveCount(0);
   await expect(async () => {
     const out = await (await seller.request.get(`/v1/link-chats/${link}/messages`, { headers: H })).json();
     expect(out.messages[0].read_at).toBeTruthy();

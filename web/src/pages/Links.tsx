@@ -243,7 +243,8 @@ export function ChatPage() {
   useEffect(() => {
     if (linksSeen) reloadConvs();
   }, [linksSeen, reloadConvs]);
-  const [archived, setArchived] = useState(false);
+  const [filter, setFilter] = useState<"all" | "unread" | "archived">("all");
+  const archived = filter === "archived";
   const [foundMessages, setFoundMessages] = useState<LinkMessage[]>();
   const settings = useLoad(() => get<LinkSettings>("/v1/link-settings"), []);
   const [q, setQ] = useState("");
@@ -284,7 +285,11 @@ export function ChatPage() {
   const open = all.find((c) => c.link === openID);
   // The person's own conversation with Taskiem, pinned at the top (§5.5).
   const taskiemOpen = openID === "taskiem";
-  const listed = all.filter((c) => c.archived === archived);
+  const unreadCount = all.filter((c) => !c.archived && c.unread > 0).length;
+  const archivedCount = all.filter((c) => c.archived).length;
+  const listed = all.filter(
+    (c) => c.archived === archived && (filter !== "unread" || c.unread > 0),
+  );
   const nameOf = (link: string) =>
     all.find((c) => c.link === link)?.name ?? "They";
   const roleOf = (link: string) => {
@@ -323,6 +328,27 @@ export function ChatPage() {
               />
             </label>
           </div>
+          {!searching && all.length > 0 && (
+            <div className="chat-chips" role="group" aria-label="Show">
+              {(
+                [
+                  ["all", "All"],
+                  ["unread", unreadCount ? `Unread (${unreadCount})` : "Unread"],
+                  ["archived", `Archived (${archivedCount})`],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  className="chat-chip"
+                  aria-pressed={filter === key}
+                  onClick={() => setFilter(key)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           <ErrorBox error={view.error ?? act.error ?? searchError} />
           {!searching && !archived && (
             <Items label="Your conversation with Taskiem">
@@ -480,18 +506,16 @@ export function ChatPage() {
                     <h2 className="grow" style={{ margin: 0 }}>
                       {archived ? "Archived" : "Chats"}
                     </h2>
-                    {(archived || all.some((c) => c.archived)) && (
-                      <button
-                        type="button"
-                        className="small"
-                        onClick={() => setArchived(!archived)}
-                      >
-                        {archived
-                          ? "Back to chats"
-                          : `Archived (${all.filter((c) => c.archived).length})`}
-                      </button>
-                    )}
                   </div>
+                  {listed.length === 0 && (
+                    <p className="hint">
+                      {archived
+                        ? "No archived chats."
+                        : filter === "unread"
+                          ? "Nothing unread."
+                          : "No chats."}
+                    </p>
+                  )}
                   <Items label={archived ? "Archived chats" : "Chats"}>
                     {listed.map((c) => (
                       <Item
@@ -599,6 +623,15 @@ export function ChatPage() {
             others={all}
             onBack={() => setParams({})}
             onChanged={reloadConvs}
+            link={view.data?.links.find((l) => l.id === open.link)}
+            onEndLink={
+              manage
+                ? (l) => {
+                    answer(l, "end", "Link ended");
+                    reloadConvs();
+                  }
+                : undefined
+            }
           />
         )}
       </div>

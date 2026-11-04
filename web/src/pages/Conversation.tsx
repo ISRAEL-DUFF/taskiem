@@ -29,6 +29,7 @@ import { Icon } from "../icons";
 import { MicButton, RecordingBar, useVoiceNote } from "./VoiceNote";
 import { MentionList, MentionText, useMentions } from "./Mentions";
 import { priceWords, type PriceItem } from "../lib/pricelists";
+import { roleLine, type BusinessLink } from "../lib/links";
 import { ErrorBox, fmtTime, Modal, Skeleton, useAction, useLoad } from "../ui";
 
 // The conversation with a linked business (business links L3; §5.5): the
@@ -516,10 +517,16 @@ export function ConversationPane({
   onBack,
   onChanged,
   others = [],
+  link,
+  onEndLink,
 }: {
   conv: Conversation;
   onBack: () => void;
   onChanged: () => void;
+  /** The link with this business, for the contact panel. */
+  link?: BusinessLink;
+  /** Ends the link (only for a member who may manage links). */
+  onEndLink?: (l: BusinessLink) => void;
   /** The other conversations, to forward to. */
   others?: Conversation[];
 }) {
@@ -528,6 +535,13 @@ export function ConversationPane({
   const [messages, setMessages] = useState<LinkMessage[]>();
   const [typing, setTyping] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
+  useEffect(() => {
+    if (!infoOpen) return;
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setInfoOpen(false);
+    document.addEventListener("keydown", esc);
+    return () => document.removeEventListener("keydown", esc);
+  }, [infoOpen]);
   useEffect(() => {
     if (!menuOpen) return;
     const esc = (e: KeyboardEvent) => e.key === "Escape" && setMenuOpen(false);
@@ -731,9 +745,15 @@ export function ConversationPane({
         >
           <Icon name="back" />
         </button>
-        <span className="chat-avatar" aria-hidden="true">
+        <button
+          type="button"
+          className="chat-avatar"
+          aria-label={`About ${conv.name}`}
+          aria-expanded={infoOpen}
+          onClick={() => setInfoOpen(!infoOpen)}
+        >
           {conv.name.slice(0, 1).toUpperCase()}
-        </span>
+        </button>
         <h2>
           {conv.name}
           {typing && (
@@ -756,6 +776,12 @@ export function ConversationPane({
             </button>
             {menuOpen && (
               <div className="chat-menu" data-testid="chat-menu">
+                <button
+                  type="button"
+                  onClick={() => (setMenuOpen(false), setInfoOpen(true))}
+                >
+                  Contact info
+                </button>
                 <button
                   type="button"
                   disabled={act.busy}
@@ -996,6 +1022,92 @@ export function ConversationPane({
           onClose={() => setForwarding(undefined)}
           onSent={onChanged}
         />
+      )}
+      {infoOpen && (
+        <aside
+          className="chat-info"
+          aria-label={`About ${conv.name}`}
+          data-testid="chat-info"
+        >
+          <div className="chat-info-head">
+            <h3>Contact info</h3>
+            <button
+              type="button"
+              className="icon-button"
+              aria-label="Close contact info"
+              onClick={() => setInfoOpen(false)}
+            >
+              <Icon name="close" />
+            </button>
+          </div>
+          <div className="chat-info-body">
+            <span className="chat-avatar big" aria-hidden="true">
+              {conv.name.slice(0, 1).toUpperCase()}
+            </span>
+            <p className="chat-info-name">{conv.name}</p>
+            {link && <p className="hint">{roleLine(link.role)}</p>}
+            {link?.state === "active" && link.answered_at && (
+              <p className="hint">Linked {fmtTime(link.answered_at)}</p>
+            )}
+            {conv.state !== "active" && (
+              <p className="hint">The link has ended.</p>
+            )}
+            {can("chat.trade") && (
+              <div className="chat-info-actions">
+                <button
+                  type="button"
+                  disabled={act.busy}
+                  onClick={() =>
+                    settings(
+                      { pinned: !conv.pinned },
+                      conv.pinned ? "Unpinned" : "Pinned",
+                    )
+                  }
+                >
+                  {conv.pinned ? "Unpin this chat" : "Pin this chat"}
+                </button>
+                <button
+                  type="button"
+                  disabled={act.busy}
+                  onClick={() =>
+                    settings(
+                      { muted: !conv.muted },
+                      conv.muted ? "Unmuted" : "Muted",
+                    )
+                  }
+                >
+                  {conv.muted ? "Unmute notifications" : "Mute notifications"}
+                </button>
+                <button
+                  type="button"
+                  disabled={act.busy}
+                  onClick={() =>
+                    settings(
+                      { archived: !conv.archived },
+                      conv.archived ? "Unarchived" : "Archived",
+                    )
+                  }
+                >
+                  {conv.archived ? "Unarchive this chat" : "Archive this chat"}
+                </button>
+                {link && link.state === "active" && onEndLink && (
+                  <button
+                    type="button"
+                    className="danger"
+                    disabled={act.busy}
+                    onClick={() =>
+                      confirm(
+                        `End the link with ${link.name}? What passed between you stays on both sides.`,
+                      ) && onEndLink(link)
+                    }
+                  >
+                    End link
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </aside>
       )}
     </section>
   );

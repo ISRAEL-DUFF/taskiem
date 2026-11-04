@@ -1768,3 +1768,17 @@ fieldset.path-set legend { font-size: 12.5px; font-weight: 600; padding: 0 4px; 
   .chat-mode .main { padding-top: env(safe-area-inset-top); }
   .composer textarea { font-size: 16px; }
 }
+.chat-chips { display: flex; gap: 8px; flex-wrap: wrap; padding: 4px 0 8px; }
+.chat-chip { border-radius: 999px; padding: 4px 12px; font-size: 13px; background: var(--panel); border: 1px solid var(--border); color: var(--text); min-height: 32px; }
+.chat-chip[aria-pressed="true"] { background: var(--tint); color: var(--tint-text); border-color: transparent; font-weight: 600; }
+button.chat-avatar { border: 0; padding: 0; cursor: pointer; }
+.chat-pane { position: relative; }
+.chat-info { position: absolute; inset: 0 0 0 auto; width: min(360px, 100%); z-index: 10; background: var(--panel); border-left: 1px solid var(--border); display: flex; flex-direction: column; box-shadow: var(--shadow-md); }
+.chat-info-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.chat-info-head h3 { margin: 0; flex: 1; font-size: 16px; }
+.chat-info-body { padding: 20px 16px; display: flex; flex-direction: column; align-items: center; gap: 4px; overflow-y: auto; }
+.chat-avatar.big { width: 96px; height: 96px; font-size: 36px; }
+.chat-info-name { margin: 8px 0 0; font-size: 18px; font-weight: 600; text-align: center; overflow-wrap: anywhere; }
+.chat-info-body .hint { text-align: center; }
+.chat-info-actions { align-self: stretch; display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+.chat-info-actions button { justify-content: center; min-height: 44px; }
