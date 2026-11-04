@@ -60,7 +60,11 @@ function serve(all: Msg[]) {
     const q = new URL(route.request().url()).searchParams;
     const limit = Number(q.get("limit") ?? 50);
     let out: Msg[];
-    if (q.get("around")) {
+    if (q.get("q"))
+      out = all
+        .filter((m) => String(m.body).includes(q.get("q")!))
+        .slice(-limit);
+    else if (q.get("around")) {
       const at = all.findIndex((m) => m.id === q.get("around"));
       if (at < 0)
         return route.fulfill({
@@ -73,7 +77,7 @@ function serve(all: Msg[]) {
     } else if (q.get("before"))
       out = all.filter((m) => m.created_at < q.get("before")!).slice(-limit);
     else if (q.get("after"))
-      out = all.filter((m) => m.created_at > q.get("after")!).slice(-limit);
+      out = all.filter((m) => m.created_at > q.get("after")!).slice(0, limit);
     else out = all.slice(-limit);
     await route.fulfill({
       contentType: "application/json",
@@ -265,4 +269,132 @@ test("a quote goes to its message, and a search result opens at its message", as
   await expect(
     buyer.getByTestId("chat-pane").locator('[data-msg="' + idOf(40) + '"]'),
   ).toHaveClass(/flash/);
+});
+
+test("more than a page arriving while the reader was away leaves no gap", async ({
+  browser,
+}) => {
+  const { buyer, link } = await linked(browser);
+  const all = conversation(link, 60);
+  await buyer.route(
+    new RegExp(`/v1/link-chats/${link}/messages(\\?.*)?$`),
+    serve(all),
+  );
+  await buyer.goto(`/chat?with=${link}`);
+  const pane = buyer.getByTestId("chat-pane");
+  await expect(pane.getByText("Message 60", { exact: true })).toBeVisible();
+  // 130 more at once (as when a hidden tab wakes): three pages.
+  all.push(...conversation(link, 190).slice(60));
+  await expect(pane.getByText("Message 190", { exact: true })).toBeVisible({
+    timeout: 15_000,
+  });
+  for (const n of [61, 110, 111, 160, 161, 189])
+    await expect(
+      pane.getByText(`Message ${n}`, { exact: true }),
+    ).toBeAttached();
+});
+
+test("a result of the search in a conversation shows the message in place", async ({
+  browser,
+}) => {
+  const { buyer, link } = await linked(browser);
+  await buyer.route(
+    new RegExp(`/v1/link-chats/${link}/messages(\\?.*)?$`),
+    serve(conversation(link, 120)),
+  );
+  await buyer.goto(`/chat?with=${link}`);
+  const pane = buyer.getByTestId("chat-pane");
+  await expect(pane.getByText("Message 120", { exact: true })).toBeVisible();
+  await pane.getByTestId("chat-search").fill("Message 12");
+  await expect(pane.getByTestId("chat-message")).toHaveCount(2); // 12 and 120
+  await axeBoth(buyer, "search results with Show");
+  await pane.getByTestId("chat-show").first().click();
+  await expect(pane.getByTestId("chat-search")).toHaveValue("");
+  await expect(pane.getByText("Message 12", { exact: true })).toBeInViewport();
+  await expect(pane.locator('[data-msg="' + idOf(12) + '"]')).toHaveClass(
+    /flash/,
+  );
+  await pageStill(buyer);
+});
+
+// The Taskiem conversation scrolls the same way (it is the same thread code).
+type TMsg = {
+  id: string;
+  channel: string;
+  inbound: boolean;
+  kind: string;
+  text: string;
+  created_at: string;
+};
+const taskiemChat = (n: number): TMsg[] =>
+  Array.from({ length: n }, (_, k) => {
+    const i = k + 1;
+    return {
+      id: idOf(i),
+      channel: "web",
+      inbound: i % 2 === 1,
+      kind: "text",
+      text: `Taskiem line ${i}`,
+      created_at: new Date(T0 + i * 60_000).toISOString(),
+    };
+  });
+const serveTaskiem = (all: TMsg[]) => async (route: Route) => {
+  if (route.request().method() !== "GET") return route.continue();
+  const q = new URL(route.request().url()).searchParams;
+  let out: TMsg[];
+  if (q.get("before"))
+    out = all.filter((m) => m.created_at < q.get("before")!).slice(-50);
+  else if (q.get("after"))
+    out = all.filter((m) => m.created_at > q.get("after")!).slice(0, 200);
+  else out = all.slice(-50);
+  await route.fulfill({
+    contentType: "application/json",
+    body: JSON.stringify({ messages: out }),
+  });
+};
+
+test("the Taskiem conversation loads older messages and follows new ones only at the bottom", async ({
+  browser,
+}) => {
+  const stamp = letters();
+  const page = await (
+    await browser.newContext({ viewport: { width: 390, height: 844 } })
+  ).newPage();
+  await signUp(page, `Ada Kitchen ${stamp}`);
+  const all = taskiemChat(120);
+  await page.route(/\/v1\/taskiem-chat(\?.*)?$/, serveTaskiem(all));
+  await page.goto("/chat?with=taskiem");
+  const pane = page.getByTestId("taskiem-pane");
+  await expect(
+    pane.getByText("Taskiem line 120", { exact: true }),
+  ).toBeVisible();
+  await expect(pane.getByTestId("taskiem-message")).toHaveCount(50);
+  const stream = page.getByTestId("taskiem-stream");
+  const fromBottom = () =>
+    stream.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight);
+  expect(await fromBottom()).toBeLessThan(5);
+
+  // Older ones come at the top, to the first message.
+  await stream.evaluate((el) => (el.scrollTop = 0));
+  await expect(pane.getByTestId("taskiem-message")).toHaveCount(100);
+  await stream.evaluate((el) => (el.scrollTop = 0));
+  await expect(pane.getByTestId("taskiem-message")).toHaveCount(120);
+  await expect(pane.getByTestId("taskiem-top")).toHaveCount(0);
+
+  // A new one does not move a reader who is up the page; a button counts it.
+  await stream.evaluate((el) => (el.scrollTop = el.scrollHeight / 2));
+  const held = await stream.evaluate((el) => el.scrollTop);
+  all.push(
+    ...taskiemChat(121)
+      .slice(120)
+      .map((m) => ({ ...m, inbound: false })),
+  );
+  const jump = pane.getByTestId("chat-jump");
+  await expect(jump).toContainText("1 new message", { timeout: 15_000 });
+  expect(
+    Math.abs((await stream.evaluate((el) => el.scrollTop)) - held),
+  ).toBeLessThan(3);
+  await axeBoth(page, "the Taskiem conversation with its button");
+  await jump.click();
+  expect(await fromBottom()).toBeLessThan(5);
 });

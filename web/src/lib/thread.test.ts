@@ -80,6 +80,25 @@ describe("followNew", () => {
       kind: "bottom",
     });
   });
+  it("takes who sent a message from isMine (the Taskiem conversation's inbound)", () => {
+    type T = { id: string; created_at: string; inbound: boolean };
+    const list: T[] = [
+      { id: "a", created_at: "2026-01-01T10:00:00Z", inbound: false },
+      { id: "b", created_at: "2026-01-01T10:05:00Z", inbound: true },
+    ];
+    const mine = (m: T) => m.inbound;
+    expect(followNew("2026-01-01T10:00:00Z", list, false, mine)).toEqual({
+      kind: "bottom",
+    });
+    expect(
+      followNew(
+        "2026-01-01T10:00:00Z",
+        [list[0]!, { ...list[1]!, inbound: false }],
+        false,
+        mine,
+      ),
+    ).toEqual({ kind: "pill", count: 1 });
+  });
   it("does nothing for older messages paged in, or the first load", () => {
     const paged = [msg("z", "2025-12-31T09:00:00Z"), ...old];
     expect(followNew("2026-01-01T10:00:00Z", paged, false)).toEqual({

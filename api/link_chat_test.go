@@ -237,6 +237,16 @@ func TestLinkMessagesAround(t *testing.T) {
 	if want := "five six seven"; strings.Join(got, " ") != want {
 		t.Errorf("seller around seven: %v, want %s", got, want)
 	}
+	// Following: what is newer than a message, oldest first, a page at a
+	// time, so a reader away for longer than a page misses none of it.
+	var times []string
+	for _, m := range buyer.must(200, "GET", "/v1/link-chats/"+link+"/messages", nil)["messages"].([]any) {
+		times = append(times, m.(map[string]any)["created_at"].(string))
+	}
+	got = bodies(buyer.must(200, "GET", "/v1/link-chats/"+link+"/messages?after="+times[1]+"&limit=2", nil))
+	if want := "three four"; strings.Join(got, " ") != want {
+		t.Errorf("after two, two at a time: %v, want %s", got, want)
+	}
 	// Not a message here, and not an id.
 	buyer.must(404, "GET", "/v1/link-chats/"+link+"/messages?around=0192e2e0-0000-7000-8000-000000000999", nil)
 	buyer.must(400, "GET", "/v1/link-chats/"+link+"/messages?around=nope", nil)

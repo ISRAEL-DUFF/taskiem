@@ -2,7 +2,6 @@ import {
   Fragment,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -31,7 +30,9 @@ import { Icon } from "../icons";
 import { MicButton, RecordingBar, useVoiceNote } from "./VoiceNote";
 import { MentionList, MentionText, useMentions } from "./Mentions";
 import { priceWords, type PriceItem } from "../lib/pricelists";
-import { atBottom, firstUnread, followNew, scrollWithin } from "../lib/thread";
+import { firstUnread } from "../lib/thread";
+import { useThread } from "../lib/useThread";
+import { ThreadJump } from "./ThreadParts";
 import { roleLine, type BusinessLink, type LinkCard } from "../lib/links";
 import { ErrorBox, fmtTime, Modal, Skeleton, useAction, useLoad } from "../ui";
 
@@ -331,6 +332,7 @@ function Bubble({
   onHide,
   onJump,
   flash = false,
+  onShow,
 }: {
   m: LinkMessage;
   other: string;
@@ -344,6 +346,8 @@ function Bubble({
   onJump?: (id: string) => void;
   /** Shown for a moment after a jump lands on it. */
   flash?: boolean;
+  /** A search result: shows it in the conversation, around it. */
+  onShow?: (id: string) => void;
 }) {
   const card = m.kind === "card" ? m.card : undefined;
   const [more, setMore] = useState(false);
@@ -522,6 +526,17 @@ function Bubble({
         </span>
       )}
       <span className="meta">
+        {onShow && (
+          <button
+            type="button"
+            className="reply-btn"
+            data-testid="chat-show"
+            onClick={() => onShow(m.id)}
+          >
+            Show
+            <span className="sr-only"> in the conversation</span>
+          </button>
+        )}
         {canReply && (
           <button
             type="button"
@@ -673,20 +688,19 @@ export function ConversationPane({
   // reader nears the top; the view follows new messages only while the
   // reader is at the bottom; "N unread messages" marks where they begin;
   // a quote, or a search result, jumps to its message.
-  const stream = useRef<HTMLDivElement>(null);
-  const topMark = useRef<HTMLDivElement>(null);
-  const stick = useRef(true);
-  const placed = useRef(false);
-  const anchor = useRef<{ h: number; top: number } | null>(null);
-  const prevNewest = useRef<string>(undefined);
-  const jumpTo = useRef<string>(undefined);
   const loadingOlder = useRef(false);
+  const loadOlderRef = useRef<() => void>(() => undefined);
+  const olderCb = useCallback(() => loadOlderRef.current(), []);
   const [hasOlder, setHasOlder] = useState(false);
   const [detached, setDetached] = useState(false); // not at the newest page
-  const [away, setAway] = useState(false);
-  const [newCount, setNewCount] = useState(0);
   const [unread, setUnread] = useState<{ id: string; count: number }>();
-  const [flashId, setFlashId] = useState<string>();
+  const thread = useThread({
+    items: messages,
+    isMine: (m) => m.mine,
+    hasOlder,
+    loadOlder: olderCb,
+  });
+  const { stream, topMark, flashId } = thread;
   const last = messages?.[messages.length - 1]?.created_at;
 
   // What is newer, every few seconds (while the newest page is the one
@@ -710,6 +724,10 @@ export function ConversationPane({
       if (after && out.messages.length === 0) return;
       setMessages((cur) => merge(cur ?? [], out.messages));
       await markRead(out.messages);
+      // A full page: there may be more after it (the reader was away).
+      const newest = out.messages[out.messages.length - 1];
+      if (after && out.messages.length >= PAGE && newest)
+        await pull(newest.created_at);
     },
     [path, markRead],
   );
@@ -720,14 +738,13 @@ export function ConversationPane({
       `${path}/messages`,
     );
     setTyping(!!out.typing);
-    placed.current = false;
-    prevNewest.current = undefined;
+    thread.reset();
     setDetached(false);
     setHasOlder(out.messages.length >= PAGE);
     setUnread(firstUnread(out.messages));
-    setNewCount(0);
     setMessages(out.messages);
     await markRead(out.messages);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path, markRead]);
   const openAt = useCallback(
     async (id: string) => {
@@ -735,9 +752,7 @@ export function ConversationPane({
         `${path}/messages?around=${encodeURIComponent(id)}&limit=${PAGE}`,
       );
       const at = out.messages.findIndex((m) => m.id === id);
-      placed.current = false;
-      prevNewest.current = undefined;
-      jumpTo.current = id;
+      thread.reset(id);
       // Newer messages beyond this window: the view is detached from the
       // newest page until the reader jumps to the latest.
       // (A full half of newer ones, or of older ones, means there may be more.)
@@ -745,9 +760,9 @@ export function ConversationPane({
       setDetached(at >= 0 && out.messages.length - at - 1 >= PAGE - half);
       setHasOlder(at >= half);
       setUnread(undefined);
-      setNewCount(0);
       setMessages(out.messages);
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [path],
   );
   useEffect(() => {
@@ -767,7 +782,7 @@ export function ConversationPane({
       );
       if (out.messages.length < PAGE) setHasOlder(false);
       if (out.messages.length > 0) {
-        anchor.current = { h: el.scrollHeight, top: el.scrollTop };
+        thread.keepPlace();
         setMessages((cur) => merge(cur ?? [], out.messages));
       }
     } catch (e) {
@@ -775,44 +790,33 @@ export function ConversationPane({
     } finally {
       loadingOlder.current = false;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, path]);
-  // The top of the thread comes into view: the next page.
-  const hasMessages = (messages?.length ?? 0) > 0;
-  useEffect(() => {
-    const mark = topMark.current;
-    if (
-      !mark ||
-      !hasOlder ||
-      !hasMessages ||
-      typeof IntersectionObserver === "undefined"
-    )
-      return;
-    const io = new IntersectionObserver(
-      ([e]) => e?.isIntersecting && void loadOlder(),
-      { root: stream.current, rootMargin: "200px 0px 0px 0px" },
-    );
-    io.observe(mark);
-    return () => io.disconnect();
-  }, [hasOlder, hasMessages, loadOlder]);
+  loadOlderRef.current = () => void loadOlder();
   const toLatest = () => {
     setError(undefined);
     openNewest().catch(setError);
   };
   const jump = (id: string) => {
-    const el = stream.current?.querySelector(`[data-msg="${id}"]`);
-    if (el) {
-      if (stream.current) scrollWithin(stream.current, el, "center");
-      setFlashId(id);
-    } else
+    if (!thread.show(id))
       openAt(id).catch(() =>
         setError(new Error("That message is no longer here.")),
       );
   };
+  // A search result: close the search, then go to the message in place.
+  const [showing, setShowing] = useState<string>();
+  const showFound = (id: string) => {
+    setQ("");
+    setFound(undefined);
+    setShowing(id);
+  };
   useEffect(() => {
-    if (!flashId) return;
-    const t = setTimeout(() => setFlashId(undefined), 1800);
-    return () => clearTimeout(t);
-  }, [flashId]);
+    if (!showing || found) return;
+    setShowing(undefined);
+    jump(showing);
+    // jump is stable enough: it reads the thread's refs and openAt.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showing, found]);
   useEffect(() => {
     const t = setInterval(() => {
       if (document.visibilityState === "visible" && !detached)
@@ -836,51 +840,6 @@ export function ConversationPane({
     }, EVERY_MS * 3);
     return () => clearInterval(t);
   }, [messages, path, detached]);
-  // Where the view goes when the messages change: after a page of older
-  // ones, where the reader was; at the first showing, to the message jumped
-  // to, the first unread, or the end; later, to the end only if the reader
-  // was there (or sent the message), else a count on the button.
-  useLayoutEffect(() => {
-    const el = stream.current;
-    if (!el || !messages) return;
-    if (anchor.current) {
-      el.scrollTop = anchor.current.top + (el.scrollHeight - anchor.current.h);
-      anchor.current = null;
-      return;
-    }
-    const newest = messages[messages.length - 1]?.created_at;
-    if (!placed.current) {
-      placed.current = true;
-      const id = jumpTo.current;
-      jumpTo.current = undefined;
-      const target = id
-        ? el.querySelector(`[data-msg="${id}"]`)
-        : el.querySelector("[data-unread]");
-      if (target) {
-        scrollWithin(el, target, id ? "center" : "start");
-        if (id) setFlashId(id);
-      } else el.scrollTop = el.scrollHeight;
-      stick.current = atBottom(el);
-      setAway(!stick.current);
-      prevNewest.current = newest;
-      return;
-    }
-    const f = followNew(prevNewest.current, messages, stick.current);
-    if (f.kind === "bottom") {
-      el.scrollTop = el.scrollHeight;
-      setNewCount(0);
-    } else if (f.kind === "pill") setNewCount((n) => n + f.count);
-    prevNewest.current = newest;
-  }, [messages]);
-  const onScroll = () => {
-    const el = stream.current;
-    if (!el) return;
-    const near = atBottom(el);
-    stick.current = near;
-    setAway(!near);
-    if (near) setNewCount(0);
-  };
-
   const choose = (f: File | undefined) => {
     setFileError(undefined);
     if (!f) return;
@@ -1084,8 +1043,11 @@ export function ConversationPane({
           className="chat-stream"
           aria-live="polite"
           data-testid="chat-stream"
+          role="log"
+          tabIndex={0}
+          aria-label="Chat history"
           ref={stream}
-          onScroll={onScroll}
+          onScroll={thread.onScroll}
         >
           {hasOlder && !found && shown && shown.length > 0 && (
             <div
@@ -1126,6 +1088,7 @@ export function ConversationPane({
                       canReply={write}
                       onReply={setReply}
                       onJump={found ? undefined : jump}
+                      onShow={found ? showFound : undefined}
                       flash={flashId === m.id}
                       latest={newest.has(m.id)}
                       onDone={() => pull(last).catch(setError)}
@@ -1142,33 +1105,12 @@ export function ConversationPane({
             ))
           )}
         </div>
-        {!found && (away || detached) && (
-          <button
-            type="button"
-            className="chat-jump"
-            data-testid="chat-jump"
-            onClick={() => {
-              if (detached) toLatest();
-              else {
-                stream.current?.scrollTo({ top: stream.current.scrollHeight });
-                setNewCount(0);
-              }
-            }}
-          >
-            <Icon name="down" />
-            <span className="sr-only">
-              {detached
-                ? "Jump to the latest messages"
-                : newCount > 0
-                  ? `${newCount} new ${newCount === 1 ? "message" : "messages"}: scroll to the newest`
-                  : "Scroll to the newest messages"}
-            </span>
-            {newCount > 0 && (
-              <span className="unread-count" aria-hidden="true">
-                {newCount}
-              </span>
-            )}
-          </button>
+        {!found && (thread.away || detached) && (
+          <ThreadJump
+            detached={detached}
+            count={thread.newCount}
+            onClick={() => (detached ? toLatest() : thread.toBottom())}
+          />
         )}
       </div>
       {write ? (

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useThread } from "../lib/useThread";
+import { ThreadJump } from "./ThreadParts";
 import { get, post, upload } from "../api";
 import type { Conversation } from "../lib/linkchat";
 import { priceWords, type SupplierPrices } from "../lib/pricelists";
@@ -20,6 +22,8 @@ import { ErrorBox, fmtTime, Skeleton, useAction, useLoad } from "../ui";
 // the left; the buttons of Taskiem's newest answer press as on the phone.
 
 const EVERY_MS = 5000;
+/** The newest page, and a page older, as the API gives them. */
+const PAGE = 50;
 const CHANNEL: Record<string, string> = {
   whatsapp: "WhatsApp",
   telegram: "Telegram",
@@ -75,8 +79,19 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
     setFileError,
   );
   const act = useAction();
-  const end = useRef<HTMLDivElement>(null);
   const last = messages?.[messages.length - 1]?.created_at;
+  // Scrolls as the other conversations do (lib/useThread): older messages
+  // load near the top, new ones are followed only at the bottom.
+  const [hasOlder, setHasOlder] = useState(false);
+  const loadingOlder = useRef(false);
+  const loadOlderRef = useRef<() => void>(() => undefined);
+  const olderCb = useCallback(() => loadOlderRef.current(), []);
+  const thread = useThread({
+    items: messages,
+    isMine: (m) => m.inbound,
+    hasOlder,
+    loadOlder: olderCb,
+  });
 
   const pull = useCallback(async (after?: string) => {
     const out = await get<{ messages: TaskiemMessage[] }>(
@@ -84,10 +99,43 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
     );
     if (after && out.messages.length === 0) return;
     setMessages((cur) => mergeTaskiem(cur ?? [], out.messages));
+    // A full page of what is newer: there may be more (the reader was away).
+    const newest = out.messages[out.messages.length - 1];
+    if (after && out.messages.length >= 200 && newest)
+      await pull(newest.created_at);
   }, []);
+  // The newest page: the view is placed at its end.
   useEffect(() => {
-    pull().catch(setError);
-  }, [pull]);
+    get<{ messages: TaskiemMessage[] }>("/v1/taskiem-chat")
+      .then((out) => {
+        thread.reset();
+        setHasOlder(out.messages.length >= PAGE);
+        setMessages(mergeTaskiem([], out.messages));
+      })
+      .catch(setError);
+    // The thread's reset is stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const loadOlder = async () => {
+    const first = messages?.[0];
+    if (!first || loadingOlder.current) return;
+    loadingOlder.current = true;
+    try {
+      const out = await get<{ messages: TaskiemMessage[] }>(
+        `/v1/taskiem-chat?before=${encodeURIComponent(first.created_at)}`,
+      );
+      if (out.messages.length < PAGE) setHasOlder(false);
+      if (out.messages.length > 0) {
+        thread.keepPlace();
+        setMessages((cur) => mergeTaskiem(cur ?? [], out.messages));
+      }
+    } catch (e) {
+      setError(e);
+    } finally {
+      loadingOlder.current = false;
+    }
+  };
+  loadOlderRef.current = () => void loadOlder();
   useEffect(() => {
     const t = setInterval(() => {
       if (document.visibilityState === "visible")
@@ -95,9 +143,6 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
     }, EVERY_MS);
     return () => clearInterval(t);
   }, [pull, last]);
-  useEffect(() => {
-    end.current?.scrollIntoView?.({ block: "end" });
-  }, [messages?.length]);
 
   const say = (body: { text?: string; reply?: string }) =>
     void act
@@ -175,78 +220,96 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
         <strong>help</strong> to see what it can do.
       </p>
       <ErrorBox error={error ?? act.error ?? fileError} />
-      <div
-        className="chat-stream"
-        aria-live="polite"
-        data-testid="taskiem-stream"
-      >
-        {!messages ? (
-          <Skeleton rows={3} label="Loading the conversation…" />
-        ) : messages.length === 0 ? (
-          <p className="hint" style={{ alignSelf: "center" }}>
-            Nothing yet. Say <strong>status</strong> to see how the business is
-            doing.
-          </p>
-        ) : (
-          groups(messages).map((g) => (
-            <div key={g.day} style={{ display: "contents" }}>
-              <span className="chat-day">{g.day}</span>
-              {g.messages.map((m, i) => {
-                const pressable = live === `${m.id}@${m.created_at}`;
-                return (
-                  <div
-                    key={`${m.id}-${i}`}
-                    className={`bubble${m.inbound ? " mine" : ""}`}
-                    data-testid="taskiem-message"
-                    data-mine={m.inbound}
-                  >
-                    {!m.inbound && <span className="who">Taskiem</span>}
-                    <span className="text">
-                      {boldParts(m.text).map((p, k) =>
-                        p.bold ? <strong key={k}>{p.text}</strong> : p.text,
-                      )}
-                    </span>
-                    {m.buttons && m.buttons.length > 0 && (
-                      <span className="row-actions" style={{ marginTop: 6 }}>
-                        {m.buttons.map((b, j) =>
-                          pressable && b.id ? (
-                            <button
-                              key={j}
-                              type="button"
-                              className="small"
-                              disabled={act.busy}
-                              onClick={() =>
-                                say({ reply: b.id, text: b.title })
-                              }
-                            >
-                              {b.title}
-                            </button>
-                          ) : (
-                            <span key={j} className="chip">
-                              {b.title}
-                            </span>
-                          ),
+      <div className="chat-stream-wrap">
+        <div
+          className="chat-stream"
+          aria-live="polite"
+          data-testid="taskiem-stream"
+          role="log"
+          tabIndex={0}
+          aria-label="Chat history"
+          ref={thread.stream}
+          onScroll={thread.onScroll}
+        >
+          {hasOlder && messages && messages.length > 0 && (
+            <div
+              ref={thread.topMark}
+              className="chat-top"
+              data-testid="taskiem-top"
+              aria-hidden="true"
+            />
+          )}
+          {!messages ? (
+            <Skeleton rows={3} label="Loading the conversation…" />
+          ) : messages.length === 0 ? (
+            <p className="hint" style={{ alignSelf: "center" }}>
+              Nothing yet. Say <strong>status</strong> to see how the business
+              is doing.
+            </p>
+          ) : (
+            groups(messages).map((g) => (
+              <div key={g.day} className="chat-group">
+                <span className="chat-day">{g.day}</span>
+                {g.messages.map((m, i) => {
+                  const pressable = live === `${m.id}@${m.created_at}`;
+                  return (
+                    <div
+                      key={`${m.id}-${i}`}
+                      className={`bubble${m.inbound ? " mine" : ""}`}
+                      data-msg={m.id}
+                      data-testid="taskiem-message"
+                      data-mine={m.inbound}
+                    >
+                      {!m.inbound && <span className="who">Taskiem</span>}
+                      <span className="text">
+                        {boldParts(m.text).map((p, k) =>
+                          p.bold ? <strong key={k}>{p.text}</strong> : p.text,
                         )}
                       </span>
-                    )}
-                    <span className="meta">
-                      {m.channel !== "web" && (
-                        <span>on {CHANNEL[m.channel] ?? m.channel} ·</span>
+                      {m.buttons && m.buttons.length > 0 && (
+                        <span className="row-actions" style={{ marginTop: 6 }}>
+                          {m.buttons.map((b, j) =>
+                            pressable && b.id ? (
+                              <button
+                                key={j}
+                                type="button"
+                                className="small"
+                                disabled={act.busy}
+                                onClick={() =>
+                                  say({ reply: b.id, text: b.title })
+                                }
+                              >
+                                {b.title}
+                              </button>
+                            ) : (
+                              <span key={j} className="chip">
+                                {b.title}
+                              </span>
+                            ),
+                          )}
+                        </span>
                       )}
-                      <time
-                        dateTime={m.created_at}
-                        title={fmtTime(m.created_at)}
-                      >
-                        {clock(m.created_at)}
-                      </time>
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          ))
+                      <span className="meta">
+                        {m.channel !== "web" && (
+                          <span>on {CHANNEL[m.channel] ?? m.channel} ·</span>
+                        )}
+                        <time
+                          dateTime={m.created_at}
+                          title={fmtTime(m.created_at)}
+                        >
+                          {clock(m.created_at)}
+                        </time>
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ))
+          )}
+        </div>
+        {thread.away && (
+          <ThreadJump count={thread.newCount} onClick={thread.toBottom} />
         )}
-        <div ref={end} />
       </div>
       {file && (
         <div className="composer-reply" data-testid="taskiem-attaching">

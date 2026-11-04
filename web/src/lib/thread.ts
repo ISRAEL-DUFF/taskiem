@@ -38,16 +38,17 @@ export type Follow =
  * in place, are not). The reader is taken to the bottom when they were there
  * or when they sent the new one; otherwise a count is shown for the pill.
  */
-export function followNew(
+export function followNew<T extends { created_at: string }>(
   prevNewest: string | undefined,
-  messages: LinkMessage[],
+  messages: T[],
   wasAtBottom: boolean,
+  isMine: (m: T) => boolean = (m) => (m as { mine?: boolean }).mine === true,
 ): Follow {
   if (!prevNewest) return { kind: "none" };
   const arrived = messages.filter((m) => m.created_at > prevNewest);
   if (arrived.length === 0) return { kind: "none" };
-  if (wasAtBottom || arrived.some((m) => m.mine)) return { kind: "bottom" };
-  return { kind: "pill", count: arrived.filter((m) => !m.mine).length };
+  if (wasAtBottom || arrived.some(isMine)) return { kind: "bottom" };
+  return { kind: "pill", count: arrived.filter((m) => !isMine(m)).length };
 }
 
 /**

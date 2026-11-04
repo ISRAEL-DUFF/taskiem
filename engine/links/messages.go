@@ -304,10 +304,18 @@ func MessagesTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, p Page) 
 		return messagesAroundTx(ctx, tx, tenant, link, *p.Around, p.Limit)
 	}
 	q := strings.TrimSpace(p.Q)
+	// Following (after, with no before): the oldest of what is newer, so a
+	// reader who was away for more than a page gets all of it, a page at a
+	// time. Otherwise the newest page (before a time, or at all).
+	following := p.After != nil && p.Before == nil && q == ""
+	order := `ORDER BY m.created_at DESC, m.id DESC`
+	if following {
+		order = `ORDER BY m.created_at, m.id`
+	}
 	rows, err := tx.Query(ctx, `SELECT `+messageCols+messageFrom+`
 		WHERE m.tenant_id = $1 AND m.link_id = $2 AND m.hidden_at IS NULL AND ($3::timestamptz IS NULL OR m.created_at < $3) AND ($4::timestamptz IS NULL OR m.created_at > $4)
 		  AND ($5 = '' OR m.body ILIKE '%' || $5 || '%' OR m.card ->> 'reference' ILIKE '%' || $5 || '%' OR m.card ->> 'note' ILIKE '%' || $5 || '%')
-		ORDER BY m.created_at DESC, m.id DESC LIMIT $6`, tenant, link, p.Before, p.After, likeSafe(q), p.Limit)
+		`+order+` LIMIT $6`, tenant, link, p.Before, p.After, likeSafe(q), p.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -315,7 +323,9 @@ func MessagesTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, p Page) 
 	if out == nil {
 		out = []Message{}
 	}
-	slices.Reverse(out) // the newest page, oldest first
+	if !following {
+		slices.Reverse(out) // the newest page, oldest first
+	}
 	return out, err
 }
 
