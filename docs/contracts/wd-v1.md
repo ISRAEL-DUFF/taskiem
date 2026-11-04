@@ -150,6 +150,19 @@ The run started by a confirmation has `trigger.body` (the inputs), `trigger.call
 
 CEL with the standard library and cel-go's strings, math, lists and optional-types extensions, plus `sum(list)`: the total of a list of numbers (an int when every element is an int, a double otherwise, 0 for an empty list; integer overflow is an error). Code written with the SDK uses it as a CEL string (`"=sum(steps.pay.output.map(r, r.amount))"`).
 
+### List blocks
+
+CEL can map, filter and test a list but cannot group one or match two lists on a key. Four more pure functions do (`engine/expr/lists.go`), so a `transform` step can total sales by area or pair each customer with their orders. A list may hold up to 10,000 rows, and a join up to 10,000 pairs, or the expression fails.
+
+| Function | Gives |
+| --- | --- |
+| `groupBy(rows, "area")` | `[{key, count, items}]`, one per distinct `area`, in order of first appearance. Rows with no `area` are one group whose `key` is `null` |
+| `uniqueBy(rows, "phone")` | The first row for each distinct `phone` |
+| `joinBy(left, right, "id", "customer_id")` | `[{left, right}]` for every pair whose keys match (an inner join) |
+| `leftJoinBy(left, right, "id", "customer_id")` | As `joinBy`, and a left row with no match comes once with `right` of `null` |
+
+A key matches another when both are the same text or the same number (`1` and `1.0` match; `"1"` and `1` do not). A missing or `null` key never matches in a join. Totals use `sum`: `groupBy(rows, "area").map(g, {"area": g.key, "total": sum(g.items.map(r, r.amount))})`. In the web builder they are the steps **Count and add up a list** and **Match two lists**. A workflow test shows them in use: `templates/tests/subscription-area-summary.test.json`.
+
 ## Durations
 
 `<n><unit>` repeated, units `ms`, `s`, `m`, `h`, `d`; for example `90s`, `1h30m`, `7d`.
