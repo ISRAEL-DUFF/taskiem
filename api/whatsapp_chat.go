@@ -911,6 +911,11 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 // waIntent does what a recognised command asks; false when it is not one
 // to act on here (yes or no with nothing to confirm, run without a name).
 func (s *Server) waIntent(ctx context.Context, c *chat, m lang.Match) (bool, error) {
+	// A command of a part of Taskiem the business turned off is not one
+	// (docs/spec/business-areas.md).
+	if !chatIntentOn(s.chatAreas(ctx, c), m.Intent) {
+		return false, nil
+	}
 	arg := strings.TrimSpace(m.Arg)
 	switch m.Intent {
 	case lang.IntentHelp:

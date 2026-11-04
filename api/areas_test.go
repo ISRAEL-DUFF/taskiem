@@ -3,6 +3,7 @@ package api_test
 import (
 	"bytes"
 	"context"
+	"net/url"
 	"sort"
 	"strings"
 	"testing"
@@ -344,4 +345,58 @@ func TestSignupKinds(t *testing.T) {
 
 	anon := &client{t: t, base: w.base}
 	anon.must(400, "POST", "/v1/signup", map[string]any{"tenant": "Odd Ltd", "email": "h@signup.test", "password": "correct horse battery", "accept_terms": true, "kinds": []string{"bank"}})
+}
+
+// TestAreasReviewFixes: a business with Linked businesses off is not found
+// by search and is not written to across a link; and money words in chat
+// stop being commands when Money is off.
+func TestAreasReviewFixes(t *testing.T) {
+	w := shopWorld(t)
+	seller := w.tenant(t, "Dangote Depot", "d@review.test")
+	buyer := w.tenant(t, "Ada Kitchen", "a@review.test")
+	sellerID := tenantOf(t, seller)
+	seller.must(200, "PUT", "/v1/link-settings", map[string]any{"findable": true})
+	find := func() int {
+		out := buyer.must(200, "GET", "/v1/links/search?q="+url.QueryEscape("dangote depot"), nil)
+		res, _ := out["results"].([]any)
+		return len(res)
+	}
+	if find() != 1 {
+		t.Fatalf("a findable business is not found")
+	}
+	buyer.must(201, "POST", "/v1/links", map[string]any{"business": sellerID, "role": "supplier"})
+	l := seller.must(200, "GET", "/v1/links", nil)["links"].([]any)[0].(map[string]any)
+	seller.must(200, "POST", "/v1/links/"+l["id"].(string)+"/accept", nil)
+	w.srv.WaitBackground()
+	linkID := buyer.must(200, "GET", "/v1/links", nil)["links"].([]any)[0].(map[string]any)["id"].(string)
+
+	// The seller turns Linked businesses off: not found by others, and a
+	// message to it says so, plainly, and writes nothing.
+	seller.must(200, "PUT", "/v1/settings/areas", map[string]any{"areas": map[string]bool{"links": false}})
+	if n := find(); n != 0 {
+		t.Errorf("a business with Linked businesses off is found: %d", n)
+	}
+	st, out := buyer.do("POST", "/v1/link-chats/"+linkID+"/messages", map[string]any{"text": "Is rice in stock?"})
+	if st != 409 || !strings.Contains(toJSON(out), "does not use Linked businesses") {
+		t.Errorf("a message to a business with Linked businesses off: %d %v", st, out)
+	}
+	// Back on: found, and the message goes.
+	seller.must(200, "PUT", "/v1/settings/areas", map[string]any{"areas": map[string]bool{"links": true}})
+	if find() != 1 {
+		t.Error("not found again after turning Linked businesses back on")
+	}
+	buyer.must(201, "POST", "/v1/link-chats/"+linkID+"/messages", map[string]any{"text": "Is rice in stock?"})
+
+	// Chat: "cash in 20,000 till" is a money-log command while Money is on,
+	// and not one when it is off.
+	verifyPhone(t, w.world, buyer, "phone", "business")
+	const num = "+2348010000077"
+	w.bind(t, buyer, num)
+	on := w.say(t, num, "cash in 20,000 till")
+	w.say(t, num, "no") // leave it: the next message starts fresh
+	buyer.must(200, "PUT", "/v1/settings/areas", map[string]any{"areas": map[string]bool{"money": false}})
+	off := w.say(t, num, "cash in 20,000 till")
+	if strings.Contains(on, "did not understand") || !strings.Contains(off, "did not understand") {
+		t.Errorf("cash in, Money on: %q, off: %q", on, off)
+	}
 }

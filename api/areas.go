@@ -302,8 +302,13 @@ func (s *Server) chatAreas(ctx context.Context, c *chat) areas.State {
 // person's language belongs to is on.
 func chatIntentOn(on areas.State, in lang.Intent) bool {
 	switch in {
-	case lang.IntentInvoice, lang.IntentExpense, lang.IntentCashIn, lang.IntentCashOut:
+	case lang.IntentInvoice, lang.IntentExpense, lang.IntentCashIn, lang.IntentCashOut, lang.IntentOwes, lang.IntentPaid:
 		return on.On(areas.Money)
+	case lang.IntentMakePage, lang.IntentMyPage, lang.IntentOpenShop, lang.IntentCloseShop, lang.IntentQR, lang.IntentReady, lang.IntentDelivered,
+		lang.IntentFronts, lang.IntentAddFront, lang.IntentFrontOn, lang.IntentFrontOff:
+		return on.On(areas.Storefront)
+	case lang.IntentOrders:
+		return on.On(areas.Orders)
 	case lang.IntentSold, lang.IntentCount, lang.IntentStock, lang.IntentTakeOff, lang.IntentReceived:
 		return on.On(areas.Stock)
 	}

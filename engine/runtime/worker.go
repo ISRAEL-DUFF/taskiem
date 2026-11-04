@@ -728,8 +728,10 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 		}
 		// A step of a part of Taskiem the business turned off does not run
 		// (docs/spec/business-areas.md): it fails, in plain words, before
-		// anything is sent.
-		if area, ok := areas.ConnectorArea(p.sched.Connector); ok {
+		// anything is sent. A step that already recorded its intent may have
+		// been sent: it carries on to its outcome (and is reconciled), never
+		// failed here as if nothing had left.
+		if area, ok := areas.ConnectorArea(p.sched.Connector); ok && len(intents) == 0 {
 			on, err := areas.Enabled(ctx, tx, c.tenant, area)
 			if err != nil {
 				return err

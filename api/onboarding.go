@@ -233,7 +233,7 @@ func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
 	if req.Kinds != nil {
 		var err error
 		if start, err = areas.FromKinds(*req.Kinds); err != nil {
-			refuse("invalid", http.StatusBadRequest, "say what you do with shop, service or school: "+err.Error())
+			refuse("invalid", http.StatusBadRequest, "kinds are shop, service or school (any number, or none for just workflows)")
 			return
 		}
 	}

@@ -398,7 +398,9 @@ func actionArea(action string) (areas.Area, bool) {
 		return areas.Orders, true
 	case strings.HasPrefix(action, "link.bill"):
 		return areas.Money, true
-	case action == "link.message", action == "link.read":
+	case action == "link.message":
+		// (A read receipt, link.read, is not gated: if the other side
+		// cannot see receipts, nothing is lost by writing one.)
 		return areas.Links, true
 	}
 	return "", false
