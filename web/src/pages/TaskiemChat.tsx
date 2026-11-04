@@ -12,6 +12,7 @@ import { useChatLive } from "./ChatLive";
 import { isHeic, preparePhoto } from "../lib/photo";
 import { PendingFile } from "./PendingFile";
 import { insertAt } from "../lib/emoji";
+import { useComposerFocus } from "../lib/composerFocus";
 import { getDraft, setDraft } from "../lib/drafts";
 import { useAutoGrow } from "../lib/useAutoGrow";
 import { get, post, upload } from "../api";
@@ -229,8 +230,10 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
       }, false)
       .then(() => undefined);
   sendFileRef.current = (f) => sendFile(f);
+  useComposerFocus(textBox, [emojiOpen, !!file], [!!file]);
   const send = () => {
     const body = text.trim();
+    if (body || file) requestAnimationFrame(() => textBox.current?.focus());
     if (file) sendFile(file, body);
     else if (body) say({ text: body });
   };
@@ -272,6 +275,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
       onKeyDown={(e) => {
         // Esc gives up the emoji panel, then a waiting photo, from anywhere.
         if (e.key !== "Escape" || e.defaultPrevented) return;
+        if (emojiOpen || file) e.preventDefault();
         if (emojiOpen) setEmojiOpen(false);
         else if (file) setFile(undefined);
       }}
@@ -524,6 +528,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
             onKeyDown={(e) => {
               if (mentions.onKeyDown(e)) return;
               if (e.key === "Escape") {
+                if (emojiOpen || file) e.preventDefault();
                 if (emojiOpen) setEmojiOpen(false);
                 else if (file) setFile(undefined);
                 return;

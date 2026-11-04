@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Link,
   useNavigate,
@@ -40,6 +40,7 @@ import { TaskiemPane } from "./TaskiemChat";
 import { ChatRow } from "./ChatRow";
 import { useChatLive } from "./ChatLive";
 import { useDrafts } from "../lib/drafts";
+import { isTyping, shortcutOf, SHORTCUTS, step } from "../lib/chatKeys";
 import { Ticks } from "./Conversation";
 import {
   EmptyState,
@@ -322,6 +323,84 @@ export function ChatPage() {
   const listed = all.filter(
     (c) => c.archived === archived && (filter !== "unread" || c.unread > 0),
   );
+  // The keyboard (a desktop reader's hands): shortcuts that are off while a
+  // field has the focus, arrows through the list, and Esc, which closes the
+  // chat after whatever panel is open has closed.
+  const searchBox = useRef<HTMLInputElement>(null);
+  const [keysOpen, setKeysOpen] = useState(false);
+  const [hint, setHint] = useState("");
+  const order = ["taskiem", ...listed.map((c) => c.link)];
+  const keys = useRef({ order, openID: openID ?? undefined, setParams });
+  keys.current = { order, openID: openID ?? undefined, setParams };
+  useEffect(() => {
+    const focusSearch = () =>
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          searchBox.current?.focus();
+          searchBox.current?.select();
+        }),
+      );
+    const onKey = (e: KeyboardEvent) => {
+      const k = keys.current;
+      if (e.key === "Escape") {
+        // The panel, the menu, the sheet or the reply is closed first, by
+        // whatever owns it (it says so by taking the key).
+        if (e.defaultPrevented || !k.openID) return;
+        if (
+          document.querySelector(
+            '[data-testid="chat-more"], .chat-menu, .attach-menu, .chat-info, .modal, .mention-list, .emoji-panel',
+          )
+        )
+          return;
+        if (e.target === searchBox.current) return;
+        const id = k.openID;
+        k.setParams({});
+        requestAnimationFrame(() =>
+          document
+            .querySelector<HTMLElement>(`.chat-list-pane a[href$="with=${id}"]`)
+            ?.focus(),
+        );
+        return;
+      }
+      const what = shortcutOf(e, isTyping(document.activeElement));
+      if (!what || e.defaultPrevented) return;
+      e.preventDefault();
+      if (what === "help") setKeysOpen(true);
+      else if (what === "search" || what === "new") {
+        if (what === "new")
+          setHint("Type the business's name or phone number, then choose Request link.");
+        k.setParams({});
+        focusSearch();
+      } else {
+        const to = step(k.order, k.openID, what === "next" ? 1 : -1);
+        if (to) k.setParams({ with: to });
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+  // Arrows in the list: down from the search box to the first chat, then
+  // chat to chat; up from the first back to the box. Enter opens (a link).
+  const onListKey = (e: React.KeyboardEvent) => {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    const box = searchBox.current;
+    const rows = Array.from(
+      e.currentTarget.querySelectorAll<HTMLElement>("a.chat-row"),
+    );
+    const at = rows.indexOf(e.target as HTMLElement);
+    if (at < 0 && e.target !== box) return;
+    const next =
+      e.target === box
+        ? e.key === "ArrowDown"
+          ? rows[0]
+          : undefined
+        : e.key === "ArrowDown"
+          ? rows[at + 1]
+          : (rows[at - 1] ?? box ?? undefined);
+    if (!next) return;
+    e.preventDefault();
+    next.focus();
+  };
   const nameOf = (link: string) =>
     all.find((c) => c.link === link)?.name ?? "They";
   const roleOf = (link: string) => {
@@ -337,7 +416,7 @@ export function ChatPage() {
     <>
       <h1 className="sr-only">Chat</h1>
       <div className={`chat-layout${open || taskiemOpen ? " open" : ""}`}>
-        <div className="chat-list-pane">
+        <div className="chat-list-pane" onKeyDown={onListKey}>
           <div className="chat-list-head">
             <h2>Chat</h2>
             <Link className="button small" to="/home">
@@ -346,6 +425,13 @@ export function ChatPage() {
             <Link className="button small" to="/settings/links">
               Linked businesses
             </Link>
+            <button
+              type="button"
+              className="button small kbd-only"
+              onClick={() => setKeysOpen(true)}
+            >
+              Keyboard
+            </button>
           </div>
           <div className="filters" role="search" aria-label="Find a business">
             <label className="search">
@@ -353,13 +439,25 @@ export function ChatPage() {
               <Icon name="search" />
               <input
                 type="search"
+                ref={searchBox}
                 placeholder="Cement, catering in Ikeja, Dangote…"
                 value={q}
-                onChange={(e) => setQ(e.target.value)}
+                onChange={(e) => (setQ(e.target.value), setHint(""))}
+                onKeyDown={(e) => {
+                  // Esc empties the box; with it empty, the key goes on.
+                  if (e.key === "Escape" && q) {
+                    e.preventDefault();
+                    setQ("");
+                    setHint("");
+                  }
+                }}
                 data-testid="link-search"
               />
             </label>
           </div>
+          <p className="sr-only" role="status">
+            {hint}
+          </p>
           {!searching && all.length > 0 && (
             <div className="chat-chips" role="group" aria-label="Show">
               {(
@@ -725,6 +823,7 @@ export function ChatPage() {
                 }
               />
             )}
+          {keysOpen && <KeysSheet onClose={() => setKeysOpen(false)} />}
           {asking && (
             <RequestSheet
               asking={asking}
@@ -1229,5 +1328,36 @@ function FindableQuestion({
         </button>
       </div>
     </section>
+  );
+}
+
+/** The keys of the Chat page, for a reader who has a keyboard. */
+function KeysSheet({ onClose }: { onClose: () => void }) {
+  return (
+    <Modal title="Keyboard" onClose={onClose}>
+      <dl className="keys" data-testid="keys-sheet">
+        {SHORTCUTS.map((s) => (
+          <div key={s.does} className="keys-row">
+            <dt>
+              {s.keys.map((k, i) => (
+                <span key={k}>
+                  {i > 0 && <span className="sr-only"> then </span>}
+                  <kbd>{k}</kbd>{" "}
+                </span>
+              ))}
+            </dt>
+            <dd>{s.does}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="hint">
+        The letters work when no box is being typed in.
+      </p>
+      <div className="row-actions">
+        <button type="button" onClick={onClose}>
+          Close
+        </button>
+      </div>
+    </Modal>
   );
 }

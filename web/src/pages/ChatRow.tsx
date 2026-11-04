@@ -80,8 +80,11 @@ export function ChatRow({
                 </span>
               )}
               {unread > 0 && (
-                <span className="unread-count" aria-label={`${unread} unread`}>
-                  {unread}
+                <span className="unread-count">
+                  <span aria-hidden="true">{unread}</span>
+                  <span className="sr-only">
+                    {unread} unread {unread === 1 ? "message" : "messages"}
+                  </span>
                 </span>
               )}
             </span>

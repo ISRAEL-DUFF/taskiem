@@ -1929,3 +1929,13 @@ button.chat-avatar { border: 0; padding: 0; cursor: pointer; }
 .info-times dd { margin: 0; font-weight: 600; }
 .info-reactions { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .notify-ask { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; padding: 10px 16px; background: var(--tint); color: var(--tint-text); border-bottom: 1px solid var(--border); font-size: 14px; }
+
+/* Keyboard (Chat, phase 7): the shortcuts sheet, and a visible ring on rows. */
+.keys { margin: 0 0 12px; }
+.keys-row { display: flex; align-items: baseline; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.keys-row dt { flex: none; min-width: 110px; }
+.keys-row dd { margin: 0; color: var(--muted); }
+.keys kbd { display: inline-block; min-width: 22px; padding: 1px 6px; text-align: center; font: inherit; font-size: 13px; color: var(--text); background: var(--panel-2); border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: 6px; }
+@media (hover: none) { .kbd-only { display: none; } }
+.chat-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--accent); }
+.bubble-chevron:focus-visible, .chat-jump:focus-visible, .icon-button:focus-visible { box-shadow: var(--ring); }

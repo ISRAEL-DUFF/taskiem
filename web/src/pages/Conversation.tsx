@@ -60,6 +60,7 @@ import { PendingFile } from "./PendingFile";
 import { AttachMenu } from "./AttachMenu";
 import { CameraSheet } from "./CameraSheet";
 import { insertAt } from "../lib/emoji";
+import { useComposerFocus } from "../lib/composerFocus";
 import { getDraft, setDraft } from "../lib/drafts";
 import { useAutoGrow } from "../lib/useAutoGrow";
 import { roleLine, type BusinessLink, type LinkCard } from "../lib/links";
@@ -496,6 +497,8 @@ function Bubble({
   const card = m.kind === "card" ? m.card : undefined;
   const [more, setMore] = useState(false);
   const [copied, setCopied] = useState(false);
+  const bubbleEl = useRef<HTMLDivElement>(null);
+  const chevron = useRef<HTMLButtonElement>(null);
   const local = m.local;
   const hasMenu =
     !local &&
@@ -559,10 +562,35 @@ function Bubble({
       if (held.current) {
         e.preventDefault();
         held.current = false;
+        return;
       }
+      // A right click opens the menu the hover's chevron opens, as on
+      // WhatsApp Web. A link, a player or a selection keeps the browser's own
+      // menu (copy, open in a new tab), and so does Shift + right click.
+      const t = e.target as Element;
+      if (
+        !hasMenu ||
+        onShow ||
+        e.shiftKey ||
+        t.closest?.("a, audio, video, input, textarea") ||
+        window.getSelection()?.toString()
+      )
+        return;
+      e.preventDefault();
+      setCopied(false);
+      setMore(true);
+      requestAnimationFrame(() =>
+        bubbleEl.current
+          ?.querySelector<HTMLElement>('[data-testid="chat-more"] button')
+          ?.focus(),
+      );
     },
     onKeyDown: (e: React.KeyboardEvent) => {
-      if (e.key === "Escape" && more) setMore(false);
+      if (e.key === "Escape" && more) {
+        e.preventDefault();
+        setMore(false);
+        chevron.current?.focus();
+      }
     },
   };
   const what = card ? cardLine(card, m.mine, other) : previewLine(m, other);
@@ -571,8 +599,26 @@ function Bubble({
   // have a row of their own.
   const inline =
     !card && !!m.body && !m.preview && !onShow && local !== "failed";
+  // An open menu closes on a click elsewhere, and on Esc from anywhere.
+  useEffect(() => {
+    if (!more) return;
+    const away = (e: MouseEvent) =>
+      !bubbleEl.current?.contains(e.target as Node) && setMore(false);
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      e.preventDefault();
+      setMore(false);
+    };
+    document.addEventListener("mousedown", away);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", away);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [more]);
   return (
     <div
+      ref={bubbleEl}
       className={`bubble${m.mine ? " mine" : ""}${first ? " first" : ""}${card ? " card-bubble" : ""}${flash ? " flash" : ""}${m.reactions?.length ? " has-reactions" : ""}`}
       data-msg={m.id}
       data-testid={card ? "chat-card" : "chat-message"}
@@ -725,6 +771,7 @@ function Bubble({
         <button
           type="button"
           className="bubble-chevron"
+          ref={chevron}
           aria-expanded={more}
           onClick={() => (setMore(!more), setCopied(false))}
         >
@@ -1192,10 +1239,19 @@ export function ConversationPane({
       }),
     [conv.link, onChanged],
   );
+  // The cursor goes back to the box: after sending, and when a panel, the
+  // sheet, a waiting photo or a reply is closed; a reply to write or a
+  // photo to caption asks for it.
+  useComposerFocus(
+    textBox,
+    [emojiOpen, infoOpen, !!forwarding, !!pending, !!reply],
+    [!!reply, !!pending],
+  );
   const send = (held?: File) => {
     const file = held ?? pending;
     const body = held ? "" : text.trim();
     if (!body && !file) return;
+    requestAnimationFrame(() => textBox.current?.focus());
     const o: Outgoing = {
       clientId: newClientId(),
       body,
@@ -1330,9 +1386,11 @@ export function ConversationPane({
           )
         )
           return;
+        const gave = emojiOpen || !!file || !!reply;
         if (emojiOpen) setEmojiOpen(false);
         else if (file) setFile(undefined);
         else if (reply) setReply(undefined);
+        if (gave) e.preventDefault();
       }}
       onDragEnter={(e) => {
         if (write && e.dataTransfer.types.includes("Files")) {
@@ -1558,7 +1616,10 @@ export function ConversationPane({
               className="composer-reply"
               data-testid="chat-replying"
               onKeyDown={(e) => {
-                if (e.key === "Escape") setReply(undefined);
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  setReply(undefined);
+                }
               }}
             >
               <span className="quote">
@@ -1660,6 +1721,7 @@ export function ConversationPane({
                   if (e.key === "Escape") {
                     // Esc gives up what is being prepared: the panel, a
                     // photo waiting for its caption, then a reply.
+                    if (emojiOpen || file || reply) e.preventDefault();
                     if (emojiOpen) setEmojiOpen(false);
                     else if (file) setFile(undefined);
                     else if (reply) setReply(undefined);
