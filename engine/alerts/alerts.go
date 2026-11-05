@@ -19,6 +19,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -216,14 +217,49 @@ func (a *Alerter) Tick(ctx context.Context) error {
 	if err != nil {
 		return errors.Join(append(errs, err)...)
 	}
-	for _, t := range tenants {
+	errs = append(errs, EachTenant(ctx, tenants, func(ctx context.Context, t uuid.UUID) error {
+		var errs []error
 		if err := a.Evaluate(ctx, t); err != nil {
 			errs = append(errs, fmt.Errorf("tenant %s: evaluate: %w", t, err))
 		}
 		if err := a.Deliver(ctx, t); err != nil {
 			errs = append(errs, fmt.Errorf("tenant %s: deliver: %w", t, err))
 		}
+		return errors.Join(errs...)
+	}))
+	return errors.Join(errs...)
+}
+
+// TenantsAtOnce is how many tenants EachTenant works on at the same time.
+const TenantsAtOnce = 4
+
+// EachTenant calls fn for every tenant, TenantsAtOnce at a time, and
+// joins their errors. A tenant whose webhook hangs holds one of the
+// places, not every other tenant's turn.
+func EachTenant(ctx context.Context, tenants []uuid.UUID, fn func(context.Context, uuid.UUID) error) error {
+	var (
+		mu   sync.Mutex
+		errs []error
+		wg   sync.WaitGroup
+	)
+	places := make(chan struct{}, TenantsAtOnce)
+	for _, t := range tenants {
+		if ctx.Err() != nil {
+			break
+		}
+		places <- struct{}{}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer func() { <-places }()
+			if err := fn(ctx, t); err != nil {
+				mu.Lock()
+				errs = append(errs, err)
+				mu.Unlock()
+			}
+		}()
 	}
+	wg.Wait()
 	return errors.Join(errs...)
 }
 
@@ -649,41 +685,58 @@ type delivery struct {
 	attempts int
 }
 
-// Deliver sends a tenant's due deliveries. Each is claimed first, so two
-// alerters never send the same one at once, and sent outside the database
-// transaction.
+// Each tenant's turn sends at most DeliverBatch deliveries, and starts
+// none after DeliverBudget: a tenant whose endpoint is slow waits for the
+// next tick rather than holding the scheduler for minutes.
+const (
+	DeliverBatch  = 50
+	DeliverBudget = 30 * time.Second
+)
+
+// Deliver sends a tenant's due deliveries, one at a time, each claimed
+// just before it is sent: the claim (five minutes) is far longer than one
+// send (15 seconds at most), so two alerters never send the same one, and
+// a delivery waiting its turn is never held by a claim that could lapse.
+// The outcome is recorded only while the claim is still this alerter's
+// (its attempts count), and sent outside the database transaction.
 func (a *Alerter) Deliver(ctx context.Context, tenant uuid.UUID) error {
-	var due []delivery
-	err := db.InTenantTx(ctx, a.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `UPDATE alert_deliveries d SET next_attempt_at = now() + interval '5 minutes', attempts = d.attempts + 1
-			WHERE (d.alert_id, d.channel_id) IN (SELECT alert_id, channel_id FROM alert_deliveries
-			  WHERE status = 'pending' AND next_attempt_at <= now() ORDER BY next_attempt_at LIMIT 50 FOR UPDATE SKIP LOCKED)
-			RETURNING d.alert_id, d.channel_id, d.attempts`)
+	start := time.Now()
+	for range DeliverBatch {
+		if time.Since(start) > DeliverBudget {
+			return nil
+		}
+		var d delivery
+		err := db.InTenantTx(ctx, a.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			// The pick is materialised: as an IN subquery the planner may
+			// rescan it, and each rescan skips the row just locked.
+			//nolint:misspell // MATERIALIZED is the SQL keyword
+			return tx.QueryRow(ctx, `WITH c AS MATERIALIZED (SELECT alert_id, channel_id FROM alert_deliveries
+				  WHERE status = 'pending' AND next_attempt_at <= now() ORDER BY next_attempt_at LIMIT 1 FOR UPDATE SKIP LOCKED)
+				UPDATE alert_deliveries d SET next_attempt_at = now() + interval '5 minutes', attempts = d.attempts + 1
+				FROM c WHERE d.alert_id = c.alert_id AND d.channel_id = c.channel_id
+				RETURNING d.alert_id, d.channel_id, d.attempts`).Scan(&d.alert, &d.channel, &d.attempts)
+		})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil //nolint:nilerr // nothing more is due
+		}
 		if err != nil {
 			return err
 		}
-		due, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (delivery, error) {
-			var d delivery
-			return d, r.Scan(&d.alert, &d.channel, &d.attempts)
-		})
-		return err
-	})
-	if err != nil {
-		return err
-	}
-	for _, d := range due {
 		sendErr := a.send(ctx, tenant, d.alert, d.channel)
-		err := db.InTenantTx(ctx, a.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		err = db.InTenantTx(ctx, a.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 			switch {
 			case sendErr == nil:
-				_, err := tx.Exec(ctx, `UPDATE alert_deliveries SET status = 'sent', sent_at = now(), last_error = NULL WHERE alert_id = $1 AND channel_id = $2`, d.alert, d.channel)
+				_, err := tx.Exec(ctx, `UPDATE alert_deliveries SET status = 'sent', sent_at = now(), last_error = NULL
+					WHERE alert_id = $1 AND channel_id = $2 AND status = 'pending' AND attempts = $3`, d.alert, d.channel, d.attempts)
 				return err
 			case d.attempts >= maxAttempts:
-				_, err := tx.Exec(ctx, `UPDATE alert_deliveries SET status = 'failed', last_error = $3 WHERE alert_id = $1 AND channel_id = $2`, d.alert, d.channel, truncate(sendErr.Error()))
+				_, err := tx.Exec(ctx, `UPDATE alert_deliveries SET status = 'failed', last_error = $3
+					WHERE alert_id = $1 AND channel_id = $2 AND status = 'pending' AND attempts = $4`, d.alert, d.channel, truncate(sendErr.Error()), d.attempts)
 				return err
 			default:
-				_, err := tx.Exec(ctx, `UPDATE alert_deliveries SET last_error = $3, next_attempt_at = $4 WHERE alert_id = $1 AND channel_id = $2`,
-					d.alert, d.channel, truncate(sendErr.Error()), a.now().Add(backoff(d.attempts)))
+				_, err := tx.Exec(ctx, `UPDATE alert_deliveries SET last_error = $3, next_attempt_at = $4
+					WHERE alert_id = $1 AND channel_id = $2 AND status = 'pending' AND attempts = $5`,
+					d.alert, d.channel, truncate(sendErr.Error()), a.now().Add(backoff(d.attempts)), d.attempts)
 				return err
 			}
 		})
