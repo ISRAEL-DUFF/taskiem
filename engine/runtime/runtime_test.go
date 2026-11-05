@@ -687,6 +687,54 @@ func TestHTTPReconcilableWriteParks(t *testing.T) {
 	}
 }
 
+// An http write whose partner accepted it but answered with a body over
+// the size kept may have happened: it parks for a person, as a connector
+// write with too large an output does, rather than failing as if nothing
+// was sent (a resume would then send it again under a new key). A read
+// with too large an answer still fails.
+func TestHTTPWriteOversizeResponseParks(t *testing.T) {
+	e := rt.New(t)
+	var keys []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			keys = append(keys, r.Header.Get("Idempotency-Key"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"rows":"` + strings.Repeat("x", 300<<10) + `"}`))
+	}))
+	defer srv.Close()
+	if err := e.Store.AllowEgress(ctx, e.Tenant, "prod", "127.0.0.1", "admin"); err != nil {
+		t.Fatal(err)
+	}
+	wf := e.Publish(t, wfDoc(`{"id":"post","type":"http","retry":{"max":2,"initial":"10ms","backoff":"fixed"},
+	  "config":{"method":"POST","url":"`+srv.URL+`","body":{"a":1},"class":"idempotent_write","idempotency_header":"Idempotency-Key"}}`, ""))
+	ref := e.Start(t, wf, map[string]any{})
+	e.Drain(t)
+	h := events(t, e, ref)
+	var fp history.FailedPayload
+	for _, ev := range h {
+		if ev.Type == history.StepFailed && ev.StepID == "post" {
+			_ = json.Unmarshal(ev.Payload, &fp)
+		}
+	}
+	if st := e.Status(t, ref); st != "needs_reconciliation" || fp.Error.Kind != "indeterminate" || !fp.Error.MaybeApplied || !strings.Contains(fp.Error.Message, "record the step as completed") {
+		t.Fatalf("status %s, failure %+v maybe_applied %v: %s", st, fp.Error, fp.Error.MaybeApplied, types(h))
+	}
+	if _, err := fork(t, e, wf, 1, ref); err == nil {
+		t.Error("a write that may have happened was resumed")
+	}
+	if len(keys) != 1 {
+		t.Errorf("partner received %d POSTs (%q), want one", len(keys), keys)
+	}
+
+	read := e.Publish(t, wfDoc(`{"id":"get","type":"http","retry":{"max":0},"config":{"method":"GET","url":"`+srv.URL+`"}}`, ""))
+	ref = e.Start(t, read, map[string]any{})
+	e.Drain(t)
+	if st, msg := e.Status(t, ref), failure(events(t, e, ref), "get"); st != "failed" || !strings.Contains(msg, "larger than") {
+		t.Errorf("oversize read: %s %q", st, msg)
+	}
+}
+
 func TestCodeStepInRun(t *testing.T) {
 	e := rt.New(t)
 	fx := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

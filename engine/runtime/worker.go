@@ -619,9 +619,9 @@ func failed(c claim, kind, msg, next string) history.Event {
 // maxStepOutput bounds a step's output kept in its history (spec 4.9:
 // 256 KB inline). A larger one would be copied into the decision cache and
 // every replay of the run; until outputs over it move to object storage, a
-// step that returns one fails. http steps cut their response body to the
-// same size instead (maxHTTPBody), and container steps keep to their own
-// limits.output_bytes.
+// step that returns one fails. http steps refuse a response body over the
+// same size in doHTTP (maxHTTPBody; a write's parks as maybe applied, as
+// here), and container steps keep to their own limits.output_bytes.
 const maxStepOutput = 256 << 10
 
 // capOutput turns a completion whose output is over maxStepOutput into a
