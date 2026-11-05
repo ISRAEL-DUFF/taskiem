@@ -12016,6 +12016,7 @@ paths:
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: member.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path
@@ -17207,6 +17208,7 @@ paths:
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: member.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: user
         in: path
@@ -20150,6 +20152,7 @@ paths:
       x-taskiem-permission: member.manage
       x-taskiem-plan-feature:
       - scim
+      x-taskiem-all-environments: true
       requestBody:
         content:
           application/json:
@@ -20577,6 +20580,7 @@ paths:
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: member.manage
+      x-taskiem-all-environments: true
       requestBody:
         required: true
         content:
@@ -21353,6 +21357,7 @@ paths:
       x-taskiem-permission: member.manage
       x-taskiem-plan-feature:
       - sso
+      x-taskiem-all-environments: true
       requestBody:
         content:
           application/json:
@@ -21400,6 +21405,7 @@ paths:
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: member.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: domain
         in: path
@@ -21426,6 +21432,7 @@ paths:
       x-taskiem-permission: member.manage
       x-taskiem-plan-feature:
       - sso
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path
@@ -21471,6 +21478,7 @@ paths:
       x-taskiem-permission: member.manage
       x-taskiem-plan-feature:
       - sso
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path

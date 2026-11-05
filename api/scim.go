@@ -106,7 +106,8 @@ func scimGrantor(ctx context.Context) *Principal {
 	return g
 }
 
-// scimAuth admits API keys holding scim.provision, never sessions. The key
+// scimAuth admits API keys holding scim.provision, never sessions, and
+// not keys limited to one environment: people reach every environment. The key
 // moves people only as far as its owner could by hand: their standing
 // now goes with the request (scimSync).
 func (s *Server) scimAuth(next http.Handler) http.Handler {
@@ -122,6 +123,10 @@ func (s *Server) scimAuth(next http.Handler) http.Handler {
 		}
 		if !p.Can(PermSCIM) {
 			s.scimFail(w, r, scimErr(http.StatusForbidden, "", "requires %s", PermSCIM))
+			return
+		}
+		if p.Environment != "" { // people are the whole tenant's (tenantWide)
+			s.scimFail(w, r, scimErr(http.StatusForbidden, "", "this key is limited to %s; people reach every environment", p.Environment))
 			return
 		}
 		grantor := &Principal{TenantID: p.TenantID, UserID: p.KeyOwner, Permissions: map[string]bool{}}
