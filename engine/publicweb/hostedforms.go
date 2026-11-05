@@ -31,6 +31,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/internal/schemacheck"
 	"github.com/israel-duff/taskiem/engine/sender"
 	"github.com/israel-duff/taskiem/engine/storefront"
+	"github.com/israel-duff/taskiem/engine/telemetry"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
 
@@ -358,6 +359,23 @@ func (s *Server) serveFormTrigger(w http.ResponseWriter, r *http.Request, id, su
 	s.serveHosted(w, r, hf, sub, s.prefillFromQuery(hf, r.URL.Query()))
 }
 
+// tripped notes a form over its submission limit: logged and counted for
+// operators (TaskiemFormUnderAttack), and recorded once a minute from this
+// process, which guards the form for an hour (a phone code first) and
+// alerts its owners (forms 7.3). The form is read again here at once.
+func (s *Server) tripped(ctx context.Context, pub PublicForm) {
+	telemetry.FormLimitTrips.Inc()
+	if !s.tripNotes.Allow(pub.Endpoint.String()) {
+		return
+	}
+	s.Logger.Warn("form host: a form's hourly submission limit tripped", "tenant", pub.Tenant, "endpoint", pub.Endpoint)
+	if err := s.Forms.Tripped(ctx, pub.Endpoint); err != nil {
+		s.Logger.Error("form host: recording a tripped form", "endpoint", pub.Endpoint, "err", err)
+		return
+	}
+	s.formCache.Delete(pub.PublicID)
+}
+
 // triggerForm is a live form's hform.
 func (s *Server) triggerForm(pub PublicForm, base, guardID string) *hform {
 	t := pub.Trigger
@@ -369,6 +387,11 @@ func (s *Server) triggerForm(pub PublicForm, base, guardID string) *hform {
 		hf.verify = "sms"
 	case "email":
 		hf.verify = "email"
+	}
+	// A public form under attack (it tripped its submission limit within
+	// the hour) asks for a phone code first (forms 7.3, storefronts 7.5).
+	if hf.verify == "" && pub.Guarded && (t.Access == "" || t.Access == "public") {
+		hf.verify = "sms"
 	}
 	return hf
 }
@@ -1192,7 +1215,7 @@ func (s *Server) formSubmit(w http.ResponseWriter, r *http.Request, hf *hform, s
 	// Addresses are many (carrier-grade NAT, or someone renting them), so
 	// a form also has a ceiling of its own across all of them (F68).
 	if hf.pub.Endpoint != uuid.Nil && !s.FormPerForm.Allow(hf.pub.Endpoint.String()) {
-		s.Logger.Warn("form host: a form's hourly submission limit tripped", "tenant", hf.pub.Tenant, "endpoint", hf.pub.Endpoint)
+		s.tripped(r.Context(), hf.pub)
 		w.Header().Set("Retry-After", "300")
 		s.showHosted(w, r, http.StatusTooManyRequests, hf, st, token, "This form is busy. Please wait a few minutes and send again.", "")
 		return

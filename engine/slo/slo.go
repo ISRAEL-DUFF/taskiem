@@ -168,6 +168,12 @@ var Alerts = []Alert{
 		Expr:        `max(taskiem_retention_purge_oldest_overdue_seconds) > 21600`,
 	},
 	{
+		Name: "TaskiemFormUnderAttack", Severity: "ticket", For: "0m",
+		Summary:     "A form is over its own submission limit",
+		Description: "The form host turned away submissions because a form went over its limit for every address together (500 an hour after a burst of 100): someone may be flooding it. The form now asks for a phone code first for an hour, and its business's owners are alerted.",
+		Expr:        `sum(increase(taskiem_form_limit_trips_total[15m])) > 0`,
+	},
+	{
 		Name: "TaskiemTargetDown", Severity: "ticket", For: "10m",
 		Summary:     "A Taskiem pod's metrics cannot be scraped",
 		Description: "Prometheus cannot scrape a Taskiem pod. If it serves traffic, the API and ingest SLIs miss its requests.",

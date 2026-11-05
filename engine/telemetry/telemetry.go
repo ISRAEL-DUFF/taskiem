@@ -119,6 +119,11 @@ var (
 		Name: "taskiem_onboarding_first_run_seconds", Help: "Time from a self-serve signup to the tenant's first successful run, observed once per tenant.",
 		Buckets: []float64{60, 120, 300, 600, 900, 1800, 3600, 4 * 3600, 24 * 3600, 7 * 24 * 3600},
 	})
+	// FormLimitTrips counts submissions a form host refused because the
+	// form was over its own limit (TaskiemFormUnderAttack, forms 7.3).
+	FormLimitTrips = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "taskiem_form_limit_trips_total", Help: "Form submissions refused because their form went over its own hourly limit (every address together): a form under attack.",
+	})
 	Signups = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "taskiem_signups_total", Help: "Self-serve signups by way in (signup: the web form, agent, whatsapp, telegram, slack) and outcome (created, rate_limited, blocked_domain, invalid, exists, honeypot, declined, cancelled, country).",
 	}, []string{"source", "outcome"})

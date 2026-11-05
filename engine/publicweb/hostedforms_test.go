@@ -47,6 +47,7 @@ type fakeForms struct {
 	limited   bool
 	closed    bool
 	taken     int
+	tripped   []uuid.UUID
 }
 
 type fakeCode struct {
@@ -59,6 +60,20 @@ type fakeCode struct {
 func newFakeForms() *fakeForms {
 	return &fakeForms{forms: map[string]PublicForm{}, links: map[string]FormLink{}, requests: map[string]FormRequest{}, byIdem: map[string]string{},
 		states: map[string]FormState{}, endpoints: map[string]uuid.UUID{}, hashes: map[string][]byte{}, once: map[string]bool{}, used: map[uuid.UUID]bool{}, answered: map[uuid.UUID]bool{}}
+}
+
+// Tripped guards the form, as taskiem_public_form_tripped does.
+func (f *fakeForms) Tripped(_ context.Context, endpoint uuid.UUID) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.tripped = append(f.tripped, endpoint)
+	for id, p := range f.forms {
+		if p.Endpoint == endpoint {
+			p.Guarded = true
+			f.forms[id] = p
+		}
+	}
+	return nil
 }
 
 func (f *fakeForms) Form(_ context.Context, id string) (PublicForm, bool, error) {
@@ -845,4 +860,37 @@ func TestHostedFormPerFormLimit(t *testing.T) {
 		t.Fatal("one form took 300 submissions at once")
 	}
 	must(t, send("calm00000001"), 200, "Thank you")
+}
+
+// A form that trips its limit is recorded (its owners and operators are
+// alerted, and it is guarded for an hour), at most once a minute from one
+// process, and while guarded a public form asks for a phone code first
+// (forms 7.3, storefronts 7.5) (F68b).
+func TestHostedFormUnderAttackRequiresTheCode(t *testing.T) {
+	e := newFormHost(t)
+	e.s.FormPerForm = formguard.NewLimiter(rate.Every(time.Hour), 2, 100, time.Hour)
+	schema := `{"type":"object","properties":{"x":{"type":"string"}}}`
+	pub := e.add("busy00000002", `{"title":"B"}`, schema)
+	e.add("calm00000002", `{"title":"C"}`, schema)
+	send := func(id string) *httptest.ResponseRecorder {
+		b := must(t, e.get("/f/"+id), 200)
+		e.tick(5 * time.Second)
+		return e.next("/f/"+id, b, url.Values{"do": {"send"}, "a.x": {"y"}})
+	}
+	must(t, send("busy00000002"), 200, "Thank you")
+	must(t, send("busy00000002"), 200, "Thank you")
+	// Before the trip is seen, the form is still sent in one page.
+	b := must(t, e.get("/f/busy00000002"), 200)
+	e.tick(5 * time.Second)
+	must(t, e.next("/f/busy00000002", b, url.Values{"do": {"send"}, "a.x": {"y"}}), 429, "This form is busy")
+	// Another trip within the minute is not recorded again.
+	e.s.tripped(context.Background(), pub)
+	if len(e.f.tripped) != 1 || e.f.tripped[0] != pub.Endpoint {
+		t.Fatalf("trips recorded: %v, want one for %s", e.f.tripped, pub.Endpoint)
+	}
+	body := must(t, e.get("/f/busy00000002"), 200, "Your phone number", "Send code")
+	if strings.Contains(body, `name="a.x"`) {
+		t.Fatal("a guarded form shows its questions before the code")
+	}
+	must(t, e.get("/f/calm00000002"), 200, `name="a.x"`)
 }

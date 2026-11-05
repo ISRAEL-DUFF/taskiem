@@ -20,10 +20,15 @@ import (
 // addressed to them: its link opens in the app.
 const AlertFormRequest = "form.request"
 
+// AlertFormGuarded is the alert a business's owners get when one of its
+// forms goes over its own submission limit and asks for a phone code
+// first for the next hour (forms 7.3): once per guard.
+const AlertFormGuarded = "form.guarded"
+
 // Tick sends what is due: form steps' links and reminders, verification
 // codes, and expires requests past their time. The api role runs it.
 func (s *Service) Tick(ctx context.Context) error {
-	errs := []error{s.SendCodes(ctx)}
+	errs := []error{s.SendCodes(ctx), s.alertGuarded(ctx)}
 	rows, err := s.Pool.Query(ctx, `SELECT tenant_id FROM taskiem_form_request_tenants()`)
 	if err != nil {
 		return errors.Join(append(errs, err)...)
@@ -35,6 +40,50 @@ func (s *Service) Tick(ctx context.Context) error {
 	for _, t := range tenants {
 		if err := s.sendRequests(ctx, t); err != nil {
 			errs = append(errs, fmt.Errorf("tenant %s: %w", t, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// alertGuarded tells the owners of each form guarded now (it went over
+// its submission limit, taskiem_public_form_tripped) that it is under
+// attack, once per guard (the alert's dedup key holds when it began).
+func (s *Service) alertGuarded(ctx context.Context) error {
+	rows, err := s.Pool.Query(ctx, `SELECT tenant_id, endpoint_id, guarded_since FROM taskiem_form_guards()`)
+	if err != nil {
+		return err
+	}
+	type guard struct {
+		tenant, endpoint uuid.UUID
+		since            time.Time
+	}
+	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (guard, error) {
+		var g guard
+		return g, r.Scan(&g.tenant, &g.endpoint, &g.since)
+	})
+	if err != nil {
+		return err
+	}
+	var errs []error
+	for _, g := range list {
+		err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{g.tenant}, func(tx pgx.Tx) error {
+			var name, env string
+			if err := tx.QueryRow(ctx, `SELECT w.name, e.environment FROM form_endpoints e JOIN workflows w ON w.id = e.workflow_id WHERE e.id = $1`, g.endpoint).Scan(&name, &env); err != nil {
+				if errors.Is(err, pgx.ErrNoRows) {
+					return nil
+				}
+				return err
+			}
+			_, err := alerts.TellOwners(ctx, tx, g.tenant, alerts.Alert{Kind: AlertFormGuarded, Dedup: g.endpoint.String() + ":" + g.since.UTC().Format(time.RFC3339Nano),
+				Title: "Your form " + name + " is getting too many answers",
+				Body: "More than 500 answers an hour reached " + name + " (" + env + "), more than a busy day brings: it may be under attack. " +
+					"For the next hour each person is asked for a code sent to their phone before the form opens, and answers over the limit are turned away. " +
+					"If you expected this many, nothing else is needed; if not, you can close the form for now.",
+				Detail: map[string]any{"endpoint": g.endpoint.String(), "environment": env, "since": g.since.UTC().Format(time.RFC3339)}})
+			return err
+		})
+		if err != nil {
+			errs = append(errs, fmt.Errorf("form %s: %w", g.endpoint, err))
 		}
 	}
 	return errors.Join(errs...)

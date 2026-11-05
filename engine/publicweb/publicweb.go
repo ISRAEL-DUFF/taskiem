@@ -23,6 +23,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/time/rate"
 
 	"github.com/israel-duff/taskiem/engine/formguard"
 	"github.com/israel-duff/taskiem/engine/forms"
@@ -204,6 +205,7 @@ type Server struct {
 
 	hosts         *lru.Cache[string, hostEntry]
 	formCache     *lru.Cache[string, formEntry]
+	tripNotes     *formguard.Limiter // a tripped form recorded once a minute
 	fguard, fstep *formguard.Guard
 	origins       *lru.Cache[uuid.UUID, []string]
 	pages         *lru.Cache[uuid.UUID, pageEntry]
@@ -255,6 +257,9 @@ func (s *Server) Handler() http.Handler {
 	if s.FormPerForm == nil {
 		b := FormSubmissionsPerForm
 		s.FormPerForm = formguard.NewLimiter(b.Rate, b.Burst, formLimiterSize, 2*time.Hour)
+	}
+	if s.tripNotes == nil {
+		s.tripNotes = formguard.NewLimiter(rate.Every(time.Minute), 1, formLimiterSize, 2*time.Minute)
 	}
 	s.FormHost = strings.ToLower(strings.TrimSuffix(s.FormHost, "."))
 	if s.fguard == nil && s.FormKeys != nil {

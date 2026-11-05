@@ -429,6 +429,8 @@ form_endpoints.closes_at
 form_endpoints.created_at
 form_endpoints.environment
 form_endpoints.form
+form_endpoints.guarded_since
+form_endpoints.guarded_until
 form_endpoints.id
 form_endpoints.max_submissions
 form_endpoints.opens_at

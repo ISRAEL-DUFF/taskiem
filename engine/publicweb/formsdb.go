@@ -37,6 +37,9 @@ type PublicForm struct {
 	// Reach are the fields holding phones the workflow messages
 	// (ingest.ReachFields): the thank-you page offers updates for them.
 	Reach []string
+	// Guarded: the form tripped its submission limit within the hour, so
+	// a public form asks for a phone code first (forms 7.3).
+	Guarded bool
 }
 
 // FormLink is a one-time link to a link form.
@@ -112,6 +115,9 @@ type FormStore interface {
 	Code(ctx context.Context, scope uuid.UUID, addressHash, codeHash, payload []byte) (bool, error)
 	CheckCode(ctx context.Context, scope uuid.UUID, addressHash, codeHash []byte) (bool, error)
 	Status(ctx context.Context, reference string, statusHash []byte) (FormState, bool, error)
+	// Tripped records that a form went over its submission limit: it is
+	// guarded for an hour and its owners are alerted (forms 7.3).
+	Tripped(ctx context.Context, endpoint uuid.UUID) error
 }
 
 // DBForms is the FormStore on a pool connected as taskiem_public.
@@ -132,11 +138,12 @@ func ParsePublicForm(publicID string, raw []byte) (PublicForm, error) {
 		Inputs        json.RawMessage `json:"inputs"`
 		Types         json.RawMessage `json:"types"`
 		Reach         []string        `json:"reach"`
+		Guarded       bool            `json:"guarded"`
 	}
 	if err := json.Unmarshal(raw, &x); err != nil {
 		return PublicForm{}, err
 	}
-	f := PublicForm{Endpoint: x.Endpoint, Tenant: x.Tenant, PublicID: publicID, Status: x.Status, Open: x.Open, Business: x.Business, Reach: x.Reach}
+	f := PublicForm{Endpoint: x.Endpoint, Tenant: x.Tenant, PublicID: publicID, Status: x.Status, Open: x.Open, Business: x.Business, Reach: x.Reach, Guarded: x.Guarded}
 	if x.ClosedMessage != nil {
 		f.ClosedMessage = *x.ClosedMessage
 	}
@@ -175,6 +182,11 @@ func (d dbForms) Form(ctx context.Context, publicID string) (PublicForm, bool, e
 	}
 	f, err := ParsePublicForm(publicID, raw)
 	return f, err == nil, err
+}
+
+func (d dbForms) Tripped(ctx context.Context, endpoint uuid.UUID) error {
+	_, err := d.pool.Exec(ctx, `SELECT taskiem_public_form_tripped($1)`, endpoint)
+	return err
 }
 
 func (d dbForms) Link(ctx context.Context, tokenHash []byte) (FormLink, bool, error) {

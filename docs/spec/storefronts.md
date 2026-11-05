@@ -394,11 +394,11 @@ A verification is a record with who did it, how and when, and appears in the aud
 - **Rate limits:**
   - per page and per visitor IP, in buckets: 20 submissions in 10 minutes, 100 a day. These are deliberately generous: Nigerian mobile networks put thousands of phones behind one IP address (carrier-grade NAT), so an IP is not a person. The per-form token, the bot defences and phone codes are the real controls;
   - per phone number on orders;
-  - per page per hour, with alerts to the owner and operators when one trips.
+  - per page per hour, with alerts to the owner and operators when one trips (as hosted forms do: [forms 7.3](forms.md#73-abuse)).
 - **Bot defences without third-party trackers:**
   - a honeypot field;
   - a minimum fill time;
-  - a light proof-of-work in the form's script, which falls back to a phone OTP for a page under attack.
+  - a light proof-of-work in the form's script, which falls back to a phone OTP for a page under attack (an hour after its per-page limit last tripped).
 - **Phone OTP on orders (optional):** the customer gets a code by SMS before the order is taken. Off by default, on automatically for a page seeing spam.
 - **Plan limits:** submissions per day and orders per day per plan; beyond them, the form shows "orders are paused" and the owner is told.
 

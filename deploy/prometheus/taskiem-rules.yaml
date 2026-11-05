@@ -725,6 +725,18 @@ groups:
     for: 30m
     labels:
       severity: ticket
+  - alert: TaskiemFormUnderAttack
+    annotations:
+      description: 'The form host turned away submissions because a form went over
+        its limit for every address together (500 an hour after a burst of 100): someone
+        may be flooding it. The form now asks for a phone code first for an hour,
+        and its business''s owners are alerted.'
+      runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemformunderattack
+      summary: A form is over its own submission limit
+    expr: sum(increase(taskiem_form_limit_trips_total[15m])) > 0
+    for: 0m
+    labels:
+      severity: ticket
   - alert: TaskiemTargetDown
     annotations:
       description: Prometheus cannot scrape a Taskiem pod. If it serves traffic, the

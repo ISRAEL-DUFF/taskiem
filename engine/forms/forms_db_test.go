@@ -571,6 +571,73 @@ func TestRunlessSubmissionsFollowRetention(t *testing.T) {
 	}
 }
 
+// A form over its own submission limit is recorded by the form host (as
+// taskiem_public): it is guarded for an hour, the form host learns so, and
+// its owners get one alert per guard (forms 7.3, F68b).
+func TestTrippedFormIsGuardedAndAlerted(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	wf := w.deploy(intake)
+	var endpoint uuid.UUID
+	var public string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT id, public_id FROM form_endpoints WHERE workflow_id = $1 AND environment = 'prod'`, wf).Scan(&endpoint, &public); err != nil {
+		t.Fatal(err)
+	}
+	pub := w.env.DB.PublicPool(t, 1)
+	guarded := func() bool {
+		t.Helper()
+		var g bool
+		if err := pub.QueryRow(ctx, `SELECT COALESCE((taskiem_public_form($1)->>'guarded')::boolean, false)`, public).Scan(&g); err != nil {
+			t.Fatal(err)
+		}
+		return g
+	}
+	if guarded() {
+		t.Fatal("guarded before any trip")
+	}
+	for range 2 {
+		if _, err := pub.Exec(ctx, `SELECT taskiem_public_form_tripped($1)`, endpoint); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !guarded() {
+		t.Fatal("not guarded after a trip")
+	}
+	alertsOf := func() int {
+		t.Helper()
+		var n int
+		if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM alerts WHERE tenant_id = $1 AND kind = $2`, w.env.Tenant, forms.AlertFormGuarded).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	for range 2 {
+		if err := w.svc.Tick(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := alertsOf(); n != 1 {
+		t.Fatalf("%d alerts for one guard, want 1", n)
+	}
+	// An hour later the guard is over; another trip is a new guard, and a
+	// new alert.
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE form_endpoints SET guarded_until = now() - interval '1 second', guarded_since = now() - interval '2 hours' WHERE id = $1`, endpoint); err != nil {
+		t.Fatal(err)
+	}
+	if guarded() {
+		t.Fatal("still guarded after the hour")
+	}
+	if _, err := pub.Exec(ctx, `SELECT taskiem_public_form_tripped($1)`, endpoint); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.svc.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if n := alertsOf(); n != 2 {
+		t.Fatalf("%d alerts after a second guard, want 2", n)
+	}
+}
+
 // decodeB64 reads Postgres's base64 (with its line breaks).
 func decodeB64(s string) ([]byte, error) {
 	return base64.StdEncoding.DecodeString(strings.ReplaceAll(s, "\n", ""))

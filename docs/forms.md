@@ -108,5 +108,5 @@ Claims are one table (`storefront_claims`), taken by the public host with the su
 ## How it is kept safe
 
 - The form host is its own name, with no cookies and a strict Content-Security-Policy; it runs as the `public` role, which holds no vault key. It seals what it receives with the public key (`TASKIEM_PUBLIC_KEY`); the api role opens it, checks the answers again, seals personal answers under the respondent's subject and starts the run.
-- Bots meet a honeypot, a minimum time to fill in and signed one-time form tokens; addresses are limited per IP hash.
+- Bots meet a honeypot, a minimum time to fill in and signed one-time form tokens; addresses are limited per IP hash, and each form across every address (500 an hour). A form over its limit is treated as under attack: for the next hour it asks each person for a code sent to their phone before its questions, and the business's owners are alerted.
 - One-time links carry 24 random bytes and are stored only as a hash; form steps' links are derived from the request, so nothing secret is stored at all.
