@@ -195,7 +195,7 @@ export function remember(list: RecentCheck[], a: GateAnswer, at = new Date().toI
 
 const RECENT_KEY = "taskiem-gate-recent";
 
-/** The recent checks kept in this browser tab's session (cleared on sign-out). */
+/** The recent checks kept in this browser tab's session (cleared on sign-out, and when someone else signs in: lib/tabOwner.ts). */
 export function loadRecent(storage: Pick<Storage, "getItem"> | undefined = typeof sessionStorage === "undefined" ? undefined : sessionStorage): RecentCheck[] {
   try {
     const raw = storage?.getItem(RECENT_KEY);
