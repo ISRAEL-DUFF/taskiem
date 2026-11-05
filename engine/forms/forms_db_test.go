@@ -334,6 +334,46 @@ func TestFormStepLinkAndAnswer(t *testing.T) {
 	}
 }
 
+// A tenant's older requests waiting for a reminder that is not due yet do
+// not hold back a newer request's first link: the batch takes only what is
+// due now, unsent requests first.
+func TestFormLinksNotStarvedByPendingReminders(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	wf := w.env.Publish(t, askFlow)
+	run := w.env.Start(t, wf, map[string]any{"body": map[string]any{"phone": "+2348031234567", "name": "Bola Ade"}})
+	w.env.Drain(t)
+	req := uuid.MustParse(decide.FormRequestID(run.ID.String(), "ask"))
+	// Sixty older requests, already sent, their one-hour reminder not due.
+	if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO form_requests (id, tenant_id, run_id, step_id, environment, recipient, title, schema, prefill, via, verify, remind, sent_at, expires_at, created_at)
+		SELECT gen_random_uuid(), tenant_id, run_id, step_id || g, environment, recipient, title, schema, prefill, via, verify, remind, now(), expires_at, now() - interval '1 hour' + g * interval '1 second'
+		FROM form_requests, generate_series(1, 60) g WHERE id = $1`, req); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.svc.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var sent *time.Time
+	var queued int
+	_ = w.env.DB.Admin.QueryRow(ctx, `SELECT sent_at FROM form_requests WHERE id = $1`, req).Scan(&sent)
+	_ = w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM platform_messages WHERE dedup_key = $1`, "form:"+req.String()+":link:sms").Scan(&queued)
+	if sent == nil || queued != 1 {
+		t.Fatalf("the newer request's link: sent_at=%v queued=%d", sent, queued)
+	}
+	// When the reminders fall due, every one of them goes, over the ticks.
+	w.svc.Now = func() time.Time { return time.Now().Add(61 * time.Minute) }
+	for i := 0; i < 3; i++ {
+		if err := w.svc.Tick(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var left int
+	_ = w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM form_requests WHERE status = 'pending' AND reminders_sent < cardinality(remind)`).Scan(&left)
+	if left != 0 {
+		t.Fatalf("reminders not sent: %d", left)
+	}
+}
+
 // A submission and its files go with the run's data when retention purges
 // the run, and with the respondent when they are erased: the rows, and the
 // stored bytes after the api's deletion pass (docs/spec/forms.md).

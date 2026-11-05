@@ -64,10 +64,16 @@ func (s *Service) sendRequests(ctx context.Context, tenant uuid.UUID) error {
 		if _, err := tx.Exec(ctx, `UPDATE form_requests SET status = 'expired' WHERE status = 'pending' AND expires_at <= now()`); err != nil {
 			return err
 		}
+		// Only what is due now takes a place in the batch, unsent requests
+		// first: older requests whose next reminder is hours away must not
+		// fill it and hold back a newer request's first link. The app clock
+		// ($1) decides a reminder, as sendRequest does.
 		rows, err := tx.Query(ctx, `SELECT r.id, r.title, r.recipient, r.prefill, r.via, r.verify,
 			ARRAY(SELECT extract(epoch FROM x)::bigint FROM unnest(r.remind) x), r.sent_at, r.reminders_sent, r.expires_at, t.name
 			FROM form_requests r JOIN tenants t ON t.id = r.tenant_id
-			WHERE r.status = 'pending' AND (r.sent_at IS NULL OR r.reminders_sent < cardinality(r.remind)) ORDER BY r.created_at LIMIT 50 FOR UPDATE OF r SKIP LOCKED`)
+			WHERE r.status = 'pending' AND (r.sent_at IS NULL
+			   OR (r.reminders_sent < cardinality(r.remind) AND r.sent_at + r.remind[r.reminders_sent + 1] <= $1))
+			ORDER BY r.sent_at IS NOT NULL, r.created_at LIMIT 50 FOR UPDATE OF r SKIP LOCKED`, s.now())
 		if err != nil {
 			return err
 		}
