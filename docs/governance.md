@@ -48,13 +48,27 @@ An enrolled authenticator is not replaced: it is removed first, with a current c
 
 Members add passkeys under **Account** (WebAuthn: the device's fingerprint, face or PIN; synced passkeys work). A passkey signs in without a password (**Sign in with a passkey**) and answers step-up: an approval whose policy asks for `passkey` needs one, and a passkey also satisfies `totp`, being the stronger factor (`POST /v1/me/step-up/options`, then the vote with `passkey`). Challenges are single-use, last five minutes, and are bound to their purpose and person, so a sign-in assertion cannot pass step-up. A step-up challenge is also bound to what it confirms: the options request names an `operation` and its `target`, and the assertion passes only that. A vote asks for `approval.decide` and `<run>/<step>/<decision>`, so an assertion made to approve one payout cannot approve another or be spent on anything else; key changes ask for `key.*` and the organisation ([BYOK](byok.md#bringing-your-key)); factor changes for `account.reauth` (below). A signature counter that does not advance is refused as a possible copied authenticator.
 
-**Administrators are held to passkeys** when the deployment sets `TASKIEM_PUBLIC_URL` (on by default then; `TASKIEM_REQUIRE_ADMIN_PASSKEYS=false` turns it off). An administrator is anyone holding `member.manage`, `role.manage`, `secret.manage`, `policy.manage`, `git.manage`, `connector.manage`, `pii.reveal` or `pii.erase`. Signed in with a password, they can only add a passkey; once they have one, their password no longer signs them in. A member who loses their passkeys is reset by someone able to grant all their roles (Members, `DELETE /v1/members/{id}/passkeys`), which also ends their sessions; when no such person can, an operator runs `taskiem passkeys reset --email …`. Every addition, removal and reset is audited.
+**Who must sign in with a passkey** ([optional passkeys](spec/optional-passkeys.md)). No one, unless one of these holds:
+- **The person chose it:** **Only sign in with my passkey** (Account). It needs a passkey to turn on, and the passkey to turn on or off; removing the last passkey, or a reset, turns it off.
+- **The business requires it:** **Require passkeys for administrators** (Settings > Security). Only owners change it, confirmed as a factor change is, and turning it on needs a passkey of their own.
+- **The deployment requires it:** `TASKIEM_REQUIRE_ADMIN_PASSKEYS=true`, off by default.
+
+An administrator is anyone holding `member.manage`, `role.manage`, `secret.manage`, `policy.manage`, `git.manage`, `connector.manage`, `pii.reveal` or `pii.erase`.
+
+**Someone held:**
+- **Without a passkey,** they can only add one, whether they signed in with a password, their chat or single sign-on.
+- **With one,** their password and chat no longer sign them in to that business, and a password or chat session already open there is refused.
+
+**Lost passkeys:**
+- A member who loses their passkeys is reset by someone able to grant all their roles (Members, `DELETE /v1/members/{id}/passkeys`), which also ends their sessions.
+- When no such person can, an operator runs `taskiem passkeys reset --email …`.
+- Every addition, removal, reset and change of these settings is audited.
 
 **Changing factors needs more than a session**, so a stolen session cannot enrol its own passkey or authenticator and pass step-up. Adding or removing a passkey (`POST /v1/me/passkeys/options`, `DELETE /v1/me/passkeys/{id}`) and setting up an authenticator (`POST /v1/me/totp`) take a proof in the body: with a passkey or an authenticator enrolled, a fresh `passkey` assertion (for a challenge from `POST /v1/me/step-up/options` with operation `account.reauth` and the change as target: `passkey.add`, `passkey.remove/<id>`, `totp.setup`, `password.change`, `whatsapp.link` or `whatsapp.pin`) or a current `totp` code; with neither, the `password`, once the person's email is confirmed (where the deployment sends email): a password on an unconfirmed email may be one whoever added the person chose, so until the person follows the confirmation link (`POST /v1/me/email/verify`, a new one from `POST /v1/me/email/verify/resend`) the answer is `403 {"reauth": ["verify_email"]}`. Without a proof the answer is `403 {"reauth": [...]}` naming what will do. A person with none of these (signed in only by single sign-on) gives nothing more. An administrator held to passkeys enrols their first one with their password; their enrol-only session may also confirm their email. `GET /v1/me` shows `factors`.
 
 A tenant resets the passkeys only of people who belong to it alone: passkeys are the person's, in every tenant they belong to. Someone who also belongs elsewhere removes their own, or an operator resets them (`taskiem passkeys reset`).
 
-The passkey rule for administrators applies to the person, not to one tenant: someone with a passkey who is an administrator in any tenant cannot sign in with a password to any of them.
+The personal setting applies to the person, in every tenant. The business setting applies to that tenant alone: an administrator held by one business signs in with a password to another that does not require passkeys.
 
 ## Single sign-on
 

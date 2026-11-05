@@ -178,7 +178,7 @@ If the draft cannot pass Taskiem's checks, Taskiem says so and suggests describi
 
 ## Signing in on the web
 
-`sign in` (or `web link`) sends a one-time link, good for an hour, to choose a password and sign in to the web app: the owner of a business a [field agent](agents.md) made has none yet, and the chat is already bound to them. It is audited (`auth.signin_link`); an organisation held to single sign-on gets its sign-in page instead. The link is only for someone with no other way in: no passkey, and no password, or one on a sign-in address that receives no mail (an account made in chat or by an agent). Anyone else is sent to the sign-in page, where **Forgot password** mails their own address, so holding a member's phone never resets their web password.
+`sign in` (or `web link`) sends a one-time link, good for an hour, to choose a password and sign in to the web app: the owner of a business a [field agent](agents.md) made has none yet, and the chat is already bound to them. It is audited (`auth.signin_link`); an organisation held to single sign-on gets its sign-in page instead.
 
 **An email, the plan and paying** ([onboarding](onboarding.md#one-person-many-doors), the same on Telegram and Slack). `email` says the account's email, or, for an account made in chat, how to add one: `email ada@example.com` sends a confirmation link there, and opening it (no sign-in needed) makes it the account's email, confirmed. `plan` says the business's plan, the trial's days left or when it renews, and the price, with **Pay** for someone who manages billing; **Pay** sends a checkout link (card or bank transfer), asking first for an email to send receipts to when the account has none (`pay ada@example.com`).
 
@@ -188,7 +188,7 @@ WhatsApp only delivers free-form messages within 24 hours of the person's last m
 
 | Name | Category | Body | Buttons | Sent when |
 | --- | --- | --- | --- | --- |
-| `taskiem_otp` | Authentication | `{{1}} is your verification code. For your security, do not share this code. This code expires in 10 minutes.` (Meta's authentication format, with its security recommendation and expiry options) | Copy code | Binding a number |
+| `taskiem_otp` | Authentication | `{{1}} is your verification code. For your security, do not share this code. This code expires in 10 minutes.` (Meta's authentication format, with its security recommendation and expiry options) | Copy code | Binding a number; signing in on the web with WhatsApp ([chat sign-in](spec/chat-sign-in.md)) |
 | `taskiem_approval_request` | Utility | `[{{1}}] Approval needed: {{2}}. {{3}} Environment: {{4}}. Tap Approve or Reject, or decide in Taskiem.` | Quick replies **Approve**, **Reject** (the payloads are decision tokens) | An approval is waiting for an approver whose window is closed |
 | `taskiem_stepup_link` | Utility | `[{{1}}] This decision on {{2}} needs your passkey or authenticator code. Confirm it in Taskiem within 10 minutes: {{3}}` | — | Step-up (normally inside the window, since the person just tapped a button) |
 | `taskiem_run_failed` | Utility | `[{{1}}] {{2}} failed in {{3}}. Details: {{4}}` | — | Alert rule `run_failed`; a run started from chat failed |

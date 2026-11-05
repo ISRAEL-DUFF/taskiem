@@ -200,6 +200,8 @@ for (const scheme of ["light", "dark"] as const) {
       "/slack/added",
       "/slack/added?error=You+did+not+add+Taskiem+to+Slack.",
       "/confirm-email",
+      // A sign-in link from chat that is not good (chat_signin.go).
+      "/signin#token=nope",
     ]) {
       await page.goto(path);
       await expect(page.locator("main h1").first()).toBeVisible();

@@ -286,6 +286,9 @@ func (s *Server) chatNumberDoor(ctx context.Context, sc *signupChat, st *signupS
 		if err := tx.QueryRow(ctx, `SELECT taskiem_chat_bind_telegram($1, $2, $3)`, owner, sc.tg.FromID, sc.tg.Username).Scan(&outcome); err != nil || outcome != "ok" {
 			return err
 		}
+		if _, err := tx.Exec(ctx, `SELECT taskiem_chat_telegram_number($1, $2)`, owner, number); err != nil {
+			return err
+		}
 		return s.termsAcceptTx(ctx, tx, uuid.Nil, owner, "telegram", st.Agreed)
 	})
 	if err != nil {

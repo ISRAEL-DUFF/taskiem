@@ -12454,6 +12454,133 @@ paths:
                 $ref: '#/components/schemas/Session'
         default:
           $ref: '#/components/responses/Error'
+  /v1/auth/chat/start:
+    post:
+      operationId: chatSigninStart
+      tags:
+      - Authentication
+      summary: Ask for a sign-in code on WhatsApp or Telegram
+      description: 'Takes only `application/json`. Sends a six-digit code, good for 10 minutes, to the WhatsApp or Telegram
+        of the person the phone number is bound to, when they may sign in with their chat. The answer is the same whether
+        or not the number is on an account; the look-up and the send happen after it. Limited per address and per number.'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              properties:
+                phone:
+                  type: string
+                  description: The number, in any usual form; the deployment's default country when it has none.
+      responses:
+        '202':
+          description: Sent, if the number is on an account.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  expires_in:
+                    type: integer
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/auth/chat/verify:
+    post:
+      operationId: chatSigninVerify
+      tags:
+      - Authentication
+      summary: Sign in with a code sent to the chat
+      description: 'Takes only `application/json`. A code works once, for the number it was sent to; five wrong lock it.
+        An administrator with a passkey signs in with it where the deployment requires it (401 `passkey_required`); an
+        organisation with single sign-on signs in with it (401 `sso_required`). The session''s `auth_method` is `chat`.'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, code]
+              properties:
+                phone:
+                  type: string
+                code:
+                  type: string
+                tenant_id:
+                  type: string
+                  format: uuid
+                bearer:
+                  type: boolean
+      responses:
+        '200':
+          description: Signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/auth/chat/link/peek:
+    post:
+      operationId: chatSigninLinkPeek
+      tags:
+      - Authentication
+      summary: Whether a sign-in link from chat is still good, without using it
+      description: Says nothing about whose it is.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+      responses:
+        '204':
+          $ref: '#/components/responses/NoContent'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/auth/chat/link:
+    post:
+      operationId: chatSigninLink
+      tags:
+      - Authentication
+      summary: Sign in with a link sent in chat
+      description: '"sign in" in chat sends a one-time link, good for 10 minutes. Only this POST uses its token, so fetching
+        the link ahead of time signs no one in. The same rules as `/v1/auth/chat/verify`.'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                tenant_id:
+                  type: string
+                  format: uuid
+                bearer:
+                  type: boolean
+      responses:
+        '200':
+          description: Signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/auth/logout:
     post:
       operationId: logout
@@ -16412,6 +16539,80 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/chat-signin:
+    put:
+      operationId: setChatSignin
+      tags:
+      - Account
+      summary: Turn signing in with WhatsApp or Telegram on or off
+      description: On by default. Off, no code is sent to the person's chat and links from chat are refused. Not for API
+        keys.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: ['on']
+              properties:
+                'on':
+                  type: boolean
+      responses:
+        '200':
+          description: The setting.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  chat_signin:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/passkey-only:
+    put:
+      operationId: setPasskeyOnly
+      tags:
+      - Account
+      summary: Only sign in with my passkey, on or off
+      description: Off by default. On, the person's password and chat sign-in are refused in every business. Turning it
+        on needs a passkey; on or off is confirmed with a passkey assertion for `account.reauth` and `passkey_only.on` or
+        `passkey_only.off` (an authenticator code or the password is not enough). Removing the last passkey turns it off.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: ['on']
+              properties:
+                'on':
+                  type: boolean
+                passkey:
+                  type: object
+                  description: The step-up assertion.
+      responses:
+        '200':
+          description: The setting.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  passkey_only:
+                    type: boolean
         default:
           $ref: '#/components/responses/Error'
   /v1/me/password:
@@ -20629,6 +20830,80 @@ paths:
                           type: string
                         variables:
                           type: integer
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/settings/security:
+    get:
+      operationId: getSecurity
+      tags:
+      - Account
+      summary: Who must sign in with a passkey here
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: member.manage
+      responses:
+        '200':
+          description: The business's setting, how many administrators have no passkey, and whether the person asking has
+            one and may change it.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  require_admin_passkeys:
+                    type: boolean
+                  admins_without_passkey:
+                    type: integer
+                  you_have_passkey:
+                    type: boolean
+                  deployment_requires:
+                    type: boolean
+                  can_change:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putSecurity
+      tags:
+      - Account
+      summary: Require passkeys for administrators, on or off
+      description: Owners only, confirmed as a factor change is (`account.reauth`, target `business.require_passkeys`).
+        Turning it on needs a passkey of the owner's own.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: member.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [require_admin_passkeys]
+              properties:
+                require_admin_passkeys:
+                  type: boolean
+                password:
+                  type: string
+                totp:
+                  type: string
+                passkey:
+                  type: object
+      responses:
+        '200':
+          description: The setting.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  require_admin_passkeys:
+                    type: boolean
         default:
           $ref: '#/components/responses/Error'
   /v1/settings/advanced:

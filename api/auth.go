@@ -79,13 +79,20 @@ type Principal struct {
 	// KeyOwner is the person an API key belongs to: it acts within their
 	// current permissions, and counts as them for four-eyes.
 	KeyOwner uuid.UUID
-	// AuthMethod is how the session signed in: password, passkey or sso.
+	// AuthMethod is how the session signed in: password, passkey, sso or
+	// chat (a code or link sent to a bound chat, chat_signin.go).
 	AuthMethod string
 	// SignedInAt is when the session signed in (sessions only).
 	SignedInAt time.Time
 	// EnrolOnly marks a password session of an administrator held to
 	// passkeys: it may only enrol one.
 	EnrolOnly bool
+	// PasskeyRequired marks a password or chat session of someone held to
+	// passkeys who has one: refused, to sign in with it (passkey_rule.go).
+	PasskeyRequired bool
+	// PasskeyReason is why the person is held to passkeys: personal,
+	// deployment or business.
+	PasskeyReason string
 	// EndUser is set for an embed app's end user (embed.go): a lightweight
 	// principal in a sub-tenant, with neither UserID nor KeyID.
 	EndUser *EndUser
@@ -278,6 +285,10 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 			writeJSON(w, http.StatusForbidden, map[string]any{"error": "the gate role sees the gate screen only", "gate_only": true})
 			return
 		}
+		if p.PasskeyRequired && r.URL.Path != "/v1/auth/logout" {
+			passkeyRequiredOut(w)
+			return
+		}
 		if p.Agent == nil && p.EnrolOnly && !enrolOnly[r.Method+" "+r.URL.Path] {
 			writeJSON(w, http.StatusForbidden, map[string]any{"error": "administrators sign in with a passkey: add one to continue", "enrol_passkey": true})
 			return
@@ -360,16 +371,19 @@ func (s *Server) resolve(r *http.Request) (*Principal, error) {
 	if len(p.Roles) == 0 {
 		return nil, errors.New("no membership")
 	}
-	p.EnrolOnly = s.RequireAdminPasskeys && p.AuthMethod == "password" && isAdmin(p.Permissions)
-	if s.RequireAdminPasskeys && p.AuthMethod == "sso" && isAdmin(p.Permissions) {
-		// Held to passkeys after SSO too (decision 0026): an administrator
-		// who signed in through their identity provider and has no passkey
-		// enrols one before anything else.
-		var has bool
-		if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_has_passkey($1)`, p.UserID).Scan(&has); err != nil {
+	// Held to passkeys (passkey_rule.go): without one, a session that did
+	// not sign in with a passkey can only add one; with one, a password or
+	// chat session is refused, to sign in with it.
+	if p.AuthMethod != "passkey" {
+		h, err := s.passkeyHoldOf(ctx, p.UserID, p.TenantID, p.Permissions)
+		if err != nil {
 			return nil, err
 		}
-		p.EnrolOnly = !has
+		if h.held {
+			p.PasskeyReason = h.reason
+			p.EnrolOnly = !h.has
+			p.PasskeyRequired = h.has && p.AuthMethod != "sso"
+		}
 	}
 	if h := r.Header.Get(agentSessionHeader); h != "" {
 		// A field agent acting in a business (agents.go).
@@ -485,34 +499,19 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusUnauthorized, "invalid email or password")
 		return
 	}
-	if s.RequireAdminPasskeys {
-		// An administrator with a passkey signs in with it, whichever tenant
-		// they ask for: the person and their passkeys are the same in all.
-		var has bool
-		if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_has_passkey($1)`, userID).Scan(&has); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		if has {
-			var tenants []uuid.UUID
-			if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_tenant_scope($1, false)`, userID).Scan(&tenants); err != nil {
-				s.fail(w, r, err)
-				return
-			}
-			for _, t := range tenants {
-				p := Principal{TenantID: t, UserID: userID, Permissions: map[string]bool{}}
-				if err := s.loadRoles(ctx, &p); err != nil {
-					s.fail(w, r, err)
-					return
-				}
-				if isAdmin(p.Permissions) {
-					writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "administrators sign in with their passkey", "passkey_required": true})
-					return
-				}
-			}
-		}
+	// Someone held to passkeys who has one signs in with it
+	// (passkey_rule.go): the business asked for, or the first they are
+	// not held in.
+	tenant, err := s.passwordSigninTenant(ctx, userID, req.TenantID)
+	if errors.Is(err, errPasskeyRequired) {
+		passkeyRequiredOut(w)
+		return
 	}
-	s.startSession(w, r, userID, req.TenantID, "password", req.Bearer)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.startSession(w, r, userID, tenant, "password", req.Bearer)
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
@@ -548,16 +547,19 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 		perms = append(perms, k)
 	}
 	slices.Sort(perms)
-	out := map[string]any{"tenant_id": p.TenantID, "roles": p.Roles, "permissions": perms, "auth_method": p.AuthMethod, "enrol_passkey": p.EnrolOnly}
+	out := map[string]any{"tenant_id": p.TenantID, "roles": p.Roles, "permissions": perms, "auth_method": p.AuthMethod, "enrol_passkey": p.EnrolOnly,
+		"passkey_reason": p.PasskeyReason}
 	if p.UserID != uuid.Nil {
 		var email, name string
+		chatSignin, passkeyOnly := true, false
 		var verified bool
 		_ = s.tx(r, func(tx pgx.Tx) error {
-			return tx.QueryRow(r.Context(), `SELECT email, name, email_verified_at IS NOT NULL FROM users WHERE id = $1`, p.UserID).Scan(&email, &name, &verified)
+			return tx.QueryRow(r.Context(), `SELECT email, name, email_verified_at IS NOT NULL, chat_signin, passkey_only FROM users WHERE id = $1`, p.UserID).Scan(&email, &name, &verified, &chatSignin, &passkeyOnly)
 		})
 		// A sign-in name that receives no mail (an account made in chat):
 		// the web app offers Add your email (chat_doors.go).
-		out["user"] = map[string]any{"id": p.UserID, "email": email, "name": name, "email_verified": verified, "email_placeholder": emailPlaceholder(email)}
+		out["user"] = map[string]any{"id": p.UserID, "email": email, "name": name, "email_verified": verified, "email_placeholder": emailPlaceholder(email),
+			"chat_signin": chatSignin, "passkey_only": passkeyOnly}
 		_ = s.tx(r, func(tx pgx.Tx) error {
 			out["totp"] = s.totpEnrolled(r.Context(), tx, p.UserID)
 			return nil

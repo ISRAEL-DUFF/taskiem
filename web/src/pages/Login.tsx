@@ -8,6 +8,7 @@ import { ErrorBox, Field, useAction } from "../ui";
 
 export function Login() {
   const { login, loginWithPasskey } = useAuth();
+  const [withChat, setWithChat] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const act = useAction();
@@ -42,6 +43,10 @@ export function Login() {
     <div className="login card">
       <h1>Sign in to Taskiem</h1>
       {ssoError && <div className="error">{ssoError}</div>}
+      {withChat ? (
+        <ChatSignIn onBack={() => setWithChat(false)} />
+      ) : (
+        <>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -90,12 +95,85 @@ export function Login() {
           </button>
         </>
       )}
-      {act.error instanceof ApiError && act.error.body.passkey_required ? <p className="hint">Administrators sign in with their passkey.</p> : null}
+      <button type="button" disabled={act.busy} style={{ width: "100%", marginTop: "0.5rem" }} onClick={() => setWithChat(true)}>
+        Sign in with WhatsApp or Telegram
+      </button>
+        </>
+      )}
+      {act.error instanceof ApiError && act.error.body.passkey_required ? <p className="hint">Sign in with your passkey.</p> : null}
       {signup && (
         <p className="hint" style={{ textAlign: "center" }}>
           New to Taskiem? <Link to="/signup">Create an account</Link>
         </p>
       )}
     </div>
+  );
+}
+
+/** Signing in with the chat (docs/spec/chat-sign-in.md): the phone number
+ * of the person's WhatsApp or Telegram, then the six-digit code sent there.
+ * The first answer is the same for any number. */
+function ChatSignIn({ onBack }: { onBack: () => void }) {
+  const { refresh } = useAuth();
+  const [phone, setPhone] = useState("");
+  const [code, setCode] = useState("");
+  const [sent, setSent] = useState<string | null>(null);
+  const act = useAction();
+  return (
+    <>
+      {sent === null ? (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void act.run(async () => setSent((await post<{ status: string }>("/v1/auth/chat/start", { phone })).status), false);
+          }}
+        >
+          <p className="hint">We send a code to the WhatsApp or Telegram on your Taskiem account.</p>
+          <Field label="Phone number">
+            <input type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required autoFocus />
+          </Field>
+          <ErrorBox error={act.error} />
+          <button className="primary" type="submit" disabled={act.busy} style={{ width: "100%" }}>
+            {act.busy ? "Sending…" : "Send me a code"}
+          </button>
+        </form>
+      ) : (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void act.run(async () => {
+              await post("/v1/auth/chat/verify", { phone, code });
+              await refresh();
+            }, false);
+          }}
+        >
+          <p role="status">{sent}</p>
+          <Field label="Code">
+            <input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} required autoFocus />
+          </Field>
+          <ErrorBox error={act.error} />
+          <button className="primary" type="submit" disabled={act.busy || code.length !== 6} style={{ width: "100%" }}>
+            {act.busy ? "Signing in…" : "Sign in"}
+          </button>
+          <p className="hint" style={{ textAlign: "center" }}>
+            <button
+              type="button"
+              className="link"
+              onClick={() => {
+                setSent(null);
+                setCode("");
+              }}
+            >
+              Send a new code
+            </button>
+          </p>
+        </form>
+      )}
+      <p className="hint" style={{ textAlign: "center" }}>
+        <button type="button" className="link" onClick={onBack}>
+          Sign in with your email instead
+        </button>
+      </p>
+    </>
   );
 }

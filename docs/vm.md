@@ -32,7 +32,7 @@ It asks for the host name, the owner's email, the organisation's name, the datab
 3. generates every secret itself (OpenBao's unseal key, the audit-anchor key, the database password, the backup password);
 4. initialises OpenBao, creates Taskiem's transit key and a token limited to it, and revokes the root token;
 5. migrates the database and creates the restricted role Taskiem signs in as;
-6. starts everything behind HTTPS, creates the organisation and its owner, and emails the owner a link to set their password (the owner then adds a passkey: administrators are held to passkeys);
+6. starts everything behind HTTPS, creates the organisation and its owner, and emails the owner a link to set their password (the owner may add a passkey under Account, and may require passkeys for administrators under Settings > Security);
 7. initialises the backup repository and turns on the timers: updates every 15 minutes, health checks every 5, a backup every night at 02:30.
 
 It ends by writing a **recovery sheet** to `/root/taskiem-recovery-<date>.txt`: OpenBao's unseal and recovery keys, the anchor key and the backup password. Put it in two offline places, then delete it (`shred -u`); the health checks remind you until you do. Without the unseal key, a backup of OpenBao cannot be opened.

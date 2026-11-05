@@ -1688,6 +1688,10 @@
       "text": "• *build* na ihe ị chọrọ ka ọ na-eme onwe ya, dịka *build every Friday text my customers who owe me* (a ga-echekwa ya dịka mbido mgbe ị kwadoro)",
       "reviewed": false
     },
+    "wa.help.signin": {
+      "text": "• *sign in* maka njikọ banye na ngwa weebụ; *password* iji email banye; *sign out everywhere*",
+      "reviewed": false
+    },
     "wa.help.cancel": {
       "text": "• *cancel*: hapụ ihe na-aga n'ihu",
       "reviewed": false
@@ -3288,12 +3292,16 @@
       "text": " (ya na foto ahụ)",
       "reviewed": false
     },
-    "wa.signin.has_password": {
-      "text": "Ị na-abanyelarị Taskiem na weebụ: {link}\nỊ chefuru okwuntughe gị? Jiri *Forgot password* ebe ahụ; njikọ ahụ ga-aga na email gị.",
+    "wa.signin.link": {
+      "text": "Mepee njikọ a ka ịhọrọ okwuntughe gị. Ọ na-arụ ọrụ otu ugboro, maka otu awa; debe ya n'onwe gị:\n{link}\nMgbe ahụ banye na weebụ site na email gị (nke dị na *{domain}*) na okwuntughe ahụ.",
       "reviewed": false
     },
-    "wa.signin.link": {
-      "text": "Mepee njikọ a ka ị họrọ okwuntughe gị ma banye Taskiem na weebụ. Ọ na-arụ ọrụ otu ugboro, maka otu awa; edobe ya naanị gị:\n{link}",
+    "wa.signin.chat_link": {
+      "text": "Mepee njikọ a ka ịbanye na Taskiem na weebụ. Ọ na-arụ ọrụ otu ugboro, maka nkeji 10; debe ya n'onwe gị:\n{link}",
+      "reviewed": false
+    },
+    "door.signin_email": {
+      "text": "Iji jiri okwuntughe banye, ị chọrọ email mbụ: zipu *email you@example.com* ma mepee njikọ anyị ezigara gị na email. Mgbe ahụ zipu *password* ọzọ.\nMa ọ bụ zipu *sign in* maka njikọ ga-abanye gị ozugbo.",
       "reviewed": false
     },
     "wa.signin.sso": {
@@ -3302,6 +3310,38 @@
     },
     "wa.signin.unavailable": {
       "text": "Edobeghị ịbanye na weebụ na Taskiem a.",
+      "reviewed": false
+    },
+    "wa.signin.off": {
+      "text": "Ịbanye site na WhatsApp ma ọ bụ Telegram agbanyụọla maka gị (Account na weebụ). Zipu *password* ka i jiri email na okwuntughe banye kama.",
+      "reviewed": false
+    },
+    "wa.signin.passkey": {
+      "text": "Ndị nchịkwa na-abanye na Taskiem site na passkey ha: {link}",
+      "reviewed": false
+    },
+    "chat.signin.code": {
+      "text": "{code} bụ koodu ịbanye Taskiem gị. Ọ ga-agwụ na nkeji 10. Ekesala ya; ọ bụrụ na ọ bụghị gị rịọrọ ya, leghara ozi a anya.",
+      "reviewed": false
+    },
+    "chat.signin.told": {
+      "text": "Ị banyere na Taskiem na weebụ site na nkata gị ({device}). Ọ bụghị gị? Zipu *sign out everywhere*.",
+      "reviewed": false
+    },
+    "account.passkey_only.on": {
+      "text": "Ịbanye na Taskiem naanị site na passkey gị agbanyela ugbu a: okwuntughe gị na nkata gị agaghị abanye gị na weebụ ọzọ. Ọ bụghị gị? Zipu *sign out everywhere*.",
+      "reviewed": false
+    },
+    "account.passkey_only.off": {
+      "text": "Ịbanye na Taskiem naanị site na passkey gị agbanyụọla ugbu a: okwuntughe gị na nkata gị na-abanye gị ọzọ. Ọ bụghị gị? Zipu *sign out everywhere*.",
+      "reviewed": false
+    },
+    "chat.signout.done": {
+      "text": "Ị pụọla na weebụ ebe niile: oge {count} kwụsịrị. Nkata gị na-aga n'ihu dịka ọ dị na mbụ.",
+      "reviewed": false
+    },
+    "chat.signout.none": {
+      "text": "Ị banyeghị na weebụ ebe ọ bụla.",
       "reviewed": false
     },
     "wa.status.denied": {
@@ -5176,10 +5216,6 @@
       "text": "Gịnị ka ị chọrọ ịgwa *{name}*? Zipu *... @{name}* na ozi gị.",
       "reviewed": false
     },
-    "chat.direct.files": {
-      "text": "Naanị okwu na-aga ozugbo n'azụmahịa site na *...* ugbu a. Zipu foto na faịlụ na ibe Chat.",
-      "reviewed": false
-    },
     "chat.direct.hint": {
       "text": "Iji zipu ya *{name}* dịka ozi, bido ya na *...*",
       "reviewed": false
@@ -5190,6 +5226,10 @@
     },
     "chat.direct.not_sent": {
       "text": "E zighị ya *{name}*: {reason}.",
+      "reviewed": false
+    },
+    "chat.direct.failed": {
+      "text": "E zighị ya *{name}*: ihe mebiri emebi. Zigharịa ya ọzọ.",
       "reviewed": false
     },
     "chat.link.photo": {
@@ -5369,7 +5409,7 @@
       "reviewed": false
     },
     "wa.mention.which": {
-      "text": "More than one of your linked businesses is called *{name}*: {list}. Pick it on the Chat page, where each is its own conversation.",
+      "text": "*@{name}* nwere ike ịbụ ihe karịrị otu n'ime azụmahịa ejikọrọ gị: {list}. Jiri ọtụtụ aha ahụ, ma ọ bụ họrọ ya na ibe Chat.",
       "reviewed": false
     },
     "order.link.auto_changed_title": {

@@ -137,7 +137,7 @@ curl -fsS https://$APP/readyz && echo ready
 
 ## 4. The owner signs in
 
-Open the email sent to the owner, choose a password, and add a **passkey** when asked (owners are administrators, and administrators are held to passkeys).
+Open the email sent to the owner and choose a password. Adding a **passkey** is optional (Account), unless the deployment sets `TASKIEM_REQUIRE_ADMIN_PASSKEYS=true`.
 
 **Check:** `https://$APP` shows the dashboard. Under **Account**, link Telegram: open the link it gives, press **Start** in Telegram, and the bot answers that the account is linked.
 

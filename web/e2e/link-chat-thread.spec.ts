@@ -328,7 +328,7 @@ test("more than a page arriving while the reader was away leaves no gap", async 
     ).toBeAttached();
 });
 
-test("a result of the search in a conversation shows the message in place", async ({
+test("a result of the search in a conversation takes the thread to the message, in place", async ({
   browser,
 }) => {
   const { buyer, link } = await linked(browser);
@@ -341,10 +341,14 @@ test("a result of the search in a conversation shows the message in place", asyn
   await expect(pane.getByText("Message 120", { exact: true })).toBeVisible();
   await pane.getByTestId("chat-search-open").click();
   await pane.getByTestId("chat-search").fill("Message 12");
-  await expect(pane.getByTestId("chat-message")).toHaveCount(2); // 12 and 120
-  await axeBoth(buyer, "search results with Show");
-  await pane.getByTestId("chat-show").first().click();
-  await expect(pane.getByTestId("chat-search")).toHaveValue("");
+  await expect(pane.getByTestId("chat-result")).toHaveCount(2); // 12 and 120
+  await axeBoth(buyer, "search results in the panel");
+  // The thread is not replaced by them: it is still the conversation, behind the panel.
+  await expect(pane.getByTestId("chat-message").first()).toBeVisible();
+  await pane
+    .getByTestId("chat-result")
+    .filter({ hasText: /Message 12(?!0)/ })
+    .click();
   await expect(pane.getByText("Message 12", { exact: true })).toBeInViewport();
   await expect(pane.locator('[data-msg="' + idOf(12) + '"]')).toHaveClass(
     /flash/,

@@ -448,23 +448,27 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 		return s.chatTemplateBuild(ctx, c, id)
 	}
 	// Anything but words ends a lone "..."'s wait (chat_direct.go), so a
-	// photo or a form is taken as it would be.
+	// voice note or a form is taken as it would be. A photo or a file
+	// captioned "... @business", or sent with "@business" while the wait
+	// lasts, goes straight to the business.
+	waiting := c.data.Direct != nil && time.Since(*c.data.Direct) <= directWait
 	if c.data.Direct != nil && (in.Image != nil || in.Document != nil || in.Media != nil || in.Flow != "") {
 		if err := s.endDirectWait(ctx, c); err != nil {
 			return err
 		}
 	}
+	if in.Image != nil || in.Document != nil {
+		caption, marked := cutDirect(in.Text)
+		if !marked && waiting {
+			caption, marked = strings.TrimSpace(in.Text), true
+		}
+		if marked && strings.Contains(caption, "@") {
+			return s.waDirectFile(ctx, c, caption)
+		}
+	}
 	// A completed WhatsApp form carries its flow token.
 	if in.Flow != "" {
 		return s.waFlowCompleted(ctx, c)
-	}
-	// A photo or a file captioned "...": only words go straight to a
-	// linked business from here (chat_direct.go), so it is not read as a
-	// product or a list either.
-	if (in.Image != nil || in.Document != nil) && c.p.Can(PermChatTrade) {
-		if _, marked := cutDirect(in.Text); marked {
-			return c.say(ctx, s, c.t("chat.direct.files"))
-		}
 	}
 	// A photo: a product to add, or the logo the set-up asked for
 	// (whatsapp_storefront.go).
@@ -866,7 +870,12 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		// A way into the web app for someone with no password (N6).
 		switch cmd {
 		case "sign in", "signin", "log in", "login", "web link", "sign in link", "web app":
+			// A link that opens the web app signed in (chat_signin.go).
 			return s.waSignInLink(ctx, c)
+		case "password", "set password", "set a password", "choose password", "choose a password", "change password", "new password":
+			return s.waPasswordLink(ctx, c)
+		case "sign out everywhere", "log out everywhere", "sign out all", "sign out of the web":
+			return s.waSignOutEverywhere(ctx, c)
 		case "pin", "chat pin", "set pin", "set my pin", "change pin":
 			// The chat PIN, set from the chat by a person with no other
 			// credential (chat_dormant.go).
@@ -1109,6 +1118,9 @@ func (s *Server) waHelp(c *chat) string {
 	}
 	if s.voiceOn(c.lang.Channel) {
 		lines = append(lines, c.t("wa.help.voice"))
+	}
+	if s.PublicURL != "" {
+		lines = append(lines, c.t("wa.help.signin"))
 	}
 	lines = append(lines, c.t("wa.help.cancel"))
 	return strings.Join(lines, "\n")

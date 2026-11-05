@@ -41,6 +41,7 @@ const paths: Record<string, string> = {
   invoices: "M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3",
   money: "M3 6h18v12H3zM12 9a3 3 0 100 6 3 3 0 000-6zM6.5 9.5v.01M17.5 14.5v.01",
   info: "M12 21a9 9 0 100-18 9 9 0 000 18zM12 11v5M12 8v.01",
+  calendar: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M8 14h2M12 14h2M16 14h.01",
   // The message menu's: reply, copy, forward, delete.
   reply: "M9 17l-5-5 5-5M4 12h10a6 6 0 016 6v1",
   forward: "M15 7l5 5-5 5M20 12H10a6 6 0 00-6 6v1",

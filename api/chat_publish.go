@@ -9,7 +9,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -518,54 +517,6 @@ func (s *Server) shopTurnOnOrders(ctx context.Context, c *chat) error {
 		msg += "\n" + c.t("wa.shop.orders_no_paystack", "link", c.t("connect.hint", "service", "paystack"))
 	}
 	return c.say(ctx, s, msg)
-}
-
-// waSignInLink answers "sign in" in chat (N6): a one-time link, good for
-// an hour, to choose a password and sign in on the web. The owner of a
-// business a field agent made has none yet; the chat's number or account
-// is already bound to them, so the link goes only where they are.
-// Someone with a passkey, or a password on a real address, is sent to the
-// sign-in page instead.
-func (s *Server) waSignInLink(ctx context.Context, c *chat) error {
-	if s.PublicURL == "" {
-		return c.say(ctx, s, c.t("wa.signin.unavailable"))
-	}
-	if ok, err := s.passwordUsable(ctx, c.p.UserID); err != nil || !ok {
-		if err != nil {
-			return err
-		}
-		return c.say(ctx, s, c.t("wa.signin.sso", "link", strings.TrimRight(s.PublicURL, "/")+"/login"))
-	}
-	// Only for someone with no other way in: no passkey, and no password
-	// or one on an address that receives no mail (a chat-born or agent-made
-	// account). Anyone else resets by email, never by holding the phone
-	// (F17).
-	f, _, err := s.factorsOf(ctx, c.tenant.ID, c.p.UserID)
-	if err != nil {
-		return err
-	}
-	var email string
-	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT email FROM users WHERE id = $1`, c.p.UserID).Scan(&email)
-	}); err != nil {
-		return err
-	}
-	if f.Passkey || (f.Password && !emailPlaceholder(email)) {
-		return c.say(ctx, s, c.t("wa.signin.has_password", "link", strings.TrimRight(s.PublicURL, "/")+"/login"))
-	}
-	if !s.limiter("wa-signin:"+c.p.UserID.String(), 10*time.Minute, 3).Allow() {
-		return c.say(ctx, s, c.t("wa.too_fast"))
-	}
-	token, selector, secretHash := newResetToken()
-	if _, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_auth_password_reset_issue($1, $2, $3, $4::interval, $5)`, c.p.UserID, selector, secretHash, time.Hour.String(), c.ch.Name()); err != nil {
-		return err
-	}
-	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
-		return waAudit(ctx, tx, c.ch.Name(), c.p, "auth.signin_link", c.p.UserID.String(), nil)
-	}); err != nil {
-		return err
-	}
-	return c.say(ctx, s, c.t("wa.signin.link", "link", strings.TrimRight(s.PublicURL, "/")+"/reset-password#token="+token))
 }
 
 // railNames are rails' display names, by connector id.

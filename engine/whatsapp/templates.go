@@ -88,7 +88,7 @@ var (
 		Name: "taskiem_otp", Category: "AUTHENTICATION",
 		Body: "{{1}} is your verification code. For your security, do not share this code. This code expires in 10 minutes.",
 		Vars: []string{"code"}, Examples: []string{"123456"}, Buttons: []TemplateButton{{Type: "copy_code", Text: "Copy code"}},
-		Purpose: "The code that binds a number to a Taskiem account (Account > WhatsApp).",
+		Purpose: "The code that binds a number to a Taskiem account (Account > WhatsApp), and that signs in on the web with WhatsApp.",
 	}
 	TplApprovalRequest = Template{
 		Name: "taskiem_approval_request", Category: "UTILITY",

@@ -301,6 +301,10 @@ const ringOf = (p: Page) =>
     const shadow = cs.boxShadow !== "none" && cs.boxShadow !== "";
     const outline =
       cs.outlineStyle !== "none" && parseFloat(cs.outlineWidth) > 0;
+    // The message box shows its ring on the pill around it.
+    const pill = el.closest(".composer-pill");
+    const pillRing =
+      !!pill && getComputedStyle(pill).boxShadow.includes("0px 0px 0px 2px");
     const r = el.getBoundingClientRect();
     const name =
       el.getAttribute("aria-label") ??
@@ -308,7 +312,7 @@ const ringOf = (p: Page) =>
       el.tagName;
     return {
       name: `${el.tagName} ${name}`,
-      ring: shadow || outline,
+      ring: shadow || outline || pillRing,
       visible: r.width > 0 && r.height > 0,
     };
   });
