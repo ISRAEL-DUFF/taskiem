@@ -1003,6 +1003,7 @@ sso_connections.group_roles
 sso_connections.id
 sso_connections.jit
 sso_connections.name
+sso_connections.owner_approved_at
 sso_connections.protocol
 sso_connections.tenant_id
 sso_connections.updated_at

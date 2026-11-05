@@ -442,6 +442,8 @@ interface SSOConnection {
   jit: boolean;
   enforce: boolean;
   disabled: boolean;
+  /** An owner set it up or approved it; until then it signs in no owner. */
+  owner_approved: boolean;
   domains: SSODomain[] | null;
   redirect_uri?: string;
   entity_id?: string;
@@ -502,6 +504,23 @@ function SingleSignOn() {
               </>
             )}
           </p>
+          {!c.owner_approved && (
+            <p className="hint">
+              No owner has set up or approved this provider, so it signs in no owner. Owners sign in with their password or passkey meanwhile.{" "}
+              {owner && (
+                <button
+                  onClick={() =>
+                    void act.run(async () => {
+                      await put(`/v1/sso/${c.id}`, { default_roles: c.default_roles, group_roles: c.group_roles, jit: c.jit, enforce: c.enforce, disabled: c.disabled, owner_approved: true });
+                      list.reload();
+                    }, "Approved for owners")
+                  }
+                >
+                  Approve for owners
+                </button>
+              )}
+            </p>
+          )}
           <p className="hint">
             Default roles: {c.default_roles.join(", ") || "none"} · Groups: {Object.entries(c.group_roles).map(([g, r]) => `${g} → ${r.join(", ")}`).join("; ") || "none"}
           </p>

@@ -21507,6 +21507,8 @@ paths:
       tags:
       - Members
       summary: Change a single sign-on connection
+      description: Roles, JIT, enforcement and disabled, held to what the caller could grant. owner_approved
+        is an owner's alone.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -21533,7 +21535,8 @@ paths:
         '204':
           $ref: '#/components/responses/NoContent'
         '403':
-          description: A role mapping the caller cannot grant.
+          description: A role mapping the caller cannot grant, or owner_approved from someone who is not an
+            owner.
           content:
             application/json:
               schema:
@@ -36881,6 +36884,7 @@ components:
       - jit
       - enforce
       - disabled
+      - owner_approved
       - domains
       properties:
         id:
@@ -36921,6 +36925,10 @@ components:
           description: Members with the connection's domains must sign in this way.
         disabled:
           type: boolean
+        owner_approved:
+          type: boolean
+          description: An owner set the connection up or approved it. Until then it signs in no one who holds
+            owner (they use their password or passkey); other members sign in as usual.
         domains:
           type:
           - array
@@ -37015,6 +37023,10 @@ components:
         disabled:
           type: boolean
           description: Update only.
+        owner_approved:
+          type: boolean
+          description: Update only, owners only (403 otherwise). True lets the connection sign in owners; false
+            stops it. Left out, it stays as it is. A connection an owner creates starts approved.
       additionalProperties: false
     DomainRequest:
       type: object
