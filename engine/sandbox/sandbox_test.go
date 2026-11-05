@@ -156,8 +156,9 @@ func TestMemoryIsBounded(t *testing.T) {
 		if !errors.Is(err, ErrMemory) && !errors.Is(err, ErrTimeout) {
 			t.Errorf("%s: want a memory or time limit error, got %v", name, err)
 		}
-		// Measured alone: peak RSS is about 75 MiB plus the WebAssembly cap
-		// (395 MiB at 320 MiB). The peak is reset before each case, but
+		// Measured alone: peak RSS is about 75 MiB plus the step's
+		// WebAssembly cap (memory_mb plus stepHeadroom). The peak is reset
+		// before each case, but
 		// runs earlier in this process leave memory the Go runtime has not
 		// returned, so this is only a sanity bound.
 		// Python's instances (a cap of their own) stay resident too.
@@ -268,5 +269,36 @@ func TestDeclaredMemoryIsUsable(t *testing.T) {
 	}
 	if _, err := run(t, src, 400, Host{}, lim); !errors.Is(err, ErrMemory) {
 		t.Errorf("400 MB within memory_mb 256: %v", err)
+	}
+}
+
+// TestStepMemoryIsEnforced: a JavaScript step's own memory_mb bounds what
+// it can hold, however it allocates (F93). QuickJS's JS_SetMemoryLimit
+// alone did not: in the WebAssembly build it counts a few bytes per
+// allocation, not the allocation's size, so many 1 MiB typed arrays or
+// strings passed a 64 MiB limit.
+func TestStepMemoryIsEnforced(t *testing.T) {
+	Init(0)
+	lim := DefaultLimits
+	lim.Memory = 64 << 20
+	lim.Timeout = 30 * time.Second
+	for name, src := range map[string]string{
+		"typed arrays":  `export default (n) => { const a = []; for (let i = 0; i < n; i++) a.push(new Uint8Array(1 << 20).fill(i)); return a.length }`,
+		"strings":       `export default (n) => { const a = []; for (let i = 0; i < n; i++) a.push("y".repeat(1 << 20) + i); return a.length }`,
+		"array buffers": `export default (n) => { const a = []; for (let i = 0; i < n; i++) a.push(new ArrayBuffer(1 << 20)); return a.length }`,
+	} {
+		if r, err := run(t, src, 300, Host{}, lim); !errors.Is(err, ErrMemory) {
+			t.Errorf("%s: 300 MiB within memory_mb 64: %v %v", name, r.Output, err)
+		}
+		// Within the limit it still runs, and a fresh runtime is not
+		// affected by the one that ran out.
+		if r, err := run(t, src, 40, Host{}, lim); err != nil || fmt.Sprint(r.Output) != "40" {
+			t.Errorf("%s: 40 MiB within memory_mb 64: %v %v", name, r.Output, err)
+		}
+	}
+	small := lim
+	small.Memory = 16 << 20
+	if _, err := run(t, `export default () => { const a = []; for (let i = 0; i < 64; i++) a.push(new Uint8Array(1 << 20)); return a.length }`, nil, Host{}, small); !errors.Is(err, ErrMemory) {
+		t.Errorf("64 MiB within memory_mb 16: %v", err)
 	}
 }

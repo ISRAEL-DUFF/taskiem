@@ -91,8 +91,8 @@ roles:
     # without it leaves them queued until their runs time out.
     queues: connector,sandbox,ai
     # Code steps need room: the interpreter's memory cap is 256 MiB per
-    # running Python step, and 320 MiB per running JavaScript step (at most
-    # 4 at once), on top of the process.
+    # running Python step, and a JavaScript step's memory_mb plus 8 MiB
+    # (at most 264 MiB, 4 steps at once), on top of the process.
     resources:
       requests: { cpu: 500m, memory: 512Mi }
       limits: { memory: 2Gi }

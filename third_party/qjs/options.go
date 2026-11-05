@@ -50,6 +50,13 @@ type Option struct {
 	// Taskiem fork: Walltime, when set, is the script's wall clock (Date),
 	// so a code step sees the run's logical time rather than the host's.
 	Walltime func() (sec int64, nsec int32)
+	// Taskiem fork: MaxMemory, when above 0, caps this runtime's WebAssembly
+	// linear memory in bytes (rounded down to 64 KiB pages, never above
+	// MemoryLimitPages). It is the hard per-runtime bound: MemoryLimit
+	// (JS_SetMemoryLimit) does not hold in this build, because wasi-libc
+	// gives QuickJS no malloc_usable_size and it counts only a fixed
+	// overhead per allocation, not the allocation's size.
+	MaxMemory int
 }
 
 // EvalOption configures JavaScript evaluation behavior in QuickJS context.
