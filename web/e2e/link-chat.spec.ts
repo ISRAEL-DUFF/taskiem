@@ -192,8 +192,8 @@ test("two linked businesses talk", async ({ browser }) => {
   // Search in the conversation; archive it.
   await pane.getByTestId("chat-search-open").click();
   await pane.getByTestId("chat-search").fill("bags");
-  await expect(pane.getByTestId("chat-message")).toHaveCount(1);
-  await pane.getByTestId("chat-search").fill("");
+  await expect(pane.getByTestId("chat-result")).toHaveCount(1);
+  await pane.getByRole("button", { name: "Close search" }).click();
   await pane
     .getByRole("button", { name: "More about this conversation" })
     .click();

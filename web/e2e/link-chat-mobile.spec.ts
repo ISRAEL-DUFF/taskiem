@@ -151,13 +151,25 @@ test("the conversation's head shows who they are, search and the menu as plain i
   const head = pane.locator(".chat-head");
   await expect(head.getByRole("heading", { name })).toBeVisible();
   await expect(head.locator(".chat-sub")).toHaveText("They supply you");
-  // The search is behind its icon, as WhatsApp's.
-  await expect(pane.getByTestId("chat-search")).toHaveCount(0);
+  // The search is a panel behind its icon, as WhatsApp's: its own head, a
+  // calendar and the box, the messages found as rows.
+  await expect(pane.getByTestId("chat-search-panel")).toHaveCount(0);
   await head.getByRole("button", { name: "Search this conversation" }).click();
-  await pane.getByTestId("chat-search").fill("Rice");
-  await expect(pane.getByTestId("chat-message")).toHaveCount(1);
-  await pane.getByTestId("chat-search").press("Escape");
-  await expect(pane.getByTestId("chat-search")).toHaveCount(0);
+  const panel = pane.getByTestId("chat-search-panel");
+  await expect(
+    panel.getByRole("heading", { name: "Search messages" }),
+  ).toBeVisible();
+  await expect(panel.getByTestId("chat-search")).toBeFocused();
+  await expect(panel).toContainText(`Search for messages within ${name}.`);
+  const pb = must(await panel.boundingBox());
+  expect(pb.width).toBeGreaterThanOrEqual(PHONE.width - 1); // the whole screen
+  await panel.getByTestId("chat-search").fill("Rice");
+  await expect(panel.getByTestId("chat-result")).toHaveCount(1);
+  await panel.getByTestId("chat-result").click();
+  await expect(panel).toHaveCount(0); // on a phone it gives way to the thread
+  await expect(
+    head.getByRole("button", { name: "Search this conversation" }),
+  ).toBeFocused();
 
   // The box: emoji, the words, attach and camera in one pill; the microphone, round, beside it.
   const pill = pane.locator(".composer-pill");
@@ -317,4 +329,81 @@ test("the camera is beside the clip on a touch screen, inside the pill; a comput
       computer.buyer.getByTestId("chat-pane").getByTestId("camera-quick"),
     ).toBeHidden();
   }
+});
+
+test("in the installed app on a phone, dragging down to read older messages scrolls the thread and does not pull the app to refresh", async ({
+  browser,
+}) => {
+  const { buyer, seller, link } = await linked(browser, {
+    viewport: PHONE,
+    hasTouch: true,
+    isMobile: true,
+  });
+  // The installed app: the page says it is standalone.
+  await buyer.addInitScript(() => {
+    Object.defineProperty(navigator, "standalone", { value: true });
+  });
+  for (let i = 1; i <= 24; i++) {
+    await say(seller, link, `Message number ${i} with some words in it`);
+    if (i % 8 === 0) await buyer.waitForTimeout(2100);
+  }
+  const drag = (sel: string) =>
+    buyer.evaluate((s) => {
+      const el = document.querySelector(s);
+      if (!el) throw new Error(`nothing at ${s}`);
+      const touch = (y: number) =>
+        new Touch({ identifier: 1, target: el, clientX: 200, clientY: y });
+      const fire = (type: string, y: number) =>
+        el.dispatchEvent(
+          new TouchEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            touches: type === "touchend" ? [] : [touch(y)],
+            changedTouches: [touch(y)],
+          }),
+        );
+      fire("touchstart", 200);
+      for (let y = 220; y <= 420; y += 20) fire("touchmove", y);
+      return new Promise<void>((done) =>
+        setTimeout(() => {
+          fire("touchend", 420);
+          done();
+        }, 50),
+      );
+    }, sel);
+  const refreshing = buyer
+    .getByRole("status")
+    .filter({ hasText: "Refreshing" });
+
+  // On a page that does not scroll inside itself, the drag refreshes.
+  await buyer.goto("/home");
+  await expect(buyer.locator("main, .main").first()).toBeVisible();
+  await drag("main, .main");
+  await expect(refreshing).toHaveCount(1);
+  await expect(refreshing).toHaveCount(0, { timeout: 5000 });
+
+  // In a long conversation the same drag, from the top of the thread, is
+  // reading back: nothing refreshes.
+  await buyer.goto(`/chat?with=${link}`);
+  const stream = buyer.getByTestId("chat-pane").locator(".chat-stream");
+  await expect
+    .poll(() => stream.getByTestId("chat-message").count())
+    .toBeGreaterThan(14); // the send limit may turn a few away
+  expect(await stream.evaluate((e) => e.scrollHeight > e.clientHeight)).toBe(
+    true,
+  );
+  await stream.evaluate((e) => (e.scrollTop = 0));
+  await drag(".chat-stream .bubble");
+  // Looked at at once and again after a moment, not waited for.
+  const status = () =>
+    buyer.evaluate(() =>
+      [...document.querySelectorAll("[role=status]")]
+        .map((e) => e.textContent)
+        .join("|"),
+    );
+  expect(await status()).not.toContain("Refreshing");
+  await buyer.waitForTimeout(400);
+  expect(await status()).not.toContain("Refreshing");
+  expect(await buyer.locator(".pull").count()).toBe(0);
+  await expect(stream).toHaveCSS("overscroll-behavior-y", "contain");
 });

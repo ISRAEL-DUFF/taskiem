@@ -57,6 +57,7 @@ import {
 import { ThreadJump } from "./ThreadParts";
 import { ChatStream } from "./ChatStream";
 import { ChatHead } from "./ChatHead";
+import { ChatSearchPanel } from "./ChatSearch";
 import { BubbleShell, CopyItem, PopItem, Ticks } from "./BubbleShell";
 import { ReadMore, useFold } from "./ReadMore";
 import { useChatLive } from "./ChatLive";
@@ -432,7 +433,6 @@ function Bubble({
   onHide,
   onJump,
   flash = false,
-  onShow,
   first = true,
   onReact,
   onStar,
@@ -452,8 +452,6 @@ function Bubble({
   onJump?: (id: string) => void;
   /** Shown for a moment after a jump lands on it. */
   flash?: boolean;
-  /** A search result: shows it in the conversation, around it. */
-  onShow?: (id: string) => void;
   /** Starts a run of one sender's messages: it has the tail and the name. */
   first?: boolean;
   /** React to it with an emoji (the same one again takes the reaction back). */
@@ -479,8 +477,7 @@ function Bubble({
   // The time and ticks sit in the corner of the last line of text (the text
   // keeps room for them); with a photo only, a link preview or a card they
   // have a row of their own.
-  const inline =
-    !card && !!m.body && !m.preview && !onShow && local !== "failed";
+  const inline = !card && !!m.body && !m.preview && local !== "failed";
   return (
     <BubbleShell
       id={m.id}
@@ -489,7 +486,6 @@ function Bubble({
       testid={card ? "chat-card" : "chat-message"}
       className={`${card ? "card-bubble" : ""}${flash ? " flash" : ""}${m.reactions?.length ? " has-reactions" : ""}`.trim()}
       what={what}
-      asResult={!!onShow}
       onReply={canReply ? () => onReply(m) : undefined}
       quickReact={!!onReact}
       menu={
@@ -600,17 +596,6 @@ function Bubble({
             </span>
           )}
           <span className={`stamp${inline ? " inline" : ""}`}>
-            {onShow && (
-              <button
-                type="button"
-                className="reply-btn"
-                data-testid="chat-show"
-                onClick={() => onShow(m.id)}
-              >
-                Show
-                <span className="sr-only"> in the conversation</span>
-              </button>
-            )}
             {m.starred && (
               <span className="starred" role="img" aria-label="Starred">
                 <Icon name="star" />
@@ -813,9 +798,8 @@ export function ConversationPane({
     onSend: (s) => sendMessage(s),
   });
   const { setReply } = c;
-  const [q, setQ] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
-  const [found, setFound] = useState<LinkMessage[]>();
+  const searchButton = useRef<HTMLButtonElement>(null);
   const act = useAction();
   const path = `/v1/link-chats/${conv.link}`;
   // The thread's scrolling, as WhatsApp Web's: older messages load as the
@@ -945,19 +929,30 @@ export function ConversationPane({
         setError(new Error("That message is no longer here.")),
       );
   };
-  // A search result: close the search, then go to the message in place.
-  const [showing, setShowing] = useState<string>();
-  const showFound = (id: string) => {
-    setQ("");
-    setFound(undefined);
-    setShowing(id);
+  // A search result: the thread goes to the message (on a phone the panel
+  // closes to show it; on a computer it stays beside the thread).
+  const onPhone = () => window.matchMedia?.("(max-width: 899px)").matches;
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    requestAnimationFrame(() => searchButton.current?.focus());
+  }, []);
+  const jumpFound = (id: string) => {
+    jump(id);
+    if (onPhone()) closeSearch();
   };
-  useEffect(() => {
-    if (!showing || found) return;
-    setShowing(undefined);
-    jump(showing);
-    // jump is stable enough: it reads the thread's refs and openAt.
-  }, [showing, found]);
+  // A day: the first message of it, or after it.
+  const jumpToDay = async (day: string) => {
+    const start = new Date(`${day}T00:00:00`);
+    if (Number.isNaN(start.getTime())) return false;
+    const before = new Date(start.getTime() - 1).toISOString();
+    const out = await get<{ messages: LinkMessage[] }>(
+      `${path}/messages?after=${encodeURIComponent(before)}&limit=1`,
+    );
+    const first = out.messages[0];
+    if (!first) return false;
+    jumpFound(first.id);
+    return true;
+  };
   // The live stream brings what changes as it happens; while it is open the
   // polling only reconciles (and says so by being slow), and without it the
   // page polls as it did.
@@ -1118,14 +1113,7 @@ export function ConversationPane({
       onChanged();
     }, "Deleted for you");
   };
-  const search = (v: string) => {
-    setQ(v);
-    if (v.trim().length < 2) return setFound(undefined);
-    get<{ messages: LinkMessage[] }>(
-      `${path}/messages?q=${encodeURIComponent(v.trim())}`,
-    ).then((r) => setFound(r.messages), setError);
-  };
-  const shown = found ?? threadItems;
+  const shown = threadItems;
   // A card's actions are offered on its document's newest card only.
   const newest = new Set<string>();
   const seen = new Set<string>();
@@ -1138,7 +1126,7 @@ export function ConversationPane({
   }
   return (
     <section
-      className="chat-pane"
+      className={`chat-pane${searchOpen ? " with-side" : ""}`}
       aria-label={`Conversation with ${conv.name}`}
       data-testid="chat-pane"
       onKeyDown={c.onPaneKeyDown}
@@ -1174,11 +1162,9 @@ export function ConversationPane({
             className="icon-button"
             aria-label="Search this conversation"
             aria-expanded={searchOpen}
+            ref={searchButton}
             data-testid="chat-search-open"
-            onClick={() => {
-              setSearchOpen(!searchOpen);
-              if (searchOpen) search("");
-            }}
+            onClick={() => setSearchOpen(!searchOpen)}
           >
             <Icon name="search" />
           </button>
@@ -1234,47 +1220,16 @@ export function ConversationPane({
           </>
         )}
       />
-      {(searchOpen || q) && (
-        <div
-          className="filters chat-search-bar"
-          role="search"
-          aria-label={`Search the conversation with ${conv.name}`}
-        >
-          <label className="search">
-            <span className="sr-only">Search this conversation</span>
-            <Icon name="search" />
-            <input
-              type="search"
-              placeholder="Search"
-              value={q}
-              autoFocus
-              onChange={(e) => search(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  e.preventDefault();
-                  search("");
-                  setSearchOpen(false);
-                }
-              }}
-              data-testid="chat-search"
-            />
-          </label>
-        </div>
-      )}
       <ErrorBox error={error ?? act.error ?? c.fileError} />
       <ChatStream
         items={shown}
         thread={thread}
-        hasOlder={hasOlder && !found}
+        hasOlder={hasOlder}
         prefix="chat"
         keyOf={(m) => m.id}
         startsRun={startsRun}
-        unread={found ? undefined : unread}
-        empty={
-          found
-            ? "No messages say that."
-            : `No messages yet. Say hello to ${conv.name}.`
-        }
+        unread={unread}
+        empty={`No messages yet. Say hello to ${conv.name}.`}
         render={(m, { first }) => (
           <Bubble
             m={m}
@@ -1283,8 +1238,7 @@ export function ConversationPane({
             onRetry={retry}
             onDiscard={discard}
             onReply={setReply}
-            onJump={found ? undefined : jump}
-            onShow={found ? showFound : undefined}
+            onJump={jump}
             first={first}
             flash={flashId === m.id}
             latest={newest.has(m.id)}
@@ -1301,7 +1255,7 @@ export function ConversationPane({
           />
         )}
         overlay={
-          !found && (thread.away || detached) ? (
+          thread.away || detached ? (
             <ThreadJump
               detached={detached}
               count={thread.newCount}
@@ -1341,6 +1295,15 @@ export function ConversationPane({
           )}
           onClose={() => setForwarding(undefined)}
           onSent={onChanged}
+        />
+      )}
+      {searchOpen && (
+        <ChatSearchPanel
+          name={conv.name}
+          path={path}
+          onClose={closeSearch}
+          onJump={jumpFound}
+          onDate={jumpToDay}
         />
       )}
       {infoOpen && (

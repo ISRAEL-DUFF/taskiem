@@ -17,3 +17,28 @@ export function pullShown(dy: number): number {
 export function pullRefreshes(dy: number): boolean {
   return pullShown(dy) >= PULL_AT;
 }
+
+/** The bits of an element `insideScroller` reads (a real Element fits). */
+export interface ScrollNode {
+  parentElement: ScrollNode | null;
+  scrollHeight: number;
+  clientHeight: number;
+  tagName?: string;
+}
+
+/** Whether a touch that starts on `el` is inside something that scrolls up
+ * and down by itself (a message list, a long sheet). Dragging down there is
+ * reading what came before, not asking the page to load again. */
+export function insideScroller(
+  el: ScrollNode | null,
+  overflowOf: (n: ScrollNode) => string = (n) =>
+    getComputedStyle(n as unknown as Element).overflowY,
+): boolean {
+  for (let n = el; n; n = n.parentElement) {
+    if (n.tagName === "BODY" || n.tagName === "HTML") return false;
+    const o = overflowOf(n);
+    if ((o === "auto" || o === "scroll") && n.scrollHeight > n.clientHeight)
+      return true;
+  }
+  return false;
+}
