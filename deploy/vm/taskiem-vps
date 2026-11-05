@@ -637,6 +637,9 @@ cmd_update() {
     return 0
   fi
   log "the new release did not become healthy: rolling back to $current"
+  # With its own kit: the Compose file, configs and this tool of the
+  # release being returned to, not of the one that failed.
+  (sync_kit "$(image_revision "$current")") || log "could not restore the deployment kit of $current: keeping $target's"
   set_image "$current"
   compose up -d --remove-orphans >/dev/null 2>&1 || true
   printf '%s\n' "$target" >"$STATE/update-failed"
@@ -654,6 +657,7 @@ cmd_rollback() {
   previous=$(cat "$STATE/previous" 2>/dev/null || true)
   [ -n "$previous" ] || die "no previous release recorded"
   log "rolling back to $previous"
+  sync_kit "$(image_revision "$previous")" # its own kit, before anything changes
   printf '%s\n' "$(cat "$STATE/current")" >"$STATE/previous"
   set_image "$previous"
   compose up -d --remove-orphans

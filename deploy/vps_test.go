@@ -167,3 +167,42 @@ func TestVPSDoesNotRetryAFailedRelease(t *testing.T) {
 		t.Errorf("current = %q, want taskiem:good2", got)
 	}
 }
+
+// TestVPSRollbackRestoresTheKit: going back to a release, after a failed
+// upgrade or with taskiem-vps rollback, also brings back that release's
+// deployment kit (Compose file, configs and taskiem-vps itself), so the old
+// image does not run under the newer release's Compose file.
+func TestVPSRollbackRestoresTheKit(t *testing.T) {
+	v := newVPS(t)
+	kit := func() string { return v.read(filepath.Join(v.kit, "docker-compose.yml")) }
+	tool := func() string { return v.read(filepath.Join(v.bin, "taskiem-vps")) }
+
+	if out, err := v.run("taskiem:broken", "update", "--now"); err == nil {
+		t.Fatalf("the broken release was accepted: %s", out)
+	}
+	if kit() != "# kit revA" || tool() != "# kit revA" {
+		t.Errorf("after the failed upgrade: compose file %q, taskiem-vps %q; want revA's", kit(), tool())
+	}
+	if ups := v.ups(); len(ups) == 0 || ups[len(ups)-1] != "taskiem:good # kit revA" {
+		t.Errorf("the rolled-back release started as %q, want taskiem:good with revA's kit", ups)
+	}
+
+	if out, err := v.run("taskiem:good2", "update", "--now"); err != nil {
+		t.Fatalf("upgrade: %v: %s", err, out)
+	}
+	if kit() != "# kit revC" {
+		t.Fatalf("after the upgrade: compose file %q, want revC's", kit())
+	}
+	if out, err := v.run("", "rollback"); err != nil {
+		t.Fatalf("rollback: %v: %s", err, out)
+	}
+	if got := v.read(filepath.Join(v.state, "current")); got != "taskiem:good" {
+		t.Errorf("current after rollback = %q, want taskiem:good", got)
+	}
+	if kit() != "# kit revA" || tool() != "# kit revA" {
+		t.Errorf("after rollback: compose file %q, taskiem-vps %q; want revA's", kit(), tool())
+	}
+	if ups := v.ups(); ups[len(ups)-1] != "taskiem:good # kit revA" {
+		t.Errorf("rollback started %q, want taskiem:good with revA's kit", ups[len(ups)-1])
+	}
+}
