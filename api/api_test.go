@@ -420,7 +420,10 @@ func TestAdminAndErasure(t *testing.T) {
 		t.Fatal("cancelled without the step-up")
 	}
 	secret := enrol(t, owner)
-	owner.must(200, "POST", "/v1/pii/erase", map[string]any{"category": "bvn", "value": "22299999999", "cancel_runs": true, "totp": codeAfter(secret, 1)})
+	// By value, in another format: the same person (canonical subject ids).
+	if out := owner.must(200, "POST", "/v1/pii/erase", map[string]any{"category": "bvn", "value": "222 9999 9999", "cancel_runs": true, "totp": codeAfter(secret, 1)}); len(out["subjects"].([]any)) != 1 {
+		t.Fatalf("erased: %v", out)
+	}
 	got := owner.must(200, "GET", "/v1/runs/"+run+"?reveal=true", nil)
 	if s := toJSON(got); strings.Contains(s, "22299999999") {
 		t.Error("erased BVN still readable")

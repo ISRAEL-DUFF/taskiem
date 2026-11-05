@@ -557,15 +557,20 @@ type eraseReq struct {
 }
 
 // runsHolding lists up to 50 of the tenant's runs in flight whose history
-// holds an envelope of the subject (subject ids are long and distinct, so
-// finding the id in an event's payload is finding the envelope).
-func (s *Server) runsHolding(r *http.Request, subject string) ([]uuid.UUID, error) {
+// holds an envelope of one of the subjects (subject ids are long and
+// distinct, so finding the id in an event's payload is finding the
+// envelope).
+func (s *Server) runsHolding(r *http.Request, subjects []string) ([]uuid.UUID, error) {
+	quoted := make([]string, len(subjects))
+	for i, x := range subjects {
+		quoted[i] = `"` + x + `"`
+	}
 	var ids []uuid.UUID
 	err := s.tx(r, func(tx pgx.Tx) error {
 		rows, err := tx.Query(r.Context(), `SELECT r.id FROM runs r
 			WHERE r.tenant_id = $1 AND r.status NOT IN ('completed', 'failed', 'cancelled')
-			  AND EXISTS (SELECT 1 FROM run_events e WHERE e.run_id = r.id AND strpos(e.payload::text, $2) > 0)
-			ORDER BY r.started_at LIMIT 50`, principalFrom(r.Context()).TenantID, `"`+subject+`"`)
+			  AND EXISTS (SELECT 1 FROM run_events e, unnest($2::text[]) q WHERE e.run_id = r.id AND strpos(e.payload::text, q) > 0)
+			ORDER BY r.started_at LIMIT 50`, principalFrom(r.Context()).TenantID, quoted)
 		if err != nil {
 			return err
 		}
@@ -586,20 +591,24 @@ func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 	}
 	p := principalFrom(r.Context())
 	subject := req.Subject
+	subjects := []string{subject}
 	if subject == "" {
 		if req.Category == "" || req.Value == nil {
 			s.fail(w, r, fmt.Errorf("%w: give subject, or category and value", errBadRequest))
 			return
 		}
+		// The person as they are sealed now, and under the ways the value
+		// was written before subject ids were canonical.
 		var err error
-		if subject, err = s.Vault.SubjectFor(r.Context(), p.TenantID, req.Category, req.Value); err != nil {
+		if subjects, err = s.Vault.SubjectsFor(r.Context(), p.TenantID, req.Category, req.Value); err != nil {
 			s.fail(w, r, err)
 			return
 		}
+		subject = subjects[0]
 	}
 	// Never under a running workflow (spec 9.4): runs in flight holding the
 	// subject finish first, or are cancelled with the erasure.
-	active, err := s.runsHolding(r, subject)
+	active, err := s.runsHolding(r, subjects)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -631,7 +640,7 @@ func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(active) > 0 {
 		// One started since, or more than were listed: not yet.
-		if still, err := s.runsHolding(r, subject); err != nil || len(still) > 0 {
+		if still, err := s.runsHolding(r, subjects); err != nil || len(still) > 0 {
 			if err == nil {
 				writeJSON(w, http.StatusConflict, map[string]any{"error": "more runs in flight hold this person's data: try again",
 					"code": "runs_in_flight", "runs": still})
@@ -641,14 +650,23 @@ func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err := s.Vault.Erase(r.Context(), p.TenantID, subject, p.Actor()); err != nil {
+	erased := []string{}
+	for _, x := range subjects {
+		err := s.Vault.Erase(r.Context(), p.TenantID, x, p.Actor())
 		if errors.Is(err, secrets.ErrNotFound) {
-			err = fmt.Errorf("%w: no such subject, or already erased", secrets.ErrNotFound)
+			continue // that form of the value was never sealed, or is erased already
 		}
-		s.fail(w, r, err)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		erased = append(erased, x)
+	}
+	if len(erased) == 0 {
+		s.fail(w, r, fmt.Errorf("%w: no such subject, or already erased", secrets.ErrNotFound))
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"subject": subject, "erased": true})
+	writeJSON(w, http.StatusOK, map[string]any{"subject": subject, "erased": true, "subjects": erased})
 }
 
 // listAnchors returns the tenant's signed audit-chain anchors and the key

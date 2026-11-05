@@ -258,3 +258,62 @@ func TestErasedSubjectComesBackAsANewOne(t *testing.T) {
 		before = append(before, env)
 	}
 }
+
+// A person's value in another format is the same subject, so erasing them
+// by value reaches what detection sealed as it was typed; and data sealed
+// before ids were canonical, under the format as typed, is found too.
+func TestOneSubjectWhateverTheFormat(t *testing.T) {
+	d := dbtest.New(t)
+	v := localVault(t, d)
+	a := d.SeedTenant(t, nil)
+	in := func(fn func(tx pgx.Tx) error) {
+		t.Helper()
+		if err := db.InTenantTx(ctx, d.App, []uuid.UUID{a.ID}, fn); err != nil {
+			t.Fatal(err)
+		}
+	}
+	e164, err := v.SubjectFor(ctx, a.ID, "phone", "+2348031234567")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{"08031234567", "0803 123 4567", " +2348031234567", "+234 (0)803 123 4567"} {
+		if s, err := v.SubjectFor(ctx, a.ID, "phone", f); err != nil || s != e164 {
+			t.Errorf("SubjectFor(phone, %q) = %s %v, want %s", f, s, err, e164)
+		}
+	}
+	if x, _ := v.SubjectFor(ctx, a.ID, "email", "Ada@X.com"); x == "" {
+		t.Fatal("no email subject")
+	} else if y, _ := v.SubjectFor(ctx, a.ID, "email", "ada@x.com"); x != y {
+		t.Errorf("an email's case made another subject: %s %s", x, y)
+	}
+	var detected, legacy any
+	in(func(tx pgx.Tx) error {
+		var err error
+		if detected, err = pii.SealDetected(ctx, v, tx, a.ID, map[string]any{"note": "0803 123 4567"}, pii.Taint{}); err != nil {
+			return err
+		}
+		legacy, err = v.SealRawTx(ctx, tx, a.ID, "phone", "08031234567")
+		return err
+	})
+	subjects, err := v.SubjectsFor(ctx, a.ID, "phone", "+2348031234567")
+	if err != nil || len(subjects) != 2 || subjects[0] != e164 {
+		t.Fatalf("subjects of the number: %v %v", subjects, err)
+	}
+	for _, s := range subjects {
+		if err := v.Erase(ctx, a.ID, s, "user:test"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	in(func(tx pgx.Tx) error {
+		for _, x := range []any{detected, legacy} {
+			got, err := pii.Open(ctx, v, tx, a.ID, x, pii.Taint{})
+			if err != nil {
+				return err
+			}
+			if s := fmt.Sprint(got); s != "map[note:[erased]]" && s != pii.Erased {
+				t.Errorf("after erasing the number: %v", got)
+			}
+		}
+		return nil
+	})
+}

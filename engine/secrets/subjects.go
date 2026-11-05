@@ -68,7 +68,17 @@ func (v *Vault) subjectID(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, cate
 	return "", pii.ErrErased
 }
 
+// subjectIDWith keys the subject by the value's canonical form
+// (pii.Canonical), so the same person written another way ('0803 123
+// 4567', '+2348031234567') is one subject. Values already canonical keep
+// the ids they had.
 func subjectIDWith(key []byte, category string, value any) string {
+	return rawSubjectIDWith(key, category, pii.Canonical(category, value))
+}
+
+// rawSubjectIDWith is the subject of the value exactly as given, as ids
+// were keyed before they were canonical.
+func rawSubjectIDWith(key []byte, category string, value any) string {
 	raw, _ := json.Marshal(value)
 	m := hmac.New(sha256.New, append([]byte("taskiem/subject/v1\x00"), key...))
 	m.Write([]byte(category + "\x00"))
@@ -190,6 +200,44 @@ func (v *Vault) SubjectFor(ctx context.Context, tenant uuid.UUID, category strin
 		return err
 	})
 	return s, err
+}
+
+// SubjectsFor lists every subject a value's person may be sealed under:
+// the one it is sealed under now (SubjectFor), then those of the ways it
+// was commonly written (pii.Formats) that still hold a key, from before
+// subject ids were canonical. Erasing a person by value erases them all.
+func (v *Vault) SubjectsFor(ctx context.Context, tenant uuid.UUID, category string, value any) ([]string, error) {
+	var out []string
+	err := db.InTenantTx(ctx, v.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		cur, err := v.subjectID(ctx, tx, tenant, category, value)
+		if err != nil {
+			return err
+		}
+		out = append(out, cur)
+		key, err := v.pseudonymKey(ctx, tx, tenant)
+		if err != nil {
+			return err
+		}
+		seen := map[string]bool{subjectIDWith(key, category, value): true}
+		for _, f := range pii.Formats(category, value) {
+			raw := rawSubjectIDWith(key, category, f)
+			if seen[raw] {
+				continue
+			}
+			seen[raw] = true
+			var live bool
+			err := tx.QueryRow(ctx, `SELECT true FROM subject_keys WHERE tenant_id = $1 AND subject_id = $2 AND shredded_at IS NULL`, tenant, raw).Scan(&live)
+			if errors.Is(err, pgx.ErrNoRows) {
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			out = append(out, raw)
+		}
+		return nil
+	})
+	return out, err
 }
 
 // SubjectForTx is SubjectFor in the caller's transaction: the subject a

@@ -19092,7 +19092,9 @@ paths:
       summary: Erase a data subject
       description: Destroys the subject's key, so every sealed copy of their data becomes unreadable. Cannot be
         undone, so a person confirms it with a passkey or authenticator code. It is never applied under a running
-        workflow; runs in flight that hold the subject finish first, or are cancelled with `cancel_runs`.
+        workflow; runs in flight that hold the subject finish first, or are cancelled with `cancel_runs`. A value is
+        matched in its canonical form (a phone in E.164, an email in lower case, an identity number's digits), so the
+        same person written another way is erased too.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -32628,6 +32630,12 @@ components:
           type: boolean
           enum:
           - true
+        subjects:
+          type: array
+          description: Every subject erased. By value, the person as they are sealed now and under the ways the value was
+            commonly written before subject ids were canonical (`0803 123 4567` beside `+2348031234567`).
+          items:
+            type: string
       additionalProperties: false
     BillingInterval:
       type: string
