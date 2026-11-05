@@ -255,6 +255,9 @@ func (s *Store) startIn(ctx context.Context, tx pgx.Tx, req StartRequest, ref *R
 					req.TenantID, req.TriggerID, req.DedupKey).Scan(&ref.ID)
 			}
 		}
+		if fork != nil && fork.resumedBy != nil {
+			return &NotResumableError{Reason: fmt.Sprintf("run %s was already resumed as run %s; resume that run if it failed", fork.parent, *fork.resumedBy)}
+		}
 		lim, err := s.limitsTx(ctx, tx, req.TenantID)
 		if err != nil {
 			return err
