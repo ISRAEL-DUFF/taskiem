@@ -360,7 +360,7 @@ func (s *Server) Handler() http.Handler {
 			r.Get("/me", s.me)
 			r.Post("/me/terms", s.answerTerms) // agreeing to the terms (onboarding.go)
 			r.Post("/me/password", s.changePassword)
-			r.Put("/me/chat-signin", s.setChatSignin) // signing in with the chat, on or off (chat_signin.go)
+			r.Put("/me/chat-signin", s.setChatSignin)   // signing in with the chat, on or off (chat_signin.go)
 			r.Put("/me/passkey-only", s.setPasskeyOnly) // only sign in with my passkey (passkey_rule.go)
 			r.Post("/me/email/verify", s.verifyEmail)
 			r.Post("/me/email/verify/resend", s.resendVerification)
