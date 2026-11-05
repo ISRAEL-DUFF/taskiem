@@ -16,6 +16,7 @@ set -Eeuo pipefail
 KIT=${TASKIEM_VPS_KIT:-/opt/taskiem}
 ETC=${TASKIEM_VPS_ETC:-/etc/taskiem}
 STATE=${TASKIEM_VPS_STATE:-/var/lib/taskiem-vps}
+BIN=${TASKIEM_VPS_BIN:-/usr/local/bin} # where this tool is installed (tests change it)
 REPO_SLUG=ISRAEL-DUFF/taskiem
 IMAGE_REPO=ghcr.io/israel-duff/taskiem
 SIGNER='^https://github\.com/ISRAEL-DUFF/taskiem/\.github/workflows/ci\.yml@refs/(heads/main|tags/v.+)$'
@@ -169,7 +170,7 @@ install_kit() { # DIR
   else
     rm -f "$KIT/caddy.d/public.caddy"
   fi
-  install -m 0755 "$src/taskiem-vps" "/usr/local/bin/taskiem-vps.new" && mv -f /usr/local/bin/taskiem-vps.new /usr/local/bin/taskiem-vps
+  install -m 0755 "$src/taskiem-vps" "$BIN/taskiem-vps.new" && mv -f "$BIN/taskiem-vps.new" "$BIN/taskiem-vps"
   if [ -z "${TASKIEM_VPS_NO_TIMERS:-}" ] && [ -d /run/systemd/system ]; then
     install -m 0644 "$src"/systemd/taskiem-vps-*.service "$src"/systemd/taskiem-vps-*.timer /etc/systemd/system/
     systemctl daemon-reload
@@ -611,6 +612,12 @@ cmd_update() {
   current=$(cat "$STATE/current" 2>/dev/null || true)
   if test_mode; then target=$TASKIEM_VPS_IMAGE_OVERRIDE; else target="$IMAGE_REPO@$(channel_digest)"; fi
   if [ "$target" = "$current" ]; then [ -n "$auto" ] || log "already on the newest $(conf CHANNEL) release"; return 0; fi
+  # A release that failed and was rolled back waits for a newer one; only
+  # --now tries it again (the timer would otherwise retry it every tick).
+  if [ -z "$now" ] && [ "$target" = "$(cat "$STATE/update-failed" 2>/dev/null || true)" ]; then
+    [ -n "$auto" ] || log "$target failed to upgrade before and was rolled back: not trying it again (use --now to retry)"
+    return 0
+  fi
   if [ -z "$now" ] && ! in_window; then
     [ -n "$auto" ] || log "outside the upgrade window ($(conf WINDOW)); use --now to upgrade anyway"
     return 0

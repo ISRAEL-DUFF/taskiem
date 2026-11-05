@@ -50,7 +50,7 @@ CI publishes a signed image for every merge to main and every version tag. Serve
 | `staging` | Every merge to main that passes CI | Within 15 minutes, at any time unless a window is set |
 | `production` | A version tag (`git tag v1.2.0 && git push --tags`) is **approved** in the `production` environment on GitHub | In the server's upgrade window (default 01:00–05:00 Lagos time) |
 
-An upgrade checks the signature, fetches the matching deployment kit, runs the migration, starts the new release and waits for it to be healthy behind HTTPS. If the migration fails or the release is not healthy within four minutes, the server **rolls back** to the release it was on, alerts you, and does not try that release again. Every release works with the schema of the one before it, so rolling back is always safe.
+An upgrade checks the signature, fetches the matching deployment kit, runs the migration, starts the new release and waits for it to be healthy behind HTTPS. If the migration fails or the release is not healthy within four minutes, the server **rolls back** to the release it was on, alerts you, and does not try that release again until a newer one is published (`taskiem-vps update --now` retries it, for example after fixing a setting it needed). Every release works with the schema of the one before it, so rolling back is always safe.
 
 An upgrade stops Taskiem for about 30 seconds while workers drain, so keep payroll-heavy hours outside the window. Webhooks sent in that gap are retried by their senders.
 
@@ -59,7 +59,7 @@ An upgrade stops Taskiem for about 30 seconds while workers drain, so keep payro
 | Command | Does |
 | --- | --- |
 | `sudo taskiem-vps status` | Channel, release and commit, last upgrade and backup, services, problems |
-| `sudo taskiem-vps update --now` | Upgrade now, outside the window |
+| `sudo taskiem-vps update --now` | Upgrade now, outside the window, even to a release that failed and was rolled back |
 | `sudo taskiem-vps rollback` | Back to the release before the current one |
 | `sudo taskiem-vps backup` | Back up now |
 | `sudo taskiem-vps check` | Run the health checks |
