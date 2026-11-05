@@ -3,6 +3,8 @@ package api_test
 import (
 	"strings"
 	"testing"
+
+	"github.com/israel-duff/taskiem/engine/whatsapp/whatsapptest"
 )
 
 // A message straight to linked businesses from the Taskiem conversation
@@ -133,4 +135,85 @@ func TestDirectMessages(t *testing.T) {
 	if r := w.say(t, viewerOn, "... @Dangote Stores hello"); strings.Contains(r, "Sent to") {
 		t.Errorf("a viewer: %q", r)
 	}
+}
+
+// A photo or a file from the phone captioned "... @business" goes to the
+// business with the caption's words, each side keeping its own copy, as
+// from the Chat page; after a lone "...", "@business" in the caption is
+// enough; a file is scanned first and nothing is stored when it fails; a
+// photo captioned "..." naming no one is read as before.
+func TestDirectFiles(t *testing.T) {
+	w := newWAWorld(t)
+	store := newProjectStorage(t)
+	w.srv.Media = store.service()
+	w.srv.Media.Scanner = chatScanner{}
+	seller, buyer, sellerID, buyerID := linkedPair(t, w)
+	const buyerOn = "+2348010000713"
+	w.bind(t, buyer, buyerOn)
+	w.say(t, buyerOn, "links")
+	link := seller.must(200, "GET", "/v1/link-chats", nil)["conversations"].([]any)[0].(map[string]any)["link"].(string)
+	sellerProject, buyerProject := "prj_"+sellerID, "prj_"+buyerID
+	last := func() map[string]any {
+		t.Helper()
+		ms := seller.must(200, "GET", "/v1/link-chats/"+link+"/messages", nil)["messages"].([]any)
+		return ms[len(ms)-1].(map[string]any)
+	}
+	reply := func(msg map[string]any) string {
+		t.Helper()
+		got := w.send(t, buyerOn, msg)
+		if len(got) == 0 {
+			t.Fatal("no reply")
+		}
+		w.srv.WaitBackground()
+		return got[len(got)-1].Text
+	}
+	copies := func(want int) {
+		t.Helper()
+		if s, b := store.in(sellerProject), store.in(buyerProject); len(s) != want || len(b) != want {
+			t.Fatalf("%d copies each: seller %v, buyer %v", want, s, b)
+		}
+	}
+	w.graph.AddMedia("img-1", "image/jpeg", photo(t), 0)
+	w.graph.AddMedia("doc-1", "application/pdf", []byte("%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n"), 0)
+	w.graph.AddMedia("doc-bad", "application/pdf", []byte("%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj EICAR-STANDARD-ANTIVIRUS-TEST-FILE"), 0)
+
+	if r := reply(whatsapptest.Image("img-1", "image/jpeg", "... @Dangote the torn bags")); !strings.Contains(r, "✓ Sent to *Dangote Stores*") {
+		t.Fatalf("a photo: %q", r)
+	}
+	m := last()
+	if a, _ := m["attachment"].(map[string]any); a == nil || a["kind"] != "photo" || m["body"] != "the torn bags" || m["mine"] != false {
+		t.Fatalf("the photo in Dangote's conversation: %v", m)
+	}
+	copies(1)
+
+	// After a lone "...", the caption's "@business" is enough.
+	w.say(t, buyerOn, "...")
+	if r := reply(whatsapptest.Image("img-1", "image/jpeg", "@Dangote again")); !strings.Contains(r, "✓ Sent to *Dangote Stores*") {
+		t.Fatalf("a photo after a lone marker: %q", r)
+	}
+	copies(2)
+
+	// A file with no words, its name kept.
+	if r := reply(whatsapptest.Document("doc-1", "application/pdf", "price.pdf", "... @Dangote")); !strings.Contains(r, "✓ Sent to *Dangote Stores*") {
+		t.Fatalf("a file: %q", r)
+	}
+	if a, _ := last()["attachment"].(map[string]any); a == nil || a["kind"] != "file" || a["name"] != "price.pdf" {
+		t.Fatalf("the file: %v", last())
+	}
+	copies(3)
+
+	// A threat: not sent, nothing stored.
+	if r := reply(whatsapptest.Document("doc-bad", "application/pdf", "x.pdf", "... @Dangote")); !strings.Contains(r, "Not sent: the file did not pass the malware check") {
+		t.Fatalf("a threat: %q", r)
+	}
+	copies(3)
+	// Naming no one: read as before, not sent.
+	if r := reply(whatsapptest.Image("img-1", "image/jpeg", "... new bags")); strings.Contains(r, "Sent to") {
+		t.Fatalf("no one named: %q", r)
+	}
+	// A business not linked: nothing sent.
+	if r := reply(whatsapptest.Image("img-1", "image/jpeg", "... @Nobody look")); !strings.Contains(r, "not linked with *Nobody*") {
+		t.Fatalf("not linked: %q", r)
+	}
+	copies(3)
 }

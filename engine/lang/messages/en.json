@@ -2109,6 +2109,11 @@
       "reviewed": true,
       "context": "Help line"
     },
+    "wa.help.signin": {
+      "text": "• *sign in* for a link into the web app; *password* to sign in with an email; *sign out everywhere*",
+      "reviewed": true,
+      "context": "Help line for getting onto the web from chat"
+    },
     "wa.help.cancel": {
       "text": "• *cancel*: drop what is in progress",
       "reviewed": true,
@@ -4110,9 +4115,19 @@
       "context": "Confirming a product sent as a photo; starts with a space"
     },
     "wa.signin.link": {
-      "text": "Open this link to choose your password and sign in to Taskiem on the web. It works once, for an hour; keep it to yourself:\n{link}",
+      "text": "Open this link to choose your password. It works once, for an hour; keep it to yourself:\n{link}\nThen sign in on the web with your email (the one at *{domain}*) and that password.",
       "reviewed": true,
-      "context": "A one-time sign-in link sent in chat"
+      "context": "\"password\" in chat: a one-time link to choose a password, and where the email to sign in with is (chat never shows an address)"
+    },
+    "wa.signin.chat_link": {
+      "text": "Open this link to sign in to Taskiem on the web. It works once, for 10 minutes; keep it to yourself:\n{link}",
+      "reviewed": true,
+      "context": "\"sign in\" in chat: a one-time link that opens the web app signed in"
+    },
+    "door.signin_email": {
+      "text": "To sign in with a password you need an email first: send *email you@example.com* and open the link we email you. Then send *password* again.\nOr send *sign in* for a link that signs you in straight away.",
+      "reviewed": true,
+      "context": "\"password\" from someone with no email yet"
     },
     "wa.signin.sso": {
       "text": "Your organisation signs in with its own company account: {link}",
@@ -4123,6 +4138,46 @@
       "text": "Signing in on the web is not set up on this Taskiem.",
       "reviewed": true,
       "context": "No public URL for links"
+    },
+    "wa.signin.off": {
+      "text": "Signing in with WhatsApp or Telegram is off for you (Account on the web). Send *password* to sign in with an email and password instead.",
+      "reviewed": true,
+      "context": "\"sign in\" from someone who turned chat sign-in off"
+    },
+    "wa.signin.passkey": {
+      "text": "Administrators sign in to Taskiem with their passkey: {link}",
+      "reviewed": true,
+      "context": "\"sign in\" from an administrator who has a passkey, where administrators must use one"
+    },
+    "chat.signin.code": {
+      "text": "{code} is your Taskiem sign-in code. It expires in 10 minutes. Do not share it; if you did not ask for it, ignore this message.",
+      "reviewed": true,
+      "context": "The code sent on Telegram to sign in on the web"
+    },
+    "chat.signin.told": {
+      "text": "You signed in to Taskiem on the web with your chat ({device}). Not you? Send *sign out everywhere*.",
+      "reviewed": true,
+      "context": "Told to the chat after a chat sign-in on the web"
+    },
+    "account.passkey_only.on": {
+      "text": "Signing in to Taskiem only with your passkey is now on: your password and chat no longer sign you in on the web. Not you? Send *sign out everywhere*.",
+      "reviewed": true,
+      "context": "Told to the chat and email when a person turns on Only sign in with my passkey"
+    },
+    "account.passkey_only.off": {
+      "text": "Signing in to Taskiem only with your passkey is now off: your password and chat sign you in again. Not you? Send *sign out everywhere*.",
+      "reviewed": true,
+      "context": "Told to the chat and email when a person turns off Only sign in with my passkey"
+    },
+    "chat.signout.done": {
+      "text": "Signed out of the web everywhere: {count} session(s) ended. Your chat goes on as before.",
+      "reviewed": true,
+      "context": "\"sign out everywhere\": every web session of the person ended"
+    },
+    "chat.signout.none": {
+      "text": "You were not signed in on the web anywhere.",
+      "reviewed": true,
+      "context": "\"sign out everywhere\" with no web session"
     },
     "wa.status.denied": {
       "text": "You cannot see runs in {org} (it takes run.read).",
@@ -6464,11 +6519,6 @@
       "reviewed": true,
       "context": "\"... @business\" with nothing else to say"
     },
-    "chat.direct.files": {
-      "text": "Only words go straight to a business with *...* for now. Send photos and files to them on the Chat page.",
-      "reviewed": true,
-      "context": "A photo or file captioned \"...\": not sent"
-    },
     "chat.direct.hint": {
       "text": "To send it to *{name}* as a message instead, start it with *...*",
       "reviewed": true,
@@ -6483,6 +6533,11 @@
       "text": "Not sent to *{name}*: {reason}.",
       "reviewed": true,
       "context": "A message after \"...\" could not go to one business; {reason} says why"
+    },
+    "chat.direct.failed": {
+      "text": "Not sent to *{name}*: something went wrong. Send it to them again.",
+      "reviewed": true,
+      "context": "A message after \"...\" failed for one business (not a refusal); the rest were sent"
     },
     "chat.link.photo": {
       "text": "Photo",

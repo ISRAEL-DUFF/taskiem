@@ -38,6 +38,7 @@ import {
 } from "./ui";
 import { Reports } from "./pages/Reports";
 import { ForgotPassword, ResetPassword } from "./pages/Password";
+import { SignInLink } from "./pages/SignInLink";
 import { AcceptInvitation } from "./pages/AcceptInvitation";
 import { Handoff } from "./pages/Handoff";
 import { Templates } from "./pages/Templates";
@@ -128,6 +129,7 @@ import { NotificationSettings } from "./pages/NotificationSettings";
 import { PaymentsSettings } from "./pages/ReceiveMoney";
 import { brandFile } from "./brand";
 import { ChatLiveProvider, NotifyBanner, useChatLive } from "./pages/ChatLive";
+import { PasskeyNudge } from "./pages/PasskeyNudge";
 import { useTaskiemUnread } from "./lib/taskiemSeen";
 import { standalone, useInstall } from "./install";
 import { PULL_AT, insideScroller, pullRefreshes, pullShown } from "./lib/pull";
@@ -168,15 +170,19 @@ function AreaOff({ area, owner }: { area: AreaKey; owner: boolean }) {
 }
 
 function EnrolPasskey() {
-  const { logout, loginWithPasskey } = useAuth();
+  const { me, logout, loginWithPasskey } = useAuth();
   const [added, setAdded] = useState(false);
   const act = useAction();
   return (
     <div className="login card" style={{ maxWidth: 640 }}>
       <h1>Add a passkey</h1>
       <p>
-        Administrators sign in to Taskiem with a passkey: your device's
-        fingerprint, face or PIN. Add one to continue.
+        {me?.passkey_reason === "business"
+          ? "This business requires its administrators to sign in with a passkey"
+          : me?.passkey_reason === "personal"
+            ? "You chose to sign in only with your passkey"
+            : "Administrators sign in to this Taskiem with a passkey"}
+        : your device's fingerprint, face or PIN. Add one to continue.
       </p>
       {added ? (
         <>
@@ -252,6 +258,8 @@ function Shell() {
   // Password recovery works signed in or out.
   if (loc.pathname === "/forgot-password") return alone(<ForgotPassword />);
   if (loc.pathname === "/reset-password") return alone(<ResetPassword />);
+  // A link "sign in" sends in chat: signs in after its button.
+  if (loc.pathname === "/signin") return alone(<SignInLink />);
   // An emailed invitation link, for someone with no account yet.
   if (loc.pathname === "/accept-invitation") return alone(<AcceptInvitation />);
   // A connect link sent from chat: no sign-in, the link is the authority.
@@ -676,6 +684,7 @@ function SignedIn() {
           <BillingBanner />
           <TermsBanner />
           <NotifyBanner />
+          <PasskeyNudge />
           <div className="page" key={`${pathname}#${fresh}`}>
             <PageBoundary>
               {off ? (
