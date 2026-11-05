@@ -434,13 +434,14 @@ func (s *Server) slackWorkspaceStranger(ctx context.Context, team, addr, text, r
 }
 
 // slackSignupToken fills in the token a linked person's new business
-// takes: their business's in this workspace.
+// takes: their business's in this workspace, installed through Taskiem's
+// app (a token a business pasted from its own app stays its own: F19).
 func (s *Server) slackSignupToken(ctx context.Context, ss *slackSignup) error {
 	if ss.token != "" {
 		return nil
 	}
 	for _, t := range ss.linked {
-		env, name, err := s.slackConnection(ctx, t, ss.team)
+		env, name, err := s.slackAppConnection(ctx, t, ss.team)
 		if err != nil {
 			continue
 		}

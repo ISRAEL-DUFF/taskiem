@@ -304,3 +304,50 @@ func TestSlackInstallUnused(t *testing.T) {
 		t.Errorf("revoked: %v", w.fake.revoked)
 	}
 }
+
+// A Slack link speaks only for a current member, and a new business made
+// from a Slack DM takes only a token Taskiem's app installed (F19): a
+// person removed from a business, whose link stayed, makes nothing with
+// its Slack; and a business's pasted token (its own Slack app) is never
+// lent to a new business, whoever asks.
+func TestSlackSignupLendsOnlyAppInstalls(t *testing.T) {
+	w := newSlackInstallWorld(t)
+	w.fake.people["U0EVE"] = [2]string{"Eve Uche", "eve@acme.test"}
+	w.fake.users["eve@acme.test"], w.fake.users["ben@acme.test"] = "U0EVE", "U0BEN"
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	owner.must(201, "POST", "/v1/connections", map[string]any{"connector": "slack@1", "environment": "prod", "credentials": map[string]string{"bot_token": "xoxb-acme"}})
+	member := func(email string) *client {
+		owner.must(201, "POST", "/v1/members", map[string]any{"email": email, "password": testPassword, "roles": []string{"viewer"}})
+		return w.login(t, email, testPassword)
+	}
+	eve, ben := member("eve@acme.test"), member("ben@acme.test")
+	w.link(t, eve, "U0EVE")
+	w.link(t, ben, "U0BEN")
+	eveID := w.scalar(t, `SELECT id::text FROM users WHERE email = 'eve@acme.test'`).(string)
+	owner.must(204, "DELETE", "/v1/members/"+eveID+"/roles/viewer", nil)
+	if v := w.scalar(t, `SELECT count(*) FROM taskiem_slack_user_of('T0ACME', 'U0EVE')`); v != int64(0) {
+		t.Fatalf("a removed member's link still speaks for Acme: %v", v)
+	}
+	if v := w.scalar(t, `SELECT count(*) FROM taskiem_slack_user_of('T0ACME', 'U0BEN')`); v != int64(1) {
+		t.Fatalf("a member's link: %v", v)
+	}
+
+	newBusiness := func(user, name string) {
+		for i, m := range []string{"new business", name, "1", "2", "yes"} {
+			w.event(t, dm("Ev"+user+string(rune('a'+i)), user, m), slackSecret)
+		}
+	}
+	// Removed: the link no longer speaks for her.
+	newBusiness("U0EVE", "Eve Drinks")
+	// A current viewer: Acme's Slack is a pasted token, not lent.
+	newBusiness("U0BEN", "Ben Drinks")
+	if v := w.scalar(t, `SELECT count(*) FROM connections c JOIN tenants t ON t.id = c.tenant_id WHERE c.connector = 'slack' AND t.name <> 'Acme'`); v != int64(0) {
+		t.Fatalf("Acme's Slack lent to another business: %v", v)
+	}
+	if v := w.scalar(t, `SELECT count(*) FROM tenants WHERE name = 'Eve Drinks'`); v != int64(0) {
+		t.Fatalf("a removed member made a business from Acme's Slack: %v", v)
+	}
+	if v := w.scalar(t, `SELECT count(*) FROM connection_app_accounts a JOIN tenants t ON t.id = a.tenant_id WHERE t.name <> 'Acme' AND a.account_key = 'T0ACME'`); v != int64(0) {
+		t.Fatalf("Acme's workspace routed to another business: %v", v)
+	}
+}

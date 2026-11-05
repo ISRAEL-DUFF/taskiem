@@ -249,7 +249,7 @@ taskiem_slack_install_request_take(bytea)	@ISRAEL-DUFF (messaging)	Takes an Add 
 taskiem_slack_installs_expired()	@ISRAEL-DUFF (messaging)	Removes installs no business took in time, returning their sealed tokens to give back (00269)
 taskiem_slack_team_businesses(text)	@ISRAEL-DUFF (messaging)	The businesses and connections on Taskiem's Slack app in a workspace (00269)
 taskiem_slack_tenants()	@ISRAEL-DUFF (messaging)	Tenants with at least one member who has linked Slack (00230)
-taskiem_slack_user_of(text,text)	@ISRAEL-DUFF (messaging)	The members a Slack user is, in the businesses that linked them (00230)
+taskiem_slack_user_of(text,text)	@ISRAEL-DUFF (messaging)	The members a Slack user is, in the businesses that linked them and still have them as a member (00230, 00390)
 taskiem_status_open(text,text,text[],timestamp with time zone,timestamp with time zone,text,text,text,text)	@ISRAEL-DUFF (engine)	part of: The public status page (Phase 4, P4-4; decision 0023, docs/reliability.md) (00123)
 taskiem_status_record_probe(boolean,integer,integer,text)	@ISRAEL-DUFF (engine)	The canary records each probe (00123)
 taskiem_status_update(uuid,text,text,text,text)	@ISRAEL-DUFF (engine)	An update's status must suit its kind, and nothing follows the last one (00123)
