@@ -62,7 +62,6 @@ func init() {
 		assets[hashed] = asset{body: body, ctype: mime.TypeByExtension(ext)}
 	}
 	funcs := template.FuncMap{
-		"sheet": sheetFor,
 		"asset": func(name string) (string, error) {
 			p, ok := assetNames[name]
 			if !ok {

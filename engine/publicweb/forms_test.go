@@ -888,7 +888,7 @@ func TestFrontPages(t *testing.T) {
 
 // No route the public host has itself is an address a front can take.
 func TestFrontSlugsMissTheRoutes(t *testing.T) {
-	for _, route := range []string{"a", "o", "f", "r", "report", "embed", "pay", "static"} {
+	for _, route := range []string{"a", "o", "f", "i", "r", "report", "embed", "pay", "static"} {
 		if err := storefront.CheckFrontSlug(route); err == nil {
 			t.Errorf("a front may take /%s", route)
 		}
@@ -986,10 +986,10 @@ func TestQuoteAndBlankForms(t *testing.T) {
 	}
 }
 
-// An item is opened by its name (an own view, with no script): with the
-// order form on it offers Add to order; with no form at all the page and
-// the item say that orders are not open yet, and where to ask, instead of
-// leaving the item doing nothing. In every theme.
+// An item is opened by its name, on a page of its own (/<front>/i/<id>):
+// with the order form on it offers Add to bag; with no form at all the page
+// and the item say that orders are not open yet, and where to ask, instead
+// of leaving the item doing nothing. In every theme.
 func TestItemsOpenAndSayWhenOrdersAreNotOpen(t *testing.T) {
 	order := uuid.New()
 	for _, theme := range brand.Themes {
@@ -1007,20 +1007,42 @@ func TestItemsOpenAndSayWhenOrdersAreNotOpen(t *testing.T) {
 		withBrand(e.s, brand.Brand{Theme: theme})
 		e.h = e.s.Handler()
 
-		// With the order form on: the name opens the item, which offers Add to order.
+		// With the order form on: the name opens the item's page, which
+		// offers Add to bag and goes to the order form.
 		page := get(e.h, "GET", sfHost, "/snacks").Body.String()
-		for _, want := range []string{`class="item-open" href="#i-1"`, `id="i-1"`, `href="/snacks/a/order?item=1"`, "Add to order", "Unavailable for now."} {
+		for _, want := range []string{`class="item-open" href="/snacks/i/1"`, `href="/snacks/a/order?item=1"`} {
 			if !strings.Contains(page, want) {
 				t.Errorf("%s: with the order form on, missing %q", theme, want)
 			}
 		}
+		if strings.Contains(page, `id="i-1"`) {
+			t.Errorf("%s: the item's pop-up is still on the page", theme)
+		}
 		if strings.Contains(page, "Orders are not open on this page yet") {
 			t.Errorf("%s: the page says orders are not open while they are", theme)
+		}
+		item := get(e.h, "GET", sfHost, "/snacks/i/1")
+		if item.Code != http.StatusOK {
+			t.Fatalf("%s: the item's page: %d", theme, item.Code)
+		}
+		for _, want := range []string{"Puff puff", "Fried fresh", "Add to bag", `action="/snacks/a/order"`, `name="step" value="bag"`, `name="q.1"`, "/_static/item-sheet."} {
+			if !strings.Contains(item.Body.String(), want) {
+				t.Errorf("%s: the item's page is missing %q", theme, want)
+			}
+		}
+		if page := get(e.h, "GET", sfHost, "/snacks/i/2").Body.String(); !strings.Contains(page, "Unavailable for now.") || strings.Contains(page, "Add to bag") {
+			t.Errorf("%s: an unavailable item offers to be bagged", theme)
+		}
+		if w := get(e.h, "GET", sfHost, "/snacks/i/99"); w.Code != http.StatusNotFound {
+			t.Errorf("%s: an item that is not there: %d", theme, w.Code)
+		}
+		if w := get(e.h, "GET", sfHost, "/nothing/i/1"); w.Code != http.StatusNotFound {
+			t.Errorf("%s: an item on a front that is not there: %d", theme, w.Code)
 		}
 
 		// With no form: the page and each item say so, and where to ask.
 		page = get(e.h, "GET", sfHost, "/cold").Body.String()
-		for _, want := range []string{`href="#i-1"`, "Orders are not open on this page yet.", `href="https://wa.me/2348031234567"`, "on WhatsApp"} {
+		for _, want := range []string{`href="/cold/i/1"`, "Orders are not open on this page yet.", `href="https://wa.me/2348031234567"`, "on WhatsApp"} {
 			if !strings.Contains(page, want) {
 				t.Errorf("%s: with no form, missing %q", theme, want)
 			}
@@ -1028,8 +1050,85 @@ func TestItemsOpenAndSayWhenOrdersAreNotOpen(t *testing.T) {
 		if strings.Contains(page, "Add to order") || strings.Contains(page, `class="add"`) {
 			t.Errorf("%s: an order button on a front that takes no orders", theme)
 		}
+		if page := get(e.h, "GET", sfHost, "/cold/i/1").Body.String(); !strings.Contains(page, "Orders are not open on this page yet.") || !strings.Contains(page, "on WhatsApp") || strings.Contains(page, "Add to bag") {
+			t.Errorf("%s: an item on a front that takes no orders: %s", theme, page)
+		}
 		if !strings.Contains(page, "/_static/item-sheet.") {
 			t.Errorf("%s: the item view's stylesheet is not linked", theme)
+		}
+	}
+}
+
+// An order is two pages, the bag and then the details, with nothing kept
+// between them but the address and the form's own fields (no cookie): the
+// bag step lists what is in it and takes it on, the details step shows it
+// as a summary above the details and posts it, and a refused submission
+// stays on the details step. Without a step in the address the order is
+// the one page it always was. In every theme.
+func TestOrderBagAndDetailsSteps(t *testing.T) {
+	order := uuid.New()
+	for _, theme := range brand.Themes {
+		p := orderPage()
+		home := storefront.PublicFront{Slug: "", Kind: "shop", Name: "Ada"}
+		food := storefront.PublicFront{Slug: "food", Kind: "food", Name: "Food",
+			Blocks:  []storefront.PublicBlock{{Kind: "list", Config: json.RawMessage(`{"table": "00000000-0000-0000-0000-000000000001", "table_name": "menu", "columns": {"name": "name"}}`)}},
+			Actions: []storefront.PublicAction{{ID: &order, Slug: "order", Kind: "order", Label: "Order food", Payment: "after_accept", Pickup: true, Form: storefront.BuiltinForm("order")}}}
+		p.Model.Fronts = []storefront.PublicFront{home, food}
+		rice := storefront.Item{ID: "1", Name: "Jollof rice", PriceKobo: kobo(150000), Available: true,
+			Options: storefront.ParseOptions(`[{"name": "Size", "choices": ["Regular", {"name": "Large", "price": 500}]}]`)}
+		p.Lists = map[string][]storefront.Item{"menu": {rice}}
+		e := formServer(t, p)
+		withBrand(e.s, brand.Brand{Theme: theme})
+		e.h = e.s.Handler()
+
+		// The bag: what is in it, with the choices and the sum.
+		bagPage := get(e.h, "GET", sfHost, "/food/a/order?step=bag&q.1=2&o.1.0=1")
+		if bagPage.Code != http.StatusOK {
+			t.Fatalf("%s: the bag step: %d", theme, bagPage.Code)
+		}
+		bag := bagPage.Body.String()
+		for _, want := range []string{"Your bag", `name="step" value="details"`, `name="q.1" value="2"`, "Large", "₦2,000 each", "Total: ₦4,000", `method="get"`} {
+			if !strings.Contains(bag, want) {
+				t.Errorf("%s: the bag step is missing %q", theme, want)
+			}
+		}
+		if strings.Contains(bag, `name="token"`) || strings.Contains(bag, "Send order") {
+			t.Errorf("%s: the bag step is the details form", theme)
+		}
+
+		// The details: the bag as a summary, its fields kept, the form to post.
+		details, tok := e.form(t, "/food/a/order?step=details&q.1=2&o.1.0=1")
+		for _, want := range []string{"Your bag", "2 × Jollof rice", "Total: ₦4,000", `name="q.1" value="2"`, `name="o.1.0" value="1"`, `step=bag`, "Send order", `method="post"`} {
+			if !strings.Contains(details, want) {
+				t.Errorf("%s: the details step is missing %q", theme, want)
+			}
+		}
+		if strings.Contains(details, `<select class="opt"`) {
+			t.Errorf("%s: the details step asks the choices again", theme)
+		}
+
+		// No step, or an empty bag: the one page it always was.
+		for _, path := range []string{"/food/a/order", "/food/a/order?step=bag", "/food/a/order?step=details&q.1=0"} {
+			if body, _ := e.form(t, path); !strings.Contains(body, `<select class="opt" name="o.1.0"`) || strings.Contains(body, "Total: ₦") {
+				t.Errorf("%s: %s is not the one-page order", theme, path)
+			}
+		}
+
+		// A refused submission stays on the details step, its bag kept.
+		*e.now = e.now.Add(20 * time.Second)
+		v := url.Values{"token": {tok}, "website": {""}, "name": {""}, "phone": {"0803 123 4567"}, "q.1": {"2"}, "o.1.0": {"1"}}
+		w := e.post("/food/a/order", v)
+		if w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), "2 × Jollof rice") || !strings.Contains(w.Body.String(), "Please enter your name") {
+			t.Fatalf("%s: a refused order: %d %s", theme, w.Code, w.Body.String())
+		}
+
+		// And an order from the details step is priced from the catalogue.
+		_, tok = e.form(t, "/food/a/order?step=details&q.1=2&o.1.0=1")
+		*e.now = e.now.Add(20 * time.Second)
+		v = url.Values{"token": {tok}, "website": {""}, "name": {"Ada Obi"}, "phone": {"0803 123 4567"}, "q.1": {"2"}, "o.1.0": {"1"}}
+		w = e.post("/food/a/order", v)
+		if w.Code != http.StatusSeeOther {
+			t.Fatalf("%s: %d %s", theme, w.Code, w.Body.String())
 		}
 	}
 }

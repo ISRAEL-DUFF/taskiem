@@ -4,9 +4,9 @@
 <p class="lede">{{if eq .Kind "order"}}Pick what you want, then tell us where it goes.{{else if eq .Kind "callback"}}Leave your number and we will call you.{{else}}We will answer as soon as we can.{{end}}</p>
 {{template "fmain" .}}
 {{with .Error}}<p class="form-error" role="alert">{{.}}</p>{{end}}
-<form method="post" action="{{.Action}}" class="form"{{if .Items}} data-order{{end}}>
+{{if eq .Step "bag"}}{{template "bagstep" .}}{{else}}<form method="post" action="{{.Action}}" class="form"{{if .Items}} data-order{{end}}>
 {{template "guard" .}}
-{{if .Items}}
+{{if eq .Step "details"}}{{template "bagsummary" .}}{{else if .Items}}
 <fieldset class="basket">
 <legend>Your order</legend>
 {{range .Items}}
@@ -78,4 +78,5 @@
 <p class="hint">Your details go to {{.Business}} only, to {{.Purpose}} and to contact you about it. Taskiem runs this page for them.</p>
 </div>
 </form>
+{{end}}
 {{template "ffoot" .}}

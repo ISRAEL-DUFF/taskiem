@@ -45,12 +45,11 @@
     <article class="row{{if or (not .Available) .SoldOut}} is-unavailable{{end}}">
       {{if and (gt $j 0) .Small}}<img class="row-img" src="{{.Small}}" alt="{{.Name}}" width="64" height="64" loading="lazy" decoding="async">{{end}}
       <div class="row-text">
-        <h3><a class="item-open" href="#i-{{.ID}}">{{.Name}}</a></h3>
+        <h3>{{if .ID}}<a class="item-open" href="{{$.Base}}/i/{{.ID}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}</h3>
         {{with .Description}}<p class="row-sub">{{.}}</p>{{end}}{{if .ReadyIn}}<p class="row-sub">Ready in {{.ReadyIn}} min</p>{{end}}
         <p class="row-price">{{.Price}}</p>
       </div>
       {{if not .Available}}<span class="badge">Unavailable</span>{{else if .SoldOut}}<span class="badge">Sold out</span>{{else if and $.Ordering .Orderable}}<a class="btn btn-small" href="{{$.Base}}/a/order?item={{.ID}}" aria-label="Add {{.Name}}">Add</a>{{end}}
-      {{template "itemsheet" (sheet . $)}}
     </article>
     {{end}}
   </section>

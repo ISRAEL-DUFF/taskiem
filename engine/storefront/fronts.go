@@ -346,7 +346,7 @@ func otherActions(ctx context.Context, tx pgx.Tx, front uuid.UUID) ([]PublicActi
 // ReservedFrontSlugs are the addresses the public host routes itself
 // (§5.1): a front may not take one. TestFrontSlugsMissTheRoutes walks the
 // router's cases.
-var ReservedFrontSlugs = []string{"a", "o", "f", "r", "pay", "report", "embed", "static", "qr", "api", "admin", "www", "status"}
+var ReservedFrontSlugs = []string{"a", "o", "f", "i", "r", "pay", "report", "embed", "static", "qr", "api", "admin", "www", "status"}
 
 var frontSlugChars = regexp.MustCompile(`[^a-z0-9]+`)
 

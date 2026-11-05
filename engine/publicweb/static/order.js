@@ -46,6 +46,7 @@
   }
   for (var i = 0; i < inputs.length; i++) {
     var input = inputs[i];
+    if (input.type === "hidden") continue;
     var name = (form.querySelector('label[for="' + input.id + '"] .line-name') || {}).textContent || "";
     var box = document.createElement("span");
     box.className = "stepper";

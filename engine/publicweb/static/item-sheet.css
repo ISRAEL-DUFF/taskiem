@@ -1,22 +1,44 @@
-/* An item's own view on a storefront or front page: opened by its name, with
-   no script (the #fragment of the address shows it, Close or Escape's back
-   button hides it). Colours come from the theme's own variables. */
+/* A shop's item pages and an order's bag, drawn the same in every theme:
+   the colours come from the theme's own variables (with a fallback where a
+   theme names one differently). An item on a list opens its page by its
+   name, the whole card being the link. No script is needed for any of it. */
 .item, .row, .tile { position: relative; }
 .item-open { color: inherit; text-decoration: none; }
 .item-open::after { content: ""; position: absolute; inset: 0; z-index: 0; }
 .item .add, .row .btn, .item .btn, .tile .add { position: relative; z-index: 1; }
-.sheet { display: none; position: fixed; inset: 0; z-index: 50; align-items: flex-end; justify-content: center; }
-.sheet:target { display: flex; }
-.sheet-back { position: absolute; inset: 0; background: rgba(0, 0, 0, .5); }
-.sheet-card { position: relative; width: 100%; max-width: 32rem; max-height: 90vh; overflow: auto; padding: 1rem 1rem 1.25rem;
-  background: var(--card, var(--bg, #fff)); color: var(--fg, #141414); border-radius: 18px 18px 0 0; box-shadow: 0 -8px 30px rgba(0, 0, 0, .25); }
-.sheet-card h3 { margin: .25rem 0 0; font-size: 1.15rem; }
-.sheet-img { display: block; width: 100%; max-height: 18rem; object-fit: cover; border-radius: 12px; margin: 0 0 .75rem; }
-.sheet-price { margin: .25rem 0 .5rem; font-weight: 700; }
-.sheet-note { color: var(--muted, #55524d); }
-.sheet-close { position: absolute; top: .5rem; right: .5rem; z-index: 2; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px;
-  border-radius: 50%; background: rgba(0, 0, 0, .6); color: #fff; font-size: 1.5rem; line-height: 1; text-decoration: none; }
-.sheet-add { display: block; margin-top: .75rem; text-align: center; }
-@media (min-width: 40rem) { .sheet { align-items: center; } .sheet-card { border-radius: 18px; } }
-@media (prefers-reduced-motion: no-preference) { .sheet:target .sheet-card { animation: sheet-up .18s ease-out; } }
-@keyframes sheet-up { from { transform: translateY(1.5rem); opacity: .6; } to { transform: none; opacity: 1; } }
+
+/* An item's page. */
+.pdp { display: grid; gap: 1rem; max-width: 56rem; margin: 0 auto; }
+.pdp-img { display: block; width: 100%; max-height: 34rem; object-fit: cover; border-radius: var(--r, 12px); background: var(--soft, var(--card, #f1efec)); }
+.pdp-main { display: flex; flex-direction: column; gap: .5rem; min-width: 0; }
+.pdp-main h1 { margin: 0; }
+.pdp-kicker { margin: 0; font-size: .75rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted, #55524d); }
+.pdp-price { margin: 0; font-size: 1.35rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.pdp-desc { margin: 0; color: var(--muted, #55524d); }
+.pdp-meta, .pdp-note { margin: 0; color: var(--muted, #55524d); font-size: .9rem; }
+.pdp-form { display: flex; flex-direction: column; gap: 1rem; margin-top: .5rem; }
+.pdp-opt { margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: .375rem; }
+.pdp-opt legend { padding: 0; margin-bottom: .375rem; font-weight: 700; }
+.pdp-choice { display: flex; align-items: center; gap: .625rem; min-height: 48px; padding: .375rem .875rem; border: 1px solid var(--line, var(--rule, #d9d6d0)); border-radius: var(--r, 10px); background: var(--card, var(--bg, #fff)); cursor: pointer; }
+.pdp-choice:has(input:checked) { border-color: var(--brand, currentColor); box-shadow: inset 0 0 0 1px var(--brand, currentColor); }
+.pdp-choice input { width: 1.25rem; height: 1.25rem; accent-color: var(--brand, currentColor); flex: none; }
+.pdp-qty { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.pdp-qty label { font-weight: 700; }
+@media (min-width: 48rem) {
+  .pdp { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 2rem; align-items: start; }
+  .pdp:not(:has(.pdp-img)) { grid-template-columns: minmax(0, 32rem); }
+}
+
+/* An order's bag: its own step, and a summary on the details step. */
+.bag, .bag-sum { max-width: 40rem; margin: 0 auto 1.25rem; }
+.bag-h { margin: 0 0 .5rem; }
+.bag-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+.bag-line { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .875rem 0; border-top: 1px solid var(--line, var(--rule, #e3e0da)); }
+.bag-text { display: flex; flex-direction: column; min-width: 0; }
+.bag-text .line-name { font-weight: 700; }
+.bag-opts, .bag-unit, .bag-hint { color: var(--muted, #55524d); font-size: .875rem; }
+.bag-hint { margin: 0; }
+.bag-row { display: flex; justify-content: space-between; gap: 1rem; padding: .5rem 0; border-top: 1px solid var(--line, var(--rule, #e3e0da)); }
+.bag-amt { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bag-sum { padding-bottom: .25rem; }
+.bag-more { text-align: center; margin: .75rem 0 0; }

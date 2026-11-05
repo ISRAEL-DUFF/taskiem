@@ -1,0 +1,70 @@
+{{/* A shop's own pages, the same in every theme (the theme draws the page
+around them and the colours through its variables): an item's page, and
+an order's two steps, the bag and then the details. Nothing here needs a
+script and nothing is kept in a cookie: the bag is in the address and in
+the form's own fields. */}}
+
+{{/* An item's page: its photo, words, price, its choices and a quantity,
+     and Add to bag (or why there is nothing to press). */}}
+{{define "itempage"}}<article class="pdp">
+  {{template "itemimg" .}}
+  <div class="pdp-main">
+    <h1>{{.It.Name}}</h1>
+    {{template "itembody" .}}
+  </div>
+</article>{{end}}
+
+{{define "itemimg"}}{{if .It.Large}}<img class="pdp-img" src="{{.It.Large}}"{{if .It.Small}} srcset="{{.It.Small}} 320w, {{.It.Large}} 800w" sizes="(min-width: 48rem) 28rem, 100vw"{{end}} alt="{{.It.Name}}" decoding="async">{{end}}{{end}}
+
+{{/* What is under an item's name: a theme that draws the name in its
+     own header (bold) calls this and itemimg itself. */}}
+{{define "itembody"}}{{with .It.Category}}<p class="pdp-kicker">{{.}}</p>{{end}}
+    {{with .It.Price}}<p class="pdp-price">{{.}}</p>{{end}}
+    {{with .It.Description}}<p class="pdp-desc">{{.}}</p>{{end}}
+    {{if .It.ReadyIn}}<p class="pdp-meta">Ready in {{.It.ReadyIn}} min</p>{{end}}
+    {{if .Add}}<form method="get" action="{{.Action}}" class="pdp-form">
+      <input type="hidden" name="step" value="bag">
+      {{range .Options}}{{$in := .Input}}<fieldset class="pdp-opt"><legend>{{.Name}}</legend>
+      {{range .Choices}}<label class="pdp-choice"><input type="radio" name="{{$in}}" value="{{.Value}}"{{if .Selected}} checked{{end}}><span>{{.Label}}</span></label>
+      {{end}}</fieldset>
+      {{end}}<div class="pdp-qty"><label for="pdp-qty">Quantity</label>
+      <input id="pdp-qty" class="qty" type="number" name="q.{{.It.ID}}" value="1" min="1" max="{{.Max}}" step="1" inputmode="numeric"></div>
+      <button class="btn btn-primary btn-brand btn-block" type="submit">Add to bag</button>
+    </form>
+    {{else if not .It.Available}}<p class="pdp-note">Unavailable for now.</p>
+    {{else if .It.SoldOut}}<p class="pdp-note">Sold out.</p>
+    {{else if .Note}}<p class="pdp-note">{{.Note}}{{with .Whats}} <a href="{{.}}" rel="noopener">Message {{$.Business}} on WhatsApp</a> to order.{{else}}{{with .Phone}} Call <a href="tel:{{.}}">{{.}}</a> to order.{{end}}{{end}}</p>
+    {{end}}{{end}}
+
+{{/* The bag, as a step of its own: what is in it, to change or take out,
+     then Continue. A GET form, so the bag goes on in the address. */}}
+{{define "bagstep"}}<form method="get" action="{{.Action}}" class="bag" data-order>
+<input type="hidden" name="step" value="details">
+<h2 class="bag-h">Your bag</h2>
+{{range .Bag}}<div class="bag-line">
+  <div class="bag-text"><label for="q-{{.N}}"><span class="line-name">{{.Name}}</span></label>
+  {{with .Choices}}<span class="bag-opts">{{.}}</span>{{end}}
+  <span class="bag-unit">{{.Unit}} each</span></div>
+  <input id="q-{{.N}}" class="qty" type="number" name="q.{{.ID}}" value="{{.Qty}}" min="0" max="{{.Max}}" step="1" inputmode="numeric" data-price="{{.UnitKobo}}">
+  {{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{.Value}}">
+  {{end}}</div>
+{{end}}
+<p class="total" data-total aria-live="polite">Total: {{.Subtotal}}</p>
+<p class="bag-hint">Set a quantity to 0 to take it out.</p>
+<button class="btn btn-primary btn-brand btn-block" type="submit">Continue</button>
+{{with .MoreHref}}<p class="bag-more"><a href="{{.}}">Add more</a></p>{{end}}
+</form>{{end}}
+
+{{/* The bag on the details step: a summary above the details, its
+     quantities and choices kept in hidden fields, the server pricing
+     the order from the catalogue as it always did. */}}
+{{define "bagsummary"}}<section class="bag-sum" aria-labelledby="bag-sum-h">
+<div class="bag-head"><h2 id="bag-sum-h" class="bag-h">Your bag</h2>{{with .ChangeHref}}<a href="{{.}}">Change</a>{{end}}</div>
+{{range .Bag}}<div class="bag-row">
+  <span>{{.Qty}} × {{.Name}}{{with .Choices}} <span class="bag-opts">{{.}}</span>{{end}}</span><span class="bag-amt">{{.Line}}</span>
+  <input type="hidden" name="q.{{.ID}}" value="{{.Qty}}" max="{{.Max}}" data-price="{{.UnitKobo}}">
+  {{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{.Value}}">
+  {{end}}</div>
+{{end}}
+<p class="total" data-total aria-live="polite">Total: {{.Subtotal}}</p>
+</section>{{end}}

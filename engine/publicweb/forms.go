@@ -114,6 +114,17 @@ type formData struct {
 	// Questions are the action's own questions (fronts F1): its form's
 	// fields but the basket and time, drawn as hosted forms' fields.
 	Questions []*field
+	// Step is where an order is in its two pages: "bag" (what is in it,
+	// to change or confirm), "details" (who and where, with the bag as a
+	// summary), or empty (one page, with the whole menu to choose from).
+	// Nothing is kept between them: the bag travels in the address and
+	// the form, so the page has no cookies and works without a script.
+	Step     string
+	Bag      []bagLine
+	Subtotal string
+	// MoreHref is where to add more to the bag, ChangeHref where the
+	// bag is changed from the details page.
+	MoreHref, ChangeHref string
 }
 
 type zoneItem struct {
@@ -145,7 +156,10 @@ type formOption struct {
 
 type formChoice struct {
 	Value, Label string
-	Selected     bool
+	// Name is the choice on its own, PriceKobo what it adds.
+	Name      string
+	PriceKobo int64
+	Selected  bool
 }
 
 // optionInput is the name of a dish's choice in one of its groups.
@@ -162,7 +176,7 @@ func formOptions(it storefront.Item) []formOption {
 			if c.PriceKobo > 0 {
 				label += " (+" + storefront.FormatNaira(c.PriceKobo) + ")"
 			}
-			o.Choices = append(o.Choices, formChoice{Value: strconv.Itoa(ci), Label: label, Selected: ci == 0})
+			o.Choices = append(o.Choices, formChoice{Value: strconv.Itoa(ci), Label: label, Name: c.Name, PriceKobo: c.PriceKobo, Selected: ci == 0})
 		}
 		out = append(out, o)
 	}
@@ -285,6 +299,7 @@ func (s *Server) serveFrontForm(w http.ResponseWriter, r *http.Request, site Sit
 		return
 	}
 	if r.Method != http.MethodPost {
+		f.stepFor(r.URL.Query())
 		if item := r.URL.Query().Get("item"); item != "" {
 			for i := range f.Items {
 				if f.Items[i].ID == item && f.Items[i].Orderable {
@@ -360,6 +375,9 @@ func (s *Server) showForm(w http.ResponseWriter, r *http.Request, status int, f 
 		token = string(t)
 	}
 	f.Token = token
+	if r.Method == http.MethodPost {
+		f.detailsAgain()
+	}
 	s.renderPrivate(w, r, status, "form.html", f)
 }
 
@@ -508,6 +526,12 @@ func (f *formData) keep(v url.Values) {
 	for _, q := range f.Questions {
 		q.show(v)
 	}
+	f.keepBasket(v)
+}
+
+// keepBasket takes the quantities and the choices a form (or an address)
+// names.
+func (f *formData) keepBasket(v url.Values) {
 	for i := range f.Items {
 		if n, err := strconv.Atoi(strings.TrimSpace(v.Get(quantityField + f.Items[i].ID))); err == nil && n > 0 && n <= f.Items[i].Max && f.Items[i].Orderable {
 			f.Items[i].Qty = n
