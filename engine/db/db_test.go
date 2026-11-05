@@ -14,6 +14,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/db/dbtest"
+	"github.com/israel-duff/taskiem/engine/ops"
 )
 
 var ctx = context.Background()
@@ -77,6 +78,57 @@ func TestEveryTenantTableIsProtected(t *testing.T) {
 	}
 	if leaked != 0 {
 		t.Errorf("%d partitions are directly readable by application roles", leaked)
+	}
+	// A table holding a tenant_id lets the application role see rows only
+	// through the transaction's scope: every permissive policy of
+	// taskiem_app either has no USING (insert only), refuses everything, or
+	// tests taskiem_tenant_scope(). USING (true) is not a tenant boundary
+	// (F82).
+	rows, err = d.Admin.Query(ctx, `
+	  SELECT c.relname || '.' || p.polname, pg_get_expr(p.polqual, p.polrelid)
+	    FROM pg_policy p JOIN pg_class c ON c.oid = p.polrelid JOIN pg_namespace n ON n.oid = c.relnamespace
+	   WHERE n.nspname = 'public' AND p.polpermissive AND ('taskiem_app'::regrole = ANY (p.polroles) OR 0::oid = ANY (p.polroles))
+	     AND EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid = c.oid AND a.attname = 'tenant_id' AND NOT a.attisdropped)
+	     AND p.polqual IS NOT NULL AND pg_get_expr(p.polqual, p.polrelid) <> 'false'
+	     AND pg_get_expr(p.polqual, p.polrelid) NOT LIKE '%taskiem_tenant_scope()%'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var policy, qual string
+		if err := rows.Scan(&policy, &qual); err != nil {
+			t.Fatal(err)
+		}
+		t.Errorf("%s: the application role's policy on a table of tenant rows ignores the tenant scope: USING (%s)", policy, qual)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// The worker-pool change log holds which tenant runs where and who moved
+// it: a tenant's transaction sees its own rows only, and the operators'
+// listing (scoped to the platform chain) sees every tenant's (F82).
+func TestWorkerPoolChangesAreScoped(t *testing.T) {
+	d := dbtest.New(t)
+	a, b := d.SeedTenant(t, nil), d.SeedTenant(t, nil)
+	if _, err := d.Admin.Exec(ctx, `INSERT INTO worker_pool_changes (tenant_id, pool, changed_by) VALUES ($1, 'dedicated-bank', 'cli:ada'), ($2, 'acme', 'cli:ada')`, b.ID, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	q := `SELECT count(*) FROM worker_pool_changes WHERE tenant_id = $1`
+	if n := count(t, d, []uuid.UUID{a.ID}, q, b.ID); n != 0 {
+		t.Errorf("tenant A's transaction sees %d of B's pool changes", n)
+	}
+	if n := count(t, d, []uuid.UUID{b.ID}, q, b.ID); n != 1 {
+		t.Errorf("tenant B sees %d of its own pool changes, want 1", n)
+	}
+	var n int
+	if err := d.App.QueryRow(ctx, `SELECT count(*) FROM worker_pool_changes`).Scan(&n); err != nil || n != 0 {
+		t.Errorf("a query with no scope sees %d pool changes (%v)", n, err)
+	}
+	if n := count(t, d, []uuid.UUID{ops.PlatformChain}, `SELECT count(*) FROM worker_pool_changes`); n != 2 {
+		t.Errorf("the platform chain sees %d pool changes, want 2", n)
 	}
 }
 
