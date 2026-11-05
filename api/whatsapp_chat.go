@@ -356,7 +356,12 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	}
 	// An invitation's Join or No, and an owner's answer to a request to
 	// join (chat_invites.go).
-	if strings.HasPrefix(in.Reply, invPrefix) || normalizeCommand(text) == "join" {
+	// A tenant's own Meta app signs its deliveries with a secret the tenant
+	// chose, so the sender it names is only as sure as that secret (F2):
+	// nothing said there brings anyone in, makes a business, or changes
+	// who holds which rights.
+	ownApp := c.wa != nil && c.wa.OwnApp
+	if !ownApp && (strings.HasPrefix(in.Reply, invPrefix) || normalizeCommand(text) == "join") {
 		if done, err := s.chatInviteMessage(ctx, &inviteChat{ch: ch, addr: number, user: user, lang: c.lang.Tag}, text, in.Reply); done || err != nil {
 			return err
 		}
@@ -364,7 +369,7 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	// Another business, or one when none is left (chat_signup.go).
 	// Only words and its own buttons: an approval tapped or a form sent
 	// meanwhile goes where it always went.
-	if ch.Name() != "web" && in.Flow == "" && in.Media == nil && in.Image == nil && in.Document == nil && (in.Reply == "" || strings.HasPrefix(in.Reply, "su:")) {
+	if !ownApp && ch.Name() != "web" && in.Flow == "" && in.Media == nil && in.Image == nil && in.Document == nil && (in.Reply == "" || strings.HasPrefix(in.Reply, "su:")) {
 		sc := &signupChat{ch: ch, addr: number, user: user, lang: c.lang.Tag}
 		if dm, ok := ch.(*slackDMChannel); ok {
 			// Another business from Slack has the workspace's Slack too.
@@ -408,6 +413,9 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	}
 	if c.p, err = s.principalOf(ctx, c.tenant.ID, user); err != nil {
 		return s.waSay(ctx, ch, number, "", c.t("wa.cannot_act", "org", c.tenant.Name))
+	}
+	if ownApp {
+		capOwnAppPrincipal(c.p)
 	}
 	// From here the conversation is with this business: what is said is
 	// kept in its history (chat_history.go), and so are the replies.
@@ -1574,4 +1582,23 @@ func shopCommandOf(i lang.Intent, arg string) string {
 		return "order " + ref + " delivered"
 	}
 	return ""
+}
+
+// ownAppWithheld are the rights a person writing to a number on the
+// tenant's own Meta app never exercises there (F2): its secret is the
+// tenant's, so a delivery "from" a member proves no more than that someone
+// holds it.
+var ownAppWithheld = []string{PermMemberManage, PermRoleManage, PermSecretManage, PermConnectionManage, PermKeyManage}
+
+// capOwnAppPrincipal withholds from p what changes who is in the business
+// or what rights anyone holds, the owner role included.
+func capOwnAppPrincipal(p *Principal) {
+	perms := make(map[string]bool, len(p.Permissions))
+	for k, v := range p.Permissions {
+		if !slices.Contains(ownAppWithheld, k) {
+			perms[k] = v
+		}
+	}
+	p.Permissions = perms
+	p.Roles = slices.DeleteFunc(slices.Clone(p.Roles), func(r string) bool { return r == "owner" })
 }

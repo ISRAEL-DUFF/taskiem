@@ -22030,7 +22030,7 @@ paths:
       tags:
       - WhatsApp
       summary: Set the tenant's WhatsApp number
-      description: The tenant's own WhatsApp Business number in place of the platform's.
+      description: The tenant's own WhatsApp Business number in place of the platform's. A number on the organisation's own Meta app (own_app, the default) is connected by an owner only.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -22053,6 +22053,12 @@ paths:
                 $ref: '#/components/schemas/WhatsAppNumber'
         '400':
           description: Bad ids, token, secrets or display number, or the Graph API refused the token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Only an owner connects a number on the organisation's own Meta app.
           content:
             application/json:
               schema:

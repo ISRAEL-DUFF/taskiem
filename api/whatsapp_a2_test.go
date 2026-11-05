@@ -629,3 +629,64 @@ func TestWhatsAppPublicMenu(t *testing.T) {
 		t.Errorf("%d replies to 12 messages", n)
 	}
 }
+
+// A number on a tenant's own Meta app is verified with a secret the tenant
+// chose, so who sent a delivery to it is only as sure as that secret
+// (F2): only an owner connects one, and what is said on it never brings
+// people in, makes businesses or exercises the rights over who holds
+// which rights, whoever it claims to come from.
+func TestWhatsAppOwnAppSendersCapped(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	chatSignupOn(w.world, "whatsapp")
+	w.graph.AddNumber(pnA, tokA, "+234 800 000 0001")
+	alpha := w.tenant(t, "Alpha", "owner@alpha.test")
+	beta := w.tenant(t, "Beta", "owner@beta.test")
+	admin := w.member(t, alpha, "admin@alpha.test", "admin")
+	const ownerNum, adaNum, attacker = "+2348011110001", "+2348011110002", "+2348099990009"
+	ada := w.member(t, alpha, "ada@alpha.test", "operator")
+	w.bind(t, alpha, ownerNum)
+	w.bind(t, ada, adaNum)
+	w.bind(t, beta, "+2348011110003")
+
+	// Only an owner connects a number on the tenant's own app; an admin may
+	// still connect one through Taskiem's app.
+	connectA := map[string]any{"phone_number_id": pnA, "waba_id": "300000000000001", "access_token": tokA, "app_secret": secA, "verify_token": vtA}
+	admin.must(403, "PUT", "/v1/whatsapp/number", connectA)
+	admin.must(200, "PUT", "/v1/whatsapp/number", map[string]any{"phone_number_id": pnA, "waba_id": "300000000000001", "access_token": tokA, "own_app": false})
+	alpha.must(200, "PUT", "/v1/whatsapp/number", connectA)
+
+	// Ordinary work still answers on the own number.
+	if got := w.sendTo(t, "/channels/whatsapp/n/"+pnA, pnA, secA, ownerNum, whatsapptest.Text("status")); len(got) != 1 || !strings.HasPrefix(got[0].Text, "No runs") {
+		t.Fatalf("status on the own number: %+v", got)
+	}
+	// An invitation "from" the owner: refused, nothing kept.
+	got := w.sendTo(t, "/channels/whatsapp/n/"+pnA, pnA, secA, ownerNum, whatsapptest.Text("invite "+attacker+" as owner"))
+	if len(got) != 1 || !strings.Contains(got[0].Text, "Only someone who manages the people") {
+		t.Fatalf("invite on the own number: %+v", got)
+	}
+	w.sendTo(t, "/channels/whatsapp/n/"+pnA, pnA, secA, ownerNum, whatsapptest.Text("yes"))
+	var n int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM chat_invites WHERE address = $1`, attacker).Scan(&n); err != nil || n != 0 {
+		t.Fatalf("invitations kept: %d %v", n, err)
+	}
+	// A new business from the own number: not started.
+	if got := w.sendTo(t, "/channels/whatsapp/n/"+pnA, pnA, secA, ownerNum, whatsapptest.Text("new business")); len(got) == 1 && strings.Contains(got[0].Text, "What is your business called") {
+		t.Fatalf("sign-up on the own number: %+v", got)
+	}
+	// Beta invites Ada on the shared number; a "join" said on Alpha's own
+	// number does not answer it.
+	if got := w.say(t, "+2348011110003", "invite "+adaNum+" as viewer"); !strings.Contains(got, "Invite "+adaNum+" to Beta") {
+		t.Fatalf("beta's invitation: %q", got)
+	}
+	w.say(t, "+2348011110003", "yes")
+	w.sendTo(t, "/channels/whatsapp/n/"+pnA, pnA, secA, adaNum, whatsapptest.Text("join"))
+	if r := memberRoles(t, w.world, userID(t, ada), "Beta"); r != "" {
+		t.Fatalf("joined Beta from Alpha's own number: %q", r)
+	}
+	// The same word on the shared number is Ada's own.
+	w.say(t, adaNum, "join")
+	if got := w.say(t, adaNum, "yes"); memberRoles(t, w.world, userID(t, ada), "Beta") != "viewer" {
+		t.Fatalf("join on the shared number: %q", got)
+	}
+}
