@@ -166,7 +166,7 @@ No Xenibase auth and no new account system: members use Taskiem's own sign-in, o
 | --- | --- |
 | `message` (default) | A thank-you message (Markdown, no links outside the organisation's verified domains) and the reference |
 | `redirect` | A redirect to a URL on one of the organisation's verified domains. Never anywhere else, so a form cannot become an open redirect |
-| `result` | The run's answer: the page waits up to 30 seconds for a `respond` step (the synchronous mode of spec 8.2) and shows its message, then falls back to the thank-you message and a status link |
+| `result` | The run's answer: the page waits up to 30 seconds for a `respond` step (the synchronous mode of spec 8.2) and shows its message, then falls back to the thank-you message and a status link. A form's result page shows only a submission sent to that form; another form's reference answers as not found |
 
 - **The status link** (optional, `after.status: true`): an unguessable link to a page that shows the latest message the workflow has set with `respond` ("Your application is with our credit team"). It never shows the run's steps or data.
 - **A copy for the respondent** (optional): an email of their answers to a verified email address, without files and with sensitive fields masked.

@@ -1474,7 +1474,10 @@ func (s *Server) serveFormDone(w http.ResponseWriter, r *http.Request, id, ref s
 		s.tryLater(w, r, "form status", err)
 		return
 	}
-	if !ok {
+	// Another form's submission answers as unknown here, as another
+	// storefront's order does (statusOf): the page shows the workflow's
+	// message under this form's business and look.
+	if !ok || st.Endpoint != pub.Endpoint {
 		s.page(w, r, http.StatusNotFound, "notfound", pageData{Title: "Page not found"})
 		return
 	}

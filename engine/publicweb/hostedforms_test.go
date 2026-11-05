@@ -31,21 +31,22 @@ const formHost = "forms.shops.test"
 
 // fakeForms stands in for the taskiem_public_form* functions.
 type fakeForms struct {
-	mu       sync.Mutex
-	forms    map[string]PublicForm
-	links    map[string]FormLink    // by token
-	requests map[string]FormRequest // by token
-	writes   []FormWrite
-	byIdem   map[string]string
-	states   map[string]FormState
-	hashes   map[string][]byte
-	once     map[string]bool
-	used     map[uuid.UUID]bool
-	answered map[uuid.UUID]bool
-	codes    []fakeCode
-	limited  bool
-	closed   bool
-	taken    int
+	mu        sync.Mutex
+	forms     map[string]PublicForm
+	links     map[string]FormLink    // by token
+	requests  map[string]FormRequest // by token
+	writes    []FormWrite
+	byIdem    map[string]string
+	states    map[string]FormState
+	endpoints map[string]uuid.UUID // the form each reference was sent to
+	hashes    map[string][]byte
+	once      map[string]bool
+	used      map[uuid.UUID]bool
+	answered  map[uuid.UUID]bool
+	codes     []fakeCode
+	limited   bool
+	closed    bool
+	taken     int
 }
 
 type fakeCode struct {
@@ -57,7 +58,7 @@ type fakeCode struct {
 
 func newFakeForms() *fakeForms {
 	return &fakeForms{forms: map[string]PublicForm{}, links: map[string]FormLink{}, requests: map[string]FormRequest{}, byIdem: map[string]string{},
-		states: map[string]FormState{}, hashes: map[string][]byte{}, once: map[string]bool{}, used: map[uuid.UUID]bool{}, answered: map[uuid.UUID]bool{}}
+		states: map[string]FormState{}, endpoints: map[string]uuid.UUID{}, hashes: map[string][]byte{}, once: map[string]bool{}, used: map[uuid.UUID]bool{}, answered: map[uuid.UUID]bool{}}
 }
 
 func (f *fakeForms) Form(_ context.Context, id string) (PublicForm, bool, error) {
@@ -126,6 +127,9 @@ func (f *fakeForms) Submit(_ context.Context, w FormWrite) (bool, error) {
 	f.writes = append(f.writes, w)
 	f.states[w.Reference] = FormState{Status: "received", Created: time.Now()}
 	f.hashes[w.Reference] = w.StatusHash
+	if w.Endpoint != nil {
+		f.endpoints[w.Reference] = *w.Endpoint
+	}
 	return true, nil
 }
 
@@ -162,6 +166,7 @@ func (f *fakeForms) Status(_ context.Context, ref string, hash []byte) (FormStat
 	if !ok || !bytes.Equal(f.hashes[ref], hash) {
 		return FormState{}, false, nil
 	}
+	st.Endpoint = f.endpoints[ref]
 	return st, true, nil
 }
 
@@ -694,6 +699,13 @@ func TestHostedFormAfter(t *testing.T) {
 		t.Fatal("waited more than 30 seconds")
 	}
 	must(t, e.get("/f/result000001/done/"+ref+"?k=wrong"), 404)
+	// Another form's page does not show this submission's message under
+	// its own business and look, framed or not (F30).
+	e.f.states[ref] = FormState{Status: "started", Created: *e.now, Message: "Pay N50,000 to 0123456789"}
+	e.add("victim000001", `{"title":"V","after":{"mode":"result","message":"Thanks."}}`, schema)
+	must(t, e.get("/f/victim000001/done/"+ref+"?k="+url.QueryEscape(key)), 404)
+	must(t, e.get("/embed/f/victim000001/done/"+ref+"?k="+url.QueryEscape(key)), 404)
+	must(t, e.get(done), 200, "Pay N50,000")
 
 	// The status link: plain words and the message, nothing else.
 	must(t, e.get("/s/"+ref+"?k="+url.QueryEscape(key)), 200, "being handled", "Reference <strong>"+ref)

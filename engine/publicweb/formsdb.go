@@ -83,6 +83,8 @@ type FormState struct {
 	Status  string // received, started, answered or refused
 	Message string
 	Created time.Time
+	// Endpoint is the form it was sent to; nil for a request's answer.
+	Endpoint uuid.UUID
 }
 
 // Why a submission was not written.
@@ -291,8 +293,9 @@ func (d dbForms) CheckCode(ctx context.Context, scope uuid.UUID, addressHash, co
 func (d dbForms) Status(ctx context.Context, reference string, statusHash []byte) (FormState, bool, error) {
 	var st FormState
 	var msg *string
-	err := d.pool.QueryRow(ctx, `SELECT status, message, created_at FROM taskiem_public_form_status($1, $2) LIMIT 1`, reference, statusHash).
-		Scan(&st.Status, &msg, &st.Created)
+	var endpoint *uuid.UUID
+	err := d.pool.QueryRow(ctx, `SELECT status, message, created_at, endpoint_id FROM taskiem_public_form_status($1, $2) LIMIT 1`, reference, statusHash).
+		Scan(&st.Status, &msg, &st.Created, &endpoint)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return FormState{}, false, nil
 	}
@@ -301,6 +304,9 @@ func (d dbForms) Status(ctx context.Context, reference string, statusHash []byte
 	}
 	if msg != nil {
 		st.Message = *msg
+	}
+	if endpoint != nil {
+		st.Endpoint = *endpoint
 	}
 	return st, true, nil
 }
