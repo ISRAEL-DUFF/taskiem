@@ -433,6 +433,25 @@ func TestAdminAndErasure(t *testing.T) {
 	}
 }
 
+// A run in flight whose history is kept out of line (payload_ref, in
+// object storage) cannot be searched for the subject, so it counts as
+// holding it: the erasure waits for it, or cancels it (F26b).
+func TestErasureWaitsForRunsWithEventsOutOfLine(t *testing.T) {
+	w := newWorld(t)
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	wf := publishFlow(t, owner, loanFlow)
+	run := owner.must(201, "POST", "/v1/workflows/"+wf+"/runs", map[string]any{"input": map[string]any{"bvn": "22288888888", "amount": 5}})["run_id"].(string)
+	// One of its events also has content kept out of line; the person
+	// erased appears nowhere inline.
+	if _, err := w.env.DB.Admin.Exec(context.Background(), `UPDATE run_events SET payload_ref = '\x0123' WHERE run_id = $1 AND seq = (SELECT max(seq) FROM run_events WHERE run_id = $1)`, run); err != nil {
+		t.Fatal(err)
+	}
+	if st, body := owner.do("POST", "/v1/pii/erase", map[string]any{"category": "bvn", "value": "22277777777"}); st != 409 || body["code"] != "runs_in_flight" ||
+		!strings.Contains(toJSON(body["runs"]), run) {
+		t.Fatalf("erasure under a run whose events are out of line: %d %v", st, body)
+	}
+}
+
 func toJSON(v any) string {
 	b, _ := json.Marshal(v)
 	return string(b)

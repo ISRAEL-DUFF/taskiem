@@ -559,7 +559,9 @@ type eraseReq struct {
 // runsHolding lists up to 50 of the tenant's runs in flight whose history
 // holds an envelope of one of the subjects (subject ids are long and
 // distinct, so finding the id in an event's payload is finding the
-// envelope).
+// envelope). An event kept out of line (payload_ref, a content hash in
+// object storage, spec 4.9) cannot be searched here, so a run with one
+// counts as holding the subject: erasing waits for it or cancels it.
 func (s *Server) runsHolding(r *http.Request, subjects []string) ([]uuid.UUID, error) {
 	quoted := make([]string, len(subjects))
 	for i, x := range subjects {
@@ -569,7 +571,8 @@ func (s *Server) runsHolding(r *http.Request, subjects []string) ([]uuid.UUID, e
 	err := s.tx(r, func(tx pgx.Tx) error {
 		rows, err := tx.Query(r.Context(), `SELECT r.id FROM runs r
 			WHERE r.tenant_id = $1 AND r.status NOT IN ('completed', 'failed', 'cancelled')
-			  AND EXISTS (SELECT 1 FROM run_events e, unnest($2::text[]) q WHERE e.run_id = r.id AND strpos(e.payload::text, q) > 0)
+			  AND EXISTS (SELECT 1 FROM run_events e WHERE e.run_id = r.id
+			    AND (e.payload_ref IS NOT NULL OR EXISTS (SELECT 1 FROM unnest($2::text[]) q WHERE strpos(e.payload::text, q) > 0)))
 			ORDER BY r.started_at LIMIT 50`, principalFrom(r.Context()).TenantID, quoted)
 		if err != nil {
 			return err
