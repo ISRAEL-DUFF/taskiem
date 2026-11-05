@@ -330,7 +330,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Static files are immutable and cheap, so only pages are counted.
-	if !s.Views.Allow(s.ClientIP(r)) {
+	if !s.Views.Allow(s.clientKey(r)) {
 		w.Header().Set("Retry-After", "60")
 		s.page(w, r, http.StatusTooManyRequests, "unavailable", pageData{Title: "Too many requests"})
 		return
@@ -514,6 +514,12 @@ func hostOf(r *http.Request) string {
 		host = h
 	}
 	return strings.TrimSuffix(host, ".")
+}
+
+// clientKey is the client's address for limits and identities: an IPv6
+// address cut to its /64, which one subscriber holds whole (F69).
+func (s *Server) clientKey(r *http.Request) string {
+	return formguard.ClientKey(s.ClientIP(r))
 }
 
 // ClientIP is the request's client address: the last X-Forwarded-For
