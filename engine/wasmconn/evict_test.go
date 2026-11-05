@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -339,3 +340,51 @@ func TestCallsHaveADeadline(t *testing.T) {
 		t.Fatal("a spinning guest ran past MaxCallTime on a context without a deadline")
 	}
 }
+
+// countingHandler counts the bytes the process log would get.
+type countingHandler struct{ n *int }
+
+func (h countingHandler) Enabled(context.Context, slog.Level) bool { return true }
+func (h countingHandler) Handle(_ context.Context, r slog.Record) error {
+	r.Attrs(func(a slog.Attr) bool { *h.n += len(a.Value.String()); return true })
+	return nil
+}
+func (h countingHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
+func (h countingHandler) WithGroup(string) slog.Handler      { return h }
+
+// TestLogLinesAreCapped: a call's log lines stop at MaxLogs in total,
+// however large one line is, whether it comes through taskiem.log or
+// standard output.
+func TestLogLinesAreCapped(t *testing.T) {
+	lim := Limits{}.withDefaults()
+	for name, write := range map[string]func(c *call){
+		"one huge line":        func(c *call) { c.log(strings.Repeat("b", 10<<20)) },
+		"stdout":               func(c *call) { _, _ = (&logWriter{c: c}).Write([]byte(strings.Repeat("a", 10<<20))) },
+		"just under, then big": func(c *call) { c.log(strings.Repeat("x", lim.MaxLogs-1)); c.log(strings.Repeat("y", 10<<20)) },
+	} {
+		var n int
+		c := &call{lim: lim, req: connector.Request{Logger: slog.New(countingHandler{&n})}}
+		write(c)
+		if n > lim.MaxLogs+64 || c.logBytes > lim.MaxLogs {
+			t.Errorf("%s: %d bytes logged, %d counted (cap %d)", name, n, c.logBytes, lim.MaxLogs)
+		}
+	}
+	// Personal data cut at the cap is still masked: it is masked before
+	// the cut.
+	var got []string
+	c := &call{lim: lim, req: connector.Request{Logger: slog.New(recordHandler{&got})}}
+	c.log(strings.Repeat("x", lim.MaxLogs-20) + " ada.lovelace@example.com and more")
+	if len(got) != 1 || strings.Contains(got[0], "ada.lovelace") {
+		t.Errorf("cut email: %d lines, ends %q", len(got), got[len(got)-1][max(0, len(got[len(got)-1])-60):])
+	}
+}
+
+type recordHandler struct{ lines *[]string }
+
+func (h recordHandler) Enabled(context.Context, slog.Level) bool { return true }
+func (h recordHandler) Handle(_ context.Context, r slog.Record) error {
+	r.Attrs(func(a slog.Attr) bool { *h.lines = append(*h.lines, a.Value.String()); return true })
+	return nil
+}
+func (h recordHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
+func (h recordHandler) WithGroup(string) slog.Handler      { return h }

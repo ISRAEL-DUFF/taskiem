@@ -573,27 +573,49 @@ func httpResponseRead(ctx context.Context, m api.Module, stack []uint64) {
 
 func logLine(ctx context.Context, m api.Module, stack []uint64) {
 	c := callFrom(ctx)
-	b, ok := m.Memory().Read(api.DecodeU32(stack[0]), api.DecodeU32(stack[1]))
-	if c == nil || !ok {
+	ptr, n := api.DecodeU32(stack[0]), api.DecodeU32(stack[1])
+	if c == nil || uint64(ptr)+uint64(n) > uint64(m.Memory().Size()) {
 		panic("taskiem.log: bad pointer")
 	}
+	// Copy no more than the call may still log (and the margin masking
+	// needs), however long the line.
+	n = uint32(min(int(n), c.logRoom()+logMargin)) //nolint:gosec // bounded by n
+	b, _ := m.Memory().Read(ptr, n)
 	c.log(string(b))
 }
 
+// logMargin is how far past the cap a line is read and masked before it
+// is cut, so personal data straddling the cut is masked whole.
+const logMargin = 256
+
+// logRoom is how many bytes of log lines the call may still keep.
+func (c *call) logRoom() int { return max(c.lim.MaxLogs-c.logBytes, 0) }
+
 func (c *call) log(s string) {
 	s = strings.TrimRight(s, "\n")
-	if s == "" || c.logBytes >= c.lim.MaxLogs || c.req.Logger == nil {
+	room := c.logRoom()
+	if s == "" || room == 0 || c.req.Logger == nil {
 		return
 	}
-	c.logBytes += len(s)
-	c.req.Logger.Info("connector log", "line", pii.Redact(s))
+	if len(s) <= room {
+		c.logBytes += len(s)
+		c.req.Logger.Info("connector log", "line", pii.Redact(s))
+		return
+	}
+	// Over the cap: mask a bounded prefix, then cut it to what is left.
+	s = pii.Redact(s[:min(len(s), room+logMargin)])
+	s = strings.ToValidUTF8(s[:min(len(s), room)], "")
+	c.logBytes = c.lim.MaxLogs
+	c.req.Logger.Info("connector log", "line", s+" …[truncated]")
 }
 
 type logWriter struct{ c *call }
 
 func (w *logWriter) Write(p []byte) (int, error) {
-	for _, l := range strings.Split(string(p), "\n") {
-		w.c.log(l)
+	for rest := p; len(rest) > 0 && w.c.logRoom() > 0; {
+		line, next, _ := bytes.Cut(rest, []byte("\n"))
+		w.c.log(string(line[:min(len(line), w.c.logRoom()+logMargin)]))
+		rest = next
 	}
 	return len(p), nil
 }

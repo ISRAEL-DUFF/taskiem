@@ -55,7 +55,7 @@ Messages are masked for personal data before they are recorded.
 | `input_read` | `(ptr: i32)` | Copies the request JSON to `ptr` |
 | `http_request` | `(ptr: i32, len: i32) -> i32` | Sends the request JSON at `ptr`; returns the length of the response JSON |
 | `http_response_read` | `(ptr: i32)` | Copies the last response JSON to `ptr` |
-| `log` | `(ptr: i32, len: i32)` | Appends a line to the step's log (masked; 16 KiB per call). Standard output and error go there too |
+| `log` | `(ptr: i32, len: i32)` | Appends a line to the step's log (masked; 16 KiB per call in all, a line past that cut short). Standard output and error go there too |
 
 The host never calls into the module while a host function runs.
 
