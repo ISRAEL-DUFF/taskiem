@@ -1105,7 +1105,21 @@ const enrichTimeout = 3 * time.Second
 func (h *Handler) enrich(ctx context.Context, f connector.Enricher, tenant uuid.UUID, env string, conn *connector.Connector, connection string, opts map[string]any, body any) (any, error) {
 	ctx, cancel := context.WithTimeout(ctx, enrichTimeout)
 	defer cancel()
-	call := connector.EventCall{Options: opts, Connect: func() (map[string]string, *http.Client, error) {
+	return f(ctx, h.eventCall(ctx, tenant, env, conn, connection, opts), body)
+}
+
+// key asks a connector's keyer for a verified event's dedup key, as enrich
+// asks its enricher, with no trigger options.
+func (h *Handler) key(ctx context.Context, f connector.Keyer, tenant uuid.UUID, env string, conn *connector.Connector, connection string, body any) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, enrichTimeout)
+	defer cancel()
+	return f(ctx, h.eventCall(ctx, tenant, env, conn, connection, nil), body)
+}
+
+// eventCall is what an enricher or a keyer gets: the options, and the
+// connection on demand.
+func (h *Handler) eventCall(ctx context.Context, tenant uuid.UUID, env string, conn *connector.Connector, connection string, opts map[string]any) connector.EventCall {
+	return connector.EventCall{Options: opts, Connect: func() (map[string]string, *http.Client, error) {
 		if h.Egress == nil {
 			return nil, nil, errors.New("no egress guard: this edge cannot call providers")
 		}
@@ -1117,7 +1131,6 @@ func (h *Handler) enrich(ctx context.Context, f connector.Enricher, tenant uuid.
 		pol := egress.Policy{Tenant: tenant.String(), Hosts: conn.Manifest.HostsFor(creds), Purpose: "connector:" + conn.Manifest.ID + ":ingest"}
 		return creds, h.Egress.Client(pol, enrichTimeout), nil
 	}}
-	return f(ctx, call, body)
 }
 
 func nullUUID(id uuid.UUID) *uuid.UUID {

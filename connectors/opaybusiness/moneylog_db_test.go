@@ -66,10 +66,12 @@ func TestSalesReachTheMoneyLog(t *testing.T) {
 	}
 }
 
-// A captured sale notification posted again with another X-Opay-Tranid
-// header (which OPay does not sign) is the same sale: its workflows run
-// once (F54).
-func TestReplayWithAnotherTranidStartsNoRun(t *testing.T) {
+// saleWorld is a tenant with an OPay connection in prod, a workflow on
+// the payment trigger and the ingest endpoint; post delivers a body to it
+// with an X-Opay-Tranid header (none when empty), and runs counts the
+// workflow's runs.
+func saleWorld(t *testing.T) (post func(body []byte, tranid string), runs func() int) {
+	t.Helper()
 	ctx := context.Background()
 	e := rt.New(t)
 	if err := e.Registry.Register(New(Options{})); err != nil {
@@ -101,8 +103,8 @@ func TestReplayWithAnotherTranidStartsNoRun(t *testing.T) {
 		MoneyLog: &moneylog.Log{Pool: e.DB.App, PII: e.Vault}}
 	srv := httptest.NewServer(http.StripPrefix("/hooks", h))
 	t.Cleanup(srv.Close)
-	body := delivery(t, docWebhook, time.Now(), creds(t)["client_auth_key"], opayKey)
-	for _, tranid := range []string{"TRAN-1", "TRAN-1", "attacker-2", ""} {
+	post = func(body []byte, tranid string) {
+		t.Helper()
 		req, err := http.NewRequest("POST", srv.URL+"/hooks/"+e.Tenant.String()+"/connectors/opay_business@1/payment?env=prod", strings.NewReader(string(body)))
 		if err != nil {
 			t.Fatal(err)
@@ -121,11 +123,45 @@ func TestReplayWithAnotherTranidStartsNoRun(t *testing.T) {
 			t.Fatalf("delivery %q: %d %s", tranid, res.StatusCode, out)
 		}
 	}
-	var runs int
-	if err := e.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM runs WHERE workflow_id = $1`, wf).Scan(&runs); err != nil {
-		t.Fatal(err)
+	runs = func() int {
+		t.Helper()
+		var n int
+		if err := e.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM runs WHERE workflow_id = $1`, wf).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
 	}
-	if runs != 1 {
-		t.Errorf("one signed body posted four times started %d runs, want 1", runs)
+	return post, runs
+}
+
+// A captured sale notification posted again with another X-Opay-Tranid
+// header (which OPay does not sign) is the same sale: its workflows run
+// once (F54).
+func TestReplayWithAnotherTranidStartsNoRun(t *testing.T) {
+	post, runs := saleWorld(t)
+	body := delivery(t, docWebhook, time.Now(), creds(t)["client_auth_key"], opayKey)
+	for _, tranid := range []string{"TRAN-1", "TRAN-1", "attacker-2", ""} {
+		post(body, tranid)
+	}
+	if n := runs(); n != 1 {
+		t.Errorf("one signed body posted four times started %d runs, want 1", n)
+	}
+}
+
+// OPay retries an unanswered notification at growing intervals, and one
+// sent after five minutes needs a new timestamp, so a new encryption and
+// signature: the same sale, re-signed, still starts its workflows once.
+// The same payment in another status is news (F54b).
+func TestResignedRetryStartsNoRun(t *testing.T) {
+	post, runs := saleWorld(t)
+	key := creds(t)["client_auth_key"]
+	post(delivery(t, docWebhook, time.Now().Add(-4*time.Minute), key, opayKey), "TRAN-1")
+	post(delivery(t, docWebhook, time.Now(), key, opayKey), "TRAN-1")
+	if n := runs(); n != 1 {
+		t.Fatalf("a sale and its re-signed retry started %d runs, want 1", n)
+	}
+	post(delivery(t, strings.Replace(docWebhook, `"status":"SUCCESS"`, `"status":"CLOSE"`, 1), time.Now(), key, opayKey), "TRAN-1")
+	if n := runs(); n != 2 {
+		t.Fatalf("the same payment in another status started %d runs in all, want 2", n)
 	}
 }

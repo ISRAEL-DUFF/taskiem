@@ -246,11 +246,13 @@ triggers:
   # enricher then checks the client auth key and decrypts the notification
   # with the business's private key, so a run sees the plain fields
   # (status, orderNo, payNo, amount, fee, sn, …). Deliveries are
-  # deduplicated on OPay's signature, which covers the whole notification
-  # and its timestamp, so a retry of the same delivery is dropped. Not on
-  # the X-Opay-Tranid header: a header is not signed, so a replay could
-  # change it and start the sale's workflows again. The encrypted body
-  # cannot carry a correlation.
+  # deduplicated on the payment and its status, which the connector's
+  # keyer reads from the decrypted notification, so a retry is dropped
+  # even when OPay signs it again with a new timestamp; the dedup below
+  # (OPay's signature) is kept only for a notification naming no payment.
+  # Not on the X-Opay-Tranid header: a header is not signed, so a replay
+  # could change it and start the sale's workflows again. The encrypted
+  # body cannot carry a correlation.
   payment:
     type: webhook
     title: Sales
