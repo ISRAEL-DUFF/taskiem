@@ -210,6 +210,7 @@ connections.id
 connections.mode
 connections.name
 connections.platform
+connections.provisioned_by
 connections.status
 connections.tenant_id
 connector_publishers.key_id
