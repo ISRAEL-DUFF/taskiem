@@ -19791,7 +19791,8 @@ paths:
       tags:
       - Members
       summary: Create or change a role
-      description: Nobody can create or widen a role carrying a permission they do not hold.
+      description: Nobody can create or widen a role carrying a permission they do not hold, or change one at all
+        that they could not grant as it stands; widening a role members hold also needs `member.manage`.
       security:
       - sessionCookie: []
         csrfHeader: []

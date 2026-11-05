@@ -175,8 +175,26 @@ func (s *Server) putRole(w http.ResponseWriter, r *http.Request) {
 			}
 		} else if err != nil {
 			return err
-		} else if _, err := tx.Exec(r.Context(), `UPDATE roles SET description = $2, permissions = $3, updated_at = now() WHERE name = $1`, name, req.Description, perms); err != nil {
-			return err
+		} else {
+			// Changing a role changes it for everyone who holds it: it takes
+			// the standing to grant (and so take away) the role as it is,
+			// as revoking it from one member does.
+			if err := canGrant(r.Context(), tx, p, []string{name}); err != nil {
+				return err
+			}
+			// Widening a role members hold grants them the new permissions.
+			if slices.ContainsFunc(perms, func(perm string) bool { return !slices.Contains(before, perm) }) && !p.Can(PermMemberManage) {
+				var held bool
+				if err := tx.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM memberships WHERE role = $1)`, name).Scan(&held); err != nil {
+					return err
+				}
+				if held {
+					return fmt.Errorf("%w: members hold %s; widening it needs %s", errForbidden, name, PermMemberManage)
+				}
+			}
+			if _, err := tx.Exec(r.Context(), `UPDATE roles SET description = $2, permissions = $3, updated_at = now() WHERE name = $1`, name, req.Description, perms); err != nil {
+				return err
+			}
 		}
 		return auditTx(r, tx, "role.put", name, map[string]any{"permissions": perms, "before": before})
 	})

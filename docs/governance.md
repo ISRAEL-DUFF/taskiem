@@ -104,7 +104,7 @@ The link is `<TASKIEM_PUBLIC_URL>/reset-password#token=…`. The token is in the
 
 ## Custom roles
 
-Besides the built-in roles, owners and admins define roles as named sets of permissions (Members → Roles, `PUT /v1/roles/{name}`). No one can create, widen, grant or take away a role carrying a permission they do not hold; this also applies to built-in roles. A role someone holds cannot be deleted. Narrowing a role takes effect on its members' next request.
+Besides the built-in roles, owners and admins define roles as named sets of permissions (Members → Roles, `PUT /v1/roles/{name}`). No one can create, widen, grant or take away a role carrying a permission they do not hold; this also applies to built-in roles. Changing a role changes it for everyone who holds it, so it takes the standing to grant the role as it stands: an admin cannot narrow, or even re-describe, a role carrying `billing.manage`. Widening a role members hold grants them the new permissions, so it also needs `member.manage`. A role someone holds cannot be deleted. Narrowing a role takes effect on its members' next request.
 
 **Business roles decide who approves.** A role with no permissions of its own (`credit_officer`, say), or a custom role that an approval step or policy names, decides who can approve money. Granting or taking one away (by hand, by SSO group mapping or by SCIM mapping) also needs `approval.decide`, so an admin without it cannot make themselves or a friend a credit officer. Turning a name members already hold into a custom role (`PUT /v1/roles/{name}`) gives them its permissions, so it needs `member.manage` and the standing to grant that role.
 
