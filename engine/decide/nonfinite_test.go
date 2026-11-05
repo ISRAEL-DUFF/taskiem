@@ -1,6 +1,7 @@
 package decide
 
 import (
+	"errors"
 	"math"
 	"strings"
 	"testing"
@@ -67,7 +68,7 @@ func TestEmitThatCannotBeRecordedIsAnErrorNotAPanic(t *testing.T) {
 	}
 	first := d.fault
 	d.emit(history.StepCompleted, "zz", 0, history.CompletedPayload{Output: "fine"})
-	if d.fault != first || len(d.out) != before {
+	if !errors.Is(d.fault, first) || len(d.out) != before {
 		t.Errorf("after a fault nothing more is recorded: %v %v", d.fault, d.out)
 	}
 }
