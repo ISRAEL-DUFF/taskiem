@@ -3288,6 +3288,10 @@
       "text": " (pẹ̀lú fọ́tò náà)",
       "reviewed": false
     },
+    "wa.signin.has_password": {
+      "text": "Ẹ ti máa ń wọlé sí Taskiem lórí wẹ́ẹ̀bù: {link}\nẸ gbàgbé ọ̀rọ̀ aṣínà yín? Ẹ lo *Forgot password* níbẹ̀; ìjápọ̀ náà yóò lọ sí ímeèlì yín.",
+      "reviewed": false
+    },
     "wa.signin.link": {
       "text": "Ẹ ṣí ìjápọ̀ yìí láti yan ọ̀rọ̀ aṣínà yín kí ẹ sì wọlé sí Taskiem lórí wẹ́ẹ̀bù. Ó ń ṣiṣẹ́ lẹ́ẹ̀kan, fún wákàtí kan; ẹ má fi han ẹnikẹ́ni:\n{link}",
       "reviewed": false

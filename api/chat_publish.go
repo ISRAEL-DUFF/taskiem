@@ -524,6 +524,8 @@ func (s *Server) shopTurnOnOrders(ctx context.Context, c *chat) error {
 // an hour, to choose a password and sign in on the web. The owner of a
 // business a field agent made has none yet; the chat's number or account
 // is already bound to them, so the link goes only where they are.
+// Someone with a passkey, or a password on a real address, is sent to the
+// sign-in page instead.
 func (s *Server) waSignInLink(ctx context.Context, c *chat) error {
 	if s.PublicURL == "" {
 		return c.say(ctx, s, c.t("wa.signin.unavailable"))
@@ -533,6 +535,23 @@ func (s *Server) waSignInLink(ctx context.Context, c *chat) error {
 			return err
 		}
 		return c.say(ctx, s, c.t("wa.signin.sso", "link", strings.TrimRight(s.PublicURL, "/")+"/login"))
+	}
+	// Only for someone with no other way in: no passkey, and no password
+	// or one on an address that receives no mail (a chat-born or agent-made
+	// account). Anyone else resets by email, never by holding the phone
+	// (F17).
+	f, _, err := s.factorsOf(ctx, c.tenant.ID, c.p.UserID)
+	if err != nil {
+		return err
+	}
+	var email string
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT email FROM users WHERE id = $1`, c.p.UserID).Scan(&email)
+	}); err != nil {
+		return err
+	}
+	if f.Passkey || (f.Password && !emailPlaceholder(email)) {
+		return c.say(ctx, s, c.t("wa.signin.has_password", "link", strings.TrimRight(s.PublicURL, "/")+"/login"))
 	}
 	if !s.limiter("wa-signin:"+c.p.UserID.String(), 10*time.Minute, 3).Allow() {
 		return c.say(ctx, s, c.t("wa.too_fast"))

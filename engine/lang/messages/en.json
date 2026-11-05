@@ -4109,6 +4109,11 @@
       "reviewed": true,
       "context": "Confirming a product sent as a photo; starts with a space"
     },
+    "wa.signin.has_password": {
+      "text": "You already sign in to Taskiem on the web: {link}\nForgot your password? Use *Forgot password* there; the link goes to your email.",
+      "reviewed": true,
+      "context": "sign in asked in chat by someone who already signs in on the web with a password or passkey; {link} is the sign-in page"
+    },
     "wa.signin.link": {
       "text": "Open this link to choose your password and sign in to Taskiem on the web. It works once, for an hour; keep it to yourself:\n{link}",
       "reviewed": true,

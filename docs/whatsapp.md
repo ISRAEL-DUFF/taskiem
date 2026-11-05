@@ -178,7 +178,7 @@ If the draft cannot pass Taskiem's checks, Taskiem says so and suggests describi
 
 ## Signing in on the web
 
-`sign in` (or `web link`) sends a one-time link, good for an hour, to choose a password and sign in to the web app: the owner of a business a [field agent](agents.md) made has none yet, and the chat is already bound to them. It is audited (`auth.signin_link`); an organisation held to single sign-on gets its sign-in page instead.
+`sign in` (or `web link`) sends a one-time link, good for an hour, to choose a password and sign in to the web app: the owner of a business a [field agent](agents.md) made has none yet, and the chat is already bound to them. It is audited (`auth.signin_link`); an organisation held to single sign-on gets its sign-in page instead. The link is only for someone with no other way in: no passkey, and no password, or one on a sign-in address that receives no mail (an account made in chat or by an agent). Anyone else is sent to the sign-in page, where **Forgot password** mails their own address, so holding a member's phone never resets their web password.
 
 **An email, the plan and paying** ([onboarding](onboarding.md#one-person-many-doors), the same on Telegram and Slack). `email` says the account's email, or, for an account made in chat, how to add one: `email ada@example.com` sends a confirmation link there, and opening it (no sign-in needed) makes it the account's email, confirmed. `plan` says the business's plan, the trial's days left or when it renews, and the price, with **Pay** for someone who manages billing; **Pay** sends a checkout link (card or bank transfer), asking first for an email to send receipts to when the account has none (`pay ada@example.com`).
 

@@ -3288,6 +3288,10 @@
       "text": " (ya na foto ahụ)",
       "reviewed": false
     },
+    "wa.signin.has_password": {
+      "text": "Ị na-abanyelarị Taskiem na weebụ: {link}\nỊ chefuru okwuntughe gị? Jiri *Forgot password* ebe ahụ; njikọ ahụ ga-aga na email gị.",
+      "reviewed": false
+    },
     "wa.signin.link": {
       "text": "Mepee njikọ a ka ị họrọ okwuntughe gị ma banye Taskiem na weebụ. Ọ na-arụ ọrụ otu ugboro, maka otu awa; edobe ya naanị gị:\n{link}",
       "reviewed": false
