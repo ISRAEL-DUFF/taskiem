@@ -548,10 +548,12 @@ type Received struct {
 
 // Received counts a payment into an invoice's account or link towards
 // it, exactly (the reference is the one Taskiem gave), once, and tells a
-// run waiting on the invoice when it becomes paid.
+// run waiting on the invoice when it becomes paid. An invoice that takes
+// no payment (void) is ErrState, with the money recorded all the same.
 func (s *Invoices) Received(ctx context.Context, tenant, invoice uuid.UUID, r Received) error {
 	var x Invoice
 	var became bool
+	var refused error
 	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		var entry *uuid.UUID
 		if s.MoneyLog != nil {
@@ -565,17 +567,36 @@ func (s *Invoices) Received(ctx context.Context, tenant, invoice uuid.UUID, r Re
 			}
 			entry = &id
 		}
-		var err error
-		x, became, err = s.RecordPayment(ctx, tx, tenant, invoice.String(), PaymentIn{AmountKobo: r.AmountKobo, PaymentID: r.PaymentID, EntryID: entry,
-			Connection: r.Connection, How: "exact", By: "system:" + r.Connection, Reasons: []string{"paid into the account Taskiem gave for this invoice"}})
+		// Counted in a savepoint: an invoice that takes no payment (void)
+		// leaves the money recorded for a person to match, and the account
+		// paid, so it is not polled again.
+		sp, err := tx.Begin(ctx)
 		if err != nil {
 			return err
+		}
+		x, became, err = s.RecordPayment(ctx, sp, tenant, invoice.String(), PaymentIn{AmountKobo: r.AmountKobo, PaymentID: r.PaymentID, EntryID: entry,
+			Connection: r.Connection, How: "exact", By: "system:" + r.Connection, Reasons: []string{"paid into the account Taskiem gave for this invoice"}})
+		switch {
+		case errors.Is(err, ErrState):
+			if rerr := sp.Rollback(ctx); rerr != nil {
+				return rerr
+			}
+			refused, became = err, false
+		case err != nil:
+			return err
+		default:
+			if err := sp.Commit(ctx); err != nil {
+				return err
+			}
 		}
 		if r.Account != uuid.Nil {
 			_, err = tx.Exec(ctx, `UPDATE customer_invoice_accounts SET status = 'paid', updated_at = now() WHERE tenant_id = $1 AND id = $2`, tenant, r.Account)
 		}
 		return err
 	})
+	if err == nil {
+		err = refused
+	}
 	if err != nil || !became {
 		return err
 	}

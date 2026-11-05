@@ -6,7 +6,7 @@ A match is a payment counted towards an invoice or an order, listed on it with h
 
 ## Exact matches
 
-A payment into an account number or payment link Taskiem gave for an invoice ([paying an invoice](invoices.md#paying-from-the-page)) is matched to that invoice at once, with no one asked. Taskiem matches it when the payment service tells it about the payment, or when its own check every 30 seconds finds it, whichever comes first.
+A payment into an account number or payment link Taskiem gave for an invoice ([paying an invoice](invoices.md#paying-from-the-page)) is matched to that invoice at once, with no one asked. Taskiem matches it when the payment service tells it about the payment, or when its own check every 30 seconds finds it, whichever comes first. Money paid in after the invoice was voided is not counted towards it: it is left for a person in **To match**, and the account is no longer checked.
 
 A payment through a storefront order's Paystack checkout page (its reference is the one Taskiem gave the page) is matched to that order the same way: when the Paystack event reaches the money log, or when the order's own payment check finds it, whichever comes first. Both write the same money log entry, its match, and the order's move to paid together, under the money's lock and the order's, so the order is matched and marked paid once, and its workflow is started or told once. An order cancelled or expired before its money came, or already paid by other money, is left for a person.
 

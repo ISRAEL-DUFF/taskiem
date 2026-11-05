@@ -737,7 +737,9 @@ func (s *Invoices) Update(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, idOr
 }
 
 // Void cancels an invoice that is not paid. Payments recorded against it
-// stay; money that still arrives for it is not counted.
+// stay; money that still arrives for it is not counted (CountPayment
+// refuses it, ErrState), and is left for a person to match. Its accounts
+// stay watched, so that money is heard.
 func (s *Invoices) Void(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, idOrNumber, reason, by string) (Invoice, error) {
 	cur, err := s.Get(ctx, tx, tenant, idOrNumber)
 	if err != nil {
@@ -1229,12 +1231,18 @@ func (s *Invoices) CountPayment(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 				return nil, false, err
 			}
 			var counted bool
-			if add {
-				return moneylog.Cols{"payment_id": p.PaymentID, "connection": nullable(p.Connection)}, true, nil
-			}
-			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM customer_invoice_payments p WHERE p.invoice_id = $1 AND p.payment_id = $2 AND p.undoes IS NULL
+			if !add {
+				if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM customer_invoice_payments p WHERE p.invoice_id = $1 AND p.payment_id = $2 AND p.undoes IS NULL
 				AND NOT EXISTS (SELECT 1 FROM customer_invoice_payments u WHERE u.undoes = p.id))`, cur.ID, p.PaymentID).Scan(&counted); err != nil || counted {
-				return nil, false, err
+					return nil, false, err
+				}
+			}
+			// A void invoice takes no new payment (the one counted before
+			// it was voided is the same again, above): the money is left
+			// for a person, not absorbed (the database refuses it too,
+			// 00350).
+			if cur.Status == "void" {
+				return nil, false, fmt.Errorf("%w: invoice %s is void; it takes no new payment", ErrState, cur.Number)
 			}
 			return moneylog.Cols{"payment_id": p.PaymentID, "connection": nullable(p.Connection)}, true, nil
 		}})
