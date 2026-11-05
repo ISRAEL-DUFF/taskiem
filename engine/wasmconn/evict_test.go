@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/effects"
 )
 
 // tinyModule is a hand-written module implementing the ABI: it calls
@@ -295,5 +296,46 @@ func TestManifestsOnlyCompilesInTheBackground(t *testing.T) {
 	}
 	if n := rt.compiles.Load(); n != 1 {
 		t.Fatalf("compiled %d times, want once", n)
+	}
+}
+
+// spinModule implements the ABI's entry point as `loop br 0`: it never
+// returns and never calls the host.
+var spinModule = []byte{0x00, 0x61, 0x73, 0x6d, 1, 0, 0, 0,
+	1, 6, 1, 0x60, 1, 0x7f, 1, 0x7e, // type (i32) -> i64
+	3, 2, 1, 0, // one function
+	5, 3, 1, 0, 1, // memory, one page
+	7, 31, 2, 6, 'm', 'e', 'm', 'o', 'r', 'y', 2, 0, 18, 't', 'a', 's', 'k', 'i', 'e', 'm', '_', 'e', 'x', 'e', 'c', 'u', 't', 'e', '_', 'v', '1', 0, 0,
+	10, 11, 1, 9, 0, 0x03, 0x40, 0x0c, 0x00, 0x0b, 0x42, 0x00, 0x0b, // loop br 0 end; i64.const 0
+}
+
+// TestCallsHaveADeadline: a guest that never returns is stopped after
+// MaxCallTime even when the caller's context has no deadline (the
+// poller's), so one tenant's connector cannot hold a caller for ever.
+func TestCallsHaveADeadline(t *testing.T) {
+	rt, err := New(context.Background(), Limits{MaxCallTime: 200 * time.Millisecond})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = rt.Close(context.Background()) })
+	c, err := rt.Load(context.Background(), []byte(tinyManifest), spinModule)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	done := make(chan error, 1)
+	start := time.Now()
+	go func() {
+		_, err := c.Actions["run"].Execute(ctx, connector.Request{})
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if k := effects.Classify(err); k != effects.KindNotSent {
+			t.Errorf("after %s: %v (%s)", time.Since(start), err, k)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a spinning guest ran past MaxCallTime on a context without a deadline")
 	}
 }

@@ -1,6 +1,6 @@
 # Contract: WebAssembly connector ABI `taskiem-connector/v1`
 
-A tenant's own connector is a [connector/v1 manifest](connector-v1.md) and a WebAssembly module that implements its actions (spec 6). The engine (`engine/wasmconn`, on wazero) runs every call in a fresh instance: memory capped, the call's deadline enforced, no filesystem, no environment, and no network except through the host function below. Go authors use [`sdk/connectorsdk`](../connector-sdk.md), which implements this ABI; the contract is here for other languages.
+A tenant's own connector is a [connector/v1 manifest](connector-v1.md) and a WebAssembly module that implements its actions (spec 6). The engine (`engine/wasmconn`, on wazero) runs every call in a fresh instance: memory capped, the call's deadline enforced (at most 30 seconds, also when the caller sets none, such as the poller), no filesystem, no environment, and no network except through the host function below. Go authors use [`sdk/connectorsdk`](../connector-sdk.md), which implements this ABI; the contract is here for other languages.
 
 ## Module
 

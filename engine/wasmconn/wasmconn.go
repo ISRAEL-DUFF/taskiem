@@ -64,6 +64,12 @@ type Limits struct {
 	// least recently used beyond it are closed once no call uses them,
 	// and compiled again when next needed. Default 32.
 	MaxCompiled int
+	// MaxCallTime bounds one call when the caller's context has no
+	// earlier deadline: a guest is interrupted only when its context
+	// ends, so a caller without a deadline (the poller) would otherwise
+	// wait for a module that loops for ever. Default 30s, the worker's
+	// call timeout and the egress client's.
+	MaxCallTime time.Duration
 }
 
 func (l Limits) withDefaults() Limits {
@@ -81,6 +87,9 @@ func (l Limits) withDefaults() Limits {
 	def(&l.MaxHTTPCalls, 20)
 	def(&l.MaxLogs, 16<<10)
 	def(&l.MaxCompiled, 32)
+	if l.MaxCallTime <= 0 {
+		l.MaxCallTime = 30 * time.Second
+	}
 	return l
 }
 
@@ -417,6 +426,11 @@ type wireError struct {
 }
 
 func (a *action) Execute(ctx context.Context, req connector.Request) (connector.Response, error) {
+	if d, ok := ctx.Deadline(); !ok || time.Until(d) > a.r.lim.MaxCallTime {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, a.r.lim.MaxCallTime)
+		defer cancel()
+	}
 	in := execInput{Action: a.name, BaseURL: strings.TrimRight(a.manifest.BaseURL, "/"), Input: req.Input, Credentials: req.Credentials,
 		IdempotencyKey: req.IdempotencyKey, Attempt: req.Attempt}
 	if in.Input == nil {
