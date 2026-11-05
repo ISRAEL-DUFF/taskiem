@@ -6,6 +6,7 @@ import { startedByWords } from "../lib/home";
 import { RunCanvas } from "../canvas/RunCanvas";
 import { RepairPanel } from "./RepairPanel";
 import { duration, templateGroups, timeline, type StepRow } from "../lib/timeline";
+import { runStreamPath } from "../lib/runStream";
 import { respondentText } from "./Forms";
 import { Icon } from "../icons";
 import { runLook, stepCounts } from "../lib/lists";
@@ -71,14 +72,14 @@ export function RunPage() {
   useEffect(() => {
     setStreamed([]);
     if (!data || reveal || TERMINAL.has(data.run.status) || typeof EventSource === "undefined") return;
-    const es = new EventSource(`/v1/runs/${id}/stream?after=${data.events.at(-1)?.seq ?? 0}`);
+    const es = new EventSource(runStreamPath(data));
     es.addEventListener("run_event", (m) => setStreamed((prev) => [...prev, JSON.parse((m as MessageEvent<string>).data) as RunEvent]));
     es.addEventListener("end", () => {
       es.close();
       reload();
     });
     return () => es.close();
-  }, [data, id, reveal, reload]);
+  }, [data, reveal, reload]);
   const events = useMemo(() => {
     if (!data) return [];
     const seen = new Set(data.events.map((e) => e.seq));

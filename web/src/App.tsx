@@ -682,6 +682,8 @@ function SignedIn() {
           <BillingBanner />
           <TermsBanner />
           <NotifyBanner />
+          {/* Keyed by the address: a page for another :id (an invoice, a run)
+              starts afresh, its keys, notices and streams with it. */}
           <div className="page" key={`${pathname}#${fresh}`}>
             <PageBoundary>
               {off ? (
