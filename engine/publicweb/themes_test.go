@@ -43,6 +43,9 @@ func TestThemeFromBrand(t *testing.T) {
 		css, link string
 	}{
 		{brand.Brand{Theme: "editorial", Color: "#1f3a5f"}, "theme-editorial.", "/_brand/1/1f3a5f.css"},
+		{brand.Brand{Theme: "kitchen"}, "theme-kitchen.", "/_brand/1/0b6e4f.css"},
+		{brand.Brand{Theme: "fashion"}, "theme-fashion.", "/_brand/1/0b6e4f.css"},
+		{brand.Brand{Theme: "salon"}, "theme-salon.", "/_brand/1/0b6e4f.css"},
 		{brand.Brand{Theme: "bold"}, "theme-bold.", "/_brand/1/0b6e4f.css"},
 		{brand.Brand{Theme: "neon", Color: "red;}"}, "theme-clean.", "/_brand/1/0b6e4f.css"},
 	} {

@@ -50,16 +50,25 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+	// Files that are not stylesheets are named first, so a stylesheet can
+	// point at them (a font) by their own names and be served with their
+	// hashed ones.
+	var sheets []fs.DirEntry
 	for _, e := range entries {
-		body, err := staticFS.ReadFile("static/" + e.Name())
-		if err != nil {
-			panic(err)
+		if path.Ext(e.Name()) == ".css" {
+			sheets = append(sheets, e)
+			continue
 		}
-		sum := sha256.Sum256(body)
-		ext := path.Ext(e.Name())
-		hashed := strings.TrimSuffix(e.Name(), ext) + "." + hex.EncodeToString(sum[:5]) + ext
-		assetNames[e.Name()] = staticPrefix + hashed
-		assets[hashed] = asset{body: body, ctype: mime.TypeByExtension(ext)}
+		addAsset(e.Name(), mustRead(e.Name()))
+	}
+	for _, e := range sheets {
+		body := mustRead(e.Name())
+		for name, hashed := range assetNames {
+			if path.Ext(name) == ".woff2" {
+				body = bytes.ReplaceAll(body, []byte("url("+name+")"), []byte("url("+hashed+")"))
+			}
+		}
+		addAsset(e.Name(), body)
 	}
 	funcs := template.FuncMap{
 		"asset": func(name string) (string, error) {
@@ -71,8 +80,29 @@ func init() {
 		},
 	}
 	for _, theme := range brand.Themes {
-		themed[theme] = template.Must(template.New("").Funcs(funcs).ParseFS(templateFS, "templates/shared/*.html", "templates/"+theme+"/*.html"))
+		themed[theme] = template.Must(template.New("").Funcs(funcs).ParseFS(templateFS, "templates/shared/*.html", "templates/"+brand.Base(theme)+"/*.html"))
 	}
+}
+
+func mustRead(name string) []byte {
+	body, err := staticFS.ReadFile("static/" + name)
+	if err != nil {
+		panic(err)
+	}
+	return body
+}
+
+// addAsset names a static file by a hash of its content and keeps it.
+func addAsset(name string, body []byte) {
+	sum := sha256.Sum256(body)
+	ext := path.Ext(name)
+	hashed := strings.TrimSuffix(name, ext) + "." + hex.EncodeToString(sum[:5]) + ext
+	ctype := mime.TypeByExtension(ext)
+	if ext == ".woff2" {
+		ctype = "font/woff2"
+	}
+	assetNames[name] = staticPrefix + hashed
+	assets[hashed] = asset{body: body, ctype: ctype}
 }
 
 func serveStatic(w http.ResponseWriter, r *http.Request) {

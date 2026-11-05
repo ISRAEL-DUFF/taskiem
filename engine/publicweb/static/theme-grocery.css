@@ -1,0 +1,33 @@
+/* Grocery: a skin on Clean, for fresh food and household shopping. A pale
+   ground, a clean geometric sans, tight rounded cards, a filled add button
+   and a heavy total. The business's colour is the accent. Loaded after
+   Clean's stylesheet. */
+@font-face { font-family: "Outfit"; font-weight: 400; font-style: normal; font-display: swap; src: url(outfit-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Outfit"; font-weight: 700; font-style: normal; font-display: swap; src: url(outfit-latin-700-normal.woff2) format("woff2"); }
+@font-face { font-family: "Outfit"; font-weight: 800; font-style: normal; font-display: swap; src: url(outfit-latin-800-normal.woff2) format("woff2"); }
+:root { --bg: #fafaf4; --card: #fff; --fg: #16241b; --muted: #586a5d; --line: #e3e6d8; --input: #c9d1bd; --r: 22px; }
+body { font-family: "Outfit", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 16px; }
+h1, h2, .bar-name { font-weight: 800; letter-spacing: -.02em; }
+h1 { font-size: 1.875rem; line-height: 1.05; }
+h2 { font-size: 1.375rem; }
+h3 { font-size: 1rem; font-weight: 700; }
+.price { font-weight: 800; font-size: 1.05rem; }
+.btn { border-radius: 999px; border-color: transparent; background: var(--brand-tint); color: var(--brand-text); font-weight: 700; }
+.btn-primary { background: var(--brand); color: var(--on-brand); }
+.cover { height: 130px; }
+.card { border-radius: 0 0 28px 28px; }
+.item { padding: .75rem; border: 1px solid var(--line); border-radius: var(--r); }
+.thumb { border-radius: 16px; }
+.add { width: 44px; height: 44px; border: 0; background: var(--brand); color: var(--on-brand); }
+.badge { background: var(--brand-tint); color: var(--brand-text); }
+.chip { border-color: transparent; background: var(--brand-tint); color: var(--brand-text); font-weight: 700; }
+.panel, .notice { border: 1px solid var(--line); border-radius: var(--r); }
+.sticky { border-radius: 24px; }
+.pdp-img { border-radius: 24px; }
+.pdp-main h1 { font-size: 2.25rem; }
+.pdp-price { font-weight: 800; font-size: 1.5rem; }
+.pdp-choice { border-radius: 14px; }
+.pdp-choice:has(input:checked) { background: var(--brand-tint); }
+.bag-line, .bag-row { border-top-color: var(--line); }
+.total { font-weight: 800; font-size: 1.5rem; }
+.field input:not([type=checkbox]):not([type=radio]), .field textarea, .field select { border-radius: 14px; }

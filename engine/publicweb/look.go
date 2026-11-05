@@ -64,6 +64,15 @@ type look struct {
 // ThemeCSS is the theme's stylesheet.
 func (l look) ThemeCSS() string { return "theme-" + l.theme() + ".css" }
 
+// BaseCSS is the stylesheet of the theme a skin is drawn on, loaded
+// before the skin's own; empty for a theme that is not a skin.
+func (l look) BaseCSS() string {
+	if b := brand.Base(l.theme()); b != l.theme() {
+		return "theme-" + b + ".css"
+	}
+	return ""
+}
+
 func (l look) theme() string { return brand.Theme(l.Theme) }
 
 // lookOf makes a look from a brand, for a business by name.

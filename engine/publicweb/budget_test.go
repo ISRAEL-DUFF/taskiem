@@ -15,7 +15,7 @@ import (
 // under them.
 const (
 	maxPageHTML   = 60 << 10 // per page, before images
-	maxStylesPage = 15 << 10 // the stylesheets a page loads: its theme's and its colour's
+	maxStylesPage = 21 << 10 // the stylesheets a page loads: its theme's (a skin's, on top of the theme it is drawn on) and its colour's
 	maxScriptTot  = 10 << 10 // every script together
 )
 
@@ -52,7 +52,11 @@ func TestPageBudget(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s: no stylesheet", theme)
 		}
-		if n := len(a.body) + colour; n > maxStylesPage {
+		n := len(a.body) + colour
+		if b := brand.Base(theme); b != theme {
+			n += len(assets[strings.TrimPrefix(assetNames["theme-"+b+".css"], staticPrefix)].body)
+		}
+		if n > maxStylesPage {
 			t.Errorf("%s: stylesheets %d bytes, budget %d", theme, n, maxStylesPage)
 		}
 	}

@@ -1,0 +1,27 @@
+/* Fashion: a skin on Editorial, for clothing and made-to-order. A bone
+   ground, a tall display serif, wide-set capitals on square buttons and
+   hairline rules. The business's colour is the accent. Loaded after
+   Editorial's stylesheet. */
+@font-face { font-family: "Instrument Serif"; font-weight: 400; font-style: normal; font-display: swap; src: url(instrument-serif-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Plus Jakarta Sans"; font-weight: 400; font-style: normal; font-display: swap; src: url(plus-jakarta-sans-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Plus Jakarta Sans"; font-weight: 700; font-style: normal; font-display: swap; src: url(plus-jakarta-sans-latin-700-normal.woff2) format("woff2"); }
+:root { --bg: #f4f0e8; --fg: #14110f; --muted: #5c5750; --rule: #d9d2c5; --soft: #ece6da; --serif: "Instrument Serif", Georgia, "Times New Roman", serif; }
+body { font-family: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+h1, h2, h3, .mast-name, .total { font-family: var(--serif); font-weight: 400; letter-spacing: -.01em; }
+.masthead h1 { font-size: 3.25rem; line-height: .92; }
+h3 { font-size: 1.35rem; line-height: 1.1; }
+.btn { border-width: 1.5px; font-weight: 700; letter-spacing: .12em; }
+.btn-primary { border-color: var(--fg); background: var(--fg); color: var(--bg); }
+.row-price { font-weight: 700; font-variant-numeric: tabular-nums; }
+.feature { aspect-ratio: 4 / 5; }
+.sticky { border-radius: 0; background: var(--fg); color: var(--bg); }
+.pdp-img { border-radius: 0; aspect-ratio: 4 / 5; max-height: none; }
+.pdp-main h1 { font-size: 3.25rem; line-height: .95; }
+.pdp-kicker { color: var(--brand-text); }
+.pdp-price { font-weight: 700; }
+.pdp-choice { border-radius: 0; border-width: 1.5px; background: transparent; }
+.pdp-choice:has(input:checked) { background: var(--soft); border-color: var(--fg); box-shadow: none; }
+.qty { background: transparent; }
+.bag-h { font-size: 2.25rem; }
+.bag-line, .bag-row { border-top-color: var(--rule); }
+.total { font-size: 2rem; }

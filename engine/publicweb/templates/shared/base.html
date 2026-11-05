@@ -3,9 +3,10 @@ link preview, and a form's hidden fields. Each theme draws the rest. */}}
 {{define "meta"}}<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
+{{with .Brand.BaseCSS}}<link rel="stylesheet" href="{{asset .}}">
+{{end}}<link rel="stylesheet" href="{{asset "item-sheet.css"}}">
 <link rel="stylesheet" href="{{asset .Brand.ThemeCSS}}">
 <link rel="stylesheet" href="{{.Brand.CSS}}">
-<link rel="stylesheet" href="{{asset "item-sheet.css"}}">
 {{end}}
 
 {{define "og"}}<title>{{.M.Card.Name}}</title>
