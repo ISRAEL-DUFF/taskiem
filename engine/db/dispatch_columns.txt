@@ -815,6 +815,8 @@ rider_presence.phone_hash
 rider_presence.said
 rider_presence.said_at
 rider_presence.until
+rider_remittance_parts.amount_kobo
+rider_remittance_parts.entry_id
 rider_remittances.settled_at
 rider_remittances.tenant_id
 riders.id

@@ -559,3 +559,76 @@ func TestBusyAcrossBusinesses(t *testing.T) {
 		t.Errorf("line %q", x.Presence.Line())
 	}
 }
+
+// A transfer counted towards a rider's cash is used up in the money log,
+// as one counted towards an invoice, an order or a sale is: nothing else
+// can count it again, and one already counted (a counter sale's) is not
+// matched to the rider.
+func TestRemittanceUsesItsEntry(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	musa := w.rider("Musa", "+2348031110001")
+	ref := w.order("Lekki", "on_delivery")
+	out, err := w.d.Offer(ctx, w.env.Tenant, ref, dispatch.OfferIn{Rider: &musa.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	x := *out.Delivery
+	w.must(x, dispatch.Accept)
+	w.must(x, dispatch.PickedUp)
+	w.must(x, dispatch.Arrived)
+	w.must(x, dispatch.Cash)
+	o := w.get(ref)
+	half := o.Payable() / 2
+	record := func(reference string) uuid.UUID {
+		var id uuid.UUID
+		w.in(func(tx pgx.Tx) error {
+			var err error
+			id, _, err = w.d.MoneyLog.RecordTx(ctx, tx, w.env.Tenant, moneylog.Entry{Direction: "in", Kind: "statement", Status: "settled", Channel: "bank",
+				Reference: reference, AmountKobo: &half, Source: "upload", Description: "TRF FROM MUSA " + ref})
+			return err
+		})
+		return id
+	}
+	// A transfer a counter sale already took is not the rider's.
+	sold := record("stmt-sale")
+	if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO stock_sales (id, tenant_id, reference, lines, amount_kobo, paid_how, status, entry_id, matched_how, matched_at, actor, key, sold_at)
+		VALUES ($1, $2, 'S-ABC123', '[{"item":"rice"}]', $3, 'transfer', 'matched', $4, 'owner', now(), 'user:ada', 'k1', now())`, uuid.New(), w.env.Tenant, half, sold); err != nil {
+		t.Fatal(err)
+	}
+	w.in(func(tx pgx.Tx) error {
+		n, err := w.d.MatchRemittances(ctx, tx, w.env.Tenant)
+		if n != 0 {
+			t.Errorf("a sale's transfer was matched to the rider: %d", n)
+		}
+		return err
+	})
+	// One naming the order pays the rider's cash, and is then used up.
+	entry := record("stmt-1")
+	w.in(func(tx pgx.Tx) error {
+		n, err := w.d.MatchRemittances(ctx, tx, w.env.Tenant)
+		if n != 1 {
+			t.Errorf("matched %d", n)
+		}
+		return err
+	})
+	w.in(func(tx pgx.Tx) error {
+		left, ok, err := moneylog.EntryLeft(ctx, tx, entry)
+		if err != nil || !ok || left != 0 {
+			t.Errorf("left of the rider's transfer: %d %v %v", left, ok, err)
+		}
+		why, err := moneylog.EntryHas(ctx, tx, w.env.Tenant, entry, half)
+		if err != nil || !strings.Contains(why, "rider") {
+			t.Errorf("counting it again: %q %v", why, err)
+		}
+		return err
+	})
+	err = db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{w.env.Tenant}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `INSERT INTO storefront_order_payments (id, tenant_id, order_id, entry_id, amount_kobo, how, by) VALUES ($1, $2, $3, $4, $5, 'manual', 'user:ada')`,
+			uuid.New(), w.env.Tenant, o.ID, entry, half)
+		return err
+	})
+	if err == nil || !strings.Contains(err.Error(), "23514") {
+		t.Errorf("the rider's transfer counted towards an order too: %v", err)
+	}
+}
