@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ApiError, get, post } from "../api";
 import { useAuth } from "../auth";
+import { safeNext } from "../lib/safePath";
 import { passkeysSupported } from "../passkeys";
 import { ErrorBox, Field, useAction } from "../ui";
 
@@ -35,7 +36,7 @@ export function Login() {
     }, 300);
     return () => clearTimeout(t);
   }, [email]);
-  const next = new URLSearchParams(window.location.search).get("next") || "/workflows";
+  const next = safeNext(new URLSearchParams(window.location.search).get("next"), "/workflows");
   const startSSO = () => window.location.assign(`${sso?.start}?return_to=${encodeURIComponent(next)}`);
   return (
     <div className="login card">

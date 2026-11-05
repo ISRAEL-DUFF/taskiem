@@ -9,6 +9,7 @@ import {
 } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth";
 import { PageBoundary } from "./PageBoundary";
+import { safeNext } from "./lib/safePath";
 import { Login } from "./pages/Login";
 import { Workflows } from "./pages/Workflows";
 import { NewWorkflow } from "./pages/NewWorkflow";
@@ -293,10 +294,10 @@ function Shell() {
   if (loc.pathname === "/login")
     return (
       <Navigate
-        to={
-          new URLSearchParams(loc.search).get("next") ||
-          (me.field_agent ? "/agent" : "/home")
-        }
+        to={safeNext(
+          new URLSearchParams(loc.search).get("next"),
+          me.field_agent ? "/agent" : "/home",
+        )}
         replace
       />
     );
