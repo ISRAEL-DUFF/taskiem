@@ -7,6 +7,8 @@ import (
 	"context"
 	"errors"
 	"os"
+	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
@@ -193,6 +195,28 @@ var (
 // read when Prometheus scrapes.
 type QueueCollector struct{ Pool *pgxpool.Pool }
 
+// CollectTimeout bounds the database queries of one scrape. They share the
+// pool that serves requests, so a database that cannot answer (a lock, a
+// stall) costs a scrape its numbers, not a connection held until it does.
+const CollectTimeout = 2 * time.Second
+
+// Each collector reads the database for one scrape at a time per process:
+// a scrape that arrives while another is reading reports nothing for that
+// collector, so scrapes arriving together (the metrics port has no
+// sign-in) take one connection between them. Prometheus scrapes far less
+// often than that.
+var queueCollecting, poolCollecting sync.Mutex
+
+// collecting starts one scrape's queries under mu, or reports false when
+// another holds it.
+func collecting(mu *sync.Mutex) (context.Context, func(), bool) {
+	if !mu.TryLock() {
+		return nil, nil, false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), CollectTimeout)
+	return ctx, func() { cancel(); mu.Unlock() }, true
+}
+
 var (
 	queueReady  = prometheus.NewDesc("taskiem_queue_ready", "Tasks ready to run and not leased.", []string{"queue"}, nil)
 	queueLeased = prometheus.NewDesc("taskiem_queue_leased", "Tasks leased by a worker.", []string{"queue"}, nil)
@@ -215,7 +239,12 @@ func (c QueueCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (c QueueCollector) Collect(ch chan<- prometheus.Metric) {
-	rows, err := c.Pool.Query(context.Background(), `SELECT queue, ready, leased, oldest_ready_seconds FROM taskiem_queue_stats()`)
+	ctx, done, ok := collecting(&queueCollecting)
+	if !ok {
+		return
+	}
+	defer done()
+	rows, err := c.Pool.Query(ctx, `SELECT queue, ready, leased, oldest_ready_seconds FROM taskiem_queue_stats()`)
 	if err != nil {
 		return
 	}
@@ -234,7 +263,7 @@ func (c QueueCollector) Collect(ch chan<- prometheus.Metric) {
 	rows.Close()
 	// One series per tenant would grow with the tenants; the total, how
 	// many tenants have a backlog and the largest one stay bounded.
-	brows, err := c.Pool.Query(context.Background(), `SELECT reason, runs, tenants, max_per_tenant FROM taskiem_backlog_stats()`)
+	brows, err := c.Pool.Query(ctx, `SELECT reason, runs, tenants, max_per_tenant FROM taskiem_backlog_stats()`)
 	if err != nil {
 		return
 	}
