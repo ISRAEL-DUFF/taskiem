@@ -179,6 +179,16 @@ install_kit() { # DIR
   fi
 }
 
+# The SCRAM-SHA-256 verifier of a password (read on stdin, so it is on no
+# command line), from the release's own taskiem, without a network.
+scram_verifier() { # IMAGE PASSWORD
+  local v
+  v=$(printf '%s\n' "$2" | docker run --rm -i --network none "$1" scram-verifier) || die "could not make the password's verifier with $1"
+  case $v in SCRAM-SHA-256\$*) ;; *) die "unexpected password verifier from $1" ;; esac
+  case $v in *"'"* | *'$$'*) die "unexpected password verifier from $1" ;; esac
+  printf '%s' "$v"
+}
+
 set_image() { # REF
   env_set "$KIT/.env" TASKIEM_IMAGE "$1"
   printf '%s\n' "$1" >"$STATE/current"
@@ -494,12 +504,17 @@ cmd_setup() {
   compose run --rm migrate
 
   log "creating the database role Taskiem signs in as ($approle)"
+  # Each login's password goes to Postgres as its SCRAM verifier, made by
+  # this release's taskiem from stdin: Postgres logs a failing statement's
+  # text, and the password is never in it.
+  local appver pubver
+  appver=$(scram_verifier "$ref" "$apppw")
   docker run --rm -i --network host -e DSN="$DATABASE_URL" "$PSQL_IMAGE" sh -c 'psql "$DSN" -qAt -v ON_ERROR_STOP=1' <<SQL >/dev/null
 DO \$\$ BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '$approle') THEN
-    CREATE ROLE "$approle" LOGIN PASSWORD '$apppw';
+    CREATE ROLE "$approle" LOGIN PASSWORD '$appver';
   ELSE
-    ALTER ROLE "$approle" LOGIN PASSWORD '$apppw';
+    ALTER ROLE "$approle" LOGIN PASSWORD '$appver';
   END IF;
 END \$\$;
 GRANT taskiem_app TO "$approle";
@@ -509,12 +524,13 @@ SQL
   [ -n "$MAIL_DOMAIN" ] || compose rm -sf taskiem-mail >/dev/null 2>&1 || true
   if [ "$PUBLIC" = yes ] || [ -n "$MAIL_DOMAIN" ]; then
     log "creating the database role the public host signs in as ($pubrole)"
+    pubver=$(scram_verifier "$ref" "$pubpw")
     docker run --rm -i --network host -e DSN="$DATABASE_URL" "$PSQL_IMAGE" sh -c 'psql "$DSN" -qAt -v ON_ERROR_STOP=1' <<SQL >/dev/null
 DO \$\$ BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '$pubrole') THEN
-    CREATE ROLE "$pubrole" LOGIN NOINHERIT PASSWORD '$pubpw';
+    CREATE ROLE "$pubrole" LOGIN NOINHERIT PASSWORD '$pubver';
   ELSE
-    ALTER ROLE "$pubrole" LOGIN NOINHERIT PASSWORD '$pubpw';
+    ALTER ROLE "$pubrole" LOGIN NOINHERIT PASSWORD '$pubver';
   END IF;
 END \$\$;
 GRANT taskiem_public TO "$pubrole";

@@ -61,15 +61,13 @@ func EnsureAppLogin(ctx context.Context, ownerDSN, appDSN string) (string, error
 	if exists {
 		verb = "ALTER"
 	}
-	var stmt string
-	if password != "" {
-		err = conn.QueryRow(ctx, "SELECT format('"+verb+" ROLE %I LOGIN NOBYPASSRLS PASSWORD %L', $1::text, $2::text)", login, password).Scan(&stmt)
-	} else {
-		err = conn.QueryRow(ctx, "SELECT format('"+verb+" ROLE %I LOGIN NOBYPASSRLS', $1::text)", login).Scan(&stmt)
-	}
+	// The password goes as its SCRAM verifier (scram.go), never in the
+	// statement's text, which Postgres may log.
+	stmt, err := loginStatement(verb, login, password)
 	if err != nil {
 		return "", err
 	}
+	//sqlcheck:built verb is "CREATE" or "ALTER"; the login is quoted with pgx.Identifier and the password is its SCRAM verifier, a quoted literal
 	if _, err := conn.Exec(ctx, stmt); err != nil {
 		return "", fmt.Errorf("%s ROLE %s (the owner needs CREATEROLE): %w", verb, login, err)
 	}
