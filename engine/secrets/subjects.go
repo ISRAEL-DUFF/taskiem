@@ -29,6 +29,12 @@ func (v *Vault) baseSubjectID(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 	if err != nil {
 		return "", err
 	}
+	if category == "other" {
+		// Free text is no one's: one subject a tenant, not one a text
+		// (pii.Unattributed). Envelopes sealed under a text's own subject
+		// before keep it.
+		value = pii.Unattributed
+	}
 	return subjectIDWith(key, category, value), nil
 }
 

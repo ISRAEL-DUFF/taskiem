@@ -19201,7 +19201,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Erased'
         '400':
-          description: Neither a subject nor a category and value.
+          description: Neither a subject nor a category and value; or the category `other`, or the organisation's free-text subject, which hold no person (erase the people the text names).
           content:
             application/json:
               schema:

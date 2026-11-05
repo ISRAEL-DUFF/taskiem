@@ -15,6 +15,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/decide"
 	"github.com/israel-duff/taskiem/engine/history"
 	"github.com/israel-duff/taskiem/engine/pii"
+	"github.com/israel-duff/taskiem/engine/runtime"
 	rt "github.com/israel-duff/taskiem/engine/runtime/runtimetest"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
@@ -431,6 +432,89 @@ func TestDeclaredTextNamingAPersonIsErasedWithThem(t *testing.T) {
 	in, out = opened()
 	if in["note"] != pii.Erased || out["note"] != pii.Erased || out["other"] != "nothing personal in here" {
 		t.Errorf("after erasing the email: %v %v", in, out)
+	}
+}
+
+// An email's text, subject and attachment names are its sender's: sealed
+// under the sender's subject, so erasing the sender erases them even when
+// the text names nobody, and an email does not add a subject key of its
+// own. Free text with no owner that names nobody shares one subject, so
+// it adds no key per text either (F62b).
+func TestEmailTextIsItsSenders(t *testing.T) {
+	e := rt.New(t)
+	wf := e.Publish(t, `{"schema":"wd/v1","id":"wf_mail","version":1,"name":"mail","trigger":{"type":"email","config":{"senders":["example.com"]}},
+  "inputs":{"schema":{"type":"object","properties":{"note":{"type":"string","x-pii":"other"}}}},
+  "steps":[{"id":"copy","type":"transform","config":{"output":{"text":"=trigger.body.text"}}}]}`)
+	keys := func() int {
+		t.Helper()
+		var n int
+		if err := e.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM subject_keys WHERE tenant_id = $1`, e.Tenant).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	mail := func(from, text string) runtime.RunRef {
+		t.Helper()
+		ref := e.Start(t, wf, map[string]any{"type": "email", "body": map[string]any{
+			"from": map[string]any{"address": from}, "to": []any{}, "cc": []any{}, "reply_to": []any{},
+			"subject": "About " + text, "text": text, "latest": text, "html": "<p>" + text + "</p>",
+			"note": "a note about " + text, "attachments": []any{}, "skipped": []any{}}})
+		e.Drain(t)
+		return ref
+	}
+	mail("ada@example.com", "Please call me back about the first order")
+	before := keys()
+	ref := mail("ada@example.com", "Please call me back about the second order")
+	mail("ada@example.com", "Please call me back about the third order")
+	if after := keys(); after != before {
+		t.Fatalf("each email added subject keys: %d, then %d", before, after)
+	}
+	read := func() (map[string]any, map[string]any) {
+		t.Helper()
+		evs, err := e.Store.OpenedHistory(ctx, ref)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var in, out map[string]any
+		for _, ev := range evs {
+			switch {
+			case ev.Type == history.RunStarted:
+				var p history.RunStartedPayload
+				if err := json.Unmarshal(ev.Payload, &p); err != nil {
+					t.Fatal(err)
+				}
+				tr, _ := p.Trigger.(map[string]any)
+				in, _ = tr["body"].(map[string]any)
+			case ev.Type == history.StepCompleted && ev.StepID == "copy":
+				var c history.CompletedPayload
+				if err := json.Unmarshal(ev.Payload, &c); err != nil {
+					t.Fatal(err)
+				}
+				out = c.Output.(map[string]any)
+			}
+		}
+		return in, out
+	}
+	if in, _ := read(); in["text"] != "Please call me back about the second order" {
+		t.Fatalf("before: %v", in)
+	}
+	subject, err := e.Vault.SubjectFor(ctx, e.Tenant, "email", "ada@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Vault.Erase(ctx, e.Tenant, subject, "dpo"); err != nil {
+		t.Fatal(err)
+	}
+	in, _ := read()
+	for _, f := range []string{"text", "latest", "html", "subject"} {
+		if in[f] != pii.Erased {
+			t.Errorf("after erasing the sender, %s reads %v", f, in[f])
+		}
+	}
+	// A declared note (no owner) naming nobody is not the sender's: it
+	// stays readable.
+	if in["note"] != "a note about Please call me back about the second order" {
+		t.Errorf("note: %v", in["note"])
 	}
 }
 

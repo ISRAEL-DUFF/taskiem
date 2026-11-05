@@ -48,7 +48,43 @@ func IsEnvelope(v any) bool {
 type Path struct {
 	Segments []string
 	Category string
+	// Owner, for free text ("other"), is the location of the person it
+	// belongs to (an email's sender), from the value's root, and
+	// OwnerCategory that person's category: the text is sealed under
+	// their subject, so erasing them erases it, and it adds no subject
+	// key of its own.
+	Owner         []string
+	OwnerCategory string
 }
+
+// owner is a free text's owner: a personal value and its category.
+type owner struct {
+	cat   string
+	value any
+}
+
+// valueAt reads the scalar at segs (no "*") in v.
+func valueAt(v any, segs []string) (any, bool) {
+	for _, s := range segs {
+		m, ok := v.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		if v, ok = m[s]; !ok {
+			return nil, false
+		}
+	}
+	_, ok := scalarKey(v)
+	return v, ok
+}
+
+// Unattributed is the value whose subject every "other" value is sealed
+// under (secrets.Vault): free text is no one's, so a subject derived from
+// the text itself is one nobody can name for erasure, and one a text grew
+// subject_keys without bound (F62b). Text that names known people or has
+// an owner is sealed under them as well. The value is no one's: it starts
+// with a NUL byte.
+const Unattributed = "\x00taskiem:unattributed text"
 
 // SchemaPaths finds fields marked "x-pii": "<category>" in a JSON Schema,
 // resolving local $ref against defs (the WD's types).
@@ -187,9 +223,20 @@ func Seal(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v any, pat
 	slices.SortStableFunc(paths, func(a, b Path) int {
 		return cmp.Compare(boolInt(a.Category == "other"), boolInt(b.Category == "other"))
 	})
-	for _, p := range paths {
+	// Owners are read before anything is sealed (an owner is usually
+	// sealed by an earlier path).
+	owners := make([]*owner, len(paths))
+	for i, p := range paths {
+		if len(p.Owner) == 0 {
+			continue
+		}
+		if ov, ok := valueAt(v, p.Owner); ok && !IsEnvelope(ov) {
+			owners[i] = &owner{cat: p.OwnerCategory, value: ov}
+		}
+	}
+	for i, p := range paths {
 		var err error
-		v, err = sealAt(ctx, c, tx, tenant, v, p.Segments, p.Category, taint)
+		v, err = sealAt(ctx, c, tx, tenant, v, p.Segments, p.Category, owners[i], taint)
 		if err != nil {
 			return nil, err
 		}
@@ -200,7 +247,7 @@ func Seal(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v any, pat
 	return sealTainted(ctx, c, tx, tenant, v, taint)
 }
 
-func sealAt(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v any, segs []string, cat string, taint Taint) (any, error) {
+func sealAt(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v any, segs []string, cat string, own *owner, taint Taint) (any, error) {
 	if len(segs) == 0 {
 		if v == nil || IsEnvelope(v) {
 			return v, nil
@@ -208,7 +255,7 @@ func sealAt(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v any, s
 		if list, ok := v.([]any); ok {
 			// A declared list of values (recipients' numbers): each is sealed.
 			for i := range list {
-				s, err := sealAt(ctx, c, tx, tenant, list[i], nil, cat, taint)
+				s, err := sealAt(ctx, c, tx, tenant, list[i], nil, cat, own, taint)
 				if err != nil {
 					return nil, err
 				}
@@ -219,7 +266,7 @@ func sealAt(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v any, s
 		if _, ok := scalarKey(v); !ok {
 			return v, nil // only scalars are sealed; objects keep their shape
 		}
-		return sealScalar(ctx, c, tx, tenant, v, cat, taint)
+		return sealScalar(ctx, c, tx, tenant, v, cat, own, taint)
 	}
 	switch t := v.(type) {
 	case map[string]any:
@@ -227,7 +274,7 @@ func sealAt(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v any, s
 		if !ok {
 			return v, nil
 		}
-		s, err := sealAt(ctx, c, tx, tenant, child, segs[1:], cat, taint)
+		s, err := sealAt(ctx, c, tx, tenant, child, segs[1:], cat, own, taint)
 		if err != nil {
 			return nil, err
 		}
@@ -237,7 +284,7 @@ func sealAt(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v any, s
 			return v, nil
 		}
 		for i := range t {
-			s, err := sealAt(ctx, c, tx, tenant, t[i], segs[1:], cat, taint)
+			s, err := sealAt(ctx, c, tx, tenant, t[i], segs[1:], cat, own, taint)
 			if err != nil {
 				return nil, err
 			}
@@ -273,7 +320,7 @@ func sealTainted(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v a
 	}
 	if k, ok := scalarKey(v); ok {
 		if cat, hit := taint[k]; hit {
-			return sealScalar(ctx, c, tx, tenant, v, cat, taint)
+			return sealScalar(ctx, c, tx, tenant, v, cat, nil, taint)
 		}
 	}
 	if str, ok := v.(string); ok {
@@ -286,9 +333,15 @@ func sealTainted(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v a
 // and, when it is text naming other known people (an email's body with
 // its sender's address), under each of them too, as sealDerived does: so
 // erasing any of them erases it, and the text is not left under a subject
-// derived from itself that nobody can name.
-func sealScalar(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v any, cat string, taint Taint) (any, error) {
+// derived from itself that nobody can name. Free text with an owner (an
+// email's sender) is sealed under the owner and anyone it names; free text
+// naming no one, without an owner, under the tenant's one subject for
+// "other" (Unattributed).
+func sealScalar(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v any, cat string, own *owner, taint Taint) (any, error) {
 	if str, ok := v.(string); ok && cat == "other" {
+		if ss, ok := c.(SubjectSealer); ok && own != nil {
+			return sealOwned(ctx, c, ss, tx, tenant, str, own, taint)
+		}
 		// Free text's own subject would be one nobody can name: text that
 		// names known people is sealed under them alone.
 		d, err := sealDerived(ctx, c, tx, tenant, str, taint)
@@ -312,8 +365,27 @@ func sealScalar(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v an
 	if !ok {
 		return env, nil
 	}
-	own, _ := env["subject"].(string)
-	return nestUnder(ctx, c, tx, tenant, str, env, own, taint)
+	self, _ := env["subject"].(string)
+	return nestUnder(ctx, c, tx, tenant, str, env, self, taint)
+}
+
+// sealOwned seals free text under its owner's subject (made if new: the
+// owner's value is sealed), then under each known person it names.
+func sealOwned(ctx context.Context, c Cipher, ss SubjectSealer, tx pgx.Tx, tenant uuid.UUID, text string, own *owner, taint Taint) (any, error) {
+	oenv, err := c.SealTx(ctx, tx, tenant, own.cat, own.value)
+	if errors.Is(err, ErrErased) {
+		return Erased, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	subject, _ := oenv["subject"].(string)
+	env, err := ss.SealUnderTx(ctx, tx, tenant, subject, "other", text)
+	if err != nil {
+		return nil, err
+	}
+	taint.Add(text, "other")
+	return nestUnder(ctx, c, tx, tenant, text, env, subject, taint)
 }
 
 // SealText seals free text under subject, the person it belongs to (the

@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"github.com/israel-duff/taskiem/api"
 	rt "github.com/israel-duff/taskiem/engine/runtime/runtimetest"
 )
@@ -450,6 +452,20 @@ func TestErasureWaitsForRunsWithEventsOutOfLine(t *testing.T) {
 		!strings.Contains(toJSON(body["runs"]), run) {
 		t.Fatalf("erasure under a run whose events are out of line: %d %v", st, body)
 	}
+}
+
+// Free text is sealed under one subject for the organisation, not one a
+// text: erasing by "other" and a text, or that subject, would erase every
+// such text, so both are refused (F62b).
+func TestFreeTextSubjectIsNotErased(t *testing.T) {
+	w := newWorld(t)
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	owner.must(400, "POST", "/v1/pii/erase", map[string]any{"category": "other", "value": "Please call me back"})
+	shared, err := w.env.Vault.SubjectFor(context.Background(), uuid.MustParse(tenantOf(t, owner)), "other", "anything")
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner.must(400, "POST", "/v1/pii/erase", map[string]any{"subject": shared})
 }
 
 func toJSON(v any) string {

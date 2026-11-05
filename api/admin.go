@@ -595,6 +595,24 @@ func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	subject := req.Subject
 	subjects := []string{subject}
+	// Free text ("other") is no one's: it is sealed under one subject for
+	// the whole organisation (pii.Unattributed), and under the people it
+	// names. Erasing that subject would erase every such text.
+	if req.Category == "other" {
+		s.fail(w, r, fmt.Errorf("%w: free text is not a person: erase the people it names", errBadRequest))
+		return
+	}
+	if subject != "" {
+		shared, err := s.Vault.SubjectFor(r.Context(), p.TenantID, "other", "")
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		if subject == shared {
+			s.fail(w, r, fmt.Errorf("%w: this subject holds the organisation's free text, not a person: erase the people it names", errBadRequest))
+			return
+		}
+	}
 	if subject == "" {
 		if req.Category == "" || req.Value == nil {
 			s.fail(w, r, fmt.Errorf("%w: give subject, or category and value", errBadRequest))
