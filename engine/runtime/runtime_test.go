@@ -609,6 +609,48 @@ func TestLargeOutputsAreRefused(t *testing.T) {
 	}
 }
 
+// An http step declared reconcilable_write has no reconcile action: an
+// unknown outcome parks it for a person instead of crashing the worker on
+// the reconcile it cannot do.
+func TestHTTPReconcilableWriteParks(t *testing.T) {
+	e := rt.New(t)
+	e.CallTimeout = 300 * time.Millisecond
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		select {
+		case <-time.After(2 * time.Second):
+		case <-r.Context().Done():
+		}
+	}))
+	defer srv.Close()
+	if err := e.Store.AllowEgress(ctx, e.Tenant, "prod", "127.0.0.1", "admin"); err != nil {
+		t.Fatal(err)
+	}
+	wf := e.Publish(t, wfDoc(`{"id":"post","type":"http","retry":{"max":2,"initial":"10ms","backoff":"fixed"},
+	  "config":{"method":"POST","url":"`+srv.URL+`","body":{"a":1},"class":"reconcilable_write"}}`, ""))
+	ref := e.Start(t, wf, map[string]any{})
+	for i := 0; i < 20 && e.Status(t, ref) != "needs_reconciliation"; i++ {
+		e.Drain(t)
+		time.Sleep(20 * time.Millisecond)
+	}
+	h := events(t, e, ref)
+	var last history.FailedPayload
+	for _, ev := range h {
+		if ev.Type == history.StepFailed && ev.StepID == "post" {
+			last = history.FailedPayload{}
+			_ = json.Unmarshal(ev.Payload, &last)
+		}
+	}
+	if st := e.Status(t, ref); st != "needs_reconciliation" || count(h, history.StepFailed, "post") != 2 ||
+		last.Error.Kind != "unknown_outcome" || last.Error.Next != "park" || !strings.Contains(last.Error.Message, "no reconcile action") {
+		t.Fatalf("status %s, last failure %+v: %s", st, last.Error, types(h))
+	}
+	if n := hits.Load(); n != 1 {
+		t.Errorf("partner hit %d times, want once", n)
+	}
+}
+
 func TestCodeStepInRun(t *testing.T) {
 	e := rt.New(t)
 	fx := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

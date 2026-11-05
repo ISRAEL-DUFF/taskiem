@@ -161,6 +161,11 @@ var (
 	LeasesReleased = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "taskiem_leases_released_total", Help: "Task, timer and orchestration leases released at shutdown instead of left to expire.",
 	})
+	// TaskPanics counts tasks whose execution panicked: the worker logs
+	// the stack and carries on, and the task's lease expires.
+	TaskPanics = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "taskiem_task_panics_total", Help: "Tasks whose execution panicked; the worker logged the stack and kept serving, and the task's lease expires.",
+	})
 	// Canary probes: the synthetic end-to-end check (engine/canary).
 	CanaryProbes = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "taskiem_canary_probes_total", Help: "Synthetic canary probes by result (ok, or the stage that failed: accept, complete, output).",

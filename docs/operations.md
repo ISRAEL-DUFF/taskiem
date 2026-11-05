@@ -187,6 +187,7 @@ Run `taskiem migrate` as the schema owner, and `taskiem serve` as `taskiem`. Or 
 | `taskiem_run_start_seconds` | — (a histogram: trigger accepted to first worker step claimed; SLO `run_start`) |
 | `taskiem_scheduler_lateness_seconds` | kind (`timer`, `schedule`; SLO `scheduler_timeliness`) |
 | `taskiem_scheduler_last_tick_timestamp_seconds` | mode (`scheduler`, `sweep`) |
+| `taskiem_task_panics_total` | — (a task whose execution panicked: the worker logs the error with its stack and keeps serving other tasks, and the task's lease expires; alert on any increase, it is a bug) |
 | `taskiem_draining`, `taskiem_leases_released_total` | — (shutdown: 1 while draining; leases handed back instead of left to expire) |
 | `taskiem_canary_probes_total`, `taskiem_canary_duration_seconds`, `taskiem_canary_last_success_timestamp_seconds` | result (`ok`, `accept`, `complete`, `output`); phase (`accept`, `complete`) |
 | `taskiem_tenant_key_checks_failed_total` | wrapped_by (`customer`: a tenant's own key, BYOK; `platform`: Taskiem's KMS). Which tenant is in the logs and the tenant's audit log ([BYOK](byok.md#when-the-key-is-unavailable)) |

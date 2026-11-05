@@ -112,6 +112,13 @@ func check(doc []byte, reg connector.Lookup, find expansion.Templates) []Problem
 				if st.Capability != nil {
 					out = append(out, pr(path+"/capability", "set when a capability step is expanded; write a capability step instead"))
 				}
+			case "http":
+				// reconcilable_write means "ask the provider before sending
+				// again", which needs a connector's reconcile action; an
+				// http step has none.
+				if st.HTTP != nil && st.HTTP.Class == "reconcilable_write" {
+					out = append(out, pr(path+"/config/class", "an http step has no reconcile action, so it cannot be reconcilable_write; use idempotent_write with an idempotency_header the partner honours, or unsafe_write"))
+				}
 			case "capability":
 				if !wd.IsWait(st.Uses) && !anyRail(reg, st.Uses) {
 					out = append(out, pr(path, fmt.Sprintf("no rail Taskiem connects to can %s yet", st.Uses)))
