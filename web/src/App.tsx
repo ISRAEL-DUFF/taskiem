@@ -282,7 +282,12 @@ function Shell() {
     );
   }
   if (me.invitations_only) return alone(<InviteeHome />);
-  if (me.enrol_passkey) return alone(<EnrolPasskey />);
+  // An enrol-only session may confirm its email: until then its password
+  // adds no passkey.
+  if (me.enrol_passkey)
+    return alone(
+      loc.pathname === "/verify-email" ? <VerifyEmail /> : <EnrolPasskey />,
+    );
   // The gate role: one screen, whatever the address; the server refuses every other route.
   if (me.gate_only) return <GateHome />;
   if (loc.pathname === "/login")

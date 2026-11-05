@@ -25040,7 +25040,8 @@ components:
           type: array
           items:
             type: string
-          description: The proofs that will do to change a factor.
+          description: The proofs that will do to change a factor (`passkey`, `totp`, `password`, `sign_in`), or `verify_email`
+            when the password cannot count until the person confirms their email.
         passkey_required:
           type: boolean
         sso_required:
