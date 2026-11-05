@@ -105,7 +105,7 @@ Built on 6 October 2026 from each provider's public documentation, clean-room, w
 | `opay@1` | Cashier and bank-transfer collections, status, close, refunds; signed requests (payouts are not publicly documented) | In-body HMAC-SHA3-512, checked by the connector | [opay.md](integrations/opay.md) |
 | `remita@1` | Funds transfer (single and bulk), invoices (RRR), banks, name enquiry | URL token, `Ok` reply, one event per payment | [remita.md](integrations/remita.md) |
 | `mono@1` | Account linking and data, statements, identity, DirectPay, Direct Debit mandates (reconcilable) | Shared secret, 200 reply | [mono.md](integrations/mono.md) |
-| `prembly@1` | IdentityPass KYC: BVN, NIN, phone, licence, passport, voter's card, CAC, bank account, face match, liveness | HMAC-SHA256 | [prembly.md](integrations/prembly.md) |
+| `prembly@1` | IdentityPass KYC: BVN, NIN, phone, licence, passport, voter's card, CAC, bank account, face match, liveness | URL token Taskiem makes (`query_secret`; Prembly's signature uses the public key) | [prembly.md](integrations/prembly.md) |
 | `youverify@1` | KYC and KYB, address verification, AML screening | HMAC-SHA256, 200 reply | [youverify.md](integrations/youverify.md) |
 | `africastalking@1` | SMS (bulk), fetch messages, airtime | URL token (Africa's Talking signs nothing) | [africastalking.md](integrations/africastalking.md) |
 | `telegram@1` | Bot API: messages, documents, photos, edits, button answers, chat lookups, webhook registration | Secret-token header | [telegram.md](integrations/telegram.md) |

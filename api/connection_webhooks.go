@@ -1,6 +1,8 @@
 package api
 
 import (
+	"fmt"
+	"maps"
 	"net/url"
 	"slices"
 	"strconv"
@@ -102,24 +104,113 @@ func moneyWebhooks(c *connector.Connector, base string, tenant uuid.UUID, connec
 		if spec.Poll != nil {
 			h.PollMinutes = int(spec.Poll.Interval().Minutes())
 		}
-		path := base + "/" + tenant.String() + "/connectors/" + url.PathEscape(c.Ref()) + "/" + url.PathEscape(name)
-		q := url.Values{"env": {"prod"}, "connection": {connection}}
 		var scheme, field string
 		if spec.Verify != nil {
 			scheme, field = spec.Verify.Scheme, spec.Verify.SecretField
 		}
-		label := fieldLabel(c.Manifest, field)
-		switch scheme {
-		case "path_secret":
-			h.Placeholder = "{" + field + "}"
-			h.URL = path + "/prod/" + url.PathEscape(connection) + "/" + h.Placeholder
-		case "query_secret":
-			h.Placeholder = "{" + field + "}"
-			h.URL = path + "?" + q.Encode() + "&" + url.QueryEscape(spec.Verify.Query) + "=" + h.Placeholder
-		default:
-			h.URL = path + "?" + q.Encode()
+		h.URL, h.Placeholder = triggerURL(c, base, tenant, name, spec, "prod", connection, "")
+		h.Verification = howVerified(c.Manifest.Name, scheme, fieldLabel(c.Manifest, field), h.Placeholder)
+		out = append(out, h)
+	}
+	return out
+}
+
+// triggerURL is the address a provider delivers a connection's trigger
+// to. For a trigger verified by a secret in the URL (path_secret,
+// query_secret), secret is put in it when given; otherwise the address
+// carries placeholder, the part the business replaces with it.
+func triggerURL(c *connector.Connector, base string, tenant uuid.UUID, name string, spec connector.TriggerSpec, env, connection, secret string) (addr, placeholder string) {
+	path := base + "/" + tenant.String() + "/connectors/" + url.PathEscape(c.Ref()) + "/" + url.PathEscape(name)
+	q := url.Values{"env": {env}, "connection": {connection}}
+	if spec.Verify == nil {
+		return path + "?" + q.Encode(), ""
+	}
+	tok := secret
+	if tok == "" {
+		placeholder = "{" + spec.Verify.SecretField + "}"
+		tok = placeholder
+	}
+	switch spec.Verify.Scheme {
+	case "path_secret":
+		return path + "/" + url.PathEscape(env) + "/" + url.PathEscape(connection) + "/" + tok, placeholder
+	case "query_secret":
+		return path + "?" + q.Encode() + "&" + url.QueryEscape(spec.Verify.Query) + "=" + tok, placeholder
+	}
+	return path + "?" + q.Encode(), ""
+}
+
+// connectionWebhook is a webhook address that carries a secret Taskiem
+// made for a connection (generate: webhook_token), shown once, when the
+// connection is saved, for the business to paste into the provider's
+// dashboard. Taskiem does not show it again: to get a new one, connect
+// again.
+type connectionWebhook struct {
+	Trigger string `json:"trigger"`
+	Title   string `json:"title"`
+	URL     string `json:"url"`
+	Where   string `json:"where"`
+}
+
+// refuseMadeFields refuses credentials that name a field Taskiem makes
+// itself (generate: webhook_token): nobody chooses, sets or clears its
+// value, so a guessable one cannot be put in its place.
+func refuseMadeFields(c *connector.Connector, creds map[string]string) error {
+	for _, k := range c.Manifest.WebhookTokenFields() {
+		if _, ok := creds[k]; ok {
+			return fmt.Errorf("%w: Taskiem makes %s itself when the connection is saved; leave it out", errBadRequest, k)
 		}
-		h.Verification = howVerified(c.Manifest.Name, scheme, label, h.Placeholder)
+	}
+	return nil
+}
+
+// withMadeFields is creds with a fresh random token in each field Taskiem
+// makes (generate: webhook_token), and those tokens on their own.
+func withMadeFields(c *connector.Connector, creds map[string]string) (map[string]string, map[string]string, error) {
+	keys := c.Manifest.WebhookTokenFields()
+	if len(keys) == 0 {
+		return creds, nil, nil
+	}
+	out := make(map[string]string, len(creds)+len(keys))
+	for k, v := range creds {
+		out[k] = v
+	}
+	made := map[string]string{}
+	for _, k := range keys {
+		tok, err := connector.NewWebhookToken()
+		if err != nil {
+			return nil, nil, err
+		}
+		out[k], made[k] = tok, tok
+	}
+	return out, made, nil
+}
+
+// connectionWebhooks are the addresses, with their tokens, of c's triggers
+// verified by a token Taskiem made (made, by field), for a connection
+// just saved.
+func connectionWebhooks(c *connector.Connector, base string, tenant uuid.UUID, env, connection string, made map[string]string) []connectionWebhook {
+	if len(made) == 0 {
+		return nil
+	}
+	var out []connectionWebhook
+	for _, name := range slices.Sorted(maps.Keys(c.Manifest.Triggers)) {
+		spec := c.Manifest.Triggers[name]
+		if spec.Type != "webhook" || spec.Verify == nil || (spec.Verify.Scheme != "query_secret" && spec.Verify.Scheme != "path_secret") {
+			continue
+		}
+		tok := made[spec.Verify.SecretField]
+		if tok == "" {
+			continue
+		}
+		h := connectionWebhook{Trigger: name, Title: spec.Title, Where: spec.Where}
+		if h.Title == "" {
+			h.Title = humanName(name)
+			h.Title = strings.ToUpper(h.Title[:1]) + h.Title[1:]
+		}
+		if h.Where == "" {
+			h.Where = "In " + c.Manifest.Name + "'s dashboard, under webhooks."
+		}
+		h.URL, _ = triggerURL(c, base, tenant, name, spec, env, connection, tok)
 		out = append(out, h)
 	}
 	return out

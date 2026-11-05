@@ -13788,7 +13788,7 @@ paths:
       tags:
       - Connectors
       summary: Add a connection
-      description: Saves a connector's credentials, encrypted, under a name in one environment.
+      description: "Saves a connector's credentials, encrypted, under a name in one environment. A field the connector's manifest says Taskiem makes (`generate: webhook_token`) is refused if given; Taskiem makes a random value for it and returns it once, inside `webhooks`."
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -14017,6 +14017,11 @@ paths:
                     type: string
                   back:
                     type: string
+                  webhooks:
+                    type: array
+                    description: As in POST /v1/connections; shown only in this answer.
+                    items:
+                      $ref: '#/components/schemas/ConnectionWebhook'
         '400':
           description: A key refused, by its start or by the service.
           content:
@@ -14202,7 +14207,8 @@ paths:
       description: |
         Merges the given fields into the connection's credentials, keeping the rest: the secret key and data API URL a linked
         Xenibase connection gets afterwards. An empty value clears a field. The result must still fit the connector's auth
-        (every required field present, no unknown one). Refused for a connection Taskiem keeps, and for an expired one.
+        (every required field present, no unknown one). Refused for a connection Taskiem keeps, and for an expired one. A field
+        Taskiem makes (`generate: webhook_token`) cannot be set or cleared: connect again for a new token.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -35377,6 +35383,30 @@ components:
           type: string
         name:
           type: string
+        webhooks:
+          type: array
+          description: "For a connector with a field Taskiem makes (`generate: webhook_token`, Prembly), the webhook addresses to paste into the provider's dashboard, each carrying the random token made for this connection. Shown only in this answer; to get a new token, connect again."
+          items:
+            $ref: '#/components/schemas/ConnectionWebhook'
+      additionalProperties: false
+    ConnectionWebhook:
+      type: object
+      required:
+      - trigger
+      - title
+      - url
+      - where
+      properties:
+        trigger:
+          type: string
+        title:
+          type: string
+        url:
+          type: string
+          description: The absolute address, under the server's hooks URL, with the connection's token in it. A secret.
+        where:
+          type: string
+          description: Where in the provider's dashboard it is pasted.
       additionalProperties: false
     OAuthStartRequest:
       type: object
@@ -37909,6 +37939,11 @@ components:
           type: string
         provisioned_by:
           type: string
+        webhooks:
+          type: array
+          description: "For a connector with a field Taskiem makes (`generate: webhook_token`, Prembly), the webhook addresses to paste into the provider's dashboard, each carrying the random token made for this connection. Shown only in this answer; to get a new token, connect again."
+          items:
+            $ref: '#/components/schemas/ConnectionWebhook'
       additionalProperties: false
     CredentialsRequest:
       type: object

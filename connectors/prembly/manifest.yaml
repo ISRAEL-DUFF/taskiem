@@ -15,7 +15,13 @@ auth:
   fields:
     # Sandbox and live share one host; the key decides the environment.
     - { key: api_key, label: Secret key (x-api-key), secret: true }
-    - { key: public_key, label: Public key (verifies Prembly's webhook signatures), secret: true, required: false }
+    # Made by Taskiem when the connection is saved, never typed: the
+    # webhook URL carries it (the verification trigger).
+    - key: callback_token
+      label: Webhook token (made by Taskiem; part of the webhook URL you paste into Prembly)
+      secret: true
+      required: false
+      generate: webhook_token
   test: { action: get_wallet_balance }
 base_url: https://api.prembly.com
 egress_hosts: [api.prembly.com]
@@ -459,18 +465,19 @@ actions:
 triggers:
   # Results Prembly sends to the webhook URL set in its dashboard: SDK
   # (widget) verifications, and API checks that finish later (PENDING).
-  # Prembly signs them with the business's public key, the one its widget
-  # is given in the browser, so a signed delivery does not prove Prembly
-  # sent it: a workflow confirms a VERIFIED result with a lookup (the
-  # secret key) before it acts on it (docs/integrations/prembly.md).
+  # Prembly signs them with the business's public key, which its widget is
+  # given in the browser, so that signature proves nothing. A delivery is
+  # accepted only with the token Taskiem made for the connection in its
+  # URL (?token=, query_secret), shown once when the connection is saved
+  # (docs/integrations/prembly.md).
   verification:
     type: webhook
-    where: "Prembly dashboard → Settings → Webhook URL. Prembly signs with your public key, which its widget exposes in the browser: confirm a VERIFIED result with a lookup step before acting on it"
-    verify: { scheme: hmac_sha256, header: x-prembly-signature, encoding: base64, secret_field: public_key }
+    where: "Prembly dashboard → Settings → Webhook URL: paste the whole address Taskiem showed when you connected Prembly, token included"
+    verify: { scheme: query_secret, query: token, secret_field: callback_token }
     events: [VERIFIED, NOT-VERIFIED, PENDING, UNSPECIFIED]
     event_type: '=body.?verification.?status.orValue("UNSPECIFIED")'
-    # From the signed body only (a header is not signed, so a replay could
-    # change it): the verification's reference and status. Without a
+    # From the body only, never Prembly's token header (a retry could
+    # carry a new one): the verification's reference and status. Without a
     # reference, the engine falls back to a hash of the body.
     dedup: '=body.?verification.?reference.orValue("") == "" ? "" : string(body.verification.reference) + ":" + string(body.?verification.?status.orValue(""))'
     # SDK sessions: the user_ref you gave the widget. API checks: the

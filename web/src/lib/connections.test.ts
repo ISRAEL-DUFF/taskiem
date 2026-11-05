@@ -87,6 +87,19 @@ describe("guided keys", () => {
     expect(splitFields(c).main.map((f) => f.key)).toEqual(["secret_key"]);
     expect(splitFields(c).more.map((f) => f.key)).toEqual(["hash"]);
   });
+  it("never asks for a token Taskiem makes itself", () => {
+    const prembly = {
+      auth: {
+        type: "api_key",
+        fields: [
+          { key: "api_key", label: "Secret key", secret: true },
+          { key: "callback_token", label: "Webhook token", secret: true, required: false, generate: "webhook_token" },
+        ],
+      },
+    } as unknown as ConnectorInfo;
+    expect(splitFields(prembly).main.map((f) => f.key)).toEqual(["api_key"]);
+    expect(splitFields(prembly).more).toEqual([]);
+  });
 
   it("offers host modes, the ones without an address here as not set up", () => {
     const iswallet: ConnectorInfo = {

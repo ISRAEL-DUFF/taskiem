@@ -205,42 +205,55 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, fmt.Errorf("%w: %q is kept for the account Taskiem holds for you: choose another name", errBadRequest, req.Name))
 		return
 	}
-	id, name, err := s.saveKeyConnection(r.Context(), principalFrom(r.Context()), env, c, req.Name, req.Credentials, req.Mode, req.Check)
+	p := principalFrom(r.Context())
+	id, name, made, err := s.saveKeyConnection(r.Context(), p, env, c, req.Name, req.Credentials, req.Mode, req.Check)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	req.Name = name
-	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "environment": env, "connector": c.Manifest.ID, "name": req.Name})
+	out := map[string]any{"id": id, "environment": env, "connector": c.Manifest.ID, "name": req.Name}
+	if hooks := connectionWebhooks(c, s.hooksBase(), p.TenantID, env, name, made); len(hooks) > 0 {
+		out["webhooks"] = hooks // shown this once: they carry the token Taskiem made
+	}
+	writeJSON(w, http.StatusCreated, out)
 }
 
 // saveKeyConnection checks a connection's keys (their starts, the mode
 // chosen, and with check the service itself) and saves it as p, within
 // the plan's limit: the web's form, a connect link and the WhatsApp key
 // form all save this way. An empty name is the first free one (main).
-func (s *Server) saveKeyConnection(ctx context.Context, p *Principal, env string, c *connector.Connector, name string, creds map[string]string, chosen string, check bool) (uuid.UUID, string, error) {
+// made are the values Taskiem made for the connection (generate:
+// webhook_token), by field, for the caller to show once in the webhook
+// addresses that carry them.
+func (s *Server) saveKeyConnection(ctx context.Context, p *Principal, env string, c *connector.Connector, name string, creds map[string]string, chosen string, check bool) (id uuid.UUID, saved string, made map[string]string, err error) {
+	if err := refuseMadeFields(c, creds); err != nil {
+		return uuid.Nil, "", nil, err
+	}
 	if err := checkCredentials(c, creds); err != nil {
-		return uuid.Nil, "", err
+		return uuid.Nil, "", nil, err
 	}
 	if err := checkKeys(c, creds, chosen); err != nil {
-		return uuid.Nil, "", err
+		return uuid.Nil, "", nil, err
 	}
 	mode, err := connectionMode(c, creds, chosen)
 	if err != nil {
-		return uuid.Nil, "", err
+		return uuid.Nil, "", nil, err
 	}
 	if check {
 		if err := s.testCredentials(ctx, p.TenantID, c, withMode(creds, mode)); err != nil {
-			return uuid.Nil, "", err
+			return uuid.Nil, "", nil, err
 		}
+	}
+	if creds, made, err = withMadeFields(c, creds); err != nil {
+		return uuid.Nil, "", nil, err
 	}
 	inTx := func(fn func(pgx.Tx) error) error {
 		return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, fn)
 	}
 	if err := inTx(func(tx pgx.Tx) error { return s.checkCount(ctx, tx, p.TenantID, "max_connections") }); err != nil {
-		return uuid.Nil, "", err
+		return uuid.Nil, "", nil, err
 	}
-	var id uuid.UUID
 	subscribes := false
 	err = inTx(func(tx pgx.Tx) error {
 		var err error
@@ -265,7 +278,7 @@ func (s *Server) saveKeyConnection(ctx context.Context, p *Principal, env string
 		if errors.As(err, &pgErr) && pgErr.SQLState() == "23505" {
 			err = fmt.Errorf("%w: a %s connection named %q already exists in %s", errConflict, c.Manifest.ID, name, env)
 		}
-		return uuid.Nil, "", err
+		return uuid.Nil, "", nil, err
 	}
 	// Remote subscriptions that waited for a connection in this
 	// environment are tried again now (decision 0021).
@@ -281,7 +294,7 @@ func (s *Server) saveKeyConnection(ctx context.Context, p *Principal, env string
 			s.Logger.Warn("remote subscriptions: applying a connection's", "err", err)
 		}
 	}
-	return id, name, nil
+	return id, name, made, nil
 }
 
 // --- secrets (names only; values are write-only) ---

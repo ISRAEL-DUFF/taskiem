@@ -207,14 +207,18 @@ func (s *Server) connectWithKey(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, errConnectLinkGone)
 		return
 	}
-	id, name, err := s.saveKeyConnection(ctx, p, l.Environment, c, "", req.Credentials, req.Mode, true)
+	id, name, made, err := s.saveKeyConnection(ctx, p, l.Environment, c, "", req.Credentials, req.Mode, true)
 	if err != nil {
 		s.spendConnectLink(ctx, l, false)
 		s.fail(w, r, err)
 		return
 	}
 	s.connectMade(ctx, l, p, c, id, name, "connect_link")
-	writeJSON(w, http.StatusCreated, map[string]any{"connected": c.Manifest.Name, "business": business, "name": name, "back": s.connectBack(l.Channel)})
+	out := map[string]any{"connected": c.Manifest.Name, "business": business, "name": name, "back": s.connectBack(l.Channel)}
+	if hooks := connectionWebhooks(c, s.hooksBase(), p.TenantID, l.Environment, name, made); len(hooks) > 0 {
+		out["webhooks"] = hooks // shown this once: they carry the token Taskiem made
+	}
+	writeJSON(w, http.StatusCreated, out)
 }
 
 // connectMiniApp checks a Telegram link's key form came from the Mini
@@ -663,7 +667,10 @@ func (s *Server) waFlowConnect(ctx context.Context, row flowRow, req whatsapp.Fl
 	if len(errs) > 0 {
 		return screen(errs, "")
 	}
-	cid, name, err := s.saveKeyConnection(ctx, p, "prod", conn, "", creds, "", true)
+	// No token is made here: a service with a field Taskiem makes never
+	// gets this form (connectFormFields), since it could not show the
+	// address that carries it.
+	cid, name, _, err := s.saveKeyConnection(ctx, p, "prod", conn, "", creds, "", true)
 	if err != nil {
 		msg := plainError(err)
 		return screen(nil, strings.ToUpper(msg[:1])+msg[1:])

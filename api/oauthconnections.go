@@ -782,6 +782,9 @@ func (s *Server) mergeConnectionCredentials(w http.ResponseWriter, r *http.Reque
 		if !ok {
 			return fmt.Errorf("%w: connector %s is no longer available", errConflict, connID)
 		}
+		if err := refuseMadeFields(c, req.Credentials); err != nil {
+			return err
+		}
 		existing, err := s.Vault.ConnectionCredentialsTx(ctx, tx, p.TenantID, id)
 		if err != nil {
 			return err
