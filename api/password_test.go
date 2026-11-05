@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/engine/alerts"
 	"github.com/israel-duff/taskiem/engine/oidc/oidctest"
 	"github.com/israel-duff/taskiem/engine/webauthn/webauthntest"
@@ -455,4 +456,20 @@ func TestChangePassword(t *testing.T) {
 	// API keys have no password.
 	key := owner.must(201, "POST", "/v1/api-keys", map[string]any{"name": "ci", "permissions": []string{"run.read"}})["key"].(string)
 	(&client{t: t, base: w.base, token: key}).must(403, "POST", "/v1/me/password", map[string]any{"current_password": testPassword, "new_password": newPassword})
+}
+
+// An owner an operator's tool creates (`taskiem bootstrap`, the demo
+// school) has the email the operator named, so it counts as confirmed and
+// may enrol a passkey or authenticator at once (F9 holds only emails no one
+// has confirmed).
+func TestOperatorCreatedOwnerEmailIsConfirmed(t *testing.T) {
+	w := newWorld(t)
+	_, user, err := api.CreateTenant(context.Background(), w.env.DB.Admin, "Booted", "first@booted.test", "First", testPassword)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var confirmed bool
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT email_verified_at IS NOT NULL FROM users WHERE id = $1`, user).Scan(&confirmed); err != nil || !confirmed {
+		t.Fatalf("the operator-created owner's email is not confirmed (%v)", err)
+	}
 }

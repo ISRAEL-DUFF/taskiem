@@ -607,9 +607,16 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 }
 
 // CreateTenant creates a tenant with its owner, a default workspace, and
-// the dev and prod environments (signup, and `taskiem bootstrap`).
+// the dev and prod environments, for operators' tools (`taskiem bootstrap`,
+// the demo school). The operator names the owner's email, so it is taken as
+// confirmed, as CreateMember does: an unconfirmed email may not enrol a
+// passkey or authenticator (F9), and no one else could have chosen it.
+// Signup goes through createTenant and confirms the email by link.
 func CreateTenant(ctx context.Context, pool *pgxpool.Pool, name, email, userName, password string) (tenant, user uuid.UUID, err error) {
-	return createTenant(ctx, pool, name, email, userName, password, nil)
+	return createTenant(ctx, pool, name, email, userName, password, func(tx pgx.Tx, _, user uuid.UUID) error {
+		_, err := tx.Exec(ctx, `UPDATE users SET email_verified_at = now() WHERE id = $1`, user)
+		return err
+	})
 }
 
 // createTenant is CreateTenant; then, when given, runs in the same

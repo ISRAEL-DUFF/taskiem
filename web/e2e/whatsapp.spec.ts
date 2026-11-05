@@ -1,4 +1,5 @@
 import { createHmac } from "node:crypto";
+import { confirmEmail } from "./confirm";
 import { createServer, type Server } from "node:http";
 import { expect, test } from "@playwright/test";
 
@@ -75,6 +76,7 @@ test("link a WhatsApp number with a code, then unlink it", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
   const added = await page.request.post("/v1/members", { headers: { "X-Taskiem-Request": "1" }, data: { email, password: "correct horse battery", roles: ["viewer"] } });
   expect(added.status()).toBe(201);
+  confirmEmail(email);
   await page.request.post("/v1/auth/logout", { headers: { "X-Taskiem-Request": "1" } });
   await page.context().clearCookies();
 
