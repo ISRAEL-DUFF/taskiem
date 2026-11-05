@@ -514,7 +514,10 @@ func (s *Server) oauthExchange(ctx context.Context, tenant uuid.UUID, c *connect
 	req.Header.Set("Accept", "application/json")
 	resp, err := hc.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %s did not answer the token exchange: %w", errOAuthProvider, c.Manifest.Name, err)
+		// The URL carries the client secret and the code where the
+		// exchange is a GET (Meta's): the error names only where it went,
+		// since it is logged and shown to the person (F11).
+		return nil, fmt.Errorf("%w: %s did not answer the token exchange: %w", errOAuthProvider, c.Manifest.Name, connector.RedactURLError(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
@@ -716,7 +719,7 @@ func (s *Server) oauthRevoke(ctx context.Context, tenant uuid.UUID, c *connector
 	req.SetBasicAuth(prov.client.ID, prov.client.Secret)
 	resp, err := hc.Do(req)
 	if err != nil {
-		s.Logger.Warn("oauth: token not revoked", "connector", c.Manifest.ID, "err", err)
+		s.Logger.Warn("oauth: token not revoked", "connector", c.Manifest.ID, "err", connector.RedactURLError(err))
 		return
 	}
 	_ = resp.Body.Close()
