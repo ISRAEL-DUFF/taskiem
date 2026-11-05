@@ -818,6 +818,7 @@ rider_presence.until
 rider_remittances.settled_at
 rider_remittances.tenant_id
 riders.id
+riders.phone
 riders.phone_hash
 riders.retired_at
 riders.tenant_id
@@ -1169,6 +1170,7 @@ subscriptions.plan_id
 subscriptions.status
 subscriptions.tenant_id
 suppliers.id
+suppliers.phone
 suppliers.phone_hash
 suppliers.retired_at
 suppliers.tenant_id
