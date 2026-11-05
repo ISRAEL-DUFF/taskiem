@@ -21348,7 +21348,7 @@ paths:
       tags:
       - Members
       summary: Add a single sign-on connection
-      description: An OpenID Connect or SAML 2.0 identity provider.
+      description: An OpenID Connect or SAML 2.0 identity provider. Owners only (403 otherwise, API keys included).
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -21398,7 +21398,7 @@ paths:
       tags:
       - Members
       summary: Verify a single sign-on domain
-      description: Checks the DNS TXT record.
+      description: Checks the DNS TXT record. Owners only (403 otherwise, API keys included).
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -21469,7 +21469,7 @@ paths:
       tags:
       - Members
       summary: Add a domain to a single sign-on connection
-      description: Answers with the DNS TXT record to publish.
+      description: Answers with the DNS TXT record to publish. Owners only (403 otherwise, API keys included).
       security:
       - sessionCookie: []
         csrfHeader: []

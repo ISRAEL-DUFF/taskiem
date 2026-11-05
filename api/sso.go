@@ -201,8 +201,25 @@ func (s *Server) checkRoleMapping(r *http.Request, tx pgx.Tx, req ssoReq) error 
 	return canGrant(r.Context(), tx, principalFrom(r.Context()), roles)
 }
 
+// ssoSetupOwner refuses anyone but an owner adding a connection or a
+// domain, or verifying one: the provider and its domains decide who signs
+// in as an existing member, owners included, so an administrator who could
+// point a provider they run at the owners' domain could sign in as an
+// owner. Keys hold no roles, so they are refused too. Roles on an existing
+// connection (updateSSO) stay with member.manage and checkRoleMapping.
+func ssoSetupOwner(r *http.Request) error {
+	if !slices.Contains(principalFrom(r.Context()).Roles, "owner") {
+		return fmt.Errorf("%w: only an owner sets up single sign-on and its domains", errForbidden)
+	}
+	return nil
+}
+
 func (s *Server) createSSO(w http.ResponseWriter, r *http.Request) {
 	if !s.ssoOn(w) {
+		return
+	}
+	if err := ssoSetupOwner(r); err != nil {
+		s.fail(w, r, err)
 		return
 	}
 	var req ssoReq
@@ -357,6 +374,10 @@ func (s *Server) updateSSO(w http.ResponseWriter, r *http.Request) {
 // addSSODomain claims a domain for a connection; it routes nobody until
 // verified.
 func (s *Server) addSSODomain(w http.ResponseWriter, r *http.Request) {
+	if err := ssoSetupOwner(r); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "not found")
@@ -416,6 +437,10 @@ var (
 )
 
 func (s *Server) verifySSODomain(w http.ResponseWriter, r *http.Request) {
+	if err := ssoSetupOwner(r); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	domain := strings.ToLower(chi.URLParam(r, "domain"))
 	var token string
 	err := s.tx(r, func(tx pgx.Tx) error {

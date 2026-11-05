@@ -228,10 +228,42 @@ func TestSSOMappingCannotEscalate(t *testing.T) {
 	owner.must(201, "POST", "/v1/members", map[string]any{"email": "adm@bank.test", "password": "correct horse battery", "roles": []string{"admin"}})
 	adm := w.login(t, "adm@bank.test", "correct horse battery")
 	cfg := map[string]any{"issuer": idp.URL, "client_id": idp.ClientID, "client_secret": idp.ClientSecret}
-	adm.must(403, "POST", "/v1/sso", map[string]any{"protocol": "oidc", "name": "x", "oidc": cfg, "group_roles": map[string]any{"it": []string{"owner"}}})
+	// An administrator changes the roles of a connection an owner set up,
+	// held to what they could grant.
+	conn := owner.must(201, "POST", "/v1/sso", map[string]any{"protocol": "oidc", "name": "x", "oidc": cfg, "default_roles": []string{"viewer"}})["id"].(string)
+	adm.must(403, "PUT", "/v1/sso/"+conn, map[string]any{"group_roles": map[string]any{"it": []string{"owner"}}})
 	owner.must(201, "PUT", "/v1/roles/privacy", map[string]any{"permissions": []string{"pii.reveal"}})
-	adm.must(403, "POST", "/v1/sso", map[string]any{"protocol": "oidc", "name": "x", "oidc": cfg, "default_roles": []string{"privacy"}})
-	adm.must(201, "POST", "/v1/sso", map[string]any{"protocol": "oidc", "name": "x", "oidc": cfg, "default_roles": []string{"viewer"}})
+	adm.must(403, "PUT", "/v1/sso/"+conn, map[string]any{"default_roles": []string{"privacy"}})
+	adm.must(204, "PUT", "/v1/sso/"+conn, map[string]any{"default_roles": []string{"viewer"}, "group_roles": map[string]any{"ops": []string{"operator"}}})
+}
+
+// TestSSOSetupIsOwners: a provider and its domains decide who can sign in
+// as an existing member, owners included, so only an owner adds a
+// connection, adds a domain or verifies one. Otherwise an administrator
+// could point a provider they run at the owners' domain and sign in as
+// an owner (finding F39).
+func TestSSOSetupIsOwners(t *testing.T) {
+	w := ssoWorld(t)
+	idp := oidctest.New()
+	defer idp.Close()
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	owner.must(201, "POST", "/v1/members", map[string]any{"email": "adm@acme.test", "password": "correct horse battery", "roles": []string{"admin"}})
+	adm := w.login(t, "adm@acme.test", "correct horse battery")
+	cfg := map[string]any{"issuer": idp.URL, "client_id": idp.ClientID, "client_secret": idp.ClientSecret}
+
+	adm.must(403, "POST", "/v1/sso", map[string]any{"protocol": "oidc", "name": "mine", "oidc": cfg, "default_roles": []string{"viewer"}})
+	id := owner.must(201, "POST", "/v1/sso", map[string]any{"protocol": "oidc", "name": "Okta", "oidc": cfg, "default_roles": []string{"viewer"}})["id"].(string)
+	adm.must(403, "POST", "/v1/sso/"+id+"/domains", map[string]any{"domain": "acme.test"})
+	dom := owner.must(201, "POST", "/v1/sso/"+id+"/domains", map[string]any{"domain": "acme.test"})
+	w.txt["_taskiem-verify.acme.test"] = []string{dom["txt_value"].(string)}
+	adm.must(403, "POST", "/v1/sso/domains/acme.test/verify", nil)
+	owner.must(204, "POST", "/v1/sso/domains/acme.test/verify", nil)
+	// An owner's key acts with no roles of its own: setup stays a person's.
+	key := keyFor(t, owner, "", "member.manage", "workflow.read", "run.read", "table.read", "invoice.read", "school.read")
+	key.must(403, "POST", "/v1/sso", map[string]any{"protocol": "oidc", "name": "k", "oidc": cfg, "default_roles": []string{"viewer"}})
+	// The administrator still sees connections and changes their roles.
+	adm.must(200, "GET", "/v1/sso", nil)
+	adm.must(204, "PUT", "/v1/sso/"+id, map[string]any{"default_roles": []string{"viewer"}})
 }
 
 func TestSSODomainClaims(t *testing.T) {
