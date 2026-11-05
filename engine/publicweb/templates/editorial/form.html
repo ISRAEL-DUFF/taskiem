@@ -1,6 +1,6 @@
 {{template "fhead" .}}{{if .Items}}<script src="{{asset "order.js"}}" defer></script>
 {{end}}{{template "fbody" .}}
-{{template "kicker" (or (and .Items "Your order") "Get in touch")}}
+{{if not .Step}}{{template "kicker" (or (and .Items "Your order") "Get in touch")}}{{end}}
 <h1>{{if eq .Step "bag"}}{{.Brand.Words.Your}}{{else if eq .Step "details"}}Checkout{{else}}{{.Label}}{{end}}</h1>
 {{with .Error}}<p class="form-error" role="alert">{{.}}</p>{{end}}
 {{if eq .Step "bag"}}{{template "bagstep" .}}{{else}}<form method="post" action="{{.Action}}" class="form{{if eq .Step "details"}} co{{end}}"{{if .Items}} data-order{{with .DepositPercent}} data-deposit-pct="{{.}}"{{end}}{{end}}>

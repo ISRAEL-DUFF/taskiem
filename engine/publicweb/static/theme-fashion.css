@@ -119,3 +119,4 @@ button.fx-under { background: none; border: 0; border-bottom: 1.5px solid var(--
 .bag-count { margin: 0; color: var(--muted); }
 .bag-box .total { margin: .5rem 0; }
 .bag-box { border-radius: 0; }
+.fx-top .sf-top-r { justify-self: end; }

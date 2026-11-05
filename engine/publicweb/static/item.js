@@ -25,7 +25,7 @@
     var k = parseInt(btn.getAttribute("data-price"), 10) || 0, q = parseInt(qty && qty.value, 10) || 1;
     var on = form.querySelectorAll("input[data-add]:checked");
     for (var j = 0; j < on.length; j++) k += parseInt(on[j].getAttribute("data-add"), 10) || 0;
-    out.textContent = " · " + naira(k * Math.max(1, q));
+    out.textContent = "· " + naira(k * Math.max(1, q));
   }
   form.addEventListener("input", sum);
   form.addEventListener("change", sum);

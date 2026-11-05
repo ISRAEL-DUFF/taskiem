@@ -105,6 +105,7 @@
 .pdp-opt-other .pdp-choice:has(input:focus-visible) { outline: 3px solid var(--brand, currentColor); outline-offset: 3px; }
 .pdp-qty label { font-size: .875rem; letter-spacing: .04em; text-transform: uppercase; }
 .pdp-cta { display: flex; flex-direction: column; gap: .75rem; }
+.pdp-run { margin-left: .4em }
 .pdp-go { min-height: 56px; border-radius: 999px; font-size: 1.05rem; }
 .pdp-thumbs { list-style: none; padding: 0; grid-template-columns: repeat(auto-fill, minmax(4.5rem, 1fr)); }
 .pdp-thumb { display: block; border-radius: var(--r, 8px); }
@@ -141,7 +142,7 @@
 }
 [data-pay-now][hidden], [data-pay-later][hidden] { display: none; }
 
-/* The bag in a shop look's header: hidden until there is one. */
+/* The bag in a shop header, hidden until there is one. */
 .sf-top-r { display: inline-flex; align-items: center; gap: .5rem; }
 .sf-pill { display: inline-flex; align-items: center; gap: .5rem; min-height: 44px; padding: 0 1rem; border-radius: 999px; background: var(--fg, #14110f); color: var(--bg, #fff); font-weight: 700; text-decoration: none; }
 .sf-pill[hidden] { display: none; }

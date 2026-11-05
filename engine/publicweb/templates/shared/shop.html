@@ -36,7 +36,7 @@ the form's own fields. */}}
       {{end}}</fieldset>
       {{end}}<div class="pdp-qty"><label for="pdp-qty">Quantity</label>
       <span class="pdp-q"><input id="pdp-qty" class="qty" type="number" name="q.{{.It.ID}}" value="1" min="1" max="{{.Max}}" step="1" inputmode="numeric" data-stepper="{{.It.Name}}"></span></div>
-      <div class="pdp-cta"><button class="btn btn-primary btn-brand btn-block pdp-go" type="submit" data-price="{{.It.PriceKobo}}">{{$w.Add}}{{with .It.Price}}<span data-run-total> · {{.}}</span>{{end}}</button>
+      <div class="pdp-cta"><button class="btn btn-primary btn-brand btn-block pdp-go" type="submit" data-price="{{.It.PriceKobo}}">{{$w.Add}}{{with .It.Price}}<span class="pdp-run" data-run-total>· {{.}}</span>{{end}}</button>
       {{if or .It.ReadyIn .DepositNote}}<p class="pdp-meta">{{if .It.ReadyIn}}Ready in about {{.It.ReadyIn}} minutes. {{end}}{{.DepositNote}}</p>{{end}}</div>
     </form>
     {{else if not .It.Available}}<p class="pdp-note">Unavailable for now.</p>

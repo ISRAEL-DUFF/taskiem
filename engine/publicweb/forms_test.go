@@ -1236,7 +1236,7 @@ func TestShopPagesAsDesigned(t *testing.T) {
 		t.Error("a service is booked, not added to a bag")
 	}
 	pics := get(e.h, "GET", sfHost, "/studio/i/2").Body.String()
-	for _, want := range []string{`data-pic="/l0.jpg" aria-current="true"`, `alt="Photo 1 of 2"`, `data-pic="/l1.jpg"`, `alt="Photo 2 of 2"`, "Add to booking", `<span data-run-total> · ₦8,000</span>`, "Pay a 50% deposit now.",
+	for _, want := range []string{`data-pic="/l0.jpg" aria-current="true"`, `alt="Photo 1 of 2"`, `data-pic="/l1.jpg"`, `alt="Photo 2 of 2"`, "Add to booking", `data-run-total>· ₦8,000</span>`, "Pay a 50% deposit now.",
 		`class="sf-pill" href="/studio/a/order?step=bag" data-bag-link`, "/_static/item."} {
 		if !strings.Contains(pics, want) {
 			t.Errorf("the item's page is missing %q", want)
