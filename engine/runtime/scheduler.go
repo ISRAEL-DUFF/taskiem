@@ -17,8 +17,8 @@ import (
 
 // Scheduler fires timers, recovers expired leases, and sweeps runs left
 // with undecided events. Running several is safe: every claim uses SKIP
-// LOCKED and every firing is guarded by fired_at, so leader election (spec
-// 2.3) only saves duplicate work.
+// LOCKED and every firing is guarded by fired_at, so there is no leader
+// election (spec 2.3).
 type Scheduler struct {
 	Store    *Store
 	ID       string
