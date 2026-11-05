@@ -63,7 +63,7 @@ An alert channel of kind `telegram` names members by email; each alert goes to t
 | Concern | Control |
 | --- | --- |
 | Forged updates | `X-Telegram-Bot-Api-Secret-Token` is compared in constant time with `TASKIEM_TELEGRAM_WEBHOOK_SECRET` before the body is read; anything else gets 401 |
-| Retried updates | Each `update_id` is claimed in the database before it is acted on |
+| Retried updates | Each `update_id` is claimed in the database before it is acted on, and a claimed update is then handled to the end (up to 30 seconds) even if Telegram stops waiting for the answer, since its resend is dropped as a duplicate |
 | Who is speaking | A message speaks for the person whose binding holds the sender's Telegram user id, in the organisation the account is working in, with that person's roles there at that moment. Only one-to-one chats with the bot are answered: in a group, anyone present would read the replies |
 | Linking someone else's account | The link is made by the signed-in person after proving it is them, carries 24 random bytes, is stored only as its SHA-256, works once for 10 minutes, and binds the account that opens it. An account belongs to one person |
 | Buttons | Telegram's button data holds 64 bytes, so a button carries `c:<22 random characters>`; the decision token it stands for is kept in `telegram_callbacks`, usable only from the account it was sent to, for 8 days. The token itself is the WhatsApp one: signed, single use, bound to the approver, and checked against its row |
