@@ -267,7 +267,7 @@ func (s *Server) waModelIntent(ctx context.Context, c *chat, text string) lang.M
 	case res.Intent == lang.IntentNone:
 		outcome = "unknown"
 	}
-	s.recordIntent(ctx, c, text, resp, outcome, errText)
+	s.recordIntent(ctx, c, resp, outcome, errText)
 	if err != nil {
 		if !errors.Is(err, intent.ErrUnusable) {
 			s.Logger.Warn("whatsapp: routing a message through the model", "err", err)
@@ -277,8 +277,8 @@ func (s *Server) waModelIntent(ctx context.Context, c *chat, text string) lang.M
 	return lang.Match{Intent: res.Intent, Arg: res.Arg, Language: c.lang.Tag}
 }
 
-func (s *Server) recordIntent(ctx context.Context, c *chat, text string, resp *ai.Response, outcome, errText string) {
-	s.recordModelCall(ctx, c, "intent", "intent", s.Languages.Model, text, resp, outcome, errText)
+func (s *Server) recordIntent(ctx context.Context, c *chat, resp *ai.Response, outcome, errText string) {
+	s.recordModelCall(ctx, c, "intent", "intent", s.Languages.Model, resp, outcome, errText)
 }
 
 // --- settings API ---
