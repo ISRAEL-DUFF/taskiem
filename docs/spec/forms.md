@@ -223,7 +223,7 @@ The same form can be filled in from WhatsApp (as a Flow) or Telegram (one questi
 
 ### 7.3 Abuse
 
-- **Rate limits:** per form and per IP hash (default 50 submissions an hour per IP for a public form, generous because mobile networks share IPs; see [storefronts 7.5](storefronts.md#75-abuse-of-forms)), and the organisation's ingest limits.
+- **Rate limits:** per form and per IP hash (default 50 submissions an hour per IP for a public form, generous because mobile networks share IPs; see [storefronts 7.5](storefronts.md#75-abuse-of-forms)), and the organisation's ingest limits. Per form, every address together: 500 submissions an hour after a burst of 100, per public host process; a form over it answers "This form is busy" and the public host logs a warning naming the tenant and form.
 - **Bots:** a hidden honeypot field, a minimum time to fill in, and a light proof-of-work in the page's script. A form under attack falls back to requiring the code (`verify`) for a while. No third-party captcha, which would be a new data processor.
 - **Size:** a submission is at most 256 KB without files.
 - **Plan limits:** submissions count as runs. Beyond the plan, the form shows its closed message and the organisation is alerted.

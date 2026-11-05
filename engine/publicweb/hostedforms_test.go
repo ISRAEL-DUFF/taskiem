@@ -813,3 +813,36 @@ func TestFormHostTLSAsk(t *testing.T) {
 		}
 	}
 }
+
+// One form takes only so many submissions an hour from every address
+// together (forms 7.3, storefronts 7.5); other forms are not held back
+// (F68).
+func TestHostedFormPerFormLimit(t *testing.T) {
+	e := newFormHost(t)
+	schema := `{"type":"object","properties":{"x":{"type":"string"}}}`
+	e.add("busy00000001", `{"title":"B"}`, schema)
+	e.add("calm00000001", `{"title":"C"}`, schema)
+	send := func(id string) *httptest.ResponseRecorder {
+		b := must(t, e.get("/f/"+id), 200)
+		e.tick(5 * time.Second)
+		return e.next("/f/"+id, b, url.Values{"do": {"send"}, "a.x": {"y"}})
+	}
+	sent := 0
+	for range 300 {
+		w := send("busy00000001")
+		if w.Code == http.StatusTooManyRequests {
+			if !strings.Contains(w.Body.String(), "This form is busy") {
+				t.Fatalf("429 says %s", w.Body.String())
+			}
+			break
+		}
+		if w.Code != 200 {
+			t.Fatalf("submission %d: %d", sent, w.Code)
+		}
+		sent++
+	}
+	if sent >= 300 {
+		t.Fatal("one form took 300 submissions at once")
+	}
+	must(t, send("calm00000001"), 200, "Thank you")
+}

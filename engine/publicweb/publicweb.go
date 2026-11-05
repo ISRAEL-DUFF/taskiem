@@ -175,6 +175,9 @@ type Server struct {
 	// FormSubmissions limits form submissions and code requests per
 	// client address; nil uses FormSubmissionsPerIP (50 an hour).
 	FormSubmissions *formguard.Limiter
+	// FormPerForm limits one form's submissions from every address
+	// together; nil uses FormSubmissionsPerForm (500 an hour).
+	FormPerForm *formguard.Limiter
 	// Invoices reads the invoices businesses send their customers, for
 	// their pages on the form host, /i/{token} (invoice.go); nil: none.
 	Invoices Invoices
@@ -248,6 +251,10 @@ func (s *Server) Handler() http.Handler {
 	if s.FormSubmissions == nil {
 		b := FormSubmissionsPerIP
 		s.FormSubmissions = formguard.NewLimiter(b.Rate, b.Burst, SubmissionLimiterSize, 2*time.Hour)
+	}
+	if s.FormPerForm == nil {
+		b := FormSubmissionsPerForm
+		s.FormPerForm = formguard.NewLimiter(b.Rate, b.Burst, formLimiterSize, 2*time.Hour)
 	}
 	s.FormHost = strings.ToLower(strings.TrimSuffix(s.FormHost, "."))
 	if s.fguard == nil && s.FormKeys != nil {

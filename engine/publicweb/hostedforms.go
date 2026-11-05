@@ -56,6 +56,14 @@ import (
 // hour, generous because mobile networks share addresses.
 var FormSubmissionsPerIP = formguard.Bucket{Rate: rate.Every(time.Hour / 50), Burst: 20}
 
+// FormSubmissionsPerForm caps one form's submissions from every address
+// together (forms 7.3, storefronts 7.5: per page per hour): 500 an hour
+// after a burst of 100, per public host process.
+var FormSubmissionsPerForm = formguard.Bucket{Rate: rate.Every(time.Hour / 500), Burst: 100}
+
+// formLimiterSize bounds the forms tracked by the per-form limit.
+const formLimiterSize = 20000
+
 // maxCarried is what files on earlier pages may hold together: they are
 // carried, sealed, in the page through the later ones.
 const maxCarried = 10 << 20
@@ -1179,6 +1187,14 @@ func (s *Server) formSubmit(w http.ResponseWriter, r *http.Request, hf *hform, s
 	if !s.formLimiter().Allow(s.ipKey(r)) {
 		w.Header().Set("Retry-After", "60")
 		s.showHosted(w, r, http.StatusTooManyRequests, hf, st, token, "Too many forms have been sent from this connection. Please wait a few minutes and send again.", "")
+		return
+	}
+	// Addresses are many (carrier-grade NAT, or someone renting them), so
+	// a form also has a ceiling of its own across all of them (F68).
+	if hf.pub.Endpoint != uuid.Nil && !s.FormPerForm.Allow(hf.pub.Endpoint.String()) {
+		s.Logger.Warn("form host: a form's hourly submission limit tripped", "tenant", hf.pub.Tenant, "endpoint", hf.pub.Endpoint)
+		w.Header().Set("Retry-After", "300")
+		s.showHosted(w, r, http.StatusTooManyRequests, hf, st, token, "This form is busy. Please wait a few minutes and send again.", "")
 		return
 	}
 	answers := hf.shownAnswers(st, -1)
