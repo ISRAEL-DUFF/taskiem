@@ -147,6 +147,11 @@ func (s *Server) putWhatsAppNumber(w http.ResponseWriter, r *http.Request) {
 	case req.PhoneNumberID == s.WhatsApp.Config.PhoneNumberID:
 		s.fail(w, r, fmt.Errorf("%w: that is the shared number", errConflict))
 		return
+	case s.WhatsApp.WABA != "" && req.WABAID == s.WhatsApp.WABA:
+		// Template statuses are kept per account: the shared number's
+		// account is the platform's (F36).
+		s.fail(w, r, fmt.Errorf("%w: that is the shared number's WhatsApp Business Account", errConflict))
+		return
 	}
 	// One number, one organisation.
 	var owner uuid.UUID

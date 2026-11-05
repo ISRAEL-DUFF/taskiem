@@ -1356,6 +1356,12 @@ whatsapp_pins.locked_until
 whatsapp_pins.pin_hash
 whatsapp_pins.set_at
 whatsapp_pins.user_id
+whatsapp_templates.language
+whatsapp_templates.meta_id
+whatsapp_templates.name
+whatsapp_templates.submitted_at
+whatsapp_templates.tenant_id
+whatsapp_templates.waba_id
 worker_pool_changes.changed_at
 worker_pool_changes.changed_by
 worker_pool_changes.id

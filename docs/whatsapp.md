@@ -215,7 +215,7 @@ Variables are filled with one-line text (Meta refuses new lines in them): the re
 
 ### The template registry
 
-Each WhatsApp Business Account Taskiem sends from, the platform number's (`TASKIEM_WHATSAPP_WABA_ID`) and each own number's (the account id given when it was connected), has a registry of what Meta knows of each template (`whatsapp_templates`, migration 00224): its status, Meta's id for it, the reason for a rejection or pause, when Taskiem submitted it and when the status was last checked. Statuses:
+Each WhatsApp Business Account Taskiem sends from, the platform number's (`TASKIEM_WHATSAPP_WABA_ID`) and each own number's (the account id given when it was connected), has a registry of what Meta knows of each template (`whatsapp_templates`, migration 00224): its status, Meta's id for it, the reason for a rejection or pause, when Taskiem submitted it and when the status was last checked. The platform account's registry is the platform's: every organisation reads it, none writes it (row-level security; the platform records into it only outside any tenant's scope, migration 00353), and an own number cannot be connected with the platform's account id. Statuses:
 
 | Status | Meaning |
 | --- | --- |

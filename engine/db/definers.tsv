@@ -308,6 +308,7 @@ taskiem_wa_otp_issue(uuid,text,text,interval,integer)	@ISRAEL-DUFF (messaging)	S
 taskiem_wa_otp_user_for(text,text)	@ISRAEL-DUFF (messaging)	The person a pending code from this number belongs to, when the code arrives as a WhatsApp reply (00035)
 taskiem_wa_otp_verify(uuid,text,integer)	@ISRAEL-DUFF (messaging)	Binds the number once its code is right, releasing the sign-in name made from a number it replaces (00035, 00389)
 taskiem_wa_own_numbers()	@ISRAEL-DUFF (messaging)	The active own numbers, for the hourly status poll (00224)
+taskiem_wa_platform_template_record(text,text,text,text,text,text,timestamp with time zone)	@ISRAEL-DUFF (messaging)	Records a template's status in the platform number's registry (rows with no tenant), only outside any tenant scope: tenants read those rows but no longer write them (00353)
 taskiem_wa_pin_remove(uuid)	@ISRAEL-DUFF (messaging)	Removes a person's PIN (00061)
 taskiem_wa_pin_result(uuid,boolean,integer,interval)	@ISRAEL-DUFF (messaging)	Records a check (00061)
 taskiem_wa_pin_set(uuid,text)	@ISRAEL-DUFF (messaging)	Sets (or replaces) a person's PIN (00061)

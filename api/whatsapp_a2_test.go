@@ -389,6 +389,11 @@ func TestWhatsAppOwnNumbers(t *testing.T) {
 		t.Error("the Flows key was not uploaded")
 	}
 	gamma.must(409, "PUT", "/v1/whatsapp/number", map[string]any{"phone_number_id": pnA, "waba_id": "300000000000009", "access_token": tokA, "app_secret": secA, "verify_token": vtA})
+	// The shared number's account is the platform's: its template registry
+	// is not an own number's to write (F36).
+	w.wa.WABA = "300000000000777"
+	beta.must(409, "PUT", "/v1/whatsapp/number", map[string]any{"phone_number_id": pnB, "waba_id": "300000000000777", "access_token": tokB, "own_app": false})
+	w.wa.WABA = ""
 	// Beta's number is on Taskiem's app (as after embedded signup).
 	beta.must(200, "PUT", "/v1/whatsapp/number", map[string]any{"phone_number_id": pnB, "waba_id": "300000000000002", "access_token": tokB, "own_app": false})
 	var raw string
