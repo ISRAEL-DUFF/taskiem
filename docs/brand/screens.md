@@ -184,6 +184,7 @@ A list of things is rows, not a table. Every row has an icon (or a letter) on a 
 
 ### Forms and switches
 
+- Fields have no outline: a soft filled shape (`--field`), a deeper tint and the ring on focus, a red tint when wrong. Never put a border back on a text field. Motion is short (120–220 ms) and only under `prefers-reduced-motion: no-preference`.
 - `<Field label="…" hint="…">` around every input. Every input has a visible label.
 - Several on/off choices in a row: `<label className="switch-line"><input type="checkbox" aria-label="…" /> <span>By email</span></label>`.
 - Choices that only a developer needs go under **Advanced** (`useAdvanced()`), or in a `<details>`.
