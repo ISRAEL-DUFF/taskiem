@@ -783,6 +783,7 @@ export function Account() {
       <Invitations />
       <AddEmail />
       <ChangePassword />
+      <ChatSignIn />
       <Passkeys />
       <WhatsApp />
       <Telegram />
@@ -906,6 +907,39 @@ export function Account() {
 }
 
 /** Light, dark, or the device's setting; kept in this browser (theme.ts). */
+/** Signing in on the web with a code or link sent to the person's WhatsApp
+ * or Telegram (docs/spec/chat-sign-in.md): on by default; off, no code is
+ * sent and links from chat are refused. */
+function ChatSignIn() {
+  const { me, refresh } = useAuth();
+  const act = useAction();
+  const on = me?.user?.chat_signin;
+  if (on === undefined) return null;
+  return (
+    <section className="card">
+      <h2 style={{ marginTop: 0 }}>Sign in with WhatsApp or Telegram</h2>
+      <p className="hint">
+        {on
+          ? "You can sign in here with a code sent to your WhatsApp or Telegram, or by sending sign in to Taskiem in your chat. Each time, your chat is told."
+          : "Off: no code is sent to your chat, and sign-in links from your chat do not work."}
+      </p>
+      <ErrorBox error={act.error} />
+      <button
+        type="button"
+        disabled={act.busy}
+        onClick={() =>
+          void act.run(async () => {
+            await put("/v1/me/chat-signin", { on: !on });
+            await refresh();
+          }, false)
+        }
+      >
+        {on ? "Turn off" : "Turn on"}
+      </button>
+    </section>
+  );
+}
+
 function Appearance() {
   const [theme, set] = useState<Theme>(savedTheme);
   const choices: [Theme, string][] = [

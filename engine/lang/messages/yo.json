@@ -1688,6 +1688,10 @@
       "text": "• *build* àti ohun tí ẹ fẹ́ kó máa ṣe fúnra rẹ̀, fún àpẹẹrẹ *build every Friday text my customers who owe me* (a ó fi pamọ́ bí àkọsílẹ̀ lẹ́yìn tí ẹ bá fìdí rẹ̀ múlẹ̀)",
       "reviewed": false
     },
+    "wa.help.signin": {
+      "text": "• *sign in* fun ọna asopọ si ohun elo wẹẹbu; *password* lati wọle pẹlu imeeli; *sign out everywhere*",
+      "reviewed": false
+    },
     "wa.help.cancel": {
       "text": "• *cancel*: láti pa ohun tó ń lọ lọ́wọ́ tì",
       "reviewed": false
@@ -3289,7 +3293,15 @@
       "reviewed": false
     },
     "wa.signin.link": {
-      "text": "Ẹ ṣí ìjápọ̀ yìí láti yan ọ̀rọ̀ aṣínà yín kí ẹ sì wọlé sí Taskiem lórí wẹ́ẹ̀bù. Ó ń ṣiṣẹ́ lẹ́ẹ̀kan, fún wákàtí kan; ẹ má fi han ẹnikẹ́ni:\n{link}",
+      "text": "Ṣii ọna asopọ yii lati yan ọrọ igbaniwọle rẹ. O ṣiṣẹ lẹẹkan, fun wakati kan; pa a mọ fun ara rẹ:\n{link}\nLẹhinna wọle lori wẹẹbu pẹlu imeeli rẹ (eyi ti o wa ni *{domain}*) ati ọrọ igbaniwọle naa.",
+      "reviewed": false
+    },
+    "wa.signin.chat_link": {
+      "text": "Ṣii ọna asopọ yii lati wọle si Taskiem lori wẹẹbu. O ṣiṣẹ lẹẹkan, fun iṣẹju 10; pa a mọ fun ara rẹ:\n{link}",
+      "reviewed": false
+    },
+    "door.signin_email": {
+      "text": "Lati wọle pẹlu ọrọ igbaniwọle o nilo imeeli ni akọkọ: fi *email you@example.com* ranṣẹ ki o ṣii ọna asopọ ti a fi ranṣẹ si imeeli rẹ. Lẹhinna fi *password* ranṣẹ lẹẹkansi.\nTabi fi *sign in* ranṣẹ fun ọna asopọ ti yoo wọle fun ọ lẹsẹkẹsẹ.",
       "reviewed": false
     },
     "wa.signin.sso": {
@@ -3298,6 +3310,30 @@
     },
     "wa.signin.unavailable": {
       "text": "A kò tíì ṣètò wíwọlé lórí wẹ́ẹ̀bù fún Taskiem yìí.",
+      "reviewed": false
+    },
+    "wa.signin.off": {
+      "text": "Wiwọle pẹlu WhatsApp tabi Telegram ti wa ni pipa fun ọ (Account lori wẹẹbu). Fi *password* ranṣẹ lati wọle pẹlu imeeli ati ọrọ igbaniwọle dipo.",
+      "reviewed": false
+    },
+    "wa.signin.passkey": {
+      "text": "Awọn alakoso wọle si Taskiem pẹlu passkey wọn: {link}",
+      "reviewed": false
+    },
+    "chat.signin.code": {
+      "text": "{code} ni koodu iwọle Taskiem rẹ. Yoo pari ni iṣẹju 10. Maṣe pin in; ti o ko ba beere fun un, foju ifiranṣẹ yii.",
+      "reviewed": false
+    },
+    "chat.signin.told": {
+      "text": "O wọle si Taskiem lori wẹẹbu pẹlu iwiregbe rẹ ({device}). Kii ṣe iwọ? Fi *sign out everywhere* ranṣẹ.",
+      "reviewed": false
+    },
+    "chat.signout.done": {
+      "text": "O ti jade kuro ni wẹẹbu nibi gbogbo: igba {count} ti pari. Iwiregbe rẹ n tẹsiwaju bi tẹlẹ.",
+      "reviewed": false
+    },
+    "chat.signout.none": {
+      "text": "O ko wọle lori wẹẹbu nibikibi.",
       "reviewed": false
     },
     "wa.status.denied": {

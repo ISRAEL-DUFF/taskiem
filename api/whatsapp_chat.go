@@ -862,7 +862,12 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		// A way into the web app for someone with no password (N6).
 		switch cmd {
 		case "sign in", "signin", "log in", "login", "web link", "sign in link", "web app":
+			// A link that opens the web app signed in (chat_signin.go).
 			return s.waSignInLink(ctx, c)
+		case "password", "set password", "set a password", "choose password", "choose a password", "change password", "new password":
+			return s.waPasswordLink(ctx, c)
+		case "sign out everywhere", "log out everywhere", "sign out all", "sign out of the web":
+			return s.waSignOutEverywhere(ctx, c)
 		case "pin", "chat pin", "set pin", "set my pin", "change pin":
 			// The chat PIN, set from the chat by a person with no other
 			// credential (chat_dormant.go).
@@ -1105,6 +1110,9 @@ func (s *Server) waHelp(c *chat) string {
 	}
 	if s.voiceOn(c.lang.Channel) {
 		lines = append(lines, c.t("wa.help.voice"))
+	}
+	if s.PublicURL != "" {
+		lines = append(lines, c.t("wa.help.signin"))
 	}
 	lines = append(lines, c.t("wa.help.cancel"))
 	return strings.Join(lines, "\n")

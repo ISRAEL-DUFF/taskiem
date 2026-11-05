@@ -188,7 +188,7 @@ WhatsApp only delivers free-form messages within 24 hours of the person's last m
 
 | Name | Category | Body | Buttons | Sent when |
 | --- | --- | --- | --- | --- |
-| `taskiem_otp` | Authentication | `{{1}} is your verification code. For your security, do not share this code. This code expires in 10 minutes.` (Meta's authentication format, with its security recommendation and expiry options) | Copy code | Binding a number |
+| `taskiem_otp` | Authentication | `{{1}} is your verification code. For your security, do not share this code. This code expires in 10 minutes.` (Meta's authentication format, with its security recommendation and expiry options) | Copy code | Binding a number; signing in on the web with WhatsApp ([chat sign-in](spec/chat-sign-in.md)) |
 | `taskiem_approval_request` | Utility | `[{{1}}] Approval needed: {{2}}. {{3}} Environment: {{4}}. Tap Approve or Reject, or decide in Taskiem.` | Quick replies **Approve**, **Reject** (the payloads are decision tokens) | An approval is waiting for an approver whose window is closed |
 | `taskiem_stepup_link` | Utility | `[{{1}}] This decision on {{2}} needs your passkey or authenticator code. Confirm it in Taskiem within 10 minutes: {{3}}` | — | Step-up (normally inside the window, since the person just tapped a button) |
 | `taskiem_run_failed` | Utility | `[{{1}}] {{2}} failed in {{3}}. Details: {{4}}` | — | Alert rule `run_failed`; a run started from chat failed |

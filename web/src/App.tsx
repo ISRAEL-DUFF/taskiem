@@ -38,6 +38,7 @@ import {
 } from "./ui";
 import { Reports } from "./pages/Reports";
 import { ForgotPassword, ResetPassword } from "./pages/Password";
+import { SignInLink } from "./pages/SignInLink";
 import { AcceptInvitation } from "./pages/AcceptInvitation";
 import { Handoff } from "./pages/Handoff";
 import { Templates } from "./pages/Templates";
@@ -252,6 +253,8 @@ function Shell() {
   // Password recovery works signed in or out.
   if (loc.pathname === "/forgot-password") return alone(<ForgotPassword />);
   if (loc.pathname === "/reset-password") return alone(<ResetPassword />);
+  // A link "sign in" sends in chat: signs in after its button.
+  if (loc.pathname === "/signin") return alone(<SignInLink />);
   // An emailed invitation link, for someone with no account yet.
   if (loc.pathname === "/accept-invitation") return alone(<AcceptInvitation />);
   // A connect link sent from chat: no sign-in, the link is the authority.

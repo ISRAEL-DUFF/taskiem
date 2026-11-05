@@ -273,11 +273,13 @@ export interface Me {
     name: string;
     email_verified?: boolean;
     email_placeholder?: boolean;
+    /** Whether the person may sign in with a code or link sent to their chat. */
+    chat_signin?: boolean;
   };
   /** Whether the member has an authenticator app enrolled for step-up. */
   totp?: boolean;
   /** How this session signed in. */
-  auth_method?: "password" | "passkey" | "sso";
+  auth_method?: "password" | "passkey" | "sso" | "chat";
   /** An administrator who must add a passkey before anything else. */
   enrol_passkey?: boolean;
   /** What the member proves themselves with to add or remove a passkey or

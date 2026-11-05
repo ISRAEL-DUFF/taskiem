@@ -1,6 +1,6 @@
 # Signing in on the web for owners who started in chat
 
-Status: **plan, agreed in outline with the founder, not built.** It builds on
+Status: **built** (§11 has where it differs from this plan). It builds on
 [chat-way-in.md](chat-way-in.md) §10.4 (decision 0058).
 
 ## 1. The problem
@@ -249,3 +249,64 @@ single sign-on.
 | B1 | Migration 00314; `/start`, `/verify`; the code on WhatsApp (template) and Telegram; limits; refusals; the notice and the audit | The same answer for a known and an unknown number, and no send for the unknown; a code signs in; the code for another number fails; five wrong lock it; expiry; an admin with a passkey and single sign-on refused; Telegram-only owner by placeholder; `auth_method = 'chat'` |
 | B2 | `sign in` sends the link; the link page; `/link`; `sign out everywhere`; `password` takes Part A | The link signs in once; a second use, an expired one and a fetched-but-not-posted one; refusals; sign out everywhere revokes; e2e: from chat to the web app signed in |
 | C | The Login page's second way in; Account's switch (if §9.1 keeps it); docs | `web` unit tests; e2e `chat-signin.spec.ts`: number, then code, then the dashboard |
+
+## 11. As built
+
+The founder took the recommendations of §9:
+- everyone with a bound WhatsApp or Telegram may sign in with it, and each person may
+  turn it off on the Account page;
+- both the code and the link are built;
+- the notice goes to the chat and to the email on every chat sign-in.
+
+**Where it lives:**
+- migration 00314;
+- `api/chat_signin.go`;
+- `web/src/pages/Login.tsx` (`ChatSignIn`), `web/src/pages/SignInLink.tsx` and
+  `web/src/pages/Account.tsx` (`ChatSignIn`);
+- the tests in `api/chat_signin_test.go`.
+
+**Where it differs from the plan:**
+- **Telegram owners are found by a number Taskiem now keeps,** not by their
+  placeholder (§4.2). A Telegram sign-up's placeholder is made from the Telegram
+  account, not the number, and the number was kept only as a hash.
+  - The number a Telegram person shares at sign-up, proven by Telegram's own-contact
+    check, is now kept on their binding (`telegram_bindings.number`, unique;
+    `taskiem_chat_telegram_number`).
+  - People who linked Telegram before this, or from the web, have none. They sign in
+    from chat with `sign in`.
+- **The link's page does not greet the person by name** (§5). The role that runs the
+  definers may never read a person's name (`TestDispatchRoleCannotReadPayloads`). So
+  `POST /v1/auth/chat/link/peek` answers 204 or 404 and says nothing of whose the link
+  is, and the page says "Sign in to Taskiem" with its button.
+- **`password` names only the email's domain** (§3): "sign in on the web with your
+  email (the one at *salon.test*)". Every message chat sends has its addresses hidden
+  (`engine/pii`), so a whole or half-hidden address cannot be shown.
+- **One reply covers no email and an email waiting** (§3). `door.signin_email` says to
+  send `email …`, open the link, then `password` again; there is no separate
+  `door.signin_confirm`. It also offers `sign in`.
+- **Account > Password** still needs a password, a passkey or an authenticator code to
+  set one (§6), as before. Someone who has only ever signed in with their chat chooses
+  a password with `password` in chat.
+- **The notice names the browser and system** ("Chrome on Windows"), not a place
+  (§7). There is no address-to-place lookup.
+  - On WhatsApp, outside the 24-hour window, it goes as `taskiem_alert`.
+  - With a confirmed email, it also goes there.
+- **Two audit actions:**
+  - `auth.chat_signin_code` for each code sent, in every business of the person;
+  - `auth.chat_signin` (channel, and `code` or `link`) beside the usual `auth.login`
+    with method `chat`.
+  - `auth.signout_everywhere` records the sessions ended, and
+    `auth.chat_signin_setting` the switch.
+- **Limits:**
+  - asking for codes: 10 an hour per address and 5 an hour per number, and the
+    database's 5 codes an hour per person;
+  - checking codes and links: the login limiter, per address and per number;
+  - links from chat: 3 every 10 minutes per person, and 3 an hour in the database.
+- **Administrators** follow the password's rules:
+  - one with a passkey is sent no code and is refused the link
+    (`wa.signin.passkey`);
+  - one without signs in only to enrol a passkey (`EnrolOnly` now holds for `chat` as
+    for `password`).
+- **Not built:** the end-to-end browser test `chat-sign-in.spec.ts` of §10. The page
+  `/signin` with a link that is not good is in the accessibility check, and the flows
+  are covered by the API tests.
