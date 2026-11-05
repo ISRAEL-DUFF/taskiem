@@ -167,6 +167,8 @@ type Alerter struct {
 	Rewrite func(string) string
 	// Now is the clock (tests).
 	Now func() time.Time
+	// TurnBudget, when set, replaces DeliverBudget (tests).
+	TurnBudget time.Duration
 }
 
 func (a *Alerter) now() time.Time {
@@ -685,9 +687,10 @@ type delivery struct {
 	attempts int
 }
 
-// Each tenant's turn sends at most DeliverBatch deliveries, and starts
-// none after DeliverBudget: a tenant whose endpoint is slow waits for the
-// next tick rather than holding the scheduler for minutes.
+// Each tenant's turn sends at most DeliverBatch deliveries and ends at
+// DeliverBudget, a send still waiting then included: a tenant whose
+// endpoint is slow waits for the next tick rather than holding its place
+// among the tenants (EachTenant) for minutes.
 const (
 	DeliverBatch  = 50
 	DeliverBudget = 30 * time.Second
@@ -698,12 +701,19 @@ const (
 // send (15 seconds at most), so two alerters never send the same one, and
 // a delivery waiting its turn is never held by a claim that could lapse.
 // The outcome is recorded only while the claim is still this alerter's
-// (its attempts count), and sent outside the database transaction.
+// (its attempts count), and sent outside the database transaction. A send
+// cut off at the end of the turn is recorded as failed and retried with
+// backoff (receivers dedupe on Taskiem-Alert-Id).
 func (a *Alerter) Deliver(ctx context.Context, tenant uuid.UUID) error {
-	start := time.Now()
+	budget := a.TurnBudget
+	if budget <= 0 {
+		budget = DeliverBudget
+	}
+	turn, cancel := context.WithTimeout(ctx, budget)
+	defer cancel()
 	for range DeliverBatch {
-		if time.Since(start) > DeliverBudget {
-			return nil
+		if turn.Err() != nil {
+			return nil // the turn is over; the rest wait for the next tick
 		}
 		var d delivery
 		err := db.InTenantTx(ctx, a.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
@@ -722,7 +732,12 @@ func (a *Alerter) Deliver(ctx context.Context, tenant uuid.UUID) error {
 		if err != nil {
 			return err
 		}
-		sendErr := a.send(ctx, tenant, d.alert, d.channel)
+		sendErr := a.send(turn, tenant, d.alert, d.channel)
+		if sendErr != nil && turn.Err() != nil && ctx.Err() == nil {
+			sendErr = fmt.Errorf("no answer within this turn's %s: %w", budget, sendErr)
+		}
+		// Recorded under ctx, not turn: the outcome of a send cut off at
+		// the end of the turn is kept too.
 		err = db.InTenantTx(ctx, a.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 			switch {
 			case sendErr == nil:

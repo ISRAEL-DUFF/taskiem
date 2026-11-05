@@ -123,3 +123,49 @@ func TestAlertDeliveryAcrossTenantsAndReplicas(t *testing.T) {
 		t.Errorf("%d alerts posted, want 31", len(hooks.posted))
 	}
 }
+
+// hangingHook answers a post only after a long pause, or not at all once
+// the request's context ends.
+type hangingHook struct{ pause time.Duration }
+
+func (h hangingHook) RoundTrip(r *http.Request) (*http.Response, error) {
+	select {
+	case <-time.After(h.pause):
+		return &http.Response{StatusCode: 200, Status: "200 OK", Body: io.NopCloser(strings.NewReader("")), Header: http.Header{}, Request: r}, nil
+	case <-r.Context().Done():
+		return nil, r.Context().Err()
+	}
+}
+
+// A tenant's turn ends at its budget even in the middle of a send to an
+// endpoint that does not answer, so it holds its place among the tenants
+// for no longer; the cut delivery is retried later, not left claimed.
+func TestAlertDeliveryTurnEndsAtItsBudget(t *testing.T) {
+	ctx := context.Background()
+	d := dbtest.New(t)
+	kms, err := secrets.NewLocalKMS(map[string][]byte{"root": bytes.Repeat([]byte{3}, 32)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := &secrets.Vault{Pool: d.App, KMS: kms, RootKey: "root"}
+	slow := d.SeedTenant(t, nil)
+	webhookAlerts(t, d, v, slow.ID, "tarpit.test", 3)
+	a := &Alerter{Pool: d.App, Secrets: v, Client: &http.Client{Transport: hangingHook{pause: 3 * time.Second}}, TurnBudget: 300 * time.Millisecond}
+
+	start := time.Now()
+	if err := a.Deliver(ctx, slow.ID); err != nil {
+		t.Fatal(err)
+	}
+	if took := time.Since(start); took > 1500*time.Millisecond {
+		t.Errorf("the turn took %s with a budget of 300ms", took)
+	}
+	var tried, retry int
+	if err := d.Admin.QueryRow(ctx, `SELECT count(*) FILTER (WHERE attempts > 0),
+		count(*) FILTER (WHERE attempts > 0 AND last_error IS NOT NULL AND next_attempt_at < now() + interval '5 minutes')
+		FROM alert_deliveries WHERE tenant_id = $1 AND status = 'pending'`, slow.ID).Scan(&tried, &retry); err != nil {
+		t.Fatal(err)
+	}
+	if tried != 1 || retry != 1 {
+		t.Errorf("%d deliveries tried, %d of them set to retry with backoff; want 1 and 1", tried, retry)
+	}
+}
