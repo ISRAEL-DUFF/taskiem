@@ -160,7 +160,7 @@ Emptying the answer later stops `taskiem-mail`. Published email triggers then re
 | --- | --- |
 | `install.sh` | The one-line installer |
 | `taskiem-vps` | Setup, update, rollback, backup, restore, checks (installed to `/usr/local/bin`) |
-| `docker-compose.yml`, `Caddyfile`, `public.caddy`, `openbao.hcl`, `openbao-taskiem-policy.hcl` | The stack, installed to `/opt/taskiem` and replaced on each upgrade with the release's own copy (`public.caddy` is used only with public pages on) |
+| `docker-compose.yml`, `Caddyfile`, `public.caddy`, `openbao.hcl`, `openbao-taskiem-policy.hcl` | The stack, installed to `/opt/taskiem` and replaced on each upgrade with the release's own copy (`public.caddy` is used only with public pages on). Its third-party images (Caddy, OpenBao, ClamAV), like the helpers `taskiem-vps` runs (psql, restic), are pinned by digest, so a setup or pull gets the image the release was reviewed with; `CLAMAV_IMAGE` and `OPENBAO_IMAGE` in `/opt/taskiem/.env` override them |
 | `systemd/` | The update, check and backup timers |
 
 The server's settings are in `/opt/taskiem/*.env` and `/etc/taskiem` (root only); its state (current and previous release, last backup) is in `/var/lib/taskiem-vps`.

@@ -21,9 +21,11 @@ REPO_SLUG=ISRAEL-DUFF/taskiem
 IMAGE_REPO=ghcr.io/israel-duff/taskiem
 SIGNER='^https://github\.com/ISRAEL-DUFF/taskiem/\.github/workflows/ci\.yml@refs/(heads/main|tags/v.+)$'
 ISSUER=https://token.actions.githubusercontent.com
-PSQL_IMAGE=postgres:16-alpine
-RESTIC_IMAGE=restic/restic:0.19.1
-OPENBAO_IMAGE=openbao/openbao:2.7.1
+# Third-party images, pinned by digest (the tag is kept for people), as the
+# Dockerfile pins its bases; docker-compose.yml pins the same OpenBao.
+PSQL_IMAGE=postgres:16.15-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab
+RESTIC_IMAGE=restic/restic:0.19.1@sha256:136600b6ff6843d61d355f7f71f460a166429f35de6fd11b568fece3c9a4d510
+OPENBAO_IMAGE=openbao/openbao:2.7.1@sha256:6d2b93856e3fcf7b18ad855a0b51eaba474dc8b79cf554379ea32034797d2acf
 
 # --- helpers -----------------------------------------------------------------
 
@@ -430,7 +432,7 @@ cmd_setup() {
   env_set "$KIT/.env" COMPOSE_PROFILES "$(IFS=,; echo "${profiles[*]}")"
   touch "$KIT/openbao.env" && chmod 600 "$KIT/openbao.env"
   env_set "$KIT/.env" TASKIEM_DOMAIN "$DOMAIN"
-  env_set "$KIT/.env" OPENBAO_VERSION "${OPENBAO_IMAGE#*:}"
+  env_set "$KIT/.env" OPENBAO_IMAGE "$OPENBAO_IMAGE"
   if [ -n "$BACKUP_REPO" ]; then
     env_set "$ETC/backup.env" RESTIC_REPOSITORY "$BACKUP_REPO"
     env_set "$ETC/backup.env" RESTIC_PASSWORD "$resticpw"
