@@ -609,6 +609,7 @@ money_entries.vendor
 money_entry_customers.customer_id
 money_entry_customers.entry_id
 money_entry_customers.tenant_id
+money_log_erasures.tenant_id
 money_lookbacks.account
 money_lookbacks.channel
 money_lookbacks.last_run_at
@@ -926,6 +927,7 @@ school_students.family_id
 school_students.id
 school_students.mirrored_at
 school_students.status
+school_students.subject_id
 school_students.tenant_id
 school_students.updated_at
 school_term_invoices.invoice_id

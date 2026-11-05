@@ -152,7 +152,7 @@ taskiem_money_leak_tenants()	@ISRAEL-DUFF (money)	Tenants with money, invoices, 
 taskiem_money_lookback_targets()	@ISRAEL-DUFF (money)	part of: Students' account numbers (decision 0046; docs/spec/schools.md 6, B4; docs/schools.md#account-numbers), and, for every business, the look-back of… (00213)
 taskiem_money_unconsidered_tenants()	@ISRAEL-DUFF (money)	Tenants with money-in entries the matcher has not looked at yet, and with payments to copy to money_matches (00202)
 taskiem_money_unmirrored_payment_tenants()	@ISRAEL-DUFF (money)	part of: Matching money to storefront orders (spec invoices-and-money-log 8.1 to 8.3; docs/matching.md, docs/storefronts.md#payments-and-matching) (00208)
-taskiem_money_unmirrored_tenants()	@ISRAEL-DUFF (money)	Tenants with entries still to copy to their kept table (00200)
+taskiem_money_unmirrored_tenants()	@ISRAEL-DUFF (money)	Tenants with entries still to copy to their kept table, or kept rows whose payer was erased (tenant ids only) (00382)
 taskiem_money_unreversed_tenants()	@ISRAEL-DUFF (money)	Across tenants, for the background work (names only, so the dispatch role's) (00213)
 taskiem_next_invoice_number(text,timestamp with time zone)	@ISRAEL-DUFF (engine)	part of: Invoices and payments (spec 16, decision 0017) (00092)
 taskiem_notifications_expire()	@ISRAEL-DUFF (messaging)	Notifications are kept 90 days (00194)

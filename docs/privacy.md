@@ -39,3 +39,4 @@ Subject ids are keyed by the organisation's pseudonymisation key, which is kept 
 What is not sealed goes with the key, in the same transaction:
 
 - **Form submissions** whose answers or respondent hold the subject are deleted, with their files; the api then removes the files from the organisation's storage ([forms](forms.md)).
+- **Kept tables** in the business's data tables: a student's rows in `school_students` and `school_term_fees` are copied again with the name `(erased)`, and a payer's entries in `money_log` get the payer `[erased]` ([kept tables](data-tables.md#kept-tables)).
