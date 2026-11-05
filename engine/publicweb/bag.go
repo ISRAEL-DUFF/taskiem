@@ -45,7 +45,7 @@ type bagField struct{ Name, Value string }
 // pricing each line as the item plus its choices, and totals it. The total
 // is only for showing: the order is priced again on the server.
 func (f *formData) fillBag() {
-	f.Bag, f.Subtotal, f.BagCount = nil, "", 0
+	f.Bag, f.Subtotal, f.BagCount, f.Deposit, f.Balance = nil, "", 0, "", ""
 	var total int64
 	for _, it := range f.Items {
 		if it.Qty <= 0 || !it.Orderable {
@@ -71,6 +71,10 @@ func (f *formData) fillBag() {
 	}
 	if len(f.Bag) > 0 {
 		f.Subtotal = storefront.FormatNaira(total)
+		if f.DepositPercent > 0 {
+			dep := storefront.ActionOptions{DepositPercent: f.DepositPercent}.Deposit(total)
+			f.Deposit, f.Balance = storefront.FormatNaira(dep), storefront.FormatNaira(total-dep)
+		}
 	}
 }
 

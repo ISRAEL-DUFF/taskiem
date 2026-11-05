@@ -107,9 +107,12 @@ type Item struct {
 	Photo       Image  `json:"photo,omitempty"`
 	// Gallery is the photos after the first, when the photo column holds
 	// several media ids separated by commas.
-	Gallery   []Image `json:"gallery,omitempty"`
-	Available bool    `json:"available"`
-	Category  string  `json:"category,omitempty"`
+	Gallery []Image `json:"gallery,omitempty"`
+	// PhotoIDs are the media ids of the photo and the gallery, in order,
+	// for the owner's screens to remove one.
+	PhotoIDs  []string `json:"photo_ids,omitempty"`
+	Available bool     `json:"available"`
+	Category  string   `json:"category,omitempty"`
 	// Stock is how many are left, when the catalogue tracks it.
 	Stock *int64 `json:"stock,omitempty"`
 	// A service's length, customers at once and time kept free after.
@@ -355,8 +358,8 @@ func MediaImage(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, id string) (Im
 }
 
 // mediaImage is a media record's URLs, refusing rejected or unknown ids.
-// maxGallery is the most photos after the first an item shows.
-const maxGallery = 5
+// MaxGallery is the most photos after the first an item has.
+const MaxGallery = 5
 
 func mediaImage(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, id string) (Image, error) {
 	mid, err := uuid.Parse(id)
@@ -458,10 +461,10 @@ func Items(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]a
 		}
 		if m.Photo != "" {
 			// One media id, or several separated by commas: the first is
-			// the photo, the rest its gallery (at most maxGallery).
+			// the photo, the rest its gallery (at most MaxGallery).
 			for _, id := range strings.Split(str(r[m.Photo]), ",") {
 				id = strings.TrimSpace(id)
-				if id == "" || len(it.Gallery) >= maxGallery {
+				if id == "" || len(it.Gallery) >= MaxGallery {
 					continue
 				}
 				img, err := mediaImage(ctx, tx, tenant, id)
@@ -471,6 +474,7 @@ func Items(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]a
 				if err != nil {
 					return nil, err
 				}
+				it.PhotoIDs = append(it.PhotoIDs, id)
 				if it.Photo == nil {
 					it.Photo = img
 				} else {

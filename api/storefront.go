@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -537,8 +538,133 @@ func (s *Server) putStorefrontImage(ctx context.Context, p *Principal, data []by
 	return m, err
 }
 
+// photoIDs are the media ids a photo column holds: one, or several
+// separated by commas (the first is the photo, the rest its gallery).
+func photoIDs(v any) []string {
+	var out []string
+	for _, p := range strings.Split(cell(v), ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// photosOf reads the media ids a row's photo column holds now.
+func (s *Server) photosOf(ctx context.Context, tenant uuid.UUID, t datatables.Table, key int64, col string) ([]string, error) {
+	rows, err := s.readAllRows(ctx, tenant, t, storefront.MaxItems+1)
+	if err != nil {
+		return nil, err
+	}
+	want := strconv.FormatInt(key, 10)
+	for _, m := range rows {
+		if cell(m["id"]) == want {
+			return photoIDs(m[col]), nil
+		}
+	}
+	return nil, pgx.ErrNoRows
+}
+
+// photoKept answers what a new photo is added to: the photos the row
+// has when the request says add=1 (an item's gallery grows), none when it
+// replaces the photo. It writes the refusal itself when the row is full
+// or cannot be read.
+func (s *Server) photoKept(w http.ResponseWriter, r *http.Request, tenant uuid.UUID, t datatables.Table, key int64, col string) ([]string, bool) {
+	if r.URL.Query().Get("add") != "1" {
+		return nil, true
+	}
+	have, err := s.photosOf(r.Context(), tenant, t, key, col)
+	if errors.Is(err, pgx.ErrNoRows) {
+		s.fail(w, r, err)
+		return nil, false
+	}
+	if err != nil {
+		s.failTables(w, r, err)
+		return nil, false
+	}
+	if len(have) > storefront.MaxGallery {
+		s.fail(w, r, fmt.Errorf("%w: an item has up to %d photos", errBadRequest, storefront.MaxGallery+1))
+		return nil, false
+	}
+	return have, true
+}
+
+// photoValue is the photo column's value once id is added to keep.
+func photoValue(keep []string, id string) string {
+	return strings.Join(append(slices.Clone(keep), id), ",")
+}
+
+// dropPhoto takes the photo ?media= out of a row's photo column (the next
+// becomes the photo when it was the first), and says whether it did.
+func (s *Server) dropPhoto(w http.ResponseWriter, r *http.Request, tenant uuid.UUID, t datatables.Table, key int64, col string) bool {
+	media := r.URL.Query().Get("media")
+	if _, err := uuid.Parse(media); err != nil {
+		s.fail(w, r, fmt.Errorf("%w: media is the id of one of the item's photos", errBadRequest))
+		return false
+	}
+	have, err := s.photosOf(r.Context(), tenant, t, key, col)
+	if errors.Is(err, pgx.ErrNoRows) {
+		s.fail(w, r, err)
+		return false
+	}
+	if err != nil {
+		s.failTables(w, r, err)
+		return false
+	}
+	left := slices.DeleteFunc(slices.Clone(have), func(x string) bool { return x == media })
+	if len(left) == len(have) {
+		writeErr(w, http.StatusNotFound, "that photo is not on this item")
+		return false
+	}
+	var value any
+	if len(left) > 0 {
+		value = strings.Join(left, ",")
+	}
+	tr, err := s.tableRowsFor(r.Context(), tenant, t, storefrontPurpose)
+	if err != nil {
+		s.failTables(w, r, err)
+		return false
+	}
+	if _, err := tr.call(r.Context(), s, "update_rows", map[string]any{"table": t.Name, "key": key,
+		"set": map[string]any{col: value}, "max_affected": 1}, "photo-drop:"+media+":"+strconv.FormatInt(key, 10)); err != nil {
+		s.failTables(w, r, err)
+		return false
+	}
+	return true
+}
+
+// removeStorefrontItemPhoto answers DELETE /v1/storefront/catalogue/rows/{row}/photo?media=<id>.
+func (s *Server) removeStorefrontItemPhoto(w http.ResponseWriter, r *http.Request) {
+	row, err := strconv.ParseInt(chi.URLParam(r, "row"), 10, 64)
+	if err != nil || row < 1 {
+		s.fail(w, r, pgx.ErrNoRows)
+		return
+	}
+	tenant := principalFrom(r.Context()).TenantID
+	var sf storefront.Storefront
+	var table datatables.Table
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		var err error
+		if sf, err = storefront.Get(r.Context(), tx, tenant); err != nil {
+			return storefrontErr(err)
+		}
+		if sf.CatalogueTable == nil || sf.CatalogueColumns.Photo == "" {
+			return fmt.Errorf("%w: the catalogue has no photo column", errBadRequest)
+		}
+		table, err = datatables.GetTable(r.Context(), tx, *sf.CatalogueTable)
+		return err
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if s.dropPhoto(w, r, tenant, table, row, sf.CatalogueColumns.Photo) {
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
 // setStorefrontItemPhoto stores an image and writes its id into the
 // catalogue row's photo column: the way an owner adds a product photo.
+// With ?add=1 the image joins the row's other photos (its gallery).
 func (s *Server) setStorefrontItemPhoto(w http.ResponseWriter, r *http.Request) {
 	row, err := strconv.ParseInt(chi.URLParam(r, "row"), 10, 64)
 	if err != nil || row < 1 {
@@ -562,6 +688,10 @@ func (s *Server) setStorefrontItemPhoto(w http.ResponseWriter, r *http.Request) 
 		s.fail(w, r, err)
 		return
 	}
+	keep, ok := s.photoKept(w, r, tenant, table, row, sf.CatalogueColumns.Photo)
+	if !ok {
+		return
+	}
 	m, err := s.storeStorefrontImage(r)
 	if err != nil {
 		s.failImage(w, r, err)
@@ -573,7 +703,7 @@ func (s *Server) setStorefrontItemPhoto(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	out, err := tr.call(r.Context(), s, "update_rows", map[string]any{"table": table.Name, "key": row,
-		"set": map[string]any{sf.CatalogueColumns.Photo: m.ID.String()}, "max_affected": 1}, "storefront-photo:"+m.ID.String()+":"+strconv.FormatInt(row, 10))
+		"set": map[string]any{sf.CatalogueColumns.Photo: photoValue(keep, m.ID.String())}, "max_affected": 1}, "storefront-photo:"+m.ID.String()+":"+strconv.FormatInt(row, 10))
 	if err != nil {
 		s.failTables(w, r, err)
 		return

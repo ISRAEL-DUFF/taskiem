@@ -38,9 +38,12 @@ the form's own fields. */}}
 
 {{/* The bag, as a step of its own: what is in it, to change or take out,
      then Continue. A GET form, so the bag goes on in the address. */}}
+{{define "bagsplit"}}{{if .Deposit}}<p class="bag-split"><span>Deposit today</span> <strong data-deposit>{{.Deposit}}</strong></p>
+<p class="bag-split bag-bal"><span>Balance when ready</span> <span data-balance>{{.Balance}}</span></p>{{end}}{{end}}
+
 {{define "bagmark"}}<span hidden data-bag-count="{{.BagCount}}" data-bag-total="{{.Subtotal}}" data-bag-href="{{.ChangeHref}}"></span>{{end}}
 
-{{define "bagstep"}}<form method="get" action="{{.Action}}" class="bag" data-order>
+{{define "bagstep"}}<form method="get" action="{{.Action}}" class="bag" data-order{{with .DepositPercent}} data-deposit-pct="{{.}}"{{end}}>
 {{template "bagmark" .}}
 <input type="hidden" name="step" value="details">
 <h2 class="bag-h">Your bag</h2>
@@ -57,6 +60,7 @@ the form's own fields. */}}
 <aside class="bag-box" aria-label="Summary"><h2 class="bag-box-h">Summary</h2>
 <p class="bag-count">{{.BagCount}} {{if eq .BagCount 1}}item{{else}}items{{end}}</p>
 <p class="total" data-total aria-live="polite">Total: {{.Subtotal}}</p>
+{{template "bagsplit" .}}
 <p class="bag-hint">Set a quantity to 0 to take it out.</p>
 <button class="btn btn-primary btn-brand btn-block" type="submit">Continue</button>
 {{with .MoreHref}}<p class="bag-more"><a href="{{.}}">Add more</a></p>{{end}}
@@ -76,6 +80,7 @@ the form's own fields. */}}
   {{end}}</div>
 {{end}}
 <p class="total" data-total aria-live="polite">Total: {{.Subtotal}}</p>
+{{template "bagsplit" .}}
 </section>{{end}}
 
 {{/* The parts of a storefront page every look shows the same way: what

@@ -2181,3 +2181,6 @@ fieldset.sf-choices label.row > input, label.row > input[type="checkbox"] { flex
 fieldset.sf-choices label.row > span, label.row > input[type="checkbox"] + span { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
 /* Reading back through a conversation or the list of them never pulls the app or the browser to refresh. */
 .chat-stream, .chat-list, .search-results { overscroll-behavior-y: contain; }
+.sf-gallery { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.sf-gallery-pic { display: inline-flex; align-items: center; gap: 6px; }
+.sf-gallery-pic img { border-radius: var(--radius-sm, 6px); object-fit: cover; }

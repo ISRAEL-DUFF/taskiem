@@ -298,18 +298,23 @@ func (s *Server) setFrontItemPhoto(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, fmt.Errorf("%w: this list has no photo column", errBadRequest))
 		return
 	}
+	tenant := principalFrom(r.Context()).TenantID
+	keep, ok := s.photoKept(w, r, tenant, t, key, lc.Columns.Photo)
+	if !ok {
+		return
+	}
 	m, err := s.storeStorefrontImage(r)
 	if err != nil {
 		s.failImage(w, r, err)
 		return
 	}
-	tr, err := s.tableRowsFor(r.Context(), principalFrom(r.Context()).TenantID, t, storefrontPurpose)
+	tr, err := s.tableRowsFor(r.Context(), tenant, t, storefrontPurpose)
 	if err != nil {
 		s.failTables(w, r, err)
 		return
 	}
 	out, err := tr.call(r.Context(), s, "update_rows", map[string]any{"table": t.Name, "key": key,
-		"set": map[string]any{lc.Columns.Photo: m.ID.String()}, "max_affected": 1}, "front-photo:"+m.ID.String()+":"+strconv.FormatInt(key, 10))
+		"set": map[string]any{lc.Columns.Photo: photoValue(keep, m.ID.String())}, "max_affected": 1}, "front-photo:"+m.ID.String()+":"+strconv.FormatInt(key, 10))
 	if err != nil {
 		s.failTables(w, r, err)
 		return
@@ -320,6 +325,28 @@ func (s *Server) setFrontItemPhoto(w http.ResponseWriter, r *http.Request) {
 	}
 	s.frontItemChanged(r, "storefront.item_photo", t, strconv.FormatInt(key, 10))
 	writeJSON(w, http.StatusOK, m)
+}
+
+// removeFrontItemPhoto answers DELETE /v1/storefront/fronts/{id}/items/{row}/photo?media=<id>.
+func (s *Server) removeFrontItemPhoto(w http.ResponseWriter, r *http.Request) {
+	key, ok := frontItemKey(r)
+	if !ok {
+		s.fail(w, r, pgx.ErrNoRows)
+		return
+	}
+	lc, t, err := s.frontListOf(r)
+	if err != nil {
+		s.fail(w, r, storefrontErr(err))
+		return
+	}
+	if lc.Columns.Photo == "" {
+		s.fail(w, r, fmt.Errorf("%w: this list has no photo column", errBadRequest))
+		return
+	}
+	if s.dropPhoto(w, r, principalFrom(r.Context()).TenantID, t, key, lc.Columns.Photo) {
+		s.frontItemChanged(r, "storefront.item_photo_remove", t, strconv.FormatInt(key, 10))
+		w.WriteHeader(http.StatusNoContent)
+	}
 }
 
 // frontItemChanged audits a change to a front's items and refreshes the

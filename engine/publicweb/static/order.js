@@ -28,6 +28,13 @@
     if (total > 0 && opt && opt.value && (!form.querySelector("input[name=fulfilment]") || (how && how.value === "delivery"))) {
       fee = parseInt(opt.getAttribute("data-fee"), 10) || 0;
     }
+    var pct = parseInt(form.getAttribute("data-deposit-pct"), 10) || 0;
+    var dep = form.querySelector("[data-deposit]"), bal = form.querySelector("[data-balance]");
+    if (pct > 0 && pct < 100 && dep && bal) {
+      var due = total + fee, part = Math.floor((due * pct + 99) / 100);
+      dep.textContent = naira(part);
+      bal.textContent = naira(due - part);
+    }
     out.textContent = total > 0 ? "Total: " + naira(total + fee) + (fee > 0 ? " with " + naira(fee) + " delivery" : "") : "";
   }
   function step(input, by, label) {

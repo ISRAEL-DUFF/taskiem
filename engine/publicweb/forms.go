@@ -123,6 +123,10 @@ type formData struct {
 	Bag      []bagLine
 	BagCount int
 	Subtotal string
+	// DepositPercent is the part of an order paid online when it takes a
+	// deposit; Deposit and Balance are that part of the bag and the rest.
+	DepositPercent   int
+	Deposit, Balance string
 	// MoreHref is where to add more to the bag, ChangeHref where the
 	// bag is changed from the details page.
 	MoreHref, ChangeHref string
@@ -342,6 +346,9 @@ func formView(p StorefrontPage, act storefront.PublicAction, site Site, embed bo
 	if act.Kind == "order" {
 		f.Pickup, f.Delivery, f.DeliveryNote = act.Pickup, act.Delivery, act.DeliveryNote
 		f.PayOnDelivery = act.Delivery && act.PayOnDelivery && act.Payment != "none"
+		if act.Payment != "none" && act.DepositPercent > 0 && act.DepositPercent < 100 {
+			f.DepositPercent = act.DepositPercent
+		}
 		if act.Delivery {
 			for _, z := range act.Zones {
 				fee := "free delivery"
@@ -441,6 +448,11 @@ func (s *Server) submitForm(w http.ResponseWriter, r *http.Request, site Site, p
 	sub.StatusKey = s.statusKey(idem)
 	if sub.Payment != "on_delivery" {
 		sub.Payment = act.Payment
+	}
+	// An order that takes a deposit pays that part online, the rest being
+	// the order's balance (paid in parts, fronts F5).
+	if act.Kind == "order" && sub.Payment != "on_delivery" && sub.Payment != "none" && act.DepositPercent > 0 && act.DepositPercent < 100 {
+		sub.DepositKobo = storefront.ActionOptions{DepositPercent: act.DepositPercent}.Deposit(sub.TotalKobo)
 	}
 	sub.Channel = "direct"
 	if embed {

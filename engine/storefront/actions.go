@@ -319,7 +319,14 @@ func SaveAction(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, a Action) (Act
 	}
 	switch a.Kind {
 	case "order":
-		a.Options.DepositPercent = 0
+		// An order may take a deposit online and the rest when it is
+		// ready, as a booking does; 100 is the full price, as none.
+		if a.Options.DepositPercent < 0 || a.Options.DepositPercent > 100 {
+			return Action{}, fmt.Errorf("%w: a deposit is 1 to 100 per cent of the price", ErrInvalid)
+		}
+		if a.Options.DepositPercent == 100 || a.Payment == "none" {
+			a.Options.DepositPercent = 0
+		}
 		zones, err := CleanZones(a.Options.Zones)
 		if err != nil {
 			return Action{}, err

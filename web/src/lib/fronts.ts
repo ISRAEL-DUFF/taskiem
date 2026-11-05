@@ -65,6 +65,9 @@ export interface FrontItem {
   category?: string;
   available: boolean;
   photo?: Image;
+  /** The photos after the first, and every photo's media id in order. */
+  gallery?: Image[];
+  photo_ids?: string[];
 }
 
 /** GET /v1/storefront/fronts/{id}/items: the items and which of the list's

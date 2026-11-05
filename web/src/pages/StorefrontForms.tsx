@@ -313,7 +313,7 @@ function PaymentOptions({
   set: (p: Partial<ActionForm>) => void;
 }) {
   const depositBad =
-    kind === "booking" &&
+    (kind === "booking" || kind === "order") &&
     form.deposit.trim() !== "" &&
     !/^(100|[1-9][0-9]?)$/.test(form.deposit.trim());
   return (
@@ -349,13 +349,14 @@ function PaymentOptions({
           onChange={(connection) => set({ connection })}
         />
       )}
-      {kind === "booking" && form.payment !== "none" && (
+      {(kind === "booking" || kind === "order") && form.payment !== "none" && (
         <Field
           label="Deposit (per cent)"
           hint={
             <span className={depositBad ? "error-text" : undefined}>
-              Paid online when booking; the rest at the appointment. Leave it
-              empty for the full price.
+              {kind === "order"
+                ? "Paid online when ordering; the rest when the order is ready or delivered. Leave it empty for the full price."
+                : "Paid online when booking; the rest at the appointment. Leave it empty for the full price."}
             </span>
           }
         >

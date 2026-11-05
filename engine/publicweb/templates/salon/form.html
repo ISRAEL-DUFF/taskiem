@@ -2,7 +2,7 @@
 {{end}}{{template "fbody" .}}
 <h1>{{.Label}}</h1>
 {{with .Error}}<p class="form-error" role="alert">{{.}}</p>{{end}}
-{{if eq .Step "bag"}}{{template "bagstep" .}}{{else}}<form method="post" action="{{.Action}}" class="form"{{if .Items}} data-order{{end}}>
+{{if eq .Step "bag"}}{{template "bagstep" .}}{{else}}<form method="post" action="{{.Action}}" class="form"{{if .Items}} data-order{{with .DepositPercent}} data-deposit-pct="{{.}}"{{end}}{{end}}>
 {{template "guard" .}}
 {{if eq .Step "details"}}{{template "bagsummary" .}}{{else if .Items}}
 <fieldset class="panel basket">
