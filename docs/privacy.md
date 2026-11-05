@@ -35,3 +35,7 @@ Workflows keep working on the plain values: the orchestrator and workers open se
 Subject ids are keyed by the organisation's pseudonymisation key, which is kept under its tenant key and re-wrapped when that key rotates, so ids stay the same across rotations. Subject keys are re-wrapped too. With [bring your own key](byok.md), every subject key is ultimately under the organisation's own key: revoking it makes all personal data unreadable at once, and runs that need it pause until it returns.
 
 `POST /v1/pii/erase` with a subject destroys its key (`pii.erase`): every envelope for that subject, in events, approvals and archives, becomes unreadable in place, and the audit chain still verifies. It cannot be undone, so it is done by a person who confirms it with a passkey (a step-up challenge for `pii.erase` and the subject id) or an authenticator code; an API key cannot erase. A string built from a person's data (`'ref-' + bvn`) is sealed under that person too, so it is erased with them. Runs still in flight for the subject must finish or be cancelled first.
+
+What is not sealed goes with the key, in the same transaction:
+
+- **Form submissions** whose answers or respondent hold the subject are deleted, with their files; the api then removes the files from the organisation's storage ([forms](forms.md)).

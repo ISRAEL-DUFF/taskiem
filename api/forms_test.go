@@ -24,6 +24,8 @@ type noFiles struct{}
 func (noFiles) PutFile(context.Context, uuid.UUID, []byte) (media.File, error) {
 	return media.File{Path: "files/x.pdf", Type: "application/pdf", Size: 1}, nil
 }
+func (noFiles) Delete(context.Context, uuid.UUID, string, []string) error { return nil }
+
 func (noFiles) SignURL(_ context.Context, _ uuid.UUID, p string, ttl time.Duration) (string, time.Time, error) {
 	return "https://storage.test/" + p, time.Now().Add(ttl), nil
 }

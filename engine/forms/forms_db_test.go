@@ -48,6 +48,24 @@ func (f *fakeFiles) PutFile(_ context.Context, _ uuid.UUID, data []byte) (media.
 	return media.File{Path: p, Type: "application/pdf", Size: int64(len(data))}, nil
 }
 
+func (f *fakeFiles) Delete(_ context.Context, _ uuid.UUID, bucket string, paths []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, p := range paths {
+		if bucket == media.PrivateBucket {
+			delete(f.files, p)
+		}
+	}
+	return nil
+}
+
+func (f *fakeFiles) has(path string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	_, ok := f.files[path]
+	return ok
+}
+
 func (f *fakeFiles) SignURL(_ context.Context, _ uuid.UUID, path string, ttl time.Duration) (string, time.Time, error) {
 	return "https://storage.test/" + path + "?sig=1", time.Now().Add(ttl), nil
 }
@@ -313,6 +331,91 @@ func TestFormStepLinkAndAnswer(t *testing.T) {
 	_ = w.env.DB.Admin.QueryRow(ctx, `SELECT answers::text FROM form_submissions WHERE reference = $1`, ref).Scan(&answers)
 	if status != "answered" || strings.Contains(answers, "0123456789") {
 		t.Fatalf("after: %s %s", status, answers)
+	}
+}
+
+// A submission and its files go with the run's data when retention purges
+// the run, and with the respondent when they are erased: the rows, and the
+// stored bytes after the api's deletion pass (docs/spec/forms.md).
+func TestFormDataFollowsRetentionAndErasure(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	wf := w.deploy(intake)
+	var endpoint uuid.UUID
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT id FROM form_endpoints WHERE workflow_id = $1 AND environment = 'prod'`, wf).Scan(&endpoint); err != nil {
+		t.Fatal(err)
+	}
+	files := w.svc.Files.(*fakeFiles)
+	send := func(phone string) (ref string, run, file uuid.UUID, key string) {
+		t.Helper()
+		ref, err := w.submit(&endpoint, nil, forms.Submission{Answers: map[string]any{"full_name": "Ada Obi", "phone": phone},
+			Respondent: forms.Respondent{Kind: "anonymous"}, Channel: "direct",
+			Files: []forms.FileMeta{{Field: "payslip", Name: "Ada_Obi_NIN.pdf", Type: "application/pdf", Size: 10}}}, []byte("%PDF-1.4 x"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		w.drain()
+		if err := w.env.DB.Admin.QueryRow(ctx, `SELECT s.run_id, f.id, f.storage_key FROM form_submissions s JOIN form_files f ON f.submission_id = s.id
+			WHERE s.reference = $1`, ref).Scan(&run, &file, &key); err != nil {
+			t.Fatal(err)
+		}
+		if !files.has(key) {
+			t.Fatalf("stored: %s", key)
+		}
+		return ref, run, file, key
+	}
+	gone := func(what, ref string, file uuid.UUID, key string) {
+		t.Helper()
+		var subs, rows int
+		_ = w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM form_submissions WHERE reference = $1`, ref).Scan(&subs)
+		_ = w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM form_files WHERE id = $1`, file).Scan(&rows)
+		if subs != 0 || rows != 0 {
+			t.Fatalf("%s: submissions=%d files=%d left", what, subs, rows)
+		}
+		if _, err := w.svc.FileURL(ctx, w.env.Tenant, file.String(), time.Minute); !errors.Is(err, forms.ErrNoRequest) {
+			t.Fatalf("%s: file url: %v", what, err)
+		}
+		if err := w.svc.DrainDeletions(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if files.has(key) {
+			t.Fatalf("%s: the stored file is still there", what)
+		}
+		var queued int
+		_ = w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM form_file_deletions`).Scan(&queued)
+		if queued != 0 {
+			t.Fatalf("%s: %d deletions still queued", what, queued)
+		}
+	}
+
+	// Retention: the run's purge takes its submission and files.
+	ref, run, file, key := send("+2348031234567")
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE runs SET retain_until = now() - interval '1 second' WHERE id = $1`, run); err != nil {
+		t.Fatal(err)
+	}
+	var purged bool
+	w.in(func(tx pgx.Tx) error { return tx.QueryRow(ctx, `SELECT taskiem_purge_run($1)`, run).Scan(&purged) })
+	if !purged {
+		t.Fatal("not purged")
+	}
+	gone("retention", ref, file, key)
+
+	// Erasure: erasing the respondent's phone takes them too; another
+	// respondent's submission stays.
+	ref, _, file, key = send("+2348031234568")
+	other, _, otherFile, otherKey := send("+2348031234569")
+	subj, err := w.env.Vault.SubjectFor(ctx, w.env.Tenant, "phone", "+2348031234568")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.env.Vault.Erase(ctx, w.env.Tenant, subj, "user:test"); err != nil {
+		t.Fatal(err)
+	}
+	gone("erasure", ref, file, key)
+	var left int
+	_ = w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM form_submissions s JOIN form_files f ON f.submission_id = s.id WHERE s.reference = $1 AND f.id = $2`, other, otherFile).Scan(&left)
+	if left != 1 || !files.has(otherKey) {
+		t.Fatalf("another respondent's submission went too: %d %v", left, files.has(otherKey))
 	}
 }
 

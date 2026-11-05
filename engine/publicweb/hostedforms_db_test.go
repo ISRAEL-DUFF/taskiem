@@ -43,6 +43,15 @@ func (f *memFiles) PutFile(_ context.Context, _ uuid.UUID, data []byte) (media.F
 	return media.File{Path: p, Type: "application/pdf", Size: int64(len(data))}, nil
 }
 
+func (f *memFiles) Delete(_ context.Context, _ uuid.UUID, _ string, paths []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, p := range paths {
+		delete(f.files, p)
+	}
+	return nil
+}
+
 func (f *memFiles) SignURL(_ context.Context, _ uuid.UUID, path string, ttl time.Duration) (string, time.Time, error) {
 	return "https://storage.test/" + path, time.Now().Add(ttl), nil
 }

@@ -158,7 +158,7 @@ No Xenibase auth and no new account system: members use Taskiem's own sign-in, o
 - **Images:** metadata (including location) is removed. Large photos are scaled down to 2,000 pixels.
 - **In the run:** a file field's value is a reference: `{id, name, type, size, sha256}`. Steps read the content through a platform action that issues a short-lived signed URL. Contents never go into run history, logs or AI prompts.
 - **People** see and download files from the run or the submission in the app, with `pii.read`, and each download is audited.
-- **Retention:** files are deleted with the run's data, by the workflow's retention.
+- **Retention:** files are deleted with the run's data, by the workflow's retention: purging the run deletes its submissions and their files, and the api then removes the files from storage.
 
 ### 6.6 After submitting
 
@@ -292,7 +292,7 @@ What is new: the `form` trigger and step, the form host, uploads with scanning, 
 - **Every form shows** who receives the answers (the organisation by name), the purpose (the form's description), and a link to the organisation's privacy notice, or one Taskiem generates from its details.
 - **The organisation is the controller**; Taskiem is its processor, as for any run.
 - **Fields marked `x-pii`** are sealed when received, and masked in the app, logs and AI. The detector also catches unmarked personal data in text fields.
-- **Erasure** of a respondent's data uses the existing erase-by-subject function, which now covers submissions and files.
+- **Erasure** of a respondent's data uses the existing erase-by-subject function, which now covers submissions and files: erasing a subject deletes every submission whose answers or respondent hold it, with its files (their bytes are removed from storage shortly after, as files are not sealed).
 - **Retention** is the workflow's. Unfinished multi-page sessions are deleted after 24 hours.
 - **The IP address** is kept only as a keyed hash, for abuse limits.
 

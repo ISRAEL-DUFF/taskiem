@@ -32,6 +32,9 @@ import (
 type FileStore interface {
 	PutFile(ctx context.Context, tenant uuid.UUID, data []byte) (media.File, error)
 	SignURL(ctx context.Context, tenant uuid.UUID, path string, ttl time.Duration) (string, time.Time, error)
+	// Delete removes stored files (of submissions retention or erasure
+	// deleted, DrainDeletions).
+	Delete(ctx context.Context, tenant uuid.UUID, bucket string, paths []string) error
 }
 
 // Service runs forms on the api side.
@@ -112,6 +115,53 @@ func (s *Service) Drain(ctx context.Context) error {
 		}
 		if _, err := s.Pool.Exec(ctx, `SELECT taskiem_form_inbox_done($1)`, x.id); err != nil {
 			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// DrainDeletions removes from storage the files of submissions that
+// retention or erasure deleted (taskiem_purge_run and the erasure trigger
+// queue them, 00380). A file whose removal fails stays queued and is
+// tried again once its lease lapses.
+func (s *Service) DrainDeletions(ctx context.Context) error {
+	if s.Files == nil {
+		return nil
+	}
+	rows, err := s.Pool.Query(ctx, `SELECT tenant_id, storage_key FROM taskiem_form_file_deletions_claim(100)`)
+	if err != nil {
+		return err
+	}
+	type queued struct {
+		tenant uuid.UUID
+		key    string
+	}
+	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (queued, error) {
+		var q queued
+		return q, r.Scan(&q.tenant, &q.key)
+	})
+	if err != nil {
+		return err
+	}
+	byTenant := map[uuid.UUID][]string{}
+	var order []uuid.UUID
+	for _, q := range list {
+		if _, ok := byTenant[q.tenant]; !ok {
+			order = append(order, q.tenant)
+		}
+		byTenant[q.tenant] = append(byTenant[q.tenant], q.key)
+	}
+	var errs []error
+	for _, t := range order {
+		keys := byTenant[t]
+		if err := s.Files.Delete(ctx, t, media.PrivateBucket, keys); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", t, err))
+			continue
+		}
+		for _, k := range keys {
+			if _, err := s.Pool.Exec(ctx, `SELECT taskiem_form_file_deletions_done($1, $2)`, t, k); err != nil {
+				errs = append(errs, err)
+			}
 		}
 	}
 	return errors.Join(errs...)
