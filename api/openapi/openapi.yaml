@@ -19090,7 +19090,8 @@ paths:
       - Audit
       summary: Erase a data subject
       description: Destroys the subject's key, so every sealed copy of their data becomes unreadable. Cannot be
-        undone, so a person confirms it with a passkey or authenticator code.
+        undone, so a person confirms it with a passkey or authenticator code. It is never applied under a running
+        workflow; runs in flight that hold the subject finish first, or are cancelled with `cancel_runs`.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -19130,6 +19131,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '409':
+          description: Runs in flight hold the subject (`code` `runs_in_flight`, `runs` lists up to 50); let them finish,
+            or erase with `cancel_runs`.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error, code, runs]
+                properties:
+                  error:
+                    type: string
+                  code:
+                    type: string
+                    enum: [runs_in_flight]
+                  runs:
+                    type: array
+                    items:
+                      type: string
+                      format: uuid
+                additionalProperties: false
         default:
           $ref: '#/components/responses/Error'
   /v1/policies:
@@ -32576,6 +32597,10 @@ components:
           description: A personal data category (`email`, `phone`, …).
         value:
           description: The value in that category.
+        cancel_runs:
+          type: boolean
+          description: Cancel the runs in flight that hold the subject (ended at once, not reversed), then erase. Without
+            it, such runs refuse the erasure with 409 `runs_in_flight`.
         totp:
           type: string
           description: A current authenticator code. Erasure needs it or a passkey, from a person.

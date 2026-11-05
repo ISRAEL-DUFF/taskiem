@@ -24,6 +24,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/remote"
+	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
 )
 
@@ -549,7 +550,29 @@ type eraseReq struct {
 	Subject  string `json:"subject,omitempty"`
 	Category string `json:"category,omitempty"`
 	Value    any    `json:"value,omitempty"`
+	// CancelRuns cancels the runs in flight that hold the subject, then
+	// erases; without it such runs refuse the erasure (spec 9.4).
+	CancelRuns bool `json:"cancel_runs,omitempty"`
 	stepUpProof
+}
+
+// runsHolding lists up to 50 of the tenant's runs in flight whose history
+// holds an envelope of the subject (subject ids are long and distinct, so
+// finding the id in an event's payload is finding the envelope).
+func (s *Server) runsHolding(r *http.Request, subject string) ([]uuid.UUID, error) {
+	var ids []uuid.UUID
+	err := s.tx(r, func(tx pgx.Tx) error {
+		rows, err := tx.Query(r.Context(), `SELECT r.id FROM runs r
+			WHERE r.tenant_id = $1 AND r.status NOT IN ('completed', 'failed', 'cancelled')
+			  AND EXISTS (SELECT 1 FROM run_events e WHERE e.run_id = r.id AND strpos(e.payload::text, $2) > 0)
+			ORDER BY r.started_at LIMIT 50`, principalFrom(r.Context()).TenantID, `"`+subject+`"`)
+		if err != nil {
+			return err
+		}
+		ids, err = pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+		return err
+	})
+	return ids, err
 }
 
 // erase destroys a data subject's key (NDPA erasure, spec 9.4), named
@@ -574,10 +597,49 @@ func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// Never under a running workflow (spec 9.4): runs in flight holding the
+	// subject finish first, or are cancelled with the erasure.
+	active, err := s.runsHolding(r, subject)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if len(active) > 0 && !req.CancelRuns {
+		writeJSON(w, http.StatusConflict, map[string]any{"error": "runs in flight hold this person's data: let them finish, or erase with cancel_runs to cancel them",
+			"code": "runs_in_flight", "runs": active})
+		return
+	}
 	// Erasure cannot be undone: a person confirms it, for this subject, with
 	// a passkey or authenticator code (Atlas part D findings).
 	if _, ok := s.personStepUp(w, r, req.stepUpProof, "pii.erase", subject, "erasures", "erasing personal data"); !ok {
 		return
+	}
+	for _, id := range active {
+		ref := runtime.RunRef{ID: id, TenantID: p.TenantID}
+		// Ended now, not reversed: a reversal would keep the run going
+		// on the data being erased.
+		if err := s.Store.CancelRun(r.Context(), ref, p.Actor(), false); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		if err := s.tx(r, func(tx pgx.Tx) error {
+			return auditTx(r, tx, "run.cancel", "run:"+id.String(), map[string]any{"reverse": false, "for": "pii.erase"})
+		}); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	}
+	if len(active) > 0 {
+		// One started since, or more than were listed: not yet.
+		if still, err := s.runsHolding(r, subject); err != nil || len(still) > 0 {
+			if err == nil {
+				writeJSON(w, http.StatusConflict, map[string]any{"error": "more runs in flight hold this person's data: try again",
+					"code": "runs_in_flight", "runs": still})
+				return
+			}
+			s.fail(w, r, err)
+			return
+		}
 	}
 	if err := s.Vault.Erase(r.Context(), p.TenantID, subject, p.Actor()); err != nil {
 		if errors.Is(err, secrets.ErrNotFound) {

@@ -406,14 +406,27 @@ func TestAdminAndErasure(t *testing.T) {
 
 	wf := publishFlow(t, owner, loanFlow)
 	run := owner.must(201, "POST", "/v1/workflows/"+wf+"/runs", map[string]any{"input": map[string]any{"bvn": "22299999999", "amount": 5}})["run_id"].(string)
+	// Erasure is never applied under a running workflow: the run holding
+	// the BVN must finish or be cancelled first (spec 9.4).
+	if st, body := owner.do("POST", "/v1/pii/erase", map[string]any{"category": "bvn", "value": "22299999999"}); st != 409 || body["code"] != "runs_in_flight" ||
+		!strings.Contains(toJSON(body["runs"]), run) {
+		t.Fatalf("erasure under a run in flight: %d %v", st, body)
+	}
 	// Erasure cannot be undone: a person confirms it with a second factor.
-	if st, body := owner.do("POST", "/v1/pii/erase", map[string]any{"category": "bvn", "value": "22299999999"}); st != 403 || body["step_up"] != "required" {
+	if st, body := owner.do("POST", "/v1/pii/erase", map[string]any{"category": "bvn", "value": "22299999999", "cancel_runs": true}); st != 403 || body["step_up"] != "required" {
 		t.Fatalf("erasure without step-up: %d %v", st, body)
 	}
+	if st := owner.must(200, "GET", "/v1/runs/"+run, nil)["run"].(map[string]any)["status"]; st == "cancelled" {
+		t.Fatal("cancelled without the step-up")
+	}
 	secret := enrol(t, owner)
-	owner.must(200, "POST", "/v1/pii/erase", map[string]any{"category": "bvn", "value": "22299999999", "totp": codeAfter(secret, 1)})
-	if s := toJSON(owner.must(200, "GET", "/v1/runs/"+run+"?reveal=true", nil)); strings.Contains(s, "22299999999") {
+	owner.must(200, "POST", "/v1/pii/erase", map[string]any{"category": "bvn", "value": "22299999999", "cancel_runs": true, "totp": codeAfter(secret, 1)})
+	got := owner.must(200, "GET", "/v1/runs/"+run+"?reveal=true", nil)
+	if s := toJSON(got); strings.Contains(s, "22299999999") {
 		t.Error("erased BVN still readable")
+	}
+	if st := got["run"].(map[string]any)["status"]; st != "cancelled" {
+		t.Errorf("the run in flight: %v", st)
 	}
 }
 
