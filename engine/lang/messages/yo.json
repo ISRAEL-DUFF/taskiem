@@ -3328,6 +3328,14 @@
       "text": "O wọle si Taskiem lori wẹẹbu pẹlu iwiregbe rẹ ({device}). Kii ṣe iwọ? Fi *sign out everywhere* ranṣẹ.",
       "reviewed": false
     },
+    "account.passkey_only.on": {
+      "text": "Wiwọle si Taskiem pẹlu passkey rẹ nikan ti wa ni titan bayi: ọrọ igbaniwọle ati iwiregbe rẹ ko le mu ọ wọle lori wẹẹbu mọ. Kii ṣe iwọ? Fi *sign out everywhere* ranṣẹ.",
+      "reviewed": false
+    },
+    "account.passkey_only.off": {
+      "text": "Wiwọle si Taskiem pẹlu passkey rẹ nikan ti wa ni pipa bayi: ọrọ igbaniwọle ati iwiregbe rẹ tun mu ọ wọle. Kii ṣe iwọ? Fi *sign out everywhere* ranṣẹ.",
+      "reviewed": false
+    },
     "chat.signout.done": {
       "text": "O ti jade kuro ni wẹẹbu nibi gbogbo: igba {count} ti pari. Iwiregbe rẹ n tẹsiwaju bi tẹlẹ.",
       "reviewed": false

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { del, get, post, put, type Invitation } from "../api";
 import { useAuth } from "../auth";
-import { addPasskey, passkeysSupported, proof } from "../passkeys";
+import { addPasskey, passkeysSupported, proof, stepUpAssert } from "../passkeys";
 import {
   ErrorBox,
   Field,
@@ -785,6 +785,7 @@ export function Account() {
       <ChangePassword />
       <ChatSignIn />
       <Passkeys />
+      <PasskeyOnly />
       <WhatsApp />
       <Telegram />
       <Slack />
@@ -907,6 +908,45 @@ export function Account() {
 }
 
 /** Light, dark, or the device's setting; kept in this browser (theme.ts). */
+/** "Only sign in with my passkey" (docs/spec/optional-passkeys.md §4):
+ * off by default; on and off are each confirmed with the passkey, and it
+ * needs one to be on. */
+function PasskeyOnly() {
+  const { me, refresh } = useAuth();
+  const act = useAction();
+  if (!me?.user || !me.factors) return null;
+  const on = !!me.user.passkey_only;
+  const has = !!me.factors.passkey;
+  return (
+    <section className="card">
+      <h2 style={{ marginTop: 0 }}>Only sign in with my passkey</h2>
+      <p className="hint">
+        {on
+          ? "On: your password and your chat no longer sign you in on the web; only your passkey does. Turning it off needs your passkey."
+          : has
+            ? "Off: you can sign in with your password, your chat or your passkey. Turn it on so only your passkey works, even if your password is found out."
+            : "Add a passkey above first. Then you can choose to sign in only with it."}
+      </p>
+      <ErrorBox error={act.error} />
+      {(has || on) && (
+        <button
+          type="button"
+          disabled={act.busy || !passkeysSupported()}
+          onClick={() =>
+            void act.run(async () => {
+              const passkey = await stepUpAssert("account.reauth", on ? "passkey_only.off" : "passkey_only.on");
+              await put("/v1/me/passkey-only", { on: !on, passkey });
+              await refresh();
+            }, false)
+          }
+        >
+          {on ? "Turn off" : "Turn on"}
+        </button>
+      )}
+    </section>
+  );
+}
+
 /** Signing in on the web with a code or link sent to the person's WhatsApp
  * or Telegram (docs/spec/chat-sign-in.md): on by default; off, no code is
  * sent and links from chat are refused. */

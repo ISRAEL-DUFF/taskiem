@@ -1271,6 +1271,7 @@ tenants.name
 tenants.parent_id
 tenants.plan_id
 tenants.region
+tenants.require_admin_passkeys
 tenants.status
 terms_acceptances.accepted_at
 terms_acceptances.asked_at
@@ -1302,6 +1303,7 @@ usage_snapshots.tenant_id
 users.chat_signin
 users.email
 users.id
+users.passkey_only
 users.password_hash
 users.status
 ussd_sessions.tenant_id

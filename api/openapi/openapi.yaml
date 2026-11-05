@@ -16497,6 +16497,45 @@ paths:
                     type: boolean
         default:
           $ref: '#/components/responses/Error'
+  /v1/me/passkey-only:
+    put:
+      operationId: setPasskeyOnly
+      tags:
+      - Account
+      summary: Only sign in with my passkey, on or off
+      description: Off by default. On, the person's password and chat sign-in are refused in every business. Turning it
+        on needs a passkey; on or off is confirmed with a passkey assertion for `account.reauth` and `passkey_only.on` or
+        `passkey_only.off` (an authenticator code or the password is not enough). Removing the last passkey turns it off.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: ['on']
+              properties:
+                'on':
+                  type: boolean
+                passkey:
+                  type: object
+                  description: The step-up assertion.
+      responses:
+        '200':
+          description: The setting.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  passkey_only:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
   /v1/me/password:
     post:
       operationId: changePassword
@@ -20680,6 +20719,80 @@ paths:
                           type: string
                         variables:
                           type: integer
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/settings/security:
+    get:
+      operationId: getSecurity
+      tags:
+      - Account
+      summary: Who must sign in with a passkey here
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: member.manage
+      responses:
+        '200':
+          description: The business's setting, how many administrators have no passkey, and whether the person asking has
+            one and may change it.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  require_admin_passkeys:
+                    type: boolean
+                  admins_without_passkey:
+                    type: integer
+                  you_have_passkey:
+                    type: boolean
+                  deployment_requires:
+                    type: boolean
+                  can_change:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putSecurity
+      tags:
+      - Account
+      summary: Require passkeys for administrators, on or off
+      description: Owners only, confirmed as a factor change is (`account.reauth`, target `business.require_passkeys`).
+        Turning it on needs a passkey of the owner's own.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: member.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [require_admin_passkeys]
+              properties:
+                require_admin_passkeys:
+                  type: boolean
+                password:
+                  type: string
+                totp:
+                  type: string
+                passkey:
+                  type: object
+      responses:
+        '200':
+          description: The setting.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  require_admin_passkeys:
+                    type: boolean
         default:
           $ref: '#/components/responses/Error'
   /v1/settings/advanced:

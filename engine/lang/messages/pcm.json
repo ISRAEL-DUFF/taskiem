@@ -3328,6 +3328,14 @@
       "text": "You don enter Taskiem for web with your chat ({device}). No be you? Send *sign out everywhere*.",
       "reviewed": false
     },
+    "account.passkey_only.on": {
+      "text": "To enter Taskiem with only your passkey don on now: your password and chat no fit enter you for web again. No be you? Send *sign out everywhere*.",
+      "reviewed": false
+    },
+    "account.passkey_only.off": {
+      "text": "To enter Taskiem with only your passkey don off now: your password and chat fit enter you again. No be you? Send *sign out everywhere*.",
+      "reviewed": false
+    },
     "chat.signout.done": {
       "text": "You don comot from web everywhere: {count} session don end. Your chat still dey as before.",
       "reviewed": false

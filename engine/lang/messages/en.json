@@ -4159,6 +4159,16 @@
       "reviewed": true,
       "context": "Told to the chat after a chat sign-in on the web"
     },
+    "account.passkey_only.on": {
+      "text": "Signing in to Taskiem only with your passkey is now on: your password and chat no longer sign you in on the web. Not you? Send *sign out everywhere*.",
+      "reviewed": true,
+      "context": "Told to the chat and email when a person turns on Only sign in with my passkey"
+    },
+    "account.passkey_only.off": {
+      "text": "Signing in to Taskiem only with your passkey is now off: your password and chat sign you in again. Not you? Send *sign out everywhere*.",
+      "reviewed": true,
+      "context": "Told to the chat and email when a person turns off Only sign in with my passkey"
+    },
     "chat.signout.done": {
       "text": "Signed out of the web everywhere: {count} session(s) ended. Your chat goes on as before.",
       "reviewed": true,

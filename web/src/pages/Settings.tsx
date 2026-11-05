@@ -8,6 +8,7 @@ import { WhatsAppNumber } from "./WhatsAppNumber";
 import { PeopleYouMessage } from "./PeopleYouMessage";
 import { USSDChannels } from "./USSDChannels";
 import { Help } from "../onboarding";
+import { proof } from "../passkeys";
 import { SchoolsSwitch } from "./Schools";
 
 interface Secret {
@@ -46,6 +47,74 @@ function AdvancedSwitch() {
   );
 }
 
+interface SecurityView {
+  require_admin_passkeys: boolean;
+  admins_without_passkey: number;
+  you_have_passkey: boolean;
+  deployment_requires: boolean;
+  can_change: boolean;
+}
+
+/** Security: whether the business requires passkeys for its
+ * administrators (docs/spec/optional-passkeys.md §5). Owners change it,
+ * confirming as for a factor change; turning it on needs a passkey of
+ * their own. */
+function Security() {
+  const { me } = useAuth();
+  const view = useLoad(() => get<SecurityView>("/v1/settings/security"), []);
+  const [typed, setTyped] = useState("");
+  const act = useAction();
+  const v = view.data;
+  if (!v) return <ErrorBox error={view.error} />;
+  const f = me?.factors;
+  const needsTyped = !f?.passkey && (f?.totp || f?.password);
+  const on = v.require_admin_passkeys;
+  return (
+    <div className="card">
+      <h2 style={{ marginTop: 0 }}>Security</h2>
+      <p>
+        <strong>Require passkeys for administrators:</strong> {on ? "on" : "off"}
+      </p>
+      <p className="hint">
+        {on
+          ? "Owners and administrators of this business sign in with a passkey: your device's fingerprint, face or PIN."
+          : "Owners and administrators may sign in with a password or their chat. Turn this on so they must use a passkey."}{" "}
+        {v.admins_without_passkey > 0 &&
+          `${v.admins_without_passkey} ${v.admins_without_passkey === 1 ? "administrator has" : "administrators have"} no passkey yet${on ? "; they are asked to add one when they next sign in." : "."}`}
+      </p>
+      {v.deployment_requires && <p className="hint">This Taskiem requires passkeys for every administrator, whatever this setting.</p>}
+      <ErrorBox error={act.error} />
+      {v.can_change && !on && !v.you_have_passkey ? (
+        <p className="hint">Add a passkey of your own first, on your Account page.</p>
+      ) : (
+        v.can_change && (
+          <form
+            className="row"
+            style={{ alignItems: "flex-end", flexWrap: "wrap" }}
+            onSubmit={(e) => {
+              e.preventDefault();
+              void act.run(async () => {
+                await put("/v1/settings/security", { require_admin_passkeys: !on, ...(await proof(f, typed, "business.require_passkeys")) });
+                setTyped("");
+                view.reload();
+              }, "Saved");
+            }}
+          >
+            {needsTyped && (
+              <Field label={f?.totp ? "Authenticator code" : "Your password"}>
+                <input type={f?.totp ? "text" : "password"} inputMode={f?.totp ? "numeric" : undefined} value={typed} onChange={(e) => setTyped(e.target.value)} required />
+              </Field>
+            )}
+            <button className={on ? "" : "primary"} type="submit" disabled={act.busy}>
+              {on ? "Turn off" : "Turn on"}
+            </button>
+          </form>
+        )
+      )}
+    </div>
+  );
+}
+
 export function Settings() {
   const { can, me } = useAuth();
   const advanced = useAdvanced();
@@ -58,6 +127,7 @@ export function Settings() {
         actions={<EnvSelect value={env} onChange={setEnv} />}
       />
       {can("member.manage") && <AdvancedSwitch />}
+      {can("member.manage") && <Security />}
       {me?.roles.includes("owner") && <SchoolsSwitch />}
       {advanced && <Environments editable={can("secret.manage")} />}
       {can("secret.manage") && <Secrets env={env} />}

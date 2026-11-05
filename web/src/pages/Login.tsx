@@ -99,7 +99,7 @@ export function Login() {
       </button>
         </>
       )}
-      {act.error instanceof ApiError && act.error.body.passkey_required ? <p className="hint">Administrators sign in with their passkey.</p> : null}
+      {act.error instanceof ApiError && act.error.body.passkey_required ? <p className="hint">Sign in with your passkey.</p> : null}
       {signup && (
         <p className="hint" style={{ textAlign: "center" }}>
           New to Taskiem? <Link to="/signup">Create an account</Link>

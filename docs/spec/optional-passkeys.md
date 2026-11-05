@@ -1,6 +1,6 @@
 # Passkeys for owners and administrators: optional, with two settings
 
-Status: **plan, agreed in outline with the founder, not built.** It amends
+Status: **built** (§12 has where it differs from this plan). It amends
 [decision 0026](../decisions/0026-bound-step-up-and-cookie-sessions.md) ("owners are
 held to passkeys by default") and [decision 0032](../decisions/0032-deployment-target.md)
 ("admins held to passkeys (the default)"), and [governance](../governance.md#passkeys).
@@ -198,3 +198,39 @@ or, with a passkey already, is told to sign in with it.
 3. **Existing deployments:** the switch turns off by default, so administrators already
    held are released (recommended, as asked). The alternative is to keep it on where
    it is on today and let operators turn it off.
+
+## 12. As built
+
+The founder took the recommendations of §11:
+- owners only change the business setting;
+- "Not now" hides the banner for 30 days on that device;
+- the deployment switch is off by default.
+
+**Where it lives:**
+- migration 00315;
+- `api/passkey_rule.go`;
+- the checks in `api/auth.go` (`login`, and each request) and `api/chat_signin.go`;
+- `web/src/pages/PasskeyNudge.tsx`;
+- `Account.tsx` (`PasskeyOnly`), `Settings.tsx` (`Security`) and `App.tsx`
+  (`EnrolPasskey`, with the reason);
+- the tests in `api/passkey_rule_test.go`.
+
+**Where it differs from the plan:**
+- **Security is a card on the Settings page,** not a page of its own (§5, §9). The
+  Settings page is the business's settings, one card each.
+- **A password or chat session already open** when its person becomes held, with a
+  passkey, is refused with 401 `passkey_required`, not shown a screen (§3). The web
+  app signs out on 401, and the login page says to sign in with the passkey. Without
+  a passkey, the session can only add one, as before.
+- **The personal setting is told** to the chat and email (`account.passkey_only.on`
+  and `.off`, in five languages). The business setting is audited only.
+- **Turning on the personal setting** does not end the person's other sessions: each
+  of their requests checks the rule, so a password or chat session is refused at its
+  next request.
+- **Cost:** each request of a session that did not sign in with a passkey reads the
+  rule once (`taskiem_auth_passkey_rule`, one indexed row each from `users`,
+  `tenants` and `webauthn_credentials`).
+- **The tests of today's rule** (`TestAdminsAreHeldToPasskeys` and the single sign-on
+  and chat sign-in ones) run with the deployment switch on and pass unchanged.
+  - `TestPasskeysOptional` covers the switch off and the personal setting.
+  - `TestBusinessRequiresPasskeys` covers the business setting.

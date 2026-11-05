@@ -181,7 +181,8 @@ type Server struct {
 	// WebAuthn is the relying party for passkeys; empty turns them off.
 	WebAuthn webauthn.Config
 	// RequireAdminPasskeys holds members with administrative permissions to
-	// passkeys (spec 13.2: on by default in production).
+	// passkeys in every business, whatever their settings (passkey_rule.go;
+	// off by default since docs/spec/optional-passkeys.md).
 	RequireAdminPasskeys bool
 	// Done, when closed, ends long-lived streams so shutdown is prompt.
 	Done <-chan struct{}
@@ -360,6 +361,7 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/me/terms", s.answerTerms) // agreeing to the terms (onboarding.go)
 			r.Post("/me/password", s.changePassword)
 			r.Put("/me/chat-signin", s.setChatSignin) // signing in with the chat, on or off (chat_signin.go)
+			r.Put("/me/passkey-only", s.setPasskeyOnly) // only sign in with my passkey (passkey_rule.go)
 			r.Post("/me/email/verify", s.verifyEmail)
 			r.Post("/me/email/verify/resend", s.resendVerification)
 			r.Post("/me/email", s.addEmail)       // Add your email (chat_doors.go)
@@ -632,6 +634,8 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermConnectionManage)).Post("/connections/{id}/check", s.checkSavedConnection)
 			r.With(s.need(PermWorkflowRead)).Get("/connection-names", s.listConnectionNames)
 			r.With(s.need(PermWorkflowEdit)).Post("/sheets/resolve", s.resolveSpreadsheet)
+			r.With(s.need(PermMemberManage)).Get("/settings/security", s.getSecurity) // who must sign in with a passkey (passkey_rule.go)
+			r.With(s.need(PermMemberManage), s.tenantWide).Put("/settings/security", s.putSecurity)
 			r.Get("/settings/advanced", s.getAdvanced) // the Advanced switch (advanced.go)
 			r.With(s.need(PermMemberManage)).Put("/settings/advanced", s.putAdvanced)
 			r.Get("/settings/areas", s.getAreas) // which parts of Taskiem the business uses (areas.go)

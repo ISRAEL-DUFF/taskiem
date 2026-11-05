@@ -24,6 +24,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
@@ -106,7 +107,10 @@ func (s *Server) chatSigninSend(ctx context.Context, number, ip string) error {
 	if ok, err := s.passwordUsable(ctx, user); err != nil || !ok {
 		return err // single sign-on everywhere: a code would be no use
 	}
-	if need, err := s.adminPasskeyRequired(ctx, user); err != nil || need {
+	if _, err := s.passwordSigninTenant(ctx, user, uuid.Nil); err != nil {
+		if errors.Is(err, errPasskeyRequired) {
+			return nil // signs in with their passkey: no code
+		}
 		return err
 	}
 	channel := ""
@@ -276,11 +280,13 @@ func (s *Server) chatSigninFinish(w http.ResponseWriter, r *http.Request, user u
 		writeErr(w, http.StatusUnauthorized, errChatSigninOff.Error())
 		return
 	}
-	if need, err := s.adminPasskeyRequired(ctx, user); err != nil {
-		s.fail(w, r, err)
+	want, err := s.passwordSigninTenant(ctx, user, want)
+	if errors.Is(err, errPasskeyRequired) {
+		passkeyRequiredOut(w)
 		return
-	} else if need {
-		writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "administrators sign in with their passkey", "passkey_required": true})
+	}
+	if err != nil {
+		s.fail(w, r, err)
 		return
 	}
 	sess, err := s.createSession(r, user, want, "chat")
@@ -311,58 +317,11 @@ func (s *Server) chatSigninFinish(w http.ResponseWriter, r *http.Request, user u
 	writeJSON(w, http.StatusOK, out)
 }
 
-// tellChatSignin tells the person a chat sign-in happened: on their chat
-// apps (outside WhatsApp's window, as the alert template) and to their
-// email when they have a confirmed one.
+// tellChatSignin tells the person a chat sign-in happened, on their chat
+// apps and by email (tellPerson).
 func (s *Server) tellChatSignin(ctx context.Context, user, tenant uuid.UUID, device string) {
-	type to struct{ channel, addr string }
-	var sends []to
-	var email string
-	var verified bool
-	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		if err := tx.QueryRow(ctx, `SELECT email, email_verified_at IS NOT NULL FROM users WHERE id = $1`, user).Scan(&email, &verified); err != nil {
-			return err
-		}
-		for _, channel := range []string{"whatsapp", "telegram"} {
-			addrs, err := chatAddrsTx(ctx, tx, channel, []uuid.UUID{user})
-			if err != nil {
-				return err
-			}
-			if a, ok := addrs[user]; ok {
-				sends = append(sends, to{channel, a})
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		s.Logger.Warn("chat sign-in: telling the person", "err", err)
-		return
-	}
-	account := strings.TrimRight(s.PublicURL, "/") + "/account"
-	for _, t := range sends {
-		ch, err := s.chatChannelFor(ctx, t.channel, tenant)
-		if err != nil {
-			continue
-		}
-		l := s.chooseLang(ctx, tenant, t.addr, "").Tag
-		text := tr(l, "chat.signin.told", "device", device)
-		tpl := whatsapp.TplAlert
-		msg := whatsapp.Message{Tenant: tenant, Text: text, Template: &tpl, Vars: map[string]string{"tenant": "Taskiem", "title": text, "link": account}}
-		if _, err := ch.Send(ctx, t.addr, msg); err != nil {
-			s.Logger.Warn("chat sign-in: telling the chat", "channel", t.channel, "err", err)
-		}
-	}
-	if verified && !emailPlaceholder(email) && s.mailOn() {
-		body := fmt.Sprintf(`You signed in to Taskiem on the web with WhatsApp or Telegram, on %s, at %s.
-
-If this was not you, send "sign out everywhere" to Taskiem in your chat, or sign out every session from your Account page:
-
-%s
-`, device, time.Now().UTC().Format("2 January 2006, 15:04 UTC"), account)
-		if err := s.sendMail(ctx, email, "New sign-in to Taskiem", body); err != nil {
-			s.Logger.Warn("chat sign-in: the email", "err", err)
-		}
-	}
+	body := fmt.Sprintf("You signed in to Taskiem on the web with WhatsApp or Telegram, on %s, at %s.", device, time.Now().UTC().Format("2 January 2006, 15:04 UTC"))
+	s.tellPerson(ctx, user, tenant, func(l lang.Tag) string { return tr(l, "chat.signin.told", "device", device) }, "New sign-in to Taskiem", body)
 }
 
 // uaSummary names a browser and its system from a User-Agent, for telling
@@ -398,33 +357,6 @@ func (s *Server) userTenants(ctx context.Context, user uuid.UUID) ([]uuid.UUID, 
 	var tenants []uuid.UUID
 	err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_tenant_scope($1, false)`, user).Scan(&tenants)
 	return tenants, err
-}
-
-// adminPasskeyRequired says the person is an administrator somewhere and
-// has a passkey, so signs in with it (where the deployment requires
-// administrators' passkeys), whichever business they ask for.
-func (s *Server) adminPasskeyRequired(ctx context.Context, user uuid.UUID) (bool, error) {
-	if !s.RequireAdminPasskeys {
-		return false, nil
-	}
-	var has bool
-	if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_has_passkey($1)`, user).Scan(&has); err != nil || !has {
-		return false, err
-	}
-	tenants, err := s.userTenants(ctx, user)
-	if err != nil {
-		return false, err
-	}
-	for _, t := range tenants {
-		p := Principal{TenantID: t, UserID: user, Permissions: map[string]bool{}}
-		if err := s.loadRoles(ctx, &p); err != nil {
-			return false, err
-		}
-		if isAdmin(p.Permissions) {
-			return true, nil
-		}
-	}
-	return false, nil
 }
 
 // setChatSignin turns chat sign-in on or off for the person
@@ -483,10 +415,10 @@ func (s *Server) waSignInLink(ctx context.Context, c *chat) error {
 	if !on {
 		return c.say(ctx, s, c.t("wa.signin.off"))
 	}
-	if need, err := s.adminPasskeyRequired(ctx, c.p.UserID); err != nil {
-		return err
-	} else if need {
+	if _, err := s.passwordSigninTenant(ctx, c.p.UserID, uuid.Nil); errors.Is(err, errPasskeyRequired) {
 		return c.say(ctx, s, c.t("wa.signin.passkey", "link", strings.TrimRight(s.PublicURL, "/")+"/login"))
+	} else if err != nil {
+		return err
 	}
 	if !s.limiter("wa-signin:"+c.p.UserID.String(), 10*time.Minute, 3).Allow() {
 		return c.say(ctx, s, c.t("wa.too_fast"))

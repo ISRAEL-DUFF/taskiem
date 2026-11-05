@@ -129,6 +129,7 @@ import { NotificationSettings } from "./pages/NotificationSettings";
 import { PaymentsSettings } from "./pages/ReceiveMoney";
 import { brandFile } from "./brand";
 import { ChatLiveProvider, NotifyBanner, useChatLive } from "./pages/ChatLive";
+import { PasskeyNudge } from "./pages/PasskeyNudge";
 import { useTaskiemUnread } from "./lib/taskiemSeen";
 import { standalone, useInstall } from "./install";
 import { PULL_AT, pullRefreshes, pullShown } from "./lib/pull";
@@ -169,15 +170,19 @@ function AreaOff({ area, owner }: { area: AreaKey; owner: boolean }) {
 }
 
 function EnrolPasskey() {
-  const { logout, loginWithPasskey } = useAuth();
+  const { me, logout, loginWithPasskey } = useAuth();
   const [added, setAdded] = useState(false);
   const act = useAction();
   return (
     <div className="login card" style={{ maxWidth: 640 }}>
       <h1>Add a passkey</h1>
       <p>
-        Administrators sign in to Taskiem with a passkey: your device's
-        fingerprint, face or PIN. Add one to continue.
+        {me?.passkey_reason === "business"
+          ? "This business requires its administrators to sign in with a passkey"
+          : me?.passkey_reason === "personal"
+            ? "You chose to sign in only with your passkey"
+            : "Administrators sign in to this Taskiem with a passkey"}
+        : your device's fingerprint, face or PIN. Add one to continue.
       </p>
       {added ? (
         <>
@@ -679,6 +684,7 @@ function SignedIn() {
           <BillingBanner />
           <TermsBanner />
           <NotifyBanner />
+          <PasskeyNudge />
           <div className="page" key={`${pathname}#${fresh}`}>
             <PageBoundary>
               {off ? (

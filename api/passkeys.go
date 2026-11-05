@@ -23,10 +23,11 @@ import (
 	"github.com/israel-duff/taskiem/engine/webauthn"
 )
 
-// Passkeys (spec 13.2): sign-in and step-up with WebAuthn. Admins are held
-// to passkeys when RequireAdminPasskeys is set: a password session of a
-// member with administrative permissions can only enrol a passkey, and
-// once they have one, their password no longer signs them in.
+// Passkeys (spec 13.2): sign-in and step-up with WebAuthn. Who is held to
+// them is passkey_rule.go: no one, unless the deployment's switch, the
+// business's setting or the person's own says so; then a session that did
+// not sign in with a passkey can only enrol one, and once they have one,
+// their password no longer signs them in there.
 
 // adminPerms are the permissions that make a member an administrator for
 // the passkey rule.
@@ -438,6 +439,11 @@ func (s *Server) removePasskey(w http.ResponseWriter, r *http.Request) {
 		if tag.RowsAffected() == 0 {
 			return pgx.ErrNoRows
 		}
+		// The last one gone: "Only sign in with my passkey" off, so no one
+		// is locked out (passkey_rule.go).
+		if err := passkeysGone(r.Context(), tx, p.UserID); err != nil {
+			return err
+		}
 		return auditTx(r, tx, "passkey.remove", p.UserID.String(), map[string]any{"credential": chi.URLParam(r, "id")})
 	})
 	if err != nil {
@@ -483,6 +489,9 @@ func (s *Server) resetPasskeys(w http.ResponseWriter, r *http.Request) {
 		}
 		tag, err := tx.Exec(r.Context(), `DELETE FROM webauthn_credentials WHERE user_id = $1`, user)
 		if err != nil {
+			return err
+		}
+		if err := passkeysGone(r.Context(), tx, user); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(r.Context(), `UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`, user); err != nil {
@@ -861,6 +870,9 @@ func ResetPasskeys(ctx context.Context, pool *pgxpool.Pool, email, operator stri
 			return err
 		}
 		removed = tag.RowsAffected()
+		if err := passkeysGone(ctx, tx, user); err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx, `UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`, user); err != nil {
 			return err
 		}

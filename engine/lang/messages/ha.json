@@ -3328,6 +3328,14 @@
       "text": "Ka shiga Taskiem a yanar gizo da hira ɗinka ({device}). Ba kai ba ne? Aika *sign out everywhere*.",
       "reviewed": false
     },
+    "account.passkey_only.on": {
+      "text": "Shiga Taskiem da passkey ɗinka kawai yanzu a kunne yake: kalmar sirrinka da hirarka ba za su ƙara shigar da kai a yanar gizo ba. Ba kai ba ne? Aika *sign out everywhere*.",
+      "reviewed": false
+    },
+    "account.passkey_only.off": {
+      "text": "Shiga Taskiem da passkey ɗinka kawai yanzu a kashe yake: kalmar sirrinka da hirarka suna sake shigar da kai. Ba kai ba ne? Aika *sign out everywhere*.",
+      "reviewed": false
+    },
     "chat.signout.done": {
       "text": "An fitar da kai daga yanar gizo ko'ina: an kawo ƙarshen zama {count}. Hirarka tana ci gaba kamar da.",
       "reviewed": false

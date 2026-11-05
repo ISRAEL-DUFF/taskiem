@@ -3328,6 +3328,14 @@
       "text": "Ị banyere na Taskiem na weebụ site na nkata gị ({device}). Ọ bụghị gị? Zipu *sign out everywhere*.",
       "reviewed": false
     },
+    "account.passkey_only.on": {
+      "text": "Ịbanye na Taskiem naanị site na passkey gị agbanyela ugbu a: okwuntughe gị na nkata gị agaghị abanye gị na weebụ ọzọ. Ọ bụghị gị? Zipu *sign out everywhere*.",
+      "reviewed": false
+    },
+    "account.passkey_only.off": {
+      "text": "Ịbanye na Taskiem naanị site na passkey gị agbanyụọla ugbu a: okwuntughe gị na nkata gị na-abanye gị ọzọ. Ọ bụghị gị? Zipu *sign out everywhere*.",
+      "reviewed": false
+    },
     "chat.signout.done": {
       "text": "Ị pụọla na weebụ ebe niile: oge {count} kwụsịrị. Nkata gị na-aga n'ihu dịka ọ dị na mbụ.",
       "reviewed": false

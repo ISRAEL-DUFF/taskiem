@@ -275,6 +275,8 @@ export interface Me {
     email_placeholder?: boolean;
     /** Whether the person may sign in with a code or link sent to their chat. */
     chat_signin?: boolean;
+    /** Whether the person signs in only with their passkey. */
+    passkey_only?: boolean;
   };
   /** Whether the member has an authenticator app enrolled for step-up. */
   totp?: boolean;
@@ -282,6 +284,8 @@ export interface Me {
   auth_method?: "password" | "passkey" | "sso" | "chat";
   /** An administrator who must add a passkey before anything else. */
   enrol_passkey?: boolean;
+  /** Why the person is held to passkeys here: personal, deployment or business. */
+  passkey_reason?: string;
   /** What the member proves themselves with to add or remove a passkey or
    * authenticator: a passkey or authenticator if they have one, else their
    * password. */

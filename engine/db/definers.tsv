@@ -323,3 +323,4 @@ taskiem_auth_chat_code_check(text,text,integer)	@ISRAEL-DUFF (identity)	Checks a
 taskiem_auth_chat_link_issue(uuid,bytea,text,interval,integer)	@ISRAEL-DUFF (identity)	Issues a one-time sign-in link sent in chat, kept as a hash; hourly cap (docs/spec/chat-sign-in.md) (00314)
 taskiem_auth_chat_link_use(bytea)	@ISRAEL-DUFF (identity)	Uses a sign-in link once: its person and channel (docs/spec/chat-sign-in.md) (00314)
 taskiem_auth_chat_link_peek(bytea)	@ISRAEL-DUFF (identity)	Whether a sign-in link is still good, nothing about whose (docs/spec/chat-sign-in.md) (00314)
+taskiem_auth_passkey_rule(uuid,uuid)	@ISRAEL-DUFF (identity)	What holds a person to passkeys in a business: their own setting, the business's, and whether they have one; for sign-in and each request (docs/spec/optional-passkeys.md) (00315)

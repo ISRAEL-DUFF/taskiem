@@ -513,7 +513,9 @@ func loadConfig() (config, error) {
 	if c.HooksURL == "" && c.PublicURL != "" {
 		c.HooksURL = c.PublicURL + "/hooks"
 	}
-	c.RequireAdminPasskeys = flag("TASKIEM_REQUIRE_ADMIN_PASSKEYS", c.PublicURL != "")
+	// Off by default: owners and administrators choose passkeys for
+	// themselves, or a business requires them (docs/spec/optional-passkeys.md).
+	c.RequireAdminPasskeys = flag("TASKIEM_REQUIRE_ADMIN_PASSKEYS", false)
 	// Read here so a bad value stops every role, not only the one serving
 	// the profiler.
 	flag("TASKIEM_PPROF", false)
