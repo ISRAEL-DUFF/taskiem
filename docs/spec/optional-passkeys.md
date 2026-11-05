@@ -234,6 +234,10 @@ The founder took the recommendations of §11:
 - **Cost:** each request of a session that did not sign in with a passkey reads the
   rule once (`taskiem_auth_passkey_rule`, one indexed row each from `users`,
   `tenants` and `webauthn_credentials`).
+- **The deployment switch keeps its reach across businesses** (§3): with it on, an
+  administrator anywhere who has a passkey signs in with it to every business, as
+  today (`TestAdminPasskeyRuleAcrossTenants`). Only the business setting is limited to
+  its own business.
 - **The tests of today's rule** (`TestAdminsAreHeldToPasskeys` and the single sign-on
   and chat sign-in ones) run with the deployment switch on and pass unchanged.
   - `TestPasskeysOptional` covers the switch off and the personal setting.

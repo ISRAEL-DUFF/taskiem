@@ -82,6 +82,18 @@ func (s *Server) passwordSigninTenant(ctx context.Context, user, want uuid.UUID)
 	if err != nil || len(tenants) == 0 {
 		return want, err // no membership: the session's own errors say so
 	}
+	// The deployment's switch holds the person, as it always did: an
+	// administrator anywhere who has a passkey signs in with it to every
+	// business, even one where they are not an administrator.
+	if s.RequireAdminPasskeys {
+		held, err := s.deploymentHolds(ctx, user, tenants)
+		if err != nil {
+			return want, err
+		}
+		if held {
+			return want, errPasskeyRequired
+		}
+	}
 	if want != uuid.Nil {
 		if !slices.Contains(tenants, want) {
 			return want, nil
@@ -105,6 +117,25 @@ func (s *Server) passwordSigninTenant(ctx context.Context, user, want uuid.UUID)
 		}
 	}
 	return uuid.Nil, errPasskeyRequired
+}
+
+// deploymentHolds says the deployment's switch holds the person: they have
+// a passkey and are an administrator in any of their businesses.
+func (s *Server) deploymentHolds(ctx context.Context, user uuid.UUID, tenants []uuid.UUID) (bool, error) {
+	var has bool
+	if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_has_passkey($1)`, user).Scan(&has); err != nil || !has {
+		return false, err
+	}
+	for _, t := range tenants {
+		p := Principal{TenantID: t, UserID: user, Permissions: map[string]bool{}}
+		if err := s.loadRoles(ctx, &p); err != nil {
+			return false, err
+		}
+		if isAdmin(p.Permissions) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // passkeyRequiredOut is the refusal of a password or chat sign-in.
