@@ -80,6 +80,7 @@ func (s *Server) putStorefrontBookings(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, storefrontErr(fmt.Errorf("%w: the services could not be read: %w", errConflict, err)))
 		return
 	}
+	s.prewarmPublish(r.Context(), p.TenantID, true)
 	err = s.tx(r, func(tx pgx.Tx) error {
 		var err error
 		if sf, err = storefront.Get(r.Context(), tx, p.TenantID); err != nil || sf.PublishedVersion == 0 {
@@ -223,20 +224,30 @@ func (s *Server) syncServices(ctx context.Context, tenant uuid.UUID, sf storefro
 		return err
 	}
 	rows, rerr := s.readAllRows(ctx, tenant, table, storefront.MaxItems+1)
-	return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+	var items []storefront.Item
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		if rerr != nil {
 			_ = storefront.CatalogueFailed(ctx, tx, tenant, fmt.Errorf("the services: %w", rerr))
 			return rerr
 		}
-		items, err := storefront.Items(ctx, tx, tenant, rows, sf.ServicesColumns)
-		if err != nil {
+		var err error
+		if items, err = storefront.Items(ctx, tx, tenant, rows, sf.ServicesColumns); err != nil {
 			_ = storefront.CatalogueFailed(ctx, tx, tenant, fmt.Errorf("the services: %w", err))
 			return err
 		}
-		if items, err = s.moderateItems(ctx, tx, tenant, items); err != nil {
+		return nil
+	}); err != nil {
+		return err
+	}
+	checked, err := s.moderateItems(ctx, tenant, items)
+	if err != nil {
+		return err
+	}
+	return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		if err := checked.record(ctx, tx, tenant); err != nil {
 			return err
 		}
-		return storefront.SyncServices(ctx, tx, tenant, items)
+		return storefront.SyncServices(ctx, tx, tenant, checked.items)
 	})
 }
 

@@ -6,11 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/billing"
+	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/moderation"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
@@ -256,28 +258,129 @@ func queueReview(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, sf storefront
 	return err
 }
 
-// moderateItems checks a live page's catalogue as it is copied: blocked
-// items are left off the page, flagged ones stay and wait for a look, and
-// items beyond the plan's limit are left off.
-func (s *Server) moderateItems(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, items []storefront.Item) ([]storefront.Item, error) {
-	sf, err := storefront.Get(ctx, tx, tenant)
-	if err != nil || sf.PublishedVersion == 0 {
-		return items, err
+// moderationWait bounds the model's part of one list's checks: what it
+// has not judged by then is kept (the words and prices still apply) and
+// asked again at the next refresh, the verdicts it gave being kept.
+const moderationWait = 2 * time.Minute
+
+// memCache is the verdicts kept for a set of texts, read in a short
+// transaction before the model is asked, and those the model gave, kept
+// in the transaction that writes after: no transaction stays open while
+// the model answers (finding F16).
+type memCache struct {
+	have, put map[string]moderation.Finding
+}
+
+func (c *memCache) Get(_ context.Context, hash []byte) (moderation.Finding, bool, error) {
+	if f, ok := c.put[string(hash)]; ok {
+		return f, true, nil
+	}
+	f, ok := c.have[string(hash)]
+	return f, ok, nil
+}
+
+func (c *memCache) Put(_ context.Context, hash []byte, f moderation.Finding) error {
+	c.put[string(hash)] = f
+	return nil
+}
+
+// save keeps the model's new verdicts in moderation_checks.
+func (c *memCache) save(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) error {
+	for h, f := range c.put {
+		if err := (txCache{tx, tenant}).Put(ctx, []byte(h), f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// readVerdicts reads the verdicts kept for texts, as Checker.Texts looks
+// them up.
+func readVerdicts(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, texts []moderation.Text) (*memCache, error) {
+	c := &memCache{have: map[string]moderation.Finding{}, put: map[string]moderation.Finding{}}
+	var hashes [][]byte
+	for _, t := range texts {
+		if t := strings.TrimSpace(t.Text); t != "" {
+			hashes = append(hashes, moderation.Hash(t))
+		}
+	}
+	if len(hashes) == 0 {
+		return c, nil
+	}
+	rows, err := tx.Query(ctx, `SELECT hash, verdict, category, reason, checker FROM moderation_checks WHERE tenant_id = $1 AND hash = ANY($2)`, tenant, hashes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var h []byte
+		var f moderation.Finding
+		if err := rows.Scan(&h, &f.Verdict, &f.Category, &f.Reason, &f.Checker); err != nil {
+			return nil, err
+		}
+		c.have[string(h)] = f
+	}
+	return c, rows.Err()
+}
+
+// itemChecks is a list's items after the checks, and what the transaction
+// that copies them records.
+type itemChecks struct {
+	items   []storefront.Item
+	flagged []moderation.Finding
+	cache   *memCache
+}
+
+// moderateItems checks a live page's items before they are copied:
+// blocked items are left off the page, flagged ones stay and wait for a
+// look, and items beyond the plan's limit are left off. It holds no
+// transaction while the model answers: the kept verdicts are read first,
+// every item's new pieces go to the model together (in requests of
+// moderation.MaxPiecesPerCall), and record keeps the new verdicts and the
+// review in the copy's transaction (finding F16).
+func (s *Server) moderateItems(ctx context.Context, tenant uuid.UUID, items []storefront.Item) (itemChecks, error) {
+	out := itemChecks{items: items}
+	var live bool
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		sf, err := storefront.Get(ctx, tx, tenant)
+		live = err == nil && sf.PublishedVersion > 0
+		return err
+	}); err != nil || !live {
+		return out, err
 	}
 	lim, err := s.Store.LimitsFor(ctx, tenant)
 	if err != nil {
-		return nil, err
+		return out, err
 	}
 	if lim.StorefrontItems > 0 && len(items) > lim.StorefrontItems {
 		items = items[:lim.StorefrontItems]
 	}
-	m := s.moderator()
-	kept := items[:0:0]
-	var flagged []moderation.Finding
+	var texts []moderation.Text
 	for _, it := range items {
-		res, err := m.Texts(ctx, txCache{tx, tenant}, itemTexts(it))
-		if err != nil {
-			return nil, err
+		texts = append(texts, itemTexts(it)...)
+	}
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		out.cache, err = readVerdicts(ctx, tx, tenant, texts)
+		return err
+	}); err != nil {
+		return out, err
+	}
+	m := s.moderator()
+	mctx, cancel := context.WithTimeout(ctx, moderationWait)
+	all, err := m.Texts(mctx, out.cache, texts)
+	cancel()
+	if err != nil {
+		return out, err
+	}
+	byItem := map[string][]moderation.Finding{}
+	for _, f := range all.Findings {
+		byItem[f.Field] = append(byItem[f.Field], f)
+	}
+	out.items = items[:0:0]
+	for _, it := range items {
+		res := moderation.Result{Verdict: moderation.Allowed}
+		for _, f := range byItem["item "+it.ID] {
+			res.Add(f)
 		}
 		if it.DurationMinutes == 0 || it.PriceKobo != nil {
 			f := m.Price("item "+it.ID, it.PriceKobo)
@@ -286,17 +389,76 @@ func (s *Server) moderateItems(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 		}
 		switch res.Verdict {
 		case moderation.Blocked:
-			flagged = append(flagged, res.Findings...)
+			out.flagged = append(out.flagged, res.Findings...)
 			continue
 		case moderation.Flagged:
-			flagged = append(flagged, res.Findings...)
+			out.flagged = append(out.flagged, res.Findings...)
 		}
-		kept = append(kept, it)
+		out.items = append(out.items, it)
 	}
-	if len(flagged) > 0 {
-		if err := queueReview(ctx, tx, tenant, sf, "catalogue", flagged, nil, "system:moderation"); err != nil {
-			return nil, err
+	return out, nil
+}
+
+// record keeps the model's new verdicts and queues what was flagged, in
+// the transaction that copies the items.
+func (c itemChecks) record(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) error {
+	if c.cache != nil {
+		if err := c.cache.save(ctx, tx, tenant); err != nil {
+			return err
 		}
 	}
-	return kept, nil
+	if len(c.flagged) == 0 {
+		return nil
+	}
+	sf, err := storefront.Get(ctx, tx, tenant)
+	if err != nil {
+		return err
+	}
+	return queueReview(ctx, tx, tenant, sf, "catalogue", c.flagged, nil, "system:moderation")
+}
+
+// prewarmPublish is prewarmPageChecks for a publish about to start (with
+// liveOnly, one that happens only on a live page): a failure only means
+// the publish's own checks ask the model.
+func (s *Server) prewarmPublish(ctx context.Context, tenant uuid.UUID, liveOnly bool) {
+	if err := s.prewarmPageChecks(ctx, tenant, liveOnly); err != nil && !errors.Is(err, storefront.ErrNotFound) && ctx.Err() == nil {
+		s.Logger.Warn("storefront: checking the page before publishing", "tenant", tenant, "err", err)
+	}
+}
+
+// prewarmPageChecks asks the model about the draft and the catalogue copy
+// before a publish's transaction opens, and keeps its verdicts, so the
+// checks inside that transaction read them rather than wait on the model
+// (finding F16). What is not answered here is asked there, as before.
+func (s *Server) prewarmPageChecks(ctx context.Context, tenant uuid.UUID, liveOnly bool) error {
+	var texts []moderation.Text
+	var cache *memCache
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		sf, err := storefront.Get(ctx, tx, tenant)
+		if err != nil || (liveOnly && sf.PublishedVersion == 0) {
+			return err
+		}
+		items, err := storefront.Catalogue(ctx, tx, tenant)
+		if err != nil {
+			return err
+		}
+		texts = pageTexts(sf.Draft, items)
+		cache, err = readVerdicts(ctx, tx, tenant, texts)
+		return err
+	}); err != nil {
+		return err
+	}
+	m := s.moderator()
+	if m.Model == nil || cache == nil {
+		return nil
+	}
+	mctx, cancel := context.WithTimeout(ctx, moderationWait)
+	_, err := m.Texts(mctx, cache, texts)
+	cancel()
+	if err != nil || len(cache.put) == 0 {
+		return err
+	}
+	return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		return cache.save(ctx, tx, tenant)
+	})
 }

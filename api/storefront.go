@@ -153,6 +153,7 @@ func (s *Server) publishStorefront(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, storefrontErr(fmt.Errorf("the catalogue could not be read: %w", err)))
 		return
 	}
+	s.prewarmPublish(r.Context(), tenant, false)
 	var sf storefront.Storefront
 	err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
@@ -288,6 +289,7 @@ func (s *Server) SyncStorefront(ctx context.Context, tenant uuid.UUID) error {
 			s.Logger.Warn("stock: recording changes made in the table", "tenant", tenant, "err", err)
 		}
 	}
+	var items []storefront.Item
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		if rerr != nil {
 			if err := storefront.CatalogueFailed(ctx, tx, tenant, rerr); err != nil {
@@ -295,16 +297,27 @@ func (s *Server) SyncStorefront(ctx context.Context, tenant uuid.UUID) error {
 			}
 			return rerr
 		}
-		items, err := storefront.Items(ctx, tx, tenant, rows, sf.CatalogueColumns)
-		if err != nil {
+		var err error
+		if items, err = storefront.Items(ctx, tx, tenant, rows, sf.CatalogueColumns); err != nil {
 			_ = storefront.CatalogueFailed(ctx, tx, tenant, err)
 			return err
 		}
-		// A live page's items are checked as they are copied (moderation.go).
-		if items, err = s.moderateItems(ctx, tx, tenant, items); err != nil {
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	// A live page's items are checked as they are copied (moderation.go),
+	// with no transaction open while the model answers.
+	checked, err := s.moderateItems(ctx, tenant, items)
+	if err != nil {
+		return err
+	}
+	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		if err := checked.record(ctx, tx, tenant); err != nil {
 			return err
 		}
-		return storefront.SyncCatalogue(ctx, tx, tenant, items)
+		return storefront.SyncCatalogue(ctx, tx, tenant, checked.items)
 	})
 	if err != nil {
 		return err
@@ -346,15 +359,25 @@ func (s *Server) syncLists(ctx context.Context, tenant uuid.UUID) error {
 			errs = append(errs, fmt.Errorf("%s: %w", l.TableName, err))
 			continue
 		}
+		var items []storefront.Item
 		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-			items, err := storefront.Items(ctx, tx, tenant, rows, l.Columns)
-			if err != nil {
+			var err error
+			items, err = storefront.Items(ctx, tx, tenant, rows, l.Columns)
+			return err
+		}); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", l.TableName, err))
+			continue
+		}
+		checked, err := s.moderateItems(ctx, tenant, items)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", l.TableName, err))
+			continue
+		}
+		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			if err := checked.record(ctx, tx, tenant); err != nil {
 				return err
 			}
-			if items, err = s.moderateItems(ctx, tx, tenant, items); err != nil {
-				return err
-			}
-			return storefront.SyncList(ctx, tx, tenant, l.TableName, items)
+			return storefront.SyncList(ctx, tx, tenant, l.TableName, checked.items)
 		}); err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", l.TableName, err))
 		}
@@ -398,24 +421,46 @@ func (s *Server) readAllRows(ctx context.Context, tenant uuid.UUID, t datatables
 	return out, nil
 }
 
+// storefrontSyncTimeout bounds one organisation's refresh in
+// RunStorefronts, so a slow table or model does not hold back the others
+// (finding F16).
+const storefrontSyncTimeout = 5 * time.Minute
+
 // RunStorefronts refreshes published storefronts' catalogue copies every
-// 15 minutes, catching changes made to the tables outside Taskiem.
+// 15 minutes, catching changes made to the tables outside Taskiem, and
+// runs the trust checks every 5.
 func (s *Server) RunStorefronts(ctx context.Context) error {
 	s.chatHooks()
+	// Reported pages and paused orders (trust.go) keep their own pace: a
+	// long round of refreshes does not delay them (finding F16).
+	trust := make(chan struct{})
+	go func() {
+		defer close(trust)
+		for {
+			if terr := s.TrustTick(ctx); terr != nil && ctx.Err() == nil {
+				s.Logger.Error("storefront trust checks", "err", terr)
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(5 * time.Minute):
+			}
+		}
+	}()
+	defer func() { <-trust }()
 	for {
 		rows, err := s.Store.Pool.Query(ctx, `SELECT tenant_id FROM taskiem_storefronts_due($1)`, time.Now().Add(-15*time.Minute))
 		if err == nil {
 			tenants, cerr := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
 			err = cerr
 			for _, t := range tenants {
-				if serr := s.SyncStorefront(ctx, t); serr != nil && ctx.Err() == nil {
+				tctx, cancel := context.WithTimeout(ctx, storefrontSyncTimeout)
+				serr := s.SyncStorefront(tctx, t)
+				cancel()
+				if serr != nil && ctx.Err() == nil {
 					s.Logger.Warn("storefront catalogue refresh", "tenant", t, "err", serr)
 				}
 			}
-		}
-		// Reported pages and paused orders (trust.go).
-		if terr := s.TrustTick(ctx); terr != nil && ctx.Err() == nil {
-			s.Logger.Error("storefront trust checks", "err", terr)
 		}
 		if err != nil && ctx.Err() == nil {
 			s.Logger.Error("storefront catalogue refreshes", "err", err)

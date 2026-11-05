@@ -84,6 +84,12 @@ var (
 	LimitHits = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "taskiem_tenant_limit_hits_total", Help: "Times a tenant reached a plan limit, by limit (ingest_rate and max_running_runs hold runs back; others refuse).",
 	}, []string{"limit"})
+	// ModerationCalls counts the requests public pages' checks make to the
+	// model (engine/moderation): Taskiem's own cost, outside any tenant's
+	// AI budget, so it is watched here.
+	ModerationCalls = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "taskiem_moderation_model_calls_total", Help: "Requests the public page checks made to the model, by outcome (ok, failed).",
+	}, []string{"outcome"})
 	RunsAdmitted = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "taskiem_runs_admitted_total", Help: "Runs held back by their tenant's limits and admitted later by the scheduler.",
 	})

@@ -76,6 +76,8 @@ Page views never reach Xenibase. Taskiem keeps a copy of the mapped columns of e
 - when the owner presses **Refresh**;
 - every 15 minutes for every published storefront, which catches rows changed in Xenibase, in workflows or from chat.
 
+Each business's scheduled refresh has at most 5 minutes, so a slow table or model does not hold up the others' refreshes or the [trust checks](moderation.md), which run on their own every few minutes.
+
 If the table cannot be read, the old copy stays, the page keeps showing it, and the error is shown to the owner.
 
 ### Stock
