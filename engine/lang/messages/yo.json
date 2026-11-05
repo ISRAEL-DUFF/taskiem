@@ -3852,6 +3852,10 @@
       "text": "• *Ada owes 5,000*, *Ada paid 2,000 cash*, *who owes me?*, *send Ada her balance*: àwọn gbèsè tí àwọn oníbàárà jẹ yín",
       "reviewed": false
     },
+    "wa.help.direct": {
+      "text": "• Kọ si ile-iṣẹ ti o so pọ: bẹrẹ pẹlu *...*, bii *... @Dangote how much is a bag of cement?*",
+      "reviewed": false
+    },
     "wa.table.form": {
       "text": "{table}: ẹ tẹ *{cta}* láti kọ àlàyé {count} ti ìlà náà; ẹ ó fìdí rẹ̀ múlẹ̀ kí a tó fi kún un. Ẹ fi *cancel* ránṣẹ́ láti dúró.",
       "reviewed": false
@@ -5156,6 +5160,34 @@
       "text": "A ti fi ranṣẹ si *{name}*. Esi wọn yoo wa sibi, ati si Chat lori wẹẹbu.",
       "reviewed": false
     },
+    "chat.direct.wait": {
+      "text": "Bayi fi ifiranṣẹ naa ranṣẹ, pẹlu *@business* fun ẹni ti o jẹ fun, bii *@Dangote how much is a bag of cement?*",
+      "reviewed": false
+    },
+    "chat.direct.who": {
+      "text": "Tani o jẹ fun? Fi *@business* kun, bii *... @Dangote how much is a bag of cement?*",
+      "reviewed": false
+    },
+    "chat.direct.empty": {
+      "text": "Kini o fẹ sọ fun *{name}*? Fi *... @{name}* ati ifiranṣẹ rẹ ranṣẹ.",
+      "reviewed": false
+    },
+    "chat.direct.files": {
+      "text": "Ọrọ nikan lo n lọ taara si ile-iṣẹ pẹlu *...* fun bayi. Fi awọn fọto ati faili ranṣẹ si wọn lori oju-iwe Chat.",
+      "reviewed": false
+    },
+    "chat.direct.hint": {
+      "text": "Lati fi ranṣẹ si *{name}* gẹgẹbi ifiranṣẹ, bẹrẹ pẹlu *...*",
+      "reviewed": false
+    },
+    "chat.direct.sent": {
+      "text": "✓ A ti fi ranṣẹ si {names}.",
+      "reviewed": false
+    },
+    "chat.direct.not_sent": {
+      "text": "Ko lọ si *{name}*: {reason}.",
+      "reviewed": false
+    },
     "chat.link.photo": {
       "text": "Fọto",
       "reviewed": false
@@ -5221,7 +5253,7 @@
       "reviewed": false
     },
     "wa.mention.how": {
-      "text": "Sọ iye ati ohun ti o fẹ lati ọdọ *{name}*, bii *20 bags of rice from @{name}*.",
+      "text": "Sọ iye ati ohun ti o fẹ lati ọdọ *{name}*, bii *20 bags of rice from @{name}*. Lati fi ranṣẹ si *{name}* gẹgẹbi ifiranṣẹ, bẹrẹ pẹlu *...*",
       "reviewed": false
     },
     "wa.mention.draft": {

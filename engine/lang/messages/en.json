@@ -4814,6 +4814,11 @@
       "reviewed": true,
       "context": "help line for the debtor book"
     },
+    "wa.help.direct": {
+      "text": "• Message a linked business: start with *...*, like *... @Dangote how much is a bag of cement?*",
+      "reviewed": true,
+      "context": "Help line for messages straight to a linked business"
+    },
     "wa.table.form": {
       "text": "{table}: tap *{cta}* to enter the row's {count} detail(s); you confirm before it is added. Send *cancel* to stop.",
       "reviewed": true,
@@ -6444,6 +6449,41 @@
       "reviewed": true,
       "context": "A message to a linked business was sent from the phone"
     },
+    "chat.direct.wait": {
+      "text": "Now send the message, with *@business* for who it is for, like *@Dangote how much is a bag of cement?*",
+      "reviewed": true,
+      "context": "A message was just \"...\": the next one goes to the linked businesses it mentions"
+    },
+    "chat.direct.who": {
+      "text": "Who is it for? Add *@business*, like *... @Dangote how much is a bag of cement?*",
+      "reviewed": true,
+      "context": "\"...\" with a message that mentions no linked business"
+    },
+    "chat.direct.empty": {
+      "text": "What do you want to say to *{name}*? Send *... @{name}* and your message.",
+      "reviewed": true,
+      "context": "\"... @business\" with nothing else to say"
+    },
+    "chat.direct.files": {
+      "text": "Only words go straight to a business with *...* for now. Send photos and files to them on the Chat page.",
+      "reviewed": true,
+      "context": "A photo or file captioned \"...\": not sent"
+    },
+    "chat.direct.hint": {
+      "text": "To send it to *{name}* as a message instead, start it with *...*",
+      "reviewed": true,
+      "context": "After a reply to a mention asking for no quantity: how to send it as a message"
+    },
+    "chat.direct.sent": {
+      "text": "✓ Sent to {names}.",
+      "reviewed": true,
+      "context": "A message after \"...\" went to the businesses it mentions; {names} is their names"
+    },
+    "chat.direct.not_sent": {
+      "text": "Not sent to *{name}*: {reason}.",
+      "reviewed": true,
+      "context": "A message after \"...\" could not go to one business; {reason} says why"
+    },
     "chat.link.photo": {
       "text": "Photo",
       "reviewed": true,
@@ -6525,7 +6565,7 @@
       "context": "A mention names a business not linked"
     },
     "wa.mention.how": {
-      "text": "Say how many of what from *{name}*, like *20 bags of rice from @{name}*.",
+      "text": "Say how many of what from *{name}*, like *20 bags of rice from @{name}*. To send it to *{name}* as a message instead, start it with *...*",
       "reviewed": true,
       "context": "A mention with nothing to order"
     },
@@ -6665,7 +6705,7 @@
       "context": "Goods received said of an order with a linked supplier that has not delivered it"
     },
     "wa.mention.which": {
-      "text": "More than one of your linked businesses is called *{name}*: {list}. Pick it on the Chat page, where each is its own conversation.",
+      "text": "*@{name}* could be more than one of your linked businesses: {list}. Use more of the name, or pick it on the Chat page.",
       "reviewed": true,
       "context": "A mention names a business of which the writer has two links of the same name; {list} says each with its role"
     },

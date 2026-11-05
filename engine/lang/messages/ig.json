@@ -3852,6 +3852,10 @@
       "text": "• *Ada owes 5,000*, *Ada paid 2,000 cash*, *who owes me?*, *send Ada her balance*: ụgwọ ndị ahịa ji gị",
       "reviewed": false
     },
+    "wa.help.direct": {
+      "text": "• Zipu ozi na azụmahịa ejikọrọ: bido ya na *...*, dịka *... @Dangote how much is a bag of cement?*",
+      "reviewed": false
+    },
     "wa.table.form": {
       "text": "{table}: pịa *{cta}* ka itinye nkọwa {count} nke ahịrị; ị ga-akwado tupu etinye ya. Ziga *cancel* ka ịkwụsị.",
       "reviewed": false
@@ -5156,6 +5160,34 @@
       "text": "Ezigala ya *{name}*. Azịza ha ga-abịa ebe a, na Chat na weebụ.",
       "reviewed": false
     },
+    "chat.direct.wait": {
+      "text": "Ugbu a zipu ozi ahụ, tinye *@business* maka onye ọ bụ, dịka *@Dangote how much is a bag of cement?*",
+      "reviewed": false
+    },
+    "chat.direct.who": {
+      "text": "Ọ bụ maka onye? Tinye *@business*, dịka *... @Dangote how much is a bag of cement?*",
+      "reviewed": false
+    },
+    "chat.direct.empty": {
+      "text": "Gịnị ka ị chọrọ ịgwa *{name}*? Zipu *... @{name}* na ozi gị.",
+      "reviewed": false
+    },
+    "chat.direct.files": {
+      "text": "Naanị okwu na-aga ozugbo n'azụmahịa site na *...* ugbu a. Zipu foto na faịlụ na ibe Chat.",
+      "reviewed": false
+    },
+    "chat.direct.hint": {
+      "text": "Iji zipu ya *{name}* dịka ozi, bido ya na *...*",
+      "reviewed": false
+    },
+    "chat.direct.sent": {
+      "text": "✓ Ezigara ya {names}.",
+      "reviewed": false
+    },
+    "chat.direct.not_sent": {
+      "text": "E zighị ya *{name}*: {reason}.",
+      "reviewed": false
+    },
     "chat.link.photo": {
       "text": "Foto",
       "reviewed": false
@@ -5221,7 +5253,7 @@
       "reviewed": false
     },
     "wa.mention.how": {
-      "text": "Kwuo ole na ihe ị chọrọ n'aka *{name}*, dịka *20 bags of rice from @{name}*.",
+      "text": "Kwuo ole na ihe ị chọrọ n'aka *{name}*, dịka *20 bags of rice from @{name}*. Iji zipu ya *{name}* dịka ozi, bido ya na *...*",
       "reviewed": false
     },
     "wa.mention.draft": {

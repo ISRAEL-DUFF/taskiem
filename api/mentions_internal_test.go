@@ -10,13 +10,27 @@ import (
 // Mentions read (mentions.go): the longest linked name after "@", what is
 // asked of each, and the names that are no linked business.
 func TestParseMentions(t *testing.T) {
-	names := []string{"Dangote", "Dangote Stores", "Cherry Blocks"}
+	act := func(names ...string) []links.Link {
+		out := make([]links.Link, len(names))
+		for i, n := range names {
+			out[i] = links.Link{Name: n, State: links.Active}
+		}
+		return out
+	}
+	type bt struct{ Business, Text string }
+	parts := func(mo mentionOrder) []bt {
+		out := []bt{}
+		for _, p := range mo.Parts {
+			out = append(out, bt{p.Business, p.Text})
+		}
+		return out
+	}
+	names := act("Dangote", "Dangote Stores", "Cherry Blocks")
 	got := parseMentions("Buy 400 bags of cement from @Dangote Stores and 20 pieces of blocks from @cherry blocks, please", names)
-	want := []mentionPart{{Business: "Dangote Stores", Text: "400 bags of cement"}, {Business: "Cherry Blocks", Text: "20 pieces of blocks"}}
-	if !reflect.DeepEqual(got.Parts, want) || len(got.Unknown) != 0 {
+	if want := []bt{{"Dangote Stores", "400 bags of cement"}, {"Cherry Blocks", "20 pieces of blocks"}}; !reflect.DeepEqual(parts(got), want) || len(got.Unknown) != 0 {
 		t.Fatalf("two businesses: %+v", got)
 	}
-	if got := parseMentions("order 5 rice from @Dangote", names); len(got.Parts) != 1 || got.Parts[0].Business != "Dangote" || got.Parts[0].Text != "5 rice" {
+	if got := parseMentions("order 5 rice from @Dangote", names); !reflect.DeepEqual(parts(got), []bt{{"Dangote", "5 rice"}}) || len(got.Parts[0].Links) != 1 {
 		t.Fatalf("the shorter name: %+v", got)
 	}
 	if got := parseMentions("10 bags from @Nobody and 2 from @Dangote", names); !reflect.DeepEqual(got.Unknown, []string{"Nobody"}) {
@@ -27,16 +41,27 @@ func TestParseMentions(t *testing.T) {
 	}
 	// Characters whose lower case is another length in bytes (the Kelvin
 	// sign, a dotted capital I) neither panic nor shift what follows.
-	if got := parseMentions("3 bags from @KK and 2 rice from @Dangote", names); !reflect.DeepEqual(got.Unknown, []string{"KK"}) ||
-		len(got.Parts) != 1 || got.Parts[0].Business != "Dangote" || got.Parts[0].Text != "2 rice" {
+	if got := parseMentions("3 bags from @KK and 2 rice from @Dangote", names); len(got.Unknown) != 1 || !reflect.DeepEqual(parts(got), []bt{{"Dangote", "2 rice"}}) {
 		t.Fatalf("the Kelvin sign: %+v", got)
 	}
-	if got := parseMentions("İyi 5 rice from @İzmir Stores and 2 garri from @dangote", append(names, "İzmir Stores")); len(got.Parts) != 2 ||
-		got.Parts[0].Business != "İzmir Stores" || got.Parts[0].Text != "İyi 5 rice" || got.Parts[1].Business != "Dangote" || got.Parts[1].Text != "2 garri" {
+	if got := parseMentions("İyi 5 rice from @İzmir Stores and 2 garri from @dangote", append(names, act("İzmir Stores")...)); !reflect.DeepEqual(parts(got), []bt{{"İzmir Stores", "İyi 5 rice"}, {"Dangote", "2 garri"}}) {
 		t.Fatalf("a dotted capital I: %+v", got)
 	}
-	if got := parseMentions("2 from @KELVİN", append(names, "Kelvin")); len(got.Parts) != 0 || len(got.Unknown) != 1 {
+	if got := parseMentions("2 from @KELVİN", append(names, act("Kelvin")...)); len(got.Parts) != 0 || len(got.Unknown) != 1 {
 		t.Fatalf("İ is not i: %+v", got)
+	}
+	// An amount after "@" is no business.
+	if got := parseMentions("buy 20 bags @4500 from @Dangote", names); len(got.Unknown) != 0 || !reflect.DeepEqual(parts(got), []bt{{"Dangote", "20 bags @4500"}}) {
+		t.Fatalf("an amount: %+v", got)
+	}
+	// The start of a name names it (docs/spec/direct-messages.md §3).
+	long := act("Dangote Nigeria Ltd", "BUA Foods Plc")
+	if got := parseMentions("Buy 20 bags of cement from @Dangote and 5 sugar from @bua", long); !reflect.DeepEqual(parts(got), []bt{{"Dangote Nigeria Ltd", "20 bags of cement"}, {"BUA Foods Plc", "5 sugar"}}) {
+		t.Fatalf("the start of the name: %+v", got)
+	}
+	got = parseMentions("@Dangote price?", act("Dangote Cement", "Dangote Sugar"))
+	if len(got.Parts) != 1 || len(got.Parts[0].Links) != 2 || got.Parts[0].Typed != "Dangote" || got.Parts[0].At != 0 || got.Parts[0].End != 8 {
+		t.Fatalf("two that fit: %+v", got)
 	}
 }
 
