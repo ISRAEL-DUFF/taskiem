@@ -592,6 +592,11 @@ func (s *Server) signupMake(ctx context.Context, sc *signupChat, st *signupState
 			switch channel {
 			case "telegram":
 				err = tx.QueryRow(ctx, `SELECT taskiem_chat_bind_telegram($1, $2, $3)`, owner, sc.tg.FromID, sc.tg.Username).Scan(&outcome)
+				if err == nil && outcome == "ok" {
+					// The number they shared: how the login page finds them
+					// (chat_signin.go).
+					_, err = tx.Exec(ctx, `SELECT taskiem_chat_telegram_number($1, $2)`, owner, number)
+				}
 			case "slack":
 				err = join(tx, tenant, owner)
 			default:

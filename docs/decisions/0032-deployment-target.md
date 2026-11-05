@@ -22,7 +22,7 @@ The load today is small: the Payrolla pilot pays 2 people (₦3,000), Payrolla h
 3. **A VM deployment must still keep the platform's guarantees.** Each of these is required, not optional:
    - Postgres 16 on a managed service or a separate host with backups and point-in-time recovery (spec 15.4); not a container on the same VM's disk.
    - OpenBao with persistent, unsealed storage (`TASKIEM_KMS=openbao`). Never the Compose file's dev-mode OpenBao, which loses every secret on restart; never `TASKIEM_KMS=local`.
-   - HTTPS only: `TASKIEM_PUBLIC_URL` on `https://`, secure cookies, HSTS (on by default with an https URL), admins held to passkeys (the default).
+   - HTTPS only: `TASKIEM_PUBLIC_URL` on `https://`, secure cookies, HSTS (on by default with an https URL), admins held to passkeys (the default; **amended** November 2026: off by default, chosen per person and per business, [optional passkeys](../spec/optional-passkeys.md)).
    - Container steps off: `TASKIEM_WORKER_QUEUES` without `container`, and no `TASKIEM_CONTAINER_*` set. The `local` runner is never used outside a developer's machine.
    - `TASKIEM_ANCHOR_DIR` and `TASKIEM_ARCHIVE_DIR` on a persistent volume, ideally write-once for anchors.
    - Hosted in Nigeria (spec 2.3, P4-C1), with the same metrics, alerts and status page as the cloud (0023).

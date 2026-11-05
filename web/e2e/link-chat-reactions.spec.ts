@@ -148,12 +148,19 @@ test("a reaction is seen by both businesses, changed, added to by the other, and
   await expect(
     bubble(buyer, "Rice is back").getByRole("button", { name: /^❤️ 1/ }),
   ).toHaveAttribute("aria-pressed", "false");
-  const server = await (
-    await buyer.request.get(`/v1/link-chats/${link}/messages`, { headers: H })
-  ).json();
-  expect(server.messages[0].reactions).toEqual([
-    { emoji: "❤️", count: 1, by: ["Dangote"] },
-  ]);
+  // The chip changes before the server has answered: wait for the server.
+  await expect
+    .poll(
+      async () =>
+        (
+          await (
+            await buyer.request.get(`/v1/link-chats/${link}/messages`, {
+              headers: H,
+            })
+          ).json()
+        ).messages[0].reactions,
+    )
+    .toEqual([{ emoji: "❤️", count: 1, by: ["Dangote"] }]);
 });
 
 test("a reaction that cannot be given is taken off again, with the reason", async ({

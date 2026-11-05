@@ -1688,6 +1688,10 @@
       "text": "• *build* da abin da kake son a sarrafa kai tsaye, misali *build every Friday text my customers who owe me* (za a adana shi a matsayin daftari bayan ka tabbatar)",
       "reviewed": false
     },
+    "wa.help.signin": {
+      "text": "• *sign in* don hanyar shiga manhajar yanar gizo; *password* don shiga da imel; *sign out everywhere*",
+      "reviewed": false
+    },
     "wa.help.cancel": {
       "text": "• *cancel*: bar abin da ke gudana",
       "reviewed": false
@@ -3289,7 +3293,15 @@
       "reviewed": false
     },
     "wa.signin.link": {
-      "text": "Buɗe wannan hanyar don zaɓar kalmar sirrinku kuma ku shiga Taskiem a yanar gizo. Yana aiki sau ɗaya, na awa ɗaya; kada ku ba kowa:\n{link}",
+      "text": "Buɗe wannan hanyar don zaɓar kalmar sirrinka. Tana aiki sau ɗaya, na awa ɗaya; ka riƙe ta da kanka:\n{link}\nSannan ka shiga a yanar gizo da imel ɗinka (wanda ke *{domain}*) da kalmar sirrin.",
+      "reviewed": false
+    },
+    "wa.signin.chat_link": {
+      "text": "Buɗe wannan hanyar don shiga Taskiem a yanar gizo. Tana aiki sau ɗaya, na minti 10; ka riƙe ta da kanka:\n{link}",
+      "reviewed": false
+    },
+    "door.signin_email": {
+      "text": "Don shiga da kalmar sirri kana buƙatar imel tukuna: aika *email you@example.com* ka buɗe hanyar da muka aika maka ta imel. Sannan ka sake aika *password*.\nKo aika *sign in* don hanyar da za ta shigar da kai nan take.",
       "reviewed": false
     },
     "wa.signin.sso": {
@@ -3298,6 +3310,38 @@
     },
     "wa.signin.unavailable": {
       "text": "Ba a saita shiga ta yanar gizo a wannan Taskiem ba.",
+      "reviewed": false
+    },
+    "wa.signin.off": {
+      "text": "Shiga da WhatsApp ko Telegram a kashe yake a gare ka (Account a yanar gizo). Aika *password* don shiga da imel da kalmar sirri maimakon haka.",
+      "reviewed": false
+    },
+    "wa.signin.passkey": {
+      "text": "Masu gudanarwa suna shiga Taskiem da passkey ɗinsu: {link}",
+      "reviewed": false
+    },
+    "chat.signin.code": {
+      "text": "{code} ita ce lambar shigarka ta Taskiem. Za ta ƙare a minti 10. Kada ka raba ta; idan ba kai ka nema ba, ka yi watsi da wannan saƙon.",
+      "reviewed": false
+    },
+    "chat.signin.told": {
+      "text": "Ka shiga Taskiem a yanar gizo da hira ɗinka ({device}). Ba kai ba ne? Aika *sign out everywhere*.",
+      "reviewed": false
+    },
+    "account.passkey_only.on": {
+      "text": "Shiga Taskiem da passkey ɗinka kawai yanzu a kunne yake: kalmar sirrinka da hirarka ba za su ƙara shigar da kai a yanar gizo ba. Ba kai ba ne? Aika *sign out everywhere*.",
+      "reviewed": false
+    },
+    "account.passkey_only.off": {
+      "text": "Shiga Taskiem da passkey ɗinka kawai yanzu a kashe yake: kalmar sirrinka da hirarka suna sake shigar da kai. Ba kai ba ne? Aika *sign out everywhere*.",
+      "reviewed": false
+    },
+    "chat.signout.done": {
+      "text": "An fitar da kai daga yanar gizo ko'ina: an kawo ƙarshen zama {count}. Hirarka tana ci gaba kamar da.",
+      "reviewed": false
+    },
+    "chat.signout.none": {
+      "text": "Ba ka shiga yanar gizo a ko'ina ba.",
       "reviewed": false
     },
     "wa.status.denied": {
@@ -5172,10 +5216,6 @@
       "text": "Me kake so ka faɗa wa *{name}*? Aika *... @{name}* da saƙonka.",
       "reviewed": false
     },
-    "chat.direct.files": {
-      "text": "Kalmomi kawai ke zuwa kai tsaye ga kasuwanci da *...* a yanzu. Aika hotuna da fayiloli gare su a shafin Chat.",
-      "reviewed": false
-    },
     "chat.direct.hint": {
       "text": "Don aika shi ga *{name}* a matsayin saƙo, fara da *...*",
       "reviewed": false
@@ -5186,6 +5226,10 @@
     },
     "chat.direct.not_sent": {
       "text": "Ba a aika zuwa *{name}* ba: {reason}.",
+      "reviewed": false
+    },
+    "chat.direct.failed": {
+      "text": "Ba a aika zuwa *{name}* ba: wani abu ya faru ba daidai ba. Sake aika musu.",
       "reviewed": false
     },
     "chat.link.photo": {
@@ -5365,7 +5409,7 @@
       "reviewed": false
     },
     "wa.mention.which": {
-      "text": "More than one of your linked businesses is called *{name}*: {list}. Pick it on the Chat page, where each is its own conversation.",
+      "text": "*@{name}* na iya zama fiye da ɗaya daga cikin kasuwancin da aka haɗa da kai: {list}. Yi amfani da ƙarin sunan, ko zaɓe shi a shafin Chat.",
       "reviewed": false
     },
     "order.link.auto_changed_title": {

@@ -68,6 +68,7 @@ export function ResetPassword() {
       {done ? (
         <>
           <p role="status">{done}</p>
+          <p className="hint">Sign in with your email and this password.</p>
           <p>
             <Link to="/login">Sign in</Link>
           </p>

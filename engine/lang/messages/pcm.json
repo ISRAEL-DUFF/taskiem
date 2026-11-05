@@ -1688,6 +1688,10 @@
       "text": "• *build* and wetin you wan automate, e.g. *build every Friday text my customers who owe me* (e go save as draft after you confirm)",
       "reviewed": false
     },
+    "wa.help.signin": {
+      "text": "• *sign in* for link to the web app; *password* to enter with email; *sign out everywhere*",
+      "reviewed": false
+    },
     "wa.help.cancel": {
       "text": "• *cancel*: drop wetin dey go on",
       "reviewed": false
@@ -3289,7 +3293,15 @@
       "reviewed": false
     },
     "wa.signin.link": {
-      "text": "Open this link make you choose your password and enter Taskiem for web. E go work once, for one hour; no give anybody:\n{link}",
+      "text": "Open this link to choose your password. E go work once, for one hour; no show anybody:\n{link}\nThen enter for web with your email (the one for *{domain}*) and that password.",
+      "reviewed": false
+    },
+    "wa.signin.chat_link": {
+      "text": "Open this link to enter Taskiem for web. E go work once, for 10 minutes; no show anybody:\n{link}",
+      "reviewed": false
+    },
+    "door.signin_email": {
+      "text": "To enter with password, you need email first: send *email you@example.com* and open the link wey we go email you. Then send *password* again.\nOr send *sign in* for link wey go enter you straight.",
       "reviewed": false
     },
     "wa.signin.sso": {
@@ -3298,6 +3310,38 @@
     },
     "wa.signin.unavailable": {
       "text": "Sign in for web never set up for this Taskiem.",
+      "reviewed": false
+    },
+    "wa.signin.off": {
+      "text": "To enter with WhatsApp or Telegram don off for you (Account for web). Send *password* to enter with email and password instead.",
+      "reviewed": false
+    },
+    "wa.signin.passkey": {
+      "text": "Administrators dey enter Taskiem with their passkey: {link}",
+      "reviewed": false
+    },
+    "chat.signin.code": {
+      "text": "{code} na your Taskiem code to enter. E go expire for 10 minutes. No share am; if no be you ask for am, ignore this message.",
+      "reviewed": false
+    },
+    "chat.signin.told": {
+      "text": "You don enter Taskiem for web with your chat ({device}). No be you? Send *sign out everywhere*.",
+      "reviewed": false
+    },
+    "account.passkey_only.on": {
+      "text": "To enter Taskiem with only your passkey don on now: your password and chat no fit enter you for web again. No be you? Send *sign out everywhere*.",
+      "reviewed": false
+    },
+    "account.passkey_only.off": {
+      "text": "To enter Taskiem with only your passkey don off now: your password and chat fit enter you again. No be you? Send *sign out everywhere*.",
+      "reviewed": false
+    },
+    "chat.signout.done": {
+      "text": "You don comot from web everywhere: {count} session don end. Your chat still dey as before.",
+      "reviewed": false
+    },
+    "chat.signout.none": {
+      "text": "You no dey inside web anywhere.",
       "reviewed": false
     },
     "wa.status.denied": {
@@ -5172,10 +5216,6 @@
       "text": "Wetin you wan tell *{name}*? Send *... @{name}* and your message.",
       "reviewed": false
     },
-    "chat.direct.files": {
-      "text": "Na only words dey go straight to business with *...* for now. Send photo and file give them for the Chat page.",
-      "reviewed": false
-    },
     "chat.direct.hint": {
       "text": "To send am to *{name}* as message, start am with *...*",
       "reviewed": false
@@ -5186,6 +5226,10 @@
     },
     "chat.direct.not_sent": {
       "text": "E no reach *{name}*: {reason}.",
+      "reviewed": false
+    },
+    "chat.direct.failed": {
+      "text": "E no reach *{name}*: something spoil. Send am give them again.",
       "reviewed": false
     },
     "chat.link.photo": {
@@ -5365,7 +5409,7 @@
       "reviewed": false
     },
     "wa.mention.which": {
-      "text": "More than one of your linked businesses is called *{name}*: {list}. Pick it on the Chat page, where each is its own conversation.",
+      "text": "*@{name}* fit be more than one of the businesses wey you link with: {list}. Use more of the name, or pick am for the Chat page.",
       "reviewed": false
     },
     "order.link.auto_changed_title": {

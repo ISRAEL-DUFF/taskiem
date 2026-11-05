@@ -9,7 +9,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -518,35 +517,6 @@ func (s *Server) shopTurnOnOrders(ctx context.Context, c *chat) error {
 		msg += "\n" + c.t("wa.shop.orders_no_paystack", "link", c.t("connect.hint", "service", "paystack"))
 	}
 	return c.say(ctx, s, msg)
-}
-
-// waSignInLink answers "sign in" in chat (N6): a one-time link, good for
-// an hour, to choose a password and sign in on the web. The owner of a
-// business a field agent made has none yet; the chat's number or account
-// is already bound to them, so the link goes only where they are.
-func (s *Server) waSignInLink(ctx context.Context, c *chat) error {
-	if s.PublicURL == "" {
-		return c.say(ctx, s, c.t("wa.signin.unavailable"))
-	}
-	if ok, err := s.passwordUsable(ctx, c.p.UserID); err != nil || !ok {
-		if err != nil {
-			return err
-		}
-		return c.say(ctx, s, c.t("wa.signin.sso", "link", strings.TrimRight(s.PublicURL, "/")+"/login"))
-	}
-	if !s.limiter("wa-signin:"+c.p.UserID.String(), 10*time.Minute, 3).Allow() {
-		return c.say(ctx, s, c.t("wa.too_fast"))
-	}
-	token, selector, secretHash := newResetToken()
-	if _, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_auth_password_reset_issue($1, $2, $3, $4::interval, $5)`, c.p.UserID, selector, secretHash, time.Hour.String(), c.ch.Name()); err != nil {
-		return err
-	}
-	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
-		return waAudit(ctx, tx, c.ch.Name(), c.p, "auth.signin_link", c.p.UserID.String(), nil)
-	}); err != nil {
-		return err
-	}
-	return c.say(ctx, s, c.t("wa.signin.link", "link", strings.TrimRight(s.PublicURL, "/")+"/reset-password#token="+token))
 }
 
 // railNames are rails' display names, by connector id.
