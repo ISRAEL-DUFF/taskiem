@@ -511,9 +511,9 @@ func TestReleasedNumberIsAStranger(t *testing.T) {
 	chatSignupOn(w.world, "whatsapp")
 	const n1, n2, n3 = "+2348031235501", "+2348031235502", "+2348031235503"
 	anon := &client{t: t, base: w.base}
-	// born signs up from number, sets a password from the chat's link and
-	// signs in on the web.
-	born := func(number, business, password string) (uuid.UUID, *client) {
+	// born signs up from number and signs in on the web with the chat's
+	// one-time sign-in link.
+	born := func(number, business string) (uuid.UUID, *client) {
 		for _, m := range []string{"start", "yes", business, "Ada", "1", "1"} {
 			w.say(t, number, m)
 		}
@@ -521,13 +521,16 @@ func TestReleasedNumberIsAStranger(t *testing.T) {
 		if u == uuid.Nil {
 			t.Fatalf("no chat-born account for %s", number)
 		}
-		tok := signInToken(w.say(t, number, "sign in"))
-		anon.must(200, "POST", "/v1/auth/password/reset", map[string]any{"token": tok, "password": password})
-		return u, w.login(t, emailOf(t, w.world, u), password)
+		m := signinLinkRe.FindStringSubmatch(w.say(t, number, "sign in"))
+		if m == nil {
+			t.Fatalf("no sign-in link for %s", number)
+		}
+		out := anon.must(200, "POST", "/v1/auth/chat/link", map[string]any{"token": m[1], "bearer": true})
+		return u, &client{t: t, base: w.base, token: out["token"].(string)}
 	}
 
 	// Unlinked on the web.
-	a, web := born(n1, "Ada Foods", "ada-web-password-1")
+	a, web := born(n1, "Ada Foods")
 	web.must(204, "DELETE", "/v1/me/whatsapp", nil)
 	if e := emailOf(t, w.world, a); !strings.HasPrefix(e, "released+") {
 		t.Fatalf("after unlinking, the sign-in name is %s", e)
@@ -540,7 +543,7 @@ func TestReleasedNumberIsAStranger(t *testing.T) {
 	}
 
 	// Linked to another number on the web.
-	c, web := born(n2, "Chi Foods", "chi-web-password-1")
+	c, web := born(n2, "Chi Foods")
 	web.must(202, "POST", "/v1/me/whatsapp", map[string]any{"number": n3, "password": "chi-web-password-1"})
 	web.must(200, "POST", "/v1/me/whatsapp/verify", map[string]any{"code": codeRe.FindString(w.graph.Last(t, n3).Text)})
 	if e := emailOf(t, w.world, c); !strings.HasPrefix(e, "released+") {
