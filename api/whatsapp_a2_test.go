@@ -690,3 +690,27 @@ func TestWhatsAppOwnAppSendersCapped(t *testing.T) {
 		t.Fatalf("join on the shared number: %q", got)
 	}
 }
+
+// The PIN goes with the number (F53): linking a different number removes
+// it, audited, as unlinking does; linking the same number again keeps it.
+func TestWhatsAppPinGoesWithTheNumber(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	const n1, n2 = "+2348031235601", "+2348031235602"
+	w.bind(t, owner, n1)
+	if _, err := w.env.DB.Admin.Exec(ctx, `SELECT taskiem_wa_pin_set($1, $2)`, userID(t, owner), "$argon2id$v=19$m=65536,t=1,p=4$c2FsdHNhbHQ$aGFzaGhhc2g"); err != nil {
+		t.Fatal(err)
+	}
+	w.bind(t, owner, n1)
+	if p := owner.must(200, "GET", "/v1/me/whatsapp", nil)["pin"].(map[string]any); p["set"] != true {
+		t.Fatalf("after linking the same number again: %v", p)
+	}
+	w.bind(t, owner, n2)
+	if p := owner.must(200, "GET", "/v1/me/whatsapp", nil)["pin"].(map[string]any); p["set"] != false {
+		t.Fatalf("after linking another number: %v", p)
+	}
+	if !strings.Contains(toJSON(owner.must(200, "GET", "/v1/audit", nil)), `"whatsapp.pin.remove"`) {
+		t.Error("the removal is not audited")
+	}
+}
