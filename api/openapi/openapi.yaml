@@ -6066,7 +6066,7 @@ paths:
       tags:
       - Links
       summary: Pay a bill from Taskiem
-      description: 'A payout to the account the supplier issued the business, through the managed workflow: the name on the account found, approved under the business''s policy, paid once carrying the bill''s token (its reference and a short code), which the supplier''s Taskiem reads to count it towards the invoice. The supplier''s bank is found by name among the banks the payments account pays; with no single match it is refused (409). The bill is paying until the bank confirms or refuses, or the payment is rejected.'
+      description: 'A payout to the account the supplier issued the business, through the managed workflow: the name on the account found, approved under the business''s policy, paid once carrying the bill''s token (its reference and a short code), which the supplier''s Taskiem reads to count it towards the invoice. The supplier''s bank is found by name among the banks the payments account pays; with no single match it is refused (409). The bill is paying until the bank confirms or refuses, or the payment is rejected. What the bank confirmed sent and the supplier has not counted yet is not due again: with nothing else left, Pay is refused (409), to confirm the payment was for this bill instead.'
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -31700,7 +31700,7 @@ components:
     Bill:
       type: object
       additionalProperties: false
-      required: [id, link, supplier, supplier_name, reference, lines, amount_kobo, paid_kobo, due_kobo, status, allow_part_payments, disputed, declared_paid_kobo, paying_kobo, sent_kobo, mirrored_at, created_at]
+      required: [id, link, supplier, supplier_name, reference, lines, amount_kobo, paid_kobo, due_kobo, status, allow_part_payments, disputed, declared_paid_kobo, paying_kobo, sent_kobo, uncounted_kobo, mirrored_at, created_at]
       properties:
         id:
           type: string
@@ -31727,6 +31727,7 @@ components:
           description: What the supplier's match has counted paid
         due_kobo:
           type: integer
+          description: What is left to pay; what was sent from Taskiem and is not counted yet (uncounted_kobo) is not due again
         due_on:
           type: string
           format: date
@@ -31746,6 +31747,9 @@ components:
         sent_kobo:
           type: integer
           description: What the bank confirmed the business sent from Taskiem; the supplier's match counts it in paid_kobo
+        uncounted_kobo:
+          type: integer
+          description: Of what was sent from Taskiem, what the supplier's figure does not show yet (its match has not paired the payment, or its count has not come back); not due again, so the bill is not paid twice
         pay_account_number:
           type: string
           description: The account number the supplier issued this business; a transfer into it is matched to the supplier's invoices exactly

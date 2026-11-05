@@ -27,6 +27,8 @@ export interface Bill {
   /** A payment from Taskiem under way, and what the bank confirmed was sent. */
   paying_kobo: number;
   sent_kobo: number;
+  /** Of what was sent, what the supplier has not counted yet: not due again. */
+  uncounted_kobo: number;
   /** The account number the supplier issued this business, and its bank. */
   pay_account_number?: string;
   pay_bank_name?: string;
