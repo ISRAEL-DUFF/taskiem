@@ -108,7 +108,7 @@ test("a reaction is seen by both businesses, changed, added to by the other, and
   const picker = buyer
     .getByTestId("chat-more")
     .getByRole("group", { name: "React" });
-  await expect(picker.getByRole("button")).toHaveCount(6);
+  await expect(picker.getByRole("button")).toHaveCount(7); // the six, and the + for any emoji
   await axeBoth(buyer, "the reaction row in the menu");
   await picker.getByRole("button", { name: "React with thumbs up" }).click();
   const chip = bubble(buyer, "Rice is back").getByRole("button", {

@@ -1916,12 +1916,16 @@ button.chat-avatar { border: 0; padding: 0; cursor: pointer; }
 .react-pick { width: 36px; height: 36px; min-height: 36px; padding: 0; border: 0; background: none; border-radius: 50%; font-size: 22px; line-height: 1; }
 .react-pick:hover, .react-pick:focus-visible { background: var(--chat-select); }
 .react-pick[aria-pressed="true"] { background: var(--chat-select); box-shadow: inset 0 0 0 2px var(--accent); }
-.bubble.has-reactions { margin-bottom: 20px; }
-.bubble .reactions { position: absolute; bottom: -19px; left: 8px; display: flex; gap: 3px; z-index: 1; }
-.bubble.mine .reactions { left: auto; right: 8px; }
-.reaction-chip { display: inline-flex; align-items: center; gap: 3px; min-height: 24px; padding: 0 7px; border-radius: 999px; background: var(--chat-in); border: 1px solid var(--border); box-shadow: 0 1px 1px var(--chat-shadow); font-size: 14px; line-height: 1; color: var(--text); }
-.reaction-chip .count { font-size: 12px; color: var(--muted); }
-.reaction-chip[aria-pressed="true"] { border-color: var(--accent); background: var(--chat-select); }
+/* A reaction, as WhatsApp's: a small round chip on the bubble's bottom corner, half over its edge, with no border (a ring of the wallpaper's colour cuts it out), a count widening it into a pill. */
+.bubble.has-reactions { margin-bottom: 11px; padding-bottom: 13px; }
+.bubble.has-reactions .stamp.inline { bottom: 14px; }
+.bubble .reactions { position: absolute; bottom: -12px; left: 6px; display: flex; gap: 3px; z-index: 1; }
+.bubble.mine .reactions { left: auto; right: 6px; }
+.reaction-chip { display: inline-flex; align-items: center; justify-content: center; gap: 3px; min-width: 24px; min-height: 24px; padding: 0 5px; border-radius: 999px; background: var(--panel); border: 0; box-shadow: 0 0 0 2px var(--chat-wallpaper), 0 1px 2px var(--chat-shadow); font-size: 14px; line-height: 1; color: var(--text); }
+.reaction-chip .count { font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.reaction-chip[aria-pressed="true"] { background: var(--tint); }
+.reaction-chip[aria-pressed="true"] .count { color: var(--tint-text); }
+.reaction-chip:focus-visible { box-shadow: 0 0 0 2px var(--chat-wallpaper), var(--ring); }
 .reaction-chip:disabled { opacity: 1; cursor: default; }
 .bubble .stamp .starred { display: inline-flex; }
 .bubble .stamp .starred svg { width: 12px; height: 12px; fill: currentColor; stroke: none; }
@@ -1952,3 +1956,118 @@ button.chat-avatar { border: 0; padding: 0; cursor: pointer; }
 .bubble span.reply-button.pressed { color: var(--text); font-weight: 600; }
 .bubble span.reply-button svg { width: 16px; height: 16px; stroke-width: 2.2; }
 .bubble .channel-mark { margin-right: 4px; }
+
+/* Chat, the phone and the computer alike (WhatsApp's own look, in ours):
+   flat heads with plain icons, a pill search, big round avatars in the list,
+   a round button to start a chat, and on a phone the tab bar under the list
+   and a floating button over it. */
+.chat-list-head { flex-wrap: nowrap; padding: 14px 16px 6px; gap: 6px; }
+.chat-list-head h2 { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+.chat-list-head .icon-button, .chat-head .icon-button { background: transparent; border-color: transparent; box-shadow: none; color: var(--text); width: 40px; height: 40px; }
+.chat-list-head .icon-button:hover:not(:disabled), .chat-head .icon-button:hover:not(:disabled) { background: var(--chat-select); }
+.chat-menu a.menu-link { display: block; text-align: left; color: var(--text); text-decoration: none; padding: 10px 12px; min-height: 40px; border-radius: 6px; line-height: 20px; }
+.chat-menu a.menu-link:hover, .chat-menu a.menu-link:focus-visible { background: var(--chat-select); }
+.new-chat { display: inline-flex; align-items: center; justify-content: center; gap: 8px; flex: none; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: var(--brand); color: var(--brand-dark); box-shadow: none; }
+.new-chat:hover:not(:disabled) { background: var(--brand); filter: brightness(1.12); }
+.new-chat svg { width: 20px; height: 20px; stroke-width: 2.2; }
+:root[data-theme="dark"] .new-chat { background: var(--brand-dark); color: var(--brand-dark-text); }
+.new-chat .fab-label { display: none; }
+.chat-mode .filters { padding: 0; }
+.chat-mode .filters .search input { background: var(--panel-2); border-color: transparent; min-height: 42px; border-radius: 999px; font-size: 15px; }
+.chat-mode .filters .search input:focus { background: var(--panel); border-color: var(--accent); }
+.chat-mode .chat-chips { padding: 8px 0 8px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.chat-mode .chat-chips::-webkit-scrollbar { display: none; }
+.chat-mode .chat-chip { flex: none; background: transparent; border-color: var(--border-strong); min-height: 34px; font-size: 14px; padding: 4px 14px; }
+.chat-row { border-bottom: 0; padding: 10px 16px; margin: 0 -14px; gap: 14px; }
+.chat-row .chat-avatar { width: 52px; height: 52px; font-size: 20px; }
+.chat-row-top .title { font-size: 16px; font-weight: 600; }
+.chat-row-sub .preview { font-size: 14.5px; }
+.chat-row-time.unread { color: var(--ok); }
+@media (min-width: 900px) {
+  .chat-row { border-radius: 10px; margin: 0 -8px; padding: 10px 8px; }
+}
+.tabbar .tab-icon { position: relative; }
+.tab-count { position: absolute; top: -3px; right: 5px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; display: grid; place-items: center; background: var(--ok); color: var(--panel); font-size: 11px; font-weight: 700; line-height: 1; }
+@media (max-width: 860px) {
+  .chat-mode { --tabbar-h: calc(58px + env(safe-area-inset-bottom)); }
+  /* The list is a screen with the tab bar under it; a conversation takes the whole screen. */
+  .shell.chat-mode:not(.chat-open) .tabbar { display: flex; }
+  .shell.chat-mode:not(.chat-open) .main { height: calc(100dvh - var(--tabbar-h)); }
+  .chat-mode .chat-list-pane { padding-bottom: 88px; }
+  .new-chat { position: fixed; right: 16px; bottom: calc(var(--tabbar-h) + 16px); z-index: 30; width: auto; height: 56px; padding: 0 20px; border-radius: 16px; box-shadow: 0 4px 12px var(--chat-shadow); }
+  .new-chat .fab-label { display: inline; font-weight: 600; font-size: 15px; }
+  .chat-mode .chat-list-pane > :not(.chat-list-head) { margin-left: 16px; margin-right: 16px; }
+  .chat-row { margin: 0 -16px; }
+}
+.chat-menu-wrap > .icon-button svg { transform: rotate(90deg); stroke-width: 3; }
+
+/* The conversation, WhatsApp's way: a flat head with the name and who they
+   are, search and menu as plain icons; the messages on the wallpaper in
+   tight runs; one round pill for the box with the emoji, attach and camera
+   inside it, and the round microphone (send) beside it. */
+.chat-head { padding: 8px 8px 8px 4px; gap: 6px; min-height: 60px; background: var(--panel); }
+@media (min-width: 900px) { .chat-head { padding-left: 16px; } }
+.chat-head-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.chat-head .chat-head-main h2 { flex: none; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-sub { font-size: 13px; line-height: 1.25; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-head .chat-sub .typing { display: inline; color: var(--ok); font-size: 13px; font-weight: 500; }
+.chat-head .chat-avatar { width: 40px; height: 40px; }
+.chat-search-bar { padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--border); }
+.chat-search-bar .search input { background: var(--panel-2); border-color: transparent; border-radius: 999px; }
+.chat-mode .chat-pane { background: var(--chat-pattern), var(--chat-wallpaper); }
+.chat-mode .chat-stream { background: none; gap: 2px; padding: 8px 10px; }
+.chat-mode .chat-head, .chat-mode .chat-search-bar { position: relative; z-index: 3; }
+.chat-day { box-shadow: 0 1px 0.5px var(--chat-shadow); border-color: transparent; background: color-mix(in srgb, var(--panel) 92%, transparent); }
+.bubble { max-width: min(84%, 560px); padding: 6px 8px 5px; border-radius: 8px; }
+@media (min-width: 900px) { .bubble { max-width: min(65%, 620px); } }
+.bubble .text { font-size: 15px; line-height: 1.35; }
+@media (min-width: 900px) { .bubble .text { font-size: 14.5px; } }
+.bubble .quote { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; width: 100%; text-align: left; border-left: 4px solid var(--accent); border-top: 0; border-right: 0; border-bottom: 0; border-radius: 6px; padding: 5px 8px; font-size: 13.5px; box-shadow: none; }
+.bubble .quote .quote-who { font-weight: 600; font-size: 12.5px; color: var(--tint-text); }
+.bubble.mine .quote .quote-who { color: var(--chat-out-meta); }
+.bubble .quote .quote-text { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.composer { background: transparent; border-top: 0; padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); gap: 6px; align-items: flex-end; }
+@media (min-width: 900px) { .composer { background: var(--panel-2); padding: 10px 16px; } }
+.composer-pill { flex: 1; min-width: 0; display: flex; align-items: flex-end; background: var(--panel); border-radius: 24px; padding: 2px 4px; box-shadow: 0 1px 0.5px var(--chat-shadow); }
+.composer-pill textarea { flex: 1; min-width: 0; border: 0; background: transparent; box-shadow: none; border-radius: 20px; min-height: 40px; padding: 10px 6px; font-size: 15.5px; }
+.composer-pill textarea:focus { box-shadow: none; border-color: transparent; outline: 2px solid var(--accent); outline-offset: -2px; }
+.composer-pill .icon-button { background: transparent; border-color: transparent; box-shadow: none; color: var(--muted); width: 40px; height: 40px; }
+.composer-pill .icon-button:hover:not(:disabled) { background: var(--chat-select); color: var(--text); }
+.composer > .icon-button.primary, .composer > .send-button { flex: none; width: 48px; height: 48px; border-radius: 50%; }
+.composer > .send-button svg, .composer > .icon-button.primary svg { width: 22px; height: 22px; }
+.composer .recording { background: var(--panel); border-radius: 24px; padding: 0 14px; }
+.new-chat:focus-visible, .chat-list-head .icon-button:focus-visible, .chat-head .icon-button:focus-visible, .composer-pill .icon-button:focus-visible { box-shadow: var(--ring); }
+.bubble .read-more { display: inline; background: none; border: 0; padding: 0; min-height: 0; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; }
+.bubble .read-more:hover { text-decoration: underline; }
+.bubble .read-more:focus-visible { box-shadow: var(--ring); border-radius: 3px; }
+
+/* A message's menu, WhatsApp's way: it floats over the chat (the bubble keeps
+   its size): the reactions in a pill above the bubble, the actions in a card
+   by it, one to a row with an icon, the destructive one after a rule. */
+.bubble-pop { position: fixed; inset: 0; z-index: 70; pointer-events: none; }
+.bubble-pop > * { position: fixed; pointer-events: auto; }
+.pop-pill { display: flex; align-items: center; gap: 2px; padding: 6px 8px; max-width: calc(100vw - 16px); background: var(--panel); border-radius: 999px; box-shadow: 0 2px 12px var(--chat-shadow); animation: pop-in 0.12s ease-out; }
+.pop-pill .reaction-picker { flex-basis: auto; padding: 0; gap: 2px; }
+.pop-pill .react-pick { width: 38px; height: 38px; min-height: 38px; font-size: 24px; }
+.pop-card { display: flex; flex-direction: column; min-width: 220px; max-width: calc(100vw - 16px); padding: 6px 0; background: var(--panel); border-radius: 14px; box-shadow: 0 4px 18px var(--chat-shadow); animation: pop-in 0.12s ease-out; }
+.pop-item { display: flex; align-items: center; gap: 16px; width: 100%; min-height: 44px; padding: 8px 20px; border: 0; border-radius: 0; background: none; box-shadow: none; color: var(--text); font-size: 15px; text-align: left; justify-content: flex-start; }
+.pop-item svg { flex: none; width: 20px; height: 20px; color: var(--muted); }
+.pop-item:hover:not(:disabled), .pop-item:focus-visible { background: var(--chat-select); }
+.pop-item:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+.pop-item.danger, .pop-item.danger svg { color: var(--danger-text, var(--danger)); }
+.pop-sep { height: 1px; margin: 6px 12px; background: var(--border); }
+@keyframes pop-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .pop-pill, .pop-card { animation: none; } }
+/* The smiley beside a bubble on a computer, for a quick reaction. */
+.bubble-react { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  .bubble-react { position: absolute; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 30px; height: 30px; min-height: 30px; padding: 0; border: 0; border-radius: 50%; background: var(--panel); color: var(--muted); box-shadow: 0 1px 3px var(--chat-shadow); opacity: 0; transition: opacity 0.12s; }
+  .bubble.mine .bubble-react { right: calc(100% + 8px); }
+  .bubble:not(.mine) .bubble-react { left: calc(100% + 8px); }
+  .bubble:hover .bubble-react, .bubble-react:focus-visible { opacity: 1; }
+  .bubble-react svg { width: 18px; height: 18px; }
+}
+.pop-picker { width: min(360px, calc(100vw - 16px)); background: var(--panel); border-radius: 14px; box-shadow: 0 4px 18px var(--chat-shadow); overflow: hidden; animation: pop-in 0.12s ease-out; }
+.pop-picker .emoji-panel { border-top: 0; max-height: 330px; }
+.pop-pill .react-more { background: var(--chat-select); color: var(--muted); }
+.pop-pill .react-more svg { width: 20px; height: 20px; }

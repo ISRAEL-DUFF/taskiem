@@ -127,7 +127,8 @@ import { Toaster } from "./toast";
 import { NotificationSettings } from "./pages/NotificationSettings";
 import { PaymentsSettings } from "./pages/ReceiveMoney";
 import { brandFile } from "./brand";
-import { ChatLiveProvider, NotifyBanner } from "./pages/ChatLive";
+import { ChatLiveProvider, NotifyBanner, useChatLive } from "./pages/ChatLive";
+import { useTaskiemUnread } from "./lib/taskiemSeen";
 import { standalone, useInstall } from "./install";
 import { PULL_AT, pullRefreshes, pullShown } from "./lib/pull";
 
@@ -325,7 +326,7 @@ function SignedIn() {
   const navRef = useRef<HTMLElement>(null);
   const mainRef = useRef<HTMLElement>(null);
   useScrollableTables(mainRef);
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const off = areaOffFor(pathname, me?.areas);
   useEffect(() => setDrawer(false), [pathname]);
   // A row of tabs wider than a phone scrolls sideways: bring the open one into view.
@@ -508,9 +509,11 @@ function SignedIn() {
     </NavLink>
   );
   // The tab bar on a phone: what an owner opens most, four at most, then Menu.
+  // Chat is one of them, as WhatsApp's Chats is the first of its own.
   const quick = (
     [
       ["/home", "Home", "home", true],
+      ["/chat", "Chat", "chat", true],
       [
         "/money",
         "Money",
@@ -535,12 +538,15 @@ function SignedIn() {
     /^\/workflows\/[^/]+$/.test(pathname) && pathname !== "/workflows/new";
   // The chat fills the window the same way, as WhatsApp Web does.
   const chatting = pathname === "/chat";
+  // On a phone the list and a conversation are separate screens: the tab bar
+  // is the list's, and gives way to the conversation, as WhatsApp's does.
+  const chatOpen = chatting && !!new URLSearchParams(search).get("with");
   return (
     <ChatLiveProvider>
       <div
         className={
           chatting
-            ? "shell builder-mode chat-mode"
+            ? `shell builder-mode chat-mode${chatOpen ? " chat-open" : ""}`
             : building
               ? "shell builder-mode"
               : "shell"
@@ -889,6 +895,7 @@ function SignedIn() {
             <NavLink key={to} to={to}>
               <span className="tab-icon">
                 <Icon name={icon} />
+                {to === "/chat" && <ChatTabCount />}
               </span>
               {label}
             </NavLink>
@@ -908,6 +915,20 @@ function SignedIn() {
         </nav>
       </div>
     </ChatLiveProvider>
+  );
+}
+
+/** The unread count on the Chat tab (conversations and Taskiem's own). */
+function ChatTabCount() {
+  const { unread } = useChatLive();
+  const taskiem = useTaskiemUnread();
+  const n = unread + taskiem;
+  if (n <= 0) return null;
+  return (
+    <span className="tab-count">
+      <span aria-hidden="true">{n > 99 ? "99+" : n}</span>
+      <span className="sr-only">{n} unread</span>
+    </span>
   );
 }
 

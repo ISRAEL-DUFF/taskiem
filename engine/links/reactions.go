@@ -10,18 +10,84 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Reactions are WhatsApp's: one emoji per member per message, from the six
-// it offers, seen by both businesses. A star is a member's own.
+// Reactions are WhatsApp's: one emoji per member per message, seen by both
+// businesses. Six are offered first; the "+" gives any one emoji. A star is a
+// member's own.
 
-// ReactionEmoji are the emoji a message may be reacted to with.
+// ReactionEmoji are the emoji offered first.
 var ReactionEmoji = []string{"👍", "❤️", "😂", "😮", "😢", "🙏"}
 
-// ValidReaction reports whether emoji is one of the six.
-func ValidReaction(emoji string) bool {
-	for _, e := range ReactionEmoji {
-		if e == emoji {
-			return true
+// maxReactionRunes bounds one emoji's code points (a family of four with
+// skin tones is 18; a flag, 2; a keycap, 3).
+const maxReactionRunes = 20
+
+// ValidReaction reports whether s is exactly one emoji: a pictograph (with
+// its variation selector, skin tone, joiners and the pictographs they join),
+// a flag (two regional indicators), or a keycap. Nothing else: no letters
+// or digits alone, no spaces, no markup, no two emoji.
+func ValidReaction(s string) bool {
+	runes := []rune(s)
+	if len(runes) == 0 || len(runes) > maxReactionRunes || len(s) > 64 {
+		return false
+	}
+	clusters := 0
+	prev := rune(0)
+	regional := 0
+	for i, r := range runes {
+		switch {
+		case r == 0x200D: // joiner: the next pictograph joins this one
+			if i == 0 || i == len(runes)-1 {
+				return false
+			}
+		case r == 0xFE0F || r == 0x20E3 || (r >= 0xE0020 && r <= 0xE007F): // variation selector, keycap, tags
+			if i == 0 {
+				return false
+			}
+		case r >= 0x1F3FB && r <= 0x1F3FF: // skin tone: joins what it follows
+			if i == 0 {
+				return false
+			}
+		case r >= 0x1F1E6 && r <= 0x1F1FF: // regional indicators: two make a flag
+			if prev == 0x200D || (regional%2 == 1) {
+				regional++
+				break
+			}
+			regional++
+			clusters++
+		case isKeycapBase(r):
+			if i != 0 || len(runes) < 2 {
+				return false
+			}
+			clusters++
+		case isPictograph(r):
+			if prev != 0x200D {
+				clusters++
+			}
+		default:
+			return false
 		}
+		prev = r
+	}
+	if regional%2 == 1 {
+		return false
+	}
+	return clusters == 1
+}
+
+func isKeycapBase(r rune) bool { return r == '#' || r == '*' || (r >= '0' && r <= '9') }
+
+// isPictograph is Unicode's emoji blocks, near enough for a reaction.
+func isPictograph(r rune) bool {
+	switch {
+	case r >= 0x1F000 && r <= 0x1FAFF, // symbols and pictographs, emoticons, transport, supplemental, extended-A
+		r >= 0x2600 && r <= 0x27BF, // miscellaneous symbols, dingbats
+		r >= 0x2300 && r <= 0x23FF, // miscellaneous technical (watch, hourglass, play buttons)
+		r >= 0x2B05 && r <= 0x2B55, // arrows, stars, circles
+		r >= 0x2190 && r <= 0x21FF, // arrows
+		r >= 0x25A0 && r <= 0x25FF, // geometric shapes
+		r == 0x203C, r == 0x2049, r == 0x2122, r == 0x2139, r == 0x24C2,
+		r == 0x2934, r == 0x2935, r == 0x3030, r == 0x303D, r == 0x3297, r == 0x3299, r == 0x00A9, r == 0x00AE:
+		return true
 	}
 	return false
 }
