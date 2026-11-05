@@ -214,14 +214,7 @@ func (s *Server) keepHistory(ctx context.Context, tenant, user uuid.UUID, channe
 		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM memberships WHERE tenant_id = $1 AND user_id = $2)`, tenant, user).Scan(&member); err != nil || !member {
 			return err
 		}
-		// Sealed under the member's own subject (one key per member, not
-		// one per message), and under anyone it names that can be found.
-		owner, err := s.Store.PII.SealTx(ctx, tx, tenant, "member", user.String())
-		if err != nil {
-			return err
-		}
-		subject, _ := owner["subject"].(string)
-		env, err := pii.SealText(ctx, s.Store.PII, tx, tenant, subject, "other", text)
+		env, err := s.sealMemberText(ctx, tx, tenant, user, text)
 		if err != nil {
 			return err
 		}
@@ -241,6 +234,19 @@ func (s *Server) keepHistory(ctx context.Context, tenant, user uuid.UUID, channe
 		return uuid.Nil
 	}
 	return id
+}
+
+// sealMemberText seals what a member wrote under the member's own subject
+// (one key per member, not one per message), and under anyone it names
+// that can be found (pii.SealText): erased with the member, or with them.
+// It is an envelope, or pii.Erased when someone it names was erased.
+func (s *Server) sealMemberText(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID, text string) (any, error) {
+	owner, err := s.Store.PII.SealTx(ctx, tx, tenant, "member", user.String())
+	if err != nil {
+		return nil, err
+	}
+	subject, _ := owner["subject"].(string)
+	return pii.SealText(ctx, s.Store.PII, tx, tenant, subject, "other", text)
 }
 
 // openText opens a kept message: sealed under its member and under each

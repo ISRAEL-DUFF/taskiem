@@ -28976,7 +28976,7 @@ components:
           description: Why a failed build failed.
         goal:
           type: string
-          description: The goal, with personal data redacted.
+          description: The goal, with personal data redacted; for a build asked for in chat, the goal as the member typed it, opened from its seal (`[erased]` once the member is erased, empty for chat builds made before this was kept).
         workflow:
           $ref: '#/components/schemas/NullableUUID'
           description: The workflow the build changes, if any.

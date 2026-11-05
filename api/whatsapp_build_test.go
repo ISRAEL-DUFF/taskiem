@@ -292,3 +292,57 @@ func TestWhatsAppBuildSaveConflict(t *testing.T) {
 		t.Errorf("the build is kept and nothing saved: %q %d %v", status, versions, err)
 	}
 }
+
+// A build goal typed in chat is the member's words, as their chat history
+// is: the build keeps it sealed under the member (shown to the business,
+// erased with the member), and its model calls keep tokens and what
+// happened, not the words (F50b).
+func TestChatBuildGoalIsSealedUnderItsMember(t *testing.T) {
+	w := newWAWorld(t)
+	w.srv.AI = &api.AISettings{Provider: waBuildModel(t, nil)}
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	const on = "+2348010000031"
+	w.bind(t, owner, on)
+	before := len(w.graph.Sent(on))
+	w.say(t, on, "build every morning text Chinedu Okafor good morning")
+	if got := w.lastTo(t, on, before+1); len(got) != 1 {
+		t.Fatalf("draft: %+v", got)
+	}
+	ctx := context.Background()
+	var build uuid.UUID
+	var goal string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT id, goal FROM ai_builds WHERE channel = 'whatsapp'`).Scan(&build, &goal); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(goal, "Chinedu") {
+		t.Errorf("the goal is kept in the clear: %q", goal)
+	}
+	var kept string
+	var tokens int64
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT string_agg(messages::text || ' ' || COALESCE(response, ''), ' '), count(*) FROM ai_interactions WHERE build_id = $1`, build).
+		Scan(&kept, &tokens); err != nil || tokens == 0 {
+		t.Fatalf("interactions: %d %v", tokens, err)
+	}
+	if strings.Contains(kept, "Chinedu") || strings.Contains(kept, "good morning") {
+		t.Errorf("the build's model calls keep the goal: %s", kept)
+	}
+	// The business still sees what was asked.
+	if g := owner.must(200, "GET", "/v1/ai/builds/"+build.String(), nil)["goal"]; g != "every morning text Chinedu Okafor good morning" {
+		t.Errorf("goal shown: %v", g)
+	}
+	// Erasing the member erases it.
+	var user uuid.UUID
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT id FROM users WHERE email = 'owner@acme.test'`).Scan(&user); err != nil {
+		t.Fatal(err)
+	}
+	subject, err := w.env.Vault.SubjectFor(ctx, uuid.MustParse(tenantOf(t, owner)), "member", user.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.env.Vault.Erase(ctx, uuid.MustParse(tenantOf(t, owner)), subject, "dpo"); err != nil {
+		t.Fatal(err)
+	}
+	if g := owner.must(200, "GET", "/v1/ai/builds/"+build.String(), nil)["goal"]; g == "every morning text Chinedu Okafor good morning" {
+		t.Errorf("the goal outlived its member's erasure: %v", g)
+	}
+}

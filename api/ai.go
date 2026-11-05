@@ -210,8 +210,18 @@ func (s *Server) startAIBuild(ctx context.Context, who aiActor, req aiBuildReq, 
 		}
 		// A plan without AI gets no ai steps proposed.
 		breq.Context.AISteps = breq.Context.AISteps && s.Billing.Require(ctx, who.tenant, billing.FeatureAI) == nil
-		_, err = tx.Exec(ctx, `INSERT INTO ai_builds (id, tenant_id, actor, goal, workflow_id, environment, provider, model, channel, base_digest)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`, id, who.tenant, who.actor, pii.Redact(req.Goal), req.Workflow, req.Environment,
+		// A goal typed in chat is the member's words, as their chat history
+		// is: sealed under them, with no clear copy (F50b).
+		goal := pii.Redact(req.Goal)
+		var sealed any
+		if who.user != uuid.Nil && s.Store.PII != nil {
+			goal = ""
+			if sealed, err = s.sealMemberText(ctx, tx, who.tenant, who.user, req.Goal); err != nil {
+				return err
+			}
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO ai_builds (id, tenant_id, actor, goal, goal_sealed, workflow_id, environment, provider, model, channel, base_digest)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, id, who.tenant, who.actor, goal, sealed, req.Workflow, req.Environment,
 			s.AI.Provider.Name(), s.AI.Provider.Model(), channel, baseDigest)
 		return err
 	})
@@ -237,6 +247,10 @@ type aiActor struct {
 	tenant           uuid.UUID
 	actor, actorType string
 	ip               string
+	// user is the member who typed the goal in chat (uuid.Nil from the
+	// web): the build keeps it sealed under them, and its model calls keep
+	// no words (F50b).
+	user uuid.UUID
 }
 
 // aiBuildTimeout bounds a build: drafting and up to three corrections.
@@ -437,6 +451,17 @@ func (rec aiRecorder) Record(ctx context.Context, it builder.Interaction) error 
 		r := pii.Redact(it.Response.Text)
 		resp, stop, model, u = &r, it.Response.StopReason, it.Response.Model, it.Response.Usage
 	}
+	errText := it.Err
+	if rec.who.user != uuid.Nil {
+		// A goal typed in chat: the prompt carries it and the answer may
+		// repeat it, so the call keeps its tokens and what happened, as a
+		// chat's own model calls do (F50). The build keeps the goal sealed
+		// and its proposal; only a provider's error is kept.
+		msgs, resp = []byte("[]"), nil
+		if it.Outcome != "error" {
+			errText = ""
+		}
+	}
 	if model == "" {
 		model = rec.s.AI.Provider.Model()
 	}
@@ -445,7 +470,7 @@ func (rec aiRecorder) Record(ctx context.Context, it builder.Interaction) error 
 			response, stop_reason, outcome, error, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, total_tokens)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NULLIF($12, ''), $13, NULLIF($14, ''), $15, $16, $17, $18, $19)`,
 			uuid.Must(uuid.NewV7()), rec.who.tenant, rec.build, it.Round, it.Kind, rec.who.actor, rec.provider, model, it.SystemDigest, msgs,
-			resp, stop, it.Outcome, pii.Redact(it.Err), u.InputTokens, u.OutputTokens, u.CacheCreationTokens, u.CacheReadTokens, u.Total())
+			resp, stop, it.Outcome, pii.Redact(errText), u.InputTokens, u.OutputTokens, u.CacheCreationTokens, u.CacheReadTokens, u.Total())
 		return err
 	})
 }
@@ -663,10 +688,31 @@ func (s *Server) aiGetBuild(w http.ResponseWriter, r *http.Request) {
 	var v aiBuildView
 	var prop []byte
 	err = s.tx(r, func(tx pgx.Tx) error {
-		return tx.QueryRow(r.Context(), `SELECT id, status, stage, error, goal, workflow_id, environment, provider, model, proposal, actor, created_at,
+		var sealed any
+		if err := tx.QueryRow(r.Context(), `SELECT id, status, stage, error, goal, goal_sealed, workflow_id, environment, provider, model, proposal, actor, created_at,
 			finished_at, saved_workflow_id, saved_version, template_id, channel FROM ai_builds WHERE id = $1`, id).
-			Scan(&v.ID, &v.Status, &v.Stage, &v.Error, &v.Goal, &v.Workflow, &v.Environment, &v.Provider, &v.Model, &prop, &v.CreatedBy,
-				&v.CreatedAt, &v.FinishedAt, &v.SavedWorkflowID, &v.SavedVersion, &v.TemplateID, &v.Channel)
+			Scan(&v.ID, &v.Status, &v.Stage, &v.Error, &v.Goal, &sealed, &v.Workflow, &v.Environment, &v.Provider, &v.Model, &prop, &v.CreatedBy,
+				&v.CreatedAt, &v.FinishedAt, &v.SavedWorkflowID, &v.SavedVersion, &v.TemplateID, &v.Channel); err != nil {
+			return err
+		}
+		env, ok := sealed.(map[string]any)
+		if !ok || s.Store.PII == nil {
+			if str, ok := sealed.(string); ok {
+				v.Goal = str // [erased] already when it was sealed
+			}
+			return nil
+		}
+		// A goal typed in chat, sealed under its member: [erased] once
+		// they are.
+		goal, err := openText(r.Context(), s.Store.PII, tx, principalFrom(r.Context()).TenantID, env)
+		if errors.Is(err, pii.ErrErased) {
+			goal, err = pii.Erased, nil
+		}
+		if err != nil {
+			return err
+		}
+		v.Goal, _ = goal.(string)
+		return nil
 	})
 	if err != nil {
 		s.fail(w, r, err)
