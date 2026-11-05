@@ -238,6 +238,7 @@ func (s *Server) listRuns(w http.ResponseWriter, r *http.Request) {
 	query += ` ORDER BY r.started_at DESC LIMIT $5`
 	var out []runSummary
 	err = s.readTx(r, func(tx pgx.Tx) error {
+		//sqlcheck:built runColumns is a const and the filters are literal; every value is a $n argument
 		rows, err := tx.Query(r.Context(), query, args...)
 		if err != nil {
 			return err

@@ -326,6 +326,7 @@ func (s *Invoices) FindBookCustomers(ctx context.Context, tx pgx.Tx, tenant uuid
 		{`search LIKE $2 || '%'`, like, func(n string) bool { return strings.HasPrefix(n, q) }},
 		{`search LIKE '%' || $2 || '%'`, like, func(n string) bool { return strings.Contains(n, q) }},
 	} {
+		//sqlcheck:built cond.where is one of the three literals above; the words are $2
 		rows, err := tx.Query(ctx, `SELECT id FROM invoice_customers WHERE tenant_id = $1 AND `+cond.where+` ORDER BY created_at, id LIMIT 9`, tenant, cond.arg)
 		if err != nil {
 			return nil, err

@@ -242,6 +242,7 @@ func (s *Server) spendConnectLink(ctx context.Context, l *connectLink, spend boo
 	}
 	var n int64
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{l.Tenant}, func(tx pgx.Tx) error {
+		//sqlcheck:built q is one of the two literals above
 		tag, err := tx.Exec(ctx, q, l.Hash)
 		n = tag.RowsAffected()
 		return err

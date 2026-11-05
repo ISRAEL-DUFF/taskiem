@@ -598,6 +598,7 @@ func (s *Server) taskiemHistory(w http.ResponseWriter, r *http.Request) {
 			sql += ` AND created_at < $3`
 			args = append(args, *before)
 		}
+		//sqlcheck:built the filter and order are literals chosen above; the times are $n arguments
 		rows, err := tx.Query(r.Context(), sql+order, args...)
 		if err != nil {
 			return err

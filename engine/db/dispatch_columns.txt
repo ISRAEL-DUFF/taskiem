@@ -156,7 +156,6 @@ channel_languages.source
 channel_languages.updated_at
 chat_history.expires_at
 chat_history.id
-chat_live_buttons.expires_at
 chat_invites.address
 chat_invites.answered_at
 chat_invites.channel
@@ -178,6 +177,7 @@ chat_link_requests.token_hash
 chat_link_requests.used_at
 chat_link_requests.user_id
 chat_link_requests.username
+chat_live_buttons.expires_at
 chat_signups.address_hash
 chat_signups.channel
 chat_signups.data
@@ -521,6 +521,8 @@ invoice_customer_links.customer_id
 invoice_customer_links.id
 invoice_customer_links.page_token_hash
 invoice_customer_links.tenant_id
+invoice_customers.subject_id
+invoice_customers.tenant_id
 invoice_paid_starts.attempts
 invoice_paid_starts.claimed_until
 invoice_paid_starts.created_at
@@ -554,11 +556,11 @@ link_orders_due.kind
 link_orders_due.object_id
 link_orders_due.tenant_id
 link_orders_due.tries
-link_starts.created_at
-link_starts.id
 link_settings.code
 link_settings.findable
 link_settings.tenant_id
+link_starts.created_at
+link_starts.id
 link_typing.link_id
 link_typing.tenant_id
 link_typing.until
@@ -1001,6 +1003,12 @@ sso_requests.return_to
 sso_requests.state
 sso_requests.tenant_id
 sso_requests.verifier
+status_incidents.id
+status_incidents.kind
+status_probes.at
+status_updates.id
+status_updates.incident_id
+status_updates.status
 stock_movements.change
 stock_movements.claimed_at
 stock_movements.count_after
@@ -1032,6 +1040,7 @@ storefront_blocks.kind
 storefront_blocks.position
 storefront_catalogue.item
 storefront_catalogue.position
+storefront_catalogue.row_id
 storefront_catalogue.storefront_id
 storefront_catalogue.table_name
 storefront_changes.action
@@ -1096,11 +1105,13 @@ storefront_order_payments.woke_run
 storefront_orders.action_id
 storefront_orders.created_at
 storefront_orders.deposit_kobo
+storefront_orders.due_kobo
 storefront_orders.ends_at
 storefront_orders.expires_at
 storefront_orders.front_id
 storefront_orders.id
 storefront_orders.kind
+storefront_orders.paid_kobo
 storefront_orders.pay_to_kobo
 storefront_orders.payment
 storefront_orders.payment_url

@@ -338,6 +338,7 @@ func (d *Dispatch) ListTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, f Li
 	if f.Open {
 		q += ` AND d.status IN ('offered', 'accepted', 'picked_up', 'arrived')`
 	}
+	//sqlcheck:built deliveryCols is a const, conditions are literals and $n from a count
 	rows, err := tx.Query(ctx, q+` ORDER BY d.offered_at DESC LIMIT 300`, args...)
 	if err != nil {
 		return nil, err
@@ -706,6 +707,7 @@ func (d *Dispatch) press(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x Del
 		if col == "answered_at" {
 			q = `UPDATE deliveries SET status = $2, answered_at = now() WHERE id = $1`
 		}
+		//sqlcheck:built col is a literal at every call in press below
 		if _, err := tx.Exec(ctx, q, x.ID, status); err != nil {
 			return err
 		}
@@ -912,6 +914,7 @@ func (d *Dispatch) Release(ctx context.Context, tenant uuid.UUID, reference, act
 		default:
 			return fmt.Errorf("%w: %s is delivered", ErrMove, reference)
 		}
+		//sqlcheck:built col is one of the two literals above
 		if _, err := tx.Exec(ctx, `UPDATE deliveries SET status = $2, `+col+` = now() WHERE id = $1`, x.ID, status); err != nil {
 			return err
 		}

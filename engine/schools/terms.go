@@ -130,6 +130,7 @@ func (s *Schools) Sessions(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]
 }
 
 func (s *Schools) terms(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, where string, args ...any) ([]Term, error) {
+	//sqlcheck:built termCols is a const and where a literal at every caller (fees.go, Sessions)
 	rows, err := tx.Query(ctx, `SELECT `+termCols+` FROM school_terms t JOIN school_sessions ss ON ss.id = t.session_id
 		WHERE t.tenant_id = $1 AND `+where+` ORDER BY t.starts_on, t.name`, append([]any{tenant}, args...)...)
 	if err != nil {

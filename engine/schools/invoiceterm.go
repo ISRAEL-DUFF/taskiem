@@ -491,6 +491,7 @@ func (s *Schools) termInvoices(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 }
 
 func (s *Schools) termInvoicesBy(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, where, order string, args ...any) ([]TermInvoice, error) {
+	//sqlcheck:built a const plus where and order, literals at every caller (fees.go, mirror.go, TermInvoices)
 	rows, err := tx.Query(ctx, termInvoiceSelect+` WHERE ti.tenant_id = $1 AND `+where+order, append([]any{tenant}, args...)...)
 	if err != nil {
 		return nil, err
@@ -554,6 +555,7 @@ func (s *Schools) rebuildDrafts(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 	if s.Invoices == nil {
 		return 0, nil
 	}
+	//sqlcheck:built where is a literal at every caller (fees.go)
 	rows, err := tx.Query(ctx, `SELECT ti.invoice_id, ti.term_id, ti.student_id, ti.class_id FROM school_term_invoices ti JOIN customer_invoices i ON i.id = ti.invoice_id
 		WHERE ti.tenant_id = $1 AND i.status = 'draft' AND `+where, append([]any{tenant}, args...)...)
 	if err != nil {

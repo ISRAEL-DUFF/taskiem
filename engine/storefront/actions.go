@@ -257,6 +257,7 @@ func Actions(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]Action, error)
 			}
 		}
 		var wf uuid.UUID
+		//sqlcheck:built BuiltinTriggerSQL is given the alias t and the placeholder $1
 		err := tx.QueryRow(ctx, `SELECT workflow_id FROM triggers t WHERE type = 'storefront' AND `+BuiltinTriggerSQL("t", "$1")+` AND environment = 'prod'`, k).Scan(&wf)
 		if err == nil {
 			a.Workflow = &wf
@@ -417,6 +418,7 @@ func SaveAction(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, a Action) (Act
 		if a.ID != nil {
 			err = tx.QueryRow(ctx, `SELECT count(*) FROM triggers WHERE type = 'storefront' AND storefront_action_id = $1 AND environment = 'prod'`, *a.ID).Scan(&n)
 		} else {
+			//sqlcheck:built BuiltinTriggerSQL is given the alias t and the placeholder $1
 			err = tx.QueryRow(ctx, `SELECT count(*) FROM triggers t WHERE type = 'storefront' AND `+BuiltinTriggerSQL("t", "$1")+` AND environment = 'prod'`, a.Kind).Scan(&n)
 		}
 		if err != nil {

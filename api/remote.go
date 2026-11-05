@@ -169,6 +169,7 @@ func undeployTx(ctx context.Context, tx pgx.Tx, wf uuid.UUID, env string) error 
 		`UPDATE form_endpoints SET status = 'closed', updated_at = now() WHERE workflow_id = $1 AND environment = $2 AND status IN ('live', 'paused')`,
 		`UPDATE email_endpoints SET status = 'closed', updated_at = now() WHERE workflow_id = $1 AND environment = $2 AND status = 'live'`,
 	} {
+		//sqlcheck:built the statements are literals in this function
 		if _, err := tx.Exec(ctx, q, wf, env); err != nil {
 			return err
 		}

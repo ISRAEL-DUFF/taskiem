@@ -278,7 +278,9 @@ func (o *Orders) ListOrdersOn(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 		args = append(args, status)
 		q += fmt.Sprintf(` AND status = $%d`, len(args))
 	}
-	rows, err := tx.Query(ctx, q+fmt.Sprintf(` ORDER BY created_at DESC LIMIT %d`, max(1, min(limit, 200))), args...)
+	args = append(args, max(1, min(limit, 200)))
+	//sqlcheck:built orderCols is a const, conditions are literals, the limit goes in as $n and $n from a count
+	rows, err := tx.Query(ctx, q+fmt.Sprintf(` ORDER BY created_at DESC LIMIT $%d`, len(args)), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -355,6 +357,7 @@ func (o *Orders) process(ctx context.Context, x inboxRow) error {
 	exists := false
 	err = db.InTenantTx(ctx, o.Pool, []uuid.UUID{x.tenant}, func(tx pgx.Tx) error {
 		var raw []byte
+		//sqlcheck:built actionOf is given only placeholders
 		if err := tx.QueryRow(ctx, `SELECT COALESCE(s.published_slug, s.slug), a.options FROM storefronts s
 			JOIN storefront_actions a ON a.storefront_id = s.id AND `+actionOf("$2", "$3")+` WHERE s.id = $1`, x.storefront, x.action, x.kind).Scan(&slug, &raw); err != nil {
 			return err
@@ -561,6 +564,7 @@ func (o *Orders) record(ctx context.Context, tx pgx.Tx, x inboxRow, sub Submissi
 	// customer as their details are (fronts §5.5).
 	var answers map[string]any
 	var form []byte
+	//sqlcheck:built actionOf is given only placeholders
 	if err := tx.QueryRow(ctx, `SELECT a.form FROM storefront_actions a WHERE a.storefront_id = $1 AND `+actionOf("$2", "$3"), x.storefront, x.action, x.kind).
 		Scan(&form); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return Order{}, err
@@ -572,6 +576,7 @@ func (o *Orders) record(ctx context.Context, tx pgx.Tx, x inboxRow, sub Submissi
 	}
 	id := uuid.Must(uuid.NewV7())
 	// The submission names its action and front (fronts §5.5).
+	//sqlcheck:built actionOf is given only placeholders
 	if tag, err := tx.Exec(ctx, `INSERT INTO storefront_orders (id, tenant_id, storefront_id, kind, reference, status_hash, status, customer, subject_id, basket,
 		total_kobo, fulfilment, payment, expires_at, status_key, deposit_kobo, service_id, service_name, starts_at, ends_at, price_change, note, zone, delivery_kobo,
 		action_id, front_id, answers, instalments, waitlist)

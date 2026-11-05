@@ -299,7 +299,7 @@ func (s *Server) slackInstalled(ctx context.Context, ss *slackSignup, app string
 	}
 	if ss.email != "" {
 		var taken bool
-		err := s.Store.Pool.QueryRow(ctx, `SELECT user_id FROM taskiem_auth_find_user($1)`, ss.email).Scan(new(uuid.UUID))
+		err := s.Store.Pool.QueryRow(ctx, `SELECT user_id FROM taskiem_auth_user_of($1)`, ss.email).Scan(new(uuid.UUID))
 		switch {
 		case err == nil:
 			taken = true
@@ -501,7 +501,7 @@ func (s *Server) slackOwnerEmail(ctx context.Context, ss *slackSignup) (string, 
 	if ss.email == "" {
 		return slackPlaceholderEmail(ss.team, ss.user), nil
 	}
-	err := s.Store.Pool.QueryRow(ctx, `SELECT user_id FROM taskiem_auth_find_user($1)`, ss.email).Scan(new(uuid.UUID))
+	err := s.Store.Pool.QueryRow(ctx, `SELECT user_id FROM taskiem_auth_user_of($1)`, ss.email).Scan(new(uuid.UUID))
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return ss.email, nil

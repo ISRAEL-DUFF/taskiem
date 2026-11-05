@@ -86,7 +86,7 @@ func (s *Server) chatLinkEmail(ctx context.Context, sc *signupChat, text string)
 		return s.suSay(ctx, sc, sc.t("door.too_many"))
 	}
 	var user uuid.UUID
-	err := s.Store.Pool.QueryRow(ctx, `SELECT user_id FROM taskiem_auth_find_user($1)`, email).Scan(&user)
+	err := s.Store.Pool.QueryRow(ctx, `SELECT user_id FROM taskiem_auth_user_of($1)`, email).Scan(&user)
 	switch {
 	case err == nil:
 		channel, address, username := chatLinkAddress(sc)

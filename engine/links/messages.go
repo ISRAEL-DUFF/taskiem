@@ -316,6 +316,7 @@ func MessagesTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, p Page) 
 	if following {
 		order = `ORDER BY m.created_at, m.id`
 	}
+	//sqlcheck:built messageCols and messageFrom are consts and order one of two literals
 	rows, err := tx.Query(ctx, `SELECT `+messageCols+messageFrom+`
 		WHERE m.tenant_id = $1 AND m.link_id = $2 AND m.hidden_at IS NULL AND ($3::timestamptz IS NULL OR m.created_at < $3) AND ($4::timestamptz IS NULL OR m.created_at > $4)
 		  AND ($5 = '' OR m.body ILIKE '%' || $5 || '%' OR m.card ->> 'reference' ILIKE '%' || $5 || '%' OR m.card ->> 'note' ILIKE '%' || $5 || '%')
@@ -347,6 +348,7 @@ func messagesAroundTx(ctx context.Context, tx pgx.Tx, tenant, link, pair uuid.UU
 	}
 	half := limit / 2
 	collect := func(sql string, args ...any) ([]Message, error) {
+		//sqlcheck:built collect is given only the literal queries below
 		rows, err := tx.Query(ctx, sql, args...)
 		if err != nil {
 			return nil, err

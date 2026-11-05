@@ -578,7 +578,7 @@ func (s *Server) signupMake(ctx context.Context, sc *signupChat, st *signupState
 			nb.OwnerEmail = email
 		}
 		var found uuid.UUID
-		err := s.Store.Pool.QueryRow(ctx, `SELECT user_id FROM taskiem_auth_find_user($1)`, nb.OwnerEmail).Scan(&found)
+		err := s.Store.Pool.QueryRow(ctx, `SELECT user_id FROM taskiem_auth_user_of($1)`, nb.OwnerEmail).Scan(&found)
 		switch {
 		case err == nil:
 			nb.Owner = found
@@ -832,6 +832,7 @@ func (s *Server) makeBusiness(ctx context.Context, nb newBusiness) (tenant, owne
 			{`INSERT INTO tenant_onboarding (tenant_id, source, signed_up_by, channel_hash) VALUES ($1, $2, $3, $4)`, []any{tenant, nb.Source, owner, nb.ChannelHash}},
 		}
 		for _, st := range stmts {
+			//sqlcheck:built the statements are literals in this function
 			if _, err := tx.Exec(ctx, st.q, st.args...); err != nil {
 				return err
 			}

@@ -254,6 +254,7 @@ func (v *Vault) Credentials(ctx context.Context, tenant uuid.UUID, env, connecto
 			q += ` AND c.name = $4`
 			args = append(args, name)
 		}
+		//sqlcheck:built a literal plus a fixed name condition with $4
 		rows, err := tx.Query(ctx, q, args...)
 		if err != nil {
 			return err
@@ -411,6 +412,7 @@ func (v *Vault) RotateCredentials(ctx context.Context, tenant uuid.UUID, env, co
 			q += ` AND name = $4`
 			args = append(args, name)
 		}
+		//sqlcheck:built a literal plus a fixed name condition with $4 and FOR UPDATE
 		rows, err := tx.Query(ctx, q+` FOR UPDATE`, args...)
 		if err != nil {
 			return err

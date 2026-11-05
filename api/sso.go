@@ -809,7 +809,7 @@ func (s *Server) finishSSO(w http.ResponseWriter, r *http.Request, c ssoConn, re
 			return err
 		}
 		_ = json.Unmarshal(groupsRaw, &settings.GroupRoles)
-		err := s.Store.Pool.QueryRow(ctx, `SELECT user_id FROM taskiem_auth_find_user($1)`, email).Scan(&user)
+		err := s.Store.Pool.QueryRow(ctx, `SELECT user_id FROM taskiem_auth_user_of($1)`, email).Scan(&user)
 		if errors.Is(err, pgx.ErrNoRows) {
 			if !settings.JIT {
 				return errSSONotMember

@@ -10,6 +10,15 @@ The CLI keeps working for everything the console does (`taskiem catalogue`, `tas
 
 Accounts are made from the CLI only, by someone with database access. There is no sign-up, no invitation and no API to create one.
 
+The CLI signs in as a login of its own, a member of `taskiem_ops_admin`, the only role that may make, reset, disable or list operator accounts. The API server's login must not be a member, so nothing that runs in the server can make an operator, even a bug that runs SQL of its choosing. Create it once, as the schema owner:
+
+```sql
+CREATE ROLE taskiem_ops LOGIN PASSWORD '...';
+GRANT taskiem_ops_admin TO taskiem_ops;
+```
+
+and give it to the CLI only: `TASKIEM_OPS_DATABASE_URL=postgres://taskiem_ops:...@db/taskiem` (default: `TASKIEM_DATABASE_URL`, which works only where that login may become `taskiem_ops_admin`, such as a superuser on a development database). Each change and its entry in the platform audit chain commit together.
+
 ```sh
 taskiem operators add ada@taskiem.example --name "Ada Obi"    # prints a one-time enrolment link
 taskiem operators                                              # list: status, passkeys, SSO, last sign-in

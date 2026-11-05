@@ -73,6 +73,7 @@ func loadFlow(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, hash []byte, loc
 		q += ` FOR UPDATE`
 	}
 	var raw []byte
+	//sqlcheck:built q is a literal, with FOR UPDATE added when locking
 	err := tx.QueryRow(ctx, q, hash, tenant).Scan(&r.kind, &r.number, &r.pnid, &r.user, &r.workflow, &r.version, &r.run, &r.step, &r.level, &r.decision, &raw, &r.status, &r.expires)
 	if err != nil {
 		return r, err

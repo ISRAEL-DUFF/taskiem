@@ -27,6 +27,7 @@ type DB struct {
 	Admin    *pgxpool.Pool // superuser: bypasses RLS; use only for setup and tampering tests
 	App      *pgxpool.Pool // SET ROLE taskiem_app
 	Dispatch *pgxpool.Pool // SET ROLE taskiem_dispatch
+	OpsAdmin *pgxpool.Pool // SET ROLE taskiem_ops_admin: the operators CLI
 }
 
 // New creates and migrates a database, and drops it when the test ends.
@@ -60,11 +61,13 @@ func New(t testing.TB) *DB {
 	}
 
 	// Small pools: CI's Postgres allows 100 connections and test packages run in parallel.
-	d := &DB{DSN: dsn, Admin: pool(t, dsn, "", 4), App: pool(t, dsn, "taskiem_app", 16), Dispatch: pool(t, dsn, "taskiem_dispatch", 2)}
+	d := &DB{DSN: dsn, Admin: pool(t, dsn, "", 4), App: pool(t, dsn, "taskiem_app", 16), Dispatch: pool(t, dsn, "taskiem_dispatch", 2),
+		OpsAdmin: pool(t, dsn, "taskiem_ops_admin", 2)}
 	t.Cleanup(func() {
 		d.Admin.Close()
 		d.App.Close()
 		d.Dispatch.Close()
+		d.OpsAdmin.Close()
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		if c, err := pgx.Connect(ctx, base); err == nil {

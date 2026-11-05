@@ -348,6 +348,7 @@ func (s *Invoices) setAccount(ctx context.Context, tenant, id uuid.UUID, set map
 			args = append(args, v)
 			q += fmt.Sprintf(", %s = $%d", k, len(args))
 		}
+		//sqlcheck:built column names are checked against accountColumns; values go in as $n
 		_, err := tx.Exec(ctx, q+` WHERE tenant_id = $1 AND id = $2`, args...)
 		return err
 	})
@@ -601,12 +602,14 @@ func (s *Invoices) noteUnavailable(ctx context.Context, q Request, cause error) 
 	}
 	first := false
 	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{q.Tenant}, func(tx pgx.Tx) error {
+		//sqlcheck:built col is one of three literal column names chosen above
 		tag, err := tx.Exec(ctx, `UPDATE customer_invoice_accounts SET error = $4, updated_at = now()
 			WHERE tenant_id = $1 AND `+col+` = $2 AND kind = $3 AND status = 'unavailable'`, q.Tenant, owner, q.Kind, shortErr(cause))
 		if err != nil || tag.RowsAffected() > 0 {
 			return err
 		}
 		first = true
+		//sqlcheck:built col is one of three literal column names chosen above
 		_, err = tx.Exec(ctx, `INSERT INTO customer_invoice_accounts (id, tenant_id, `+col+`, seq, kind, connector, connection, payment_id, amount_kobo, status, error)
 			SELECT $1::uuid, $2::uuid, $3::uuid, COALESCE(max(seq), 0) + 1, $4::text, 'none', 'none', 'unavailable:' || $1::uuid::text, $5::bigint, 'unavailable', $6::text
 			  FROM customer_invoice_accounts WHERE `+col+` = $3 AND kind = $4`, uuid.New(), q.Tenant, owner, q.Kind, max(q.AmountKobo, 100), shortErr(cause))

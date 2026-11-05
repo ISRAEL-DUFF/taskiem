@@ -9,7 +9,7 @@ import (
 )
 
 // groupRoles are the roles the migrations make. Nothing signs in as them.
-var groupRoles = map[string]bool{"taskiem_app": true, "taskiem_dispatch": true, "taskiem_public": true}
+var groupRoles = map[string]bool{"taskiem_app": true, "taskiem_dispatch": true, "taskiem_public": true, "taskiem_ops_admin": true}
 
 // EnsureAppLogin makes the user of appDSN a login that is a member of
 // taskiem_app and owns nothing, creating it if it does not exist and
@@ -63,16 +63,20 @@ func EnsureAppLogin(ctx context.Context, ownerDSN, appDSN string) (string, error
 	}
 	var stmt string
 	if password != "" {
+		//sqlcheck:built verb is "CREATE" or "ALTER"; the login and password are $n arguments that format quotes
 		err = conn.QueryRow(ctx, "SELECT format('"+verb+" ROLE %I LOGIN NOBYPASSRLS PASSWORD %L', $1::text, $2::text)", login, password).Scan(&stmt)
 	} else {
+		//sqlcheck:built verb is "CREATE" or "ALTER"; the login is a $n argument that format quotes
 		err = conn.QueryRow(ctx, "SELECT format('"+verb+" ROLE %I LOGIN NOBYPASSRLS', $1::text)", login).Scan(&stmt)
 	}
 	if err != nil {
 		return "", err
 	}
+	//sqlcheck:built stmt is format's output above, its login quoted with %I and password with %L
 	if _, err := conn.Exec(ctx, stmt); err != nil {
 		return "", fmt.Errorf("%s ROLE %s (the owner needs CREATEROLE): %w", verb, login, err)
 	}
+	//sqlcheck:built the login is quoted by pgx.Identifier
 	if _, err := conn.Exec(ctx, "GRANT taskiem_app TO "+pgx.Identifier{login}.Sanitize()); err != nil { //nolint:misspell // pgx API
 		return "", err
 	}

@@ -385,20 +385,21 @@ func (s *Server) listFormSubmissions(w http.ResponseWriter, r *http.Request) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	q := `SELECT ` + formSubmissionCols + ` FROM form_submissions`
-	args := []any{}
+	q := `SELECT ` + formSubmissionCols + ` FROM form_submissions ORDER BY created_at DESC LIMIT $1`
+	args := []any{limit}
 	if f := r.URL.Query().Get("form"); f != "" {
 		id, err := uuid.Parse(f)
 		if err != nil {
 			writeErr(w, http.StatusBadRequest, "form is a form's id")
 			return
 		}
-		q += ` WHERE endpoint_id = $1`
+		q = `SELECT ` + formSubmissionCols + ` FROM form_submissions WHERE endpoint_id = $2 ORDER BY created_at DESC LIMIT $1`
 		args = append(args, id)
 	}
 	var list []submissionOut
 	err := s.tx(r, func(tx pgx.Tx) error {
-		rows, err := tx.Query(r.Context(), q+fmt.Sprintf(` ORDER BY created_at DESC LIMIT %d`, limit), args...)
+		//sqlcheck:built q is one of two literals above
+		rows, err := tx.Query(r.Context(), q, args...)
 		if err != nil {
 			return err
 		}

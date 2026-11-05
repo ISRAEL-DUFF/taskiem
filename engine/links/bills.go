@@ -176,6 +176,7 @@ func ListBillsPageTx(ctx context.Context, tx pgx.Tx, status string, limit, offse
 	case "void":
 		where = `status = 'void'`
 	}
+	//sqlcheck:built billCols is a const and where is one of the literals above
 	rows, err := tx.Query(ctx, `SELECT `+billCols+` FROM bills WHERE `+where+`
 		ORDER BY status IN ('paid', 'void'), due_on NULLS LAST, created_at DESC, id LIMIT $1 OFFSET $2`, limit, offset)
 	if err != nil {

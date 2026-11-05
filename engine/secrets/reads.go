@@ -186,6 +186,7 @@ func ListReads(ctx context.Context, tx pgx.Tx, f ReadFilter) ([]Read, error) {
 	}
 	args = append(args, f.Limit)
 	q += " ORDER BY at DESC, id DESC LIMIT $" + strconv.Itoa(len(args))
+	//sqlcheck:built readColumns is a const, conditions are literals and $n from a count
 	rows, err := tx.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err

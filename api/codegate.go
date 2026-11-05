@@ -268,6 +268,7 @@ func (h *heldLease) exec(q string, args ...any) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	err := db.InTenantTx(ctx, h.l.pool, []uuid.UUID{h.tenant}, func(tx pgx.Tx) error {
+		//sqlcheck:built q is a literal from the callers in this file
 		_, err := tx.Exec(ctx, q, append([]any{h.tenant, h.id}, args...)...)
 		return err
 	})

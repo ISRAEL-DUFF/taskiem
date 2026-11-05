@@ -67,6 +67,7 @@ func actionWorkflowNamedTx(ctx context.Context, tx pgx.Tx, action uuid.UUID) (*u
 func orderWorkflowNamedTx(ctx context.Context, tx pgx.Tx) (*uuid.UUID, string, string, error) {
 	var wf uuid.UUID
 	var tpl, name string
+	//sqlcheck:built BuiltinTriggerSQL is given the alias t and the literal 'order'
 	err := tx.QueryRow(ctx, `SELECT t.workflow_id, COALESCE(v.template_id, ''), w.name FROM triggers t
 		JOIN workflow_versions v ON v.workflow_id = t.workflow_id AND v.version = t.version JOIN workflows w ON w.id = t.workflow_id
 		WHERE t.type = 'storefront' AND t.environment = 'prod' AND `+storefront.BuiltinTriggerSQL("t", "'order'")).Scan(&wf, &tpl, &name)

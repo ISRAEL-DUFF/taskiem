@@ -320,13 +320,16 @@ func GetOrderTx(ctx context.Context, tx pgx.Tx, ref string, lock bool) (Order, e
 		forUpdate = ` FOR UPDATE OF o, s`
 	}
 	if id, err := uuid.Parse(ref); err == nil {
+		//sqlcheck:built orderCols and orderFrom are consts; the clause and FOR UPDATE are literals
 		return scanOrder(tx.QueryRow(ctx, q+`s.id = $1`+forUpdate, id))
 	}
 	ref = strings.ToUpper(strings.TrimSpace(ref))
+	//sqlcheck:built orderCols and orderFrom are consts; the clause and FOR UPDATE are literals
 	o, err := scanOrder(tx.QueryRow(ctx, q+`s.reference = $1`+forUpdate, ref))
 	if !errors.Is(err, ErrNotFound) {
 		return o, err
 	}
+	//sqlcheck:built orderCols and orderFrom are consts; the clause and FOR UPDATE are literals
 	rows, err := tx.Query(ctx, q+`o.purchase_reference = $1 ORDER BY s.created_at DESC LIMIT 2`+forUpdate, ref)
 	if err != nil {
 		return o, err

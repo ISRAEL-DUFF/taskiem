@@ -414,7 +414,7 @@ func (s *Server) inviteJoin(ctx context.Context, ic *inviteChat, inv *inviteRow,
 	if isNew {
 		// Someone a field agent or an earlier invitation made by this
 		// chat is the same person.
-		err := s.Store.Pool.QueryRow(ctx, `SELECT user_id FROM taskiem_auth_find_user($1)`, email).Scan(&user)
+		err := s.Store.Pool.QueryRow(ctx, `SELECT user_id FROM taskiem_auth_user_of($1)`, email).Scan(&user)
 		switch {
 		case err == nil:
 			isNew = false

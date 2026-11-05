@@ -391,6 +391,7 @@ func (a *Alerter) find(ctx context.Context, tx pgx.Tx, r rule, now time.Time) ([
 	}
 	var out []Alert
 	runAlert := func(q string, args []any, mk func(id uuid.UUID, wf, env string, at time.Time) Alert) error {
+		//sqlcheck:built q is a literal at every caller in find, plus filters' fixed conditions with $n placeholders
 		rows, err := tx.Query(ctx, q, args...)
 		if err != nil {
 			return err
@@ -438,6 +439,7 @@ func (a *Alerter) find(ctx context.Context, tx pgx.Tx, r rule, now time.Time) ([
 			})
 	case StuckApproval:
 		where, args := filters(r.cfg, "r", []any{now.Add(-threshold)})
+		//sqlcheck:built a literal plus filters' fixed conditions with $n placeholders; the alias is a literal
 		rows, qerr := tx.Query(ctx, `SELECT ap.run_id, ap.step_id, w.name, r.environment, ap.requested_at, COALESCE(ap.role, ap.policy, '') FROM approvals ap
 			JOIN runs r ON r.id = ap.run_id JOIN workflows w ON w.id = r.workflow_id
 			WHERE ap.status = 'open' AND ap.requested_at < $1`+where+` ORDER BY ap.requested_at LIMIT 200`, args...)
@@ -604,6 +606,7 @@ var repairClass = map[string]string{ //nolint:gosec // repair classes and their 
 // may quote run data); people read those on the run's page.
 func (a *Alerter) findRepairs(ctx context.Context, tx pgx.Tx, r rule, now time.Time) ([]Alert, error) {
 	where, args := filters(r.cfg, "p", []any{r.since, now})
+	//sqlcheck:built a literal plus filters' fixed conditions with $n placeholders; the alias is a literal
 	rows, err := tx.Query(ctx, `SELECT p.id, p.run_id, w.name, p.environment, COALESCE(p.class, ''), p.status FROM repair_proposals p
 		JOIN workflows w ON w.id = p.workflow_id
 		WHERE p.status IN ('proposed', 'action') AND p.finished_at > $1 AND p.finished_at <= $2`+where+` ORDER BY p.finished_at LIMIT 200`, args...)

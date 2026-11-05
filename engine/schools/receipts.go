@@ -279,6 +279,7 @@ func (s *Schools) ReceiptByID(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 	if id, err := uuid.Parse(idOrNumber); err == nil {
 		where, arg = `r.id = $2`, id
 	}
+	//sqlcheck:built receiptCols is a const and where one of two literals
 	rows, err := tx.Query(ctx, `SELECT `+receiptCols+` WHERE r.tenant_id = $1 AND `+where, tenant, arg)
 	if err != nil {
 		return Receipt{}, err

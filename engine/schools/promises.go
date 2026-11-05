@@ -165,6 +165,7 @@ func (s *Schools) Promises(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, f P
 		q = `SELECT * FROM (SELECT DISTINCT ON (p.student_id) ` + promiseCols + ` WHERE p.tenant_id = $1 AND ($2::uuid IS NULL OR p.student_id = $2) AND ($3 = '' OR p.status = $3)
 			ORDER BY p.student_id, p.created_at DESC) x LIMIT $4`
 	}
+	//sqlcheck:built q is one of two literals around the const promiseCols
 	rows, err := tx.Query(ctx, q, tenant, f.Student, f.Status, f.Limit)
 	if err != nil {
 		return nil, err

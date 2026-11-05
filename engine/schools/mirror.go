@@ -253,6 +253,7 @@ func (m *Mirror) Tenant(ctx context.Context, tenant uuid.UUID) error {
 
 func (m *Mirror) mark(ctx context.Context, tenant uuid.UUID, q string, x copyRow) error {
 	return m.Schools.In(ctx, tenant, func(tx pgx.Tx) error {
+		//sqlcheck:built q is a literal at every caller (Mirror.Tenant above)
 		_, err := tx.Exec(ctx, q, tenant, x.id, x.changed)
 		return err
 	})

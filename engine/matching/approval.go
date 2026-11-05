@@ -90,6 +90,7 @@ func StudentInvoicesSQL(param string) string {
 // reported is never counted.
 func EnteredUnapproved(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, student *uuid.UUID, invoices []uuid.UUID) (int64, error) {
 	var n int64
+	//sqlcheck:built SchoolWindowSQL is a const and StudentInvoicesSQL is given the literal "$3"
 	err := tx.QueryRow(ctx, `SELECT COALESCE(sum(p.amount_kobo), 0)::bigint FROM customer_invoice_payments p JOIN money_entries e ON e.id = p.entry_id
 		WHERE p.tenant_id = $1 AND p.undoes IS NULL
 		  AND (p.invoice_id = ANY ($2) OR $3::uuid IS NOT NULL AND p.created_at >= `+SchoolWindowSQL+` AND p.invoice_id IN (`+StudentInvoicesSQL("$3")+`))

@@ -60,6 +60,7 @@ func queueChat(ctx context.Context, tx pgx.Tx, tenant, alert uuid.UUID, users []
 		{"whatsapp", `SELECT user_id FROM taskiem_wa_numbers($1)`},
 		{"telegram", `SELECT user_id FROM taskiem_tg_accounts($1)`},
 	} {
+		//sqlcheck:built ch.q is one of the two literals in the list above
 		rows, err := tx.Query(ctx, ch.q, users)
 		if err != nil {
 			return told, err

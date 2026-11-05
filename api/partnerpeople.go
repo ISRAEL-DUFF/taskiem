@@ -107,7 +107,7 @@ func (s *Server) inviteToSubTenant(w http.ResponseWriter, r *http.Request) {
 	// The person, if they have an account; a new one is created (with no
 	// way to sign in) in the same transaction as the invitation.
 	user, existing := uuid.Must(uuid.NewV7()), true
-	if err := s.Store.Pool.QueryRow(ctx, `SELECT user_id FROM taskiem_auth_find_user($1)`, req.Email).Scan(&user); errors.Is(err, pgx.ErrNoRows) {
+	if err := s.Store.Pool.QueryRow(ctx, `SELECT user_id FROM taskiem_auth_user_of($1)`, req.Email).Scan(&user); errors.Is(err, pgx.ErrNoRows) {
 		existing = false
 	} else if err != nil {
 		s.fail(w, r, err)
