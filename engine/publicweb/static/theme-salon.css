@@ -83,3 +83,12 @@ h3 { font-weight: 700; }
 .kx-narrow, .sl-narrow, .gx-narrow, .fx-narrow { max-width: 70rem; margin: 0 auto; padding: 0 1.25rem 2rem; }
 .kx-page, .sl-page, .gx-page, .fx-page { background: var(--bg); }
 @media (min-width: 900px) { .bag { max-width: none; } .pdp { max-width: none; } .kx-page h1:first-of-type, .sl-page h1:first-of-type, .gx-page h1:first-of-type { margin-bottom: 1rem; } }
+.hero-initials { font-family: var(--head); font-size: 5rem; color: var(--brand-text); }
+.hero-logo { width: 50%; height: auto; object-fit: contain; border-radius: 50%; }
+.hero-tag { display: none; }
+.sl-arch { background: #d4e2d6; }
+.sl-time { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1.5rem; margin: 2rem 0; padding: 2rem; border-radius: 36px; background: var(--fg); color: #fff; }
+.sl-time h2 { margin: 0 0 .5rem; font-size: 2.25rem; color: #fff; }
+.sl-time p { margin: 0; max-width: 28rem; opacity: .85; }
+.sl-time-btn { background: #f0c4b8; border-color: #f0c4b8; color: var(--fg); }
+.sf-foot { padding-left: max(1.25rem, calc((100% - 66rem) / 2 + 1.25rem)); padding-right: max(1.25rem, calc((100% - 66rem) / 2 + 1.25rem)); } .sf-foot > * { max-width: none; margin-left: 0; margin-right: 0; }

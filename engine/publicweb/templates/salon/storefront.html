@@ -18,13 +18,14 @@
       {{if not .Forms}}{{with .M.WhatsLink}}<a class="btn btn-primary" href="{{.}}" rel="noopener">Book on WhatsApp</a>{{end}}{{end}}
     </p>
   </div>
-  <div class="sl-arch">{{with .Brand.Cover}}<img src="{{.}}" srcset="{{.}} 800w, {{$.Brand.CoverLarge}} 2000w" sizes="(min-width: 900px) 40vw, 100vw" alt="">{{else}}{{with .Brand.Logo}}<img class="sl-logo" src="{{.}}" alt="">{{else}}<span class="sl-initials" aria-hidden="true">{{.Brand.Initials}}</span>{{end}}{{end}}</div>
+  <div class="sl-arch">{{template "heropic" .}}</div>
 </section>
 <main class="sl-main">
 {{template "sfnotes" .}}
 {{if .Services}}<section id="services" aria-labelledby="services-h"><h2 id="services-h">Services</h2>
 <ul class="sl-services">{{range .Services}}<li class="sl-service"><span class="sl-ico">{{template "i-clock"}}</span><div class="item-text"><h3>{{.Name}}</h3><p class="item-sub">{{.Length}} · {{.Price}}</p></div><a class="btn btn-primary btn-small" href="{{.Href}}" aria-label="Book {{.Name}}">Book</a></li>
 {{end}}</ul></section>{{end}}
+{{if .Services}}{{range .Forms}}{{if eq .Kind "booking"}}<section class="sl-time" aria-labelledby="time-h"><div><h2 id="time-h">Choose a time</h2><p>Pick a service, then a day and a time that suits you. We confirm on WhatsApp.</p></div><a class="btn sl-time-btn" href="{{$.Base}}/a/{{.Ref}}">{{.Label}}</a></section>{{end}}{{end}}{{end}}
 {{if .HasItems}}{{if gt (len .Sections) 1}}<nav class="chips" aria-label="Sections">{{range $i, $s := .Sections}}{{if .Title}}<a class="chip" href="#s{{$i}}">{{.Title}}</a>{{end}}{{end}}</nav>{{end}}
 {{range $i, $s := .Sections}}<section id="s{{$i}}" aria-label="{{if .Title}}{{.Title}}{{else}}Products{{end}}">
   <h2>{{if .Title}}{{.Title}}{{else}}Products{{end}}</h2>

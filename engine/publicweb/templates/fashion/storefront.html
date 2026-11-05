@@ -20,7 +20,7 @@
       {{with .M.WhatsLink}}{{if not $.HasItems}}<a class="btn btn-primary" href="{{.}}" rel="noopener">Chat on WhatsApp</a>{{end}}{{end}}
     </p>
   </div>
-  <div class="fx-feature">{{with .Brand.Cover}}<img src="{{.}}" srcset="{{.}} 800w, {{$.Brand.CoverLarge}} 2000w" sizes="(min-width: 900px) 40vw, 100vw" alt="">{{else}}{{with .Brand.Logo}}<img class="fx-logo" src="{{.}}" alt="">{{else}}<span class="fx-initials" aria-hidden="true">{{.Brand.Initials}}</span>{{end}}{{end}}</div>
+  <div class="fx-feature">{{template "heropic" .}}</div>
 </section>
 <main class="fx-main">
 {{template "sfnotes" .}}
@@ -37,9 +37,15 @@
     {{if not .Available}}<p class="item-sub">Unavailable</p>{{else if .SoldOut}}<p class="item-sub">Sold out</p>{{else if and $.Ordering .Orderable}}<a class="fx-under" href="{{$.Base}}/a/order?item={{.ID}}">Add to bag</a>{{end}}
   </li>{{end}}</ul>
 </section>{{end}}</div>{{end}}
+{{if .HasItems}}<section class="fx-steps" aria-label="How it works"><div><span>1</span><h3>Choose a piece</h3><p>Add it to your bag.</p></div><div><span>2</span><h3>Send your details</h3><p>Fill in your details and place the order.</p></div><div><span>3</span><h3>We confirm</h3><p>{{.M.Card.Name}} gets in touch to confirm and arrange delivery.</p></div></section>{{end}}
 {{template "sfinfo" .}}
 </main>
-{{template "sffoot" .}}
+<footer class="foot sf-foot fx-foot">
+<p class="sf-foot-name">{{.M.Card.Name}}</p>
+<nav class="fx-foot-links" aria-label="Links">{{if .HasItems}}<a href="#shop">Shop</a>{{end}}{{range .Forms}}{{if eq .Kind "booking"}}<a href="{{$.Base}}/a/{{.Ref}}">{{.Label}}</a>{{end}}{{end}}{{with .M.WhatsLink}}<a href="{{.}}" rel="noopener">Chat on WhatsApp</a>{{end}}{{with .Phone}}<a href="tel:{{.}}">Call</a>{{end}}</nav>
+<p class="sf-foot-meta">Powered by Taskiem · <a href="/report">Report this page</a></p>
+<p class="safety">Taskiem never asks for card details, PINs or OTPs. {{template "safety"}}</p>
+</footer>
 {{if .Ordering}}<a class="sticky" href="{{.Base}}/a/order"><span>Checkout</span>{{template "i-next"}}</a>{{end}}
 </body>
 </html>

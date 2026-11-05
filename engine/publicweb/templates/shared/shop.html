@@ -95,3 +95,7 @@ notices before it. A look's stylesheet draws them. */}}
 <p class="sf-foot-meta">Powered by Taskiem · <a href="/report">Report this page</a></p>
 <p class="safety">Taskiem never asks for card details, PINs or OTPs. {{template "safety"}}</p>
 </footer>{{end}}
+
+{{/* The picture a look's hero shows: the cover photo, else the first
+     item's photo, else the logo or initials. */}}
+{{define "heropic"}}{{$img := ""}}{{$name := ""}}{{$price := ""}}{{range .Sections}}{{range .Items}}{{if and (not $img) .Large}}{{$img = .Large}}{{$name = .Name}}{{$price = .Price}}{{end}}{{end}}{{end}}{{with .Brand.Cover}}<img src="{{.}}" srcset="{{.}} 800w, {{$.Brand.CoverLarge}} 2000w" sizes="(min-width: 900px) 50vw, 100vw" alt="">{{else}}{{if $img}}<img src="{{$img}}" sizes="(min-width: 900px) 50vw, 100vw" alt="">{{if $name}}<span class="hero-tag"><strong>{{$name}}</strong> {{$price}}</span>{{end}}{{else}}{{with .Brand.Logo}}<img class="hero-logo" src="{{.}}" alt="">{{else}}<span class="hero-initials" aria-hidden="true">{{.Brand.Initials}}</span>{{end}}{{end}}{{end}}{{end}}

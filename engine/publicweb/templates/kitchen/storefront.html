@@ -18,7 +18,7 @@
       {{with .M.WhatsLink}}<a class="btn" href="{{.}}" rel="noopener">Order on WhatsApp</a>{{end}}
     </p>
   </div>
-  <div class="kx-plate">{{with .Brand.Cover}}<img src="{{.}}" srcset="{{.}} 800w, {{$.Brand.CoverLarge}} 2000w" sizes="(min-width: 900px) 50vw, 100vw" alt="">{{else}}{{with .Brand.Logo}}<img class="kx-logo" src="{{.}}" alt="">{{else}}<span class="kx-initials" aria-hidden="true">{{.Brand.Initials}}</span>{{end}}{{end}}</div>
+  <div class="kx-plate">{{template "heropic" .}}</div>
 </section>
 <main class="kx-main">
 {{template "sfnotes" .}}

@@ -87,3 +87,10 @@ h3, .price { font-weight: 700; }
 .kx-narrow, .sl-narrow, .gx-narrow, .fx-narrow { max-width: 70rem; margin: 0 auto; padding: 0 1.25rem 2rem; }
 .kx-page, .sl-page, .gx-page, .fx-page { background: var(--bg); }
 @media (min-width: 900px) { .bag { max-width: none; } .pdp { max-width: none; } .kx-page h1:first-of-type, .sl-page h1:first-of-type, .gx-page h1:first-of-type { margin-bottom: 1rem; } }
+.kx-plate { position: relative; background: #f6d6cf; }
+.hero-tag { position: absolute; left: 1rem; bottom: 1rem; padding: .6rem .9rem; border-radius: 14px; background: var(--fg); color: #fff; font-size: .875rem; font-weight: 700; }
+.hero-tag strong { display: block; }
+.hero-initials { font-family: var(--head); font-weight: 900; font-size: 5rem; color: var(--brand-text); }
+.hero-logo { width: 55%; height: auto; object-fit: contain; border-radius: 50%; }
+.kx-pill::before { content: ""; display: inline-block; width: .5rem; height: .5rem; margin-right: .45rem; border-radius: 50%; background: currentColor; }
+.sf-foot { padding-left: max(1.25rem, calc((100% - 70rem) / 2 + 1.25rem)); padding-right: max(1.25rem, calc((100% - 70rem) / 2 + 1.25rem)); } .sf-foot > * { max-width: none; margin-left: 0; margin-right: 0; }
