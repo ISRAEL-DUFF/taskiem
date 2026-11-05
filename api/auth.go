@@ -516,10 +516,9 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
-	tok := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-	if c, err := r.Cookie(sessionCookie); err == nil {
-		tok = c.Value
-	}
+	// The session that authenticated this request, chosen as resolve
+	// chooses it: a bearer token before a cookie.
+	tok := sessionToken(r)
 	var err error
 	if principalFrom(r.Context()).Invitee {
 		_, err = s.Store.Pool.Exec(r.Context(), `SELECT taskiem_auth_invitee_end($1)`, hashToken(tok))

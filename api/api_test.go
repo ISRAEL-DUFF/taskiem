@@ -448,3 +448,16 @@ func (c *client) raw(t *testing.T, method, path string) string {
 	s, _ := out["raw"].(string)
 	return s
 }
+
+// TestLogoutEndsTheAuthenticatingSession: sign-out ends the session the
+// request was authenticated with, the bearer token before a cookie, as
+// authentication chooses (finding F70).
+func TestLogoutEndsTheAuthenticatingSession(t *testing.T) {
+	w := newWorld(t)
+	a := w.tenant(t, "Acme", "owner@acme.test")
+	b := w.login(t, "owner@acme.test", "correct horse battery")
+	a.must(204, "POST", "/v1/auth/logout", nil, "Cookie", "taskiem_session="+b.token)
+	if st, _ := a.do("GET", "/v1/me", nil); st != 401 {
+		t.Errorf("the bearer session that signed out still works: %d", st)
+	}
+}
