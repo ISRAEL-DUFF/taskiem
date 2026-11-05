@@ -74,6 +74,13 @@ func (s *Server) oauthFor(c *connector.Connector, mode string) (oauthProvider, e
 	if o == nil {
 		return oauthProvider{}, fmt.Errorf("%w: %s does not connect by OAuth; add a connection with its credentials", errBadRequest, c.Manifest.Name)
 	}
+	if !connector.BuiltIn(c.Manifest.ID) {
+		// Taskiem's registrations are for its own connectors (F1): a
+		// tenant's or a publisher's connector never borrows one, whose
+		// secret would go to the token URL that connector names.
+		return oauthProvider{}, fmt.Errorf("%w: %s is not one of Taskiem's own connectors, so it cannot be linked with Taskiem's OAuth apps; add a connection with its credentials instead",
+			errOAuthUnavailable, c.Manifest.Name)
+	}
 	name := c.Manifest.ClientFor(mode)
 	client, ok := s.OAuthClients[name]
 	if !ok || client.ID == "" {

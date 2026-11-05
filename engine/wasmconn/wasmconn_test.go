@@ -175,16 +175,31 @@ func TestLoadRefusesBadConnectors(t *testing.T) {
 	rt, ctx := shared, context.Background()
 	builtinID := strings.Replace(string(exampleManifest), "id: x_example_ledger", "id: example_ledger", 1)
 	unverified := strings.TrimRight(string(exampleManifest), "\n") + "\ntriggers:\n  paid:\n    type: webhook\n    verify: { scheme: none }\n"
+	// Taskiem's platform OAuth apps are for its built-ins: a tenant's
+	// connector naming one would have the app's secret sent to its own
+	// token URL, or copied into its credentials (F1).
+	apiKey := "auth:\n  type: api_key\n  fields:\n    - { key: api_key, label: API key, secret: true }\n"
+	oauth := func(extra, modes string) []byte {
+		return []byte(strings.Replace(string(exampleManifest), apiKey, "auth:\n  type: oauth2\n  fields:\n    - { key: api_key, label: API key, secret: true }\n    - { key: stolen, label: S, secret: true }\n"+
+			"  oauth2:\n    authorize_url: https://evil.example/authorize\n    token_url: https://evil.example/token\n    pkce: true\n    scopes: [x]\n"+
+			"    fields_from_token: { api_key: access_token }\n"+extra+modes, 1))
+	}
+	platformApp := oauth("    client: slack\n    platform_client_fields: { stolen: id }\n", "")
+	platformFields := oauth("    platform_client_fields: { stolen: secret }\n", "")
+	modeApp := oauth("    fields_from_callback: { stolen: realmId }\n", "  modes:\n    - { mode: live, label: Live, base_url: https://ledger.example.com }\n    - { mode: test, label: Test, base_url: https://sandbox.ledger.example.com, client: quickbooks_sandbox }\n")
 	for name, tc := range map[string]struct {
 		manifest, module []byte
 		want             string
 	}{
-		"built-in id":        {[]byte(builtinID), exampleWasm, "must start with"},
-		"unverified trigger": {[]byte(unverified), exampleWasm, `trigger "paid" must verify`},
-		"not wasm":           {exampleManifest, []byte("hello"), "does not compile"},
-		"no export":          {exampleManifest, emptyModule, "must export taskiem_execute_v1"},
-		"bad manifest":       {[]byte("manifest: connector/v1\nid: x_a\n"), exampleWasm, "manifest"},
-		"foreign import":     {exampleManifest, importsEnv, "does not provide"},
+		"built-in id":         {[]byte(builtinID), exampleWasm, "must start with"},
+		"unverified trigger":  {[]byte(unverified), exampleWasm, `trigger "paid" must verify`},
+		"not wasm":            {exampleManifest, []byte("hello"), "does not compile"},
+		"no export":           {exampleManifest, emptyModule, "must export taskiem_execute_v1"},
+		"bad manifest":        {[]byte("manifest: connector/v1\nid: x_a\n"), exampleWasm, "manifest"},
+		"foreign import":      {exampleManifest, importsEnv, "does not provide"},
+		"platform app":        {platformApp, exampleWasm, "auth.oauth2.client"},
+		"platform fields":     {platformFields, exampleWasm, "platform_client_fields"},
+		"mode's platform app": {modeApp, exampleWasm, "auth.modes[1].client"},
 	} {
 		if _, err := rt.Load(ctx, tc.manifest, tc.module); !errors.Is(err, ErrInvalid) || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s: %v", name, err)

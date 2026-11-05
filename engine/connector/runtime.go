@@ -183,6 +183,12 @@ const TenantPrefix = "x_"
 // tenants' own x_ connectors.
 const CataloguePrefix = "p_"
 
+// BuiltIn says whether id is one of Taskiem's own connectors: neither a
+// tenant's (x_) nor a publisher's in the catalogue (p_).
+func BuiltIn(id string) bool {
+	return !strings.HasPrefix(id, TenantPrefix) && !strings.HasPrefix(id, CataloguePrefix)
+}
+
 // TenantSource returns a tenant's own connectors and the catalogue
 // connectors it installed.
 type TenantSource func(ctx context.Context, tenant string) ([]*Connector, error)

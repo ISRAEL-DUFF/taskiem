@@ -166,6 +166,30 @@ func (m *Manifest) Clients() []string {
 	return out
 }
 
+// PlatformAppUses are the places a manifest asks for one of Taskiem's own
+// OAuth registrations by name (auth.oauth2.client, platform_client_fields,
+// auth.modes[i].client). Only a built-in may: the app's secret goes to the
+// token URL the manifest names, and platform_client_fields copies it into
+// the connection's credentials, so a tenant's or a publisher's connector
+// asking for one would get it (F1).
+func (m *Manifest) PlatformAppUses() []string {
+	var out []string
+	if o := m.Auth.OAuth2; o != nil {
+		if o.Client != "" {
+			out = append(out, "auth.oauth2.client")
+		}
+		if len(o.PlatformClientFields) > 0 {
+			out = append(out, "auth.oauth2.platform_client_fields")
+		}
+	}
+	for i, h := range m.Auth.HostModes {
+		if h.Client != "" {
+			out = append(out, fmt.Sprintf("auth.modes[%d].client", i))
+		}
+	}
+	return out
+}
+
 // ServerPlaceholder starts an OAuth URL resolved from the connector's base
 // URL at runtime.
 const ServerPlaceholder = "${server}"

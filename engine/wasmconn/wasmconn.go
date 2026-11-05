@@ -169,6 +169,11 @@ func (r *Runtime) load(ctx context.Context, manifest, module []byte, prefix, wha
 	if !strings.HasPrefix(m.ID, prefix) {
 		return nil, fmt.Errorf("%w: %s id must start with %q, not %q", ErrInvalid, what, prefix, m.ID)
 	}
+	if uses := m.PlatformAppUses(); len(uses) > 0 {
+		// Taskiem's OAuth apps are its built-ins' (F1): their secrets
+		// would go to this manifest's token URL, or into its credentials.
+		return nil, fmt.Errorf("%w: %s manifest cannot use Taskiem's own OAuth apps (%s); its OAuth must be a client of its own", ErrInvalid, what, strings.Join(uses, ", "))
+	}
 	for name, t := range m.Triggers {
 		// Anyone could deliver to an unverified trigger of a tenant's own connector.
 		if t.Verify == nil || t.Verify.Scheme == "none" {

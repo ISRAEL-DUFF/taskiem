@@ -21625,7 +21625,7 @@ paths:
       tags:
       - Connectors
       summary: Upload a connector
-      description: 'A WebAssembly connector: multipart fields `manifest` and `module`.'
+      description: 'A WebAssembly connector: multipart fields `manifest` and `module`. A manifest that names one of Taskiem''s own OAuth apps (`auth.oauth2.client`, `platform_client_fields`, a mode''s `client`) is refused.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -33951,7 +33951,7 @@ components:
           description: How the connector authenticates (its manifest's `auth`, with `oauth2` when it connects by OAuth).
         oauth_linkable:
           type: boolean
-          description: For a connector that declares `auth.oauth2`, whether it can be connected by OAuth on this platform.
+          description: For a connector that declares `auth.oauth2`, whether it can be connected by OAuth on this platform. Always false for a tenant's own (`x_`) or a catalogue (`p_`) connector, which Taskiem's OAuth apps are never lent to.
         oauth_modes:
           type: array
           items:
