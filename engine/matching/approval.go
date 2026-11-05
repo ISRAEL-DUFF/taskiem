@@ -178,8 +178,14 @@ func (m *Matcher) holdMatch(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, c 
 		return nil, fmt.Errorf("%w: a match of this payment already waits for a second person's approval", invoicing.ErrState)
 	}
 	raw, _ := json.Marshal(heldRequest{Entry: c.entry, Suggestion: c.suggestion, Parts: c.parts, CreditRest: c.creditRest, How: c.how, Reasons: c.reasons})
+	// The person who asked: a user, or the owner of the API key that
+	// asked (taskiem_actor_human), so they never approve it themselves.
 	var user *uuid.UUID
-	if id, err := uuid.Parse(c.by); err == nil {
+	var human string
+	if err := tx.QueryRow(ctx, `SELECT taskiem_actor_human($1)`, c.by).Scan(&human); err != nil {
+		return nil, err
+	}
+	if id, err := uuid.Parse(human); err == nil {
 		user = &id
 	}
 	h := &Held{RequestID: uuid.New(), AmountKobo: towards}
