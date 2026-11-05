@@ -109,7 +109,7 @@ type Item struct {
 	// several media ids separated by commas.
 	Gallery   []Image `json:"gallery,omitempty"`
 	Available bool    `json:"available"`
-	Category    string `json:"category,omitempty"`
+	Category  string  `json:"category,omitempty"`
 	// Stock is how many are left, when the catalogue tracks it.
 	Stock *int64 `json:"stock,omitempty"`
 	// A service's length, customers at once and time kept free after.
