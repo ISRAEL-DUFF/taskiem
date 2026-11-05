@@ -3852,6 +3852,10 @@
       "text": "• *Ada owes 5,000*, *Ada paid 2,000 cash*, *who owes me?*, *send Ada her balance*: basussukan da abokan ciniki ke bin ka",
       "reviewed": false
     },
+    "wa.help.direct": {
+      "text": "• Aika saƙo ga kasuwancin da aka haɗa: fara da *...*, kamar *... @Dangote how much is a bag of cement?*",
+      "reviewed": false
+    },
     "wa.table.form": {
       "text": "{table}: danna *{cta}* don shigar da bayanai {count} na layin; za ka tabbatar kafin a ƙara shi. Aika *cancel* don tsayawa.",
       "reviewed": false
@@ -5156,6 +5160,34 @@
       "text": "An aika wa *{name}*. Amsoshinsu za su zo nan, da kuma Chat a yanar gizo.",
       "reviewed": false
     },
+    "chat.direct.wait": {
+      "text": "Yanzu aika saƙon, tare da *@business* don wanda yake gare shi, kamar *@Dangote how much is a bag of cement?*",
+      "reviewed": false
+    },
+    "chat.direct.who": {
+      "text": "Ga wa ne? Ƙara *@business*, kamar *... @Dangote how much is a bag of cement?*",
+      "reviewed": false
+    },
+    "chat.direct.empty": {
+      "text": "Me kake so ka faɗa wa *{name}*? Aika *... @{name}* da saƙonka.",
+      "reviewed": false
+    },
+    "chat.direct.files": {
+      "text": "Kalmomi kawai ke zuwa kai tsaye ga kasuwanci da *...* a yanzu. Aika hotuna da fayiloli gare su a shafin Chat.",
+      "reviewed": false
+    },
+    "chat.direct.hint": {
+      "text": "Don aika shi ga *{name}* a matsayin saƙo, fara da *...*",
+      "reviewed": false
+    },
+    "chat.direct.sent": {
+      "text": "✓ An aika zuwa {names}.",
+      "reviewed": false
+    },
+    "chat.direct.not_sent": {
+      "text": "Ba a aika zuwa *{name}* ba: {reason}.",
+      "reviewed": false
+    },
     "chat.link.photo": {
       "text": "Hoto",
       "reviewed": false
@@ -5221,7 +5253,7 @@
       "reviewed": false
     },
     "wa.mention.how": {
-      "text": "Faɗi adadi da abin da kake so daga *{name}*, kamar *20 bags of rice from @{name}*.",
+      "text": "Faɗi adadi da abin da kake so daga *{name}*, kamar *20 bags of rice from @{name}*. Don aika shi ga *{name}* a matsayin saƙo, fara da *...*",
       "reviewed": false
     },
     "wa.mention.draft": {

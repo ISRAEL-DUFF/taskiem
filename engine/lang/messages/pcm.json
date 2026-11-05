@@ -3852,6 +3852,10 @@
       "text": "• *Ada owes 5,000*, *Ada paid 2,000 cash*, *who owes me?*, *send Ada her balance*: the debt wey customers dey owe you",
       "reviewed": false
     },
+    "wa.help.direct": {
+      "text": "• Message business wey you link with: start am with *...*, like *... @Dangote how much is a bag of cement?*",
+      "reviewed": false
+    },
     "wa.table.form": {
       "text": "{table}: tap *{cta}* to enter the {count} detail(s) for the row; you go confirm before I add am. Send *cancel* to stop.",
       "reviewed": false
@@ -5156,6 +5160,34 @@
       "text": "E don reach *{name}*. Their reply go come here, and for Chat for the web.",
       "reviewed": false
     },
+    "chat.direct.wait": {
+      "text": "Now send the message, put *@business* for who e be for, like *@Dangote how much is a bag of cement?*",
+      "reviewed": false
+    },
+    "chat.direct.who": {
+      "text": "Na who e be for? Add *@business*, like *... @Dangote how much is a bag of cement?*",
+      "reviewed": false
+    },
+    "chat.direct.empty": {
+      "text": "Wetin you wan tell *{name}*? Send *... @{name}* and your message.",
+      "reviewed": false
+    },
+    "chat.direct.files": {
+      "text": "Na only words dey go straight to business with *...* for now. Send photo and file give them for the Chat page.",
+      "reviewed": false
+    },
+    "chat.direct.hint": {
+      "text": "To send am to *{name}* as message, start am with *...*",
+      "reviewed": false
+    },
+    "chat.direct.sent": {
+      "text": "✓ E don reach {names}.",
+      "reviewed": false
+    },
+    "chat.direct.not_sent": {
+      "text": "E no reach *{name}*: {reason}.",
+      "reviewed": false
+    },
     "chat.link.photo": {
       "text": "Foto",
       "reviewed": false
@@ -5221,7 +5253,7 @@
       "reviewed": false
     },
     "wa.mention.how": {
-      "text": "Talk how many and wetin from *{name}*, like *20 bags of rice from @{name}*.",
+      "text": "Talk how many and wetin from *{name}*, like *20 bags of rice from @{name}*. To send am to *{name}* as message, start am with *...*",
       "reviewed": false
     },
     "wa.mention.draft": {

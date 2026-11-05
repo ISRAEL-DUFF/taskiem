@@ -645,25 +645,19 @@ func (s *Server) waAskLinked(ctx context.Context, c *chat, rest string) (bool, e
 	}); err != nil {
 		return true, err
 	}
-	words := strings.Fields(rest)
-	// The longest run of words that names one linked business.
-	var to links.Link
-	n := 0
-	for i := len(words); i > 0 && n == 0; i-- {
-		name := strings.Join(words[:i], " ")
-		var hit []links.Link
-		for _, l := range list {
-			if l.State == links.Active && strings.HasPrefix(strings.ToLower(l.Name), strings.ToLower(name)) {
-				hit = append(hit, l)
-			}
-		}
-		if len(hit) == 1 {
-			to, n = hit[0], i
-		}
-	}
-	if n == 0 {
+	// The longest run of words that names a linked business, by the start
+	// of its name (links.Mentioned): "ask Dangote …" for Dangote Nigeria Ltd.
+	rest = strings.TrimSpace(rest)
+	hit, used := links.Mentioned(list, rest)
+	if used == 0 {
 		return false, nil
 	}
+	if len(hit) > 1 {
+		return true, c.say(ctx, s, c.t("wa.mention.which", "name", whatsapp.SafeText(string([]rune(rest)[:used])), "list", mentionChoices(c, hit)))
+	}
+	to := hit[0]
+	words := strings.Fields(string([]rune(rest)[used:]))
+	n := 0
 	if !c.p.Can(PermChatTrade) {
 		return true, c.say(ctx, s, c.t("chat.link.denied", "org", c.tenant.Name))
 	}
