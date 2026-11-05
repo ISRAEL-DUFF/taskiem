@@ -42,3 +42,48 @@
 .bag-amt { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .bag-sum { padding-bottom: .25rem; }
 .bag-more { text-align: center; margin: .75rem 0 0; }
+
+/* An item's pictures, colours, sizes and notes. */
+.pdp-media { min-width: 0; }
+.pdp-media:empty { display: none; }
+.pdp-thumbs { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; margin: .5rem 0 0; }
+.pdp-thumb img { display: block; width: 100%; height: auto; aspect-ratio: 1; object-fit: cover; border-radius: var(--r, 8px); }
+.sw { display: inline-block; flex: none; width: 1.5rem; height: 1.5rem; border-radius: 50%; background: #bdb8b0; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .15); }
+.sw-black { background: #14110f; } .sw-white { background: #fff; } .sw-grey, .sw-gray { background: #8b8882; } .sw-red { background: #c43d1c; }
+.sw-orange { background: #e8731b; } .sw-yellow { background: #f1c232; } .sw-green { background: #3f7d4e; } .sw-blue { background: #2f5fb3; }
+.sw-navy { background: #1f2a52; } .sw-purple { background: #5b3d86; } .sw-pink { background: #e9a6b8; } .sw-brown { background: #7a4a2b; }
+.sw-cream, .sw-ivory { background: #f4ead2; } .sw-beige, .sw-tan { background: #d8c3a0; } .sw-gold { background: #c9a227; } .sw-moss, .sw-olive { background: #5b6b3c; }
+.sw-teal { background: #1f7a78; } .sw-maroon, .sw-burgundy { background: #6e1f2b; } .sw-khaki { background: #b9ab7a; }
+.pdp-opt-colour { flex-direction: row; flex-wrap: wrap; align-items: center; gap: .625rem; }
+.pdp-opt-colour legend { width: 100%; }
+.pdp-opt-colour .pdp-choice { position: relative; padding: 0; min-height: 0; border: 0; background: none; border-radius: 50%; }
+.pdp-opt-colour .pdp-choice input { position: absolute; opacity: 0; inset: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.pdp-opt-colour .pdp-choice .sw { width: 2.25rem; height: 2.25rem; }
+.pdp-opt-colour .pdp-choice span:not(.sw) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.pdp-opt-colour .pdp-choice:has(input:checked) { box-shadow: 0 0 0 2px var(--bg, #fff), 0 0 0 4px var(--fg, #14110f); }
+.pdp-opt-colour .pdp-choice:has(input:focus-visible) { outline: 2px solid var(--brand, currentColor); outline-offset: 4px; }
+.pdp-opt-size { flex-direction: row; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.pdp-opt-size legend { width: 100%; }
+.pdp-opt-size .pdp-choice { position: relative; justify-content: center; min-width: 3.5rem; min-height: 3rem; padding: 0 .75rem; border-radius: 0; }
+.pdp-opt-size .pdp-choice input { position: absolute; opacity: 0; inset: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.pdp-opt-size .pdp-choice:has(input:checked) { background: var(--fg, #14110f); color: var(--bg, #fff); box-shadow: none; }
+.pdp-opt-size .pdp-choice:has(input:focus-visible) { outline: 2px solid var(--brand, currentColor); outline-offset: 2px; }
+.pdp-more { margin-top: 1rem; border-top: 1px solid var(--line, var(--rule, #d9d6d0)); }
+.pdp-more details { border-bottom: 1px solid var(--line, var(--rule, #d9d6d0)); }
+.pdp-more summary { display: flex; justify-content: space-between; align-items: center; min-height: 48px; font-weight: 700; cursor: pointer; list-style: none; }
+.pdp-more summary::-webkit-details-marker { display: none; }
+.pdp-more summary::after { content: "+"; font-weight: 400; }
+.pdp-more details[open] summary::after { content: "\2212"; }
+.pdp-more details p { margin: 0 0 .875rem; color: var(--muted, #55524d); }
+.badge-few { background: #fdeccf; color: #7a4a00; }
+
+/* The bag: a picture, the choices, and Remove. */
+.bag-line { gap: .75rem; }
+.bag-thumb { flex: none; width: 64px; height: 64px; object-fit: cover; border-radius: var(--r, 8px); }
+.bag-text { flex: 1; }
+.bag-remove { margin-top: .25rem; font-size: .875rem; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.bag-n { display: inline-grid; place-items: center; min-width: 1.4rem; height: 1.4rem; margin-left: .35rem; padding: 0 .35rem; border-radius: 999px; background: var(--fg, #14110f); color: var(--bg, #fff); font-size: .75rem; }
+.sticky-sum { display: flex; flex-direction: column; line-height: 1.15; }
+.sticky-sum small { opacity: .8; }
+.sticky-sum[hidden], [data-bag-hide][hidden], .bag-n[hidden] { display: none; }

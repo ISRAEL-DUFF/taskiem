@@ -1,4 +1,11 @@
 {{template "fhead" .}}{{template "fbody" .}}
 {{with .Home}}<p class="pdp-crumb"><a href="{{.}}">{{template "i-back"}}Back to {{$.Business}}</a></p>{{end}}
-{{template "itempage" .}}
+<article class="pdp">
+  <div class="pdp-media">{{template "itemimg" .}}</div>
+  <div class="pdp-main">
+    <h1>{{.It.Name}}</h1>
+    {{template "itembody" .}}
+    {{template "itemmore" .}}
+  </div>
+</article>
 {{template "ffoot" .}}

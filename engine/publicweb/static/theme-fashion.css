@@ -78,10 +78,9 @@ h3 { font-size: 1.35rem; line-height: 1.1; }
 @media (min-width: 900px) {
   .pdp { display: grid; grid-template-columns: 1.1fr .9fr; gap: 3rem; align-items: start; }
   .pdp-img { width: 100%; }
-  .bag { display: grid; grid-template-columns: 1fr 20rem; grid-auto-flow: row dense; column-gap: 3rem; align-items: start; }
+  .bag { display: grid; grid-template-columns: 1fr 22rem; column-gap: 3rem; align-items: start; }
   .bag > .bag-h { grid-column: 1 / -1; }
-  .bag > .bag-line { grid-column: 1; }
-  .bag > .total, .bag > .bag-hint, .bag > .btn, .bag > .bag-more { grid-column: 2; }
+  .bag-box { position: sticky; top: 1rem; }
 }
 .kx-narrow, .sl-narrow, .gx-narrow, .fx-narrow { max-width: 70rem; margin: 0 auto; padding: 0 1.25rem 2rem; }
 .kx-page, .sl-page, .gx-page, .fx-page { background: var(--bg); }
@@ -101,3 +100,21 @@ h3 { font-size: 1.35rem; line-height: 1.1; }
 @media (min-width: 900px) { .fx-steps { grid-template-columns: repeat(3, 1fr); } }
 .sf-foot { padding-left: max(1.25rem, calc((100% - 72rem) / 2 + 1.25rem)); padding-right: max(1.25rem, calc((100% - 72rem) / 2 + 1.25rem)); } .sf-foot > * { max-width: none; margin-left: 0; margin-right: 0; }
 @media (min-width: 900px) { .fx-hero { align-items: start; } .fx-hero h1 { font-size: 7rem; } }
+
+.fx-hero h1 em { font-style: italic; }
+.fx-dots { display: flex; gap: .375rem; margin: 0 0 .5rem; }
+.fx-dots .sw { width: .9rem; height: .9rem; }
+.fx-piece .badge-few { margin: 0 0 .5rem; background: transparent; padding: 0; color: var(--brand-text); font-size: .75rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.fx-bag .bag-n { background: var(--fg); color: var(--bg); }
+.fx .sticky .sticky-sum { flex-direction: row; align-items: baseline; gap: .75rem; }
+.fx .sticky .sticky-go { margin-left: auto; }
+.fx .pdp-media .pdp-img { aspect-ratio: 4 / 5; max-height: none; border-radius: 0; }
+.fx .pdp-thumbs { gap: .75rem; }
+.fx .pdp-thumb img { border-radius: 0; }
+.fx .pdp-more summary { font-size: .9375rem; }
+
+.bag-box { display: flex; flex-direction: column; gap: .5rem; margin-top: 1rem; padding: 1.25rem; border: 1px solid var(--line, var(--rule)); background: var(--card, var(--bg)); }
+.bag-box-h { margin: 0; font-size: 1.5rem; }
+.bag-count { margin: 0; color: var(--muted); }
+.bag-box .total { margin: .5rem 0; }
+.bag-box { border-radius: 0; }

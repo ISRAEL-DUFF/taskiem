@@ -79,10 +79,9 @@ h3, .price { font-weight: 700; }
 @media (min-width: 900px) {
   .pdp { display: grid; grid-template-columns: 1.1fr .9fr; gap: 3rem; align-items: start; }
   .pdp-img { width: 100%; }
-  .bag { display: grid; grid-template-columns: 1fr 20rem; grid-auto-flow: row dense; column-gap: 3rem; align-items: start; }
+  .bag { display: grid; grid-template-columns: 1fr 22rem; column-gap: 3rem; align-items: start; }
   .bag > .bag-h { grid-column: 1 / -1; }
-  .bag > .bag-line { grid-column: 1; }
-  .bag > .total, .bag > .bag-hint, .bag > .btn, .bag > .bag-more { grid-column: 2; }
+  .bag-box { position: sticky; top: 1rem; }
 }
 .kx-narrow, .sl-narrow, .gx-narrow, .fx-narrow { max-width: 70rem; margin: 0 auto; padding: 0 1.25rem 2rem; }
 .kx-page, .sl-page, .gx-page, .fx-page { background: var(--bg); }
@@ -94,3 +93,18 @@ h3, .price { font-weight: 700; }
 .hero-logo { width: 55%; height: auto; object-fit: contain; border-radius: 50%; }
 .kx-pill::before { content: ""; display: inline-block; width: .5rem; height: .5rem; margin-right: .45rem; border-radius: 50%; background: currentColor; }
 .sf-foot { padding-left: max(1.25rem, calc((100% - 70rem) / 2 + 1.25rem)); padding-right: max(1.25rem, calc((100% - 70rem) / 2 + 1.25rem)); } .sf-foot > * { max-width: none; margin-left: 0; margin-right: 0; }
+
+/* Colour on the headline, the dark bag button and the floating total. */
+.kx-hero h1 em { font-style: italic; color: var(--brand); }
+.kx-bag .bag-n { background: var(--brand); color: var(--on-brand); }
+.kx .sticky { display: flex; align-items: center; justify-content: space-between; gap: 1rem; border-radius: 22px; background: var(--fg); color: #fff; }
+.kx .sticky .sticky-go { display: grid; place-items: center; padding: .6rem 1.1rem; border-radius: 999px; background: #f2a93b; color: var(--fg); font-weight: 700; }
+.kx .sticky-sum { font-size: 1.125rem; }
+.kx .pdp-opt-other .pdp-choice { border-radius: 999px; }
+.kx .badge-few { margin-top: .25rem; display: inline-block; }
+
+.bag-box { display: flex; flex-direction: column; gap: .5rem; margin-top: 1rem; padding: 1.25rem; border: 1px solid var(--line, var(--rule)); background: var(--card, var(--bg)); }
+.bag-box-h { margin: 0; font-size: 1.5rem; }
+.bag-count { margin: 0; color: var(--muted); }
+.bag-box .total { margin: .5rem 0; }
+.bag-box { border-radius: 22px; }

@@ -73,6 +73,10 @@ func (l look) BaseCSS() string {
 	return ""
 }
 
+// BagPill is true for the looks that show the bag's count and total on
+// the pages around it (they load bagpill.js).
+func (l look) BagPill() bool { return brand.Base(l.theme()) != l.theme() }
+
 func (l look) theme() string { return brand.Theme(l.Theme) }
 
 // lookOf makes a look from a brand, for a business by name.

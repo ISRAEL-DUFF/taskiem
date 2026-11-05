@@ -16,4 +16,5 @@
 <p class="hint">Otherwise, updates come by text message.</p>
 </section>
 {{end}}{{with .StatusURL}}<p><a class="btn btn-block" href="{{.}}"{{if $.Embed}} target="_blank" rel="noopener noreferrer"{{end}}>See what happens next</a></p>{{end}}
+<span hidden data-bag-clear></span>
 {{template "ffoot" .}}

@@ -75,10 +75,9 @@ h3 { font-weight: 700; }
 @media (min-width: 900px) {
   .pdp { display: grid; grid-template-columns: 1.1fr .9fr; gap: 3rem; align-items: start; }
   .pdp-img { width: 100%; }
-  .bag { display: grid; grid-template-columns: 1fr 20rem; grid-auto-flow: row dense; column-gap: 3rem; align-items: start; }
+  .bag { display: grid; grid-template-columns: 1fr 22rem; column-gap: 3rem; align-items: start; }
   .bag > .bag-h { grid-column: 1 / -1; }
-  .bag > .bag-line { grid-column: 1; }
-  .bag > .total, .bag > .bag-hint, .bag > .btn, .bag > .bag-more { grid-column: 2; }
+  .bag-box { position: sticky; top: 1rem; }
 }
 .kx-narrow, .sl-narrow, .gx-narrow, .fx-narrow { max-width: 70rem; margin: 0 auto; padding: 0 1.25rem 2rem; }
 .kx-page, .sl-page, .gx-page, .fx-page { background: var(--bg); }
@@ -92,3 +91,26 @@ h3 { font-weight: 700; }
 .sl-time p { margin: 0; max-width: 28rem; opacity: .85; }
 .sl-time-btn { background: #f0c4b8; border-color: #f0c4b8; color: var(--fg); }
 .sf-foot { padding-left: max(1.25rem, calc((100% - 66rem) / 2 + 1.25rem)); padding-right: max(1.25rem, calc((100% - 66rem) / 2 + 1.25rem)); } .sf-foot > * { max-width: none; margin-left: 0; margin-right: 0; }
+
+.sl-hero h1 em { font-style: italic; color: var(--brand-text); }
+.sl .badge-few { display: inline-block; margin-top: .25rem; }
+.sl-page .days, .sl-page .slots { color: var(--fg); }
+.sl-page .day { display: inline-grid; justify-items: center; min-width: 4rem; padding: .5rem .75rem; border: 1.5px solid var(--line); border-radius: 18px; background: var(--card); text-decoration: none; color: var(--fg); font-weight: 700; }
+.sl-page .day.is-current { background: #f0c4b8; border-color: #f0c4b8; }
+.sl-page .slot-grid { display: flex; flex-wrap: wrap; gap: .5rem; }
+.sl-page .slot label { display: inline-block; min-width: 5rem; padding: .6rem 1rem; border: 1.5px solid var(--line); border-radius: 999px; background: var(--card); text-align: center; cursor: pointer; }
+.sl-page .slot input { position: absolute; opacity: 0; }
+.sl-page .slot input:checked + label { background: var(--fg); border-color: var(--fg); color: #fff; }
+.sl-page .slot input:focus-visible + label { outline: 2px solid var(--brand); outline-offset: 2px; }
+.sl-page .service, .sl-page .summary.pay { padding: 1rem; border-radius: 24px; background: var(--card); border: 1px solid var(--line); }
+@media (min-width: 900px) {
+  .sl-page form.form:has(.slots) { display: grid; grid-template-columns: 1fr 22rem; column-gap: 3rem; align-items: start; }
+  .sl-page form.form:has(.slots) .slots { grid-column: 1; grid-row: 1 / span 4; }
+  .sl-page form.form:has(.slots) > :not(.slots) { grid-column: 2; }
+}
+
+.bag-box { display: flex; flex-direction: column; gap: .5rem; margin-top: 1rem; padding: 1.25rem; border: 1px solid var(--line, var(--rule)); background: var(--card, var(--bg)); }
+.bag-box-h { margin: 0; font-size: 1.5rem; }
+.bag-count { margin: 0; color: var(--muted); }
+.bag-box .total { margin: .5rem 0; }
+.bag-box { border-radius: 24px; }

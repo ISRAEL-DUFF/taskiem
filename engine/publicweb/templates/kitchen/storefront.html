@@ -5,12 +5,12 @@
 <body class="sf kx{{if .Ordering}} has-sticky{{end}}">
 <div class="kx-top">
   <a class="kx-name" href="{{if .Home}}{{.Home}}{{else}}#{{end}}">{{.M.Card.Name}}</a>
-  {{if .Ordering}}<a class="kx-bag" href="{{.Base}}/a/order">{{template "i-bag"}}<span>Order</span></a>{{end}}
+  {{if .Ordering}}<a class="kx-bag" href="{{.Base}}/a/order" data-bag-link>{{template "i-bag"}}<span>Order</span><b class="bag-n" data-bag-n hidden data-bag-show></b></a>{{end}}
 </div>
 <section class="kx-hero">
   <div class="kx-copy">
     {{if .OpenKnown}}<p class="kx-pill {{if .OpenNow}}is-open{{else}}is-closed{{end}}">{{if .OpenNow}}Open now{{else}}Closed now{{end}}</p>{{end}}
-    <h1>{{if .M.Card.Tagline}}{{.M.Card.Tagline}}{{else}}{{.M.Card.Name}}{{end}}</h1>
+    {{$a := accent (or .M.Card.Tagline .M.Card.Name)}}<h1>{{index $a 0}}{{with index $a 1}} <em>{{.}}</em>{{end}}</h1>
     {{with .M.Card.About}}<p class="kx-lead">{{.}}</p>{{end}}
     <p class="kx-cta">
       {{if .HasItems}}<a class="btn btn-primary" href="#menu">See the menu</a>{{end}}
@@ -39,7 +39,7 @@
       <a class="kx-img" href="{{if .ID}}{{$.Base}}/i/{{.ID}}{{else}}#{{end}}" tabindex="-1" aria-hidden="true">{{if .Small}}<img src="{{.Small}}" srcset="{{.Small}} 320w, {{.Large}} 800w" sizes="(min-width: 900px) 18vw, 45vw" alt="" loading="lazy" decoding="async">{{else}}{{template "i-photo"}}{{end}}</a>
       <div class="kx-meta">
         <div><h3>{{if .ID}}<a class="item-open" href="{{$.Base}}/i/{{.ID}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}</h3>
-        <p class="price">{{.Price}}</p>{{if .ReadyIn}}<p class="item-sub">Ready in {{.ReadyIn}} min</p>{{end}}</div>
+        <p class="price">{{.Price}}</p>{{if .Few}}<span class="badge badge-few">Few left</span>{{end}}{{if .ReadyIn}}<p class="item-sub">Ready in {{.ReadyIn}} min</p>{{end}}</div>
         {{if not .Available}}<span class="badge">Unavailable</span>{{else if .SoldOut}}<span class="badge">Sold out</span>{{else if and $.Ordering .Orderable}}<a class="add" href="{{$.Base}}/a/order?item={{.ID}}" aria-label="Add {{.Name}}">{{template "i-plus"}}</a>{{end}}
       </div>
     </li>
@@ -50,6 +50,6 @@
 {{template "sfinfo" .}}
 </main>
 {{template "sffoot" .}}
-{{if .Ordering}}<a class="sticky" href="{{.Base}}/a/order"><span>Start your order</span>{{template "i-next"}}</a>{{end}}
+{{if .Ordering}}<a class="sticky" href="{{.Base}}/a/order" data-bag-link><span data-bag-hide>Start your order</span><span class="sticky-sum" data-bag-show hidden><small><b data-bag-n></b> items</small> <b data-bag-t></b></span><span class="sticky-go"><span data-bag-show hidden>Checkout&nbsp;</span>{{template "i-next"}}</span></a>{{end}}
 </body>
 </html>

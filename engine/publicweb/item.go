@@ -33,6 +33,10 @@ type itemData struct {
 	Note   string
 	Whats  string
 	Phone  string
+	// Pickup, Delivery and DeliveryNote are how the order form hands
+	// over, for the item's Delivery section.
+	Pickup, Delivery bool
+	DeliveryNote     string
 }
 
 // serveItem answers an item's page: its photo, words, price and choices,
@@ -77,12 +81,16 @@ func (s *Server) serveItem(w http.ResponseWriter, r *http.Request, site Site, fr
 	if x.Large == "" {
 		x.Large = it.Photo["2000"]
 	}
+	x.decorate()
 	if it.PriceKobo != nil {
 		x.Price = storefront.FormatNaira(*it.PriceKobo)
 	}
 	d := itemData{pageData: pageData{Title: it.Name, Lang: c.Language, Look: s.lookFor(r.Context(), site.Tenant, c.Name)},
 		Business: c.Name, Home: home, It: x, Options: formOptions(it), Max: most(it), Whats: p.Model.WhatsLink, Phone: c.Phone}
 	act, hasOrder := findAction(actions, "order")
+	if hasOrder {
+		d.Pickup, d.Delivery, d.DeliveryNote = act.Pickup, act.Delivery, act.DeliveryNote
+	}
 	hasBasket := hasOrder && storefront.HasWidget(storefront.EffectiveForm(act.Form, act.Kind), "basket")
 	switch {
 	case p.Status == "closed":

@@ -7,7 +7,8 @@ link preview, and a form's hidden fields. Each theme draws the rest. */}}
 {{end}}<link rel="stylesheet" href="{{asset "item-sheet.css"}}">
 <link rel="stylesheet" href="{{asset .Brand.ThemeCSS}}">
 <link rel="stylesheet" href="{{.Brand.CSS}}">
-{{end}}
+{{if .Brand.BagPill}}<script src="{{asset "bagpill.js"}}" defer></script>
+{{end}}{{end}}
 
 {{define "og"}}<title>{{.M.Card.Name}}</title>
 {{with .Description}}<meta name="description" content="{{.}}">{{end}}

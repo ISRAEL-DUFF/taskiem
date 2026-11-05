@@ -31,6 +31,10 @@ type bagLine struct {
 	Unit     string
 	Line     string
 	UnitKobo int64
+	// Small is the item's thumbnail; Remove is the bag's address without
+	// this line (the way home when it was the last).
+	Small  string
+	Remove string
 	// Hidden are the line's choices, carried as fields.
 	Hidden []bagField
 }
@@ -41,7 +45,7 @@ type bagField struct{ Name, Value string }
 // pricing each line as the item plus its choices, and totals it. The total
 // is only for showing: the order is priced again on the server.
 func (f *formData) fillBag() {
-	f.Bag, f.Subtotal = nil, ""
+	f.Bag, f.Subtotal, f.BagCount = nil, "", 0
 	var total int64
 	for _, it := range f.Items {
 		if it.Qty <= 0 || !it.Orderable {
@@ -61,8 +65,9 @@ func (f *formData) fillBag() {
 		}
 		line := unit * int64(it.Qty)
 		total += line
+		f.BagCount += it.Qty
 		f.Bag = append(f.Bag, bagLine{N: it.N, ID: it.ID, Name: it.Name, Qty: it.Qty, Max: it.Max, Choices: strings.Join(names, ", "),
-			Unit: storefront.FormatNaira(unit), Line: storefront.FormatNaira(line), UnitKobo: unit, Hidden: hidden})
+			Unit: storefront.FormatNaira(unit), Line: storefront.FormatNaira(line), UnitKobo: unit, Small: it.Small, Hidden: hidden})
 	}
 	if len(f.Bag) > 0 {
 		f.Subtotal = storefront.FormatNaira(total)
@@ -105,6 +110,29 @@ func (f *formData) stepFor(q url.Values) {
 func (f *formData) setLinks() {
 	f.MoreHref = f.Home
 	f.ChangeHref = f.Action + "?" + f.bagQuery(stepBag)
+	for i := range f.Bag {
+		f.Bag[i].Remove = f.removeHref(f.Bag[i].ID)
+	}
+}
+
+// removeHref is the bag's address without the line of item id.
+func (f *formData) removeHref(id string) string {
+	v := url.Values{"step": {stepBag}}
+	left := 0
+	for _, l := range f.Bag {
+		if l.ID == id {
+			continue
+		}
+		left++
+		v.Set(quantityField+l.ID, strconv.Itoa(l.Qty))
+		for _, h := range l.Hidden {
+			v.Set(h.Name, h.Value)
+		}
+	}
+	if left == 0 {
+		return f.Home
+	}
+	return f.Action + "?" + v.Encode()
 }
 
 // detailsAgain keeps a refused submission on its details step, with its

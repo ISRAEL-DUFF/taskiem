@@ -15,7 +15,7 @@ import (
 // under them.
 const (
 	maxPageHTML   = 60 << 10 // per page, before images
-	maxStylesPage = 21 << 10 // the stylesheets a page loads: its theme's (a skin's, on top of the theme it is drawn on) and its colour's
+	maxStylesPage = 26 << 10 // the stylesheets a page loads: its theme's (a skin's, on top of the theme it is drawn on) and its colour's
 	maxScriptTot  = 10 << 10 // every script together
 )
 

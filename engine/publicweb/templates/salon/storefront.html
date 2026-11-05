@@ -10,7 +10,7 @@
 <section class="sl-hero">
   <div class="sl-copy">
     {{if .OpenKnown}}<p class="sl-kicker">{{if .OpenNow}}Open now{{else}}Closed now{{end}}{{with .M.Card.Area}} · {{.}}{{end}}</p>{{else}}{{with .M.Card.Area}}<p class="sl-kicker">{{.}}</p>{{end}}{{end}}
-    <h1>{{if .M.Card.Tagline}}{{.M.Card.Tagline}}{{else}}{{.M.Card.Name}}{{end}}</h1>
+    {{$a := accent (or .M.Card.Tagline .M.Card.Name)}}<h1>{{index $a 0}}{{with index $a 1}} <em>{{.}}</em>{{end}}</h1>
     {{with .M.Card.About}}<p class="sl-lead">{{.}}</p>{{end}}
     <p class="sl-cta">
       {{range .Forms}}{{if eq .Kind "booking"}}<a class="btn btn-primary" href="{{$.Base}}/a/{{.Ref}}">{{.Label}}</a>{{end}}{{end}}
@@ -31,7 +31,7 @@
   <h2>{{if .Title}}{{.Title}}{{else}}Products{{end}}</h2>
   <ul class="sl-products">{{range .Items}}<li class="sl-product{{if or (not .Available) .SoldOut}} is-unavailable{{end}}">
     {{if .Small}}<img class="thumb" src="{{.Small}}" srcset="{{.Small}} 320w, {{.Large}} 800w" sizes="64px" alt="" loading="lazy" decoding="async">{{else}}<span class="thumb thumb-icon">{{template "i-photo"}}</span>{{end}}
-    <div class="item-text"><h3>{{if .ID}}<a class="item-open" href="{{$.Base}}/i/{{.ID}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}</h3><p class="item-sub">{{.Price}}</p></div>
+    <div class="item-text"><h3>{{if .ID}}<a class="item-open" href="{{$.Base}}/i/{{.ID}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}</h3><p class="item-sub">{{.Price}}</p>{{if .Few}}<span class="badge badge-few">Few left</span>{{end}}</div>
     {{if not .Available}}<span class="badge">Unavailable</span>{{else if .SoldOut}}<span class="badge">Sold out</span>{{else if and $.Ordering .Orderable}}<a class="add" href="{{$.Base}}/a/order?item={{.ID}}" aria-label="Add {{.Name}}">{{template "i-plus"}}</a>{{end}}
   </li>{{end}}</ul>
 </section>{{end}}{{end}}

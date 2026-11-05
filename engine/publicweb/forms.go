@@ -121,6 +121,7 @@ type formData struct {
 	// the form, so the page has no cookies and works without a script.
 	Step     string
 	Bag      []bagLine
+	BagCount int
 	Subtotal string
 	// MoreHref is where to add more to the bag, ChangeHref where the
 	// bag is changed from the details page.
@@ -144,6 +145,8 @@ type formItem struct {
 	Max       int // the most one order may take: maxQuantity, or the stock left
 	Orderable bool
 	SoldOut   bool
+	// Small is the item's thumbnail, for the bag.
+	Small string
 	// Options are a Food dish's groups, a choice each (fronts F3).
 	Options []formOption
 }
@@ -852,7 +855,7 @@ func basketItems(items []storefront.Item) []formItem {
 			continue
 		}
 		seen[it.ID] = true
-		x := formItem{N: len(out), ID: it.ID, Name: it.Name, Max: most(it), Orderable: orderable(it), SoldOut: it.SoldOut(), Options: formOptions(it)}
+		x := formItem{N: len(out), ID: it.ID, Name: it.Name, Max: most(it), Orderable: orderable(it), SoldOut: it.SoldOut(), Options: formOptions(it), Small: it.Photo["320"]}
 		if it.PriceKobo != nil {
 			x.PriceKobo, x.Price = *it.PriceKobo, storefront.FormatNaira(*it.PriceKobo)
 		}

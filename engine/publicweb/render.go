@@ -78,6 +78,9 @@ func init() {
 			}
 			return p, nil
 		},
+		"accent":  accent,
+		"swatch":  swatch,
+		"optkind": optkind,
 	}
 	for _, theme := range brand.Themes {
 		themed[theme] = template.Must(template.New("").Funcs(funcs).ParseFS(templateFS, "templates/shared/*.html", "templates/"+theme+"/*.html"))
@@ -189,4 +192,53 @@ func (s *Server) renderWith(w http.ResponseWriter, r *http.Request, status int, 
 	if r.Method != http.MethodHead {
 		_, _ = w.Write(buf.Bytes())
 	}
+}
+
+// accent splits a headline in two so a look can set the second part in
+// its accent style: at the first comma ("Hot food," / "made fresh today."),
+// else before the last word ("Book your" / "glow."). A one-word headline
+// has no second part.
+func accent(s string) [2]string {
+	s = strings.TrimSpace(s)
+	if i := strings.Index(s, ","); i >= 0 && i < len(s)-1 {
+		return [2]string{s[:i+1], strings.TrimSpace(s[i+1:])}
+	}
+	if i := strings.LastIndex(s, " "); i > 0 {
+		return [2]string{s[:i], s[i+1:]}
+	}
+	return [2]string{s, ""}
+}
+
+// swatchNames are the colour words a choice's dot can be drawn in; the
+// stylesheet has a class for each (sw-black, sw-red, ...).
+var swatchNames = map[string]bool{
+	"black": true, "white": true, "grey": true, "gray": true, "red": true, "orange": true, "yellow": true, "green": true,
+	"blue": true, "navy": true, "purple": true, "pink": true, "brown": true, "cream": true, "beige": true, "gold": true,
+	"moss": true, "olive": true, "teal": true, "maroon": true, "burgundy": true, "ivory": true, "tan": true, "khaki": true,
+}
+
+// swatch is the class of a colour choice's dot ("Black" gives sw-black), or
+// sw-none when the choice is not a colour the stylesheet knows.
+func swatch(name string) string {
+	w := strings.ToLower(strings.TrimSpace(name))
+	if i := strings.IndexAny(w, " (/-"); i > 0 {
+		w = w[:i]
+	}
+	if swatchNames[w] {
+		return "sw-" + w
+	}
+	return "sw-none"
+}
+
+// optkind is what a group of choices is, so a look can draw it: "colour"
+// (dots), "size" (square buttons), or "other".
+func optkind(name string) string {
+	w := strings.ToLower(name)
+	switch {
+	case strings.Contains(w, "colour"), strings.Contains(w, "color"):
+		return "colour"
+	case strings.Contains(w, "size"):
+		return "size"
+	}
+	return "other"
 }

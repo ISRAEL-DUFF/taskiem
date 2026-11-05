@@ -105,7 +105,10 @@ type Item struct {
 	PriceKobo   *int64 `json:"price_kobo,omitempty"`
 	Description string `json:"description,omitempty"`
 	Photo       Image  `json:"photo,omitempty"`
-	Available   bool   `json:"available"`
+	// Gallery is the photos after the first, when the photo column holds
+	// several media ids separated by commas.
+	Gallery   []Image `json:"gallery,omitempty"`
+	Available bool    `json:"available"`
 	Category    string `json:"category,omitempty"`
 	// Stock is how many are left, when the catalogue tracks it.
 	Stock *int64 `json:"stock,omitempty"`
@@ -352,6 +355,9 @@ func MediaImage(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, id string) (Im
 }
 
 // mediaImage is a media record's URLs, refusing rejected or unknown ids.
+// maxGallery is the most photos after the first an item shows.
+const maxGallery = 5
+
 func mediaImage(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, id string) (Image, error) {
 	mid, err := uuid.Parse(id)
 	if err != nil {
@@ -451,11 +457,24 @@ func Items(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]a
 			}
 		}
 		if m.Photo != "" {
-			if id := str(r[m.Photo]); id != "" {
-				if img, err := mediaImage(ctx, tx, tenant, id); err == nil {
-					it.Photo = img
-				} else if !errors.Is(err, ErrInvalid) {
+			// One media id, or several separated by commas: the first is
+			// the photo, the rest its gallery (at most maxGallery).
+			for _, id := range strings.Split(str(r[m.Photo]), ",") {
+				id = strings.TrimSpace(id)
+				if id == "" || len(it.Gallery) >= maxGallery {
+					continue
+				}
+				img, err := mediaImage(ctx, tx, tenant, id)
+				if errors.Is(err, ErrInvalid) {
+					continue
+				}
+				if err != nil {
 					return nil, err
+				}
+				if it.Photo == nil {
+					it.Photo = img
+				} else {
+					it.Gallery = append(it.Gallery, img)
 				}
 			}
 		}
