@@ -521,7 +521,7 @@ Page views far outnumber submissions and arrive in bursts (a status shared to 2,
 - **Roles:** the business is the **data controller** for its customers' details, and Taskiem the processor. The storefront terms, which owners accept before publishing, say so.
 - **Notice:** every form shows a short notice: who receives the details (the business by name), why (to handle the order), and a link to a privacy page Taskiem generates for the business from its card.
 - **Collection:** only the fields the action needs. Personal fields are sealed at rest, masked in messages and the web app (spec 9.3), and access to unmasked values is audited.
-- **Retention:** submissions and their personal fields are kept for the business's retention setting (default 12 months) and then erased. The existing erasure function applies to a customer's request through the business.
+- **Retention:** submissions and their personal fields are kept for the business's retention setting (`retention_days` on `PUT /v1/storefront`, 30 days to 10 years, default 12 months) and then erased: an hourly pass replaces the customer's details of each ended order (declined, expired, completed, cancelled, no-show, price changed, refunded) not changed for that long, and ends its status link; orders still open wait until they end. The customer's subject key is not destroyed, so their newer orders keep their details. The existing erasure function applies to a customer's request through the business.
 - **No tracking:** no analytics scripts, no third-party fonts or trackers, and no cookies on pages. Visit counts for the owner come from server logs, aggregated without IPs ([10](#10-what-the-owner-sees)).
 
 ## 10. What the owner sees

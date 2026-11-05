@@ -265,6 +265,7 @@ taskiem_storefront_holds_sweep()	@ISRAEL-DUFF (storefronts)	Holds long past, whi
 taskiem_storefront_inbox_claim(integer)	@ISRAEL-DUFF (storefronts)	The api role's side of the inbox (00180)
 taskiem_storefront_inbox_done(uuid)	@ISRAEL-DUFF (storefronts)	part of: Storefront orders, enquiries and callbacks (Phase 5, S3; docs/spec/storefronts.md 6.3 to 6.5, 8.2; docs/storefronts.md) (00180)
 taskiem_storefront_lock(uuid)	@ISRAEL-DUFF (storefronts)	part of: Storefront bookings (docs/spec/storefronts.md 6.9) and the price check before a run (8.1) (00181)
+taskiem_storefront_orders_forget(integer)	@ISRAEL-DUFF (storefronts)	Erases the customer's details of ended orders past their business's retention, across businesses, reading only status, age and the retention setting; answers tenant ids and counts (00385)
 taskiem_storefront_payment_tenants()	@ISRAEL-DUFF (storefronts)	Tenants with orders waiting for payment, for the payment checker (00180)
 taskiem_storefront_release_domain(uuid,text[])	@ISRAEL-DUFF (storefronts)	Stops serving a storefront's own domain (and its twin), in the caller's scope (00185)
 taskiem_storefront_slot_free(uuid,text,text,timestamp with time zone,timestamp with time zone,integer)	@ISRAEL-DUFF (storefronts)	Whether a booking of p_service from p_start (keeping the calendar until p_until) fits beside the live holds other than p_except's (00181)

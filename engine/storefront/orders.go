@@ -1390,6 +1390,37 @@ func (o *Orders) NotifyCustomer(ctx context.Context, tenant uuid.UUID, reference
 	return out, err
 }
 
+// ForgetExpired erases the customer's details of ended orders past their
+// business's retention (storefronts.retention_days, 12 months by
+// default; docs/spec/storefronts.md, Privacy), up to 1,000 at a time,
+// and audits how many each business lost.
+func (o *Orders) ForgetExpired(ctx context.Context) error {
+	rows, err := o.Pool.Query(ctx, `SELECT tenant_id, forgotten FROM taskiem_storefront_orders_forget(1000)`)
+	if err != nil {
+		return err
+	}
+	type forgot struct {
+		tenant uuid.UUID
+		n      int
+	}
+	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (forgot, error) {
+		var f forgot
+		return f, r.Scan(&f.tenant, &f.n)
+	})
+	if err != nil {
+		return err
+	}
+	var errs []error
+	for _, f := range list {
+		if err := db.InTenantTx(ctx, o.Pool, []uuid.UUID{f.tenant}, func(tx pgx.Tx) error {
+			return audit(ctx, tx, f.tenant, "storefront.retention", "orders", map[string]any{"forgotten": f.n})
+		}); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
 func audit(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, action, target string, detail map[string]any) error {
 	if detail == nil {
 		detail = map[string]any{}

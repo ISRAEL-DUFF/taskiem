@@ -1112,6 +1112,7 @@ storefront_orders.created_at
 storefront_orders.deposit_kobo
 storefront_orders.ends_at
 storefront_orders.expires_at
+storefront_orders.forgotten_at
 storefront_orders.front_id
 storefront_orders.id
 storefront_orders.kind
@@ -1128,6 +1129,7 @@ storefront_orders.status_hash
 storefront_orders.storefront_id
 storefront_orders.tenant_id
 storefront_orders.total_kobo
+storefront_orders.updated_at
 storefront_orders.version
 storefront_reviews.created_at
 storefront_reviews.created_by
@@ -1157,6 +1159,7 @@ storefronts.orders_paused
 storefronts.published_slug
 storefronts.published_version
 storefronts.reopen_at
+storefronts.retention_days
 storefronts.services_table
 storefronts.slug
 storefronts.status

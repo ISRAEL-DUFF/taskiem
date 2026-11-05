@@ -130,7 +130,7 @@ Saving a form re-publishes a published page, so its buttons match.
 
    The public host holds no key to the vault, so it cannot seal personal data itself.
 2. **Taskiem records it.** Within a second, the `api` role takes it from the inbox:
-   - seals the customer's details under their personal-data subject (erasing the customer erases them);
+   - seals the customer's details under their personal-data subject (erasing the customer erases them; and once an order has ended, they are erased after the storefront's retention, 12 months unless `retention_days` says otherwise);
    - records the order with a reference such as `AK-7QX4KD`;
    - deletes the inbox row.
 3. **Paid when ordering:** on a Paystack form, a checkout page is made at once. The customer's status page takes them to it, and Paystack sends them back.

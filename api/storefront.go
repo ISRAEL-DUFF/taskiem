@@ -87,6 +87,7 @@ func (s *Server) putStorefront(w http.ResponseWriter, r *http.Request) {
 		Draft            storefront.Card    `json:"draft"`
 		CatalogueTable   *uuid.UUID         `json:"catalogue_table"`
 		CatalogueColumns storefront.Columns `json:"catalogue_columns"`
+		RetentionDays    *int               `json:"retention_days,omitempty"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
@@ -125,6 +126,15 @@ func (s *Server) putStorefront(w http.ResponseWriter, r *http.Request) {
 		var err error
 		if sf, err = storefront.Save(r.Context(), tx, p.TenantID, req.Slug, req.Draft, req.CatalogueTable, req.CatalogueColumns, p.Actor()); err != nil {
 			return storefrontErr(err)
+		}
+		if req.RetentionDays != nil && *req.RetentionDays != sf.RetentionDays {
+			if err := storefront.SetRetention(r.Context(), tx, p.TenantID, *req.RetentionDays); err != nil {
+				return storefrontErr(err)
+			}
+			sf.RetentionDays = *req.RetentionDays
+			if err := auditTx(r, tx, "storefront.retention.set", sf.Slug, map[string]any{"days": sf.RetentionDays}); err != nil {
+				return err
+			}
 		}
 		return auditTx(r, tx, "storefront.save", sf.Slug, nil)
 	})

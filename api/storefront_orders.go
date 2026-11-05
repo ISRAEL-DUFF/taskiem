@@ -193,7 +193,8 @@ func maskCustomer(c *storefront.Customer) {
 // RunStorefrontOrders takes submissions from the inbox every second, asks
 // the payment provider about waiting payments every 30 seconds, and every
 // 15 applies customers' and owners' changes, sweeps bookings and moves
-// riders' deliveries on (offers that ran out, quiet riders).
+// riders' deliveries on (offers that ran out, quiet riders); every hour it
+// erases the customer's details of ended orders past retention.
 func (s *Server) RunStorefrontOrders(ctx context.Context) error {
 	s.chatHooks()
 	if s.Orders == nil {
@@ -201,6 +202,8 @@ func (s *Server) RunStorefrontOrders(ctx context.Context) error {
 		return nil
 	}
 	tick, payments, bookings := time.NewTicker(time.Second), time.NewTicker(30*time.Second), time.NewTicker(15*time.Second)
+	retention := time.NewTicker(time.Hour)
+	defer retention.Stop()
 	defer tick.Stop()
 	defer payments.Stop()
 	defer bookings.Stop()
@@ -211,6 +214,12 @@ func (s *Server) RunStorefrontOrders(ctx context.Context) error {
 		case <-tick.C:
 			if err := s.Orders.Drain(ctx); err != nil && ctx.Err() == nil {
 				s.Logger.Error("storefront: inbox", "err", err)
+			}
+		case <-retention.C:
+			// Ended orders past the business's retention lose their
+			// customer's details (docs/storefronts.md, Privacy).
+			if err := s.Orders.ForgetExpired(ctx); err != nil && ctx.Err() == nil {
+				s.Logger.Error("storefront: retention", "err", err)
 			}
 		case <-payments.C:
 			if err := s.Orders.CheckPayments(ctx); err != nil && ctx.Err() == nil {

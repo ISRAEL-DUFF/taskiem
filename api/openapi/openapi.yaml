@@ -393,7 +393,8 @@ paths:
       tags:
       - Storefront
       summary: Save the storefront's draft
-      description: The slug and the catalogue mapping are checked now; the card when it is published.
+      description: The slug and the catalogue mapping are checked now; the card when it is published. `retention_days`
+        sets how long ended orders keep their customer's details.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -29233,6 +29234,11 @@ components:
           format: uuid
         catalogue_columns:
           $ref: '#/components/schemas/StorefrontColumns'
+        retention_days:
+          type: integer
+          minimum: 30
+          maximum: 3650
+          description: How long ended orders keep their customer's details before they are erased; unchanged when left out
     Storefront:
       type: object
       required: [id, slug, status, draft, catalogue_table, catalogue_columns, published_version, preview_url, templates, accents]
@@ -29305,6 +29311,9 @@ components:
           - string
           - 'null'
           description: The primary of the business's own verified domains
+        retention_days:
+          type: integer
+          description: How long ended orders keep their customer's details before they are erased (30 to 3650, 365 by default)
         templates:
           type: array
           items:
