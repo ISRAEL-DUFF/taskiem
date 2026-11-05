@@ -261,6 +261,9 @@ type tenantGate struct {
 	mu      sync.Mutex
 	entries map[uuid.UUID]*gateEntry
 	lookups *rate.Limiter // database checks for tenants not cached
+	// refresh re-checks tenants already known to exist, apart from
+	// lookups, which made-up ids can spend (F29).
+	refresh *rate.Limiter
 }
 
 type gateEntry struct {
@@ -305,6 +308,7 @@ const (
 	gateTTL    = time.Minute      // how long whether a tenant exists is trusted
 	gateIdle   = 10 * time.Minute // a tenant not seen for this long may be forgotten
 	gateLookup = 100              // tenant checks per second, across all tenants
+	gateStale  = gateIdle         // a known tenant's last answer, kept while re-checks are spent
 )
 
 // errBusy: too many unknown tenants are being looked up; retry shortly.
@@ -319,6 +323,7 @@ func (h *Handler) gate(ctx context.Context, tenant uuid.UUID) (gateEntry, error)
 	if g.entries == nil {
 		g.entries = map[uuid.UUID]*gateEntry{}
 		g.lookups = rate.NewLimiter(gateLookup, gateLookup)
+		g.refresh = rate.NewLimiter(gateLookup, gateLookup)
 	}
 	e := g.entries[tenant]
 	if e != nil && now.Sub(e.checked) < gateTTL {
@@ -326,7 +331,23 @@ func (h *Handler) gate(ctx context.Context, tenant uuid.UUID) (gateEntry, error)
 		g.mu.Unlock()
 		return *e, nil
 	}
-	allowed := g.lookups.Allow()
+	// Ids that are not known tenants share lookups, which anyone can
+	// spend by making ids up; a known tenant's re-check comes from its
+	// own budget, and while that is spent too it keeps its last answer
+	// for a while rather than being turned away.
+	known := e != nil && e.hard != nil
+	var allowed bool
+	if known {
+		allowed = g.refresh.Allow()
+		if !allowed && now.Sub(e.checked) < gateStale {
+			e.seen = now
+			out := *e
+			g.mu.Unlock()
+			return out, nil
+		}
+	} else {
+		allowed = g.lookups.Allow()
+	}
 	g.mu.Unlock()
 	if !allowed {
 		return gateEntry{}, errBusy
