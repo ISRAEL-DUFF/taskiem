@@ -267,8 +267,15 @@ func (s *Store) startIn(ctx context.Context, tx pgx.Tx, req StartRequest, ref *R
 		if err := checkQuota(ctx, tx, req.TenantID, lim); err != nil {
 			return err
 		}
-		if out.HeldBy, err = tenantHold(ctx, tx, req, lim); err != nil {
-			return err
+		// A child its parent's step waits for runs in the parent's slot:
+		// holding it would leave the parent waiting on a run that cannot
+		// start while the parent counts against the same limit (decision
+		// 0049). Chains are at most wd.MaxSubflowDepth deep, which bounds the
+		// overshoot.
+		if req.Parent == nil || !req.Parent.Waits {
+			if out.HeldBy, err = tenantHold(ctx, tx, req, lim); err != nil {
+				return err
+			}
 		}
 		if out.HeldBy != "" {
 			if err := checkBacklog(ctx, tx, req.TenantID, lim); err != nil {

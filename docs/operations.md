@@ -209,7 +209,7 @@ Every tenant has plan limits (spec 8.3, 16): the platform defaults below, change
 | --- | --- | --- |
 | `ingest_rate`, `ingest_burst` | 20/s, 100 | Soft limit. Deliveries above it are still verified, deduplicated, recorded and answered 202 (`"queued": true`); the runs they start wait as `queued` and the scheduler admits them, oldest first, at this rate. While a tenant has runs waiting, its new runs (also manual and scheduled ones) queue behind them. Signals to waiting runs are delivered at once |
 | `ingest_ceiling`, `ingest_ceiling_burst` | 50/s, 200 | Hard limit: 429 `rate_limited` with `Retry-After` |
-| `max_running_runs` | 0 | Runs in status running at once, including those waiting on a signal, approval or timer. More are accepted and queued, and admitted as runs end |
+| `max_running_runs` | 0 | Runs in status running at once, including those waiting on a signal, approval or timer. More are accepted and queued, and admitted as runs end. A child run its parent's subflow step waits for is not held: it runs in its parent's slot ([decision 0049](decisions/0049-subflows.md)) |
 | `max_queued_runs` | 10,000 | The backlog. A start that would queue beyond it gets 429 `backlog_full` with `Retry-After` |
 | `runs_per_day`, `runs_per_month` | 0 | Run quotas (UTC), counting every accepted run. Beyond them starts get 429 `quota_exceeded` with `Retry-After` until the period ends (webhooks, connector events and `POST /v1/workflows/{id}/runs` alike); a schedule fire is skipped, logged and counted, and the schedule moves on. Off by default: spec 16 prices plans flat |
 | `max_workflows` | 0 | Creating another workflow (API or Git sync) gets 429 `limit_exceeded` |
