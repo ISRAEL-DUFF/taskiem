@@ -33,7 +33,7 @@ func (noFiles) SignURL(_ context.Context, _ uuid.UUID, p string, ttl time.Durati
 func formsWorld(t *testing.T) *world {
 	w := newWorld(t)
 	keys, _ := forms.NewKeys(bytes.Repeat([]byte{5}, 32))
-	w.srv.Forms = &forms.Service{Pool: w.env.DB.App, Vault: w.env.Vault, Keys: keys, Files: noFiles{}, Start: w.env.Store.Start,
+	w.srv.Forms = &forms.Service{Pool: w.env.DB.App, Vault: w.env.Vault, Keys: keys, Files: noFiles{}, Start: w.env.Store.Start, Retention: w.env.Store.Retention,
 		Signal: w.env.Store.DeliverSignalOnce, FormHost: "forms.shops.taskiem.test", AppURL: "https://app.taskiem.test"}
 	if err := w.env.Registry.Register(formconn.New(w.srv.Forms)); err != nil {
 		t.Fatal(err)

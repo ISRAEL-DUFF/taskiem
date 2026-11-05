@@ -21,6 +21,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/forms"
 	"github.com/israel-duff/taskiem/engine/ingest"
 	"github.com/israel-duff/taskiem/engine/media"
+	"github.com/israel-duff/taskiem/engine/runtime"
 	rt "github.com/israel-duff/taskiem/engine/runtime/runtimetest"
 	"github.com/israel-duff/taskiem/engine/sender"
 	"github.com/israel-duff/taskiem/engine/wd"
@@ -59,6 +60,12 @@ func (f *fakeFiles) Delete(_ context.Context, _ uuid.UUID, bucket string, paths 
 	return nil
 }
 
+func (f *fakeFiles) count() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.files)
+}
+
 func (f *fakeFiles) has(path string) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -84,7 +91,7 @@ func newWorld(t *testing.T) *world {
 	}
 	svc := &forms.Service{Pool: env.DB.App, Vault: env.Vault, Keys: keys, Files: &fakeFiles{files: map[string][]byte{}}, Scanner: fakeScanner{bad: "EICAR"},
 		Messages: &sender.Queue{Vault: env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)},
-		Start:    env.Store.Start, Signal: env.Store.DeliverSignalOnce, FormHost: "forms.shops.test", AppURL: "https://app.test"}
+		Start:    env.Store.Start, Signal: env.Store.DeliverSignalOnce, Retention: env.Store.Retention, FormHost: "forms.shops.test", AppURL: "https://app.test"}
 	return &world{t: t, env: env, svc: svc}
 }
 
@@ -459,6 +466,109 @@ func TestFormDataFollowsRetentionAndErasure(t *testing.T) {
 	}
 	// The erased respondent can submit again, as someone new.
 	send("+2348031234568")
+}
+
+// A submission that starts no run (refused, or not started at a plan
+// limit) has no run whose retention would delete it: it carries its own
+// retain_until, set as its run's would be, and goes when that passes.
+// Files stored before a refusal are removed from storage at once.
+func TestRunlessSubmissionsFollowRetention(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	wf := w.deploy(intake)
+	var endpoint uuid.UUID
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT id FROM form_endpoints WHERE workflow_id = $1 AND environment = 'prod'`, wf).Scan(&endpoint); err != nil {
+		t.Fatal(err)
+	}
+	files := w.svc.Files.(*fakeFiles)
+	payslip := []forms.FileMeta{{Field: "payslip", Name: "Ada_Obi_NIN.pdf", Type: "application/pdf", Size: 10}}
+	row := func(ref string) (status string, run *uuid.UUID, until *time.Time) {
+		t.Helper()
+		if err := w.env.DB.Admin.QueryRow(ctx, `SELECT status, run_id, retain_until FROM form_submissions WHERE reference = $1`, ref).Scan(&status, &run, &until); err != nil {
+			t.Fatal(err)
+		}
+		return status, run, until
+	}
+	kept := func(what string, until *time.Time) {
+		t.Helper()
+		if until == nil || time.Until(*until) < runtime.DefaultRetention-time.Hour || time.Until(*until) > runtime.DefaultRetention+time.Hour {
+			t.Fatalf("%s: retain_until %v, want the run's retention (%v) from now", what, until, runtime.DefaultRetention)
+		}
+	}
+
+	// Refused after its file was stored (full_name is required): the file
+	// is removed, and the refusal is kept as long as a run would be.
+	refused, err := w.submit(&endpoint, nil, forms.Submission{Answers: map[string]any{"phone": "+2348031234567"},
+		Respondent: forms.Respondent{Kind: "anonymous"}, Channel: "direct", Files: payslip}, []byte("%PDF-1.4 x"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.drain()
+	status, run, until := row(refused)
+	if status != "refused" || run != nil {
+		t.Fatalf("refused: %s %v", status, run)
+	}
+	kept("refused", until)
+	if err := w.svc.DrainDeletions(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if n := files.count(); n != 0 {
+		t.Fatalf("a refused submission's file stayed in storage (%d files)", n)
+	}
+
+	// Not started at a plan limit: answers and file are kept, as long as
+	// its run would have been.
+	start := w.svc.Start
+	w.svc.Start = func(context.Context, runtime.StartRequest) (runtime.Started, error) {
+		return runtime.Started{}, &runtime.LimitError{Limit: "runs_per_day", Code: "quota_exceeded", Message: "quota"}
+	}
+	held, err := w.submit(&endpoint, nil, forms.Submission{Answers: map[string]any{"full_name": "Ada Obi", "phone": "+2348031234568"},
+		Respondent: forms.Respondent{Kind: "anonymous"}, Channel: "direct", Files: payslip}, []byte("%PDF-1.4 y"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.drain()
+	w.svc.Start = start
+	status, run, until = row(held)
+	if status != "received" || run != nil {
+		t.Fatalf("not started: %s %v", status, run)
+	}
+	kept("not started", until)
+	var key string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT f.storage_key FROM form_files f JOIN form_submissions s ON s.id = f.submission_id WHERE s.reference = $1`, held).Scan(&key); err != nil {
+		t.Fatal(err)
+	}
+
+	// A submission whose run started goes with its run, not on its own.
+	started, err := w.submit(&endpoint, nil, forms.Submission{Answers: map[string]any{"full_name": "Ada Obi", "phone": "+2348031234569"},
+		Respondent: forms.Respondent{Kind: "anonymous"}, Channel: "direct"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.drain()
+	if _, run, until := row(started); run == nil || until != nil {
+		t.Fatalf("started: run %v retain_until %v", run, until)
+	}
+
+	// Past their retention, both go, with the stored file.
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE form_submissions SET retain_until = now() - interval '1 second' WHERE reference = ANY ($1)`, []string{refused, held}); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.svc.DrainDeletions(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var left int
+	_ = w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM form_submissions WHERE reference = ANY ($1)`, []string{refused, held}).Scan(&left)
+	if left != 0 {
+		t.Fatalf("%d run-less submissions outlived their retention", left)
+	}
+	if files.has(key) {
+		t.Fatal("the not-started submission's file is still stored")
+	}
+	_ = w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM form_submissions WHERE reference = $1`, started).Scan(&left)
+	if left != 1 {
+		t.Fatal("a started submission went before its run")
+	}
 }
 
 // decodeB64 reads Postgres's base64 (with its line breaks).

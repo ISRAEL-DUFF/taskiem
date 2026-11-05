@@ -24,7 +24,7 @@ func formsService(cfg config, e *engine, log *slog.Logger) (*forms.Service, erro
 	if err != nil {
 		return nil, err
 	}
-	s := &forms.Service{Pool: e.pool, Vault: e.vault, Keys: keys, Start: e.store.Start, Signal: e.store.DeliverSignalOnce,
+	s := &forms.Service{Pool: e.pool, Vault: e.vault, Keys: keys, Start: e.store.Start, Signal: e.store.DeliverSignalOnce, Retention: e.store.Retention,
 		FormHost: formHost(cfg), AppURL: cfg.PublicURL, Logger: log.With("component", "forms")}
 	s.Files = &media.Service{Credentials: e.tables().Credentials, Guard: &egress.Guard{Logger: log}, Logger: log}
 	if addr := strings.TrimSpace(os.Getenv("TASKIEM_CLAMD_ADDR")); addr != "" {

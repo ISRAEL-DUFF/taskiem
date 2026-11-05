@@ -158,7 +158,7 @@ No Xenibase auth and no new account system: members use Taskiem's own sign-in, o
 - **Images:** metadata (including location) is removed. Large photos are scaled down to 2,000 pixels.
 - **In the run:** a file field's value is a reference: `{id, name, type, size, sha256}`. Steps read the content through a platform action that issues a short-lived signed URL. Contents never go into run history, logs or AI prompts.
 - **People** see and download files from the run or the submission in the app, with `pii.read`, and each download is audited.
-- **Retention:** files are deleted with the run's data, by the workflow's retention: purging the run deletes its submissions and their files, and the api then removes the files from storage.
+- **Retention:** files are deleted with the run's data, by the workflow's retention: purging the run deletes its submissions and their files, and the api then removes the files from storage. A submission that starts no run (refused, or held back at a plan limit) is kept as long as its run would have been, counted from when it was refused or held, then deleted with its files; files stored for a submission that is then refused are removed at once.
 
 ### 6.6 After submitting
 
@@ -293,7 +293,7 @@ What is new: the `form` trigger and step, the form host, uploads with scanning, 
 - **The organisation is the controller**; Taskiem is its processor, as for any run.
 - **Fields marked `x-pii`** are sealed when received, and masked in the app, logs and AI. The detector also catches unmarked personal data in text fields.
 - **Erasure** of a respondent's data uses the existing erase-by-subject function, which now covers submissions and files: erasing a subject deletes every submission whose answers or respondent hold it, with its files (their bytes are removed from storage shortly after, as files are not sealed).
-- **Retention** is the workflow's. Unfinished multi-page sessions are deleted after 24 hours.
+- **Retention** is the workflow's, for submissions with or without a run. Unfinished multi-page sessions are deleted after 24 hours.
 - **The IP address** is kept only as a keyed hash, for abuse limits.
 
 ## 10. What the builder sees

@@ -902,29 +902,43 @@ func policySnapshots(ctx context.Context, tx pgx.Tx, def *wd.Definition) (map[st
 // DefaultRetention applies when a workflow sets no settings.retention.
 const DefaultRetention = 90 * 24 * time.Hour
 
+// Retention is how long an ended run of def is kept in tenant (spec 9.4):
+// the workflow's settings.retention, else the tenant's governance default,
+// else DefaultRetention, capped by the plan (spec 16.2). def may be nil
+// (no workflow known): the tenant's default then applies. A form
+// submission that starts no run is kept as long (forms.Service.Retention).
+func (s *Store) Retention(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, def *wd.Definition) (time.Duration, error) {
+	retention := DefaultRetention
+	var tenantDefault string
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(default_retention, '') FROM governance_settings WHERE tenant_id = $1`, tenant).Scan(&tenantDefault); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return 0, err
+	}
+	if d, err := wd.ParseDuration(tenantDefault); err == nil && d > 0 {
+		retention = d
+	}
+	if def != nil {
+		if d, err := wd.ParseDuration(def.Settings.Retention); err == nil && d > 0 {
+			retention = d
+		}
+	}
+	lim, err := s.limitsTx(ctx, tx, tenant)
+	if err != nil {
+		return 0, err
+	}
+	if c := time.Duration(lim.MaxRetentionDays) * 24 * time.Hour; c > 0 && retention > c {
+		retention = c
+	}
+	return retention, nil
+}
+
 // endRun marks a run terminal, starts its retention clock (spec 9.4), clears
 // what it no longer needs, and admits queued runs its slot was holding back.
 // Tasks a worker holds are left alone: its result is still recorded.
 func (s *Store) endRun(ctx context.Context, tx pgx.Tx, r runRow, def *wd.Definition, status string) error {
 	run := r.ref.ID
-	retention := DefaultRetention
-	var tenantDefault string
-	if err := tx.QueryRow(ctx, `SELECT COALESCE(default_retention, '') FROM governance_settings WHERE tenant_id = $1`, r.ref.TenantID).Scan(&tenantDefault); err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return err
-	}
-	if d, err := wd.ParseDuration(tenantDefault); err == nil && d > 0 {
-		retention = d
-	}
-	if d, err := wd.ParseDuration(def.Settings.Retention); err == nil && d > 0 {
-		retention = d
-	}
-	// The plan caps retention (spec 16.2).
-	lim, err := s.limitsTx(ctx, tx, r.ref.TenantID)
+	retention, err := s.Retention(ctx, tx, r.ref.TenantID, def)
 	if err != nil {
 		return err
-	}
-	if c := time.Duration(lim.MaxRetentionDays) * 24 * time.Hour; c > 0 && retention > c {
-		retention = c
 	}
 	if _, err := tx.Exec(ctx, `UPDATE runs SET status = $2, ended_at = now(), retain_until = now() + $3::interval WHERE id = $1`,
 		run, status, fmt.Sprintf("%d seconds", int64(retention.Seconds()))); err != nil {

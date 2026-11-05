@@ -500,6 +500,7 @@ form_submissions.message
 form_submissions.reference
 form_submissions.request_id
 form_submissions.respondent
+form_submissions.retain_until
 form_submissions.run_id
 form_submissions.status
 form_submissions.status_hash

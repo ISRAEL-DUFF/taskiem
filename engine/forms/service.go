@@ -50,6 +50,11 @@ type Service struct {
 	// form step (runtime.Store.DeliverSignalOnce).
 	Start  func(ctx context.Context, req runtime.StartRequest) (runtime.Started, error)
 	Signal func(ctx context.Context, tenant uuid.UUID, env, event, correlation, dedupKey string, payload any) ([]uuid.UUID, bool, error)
+	// Retention is how long a run of def would be kept (runtime.Store.Retention):
+	// a submission that starts no run, refused or held at a plan limit, is
+	// kept as long, then deleted with its files (ExpireRunless). nil keeps
+	// such submissions runtime.DefaultRetention.
+	Retention func(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, def *wd.Definition) (time.Duration, error)
 	// FormHost is the form host's name (forms.<preview domain>); AppURL
 	// the web app's, where members' forms open.
 	FormHost string
@@ -120,11 +125,17 @@ func (s *Service) Drain(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
-// DrainDeletions removes from storage the files of submissions that
-// retention or erasure deleted (taskiem_purge_run and the erasure trigger
-// queue them, 00380). A file whose removal fails stays queued and is
+// DrainDeletions deletes the submissions that started no run once their
+// retain_until passes (00358), then removes from storage the files of
+// submissions that retention or erasure deleted (taskiem_purge_run and the
+// erasure trigger queue them, 00380) and of refused ones. A file whose removal fails stays queued and is
 // tried again once its lease lapses.
 func (s *Service) DrainDeletions(ctx context.Context) error {
+	// Submissions that started no run, past their own retention, go first
+	// (their files join the queue).
+	if _, err := s.Pool.Exec(ctx, `SELECT taskiem_form_submissions_expire(500)`); err != nil {
+		return err
+	}
 	if s.Files == nil {
 		return nil
 	}
@@ -192,11 +203,11 @@ func (s *Service) processInbox(ctx context.Context, x inboxRow) error {
 	count := map[string]int{}
 	for i, meta := range sub.Files {
 		if i >= len(raw) || raw[i].field != meta.Field {
-			return s.refuse(ctx, x.tenant, x.endpoint, x.request, x.reference, x.statusHash, sub, "a file did not arrive")
+			return s.refuse(ctx, x.tenant, x.endpoint, x.request, x.reference, x.statusHash, sub, nil, nil, "a file did not arrive")
 		}
 		data, err := s.Keys.OpenBytes(UploadAAD(x.reference, meta.Field, count[meta.Field]), raw[i].data)
 		if err != nil {
-			return s.refuse(ctx, x.tenant, x.endpoint, x.request, x.reference, x.statusHash, sub, "a file did not open")
+			return s.refuse(ctx, x.tenant, x.endpoint, x.request, x.reference, x.statusHash, sub, nil, nil, "a file did not open")
 		}
 		count[meta.Field]++
 		uploads = append(uploads, Upload{Meta: meta, Data: data})
@@ -250,19 +261,20 @@ func (s *Service) Process(ctx context.Context, in Incoming) error {
 	})
 	if err != nil || done {
 		if errors.Is(err, ErrNoRequest) {
-			return s.refuse(ctx, in.Tenant, in.Endpoint, in.Request, in.Reference, in.StatusHash, in.Submission, "the form is no longer taking answers")
+			return s.refuse(ctx, in.Tenant, in.Endpoint, in.Request, in.Reference, in.StatusHash, in.Submission, nil, nil, "the form is no longer taking answers")
 		}
 		return err
 	}
 	answers, files, why, err := s.files(ctx, in, tg)
 	if err != nil {
-		return err
+		// Files stored before the error are stored again on the retry.
+		return errors.Join(err, s.discard(ctx, in.Tenant, files))
 	}
 	if why == "" {
 		why = s.check(tg, answers, files)
 	}
 	if why != "" {
-		return s.refuse(ctx, in.Tenant, in.Endpoint, in.Request, in.Reference, in.StatusHash, in.Submission, why)
+		return s.refuse(ctx, in.Tenant, in.Endpoint, in.Request, in.Reference, in.StatusHash, in.Submission, tg.def, files, why)
 	}
 	id := uuid.Must(uuid.NewV7())
 	r := in.Submission.Respondent
@@ -323,7 +335,8 @@ func (s *Service) Process(ctx context.Context, in Incoming) error {
 		return audit(ctx, tx, in.Tenant, "form.submitted", in.Reference, map[string]any{"files": len(files), "channel": ch})
 	})
 	if err != nil {
-		return err
+		// Not recorded: the retry stores its files again.
+		return errors.Join(err, s.discard(ctx, in.Tenant, files))
 	}
 	if tg.request != nil {
 		return s.answerStep(ctx, in, tg, id, signal)
@@ -424,25 +437,25 @@ func (s *Service) files(ctx context.Context, in Incoming, tg target) (map[string
 	for _, u := range in.Uploads {
 		p, _ := props[u.Meta.Field].(map[string]any)
 		if f, _ := p["format"].(string); f != "file" {
-			return nil, nil, fmt.Sprintf("%q takes no file", u.Meta.Field), nil
+			return nil, out, fmt.Sprintf("%q takes no file", u.Meta.Field), nil
 		}
 		if why := fileRule(p, u); why != "" {
-			return nil, nil, why, nil
+			return nil, out, why, nil
 		}
 		threat, err := s.Scanner.Scan(ctx, u.Data)
 		if err != nil {
-			return nil, nil, "", err // tried again
+			return nil, out, "", err // tried again
 		}
 		if threat != "" {
 			s.log().Warn("forms: a file failed the malware scan", "reference", in.Reference, "field", u.Meta.Field, "threat", threat)
-			return nil, nil, fmt.Sprintf("the file %q did not pass the malware check", u.Meta.Name), nil
+			return nil, out, fmt.Sprintf("the file %q did not pass the malware check", u.Meta.Name), nil
 		}
 		f, err := s.Files.PutFile(ctx, in.Tenant, u.Data)
 		if errors.Is(err, media.ErrFile) {
-			return nil, nil, plain(err), nil
+			return nil, out, plain(err), nil
 		}
 		if err != nil {
-			return nil, nil, "", err
+			return nil, out, "", err
 		}
 		sum := sha256.Sum256(u.Data)
 		ref := FileRef{ID: uuid.Must(uuid.NewV7()).String(), Name: clipName(u.Meta.Name), Type: f.Type, Size: f.Size, SHA256: hex.EncodeToString(sum[:])}
@@ -624,10 +637,15 @@ func (s *Service) startRun(ctx context.Context, in Incoming, tg target, id uuid.
 	}
 	return db.InTenantTx(ctx, s.Pool, []uuid.UUID{in.Tenant}, func(tx pgx.Tx) error {
 		if note != "" {
-			_, err := tx.Exec(ctx, `UPDATE form_submissions SET note = $2, updated_at = now() WHERE id = $1`, id, note)
+			// No run will delete it: it is kept as long as its run would be.
+			keep, err := s.retention(ctx, tx, in.Tenant, tg.def)
+			if err != nil {
+				return err
+			}
+			_, err = tx.Exec(ctx, `UPDATE form_submissions SET note = $2, retain_until = now() + $3::interval, updated_at = now() WHERE id = $1`, id, note, keep)
 			return err
 		}
-		_, err := tx.Exec(ctx, `UPDATE form_submissions SET run_id = $2, status = 'started', updated_at = now() WHERE id = $1`, id, st.Ref.ID)
+		_, err := tx.Exec(ctx, `UPDATE form_submissions SET run_id = $2, status = 'started', retain_until = NULL, updated_at = now() WHERE id = $1`, id, st.Ref.ID)
 		return err
 	})
 }
@@ -637,23 +655,61 @@ func (s *Service) answerStep(ctx context.Context, in Incoming, tg target, id uui
 		return err
 	}
 	return db.InTenantTx(ctx, s.Pool, []uuid.UUID{in.Tenant}, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `UPDATE form_submissions SET run_id = $2, status = 'answered', updated_at = now() WHERE id = $1`, id, tg.run)
+		_, err := tx.Exec(ctx, `UPDATE form_submissions SET run_id = $2, status = 'answered', retain_until = NULL, updated_at = now() WHERE id = $1`, id, tg.run)
 		return err
 	})
 }
 
 // refuse records a submission that cannot go ahead, so its status link
-// says so, and drops its inbox row.
-func (s *Service) refuse(ctx context.Context, tenant uuid.UUID, endpoint, request *uuid.UUID, reference string, statusHash []byte, sub Submission, why string) error {
+// says so, and drops its inbox row. No run will delete the record, so it
+// is kept as long as a run of def would be (nil: the tenant's default);
+// files already stored for it are discarded.
+func (s *Service) refuse(ctx context.Context, tenant uuid.UUID, endpoint, request *uuid.UUID, reference string, statusHash []byte, sub Submission, def *wd.Definition, stored []storedFile, why string) error {
 	s.log().Warn("forms: submission refused", "reference", reference, "why", why)
+	if err := s.discard(ctx, tenant, stored); err != nil {
+		return err
+	}
 	return db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		ch := sub.Channel
 		if ch == "" {
 			ch = "direct"
 		}
-		_, err := tx.Exec(ctx, `INSERT INTO form_submissions (id, tenant_id, endpoint_id, request_id, reference, status_hash, answers, respondent, channel, status, note)
-			VALUES ($1, $2, $3, $4, $5, $6, '{}', $7, $8, 'refused', $9) ON CONFLICT (reference) DO NOTHING`,
-			uuid.Must(uuid.NewV7()), tenant, endpoint, request, reference, statusHash, map[string]any{"kind": sub.Respondent.Kind}, ch, why)
+		keep, err := s.retention(ctx, tx, tenant, def)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO form_submissions (id, tenant_id, endpoint_id, request_id, reference, status_hash, answers, respondent, channel, status, note, retain_until)
+			VALUES ($1, $2, $3, $4, $5, $6, '{}', $7, $8, 'refused', $9, now() + $10::interval) ON CONFLICT (reference) DO NOTHING`,
+			uuid.Must(uuid.NewV7()), tenant, endpoint, request, reference, statusHash, map[string]any{"kind": sub.Respondent.Kind}, ch, why, keep)
+		return err
+	})
+}
+
+// retention is how long a submission that starts no run is kept, as an
+// interval for Postgres.
+func (s *Service) retention(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, def *wd.Definition) (string, error) {
+	d := runtime.DefaultRetention
+	if s.Retention != nil {
+		var err error
+		if d, err = s.Retention(ctx, tx, tenant, def); err != nil {
+			return "", err
+		}
+	}
+	return fmt.Sprintf("%d seconds", int64(d.Seconds())), nil
+}
+
+// discard queues files stored for a submission that was not recorded with
+// them (refused, or failed and tried again), for DrainDeletions to remove.
+func (s *Service) discard(ctx context.Context, tenant uuid.UUID, stored []storedFile) error {
+	if len(stored) == 0 {
+		return nil
+	}
+	keys := make([]string, len(stored))
+	for i, f := range stored {
+		keys[i] = f.path
+	}
+	return db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `SELECT taskiem_form_files_discard($1, $2)`, tenant, keys)
 		return err
 	})
 }
