@@ -1780,7 +1780,7 @@ paths:
         schema:
           type: string
           maxLength: 255
-        description: 'Makes the request safe to retry: the same key answers the same invoice, or sends nothing more'
+        description: 'Makes the request safe to retry: the same key on the same invoice sends nothing more. The key belongs to that invoice: on another invoice it sends that invoice.'
       responses:
         '200':
           description: What was sent

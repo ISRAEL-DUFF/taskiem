@@ -392,3 +392,28 @@ func TestSendPastTheRecipientLimit(t *testing.T) {
 		}
 	}
 }
+
+// A sending key stands for one invoice's messages: the same key sent with
+// another invoice (a page that kept its key when it moved to the next
+// invoice) still reaches that invoice's customer, while a retry of the
+// same invoice with it sends nothing more.
+func TestSendKeyIsPerInvoice(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	bola := invoicing.Customer{Name: "Bola Ade", Phone: "+2348039999999", Email: "bola@example.com"}
+	a := w.create(invoicing.Draft{Customer: ada, AmountKobo: 100000})
+	b := w.create(invoicing.Draft{Customer: bola, AmountKobo: 200000})
+	if sa, err := w.inv.Send(ctx, w.env.Tenant, a.Number, "user:ada", "same-key"); err != nil || len(sa.Queued) != 2 {
+		t.Fatalf("A: %v %+v", err, sa.Queued)
+	}
+	if sb, err := w.inv.Send(ctx, w.env.Tenant, b.Number, "user:ada", "same-key"); err != nil || len(sb.Queued) != 2 {
+		t.Fatalf("B sent with A's key queued %v (%v): its customer was never told", sb.Queued, err)
+	}
+	if again, err := w.inv.Send(ctx, w.env.Tenant, b.Number, "user:ada", "same-key"); err != nil || len(again.Queued) != 0 {
+		t.Fatalf("B retried with its key queued %v (%v)", again.Queued, err)
+	}
+	var n int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM platform_messages WHERE tenant_id = $1`, w.env.Tenant).Scan(&n); err != nil || n != 4 {
+		t.Fatalf("messages %d (%v), want 4", n, err)
+	}
+}

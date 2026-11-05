@@ -861,11 +861,14 @@ func (s *Invoices) Send(ctx context.Context, tenant uuid.UUID, idOrNumber, by, k
 				text += " " + line
 			}
 		}
-		out.Queued, out.SMSOverAllowance, err = s.deliver(ctx, tx, tenant, cur, business, text, "Invoice "+cur.Number+" from "+business, "invoice:"+key)
+		// The key is the caller's; the invoice is part of the messages' key,
+		// so one key never stands for another invoice's messages.
+		msgKey := "invoice:" + cur.ID.String() + ":" + key
+		out.Queued, out.SMSOverAllowance, err = s.deliver(ctx, tx, tenant, cur, business, text, "Invoice "+cur.Number+" from "+business, msgKey)
 		if err != nil {
 			return err
 		}
-		ch, err := s.queueChat(ctx, tx, tenant, cur, "invoice:"+key)
+		ch, err := s.queueChat(ctx, tx, tenant, cur, msgKey)
 		if err != nil {
 			return err
 		}
