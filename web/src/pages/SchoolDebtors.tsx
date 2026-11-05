@@ -6,6 +6,7 @@ import { EmptyState, ErrorBox, Field, PageHeader, Skeleton, fmtTime, useAction, 
 import { naira, newRequestKey } from "../lib/invoices";
 import { dateLabel, schoolAccess, type SchoolClass, type SchoolSettings } from "../lib/schools";
 import { instalmentsLine } from "../lib/schoolFamily";
+import { saveFile } from "../lib/saveFile";
 import {
   BUCKETS,
   HAS_FILTERS,
@@ -83,12 +84,7 @@ export function SchoolDebtorsPage() {
   const download = () =>
     act.run(async () => {
       const blob = await getBlob(debtorsPath(filter, "csv") + (reveal ? "&reveal=true" : ""));
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `debtors-${list.data?.today ?? "today"}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
+      saveFile(blob, `debtors-${list.data?.today ?? "today"}.csv`);
     }, false);
   return (
     <>
