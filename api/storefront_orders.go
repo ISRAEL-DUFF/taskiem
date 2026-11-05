@@ -201,11 +201,17 @@ func (s *Server) RunStorefrontOrders(ctx context.Context) error {
 		<-ctx.Done()
 		return nil
 	}
-	tick, payments, bookings := time.NewTicker(time.Second), time.NewTicker(30*time.Second), time.NewTicker(15*time.Second)
+	// The provider lookups run in a loop of their own (as invoices' do,
+	// invoices.go): a slow provider must not hold back the order inbox.
+	go every(ctx, 30*time.Second, func() {
+		if err := s.Orders.CheckPayments(ctx); err != nil && ctx.Err() == nil {
+			s.Logger.Error("storefront: payments", "err", err)
+		}
+	})
+	tick, bookings := time.NewTicker(time.Second), time.NewTicker(15*time.Second)
 	retention := time.NewTicker(time.Hour)
 	defer retention.Stop()
 	defer tick.Stop()
-	defer payments.Stop()
 	defer bookings.Stop()
 	for {
 		select {
@@ -220,10 +226,6 @@ func (s *Server) RunStorefrontOrders(ctx context.Context) error {
 			// customer's details (docs/storefronts.md, Privacy).
 			if err := s.Orders.ForgetExpired(ctx); err != nil && ctx.Err() == nil {
 				s.Logger.Error("storefront: retention", "err", err)
-			}
-		case <-payments.C:
-			if err := s.Orders.CheckPayments(ctx); err != nil && ctx.Err() == nil {
-				s.Logger.Error("storefront: payments", "err", err)
 			}
 		case <-bookings.C:
 			if err := s.Orders.CheckBookings(ctx); err != nil && ctx.Err() == nil {

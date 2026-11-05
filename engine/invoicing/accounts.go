@@ -460,13 +460,31 @@ type watched struct {
 	invoice, order, link *uuid.UUID
 }
 
+// checkEvery is how often an account's payment is looked up, and so how
+// long a pass's claim on it lasts; checkBudget is how long one tenant's
+// pass starts new lookups, below it. A lookup still under way when the
+// claim lapses may be asked again by another replica: that is a read, and
+// a payment is counted once (Received).
+const (
+	checkEvery  = 30 * time.Second
+	checkBudget = 20 * time.Second
+)
+
 func (s *Invoices) checkTenant(ctx context.Context, tenant uuid.UUID) error {
 	now := s.now()
 	var list []watched
 	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT `+accountCols+`, invoice_id, order_id, customer_link_id FROM customer_invoice_accounts
-			WHERE tenant_id = $1 AND status IN ('requested', 'open') AND (checked_at IS NULL OR checked_at < $2)
-			ORDER BY checked_at NULLS FIRST LIMIT 50`, tenant, now.Add(-30*time.Second))
+		// The accounts are claimed as they are read (checked_at set now,
+		// rows another replica is reading skipped), so api replicas split
+		// the lookups rather than each asking the provider about every one.
+		// The pick is materialised: as an IN subquery the planner may
+		// rescan it, and each rescan skips the rows just locked.
+		//nolint:misspell // MATERIALIZED is the SQL keyword
+		rows, err := tx.Query(ctx, `WITH c AS MATERIALIZED (SELECT id AS claimed FROM customer_invoice_accounts
+			  WHERE tenant_id = $1 AND status IN ('requested', 'open') AND (checked_at IS NULL OR checked_at < $2)
+			  ORDER BY checked_at NULLS FIRST LIMIT 50 FOR UPDATE SKIP LOCKED)
+			UPDATE customer_invoice_accounts SET checked_at = $3 FROM c WHERE id = c.claimed
+			RETURNING `+accountCols+`, invoice_id, order_id, customer_link_id`, tenant, now.Add(-checkEvery), now)
 		if err != nil {
 			return err
 		}
@@ -482,7 +500,15 @@ func (s *Invoices) checkTenant(ctx context.Context, tenant uuid.UUID) error {
 	if err != nil {
 		return err
 	}
+	started := time.Now()
 	for _, w := range list {
+		// The claim lasts checkEvery: past checkBudget, the rest is left
+		// for the next pass (any replica's), so a slow provider neither
+		// holds this tenant's pass for minutes nor lets another replica
+		// look up what this one is about to.
+		if time.Since(started) > checkBudget {
+			break
+		}
 		// Stop watching an account well after it expired, and a link after
 		// a week: nothing more will come.
 		end := w.CreatedAt.Add(WatchLinks)
