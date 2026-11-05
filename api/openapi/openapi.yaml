@@ -18603,6 +18603,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SubTenantStatus'
+        '403':
+          description: A Taskiem operator suspended the sub-tenant; only an operator resumes it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: No such sub-tenant.
           content:

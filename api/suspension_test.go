@@ -7,6 +7,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+
+	"github.com/israel-duff/taskiem/engine/db"
 )
 
 // Repair jobs of a suspended tenant wait until it is resumed.
@@ -64,4 +67,72 @@ func TestSubTenantSuspensionHoldsWork(t *testing.T) {
 	}
 	u2 := p.endUser(t, w, app, sub, "u", "", "run.start", "run.read")
 	u2.call(201, "POST", "/workflows/"+wf+"/runs", map[string]any{"input": map[string]any{"name": "x"}})
+}
+
+// A sub-tenant a Taskiem operator suspended stays suspended until an
+// operator resumes it (F40): its partner can still read it and revoke its
+// end users' tokens, but cannot resume it or write into it. An operator can
+// also take over a suspension the partner made. Once the operator resumes
+// it, the partner suspends and resumes it as before.
+func TestOperatorSuspensionHoldsAgainstPartner(t *testing.T) {
+	ctx := context.Background()
+	w := opsWorld(t)
+	p := w.partner(t, "Wagely", "owner@wagely.test")
+	sub := p.sub(t, "Customer", nil)
+	c, a := enrolOperator(t, w, "reviewer@taskiem.test")
+	status := func() (st string, by *string) {
+		t.Helper()
+		if err := w.env.DB.Admin.QueryRow(ctx, `SELECT status, suspended_by FROM tenants WHERE id = $1`, sub).Scan(&st, &by); err != nil {
+			t.Fatal(err)
+		}
+		return st, by
+	}
+	base := "/v1/partner/sub-tenants/" + sub
+
+	// The partner suspends it; an operator then holds it as Taskiem's.
+	p.key.must(200, "POST", base+"/suspend", nil)
+	c.must(200, "POST", "/v1/ops/tenants/"+sub+"/suspend", map[string]any{"reason": "fraud report", "step_up": c.stepUp(a, "ops.tenant.suspend", sub)})
+	if st, by := status(); st != "suspended" || by == nil || *by != "operator" {
+		t.Fatalf("after the operator's suspension: %s %v", st, by)
+	}
+
+	p.key.must(403, "POST", base+"/resume", nil)
+	p.key.must(403, "POST", base+"/invitations", map[string]any{"email": "x@customer.test", "roles": []string{"viewer"}})
+	p.key.must(403, "PUT", base+"/roles/clerk", map[string]any{"permissions": []string{"run.read"}})
+	p.key.must(403, "PUT", base+"/limits", map[string]any{"runs_per_day": 10})
+	if st, _ := status(); st != "suspended" {
+		t.Fatalf("the partner resumed an operator's suspension: %s", st)
+	}
+	// Reading it still works.
+	p.key.must(200, "GET", base+"/runs", nil)
+	p.key.must(200, "GET", base+"/invitations", nil)
+	p.key.must(200, "GET", base+"/connections", nil)
+	p.key.must(200, "GET", "/v1/partner/sub-tenants", nil)
+
+	// The application role cannot lift the hold by writing the row itself.
+	err := db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{uuid.MustParse(sub)}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE tenants SET status = 'active' WHERE id = $1`, sub)
+		return err
+	})
+	if err == nil {
+		t.Fatal("an application transaction lifted an operator's suspension")
+	}
+	err = db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{uuid.MustParse(sub)}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE tenants SET suspended_by = 'partner' WHERE id = $1`, sub)
+		return err
+	})
+	if err == nil {
+		t.Fatal("an application transaction changed who holds a suspension")
+	}
+
+	c.must(200, "POST", "/v1/ops/tenants/"+sub+"/resume", map[string]any{"reason": "cleared", "step_up": c.stepUp(a, "ops.tenant.resume", sub)})
+	if st, by := status(); st != "active" || by != nil {
+		t.Fatalf("after the operator's resume: %s %v", st, by)
+	}
+	p.key.must(200, "POST", base+"/suspend", nil)
+	if st, by := status(); st != "suspended" || by == nil || *by != "partner" {
+		t.Fatalf("after the partner's suspension: %s %v", st, by)
+	}
+	p.key.must(201, "POST", base+"/invitations", map[string]any{"email": "y@customer.test", "roles": []string{"viewer"}})
+	p.key.must(200, "POST", base+"/resume", nil)
 }

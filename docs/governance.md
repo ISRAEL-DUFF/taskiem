@@ -120,7 +120,7 @@ Runs outside `dev` use the version deployed in their environment; pinning anothe
 
 ## Suspended tenants
 
-A tenant is suspended by its partner (a sub-tenant: `POST /v1/partner/sub-tenants/{sub}/suspend`) or by a Taskiem operator, any tenant, from the operator console (`POST /v1/ops/tenants/{id}/suspend` and `/resume`, with a reason and a passkey for that tenant, recorded in the platform's audit chain and the tenant's). While suspended it does no new work:
+A tenant is suspended by its partner (a sub-tenant: `POST /v1/partner/sub-tenants/{sub}/suspend`) or by a Taskiem operator, any tenant, from the operator console (`POST /v1/ops/tenants/{id}/suspend` and `/resume`, with a reason and a passkey for that tenant, recorded in the platform's audit chain and the tenant's). The tenant records which of them suspended it (`tenants.suspended_by`: `partner` or `operator`). An operator's suspension holds against the partner: only an operator resumes it, and meanwhile the partner may read the sub-tenant and revoke its end users' tokens but not write into it (403). An operator may take over a suspension the partner made; the database refuses any other change to an operator's hold (migration 00322). While suspended it does no new work:
 
 - **Sign-in, sessions, API keys and end-user tokens** stop working (its sessions and end-user tokens are also revoked).
 - **Schedules** are not claimed, so they do not fire.

@@ -554,15 +554,18 @@ func (s *Server) opsTenantAction(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		var was string
-		if err := tx.QueryRow(ctx, `SELECT status FROM tenants WHERE id = $1 FOR UPDATE`, tenant).Scan(&was); errors.Is(err, pgx.ErrNoRows) {
+		var by *string
+		if err := tx.QueryRow(ctx, `SELECT status, suspended_by FROM tenants WHERE id = $1 FOR UPDATE`, tenant).Scan(&was, &by); errors.Is(err, pgx.ErrNoRows) {
 			return errNotFoundTenant
 		} else if err != nil {
 			return err
 		}
-		if was == status || was != "active" && was != "suspended" {
+		// A suspension the partner made can be taken over: it then holds
+		// against the partner too (migration 00322).
+		if was == status && (status != "suspended" || by != nil && *by == "operator") || was != "active" && was != "suspended" {
 			return fmt.Errorf("%w: the organisation is %s", errConflict, was)
 		}
-		if _, err := tx.Exec(ctx, `UPDATE tenants SET status = $2 WHERE id = $1`, tenant, status); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE tenants SET status = $2, suspended_by = CASE WHEN $2 = 'suspended' THEN 'operator' END WHERE id = $1`, tenant, status); err != nil {
 			return err
 		}
 		if status == "suspended" {

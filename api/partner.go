@@ -372,7 +372,8 @@ func (s *Server) putSubTenantLimits(w http.ResponseWriter, r *http.Request) {
 // does no new work: schedules are not claimed, webhook and connector
 // deliveries get 423 (counted), queued runs wait and repair jobs wait
 // (migration 00088). Resuming continues schedules from now, without
-// catching up fires missed meanwhile (docs/embedding.md).
+// catching up fires missed meanwhile (docs/embedding.md). A sub-tenant a
+// Taskiem operator suspended is the operator's to resume (migration 00322).
 func (s *Server) setSubTenantStatus(status string) http.HandlerFunc {
 	action := "partner.subtenant.suspend"
 	if status == "active" {
@@ -386,7 +387,10 @@ func (s *Server) setSubTenantStatus(status string) http.HandlerFunc {
 		}
 		err = s.partnerTx(r, sub, action, nil, func(tx pgx.Tx) error {
 			ctx := r.Context()
-			tag, err := tx.Exec(ctx, `UPDATE tenants SET status = $2 WHERE id = $1 AND status <> $2`, sub, status)
+			// A suspension records that the partner made it; resuming one
+			// an operator made is refused by taskiem_partner_enter (F40).
+			tag, err := tx.Exec(ctx, `UPDATE tenants SET status = $2, suspended_by = CASE WHEN $2 = 'suspended' THEN 'partner' END
+				WHERE id = $1 AND status <> $2`, sub, status)
 			if err != nil {
 				return err
 			}

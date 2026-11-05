@@ -66,7 +66,7 @@ A sub-tenant gets a default workspace and the `dev` and `prod` environments. It 
 | `GET /v1/partner/sub-tenants` | read | Sub-tenants: id, name, region, status |
 | `POST /v1/partner/sub-tenants` | manage | Create one (above) |
 | `PUT /v1/partner/sub-tenants/{sub}/limits` | manage | Change its limits, within the partner's: `{"runs_per_day": 100, "max_workflows": null}`. `max_payload_bytes` too ([payload size](#payload-size)) |
-| `POST /v1/partner/sub-tenants/{sub}/suspend`, `/resume` | manage | Suspend or resume it. Suspended, it does no new work: no sign-in or tokens, no schedules, its webhooks and connector triggers answer 423, queued runs and repair jobs wait. Resumed, schedules continue from now without catching up ([suspended tenants](governance.md#suspended-tenants)) |
+| `POST /v1/partner/sub-tenants/{sub}/suspend`, `/resume` | manage | Suspend or resume it. Suspended, it does no new work: no sign-in or tokens, no schedules, its webhooks and connector triggers answer 423, queued runs and repair jobs wait. Resumed, schedules continue from now without catching up ([suspended tenants](governance.md#suspended-tenants)). A sub-tenant a Taskiem operator suspended cannot be resumed by its partner (403) |
 | `GET /v1/partner/sub-tenants/{sub}/workflows` | read | Its workflows: names and versions, not definitions |
 | `GET /v1/partner/sub-tenants/{sub}/runs` | read | Its runs, redacted to their outcome: workflow, version, environment, status, who started them, timing, and for a failure the error's kind. Never inputs, outputs, step data or error messages. Filters: `status`, `before`, `limit` |
 | `GET /v1/partner/sub-tenants/{sub}/usage` | read | Its effective limits, usage and recent limit hits |
@@ -88,7 +88,7 @@ PUT /v1/partner/sub-tenants/{sub}/limits
 
 A value above yours, or above 10 MiB, is refused with 400.
 
-**Suspending** a sub-tenant stops at once every end-user token and session in it, revokes its outstanding tokens (resuming does not revive them: mint new ones), and refuses new tokens with 409. The partner can still read it, and resume it. While suspended it does no new work: its schedules do not fire, its webhooks and connector triggers answer 423, queued runs and repair jobs wait. Resuming continues its schedules from now, without catching up fires missed meanwhile ([suspended tenants](governance.md#suspended-tenants)).
+**Suspending** a sub-tenant stops at once every end-user token and session in it, revokes its outstanding tokens (resuming does not revive them: mint new ones), and refuses new tokens with 409. The partner can still read it, and resume it, unless a Taskiem operator suspended it: then it is Taskiem's to resume. While an operator holds it, the partner's reads (`GET`) and end-user token revocations still work, and every other partner call for that sub-tenant (resume, limits, invitations, roles, workflows, connections, publish decisions) answers 403. An operator can also take over a suspension the partner made. While suspended it does no new work: its schedules do not fire, its webhooks and connector triggers answer 423, queued runs and repair jobs wait. Resuming continues its schedules from now, without catching up fires missed meanwhile ([suspended tenants](governance.md#suspended-tenants)).
 
 ## 3. Register an embed app
 

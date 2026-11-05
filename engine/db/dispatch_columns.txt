@@ -1278,6 +1278,7 @@ tenants.parent_id
 tenants.plan_id
 tenants.region
 tenants.status
+tenants.suspended_by
 terms_acceptances.accepted_at
 terms_acceptances.asked_at
 terms_acceptances.channel
