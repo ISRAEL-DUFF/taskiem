@@ -13,6 +13,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/db/dbtest"
+	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/secrets"
 )
 
@@ -196,5 +197,64 @@ func TestFirstKeyMadeOnceUnderConcurrency(t *testing.T) {
 	var n int
 	if err := d.Admin.QueryRow(ctx, `SELECT count(*) FROM tenant_keys WHERE tenant_id = $1`, a.ID).Scan(&n); err != nil || n != 1 {
 		t.Fatalf("tenant keys: %d %v", n, err)
+	}
+}
+
+// An erased person who comes back is a new subject: what was sealed for
+// them before stays erased, and their value can be sealed again (it was
+// refused for good, and inboxes retried it forever).
+func TestErasedSubjectComesBackAsANewOne(t *testing.T) {
+	d := dbtest.New(t)
+	v := localVault(t, d)
+	a := d.SeedTenant(t, nil)
+	in := func(fn func(tx pgx.Tx) error) {
+		t.Helper()
+		if err := db.InTenantTx(ctx, d.App, []uuid.UUID{a.ID}, fn); err != nil {
+			t.Fatal(err)
+		}
+	}
+	seal := func() map[string]any {
+		t.Helper()
+		var env map[string]any
+		in(func(tx pgx.Tx) error {
+			var err error
+			env, err = v.SealTx(ctx, tx, a.ID, "phone", "+2348031234567")
+			return err
+		})
+		return env
+	}
+	open := func(env map[string]any) (any, error) {
+		var out any
+		err := db.InTenantTx(ctx, d.App, []uuid.UUID{a.ID}, func(tx pgx.Tx) error {
+			var err error
+			out, err = v.OpenTx(ctx, tx, a.ID, env)
+			return err
+		})
+		return out, err
+	}
+	seen := map[string]bool{}
+	var before []map[string]any
+	for i := range 3 {
+		env := seal()
+		subject, _ := env["subject"].(string)
+		if seen[subject] {
+			t.Fatalf("generation %d reused the subject %s", i, subject)
+		}
+		seen[subject] = true
+		if cur, err := v.SubjectFor(ctx, a.ID, "phone", "+2348031234567"); err != nil || cur != subject {
+			t.Fatalf("generation %d: SubjectFor %q %v, sealed under %q", i, cur, err, subject)
+		}
+		if got, err := open(env); err != nil || got != "+2348031234567" {
+			t.Fatalf("generation %d opens to %v %v", i, got, err)
+		}
+		for _, old := range before {
+			if _, err := open(old); !errors.Is(err, pii.ErrErased) {
+				t.Fatalf("an earlier generation opens: %v", err)
+			}
+		}
+		if err := v.Erase(ctx, a.ID, subject, "user:test"); err != nil {
+			t.Fatal(err)
+		}
+		before = append(before, env)
 	}
 }

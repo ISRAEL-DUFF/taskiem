@@ -417,6 +417,8 @@ func TestFormDataFollowsRetentionAndErasure(t *testing.T) {
 	if left != 1 || !files.has(otherKey) {
 		t.Fatalf("another respondent's submission went too: %d %v", left, files.has(otherKey))
 	}
+	// The erased respondent can submit again, as someone new.
+	send("+2348031234568")
 }
 
 // decodeB64 reads Postgres's base64 (with its line breaks).

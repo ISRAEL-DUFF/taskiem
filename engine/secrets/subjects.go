@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -18,17 +19,53 @@ import (
 	"github.com/israel-duff/taskiem/engine/pii"
 )
 
-// subjectID derives a stable pseudonymous id for a data subject from the
-// value, keyed by the tenant's pseudonymisation key (spec 5.2: hmac(tenant
-// key, bvn)). That key started as tenant key version 1's material and is
-// kept apart from it since migration 00100, so ids never change while
-// tenant keys rotate.
-func (v *Vault) subjectID(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, category string, value any) (string, error) {
+// baseSubjectID derives a stable pseudonymous id for a data subject from
+// the value, keyed by the tenant's pseudonymisation key (spec 5.2:
+// hmac(tenant key, bvn)). That key started as tenant key version 1's
+// material and is kept apart from it since migration 00100, so ids never
+// change while tenant keys rotate.
+func (v *Vault) baseSubjectID(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, category string, value any) (string, error) {
 	key, err := v.pseudonymKey(ctx, tx, tenant)
 	if err != nil {
 		return "", err
 	}
 	return subjectIDWith(key, category, value), nil
+}
+
+// maxGenerations bounds how often one value's subject is erased and
+// started again.
+const maxGenerations = 1000
+
+// generation is a value's subject after it was erased g times: an erased
+// person who comes back is a new subject (base~1, base~2, ...), so what
+// was sealed for them before stays erased and they can be sealed again.
+func generation(base string, g int) string {
+	if g == 0 {
+		return base
+	}
+	return base + "~" + strconv.Itoa(g)
+}
+
+// subjectID is the subject a value is sealed under now: the first
+// generation of its base id whose key is not shredded (or does not exist
+// yet).
+func (v *Vault) subjectID(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, category string, value any) (string, error) {
+	base, err := v.baseSubjectID(ctx, tx, tenant, category, value)
+	if err != nil {
+		return "", err
+	}
+	for g := range maxGenerations {
+		subject := generation(base, g)
+		var shredded bool
+		err := tx.QueryRow(ctx, `SELECT shredded_at IS NOT NULL FROM subject_keys WHERE tenant_id = $1 AND subject_id = $2`, tenant, subject).Scan(&shredded)
+		if errors.Is(err, pgx.ErrNoRows) || (err == nil && !shredded) {
+			return subject, nil
+		}
+		if err != nil {
+			return "", err
+		}
+	}
+	return "", pii.ErrErased
 }
 
 func subjectIDWith(key []byte, category string, value any) string {
@@ -78,12 +115,22 @@ func (v *Vault) subjectKey(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, sub
 }
 
 // SealTx encrypts one personal value under its subject's key.
+// A value whose subject was erased is sealed under its next generation.
 func (v *Vault) SealTx(ctx context.Context, tx pgx.Tx, t uuid.UUID, category string, value any) (map[string]any, error) {
-	subject, err := v.subjectID(ctx, tx, t, category, value)
+	base, err := v.baseSubjectID(ctx, tx, t, category, value)
 	if err != nil {
 		return nil, err
 	}
-	dek, err := v.subjectKey(ctx, tx, t, subject, category, true)
+	var subject string
+	var dek []byte
+	for g := 0; ; g++ {
+		subject = generation(base, g)
+		dek, err = v.subjectKey(ctx, tx, t, subject, category, true)
+		if !errors.Is(err, pii.ErrErased) || g+1 >= maxGenerations {
+			break
+		}
+		// Shredded: the person was erased and came back.
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +179,9 @@ func (v *Vault) OpenTx(ctx context.Context, tx pgx.Tx, t uuid.UUID, env map[stri
 	return out, err
 }
 
-// SubjectFor returns the subject id a value would be sealed under.
+// SubjectFor returns the subject id a value would be sealed under: its
+// current generation, so erasing by value erases the person as they are
+// now (earlier generations were erased already).
 func (v *Vault) SubjectFor(ctx context.Context, tenant uuid.UUID, category string, value any) (string, error) {
 	var s string
 	err := db.InTenantTx(ctx, v.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
