@@ -324,6 +324,7 @@ Timers and schedules fire late.
 2. Is a scheduler running and ticking (`taskiem_scheduler_last_tick_timestamp_seconds`)? Its logs for `scheduler tick failed`.
 3. A large backlog of due timers after an outage drains at 100 per tick; it catches up on its own. Several schedulers are safe (claims use `SKIP LOCKED`) if it does not.
 4. The database: slow claims, lock waits.
+5. One run that cannot be decided (a tenant's own key unavailable, a decision that faults) does not hold up the others: its timer or sweep entry is logged (`scheduler: could not handle timer` or `run`, with the run's id), counted in `taskiem_scheduler_item_failures_total`, and retried a minute later while the rest of its batch goes on. Such failures do not stop the tick from counting, so `TaskiemSchedulerStalled` is not raised for them; look at the run instead.
 
 ### Runbook: TaskiemCanaryFailing
 

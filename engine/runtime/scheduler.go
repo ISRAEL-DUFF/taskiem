@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -71,10 +72,15 @@ func (s *Scheduler) Run(ctx context.Context) error {
 		mode = "sweep"
 	}
 	for {
-		if _, err := s.Tick(ctx); err != nil && ctx.Err() == nil {
-			s.Logger.Error("scheduler tick failed", "err", err)
-		} else if err == nil {
+		_, err := s.Tick(ctx)
+		switch {
+		case err == nil || onlyItemErrors(err):
+			// A timer or run that could not be decided was logged and
+			// counted on its own (taskiem_scheduler_item_failures_total);
+			// the scheduler itself is keeping up.
 			telemetry.SchedulerTick.WithLabelValues(mode).SetToCurrentTime()
+		case ctx.Err() == nil:
+			s.Logger.Error("scheduler tick failed", "err", err)
 		}
 		select {
 		case <-ctx.Done():
@@ -174,7 +180,9 @@ func (s *Scheduler) fireTimers(ctx context.Context) (int, error) {
 		return 0, err
 	}
 	fired := 0
+	var errs []error
 	for _, d := range timers {
+		done := false
 		err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{d.tenant}, func(tx pgx.Tx) error {
 			tag, err := tx.Exec(ctx, `UPDATE timers SET fired_at = now() WHERE id = $1 AND fired_at IS NULL`, d.id)
 			if err != nil || tag.RowsAffected() == 0 {
@@ -191,15 +199,73 @@ func (s *Scheduler) fireTimers(ctx context.Context) (int, error) {
 			if _, err := appendEvent(ctx, tx, d.run, history.TimerFired, d.step, 0, history.TimerPayload{Kind: d.kind, TimerID: d.id.String()}, history.OriginScheduler); err != nil {
 				return err
 			}
-			fired++
-			telemetry.SchedulerLateness.WithLabelValues("timer").Observe(d.late)
-			return s.Store.decideInline(ctx, tx, run.ref)
+			if err := s.Store.decideInline(ctx, tx, run.ref); err != nil {
+				return err
+			}
+			done = true
+			return nil
 		})
 		if err != nil {
-			return fired, err
+			if ctx.Err() != nil {
+				return fired, errors.Join(append(errs, err)...)
+			}
+			// One run that cannot be decided must not hold up the timers
+			// claimed with it (other tenants' among them): note it, put it
+			// back for later, and go on.
+			errs = append(errs, s.failedItem(ctx, "timer", d.tenant, `UPDATE timers SET lease_until = now() + $3::interval WHERE id = $1 AND lease_owner = $2 AND fired_at IS NULL`, d.id,
+				fmt.Errorf("timer %s of run %s: %w", d.id, d.run, err)))
+			continue
+		}
+		if done {
+			fired++
+			telemetry.SchedulerLateness.WithLabelValues("timer").Observe(d.late)
 		}
 	}
-	return fired, nil
+	return fired, errors.Join(errs...)
+}
+
+// itemError is one timer or run a tick could not decide, while the rest of
+// its batch went on.
+type itemError struct{ err error }
+
+func (e *itemError) Error() string { return e.err.Error() }
+func (e *itemError) Unwrap() error { return e.err }
+
+// onlyItemErrors reports whether every error joined in err is an itemError.
+func onlyItemErrors(err error) bool {
+	if j, ok := err.(interface{ Unwrap() []error }); ok {
+		for _, e := range j.Unwrap() {
+			if !onlyItemErrors(e) {
+				return false
+			}
+		}
+		return true
+	}
+	var item *itemError
+	return errors.As(err, &item)
+}
+
+// failedItemBackoff is how long a timer or run whose decision failed is
+// left before it is claimed again: long enough that it stops heading every
+// claim (they take the oldest first), short enough that a passing fault
+// (a key briefly unavailable) costs little.
+const failedItemBackoff = time.Minute
+
+// failedItem logs and counts a timer or run the scheduler could not
+// handle, and pushes its lease out by failedItemBackoff with backoff (a
+// constant UPDATE taking the item's id, this scheduler's id and the
+// interval), so the claim's oldest-first order does not hand it back
+// first after every lease. It returns err, for Tick's joined error.
+func (s *Scheduler) failedItem(ctx context.Context, kind string, tenant uuid.UUID, backoff string, id uuid.UUID, err error) error {
+	telemetry.SchedulerItemFailures.WithLabelValues(kind).Inc()
+	s.Logger.Error("scheduler: could not handle "+kind+"; others go on", "id", id, "tenant", tenant, "err", err)
+	if berr := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, backoff, id, s.ID, failedItemBackoff)
+		return err
+	}); berr != nil {
+		s.Logger.Warn("scheduler: could not back off "+kind+"; its lease expires as usual", "id", id, "err", berr)
+	}
+	return &itemError{err}
 }
 
 // sweep decides runs whose events were appended without an inline decision.
@@ -218,12 +284,23 @@ func (s *Scheduler) sweep(ctx context.Context) (int, error) {
 		refs = append(refs, r)
 	}
 	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	swept := 0
+	var errs []error
 	for _, r := range refs {
 		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{r.TenantID}, func(tx pgx.Tx) error {
 			return s.Store.decideInline(ctx, tx, r)
 		}); err != nil {
-			return 0, err
+			if ctx.Err() != nil {
+				return swept, errors.Join(append(errs, err)...)
+			}
+			errs = append(errs, s.failedItem(ctx, "run", r.TenantID, `UPDATE runs SET orch_lease_until = now() + $3::interval WHERE id = $1 AND orch_lease_owner = $2`, r.ID,
+				fmt.Errorf("run %s: %w", r.ID, err)))
+			continue
 		}
+		swept++
 	}
-	return len(refs), rows.Err()
+	return swept, errors.Join(errs...)
 }

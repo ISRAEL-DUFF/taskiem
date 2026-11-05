@@ -161,6 +161,11 @@ var (
 	LeasesReleased = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "taskiem_leases_released_total", Help: "Task, timer and orchestration leases released at shutdown instead of left to expire.",
 	})
+	// SchedulerItemFailures counts timers and swept runs whose decision
+	// failed; the scheduler goes on with the rest and retries each later.
+	SchedulerItemFailures = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "taskiem_scheduler_item_failures_total", Help: "Timers and swept runs the scheduler could not decide, by kind (timer, run); the rest of the batch goes on and each is retried after a minute.",
+	}, []string{"kind"})
 	// TaskPanics counts tasks whose execution panicked: the worker logs
 	// the stack and carries on, and the task's lease expires.
 	TaskPanics = promauto.NewCounter(prometheus.CounterOpts{
