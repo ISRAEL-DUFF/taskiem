@@ -145,13 +145,21 @@ type session struct {
 	conn  *smtp.Conn
 	from  string
 	rcpts []rcpt
+	bad   int // unknown recipients named on this connection
 }
+
+// maxBadRcpts unknown recipients end a connection. Each costs a lookup
+// on the mail role's small pool, and go-smtp's recipient cap counts only
+// those accepted, so without it one connection could look up addresses
+// without end (F66). Senders retry on the 421 later.
+const maxBadRcpts = 5
 
 var (
 	errNoSuchAddress = &smtp.SMTPError{Code: 550, EnhancedCode: smtp.EnhancedCode{5, 1, 1}, Message: "No such address here"}
 	errNotOurs       = &smtp.SMTPError{Code: 550, EnhancedCode: smtp.EnhancedCode{5, 7, 1}, Message: "This server takes mail for its own addresses only"}
 	errTryLater      = &smtp.SMTPError{Code: 451, EnhancedCode: smtp.EnhancedCode{4, 3, 0}, Message: "Not now: try again later"}
 	errMalformed     = &smtp.SMTPError{Code: 554, EnhancedCode: smtp.EnhancedCode{5, 6, 0}, Message: "The message cannot be read"}
+	errTooManyBad    = &smtp.SMTPError{Code: 421, EnhancedCode: smtp.EnhancedCode{4, 7, 0}, Message: "Too many unknown recipients: closing"}
 )
 
 func (ss *session) Mail(from string, _ *smtp.MailOptions) error {
@@ -172,6 +180,10 @@ func (ss *session) Rcpt(to string, _ *smtp.RcptOptions) error {
 	if !localPart.MatchString(local) {
 		return errNoSuchAddress
 	}
+	if ss.bad >= maxBadRcpts {
+		ss.hangUp()
+		return errTooManyBad
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	ep, ok, err := ss.s.Store.Recipient(ctx, local)
@@ -181,6 +193,7 @@ func (ss *session) Rcpt(to string, _ *smtp.RcptOptions) error {
 	}
 	if !ok {
 		telemetry.Ingest.WithLabelValues("email_smtp", "unknown_recipient").Inc()
+		ss.bad++
 		return errNoSuchAddress
 	}
 	for _, r := range ss.rcpts {
@@ -190,6 +203,17 @@ func (ss *session) Rcpt(to string, _ *smtp.RcptOptions) error {
 	}
 	ss.rcpts = append(ss.rcpts, rcpt{address: local + "@" + ss.s.Domain, endpoint: ep})
 	return nil
+}
+
+// hangUp answers 421 and closes the connection. go-smtp has no way for
+// a session to end its connection after an answer: the reply is written
+// here, and go-smtp's own copy of it, written after, goes nowhere.
+func (ss *session) hangUp() {
+	c := ss.conn.Conn()
+	_ = c.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	_, _ = fmt.Fprintf(c, "%d %d.%d.%d %s\r\n", errTooManyBad.Code, errTooManyBad.EnhancedCode[0], errTooManyBad.EnhancedCode[1],
+		errTooManyBad.EnhancedCode[2], errTooManyBad.Message)
+	_ = c.Close()
 }
 
 func (ss *session) Data(r io.Reader) error {
