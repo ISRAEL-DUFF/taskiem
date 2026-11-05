@@ -2165,3 +2165,7 @@ input[type="file"], input[type="color"], .look-colour input[type="color"] { bord
 .composer-pill textarea, .composer-pill textarea:hover, .composer-pill textarea:focus { background: transparent; box-shadow: none; }
 
 .composer-pill:focus-within { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), 0 1px 0.5px var(--chat-shadow); }
+/* A choice with a hint wraps inside the screen: the radio keeps its size, the words wrap. */
+fieldset.sf-choices label.row, label.row:has(> input[type="checkbox"]) { align-items: flex-start; gap: 10px; }
+fieldset.sf-choices label.row > input, label.row > input[type="checkbox"] { flex: none; margin-top: 2px; }
+fieldset.sf-choices label.row > span, label.row > input[type="checkbox"] + span { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
