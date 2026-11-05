@@ -2030,7 +2030,7 @@ button.chat-avatar { border: 0; padding: 0; cursor: pointer; }
 @media (min-width: 900px) { .composer { background: var(--panel-2); padding: 10px 16px; } }
 .composer-pill { flex: 1; min-width: 0; display: flex; align-items: flex-end; background: var(--panel); border-radius: 24px; padding: 2px 4px; box-shadow: 0 1px 0.5px var(--chat-shadow); }
 .composer-pill textarea { flex: 1; min-width: 0; border: 0; background: transparent; box-shadow: none; border-radius: 20px; min-height: 40px; padding: 10px 6px; font-size: 15.5px; }
-.composer-pill textarea:focus { box-shadow: none; border-color: transparent; outline: 2px solid var(--accent); outline-offset: -2px; }
+.composer-pill textarea:focus { box-shadow: none; border-color: transparent; outline: none; }
 .composer-pill .icon-button { background: transparent; border-color: transparent; box-shadow: none; color: var(--muted); width: 40px; height: 40px; }
 .composer-pill .icon-button:hover:not(:disabled) { background: var(--chat-select); color: var(--text); }
 .composer > .icon-button.primary, .composer > .send-button { flex: none; width: 48px; height: 48px; border-radius: 50%; }
@@ -2084,7 +2084,7 @@ button.chat-avatar { border: 0; padding: 0; cursor: pointer; }
 .chat-search-row .icon-button:focus-visible { box-shadow: var(--ring); }
 .chat-search-row .search { position: relative; flex: 1; }
 .chat-search-row .search input { width: 100%; padding-left: 36px; min-height: 42px; border-radius: 999px; background: var(--panel-2); border-color: transparent; font-size: 15px; }
-.chat-search-row .search input:focus { background: var(--panel); border-color: var(--accent); box-shadow: none; outline: 2px solid var(--accent); outline-offset: -2px; }
+.chat-search-row .search input:focus { background: var(--field-focus); border-color: transparent; box-shadow: var(--ring); outline: none; }
 .chat-search-row .search svg { position: absolute; left: 12px; top: 13px; width: 16px; height: 16px; color: var(--muted); pointer-events: none; }
 .chat-date-row { padding: 0 16px 8px 52px; }
 .chat-date-row label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
@@ -2162,3 +2162,6 @@ input[type="file"], input[type="color"], .look-colour input[type="color"] { bord
   .row-link, .nav a, .tabbar a { transition: background-color 0.15s ease, color 0.15s ease; }
   .card, .hero { animation: rise-in 0.22s ease-out; }
 }
+.composer-pill textarea, .composer-pill textarea:hover, .composer-pill textarea:focus { background: transparent; box-shadow: none; }
+.composer-pill { transition: box-shadow 0.18s ease; }
+.composer-pill:focus-within { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), 0 1px 0.5px var(--chat-shadow); }
