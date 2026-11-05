@@ -81,6 +81,7 @@ func init() {
 		"accent":  accent,
 		"swatch":  swatch,
 		"optkind": optkind,
+		"add":     func(a, b int) int { return a + b },
 	}
 	for _, theme := range brand.Themes {
 		themed[theme] = template.Must(template.New("").Funcs(funcs).ParseFS(templateFS, "templates/shared/*.html", "templates/"+theme+"/*.html"))
@@ -127,6 +128,9 @@ type pageData struct {
 	Title string
 	Lang  string
 	Look  look
+	// BagHref is the order this page's bag belongs to, for the shop
+	// looks' bag in the header ("" for none).
+	BagHref string
 }
 
 // Brand is the page's look, the default when it has none.

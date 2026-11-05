@@ -139,6 +139,17 @@ export function FrontItems({
                         "Photo removed",
                       )
                     }
+                    onMain={(id) =>
+                      void act.run(
+                        async () => (
+                          await put(
+                            `${base}/${encodeURIComponent(it.id)}/photo/main?media=${encodeURIComponent(id)}`,
+                          ),
+                          await after()
+                        ),
+                        "Main photo changed",
+                      )
+                    }
                   />
                 </span>
               }

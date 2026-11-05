@@ -1,4 +1,5 @@
-{{template "fhead" .}}{{template "fbody" .}}
+{{template "fhead" .}}<script src="{{asset "item.js"}}" defer></script>
+{{template "fbody" .}}
 <h1>{{.It.Name}}</h1>
 {{template "fmain" .}}
 <article class="pdp">

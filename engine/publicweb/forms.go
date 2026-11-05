@@ -130,6 +130,10 @@ type formData struct {
 	// MoreHref is where to add more to the bag, ChangeHref where the
 	// bag is changed from the details page.
 	MoreHref, ChangeHref string
+	// PayNow is true when the order is paid as it is sent (the details
+	// step's button says how much); Whats is the business's WhatsApp.
+	PayNow bool
+	Whats  string
 }
 
 type zoneItem struct {
@@ -364,6 +368,10 @@ func formView(p StorefrontPage, act storefront.PublicAction, site Site, embed bo
 	if act.Kind == "order" {
 		f.Pickup, f.Delivery, f.DeliveryNote = act.Pickup, act.Delivery, act.DeliveryNote
 		f.PayOnDelivery = act.Delivery && act.PayOnDelivery && act.Payment != "none"
+		f.PayNow, f.Whats = act.Payment == "at_order", p.Model.WhatsLink
+		if !embed {
+			f.BagHref = f.Action
+		}
 		if act.Payment != "none" && act.DepositPercent > 0 && act.DepositPercent < 100 {
 			f.DepositPercent = act.DepositPercent
 		}

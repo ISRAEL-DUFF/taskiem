@@ -3,6 +3,7 @@
    theme names one differently). An item on a list opens its page by its
    name, the whole card being the link. No script is needed for any of it. */
 .item, .row, .tile, .kx-card, .fx-piece, .gx-card { position: relative; }
+:root { --ln: var(--line, var(--rule, #ddd9d2)); }
 .item-open { color: inherit; text-decoration: none; }
 .item-open::after { content: ""; position: absolute; inset: 0; z-index: 0; }
 .item .add, .row .btn, .item .btn, .tile .add, .kx-card .add, .kx-buy, .fx-buy, .fx-under, .gx-buy, .gx-add { position: relative; z-index: 1; }
@@ -20,7 +21,7 @@
 .pdp-form { display: flex; flex-direction: column; gap: 1rem; margin-top: .5rem; }
 .pdp-opt { margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: .375rem; }
 .pdp-opt legend { padding: 0; margin-bottom: .375rem; font-weight: 700; }
-.pdp-choice { display: flex; align-items: center; gap: .625rem; min-height: 48px; padding: .375rem .875rem; border: 1px solid var(--line, var(--rule, #d9d6d0)); border-radius: var(--r, 10px); background: var(--card, var(--bg, #fff)); cursor: pointer; }
+.pdp-choice { display: flex; align-items: center; gap: .625rem; min-height: 48px; padding: .375rem .875rem; border: 1px solid var(--ln); border-radius: var(--r, 10px); background: var(--card, var(--bg, #fff)); cursor: pointer; }
 .pdp-choice:has(input:checked) { border-color: var(--brand, currentColor); box-shadow: inset 0 0 0 1px var(--brand, currentColor); }
 .pdp-choice input { width: 1.25rem; height: 1.25rem; accent-color: var(--brand, currentColor); flex: none; }
 .pdp-qty { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
@@ -31,18 +32,16 @@
 }
 
 /* An order's bag: its own step, and a summary on the details step. */
-.bag, .bag-sum { max-width: 40rem; margin: 0 auto 1.25rem; }
+.bag-sum { margin: 0 0 1.25rem; }
 .bag-h { margin: 0 0 .5rem; }
 .bag-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
-.bag-line { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .875rem 0; border-top: 1px solid var(--line, var(--rule, #e3e0da)); }
-.bag-text { display: flex; flex-direction: column; min-width: 0; }
+.bag-line { display: flex; border-top: 1px solid var(--ln); }
+.bag-text { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .bag-text .line-name { font-weight: 700; }
 .bag-opts, .bag-unit, .bag-hint { color: var(--muted, #55524d); font-size: .875rem; }
-.bag-hint { margin: 0; }
-.bag-row { display: flex; justify-content: space-between; gap: 1rem; padding: .5rem 0; border-top: 1px solid var(--line, var(--rule, #e3e0da)); }
+.bag-row { display: flex; justify-content: space-between; gap: 1rem; padding: .5rem 0; border-top: 1px solid var(--ln); }
 .bag-amt { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.bag-sum { padding-bottom: .25rem; }
-.bag-more { text-align: center; margin: .75rem 0 0; }
+.bag-more { margin: 0; }
 
 /* An item's pictures, colours, sizes and notes. */
 .pdp-media { min-width: 0; }
@@ -69,8 +68,8 @@
 .pdp-opt-size .pdp-choice input { position: absolute; opacity: 0; inset: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
 .pdp-opt-size .pdp-choice:has(input:checked) { background: var(--fg, #14110f); color: var(--bg, #fff); box-shadow: none; }
 .pdp-opt-size .pdp-choice:has(input:focus-visible) { outline: 2px solid var(--brand, currentColor); outline-offset: 2px; }
-.pdp-more { margin-top: 1rem; border-top: 1px solid var(--line, var(--rule, #d9d6d0)); }
-.pdp-more details { border-bottom: 1px solid var(--line, var(--rule, #d9d6d0)); }
+.pdp-more { margin-top: 1rem; border-top: 1px solid var(--ln); }
+.pdp-more details { border-bottom: 1px solid var(--ln); }
 .pdp-more summary { display: flex; justify-content: space-between; align-items: center; min-height: 48px; font-weight: 700; cursor: pointer; list-style: none; }
 .pdp-more summary::-webkit-details-marker { display: none; }
 .pdp-more summary::after { content: "+"; font-weight: 400; }
@@ -78,11 +77,8 @@
 .pdp-more details p { margin: 0 0 .875rem; color: var(--muted, #55524d); }
 .badge-few { background: #fdeccf; color: #7a4a00; }
 
-/* The bag: a picture, the choices, and Remove. */
-.bag-line { gap: .75rem; }
-.bag-thumb { flex: none; width: 64px; height: 64px; object-fit: cover; border-radius: var(--r, 8px); }
-.bag-text { flex: 1; }
-.bag-remove { margin-top: .25rem; font-size: .875rem; }
+.bag-thumb { flex: none; object-fit: cover; }
+.bag-remove { font-size: .875rem; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .bag-n { display: inline-grid; place-items: center; min-width: 1.4rem; height: 1.4rem; margin-left: .35rem; padding: 0 .35rem; border-radius: 999px; background: var(--fg, #14110f); color: var(--bg, #fff); font-size: .75rem; }
 .sticky-sum { display: flex; flex-direction: column; line-height: 1.15; }
@@ -93,3 +89,61 @@
 .bag-split { display: flex; justify-content: space-between; gap: 1rem; margin: 0.25rem 0; font-size: 0.95rem; }
 .bag-bal { opacity: 0.75; }
 .bag-split[hidden] { display: none; }
+
+/* The shop looks' designs: a big name, chips, one 56px button with the
+   sum on it, every target 44px or more. */
+.pdp-crumb { display: flex; align-items: center; gap: .375rem; margin: 0 0 .75rem; font-size: .875rem; color: var(--muted, #55524d); }
+.pdp-crumb a { display: inline-flex; align-items: center; min-height: 44px; color: inherit; text-decoration: underline; text-underline-offset: 4px; }
+.pdp-main { gap: .875rem; }
+.pdp-main h1 { font-size: clamp(2.25rem, 5.4vw, 4.25rem); line-height: 1; letter-spacing: -.02em; }
+.pdp-kicker { color: var(--brand, var(--muted, #55524d)); }
+.pdp-opt-other { flex-direction: row; flex-wrap: wrap; gap: .5rem; }
+.pdp-opt-other legend { width: 100%; font-size: .875rem; letter-spacing: .04em; text-transform: uppercase; }
+.pdp-opt-other .pdp-choice { position: relative; min-height: 44px; padding: 0 1.25rem; border: 1.5px solid var(--fg, currentColor); border-radius: 999px; background: transparent; font-weight: 700; font-size: .95rem; }
+.pdp-opt-other .pdp-choice input { position: absolute; opacity: 0; inset: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.pdp-opt-other .pdp-choice:has(input:checked) { background: var(--fg, #14110f); color: var(--bg, #fff); box-shadow: none; }
+.pdp-opt-other .pdp-choice:has(input:focus-visible) { outline: 3px solid var(--brand, currentColor); outline-offset: 3px; }
+.pdp-qty label { font-size: .875rem; letter-spacing: .04em; text-transform: uppercase; }
+.pdp-cta { display: flex; flex-direction: column; gap: .75rem; }
+.pdp-go { min-height: 56px; border-radius: 999px; font-size: 1.05rem; }
+.pdp-thumbs { list-style: none; padding: 0; grid-template-columns: repeat(auto-fill, minmax(4.5rem, 1fr)); }
+.pdp-thumb { display: block; border-radius: var(--r, 8px); }
+.pdp-thumb[aria-current] img { box-shadow: 0 0 0 2px var(--bg, #fff), 0 0 0 4px var(--fg, #14110f); }
+.pdp-img { aspect-ratio: 1; height: auto; }
+.step, .bag-remove, .bag-more a, .bag-head a { min-height: 44px; min-width: 44px; }
+.bag-remove, .bag-more a, .bag-head a { display: inline-flex; align-items: center; text-decoration: underline; text-underline-offset: 4px; color: inherit; }
+.pdp :focus-visible, .bag :focus-visible, .co :focus-visible, .sf-pill:focus-visible { outline: 3px solid var(--brand, currentColor); outline-offset: 3px; }
+
+/* The bag: lines on the left, a summary box on the right (below, on a phone). */
+.bag { max-width: 72rem; display: flex; flex-wrap: wrap; gap: clamp(1.5rem, 4vw, 4rem); align-items: flex-start; }
+.bag-items { flex: 2 1 22rem; min-width: 0; margin: 0; padding: 0; list-style: none; border-bottom: 1px solid var(--ln); }
+.bag-line { align-items: flex-start; gap: 1rem; padding: 1.25rem 0; }
+.bag-thumb { width: 96px; height: 96px; border-radius: 18px; }
+.bag-text { gap: .375rem; }
+.bag-top { display: flex; justify-content: space-between; gap: .75rem; align-items: baseline; }
+.bag-top .line-name { font-size: 1.2rem; }
+.bag-act { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.bag-box { flex: 1 1 18rem; min-width: 0; max-width: 32rem; display: flex; flex-direction: column; gap: .75rem; padding: clamp(1.25rem, 3vw, 2rem); border: 1px solid var(--ln); border-radius: 24px; background: var(--card, var(--bg, #fff)); }
+.bag-box-h, .bag-hint { margin: 0; }
+.bag-box .total, .bag-sum .total { margin: 0; padding-top: .75rem; border-top: 1px solid var(--ln); font-size: 1.35rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.bag-dep strong { font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+
+/* Checkout: the details, and beside them what is ordered, with Pay. */
+.co { display: flex; flex-direction: column; }
+.co .bag-sum { order: 99; display: flex; flex-direction: column; gap: .5rem; padding: clamp(1.25rem, 3vw, 2rem); border: 1px solid var(--ln); border-radius: 24px; background: var(--card, var(--bg, #fff)); }
+.bag-row { align-items: center; }
+.bag-what { flex: 1; min-width: 0; }
+.bag-thumb-s { width: 56px; height: 56px; border-radius: 14px; }
+@media (min-width: 60rem) {
+  .co { display: grid; grid-template-columns: minmax(0, 2fr) minmax(18rem, 1fr); column-gap: 4rem; align-items: start; max-width: 72rem; }
+  .co > * { grid-column: 1; }
+  .co > .bag-sum { grid-column: 2; grid-row: 1 / span 40; position: sticky; top: 1rem; }
+}
+[data-pay-now][hidden], [data-pay-later][hidden] { display: none; }
+
+/* The bag in a shop look's header: hidden until there is one. */
+.sf-top-r { display: inline-flex; align-items: center; gap: .5rem; }
+.sf-pill { display: inline-flex; align-items: center; gap: .5rem; min-height: 44px; padding: 0 1rem; border-radius: 999px; background: var(--fg, #14110f); color: var(--bg, #fff); font-weight: 700; text-decoration: none; }
+.sf-pill[hidden] { display: none; }
+.pdp-q { display: inline-flex; align-items: center; border: 1.5px solid var(--fg, currentColor); border-radius: 999px; }
+.pdp-q .qty { width: 3rem; border: 0; background: none; text-align: center; }

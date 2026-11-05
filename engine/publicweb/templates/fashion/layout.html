@@ -14,7 +14,7 @@ like a masthead. */}}
 <header class="fx-top">
   {{with .Home}}<a class="fx-link" href="{{.}}">Shop</a>{{else}}<span></span>{{end}}
   <a class="fx-name" href="{{with .Home}}{{.}}{{else}}#{{end}}">{{.Business}}</a>
-  <span></span>
+  <span class="sf-top-r">{{with .BagHref}}<a class="sf-pill" href="{{.}}?step=bag" data-bag-link data-bag-show hidden>{{template "i-bag"}}<span class="sr">{{$.Brand.Words.Your}}, </span><b data-bag-n></b><span class="sr"> items</span></a>{{end}}</span>
 </header>
 <main class="page fx-narrow">
 {{end}}

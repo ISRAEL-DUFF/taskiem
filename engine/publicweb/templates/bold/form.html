@@ -1,10 +1,10 @@
 {{template "fhead" .}}{{if .Items}}<script src="{{asset "order.js"}}" defer></script>
 {{end}}{{template "fbody" .}}
-<h1>{{.Label}}</h1>
+<h1>{{if eq .Step "bag"}}{{.Brand.Words.Your}}{{else if eq .Step "details"}}Checkout{{else}}{{.Label}}{{end}}</h1>
 <p class="lede">{{if eq .Kind "order"}}Pick what you want, then tell us where it goes.{{else if eq .Kind "callback"}}Leave your number and we will call you.{{else}}We will answer as soon as we can.{{end}}</p>
 {{template "fmain" .}}
 {{with .Error}}<p class="form-error" role="alert">{{.}}</p>{{end}}
-{{if eq .Step "bag"}}{{template "bagstep" .}}{{else}}<form method="post" action="{{.Action}}" class="form"{{if .Items}} data-order{{with .DepositPercent}} data-deposit-pct="{{.}}"{{end}}{{end}}>
+{{if eq .Step "bag"}}{{template "bagstep" .}}{{else}}<form method="post" action="{{.Action}}" class="form{{if eq .Step "details"}} co{{end}}"{{if .Items}} data-order{{with .DepositPercent}} data-deposit-pct="{{.}}"{{end}}{{end}}>
 {{template "guard" .}}
 {{if eq .Step "details"}}{{template "bagsummary" .}}{{else if .Items}}
 <fieldset class="basket">
@@ -74,7 +74,7 @@
 </div>
 <div class="dark sum">
 {{if .Items}}<p class="total" data-total aria-live="polite"></p>{{end}}
-<button class="btn btn-brand btn-block" type="submit">{{if eq .Kind "order"}}Send order{{else}}Send{{end}}</button>
+{{if ne .Step "details"}}<button class="btn btn-brand btn-block" type="submit">{{if eq .Kind "order"}}Send order{{else}}Send{{end}}</button>{{end}}
 <p class="hint">Your details go to {{.Business}} only, to {{.Purpose}} and to contact you about it. Taskiem runs this page for them.</p>
 </div>
 </form>

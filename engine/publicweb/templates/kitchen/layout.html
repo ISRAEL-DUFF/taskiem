@@ -13,7 +13,7 @@ everything. A business's pages open with a bar: back, logo, name. */}}
 <body class="kx kx-page">
 <div class="kx-top">
   <a class="kx-name" href="{{with .Home}}{{.}}{{else}}#{{end}}">{{.Business}}</a>
-  {{with .Home}}<a class="kx-bag" href="{{.}}">{{template "i-back"}}<span>Menu</span></a>{{end}}
+  <span class="sf-top-r">{{with .Home}}<a class="kx-bag" href="{{.}}">{{template "i-back"}}<span>Menu</span></a>{{end}}{{with .BagHref}}<a class="sf-pill" href="{{.}}?step=bag" data-bag-link data-bag-show hidden>{{template "i-bag"}}<span class="sr">{{$.Brand.Words.Your}}, </span><b data-bag-n></b><span class="sr"> items</span></a>{{end}}</span>
 </div>
 <main class="page kx-narrow">
 {{end}}

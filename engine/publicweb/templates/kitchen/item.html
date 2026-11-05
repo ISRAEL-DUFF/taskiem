@@ -1,8 +1,10 @@
-{{template "fhead" .}}{{template "fbody" .}}
-{{with .Home}}<p class="pdp-crumb"><a href="{{.}}">{{template "i-back"}}Back to {{$.Business}}</a></p>{{end}}
+{{template "fhead" .}}<script src="{{asset "item.js"}}" defer></script>
+{{template "fbody" .}}
+{{with .Home}}<nav class="pdp-crumb" aria-label="Breadcrumb"><a href="{{.}}">{{template "i-back"}}Back</a> <span aria-hidden="true">/</span> {{$.It.Name}}</nav>{{end}}
 <article class="pdp">
   <div class="pdp-media">{{template "itemimg" .}}</div>
   <div class="pdp-main">
+    {{with .Kicker}}<p class="pdp-kicker">{{.}}</p>{{end}}
     <h1>{{.It.Name}}</h1>
     {{template "itembody" .}}
     {{template "itemmore" .}}

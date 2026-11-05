@@ -1082,6 +1082,20 @@ function CatalogueCopy({
                           );
                         }, "Photo removed")
                       }
+                      onMain={(id) =>
+                        void act.run(async () => {
+                          await tidy(
+                            put(
+                              `/v1/storefront/catalogue/rows/${encodeURIComponent(item.id)}/photo/main?media=${encodeURIComponent(id)}`,
+                            ),
+                          );
+                          setData(
+                            await tidy(
+                              post<Catalogue>("/v1/storefront/catalogue/refresh"),
+                            ),
+                          );
+                        }, "Main photo changed")
+                      }
                     />
                   </div>
                   <div className="sf-item-side">

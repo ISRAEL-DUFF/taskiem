@@ -13,7 +13,7 @@ everything. A business's pages open with a bar: back, logo, name. */}}
 <body class="sl sl-page">
 <div class="sl-top">
   <a class="sl-name" href="{{with .Home}}{{.}}{{else}}#{{end}}">{{.Business}}</a>
-  {{with .Home}}<a class="btn btn-small" href="{{.}}">Back</a>{{end}}
+  <span class="sf-top-r">{{with .Home}}<a class="btn btn-small" href="{{.}}">Back</a>{{end}}{{with .BagHref}}<a class="sf-pill" href="{{.}}?step=bag" data-bag-link data-bag-show hidden>{{template "i-bag"}}<span class="sr">{{$.Brand.Words.Your}}, </span><b data-bag-n></b><span class="sr"> items</span></a>{{end}}</span>
 </div>
 <main class="page sl-narrow">
 {{end}}

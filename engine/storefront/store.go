@@ -383,6 +383,23 @@ func mediaImage(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, id string) (Im
 	return img, nil
 }
 
+// Shown keeps the media ids of a photo column a page can show (stored,
+// and not refused by review), in order.
+func Shown(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, ids []string) ([]string, error) {
+	var out []string
+	for _, id := range ids {
+		_, err := mediaImage(ctx, tx, tenant, id)
+		if errors.Is(err, ErrInvalid) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, nil
+}
+
 // --- the catalogue copy ---
 
 // Rows reads every row of a data table (in pages, up to MaxItems + 1).

@@ -14,22 +14,30 @@ the form's own fields. */}}
   </div>
 </article>{{end}}
 
-{{define "itemimg"}}{{if .It.Large}}<img class="pdp-img" src="{{.It.Large}}"{{if .It.Small}} srcset="{{.It.Small}} 320w, {{.It.Large}} 800w" sizes="(min-width: 48rem) 28rem, 100vw"{{end}} alt="{{.It.Name}}" decoding="async">{{end}}{{if .It.Pics}}<p class="pdp-thumbs">{{range .It.Pics}}<a class="pdp-thumb" href="{{.Large}}"><img src="{{.Small}}" alt="" width="120" height="120" loading="lazy" decoding="async"></a>{{end}}</p>{{end}}{{end}}
+{{/* An item's photos: the main one, and every photo as a thumbnail that
+     shows it there (a link to the photo itself without a script). */}}
+{{define "itemimg"}}{{if .It.Large}}<img class="pdp-img" src="{{.It.Large}}"{{if .It.Small}} srcset="{{.It.Small}} 320w, {{.It.Large}} 800w" sizes="(min-width: 48rem) 28rem, 100vw"{{end}} alt="{{.It.Name}}" width="800" height="800" decoding="async" data-pic-main>{{end}}{{if and .It.Large .It.Pics}}{{$n := len .It.Pics}}<ul class="pdp-thumbs" aria-label="Photos of {{.It.Name}}">
+<li><a class="pdp-thumb" href="{{.It.Large}}" data-pic="{{.It.Large}}" aria-current="true"><img src="{{or .It.Small .It.Large}}" alt="Photo 1 of {{add $n 1}}" width="120" height="120" loading="lazy" decoding="async"></a></li>
+{{range $i, $p := .It.Pics}}<li><a class="pdp-thumb" href="{{$p.Large}}" data-pic="{{$p.Large}}"><img src="{{$p.Small}}" alt="Photo {{add $i 2}} of {{add $n 1}}" width="120" height="120" loading="lazy" decoding="async"></a></li>
+{{end}}</ul>{{end}}{{end}}
 
 {{/* What is under an item's name: a theme that draws the name in its
-     own header (bold) calls this and itemimg itself. */}}
-{{define "itembody"}}{{with .It.Category}}<p class="pdp-kicker">{{.}}</p>{{end}}
+     own header (bold) calls this and itemimg itself. A shop look draws
+     the kicker above the name itself. Choices are chips; the button says
+     what it adds, and the sum as the choices change (item.js). */}}
+{{define "itembody"}}{{$w := .Brand.Words}}{{if not .Brand.Shop}}{{with .Kicker}}<p class="pdp-kicker">{{.}}</p>{{end}}{{end}}
     {{with .It.Price}}<p class="pdp-price">{{.}}</p>{{end}}
     {{with .It.Description}}<p class="pdp-desc">{{.}}</p>{{end}}
-    {{if .It.ReadyIn}}<p class="pdp-meta">Ready in {{.It.ReadyIn}} min</p>{{end}}
-    {{if .Add}}<form method="get" action="{{.Action}}" class="pdp-form" data-merge>
+    {{if .Book}}<div class="pdp-cta"><a class="btn btn-primary btn-brand btn-block pdp-go" href="{{.Book}}">Choose a time</a>{{with .DepositNote}}<p class="pdp-meta">{{.}}</p>{{end}}</div>
+    {{else if .Add}}<form method="get" action="{{.Action}}" class="pdp-form" data-merge data-run>
       <input type="hidden" name="step" value="bag">
       {{range .Options}}{{$in := .Input}}{{$k := optkind .Name}}<fieldset class="pdp-opt pdp-opt-{{$k}}"><legend>{{.Name}}</legend>
-      {{range .Choices}}<label class="pdp-choice"><input type="radio" name="{{$in}}" value="{{.Value}}"{{if .Selected}} checked{{end}}>{{if eq $k "colour"}}<i class="sw {{swatch .Name}}" aria-hidden="true"></i>{{end}}<span>{{if eq $k "size"}}{{.Name}}{{else}}{{.Label}}{{end}}</span></label>
+      {{range .Choices}}<label class="pdp-choice"><input type="radio" name="{{$in}}" value="{{.Value}}" data-add="{{.PriceKobo}}"{{if .Selected}} checked{{end}}>{{if eq $k "colour"}}<i class="sw {{swatch .Name}}" aria-hidden="true"></i>{{end}}<span>{{if eq $k "size"}}{{.Name}}{{else}}{{.Label}}{{end}}</span></label>
       {{end}}</fieldset>
       {{end}}<div class="pdp-qty"><label for="pdp-qty">Quantity</label>
-      <input id="pdp-qty" class="qty" type="number" name="q.{{.It.ID}}" value="1" min="1" max="{{.Max}}" step="1" inputmode="numeric"></div>
-      <button class="btn btn-primary btn-brand btn-block" type="submit">Add to bag</button>
+      <span class="pdp-q"><input id="pdp-qty" class="qty" type="number" name="q.{{.It.ID}}" value="1" min="1" max="{{.Max}}" step="1" inputmode="numeric" data-stepper="{{.It.Name}}"></span></div>
+      <div class="pdp-cta"><button class="btn btn-primary btn-brand btn-block pdp-go" type="submit" data-price="{{.It.PriceKobo}}">{{$w.Add}}{{with .It.Price}}<span data-run-total> · {{.}}</span>{{end}}</button>
+      {{if or .It.ReadyIn .DepositNote}}<p class="pdp-meta">{{if .It.ReadyIn}}Ready in about {{.It.ReadyIn}} minutes. {{end}}{{.DepositNote}}</p>{{end}}</div>
     </form>
     {{else if not .It.Available}}<p class="pdp-note">Unavailable for now.</p>
     {{else if .It.SoldOut}}<p class="pdp-note">Sold out.</p>
@@ -38,53 +46,57 @@ the form's own fields. */}}
 
 {{/* The bag, as a step of its own: what is in it, to change or take out,
      then Continue. A GET form, so the bag goes on in the address. */}}
-{{define "bagsplit"}}{{if .Deposit}}<p class="bag-split"><span>Deposit today</span> <strong data-deposit>{{.Deposit}}</strong></p>
-<p class="bag-split bag-bal"><span>Balance when ready</span> <span data-balance>{{.Balance}}</span></p>{{end}}{{end}}
+{{define "bagsplit"}}{{if .Deposit}}<p class="bag-split bag-dep"><span>Deposit today</span> <strong data-deposit>{{.Deposit}}</strong></p>
+<p class="bag-split bag-bal"><span>{{.Brand.Words.Balance}}</span> <span data-balance>{{.Balance}}</span></p>{{end}}{{end}}
 
 {{define "bagmark"}}<span hidden data-bag-count="{{.BagCount}}" data-bag-total="{{.Subtotal}}" data-bag-href="{{.ChangeHref}}"></span>{{end}}
 
-{{define "bagstep"}}{{if not .Bag}}<div class="bag bag-empty">
+{{define "bagstep"}}{{$w := .Brand.Words}}{{if not .Bag}}<div class="bag bag-empty">
 <span hidden data-bag-clear></span>
-<h2 class="bag-h">Your bag is empty</h2>
+<h2 class="bag-h">Your {{$w.Bag}} is empty</h2>
 {{with .MoreHref}}<p class="bag-more"><a class="btn btn-primary btn-brand" href="{{.}}">See what we have</a></p>{{end}}
 </div>{{else}}<form method="get" action="{{.Action}}" class="bag" data-order{{with .DepositPercent}} data-deposit-pct="{{.}}"{{end}}>
 {{template "bagmark" .}}
 <input type="hidden" name="step" value="details">
-<h2 class="bag-h">Your bag</h2>
-<div class="bag-items">{{range .Bag}}<div class="bag-line">
-  {{if .Small}}<img class="bag-thumb" src="{{.Small}}" alt="" width="64" height="64" loading="lazy">{{end}}
-  <div class="bag-text"><label for="q-{{.N}}"><span class="line-name">{{.Name}}</span></label>
+<ul class="bag-items" aria-label="{{$w.Your}}">{{range .Bag}}<li class="bag-line">
+  {{if .Small}}<img class="bag-thumb" src="{{.Small}}" alt="" width="96" height="96" loading="lazy">{{end}}
+  <div class="bag-text">
+  <div class="bag-top"><label for="q-{{.N}}" class="line-name">{{.Name}}</label><span class="bag-amt">{{.Line}}</span></div>
   {{with .Choices}}<span class="bag-opts">{{.}}</span>{{end}}
-  <span class="bag-unit">{{.Unit}} each</span>{{$n := .Name}}{{with .Remove}}<a class="bag-remove" href="{{.}}">Remove<span class="sr"> {{$n}}</span></a>{{end}}</div>
-  <input id="q-{{.N}}" class="qty" type="number" name="q.{{.Key}}" value="{{.Qty}}" min="0" max="{{.Max}}" step="1" inputmode="numeric" data-price="{{.UnitKobo}}">
+  <span class="bag-unit">{{.Unit}} each</span>
+  <div class="bag-act"><span class="bag-q"><input id="q-{{.N}}" class="qty" type="number" name="q.{{.Key}}" value="{{.Qty}}" min="0" max="{{.Max}}" step="1" inputmode="numeric" data-price="{{.UnitKobo}}"></span>{{$n := .Name}}{{with .Remove}}<a class="bag-remove" href="{{.}}">Remove<span class="sr"> {{$n}}</span></a>{{end}}</div>
   {{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{.Value}}">
-  {{end}}</div>
+  {{end}}</div></li>
 {{end}}
-</div>
-<aside class="bag-box" aria-label="Summary"><h2 class="bag-box-h">Summary</h2>
+</ul>
+<aside class="bag-box" aria-labelledby="bag-box-h"><h2 id="bag-box-h" class="bag-box-h">Summary</h2>
 <p class="bag-count">{{.BagCount}} {{if eq .BagCount 1}}item{{else}}items{{end}}</p>
 <p class="total" data-total aria-live="polite">Total: {{.Subtotal}}</p>
 {{template "bagsplit" .}}
-<p class="bag-hint">Set a quantity to 0 to take it out.</p>
-<button class="btn btn-primary btn-brand btn-block" type="submit">Continue</button>
-{{with .MoreHref}}<p class="bag-more"><a href="{{.}}">Add more</a></p>{{end}}
+{{if .Delivery}}<p class="bag-hint">Delivery is added at checkout.</p>{{end}}
+<button class="btn btn-primary btn-brand btn-block pdp-go" type="submit">Checkout</button>
+{{with .MoreHref}}<p class="bag-more"><a href="{{.}}">{{$w.More}}</a></p>{{end}}
 </aside>
 </form>{{end}}{{end}}
 
-{{/* The bag on the details step: a summary above the details, its
+{{/* The bag on the details step: a summary beside the details, its
      quantities and choices kept in hidden fields, the server pricing
-     the order from the catalogue as it always did. */}}
-{{define "bagsummary"}}<section class="bag-sum" aria-labelledby="bag-sum-h">
+     the order from the catalogue as it always did. It ends with the
+     form's button: Pay, and how much, when the order is paid now. */}}
+{{define "bagsummary"}}{{$w := .Brand.Words}}<section class="bag-sum" aria-labelledby="bag-sum-h">
 {{template "bagmark" .}}
-<div class="bag-head"><h2 id="bag-sum-h" class="bag-h">Your bag</h2>{{with .ChangeHref}}<a href="{{.}}">Change</a>{{end}}</div>
+<div class="bag-head"><h2 id="bag-sum-h" class="bag-h">{{$w.Your}}</h2>{{with .ChangeHref}}<a href="{{.}}">Change</a>{{end}}</div>
 {{range .Bag}}<div class="bag-row">
-  <span>{{.Qty}} × {{.Name}}{{with .Choices}} <span class="bag-opts">{{.}}</span>{{end}}</span><span class="bag-amt">{{.Line}}</span>
+  {{if .Small}}<img class="bag-thumb bag-thumb-s" src="{{.Small}}" alt="" width="56" height="56" loading="lazy">{{end}}
+  <span class="bag-what">{{.Qty}} × {{.Name}}{{with .Choices}} <span class="bag-opts">{{.}}</span>{{end}}</span><span class="bag-amt">{{.Line}}</span>
   <input type="hidden" name="q.{{.Key}}" value="{{.Qty}}" max="{{.Max}}" data-price="{{.UnitKobo}}">
   {{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{.Value}}">
   {{end}}</div>
 {{end}}
 <p class="total" data-total aria-live="polite">Total: {{.Subtotal}}</p>
 {{template "bagsplit" .}}
+<button class="btn btn-primary btn-brand btn-block pdp-go" type="submit">{{if .PayNow}}<span data-pay-now>Pay <span data-pay>{{or .Deposit .Subtotal}}</span>{{if .Deposit}} deposit{{end}}</span>{{if .PayOnDelivery}}<span data-pay-later hidden>Send order</span>{{end}}{{else}}Send order{{end}}</button>
+{{with .Whats}}<p class="bag-hint">We confirm your {{$w.Bag}} on WhatsApp.</p>{{end}}
 </section>{{end}}
 
 {{/* The parts of a storefront page every look shows the same way: what
@@ -93,7 +105,7 @@ notices before it. A look's stylesheet draws them. */}}
 {{define "sfnotes"}}{{with .Front}}<section class="panel front" aria-labelledby="front-h"><h2 id="front-h">{{.Name}}</h2>{{with .Tagline}}<p>{{.}}</p>{{end}}<p><a href="{{$.Home}}">All of {{$.M.Card.Name}}</a></p></section>
 {{end}}{{if .Closed}}<p class="notice" role="status">{{.Closed}}</p>{{end}}{{if and .HasItems (not .Forms) (not .Closed)}}<p class="notice" role="status">Orders are not open on this page yet.{{with .M.WhatsLink}} <a href="{{.}}" rel="noopener">Message {{$.M.Card.Name}} on WhatsApp</a> to order.{{else}}{{with .Phone}} Call <a href="tel:{{.}}">{{.}}</a> to order.{{end}}{{end}}</p>{{end}}{{end}}
 
-{{define "sfinfo"}}{{with .M.Card.About}}<section class="panel"><h2>About</h2><p>{{.}}</p></section>{{end}}
+{{define "sfinfo"}}{{if not .Brand.Shop}}{{with .M.Card.About}}<section class="panel"><h2>About</h2><p>{{.}}</p></section>{{end}}{{end}}
 {{if .Hours}}<section class="panel hours">
 <h2>Opening hours</h2>
 <table>{{range .Hours}}<tr{{if .Today}} class="is-today"{{end}}><th scope="row">{{.Day}}{{if .Today}} · today{{end}}</th><td>{{.Spans}}</td></tr>{{end}}</table>

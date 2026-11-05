@@ -3,7 +3,7 @@
 <head>
 {{template "meta" .}}{{template "og" .}}</head>
 <body class="sf fx{{if .Ordering}} has-sticky{{end}}">
-{{with .Closed}}{{else}}{{if .Ordering}}<p class="fx-strip">Order online, pay securely. We confirm on WhatsApp.</p>{{end}}{{end}}
+{{with .Closed}}{{else}}{{if .Ordering}}<p class="fx-strip">Order online, pay securely.{{if .M.WhatsLink}} We confirm on WhatsApp.{{end}}</p>{{end}}{{end}}
 <header class="fx-top">
   <a class="fx-link" href="#shop">Shop</a>
   <a class="fx-name" href="{{if .Home}}{{.Home}}{{else}}#{{end}}">{{.M.Card.Name}}</a>

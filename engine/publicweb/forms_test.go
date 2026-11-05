@@ -405,6 +405,9 @@ func TestStatusPage(t *testing.T) {
 	}{
 		{OrderState{Status: "awaiting_payment", Kind: "order", TotalKobo: 450200, PaymentURL: "https://checkout.paystack.test/abc"},
 			[]string{`href="https://checkout.paystack.test/abc" rel="noopener noreferrer">Pay ₦4,502</a>`, "Your order is held for 30 minutes"}, false},
+		// A deposit: the card page charges the deposit, and the button says so.
+		{OrderState{Status: "awaiting_payment", Kind: "order", TotalKobo: 450200, AskedKobo: 135060, PaymentURL: "https://checkout.paystack.test/dep"},
+			[]string{`href="https://checkout.paystack.test/dep" rel="noopener noreferrer">Pay ₦1,350.60</a>`}, false},
 		{OrderState{Status: "awaiting_payment", Kind: "order", TotalKobo: 450200}, []string{"preparing your payment"}, true},
 		{OrderState{Status: "awaiting_payment", Kind: "order", TotalKobo: 450200, PaymentURL: "javascript:alert(1)"}, []string{"preparing your payment"}, true},
 		{OrderState{Status: "received", Kind: "order", TotalKobo: 450200}, []string{"Order received", "Ada&#39;s &lt;Kitchen&gt; will confirm by SMS", "₦4,502"}, false},
@@ -1029,12 +1032,13 @@ func TestItemsOpenAndSayWhenOrdersAreNotOpen(t *testing.T) {
 		if item.Code != http.StatusOK {
 			t.Fatalf("%s: the item's page: %d", theme, item.Code)
 		}
-		for _, want := range []string{"Puff puff", "Fried fresh", "Add to bag", `action="/snacks/a/order"`, `name="step" value="bag"`, `name="q.1"`, "/_static/item-sheet."} {
+		add := lookOf(brand.Brand{Theme: theme}, "").Words().Add
+		for _, want := range []string{"Puff puff", "Fried fresh", add, `action="/snacks/a/order"`, `name="step" value="bag"`, `name="q.1"`, "/_static/item-sheet."} {
 			if !strings.Contains(item.Body.String(), want) {
 				t.Errorf("%s: the item's page is missing %q", theme, want)
 			}
 		}
-		if page := get(e.h, "GET", sfHost, "/snacks/i/2").Body.String(); !strings.Contains(page, "Unavailable for now.") || strings.Contains(page, "Add to bag") {
+		if page := get(e.h, "GET", sfHost, "/snacks/i/2").Body.String(); !strings.Contains(page, "Unavailable for now.") || strings.Contains(page, add) {
 			t.Errorf("%s: an unavailable item offers to be bagged", theme)
 		}
 		if w := get(e.h, "GET", sfHost, "/snacks/i/99"); w.Code != http.StatusNotFound {
@@ -1054,7 +1058,7 @@ func TestItemsOpenAndSayWhenOrdersAreNotOpen(t *testing.T) {
 		if strings.Contains(page, "Add to order") || strings.Contains(page, `class="add"`) {
 			t.Errorf("%s: an order button on a front that takes no orders", theme)
 		}
-		if page := get(e.h, "GET", sfHost, "/cold/i/1").Body.String(); !strings.Contains(page, "Orders are not open on this page yet.") || !strings.Contains(page, "on WhatsApp") || strings.Contains(page, "Add to bag") {
+		if page := get(e.h, "GET", sfHost, "/cold/i/1").Body.String(); !strings.Contains(page, "Orders are not open on this page yet.") || !strings.Contains(page, "on WhatsApp") || strings.Contains(page, add) {
 			t.Errorf("%s: an item on a front that takes no orders: %s", theme, page)
 		}
 		if !strings.Contains(page, "/_static/item-sheet.") {
@@ -1091,7 +1095,8 @@ func TestOrderBagAndDetailsSteps(t *testing.T) {
 			t.Fatalf("%s: the bag step: %d", theme, bagPage.Code)
 		}
 		bag := bagPage.Body.String()
-		for _, want := range []string{"Your bag", `name="step" value="details"`, `name="q.1" value="2"`, "Large", "₦2,000 each", "Total: ₦4,000", `method="get"`} {
+		words := lookOf(brand.Brand{Theme: theme}, "").Words()
+		for _, want := range []string{words.Your, `name="step" value="details"`, `name="q.1" value="2"`, "Large", "₦2,000 each", "Total: ₦4,000", `method="get"`} {
 			if !strings.Contains(bag, want) {
 				t.Errorf("%s: the bag step is missing %q", theme, want)
 			}
@@ -1102,7 +1107,7 @@ func TestOrderBagAndDetailsSteps(t *testing.T) {
 
 		// The details: the bag as a summary, its fields kept, the form to post.
 		details, tok := e.form(t, "/food/a/order?step=details&q.1=2&o.1.0=1")
-		for _, want := range []string{"Your bag", "2 × Jollof rice", "Total: ₦4,000", `name="q.1" value="2"`, `name="o.1.0" value="1"`, `step=bag`, "Send order", `method="post"`} {
+		for _, want := range []string{words.Your, "2 × Jollof rice", "Total: ₦4,000", `name="q.1" value="2"`, `name="o.1.0" value="1"`, `step=bag`, "Send order", `method="post"`} {
 			if !strings.Contains(details, want) {
 				t.Errorf("%s: the details step is missing %q", theme, want)
 			}
@@ -1117,7 +1122,7 @@ func TestOrderBagAndDetailsSteps(t *testing.T) {
 		}
 		// An emptied bag says so, and is forgotten in the browser.
 		for _, path := range []string{"/food/a/order?step=bag", "/food/a/order?step=details&q.1=0"} {
-			if body := get(e.h, "GET", sfHost, path).Body.String(); !strings.Contains(body, "Your bag is empty") || !strings.Contains(body, "data-bag-clear") || strings.Contains(body, `name="token"`) {
+			if body := get(e.h, "GET", sfHost, path).Body.String(); !strings.Contains(body, "Your "+words.Bag+" is empty") || !strings.Contains(body, "data-bag-clear") || strings.Contains(body, `name="token"`) {
 				t.Errorf("%s: %s is not the empty bag", theme, path)
 			}
 		}
@@ -1174,7 +1179,7 @@ func TestBagLinesOfOneItem(t *testing.T) {
 	}
 
 	stale := get(e.h, "GET", sfHost, "/food/a/order?step=bag&q.1=1&o.1.0=7").Body.String()
-	if !strings.Contains(stale, "The choices for Jollof rice have changed") || !strings.Contains(stale, "Your bag is empty") {
+	if !strings.Contains(stale, "The choices for Jollof rice have changed") || !strings.Contains(stale, "Your order is empty") {
 		t.Errorf("a choice no longer offered: %s", stale)
 	}
 
@@ -1195,5 +1200,59 @@ func TestBagLinesOfOneItem(t *testing.T) {
 	sub, err := storefront.OpenSubmission(e.s.InboxKey, e.sf, ref, e.inbox.rows[ref].payload)
 	if err != nil || len(sub.Basket) != 2 || sub.Basket[0].LineName() != "Jollof rice (Regular)" || sub.Basket[1].LineName() != "Jollof rice (Large)" || sub.TotalKobo != 550000 {
 		t.Fatalf("priced: %+v %v", sub.Basket, err)
+	}
+}
+
+// The shop looks' pages as their designs have them: a service's page says
+// what kind and how long above its name and opens the booking form with
+// it chosen, saying the deposit; an item's photos are all thumbnails,
+// the first among them; the bag pill knows the order; and the details
+// step's button says what is paid now.
+func TestShopPagesAsDesigned(t *testing.T) {
+	order, book := uuid.New(), uuid.New()
+	p := orderPage()
+	home := storefront.PublicFront{Slug: "", Kind: "shop", Name: "Bloom"}
+	studio := storefront.PublicFront{Slug: "studio", Kind: "food", Name: "Studio",
+		Blocks: []storefront.PublicBlock{{Kind: "list", Config: json.RawMessage(`{"table": "00000000-0000-0000-0000-000000000001", "table_name": "menu", "columns": {"name": "name"}}`)}},
+		Actions: []storefront.PublicAction{
+			{ID: &order, Slug: "order", Kind: "order", Label: "Order", Payment: "at_order", Pickup: true, DepositPercent: 50, Form: storefront.BuiltinForm("order")},
+			{ID: &book, Slug: "booking", Kind: "booking", Label: "Book", Payment: "at_order", DepositPercent: 20, Form: storefront.BuiltinForm("booking")}}}
+	p.Model.Fronts = []storefront.PublicFront{home, studio}
+	press := storefront.Item{ID: "1", Name: "Silk press", Category: "Hair", PriceKobo: kobo(2500000), Available: true, DurationMinutes: 120}
+	oil := storefront.Item{ID: "2", Name: "Hair oil", PriceKobo: kobo(800000), Available: true,
+		Photo: storefront.Image{"320": "/s0.jpg", "800": "/l0.jpg"}, Gallery: []storefront.Image{{"320": "/s1.jpg", "800": "/l1.jpg"}}}
+	p.Lists = map[string][]storefront.Item{"menu": {press, oil}}
+	e := formServer(t, p)
+	withBrand(e.s, brand.Brand{Theme: "salon"})
+	e.h = e.s.Handler()
+
+	svc := get(e.h, "GET", sfHost, "/studio/i/1").Body.String()
+	for _, want := range []string{`<p class="pdp-kicker">Hair · 2 hours</p>`, `href="/studio/a/booking?service=1">Choose a time</a>`, "Pay a ₦5,000 deposit to hold your time."} {
+		if !strings.Contains(svc, want) {
+			t.Errorf("the service's page is missing %q", want)
+		}
+	}
+	if strings.Contains(svc, "Add to booking") {
+		t.Error("a service is booked, not added to a bag")
+	}
+	pics := get(e.h, "GET", sfHost, "/studio/i/2").Body.String()
+	for _, want := range []string{`data-pic="/l0.jpg" aria-current="true"`, `alt="Photo 1 of 2"`, `data-pic="/l1.jpg"`, `alt="Photo 2 of 2"`, "Add to booking", `<span data-run-total> · ₦8,000</span>`, "Pay a 50% deposit now.",
+		`class="sf-pill" href="/studio/a/order?step=bag" data-bag-link`, "/_static/item."} {
+		if !strings.Contains(pics, want) {
+			t.Errorf("the item's page is missing %q", want)
+		}
+	}
+
+	details, _ := e.form(t, "/studio/a/order?step=details&q.2=2")
+	for _, want := range []string{"<h1>Checkout</h1>", `class="form co"`, "Your booking", `Pay <span data-pay>₦8,000</span> deposit`, "Balance at the studio"} {
+		if !strings.Contains(details, want) {
+			t.Errorf("the details step is missing %q", want)
+		}
+	}
+	if strings.Contains(details, ">Send order</button>") {
+		t.Error("the details step has two buttons")
+	}
+	if bag := get(e.h, "GET", sfHost, "/studio/a/order?step=bag&q.2=1").Body.String(); !strings.Contains(bag, "<h1>Your booking</h1>") || !strings.Contains(bag, ">Add another service</a>") {
+		t.Errorf("the bag step: %s", bag)
 	}
 }

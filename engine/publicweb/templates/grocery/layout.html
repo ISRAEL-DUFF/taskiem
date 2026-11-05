@@ -13,7 +13,7 @@ everything. A business's pages open with a bar: back, logo, name. */}}
 <body class="gx gx-page">
 <header class="gx-top">
   <a class="gx-name" href="{{with .Home}}{{.}}{{else}}#{{end}}">{{template "mark" .}}{{.Business}}</a>
-  {{with .Home}}<a class="gx-bag" href="{{.}}">{{template "i-back"}}<span>Shop</span></a>{{end}}
+  <span class="sf-top-r">{{with .Home}}<a class="gx-bag" href="{{.}}">{{template "i-back"}}<span>Shop</span></a>{{end}}{{with .BagHref}}<a class="sf-pill" href="{{.}}?step=bag" data-bag-link data-bag-show hidden>{{template "i-bag"}}<span class="sr">{{$.Brand.Words.Your}}, </span><b data-bag-n></b><span class="sr"> items</span></a>{{end}}</span>
 </header>
 <main class="page gx-narrow">
 {{end}}

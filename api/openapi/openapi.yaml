@@ -596,6 +596,14 @@ paths:
         schema:
           type: integer
         description: The row's id
+      - name: add
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - '1'
+        description: 1 adds the photo to the item's gallery (up to 6 photos; 409 past that). Without it the photo takes the place of the main photo, the rest kept.
       requestBody:
         required: true
         content:
@@ -618,6 +626,69 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StorefrontMedia'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: removeStorefrontItemPhoto
+      tags:
+      - Storefront
+      summary: Take a photo off a catalogue row
+      description: The next photo becomes the main one when the main one is taken out. Any entry the photo column holds can be taken out, so one the page cannot show does not keep its place.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: row
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: The row's id
+      - name: media
+        in: query
+        required: true
+        schema:
+          type: string
+        description: The photo's media id, as the item lists it
+      responses:
+        '204':
+          description: Taken out
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/catalogue/rows/{row}/photo/main:
+    put:
+      operationId: mainStorefrontItemPhoto
+      tags:
+      - Storefront
+      summary: Make one of a catalogue row's photos its main photo
+      description: The photo moves to the front; the others keep their order after it.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: row
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: The row's id
+      - name: media
+        in: query
+        required: true
+        schema:
+          type: string
+        description: The photo's media id, as the item lists it
+      responses:
+        '204':
+          description: It is the main photo
         default:
           $ref: '#/components/responses/Error'
   /v1/storefront/media:
@@ -1503,6 +1574,14 @@ paths:
         schema:
           type: integer
         description: The item's row id in the front's table
+      - name: add
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - '1'
+        description: 1 adds the photo to the item's gallery (up to 6 photos; 409 past that). Without it the photo takes the place of the main photo, the rest kept.
       requestBody:
         required: true
         content:
@@ -1525,6 +1604,83 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StorefrontMedia'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: removeStorefrontFrontItemPhoto
+      tags:
+      - Storefront
+      summary: Take a photo off a front's item
+      description: The next photo becomes the main one when the main one is taken out. Any entry the photo column holds can be taken out, so one the page cannot show does not keep its place.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The front's id
+      - name: row
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: The item's row id in the front's table
+      - name: media
+        in: query
+        required: true
+        schema:
+          type: string
+        description: The photo's media id, as the item lists it
+      responses:
+        '204':
+          description: Taken out
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/fronts/{id}/items/{row}/photo/main:
+    put:
+      operationId: mainStorefrontFrontItemPhoto
+      tags:
+      - Storefront
+      summary: Make one of a front's item's photos its main photo
+      description: The photo moves to the front; the others keep their order after it.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The front's id
+      - name: row
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: The item's row id in the front's table
+      - name: media
+        in: query
+        required: true
+        schema:
+          type: string
+        description: The photo's media id, as the item lists it
+      responses:
+        '204':
+          description: It is the main photo
         default:
           $ref: '#/components/responses/Error'
   /v1/storefront/fronts/{id}:

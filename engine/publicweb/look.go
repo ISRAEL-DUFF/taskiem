@@ -79,6 +79,34 @@ func (l look) BagPill() bool { return brand.Base(l.theme()) != l.theme() }
 
 func (l look) theme() string { return brand.Theme(l.Theme) }
 
+// shopWords are what a shop look calls its bag and the steps around it,
+// as each look's designs say them (Kitchen takes an order, Grocery fills
+// a basket, Salon makes a booking).
+type shopWords struct {
+	Bag     string // "order", "bag", "basket", "booking"
+	Your    string // the bag page's heading
+	Add     string // the item page's button
+	More    string // back to the catalogue from the bag
+	Balance string // what is left after the deposit, and when
+}
+
+// Words are the look's shopWords.
+func (l look) Words() shopWords {
+	switch l.theme() {
+	case "kitchen":
+		return shopWords{"order", "Your order", "Add to order", "Add something else", "Balance when it is ready"}
+	case "grocery":
+		return shopWords{"basket", "Your basket", "Add to basket", "Keep shopping", "Balance on delivery"}
+	case "salon":
+		return shopWords{"booking", "Your booking", "Add to booking", "Add another service", "Balance at the studio"}
+	}
+	return shopWords{"bag", "Your bag", "Add to bag", "Keep shopping", "Balance when it is ready"}
+}
+
+// Shop is true for the shop looks, which draw an item's kicker above its
+// name and the bag's own pages as their designs have them.
+func (l look) Shop() bool { return l.BagPill() }
+
 // lookOf makes a look from a brand, for a business by name.
 func lookOf(b brand.Brand, business string) look {
 	l := look{Theme: brand.Theme(b.Theme), CSS: brandCSSPath(b.Color), Initials: brand.Initials(business)}
