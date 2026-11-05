@@ -3,6 +3,7 @@ import { useThread } from "../lib/useThread";
 import { ThreadJump } from "./ThreadParts";
 import { ChatStream } from "./ChatStream";
 import { ChatHead } from "./ChatHead";
+import { ReadMore, useFold } from "./ReadMore";
 import { ComposerView, TASKIEM_FILES, useComposer } from "./ChatComposer";
 import { BubbleShell, CopyItem, Ticks } from "./BubbleShell";
 import { useChatLive } from "./ChatLive";
@@ -49,6 +50,20 @@ if (typeof window !== "undefined") {
   window.addEventListener("beforeunload", () => (leaving = true));
   window.addEventListener("pagehide", () => (leaving = true));
   window.addEventListener("pageshow", () => (leaving = false));
+}
+
+/** Taskiem's words, *bold* marked, a long answer folded. */
+function TaskiemText({ text, gap }: { text: string; gap: boolean }) {
+  const fold = useFold(text);
+  return (
+    <span className="text">
+      {boldParts(fold.shown).map((p, k) =>
+        p.bold ? <strong key={k}>{p.text}</strong> : p.text,
+      )}
+      {fold.folded && <ReadMore onClick={fold.more} />}
+      {gap && <span className="stamp-gap" aria-hidden="true" />}
+    </span>
+  );
 }
 
 const startsRun = (
@@ -322,15 +337,15 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
             T
           </span>
         }
-        title={
-          <>
-            Taskiem
-            {act.busy && (
-              <span className="typing" data-testid="taskiem-typing">
-                typing…
-              </span>
-            )}
-          </>
+        title="Taskiem"
+        subtitle={
+          act.busy ? (
+            <span className="typing" data-testid="taskiem-typing">
+              typing…
+            </span>
+          ) : (
+            "Your assistant, as on your phone"
+          )
         }
       />
       <ErrorBox error={error ?? act.error ?? c.fileError} />
@@ -365,7 +380,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
               what={m.text.split("\n")[0]?.slice(0, 60) ?? "message"}
               menu={
                 !m.local && m.text
-                  ? () => <CopyItem text={m.text} />
+                  ? () => ({ actions: <CopyItem text={m.text} /> })
                   : undefined
               }
               after={
@@ -399,12 +414,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
               }
             >
               {!m.inbound && first && <span className="who">Taskiem</span>}
-              <span className="text">
-                {boldParts(m.text).map((p, k) =>
-                  p.bold ? <strong key={k}>{p.text}</strong> : p.text,
-                )}
-                {inline && <span className="stamp-gap" aria-hidden="true" />}
-              </span>
+              <TaskiemText text={m.text} gap={inline} />
               {m.buttons && m.buttons.length > 0 && (
                 <span
                   className="reply-buttons"

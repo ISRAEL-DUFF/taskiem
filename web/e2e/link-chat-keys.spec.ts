@@ -252,7 +252,7 @@ test("a right click on a bubble opens its menu; Esc closes it and the chat stays
   await b.click({ button: "right" });
   const menu = b.getByTestId("chat-more");
   await expect(menu).toBeVisible();
-  await expect(menu.getByRole("button").first()).toBeFocused();
+  await expect(menu.locator(".pop-card button").first()).toBeFocused(); // the first row, as WhatsApp's
   await buyer.keyboard.press("Escape");
   await expect(menu).toHaveCount(0);
   expect(withParam(buyer)).toBe(link);

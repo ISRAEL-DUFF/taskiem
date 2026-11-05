@@ -190,6 +190,7 @@ test("two linked businesses talk", async ({ browser }) => {
   );
 
   // Search in the conversation; archive it.
+  await pane.getByTestId("chat-search-open").click();
   await pane.getByTestId("chat-search").fill("bags");
   await expect(pane.getByTestId("chat-message")).toHaveCount(1);
   await pane.getByTestId("chat-search").fill("");

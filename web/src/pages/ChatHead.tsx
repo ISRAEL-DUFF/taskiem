@@ -13,13 +13,48 @@ export function ChatHead({
   onBack,
   avatar,
   title,
+  subtitle,
   menuLabel,
   items,
+  actions,
 }: {
   onBack: () => void;
   avatar: ReactNode;
   title: ReactNode;
+  /** Under the name: who they are, or "typing…". */
+  subtitle?: ReactNode;
   menuLabel: string;
+  items?: (close: () => void) => ReactNode;
+  /** Buttons before the menu (search). */
+  actions?: ReactNode;
+}) {
+  return (
+    <div className="chat-head">
+      <button
+        type="button"
+        className="icon-button chat-back"
+        onClick={onBack}
+        aria-label="Back to the chats"
+      >
+        <Icon name="back" />
+      </button>
+      {avatar}
+      <div className="chat-head-main">
+        <h2>{title}</h2>
+        {subtitle && <span className="chat-sub">{subtitle}</span>}
+      </div>
+      {actions}
+      <HeadMenu label={menuLabel} items={items} />
+    </div>
+  );
+}
+
+/** The ⋯ menu of a head: the screen's own entries, then Keyboard (a computer's). Closes on Esc (the focus going back to its button) and on a click elsewhere. */
+export function HeadMenu({
+  label,
+  items,
+}: {
+  label: string;
   items?: (close: () => void) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -42,44 +77,33 @@ export function ChatHead({
   }, [open]);
   const close = () => setOpen(false);
   return (
-    <div className="chat-head">
+    <div className="chat-menu-wrap">
       <button
         type="button"
-        className="icon-button chat-back"
-        onClick={onBack}
-        aria-label="Back to the chats"
+        className="icon-button"
+        ref={button}
+        aria-label={label}
+        aria-expanded={open}
+        aria-haspopup="true"
+        onClick={() => setOpen(!open)}
       >
-        <Icon name="back" />
+        <Icon name="more" />
       </button>
-      {avatar}
-      <h2>{title}</h2>
-      <div className="chat-menu-wrap">
-        <button
-          type="button"
-          className="icon-button"
-          ref={button}
-          aria-label={menuLabel}
-          aria-expanded={open}
-          aria-haspopup="true"
-          onClick={() => setOpen(!open)}
-        >
-          <Icon name="more" />
-        </button>
-        {open && (
-          <div className="chat-menu" data-testid="chat-menu">
-            {items?.(close)}
-            <button
-              type="button"
-              onClick={() => {
-                close();
-                window.dispatchEvent(new Event(KEYS_EVENT));
-              }}
-            >
-              Keyboard
-            </button>
-          </div>
-        )}
-      </div>
+      {open && (
+        <div className="chat-menu" data-testid="chat-menu">
+          {items?.(close)}
+          <button
+            type="button"
+            className="kbd-only"
+            onClick={() => {
+              close();
+              window.dispatchEvent(new Event(KEYS_EVENT));
+            }}
+          >
+            Keyboard
+          </button>
+        </div>
+      )}
     </div>
   );
 }

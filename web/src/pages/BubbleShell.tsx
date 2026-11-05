@@ -1,5 +1,18 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { Icon } from "../icons";
+
+// The full emoji list is loaded when the "+" is first pressed.
+const EmojiPanel = lazy(() =>
+  import("./EmojiPanel").then((m) => ({ default: m.EmojiPanel })),
+);
 
 /** A swipe this far right replies. */
 const SWIPE_REPLY_PX = 60;
@@ -33,6 +46,7 @@ export function BubbleShell({
   menu,
   onReply,
   asResult = false,
+  quickReact = false,
   children,
   after,
 }: {
@@ -44,16 +58,31 @@ export function BubbleShell({
   className?: string;
   /** What the bubble holds, in a line, for the menu's name. */
   what: string;
-  /** The menu's entries, given the way to close it; none: no menu. */
-  menu?: (close: () => void) => ReactNode;
+  /** The menu: the reactions (a pill above the bubble) and the actions (a card by it), given the way to close it; none: no menu. */
+  menu?: (
+    close: () => void,
+    more: { pick: () => void },
+  ) => {
+    reactions?: ReactNode;
+    actions: ReactNode;
+    /** An emoji chosen from the full picker (the "+"). */
+    onPick?: (emoji: string) => void;
+  };
   /** Replying to it (the swipe, and the menu's entry if it has one). */
   onReply?: () => void;
   /** A search result: it has no menu, the conversation's does the work. */
   asResult?: boolean;
+  /** A smiley beside the bubble on hover, for a quick reaction. */
+  quickReact?: boolean;
   children: ReactNode;
   after?: ReactNode;
 }) {
-  const [more, setMore] = useState(false);
+  // The menu: closed, the reactions alone (the smiley on hover), or whole.
+  const [more, setMoreState] = useState<false | "react" | "full" | "pick">(
+    false,
+  );
+  const setMore = (v: boolean | "react" | "full" | "pick") =>
+    setMoreState(v === true ? "full" : v);
   const bubbleEl = useRef<HTMLDivElement>(null);
   const chevron = useRef<HTMLButtonElement>(null);
   const hasMenu = !!menu && !asResult;
@@ -129,7 +158,9 @@ export function BubbleShell({
       setMore(true);
       requestAnimationFrame(() =>
         bubbleEl.current
-          ?.querySelector<HTMLElement>('[data-testid="chat-more"] button')
+          ?.querySelector<HTMLElement>(
+            '[data-testid="chat-more"] .pop-card button',
+          )
           ?.focus(),
       );
     },
@@ -158,6 +189,78 @@ export function BubbleShell({
       document.removeEventListener("keydown", esc);
     };
   }, [more]);
+  // Where the menu floats: the reactions above the bubble, the actions
+  // below it, on the bubble's own side, kept on the screen. A scroll or a
+  // resize closes it (the bubble moves from under it).
+  const pill = useRef<HTMLDivElement>(null);
+  const card = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{
+    pill?: { top: number; left: number };
+    card?: { top: number; left: number };
+  }>({});
+  useLayoutEffect(() => {
+    if (!more || !bubbleEl.current) return;
+    const r = bubbleEl.current.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const gap = 6;
+    const edge = 8;
+    const place = (w: number) =>
+      Math.max(edge, Math.min(mine ? r.right - w : r.left, vw - w - edge));
+    const next: typeof pos = {};
+    let below = r.bottom + gap;
+    if (pill.current) {
+      const w = pill.current.offsetWidth;
+      const h = pill.current.offsetHeight;
+      let top = r.top - h - gap;
+      if (top < edge) {
+        top = r.bottom + gap; // no room above: under the bubble
+        below = top + h + gap;
+      }
+      next.pill = { top, left: place(w) };
+    }
+    if (card.current) {
+      const w = card.current.offsetWidth;
+      const h = card.current.offsetHeight;
+      let top = below;
+      if (top + h > vh - edge) top = Math.max(edge, vh - h - edge);
+      next.card = { top, left: place(w) };
+    }
+    setPos(next);
+  }, [more, mine]);
+  useEffect(() => {
+    if (!more) return;
+    const shut = () => setMore(false);
+    window.addEventListener("resize", shut);
+    document.addEventListener("scroll", shut, true);
+    return () => {
+      window.removeEventListener("resize", shut);
+      document.removeEventListener("scroll", shut, true);
+    };
+  }, [more]);
+  const parts =
+    more && menu
+      ? menu(() => setMore(false), { pick: () => setMore("pick") })
+      : undefined;
+  const arrows = (e: React.KeyboardEvent) => {
+    const keys = ["ArrowDown", "ArrowUp", "Home", "End"];
+    if (!keys.includes(e.key)) return;
+    const all = Array.from(
+      e.currentTarget.querySelectorAll<HTMLElement>("button:not(:disabled)"),
+    );
+    if (all.length === 0) return;
+    e.preventDefault();
+    const at = all.indexOf(document.activeElement as HTMLElement);
+    const to =
+      e.key === "Home"
+        ? 0
+        : e.key === "End"
+          ? all.length - 1
+          : e.key === "ArrowDown"
+            ? (at + 1) % all.length
+            : (at - 1 + all.length) % all.length;
+    all[to]?.focus();
+  };
   return (
     <div
       ref={bubbleEl}
@@ -169,26 +272,62 @@ export function BubbleShell({
       {...touch}
     >
       {children}
-      {more && menu && (
-        <span
-          className="row-actions bubble-more"
+      {parts && (
+        <div
+          className="bubble-pop"
           data-testid="chat-more"
           role="group"
           aria-label={`Options for ${what}`}
+          onKeyDown={arrows}
         >
-          {menu(() => setMore(false))}
-        </span>
+          {parts.reactions && more !== "pick" && (
+            <div className="pop-pill" ref={pill} style={pos.pill}>
+              {parts.reactions}
+            </div>
+          )}
+          {more === "pick" && (
+            <div className="pop-picker" ref={pill} style={pos.pill}>
+              <Suspense
+                fallback={<div className="emoji-panel" aria-busy="true" />}
+              >
+                <EmojiPanel
+                  onPick={(c) => parts.onPick?.(c)}
+                  onClose={() => {
+                    setMore(false);
+                    chevron.current?.focus();
+                  }}
+                />
+              </Suspense>
+            </div>
+          )}
+          {more === "full" && (
+            <div className="pop-card" ref={card} style={pos.card}>
+              {parts.actions}
+            </div>
+          )}
+        </div>
       )}
       {(canReply || hasMenu) && !asResult && (
         <button
           type="button"
           className="bubble-chevron"
           ref={chevron}
-          aria-expanded={more}
-          onClick={() => setMore(!more)}
+          aria-expanded={more === "full"}
+          onClick={() => setMore(more === "full" ? false : "full")}
         >
           <Icon name="down" />
           <span className="sr-only">More for {what}</span>
+        </button>
+      )}
+      {hasMenu && quickReact && (
+        <button
+          type="button"
+          className="bubble-react"
+          tabIndex={-1}
+          aria-hidden="true"
+          onClick={() => setMore(more === "react" ? false : "react")}
+        >
+          <Icon name="emoji" />
         </button>
       )}
       {after}
@@ -196,13 +335,36 @@ export function BubbleShell({
   );
 }
 
+/** A row of the action card: its icon and its words. */
+export function PopItem({
+  icon,
+  danger = false,
+  onClick,
+  children,
+}: {
+  icon: string;
+  danger?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      className={`pop-item${danger ? " danger" : ""}`}
+      onClick={onClick}
+    >
+      <Icon name={icon} />
+      <span>{children}</span>
+    </button>
+  );
+}
+
 /** The menu's Copy: the message's words to the clipboard; it says so. */
 export function CopyItem({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   return (
-    <button
-      type="button"
-      className="small"
+    <PopItem
+      icon="copy"
       onClick={() =>
         void navigator.clipboard?.writeText(text).then(
           () => setCopied(true),
@@ -211,7 +373,7 @@ export function CopyItem({ text }: { text: string }) {
       }
     >
       {copied ? "Copied" : "Copy"}
-    </button>
+    </PopItem>
   );
 }
 

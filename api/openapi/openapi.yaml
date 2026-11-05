@@ -8061,7 +8061,7 @@ paths:
       tags:
       - Links
       summary: React to a message
-      description: Your emoji on a message, one of 👍 ❤️ 😂 😮 😢 🙏, replacing the one you gave, seen by both businesses. One reaction per member per message. The other side's people are told on their phones unless they muted the conversation, and a first reaction counts against the plan's messages per day. Refused once the link has ended (409).
+      description: Your emoji on a message, any one emoji (the six first offered are 👍 ❤️ 😂 😮 😢 🙏), replacing the one you gave, seen by both businesses. One reaction per member per message. The other side's people are told on their phones unless they muted the conversation, and a first reaction counts against the plan's messages per day. Refused once the link has ended (409).
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -8092,7 +8092,8 @@ paths:
               properties:
                 emoji:
                   type: string
-                  enum: ['👍', '❤️', '😂', '😮', '😢', '🙏']
+                  maxLength: 64
+                  description: Exactly one emoji
       responses:
         '200':
           description: The reactions on the message, as this business sees them
@@ -30281,7 +30282,7 @@ components:
       properties:
         emoji:
           type: string
-          enum: ['👍', '❤️', '😂', '😮', '😢', '🙏']
+          description: One emoji
         count:
           type: integer
           description: How many people gave it, on both sides

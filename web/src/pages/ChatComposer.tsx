@@ -363,71 +363,73 @@ export function ComposerView<R>({
             c.send();
           }}
         >
-          <button
-            type="button"
-            className="icon-button"
-            aria-label="Emoji"
-            title="Emoji"
-            aria-expanded={c.emojiOpen}
-            data-testid="emoji-button"
-            onClick={() => c.setEmojiOpen(!c.emojiOpen)}
-          >
-            <Icon name="emoji" />
-          </button>
-          <AttachMenu onChoose={c.attach} documents={c.o.rules.documents} />
-          <label className="sr-only" htmlFor={textId}>
-            {textLabel}
-          </label>
-          <textarea
-            id={textId}
-            ref={c.textBox}
-            rows={1}
-            maxLength={4000}
-            placeholder={file ? "Add a caption" : "Type a message"}
-            value={text}
-            onChange={(e) => {
-              c.typed(e.target.value);
-              c.mentions.update(e.target.value, e.target.selectionStart);
-            }}
-            onPaste={(e) => {
-              // A pasted picture is a photo to send, with a caption.
-              const f = Array.from(e.clipboardData.files).find((x) =>
-                x.type.startsWith("image/"),
-              );
-              if (f) {
-                e.preventDefault();
-                void c.choose(f);
-              }
-            }}
-            onKeyDown={(e) => {
-              if (c.mentions.onKeyDown(e)) return;
-              if (e.key === "Escape") {
-                // Esc gives up what is being prepared: the panel, a photo
-                // waiting for its caption, then a reply.
-                if (c.emojiOpen || file || reply) e.preventDefault();
-                if (c.emojiOpen) c.setEmojiOpen(false);
-                else if (file) c.setFile(undefined);
-                else if (reply) c.setReply(undefined);
-                return;
-              }
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                c.send();
-              }
-            }}
-          />
-          {!text.trim() && !file && (
+          <div className="composer-pill">
             <button
               type="button"
-              className="icon-button camera-quick"
-              aria-label="Take a photo"
-              title="Take a photo"
-              data-testid="camera-quick"
-              onClick={() => c.attach("camera")}
+              className="icon-button"
+              aria-label="Emoji"
+              title="Emoji"
+              aria-expanded={c.emojiOpen}
+              data-testid="emoji-button"
+              onClick={() => c.setEmojiOpen(!c.emojiOpen)}
             >
-              <Icon name="camera" />
+              <Icon name="emoji" />
             </button>
-          )}
+            <label className="sr-only" htmlFor={textId}>
+              {textLabel}
+            </label>
+            <textarea
+              id={textId}
+              ref={c.textBox}
+              rows={1}
+              maxLength={4000}
+              placeholder={file ? "Add a caption" : "Type a message"}
+              value={text}
+              onChange={(e) => {
+                c.typed(e.target.value);
+                c.mentions.update(e.target.value, e.target.selectionStart);
+              }}
+              onPaste={(e) => {
+                // A pasted picture is a photo to send, with a caption.
+                const f = Array.from(e.clipboardData.files).find((x) =>
+                  x.type.startsWith("image/"),
+                );
+                if (f) {
+                  e.preventDefault();
+                  void c.choose(f);
+                }
+              }}
+              onKeyDown={(e) => {
+                if (c.mentions.onKeyDown(e)) return;
+                if (e.key === "Escape") {
+                  // Esc gives up what is being prepared: the panel, a photo
+                  // waiting for its caption, then a reply.
+                  if (c.emojiOpen || file || reply) e.preventDefault();
+                  if (c.emojiOpen) c.setEmojiOpen(false);
+                  else if (file) c.setFile(undefined);
+                  else if (reply) c.setReply(undefined);
+                  return;
+                }
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  c.send();
+                }
+              }}
+            />
+            <AttachMenu onChoose={c.attach} documents={c.o.rules.documents} />
+            {!text.trim() && !file && (
+              <button
+                type="button"
+                className="icon-button camera-quick"
+                aria-label="Take a photo"
+                title="Take a photo"
+                data-testid="camera-quick"
+                onClick={() => c.attach("camera")}
+              >
+                <Icon name="camera" />
+              </button>
+            )}
+          </div>
           {!text.trim() && !file && voice.can ? (
             <MicButton
               voice={voice}
@@ -436,10 +438,13 @@ export function ComposerView<R>({
           ) : (
             <button
               type="submit"
-              className="primary"
+              className="primary icon-button send-button"
               disabled={busy || (!text.trim() && !file)}
             >
-              {busy && file ? "Sending…" : "Send"}
+              <Icon name="send" />
+              <span className="sr-only">
+                {busy && file ? "Sending…" : "Send"}
+              </span>
             </button>
           )}
         </form>

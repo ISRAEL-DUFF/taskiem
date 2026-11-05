@@ -57,7 +57,8 @@ import {
 import { ThreadJump } from "./ThreadParts";
 import { ChatStream } from "./ChatStream";
 import { ChatHead } from "./ChatHead";
-import { BubbleShell, CopyItem, Ticks } from "./BubbleShell";
+import { BubbleShell, CopyItem, PopItem, Ticks } from "./BubbleShell";
+import { ReadMore, useFold } from "./ReadMore";
 import { useChatLive } from "./ChatLive";
 import { roleLine, type BusinessLink, type LinkCard } from "../lib/links";
 import { ErrorBox, fmtTime, Modal, useAction, useLoad } from "../ui";
@@ -466,6 +467,7 @@ function Bubble({
   onDiscard?: (clientId: string) => void;
 }) {
   const card = m.kind === "card" ? m.card : undefined;
+  const fold = useFold(m.body ?? "");
   const local = m.local;
   const hasMenu =
     !local &&
@@ -489,79 +491,84 @@ function Bubble({
       what={what}
       asResult={!!onShow}
       onReply={canReply ? () => onReply(m) : undefined}
+      quickReact={!!onReact}
       menu={
         hasMenu
-          ? (close) => (
-              <>
-                {onReact && (
-                  <span
-                    className="reaction-picker"
-                    role="group"
-                    aria-label="React"
+          ? (close, more) => ({
+              onPick: onReact
+                ? (e: string) => (close(), onReact(m, e))
+                : undefined,
+              reactions: onReact ? (
+                <span
+                  className="reaction-picker"
+                  role="group"
+                  aria-label="React"
+                >
+                  {REACTIONS.map((e) => (
+                    <button
+                      key={e}
+                      type="button"
+                      className="react-pick"
+                      aria-pressed={mineEmoji === e}
+                      aria-label={`React with ${REACTION_NAMES[e]}`}
+                      title={REACTION_NAMES[e]}
+                      onClick={() => (close(), onReact(m, e))}
+                    >
+                      {e}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className="react-pick react-more"
+                    aria-label="More reactions"
+                    title="More reactions"
+                    onClick={more.pick}
                   >
-                    {REACTIONS.map((e) => (
-                      <button
-                        key={e}
-                        type="button"
-                        className="react-pick"
-                        aria-pressed={mineEmoji === e}
-                        aria-label={`React with ${REACTION_NAMES[e]}`}
-                        title={REACTION_NAMES[e]}
-                        onClick={() => (close(), onReact(m, e))}
+                    <Icon name="plus" />
+                  </button>
+                </span>
+              ) : undefined,
+              actions: (
+                <>
+                  {onInfo && (
+                    <PopItem icon="info" onClick={() => (close(), onInfo(m))}>
+                      Message info
+                    </PopItem>
+                  )}
+                  {canReply && (
+                    <PopItem icon="reply" onClick={() => (close(), onReply(m))}>
+                      Reply
+                    </PopItem>
+                  )}
+                  {!card && m.body && <CopyItem text={m.body} />}
+                  {!card && onForward && (
+                    <PopItem
+                      icon="forward"
+                      onClick={() => (close(), onForward(m))}
+                    >
+                      Forward
+                    </PopItem>
+                  )}
+                  {onStar && (
+                    <PopItem icon="star" onClick={() => (close(), onStar(m))}>
+                      {m.starred ? "Unstar" : "Star"}
+                    </PopItem>
+                  )}
+                  {!card && onHide && (
+                    <>
+                      <div className="pop-sep" role="separator" />
+                      <PopItem
+                        icon="trash"
+                        danger
+                        onClick={() => (close(), onHide(m))}
                       >
-                        {e}
-                      </button>
-                    ))}
-                  </span>
-                )}
-                {canReply && (
-                  <button
-                    type="button"
-                    className="small"
-                    onClick={() => (close(), onReply(m))}
-                  >
-                    Reply
-                  </button>
-                )}
-                {!card && m.body && <CopyItem text={m.body} />}
-                {!card && onForward && (
-                  <button
-                    type="button"
-                    className="small"
-                    onClick={() => (close(), onForward(m))}
-                  >
-                    Forward
-                  </button>
-                )}
-                {onStar && (
-                  <button
-                    type="button"
-                    className="small"
-                    onClick={() => (close(), onStar(m))}
-                  >
-                    {m.starred ? "Unstar" : "Star"}
-                  </button>
-                )}
-                {onInfo && (
-                  <button
-                    type="button"
-                    className="small"
-                    onClick={() => (close(), onInfo(m))}
-                  >
-                    Info
-                  </button>
-                )}
-                {!card && onHide && (
-                  <button
-                    type="button"
-                    className="small danger"
-                    onClick={() => (close(), onHide(m))}
-                  >
-                    Delete for me
-                  </button>
-                )}
-              </>
-            )
+                        Delete for me
+                      </PopItem>
+                    </>
+                  )}
+                </>
+              ),
+            })
           : undefined
       }
       after={
@@ -664,14 +671,18 @@ function Bubble({
           title="Go to the message"
           onClick={() => onJump(m.reply?.pair_id ?? "")}
         >
-          {m.reply.mine ? "You" : other}:{" "}
-          {previewLine({ ...m.reply, mine: m.reply.mine }, other)}
+          <span className="quote-who">{m.reply.mine ? "You" : other}</span>
+          <span className="quote-text">
+            {previewLine({ ...m.reply, mine: m.reply.mine }, other)}
+          </span>
         </button>
       )}
       {m.reply && !onJump && (
         <span className="quote" data-testid="chat-quote">
-          {m.reply.mine ? "You" : other}:{" "}
-          {previewLine({ ...m.reply, mine: m.reply.mine }, other)}
+          <span className="quote-who">{m.reply.mine ? "You" : other}</span>
+          <span className="quote-text">
+            {previewLine({ ...m.reply, mine: m.reply.mine }, other)}
+          </span>
         </span>
       )}
       {card ? (
@@ -692,7 +703,8 @@ function Bubble({
           )}
           {m.body && (
             <span className="text">
-              <MentionText text={m.body} mentions={m.mentions} />
+              <MentionText text={fold.shown} mentions={m.mentions} />
+              {fold.folded && <ReadMore onClick={fold.more} />}
               {inline && (
                 <span
                   className={`stamp-gap${m.mine ? " mine" : ""}`}
@@ -802,6 +814,7 @@ export function ConversationPane({
   });
   const { setReply } = c;
   const [q, setQ] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
   const [found, setFound] = useState<LinkMessage[]>();
   const act = useAction();
   const path = `/v1/link-chats/${conv.link}`;
@@ -1145,15 +1158,30 @@ export function ConversationPane({
             {conv.name.slice(0, 1).toUpperCase()}
           </button>
         }
-        title={
-          <>
-            {conv.name}
-            {(connected ? live.typing.has(conv.link) : typing) && (
-              <span className="typing" data-testid="chat-typing">
-                typing…
-              </span>
-            )}
-          </>
+        title={conv.name}
+        subtitle={
+          (connected ? live.typing.has(conv.link) : typing) ? (
+            <span className="typing" data-testid="chat-typing">
+              typing…
+            </span>
+          ) : link ? (
+            roleLine(link.role)
+          ) : undefined
+        }
+        actions={
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="Search this conversation"
+            aria-expanded={searchOpen}
+            data-testid="chat-search-open"
+            onClick={() => {
+              setSearchOpen(!searchOpen);
+              if (searchOpen) search("");
+            }}
+          >
+            <Icon name="search" />
+          </button>
         }
         items={(close) => (
           <>
@@ -1206,24 +1234,33 @@ export function ConversationPane({
           </>
         )}
       />
-      <div
-        className="filters"
-        role="search"
-        aria-label={`Search the conversation with ${conv.name}`}
-        style={{ padding: "8px 12px 0" }}
-      >
-        <label className="search">
-          <span className="sr-only">Search this conversation</span>
-          <Icon name="search" />
-          <input
-            type="search"
-            placeholder="Search"
-            value={q}
-            onChange={(e) => search(e.target.value)}
-            data-testid="chat-search"
-          />
-        </label>
-      </div>
+      {(searchOpen || q) && (
+        <div
+          className="filters chat-search-bar"
+          role="search"
+          aria-label={`Search the conversation with ${conv.name}`}
+        >
+          <label className="search">
+            <span className="sr-only">Search this conversation</span>
+            <Icon name="search" />
+            <input
+              type="search"
+              placeholder="Search"
+              value={q}
+              autoFocus
+              onChange={(e) => search(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  search("");
+                  setSearchOpen(false);
+                }
+              }}
+              data-testid="chat-search"
+            />
+          </label>
+        </div>
+      )}
       <ErrorBox error={error ?? act.error ?? c.fileError} />
       <ChatStream
         items={shown}

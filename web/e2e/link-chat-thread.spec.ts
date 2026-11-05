@@ -339,6 +339,7 @@ test("a result of the search in a conversation shows the message in place", asyn
   await buyer.goto(`/chat?with=${link}`);
   const pane = buyer.getByTestId("chat-pane");
   await expect(pane.getByText("Message 120", { exact: true })).toBeVisible();
+  await pane.getByTestId("chat-search-open").click();
   await pane.getByTestId("chat-search").fill("Message 12");
   await expect(pane.getByTestId("chat-message")).toHaveCount(2); // 12 and 120
   await axeBoth(buyer, "search results with Show");
