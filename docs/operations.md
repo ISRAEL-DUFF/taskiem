@@ -154,7 +154,7 @@ CREATE ROLE taskiem LOGIN PASSWORD '...';
 GRANT taskiem_app TO taskiem;
 ```
 
-Run `taskiem migrate` as the schema owner, and `taskiem serve` as `taskiem`. Or let `taskiem migrate` do it: with `TASKIEM_APP_DATABASE_URL` set to the engine's URL, it creates that login after migrating (or sets its password, sent as its SCRAM-SHA-256 verifier so that it never appears in a statement Postgres logs), and grants it `taskiem_app`. It refuses the owner's own login, a superuser, a login that owns tables, and Taskiem's own role names. The owner needs `CREATEROLE`. The Helm chart's migration Job always does this ([Kubernetes](kubernetes.md#database-logins)).
+Run `taskiem migrate` as the schema owner, and `taskiem serve` as `taskiem`. Or let `taskiem migrate` do it: with `TASKIEM_APP_DATABASE_URL` set to the engine's URL, it creates that login after migrating (or sets its password, sent as its SCRAM-SHA-256 verifier so that it never appears in a statement Postgres logs), and grants it `taskiem_app`. It refuses the owner's own login, a superuser, a login that owns tables, Taskiem's own role names, and an existing login that is already a member of any role but `taskiem_app` (it could `SET ROLE` to it past row-level security: revoke the membership, or use a new login). The owner needs `CREATEROLE`. The Helm chart's migration Job always does this ([Kubernetes](kubernetes.md#database-logins)).
 
 ## Webhooks
 

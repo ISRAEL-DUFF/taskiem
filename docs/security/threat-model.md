@@ -234,7 +234,7 @@ STRIDE per boundary. **Status** is what the code does today. "Self-review" point
 ## Assumptions
 
 - TLS terminates at the ingress. `TASKIEM_TRUST_PROXY` is on only behind a proxy that overwrites `X-Forwarded-For`.
-- The database role used by the pods is `taskiem_app`, not the schema owner. Only migrations run as the owner.
+- The database role used by the pods is `taskiem_app`, not the schema owner. Only migrations run as the owner. The pods' login is a member of `taskiem_app` and nothing else: `taskiem migrate` refuses an existing login that can already become another role (`taskiem_dispatch`, the owner, a superuser role), which it could `SET ROLE` to past row-level security (`TestEnsureAppLoginRefusesExtraMemberships`).
 - OpenBao (or the cloud KMS) is separate from the database and its token is scoped to the transit key.
 - A tenant's own key service (BYOK) is the tenant's: its availability, access policy and audit logs are the customer's responsibility, and the credentials it gives Taskiem allow only encrypt and decrypt with that key.
 - The scheduler's anchor directory is write-once storage, or anchors are also emailed outside the platform.
