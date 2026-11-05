@@ -15,8 +15,9 @@ import (
 // under them.
 const (
 	maxPageHTML   = 60 << 10 // per page, before images
-	maxStylesPage = 26 << 10 // the stylesheets a page loads: its theme's (a skin's, on top of the theme it is drawn on) and its colour's
-	maxScriptTot  = 10 << 10 // every script together
+	maxStylesPage = 36 << 10 // the stylesheets a page loads: its theme's (a skin's, on top of the theme it is drawn on), its colour's and the shop sheet every page has
+	maxBasketJS   = 10 << 10 // the basket's scripts, which an order page loads together: the total and − + (order.js) and the bag (bagpill.js)
+	maxScriptTot  = 16 << 10 // every script together
 )
 
 func TestPageBudget(t *testing.T) {
@@ -36,17 +37,27 @@ func TestPageBudget(t *testing.T) {
 			t.Errorf("%s: page is %d bytes, budget %d", path, n, maxPageHTML)
 		}
 	}
-	var js int
+	var js, basket int
 	for name, a := range assets {
 		if strings.HasSuffix(name, ".js") {
 			js += len(a.body)
 		}
 	}
+	for _, name := range []string{"order.js", "bagpill.js"} {
+		a, ok := assets[strings.TrimPrefix(assetNames[name], staticPrefix)]
+		if !ok {
+			t.Fatalf("no %s", name)
+		}
+		basket += len(a.body)
+	}
+	if basket > maxBasketJS {
+		t.Errorf("the basket's scripts: %d bytes (budget %d)", basket, maxBasketJS)
+	}
 	if js > maxScriptTot {
 		t.Errorf("static files: js %d bytes (budget %d)", js, maxScriptTot)
 	}
 	// A page loads one theme's stylesheet, and its colour's.
-	colour := len(brand.PaletteOf("#0b6e4f").CSS())
+	colour := len(brand.PaletteOf("#0b6e4f").CSS()) + len(assets[strings.TrimPrefix(assetNames["item-sheet.css"], staticPrefix)].body)
 	for _, theme := range brand.Themes {
 		a, ok := assets[strings.TrimPrefix(assetNames["theme-"+theme+".css"], staticPrefix)]
 		if !ok {

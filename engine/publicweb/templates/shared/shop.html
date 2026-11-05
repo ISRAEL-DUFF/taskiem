@@ -43,7 +43,11 @@ the form's own fields. */}}
 
 {{define "bagmark"}}<span hidden data-bag-count="{{.BagCount}}" data-bag-total="{{.Subtotal}}" data-bag-href="{{.ChangeHref}}"></span>{{end}}
 
-{{define "bagstep"}}<form method="get" action="{{.Action}}" class="bag" data-order{{with .DepositPercent}} data-deposit-pct="{{.}}"{{end}}>
+{{define "bagstep"}}{{if not .Bag}}<div class="bag bag-empty">
+<span hidden data-bag-clear></span>
+<h2 class="bag-h">Your bag is empty</h2>
+{{with .MoreHref}}<p class="bag-more"><a class="btn btn-primary btn-brand" href="{{.}}">See what we have</a></p>{{end}}
+</div>{{else}}<form method="get" action="{{.Action}}" class="bag" data-order{{with .DepositPercent}} data-deposit-pct="{{.}}"{{end}}>
 {{template "bagmark" .}}
 <input type="hidden" name="step" value="details">
 <h2 class="bag-h">Your bag</h2>
@@ -51,8 +55,8 @@ the form's own fields. */}}
   {{if .Small}}<img class="bag-thumb" src="{{.Small}}" alt="" width="64" height="64" loading="lazy">{{end}}
   <div class="bag-text"><label for="q-{{.N}}"><span class="line-name">{{.Name}}</span></label>
   {{with .Choices}}<span class="bag-opts">{{.}}</span>{{end}}
-  <span class="bag-unit">{{.Unit}} each</span>{{with .Remove}}<a class="bag-remove" href="{{.}}">Remove</a>{{end}}</div>
-  <input id="q-{{.N}}" class="qty" type="number" name="q.{{.ID}}" value="{{.Qty}}" min="0" max="{{.Max}}" step="1" inputmode="numeric" data-price="{{.UnitKobo}}">
+  <span class="bag-unit">{{.Unit}} each</span>{{$n := .Name}}{{with .Remove}}<a class="bag-remove" href="{{.}}">Remove<span class="sr"> {{$n}}</span></a>{{end}}</div>
+  <input id="q-{{.N}}" class="qty" type="number" name="q.{{.Key}}" value="{{.Qty}}" min="0" max="{{.Max}}" step="1" inputmode="numeric" data-price="{{.UnitKobo}}">
   {{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{.Value}}">
   {{end}}</div>
 {{end}}
@@ -65,7 +69,7 @@ the form's own fields. */}}
 <button class="btn btn-primary btn-brand btn-block" type="submit">Continue</button>
 {{with .MoreHref}}<p class="bag-more"><a href="{{.}}">Add more</a></p>{{end}}
 </aside>
-</form>{{end}}
+</form>{{end}}{{end}}
 
 {{/* The bag on the details step: a summary above the details, its
      quantities and choices kept in hidden fields, the server pricing
@@ -75,7 +79,7 @@ the form's own fields. */}}
 <div class="bag-head"><h2 id="bag-sum-h" class="bag-h">Your bag</h2>{{with .ChangeHref}}<a href="{{.}}">Change</a>{{end}}</div>
 {{range .Bag}}<div class="bag-row">
   <span>{{.Qty}} × {{.Name}}{{with .Choices}} <span class="bag-opts">{{.}}</span>{{end}}</span><span class="bag-amt">{{.Line}}</span>
-  <input type="hidden" name="q.{{.ID}}" value="{{.Qty}}" max="{{.Max}}" data-price="{{.UnitKobo}}">
+  <input type="hidden" name="q.{{.Key}}" value="{{.Qty}}" max="{{.Max}}" data-price="{{.UnitKobo}}">
   {{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{.Value}}">
   {{end}}</div>
 {{end}}

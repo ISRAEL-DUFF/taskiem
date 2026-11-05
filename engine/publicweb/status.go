@@ -338,8 +338,9 @@ func statusWords(d *statusData, o OrderState) {
 		}
 		if u := payLink(o.PaymentURL); u != "" {
 			d.Headline = "Pay for your order " + d.Reference
-			// The card page charges what it was made for.
-			d.PayURL, d.PayLabel = u, "Pay "+total
+			// The card page charges what it was made for: the deposit, when
+			// the order has one.
+			d.PayURL, d.PayLabel = u, "Pay "+pay
 			d.Lines = []string{d.heldLine(false), "You pay " + b + " through their payment provider. Never share a PIN or one-time code with anyone."}
 		} else if d.transferOnly() {
 			d.Headline = "Pay for your order " + d.Reference

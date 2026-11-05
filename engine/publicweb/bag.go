@@ -24,6 +24,7 @@ const (
 type bagLine struct {
 	N        int
 	ID       string
+	Key      string // the line's fields: the item's id, or <id>~k
 	Name     string
 	Qty      int
 	Max      int
@@ -36,7 +37,8 @@ type bagLine struct {
 	Small  string
 	Remove string
 	// Hidden are the line's choices, carried as fields.
-	Hidden []bagField
+	Hidden   []bagField
+	lineKobo int64
 }
 
 type bagField struct{ Name, Value string }
@@ -47,42 +49,53 @@ type bagField struct{ Name, Value string }
 func (f *formData) fillBag() {
 	f.Bag, f.Subtotal, f.BagCount, f.Deposit, f.Balance = nil, "", 0, "", ""
 	var total int64
-	for _, it := range f.Items {
-		if it.Qty <= 0 || !it.Orderable {
-			continue
-		}
-		unit := it.PriceKobo
-		var names []string
-		var hidden []bagField
-		for _, o := range it.Options {
-			for _, c := range o.Choices {
-				if c.Selected {
-					unit += c.PriceKobo
-					names = append(names, c.Name)
-					hidden = append(hidden, bagField{Name: o.Input, Value: c.Value})
-				}
+	n := 0
+	for _, base := range f.Items {
+		for _, it := range append([]formItem{base}, base.More...) {
+			if it.Qty <= 0 || !it.Orderable {
+				continue
 			}
+			l := it.line()
+			l.N = n
+			n++
+			total += l.lineKobo
+			f.BagCount += it.Qty
+			f.Bag = append(f.Bag, l)
 		}
-		line := unit * int64(it.Qty)
-		total += line
-		f.BagCount += it.Qty
-		f.Bag = append(f.Bag, bagLine{N: it.N, ID: it.ID, Name: it.Name, Qty: it.Qty, Max: it.Max, Choices: strings.Join(names, ", "),
-			Unit: storefront.FormatNaira(unit), Line: storefront.FormatNaira(line), UnitKobo: unit, Small: it.Small, Hidden: hidden})
 	}
 	if len(f.Bag) > 0 {
 		f.Subtotal = storefront.FormatNaira(total)
-		if f.DepositPercent > 0 && !f.PayLater {
-			dep := storefront.ActionOptions{DepositPercent: f.DepositPercent}.Deposit(total)
+		if dep := (storefront.ActionOptions{DepositPercent: f.DepositPercent}).OrderDeposit(total); dep > 0 && !f.PayLater {
 			f.Deposit, f.Balance = storefront.FormatNaira(dep), storefront.FormatNaira(total-dep)
 		}
 	}
+}
+
+// line is a bag line of the item as it is chosen: its price with its
+// choices, for showing only.
+func (it formItem) line() bagLine {
+	unit := it.PriceKobo
+	var names []string
+	var hidden []bagField
+	for _, o := range it.Options {
+		for _, c := range o.Choices {
+			if c.Selected {
+				unit += c.PriceKobo
+				names = append(names, c.Name)
+				hidden = append(hidden, bagField{Name: o.Input, Value: c.Value})
+			}
+		}
+	}
+	line := unit * int64(it.Qty)
+	return bagLine{ID: it.ID, Key: it.Key, Name: it.Name, Qty: it.Qty, Max: it.Max, Choices: strings.Join(names, ", "),
+		Unit: storefront.FormatNaira(unit), Line: storefront.FormatNaira(line), UnitKobo: unit, lineKobo: line, Small: it.Small, Hidden: hidden}
 }
 
 // bagQuery is the bag as an address's query, for a step to go back to.
 func (f *formData) bagQuery(step string) string {
 	v := url.Values{"step": {step}}
 	for _, l := range f.Bag {
-		v.Set(quantityField+l.ID, strconv.Itoa(l.Qty))
+		v.Set(quantityField+l.Key, strconv.Itoa(l.Qty))
 		for _, h := range l.Hidden {
 			v.Set(h.Name, h.Value)
 		}
@@ -104,6 +117,9 @@ func (f *formData) stepFor(q url.Values) {
 	f.keepBasket(q)
 	f.fillBag()
 	if len(f.Bag) == 0 {
+		// An emptied bag says so, and is forgotten in this browser,
+		// rather than turning back into the whole menu.
+		f.Step, f.MoreHref = stepBag, f.Home
 		return
 	}
 	f.Step = step
@@ -115,26 +131,22 @@ func (f *formData) setLinks() {
 	f.MoreHref = f.Home
 	f.ChangeHref = f.Action + "?" + f.bagQuery(stepBag)
 	for i := range f.Bag {
-		f.Bag[i].Remove = f.removeHref(f.Bag[i].ID)
+		f.Bag[i].Remove = f.removeHref(f.Bag[i].Key)
 	}
 }
 
-// removeHref is the bag's address without the line of item id.
-func (f *formData) removeHref(id string) string {
+// removeHref is the bag's address without the line of key; with nothing
+// left, the empty bag (which forgets it in this browser).
+func (f *formData) removeHref(key string) string {
 	v := url.Values{"step": {stepBag}}
-	left := 0
 	for _, l := range f.Bag {
-		if l.ID == id {
+		if l.Key == key {
 			continue
 		}
-		left++
-		v.Set(quantityField+l.ID, strconv.Itoa(l.Qty))
+		v.Set(quantityField+l.Key, strconv.Itoa(l.Qty))
 		for _, h := range l.Hidden {
 			v.Set(h.Name, h.Value)
 		}
-	}
-	if left == 0 {
-		return f.Home
 	}
 	return f.Action + "?" + v.Encode()
 }

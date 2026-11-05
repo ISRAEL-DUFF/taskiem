@@ -35,7 +35,9 @@
     var pct = parseInt(form.getAttribute("data-deposit-pct"), 10) || 0;
     var dep = form.querySelector("[data-deposit]"), bal = form.querySelector("[data-balance]");
     if (pct > 0 && pct < 100 && dep && bal) {
+      // As the server takes it: at least ₦1, and less than the whole.
       var due = total + fee, part = Math.floor((due * pct + 99) / 100);
+      if (part < 100 || part >= due) for (s = 0; s < split.length; s++) split[s].hidden = true;
       dep.textContent = naira(part);
       bal.textContent = naira(due - part);
     }
@@ -92,5 +94,14 @@
   }
   form.addEventListener("input", update);
   form.addEventListener("change", update);
+  // Sending the order: one tap only, so a slow connection does not send
+  // it twice. Coming back to the page (the back button) frees it again.
+  if ((form.getAttribute("method") || "").toLowerCase() === "post") {
+    var sends = form.querySelectorAll("button[type=submit]");
+    form.addEventListener("submit", function () {
+      setTimeout(function () { for (var i = 0; i < sends.length; i++) sends[i].disabled = true; }, 0);
+    });
+    window.addEventListener("pageshow", function () { for (var i = 0; i < sends.length; i++) sends[i].disabled = false; });
+  }
   update();
 })();

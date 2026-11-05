@@ -12,7 +12,7 @@ export default tseslint.config(
     files: ["engine/**/*.js"],
     languageOptions: {
       sourceType: "script",
-      globals: { window: "readonly", document: "readonly", crypto: "readonly", TextEncoder: "readonly", setTimeout: "readonly" },
+      globals: { window: "readonly", document: "readonly", crypto: "readonly", TextEncoder: "readonly", setTimeout: "readonly", URLSearchParams: "readonly" },
     },
   },
   // The card maker's Node script, whose callbacks also run in the browser (docs/strategy/marketing/cards).

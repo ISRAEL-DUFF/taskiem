@@ -355,7 +355,7 @@ function PaymentOptions({
           hint={
             <span className={depositBad ? "error-text" : undefined}>
               {kind === "order"
-                ? "Paid online when ordering; the rest when the order is ready or delivered. Leave it empty for the full price."
+                ? "Paid online when ordering; the rest when the order is ready or delivered. Leave it empty, or 100, for the full price. A deposit under ₦1 is not asked for."
                 : "Paid online when booking; the rest at the appointment. Leave it empty for the full price."}
             </span>
           }

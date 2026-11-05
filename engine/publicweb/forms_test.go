@@ -1010,10 +1010,14 @@ func TestItemsOpenAndSayWhenOrdersAreNotOpen(t *testing.T) {
 		// With the order form on: the name opens the item's page, which
 		// offers Add to bag and goes to the order form.
 		page := get(e.h, "GET", sfHost, "/snacks").Body.String()
-		for _, want := range []string{`class="item-open" href="/snacks/i/1"`, `href="/snacks/a/order?item=1"`} {
-			if !strings.Contains(page, want) {
-				t.Errorf("%s: with the order form on, missing %q", theme, want)
-			}
+		if !strings.Contains(page, `class="item-open" href="/snacks/i/1"`) {
+			t.Errorf("%s: with the order form on, the item's page is not linked", theme)
+		}
+		// A card adds: by the order form (the older looks), or straight to
+		// the bag (the shop looks: a form with the item's quantity).
+		toBag := strings.Contains(page, `action="/snacks/a/order"`) && strings.Contains(page, `name="q.1"`) && strings.Contains(page, `name="step" value="bag"`)
+		if !strings.Contains(page, `href="/snacks/a/order?item=1"`) && !toBag {
+			t.Errorf("%s: with the order form on, a card does not add the item", theme)
 		}
 		if strings.Contains(page, `id="i-1"`) {
 			t.Errorf("%s: the item's pop-up is still on the page", theme)
@@ -1107,10 +1111,14 @@ func TestOrderBagAndDetailsSteps(t *testing.T) {
 			t.Errorf("%s: the details step asks the choices again", theme)
 		}
 
-		// No step, or an empty bag: the one page it always was.
-		for _, path := range []string{"/food/a/order", "/food/a/order?step=bag", "/food/a/order?step=details&q.1=0"} {
-			if body, _ := e.form(t, path); !strings.Contains(body, `<select class="opt" name="o.1.0"`) || strings.Contains(body, "Total: ₦") {
-				t.Errorf("%s: %s is not the one-page order", theme, path)
+		// No step: the one page it always was.
+		if body, _ := e.form(t, "/food/a/order"); !strings.Contains(body, `<select class="opt" name="o.1.0"`) || strings.Contains(body, "Total: ₦") {
+			t.Errorf("%s: no step is not the one-page order", theme)
+		}
+		// An emptied bag says so, and is forgotten in the browser.
+		for _, path := range []string{"/food/a/order?step=bag", "/food/a/order?step=details&q.1=0"} {
+			if body := get(e.h, "GET", sfHost, path).Body.String(); !strings.Contains(body, "Your bag is empty") || !strings.Contains(body, "data-bag-clear") || strings.Contains(body, `name="token"`) {
+				t.Errorf("%s: %s is not the empty bag", theme, path)
 			}
 		}
 
@@ -1130,5 +1138,62 @@ func TestOrderBagAndDetailsSteps(t *testing.T) {
 		if w.Code != http.StatusSeeOther {
 			t.Fatalf("%s: %d %s", theme, w.Code, w.Body.String())
 		}
+	}
+}
+
+// One item twice in a bag, with different choices: two lines (q.1 and
+// q.1~2), priced each with its own; together they are held to what is
+// left. A choice the dish no longer has takes its line out, saying so,
+// rather than putting the first choice in its place.
+func TestBagLinesOfOneItem(t *testing.T) {
+	order := uuid.New()
+	p := orderPage()
+	home := storefront.PublicFront{Slug: "", Kind: "shop", Name: "Ada"}
+	food := storefront.PublicFront{Slug: "food", Kind: "food", Name: "Food",
+		Blocks:  []storefront.PublicBlock{{Kind: "list", Config: json.RawMessage(`{"table": "00000000-0000-0000-0000-000000000001", "table_name": "menu", "columns": {"name": "name"}}`)}},
+		Actions: []storefront.PublicAction{{ID: &order, Slug: "order", Kind: "order", Label: "Order food", Payment: "after_accept", Pickup: true, Form: storefront.BuiltinForm("order")}}}
+	p.Model.Fronts = []storefront.PublicFront{home, food}
+	left := int64(3)
+	rice := storefront.Item{ID: "1", Name: "Jollof rice", PriceKobo: kobo(150000), Available: true, Stock: &left,
+		Options: storefront.ParseOptions(`[{"name": "Size", "choices": ["Regular", {"name": "Large", "price": 500}]}]`)}
+	p.Lists = map[string][]storefront.Item{"menu": {rice}}
+	e := formServer(t, p)
+	withBrand(e.s, brand.Brand{Theme: "kitchen"})
+	e.h = e.s.Handler()
+
+	bag := get(e.h, "GET", sfHost, "/food/a/order?step=bag&q.1=1&o.1.0=0&q.1~2=2&o.1~2.0=1").Body.String()
+	for _, want := range []string{`name="q.1" value="1"`, `name="q.1~2" value="2"`, `name="o.1~2.0" value="1"`, "Regular", "Large", "Total: ₦5,500", "Remove<span class=\"sr\"> Jollof rice</span>"} {
+		if !strings.Contains(bag, want) {
+			t.Errorf("two lines of one dish: missing %q", want)
+		}
+	}
+	for _, want := range []string{`href="/food/a/order?o.1~2.0=1&amp;q.1~2=2&amp;step=bag"`, `href="/food/a/order?o.1.0=0&amp;q.1=1&amp;step=bag"`} {
+		if !strings.Contains(bag, want) {
+			t.Errorf("removing one line keeps the other: missing %s", want)
+		}
+	}
+
+	stale := get(e.h, "GET", sfHost, "/food/a/order?step=bag&q.1=1&o.1.0=7").Body.String()
+	if !strings.Contains(stale, "The choices for Jollof rice have changed") || !strings.Contains(stale, "Your bag is empty") {
+		t.Errorf("a choice no longer offered: %s", stale)
+	}
+
+	_, tok := e.form(t, "/food/a/order?step=details&q.1=1&o.1.0=0&q.1~2=2&o.1~2.0=1")
+	*e.now = e.now.Add(20 * time.Second)
+	v := url.Values{"token": {tok}, "website": {""}, "name": {"Ada Obi"}, "phone": {"0803 123 4567"}, "q.1": {"2"}, "o.1.0": {"0"}, "q.1~2": {"2"}, "o.1~2.0": {"1"}}
+	if w := e.post("/food/a/order", v); w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), "Only 3 of Jollof rice left") {
+		t.Fatalf("four of three left, over two lines: %d", w.Code)
+	}
+	_, tok = e.form(t, "/food/a/order?step=details&q.1=1&o.1.0=0&q.1~2=2&o.1~2.0=1")
+	*e.now = e.now.Add(20 * time.Second)
+	v = url.Values{"token": {tok}, "website": {""}, "name": {"Ada Obi"}, "phone": {"0803 123 4567"}, "q.1": {"1"}, "o.1.0": {"0"}, "q.1~2": {"2"}, "o.1~2.0": {"1"}}
+	w := e.post("/food/a/order", v)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("%d %s", w.Code, w.Body.String())
+	}
+	ref := regexp.MustCompile(`^/o/(AD-[A-Z2-9]{6})`).FindStringSubmatch(w.Header().Get("Location"))[1]
+	sub, err := storefront.OpenSubmission(e.s.InboxKey, e.sf, ref, e.inbox.rows[ref].payload)
+	if err != nil || len(sub.Basket) != 2 || sub.Basket[0].LineName() != "Jollof rice (Regular)" || sub.Basket[1].LineName() != "Jollof rice (Large)" || sub.TotalKobo != 550000 {
+		t.Fatalf("priced: %+v %v", sub.Basket, err)
 	}
 }

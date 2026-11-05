@@ -65,9 +65,9 @@ func TestSearchTermIsShort(t *testing.T) {
 
 func TestItemDecorate(t *testing.T) {
 	left := int64(3)
-	x := item{Item: storefront.Item{Stock: &left, Gallery: []storefront.Image{{"320": "s", "800": "l"}, {}}}}
+	x := item{Item: storefront.Item{Available: true, Stock: &left, Gallery: []storefront.Image{{"320": "s", "800": "l"}, {}}}}
 	x.decorate()
-	if !x.Few || len(x.Pics) != 1 || x.Pics[0].Small != "s" || x.Pics[0].Large != "l" {
+	if !x.Few || x.Max != 3 || len(x.Pics) != 1 || x.Pics[0].Small != "s" || x.Pics[0].Large != "l" {
 		t.Errorf("decorate: %+v", x)
 	}
 	plenty := int64(50)
@@ -80,14 +80,18 @@ func TestItemDecorate(t *testing.T) {
 
 func TestBagRemoveKeepsTheRest(t *testing.T) {
 	f := formData{Action: "/a/order", Home: "/", Bag: []bagLine{
-		{ID: "1", Qty: 2},
-		{ID: "2", Qty: 1, Hidden: []bagField{{Name: "o.2.0", Value: "1"}}},
+		{ID: "1", Key: "1", Qty: 2},
+		{ID: "2", Key: "2", Qty: 1, Hidden: []bagField{{Name: "o.2.0", Value: "1"}}},
+		{ID: "2", Key: "2~2", Qty: 3, Hidden: []bagField{{Name: "o.2~2.0", Value: "0"}}},
 	}}
-	if got, want := f.removeHref("1"), "/a/order?o.2.0=1&q.2=1&step=bag"; got != want {
+	if got, want := f.removeHref("1"), "/a/order?o.2.0=1&o.2~2.0=0&q.2=1&q.2~2=3&step=bag"; got != want {
 		t.Errorf("removeHref = %q, want %q", got, want)
 	}
+	if got, want := f.removeHref("2~2"), "/a/order?o.2.0=1&q.1=2&q.2=1&step=bag"; got != want {
+		t.Errorf("removing one line of an item keeps its other: %q, want %q", got, want)
+	}
 	f.Bag = f.Bag[:1]
-	if got := f.removeHref("1"); got != "/" {
-		t.Errorf("removing the last line goes home, got %q", got)
+	if got := f.removeHref("1"); got != "/a/order?step=bag" {
+		t.Errorf("removing the last line goes to the empty bag, got %q", got)
 	}
 }

@@ -94,7 +94,28 @@ func reprice(sub Submission, live map[string]Item, opts ActionOptions) (PriceCha
 	if len(pc.Basket) > 0 {
 		pc.TotalKobo += sub.DeliveryKobo
 	}
+	// An order with a deposit keeps one at the new prices: without it, the
+	// customer accepting the change would be asked for the whole total.
+	if sub.DepositKobo > 0 && len(pc.Basket) > 0 {
+		pc.DepositKobo = repricedDeposit(sub, pc.TotalKobo, opts)
+	}
 	return pc, changed
+}
+
+// repricedDeposit is an order's deposit at a new total: the action's
+// percentage when it has one, else the share of the total the order's
+// deposit was, rounded up to whole kobo as Deposit rounds.
+func repricedDeposit(sub Submission, total int64, opts ActionOptions) int64 {
+	if opts.DepositPercent > 0 && opts.DepositPercent < 100 {
+		return opts.OrderDeposit(total)
+	}
+	if sub.TotalKobo <= 0 || sub.DepositKobo >= sub.TotalKobo {
+		return 0
+	}
+	if d := (total*sub.DepositKobo + sub.TotalKobo - 1) / sub.TotalKobo; d >= MinDepositKobo && d < total {
+		return d
+	}
+	return 0
 }
 
 // Items reads rows of the catalogue or services table through the

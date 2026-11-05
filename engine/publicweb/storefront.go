@@ -213,6 +213,9 @@ type item struct {
 	// the full picture; Few is true when only a handful are left.
 	Pics []pic
 	Few  bool
+	// Max is the most one order may take (the stock left, or the cap), for
+	// a card's own quantity.
+	Max int
 }
 
 // pic is one photo of an item's gallery.
@@ -236,7 +239,8 @@ func (x *item) decorate() {
 			x.Pics = append(x.Pics, pic{Small: sm, Large: l})
 		}
 	}
-	x.Few = x.Stock != nil && *x.Stock > 0 && *x.Stock <= fewLeft
+	x.Few = x.Available && x.Stock != nil && *x.Stock > 0 && *x.Stock <= fewLeft
+	x.Max = most(x.Item)
 }
 
 type hoursRow struct {

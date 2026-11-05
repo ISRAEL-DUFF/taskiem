@@ -86,7 +86,7 @@ func (s *Server) serveItem(w http.ResponseWriter, r *http.Request, site Site, fr
 		x.Price = storefront.FormatNaira(*it.PriceKobo)
 	}
 	d := itemData{pageData: pageData{Title: it.Name, Lang: c.Language, Look: s.lookFor(r.Context(), site.Tenant, c.Name)},
-		Business: c.Name, Home: home, It: x, Options: formOptions(it), Max: most(it), Whats: p.Model.WhatsLink, Phone: c.Phone}
+		Business: c.Name, Home: home, It: x, Options: formOptions(it, it.ID), Max: most(it), Whats: p.Model.WhatsLink, Phone: c.Phone}
 	act, hasOrder := findAction(actions, "order")
 	if hasOrder {
 		d.Pickup, d.Delivery, d.DeliveryNote = act.Pickup, act.Delivery, act.DeliveryNote

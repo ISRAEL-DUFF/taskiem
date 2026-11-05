@@ -2,10 +2,11 @@
    the colours come from the theme's own variables (with a fallback where a
    theme names one differently). An item on a list opens its page by its
    name, the whole card being the link. No script is needed for any of it. */
-.item, .row, .tile { position: relative; }
+.item, .row, .tile, .kx-card, .fx-piece, .gx-card { position: relative; }
 .item-open { color: inherit; text-decoration: none; }
 .item-open::after { content: ""; position: absolute; inset: 0; z-index: 0; }
-.item .add, .row .btn, .item .btn, .tile .add { position: relative; z-index: 1; }
+.item .add, .row .btn, .item .btn, .tile .add, .kx-card .add, .kx-buy, .fx-buy, .fx-under, .gx-buy, .gx-add { position: relative; z-index: 1; }
+.kx-buy, .fx-buy { margin: 0; }
 
 /* An item's page. */
 .pdp { display: grid; gap: 1rem; max-width: 56rem; margin: 0 auto; }
