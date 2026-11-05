@@ -459,8 +459,13 @@ actions:
 triggers:
   # Results Prembly sends to the webhook URL set in its dashboard: SDK
   # (widget) verifications, and API checks that finish later (PENDING).
+  # Prembly signs them with the business's public key, the one its widget
+  # is given in the browser, so a signed delivery does not prove Prembly
+  # sent it: a workflow confirms a VERIFIED result with a lookup (the
+  # secret key) before it acts on it (docs/integrations/prembly.md).
   verification:
     type: webhook
+    where: "Prembly dashboard → Settings → Webhook URL. Prembly signs with your public key, which its widget exposes in the browser: confirm a VERIFIED result with a lookup step before acting on it"
     verify: { scheme: hmac_sha256, header: x-prembly-signature, encoding: base64, secret_field: public_key }
     events: [VERIFIED, NOT-VERIFIED, PENDING, UNSPECIFIED]
     event_type: '=body.?verification.?status.orValue("UNSPECIFIED")'

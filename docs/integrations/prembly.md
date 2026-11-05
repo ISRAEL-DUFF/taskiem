@@ -41,7 +41,9 @@ Every action is a read: Prembly bills each check, but none has an effect.
 
 ## Webhooks
 
-Prembly posts SDK (widget) results, and results of checks that were `PENDING`, to the webhook URL in its dashboard; the payload is the same as the API response. One trigger, `verification`, at `/hooks/{tenant}/connectors/prembly@1/verification?env=prod&connection=<name>`. Deliveries are verified as Prembly documents: `x-prembly-signature` is base64 HMAC-SHA256 of the body keyed with the public key. Repeats are dropped on what the signature covers: the verification's `reference` and `status`, or, without a reference, a hash of the body. The `token` header is not used, because the signature does not cover it and a replayed delivery could carry a new one.
+Prembly posts SDK (widget) results, and results of checks that were `PENDING`, to the webhook URL in its dashboard; the payload is the same as the API response. One trigger, `verification`, at `/hooks/{tenant}/connectors/prembly@1/verification?env=prod&connection=<name>`. Deliveries are verified as Prembly documents: `x-prembly-signature` is base64 HMAC-SHA256 of the body keyed with the public key.
+
+**A signed delivery is not proof.** Prembly's widget (SDK) is configured with that same public key in the business's web page, so anyone who reads it there can sign a made-up delivery, `VERIFIED` and correlated on a `user_ref` they chose, and no timestamp limits it. Treat this trigger as a hint that a result is ready: before a workflow approves anyone on `VERIFIED`, it confirms the result with a lookup step (`lookup_bvn`, `lookup_nin`, … with the secret key) on the identity it is about. Taskiem cannot confirm the delivery itself until Prembly documents a lookup of a widget verification by reference (to confirm, 7). Repeats are dropped on what the signature covers: the verification's `reference` and `status`, or, without a reference, a hash of the body. The `token` header is not used, because the signature does not cover it and a replayed delivery could carry a new one.
 
 | Event (`verification.status`) | Correlation |
 | --- | --- |
@@ -55,3 +57,4 @@ Prembly posts SDK (widget) results, and results of checks that were `PENDING`, t
 4. `nin_w_face` documents `number_nin` as an integer; the connector sends it as a JSON number.
 5. Whether the signature covers the raw body (the connector verifies the raw body), and whether a retried delivery repeats the body byte for byte.
 6. Whether the webhook carries the same `verification.reference` the API call returned.
+7. An endpoint that returns a widget or SDK verification by its reference, with the secret key, so the trigger can confirm each delivery before any run sees it; or a webhook signing secret that is not the widget's public key.
