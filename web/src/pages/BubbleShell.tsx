@@ -45,7 +45,6 @@ export function BubbleShell({
   what,
   menu,
   onReply,
-  asResult = false,
   quickReact = false,
   children,
   after,
@@ -70,8 +69,6 @@ export function BubbleShell({
   };
   /** Replying to it (the swipe, and the menu's entry if it has one). */
   onReply?: () => void;
-  /** A search result: it has no menu, the conversation's does the work. */
-  asResult?: boolean;
   /** A smiley beside the bubble on hover, for a quick reaction. */
   quickReact?: boolean;
   children: ReactNode;
@@ -85,8 +82,8 @@ export function BubbleShell({
     setMoreState(v === true ? "full" : v);
   const bubbleEl = useRef<HTMLDivElement>(null);
   const chevron = useRef<HTMLButtonElement>(null);
-  const hasMenu = !!menu && !asResult;
-  const canReply = !!onReply && !asResult;
+  const hasMenu = !!menu;
+  const canReply = !!onReply;
   // Swipe right to reply, and a finger held to open the menu, on a touch
   // screen, as WhatsApp's; the hold is let go by a move or a scroll.
   const drag = useRef<{ x: number; y: number; id: number } | null>(null);
@@ -307,7 +304,7 @@ export function BubbleShell({
           )}
         </div>
       )}
-      {(canReply || hasMenu) && !asResult && (
+      {(canReply || hasMenu) && (
         <button
           type="button"
           className="bubble-chevron"
