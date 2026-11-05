@@ -878,7 +878,7 @@ func (s *Server) acceptInvitation(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if source == "scim" {
-			ch, err := s.scimSync(ctx, tx, tenant, p.UserID)
+			ch, err := s.scimSync(ctx, tx, tenant, p.UserID, nil)
 			if err != nil {
 				return err
 			}
