@@ -124,7 +124,8 @@ func (g *gitlab) Propose(ctx context.Context, branch, title, body string, files 
 }
 
 func (g *gitlab) VerifyPush(h http.Header, body []byte, secret string) (*Push, error) {
-	if subtle.ConstantTimeCompare([]byte(h.Get("X-Gitlab-Token")), []byte(secret)) != 1 {
+	// An empty secret would equal an absent header: it verifies nothing.
+	if secret == "" || subtle.ConstantTimeCompare([]byte(h.Get("X-Gitlab-Token")), []byte(secret)) != 1 {
 		return nil, ErrSignature
 	}
 	if h.Get("X-Gitlab-Event") != "Push Hook" {

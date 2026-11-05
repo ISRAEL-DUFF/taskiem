@@ -490,7 +490,8 @@ func (s *Server) gitHook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	secret, err := s.Vault.Get(secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindGit, Purpose: secrets.PurposeIngestVerify}), tenant, gitVaultEnv, gitHookName(env))
-	if errors.Is(err, secrets.ErrNotFound) {
+	// An empty secret verifies nothing, whichever provider checks it.
+	if errors.Is(err, secrets.ErrNotFound) || (err == nil && secret == "") {
 		deny()
 		return
 	}

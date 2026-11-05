@@ -220,6 +220,10 @@ func (g *github) Propose(ctx context.Context, branch, title, body string, files 
 }
 
 func (g *github) VerifyPush(h http.Header, body []byte, secret string) (*Push, error) {
+	// Anyone can compute an HMAC with an empty key: it verifies nothing.
+	if secret == "" {
+		return nil, ErrSignature
+	}
 	sig := strings.TrimPrefix(h.Get("X-Hub-Signature-256"), "sha256=")
 	want := hmac.New(sha256.New, []byte(secret))
 	want.Write(body)

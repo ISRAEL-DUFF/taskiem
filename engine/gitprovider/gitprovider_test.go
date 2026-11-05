@@ -279,3 +279,28 @@ func keys(m map[string][]byte) []string {
 	}
 	return out
 }
+
+// TestEmptySecretVerifiesNothing: an empty stored secret refuses every
+// delivery, with or without a signature made with an empty key. An HMAC
+// with an empty key, or an empty token compared with an absent header,
+// is something anyone can produce (F56).
+func TestEmptySecretVerifiesNothing(t *testing.T) {
+	for _, h := range hosts(t) {
+		t.Run(h.name, func(t *testing.T) {
+			p, err := gitprovider.New(h.cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			hdr, body := h.push("main", "abc123", "")
+			if push, err := p.VerifyPush(hdr, body, ""); !errors.Is(err, gitprovider.ErrSignature) {
+				t.Errorf("signed with an empty key: %+v %v", push, err)
+			}
+			for _, k := range []string{"X-Hub-Signature-256", "X-Hub-Signature", "X-Gitlab-Token"} {
+				hdr.Del(k)
+			}
+			if push, err := p.VerifyPush(hdr, body, ""); !errors.Is(err, gitprovider.ErrSignature) {
+				t.Errorf("unsigned: %+v %v", push, err)
+			}
+		})
+	}
+}
