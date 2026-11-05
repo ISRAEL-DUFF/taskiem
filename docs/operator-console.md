@@ -42,6 +42,12 @@ Each change asks the browser for the operator's passkey, for that change only: t
 | `ops.publisher.verify`, `ops.publisher.suspend`, `ops.publisher.reinstate` | the publisher's slug |
 | `ops.status.open` | `incident` or `maintenance` |
 | `ops.status.update` | `<incident id>/<new status>` |
+| `ops.storefront.review` | `<review id>/approve` or `/reject` |
+| `ops.storefront.suspend`, `ops.storefront.restore` | the tenant id |
+| `ops.report.dismiss`, `ops.report.action`, `ops.report.contact` | the report id |
+| `ops.agent.add` | the agent's email, in lower case |
+| `ops.agent.suspend`, `ops.agent.reactivate`, `ops.agent.retire` | the agent id |
+| `ops.tenant.suspend`, `ops.tenant.resume` | the tenant id |
 
 An operator signed in with single sign-on who has no passkey can read but not change anything.
 
