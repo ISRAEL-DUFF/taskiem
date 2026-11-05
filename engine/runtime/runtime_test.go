@@ -567,6 +567,42 @@ func TestConnectorCredentialsFromConnections(t *testing.T) {
 	}
 }
 
+// A compensation runs with the connection the step it undoes named: with
+// two accounts for the connector, the refund goes to the one that paid.
+func TestCompensationUsesTheStepsConnection(t *testing.T) {
+	e := rt.New(t)
+	var refundedWith string
+	conn := e.Provider.Connector()
+	conn.Manifest.ID = "twopay"
+	conn.Manifest.Auth.Type = "api_key"
+	conn.Manifest.Auth.Fields = []connector.AuthField{{Key: "secret_key"}}
+	refund := conn.Actions["refund"]
+	conn.Actions["refund"] = connector.ActionFunc(func(c context.Context, r connector.Request) (connector.Response, error) {
+		refundedWith = r.Credentials["secret_key"]
+		return refund.Execute(c, r)
+	})
+	if err := e.Registry.Register(conn); err != nil {
+		t.Fatal(err)
+	}
+	for name, key := range map[string]string{"main": "sk_main", "payroll": "sk_payroll"} {
+		if _, err := e.Vault.CreateConnection(ctx, e.Tenant, "prod", "twopay", name, "api_key", map[string]string{"secret_key": key}, "admin"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	wf := e.Publish(t, wfDoc(`{"id":"pay","type":"connector","connector":"twopay@1","action":"transfer","connection":"payroll",
+	  "input":{"amount":1,"logical_id":"=run.id + ':pay'"},"compensate":{"action":"refund","input":{"reference":"=steps.pay.output.reference"}}},
+	  {"id":"ok","type":"approval","needs":["pay"],"config":{"role":"officer"}}`, ""))
+	ref := e.Start(t, wf, map[string]any{})
+	e.Drain(t)
+	if err := e.Store.CancelRun(ctx, ref, "u1", true); err != nil {
+		t.Fatal(err)
+	}
+	e.Drain(t)
+	if st := e.Status(t, ref); st != "cancelled" || refundedWith != "sk_payroll" {
+		t.Errorf("status %s, refund sent with %q, want the payroll connection: %s", st, refundedWith, types(events(t, e, ref)))
+	}
+}
+
 // A step output over 256 KB is not kept: a read fails saying so, and a
 // write, which has already happened, parks for an operator.
 func TestLargeOutputsAreRefused(t *testing.T) {
