@@ -166,6 +166,11 @@ var (
 	SchedulerItemFailures = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "taskiem_scheduler_item_failures_total", Help: "Timers and swept runs the scheduler could not decide, by kind (timer, run); the rest of the batch goes on and each is retried after a minute.",
 	}, []string{"kind"})
+	// DecisionsContinued counts decisions that ran out of one
+	// transaction's rounds and were left for the sweep to carry on.
+	DecisionsContinued = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "taskiem_decisions_continued_total", Help: "Decisions that ran out of one transaction's rounds (a long chain of steps completing inline) and were carried on by the sweep.",
+	})
 	// TaskPanics counts tasks whose execution panicked: the worker logs
 	// the stack and carries on, and the task's lease expires.
 	TaskPanics = promauto.NewCounter(prometheus.CounterOpts{

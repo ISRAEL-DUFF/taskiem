@@ -103,7 +103,8 @@ const settleStatus = `, status = CASE WHEN runs.status NOT IN ('running', 'waiti
 const liveStatuses = `status IN ('running', 'waiting')`
 
 // maxInlineRounds bounds decide -> effects -> decide loops in one transaction
-// (a buffered signal consumed by a new wait triggers another round).
+// (a buffered signal consumed by a new wait triggers another round). A
+// decision that needs more leaves the rest to the sweep (decideInline).
 const maxInlineRounds = 16
 
 // maxForkRounds bounds the rounds of a forked run, whose replayed outcomes
@@ -604,25 +605,42 @@ func (s *Store) decideInline(ctx context.Context, tx pgx.Tx, ref RunRef) error {
 			}
 		}
 		if len(deferred) == 0 {
-			if scheduled > 0 {
-				return s.countSteps(ctx, tx, run, def, scheduled)
-			}
-			_, err := tx.Exec(ctx, `UPDATE runs SET decided_seq = last_seq, orch_lease_owner = NULL, orch_lease_until = NULL`+settleStatus+` WHERE id = $1`, ref.ID)
-			return err
+			return s.settle(ctx, tx, run, def, scheduled, true)
 		}
 	}
-	return fmt.Errorf("run %s: decision did not settle after %d rounds", ref.ID, rounds)
+	// Not settled within this transaction's rounds (a long chain of steps
+	// that each complete in the next round): keep what is decided, and
+	// leave what the last round appended undecided for the scheduler's
+	// sweep, which carries on in a transaction of its own. Each
+	// transaction stays bounded, and the run is not refused.
+	telemetry.DecisionsContinued.Inc()
+	return s.settle(ctx, tx, run, def, scheduled, false)
 }
+
+// settle ends a decision: it records the steps it scheduled (countSteps)
+// and releases the run. A decision that ran out of rounds (settled false)
+// leaves the run undecided (decided_seq < last_seq), so the sweep claims
+// it; deciding a run with nothing new is a no-op.
+func (s *Store) settle(ctx context.Context, tx pgx.Tx, run runRow, def *wd.Definition, scheduled int, settled bool) error {
+	if scheduled > 0 {
+		return s.countSteps(ctx, tx, run, def, scheduled, settled)
+	}
+	_, err := tx.Exec(ctx, `UPDATE runs SET `+decidedThrough+`, orch_lease_owner = NULL, orch_lease_until = NULL`+settleStatus+` WHERE id = $1`, run.ref.ID, settled)
+	return err
+}
+
+// decidedThrough sets decided_seq for a decision ($2: whether it settled).
+const decidedThrough = `decided_seq = CASE WHEN $2::boolean THEN last_seq ELSE last_seq - 1 END`
 
 // countSteps records a decision's scheduled steps and fails the run when
 // they take it past its tenant's max_steps_per_run (a runaway foreach or
 // retry loop). The failure is appended after decide's batch, as a
 // cancellation is, and ends the run in the same transaction, so no step
 // beyond the cap ever reaches a worker.
-func (s *Store) countSteps(ctx context.Context, tx pgx.Tx, run runRow, def *wd.Definition, scheduled int) error {
+func (s *Store) countSteps(ctx context.Context, tx pgx.Tx, run runRow, def *wd.Definition, scheduled int, settled bool) error {
 	var total int
-	if err := tx.QueryRow(ctx, `UPDATE runs SET decided_seq = last_seq, orch_lease_owner = NULL, orch_lease_until = NULL, steps_scheduled = steps_scheduled + $2`+settleStatus+`
-		WHERE id = $1 RETURNING steps_scheduled`, run.ref.ID, scheduled).Scan(&total); err != nil {
+	if err := tx.QueryRow(ctx, `UPDATE runs SET `+decidedThrough+`, orch_lease_owner = NULL, orch_lease_until = NULL, steps_scheduled = steps_scheduled + $3`+settleStatus+`
+		WHERE id = $1 RETURNING steps_scheduled`, run.ref.ID, settled, scheduled).Scan(&total); err != nil {
 		return err
 	}
 	lim, err := s.limitsTx(ctx, tx, run.ref.TenantID)
