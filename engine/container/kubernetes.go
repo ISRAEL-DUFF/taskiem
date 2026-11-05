@@ -627,7 +627,7 @@ func (k *Kubernetes) Run(ctx context.Context, s Spec) (Result, error) {
 		return Result{Elapsed: elapsed}, unknown("container step timed out")
 	}
 	var log string
-	limit := (s.OutputBytes+LogBytes)*4/3 + 8<<10
+	limit := ResultLineBytes(s.OutputBytes)
 	q := url.Values{"container": {"main"}, "limitBytes": {strconv.Itoa(limit)}}
 	if err := k.do(ctx, http.MethodGet, k.nsPath("pods")+"/"+name+"/log?"+q.Encode(), nil, &log); err != nil {
 		return Result{Elapsed: elapsed}, unknown("reading the container's result: %v", err)

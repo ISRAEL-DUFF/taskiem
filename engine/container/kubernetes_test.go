@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -89,7 +90,11 @@ func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("container") != "main" || r.URL.Query().Get("limitBytes") == "" {
 			f.t.Errorf("log query %s", r.URL.RawQuery)
 		}
-		_, _ = w.Write([]byte(f.log))
+		log := f.log
+		if n, err := strconv.Atoi(r.URL.Query().Get("limitBytes")); err == nil && n < len(log) {
+			log = log[:n] // as the kubelet does
+		}
+		_, _ = w.Write([]byte(log))
 	case r.Method == http.MethodGet && strings.HasPrefix(p, ns+"pods/"):
 		f.gets++
 		st := map[string]any{"phase": "Pending"}
@@ -362,5 +367,30 @@ func TestKubernetesRunningTimeIsReported(t *testing.T) {
 	res, _ := k.Run(ctx, kubeSpec())
 	if took := time.Since(start); res.Elapsed <= 0 || res.Elapsed > took {
 		t.Errorf("skewed clock: reported %s of %s", res.Elapsed, took)
+	}
+}
+
+// TestHTMLOutputFitsTheResultLine: an output within the step's limit is
+// read back whole however it encodes. HTML (escaped by encoding/json by
+// default), line separators and control characters in the logs all grow
+// when encoded, and the runner reads only so many bytes of the log.
+func TestHTMLOutputFitsTheResultLine(t *testing.T) {
+	s := kubeSpec()
+	s.OutputBytes = 262144
+	fill := func(unit string, n int) string { return strings.Repeat(unit, n/len(unit)) }
+	outputs := map[string]string{
+		"html":            `"` + fill("<td>&amp;</td>", s.OutputBytes-2) + `"`,
+		"line separators": `"` + fill(" ", s.OutputBytes-2) + `"`,
+	}
+	for name, out := range outputs {
+		o := Outcome{Output: json.RawMessage(out), Logs: fill("\x01", LogBytes), Error: "", Elapsed: time.Second}
+		line := o.Encode() + "\n"
+		f, k := newFakeAPI(t)
+		f.status = func(int) map[string]any { return terminated(0, "Completed") }
+		f.log = line
+		res, err := k.Run(context.Background(), s)
+		if err != nil || len(res.Output) != len(out) {
+			t.Errorf("%s: output of %d bytes, result line %d: got %d bytes, %v", name, len(out), len(line), len(res.Output), err)
+		}
 	}
 }
