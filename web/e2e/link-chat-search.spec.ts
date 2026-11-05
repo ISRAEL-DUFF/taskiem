@@ -183,15 +183,19 @@ test("the calendar goes to a day: the first message of it or after it, and says 
     pane.getByTestId("chat-message").filter({ hasText: "The first message" }),
   ).not.toBeInViewport();
   await panel.getByRole("button", { name: "Search by date" }).click();
-  await expect(panel.getByTestId("chat-date")).toBeVisible();
+  const cal = panel.getByTestId("chat-calendar");
+  await expect(cal).toBeVisible();
   await axeBoth(buyer, "the search panel with the calendar");
-  // A day before the conversation: its first message.
-  await panel.getByTestId("chat-date").fill("2020-01-01");
+  // A day before the conversation (the month before): its first message.
+  await cal.getByRole("button", { name: "Previous month" }).click();
+  await cal.locator(".dp-day:not(.other):not(:disabled)").first().click();
+  await expect(cal).toHaveCount(0); // chosen: it closes
   const first = pane
     .getByTestId("chat-message")
     .filter({ hasText: "The first message" });
   await expect(first).toBeInViewport();
   await expect(first).toHaveClass(/flash/);
+  await expect(panel.getByTestId("chat-date-open")).toBeFocused();
 
   // A day after all of it: nothing, and it says so.
   await buyer.route(/\/messages\?after=/, (route) =>
@@ -201,7 +205,8 @@ test("the calendar goes to a day: the first message of it or after it, and says 
       body: JSON.stringify({ messages: [] }),
     }),
   );
-  await panel.getByTestId("chat-date").fill("2020-01-02");
+  await panel.getByRole("button", { name: "Search by date" }).click();
+  await panel.getByTestId("chat-calendar").locator(".dp-day.today").click();
   await expect(panel).toContainText("No messages on or after that day.");
 });
 
@@ -238,4 +243,73 @@ test("on a phone it is the whole screen, the rows fit, nothing scrolls sideways,
   await axeBoth(buyer, "the search panel on a phone");
   await panel.getByTestId("chat-result").first().click();
   await expect(panel).toHaveCount(0, { timeout: 10_000 });
+});
+
+test("the calendar is a month with arrows, today filled in, later days dimmed and not to be chosen; keys move through it; Esc closes only it", async ({
+  browser,
+}) => {
+  const { buyer, link } = await linked(browser, {
+    viewport: { width: 1280, height: 800 },
+  });
+  await buyer.goto(`/chat?with=${link}`);
+  const pane = buyer.getByTestId("chat-pane");
+  await pane.getByRole("button", { name: "Search this conversation" }).click();
+  const panel = pane.getByTestId("chat-search-panel");
+  await panel.getByRole("button", { name: "Search by date" }).click();
+  const cal = panel.getByTestId("chat-calendar");
+  const now = new Date();
+  const month = now.toLocaleDateString(undefined, {
+    month: "long",
+    year: "numeric",
+  });
+  await expect(cal.locator(".dp-month")).toHaveText(month);
+  await expect(cal.getByRole("columnheader")).toHaveCount(7);
+  await expect(cal.locator(".dp-day")).toHaveCount(42); // six weeks
+  const today = cal.locator(".dp-day.today");
+  await expect(today).toHaveText(String(now.getDate()));
+  await expect(today).toHaveAttribute("aria-current", "date");
+  await expect(today).toHaveAccessibleName(/\d{4}/); // "Wednesday 4 November 2026"
+  // Today is the day with the focus; days after it cannot be chosen, nor can the month after.
+  await expect(today).toBeFocused();
+  await expect(cal.getByRole("button", { name: "Next month" })).toBeDisabled();
+  const later = cal.locator(".dp-day:disabled");
+  expect(await later.count()).toBeGreaterThan(0);
+  const tb = must(await today.boundingBox());
+  expect(Math.round(tb.width)).toBe(Math.round(tb.height)); // round
+
+  // Keys: left a day, up a week, Page Up a month back (the arrows then allow the month after).
+  await buyer.keyboard.press("ArrowLeft");
+  await expect(cal.locator('.dp-day[tabindex="0"]')).toHaveAccessibleName(
+    /\d{4}/,
+  );
+  await buyer.keyboard.press("ArrowUp");
+  await buyer.keyboard.press("PageUp");
+  await expect(cal.locator(".dp-month")).not.toHaveText(month);
+  await expect(cal.getByRole("button", { name: "Next month" })).toBeEnabled();
+  await cal.getByRole("button", { name: "Next month" }).click(); // Sep 28 -> Oct 28
+  await cal.getByRole("button", { name: "Next month" }).click(); // -> today's month
+  await expect(cal.locator(".dp-month")).toHaveText(month);
+
+  // A click elsewhere and Esc close the calendar only.
+  await buyer.keyboard.press("Escape");
+  await expect(cal).toHaveCount(0);
+  await expect(panel).toBeVisible();
+  await expect(panel.getByTestId("chat-date-open")).toBeFocused();
+  await panel.getByRole("button", { name: "Search by date" }).click();
+  await panel.getByRole("heading", { name: "Search messages" }).click();
+  await expect(cal).toHaveCount(0);
+  await expect(panel).toBeVisible();
+
+  // On a phone it fits the screen.
+  await buyer.setViewportSize({ width: 360, height: 740 });
+  await panel.getByRole("button", { name: "Search by date" }).click();
+  const r = must(await cal.boundingBox());
+  expect(r.x).toBeGreaterThanOrEqual(0);
+  expect(r.x + r.width).toBeLessThanOrEqual(360);
+  expect(
+    await buyer.evaluate(
+      () => document.documentElement.scrollWidth > window.innerWidth + 1,
+    ),
+  ).toBe(false);
+  await axeBoth(buyer, "the calendar on a phone");
 });

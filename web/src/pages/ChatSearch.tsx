@@ -4,6 +4,7 @@ import { Icon } from "../icons";
 import { listTime, previewLine, type LinkMessage } from "../lib/linkchat";
 import { around, highlight } from "../lib/snippet";
 import { ErrorBox } from "../ui";
+import { DayPicker } from "./DayPicker";
 
 /**
  * Search in a conversation, as WhatsApp's: a panel beside the thread (the
@@ -34,6 +35,11 @@ export function ChatSearchPanel({
   const [dateOpen, setDateOpen] = useState(false);
   const [note, setNote] = useState("");
   const list = useRef<HTMLUListElement>(null);
+  const dateButton = useRef<HTMLButtonElement>(null);
+  const closeDate = () => {
+    setDateOpen(false);
+    requestAnimationFrame(() => dateButton.current?.focus());
+  };
   const query = q.trim();
   // Searched a moment after the typing stops; an older answer never replaces a newer.
   useEffect(() => {
@@ -56,20 +62,28 @@ export function ChatSearchPanel({
       clearTimeout(t);
     };
   }, [query, path]);
-  // Esc closes the panel (the chat stays).
+  // Esc closes the calendar if it is open, else the panel (the chat stays); a
+  // click elsewhere closes the calendar.
   useEffect(() => {
     const esc = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || e.defaultPrevented) return;
       e.preventDefault();
-      onClose();
+      if (dateOpen) closeDate();
+      else onClose();
+    };
+    const away = (e: MouseEvent) => {
+      if (dateOpen && !(e.target as Element).closest?.(".chat-date-anchor"))
+        setDateOpen(false);
     };
     document.addEventListener("keydown", esc);
-    return () => document.removeEventListener("keydown", esc);
-  }, [onClose]);
+    document.addEventListener("mousedown", away);
+    return () => {
+      document.removeEventListener("keydown", esc);
+      document.removeEventListener("mousedown", away);
+    };
+  }, [onClose, dateOpen]);
   const rows = () =>
     Array.from(list.current?.querySelectorAll<HTMLElement>("button") ?? []);
-  const today = new Date();
-  const max = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   return (
     <aside
       className="chat-info chat-search"
@@ -88,19 +102,34 @@ export function ChatSearchPanel({
         <h3>Search messages</h3>
       </div>
       <div className="chat-search-row" role="search">
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="Search by date"
-          aria-expanded={dateOpen}
-          data-testid="chat-date-open"
-          onClick={() => {
-            setDateOpen(!dateOpen);
-            setNote("");
-          }}
-        >
-          <Icon name="calendar" />
-        </button>
+        <div className="chat-date-anchor">
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="Search by date"
+            aria-expanded={dateOpen}
+            data-testid="chat-date-open"
+            ref={dateButton}
+            onClick={() => {
+              setDateOpen(!dateOpen);
+              setNote("");
+            }}
+          >
+            <Icon name="calendar" />
+          </button>
+          {dateOpen && (
+            <DayPicker
+              onClose={closeDate}
+              onPick={(day) => {
+                closeDate();
+                onDate(day).then(
+                  (ok) => !ok && setNote("No messages on or after that day."),
+                  (err: unknown) => setError(err),
+                );
+              }}
+            />
+          )}
+        </div>
         <label className="search">
           <span className="sr-only">Search messages in {name}</span>
           <Icon name="search" />
@@ -120,31 +149,10 @@ export function ChatSearchPanel({
           />
         </label>
       </div>
-      {dateOpen && (
-        <div className="chat-date-row">
-          <label>
-            <span>Go to a day</span>
-            <input
-              type="date"
-              max={max}
-              data-testid="chat-date"
-              onChange={(e) => {
-                const day = e.target.value;
-                if (!day) return;
-                setNote("");
-                onDate(day).then(
-                  (ok) => !ok && setNote("No messages on or after that day."),
-                  (err: unknown) => setError(err),
-                );
-              }}
-            />
-          </label>
-          {note && (
-            <p className="hint" role="status">
-              {note}
-            </p>
-          )}
-        </div>
+      {note && (
+        <p className="hint chat-date-note" role="status">
+          {note}
+        </p>
       )}
       <ErrorBox error={error} />
       <div className="chat-search-body">
