@@ -94,7 +94,7 @@ taskiem_chat_signup_put(bytea,text,text,jsonb,interval)	@ISRAEL-DUFF (onboarding
 taskiem_chat_signup_take(bytea)	@ISRAEL-DUFF (messaging)	Claims a chat sign-up's record once, to make its business (00272)
 taskiem_claim_due_schedules(integer,integer,interval)	@ISRAEL-DUFF (engine)	part of: A suspended tenant (a partner's suspended sub-tenant, or any tenant an operator suspends) does no new work (docs/embedding.md, docs/governance.md) (00088)
 taskiem_claim_due_timers(text,integer,interval)	@ISRAEL-DUFF (engine)	Scheduler (00006)
-taskiem_claim_git_syncs(integer,interval)	@ISRAEL-DUFF (engine)	part of: Git integration (spec 10.3) (00015)
+taskiem_claim_git_syncs(integer,interval)	@ISRAEL-DUFF (engine)	Leases queued Git syncs, and those whose lease lapsed, across tenants: answers sync and tenant ids and the lease, which fences the sync's deploy and outcome (00352)
 taskiem_claim_purgeable_runs(integer)	@ISRAEL-DUFF (engine)	claims ended runs past retention for the purge, across tenants: returns ids only, and leases each for ten minutes (purge_after) so concurrent schedulers split the work (00009, 00256)
 taskiem_claim_runs_to_orchestrate(text,integer,interval)	@ISRAEL-DUFF (engine)	Orchestrators (00006)
 taskiem_claim_tasks(text,text,integer,interval,integer)	@ISRAEL-DUFF (engine)	part of: Reliability (Phase 4, P4-4; decision 0023) (00122)
