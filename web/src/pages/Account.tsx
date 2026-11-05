@@ -375,7 +375,13 @@ function Telegram() {
             className="danger"
             disabled={act.busy}
             onClick={() =>
-              confirm("Unlink Telegram?") &&
+              confirm(
+                /^owner\+.*@telegram\.taskiem\.invalid$/.test(
+                  me?.user?.email ?? "",
+                )
+                  ? "Unlink Telegram? Your account was made in a chat: its sign-in name comes from this Telegram account and is released with it. Add your email first, so you can still sign in."
+                  : "Unlink Telegram?",
+              ) &&
               void act.run(
                 async () => (
                   await del("/v1/me/telegram"),
@@ -574,7 +580,13 @@ function WhatsApp() {
             className="danger"
             disabled={act.busy}
             onClick={() =>
-              confirm("Unlink this number?") &&
+              confirm(
+                /^owner\+.*@phone\.taskiem\.invalid$/.test(
+                  me?.user?.email ?? "",
+                )
+                  ? "Unlink this number? Your account was made in a chat: its sign-in name comes from this number and is released with it. Add your email first, so you can still sign in."
+                  : "Unlink this number?",
+              ) &&
               void act.run(
                 async () => (await del("/v1/me/whatsapp"), b.reload()),
                 "WhatsApp unlinked",
