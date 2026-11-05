@@ -214,7 +214,14 @@ func (s *Server) keepHistory(ctx context.Context, tenant, user uuid.UUID, channe
 		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM memberships WHERE tenant_id = $1 AND user_id = $2)`, tenant, user).Scan(&member); err != nil || !member {
 			return err
 		}
-		env, err := s.Store.PII.SealTx(ctx, tx, tenant, "other", text)
+		// Sealed under the member's own subject (one key per member, not
+		// one per message), and under anyone it names that can be found.
+		owner, err := s.Store.PII.SealTx(ctx, tx, tenant, "member", user.String())
+		if err != nil {
+			return err
+		}
+		subject, _ := owner["subject"].(string)
+		env, err := pii.SealText(ctx, s.Store.PII, tx, tenant, subject, "other", text)
 		if err != nil {
 			return err
 		}
@@ -234,6 +241,23 @@ func (s *Server) keepHistory(ctx context.Context, tenant, user uuid.UUID, channe
 		return uuid.Nil
 	}
 	return id
+}
+
+// openText opens a kept message: sealed under its member and under each
+// person it names, one envelope inside another (pii.SealText).
+func openText(ctx context.Context, c pii.Cipher, tx pgx.Tx, tenant uuid.UUID, env map[string]any) (any, error) {
+	var v any = env
+	for range 16 {
+		e, ok := v.(map[string]any)
+		if !ok || !pii.IsEnvelope(e) {
+			return v, nil
+		}
+		var err error
+		if v, err = c.OpenTx(ctx, tx, tenant, e); err != nil {
+			return nil, err
+		}
+	}
+	return nil, errors.New("chat history: a message sealed too deep")
 }
 
 // recordSent keeps a message a channel sent to a member: in the business
@@ -616,7 +640,7 @@ func (s *Server) taskiemHistory(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		for _, x := range got {
-			v, err := s.Store.PII.OpenTx(r.Context(), tx, p.TenantID, x.env)
+			v, err := openText(r.Context(), s.Store.PII, tx, p.TenantID, x.env)
 			switch {
 			case errors.Is(err, pii.ErrErased):
 				x.m.Text = pii.Erased
@@ -666,7 +690,7 @@ func (s *Server) taskiemSince(ctx context.Context, tx pgx.Tx, p *Principal, sinc
 	}
 	out := make([]TaskiemMessage, 0, len(got))
 	for _, x := range got {
-		v, err := s.Store.PII.OpenTx(ctx, tx, p.TenantID, x.env)
+		v, err := openText(ctx, s.Store.PII, tx, p.TenantID, x.env)
 		switch {
 		case errors.Is(err, pii.ErrErased):
 			x.m.Text = pii.Erased

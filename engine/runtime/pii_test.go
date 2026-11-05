@@ -372,3 +372,59 @@ func TestDerivedPIIIsSealedAndErased(t *testing.T) {
 		t.Errorf("after erasing the BVN: %v", o)
 	}
 }
+
+// Free text in a declared field (an email's body, a note) that names a
+// known person is sealed under that person too, and so are its copies:
+// erasing the person erases it (docs/privacy.md).
+func TestDeclaredTextNamingAPersonIsErasedWithThem(t *testing.T) {
+	e := rt.New(t)
+	wf := e.Publish(t, `{"schema":"wd/v1","id":"wf_t","version":1,"name":"t","trigger":{"type":"manual"},
+  "inputs":{"schema":{"type":"object","properties":{"email":{"type":"string","x-pii":"email"},"note":{"type":"string","x-pii":"other"},
+    "other":{"type":"string","x-pii":"other"}}}},
+  "steps":[{"id":"copy","type":"transform","config":{"output":{"note":"=trigger.body.note","other":"=trigger.body.other"}}}]}`)
+	const email = "ada@example.com"
+	note := "I am Ada Obi, write to me at " + email
+	ref := e.Start(t, wf, map[string]any{"body": map[string]any{"email": email, "note": note, "other": "nothing personal in here"}})
+	e.Drain(t)
+	opened := func() (map[string]any, map[string]any) {
+		t.Helper()
+		evs, err := e.Store.OpenedHistory(ctx, ref)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var in, out map[string]any
+		for _, ev := range evs {
+			switch {
+			case ev.Type == history.RunStarted:
+				var p history.RunStartedPayload
+				if err := json.Unmarshal(ev.Payload, &p); err != nil {
+					t.Fatal(err)
+				}
+				tr, _ := p.Trigger.(map[string]any)
+				in, _ = tr["body"].(map[string]any)
+			case ev.Type == history.StepCompleted && ev.StepID == "copy":
+				var c history.CompletedPayload
+				if err := json.Unmarshal(ev.Payload, &c); err != nil {
+					t.Fatal(err)
+				}
+				out = c.Output.(map[string]any)
+			}
+		}
+		return in, out
+	}
+	in, out := opened()
+	if in["note"] != note || out["note"] != note || out["other"] != "nothing personal in here" {
+		t.Fatalf("before: %v %v", in, out)
+	}
+	subject, err := e.Vault.SubjectFor(ctx, e.Tenant, "email", email)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Vault.Erase(ctx, e.Tenant, subject, "dpo"); err != nil {
+		t.Fatal(err)
+	}
+	in, out = opened()
+	if in["note"] != pii.Erased || out["note"] != pii.Erased || out["other"] != "nothing personal in here" {
+		t.Errorf("after erasing the email: %v %v", in, out)
+	}
+}

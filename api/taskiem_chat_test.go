@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/engine/voice"
 )
@@ -25,6 +27,15 @@ func (c *client) taskiemFile(t *testing.T, name string, data []byte, text string
 	}
 	_ = mw.Close()
 	return c.rawPost(t, "/v1/taskiem-chat/files", mw.FormDataContentType(), b.Bytes())
+}
+
+func uuidOf(t *testing.T, s string) uuid.UUID {
+	t.Helper()
+	id, err := uuid.Parse(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
 }
 
 func jsonText(v any) string {
@@ -153,6 +164,70 @@ func TestTaskiemConversation(t *testing.T) {
 	var left int
 	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM chat_history`).Scan(&left); err != nil || left != 0 {
 		t.Errorf("purged: %d %v", left, err)
+	}
+}
+
+// The Taskiem conversation is kept under its member's own subject: one key
+// for all their messages (not one per message, which grew subject_keys
+// without bound), and erasing the member erases it; a customer's phone
+// typed in it is erased with that customer too.
+func TestTaskiemHistoryIsTheMembers(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	owner := w.tenant(t, "Ada's Kitchen", "ada@keys.test")
+	keys := func() int {
+		t.Helper()
+		var n int
+		if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM subject_keys`).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	owner.must(200, "POST", "/v1/taskiem-chat", map[string]any{"text": "hello"})
+	before := keys()
+	for _, m := range []string{"what can you do", "help", "status", "thanks a lot"} {
+		owner.must(200, "POST", "/v1/taskiem-chat", map[string]any{"text": m})
+	}
+	if after := keys(); after != before {
+		t.Errorf("subject keys grew with the messages: %d to %d", before, after)
+	}
+	owner.must(200, "POST", "/v1/taskiem-chat", map[string]any{"text": "call Bola on 08031234567 about it"})
+	var tenant, user string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT tenant_id::text, user_id::text FROM chat_history LIMIT 1`).Scan(&tenant, &user); err != nil {
+		t.Fatal(err)
+	}
+	texts := func() []string {
+		t.Helper()
+		var out []string
+		for _, m := range owner.must(200, "GET", "/v1/taskiem-chat", nil)["messages"].([]any) {
+			if m.(map[string]any)["inbound"] == true {
+				out = append(out, m.(map[string]any)["text"].(string))
+			}
+		}
+		return out
+	}
+	if got := texts(); len(got) != 6 || got[5] != "call Bola on 08031234567 about it" {
+		t.Fatalf("history: %v", got)
+	}
+	erase := func(category, value string) {
+		t.Helper()
+		subj, err := w.env.Vault.SubjectFor(ctx, uuidOf(t, tenant), category, value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := w.env.Vault.Erase(ctx, uuidOf(t, tenant), subj, "user:test"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	erase("phone", "08031234567")
+	if got := texts(); got[0] != "hello" || got[5] != "[erased]" {
+		t.Fatalf("after erasing the customer: %v", got)
+	}
+	erase("member", user)
+	for _, x := range texts() {
+		if x != "[erased]" {
+			t.Fatalf("after erasing the member: %v", texts())
+		}
 	}
 }
 

@@ -5,12 +5,15 @@
 package pii
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -179,6 +182,11 @@ func Seal(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v any, pat
 		return v, nil
 	}
 	v = deepCopy(v)
+	// Free text last, so the people it may name are known (taint) by then.
+	paths = slices.Clone(paths)
+	slices.SortStableFunc(paths, func(a, b Path) int {
+		return cmp.Compare(boolInt(a.Category == "other"), boolInt(b.Category == "other"))
+	})
 	for _, p := range paths {
 		var err error
 		v, err = sealAt(ctx, c, tx, tenant, v, p.Segments, p.Category, taint)
@@ -211,8 +219,7 @@ func sealAt(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v any, s
 		if _, ok := scalarKey(v); !ok {
 			return v, nil // only scalars are sealed; objects keep their shape
 		}
-		taint.Add(v, cat)
-		return c.SealTx(ctx, tx, tenant, cat, v)
+		return sealScalar(ctx, c, tx, tenant, v, cat, taint)
 	}
 	switch t := v.(type) {
 	case map[string]any:
@@ -266,13 +273,78 @@ func sealTainted(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v a
 	}
 	if k, ok := scalarKey(v); ok {
 		if cat, hit := taint[k]; hit {
-			return c.SealTx(ctx, tx, tenant, cat, v)
+			return sealScalar(ctx, c, tx, tenant, v, cat, taint)
 		}
 	}
 	if str, ok := v.(string); ok {
 		return sealDerived(ctx, c, tx, tenant, str, taint)
 	}
 	return v, nil
+}
+
+// sealScalar seals a declared (or copied) value under its own subject,
+// and, when it is text naming other known people (an email's body with
+// its sender's address), under each of them too, as sealDerived does: so
+// erasing any of them erases it, and the text is not left under a subject
+// derived from itself that nobody can name.
+func sealScalar(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v any, cat string, taint Taint) (any, error) {
+	if str, ok := v.(string); ok && cat == "other" {
+		// Free text's own subject would be one nobody can name: text that
+		// names known people is sealed under them alone.
+		d, err := sealDerived(ctx, c, tx, tenant, str, taint)
+		if err != nil {
+			return nil, err
+		}
+		if d, ok := d.(map[string]any); ok {
+			taint.Add(v, cat)
+			return d, nil
+		}
+		if d == Erased {
+			return d, nil
+		}
+	}
+	env, err := c.SealTx(ctx, tx, tenant, cat, v)
+	if err != nil {
+		return nil, err
+	}
+	str, ok := v.(string)
+	taint.Add(v, cat)
+	if !ok {
+		return env, nil
+	}
+	own, _ := env["subject"].(string)
+	return nestUnder(ctx, c, tx, tenant, str, env, own, taint)
+}
+
+// SealText seals free text under subject, the person it belongs to (the
+// member who wrote or was sent a message), and under the subject of each
+// personal value found in it word by word (a phone number, an email, a
+// BVN), so erasing its owner or anyone it names erases it. One owner is
+// one subject key, however many texts they have.
+func SealText(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, subject, category, text string) (any, error) {
+	ss, ok := c.(SubjectSealer)
+	if !ok {
+		return nil, errors.New("pii: this cipher cannot seal under a subject")
+	}
+	env, err := ss.SealUnderTx(ctx, tx, tenant, subject, category, text)
+	if err != nil {
+		return nil, err
+	}
+	taint := Taint{}
+	for _, w := range strings.FieldsFunc(text, func(r rune) bool { return unicode.IsSpace(r) || strings.ContainsRune(",;!?()[]<>\"'", r) }) {
+		w = strings.TrimRight(w, ".:")
+		if cat, ok := Classify("", w, nil); ok {
+			taint.Add(w, cat)
+		}
+	}
+	return nestUnder(ctx, c, tx, tenant, text, env, subject, taint)
+}
+
+func boolInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 // SubjectSealer seals under the subject of another value, so that erasing
@@ -289,9 +361,16 @@ type SubjectSealer interface {
 // envelope inside another, so erasing any of those people erases it.
 // Values shorter than MinRedact are not looked for, as in RedactText.
 func sealDerived(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, s string, taint Taint) (any, error) {
+	return nestUnder(ctx, c, tx, tenant, s, s, "", taint)
+}
+
+// nestUnder seals out under the subject of each known value s contains
+// (but the subject skip, out's own), longest first, one envelope inside
+// another; out is returned as it is when s contains none.
+func nestUnder(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, s string, out any, skip string, taint Taint) (any, error) {
 	ss, ok := c.(SubjectSealer)
 	if !ok || len(taint) == 0 {
-		return s, nil
+		return out, nil
 	}
 	type hit struct {
 		value any
@@ -315,7 +394,7 @@ func sealDerived(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, s s
 		hits = append(hits, hit{value, text, cat})
 	}
 	if len(hits) == 0 {
-		return s, nil
+		return out, nil
 	}
 	sort.Slice(hits, func(i, j int) bool {
 		if len(hits[i].text) != len(hits[j].text) {
@@ -323,8 +402,7 @@ func sealDerived(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, s s
 		}
 		return hits[i].text < hits[j].text
 	})
-	var out any = s
-	seen := map[string]bool{}
+	seen := map[string]bool{skip: true}
 	for _, h := range hits {
 		subject, err := ss.SubjectForTx(ctx, tx, tenant, h.cat, h.value)
 		if err != nil {
