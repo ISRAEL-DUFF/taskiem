@@ -10,19 +10,19 @@ everything. A business's pages open with a bar: back, logo, name. */}}
 {{define "mark"}}{{with .Brand.Logo}}<img class="mark" src="{{.}}" alt="" width="36" height="36">{{else}}<span class="mark" aria-hidden="true">{{.Brand.Initials}}</span>{{end}}{{end}}
 
 {{define "fbody"}}</head>
-<body>
-<header class="bar">
-{{with .Home}}<a class="bar-back" href="{{.}}" aria-label="Back to {{$.Business}}">{{template "i-back"}}</a>{{end}}
-{{template "mark" .}}
-<span class="bar-name">{{with .Home}}<a class="sf-back" href="{{.}}">{{$.Business}}</a>{{else}}{{.Business}}{{end}}</span>
-</header>
-<main class="page">
+<body class="kx kx-page">
+<div class="kx-top">
+  <a class="kx-name" href="{{with .Home}}{{.}}{{else}}#{{end}}">{{.Business}}</a>
+  {{with .Home}}<a class="kx-bag" href="{{.}}">{{template "i-back"}}<span>Menu</span></a>{{end}}
+</div>
+<main class="page kx-narrow">
 {{end}}
 
 {{define "ffoot"}}</main>
-<footer class="foot">
+<footer class="foot sf-foot">
+<p class="sf-foot-name">{{.Business}}</p>
+<p class="sf-foot-meta">Powered by Taskiem</p>
 <p class="safety">{{template "safety"}}</p>
-<p>Powered by Taskiem</p>
 </footer>
 </body>
 </html>

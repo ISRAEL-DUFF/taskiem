@@ -10,21 +10,22 @@ like a masthead. */}}
 {{end}}
 
 {{define "fbody"}}</head>
-<body>
-<header class="mast">
-{{with .Home}}<a class="mast-back" href="{{.}}">← Back</a>{{else}}<span class="mast-back"></span>{{end}}
-{{with .Home}}<a class="sf-back mast-name" href="{{.}}">{{$.Business}}</a>{{else}}<span class="mast-name">{{.Business}}</span>{{end}}
-<span class="mast-back"></span>
+<body class="fx fx-page">
+<header class="fx-top">
+  {{with .Home}}<a class="fx-link" href="{{.}}">Shop</a>{{else}}<span></span>{{end}}
+  <a class="fx-name" href="{{with .Home}}{{.}}{{else}}#{{end}}">{{.Business}}</a>
+  <span></span>
 </header>
-<main class="page">
+<main class="page fx-narrow">
 {{end}}
 
 {{define "kicker"}}<p class="kicker">{{.}}</p>{{end}}
 
 {{define "ffoot"}}</main>
-<footer class="foot">
+<footer class="foot sf-foot">
+<p class="sf-foot-name">{{.Business}}</p>
+<p class="sf-foot-meta">Powered by Taskiem</p>
 <p class="safety">{{template "safety"}}</p>
-<p>Powered by Taskiem</p>
 </footer>
 </body>
 </html>
