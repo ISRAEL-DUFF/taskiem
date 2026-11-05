@@ -1654,9 +1654,11 @@ paths:
       description: With the business's next number. Give amount_kobo (one line) or lines. Send it with /send.
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: Idempotency-Key
         in: header
@@ -1725,9 +1727,11 @@ paths:
       description: 'Only a draft can be changed (409 otherwise): void a sent invoice and send another.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path
@@ -1759,9 +1763,11 @@ paths:
       description: By SMS and email with its page's link, and marks it sent. Sending again resends the same link. A void or paid invoice is not sent (409).
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path
@@ -1793,9 +1799,11 @@ paths:
       description: With the reason. A paid invoice cannot be voided (409). A void invoice takes no new payment.
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path
@@ -1832,9 +1840,11 @@ paths:
       description: 'A recorded change with a reason, added as a line of its own: a line added (add, with description and amount_kobo, optionally pass_through_for), an earlier item taken out (remove, with line, its position from 0) or a discount (discount, with amount_kobo; never of money collected for others). The total and status follow from the lines and the payments counted: the total never goes below what was paid (409), and a paid invoice whose total rises is part-paid again. A draft is changed instead (409). Where the Schools area is on, a discount at or above the school''s discount threshold waits for a second person instead: 202 with code needs_approval and the request recorded; the invoice is amended when someone with school.approve approves it. Audited.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path
@@ -1893,9 +1903,11 @@ paths:
       description: For a payment matched to the wrong invoice. Both the payment and its undoing stay in the invoice's history.
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path
@@ -2005,9 +2017,11 @@ paths:
       description: "With no body, what is left of the payment (all of it, unless part of it counts elsewhere) counts towards the invoice or storefront order; the payment's other suggestions close, and the payer is remembered for the invoice's customer. With parts, the payment is split: each part counts towards its invoice or order (the suggested one among them, or not), never more in all than is left of the payment; credit_rest leaves what the parts do not count as the customer's credit (every part must then be for one customer's invoices), else it waits in To match. split: true splits it as the suggestion's split offers (the customer's open invoices oldest first, the rest as their credit). Undo each part as any payment of its invoice, or with /v1/money/order-payments/{id}/undo (docs/matching.md#split-payments). Where the business runs Schools with a cash threshold, money a person entered (cash, or a statement line uploaded) counted towards an invoice when it is at or above the threshold is recorded for a second person instead (202, code needs_approval, with the request, kind cash_match): nothing is counted until someone with school.approve who is not the requester approves it."
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path
@@ -2055,9 +2069,11 @@ paths:
       description: "It is not offered again."
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path
@@ -2089,9 +2105,11 @@ paths:
       description: "For money in that no suggestion fits. {id} is the money log entry. Give invoice or order, not both, and what is left of the payment counts towards it (a void invoice takes no new payment: 409); or give parts to split the payment across invoices and orders (credit_rest leaves the rest as the customer's credit). The parts of a payment never add up to more than it; an order takes one payment of at least what is due. The payer is remembered for the invoices' customers. Where the business runs Schools with a cash threshold, money a person entered (cash, or a statement line uploaded) counted towards an invoice when it is at or above the threshold is recorded for a second person instead (202, code needs_approval, with the request, kind cash_match): nothing is counted until someone with school.approve who is not the requester approves it."
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path
@@ -2147,9 +2165,11 @@ paths:
       description: "The payment stays, and a row naming it takes it out; the money goes back to be matched. When that payment paid the order, the order goes back to unpaid. Refused (409) when the order went on: its workflow was started or told it was paid, it was paid through its checkout page, or it has been decided since (docs/matching.md)."
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path
@@ -2175,9 +2195,11 @@ paths:
       description: "A payer remembered for a customer (GET /v1/invoices/{id}/customer) is forgotten: their next payment is suggested as anyone's would be (docs/matching.md#payer-memory). Audited."
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path
@@ -2280,9 +2302,11 @@ paths:
       description: "Links a customer's permanent account (a virtual_account issued for them on a connection) to the customer, so money paid into it is matched exactly to their oldest open invoice, then the next, the rest kept as their credit (docs/matching.md#customers-own-account-numbers). The customer is as their invoices have them: by key when given, else by phone, else email. The same account for the same customer again returns it; an account already another customer's, or registered with another number or reference, is refused (409)."
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       requestBody:
         required: true
         content:
@@ -2348,9 +2372,11 @@ paths:
       description: "Gives the invoice's customer a permanent account number: issued on a connection that can (issue true; GET /v1/customer-accounts/issuers lists them), or the one the business already has for them (account_number and reference), registered as POST /v1/customer-accounts does. The customer is the invoice's, so no details travel. The same customer and connection again answers the account already issued; a connection that cannot issue, or a payment service's refusal, is 400 or 409 with the reason. Money paid into the account is matched to the customer's oldest open invoice, then the next, the rest kept as their credit (docs/matching.md#customers-own-account-numbers). Audited."
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path
@@ -2453,9 +2479,11 @@ paths:
       description: "member null gives it to no one."
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path
@@ -2493,9 +2521,11 @@ paths:
       description: "As recovered (with the amount got back), written_off or not_a_leak."
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path
@@ -2564,9 +2594,11 @@ paths:
       description: "Percent in basis points of the amount, plus a flat fee, up to a cap."
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       requestBody:
         required: true
         content:
@@ -2624,9 +2656,11 @@ paths:
       description: "A CSV in the common format (date, description, amount, and optionally reference and balance), or with its columns matched to it. A file with any line Taskiem cannot read adds nothing and answers 422 with the lines and why. Lines already in the log are skipped."
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       requestBody:
         required: true
         content:
@@ -2703,9 +2737,11 @@ paths:
       description: "same with entry_id records the line as the bank's confirmation of that transfer (counted once, never matched again); different records it as money of its own, which matching then looks at."
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path
@@ -2755,9 +2791,11 @@ paths:
       description: "Once per Idempotency-Key. An expense is money out; cash goes in or out."
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       requestBody:
         required: true
         content:
@@ -5752,6 +5790,7 @@ paths:
       description: 'Name a business a search listed, or send blind to whoever uses a phone number (an owner''s linked number or a business''s own WhatsApp number) or a storefront address. A blind request answers 202 with the same words whether or not a business is behind it. At most 20 requests a day (409).'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: link.manage
@@ -5888,6 +5927,7 @@ paths:
       description: 'As the side allowed to: accept and decline a request made to us; block a request or a link (a block is never told); unblock; cancel a request we made; end a link. Audited in both businesses where the other side may know of it. 409 when the link is not in a state for that answer.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: link.manage
@@ -5925,6 +5965,7 @@ paths:
       description: A request that reached a business stays with it until answered or expired; we cannot know whether it did.
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: link.manage
@@ -6020,6 +6061,7 @@ paths:
       description: The payments account bills are paid from (Taskiem's own wallet when left out) and who approves, written into a managed workflow made from the pay-linked-bill template, under the business's governance.
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
@@ -6070,6 +6112,7 @@ paths:
       description: 'A payout to the account the supplier issued the business, through the managed workflow: the name on the account found, approved under the business''s policy, paid once carrying the bill''s token (its reference and a short code), which the supplier''s Taskiem reads to count it towards the invoice. The supplier''s bank is found by name among the banks the payments account pays; with no single match it is refused (409). The bill is paying until the bank confirms or refuses, or the payment is rejected. What the bank confirmed sent and the supplier has not counted yet is not due again: with nothing else left, Pay is refused (409), to confirm the payment was for this bill instead.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
@@ -6118,6 +6161,7 @@ paths:
       description: The business's own word, kept beside what the supplier counted (declared_paid_kobo), never in paid_kobo; the supplier is told.
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
@@ -6164,6 +6208,7 @@ paths:
       description: 'The bill is queried: not paid from Taskiem until the query is settled, and the supplier''s invoice is passed over by its oldest-first matching (money that names it still pays it). The supplier is told the reason.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
@@ -6204,6 +6249,7 @@ paths:
       description: As it stands, or with an amount taken off (an amendment of the invoice, which its bill follows); the invoice is matched oldest-first again and the buyer's bill is no longer queried; the buyer is told, and both conversations show it. 409 when it is not queried.
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
@@ -6291,6 +6337,7 @@ paths:
       description: It reaches them as a purchase order to us waiting for their Confirm, and goes no further until then. 409 when they have not marked us as their supplier on Taskiem.
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: storefront.manage
@@ -6387,6 +6434,7 @@ paths:
       description: Remembered for the link's next orders; the line takes our price. 409 once the order is no longer new.
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: storefront.manage
@@ -6437,6 +6485,7 @@ paths:
       description: 'accept, decline, change (with lines), ready, dispatched, delivered (with what was delivered), cancel (our own, or yes to the buyer''s request), keep (no to the buyer''s request to cancel), or agree (the buyer''s count of a short delivery). The buyer''s purchase order follows in the same transaction, and the buyer is told. An invoice to the buyer is raised at acceptance or once the delivery is received, as set for the link (PUT /v1/links/{id}/trade), and becomes its bill. 409 when the order''s status does not allow the step.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: storefront.manage
@@ -6543,6 +6592,7 @@ paths:
       description: When their invoice is raised, at acceptance or once the delivery is received (the default), and whether they are accepted by themselves when they arrive priced (off by default). A PUT changes only what it names.
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: link.manage
@@ -6777,6 +6827,7 @@ paths:
       description: 'For a payout the bank confirmed that the supplier''s matching did not pair within three days: the business''s own word that the money was for this bill. The payment is marked paired, and the supplier is told which invoice the money was for, so its side can re-aim its match.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
@@ -6936,6 +6987,7 @@ paths:
       description: Muted, the business's people are not told of its messages on their phones; archived, it is off the list until unarchived; pinned, it is at the top of the list (up to three, the last pinned first; a fourth is refused with 409). A PUT changes only what it names.
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: chat.trade
@@ -7052,6 +7104,7 @@ paths:
       description: Written in both businesses at once; its people who write to linked businesses are told on their phones unless they muted the conversation. reply_to quotes a message, and a card's makes it a reply about that card's document. client_id is an id the sender made, and the same send repeated (a retry after a dropped connection) is answered with the first message (200), never sent again. A client_id reused for different words, or for a message since deleted for your side, is refused (409).
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: chat.trade
@@ -7159,6 +7212,7 @@ paths:
       description: 'An empty list, by name.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: storefront.manage
@@ -7198,6 +7252,7 @@ paths:
       description: 'The buyers it is shared with see the new name.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: storefront.manage
@@ -7245,6 +7300,7 @@ paths:
       description: 'Withdrawn from every buyer it was shared with.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: storefront.manage
@@ -7281,6 +7337,7 @@ paths:
       description: 'Replaces the items: each one of your own stock items, with the price a linked buyer pays, a minimum quantity (1 by default) and whether it is available (yes by default). The buyers it is shared with see the change at once; an open order keeps its prices.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: storefront.manage
@@ -7344,6 +7401,7 @@ paths:
       description: 'Exactly the linked buyers named: a link has one list, so one shared with another moves here, and one not named is withdrawn.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: storefront.manage
@@ -7433,6 +7491,7 @@ paths:
       description: 'prices maps your item to its price for this buyer; an item not named has the lists price.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: storefront.manage
@@ -7522,6 +7581,7 @@ paths:
       description: 'A purchase order drafted at the lists prices (each line at least its minimum, while available), sent as any order is. Needs an Idempotency-Key. A line whose item you have not said is one of yours answers 422 with code item_unlinked and the item, unless item_id says which, which then links it.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: table.edit
@@ -7615,6 +7675,7 @@ paths:
       description: 'Its orders then reach the supplier as that item. One each way: a link made again replaces the old one.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: storefront.manage
@@ -7664,6 +7725,7 @@ paths:
       description: ''
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: storefront.manage
@@ -7724,6 +7786,7 @@ paths:
       description: 'Read as a message typed on WhatsApp (the same words: status, orders, cash in, invoice, building by chat): text, or reply (a button''s id from an answer, with its title as text). The answer is what Taskiem said, its buttons pressable by their ids. A person only: not an API key.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       requestBody:
@@ -7758,6 +7821,7 @@ paths:
       description: 'A multipart form: file (a voice note in Ogg, WebM, MP3 or MP4 audio, or a JPEG, PNG or WebP photo) and text (a photo''s caption). Read as one sent on WhatsApp: a voice note is transcribed when the business has voice notes on, and read as typed; a photo with a caption adds a product, or is the logo the set-up asked for. The file is held in memory only. A person only: not an API key.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       requestBody:
@@ -7792,6 +7856,7 @@ paths:
       description: 'A multipart form: `file` (a JPEG, PNG or WebP photo, cleaned of its metadata; a PDF without scripts or actions; or a voice note in Ogg, WebM, MP3 or MP4 audio, up to 16 MB), an optional `text` caption and `reply_to`. Each business keeps its own copy in its own storage: the file is stored in both before the message is written in both, and if either copy cannot be kept, nothing is sent (409).'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: chat.trade
@@ -7953,6 +8018,7 @@ paths:
       description: The other side's typing line shows for six seconds. Not audited; no words are sent.
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: chat.trade
@@ -7978,6 +8044,7 @@ paths:
       description: 'One of this conversation''s messages, sent to 1 to 5 other conversations, marked Forwarded. A photo, PDF or voice note goes as a copy into each business''s own storage and ours, from our copy; a document''s card is not forwarded (400).'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: chat.trade
@@ -8034,6 +8101,7 @@ paths:
       description: Our copy is hidden from our view; the other business keeps its own, as each keeps the record of the trade. A document's card is never hidden (400).
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: chat.trade
@@ -8065,6 +8133,7 @@ paths:
       description: Your emoji on a message, any one emoji (the six first offered are 👍 ❤️ 😂 😮 😢 🙏), replacing the one you gave, seen by both businesses. One reaction per member per message. The other side's people are told on their phones unless they muted the conversation, and a first reaction counts against the plan's messages per day. Refused once the link has ended (409).
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: chat.trade
@@ -8119,6 +8188,7 @@ paths:
       description: Your reaction is taken off the message, on both sides. Nothing is told, and taking back one you did not give is nothing.
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: chat.trade
@@ -8161,6 +8231,7 @@ paths:
       description: Kept for you alone, so no one is told and no one else can see it. An API key has no stars of its own (403).
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-all-environments: true
@@ -8199,6 +8270,7 @@ paths:
       description: The star is taken off.
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-all-environments: true
@@ -8291,9 +8363,9 @@ paths:
       description: Its messages are read here, and the sender sees the double tick.
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
-      x-taskiem-all-environments: true
       parameters:
       - name: link
         in: path
@@ -8373,6 +8445,7 @@ paths:
       description: findable null goes back to the default, on with a published storefront.
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: link.manage
@@ -8425,9 +8498,11 @@ paths:
       description: The next number may only move forward.
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       requestBody:
         required: true
         content:
@@ -8452,9 +8527,11 @@ paths:
       description: "credit_days for lines recorded from now on (null: no fixed time, so notebook debts are never overdue or reminded); apply_open dates the open notebook debts by it too, each from the day it was recorded."
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       requestBody:
         required: true
         content:
