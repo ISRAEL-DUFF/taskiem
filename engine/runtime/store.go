@@ -72,6 +72,7 @@ type Store struct {
 
 	defs     lru.Cache[string, *wd.Definition] // "workflow_id/version"; versions are immutable; bounded (S34)
 	folds    decideCache
+	taints   taintCache
 	limits   sync.Map // tenant -> cachedLimits
 	hits     sync.Map // "tenant/limit" -> time recorded
 	hitCount atomic.Int64
@@ -476,6 +477,16 @@ func lockRun(ctx context.Context, tx pgx.Tx, id uuid.UUID) (runRow, error) {
 		return r, fmt.Errorf("run %s: %w", id, ErrNotFound)
 	}
 	return r, err
+}
+
+// stepHistory loads what a task needs of its run's history, in order: the
+// run's start, its first scheduled step (for the run-start latency) and
+// the events of one step instance.
+func stepHistory(ctx context.Context, tx pgx.Tx, runID uuid.UUID, step string) ([]history.Event, error) {
+	return queryHistory(ctx, tx, `SELECT seq, type, COALESCE(step_id, ''), COALESCE(attempt, 0), payload, recorded_at, origin
+		FROM run_events WHERE run_id = $1 AND (step_id = $2 OR type = 'RunStarted'
+			OR seq = (SELECT f.seq FROM run_events f WHERE f.run_id = $1 AND f.type = 'StepScheduled' ORDER BY f.seq LIMIT 1))
+		ORDER BY seq`, runID, step)
 }
 
 // History loads a run's events in order.

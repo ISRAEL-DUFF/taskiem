@@ -3,8 +3,13 @@ package runtime_test
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/decide"
@@ -426,5 +431,53 @@ func TestDeclaredTextNamingAPersonIsErasedWithThem(t *testing.T) {
 	in, out = opened()
 	if in["note"] != pii.Erased || out["note"] != pii.Erased || out["other"] != "nothing personal in here" {
 		t.Errorf("after erasing the email: %v %v", in, out)
+	}
+}
+
+// countingCipher counts the sealed values opened.
+type countingCipher struct {
+	pii.Cipher
+	opened atomic.Int64
+}
+
+func (c *countingCipher) OpenTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, envelope map[string]any) (any, error) {
+	c.opened.Add(1)
+	return c.Cipher.OpenTx(ctx, tx, tenant, envelope)
+}
+
+// A task opens what it needs of its run's history, not all of it each
+// time: the personal values a run holds are opened once as the run goes
+// (and kept with it), so a foreach of n items opens about n values, not
+// n squared. What the task's output must seal is still known.
+func TestTasksDoNotReopenTheWholeHistory(t *testing.T) {
+	opens := func(n int) int64 {
+		e := rt.New(t)
+		c := &countingCipher{Cipher: e.Store.PII}
+		e.Store.PII = c
+		items := make([]string, n)
+		for i := range items {
+			items[i] = strconv.Itoa(i)
+		}
+		wf := e.Publish(t, `{"schema":"wd/v1","id":"wf_fan","version":1,"name":"fan","trigger":{"type":"manual"},
+		  "inputs":{"schema":{"type":"object","properties":{"bvn":{"type":"string","x-pii":"bvn"}}}},
+		  "steps":[{"id":"fan","type":"foreach","config":{"items":"=[`+strings.Join(items, ",")+`]","steps":[
+		    {"id":"v","type":"connector","connector":"fakepay@1","action":"transfer","input":{"amount":"=item","logical_id":"=trigger.body.bvn"}}]}}]}`)
+		ref := e.Start(t, wf, map[string]any{"body": map[string]any{"bvn": "22212345678"}})
+		before := c.opened.Load()
+		e.Drain(t)
+		if st := e.Status(t, ref); st != "completed" {
+			t.Fatalf("%d items: %s: %s", n, st, types(events(t, e, ref)))
+		}
+		for _, ev := range events(t, e, ref) {
+			if strings.Contains(string(ev.Payload), "22212345678") {
+				t.Fatalf("plaintext BVN in %s(%s)", ev.Type, ev.StepID)
+			}
+		}
+		return c.opened.Load() - before
+	}
+	small, large := opens(20), opens(80)
+	t.Logf("values opened: %d for 20 items, %d for 80", small, large)
+	if large > 6*small {
+		t.Errorf("opening grows faster than the run: %d for 20 items, %d for 80", small, large)
 	}
 }

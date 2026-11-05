@@ -669,11 +669,18 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 		if err != nil {
 			return err
 		}
-		raw, err := History(ctx, tx, c.run)
+		// The run's personal values, read once as the run goes (runTaint),
+		// and only this step's events opened: a task does not reopen the
+		// whole history (a foreach would cost n squared).
+		taint, err := w.Store.runTaint(ctx, tx, c.tenant, c.run)
 		if err != nil {
 			return err
 		}
-		hist, taint, err := w.Store.openHistory(ctx, tx, c.tenant, raw)
+		raw, err := stepHistory(ctx, tx, c.run, c.step)
+		if err != nil {
+			return err
+		}
+		hist, taint, err := w.Store.openHistoryInto(ctx, tx, c.tenant, raw, taint)
 		if err != nil {
 			return err
 		}
