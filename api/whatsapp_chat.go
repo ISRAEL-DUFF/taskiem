@@ -263,6 +263,9 @@ type chatData struct {
 	// Debt is a notebook debt or a customer's payment being recorded
 	// (chat_debtors.go).
 	Debt *chatDebt `json:"debt,omitempty"`
+	// Direct is when a lone "..." was sent: the next message goes to the
+	// linked businesses it mentions (chat_direct.go).
+	Direct *time.Time `json:"direct,omitempty"`
 }
 
 // WhatsAppPublic, when set, answers a message to the shared number from a
@@ -439,6 +442,14 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	// A completed WhatsApp form carries its flow token.
 	if in.Flow != "" {
 		return s.waFlowCompleted(ctx, c)
+	}
+	// A photo or a file captioned "...": only words go straight to a
+	// linked business from here (chat_direct.go), so it is not read as a
+	// product or a list either.
+	if (in.Image != nil || in.Document != nil) && c.p.Can(PermChatTrade) {
+		if _, marked := cutDirect(in.Text); marked {
+			return c.say(ctx, s, c.t("chat.direct.files"))
+		}
 	}
 	// A photo: a product to add, or the logo the set-up asked for
 	// (whatsapp_storefront.go).
@@ -641,6 +652,11 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	// A reply quoting a linked business's message, into its conversation
 	// (link_chat.go), whatever else the conversation is in the middle of.
 	if done, err := s.waQuotedReply(ctx, c); done || err != nil {
+		return err
+	}
+	// "..." first: a message straight to the linked businesses it
+	// mentions (chat_direct.go), read by no command and no model.
+	if done, err := s.waDirect(ctx, c); done || err != nil {
 		return err
 	}
 	// Accept or Decline on a linked business's order, All came on its
@@ -1063,6 +1079,9 @@ func (s *Server) waHelp(c *chat) string {
 	}
 	if c.p.Can(PermInvoiceManage) && s.Invoices != nil {
 		lines = append(lines, c.t("wa.help.invoice"), c.t("wa.help.debts"))
+	}
+	if c.p.Can(PermChatTrade) {
+		lines = append(lines, c.t("wa.help.direct"))
 	}
 	if c.p.Can(PermInvoiceManage) {
 		lines = append(lines, c.t("wa.help.money"))

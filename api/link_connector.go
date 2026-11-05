@@ -156,11 +156,11 @@ func linkNamed(ctx context.Context, tx pgx.Tx, name string) (links.Link, error) 
 			return l, nil
 		}
 	}
-	var found []links.Link
-	for _, l := range active {
-		if strings.Contains(strings.ToLower(l.Name), want) {
-			found = append(found, l)
-		}
+	// The start of a name (links.Named: "Dangote" for Dangote Nigeria
+	// Ltd), then, as before it, a name containing the words.
+	found := links.Named(active, name)
+	if len(found) == 0 {
+		found = containing(active, want)
 	}
 	switch len(found) {
 	case 1:
@@ -173,6 +173,17 @@ func linkNamed(ctx context.Context, tx pgx.Tx, name string) (links.Link, error) 
 		names[i] = l.Name
 	}
 	return links.Link{}, fmt.Errorf("%w: %q could be %s", links.ErrInvalid, name, strings.Join(names, ", "))
+}
+
+// containing is the links whose name contains want (lower case).
+func containing(active []links.Link, want string) []links.Link {
+	var found []links.Link
+	for _, l := range active {
+		if strings.Contains(strings.ToLower(l.Name), want) {
+			found = append(found, l)
+		}
+	}
+	return found
 }
 
 // --- bills ---
