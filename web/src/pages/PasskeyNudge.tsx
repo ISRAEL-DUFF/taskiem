@@ -18,7 +18,7 @@ function quietUntil(): number {
 
 /** Suggests a passkey to an administrator who has none, on a device that
  * can make one (docs/spec/optional-passkeys.md §6). No one is made to add
- * one; "Not now" hides it on this device for 30 days. */
+ * one; "Remind me later" hides it on this device for 30 days. */
 export function PasskeyNudge() {
   const { me } = useAuth();
   const [hidden, setHidden] = useState(() => Date.now() < quietUntil());
@@ -29,7 +29,7 @@ export function PasskeyNudge() {
       <span>Add a passkey: sign in with your fingerprint or face, and keep your account safe even if your password is found out.</span>
       <span className="row-actions">
         <Link className="button primary small" to="/account">
-          Add a passkey
+          Set up a passkey
         </Link>
         <button
           type="button"
@@ -43,7 +43,7 @@ export function PasskeyNudge() {
             setHidden(true);
           }}
         >
-          Not now
+          Remind me later
         </button>
       </span>
     </div>

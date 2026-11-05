@@ -795,6 +795,7 @@ table.cards tr.sf-refund td:first-child { box-shadow: none; }
 
 /* Forms (docs/forms.md): the editor, the renderer, the Forms page. */
 button.small { padding: 2px 8px; font-size: 0.85em; box-shadow: none; }
+button.small:focus-visible { box-shadow: var(--ring); } /* the ring, which the line above would otherwise take away */
 .badge.live, .badge.started, .badge.answered { --tone: var(--ok); }
 .badge.closed, .badge.received { --tone: var(--muted); }
 .badge.suspended, .badge.refused { --tone: var(--danger); }

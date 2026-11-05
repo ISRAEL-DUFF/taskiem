@@ -216,6 +216,10 @@ The founder took the recommendations of §11:
 - the tests in `api/passkey_rule_test.go`.
 
 **Where it differs from the plan:**
+- **The banner's buttons are "Set up a passkey" and "Remind me later"** (§6), so they
+  are not taken for the other "Add a passkey" and "Not now" buttons on the same page.
+- **Small buttons show the focus ring again.** `button.small` took it away, which the
+  banner's second button made visible to the keyboard test (`link-chat-keys`).
 - **Security is a card on the Settings page,** not a page of its own (§5, §9). The
   Settings page is the business's settings, one card each.
 - **A password or chat session already open** when its person becomes held, with a
