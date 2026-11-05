@@ -207,7 +207,7 @@ Traces span API requests, ingest, and worker steps, with `tenant_id`, `run_id`, 
 
 ## Plan limits
 
-Every tenant has plan limits (spec 8.3, 16): the platform defaults below, changed for all tenants with `TASKIEM_DEFAULT_<LIMIT>` and for one tenant with `taskiem tenants limits`. Zero means no limit. Tenants see theirs, with their usage and the limits they reached lately, at `GET /v1/limits` (any member) and in Settings; nothing in the API changes them, and the application's database role cannot write `tenant_limits` (the CLI goes through an audited function). A change reaches running processes within a minute.
+Every tenant has plan limits (spec 8.3, 16): the platform defaults below, changed for all tenants with `TASKIEM_DEFAULT_<LIMIT>` and for one tenant with `taskiem tenants limits`. Zero means no limit. Tenants see theirs, with their usage and the limits they reached lately, at `GET /v1/limits` (any member) and in Settings; nothing in the API changes them, and the application's database role cannot write `tenant_limits`: the CLI goes through an audited operators' function (`taskiem_ops_set_tenant_limits`), and the partner API's function sets only a sub-tenant's limits, never above its partner's own (migration 00357), so no organisation's transaction can raise its own limits. A change reaches running processes within a minute.
 
 | Limit | Default | What happens at the limit |
 | --- | --- | --- |

@@ -656,7 +656,9 @@ func (s *Store) SetLimits(ctx context.Context, tenant uuid.UUID, values map[stri
 		if !exists {
 			return fmt.Errorf("tenant %s: %w", tenant, ErrNotFound)
 		}
-		if _, err := tx.Exec(ctx, `SELECT taskiem_set_tenant_limits($1, $2, $3)`, tenant, raw, by); err != nil {
+		// The operators' function: taskiem_set_tenant_limits is the partner
+		// API's and sets only a sub-tenant's limits (migration 00357).
+		if _, err := tx.Exec(ctx, `SELECT taskiem_ops_set_tenant_limits($1, $2, $3)`, tenant, raw, by); err != nil {
 			return err
 		}
 		_, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'system', $2, 'limits.set', $3, $4)`, tenant, by, strings.Join(keys, ","), raw)
