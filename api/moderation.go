@@ -181,6 +181,9 @@ func (s *Server) publishGated(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 	if res.Verdict == moderation.Blocked {
 		return publishResult{Checks: res}, blockedErr(res)
 	}
+	if err := s.notPlatformHost(sf.Slug); err != nil {
+		return publishResult{}, err
+	}
 	first := sf.PublishedVersion == 0 || sf.Status == "in_review"
 	hold := first && (!v.Business || res.Verdict == moderation.Flagged)
 	if sf, err = storefront.Publish(ctx, tx, tenant, s.previewDomain(), actor, hold); err != nil {

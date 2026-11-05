@@ -358,7 +358,7 @@ A verification is a record with who did it, how and when, and appears in the aud
 
 ### 7.2 Names and impersonation
 
-- **Reserved slugs:** platform words (`www`, `app`, `api`, `admin`, `login`, `secure`, `support`...).
+- **Reserved slugs:** platform words (`www`, `app`, `api`, `admin`, `login`, `secure`, `support`, `pages`, `forms`...). A page is not published at a preview address that is the platform's own: the name owners point their domains at (`TASKIEM_PUBLIC_CNAME`) or the form host.
 - **Look-alike slugs refused:** names of banks, fintechs, telcos, government agencies and large brands, from a maintained list, compared after normalising look-alike characters (`0`/`o`, `1`/`l`, repeated letters).
 - **Business names** are checked against the same list. A match goes to review instead of being refused outright.
 - A storefront can never show "bank", "verify your account" or similar flows: its actions are only the kinds in [6.3](#63-actions-and-hosted-forms).
