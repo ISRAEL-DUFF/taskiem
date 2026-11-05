@@ -45,7 +45,7 @@ func New() (*Engine, error) { return NewWithRoots(Roots...) }
 // NewWithRoots returns an engine whose expressions may reference only the
 // given variables (connector manifests evaluate over "body" and "headers").
 func NewWithRoots(roots ...string) (*Engine, error) {
-	opts := []cel.EnvOption{ext.Strings(), ext.Math(), ext.Lists(), cel.OptionalTypes(), sumFunction}
+	opts := append([]cel.EnvOption{ext.Strings(), ext.Math(), ext.Lists(), cel.OptionalTypes(), sumFunction}, listBlocks...)
 	for _, r := range roots {
 		opts = append(opts, cel.Variable(r, cel.DynType))
 	}
@@ -61,7 +61,8 @@ func NewWithRoots(roots ...string) (*Engine, error) {
 // a form field (Slack's interaction payload). Workflow expressions do not
 // get it, so the SDK and codegen need not mirror it.
 func NewTriggerEngine(roots ...string) (*Engine, error) {
-	opts := []cel.EnvOption{ext.Strings(), ext.Math(), ext.Lists(), cel.OptionalTypes(), sumFunction,
+	opts := append([]cel.EnvOption{ext.Strings(), ext.Math(), ext.Lists(), cel.OptionalTypes(), sumFunction}, listBlocks...)
+	opts = append(opts,
 		cel.Function("parseJSON", cel.Overload("parseJSON_string", []*cel.Type{cel.StringType}, cel.DynType,
 			cel.UnaryBinding(func(v ref.Val) ref.Val {
 				s, ok := v.(types.String)
@@ -73,7 +74,7 @@ func NewTriggerEngine(roots ...string) (*Engine, error) {
 					return types.NewErr("parseJSON: %v", err)
 				}
 				return types.DefaultTypeAdapter.NativeToValue(x)
-			})))}
+			}))))
 	for _, r := range roots {
 		opts = append(opts, cel.Variable(r, cel.DynType))
 	}

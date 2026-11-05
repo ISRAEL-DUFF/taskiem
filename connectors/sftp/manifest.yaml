@@ -25,6 +25,12 @@ auth:
     - { key: private_key, label: Private key (PEM or OpenSSH format), secret: true, required: false }
     - { key: private_key_passphrase, label: Private key passphrase, secret: true, required: false }
     - { key: host_key, label: "Server host key: a known_hosts or authorized_keys line, a base64 key, or a SHA256: fingerprint. Required; leave empty once to be shown the server's", required: false }
+    - { key: tunnel_host, label: "Private network: the bastion's public host (leave all tunnel fields empty to connect directly)", required: false }
+    - { key: tunnel_port, label: "Private network: the bastion's SSH port (default 22)", required: false }
+    - { key: tunnel_user, label: "Private network: the bastion's user", required: false }
+    - { key: tunnel_private_key, label: "Private network: the user's private key (PEM or OpenSSH)", secret: true, required: false }
+    - { key: tunnel_passphrase, label: "Private network: the key's passphrase, if it has one", secret: true, required: false }
+    - { key: tunnel_host_key, label: "Private network: the bastion's host key (a known_hosts or authorized_keys line, or a SHA256: fingerprint). Required with a tunnel; leave empty once to be shown the bastion's", required: false }
   test: { action: stat }
 egress_hosts: ["${connection.host}"]
 actions:

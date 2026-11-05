@@ -25,6 +25,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/secrets"
+	"github.com/israel-duff/taskiem/engine/tunnel"
 )
 
 var nameRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{0,62}$`)
@@ -686,7 +687,11 @@ func (s *Server) testCredentials(ctx context.Context, tenant uuid.UUID, c *conne
 	hc := g.Client(egress.Policy{Tenant: tenant.String(), Hosts: c.Manifest.HostsFor(creds), Purpose: "connector:" + c.Manifest.ID}, 20*time.Second)
 	tctx, cancel := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel()
-	if _, err := action.Execute(tctx, connector.Request{Input: map[string]any{}, Credentials: creds, HTTP: hc, Logger: s.Logger, Attempt: 1}); err != nil {
+	dial, err := tunnel.Dialer(g, egress.Policy{Tenant: tenant.String(), Hosts: c.Manifest.HostsFor(creds), Purpose: "connector:" + c.Manifest.ID}, creds)
+	if err != nil {
+		return fmt.Errorf("%w: %s", errBadRequest, strings.TrimPrefix(err.Error(), "tunnel: "))
+	}
+	if _, err := action.Execute(tctx, connector.Request{Input: map[string]any{}, Credentials: creds, HTTP: hc, Dial: dial, Logger: s.Logger, Attempt: 1}); err != nil {
 		return fmt.Errorf("%w: %s did not accept these details. Check you copied the whole value from the right page, then try again", errBadRequest, c.Manifest.Name)
 	}
 	return nil

@@ -1,0 +1,151 @@
+{
+  "id": "subscription-area-summary",
+  "title": "Tell me how my subscribers are doing, by area",
+  "summary": "Once a week, count your active subscribers and add up what they pay each month, for each area, and send you the list.",
+  "description": "On the day and time you choose, reads your active subscribers from your subscribers table, groups them by area, and sends you one message: for each area, how many subscribers and what they pay each month, then the total. Subscribers with no area are counted together. It looks at up to 1,000 subscribers; with more, it says so.",
+  "category": "subscriptions",
+  "tags": [
+    "subscriptions",
+    "summary",
+    "reports",
+    "areas"
+  ],
+  "keywords": [
+    "summary",
+    "report",
+    "by area",
+    "per area",
+    "totals",
+    "how many",
+    "subscribers",
+    "members",
+    "membership",
+    "monthly income",
+    "revenue",
+    "count",
+    "gym",
+    "club",
+    "internet",
+    "isp"
+  ],
+  "requires": [
+    "subscribers",
+    "summary",
+    "by area"
+  ],
+  "connectors": [
+    "xenibase@1",
+    "notify@1"
+  ],
+  "tables": [
+    {
+      "known": "subscribers",
+      "name": "{{subscribers_table}}"
+    }
+  ],
+  "params": [
+    {
+      "name": "day",
+      "type": "weekday",
+      "title": "Day",
+      "description": "The day of the week the summary comes.",
+      "required": true,
+      "default": "monday",
+      "example": "monday"
+    },
+    {
+      "name": "send_time",
+      "type": "time",
+      "title": "Time",
+      "description": "When it comes, Lagos time.",
+      "required": true,
+      "default": "08:00",
+      "example": "08:00"
+    },
+    {
+      "name": "subscribers_table",
+      "type": "string",
+      "title": "Subscribers table",
+      "description": "Your subscribers: name, phone, plan, price each month, when it renews and whether they are active. Taskiem makes it for you if it does not exist.",
+      "required": false,
+      "default": "subscribers",
+      "example": "subscribers",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$",
+      "picker": "table"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_subscriptionAreaSummary",
+    "version": 1,
+    "name": "Tell me how my subscribers are doing, by area",
+    "description": "Sends the owner each area's subscriber count and monthly income.",
+    "trigger": {
+      "type": "schedule",
+      "config": {
+        "cron": "{{send_time:minute}} {{send_time:hour}} * * {{day:cron}}",
+        "timezone": "Africa/Lagos"
+      }
+    },
+    "steps": [
+      {
+        "id": "read_subscribers",
+        "type": "connector",
+        "name": "Read the active subscribers",
+        "connector": "xenibase@1",
+        "action": "read_rows",
+        "connection": "data_tables",
+        "input": {
+          "table": "{{subscribers_table}}",
+          "filters": [
+            {
+              "column": "status",
+              "op": "ilike",
+              "value": "active"
+            }
+          ],
+          "order": [
+            {
+              "column": "name"
+            }
+          ],
+          "limit": 1000
+        }
+      },
+      {
+        "id": "by_area",
+        "type": "transform",
+        "name": "Group them by area and add each group up",
+        "needs": [
+          "read_subscribers"
+        ],
+        "config": {
+          "output": {
+            "rows": "=(has(steps.read_subscribers.output.rows) ? steps.read_subscribers.output.rows : [])",
+            "areas": "=groupBy(has(steps.read_subscribers.output.rows) ? steps.read_subscribers.output.rows : [], 'area').map(g, {'area': g.key == null ? 'No area' : string(g.key), 'count': g.count, 'monthly_naira': sum(g.items.map(r, has(r.monthly_naira) && r.monthly_naira != null ? r.monthly_naira : 0))})"
+          }
+        }
+      },
+      {
+        "id": "tell_me",
+        "type": "connector",
+        "name": "Send you the summary",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "by_area"
+        ],
+        "input": {
+          "title": "Your subscribers, by area",
+          "message": "=size(steps.by_area.output.rows) == 0 ? 'You have no active subscribers yet.' : steps.by_area.output.areas.map(a, a.area + ': ' + string(a.count) + ' (N' + string(a.monthly_naira) + ' a month)').join('; ') + '. In all: ' + string(size(steps.by_area.output.rows)) + ' subscribers, N' + string(sum(steps.by_area.output.areas.map(a, a.monthly_naira))) + ' a month.' + (has(steps.read_subscribers.output.next_cursor) && steps.read_subscribers.output.next_cursor != null && string(steps.read_subscribers.output.next_cursor) != '' ? ' Only the first 1,000 subscribers are counted.' : '')"
+        },
+        "effect": {
+          "idempotency_seed": "='area-summary:' + string(run.started_at)"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "30m"
+    }
+  }
+}

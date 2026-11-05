@@ -5,6 +5,7 @@ import type { Step } from "@sdk/wd";
 import { newStep } from "../lib/graph";
 import { newChoice } from "../lib/flow";
 import { lookOf, type Tone } from "./look";
+import { MATCH_STARTER, TOTALS_STARTER } from "../lib/listblocks";
 
 export interface Pick {
   key: string;
@@ -19,17 +20,72 @@ export interface Pick {
   make: (id: string) => Step;
 }
 
-export const GROUPS: { name: string; what: string; icon: string; tone: Tone }[] = [
-  { name: "Payments", what: "Payment links, pay a bank account, check a payment, refunds", icon: "card", tone: "warn" },
-  { name: "Messages", what: "WhatsApp, Telegram, SMS and email", icon: "chat", tone: "ok" },
-  { name: "Tables and sheets", what: "Your tables and Google Sheets: find, add or change a row", icon: "tables", tone: "ok" },
-  { name: "People", what: "Ask for approval, ask someone to fill in a form", icon: "members", tone: "brand" },
-  { name: "Decide and repeat", what: "If, do these together, for each, wait", icon: "split", tone: "info" },
-  { name: "AI", what: "Write a reply, read a receipt, sort a message", icon: "sparkle", tone: "brand" },
-  { name: "Invoices and orders", what: "Make an invoice, an order, a school's fees", icon: "invoices", tone: "warn" },
-  { name: "Your other workflows", what: "Run one of your workflows, or a ready one", icon: "workflows", tone: "brand" },
-  { name: "Other services", what: "Every other service Taskiem connects to", icon: "connections", tone: "muted" },
-  { name: "Advanced", what: "Call a web address, run code, change the data", icon: "code", tone: "muted" },
+export const GROUPS: {
+  name: string;
+  what: string;
+  icon: string;
+  tone: Tone;
+}[] = [
+  {
+    name: "Payments",
+    what: "Payment links, pay a bank account, check a payment, refunds",
+    icon: "card",
+    tone: "warn",
+  },
+  {
+    name: "Messages",
+    what: "WhatsApp, Telegram, SMS and email",
+    icon: "chat",
+    tone: "ok",
+  },
+  {
+    name: "Tables and sheets",
+    what: "Your tables and Google Sheets: find, add or change a row",
+    icon: "tables",
+    tone: "ok",
+  },
+  {
+    name: "People",
+    what: "Ask for approval, ask someone to fill in a form",
+    icon: "members",
+    tone: "brand",
+  },
+  {
+    name: "Decide and repeat",
+    what: "If, do these together, for each, wait",
+    icon: "split",
+    tone: "info",
+  },
+  {
+    name: "AI",
+    what: "Write a reply, read a receipt, sort a message",
+    icon: "sparkle",
+    tone: "brand",
+  },
+  {
+    name: "Invoices and orders",
+    what: "Make an invoice, an order, a school's fees",
+    icon: "invoices",
+    tone: "warn",
+  },
+  {
+    name: "Your other workflows",
+    what: "Run one of your workflows, or a ready one",
+    icon: "workflows",
+    tone: "brand",
+  },
+  {
+    name: "Other services",
+    what: "Every other service Taskiem connects to",
+    icon: "connections",
+    tone: "muted",
+  },
+  {
+    name: "Advanced",
+    what: "Call a web address, run code, change the data",
+    icon: "code",
+    tone: "muted",
+  },
 ];
 
 interface ConnectorLike {
@@ -64,49 +120,260 @@ function groupOf(c: ConnectorLike): string | null {
 const named = (s: Step, name: string): Step => ({ ...s, name }) as Step;
 
 /** Everything that can be added, from what this Taskiem connects to. */
-export function catalog(connectors: ConnectorLike[], capabilities: CapabilityLike[]): Pick[] {
+export function catalog(
+  connectors: ConnectorLike[],
+  capabilities: CapabilityLike[],
+): Pick[] {
   const out: Pick[] = [];
   for (const c of capabilities) {
     if (c.kind === "event") continue;
-    out.push({ key: `cap:${c.name}`, title: c.title, sub: c.description ?? "With whichever payments account you connected", icon: "card", tone: "warn", group: "Payments", base: c.name, make: (id) => named({ id, type: "capability", uses: c.name, input: {} } as Step, c.title) });
+    out.push({
+      key: `cap:${c.name}`,
+      title: c.title,
+      sub: c.description ?? "With whichever payments account you connected",
+      icon: "card",
+      tone: "warn",
+      group: "Payments",
+      base: c.name,
+      make: (id) =>
+        named(
+          { id, type: "capability", uses: c.name, input: {} } as Step,
+          c.title,
+        ),
+    });
   }
   for (const c of connectors) {
     const group = groupOf(c);
     if (!group) continue;
     for (const [action, a] of Object.entries(c.actions)) {
-      const step = (id: string) => ({ id, type: "connector", connector: c.ref, action, input: {} }) as Step;
+      const step = (id: string) =>
+        ({
+          id,
+          type: "connector",
+          connector: c.ref,
+          action,
+          input: {},
+        }) as Step;
       const look = lookOf(step("x"), [c]);
-      out.push({ key: `con:${c.ref}:${action}`, title: `${a.title || action}`, sub: c.name, icon: look.icon, tone: look.tone, group, base: action, make: (id) => named(step(id), `${a.title || action}`) });
+      out.push({
+        key: `con:${c.ref}:${action}`,
+        title: `${a.title || action}`,
+        sub: c.name,
+        icon: look.icon,
+        tone: look.tone,
+        group,
+        base: action,
+        make: (id) => named(step(id), `${a.title || action}`),
+      });
     }
   }
-  const own: [string, string, string, Step["type"] | "choice", string, string, Tone][] = [
-    ["People", "Ask for approval", "Wait until someone with a role says yes or no", "approval", "approvals", "approval", "brand"],
-    ["People", "Ask someone to fill in a form", "A link by WhatsApp, SMS or email; the answers come back here", "form", "forms", "form", "brand"],
-    ["Decide and repeat", "If", "Go one way or another: Yes or No", "choice", "split", "check", "info"],
-    ["Decide and repeat", "Do these together", "Steps that run at the same time", "parallel", "split", "together", "info"],
-    ["Decide and repeat", "For each", "The same steps for every item in a list", "foreach", "loop", "each", "info"],
-    ["Decide and repeat", "Wait", "An hour, a day, or until a time", "wait", "clock", "wait", "info"],
-    ["AI", "Ask the AI", "Write a reply, read a receipt, sort a message", "ai", "sparkle", "ask_ai", "brand"],
-    ["Your other workflows", "Run another of your workflows", "It runs as a step here, and this one waits for it", "subflow", "workflows", "run_workflow", "brand"],
-    ["Your other workflows", "Use a ready workflow", "One of Taskiem's ready workflows, as a step here", "template", "templates", "ready_workflow", "brand"],
-    ["Advanced", "Call a web address", "Send or fetch data from another system", "http", "code", "call", "muted"],
-    ["Advanced", "Run code", "JavaScript or Python, for what no step does", "code", "code", "code", "muted"],
-    ["Advanced", "Change the data", "Shape values for the steps after it", "transform", "code", "change", "muted"],
-    ["Advanced", "Answer the caller", "What a website that started it gets back", "respond", "code", "answer", "muted"],
-    ["Advanced", "Wait to be called back", "Until another system calls this run's own address", "callback", "inbox", "callback", "muted"],
-    ["Advanced", "Wait for an event", "Until a payment service says something happened", "signal", "inbox", "wait_event", "muted"],
+  const own: [
+    string,
+    string,
+    string,
+    Step["type"] | "choice",
+    string,
+    string,
+    Tone,
+  ][] = [
+    [
+      "People",
+      "Ask for approval",
+      "Wait until someone with a role says yes or no",
+      "approval",
+      "approvals",
+      "approval",
+      "brand",
+    ],
+    [
+      "People",
+      "Ask someone to fill in a form",
+      "A link by WhatsApp, SMS or email; the answers come back here",
+      "form",
+      "forms",
+      "form",
+      "brand",
+    ],
+    [
+      "Decide and repeat",
+      "If",
+      "Go one way or another: Yes or No",
+      "choice",
+      "split",
+      "check",
+      "info",
+    ],
+    [
+      "Decide and repeat",
+      "Do these together",
+      "Steps that run at the same time",
+      "parallel",
+      "split",
+      "together",
+      "info",
+    ],
+    [
+      "Decide and repeat",
+      "For each",
+      "The same steps for every item in a list",
+      "foreach",
+      "loop",
+      "each",
+      "info",
+    ],
+    [
+      "Decide and repeat",
+      "Wait",
+      "An hour, a day, or until a time",
+      "wait",
+      "clock",
+      "wait",
+      "info",
+    ],
+    [
+      "AI",
+      "Ask the AI",
+      "Write a reply, read a receipt, sort a message",
+      "ai",
+      "sparkle",
+      "ask_ai",
+      "brand",
+    ],
+    [
+      "Your other workflows",
+      "Run another of your workflows",
+      "It runs as a step here, and this one waits for it",
+      "subflow",
+      "workflows",
+      "run_workflow",
+      "brand",
+    ],
+    [
+      "Your other workflows",
+      "Use a ready workflow",
+      "One of Taskiem's ready workflows, as a step here",
+      "template",
+      "templates",
+      "ready_workflow",
+      "brand",
+    ],
+    [
+      "Advanced",
+      "Call a web address",
+      "Send or fetch data from another system",
+      "http",
+      "code",
+      "call",
+      "muted",
+    ],
+    [
+      "Advanced",
+      "Run code",
+      "JavaScript or Python, for what no step does",
+      "code",
+      "code",
+      "code",
+      "muted",
+    ],
+    [
+      "Advanced",
+      "Change the data",
+      "Shape values for the steps after it",
+      "transform",
+      "code",
+      "change",
+      "muted",
+    ],
+    [
+      "Advanced",
+      "Answer the caller",
+      "What a website that started it gets back",
+      "respond",
+      "code",
+      "answer",
+      "muted",
+    ],
+    [
+      "Advanced",
+      "Wait to be called back",
+      "Until another system calls this run's own address",
+      "callback",
+      "inbox",
+      "callback",
+      "muted",
+    ],
+    [
+      "Advanced",
+      "Wait for an event",
+      "Until a payment service says something happened",
+      "signal",
+      "inbox",
+      "wait_event",
+      "muted",
+    ],
   ];
   for (const [group, title, sub, type, icon, base, tone] of own) {
-    out.push({ key: `own:${type}`, title, sub, icon, tone, group, base, make: (id) => named(type === "choice" ? newChoice(id) : newStep(type, id), title === "If" ? "Is it so?" : title) });
+    out.push({
+      key: `own:${type}`,
+      title,
+      sub,
+      icon,
+      tone,
+      group,
+      base,
+      make: (id) =>
+        named(
+          type === "choice" ? newChoice(id) : newStep(type, id),
+          title === "If" ? "Is it so?" : title,
+        ),
+    });
   }
+  // The list blocks (engine/expr/lists.go): a change-the-data step that
+  // starts from a working example, to be pointed at the step's own list.
+  out.push(
+    {
+      key: "own:totals",
+      title: "Count and add up a list",
+      sub: "How many, and the total, for each area, plan or anything else in a list",
+      icon: "loop",
+      tone: "info",
+      group: "Decide and repeat",
+      base: "totals",
+      make: (id) =>
+        named(
+          { id, type: "transform", config: { output: TOTALS_STARTER } } as Step,
+          "Count and add up a list",
+        ),
+    },
+    {
+      key: "own:match",
+      title: "Match two lists",
+      sub: "Pair each row of one list with the row it belongs to in another",
+      icon: "split",
+      tone: "info",
+      group: "Decide and repeat",
+      base: "match",
+      make: (id) =>
+        named(
+          { id, type: "transform", config: { output: MATCH_STARTER } } as Step,
+          "Match two lists",
+        ),
+    },
+  );
   return out;
 }
 
 /** The three to offer first: a message, an approval and a payment link, as far as this Taskiem has them. */
 export function suggested(all: Pick[]): Pick[] {
   const want = [
-    (p: Pick) => p.group === "Messages" && /whatsapp/i.test(p.sub) && /^send a (text )?message$/i.test(p.title),
-    (p: Pick) => p.group === "Messages" && /whatsapp/i.test(p.sub) && /send/i.test(p.title),
+    (p: Pick) =>
+      p.group === "Messages" &&
+      /whatsapp/i.test(p.sub) &&
+      /^send a (text )?message$/i.test(p.title),
+    (p: Pick) =>
+      p.group === "Messages" &&
+      /whatsapp/i.test(p.sub) &&
+      /send/i.test(p.title),
     (p: Pick) => p.key === "own:approval",
     (p: Pick) => p.group === "Payments" && /link|payment page/i.test(p.title),
     (p: Pick) => p.group === "Messages" && /send/i.test(p.title),
@@ -116,7 +383,12 @@ export function suggested(all: Pick[]): Pick[] {
   for (const w of want) {
     const p = all.find((x) => w(x) && !out.includes(x));
     // One message at most: the second rule is the first's fallback.
-    if (p && out.length < 3 && !(p.group === "Messages" && out.some((x) => x.group === "Messages"))) out.push(p);
+    if (
+      p &&
+      out.length < 3 &&
+      !(p.group === "Messages" && out.some((x) => x.group === "Messages"))
+    )
+      out.push(p);
   }
   return out;
 }

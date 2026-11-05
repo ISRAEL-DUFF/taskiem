@@ -34,6 +34,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/sandbox"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/telemetry"
+	"github.com/israel-duff/taskiem/engine/tunnel"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
 
@@ -1470,9 +1471,13 @@ func (w *Worker) dialer(ctx context.Context, p *plan, creds map[string]string) (
 	if err != nil {
 		return nil, err
 	}
-	return func(ctx context.Context, network, addr string) (net.Conn, error) {
-		return w.Egress.DialContext(ctx, pol, network, addr)
-	}, nil
+	// A connection that names a tunnel reaches its host through the
+	// customer's bastion (decision 0013); otherwise through the guard.
+	d, err := tunnel.Dialer(w.Egress, pol, creds)
+	if err != nil {
+		return nil, err
+	}
+	return d, nil
 }
 
 // heartbeat extends the lease while the task runs and cancels the task's

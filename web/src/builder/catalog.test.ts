@@ -1,11 +1,44 @@
 import { describe, expect, it } from "vitest";
 import { catalog, idFrom, search, suggested } from "./catalog";
 
-const connectors: { ref: string; id: string; name: string; category: string; actions: Record<string, { title: string }> }[] = [
-  { ref: "whatsapp@1", id: "whatsapp", name: "WhatsApp", category: "messaging", actions: { send_buttons: { title: "Send an interactive message" }, send_message: { title: "Send a message" } } },
-  { ref: "googlesheets@1", id: "googlesheets", name: "Google Sheets", category: "productivity", actions: { append_row: { title: "Add a row" } } },
-  { ref: "paystack@1", id: "paystack", name: "Paystack", category: "payments", actions: { check_balance: { title: "Check the balance" } } },
-  { ref: "internal@1", id: "internal", name: "Internal", category: "other", actions: { x: { title: "X" } } },
+const connectors: {
+  ref: string;
+  id: string;
+  name: string;
+  category: string;
+  actions: Record<string, { title: string }>;
+}[] = [
+  {
+    ref: "whatsapp@1",
+    id: "whatsapp",
+    name: "WhatsApp",
+    category: "messaging",
+    actions: {
+      send_buttons: { title: "Send an interactive message" },
+      send_message: { title: "Send a message" },
+    },
+  },
+  {
+    ref: "googlesheets@1",
+    id: "googlesheets",
+    name: "Google Sheets",
+    category: "productivity",
+    actions: { append_row: { title: "Add a row" } },
+  },
+  {
+    ref: "paystack@1",
+    id: "paystack",
+    name: "Paystack",
+    category: "payments",
+    actions: { check_balance: { title: "Check the balance" } },
+  },
+  {
+    ref: "internal@1",
+    id: "internal",
+    name: "Internal",
+    category: "other",
+    actions: { x: { title: "X" } },
+  },
 ];
 const capabilities = [
   { name: "collect_link", title: "Send a payment link" },
@@ -27,24 +60,48 @@ describe("what can be added", () => {
     expect(of("Send a payment link")).toBe("Payments");
     expect(of("Check the balance")).toBe("Other services");
     expect(of("If")).toBe("Decide and repeat");
-    expect(all.some((p) => p.title === "X" || p.title === "A payout settled")).toBe(false);
+    expect(
+      all.some((p) => p.title === "X" || p.title === "A payout settled"),
+    ).toBe(false);
   });
 
   it("makes the step, named in words", () => {
     const wa = pick("Send a message").make("tell");
-    expect(wa).toMatchObject({ id: "tell", type: "connector", connector: "whatsapp@1", action: "send_message", name: "Send a message" });
+    expect(wa).toMatchObject({
+      id: "tell",
+      type: "connector",
+      connector: "whatsapp@1",
+      action: "send_message",
+      name: "Send a message",
+    });
     const choice = pick("If").make("c");
-    expect(choice).toMatchObject({ type: "branch", config: { paths: [{ name: "yes" }], default: { steps: [] } } });
-    expect(pick("Pay a bank account").make("pay")).toMatchObject({ type: "capability", uses: "pay_bank" });
+    expect(choice).toMatchObject({
+      type: "branch",
+      config: { paths: [{ name: "yes" }], default: { steps: [] } },
+    });
+    expect(pick("Pay a bank account").make("pay")).toMatchObject({
+      type: "capability",
+      uses: "pay_bank",
+    });
   });
 
   it("offers a message, an approval and a payment link first", () => {
-    expect(suggested(all).map((p) => p.title)).toEqual(["Send a message", "Ask for approval", "Send a payment link"]);
+    expect(suggested(all).map((p) => p.title)).toEqual([
+      "Send a message",
+      "Ask for approval",
+      "Send a payment link",
+    ]);
   });
 
   it("finds by every word, in the title, the service or the group", () => {
-    expect(search(all, "whatsapp send").map((p) => p.title)).toEqual(["Send an interactive message", "Send a message"]);
-    expect(search(all, "payments").map((p) => p.title)).toEqual(["Send a payment link", "Pay a bank account"]);
+    expect(search(all, "whatsapp send").map((p) => p.title)).toEqual([
+      "Send an interactive message",
+      "Send a message",
+    ]);
+    expect(search(all, "payments").map((p) => p.title)).toEqual([
+      "Send a payment link",
+      "Pay a bank account",
+    ]);
     expect(search(all, "")).toEqual([]);
   });
 
@@ -53,7 +110,28 @@ describe("what can be added", () => {
     expect(pick("Send a message").base).toBe("send_message");
     expect(pick("Pay a bank account").base).toBe("pay_bank");
     expect(idFrom("Send a message", new Set())).toBe("send_a_message");
-    expect(idFrom("Send a message", new Set(["send_a_message"]))).toBe("send_a_message_2");
+    expect(idFrom("Send a message", new Set(["send_a_message"]))).toBe(
+      "send_a_message_2",
+    );
     expect(idFrom("1st reminder!", new Set())).toBe("s_1st_reminder");
+  });
+});
+
+describe("the list blocks", () => {
+  it("are offered with the decide-and-repeat steps and make a change-the-data step", () => {
+    const all = catalog([], []);
+    const totals = all.find((p) => p.key === "own:totals");
+    const match = all.find((p) => p.key === "own:match");
+    if (!totals || !match) throw new Error("the list blocks are not offered");
+    expect(totals.group).toBe("Decide and repeat");
+    expect(match.group).toBe("Decide and repeat");
+    expect(totals.make("totals")).toMatchObject({
+      type: "transform",
+      name: "Count and add up a list",
+    });
+    expect(JSON.stringify(totals.make("t"))).toContain("groupBy(");
+    expect(JSON.stringify(match.make("m"))).toContain("leftJoinBy(");
+    expect(search(all, "add up").map((p) => p.key)).toContain("own:totals");
+    expect(search(all, "match").map((p) => p.key)).toContain("own:match");
   });
 });

@@ -1,0 +1,216 @@
+{
+  "id": "subscription-renew-on-payment",
+  "title": "Renew a subscriber when they pay",
+  "summary": "When an invoice that covers a period is paid in full, find the subscriber by phone, move their renewal date on, mark them active and thank them.",
+  "description": "Starts the moment one of your invoices is paid in full. Looks the customer up in your subscribers table by their phone number (the last ten digits, so +234 and 0 numbers match). If they are there and paid at least their monthly price, their renewal date moves on by the days you choose (from today, or from their current date if it is later), they are marked active, and they are sent a thank-you text with the new date. Nothing is called outside Taskiem, so it suits a gym, a club, a class or any business without another system to switch things on in. If you do switch a service on elsewhere, use \"Switch a subscriber back on, on your system, when they pay\".",
+  "category": "subscriptions",
+  "tags": [
+    "subscriptions",
+    "renew",
+    "invoices",
+    "customers",
+    "payment"
+  ],
+  "keywords": [
+    "renew",
+    "renewal",
+    "membership",
+    "members",
+    "gym",
+    "club",
+    "subscription",
+    "subscriber",
+    "activate",
+    "extend",
+    "monthly",
+    "class",
+    "tuition",
+    "dues"
+  ],
+  "requires": [
+    "subscribers",
+    "renew",
+    "membership"
+  ],
+  "connectors": [
+    "xenibase@1",
+    "notify@1"
+  ],
+  "params": [
+    {
+      "name": "business_name",
+      "type": "string",
+      "title": "Business name",
+      "description": "How your customers know you; it starts every message.",
+      "required": true,
+      "example": "Sunrise Fitness",
+      "max_length": 60
+    },
+    {
+      "name": "extend_days",
+      "type": "integer",
+      "title": "Days to add",
+      "description": "How many days a payment adds to the renewal date.",
+      "required": true,
+      "default": 30,
+      "example": 30,
+      "minimum": 1,
+      "maximum": 366
+    },
+    {
+      "name": "subscribers_table",
+      "type": "string",
+      "title": "Subscribers table",
+      "description": "Your subscribers: name, phone, plan, price each month, when it renews and whether they are active. Taskiem makes it for you if it does not exist.",
+      "required": false,
+      "default": "subscribers",
+      "example": "subscribers",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$",
+      "picker": "table"
+    }
+  ],
+  "tables": [
+    {
+      "known": "subscribers",
+      "name": "{{subscribers_table}}"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_subscriptionRenewOnPayment",
+    "version": 1,
+    "name": "Renew a subscriber when they pay",
+    "description": "Renews the subscriber who paid and thanks them.",
+    "trigger": {
+      "type": "invoice",
+      "config": {
+        "event": "paid"
+      }
+    },
+    "steps": [
+      {
+        "id": "settings",
+        "type": "transform",
+        "name": "Use your business name",
+        "config": {
+          "output": {
+            "business_name": "{{business_name}}"
+          }
+        }
+      },
+      {
+        "id": "find",
+        "type": "connector",
+        "name": "Find the subscriber by phone",
+        "connector": "xenibase@1",
+        "action": "read_rows",
+        "connection": "data_tables",
+        "when": "=has(trigger.body.customer.phone) && trigger.body.customer.phone != null && size(string(trigger.body.customer.phone)) >= 10",
+        "input": {
+          "table": "{{subscribers_table}}",
+          "filters": [
+            {
+              "column": "phone",
+              "op": "like",
+              "value": "='%' + string(trigger.body.customer.phone).substring(size(string(trigger.body.customer.phone)) - 10)"
+            }
+          ],
+          "limit": 1
+        }
+      },
+      {
+        "id": "renewal",
+        "type": "transform",
+        "name": "Work out the new renewal date",
+        "needs": [
+          "find"
+        ],
+        "when": "=has(steps.find.output.rows) && size(steps.find.output.rows) > 0 && has(steps.find.output.rows[0].monthly_naira) && steps.find.output.rows[0].monthly_naira != null && int(trigger.body.amount_kobo) >= int(double(steps.find.output.rows[0].monthly_naira) * 100.0)",
+        "config": {
+          "output": {
+            "renews_on": "=string((has(steps.find.output.rows[0].renews_on) && steps.find.output.rows[0].renews_on != null && timestamp(string(steps.find.output.rows[0].renews_on).substring(0, 10) + 'T00:00:00Z') > timestamp(run.started_at) ? timestamp(string(steps.find.output.rows[0].renews_on).substring(0, 10) + 'T00:00:00Z') : timestamp(run.started_at)) + duration(string({{extend_days}} * 24) + 'h')).substring(0, 10)"
+          }
+        }
+      },
+      {
+        "id": "restore",
+        "type": "branch",
+        "name": "Is this a subscriber?",
+        "needs": [
+          "settings",
+          "renewal"
+        ],
+        "config": {
+          "paths": [
+            {
+              "name": "subscriber",
+              "when": "=has(steps.find.output.rows) && size(steps.find.output.rows) > 0",
+              "steps": [
+                {
+                  "id": "renew_on",
+                  "type": "connector",
+                  "name": "Mark them active and move their renewal date on",
+                  "connector": "xenibase@1",
+                  "action": "update_rows",
+                  "connection": "data_tables",
+                  "input": {
+                    "table": "{{subscribers_table}}",
+                    "filters": [
+                      {
+                        "column": "phone",
+                        "op": "eq",
+                        "value": "=string(steps.find.output.rows[0].phone)"
+                      }
+                    ],
+                    "max_affected": 1,
+                    "set": {
+                      "status": "active",
+                      "renews_on": "=steps.renewal.output.renews_on"
+                    }
+                  },
+                  "effect": {
+                    "idempotency_seed": "='renew:' + trigger.body.number"
+                  }
+                },
+                {
+                  "id": "thank_on",
+                  "type": "connector",
+                  "name": "Text them their plan is renewed",
+                  "connector": "notify@1",
+                  "action": "text",
+                  "needs": [
+                    "renew_on"
+                  ],
+                  "input": {
+                    "to": "=string(trigger.body.customer.phone)",
+                    "message": "=steps.settings.output.business_name + ': Thank you, we received your payment and your plan is active until ' + steps.renewal.output.renews_on.substring(0, 10) + '.'"
+                  },
+                  "effect": {
+                    "idempotency_seed": "='reconnect-text:' + trigger.body.number"
+                  }
+                }
+              ]
+            }
+          ],
+          "default": {
+            "steps": [
+              {
+                "id": "nothing_to_do",
+                "type": "transform",
+                "name": "Nothing to do: not a subscriber, or paid less than their price",
+                "config": {
+                  "output": {
+                    "changed": false
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "30m"
+    }
+  }
+}

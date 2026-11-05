@@ -1,6 +1,6 @@
 # 0013 — Reaching databases and servers on private networks
 
-Date: 2026-10-07 · Status: Proposed (design; not built)
+Date: 2026-10-07 · Status: **Accepted. Mechanism 1 (the SSH tunnel) built 2026-11-04**; mechanisms 2 and 3 not built
 
 ## Problem
 
@@ -12,7 +12,9 @@ The design must let a tenant reach its own private hosts without letting any ten
 
 Three mechanisms, offered in this order. All three keep the guard's rule that a tenant's traffic never leaves the worker towards a private address on the worker's own network.
 
-### 1. SSH tunnel through the customer's bastion (build first)
+### 1. SSH tunnel through the customer's bastion (built)
+
+Built as `engine/tunnel` (the tunnel and its dialer, tested against an in-process SSH server in `engine/tunnel/tunneltest`), the optional `tunnel_*` connection fields on the MySQL, PostgreSQL and SFTP connectors, and the `privatehttp@1` connector for web addresses on a private network. Each call opens its own tunnel (no pooling). The tunnel is a field of each connection, as the starting point below said. Owner-facing steps: [Reaching your own network](../integrations/private-network.md).
 
 A connection to MySQL, PostgreSQL or SFTP gains an optional `tunnel` block:
 
@@ -61,4 +63,4 @@ This needs a relay endpoint on the edge and a multiplexing protocol (HTTP/2 or W
 
 ## Not decided
 
-- Whether `tunnel` is a field of each connection or a named, reusable tunnel shared by several connections in a tenant. The per-connection field is simpler and is the starting point.
+- Whether `tunnel` is a field of each connection or a named, reusable tunnel shared by several connections in a tenant. The per-connection fields are built; a shared tunnel is still open.

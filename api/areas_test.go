@@ -414,16 +414,16 @@ func TestTemplatesFollowTheSwitches(t *testing.T) {
 		}
 		return false
 	}
-	for _, id := range []string{"subscription-monthly-invoices", "subscription-reconnect-on-payment", "subscription-outage-notice"} {
+	for _, id := range []string{"subscription-monthly-invoices", "subscription-reconnect-on-payment", "subscription-renew-on-payment", "subscription-notice", "subscription-mark-expired"} {
 		if !has(id) {
 			t.Errorf("%s is not offered with every part on", id)
 		}
 	}
 	owner.must(200, "PUT", "/v1/settings/areas", map[string]any{"areas": map[string]bool{"money": false}})
-	if has("subscription-monthly-invoices") || has("subscription-reconnect-on-payment") || has("chase-overdue-invoices") {
+	if has("subscription-monthly-invoices") || has("subscription-reconnect-on-payment") || has("subscription-renew-on-payment") || has("chase-overdue-invoices") {
 		t.Error("invoice templates are offered with Money off")
 	}
-	if !has("subscription-outage-notice") {
+	if !has("subscription-notice") || !has("subscription-mark-expired") {
 		t.Error("a template that needs no part that is off disappeared")
 	}
 	owner.must(200, "PUT", "/v1/settings/areas", map[string]any{"areas": map[string]bool{"money": true}})
