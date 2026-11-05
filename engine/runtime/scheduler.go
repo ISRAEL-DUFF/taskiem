@@ -37,7 +37,7 @@ type Scheduler struct {
 	PurgeBatch  int
 	PurgeBudget time.Duration
 
-	lastPartitions, lastPurge, lastReceipts, lastPurgeReport time.Time
+	lastPartitions, lastPurge, lastReceipts, lastSessions, lastPurgeReport time.Time
 	// purgeBehind: the last purge pass ran out of budget with runs left.
 	purgeBehind bool
 }
@@ -140,6 +140,13 @@ func (s *Scheduler) Tick(ctx context.Context) (TickStats, error) {
 			errs = append(errs, err)
 		} else {
 			s.lastReceipts = time.Now()
+		}
+	}
+	if time.Since(s.lastSessions) > time.Hour {
+		if err := s.purgeSessions(ctx); err != nil { // retention.go
+			errs = append(errs, err)
+		} else {
+			s.lastSessions = time.Now()
 		}
 	}
 	if time.Since(s.lastPartitions) > time.Hour {

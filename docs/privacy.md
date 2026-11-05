@@ -41,3 +41,7 @@ What is not sealed goes with the key, in the same transaction:
 - **Form submissions** whose answers or respondent hold the subject are deleted, with their files; the api then removes the files from the organisation's storage ([forms](forms.md)).
 - **Kept tables** in the business's data tables: a student's rows in `school_students` and `school_term_fees` are copied again with the name `(erased)`, and a payer's entries in `money_log` get the payer `[erased]` ([kept tables](data-tables.md#kept-tables)).
 - **Keyed hashes of a phone**, which whoever holds the platform's hash key could reverse by trying every number: the person's contact (how Taskiem reaches them on Telegram or WhatsApp) is deleted and their number taken off the business's request links; a rider's or supplier's row keeps its history with a hash that matches no number, and what the rider told the platform number is dropped once no business has them.
+
+## Sign-in sessions
+
+Each sign-in keeps a session: the hash of its token, the person, the organisation, when it began, when it expires or was revoked, the sign-in method and the client's IP address. A session is deleted, IP address and all, 30 days after it expires; a revoked session keeps its expiry, so it goes 30 days after it would have expired. The scheduler does this every hour (`taskiem_purge_sessions`, migration 00356). The audit log's record of each sign-in is not touched.

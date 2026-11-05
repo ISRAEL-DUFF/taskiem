@@ -199,6 +199,7 @@ taskiem_pool_stats()	@ISRAEL-DUFF (engine)	Queue depth by pool and queue, for me
 taskiem_purge_backlog()	@ISRAEL-DUFF (engine)	counts ended runs past retention not yet purged, across tenants, for the backlog metrics: counts and an age only, no ids (00256)
 taskiem_purge_run(uuid)	@ISRAEL-DUFF (engine)	Purges one ended run past retention in the caller's tenant scope: its events, steps, approvals, and its form submissions and files (queued for storage removal) (00380)
 taskiem_purge_run_failed(uuid,text)	@ISRAEL-DUFF (engine)	records a failed purge of one run in the caller's tenant scope and backs it off; only a run already past retention, so it cannot hold back anything else (00256)
+taskiem_purge_sessions(integer)	@ISRAEL-DUFF (identity)	deletes sign-in sessions that expired more than 30 days ago (revoked ones keep their expiry), for every tenant, in batches; returns only a count and cannot touch a live or recently ended session (00356)
 taskiem_purge_trigger_receipts()	@ISRAEL-DUFF (engine)	deletes trigger receipts older than the fixed 30-day dedup window, for every tenant; reads only received_at and takes no arguments, so it cannot clear a fresh receipt (00240)
 taskiem_put_plan(jsonb,text)	@ISRAEL-DUFF (engine)	Operators load a plan (taskiem billing plans --load) (00090)
 taskiem_queue_stats()	@ISRAEL-DUFF (engine)	Queue depth and age for metrics (spec 15.2), across tenants (00013)
