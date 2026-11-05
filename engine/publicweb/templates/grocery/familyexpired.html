@@ -1,0 +1,10 @@
+{{template "fhead" .}}{{template "fbody" .}}
+<h1>{{.Title}}</h1>
+<p class="notice" role="status">{{.Message}}</p>
+{{with .Notice}}<p class="notice" role="status">{{.}}</p>{{end}}
+{{with .Action}}<form method="post" action="{{.}}" class="fields">
+<input type="hidden" name="idem" value="{{$.Idem}}">
+<p class="hint">We will send it to the phone number the school has for your family, on WhatsApp or Telegram where you get the school's updates there, otherwise by text message.</p>
+<button class="btn btn-primary btn-block" type="submit">Send me a new link</button>
+</form>{{end}}
+{{template "ffoot" .}}

@@ -1,0 +1,48 @@
+{{/* Editorial: black and white with the business's colour used
+sparingly, serif headings, hairline rules, square corners, small
+capitals. Pages open with a thin bar: back, and the business's name set
+like a masthead. */}}
+{{define "fhead"}}<!doctype html>
+<html lang="{{.Lang}}">
+<head>
+{{template "meta" .}}<meta name="robots" content="noindex">
+<title>{{.Title}} · {{.Business}}</title>
+{{end}}
+
+{{define "fbody"}}</head>
+<body>
+<header class="mast">
+{{with .Home}}<a class="mast-back" href="{{.}}">← Back</a>{{else}}<span class="mast-back"></span>{{end}}
+{{with .Home}}<a class="sf-back mast-name" href="{{.}}">{{$.Business}}</a>{{else}}<span class="mast-name">{{.Business}}</span>{{end}}
+<span class="mast-back"></span>
+</header>
+<main class="page">
+{{end}}
+
+{{define "kicker"}}<p class="kicker">{{.}}</p>{{end}}
+
+{{define "ffoot"}}</main>
+<footer class="foot">
+<p class="safety">{{template "safety"}}</p>
+<p>Powered by Taskiem</p>
+</footer>
+</body>
+</html>
+{{end}}
+
+{{define "head"}}<!doctype html>
+<html lang="{{.Lang}}">
+<head>
+{{template "meta" .}}<title>{{.Title}}</title>
+</head>
+<body>
+<main class="page page-plain">
+{{end}}
+
+{{define "foot"}}</main>
+<footer class="foot">
+<p class="safety">{{template "safety"}}</p>
+</footer>
+</body>
+</html>
+{{end}}

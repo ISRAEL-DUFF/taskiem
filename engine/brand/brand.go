@@ -18,8 +18,8 @@ var ErrInvalid = errors.New("brand: invalid")
 // Themes are the looks a business may pick; the first is the default.
 // clean: light cards and a cover photo; bold: the colour fills the
 // header, a photo grid; editorial: black and white, serif headings.
-// kitchen, fashion, salon and grocery are skins: each is drawn on one of
-// those (Base) with its own colours, type and shapes on top, for food,
+// kitchen, fashion, salon and grocery have their own pages; their stylesheet is laid on one of
+// those (Base) for the pages they share (forms, status), with their own look on top, for food,
 // clothing, beauty and bookings, and fresh shopping.
 var Themes = []string{"clean", "bold", "editorial", "kitchen", "fashion", "salon", "grocery"}
 

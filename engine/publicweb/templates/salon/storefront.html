@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="{{.Lang}}">
+<head>
+{{template "meta" .}}{{template "og" .}}</head>
+<body class="sf sl">
+<div class="sl-top">
+  <a class="sl-name" href="{{if .Home}}{{.Home}}{{else}}#{{end}}">{{.M.Card.Name}}</a>
+  {{range .Forms}}{{if eq .Kind "booking"}}<a class="btn btn-primary btn-small" href="{{$.Base}}/a/{{.Ref}}">Book now</a>{{end}}{{end}}
+</div>
+<section class="sl-hero">
+  <div class="sl-copy">
+    {{if .OpenKnown}}<p class="sl-kicker">{{if .OpenNow}}Open now{{else}}Closed now{{end}}{{with .M.Card.Area}} · {{.}}{{end}}</p>{{else}}{{with .M.Card.Area}}<p class="sl-kicker">{{.}}</p>{{end}}{{end}}
+    <h1>{{if .M.Card.Tagline}}{{.M.Card.Tagline}}{{else}}{{.M.Card.Name}}{{end}}</h1>
+    {{with .M.Card.About}}<p class="sl-lead">{{.}}</p>{{end}}
+    <p class="sl-cta">
+      {{range .Forms}}{{if eq .Kind "booking"}}<a class="btn btn-primary" href="{{$.Base}}/a/{{.Ref}}">{{.Label}}</a>{{end}}{{end}}
+      {{if .Services}}<a class="btn" href="#services">See services</a>{{end}}
+      {{if not .Forms}}{{with .M.WhatsLink}}<a class="btn btn-primary" href="{{.}}" rel="noopener">Book on WhatsApp</a>{{end}}{{end}}
+    </p>
+  </div>
+  <div class="sl-arch">{{with .Brand.Cover}}<img src="{{.}}" srcset="{{.}} 800w, {{$.Brand.CoverLarge}} 2000w" sizes="(min-width: 900px) 40vw, 100vw" alt="">{{else}}{{with .Brand.Logo}}<img class="sl-logo" src="{{.}}" alt="">{{else}}<span class="sl-initials" aria-hidden="true">{{.Brand.Initials}}</span>{{end}}{{end}}</div>
+</section>
+<main class="sl-main">
+{{template "sfnotes" .}}
+{{if .Services}}<section id="services" aria-labelledby="services-h"><h2 id="services-h">Services</h2>
+<ul class="sl-services">{{range .Services}}<li class="sl-service"><span class="sl-ico">{{template "i-clock"}}</span><div class="item-text"><h3>{{.Name}}</h3><p class="item-sub">{{.Length}} · {{.Price}}</p></div><a class="btn btn-primary btn-small" href="{{.Href}}" aria-label="Book {{.Name}}">Book</a></li>
+{{end}}</ul></section>{{end}}
+{{if .HasItems}}{{if gt (len .Sections) 1}}<nav class="chips" aria-label="Sections">{{range $i, $s := .Sections}}{{if .Title}}<a class="chip" href="#s{{$i}}">{{.Title}}</a>{{end}}{{end}}</nav>{{end}}
+{{range $i, $s := .Sections}}<section id="s{{$i}}" aria-label="{{if .Title}}{{.Title}}{{else}}Products{{end}}">
+  <h2>{{if .Title}}{{.Title}}{{else}}Products{{end}}</h2>
+  <ul class="sl-products">{{range .Items}}<li class="sl-product{{if or (not .Available) .SoldOut}} is-unavailable{{end}}">
+    {{if .Small}}<img class="thumb" src="{{.Small}}" srcset="{{.Small}} 320w, {{.Large}} 800w" sizes="64px" alt="" loading="lazy" decoding="async">{{else}}<span class="thumb thumb-icon">{{template "i-photo"}}</span>{{end}}
+    <div class="item-text"><h3>{{if .ID}}<a class="item-open" href="{{$.Base}}/i/{{.ID}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}</h3><p class="item-sub">{{.Price}}</p></div>
+    {{if not .Available}}<span class="badge">Unavailable</span>{{else if .SoldOut}}<span class="badge">Sold out</span>{{else if and $.Ordering .Orderable}}<a class="add" href="{{$.Base}}/a/order?item={{.ID}}" aria-label="Add {{.Name}}">{{template "i-plus"}}</a>{{end}}
+  </li>{{end}}</ul>
+</section>{{end}}{{end}}
+{{template "sfinfo" .}}
+</main>
+{{template "sffoot" .}}
+</body>
+</html>

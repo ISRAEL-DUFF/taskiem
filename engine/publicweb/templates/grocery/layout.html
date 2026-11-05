@@ -1,0 +1,46 @@
+{{/* Clean: light cards on a pale ground, a cover photo, rounded
+everything. A business's pages open with a bar: back, logo, name. */}}
+{{define "fhead"}}<!doctype html>
+<html lang="{{.Lang}}">
+<head>
+{{template "meta" .}}<meta name="robots" content="noindex">
+<title>{{.Title}} · {{.Business}}</title>
+{{end}}
+
+{{define "mark"}}{{with .Brand.Logo}}<img class="mark" src="{{.}}" alt="" width="36" height="36">{{else}}<span class="mark" aria-hidden="true">{{.Brand.Initials}}</span>{{end}}{{end}}
+
+{{define "fbody"}}</head>
+<body>
+<header class="bar">
+{{with .Home}}<a class="bar-back" href="{{.}}" aria-label="Back to {{$.Business}}">{{template "i-back"}}</a>{{end}}
+{{template "mark" .}}
+<span class="bar-name">{{with .Home}}<a class="sf-back" href="{{.}}">{{$.Business}}</a>{{else}}{{.Business}}{{end}}</span>
+</header>
+<main class="page">
+{{end}}
+
+{{define "ffoot"}}</main>
+<footer class="foot">
+<p class="safety">{{template "safety"}}</p>
+<p>Powered by Taskiem</p>
+</footer>
+</body>
+</html>
+{{end}}
+
+{{define "head"}}<!doctype html>
+<html lang="{{.Lang}}">
+<head>
+{{template "meta" .}}<title>{{.Title}}</title>
+</head>
+<body>
+<main class="page page-plain">
+{{end}}
+
+{{define "foot"}}</main>
+<footer class="foot">
+<p class="safety">{{template "safety"}}</p>
+</footer>
+</body>
+</html>
+{{end}}

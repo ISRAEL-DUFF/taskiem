@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="{{.Lang}}">
+<head>
+{{template "meta" .}}{{template "og" .}}</head>
+<body class="sf fx{{if .Ordering}} has-sticky{{end}}">
+{{with .Closed}}{{else}}{{if .Ordering}}<p class="fx-strip">Order online, pay securely. We confirm on WhatsApp.</p>{{end}}{{end}}
+<header class="fx-top">
+  <a class="fx-link" href="#shop">Shop</a>
+  <a class="fx-name" href="{{if .Home}}{{.Home}}{{else}}#{{end}}">{{.M.Card.Name}}</a>
+  {{if .Ordering}}<a class="fx-link fx-bag" href="{{.Base}}/a/order">Bag</a>{{else}}<span></span>{{end}}
+</header>
+<section class="fx-hero">
+  <div class="fx-copy">
+    {{with .M.Card.Area}}<p class="fx-kicker">{{.}}</p>{{end}}
+    <h1>{{if .M.Card.Tagline}}{{.M.Card.Tagline}}{{else}}{{.M.Card.Name}}{{end}}</h1>
+    {{with .M.Card.About}}<p class="fx-lead">{{.}}</p>{{end}}
+    <p class="fx-cta">
+      {{if .HasItems}}<a class="btn btn-primary" href="#shop">Shop the collection</a>{{end}}
+      {{range .Forms}}{{if eq .Kind "booking"}}<a class="fx-under" href="{{$.Base}}/a/{{.Ref}}">{{.Label}}</a>{{end}}{{end}}
+      {{with .M.WhatsLink}}{{if not $.HasItems}}<a class="btn btn-primary" href="{{.}}" rel="noopener">Chat on WhatsApp</a>{{end}}{{end}}
+    </p>
+  </div>
+  <div class="fx-feature">{{with .Brand.Cover}}<img src="{{.}}" srcset="{{.}} 800w, {{$.Brand.CoverLarge}} 2000w" sizes="(min-width: 900px) 40vw, 100vw" alt="">{{else}}{{with .Brand.Logo}}<img class="fx-logo" src="{{.}}" alt="">{{else}}<span class="fx-initials" aria-hidden="true">{{.Brand.Initials}}</span>{{end}}{{end}}</div>
+</section>
+<main class="fx-main">
+{{template "sfnotes" .}}
+{{if .Services}}<section aria-labelledby="services-h"><h2 id="services-h">Fittings and services</h2>
+<ul class="fx-list">{{range .Services}}<li><span><strong>{{.Name}}</strong><em>{{.Length}} · {{.Price}}</em></span><a class="fx-under" href="{{.Href}}" aria-label="Book {{.Name}}">Book</a></li>
+{{end}}</ul></section>{{end}}
+{{if .HasItems}}<div id="shop">
+<div class="fx-shophead"><h2>The collection</h2>{{if gt (len .Sections) 1}}<nav class="fx-tabs" aria-label="Sections">{{range $i, $s := .Sections}}{{if .Title}}<a href="#s{{$i}}">{{.Title}}</a>{{end}}{{end}}</nav>{{end}}</div>
+{{range $i, $s := .Sections}}<section id="s{{$i}}" aria-label="{{if .Title}}{{.Title}}{{else}}Collection{{end}}">
+  {{if .Title}}{{if gt (len $.Sections) 1}}<h3 class="fx-cat">{{.Title}}</h3>{{end}}{{end}}
+  <ul class="fx-grid">{{range .Items}}<li class="fx-piece{{if or (not .Available) .SoldOut}} is-unavailable{{end}}">
+    <a class="fx-img" href="{{if .ID}}{{$.Base}}/i/{{.ID}}{{else}}#{{end}}" tabindex="-1" aria-hidden="true">{{if .Small}}<img src="{{.Small}}" srcset="{{.Small}} 320w, {{.Large}} 800w" sizes="(min-width: 900px) 18vw, 45vw" alt="" loading="lazy" decoding="async">{{else}}{{template "i-photo"}}{{end}}</a>
+    <p class="fx-line"><a class="item-open" href="{{if .ID}}{{$.Base}}/i/{{.ID}}{{else}}#{{end}}">{{.Name}}</a><span>{{.Price}}</span></p>
+    {{if not .Available}}<p class="item-sub">Unavailable</p>{{else if .SoldOut}}<p class="item-sub">Sold out</p>{{else if and $.Ordering .Orderable}}<a class="fx-under" href="{{$.Base}}/a/order?item={{.ID}}">Add to bag</a>{{end}}
+  </li>{{end}}</ul>
+</section>{{end}}</div>{{end}}
+{{template "sfinfo" .}}
+</main>
+{{template "sffoot" .}}
+{{if .Ordering}}<a class="sticky" href="{{.Base}}/a/order"><span>Checkout</span>{{template "i-next"}}</a>{{end}}
+</body>
+</html>

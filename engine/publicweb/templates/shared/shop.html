@@ -68,3 +68,30 @@ the form's own fields. */}}
 {{end}}
 <p class="total" data-total aria-live="polite">Total: {{.Subtotal}}</p>
 </section>{{end}}
+
+{{/* The parts of a storefront page every look shows the same way: what
+comes after the catalogue (about, hours, address, more fronts) and the
+notices before it. A look's stylesheet draws them. */}}
+{{define "sfnotes"}}{{with .Front}}<section class="panel front" aria-labelledby="front-h"><h2 id="front-h">{{.Name}}</h2>{{with .Tagline}}<p>{{.}}</p>{{end}}<p><a href="{{$.Home}}">All of {{$.M.Card.Name}}</a></p></section>
+{{end}}{{if .Closed}}<p class="notice" role="status">{{.Closed}}</p>{{end}}{{if and .HasItems (not .Forms) (not .Closed)}}<p class="notice" role="status">Orders are not open on this page yet.{{with .M.WhatsLink}} <a href="{{.}}" rel="noopener">Message {{$.M.Card.Name}} on WhatsApp</a> to order.{{else}}{{with .Phone}} Call <a href="tel:{{.}}">{{.}}</a> to order.{{end}}{{end}}</p>{{end}}{{end}}
+
+{{define "sfinfo"}}{{with .M.Card.About}}<section class="panel"><h2>About</h2><p>{{.}}</p></section>{{end}}
+{{if .Hours}}<section class="panel hours">
+<h2>Opening hours</h2>
+<table>{{range .Hours}}<tr{{if .Today}} class="is-today"{{end}}><th scope="row">{{.Day}}{{if .Today}} · today{{end}}</th><td>{{.Spans}}</td></tr>{{end}}</table>
+{{with .M.Card.Hours.Note}}<p class="item-sub">{{.}}</p>{{end}}
+</section>{{end}}
+{{with .M.Card.Address}}<section class="panel"><h2>Where to find us</h2><p>{{.}}</p>{{with $.M.MapLink}}<p><a href="{{.}}" rel="noopener">Get directions</a></p>{{end}}</section>{{end}}
+{{if .Fronts}}<section aria-labelledby="fronts-h"><h2 id="fronts-h">More from {{.M.Card.Name}}</h2>
+<ul class="items">{{range .Fronts}}<li class="item">{{if .Small}}<img class="thumb" src="{{.Small}}" alt="" loading="lazy" decoding="async">{{else}}<span class="thumb thumb-icon">{{template "i-photo"}}</span>{{end}}<div class="item-text"><h3><a href="{{.Href}}">{{.Name}}</a></h3>{{with .Tagline}}<p class="item-sub">{{.}}</p>{{end}}</div></li>
+{{end}}</ul></section>{{end}}{{end}}
+
+{{define "sfcontact"}}{{with .M.WhatsLink}}<a class="btn" href="{{.}}" rel="noopener">{{template "i-whatsapp"}}WhatsApp</a>{{end}}{{with .Phone}}<a class="btn" href="tel:{{.}}">{{template "i-call"}}Call</a>{{end}}{{end}}
+
+{{define "sffoot"}}<footer class="foot sf-foot">
+<p class="sf-foot-name">{{.M.Card.Name}}</p>
+{{with .M.Card.Tagline}}<p class="sf-foot-line">{{.}}</p>{{end}}
+<p class="sf-foot-contact">{{template "sfcontact" .}}</p>
+<p class="sf-foot-meta">Powered by Taskiem · <a href="/report">Report this page</a></p>
+<p class="safety">Taskiem never asks for card details, PINs or OTPs. {{template "safety"}}</p>
+</footer>{{end}}

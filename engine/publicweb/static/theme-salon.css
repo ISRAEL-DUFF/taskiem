@@ -32,3 +32,40 @@ h3 { font-weight: 700; }
 .total { font-family: var(--head); font-weight: 400; font-size: 1.75rem; }
 .slot label, .day { border-radius: 999px; }
 .field input:not([type=checkbox]):not([type=radio]), .field textarea, .field select { border-radius: 16px; }
+
+/* The page: a bar, a headline beside an arch, services in two columns. */
+.sl-top { display: flex; align-items: center; justify-content: space-between; max-width: 66rem; margin: 0 auto; padding: 1rem 1.25rem; }
+.sl-name { font-family: var(--head); font-size: 1.5rem; color: var(--fg); text-decoration: none; }
+.sl-hero { display: grid; gap: 1.5rem; max-width: 66rem; margin: 0 auto; padding: .5rem 1.25rem 2rem; }
+.sl-kicker { margin: 0 0 .75rem; font-size: .8125rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--brand-text); }
+.sl-hero h1 { font-size: clamp(2.75rem, 10vw, 5.5rem); line-height: .95; margin: 0 0 1rem; }
+.sl-lead { max-width: 30rem; margin: 0 0 1.25rem; color: var(--muted); }
+.sl-cta { display: flex; flex-wrap: wrap; gap: .75rem; margin: 0; }
+.sl-arch { display: grid; place-items: center; aspect-ratio: 4 / 5; border-radius: 999px 999px 14px 14px; background: var(--brand-tint); overflow: hidden; }
+.sl-arch img { width: 100%; height: 100%; object-fit: cover; }
+.sl-arch .sl-logo { width: 50%; height: auto; object-fit: contain; border-radius: 50%; }
+.sl-initials { font-family: var(--head); font-size: 5rem; color: var(--brand-text); }
+.sl-main { max-width: 66rem; margin: 0 auto; padding: 0 1.25rem 2rem; }
+.sl-services, .sl-products { display: grid; gap: .75rem; margin: 0; padding: 0; list-style: none; }
+.sl-service, .sl-product { display: flex; align-items: center; gap: .875rem; padding: .875rem 1rem; border: 1px solid var(--line); border-radius: 24px; background: var(--card); }
+.sl-service .item-text, .sl-product .item-text { flex: 1; min-width: 0; }
+.sl-service h3, .sl-product h3 { margin: 0; font-size: 1rem; }
+.sl-product h3 a { color: inherit; text-decoration: none; }
+.sl-service p, .sl-product p { margin: .1rem 0 0; }
+.sl-ico { display: grid; place-items: center; flex: none; width: 52px; height: 52px; border-radius: 50%; background: var(--brand-tint); color: var(--brand-text); }
+.sl-product .thumb { flex: none; width: 52px; height: 52px; }
+.sl-product.is-unavailable { opacity: .55; }
+.sf-foot { margin-top: 2rem; padding: 2rem 1.25rem; background: var(--fg); color: #f9e9e3; }
+.sf-foot > * { max-width: 66rem; margin-left: auto; margin-right: auto; }
+.sf-foot a { color: inherit; }
+.sf-foot .btn { border-color: currentColor; background: transparent; color: inherit; }
+.sf-foot-name { font-family: var(--head); font-size: 1.75rem; margin-top: 0; margin-bottom: 0; }
+.sf-foot-line { margin: .25rem auto 1rem; opacity: .8; }
+.sf-foot-contact { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1rem; }
+.sf-foot-meta, .sf-foot .safety { font-size: .8125rem; opacity: .75; }
+@media (min-width: 900px) {
+  .sl-hero { grid-template-columns: 1.1fr .9fr; align-items: center; gap: 3rem; }
+  .sl-services, .sl-products { grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .sl-arch { max-width: 25rem; justify-self: end; width: 100%; }
+}
+.sf-foot { max-width: none; margin-left: 0; margin-right: 0; text-align: left; } .sf-foot > * { text-align: left; }

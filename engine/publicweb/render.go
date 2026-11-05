@@ -80,7 +80,7 @@ func init() {
 		},
 	}
 	for _, theme := range brand.Themes {
-		themed[theme] = template.Must(template.New("").Funcs(funcs).ParseFS(templateFS, "templates/shared/*.html", "templates/"+brand.Base(theme)+"/*.html"))
+		themed[theme] = template.Must(template.New("").Funcs(funcs).ParseFS(templateFS, "templates/shared/*.html", "templates/"+theme+"/*.html"))
 	}
 }
 
