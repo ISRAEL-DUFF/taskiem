@@ -87,3 +87,8 @@
 .sticky-sum { display: flex; flex-direction: column; line-height: 1.15; }
 .sticky-sum small { opacity: .8; }
 .sticky-sum[hidden], [data-bag-hide][hidden], .bag-n[hidden] { display: none; }
+
+/* An order's deposit and what is left, under the total. */
+.bag-split { display: flex; justify-content: space-between; gap: 1rem; margin: 0.25rem 0; font-size: 0.95rem; }
+.bag-bal { opacity: 0.75; }
+.bag-split[hidden] { display: none; }

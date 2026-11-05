@@ -28,6 +28,10 @@
     if (total > 0 && opt && opt.value && (!form.querySelector("input[name=fulfilment]") || (how && how.value === "delivery"))) {
       fee = parseInt(opt.getAttribute("data-fee"), 10) || 0;
     }
+    // Paying at the door has no deposit, so the split is hidden then.
+    var later = form.querySelector("input[name=pay]:checked");
+    var split = form.querySelectorAll(".bag-split");
+    for (var s = 0; s < split.length; s++) split[s].hidden = !!(later && later.value === "on_delivery");
     var pct = parseInt(form.getAttribute("data-deposit-pct"), 10) || 0;
     var dep = form.querySelector("[data-deposit]"), bal = form.querySelector("[data-balance]");
     if (pct > 0 && pct < 100 && dep && bal) {

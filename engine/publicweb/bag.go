@@ -71,7 +71,7 @@ func (f *formData) fillBag() {
 	}
 	if len(f.Bag) > 0 {
 		f.Subtotal = storefront.FormatNaira(total)
-		if f.DepositPercent > 0 {
+		if f.DepositPercent > 0 && !f.PayLater {
 			dep := storefront.ActionOptions{DepositPercent: f.DepositPercent}.Deposit(total)
 			f.Deposit, f.Balance = storefront.FormatNaira(dep), storefront.FormatNaira(total-dep)
 		}
