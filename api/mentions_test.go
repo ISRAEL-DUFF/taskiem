@@ -66,6 +66,14 @@ func TestMentionsOrderFromTwo(t *testing.T) {
 		!strings.Contains(r, "*Cherry Blocks*") || !strings.Contains(r, "₦9,000") {
 		t.Fatalf("read back: %q", r)
 	}
+	// A message straight to a business meanwhile, after a lone "..."
+	// (direct-messages.md): the drafts still wait for their yes.
+	if r := w.say(t, buyerOn, "..."); !strings.Contains(r, "Now send the message") {
+		t.Fatalf("a lone marker: %q", r)
+	}
+	if r := w.say(t, buyerOn, "@Dangote is the cement price still right?"); !strings.Contains(r, "✓ Sent to *Dangote Stores*") {
+		t.Fatalf("straight to Dangote: %q", r)
+	}
 	if r := w.say(t, buyerOn, "yes"); !strings.Contains(r, "Sent:") || !strings.Contains(r, "Dangote Stores") || !strings.Contains(r, "Cherry Blocks") {
 		t.Fatalf("sent: %q", r)
 	}

@@ -86,6 +86,11 @@ func (s *Server) waDirect(ctx context.Context, c *chat) (bool, error) {
 		return false, nil
 	}
 	text, marked := cutDirect(c.in.Text)
+	// "... sold 5 bags" names no one: read as it always was. Only a lone
+	// "..." or one with an "@" is the marker's.
+	if marked && text != "" && !strings.Contains(text, "@") {
+		marked = false
+	}
 	if !marked {
 		if c.data.Direct == nil {
 			return false, nil
@@ -109,7 +114,7 @@ func (s *Server) waDirect(ctx context.Context, c *chat) (bool, error) {
 		d.Direct = &now
 		// Whatever Taskiem was asking is still asked; on its own, the
 		// wait ends by itself.
-		state, ttl := c.state, waPendingTTL
+		state, ttl := c.state, chatStateTTL(c.state)
 		if state == stateIdle {
 			state, ttl = stateCollecting, directWait
 		}
@@ -179,5 +184,14 @@ func (s *Server) endDirectWait(ctx context.Context, c *chat) error {
 	if c.state == stateCollecting && reflect.DeepEqual(d, chatData{}) {
 		return s.saveSession(ctx, c, stateIdle, chatData{}, 0)
 	}
-	return s.saveSession(ctx, c, c.state, d, waPendingTTL)
+	return s.saveSession(ctx, c, c.state, d, chatStateTTL(c.state))
+}
+
+// chatStateTTL is how long a state is kept when it is saved again unchanged:
+// a step-up link's ten minutes, else a pending command's.
+func chatStateTTL(state string) time.Duration {
+	if state == stateStepUp {
+		return waHandoffTTL
+	}
+	return waPendingTTL
 }

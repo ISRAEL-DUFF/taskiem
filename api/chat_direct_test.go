@@ -79,11 +79,16 @@ func TestDirectMessages(t *testing.T) {
 	if got := bodies(bua); len(got) != 1 || got[0] != "price of cement this week?" {
 		t.Fatalf("what BUA received: %q", got)
 	}
+	// An amount after "@" is no business.
+	sent("... @Dangote can you do cement @4500?", "*Dangote Stores*")
+	if got := bodies(dangote); got[len(got)-1] != "can you do cement @4500?" {
+		t.Fatalf("an amount: %q", got[len(got)-1])
+	}
 	n := len(bodies(dangote))
 
 	// Nothing goes to anyone without one linked business per mention.
 	for text, reply := range map[string]string{
-		"... how much?":           "Who is it for?",
+		"... @ how much?":         "Who is it for?",
 		"... @Nobody @Dangote hi": "not linked with *Nobody*",
 		"... @Dangote":            "What do you want to say to *Dangote Stores*?",
 	} {
@@ -91,9 +96,13 @@ func TestDirectMessages(t *testing.T) {
 			t.Errorf("%q: %q", text, r)
 		}
 	}
-	// "...and" is no marker; without the marker a mention is read as before,
-	// with the hint.
-	w.say(t, buyerOn, "...and that is all")
+	// "...and" is no marker, and "..." naming no one is read as before;
+	// without the marker a mention is read as before, with the hint.
+	for _, text := range []string{"...and that is all", "... links"} {
+		if r := w.say(t, buyerOn, text); strings.Contains(r, "Sent to") || strings.Contains(r, "Who is it for") {
+			t.Errorf("%q is read as before: %q", text, r)
+		}
+	}
 	if r := w.say(t, buyerOn, "@Dangote how much is a bag of cement?"); !strings.Contains(r, "*Dangote Stores* shares no price list") ||
 		!strings.Contains(r, "To send it to *Dangote Stores* as a message instead, start it with *...*") {
 		t.Errorf("without the marker: %q", r)

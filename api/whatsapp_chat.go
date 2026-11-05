@@ -439,6 +439,13 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	if id, ok := strings.CutPrefix(in.Reply, signupTplPrefix); ok {
 		return s.chatTemplateBuild(ctx, c, id)
 	}
+	// Anything but words ends a lone "..."'s wait (chat_direct.go), so a
+	// photo or a form is taken as it would be.
+	if c.data.Direct != nil && (in.Image != nil || in.Document != nil || in.Media != nil || in.Flow != "") {
+		if err := s.endDirectWait(ctx, c); err != nil {
+			return err
+		}
+	}
 	// A completed WhatsApp form carries its flow token.
 	if in.Flow != "" {
 		return s.waFlowCompleted(ctx, c)

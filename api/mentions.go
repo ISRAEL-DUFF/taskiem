@@ -17,6 +17,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -77,7 +78,8 @@ func parseMentions(text string, active []links.Link) mentionOrder {
 				Typed: string(r[i+1 : end]), At: i, End: end})
 		} else {
 			w := mentionWordRe.FindString(rest)
-			if w == "" {
+			// "@4500" is an amount ("cement @4500"), not a business.
+			if w == "" || unicode.IsDigit([]rune(w)[0]) {
 				continue
 			}
 			out.Unknown = append(out.Unknown, w)

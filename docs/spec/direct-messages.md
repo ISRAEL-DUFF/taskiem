@@ -103,17 +103,26 @@ in `waCommand`: pending questions, commands, mention orders and the model.
     marker.
   - On its own line, the message follows on the next lines.
   - On the same line, `... @Dangote …`, for keyboards where Enter sends.
+  - **It needs an `@`.** A `...` before a message with no `@` (`... sold 5 bags of
+    rice`) is read as it always was, so nobody who starts a message with dots is
+    caught out. Only a lone `...`, or one with an `@`, is the marker.
 - **A lone `...`:** Taskiem answers "Now send the message, with *@business*…", and the
   next message goes to the businesses it mentions.
   - The wait is in the chat session (`chatData.Direct`) and lasts five minutes.
   - **A pending question is kept.** If Taskiem was waiting on a question (a draft to
     confirm, say), it is still waiting.
-  - **A next message with no `@`** ends the wait, and is read as usual.
+  - **A next message with no `@`** ends the wait, and is read as usual. So do a
+    photo, a file, a voice note or a completed form, which are then taken as they
+    would be.
+  - Saving the wait keeps a pending security step's ten minutes.
 - **Who it goes to:** every business the message mentions (§3).
   - Several mentions mean the same words to each, as its own message in its own
     conversation.
   - **Unless every mention names exactly one linked business, nothing is sent to
     anyone.** The reply names the unknown business, or asks which one.
+  - **An `@` before a number is an amount, not a business:** `cement @4500` is
+    sent as typed. This also fixes `buy 20 bags @4500 from @Dangote`, which before
+    read "4500" as a business not linked.
 - **What they receive:**
   - The mentions at the start are left out: `@Dangote, @BUA: price?` arrives as
     "price?".
@@ -121,7 +130,8 @@ in `waCommand`: pending questions, commands, mention orders and the model.
     depot open?` arrives as "Hi Dangote, is the depot open?".
   - New lines are kept.
 - **Replies when nothing can be sent:**
-  - No mention: "Who is it for? Add *@business*…".
+  - An `@` that names nothing (`... @ how much?`): "Who is it for? Add
+    *@business*…".
   - Nothing left once the mentions are removed: "What do you want to say to
     *Dangote Nigeria Ltd*?".
 - **How it is sent:** through `sendLink`, as `ask …` is.
@@ -182,6 +192,10 @@ Two English messages changed:
 - **`api/chat_direct_test.go` `TestDirectMessages`, on WhatsApp:**
   - the marker on the same line, on its own line, and as `…`, each received as said;
   - a lone `...` then the message, and a lone `...` then a message with no mention;
+  - `... links` and `...and` read as before;
+  - an amount after `@`;
+  - in `TestMentionsOrderFromTwo`: a lone `...` and a message to Dangote while two
+    drafts wait, and the drafts' **Yes** still sends both;
   - two businesses;
   - nothing sent for no mention, an unknown business, or nothing to say;
   - `...and` read as before;

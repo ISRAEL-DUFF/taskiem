@@ -50,6 +50,10 @@ func TestParseMentions(t *testing.T) {
 	if got := parseMentions("2 from @KELVİN", append(names, act("Kelvin")...)); len(got.Parts) != 0 || len(got.Unknown) != 1 {
 		t.Fatalf("İ is not i: %+v", got)
 	}
+	// An amount after "@" is no business.
+	if got := parseMentions("buy 20 bags @4500 from @Dangote", names); len(got.Unknown) != 0 || !reflect.DeepEqual(parts(got), []bt{{"Dangote", "20 bags @4500"}}) {
+		t.Fatalf("an amount: %+v", got)
+	}
 	// The start of a name names it (docs/spec/direct-messages.md §3).
 	long := act("Dangote Nigeria Ltd", "BUA Foods Plc")
 	if got := parseMentions("Buy 20 bags of cement from @Dangote and 5 sugar from @bua", long); !reflect.DeepEqual(parts(got), []bt{{"Dangote Nigeria Ltd", "20 bags of cement"}, {"BUA Foods Plc", "5 sugar"}}) {
