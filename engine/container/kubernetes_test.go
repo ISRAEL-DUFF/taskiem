@@ -304,3 +304,63 @@ func TestKubernetesRefusesImagesAndCancels(t *testing.T) {
 		t.Fatal("Check passed without a NetworkPolicy")
 	}
 }
+
+// TestKubernetesRunningTimeIsReported: a step that ends without a
+// result after its program started (cancelled, the Pod gone, the
+// deadline with no terminated state) still reports the time it ran, so
+// the container minutes it used are counted.
+func TestKubernetesRunningTimeIsReported(t *testing.T) {
+	running := func() map[string]any {
+		return map[string]any{"phase": "Running", "containerStatuses": []any{map[string]any{"name": "main", "state": map[string]any{"running": map[string]any{
+			"startedAt": time.Now().UTC().Format(time.RFC3339Nano)}}}}}
+	}
+	cases := map[string]struct {
+		status func(int) map[string]any
+		cancel time.Duration
+		msg    string
+	}{
+		"cancelled": {func(int) map[string]any { return running() }, 300 * time.Millisecond, "cancelled while running"},
+		"deadline without terminated": {func(n int) map[string]any {
+			if n < 40 {
+				return running()
+			}
+			return map[string]any{"phase": "Failed", "reason": "DeadlineExceeded"}
+		}, 0, "timed out"},
+		"ended without a result": {func(n int) map[string]any {
+			if n < 40 {
+				return running()
+			}
+			return map[string]any{"phase": "Failed", "reason": "Evicted"}
+		}, 0, "without a result"},
+	}
+	for name, c := range cases {
+		f, k := newFakeAPI(t)
+		f.status = c.status
+		ctx, cancel := context.WithCancel(context.Background())
+		if c.cancel > 0 {
+			time.AfterFunc(c.cancel, cancel)
+		}
+		start := time.Now()
+		res, err := k.Run(ctx, kubeSpec())
+		took := time.Since(start)
+		cancel()
+		if !errors.Is(err, effects.ErrUnknownOutcome) || !strings.Contains(err.Error(), c.msg) {
+			t.Errorf("%s: %v", name, err)
+		}
+		if res.Elapsed < 100*time.Millisecond || res.Elapsed > took {
+			t.Errorf("%s: reported %s of %s", name, res.Elapsed, took)
+		}
+	}
+	// A kubelet clock far behind ours cannot report more than the wait.
+	f, k := newFakeAPI(t)
+	f.status = func(int) map[string]any {
+		return map[string]any{"phase": "Running", "containerStatuses": []any{map[string]any{"name": "main", "state": map[string]any{"running": map[string]any{"startedAt": "2020-01-01T00:00:00Z"}}}}}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	res, _ := k.Run(ctx, kubeSpec())
+	if took := time.Since(start); res.Elapsed <= 0 || res.Elapsed > took {
+		t.Errorf("skewed clock: reported %s of %s", res.Elapsed, took)
+	}
+}

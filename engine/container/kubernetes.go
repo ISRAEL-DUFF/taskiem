@@ -547,12 +547,23 @@ func (k *Kubernetes) Run(ctx context.Context, s Spec) (Result, error) {
 
 	start := time.Now()
 	running := false
+	// ranFrom is when the program started: the kubelet's time, kept
+	// within our own wait so a skewed clock cannot inflate it. A step
+	// that ends without a result after it started still reports the
+	// time it ran, which is counted against the tenant's minutes.
+	var ranFrom time.Time
+	ran := func() time.Duration {
+		if ranFrom.IsZero() {
+			return 0
+		}
+		return max(time.Since(ranFrom), 0)
+	}
 	var p podStatus
 	for {
 		select {
 		case <-ctx.Done():
 			if running {
-				return Result{}, unknown("container step cancelled while running")
+				return Result{Elapsed: ran()}, unknown("container step cancelled while running")
 			}
 			return Result{}, notStarted("cancelled before the program started")
 		case <-time.After(k.poll()):
@@ -565,7 +576,7 @@ func (k *Kubernetes) Run(ctx context.Context, s Spec) (Result, error) {
 			var ae *apiError
 			if errors.As(err, &ae) && ae.Code == http.StatusNotFound {
 				if running {
-					return Result{}, unknown("container Pod disappeared while running")
+					return Result{Elapsed: ran()}, unknown("container Pod disappeared while running")
 				}
 				return Result{}, notStarted("container Pod disappeared before it started")
 			}
@@ -574,6 +585,9 @@ func (k *Kubernetes) Run(ctx context.Context, s Spec) (Result, error) {
 		}
 		m := p.main()
 		if m != nil && (m.State.Running != nil || m.State.Terminated != nil) {
+			if !running {
+				ranFrom = startedAt(m, start)
+			}
 			running = true
 		}
 		if p.Status.Phase == "Succeeded" || p.Status.Phase == "Failed" {
@@ -591,7 +605,7 @@ func (k *Kubernetes) Run(ctx context.Context, s Spec) (Result, error) {
 	m := p.main()
 	if m == nil || m.State.Terminated == nil {
 		if p.Status.Reason == "DeadlineExceeded" && running {
-			return Result{}, unknown("container step timed out")
+			return Result{Elapsed: ran()}, unknown("container step timed out")
 		}
 		if !running {
 			if why := p.stuck(); why != "" {
@@ -599,7 +613,7 @@ func (k *Kubernetes) Run(ctx context.Context, s Spec) (Result, error) {
 			}
 			return Result{}, notStarted("Pod %s: %s %s", p.Status.Phase, p.Status.Reason, p.Status.Message)
 		}
-		return Result{}, unknown("container Pod ended (%s %s) without a result", p.Status.Reason, p.Status.Message)
+		return Result{Elapsed: ran()}, unknown("container Pod ended (%s %s) without a result", p.Status.Reason, p.Status.Message)
 	}
 	t := m.State.Terminated
 	elapsed := t.FinishedAt.Sub(t.StartedAt)
@@ -623,6 +637,27 @@ func (k *Kubernetes) Run(ctx context.Context, s Spec) (Result, error) {
 		return Result{Elapsed: elapsed}, unknown("container ended without a result (exit %d, %s)", t.ExitCode, t.Reason)
 	}
 	return Settle(o, elapsed)
+}
+
+// startedAt is when the main container started by the kubelet's report,
+// clamped to after the attempt's wait began (the program cannot have
+// run before) and to now.
+func startedAt(m *containerStatus, waitFrom time.Time) time.Time {
+	var t time.Time
+	switch {
+	case m.State.Running != nil:
+		t = m.State.Running.StartedAt
+	case m.State.Terminated != nil:
+		t = m.State.Terminated.StartedAt
+	}
+	now := time.Now()
+	if t.IsZero() || t.After(now) {
+		return now
+	}
+	if t.Before(waitFrom) {
+		return waitFrom
+	}
+	return t
 }
 
 // remove deletes an attempt's Pod and Secret, whatever the step's context.
