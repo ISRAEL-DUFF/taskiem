@@ -2163,5 +2163,5 @@ input[type="file"], input[type="color"], .look-colour input[type="color"] { bord
   .card, .hero { animation: rise-in 0.22s ease-out; }
 }
 .composer-pill textarea, .composer-pill textarea:hover, .composer-pill textarea:focus { background: transparent; box-shadow: none; }
-.composer-pill { transition: box-shadow 0.18s ease; }
+
 .composer-pill:focus-within { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), 0 1px 0.5px var(--chat-shadow); }
