@@ -11,7 +11,7 @@
 <form class="gx-search" role="search" method="get" action="{{if .Base}}{{.Base}}{{else}}/{{end}}"><label class="sr" for="gx-q">Search</label>{{template "i-search"}}<input id="gx-q" type="search" name="q" value="{{.Search}}" maxlength="40" placeholder="Search {{.M.Card.Name}}" autocomplete="off"></form>
 <main class="gx-main">
 {{template "sfnotes" .}}
-{{if gt (len .Sections) 1}}<nav class="gx-cats" aria-label="Aisles">{{range $i, $s := .Sections}}{{if .Title}}<a href="#s{{$i}}"><span class="gx-dot c{{$i}}">{{template "i-photo"}}</span>{{.Title}}</a>{{end}}{{end}}</nav>{{end}}
+{{if gt (len .Sections) 1}}<nav class="gx-cats" aria-label="Aisles">{{range $i, $s := .Sections}}{{if .Title}}<a href="#s{{$i}}">{{$pic := ""}}{{range .Items}}{{if and (not $pic) .Small}}{{$pic = .Small}}{{end}}{{end}}<span class="gx-dot c{{$i}}" aria-hidden="true">{{if $pic}}<img src="{{$pic}}" alt="" width="64" height="64" loading="lazy" decoding="async">{{else}}{{initial .Title}}{{end}}</span>{{.Title}}</a>{{end}}{{end}}</nav>{{end}}
 {{if not .Search}}<section class="gx-promo">
   <div><p class="gx-tag">{{if .OpenKnown}}{{if .OpenNow}}Open now{{else}}Closed now{{end}}{{else}}Welcome{{end}}</p>
   <h1>{{.M.Card.Name}}</h1>

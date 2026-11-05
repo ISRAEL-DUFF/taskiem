@@ -82,6 +82,13 @@ func init() {
 		"swatch":  swatch,
 		"optkind": optkind,
 		"add":     func(a, b int) int { return a + b },
+		// initial is a name's first letter, for a circle with no photo.
+		"initial": func(s string) string {
+			for _, r := range strings.TrimSpace(s) {
+				return strings.ToUpper(string(r))
+			}
+			return ""
+		},
 	}
 	for _, theme := range brand.Themes {
 		themed[theme] = template.Must(template.New("").Funcs(funcs).ParseFS(templateFS, "templates/shared/*.html", "templates/"+theme+"/*.html"))
