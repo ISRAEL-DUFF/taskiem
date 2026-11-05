@@ -5172,10 +5172,6 @@
       "text": "Wetin you wan tell *{name}*? Send *... @{name}* and your message.",
       "reviewed": false
     },
-    "chat.direct.files": {
-      "text": "Na only words dey go straight to business with *...* for now. Send photo and file give them for the Chat page.",
-      "reviewed": false
-    },
     "chat.direct.hint": {
       "text": "To send am to *{name}* as message, start am with *...*",
       "reviewed": false
@@ -5186,6 +5182,10 @@
     },
     "chat.direct.not_sent": {
       "text": "E no reach *{name}*: {reason}.",
+      "reviewed": false
+    },
+    "chat.direct.failed": {
+      "text": "E no reach *{name}*: something spoil. Send am give them again.",
       "reviewed": false
     },
     "chat.link.photo": {
@@ -5365,7 +5365,7 @@
       "reviewed": false
     },
     "wa.mention.which": {
-      "text": "More than one of your linked businesses is called *{name}*: {list}. Pick it on the Chat page, where each is its own conversation.",
+      "text": "*@{name}* fit be more than one of the businesses wey you link with: {list}. Use more of the name, or pick am for the Chat page.",
       "reviewed": false
     },
     "order.link.auto_changed_title": {

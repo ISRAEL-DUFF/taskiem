@@ -32,7 +32,7 @@ To write to a linked business from your Taskiem chat, start the message with *..
 
 *... @Dangote how much is a bag of cement?*
 
-The message goes straight to Dangote, and Taskiem only answers *✓ Sent to Dangote Nigeria Ltd*. Mention several businesses to send the same words to each. A message without *...* is read as always: *Buy 400 bags of cement from @Dangote* still makes an order.
+The message goes straight to Dangote, and Taskiem only answers *✓ Sent to Dangote Nigeria Ltd*. Mention several businesses to send the same words to each. A photo or a file works the same way: put *... @Dangote* and any words in its caption. A message without *...* is read as always: *Buy 400 bags of cement from @Dangote* still makes an order.
 
 You don't have to type a business's whole name: *@Dangote* finds *Dangote Nigeria Ltd*. If two of your linked businesses start the same way, Taskiem asks which one, and sends nothing until you say more of the name. Owners, admins and operators can write; everyone else can read.
 

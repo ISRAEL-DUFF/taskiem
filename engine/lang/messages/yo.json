@@ -5172,10 +5172,6 @@
       "text": "Kini o fẹ sọ fun *{name}*? Fi *... @{name}* ati ifiranṣẹ rẹ ranṣẹ.",
       "reviewed": false
     },
-    "chat.direct.files": {
-      "text": "Ọrọ nikan lo n lọ taara si ile-iṣẹ pẹlu *...* fun bayi. Fi awọn fọto ati faili ranṣẹ si wọn lori oju-iwe Chat.",
-      "reviewed": false
-    },
     "chat.direct.hint": {
       "text": "Lati fi ranṣẹ si *{name}* gẹgẹbi ifiranṣẹ, bẹrẹ pẹlu *...*",
       "reviewed": false
@@ -5186,6 +5182,10 @@
     },
     "chat.direct.not_sent": {
       "text": "Ko lọ si *{name}*: {reason}.",
+      "reviewed": false
+    },
+    "chat.direct.failed": {
+      "text": "Ko lọ si *{name}*: nkan kan ṣe aṣiṣe. Tun fi ranṣẹ si wọn.",
       "reviewed": false
     },
     "chat.link.photo": {
@@ -5365,7 +5365,7 @@
       "reviewed": false
     },
     "wa.mention.which": {
-      "text": "More than one of your linked businesses is called *{name}*: {list}. Pick it on the Chat page, where each is its own conversation.",
+      "text": "*@{name}* le jẹ ju ọkan lọ ninu awọn ile-iṣẹ ti o so pọ: {list}. Lo diẹ sii ninu orukọ naa, tabi yan an lori oju-iwe Chat.",
       "reviewed": false
     },
     "order.link.auto_changed_title": {

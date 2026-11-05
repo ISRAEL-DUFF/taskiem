@@ -5172,10 +5172,6 @@
       "text": "Gịnị ka ị chọrọ ịgwa *{name}*? Zipu *... @{name}* na ozi gị.",
       "reviewed": false
     },
-    "chat.direct.files": {
-      "text": "Naanị okwu na-aga ozugbo n'azụmahịa site na *...* ugbu a. Zipu foto na faịlụ na ibe Chat.",
-      "reviewed": false
-    },
     "chat.direct.hint": {
       "text": "Iji zipu ya *{name}* dịka ozi, bido ya na *...*",
       "reviewed": false
@@ -5186,6 +5182,10 @@
     },
     "chat.direct.not_sent": {
       "text": "E zighị ya *{name}*: {reason}.",
+      "reviewed": false
+    },
+    "chat.direct.failed": {
+      "text": "E zighị ya *{name}*: ihe mebiri emebi. Zigharịa ya ọzọ.",
       "reviewed": false
     },
     "chat.link.photo": {
@@ -5365,7 +5365,7 @@
       "reviewed": false
     },
     "wa.mention.which": {
-      "text": "More than one of your linked businesses is called *{name}*: {list}. Pick it on the Chat page, where each is its own conversation.",
+      "text": "*@{name}* nwere ike ịbụ ihe karịrị otu n'ime azụmahịa ejikọrọ gị: {list}. Jiri ọtụtụ aha ahụ, ma ọ bụ họrọ ya na ibe Chat.",
       "reviewed": false
     },
     "order.link.auto_changed_title": {

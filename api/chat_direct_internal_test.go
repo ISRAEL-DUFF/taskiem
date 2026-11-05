@@ -1,6 +1,9 @@
 package api
 
 import (
+	"errors"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/israel-duff/taskiem/engine/links"
@@ -49,5 +52,28 @@ func TestDirectBody(t *testing.T) {
 		if got := directBody(in, parseMentions(in, act).Parts); got != want {
 			t.Errorf("%q: %q, want %q", in, got, want)
 		}
+	}
+}
+
+// The receipt names what went, then each business it did not, with why: a
+// failure part way does not hide what was already sent.
+func TestDirectReceipt(t *testing.T) {
+	tr := func(id string, kv ...string) string { return id + fmt.Sprint(kv) }
+	got := directReceipt(tr, []directResult{
+		{name: "Dangote Stores"},
+		{name: "BUA Foods", err: errors.New("connection reset")},
+		{name: "Cherry", err: fmt.Errorf("%w: this plan allows at most 5 messages to linked businesses a day", links.ErrLimit)},
+		{name: "Ola", err: nil},
+	})
+	want := []string{
+		"chat.direct.sent[names *Dangote Stores*, *Ola*]",
+		"chat.direct.failed[name BUA Foods]",
+		"chat.direct.not_sent[name Cherry reason this plan allows at most 5 messages to linked businesses a day]",
+	}
+	if got != strings.Join(want, "\n") {
+		t.Fatalf("receipt:\n%s", got)
+	}
+	if got := directReceipt(tr, []directResult{{name: "BUA Foods", err: errors.New("down")}}); got != "chat.direct.failed[name BUA Foods]" {
+		t.Fatalf("none sent: %s", got)
 	}
 }

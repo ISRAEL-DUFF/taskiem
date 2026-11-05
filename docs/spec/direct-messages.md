@@ -141,11 +141,24 @@ in `waCommand`: pending questions, commands, mention orders and the model.
     the conversation on the web.
 - **The receipt:**
   - "✓ Sent to *Dangote Nigeria Ltd*, *BUA Foods Plc*."
-  - A business it could not go to is named with the reason ("Not sent to *X*:
-    …"), under the ones that went.
-- **Photos and files** captioned `...` are not sent. The reply says that only words
-  go this way, and that photos and files go on the Chat page. They are not read as a
-  product photo or a list either.
+  - A business it could not go to is named under the ones that went: with the
+    reason for a refusal ("Not sent to *X*: …"), or, for a failure (a server error,
+    logged), "Not sent to *X*: something went wrong. Send it to them again."
+  - One business failing never stops the rest, and the receipt always names what
+    went (`directSend`, `directReceipt`), so sending again only to the ones named
+    never sends anything twice.
+- **Photos and files** (`waDirectFile`) captioned `... @business`, or sent with
+  `@business` in the caption while a lone `...` waits, go to the businesses with the
+  caption's words, which may be none. It works as the Chat page's upload does:
+  - the file is fetched from the chat app (WhatsApp, Telegram, or the web's upload);
+  - it is scanned for malware once;
+  - for each business, our copy and theirs are stored, each in its own business's
+    storage;
+  - a copy stored for a message that is not sent is removed.
+  A photo is at most 10 MB, a file at most `media.MaxFileBytes`. A file that fails
+  the scan, is too large, or cannot be checked (no scanner) is sent to no one, and
+  the reply says why. A photo captioned `...` with no `@` is read as before: a
+  product photo, or a list.
 - **Voice notes** cannot carry the marker, so they go to Taskiem as before.
 
 **The hint without the marker.** When a mention asks for no quantity, the reply
@@ -161,14 +174,15 @@ anyone who may write to linked businesses.
 
 The new messages are in all five languages: English reviewed, the other four drafts.
 - `chat.direct.wait`, `chat.direct.who` and `chat.direct.empty`;
-- `chat.direct.sent`, `chat.direct.not_sent`, `chat.direct.files` and
+- `chat.direct.sent`, `chat.direct.not_sent`, `chat.direct.failed` and
   `chat.direct.hint`;
 - `wa.help.direct`.
 
-Two English messages changed:
+Two messages changed:
 - `wa.mention.how` gains the hint;
 - `wa.mention.which` now reads "*@Dangote* could be more than one of your linked
-  businesses: …. Use more of the name, or pick it on the Chat page".
+  businesses: …. Use more of the name, or pick it on the Chat page", in all five
+  languages.
 
 ## 6. Cost
 
@@ -189,6 +203,16 @@ Two English messages changed:
   fit.
 - **`TestCutDirect`:** the marker's forms, and what is not one.
 - **`TestDirectBody`:** what is received.
+- **`TestDirectReceipt`:** what went, then a failure, then a refusal with its reason;
+  and a failure when nothing went.
+- **`TestDirectFiles`, on WhatsApp:**
+  - a photo with words;
+  - a photo after a lone `...`;
+  - a PDF with no words, keeping its name;
+  - a copy in each business's storage for each;
+  - a file that fails the scan: not sent, nothing stored;
+  - a photo naming no one, read as before;
+  - a business not linked.
 - **`api/chat_direct_test.go` `TestDirectMessages`, on WhatsApp:**
   - the marker on the same line, on its own line, and as `…`, each received as said;
   - a lone `...` then the message, and a lone `...` then a message with no mention;

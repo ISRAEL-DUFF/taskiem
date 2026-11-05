@@ -6464,11 +6464,6 @@
       "reviewed": true,
       "context": "\"... @business\" with nothing else to say"
     },
-    "chat.direct.files": {
-      "text": "Only words go straight to a business with *...* for now. Send photos and files to them on the Chat page.",
-      "reviewed": true,
-      "context": "A photo or file captioned \"...\": not sent"
-    },
     "chat.direct.hint": {
       "text": "To send it to *{name}* as a message instead, start it with *...*",
       "reviewed": true,
@@ -6483,6 +6478,11 @@
       "text": "Not sent to *{name}*: {reason}.",
       "reviewed": true,
       "context": "A message after \"...\" could not go to one business; {reason} says why"
+    },
+    "chat.direct.failed": {
+      "text": "Not sent to *{name}*: something went wrong. Send it to them again.",
+      "reviewed": true,
+      "context": "A message after \"...\" failed for one business (not a refusal); the rest were sent"
     },
     "chat.link.photo": {
       "text": "Photo",
