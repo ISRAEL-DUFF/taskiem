@@ -151,13 +151,25 @@ test("the conversation's head shows who they are, search and the menu as plain i
   const head = pane.locator(".chat-head");
   await expect(head.getByRole("heading", { name })).toBeVisible();
   await expect(head.locator(".chat-sub")).toHaveText("They supply you");
-  // The search is behind its icon, as WhatsApp's.
-  await expect(pane.getByTestId("chat-search")).toHaveCount(0);
+  // The search is a panel behind its icon, as WhatsApp's: its own head, a
+  // calendar and the box, the messages found as rows.
+  await expect(pane.getByTestId("chat-search-panel")).toHaveCount(0);
   await head.getByRole("button", { name: "Search this conversation" }).click();
-  await pane.getByTestId("chat-search").fill("Rice");
-  await expect(pane.getByTestId("chat-message")).toHaveCount(1);
-  await pane.getByTestId("chat-search").press("Escape");
-  await expect(pane.getByTestId("chat-search")).toHaveCount(0);
+  const panel = pane.getByTestId("chat-search-panel");
+  await expect(
+    panel.getByRole("heading", { name: "Search messages" }),
+  ).toBeVisible();
+  await expect(panel.getByTestId("chat-search")).toBeFocused();
+  await expect(panel).toContainText(`Search for messages within ${name}.`);
+  const pb = must(await panel.boundingBox());
+  expect(pb.width).toBeGreaterThanOrEqual(PHONE.width - 1); // the whole screen
+  await panel.getByTestId("chat-search").fill("Rice");
+  await expect(panel.getByTestId("chat-result")).toHaveCount(1);
+  await panel.getByTestId("chat-result").click();
+  await expect(panel).toHaveCount(0); // on a phone it gives way to the thread
+  await expect(
+    head.getByRole("button", { name: "Search this conversation" }),
+  ).toBeFocused();
 
   // The box: emoji, the words, attach and camera in one pill; the microphone, round, beside it.
   const pill = pane.locator(".composer-pill");
