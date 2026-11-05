@@ -709,13 +709,17 @@ type agentVisit struct {
 // listAgentVisits lists the agent sessions on the business: who came,
 // when, and how each ended.
 func (s *Server) listAgentVisits(w http.ResponseWriter, r *http.Request) {
-	rows, err := s.Store.Pool.Query(r.Context(), `SELECT id, agent_name, agent_code, kind, status, consent_at, expires_at, ended_at, end_reason, created_at
-		FROM taskiem_tenant_agent_sessions($1, 100)`, principalFrom(r.Context()).TenantID)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	out, err := pgx.CollectRows(rows, pgx.RowToStructByPos[agentVisit])
+	// In the tenant's scope: the function lists nothing outside it.
+	var out []agentVisit
+	err := s.tx(r, func(tx pgx.Tx) error {
+		rows, err := tx.Query(r.Context(), `SELECT id, agent_name, agent_code, kind, status, consent_at, expires_at, ended_at, end_reason, created_at
+			FROM taskiem_tenant_agent_sessions($1, 100)`, principalFrom(r.Context()).TenantID)
+		if err != nil {
+			return err
+		}
+		out, err = pgx.CollectRows(rows, pgx.RowToStructByPos[agentVisit])
+		return err
+	})
 	if err != nil {
 		s.fail(w, r, err)
 		return
