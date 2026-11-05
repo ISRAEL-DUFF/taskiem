@@ -2169,3 +2169,5 @@ input[type="file"], input[type="color"], .look-colour input[type="color"] { bord
 fieldset.sf-choices label.row, label.row:has(> input[type="checkbox"]) { align-items: flex-start; gap: 10px; }
 fieldset.sf-choices label.row > input, label.row > input[type="checkbox"] { flex: none; margin-top: 2px; }
 fieldset.sf-choices label.row > span, label.row > input[type="checkbox"] + span { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
+/* Reading back through a conversation or the list of them never pulls the app or the browser to refresh. */
+.chat-stream, .chat-list, .search-results { overscroll-behavior-y: contain; }

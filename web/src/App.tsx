@@ -130,7 +130,7 @@ import { brandFile } from "./brand";
 import { ChatLiveProvider, NotifyBanner, useChatLive } from "./pages/ChatLive";
 import { useTaskiemUnread } from "./lib/taskiemSeen";
 import { standalone, useInstall } from "./install";
-import { PULL_AT, pullRefreshes, pullShown } from "./lib/pull";
+import { PULL_AT, insideScroller, pullRefreshes, pullShown } from "./lib/pull";
 
 export function App() {
   return (
@@ -965,7 +965,8 @@ function PullToRefresh({ onRefresh }: { onRefresh: () => void }) {
       start =
         window.scrollY <= 0 &&
         e.touches.length === 1 &&
-        !t?.closest(".modal, .nav.drawer, .canvas, .bell-panel")
+        !t?.closest(".modal, .nav.drawer, .canvas, .bell-panel") &&
+        !insideScroller(t)
           ? (e.touches[0]?.clientY ?? null)
           : null;
       dy = 0;
