@@ -42,6 +42,8 @@ For work that needs native libraries, more memory or more time (PDF rendering, i
 
 A definition that asks for more than a maximum is refused when it is validated.
 
+Every JavaScript step runs within a hard WebAssembly cap of 320 MiB per running step, room for the largest `memory_mb` (256) plus QuickJS's own structures; the step's `memory_mb` is QuickJS's own limit on its heap within it.
+
 A step that throws, times out, runs out of memory or returns too much fails without retrying: the same code on the same input would fail the same way. Errors give the exception and the line (`KeyError: 'rate' (line 4)`).
 
 ## Python

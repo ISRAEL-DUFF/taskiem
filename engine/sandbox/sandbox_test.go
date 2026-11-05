@@ -6,12 +6,16 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/fastschema/qjs"
+
 	"github.com/israel-duff/taskiem/engine/effects"
+	"github.com/israel-duff/taskiem/engine/wd"
 )
 
 func run(t *testing.T, src string, input any, host Host, lim Limits) (Result, error) {
@@ -143,6 +147,7 @@ func TestMemoryIsBounded(t *testing.T) {
 		"one big string": `export default () => "x".repeat(512 << 20).length`,
 		"many pushes":    `export default () => { const a = []; for (let i = 0; i < 100000; i++) a.push("y".repeat(100000) + i); return a.length }`,
 	} {
+		resetPeakRSS()
 		start := time.Now()
 		_, err := run(t, src, nil, Host{}, lim)
 		if err == nil {
@@ -152,9 +157,11 @@ func TestMemoryIsBounded(t *testing.T) {
 			t.Errorf("%s: want a memory or time limit error, got %v", name, err)
 		}
 		// Measured alone: peak RSS is about 75 MiB plus the WebAssembly cap
-		// (204 MiB at 128 MiB). Runs earlier in this process add garbage not
-		// yet collected, so this is only a sanity bound.
-		if peak := peakRSS(); peak > 768<<20 {
+		// (395 MiB at 320 MiB). The peak is reset before each case, but
+		// runs earlier in this process leave memory the Go runtime has not
+		// returned, so this is only a sanity bound.
+		// Python's instances (a cap of their own) stay resident too.
+		if peak := peakRSS(); peak > 512<<20+int64(qjs.MemoryLimitPages)<<16 {
 			t.Errorf("%s: peak resident memory %d MiB", name, peak>>20)
 		}
 		t.Logf("%s: %v after %s, peak RSS %d MiB", name, err, time.Since(start).Round(time.Millisecond), peakRSS()>>20)
@@ -220,6 +227,14 @@ func BenchmarkColdRun(b *testing.B) {
 }
 
 // peakRSS reads the process's peak resident set size (Linux).
+// resetPeakRSS returns what memory it can to the system and resets the
+// peak resident size (Linux: clear_refs 5), so peakRSS measures what
+// runs next rather than earlier tests.
+func resetPeakRSS() {
+	debug.FreeOSMemory()
+	_ = os.WriteFile("/proc/self/clear_refs", []byte("5"), 0o600)
+}
+
 func peakRSS() int64 {
 	raw, err := os.ReadFile("/proc/self/status")
 	if err != nil {
@@ -232,4 +247,26 @@ func peakRSS() int64 {
 		}
 	}
 	return 0
+}
+
+// TestDeclaredMemoryIsUsable: a JavaScript step may ask for up to
+// wd.MaxCodeMemoryMB of heap (limits.memory_mb), and gets it: the
+// process-wide WebAssembly cap leaves room for the largest heap plus
+// QuickJS's own structures. Past the cap it still fails.
+func TestDeclaredMemoryIsUsable(t *testing.T) {
+	if MaxMemory != wd.MaxCodeMemoryMB<<20 {
+		t.Fatalf("sandbox.MaxMemory %d MiB, wd.MaxCodeMemoryMB %d", MaxMemory>>20, wd.MaxCodeMemoryMB)
+	}
+	Init(0) // as the worker does
+	lim := DefaultLimits
+	lim.Memory = MaxMemory
+	lim.Timeout = 30 * time.Second
+	src := `export default (n) => { const a = []; for (let i = 0; i < n; i++) a.push(new Uint8Array(1 << 20).fill(i)); return a.length }`
+	r, err := run(t, src, 200, Host{}, lim)
+	if err != nil || fmt.Sprint(r.Output) != "200" {
+		t.Fatalf("200 MB within memory_mb 256: %v %v", r.Output, err)
+	}
+	if _, err := run(t, src, 400, Host{}, lim); !errors.Is(err, ErrMemory) {
+		t.Errorf("400 MB within memory_mb 256: %v", err)
+	}
 }

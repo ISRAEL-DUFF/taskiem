@@ -146,11 +146,24 @@ delete globalThis.__taskiem_host_installed;
 
 var initOnce sync.Once
 
+// MaxMemory is the largest heap a JavaScript step may ask for
+// (limits.memory_mb, wd.MaxCodeMemoryMB).
+const MaxMemory = 256 << 20
+
+// jsHeadroom is the WebAssembly memory QuickJS needs beyond a script's
+// heap: its own structures, stack and the module's data.
+const jsHeadroom = 64 << 20
+
 // Init sets the process-wide WebAssembly memory cap and compiles the QuickJS
 // module (about a second), so no script's time limit pays for it. Call it
-// at worker start; Run calls it with the default cap otherwise.
+// at worker start; Run calls it with the default cap otherwise. 0 is the
+// default: room for MaxMemory, the largest heap a step may ask for. Each
+// script's own Limits.Memory still bounds its heap.
 func Init(maxMemoryBytes int) {
 	initOnce.Do(func() {
+		if maxMemoryBytes <= 0 {
+			maxMemoryBytes = MaxMemory + jsHeadroom
+		}
 		if pages := maxMemoryBytes / 65536; pages > 0 && pages <= 65536 {
 			qjs.MemoryLimitPages = uint32(pages) //nolint:gosec // bounded above
 		}
