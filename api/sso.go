@@ -592,7 +592,7 @@ func safeReturn(v string) string {
 // discovery and starting a sign-in reach the database before anyone is
 // known.
 func (s *Server) ssoLimit(w http.ResponseWriter, r *http.Request) bool {
-	if !s.limiter("sso:"+clientIP(r), 2*time.Second, 30).Allow() {
+	if !s.limiter("sso:"+limitIP(r), 2*time.Second, 30).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "too many requests")
 		return false
 	}

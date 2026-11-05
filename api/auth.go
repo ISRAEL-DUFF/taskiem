@@ -456,7 +456,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	if !jsonOnly(w, r) {
 		return
 	}
-	if !s.loginLimiter("login:" + clientIP(r)).Allow() {
+	if !s.loginLimiter("login:" + limitIP(r)).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "too many login attempts")
 		return
 	}

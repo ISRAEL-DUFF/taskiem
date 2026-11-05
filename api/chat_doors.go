@@ -406,7 +406,7 @@ func (s *Server) confirmEmailChange(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, verifyLinkBadMsg)
 		return
 	}
-	if !s.limiter("email-confirm:"+clientIP(r), time.Minute, 20).Allow() {
+	if !s.limiter("email-confirm:"+limitIP(r), time.Minute, 20).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "too many attempts")
 		return
 	}

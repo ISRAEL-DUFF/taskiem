@@ -34,6 +34,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/dispatch"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/embedsites"
+	"github.com/israel-duff/taskiem/engine/formguard"
 	"github.com/israel-duff/taskiem/engine/forms"
 	"github.com/israel-duff/taskiem/engine/httpsec"
 	"github.com/israel-duff/taskiem/engine/inmail"
@@ -939,6 +940,11 @@ func clientIP(r *http.Request) string {
 	}
 	return host
 }
+
+// limitIP is the client's address as per-address limits key it: an IPv4
+// address as is, an IPv6 address cut to its /64, which one subscriber
+// holds whole (formguard.ClientKey, as the public host's limits).
+func limitIP(r *http.Request) string { return formguard.ClientKey(clientIP(r)) }
 
 // loginLimiter paces sign-in attempts by key: "login:" and an address, or
 // "login-email:" and an email.

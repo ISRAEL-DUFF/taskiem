@@ -185,7 +185,7 @@ func (s *Server) ussdCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	// Authenticate before reading anything of the request into the
 	// database: the channel row is looked up by the URL's tenant only.
-	ch, err := s.ussdChannelFor(ctx, tenant, provider, clientIP(r))
+	ch, err := s.ussdChannelFor(ctx, tenant, provider, limitIP(r))
 	if err != nil {
 		s.Logger.Warn("ussd: channel lookup", "tenant", tenant, "err", err)
 		in := tenant
@@ -319,7 +319,7 @@ func (ch *ussdChannel) allows(token, ip string) bool {
 // errUSSDLookupsPaced: a caller has missed the channel cache too often.
 var errUSSDLookupsPaced = errors.New("ussd: too many channel lookups")
 
-func (s *Server) ussdChannelFor(ctx context.Context, tenant uuid.UUID, provider, ip string) (*ussdChannel, error) {
+func (s *Server) ussdChannelFor(ctx context.Context, tenant uuid.UUID, provider, ipKey string) (*ussdChannel, error) {
 	key := tenant.String() + "/" + provider
 	st := &s.ussd
 	st.mu.Lock()
@@ -333,7 +333,7 @@ func (s *Server) ussdChannelFor(ctx context.Context, tenant uuid.UUID, provider,
 	// caller's choice, so a bucket per tenant would pace nothing and fill
 	// the shared limiter set (F28). Aggregators call from a few fixed
 	// addresses, and the cache answers their tenants between misses.
-	if !s.limiter("ussd-lookup:"+ip, 100*time.Millisecond, 20).Allow() {
+	if !s.limiter("ussd-lookup:"+ipKey, 100*time.Millisecond, 20).Allow() {
 		return nil, errUSSDLookupsPaced
 	}
 	var ch *ussdChannel

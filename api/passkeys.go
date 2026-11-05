@@ -159,7 +159,7 @@ func (s *Server) passkeyLoginOptions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Issuing a challenge is cheap but stores a row: its own, looser limit.
-	if !s.limiter("challenge:"+clientIP(r), time.Second, 30).Allow() {
+	if !s.limiter("challenge:"+limitIP(r), time.Second, 30).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "too many requests")
 		return
 	}
@@ -178,7 +178,7 @@ func (s *Server) passkeyLogin(w http.ResponseWriter, r *http.Request) {
 	if !s.passkeysOn(w) || !jsonOnly(w, r) {
 		return
 	}
-	if !s.loginLimiter("login:" + clientIP(r)).Allow() {
+	if !s.loginLimiter("login:" + limitIP(r)).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "too many login attempts")
 		return
 	}

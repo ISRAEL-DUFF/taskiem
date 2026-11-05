@@ -99,7 +99,7 @@ func (s *Server) slackInstallStart(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "not found")
 		return
 	}
-	if !s.limiter("slack-install:"+clientIP(r), time.Minute, 10).Allow() {
+	if !s.limiter("slack-install:"+limitIP(r), time.Minute, 10).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "too many requests; try again in a minute")
 		return
 	}

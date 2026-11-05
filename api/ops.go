@@ -354,7 +354,7 @@ func (s *Server) opsVerifyPasskey(ctx context.Context, c credentialJSON, purpose
 }
 
 func (s *Server) opsLimit(w http.ResponseWriter, r *http.Request) bool {
-	if !s.loginLimiter("ops-login:" + clientIP(r)).Allow() {
+	if !s.loginLimiter("ops-login:" + limitIP(r)).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "too many sign-in attempts")
 		return false
 	}
@@ -365,7 +365,7 @@ func (s *Server) opsLoginOptions(w http.ResponseWriter, r *http.Request) {
 	if !s.passkeysOn(w) {
 		return
 	}
-	if !s.limiter("ops-challenge:"+clientIP(r), time.Second, 30).Allow() {
+	if !s.limiter("ops-challenge:"+limitIP(r), time.Second, 30).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "too many requests")
 		return
 	}

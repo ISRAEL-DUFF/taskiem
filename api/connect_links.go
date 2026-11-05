@@ -138,7 +138,7 @@ func (s *Server) openConnectLink(ctx context.Context, tok string) (*connectLink,
 // connectLimited paces the connect page per address and per link.
 func (s *Server) connectLimited(w http.ResponseWriter, r *http.Request) bool {
 	tok := chi.URLParam(r, "token")
-	if !s.limiter("connect-ip:"+clientIP(r), time.Minute, 30).Allow() || !s.limiter("connect-tok:"+tok, time.Minute, 12).Allow() {
+	if !s.limiter("connect-ip:"+limitIP(r), time.Minute, 30).Allow() || !s.limiter("connect-tok:"+tok, time.Minute, 12).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "too many tries: wait a minute")
 		return true
 	}

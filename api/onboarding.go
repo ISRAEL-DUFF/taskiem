@@ -187,7 +187,7 @@ func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, status, msg)
 	}
 	ip := clientIP(r)
-	if !s.loginLimiter("login:" + ip).Allow() {
+	if !s.loginLimiter("login:" + limitIP(r)).Allow() {
 		refuse("rate_limited", http.StatusTooManyRequests, "too many attempts")
 		return
 	}

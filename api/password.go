@@ -106,7 +106,7 @@ func (s *Server) forgotPassword(w http.ResponseWriter, r *http.Request) {
 	if !jsonOnly(w, r) {
 		return
 	}
-	if !s.loginLimiter("forgot:" + clientIP(r)).Allow() {
+	if !s.loginLimiter("forgot:" + limitIP(r)).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "too many attempts")
 		return
 	}
@@ -185,7 +185,7 @@ func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	if !s.loginLimiter("reset:" + clientIP(r)).Allow() {
+	if !s.loginLimiter("reset:" + limitIP(r)).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "too many attempts")
 		return
 	}

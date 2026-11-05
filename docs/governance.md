@@ -85,7 +85,7 @@ An identity provider (Okta, Microsoft Entra ID, others) keeps members in step wi
 
 Invitations, acceptances, declines and withdrawals are audited in the inviting tenant's chain (`member.invite`, `member.invitation.accept`, `member.invitation.decline`, `member.invitation.cancel`).
 
-Sessions and API keys stop working while their tenant is [suspended](#suspended-tenants), and sessions while their user is disabled. Sign-in (`/v1/auth/login`, `/v1/auth/passkey`) takes only `application/json`, and attempts are limited per address and per account; SSO discovery and start are limited per address. A sign-in answers with the session as an `HttpOnly` cookie, which the page's scripts cannot read, and no token in the body. A client that is not a browser (a script, the CLI) sends `"bearer": true` and gets `token` in the body instead, and no cookie; signup (`POST /v1/signup`) works the same way.
+Sessions and API keys stop working while their tenant is [suspended](#suspended-tenants), and sessions while their user is disabled. Sign-in (`/v1/auth/login`, `/v1/auth/passkey`) takes only `application/json`, and attempts are limited per address and per account; SSO discovery and start are limited per address. An address, for every per-address limit, is an IPv4 address or an IPv6 /64, which one subscriber holds whole. A sign-in answers with the session as an `HttpOnly` cookie, which the page's scripts cannot read, and no token in the body. A client that is not a browser (a script, the CLI) sends `"bearer": true` and gets `token` in the body instead, and no cookie; signup (`POST /v1/signup`) works the same way.
 
 ## Passwords
 
