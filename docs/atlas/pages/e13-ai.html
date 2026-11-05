@@ -115,14 +115,14 @@
 </div>
 
 <h2 id="ai--budgets">Budgets</h2>
-<p>Each tenant has a monthly budget, <code>ai_monthly_tokens</code> (2,000,000 by default, 0 for no limit), summed from <code>ai_interactions</code> for the UTC month. Every token counts, cache reads included. A plan with AI overage lifts it (<x-ref path="api/ai.go" symbol="func (s *Server) aiBudget("><code>aiBudget</code></x-ref>).</p>
+<p>Each tenant has a monthly budget, <code>ai_monthly_tokens</code> (2,000,000 by default, 0 for no limit), summed from <code>ai_interactions</code> for the UTC month, plus what the calls running now have reserved. Every token counts, cache reads included. A plan with AI overage lifts it (<x-ref path="api/ai.go" symbol="func (s *Server) aiBudget("><code>aiBudget</code></x-ref>). Every call reserves its prompt and longest answer in <code>ai_reservations</code> before it calls, under a lock per tenant, and releases them once it is recorded, so calls started at once count each other (<x-ref path="engine/runtime/aistep.go" symbol="func ReserveAI("><code>ReserveAI</code></x-ref>, migration 00392).</p>
 <div class="table-wrap"><table>
   <thead><tr><th>Use</th><th>Checked</th><th>Over budget</th><th>Other limits</th></tr></thead>
   <tbody>
-    <tr><td>Build (web, chat)</td><td>Before starting, and before each call (<x-ref path="api/ai.go" symbol="func (m aiMeter) Allow(ctx context.Context) error {"><code>aiMeter</code></x-ref>)</td><td>429, or the last draft with a warning</td><td>5 builds per 20 seconds per tenant, 3 per number in chat; 15 minutes; 4 calls</td></tr>
-    <tr><td>Repair</td><td>Before the job, when the model is needed, and before each attempt</td><td>Skipped, or withheld</td><td>15 minutes; 3 attempts; one analysis per version and failure</td></tr>
+    <tr><td>Build (web, chat)</td><td>Before starting, and before each call (<x-ref path="api/ai.go" symbol="func (m aiMeter) Reserve(ctx context.Context, estimate int64) (func(), error) {"><code>aiMeter</code></x-ref>)</td><td>429, or the last draft with a warning</td><td>5 builds per 20 seconds per tenant, 3 per number in chat; 15 minutes; 4 calls</td></tr>
+    <tr><td>Repair</td><td>Before the job, when the model is needed, and before each attempt, reserving</td><td>Skipped, or withheld</td><td>15 minutes; 3 attempts; one analysis per version and failure</td></tr>
     <tr><td>AI step</td><td>Before each attempt, counting what running steps have reserved</td><td>The step fails for good (<code>limit</code>), and its message says so</td><td>8,192 output tokens, 2 minutes, 2 rounds per attempt; 256 KB question (<code>input_too_large</code>)</td></tr>
-    <tr><td>Chat routing</td><td>Before each call</td><td>Not routed</td><td>10 per 6 seconds per number; 1,000 characters</td></tr>
+    <tr><td>Chat routing, table questions</td><td>Before each call, reserving</td><td>Not routed</td><td>10 per 6 seconds per number; 1,000 characters</td></tr>
   </tbody>
 </table></div>
 

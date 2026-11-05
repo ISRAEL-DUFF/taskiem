@@ -260,6 +260,14 @@ func (s *Server) waAskFrom(ctx context.Context, c *chat, question string, fallba
 	if info.Tag == "" {
 		info, _ = lang.Lookup(lang.EN)
 	}
+	// The call's tokens are reserved until it is recorded (finding F49).
+	release, err := s.reserveAI(ctx, c.tenant.ID, "table_query", tablequery.Request(question, info, described, 0).Estimate(), chatAIReservation)
+	if errors.Is(err, ai.ErrBudgetExhausted) {
+		return say("wa.ask.budget")
+	}
+	if err != nil {
+		return true, err
+	}
 	spec, resp, err := (&tablequery.Asker{Provider: model}).Ask(ctx, question, info, described)
 	outcome, errText := "valid", ""
 	switch {
@@ -277,6 +285,7 @@ func (s *Server) waAskFrom(ctx context.Context, c *chat, question string, fallba
 		}
 	}
 	s.recordModelCall(ctx, c, "table_query", "tablequery", model, question, resp, outcome, errText)
+	release()
 	if fallback && outcome == "unknown" {
 		// Not about the tables: the chat's usual answer follows.
 		return false, nil
@@ -527,6 +536,10 @@ func (s *Server) waAskMore(ctx context.Context, c *chat, f *chatFound) error {
 	}
 	return s.waAnswer(ctx, c, q, f.Last)
 }
+
+// chatAIReservation is how long a chat's model call holds its tokens of
+// the budget if it is never released (its process died).
+const chatAIReservation = 5 * time.Minute
 
 // recordModelCall records a chat's model call like a build's
 // (ai_interactions), so it counts against the business's AI budget.

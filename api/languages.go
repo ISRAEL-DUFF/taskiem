@@ -249,11 +249,13 @@ func (s *Server) waModelIntent(ctx context.Context, c *chat, text string) lang.M
 	if s.Billing.Require(ctx, c.tenant.ID, billing.FeatureAI) != nil {
 		return lang.Match{}
 	}
-	limit, used, err := s.aiBudget(ctx, c.tenant.ID)
-	if err != nil || limit > 0 && used >= limit {
+	info, _ := lang.Lookup(c.lang.Tag)
+	// The call's tokens are reserved until it is recorded (finding F49).
+	release, err := s.reserveAI(ctx, c.tenant.ID, "intent", intent.Request(text, info, 0).Estimate(), chatAIReservation)
+	if err != nil {
 		return lang.Match{}
 	}
-	info, _ := lang.Lookup(c.lang.Tag)
+	defer release()
 	cl := &intent.Classifier{Provider: s.Languages.Model}
 	res, resp, err := cl.Classify(ctx, text, info)
 	outcome, errText := "valid", ""

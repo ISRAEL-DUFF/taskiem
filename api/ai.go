@@ -70,14 +70,20 @@ func (s *Server) aiDisabled(w http.ResponseWriter) {
 		"error": "AI building is not configured on this deployment; build the workflow on the canvas instead"})
 }
 
-// aiBudget returns the tenant's monthly token budget (0: none) and use.
+// aiBudget returns the tenant's monthly token budget (0: none) and use:
+// the tokens recorded and those the model calls running now have reserved
+// (runtime.ReserveAI), so a check sees calls in flight (finding F49).
 func (s *Server) aiBudget(ctx context.Context, tenant uuid.UUID) (limit, used int64, err error) {
 	lim, err := s.Store.LimitsFor(ctx, tenant)
 	if err != nil {
 		return 0, 0, err
 	}
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		used, err = runtime.AITokensThisMonth(ctx, tx, tenant)
+		if used, err = runtime.AITokensThisMonth(ctx, tx, tenant); err != nil {
+			return err
+		}
+		reserved, err := runtime.AIReserved(ctx, tx, tenant)
+		used += reserved
 		return err
 	})
 	if err != nil {
@@ -279,7 +285,7 @@ func (s *Server) runBuild(id uuid.UUID, who aiActor, req builder.Request) (*buil
 		},
 		Templates: templates.Default(),
 		Find:      s.callables(ctx, who.tenant),
-		Meter:     aiMeter{s: s, tenant: who.tenant},
+		Meter:     aiMeter{s: s, tenant: who.tenant, purpose: "build", ttl: aiBuildTimeout + time.Minute},
 		Recorder:  aiRecorder{s: s, build: id, who: who, provider: s.AI.Provider.Name()},
 		Effort:    s.AI.Effort,
 		MaxTokens: s.AI.MaxTokens,
@@ -371,21 +377,43 @@ func modelOf(p *builder.Proposal) string {
 	return p.Model
 }
 
-// aiMeter refuses a model call once the tenant's monthly budget is spent.
+// aiMeter refuses a model call once the tenant's monthly budget is spent,
+// and reserves what a call may use until it is recorded.
 type aiMeter struct {
-	s      *Server
-	tenant uuid.UUID
+	s       *Server
+	tenant  uuid.UUID
+	purpose string
+	ttl     time.Duration
 }
 
-func (m aiMeter) Allow(ctx context.Context) error {
-	limit, used, err := m.s.aiBudget(ctx, m.tenant)
+func (m aiMeter) Reserve(ctx context.Context, estimate int64) (func(), error) {
+	return m.s.reserveAI(ctx, m.tenant, m.purpose, estimate, m.ttl)
+}
+
+// reserveAI reserves estimate tokens of the tenant's monthly AI budget for
+// one model call until release is called, after the call is recorded, or
+// until ttl passes if this process dies first. It returns
+// ai.ErrBudgetExhausted when the tokens recorded and reserved already
+// reach the budget. A plan without a budget, or one billing overage,
+// reserves nothing (finding F49).
+func (s *Server) reserveAI(ctx context.Context, tenant uuid.UUID, purpose string, estimate int64, ttl time.Duration) (release func(), err error) {
+	lim, err := s.Store.LimitsFor(ctx, tenant)
 	if err != nil {
-		return err
+		return func() {}, err
 	}
-	if limit > 0 && used >= limit {
-		return ai.ErrBudgetExhausted
+	if lim.AIMonthlyTokens <= 0 {
+		return func() {}, nil
 	}
-	return nil
+	if rate, err := s.Billing.AIOverage(ctx, tenant); err != nil {
+		return func() {}, err
+	} else if rate > 0 {
+		return func() {}, nil
+	}
+	release, over, err := runtime.ReserveAI(ctx, s.Store.Pool, s.Logger, tenant, runtime.Reservation{Purpose: purpose}, lim.AIMonthlyTokens, estimate, ttl)
+	if err == nil && over {
+		err = ai.ErrBudgetExhausted
+	}
+	return release, err
 }
 
 // aiRecorder writes each model call to ai_interactions.

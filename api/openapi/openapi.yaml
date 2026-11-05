@@ -28753,6 +28753,7 @@ components:
               description: The plan's monthly token budget; 0 is no limit (or overage billed).
             used_tokens:
               type: integer
+              description: This UTC month's tokens recorded, plus those the model calls running now have reserved.
           additionalProperties: false
         step_models:
           type: array
