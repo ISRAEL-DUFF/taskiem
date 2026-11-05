@@ -9,7 +9,7 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
-// Migration 00362 blanks the goal a chat build kept in the clear and the
+// Migration 00398 blanks the goal a chat build kept in the clear and the
 // words of its model calls (finding F50b), keeping their tokens and
 // outcome; builds from the web and template picks keep theirs.
 func TestAIBuildChatGoalMigration(t *testing.T) {
@@ -25,7 +25,7 @@ func TestAIBuildChatGoalMigration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := p.UpTo(ctx, 361); err != nil {
+	if _, err := p.UpTo(ctx, 397); err != nil {
 		t.Fatal(err)
 	}
 	conn, err := pgx.Connect(ctx, dsn)
@@ -52,7 +52,7 @@ func TestAIBuildChatGoalMigration(t *testing.T) {
 	build("00000000-0000-0000-0000-0000000000b1", "whatsapp", "pay Chinedu Okafor every Friday", nil)
 	build("00000000-0000-0000-0000-0000000000b2", "web", "pay Chinedu Okafor every Friday", nil)
 	build("00000000-0000-0000-0000-0000000000b3", "whatsapp", "template debtor-reminder-sms", "debtor-reminder-sms")
-	if _, err := p.UpTo(ctx, 362); err != nil {
+	if _, err := p.UpTo(ctx, 398); err != nil {
 		t.Fatal(err)
 	}
 	var chatWords, webKept, tplKept, tokens int
@@ -65,6 +65,6 @@ func TestAIBuildChatGoalMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 	if chatWords != 0 || webKept != 1 || tplKept != 1 || tokens != 3*320 {
-		t.Fatalf("after 00362: %d chat rows with words, %d web rows kept, %d template rows kept, %d tokens", chatWords, webKept, tplKept, tokens)
+		t.Fatalf("after 00398: %d chat rows with words, %d web rows kept, %d template rows kept, %d tokens", chatWords, webKept, tplKept, tokens)
 	}
 }

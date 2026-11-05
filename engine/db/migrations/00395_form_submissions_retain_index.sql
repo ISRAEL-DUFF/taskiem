@@ -1,5 +1,5 @@
 -- +goose NO TRANSACTION
--- taskiem_form_submissions_expire (00358) looks for submissions that
+-- taskiem_form_submissions_expire (00394) looks for submissions that
 -- started no run and are past their retain_until; without an index it read
 -- every submission. form_submissions grows with every answer, so the index
 -- is built CONCURRENTLY (CONTRIBUTING.md, Migrations).

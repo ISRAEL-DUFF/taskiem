@@ -126,7 +126,7 @@ func (s *Service) Drain(ctx context.Context) error {
 }
 
 // DrainDeletions deletes the submissions that started no run once their
-// retain_until passes (00358), then removes from storage the files of
+// retain_until passes (00394), then removes from storage the files of
 // submissions that retention or erasure deleted (taskiem_purge_run and the
 // erasure trigger queue them, 00380) and of refused ones. A file whose removal fails stays queued and is
 // tried again once its lease lapses.
