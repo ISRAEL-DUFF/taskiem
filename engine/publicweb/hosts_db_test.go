@@ -146,12 +146,20 @@ func TestPublicRoleReachesNothingElse(t *testing.T) {
 	rows.Close()
 	allowed := map[string]bool{"taskiem_public_host(text)": true, "taskiem_public_embed_origins(uuid)": true,
 		"taskiem_public_storefront(uuid)": true, "taskiem_public_storefront_catalogue(uuid)": true,
-		"taskiem_public_submit(uuid,text,text,bytea,bytea,bytea)": true, "taskiem_public_order_status(text,bytea)": true,
+		// Fronts (F3): a front's list, by its table.
+		"taskiem_public_storefront_list(uuid,text)":               true,
+		"taskiem_public_submit(uuid,text,text,bytea,bytea,bytea)": true, "taskiem_public_order_status(text,bytea)": true, "taskiem_public_order_money(text,bytea)": true,
 		// Bookings (S4): the services and free time, holding a slot, a booking's status and the customer's changes.
 		"taskiem_public_storefront_services(uuid)": true, "taskiem_public_busy(uuid,timestamp with time zone,timestamp with time zone)": true,
 		"taskiem_public_book(uuid,text,bytea,bytea,bytea,text,timestamp with time zone,timestamp with time zone,integer)": true,
 		"taskiem_public_booking(text,bytea)": true, "taskiem_public_price_change(text,bytea)": true,
 		"taskiem_public_change(text,bytea,text,integer,timestamp with time zone,timestamp with time zone,timestamp with time zone,integer)": true,
+		// Fronts (F1): a submission and a booking to an action by its id; the two above are their wrappers for a release.
+		"taskiem_public_submit_action(uuid,text,bytea,bytea,bytea)":                                                              true,
+		"taskiem_public_book_action(uuid,text,bytea,bytea,bytea,text,timestamp with time zone,timestamp with time zone,integer)": true,
+		// Hire (F5): a claim on a list's item for dates, and what is taken between two times.
+		"taskiem_public_claim(uuid,text,bytea,bytea,bytea,text,integer,timestamp with time zone,timestamp with time zone)": true,
+		"taskiem_public_taken(uuid,timestamp with time zone,timestamp with time zone)":                                     true,
 		// Hosted forms (S7): a form, a one-time link, a form step's request, a submission and its files, codes and status links.
 		"taskiem_public_form(text)": true, "taskiem_public_form_link(bytea)": true, "taskiem_public_form_request(bytea)": true,
 		"taskiem_public_form_submit(uuid,uuid,uuid,bytea,text,bytea,bytea,bytea)": true, "taskiem_public_form_upload(uuid,text,bytea)": true,
@@ -177,7 +185,12 @@ func TestPublicRoleReachesNothingElse(t *testing.T) {
 		// A school family's page (B6): the link, the family's students, invoices, receipts and requests, and what its forms send to the inbox.
 		"taskiem_public_school_family(bytea)": true, "taskiem_public_school_family_students(bytea)": true, "taskiem_public_school_family_invoices(bytea)": true,
 		"taskiem_public_school_family_receipts(bytea)": true, "taskiem_public_school_family_requests(bytea)": true,
-		"taskiem_public_school_family_ask(bytea,text,uuid,bytea,bytea)": true}
+		"taskiem_public_school_family_ask(bytea,text,uuid,bytea,bytea)": true,
+		// Business links: a business's link code, printed on its invoice's page (decision 0061).
+		"taskiem_public_link_code(uuid)": true,
+		// A customer's page (decision 0060, R5): their open lines with nothing personal, and paying towards the total.
+		"taskiem_public_customer_link(bytea)": true, "taskiem_public_customer_link_request(bytea,text,bigint)": true,
+		"taskiem_public_customer_link_payment(bytea)": true, "taskiem_public_customer_link_own_account(bytea)": true}
 	for _, f := range definers {
 		if !allowed[f] {
 			t.Errorf("taskiem_public may execute the privileged function %s", f)

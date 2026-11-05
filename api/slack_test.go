@@ -32,13 +32,38 @@ type slackFake struct {
 	mu    sync.Mutex
 	users map[string]string // email -> user id
 	posts []map[string]any
+	// install is oauth.v2.access's answer to the code "good-code"
+	// (slack_install_test.go); revoked the tokens given back; people the
+	// users users.info knows (real_name, email).
+	install map[string]any
+	revoked []string
+	people  map[string][2]string
 }
 
 func newSlackFake(t *testing.T) *slackFake {
-	f := &slackFake{users: map[string]string{}}
+	f := &slackFake{users: map[string]string{}, people: map[string][2]string{}}
 	f.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw, _ := io.ReadAll(r.Body)
 		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/oauth.v2.access":
+			form, _ := url.ParseQuery(string(raw))
+			f.mu.Lock()
+			defer f.mu.Unlock()
+			if form.Get("code") != "good-code" || form.Get("code_verifier") == "" || form.Get("client_secret") != "slack-secret" || f.install == nil {
+				_, _ = w.Write([]byte(`{"ok":false,"error":"invalid_code"}`))
+				return
+			}
+			_ = json.NewEncoder(w).Encode(f.install)
+			return
+		case "/auth.revoke":
+			form, _ := url.ParseQuery(string(raw))
+			f.mu.Lock()
+			f.revoked = append(f.revoked, form.Get("token"))
+			f.mu.Unlock()
+			_, _ = w.Write([]byte(`{"ok":true,"revoked":true}`))
+			return
+		}
 		if r.Header.Get("Authorization") != "Bearer xoxb-acme" {
 			_, _ = w.Write([]byte(`{"ok":false,"error":"invalid_auth"}`))
 			return
@@ -46,6 +71,15 @@ func newSlackFake(t *testing.T) *slackFake {
 		f.mu.Lock()
 		defer f.mu.Unlock()
 		switch r.URL.Path {
+		case "/users.info":
+			form, _ := url.ParseQuery(string(raw))
+			p, ok := f.people[form.Get("user")]
+			if !ok {
+				_, _ = w.Write([]byte(`{"ok":false,"error":"user_not_found"}`))
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "user": map[string]any{"id": form.Get("user"), "team_id": "T0ACME", "name": "x", "real_name": p[0],
+				"profile": map[string]any{"real_name": p[0], "email": p[1]}}})
 		case "/auth.test":
 			_, _ = w.Write([]byte(`{"ok":true,"team":"Acme","team_id":"T0ACME","user":"taskiem","user_id":"U0BOT","bot_id":"B0BOT"}`))
 		case "/users.lookupByEmail":
@@ -115,6 +149,7 @@ func newSlackWorld(t *testing.T) *slackWorld {
 		Logger: slog.New(slog.DiscardHandler), Slack: &api.SlackApp{SigningSecret: slackSecret}, ChatSigner: whatsapp.Signer{Key: waKey}, PublicURL: waPublicURL}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/channels/slack/interactions", srv.SlackHooks().ServeHTTP)
+	mux.HandleFunc("/channels/slack/events", srv.SlackEvents().ServeHTTP)
 	mux.Handle("/", specCheck(t, srv.Handler()))
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)

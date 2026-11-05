@@ -51,14 +51,15 @@ export TASKIEM_MESSAGE_HASH_KEY=cnJycnJycnJycnJycnJycnJycnJycnJycnJycnJycnI=
 # The platform number's templates count as approved against the fake
 # (docs/whatsapp.md#the-template-registry: development and tests only).
 export TASKIEM_WHATSAPP_TEMPLATES_ASSUME_APPROVED=true
-# Every spec signs in from the same address.
-export TASKIEM_LOGIN_BURST=100
+# Every spec signs in (or signs up, which counts the same) from the same
+# address: the whole run is more than a burst of 100 plus one every six seconds.
+export TASKIEM_LOGIN_BURST=1000
 # Self-serve signup, and Termii pointed at the fake onboarding.spec.ts runs
 # (loopback is allowed only because the URL names it).
 export TASKIEM_ALLOW_SIGNUP=true TASKIEM_TERMII_URL=http://127.0.0.1:12727
 # Every spec that wants a business of its own signs one up from this
-# address (cash, family, accessibility): more than the daily limit allows.
-export TASKIEM_SIGNUP_PER_ADDRESS=100
+# address (cash, family, accessibility, the chat specs, two each): more than the daily limit allows.
+export TASKIEM_SIGNUP_PER_ADDRESS=1000
 # Students' account numbers (accounts.spec.ts) are issued by a fake iswallet
 # (loopback is allowed only because the URL names it).
 export TASKIEM_ISWALLET_URL=http://127.0.0.1:12828

@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>How it works</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/50a98d2917f323d39577f6eb0dc5de03">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&family=Plus+Jakarta+Sans:wght@400;500;800&display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="tk" data-theme="{{theme}}">
+<dc-import name="Header" theme="{{theme}}" hint-size="100%,88px"></dc-import>
+<main>
+
+<section class="page-top">
+  <div class="container" style="display:flex;flex-direction:column;gap:20px">
+    <p class="label">How it works</p>
+    <h1 class="h1" style="max-width:1000px">From “hi” to your first result, in one chat.</h1>
+    <p class="lede" style="max-width:640px">This is a whole conversation, start to finish. On the left, what you and Taskiem say. On the right, what is happening.</p>
+  </div>
+</section>
+
+<section style="padding-bottom:clamp(48px,7vw,96px)">
+  <div class="container">
+
+    <div class="moment">
+      <div class="moment-chat">
+        <div class="bub bub-me">hi</div>
+        <div class="bub bub-tk">Hi, I am Taskiem. Tell me a job you do again and again, in your own words, and I will set it up.</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;max-width:480px">
+        <p class="label">01</p>
+        <h2 class="h3" style="font-size:26px">Start with hello</h2>
+        <p class="small">No forms and no set-up screens. Open WhatsApp, say hi, and Taskiem answers.</p>
+      </div>
+    </div>
+
+    <div class="moment">
+      <div class="moment-chat">
+        <div class="bub bub-me">every Friday at 10am text the customers in my debtors table who still owe me</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;max-width:480px">
+        <p class="label">02</p>
+        <h2 class="h3" style="font-size:26px">Say it your way</h2>
+        <p class="small">Write the job the way you would tell a person. You do not need special words.</p>
+      </div>
+    </div>
+
+    <div class="moment">
+      <div class="moment-chat">
+        <div class="bub bub-tk">
+          <p>Here is what I will do every Friday at 10:00:</p>
+          <ol style="margin:8px 0;padding-left:20px;display:flex;flex-direction:column;gap:6px;color:#13261f">
+            <li>Read your <em>Debtors</em> table.</li>
+            <li>Text each person with a balance above ₦0: “Good morning Chidi, your balance with Ada's Kitchen is ₦12,500. Thank you.”</li>
+            <li>Send you a count of who was reminded.</li>
+          </ol>
+          <p>Shall I set it up? Reply <strong style="color:#0d3b2e">yes</strong>.</p>
+        </div>
+        <div class="bub bub-me">yes</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;max-width:480px">
+        <p class="label">03</p>
+        <h2 class="h3" style="font-size:26px">It reads back, you say yes</h2>
+        <p class="small">Taskiem lists every step and who it will message. Nothing happens until you reply yes.</p>
+      </div>
+    </div>
+
+    <div class="moment">
+      <div class="moment-chat">
+        <div class="bub bub-tk">
+          <p>To read your Debtors table I need to connect Google Sheets. You only do this once.</p>
+          <p style="margin-top:10px"><span style="display:inline-flex;align-items:center;min-height:44px;padding:0 18px;border-radius:999px;background:#0d3b2e;color:#ffffff;font-weight:800;font-size:15px">Connect Google Sheets</span></p>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;max-width:480px">
+        <p class="label">04</p>
+        <h2 class="h3" style="font-size:26px">Connect once</h2>
+        <p class="small">If a job needs a service, Taskiem asks you to link it. After that, every job can use it.</p>
+      </div>
+    </div>
+
+    <div class="moment">
+      <div class="moment-chat">
+        <div class="bub bub-tk">Done. Next run: Friday at 10:00. I will tell you how it went.</div>
+        <p aria-hidden="true" style="align-self:center;font-size:13px;color:#5b6b64;margin:6px 0">Friday, 10:00</p>
+        <div class="bub bub-tk">Reminded 7 people today. Total owed: ₦86,500.</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;max-width:480px">
+        <p class="label">05</p>
+        <h2 class="h3" style="font-size:26px">It runs without you</h2>
+        <p class="small">Friday comes, the job runs, and you get a short report. Figures here are an example.</p>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- Approvals with a PIN -->
+<section class="onpine sec" style="background:#0d3b2e;color:#ffffff">
+  <div class="container" style="display:flex;flex-wrap:wrap;gap:clamp(32px,5vw,72px);align-items:center">
+    <div style="flex:1 1 380px;min-width:0;display:flex;flex-direction:column;gap:18px">
+      <p class="label">Approvals with a PIN</p>
+      <h2 class="h2">Money always waits for you.</h2>
+      <p class="lede">Messages can go out on their own once you have said yes. Payments are different. Each one stops and asks for your PIN first.</p>
+      <ul class="checks" style="margin-top:6px">
+        <li style="color:#ffffff"><span class="tick" style="background:#c8f169;color:#0d3b2e"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span>You see who is paid and how much, before anything moves.</li>
+        <li style="color:#ffffff"><span class="tick" style="background:#c8f169;color:#0d3b2e"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span>Only your PIN approves it. Taskiem cannot approve for you.</li>
+        <li style="color:#ffffff"><span class="tick" style="background:#c8f169;color:#0d3b2e"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span>A payment is sent once, even if the network drops.</li>
+      </ul>
+    </div>
+    <div style="flex:1 1 340px;min-width:0;display:flex;justify-content:center">
+      <div class="phone">
+        <div class="screen">
+          <div class="chat-head">
+            <img src="/_blob/5315bafeb8fb29b4ae5c1a426166468c" alt="" width="40" height="40" style="width:40px;height:40px;border-radius:50%">
+            <div style="display:flex;flex-direction:column;line-height:1.25"><span style="font-weight:800;font-size:16px">Taskiem</span><span style="font-size:13px;color:rgba(255,255,255,.8)">online</span></div>
+          </div>
+          <div class="chat-body">
+            <div class="bub bub-tk">
+              <p>Ready to pay 3 staff, ₦255,000 in total.</p>
+              <p style="margin-top:8px">Reply with your PIN to approve.</p>
+            </div>
+            <div class="bub bub-me" style="letter-spacing:.3em;font-weight:800">••••</div>
+            <div class="bub bub-tk">Approved. All 3 payments sent once. The record is saved.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Team and roles -->
+<section class="sec">
+  <div class="container" style="display:flex;flex-direction:column;gap:48px">
+    <div style="max-width:760px;display:flex;flex-direction:column;gap:16px">
+      <p class="label">The team and their roles</p>
+      <h2 class="h2">Give your team a part. Keep the PIN.</h2>
+      <p class="lede">Add the people who help you run the business and choose what each can do. Roles below are an example.</p>
+    </div>
+    <div class="grid" style="--min:250px">
+      <div class="card">
+        <div class="ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></div>
+        <h3 class="h3">Owner</h3>
+        <p class="small">Approves payments with a PIN and sees everything.</p>
+      </div>
+      <div class="card">
+        <div class="ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h4"/></svg></div>
+        <h3 class="h3">Manager</h3>
+        <p class="small">Sets up jobs and prepares payments. Cannot approve them.</p>
+      </div>
+      <div class="card">
+        <div class="ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h2M12 11h2M8 15h2M12 15h4"/></svg></div>
+        <h3 class="h3">Cashier</h3>
+        <p class="small">Adds sales and sees the lists you share with them.</p>
+      </div>
+      <div class="card">
+        <div class="ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7"/></svg></div>
+        <h3 class="h3">Accountant</h3>
+        <p class="small">Reads records and exports them. Changes nothing.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+<dc-import name="Cta" theme="{{theme}}" hint-size="100%,430px"></dc-import>
+<dc-import name="Footer" theme="{{theme}}" hint-size="100%,380px"></dc-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Theme"},"$preview":{"width":1440,"height":4500}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { theme: this.props.theme === 'dark' ? 'dark' : 'light' };
+  }
+}
+</script>
+</body>
+</html>

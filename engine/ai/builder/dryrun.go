@@ -97,6 +97,11 @@ func HappyPathWith(def *wd.Definition, reg connector.Lookup, find expansion.Temp
 			body["payment"] = map[string]any{"id": "00000000-0000-7000-8000-000000000001", "amount_kobo": 2500000, "amount": "₦25,000", "how": "exact", "paid_at": "2026-01-01T09:00:00Z"}
 		}
 	}
+	if def.Trigger.Type == "link" {
+		// A link event between linked businesses (business links L6).
+		ev, _ := def.Trigger.Config["event"].(string)
+		trig = linkSample(ev)
+	}
 	if def.Trigger.Type == "form" {
 		// What a submission carries beside the answers (forms 8.2).
 		trig["form"] = map[string]any{"submission_id": "00000000-0000-7000-8000-000000000000", "reference": "F-SAMPLE23", "submitted_at": "2026-01-01T09:00:00Z",
@@ -189,7 +194,13 @@ func HappyPathWith(def *wd.Definition, reg connector.Lookup, find expansion.Temp
 			case "approval":
 				c.Approvals[st.ID] = wdtest.ApprovalMock{Decision: "approved", By: "checker"}
 			case "signal":
-				c.Signals[st.ID] = wdtest.SignalMock{Payload: map[string]any{}}
+				payload := map[string]any{}
+				if st.Signal != nil && st.Signal.Event == "storefront.payment" {
+					// What a storefront payment says: paid, and what is left
+					// (fronts F5).
+					payload = map[string]any{"reference": "AK-SAMPLE1", "status": "paid", "amount_kobo": 500000, "balance_kobo": 0}
+				}
+				c.Signals[st.ID] = wdtest.SignalMock{Payload: payload}
 			case "callback":
 				c.Signals[st.ID] = wdtest.SignalMock{Payload: map[string]any{"body": map[string]any{}, "query": map[string]any{}, "received_at": "2026-01-01T09:00:00Z"}}
 			case "form":
@@ -449,4 +460,31 @@ func TryDraft(doc []byte, reg connector.Lookup, policies map[string]json.RawMess
 		}
 	}
 	return c, runCase(def, reg, usedPolicies(def, policies), find, c), nil
+}
+
+// linkSample is a link event as a run sees it, with sample values: for
+// the builder's dry run and its happy path.
+func linkSample(event string) map[string]any {
+	const link = "00000000-0000-7000-8000-00000000a11c"
+	lines := []any{map[string]any{"item": "Rice 50kg", "unit": "bag", "quantity": 10, "price_kobo": 4500000}}
+	body := map[string]any{"link": link, "business": "Dangote Stores"}
+	switch event {
+	case "bill.received", "bill.paid":
+		body["reference"], body["amount_kobo"], body["due_on"] = "INV-0042", 45000000, "2026-01-15"
+		body["paid_kobo"], body["due_kobo"] = 0, 45000000
+		if event == "bill.paid" {
+			body["paid_kobo"], body["due_kobo"] = 45000000, 0
+		}
+	case "order.received":
+		body["business"] = "Ada's Kitchen"
+		body["reference"], body["total_kobo"], body["lines"], body["note"] = "P-7QX4KD", 45000000, lines, ""
+	case "order.delivered":
+		body["reference"], body["purchase_id"], body["total_kobo"], body["lines"] = "P-7QX4KD", "00000000-0000-7000-8000-000000000001", 45000000, lines
+	case "thread.message":
+		body["text"], body["sender"], body["message_id"] = "Is the rice ready?", "Musa", "00000000-0000-7000-8000-000000000002"
+	case "link.accepted":
+		body["role"] = "supplier"
+	}
+	body["event"] = event
+	return map[string]any{"type": "link", "event": event, "body": body}
 }

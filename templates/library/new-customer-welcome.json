@@ -3,6 +3,7 @@
   "title": "Welcome new customers by SMS",
   "summary": "When a customer signs up, text them a welcome message and add them to your customer list.",
   "description": "Gives your sign-up form or app a signed web address. Each new customer it sends (name and phone number) gets a welcome SMS from your business, and is added to your customer list in a Google Sheet at the same time. A sign-up sent twice is only welcomed once.",
+  "replaced_where": {"by": "customer-welcome-table", "when": "no_sheets"},
   "category": "customers",
   "tags": ["customers", "onboarding", "welcome", "sms", "google sheets", "webhook"],
   "keywords": ["welcome", "new", "customer", "signup", "sign", "register", "registration", "onboard", "onboarding", "joins"],

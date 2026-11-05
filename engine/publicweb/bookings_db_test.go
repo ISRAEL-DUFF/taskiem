@@ -109,14 +109,14 @@ func TestBookingThroughTheDatabase(t *testing.T) {
 		ref := refOf(loc)
 		if _, err := d.Admin.Exec(ctx, `INSERT INTO storefront_orders (id, tenant_id, storefront_id, kind, reference, status_hash, status, customer, subject_id,
 			total_kobo, payment, service_id, service_name, starts_at, ends_at)
-			SELECT gen_random_uuid(), i.tenant_id, i.storefront_id, 'booking', i.reference, i.status_hash, $2, '{}', 'subject', 300000, 'none', h.service_id, 'Haircut',
-			  h.starts_at, h.until_at FROM storefront_inbox i JOIN storefront_holds h ON h.reference = i.reference WHERE i.reference = $1`, ref, status); err != nil {
+			SELECT gen_random_uuid(), i.tenant_id, i.storefront_id, 'booking', i.reference, i.status_hash, $2, '{}', 'subject', 300000, 'none', h.item_id, 'Haircut',
+			  h.starts_at, h.until_at FROM storefront_inbox i JOIN storefront_claims h ON h.reference = i.reference WHERE i.reference = $1`, ref, status); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := d.Admin.Exec(ctx, `DELETE FROM storefront_inbox WHERE reference = $1`, ref); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := d.Admin.Exec(ctx, `UPDATE storefront_holds SET expires_at = NULL WHERE reference = $1`, ref); err != nil {
+		if _, err := d.Admin.Exec(ctx, `UPDATE storefront_claims SET expires_at = NULL WHERE reference = $1`, ref); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -136,7 +136,7 @@ func TestBookingThroughTheDatabase(t *testing.T) {
 	}
 	var status string
 	var holds, changes int
-	if err := d.Admin.QueryRow(ctx, `SELECT status, (SELECT count(*) FROM storefront_holds WHERE reference = $1), (SELECT count(*) FROM storefront_changes)
+	if err := d.Admin.QueryRow(ctx, `SELECT status, (SELECT count(*) FROM storefront_claims WHERE reference = $1), (SELECT count(*) FROM storefront_changes)
 		FROM storefront_orders WHERE reference = $1`, ref1).Scan(&status, &holds, &changes); err != nil || status != "cancelled" || holds != 0 || changes != 1 {
 		t.Fatalf("after cancelling: %s, %d holds, %d changes, %v", status, holds, changes, err)
 	}
@@ -152,7 +152,7 @@ func TestBookingThroughTheDatabase(t *testing.T) {
 		t.Fatalf("move: %d %s", w.Code, w.Body.String())
 	}
 	var moved time.Time
-	if err := d.Admin.QueryRow(ctx, `SELECT h.starts_at FROM storefront_holds h WHERE h.reference = $1`, ref2).Scan(&moved); err != nil || !moved.Equal(start) {
+	if err := d.Admin.QueryRow(ctx, `SELECT h.starts_at FROM storefront_claims h WHERE h.reference = $1`, ref2).Scan(&moved); err != nil || !moved.Equal(start) {
 		t.Fatalf("hold at %v %v", moved, err)
 	}
 	if body := get(e.h, "GET", sfHost, second).Body.String(); !strings.Contains(body, "Haircut, "+storefront.When(start)) || !strings.Contains(body, "Your booking is confirmed") {

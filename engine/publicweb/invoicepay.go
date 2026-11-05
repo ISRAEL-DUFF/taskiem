@@ -103,6 +103,8 @@ var lagos = func() *time.Location {
 
 // payView is what the page shows of the ways to pay.
 type payView struct {
+	// Heading: Pay this invoice, or Pay what you owe on a customer's page.
+	Heading string
 	// Own: the customer's own account number, always open.
 	Own *accountView
 	// Transfer: the account to pay into, while it is open.
@@ -125,16 +127,22 @@ type accountView struct {
 	Number, Bank, Name, Amount, Until, Left, Late, Wrong string
 }
 
-// payOptions fills the page's payment section and says how often it
-// should refresh itself (0: never).
+// payOptions fills an invoice page's payment section and says how often
+// it should refresh itself (0: never).
 func (s *Server) payOptions(ctx context.Context, token string, p InvoicePage) (*payView, int, error) {
-	opts, err := s.InvoicePay.Options(ctx, invoicing.TokenHash(token))
+	return s.payWays(ctx, s.InvoicePay, invoicing.TokenHash(token), "/i/"+token+"/pay", "Pay this invoice", "this invoice", p.Business, p.TotalKobo-p.PaidKobo)
+}
+
+// payWays fills a page's payment section from pay's options for the page
+// of tokenHash: an invoice's, or a customer's (customer.go), what names
+// the page in its notes, and what is due.
+func (s *Server) payWays(ctx context.Context, pay InvoicePay, tokenHash []byte, action, heading, what, business string, due int64) (*payView, int, error) {
+	opts, err := pay.Options(ctx, tokenHash)
 	if err != nil {
 		return nil, 0, err
 	}
 	now := s.now()
-	due := p.TotalKobo - p.PaidKobo
-	v := &payView{TransferLabel: "Pay by bank transfer", CardLabel: "Pay by card", Action: "/i/" + token + "/pay", Due: invoicing.Naira(due)}
+	v := &payView{Heading: heading, TransferLabel: "Pay by bank transfer", CardLabel: "Pay by card", Action: action, Due: invoicing.Naira(due)}
 	refresh := 0
 	for _, o := range opts {
 		v.PartPayments = o.PartPayments
@@ -154,11 +162,13 @@ func (s *Server) payOptions(ctx context.Context, token string, p InvoicePage) (*
 				v.Note, v.TransferLabel = "The last account number has expired. If you already paid into it, your payment will still show here.", "Get a new account number"
 			case o.Status == "failed":
 				v.Note = "We could not get an account number just now. Please try again in a few minutes."
+			case o.Status == "unavailable":
+				v.Note, v.TransferLabel = unavailableNote(what, business), "Try again"
 			}
 			if limited {
 				v.TransferLabel = ""
 				if v.Account == nil && v.Waiting == "" {
-					v.Note = "Too many account numbers were asked for this invoice. Please try again in an hour, or contact " + p.Business + "."
+					v.Note = "Too many account numbers were asked for " + what + ". Please try again in an hour, or contact " + business + "."
 				}
 			}
 		case "link":
@@ -170,7 +180,12 @@ func (s *Server) payOptions(ctx context.Context, token string, p InvoicePage) (*
 			case o.Status == "open" && o.PaymentURL != "":
 				v.CardURL, v.CardLabel = o.PaymentURL, "Continue to card payment"
 			case o.Status == "failed" && v.Note == "":
-				v.Note = "Card payment is not available for this invoice just now."
+				v.Note = "Card payment is not available for " + what + " just now."
+			case o.Status == "unavailable":
+				if v.Note == "" {
+					v.Note = unavailableNote(what, business)
+				}
+				v.CardLabel = "Try card payment again"
 			}
 			if limited && v.CardURL == "" {
 				v.CardLabel = ""
@@ -182,7 +197,7 @@ func (s *Server) payOptions(ctx context.Context, token string, p InvoicePage) (*
 	}
 	// A customer with a number of their own pays into it; a one-time number
 	// stays on offer.
-	if num, bank, err := s.InvoicePay.OwnAccount(ctx, invoicing.TokenHash(token)); err != nil {
+	if num, bank, err := pay.OwnAccount(ctx, tokenHash); err != nil {
 		return nil, 0, err
 	} else if num != "" {
 		v.Own = &accountView{Number: num, Bank: bank, Amount: v.Due}
@@ -191,6 +206,13 @@ func (s *Server) payOptions(ctx context.Context, token string, p InvoicePage) (*
 		}
 	}
 	return v, refresh, nil
+}
+
+// unavailableNote is what a page says when the business has no payments
+// connection that can open an account number or a card page: said, rather
+// than leaving the customer wondering whether the button worked.
+func unavailableNote(what, business string) string {
+	return "Online payment is not set up for " + what + " yet. Please pay " + business + " directly, or try again later."
 }
 
 var lateWords = map[string]string{
@@ -219,6 +241,12 @@ func minutesLeft(d time.Duration) string {
 // an invoice that takes part payments, amount in naira. It queues the
 // request and sends the customer back to the page, which waits for it.
 func (s *Server) servePay(w http.ResponseWriter, r *http.Request, token string) {
+	s.askToPay(w, r, s.InvoicePay, invoicing.TokenHash(token), "/i/"+token, "on this invoice")
+}
+
+// askToPay queues a page's request with pay and sends the customer back
+// to the page (back), which waits for it.
+func (s *Server) askToPay(w http.ResponseWriter, r *http.Request, pay InvoicePay, tokenHash []byte, back, where string) {
 	if !allowed(w, r, http.MethodPost) {
 		return
 	}
@@ -247,17 +275,17 @@ func (s *Server) servePay(w http.ResponseWriter, r *http.Request, token string) 
 		}
 		amount = k
 	}
-	ok, err := s.InvoicePay.Request(r.Context(), invoicing.TokenHash(token), kind, amount)
+	ok, err := pay.Request(r.Context(), tokenHash, kind, amount)
 	if err != nil {
 		s.tryLater(w, r, "invoice payment", err)
 		return
 	}
 	if !ok && amount > 0 {
-		s.invoiceMessage(w, r, http.StatusUnprocessableEntity, "That amount cannot be paid on this invoice. Go back and check it.")
+		s.invoiceMessage(w, r, http.StatusUnprocessableEntity, "That amount cannot be paid "+where+". Go back and check it.")
 		return
 	}
 	// Refused otherwise (paid, limits): the page says why.
-	http.Redirect(w, r, "/i/"+token, http.StatusSeeOther) //nolint:gosec // G710: a relative path; serveInvoice checked token against invoiceTokenRe
+	http.Redirect(w, r, back, http.StatusSeeOther) //nolint:gosec // G710: a relative path; its token was checked against invoiceTokenRe
 }
 
 func (s *Server) invoiceMessage(w http.ResponseWriter, r *http.Request, status int, msg string) {

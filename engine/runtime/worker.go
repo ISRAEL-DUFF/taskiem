@@ -20,6 +20,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/israel-duff/taskiem/engine/areas"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/container"
 	"github.com/israel-duff/taskiem/engine/datatables"
@@ -725,6 +726,21 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 			p.stepType = s.Type
 			p.step = s
 		}
+		// A step of a part of Taskiem the business turned off does not run
+		// (docs/spec/business-areas.md): it fails, in plain words, before
+		// anything is sent. A step that already recorded its intent may have
+		// been sent: it carries on to its outcome (and is reconciled), never
+		// failed here as if nothing had left.
+		if area, ok := areas.ConnectorArea(p.sched.Connector); ok && len(intents) == 0 {
+			on, err := areas.Enabled(ctx, tx, c.tenant, area)
+			if err != nil {
+				return err
+			}
+			if !on {
+				p.mode = modeDone
+				return w.recordFailure(ctx, tx, p, "fatal", areas.OffSentence(area))
+			}
+		}
 		if err := w.resolveExecutor(ctx, p); err != nil {
 			if errors.Is(err, errLookup) {
 				return err // the database, not the step: try the task again
@@ -1016,6 +1032,9 @@ func (w *Worker) finish(ctx context.Context, p *plan, result *history.Event) err
 		proj := result.Type == history.StepCompleted && projected(p)
 		*result = project(p, *result)
 		if err := w.recordPayout(ctx, tx, p, *result); err != nil {
+			return err
+		}
+		if err := w.tellPayoutSent(ctx, tx, p, *result); err != nil {
 			return err
 		}
 		if err := w.rememberPaidAccounts(ctx, tx, p, *result); err != nil {

@@ -1,15 +1,18 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/secrets"
 )
@@ -28,11 +31,17 @@ var errNoAccountID = fmt.Errorf("%w: add your WhatsApp Business Account ID to th
 // one, and returns the action's output. title is the service's name in
 // the errors a person reads.
 func (s *Server) connectorLookup(r *http.Request, conn, title, connection, action, purpose string, input map[string]any) (map[string]any, error) {
-	p := principalFrom(r.Context())
+	return s.connectorAction(r.Context(), principalFrom(r.Context()), conn, title, connection, action, purpose, input)
+}
+
+// connectorAction runs one action of a connector on the person's business's
+// connection in prod (the named one, or the only one): the API's lookups,
+// and chat's (a Google Sheet copied into a table).
+func (s *Server) connectorAction(ctx context.Context, p *Principal, conn, title, connection, action, purpose string, input map[string]any) (map[string]any, error) {
 	const env = "prod"
 	var name string
-	if err := s.tx(r, func(tx pgx.Tx) error {
-		rows, err := tx.Query(r.Context(), `SELECT name FROM connections WHERE environment = $1 AND connector = $2 AND status = 'active' AND ($3 = '' OR name = $3)`,
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT name FROM connections WHERE environment = $1 AND connector = $2 AND status = 'active' AND ($3 = '' OR name = $3)`,
 			env, conn, connection)
 		if err != nil {
 			return err
@@ -52,7 +61,7 @@ func (s *Server) connectorLookup(r *http.Request, conn, title, connection, actio
 	}); err != nil {
 		return nil, err
 	}
-	reg, err := s.Registry.For(r.Context(), p.TenantID.String())
+	reg, err := s.Registry.For(ctx, p.TenantID.String())
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +69,7 @@ func (s *Server) connectorLookup(r *http.Request, conn, title, connection, actio
 	if !ok {
 		return nil, fmt.Errorf("%w: %s is not available here", errBadRequest, title)
 	}
-	creds, err := s.Vault.Credentials(secrets.WithUse(r.Context(), secrets.Use{Kind: secrets.KindConnection, Purpose: purpose, Actor: p.Actor()}), p.TenantID, env, conn, name)
+	creds, err := s.Vault.Credentials(secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindConnection, Purpose: purpose, Actor: p.Actor()}), p.TenantID, env, conn, name)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +81,7 @@ func (s *Server) connectorLookup(r *http.Request, conn, title, connection, actio
 		g = &egress.Guard{Logger: s.Logger}
 	}
 	hc := g.Client(egress.Policy{Tenant: p.TenantID.String(), Hosts: c.Manifest.HostsFor(creds), Purpose: "connector:" + conn}, 20*time.Second)
-	resp, err := c.Actions[action].Execute(r.Context(), connector.Request{Input: input, Credentials: creds, HTTP: hc, Logger: s.Logger, Attempt: 1})
+	resp, err := c.Actions[action].Execute(ctx, connector.Request{Input: input, Credentials: creds, HTTP: hc, Logger: s.Logger, Attempt: 1})
 	if err != nil {
 		return nil, &lookupError{err: err}
 	}

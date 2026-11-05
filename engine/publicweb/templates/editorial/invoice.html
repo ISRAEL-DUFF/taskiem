@@ -1,7 +1,7 @@
 {{template "fhead" .}}{{with .Refresh}}<meta http-equiv="refresh" content="{{.}}">
 {{end}}{{template "fbody" .}}
 <p class="kicker">{{.Status}}{{with .DueOn}} · {{.}}{{end}}</p>
-<h1>Invoice {{.Number}}</h1>
+<h1>{{.Heading}}</h1>
 {{with .Message}}<p class="notice" role="status">{{.}}</p>{{end}}
 <div class="inv">
 {{range .Lines}}<div class="inv-row"><div class="inv-what"><span class="line-name">{{.Description}}</span> {{with .Each}}<span class="line-price">{{.}}</span>{{end}}{{with .Note}} <span class="line-price">{{.}}</span>{{end}}</div><span>{{.Amount}}</span></div>
@@ -16,4 +16,5 @@
 {{with .Note}}<p class="row-sub inv-note">{{.}}</p>{{end}}
 
 {{if .Payable}}{{with .Pay}}{{template "invoicepay" .}}{{else}}<p class="hint center">Ask {{.Business}} how to pay.</p>{{end}}{{end}}
-{{template "ffoot" .}}
+{{with .LinkURL}}<p class="hint center">Is your business on Taskiem too? <a href="{{.}}">Link with {{$.Business}}</a>, and your invoices and orders reach each other by themselves.</p>
+{{end}}{{template "ffoot" .}}

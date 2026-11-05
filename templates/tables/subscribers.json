@@ -1,0 +1,57 @@
+{
+  "name": "subscribers",
+  "title": "Subscribers",
+  "description": "The customers who pay every month for a service: who they are, their plan and price, and when it renews.",
+  "columns": [
+    {
+      "name": "name",
+      "title": "Name",
+      "type": "text",
+      "required": true,
+      "personal": true
+    },
+    {
+      "name": "phone",
+      "title": "Phone",
+      "type": "phone",
+      "required": true
+    },
+    {
+      "name": "email",
+      "title": "Email",
+      "type": "email"
+    },
+    {
+      "name": "plan",
+      "title": "Plan",
+      "type": "text"
+    },
+    {
+      "name": "monthly_naira",
+      "title": "Price each month (naira)",
+      "type": "number",
+      "required": true
+    },
+    {
+      "name": "renews_on",
+      "title": "Renews on",
+      "type": "date"
+    },
+    {
+      "name": "status",
+      "title": "Status (active or suspended)",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "account_ref",
+      "title": "Account or username on your system",
+      "type": "text"
+    },
+    {
+      "name": "area",
+      "title": "Area",
+      "type": "text"
+    }
+  ]
+}

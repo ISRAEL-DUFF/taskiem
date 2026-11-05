@@ -104,6 +104,18 @@ export const anchor = {
   verify_account: (input: AnchorVerifyAccountInput, extra?: ConnectorExtra): StepSpec => connector("anchor@1", "verify_account", input, extra),
 };
 
+// Bills (bills@1)
+export interface BillsFinishBillPaymentInput {
+  /** The bank's name for the account */
+  account_name?: Val<string>;
+  payment_id: Val<string>;
+  status: Val<"paid" | "failed" | "rejected" | "unknown">;
+}
+export const bills = {
+  /** Record a linked bill's outcome (idempotent_write) */
+  finish_bill_payment: (input: BillsFinishBillPaymentInput, extra?: ConnectorExtra): StepSpec => connector("bills@1", "finish_bill_payment", input, extra),
+};
+
 // Breet (breet@1)
 export interface BreetAddBankInput {
   account_number: Val<string>;
@@ -687,10 +699,16 @@ export interface InvoicesCreateInput {
   lines?: Value;
   note?: Val<string>;
 }
+export interface InvoicesCustomerLinkInput {
+  /** Any open invoice or notebook debt of the customer's */
+  number: Val<string>;
+}
 export interface InvoicesGetInput {
   number: Val<string>;
 }
 export interface InvoicesListInput {
+  /** customer: one row per customer with something overdue (status overdue only) */
+  group?: Val<"customer">;
   /** At most this many (default 50) */
   limit?: Val<number>;
   /** For paid */
@@ -733,6 +751,8 @@ export interface InvoicesVoidInput {
 export const invoices = {
   /** Create an invoice (idempotent_write) */
   create: (input: InvoicesCreateInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "create", input, extra),
+  /** The customer's payment link (read) */
+  customer_link: (input: InvoicesCustomerLinkInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "customer_link", input, extra),
   /** Read an invoice (read) */
   get: (input: InvoicesGetInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "get", input, extra),
   /** List overdue or paid invoices (read) */
@@ -912,6 +932,78 @@ export const lenco = {
   resolve_account: (input: LencoResolveAccountInput, extra?: ConnectorExtra): StepSpec => connector("lenco@1", "resolve_account", input, extra),
   /** Transfer to a bank account (idempotent_write) */
   transfer: (input: LencoTransferInput, extra?: ConnectorExtra): StepSpec => connector("lenco@1", "transfer", input, extra),
+};
+
+// Linked businesses (link@1)
+export interface LinkGetBillInput {
+  /** The supplier's invoice number */
+  reference: Val<string>;
+}
+export interface LinkGetOrderInput {
+  reference: Val<string>;
+}
+export interface LinkListBillsInput {
+  /** Only this supplier's (its name on Taskiem) */
+  business?: Val<string>;
+  /** Only those due within this many days */
+  due_within_days?: Val<number>;
+  /** At most this many (default 50) */
+  limit?: Val<number>;
+}
+export interface LinkLowOrdersInput {
+  /** Only this supplier */
+  business?: Val<string>;
+}
+export interface LinkOrderStepInput {
+  /** Said to the customer with the step */
+  note?: Val<string>;
+  reference: Val<string>;
+  step: Val<"accept" | "decline" | "ready" | "dispatched">;
+}
+export interface LinkPayBillInput {
+  /** A part payment */
+  amount_kobo?: Val<number>;
+  /** The supplier's invoice number */
+  reference: Val<string>;
+}
+export interface LinkPlaceOrderInput {
+  /** The supplier's name on Taskiem */
+  business: Val<string>;
+  items: Value;
+  note?: Val<string>;
+}
+export interface LinkPriceOfInput {
+  /** The supplier's name on Taskiem */
+  business: Val<string>;
+  /** The item's name */
+  item: Val<string>;
+}
+export interface LinkReplyInput {
+  /** Its name on Taskiem */
+  business?: Val<string>;
+  /** A document whose card the message answers */
+  reference?: Val<string>;
+  text: Val<string>;
+}
+export const link = {
+  /** Read a bill from a linked supplier (read) */
+  get_bill: (input: LinkGetBillInput, extra?: ConnectorExtra): StepSpec => connector("link@1", "get_bill", input, extra),
+  /** Read an order between linked businesses (read) */
+  get_order: (input: LinkGetOrderInput, extra?: ConnectorExtra): StepSpec => connector("link@1", "get_order", input, extra),
+  /** List bills from linked suppliers still to pay (read) */
+  list_bills: (input?: LinkListBillsInput, extra?: ConnectorExtra): StepSpec => connector("link@1", "list_bills", input, extra),
+  /** What the low list would order from linked suppliers (read) */
+  low_orders: (input?: LinkLowOrdersInput, extra?: ConnectorExtra): StepSpec => connector("link@1", "low_orders", input, extra),
+  /** Move an order a linked customer placed with us (idempotent_write) */
+  order_step: (input: LinkOrderStepInput, extra?: ConnectorExtra): StepSpec => connector("link@1", "order_step", input, extra),
+  /** Pay a bill from a linked supplier (idempotent_write) */
+  pay_bill: (input: LinkPayBillInput, extra?: ConnectorExtra): StepSpec => connector("link@1", "pay_bill", input, extra),
+  /** Order from a linked supplier (idempotent_write) */
+  place_order: (input: LinkPlaceOrderInput, extra?: ConnectorExtra): StepSpec => connector("link@1", "place_order", input, extra),
+  /** Price of an item on a linked supplier's list (read) */
+  price_of: (input: LinkPriceOfInput, extra?: ConnectorExtra): StepSpec => connector("link@1", "price_of", input, extra),
+  /** Write to a linked business (idempotent_write) */
+  reply: (input: LinkReplyInput, extra?: ConnectorExtra): StepSpec => connector("link@1", "reply", input, extra),
 };
 
 // Mailchimp (mailchimp@1)
@@ -2752,6 +2844,10 @@ export interface SlackGetConversationInput {
   channel: Val<string>;
   include_num_members?: Val<boolean>;
 }
+export interface SlackGetUserInput {
+  /** The user's id (U…) */
+  user: Val<string>;
+}
 export interface SlackListConversationsInput {
   /** next_cursor from the previous page */
   cursor?: Val<string>;
@@ -2848,6 +2944,8 @@ export const slack = {
   auth_test: (input?: SlackAuthTestInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "auth_test", input, extra),
   /** Get a channel (read) */
   get_conversation: (input: SlackGetConversationInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "get_conversation", input, extra),
+  /** Get a user (read) */
+  get_user: (input: SlackGetUserInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "get_user", input, extra),
   /** List channels (read) */
   list_conversations: (input?: SlackListConversationsInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "list_conversations", input, extra),
   /** List the workspace's people (read) */
@@ -2972,18 +3070,29 @@ export interface StorefrontDecideInput {
 export interface StorefrontGetBookingInput {
   reference: Val<string>;
 }
+export interface StorefrontIssueTicketsInput {
+  reference: Val<string>;
+}
+export interface StorefrontMarkReturnedInput {
+  reference: Val<string>;
+}
 export interface StorefrontNotifyCustomerInput {
   reference: Val<string>;
-  /** Instead of text: one of Taskiem's customer messages (order_confirmed_pickup, booking_confirmed…), in the business's own language */
+  /** Instead of text: one of Taskiem's customer messages (order_confirmed_pickup, booking_confirmed, deposit_received, balance_due…), in the business's own language */
   say?: Val<string>;
   /** The email's subject */
   subject?: Val<string>;
   /** The message; an SMS starts with the business's name and is at most three parts. {link} becomes the customer's status link, where a booking is moved or cancelled */
   text?: Val<string>;
-  /** With say: the message's values (reference, total, url, service, when) */
+  /** With say: the message's values (reference, total, url, service, when, amount, balance) */
   vars?: Value;
 }
+export interface StorefrontOfferPlaceInput {
+  reference: Val<string>;
+}
 export interface StorefrontPaymentLinkInput {
+  /** On an order paid before: what this step asks, at most the balance; left out, the balance */
+  amount_kobo?: Val<number>;
   reference: Val<string>;
 }
 export interface StorefrontRefundInput {
@@ -2994,8 +3103,14 @@ export const storefront = {
   decide: (input: StorefrontDecideInput, extra?: ConnectorExtra): StepSpec => connector("storefront@1", "decide", input, extra),
   /** Read a booking (read) */
   get_booking: (input: StorefrontGetBookingInput, extra?: ConnectorExtra): StepSpec => connector("storefront@1", "get_booking", input, extra),
+  /** Issue tickets (idempotent_write) */
+  issue_tickets: (input: StorefrontIssueTicketsInput, extra?: ConnectorExtra): StepSpec => connector("storefront@1", "issue_tickets", input, extra),
+  /** Mark a hire returned (idempotent_write) */
+  mark_returned: (input: StorefrontMarkReturnedInput, extra?: ConnectorExtra): StepSpec => connector("storefront@1", "mark_returned", input, extra),
   /** Message the customer (idempotent_write) */
   notify_customer: (input: StorefrontNotifyCustomerInput, extra?: ConnectorExtra): StepSpec => connector("storefront@1", "notify_customer", input, extra),
+  /** Offer a waiting-list place (idempotent_write) */
+  offer_place: (input: StorefrontOfferPlaceInput, extra?: ConnectorExtra): StepSpec => connector("storefront@1", "offer_place", input, extra),
   /** Make the order's payment link (idempotent_write) */
   payment_link: (input: StorefrontPaymentLinkInput, extra?: ConnectorExtra): StepSpec => connector("storefront@1", "payment_link", input, extra),
   /** Refund the customer (idempotent_write) */
@@ -3727,6 +3842,7 @@ export const zoho_mail = {
 export const CONNECTOR_HELPERS: Record<string, string> = {
   "africastalking@1": "africastalking",
   "anchor@1": "anchor",
+  "bills@1": "bills",
   "breet@1": "breet",
   "brevo@1": "brevo",
   "dojah@1": "dojah",
@@ -3740,6 +3856,7 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "invoices@1": "invoices",
   "iswallet@1": "iswallet",
   "lenco@1": "lenco",
+  "link@1": "link",
   "mailchimp@1": "mailchimp",
   "messenger@1": "messenger",
   "moniepoint@1": "moniepoint",
@@ -3779,6 +3896,7 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
 export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "africastalking@1": ["fetch_messages", "get_airtime_status", "get_balance", "send_airtime", "send_sms"],
   "anchor@1": ["book_transfer", "get_balance", "get_transfer", "get_transfer_by_reference", "list_banks", "transfer", "verify_account"],
+  "bills@1": ["finish_bill_payment"],
   "breet@1": ["add_bank", "generate_address", "get_balances", "get_deposit", "get_withdrawal", "list_assets", "list_banks", "verify_bank_account", "withdraw_crypto", "withdraw_to_bank"],
   "brevo@1": ["add_to_list", "create_or_update_contact", "get_account", "list_lists", "send_campaign", "send_email", "send_sms"],
   "dojah@1": ["check_balance", "lookup_bvn", "lookup_nin"],
@@ -3789,9 +3907,10 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "googlesheets@1": ["add_sheet", "append_rows", "batch_get_values", "clear_values", "create_spreadsheet", "get_spreadsheet", "get_values", "update_values"],
   "instagram@1": ["get_account", "get_conversation", "get_profile", "mark_seen", "send_message", "send_typing"],
   "interswitch@1": ["get_payment", "get_transfer", "list_banks", "resolve_account", "transfer"],
-  "invoices@1": ["create", "get", "list", "notify_customer", "register_account", "send", "void"],
+  "invoices@1": ["create", "customer_link", "get", "list", "notify_customer", "register_account", "send", "void"],
   "iswallet@1": ["create_dynamic_account", "create_wallet", "get_balance", "get_payout", "issue_virtual_account", "issue_virtual_accounts", "list_banks", "list_providers", "list_transactions", "name_enquiry", "payout", "transfer"],
   "lenco@1": ["create_virtual_account", "get_balance", "get_transfer", "list_accounts", "list_banks", "resolve_account", "transfer"],
+  "link@1": ["get_bill", "get_order", "list_bills", "low_orders", "order_step", "pay_bill", "place_order", "price_of", "reply"],
   "mailchimp@1": ["add_or_update_member", "create_campaign", "get_account", "list_audiences", "send_campaign", "tag_member"],
   "messenger@1": ["get_conversation", "get_page", "get_profile", "mark_seen", "send_message", "send_typing"],
   "moniepoint@1": ["create_reserved_account", "get_balance", "get_reserved_account", "get_transaction", "get_transfer", "init_transaction", "list_banks", "resolve_account", "transfer"],
@@ -3814,9 +3933,9 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "s3@1": ["copy_object", "delete_object", "get_object", "head_object", "list_objects", "presign_url", "put_object"],
   "schools@1": ["clearance", "clearance_list", "current_term", "daily_close", "family_link", "get_student", "invoice_term", "issue_account", "list_classes", "list_debtors", "list_fee_items", "list_students", "plan_decisions", "send_account_number", "send_receipt", "send_reminders", "tell_plan_decision", "term_invoices"],
   "sftp@1": ["delete", "download_file", "list_directory", "mkdir", "rename", "stat", "upload_file"],
-  "slack@1": ["add_reaction", "auth_test", "get_conversation", "list_conversations", "list_users", "lookup_user_by_email", "open_conversation", "post_ephemeral", "post_message", "schedule_message", "update_message", "upload_file"],
+  "slack@1": ["add_reaction", "auth_test", "get_conversation", "get_user", "list_conversations", "list_users", "lookup_user_by_email", "open_conversation", "post_ephemeral", "post_message", "schedule_message", "update_message", "upload_file"],
   "stock@1": ["adjust", "count", "draft_purchase", "get_item", "list_items", "list_purchases", "low_items", "movements", "receive", "record_sale", "sales_day", "send_purchase"],
-  "storefront@1": ["decide", "get_booking", "notify_customer", "payment_link", "refund"],
+  "storefront@1": ["decide", "get_booking", "issue_tickets", "mark_returned", "notify_customer", "offer_place", "payment_link", "refund"],
   "telegram@1": ["answer_callback_query", "delete_webhook", "edit_message_text", "get_chat", "get_me", "get_webhook_info", "send_document", "send_message", "send_photo", "set_webhook"],
   "termii@1": ["check_balance", "send_sms"],
   "whatsapp@1": ["get_phone_number", "list_templates", "mark_as_read", "send_interactive", "send_media", "send_template", "send_text"],

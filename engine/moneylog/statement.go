@@ -299,18 +299,25 @@ func parseKobo(s string) (int64, bool) {
 // Imported is what an upload added.
 type Imported struct {
 	Added   int `json:"added"`
-	Skipped int `json:"skipped"` // lines already in the log
+	Skipped int `json:"skipped"` // lines already in the log, or waiting
+	// Paired: lines recorded as the bank's confirmation of a transfer
+	// entered by hand (pairing.go); Waiting: lines that wait for a person
+	// to say whether they are one.
+	Paired  int `json:"paired"`
+	Waiting int `json:"waiting"`
 }
 
 // ImportStatement adds a statement's lines to the log as statement
 // entries on channel ("gtbank/current"), skipping lines already there,
-// and remembers the columns for the channel's next upload.
+// pairs money in with the transfers entered by hand on that channel
+// (pairing.go), and remembers the columns for the channel's next upload.
 func (l *Log) ImportStatement(ctx context.Context, tenant uuid.UUID, channel, by string, cols StatementFormat, lines []Line) (Imported, error) {
 	if !channelRe.MatchString(channel) {
 		return Imported{}, fmt.Errorf("%w: name the account the statement is for, such as gtbank/current", ErrInvalid)
 	}
 	var out Imported
 	err := db.InTenantTx(ctx, l.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		entries := make([]Entry, 0, len(lines))
 		for _, ln := range lines {
 			amount, dir := ln.AmountKobo, "in"
 			if amount < 0 {
@@ -326,6 +333,30 @@ func (l *Log) ImportStatement(ctx context.Context, tenant uuid.UUID, channel, by
 			if e.Reference == "" {
 				e.Reference = "-"
 			}
+			entries = append(entries, e)
+		}
+		plan, err := l.pair(ctx, tx, tenant, channel, entries)
+		if err != nil {
+			return err
+		}
+		for i, e := range entries {
+			switch p := plan[i]; {
+			case p.skip:
+				out.Skipped++
+				continue
+			case len(p.ask) > 0:
+				if err := l.wait(ctx, tx, tenant, channel, by, e, p.ask); err != nil {
+					return err
+				}
+				out.Waiting++
+				continue
+			case p.confirms != uuid.Nil:
+				if err := l.confirm(ctx, tx, tenant, &e, p.confirms); err != nil {
+					return err
+				}
+				out.Paired++
+				continue
+			}
 			_, fresh, err := l.RecordTx(ctx, tx, tenant, e)
 			if err != nil {
 				return err
@@ -336,7 +367,7 @@ func (l *Log) ImportStatement(ctx context.Context, tenant uuid.UUID, channel, by
 				out.Skipped++
 			}
 		}
-		_, err := tx.Exec(ctx, `INSERT INTO money_statement_formats (tenant_id, channel, columns) VALUES ($1, $2, $3)
+		_, err = tx.Exec(ctx, `INSERT INTO money_statement_formats (tenant_id, channel, columns) VALUES ($1, $2, $3)
 			ON CONFLICT (tenant_id, channel) DO UPDATE SET columns = $3, updated_at = now()`, tenant, channel, cols)
 		return err
 	})
@@ -357,6 +388,11 @@ func StatementColumns(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, channel 
 // channelRe is a name for an account statements are uploaded for, or
 // that cash moves through: "gtbank/current", "cash", "petty-cash".
 var channelRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{0,40}(/[a-z0-9][a-z0-9_.-]{0,40})?$`)
+
+// ValidChannel reports whether a name may name an account statements are
+// uploaded for (gtbank/current), as a transfer entered by hand names the
+// account it went into.
+func ValidChannel(name string) bool { return channelRe.MatchString(name) }
 
 // Entered is cash or an expense a person enters.
 type Entered struct {

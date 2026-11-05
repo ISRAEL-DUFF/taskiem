@@ -34,6 +34,7 @@ describe("triggerWords", () => {
     expect(triggerWords({ type: "storefront" })).toBe("An order comes in");
     expect(triggerWords({ type: "invoice", config: { event: "paid" } })).toBe("An invoice is paid");
     expect(triggerWords({ type: "invoice", config: { event: "payment" } })).toBe("A payment is counted towards an invoice");
+    expect(triggerWords({ type: "link", config: { event: "bill.received" } })).toBe("A linked supplier sends a bill");
     expect(triggerWords({ type: "connector_event", config: { connector: "paystack@1" } })).toBe("Paystack tells it something happened");
     expect(triggerWords({ type: "manual" })).toBe("When someone starts it");
     expect(triggerWords(null)).toBe("Not set up yet");

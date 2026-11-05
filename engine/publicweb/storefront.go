@@ -30,6 +30,9 @@ type StorefrontPage struct {
 	// (the plan's month, or the unverified daily limit).
 	Verified     bool
 	OrdersPaused bool
+	// Lists are the copies of the other fronts' lists, by table (fronts
+	// F3, §5.2).
+	Lists map[string][]storefront.Item
 }
 
 // Storefronts reads a storefront's page; ok is false when it is not
@@ -68,6 +71,29 @@ func DBStorefronts(pool *pgxpool.Pool) Storefronts {
 		}
 		if err := json.Unmarshal(items, &p.Items); err != nil {
 			return StorefrontPage{}, false, err
+		}
+		// Each other front's list, its table read once.
+		for _, f := range p.Model.Fronts {
+			if f.Slug == "" {
+				continue
+			}
+			for _, t := range f.ListTables() {
+				if _, ok := p.Lists[t]; ok {
+					continue
+				}
+				var raw []byte
+				if err := pool.QueryRow(ctx, `SELECT taskiem_public_storefront_list($1, $2)`, id, t).Scan(&raw); err != nil {
+					return StorefrontPage{}, false, err
+				}
+				var list []storefront.Item
+				if err := json.Unmarshal(raw, &list); err != nil {
+					return StorefrontPage{}, false, err
+				}
+				if p.Lists == nil {
+					p.Lists = map[string][]storefront.Item{}
+				}
+				p.Lists[t] = list
+			}
 		}
 		return p, true, nil
 	}
@@ -118,9 +144,21 @@ type storefrontData struct {
 	// order form is one, so items get an Add link.
 	Forms    []storefront.PublicAction
 	Ordering bool
+	// A front's page (fronts F3): the front, the prefix of its actions'
+	// addresses (Base, "" on the home page) and the way home. The home
+	// page lists the other fronts.
+	Front  *storefront.PublicFront
+	Base   string
+	Home   string
+	Fronts []frontCard
 	// Services are what can be booked, each with a Book link, when the
 	// booking form is one of Forms.
 	Services []serviceView
+}
+
+// frontCard is another front as the home page lists it.
+type frontCard struct {
+	Name, Tagline, Href, Small string
 }
 
 type section struct {
@@ -134,6 +172,25 @@ type item struct {
 	Small     string
 	Large     string
 	Orderable bool
+}
+
+// sheetData is what an item's own view is given: the item, and what a
+// customer can do from it (add it to an order, or why not).
+type sheetData struct {
+	It       item
+	Open     bool // the page takes orders: an Add link
+	Base     string
+	Business string
+	Whats    string
+	Phone    string
+	// Closed is true when the page has items but no form at all: orders
+	// are not open yet, and the customer is told rather than left with
+	// an item that does nothing.
+	Closed bool
+}
+
+func sheetFor(it item, d storefrontData) sheetData {
+	return sheetData{It: it, Open: d.Ordering, Base: d.Base, Business: d.M.Card.Name, Whats: d.M.WhatsLink, Phone: d.Phone, Closed: len(d.Forms) == 0}
 }
 
 type hoursRow struct {
@@ -168,6 +225,64 @@ func (s *Server) serveStorefront(w http.ResponseWriter, r *http.Request, site Si
 	}
 	if _, ok := findAction(d.Forms, "booking"); ok {
 		s.bookingOffer(r.Context(), site, p, &d)
+	}
+	if d.Closed == "" {
+		for _, f := range p.Model.Fronts {
+			if f.Slug != "" {
+				d.Fronts = append(d.Fronts, frontCard{Name: f.Name, Tagline: f.Tagline, Href: "/" + f.Slug})
+			}
+		}
+	}
+	s.render(w, r, http.StatusOK, "storefront.html", d)
+}
+
+// frontOf is the published front at an address (false when there is none,
+// or it is off: an off front is not in the snapshot).
+func frontOf(p StorefrontPage, slug string) (storefront.PublicFront, bool) {
+	for _, f := range p.Model.Fronts {
+		if f.Slug == slug && slug != "" {
+			return f, true
+		}
+	}
+	return storefront.PublicFront{}, false
+}
+
+// serveFront answers /<slug>: a front's page (fronts F3, §7.3), the
+// business's card above the front's own header, list and buttons.
+func (s *Server) serveFront(w http.ResponseWriter, r *http.Request, site Site, slug string) {
+	p, ok, err := s.storefrontPage(r.Context(), site.ID)
+	if err != nil {
+		if !errors.Is(err, context.Canceled) {
+			s.Logger.Error("public host: storefront", "storefront", site.ID, "err", err)
+		}
+		s.page(w, r, http.StatusServiceUnavailable, "unavailable", pageData{Title: "Try again shortly"})
+		return
+	}
+	f, found := frontOf(p, slug)
+	if !ok || !found || p.Status == "suspended" {
+		s.page(w, r, http.StatusNotFound, "notfound", pageData{Title: "Page not found"})
+		return
+	}
+	front := p
+	front.Items = p.Lists[f.ListTable()]
+	front.Model.HasServices = false
+	d := storefrontView(front, s.now())
+	d.Title = f.Name + " · " + p.Model.Card.Name
+	d.Front, d.Base, d.Home = &f, "/"+f.Slug, "/"
+	d.Forms, d.Ordering = nil, false
+	if d.Closed == "" {
+		for _, a := range f.Actions {
+			d.Forms = append(d.Forms, a)
+			d.Ordering = d.Ordering || a.Ref() == "order"
+		}
+	}
+	d.Look = s.lookFor(r.Context(), site.Tenant, p.Model.Card.Name)
+	d.URL = s.address(r, site, p) + "/" + f.Slug
+	if f.Tagline != "" {
+		d.Description = f.Tagline
+	}
+	if !s.formsOpen() {
+		d.Forms, d.Ordering = nil, false
 	}
 	s.render(w, r, http.StatusOK, "storefront.html", d)
 }
@@ -254,10 +369,16 @@ func storefrontView(p StorefrontPage, now time.Time) storefrontData {
 		return d
 	}
 	// Order first: it is the primary button.
-	for _, k := range storefront.Kinds {
-		if a, ok := findAction(p.Model.Actions, k); ok {
+	for _, k := range storefront.BuiltinKinds {
+		if a, ok := findAction(p.Model.Home().Actions, k); ok {
 			d.Forms = append(d.Forms, a)
 			d.Ordering = d.Ordering || k == "order"
+		}
+	}
+	// Then the other actions on (fronts F2), in their order.
+	for _, a := range p.Model.Home().Actions {
+		if a.Ref() != a.Kind {
+			d.Forms = append(d.Forms, a)
 		}
 	}
 	byTitle := map[string]int{}

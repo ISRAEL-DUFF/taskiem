@@ -21,6 +21,7 @@ import (
 	"golang.org/x/crypto/argon2"
 
 	"github.com/israel-duff/taskiem/engine/access"
+	"github.com/israel-duff/taskiem/engine/areas"
 	"github.com/israel-duff/taskiem/engine/db"
 )
 
@@ -88,6 +89,9 @@ type Principal struct {
 	// EndUser is set for an embed app's end user (embed.go): a lightweight
 	// principal in a sub-tenant, with neither UserID nor KeyID.
 	EndUser *EndUser
+	// Run is a workflow run acting through link@1 (link_connector.go):
+	// it acts as the system, "workflow:<run>".
+	Run uuid.UUID
 	// Invitee is a person with no membership signed in to answer their
 	// invitations (invitations.go): UserID only, no tenant, no permissions.
 	Invitee                   bool
@@ -142,6 +146,9 @@ func (p *Principal) HasRole(role string) bool {
 }
 
 func (p *Principal) Actor() string {
+	if p.Run != uuid.Nil {
+		return "workflow:" + p.Run.String()
+	}
 	if p.Agent != nil {
 		return "agent:" + p.Agent.Code
 	}
@@ -166,6 +173,9 @@ func (p *Principal) Human() uuid.UUID {
 }
 
 func (p *Principal) ActorType() string {
+	if p.Run != uuid.Nil {
+		return "system"
+	}
 	if p.Agent != nil {
 		return "agent"
 	}
@@ -275,6 +285,11 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 		// Cookie sessions must prove the request came from our own pages.
 		if p.viaCookie && r.Method != http.MethodGet && r.Method != http.MethodHead && r.Header.Get(csrfHeader) == "" {
 			writeErr(w, http.StatusForbidden, "missing "+csrfHeader+" header")
+			return
+		}
+		// A part of Taskiem the business has turned off is refused here, for
+		// every route under its paths (areas.go).
+		if !s.areaGate(w, r, p) {
 			return
 		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ctxKey{}, p)))
@@ -541,7 +556,9 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 		_ = s.tx(r, func(tx pgx.Tx) error {
 			return tx.QueryRow(r.Context(), `SELECT email, name, email_verified_at IS NOT NULL FROM users WHERE id = $1`, p.UserID).Scan(&email, &name, &verified)
 		})
-		out["user"] = map[string]any{"id": p.UserID, "email": email, "name": name, "email_verified": verified}
+		// A sign-in name that receives no mail (an account made in chat):
+		// the web app offers Add your email (chat_doors.go).
+		out["user"] = map[string]any{"id": p.UserID, "email": email, "name": name, "email_verified": verified, "email_placeholder": emailPlaceholder(email)}
 		_ = s.tx(r, func(tx pgx.Tx) error {
 			out["totp"] = s.totpEnrolled(r.Context(), tx, p.UserID)
 			return nil
@@ -549,6 +566,10 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 		// What the member proves themselves with to change their factors.
 		if f, _, err := s.factorsOf(r.Context(), p.TenantID, p.UserID); err == nil {
 			out["factors"] = f
+		}
+		// Terms the person has not answered yet (onboarding.go).
+		if t := s.meTerms(r.Context(), p.UserID); t != nil && p.KeyID == uuid.Nil {
+			out["terms"] = t
 		}
 	}
 	// What the web app shows: the technical parts only with Advanced on,
@@ -565,6 +586,12 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 		}
 		// The Schools area, when the business turned it on (schools.go).
 		out["schools"] = s.schoolsOn(r.Context(), tx, p.TenantID)
+		// Which parts of Taskiem the business uses (areas.go).
+		st, err := areas.Load(r.Context(), tx, p.TenantID)
+		if err != nil {
+			return err
+		}
+		out["areas"] = st
 		out["gate_only"] = access.GateOnly(p.Permissions)
 		return nil
 	})
@@ -709,7 +736,7 @@ func (s *Server) addMember(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if err := s.needVerified(r); err != nil {
+	if err := s.needVerified(r, true); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -896,7 +923,7 @@ func (s *Server) createKey(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if err := s.needVerified(r); err != nil {
+	if err := s.needVerified(r, false); err != nil {
 		s.fail(w, r, err)
 		return
 	}

@@ -226,12 +226,13 @@ func CreditOf(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, customer string)
 	return n, err
 }
 
-// OpenInvoicesOf lists a customer's open invoices (sent, part-paid or
-// overdue) oldest first: by due date (those without one by when they were
-// sent), then when sent and number. What a customer's money pays first.
+// OpenInvoicesOf lists a customer's open invoices (recorded, sent,
+// part-paid or overdue) oldest first: by due date (those without one by
+// when they were sent, or recorded), then when sent and number. What a
+// customer's money pays first.
 func (s *Invoices) OpenInvoicesOf(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, customer string) ([]Invoice, error) {
-	rows, err := tx.Query(ctx, `SELECT id FROM customer_invoices WHERE tenant_id = $1 AND customer_id = $2 AND status IN ('sent', 'part_paid', 'overdue')
-		ORDER BY COALESCE(due_on, (sent_at AT TIME ZONE 'Africa/Lagos')::date), sent_at, number LIMIT 200`, tenant, customer)
+	rows, err := tx.Query(ctx, `SELECT id FROM customer_invoices WHERE tenant_id = $1 AND customer_id = $2 AND status IN ('recorded', 'sent', 'part_paid', 'overdue')
+		ORDER BY COALESCE(due_on, (COALESCE(sent_at, recorded_at) AT TIME ZONE 'Africa/Lagos')::date), COALESCE(sent_at, recorded_at), number LIMIT 200`, tenant, customer)
 	if err != nil {
 		return nil, err
 	}

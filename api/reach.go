@@ -242,9 +242,15 @@ func (s *Server) sendReachItem(ctx context.Context, it whatsapp.OutboxItem) erro
 	if err != nil {
 		return s.reachFallback(ctx, it, business, in, err)
 	}
-	var addr string
+	var addr, offer string
+	var offerButton *whatsapp.Button
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{it.Tenant}, func(tx pgx.Tx) error {
-		addr, err = s.Reach.AddressTx(ctx, tx, it.Tenant, t)
+		if addr, err = s.Reach.AddressTx(ctx, tx, it.Tenant, t); err != nil {
+			return err
+		}
+		// An update to a business on Taskiem offers it a link, the first
+		// time (business links).
+		offer, offerButton, err = s.linkOfferChat(ctx, tx, it.Tenant, it.Channel, addr, s.chooseLang(ctx, it.Tenant, addr, "").Tag)
 		return err
 	}); err != nil {
 		if errors.Is(err, reach.ErrGone) {
@@ -272,6 +278,10 @@ func (s *Server) sendReachItem(ctx context.Context, it whatsapp.OutboxItem) erro
 	tpl := whatsapp.TplUpdate
 	m := whatsapp.Message{Text: ch.Prefix(business) + body, Tenant: it.Tenant, Template: &tpl,
 		Vars: map[string]string{"tenant": business, "about": about, "message": head}}
+	if offerButton != nil {
+		m.Text += "\n\n" + offer
+		m.Buttons = []whatsapp.Button{*offerButton}
+	}
 	_, err = ch.Send(ctx, addr, m)
 	var waErr *whatsapp.GraphError
 	switch {

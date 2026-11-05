@@ -228,6 +228,9 @@ func FromEvent(channel, event string, fields map[string]any) (Entry, bool) {
 	case "payment.received":
 		e.Direction, e.Kind, e.Status, e.Reference = "in", "payment", "settled", str(fields, "payment_id")
 		e.OccurredAt = when(fields, "paid_at")
+		// What the payer wrote, where the rail passes it on: matching reads
+		// an invoice number in it (docs/matching.md).
+		e.Description = clip(str(fields, "narration"), 300)
 		// The rail's fee where it settles net and says so (iswallet's
 		// one-time numbers): amount_kobo stays what the payer sent.
 		e.FeeKobo = kobo(fields, "fee_kobo")
@@ -248,6 +251,7 @@ func FromEvent(channel, event string, fields map[string]any) (Entry, bool) {
 		// The account it was paid into: the permanent-account rule needs it
 		// to agree with the reference (engine/matching).
 		e.AccountNumber = str(fields, "account_number")
+		e.Description = clip(str(fields, "narration"), 300)
 	case "payout.settled":
 		e.Direction, e.Kind, e.Status, e.Reference = "out", "payout", "settled", str(fields, "payout_id")
 		e.OccurredAt = when(fields, "settled_at")
@@ -346,7 +350,7 @@ func FromPayout(channel string, input, output map[string]any) (Entry, bool) {
 	}
 	return Entry{Direction: "out", Kind: "payout", Status: "settled", Channel: channel, Reference: str(output, "payout_id"),
 		Event: "payout.settled", Source: "step", Currency: str(input, "currency"),
-		AmountKobo: kobo(input, "amount_kobo"), FeeKobo: kobo(output, "fee_kobo")}, true
+		AmountKobo: kobo(input, "amount_kobo"), FeeKobo: kobo(output, "fee_kobo"), Description: clip(str(input, "narration"), 300)}, true
 }
 
 var posStatus = map[string]string{"approved": "settled", "declined": "failed", "reversed": "reversed", "pending": "pending"}

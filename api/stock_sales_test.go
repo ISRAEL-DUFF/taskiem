@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"bytes"
 	"context"
 	"strings"
 	"testing"
@@ -9,9 +10,11 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/israel-duff/taskiem/api"
+	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/moneydigest"
 	"github.com/israel-duff/taskiem/engine/moneylog"
+	"github.com/israel-duff/taskiem/engine/sender"
 	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
@@ -181,5 +184,53 @@ func TestEveningText(t *testing.T) {
 		if !strings.Contains(text, want) {
 			t.Errorf("missing %q in %q", want, text)
 		}
+	}
+}
+
+// A sale on credit (decision 0060, R5): the stock moves as for any sale,
+// and what the customer owes is a notebook debt with the sale's lines, in
+// the same yes; a customer new to the book is made; a price for all of it
+// is one line; someone who may not manage invoices is refused.
+func TestCreditSaleByChat(t *testing.T) {
+	w := shopWorld(t)
+	withStock(w.world)
+	w.srv.Invoices = &invoicing.Invoices{Pool: w.env.DB.App, Vault: w.env.Vault, PageBase: "https://forms.taskiem.test",
+		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}, Signal: w.env.Store.DeliverSignalOnce}
+	owner := w.tenant(t, "Mama Put Stores", "ada@mama.test")
+	const on, sn = "+2348010000091", "+2348010000092"
+	w.bind(t, owner, on)
+	w.bind(t, w.member(t, owner, "stock@mama.test", "builder"), sn)
+	owner.must(200, "POST", "/v1/stock/setup", nil)
+	owner.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Indomie", "quantity": 10, "unit": "carton", "price_kobo": 1000000}, "Idempotency-Key", "i")
+
+	r := w.say(t, on, "sold 2 cartons of indomie credit to Ada")
+	if !strings.Contains(r, "Sold 2 cartons Indomie for ₦20,000, on credit?") || !strings.Contains(r, "Ada will owe ₦20,000 in all.") || !strings.Contains(r, "Ada is new") {
+		t.Fatalf("confirm: %q", r)
+	}
+	if r := w.yes(t, on); !strings.Contains(r, "Recorded as a debt: Ada owes it (INV-0001), ₦20,000 in all now.") {
+		t.Fatalf("recorded: %q", r)
+	}
+	x := owner.must(200, "GET", "/v1/invoices/INV-0001", nil)["invoice"].(map[string]any)
+	line := x["lines"].([]any)[0].(map[string]any)
+	if x["kind"] != "credit" || x["status"] != "recorded" || line["quantity"] != float64(2) || line["unit_kobo"] != float64(1000000) || line["description"] != "carton of Indomie" {
+		t.Fatalf("the debt: %v", x)
+	}
+	if it := itemsByName(t, owner.must(200, "GET", "/v1/stock", nil))["Indomie"]; it["stock"] != float64(8) {
+		t.Errorf("stock: %v", it)
+	}
+	// A price for all of it, to Ada again: one line, her balance grows.
+	if r := w.say(t, on, "sold 1 carton indomie 9,000 on credit to Ada"); !strings.Contains(r, "Ada will owe ₦29,000 in all.") || strings.Contains(r, "is new") {
+		t.Fatalf("again: %q", r)
+	}
+	w.yes(t, on)
+	if x := owner.must(200, "GET", "/v1/invoices/INV-0002", nil)["invoice"].(map[string]any); x["total_kobo"] != float64(900000) || len(x["lines"].([]any)) != 1 {
+		t.Errorf("one line: %v", x)
+	}
+	if r := w.say(t, on, "who owes me"); !strings.Contains(r, "1. Ada: ₦29,000 (2 line(s))") {
+		t.Errorf("who owes: %q", r)
+	}
+	// Stock, but not invoices: refused.
+	if r := w.say(t, sn, "sold 1 carton indomie credit to Ada"); !strings.Contains(r, "invoice.manage") {
+		t.Errorf("no invoices: %q", r)
 	}
 }

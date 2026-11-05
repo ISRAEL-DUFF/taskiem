@@ -29,6 +29,78 @@ import (
 // address in the environment (a USSD service code).
 var ErrTriggerTaken = errors.New("trigger taken")
 
+// ActionTaken is ErrTriggerTaken for a storefront action: the workflow
+// that holds it in the environment, so the editor can offer to replace it
+// (docs/spec/fronts.md F0).
+type ActionTaken struct {
+	Action      string
+	Workflow    uuid.UUID
+	Name        string
+	Environment string
+}
+
+func (e *ActionTaken) Error() string {
+	return fmt.Sprintf("%s: the storefront's %s form already starts workflow %q in %s", ErrTriggerTaken, e.Action, e.Name, e.Environment)
+}
+
+func (e *ActionTaken) Unwrap() error { return ErrTriggerTaken }
+
+// StorefrontAction is the action a storefront trigger names (fronts §5.3):
+// by action_id, else the built-in action of its kind, when the storefront
+// has one (nil otherwise). The kind it reports is the action's.
+func StorefrontAction(ctx context.Context, tx pgx.Tx, c map[string]any) (*uuid.UUID, string, error) {
+	kind := str(c, "action")
+	var id uuid.UUID
+	var err error
+	if s := str(c, "action_id"); s != "" {
+		if id, err = uuid.Parse(s); err != nil {
+			return nil, "", fmt.Errorf("%w: %q is not an action's id", ErrNoStorefrontAction, s)
+		}
+		err = tx.QueryRow(ctx, `SELECT kind FROM storefront_actions WHERE id = $1`, id).Scan(&kind)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, "", ErrNoStorefrontAction
+		}
+	} else {
+		err = tx.QueryRow(ctx, `SELECT id FROM storefront_actions WHERE kind = $1 AND builtin`, kind).Scan(&id)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, kind, nil
+		}
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	return &id, kind, nil
+}
+
+// ErrNoStorefrontAction refuses a storefront trigger naming an action the
+// business does not have.
+var ErrNoStorefrontAction = errors.New("ingest: the storefront has no such action")
+
+// StorefrontActionHolder is the workflow other than wf that holds a
+// storefront action in env (nil when none does): the action by id when it
+// is known, and by the built-in kind for a trigger registered before its
+// storefront had one.
+func StorefrontActionHolder(ctx context.Context, tx pgx.Tx, env, action string, wf uuid.UUID) (*ActionTaken, error) {
+	return StorefrontActionHolderOf(ctx, tx, env, action, nil, wf)
+}
+
+// StorefrontActionHolderOf is StorefrontActionHolder for an action known by
+// its id too.
+func StorefrontActionHolderOf(ctx context.Context, tx pgx.Tx, env, action string, id *uuid.UUID, wf uuid.UUID) (*ActionTaken, error) {
+	t := &ActionTaken{Action: action, Environment: env}
+	err := tx.QueryRow(ctx, `SELECT w.id, w.name FROM triggers t JOIN workflows w ON w.id = t.workflow_id
+		WHERE t.type = 'storefront' AND t.environment = $1 AND t.workflow_id <> $3
+		  AND (t.storefront_action_id = $4 OR (t.storefront_action = $2 AND (t.storefront_action_id IS NULL OR $4::uuid IS NULL)))
+		LIMIT 1`, env, action, wf, id).Scan(&t.Workflow, &t.Name)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
 // DefaultTimezone is where schedules run unless they name another (spec 8.1).
 const DefaultTimezone = "Africa/Lagos"
 
@@ -171,15 +243,22 @@ func Check(def *wd.Definition, reg connector.Lookup) error {
 		return nil
 	case "storefront":
 		switch str(c, "action") {
-		case "order", "enquiry", "callback", "booking":
+		case "order", "enquiry", "callback", "booking", "hire", "space", "tickets", "class", "quote":
 			return nil
 		}
-		return fmt.Errorf("a storefront trigger's action is order, enquiry, callback or booking")
+		return fmt.Errorf("a storefront trigger's action is order, enquiry, callback, booking, hire, space, tickets, class or quote")
 	case "invoice":
 		if e := str(c, "event"); e != "paid" && e != "payment" {
 			return fmt.Errorf("an invoice trigger's event is paid or payment")
 		}
 		return nil
+	case "link":
+		// Business links L6: what happens between linked businesses.
+		switch str(c, "event") {
+		case "bill.received", "bill.paid", "order.received", "order.delivered", "thread.message", "link.accepted":
+			return nil
+		}
+		return fmt.Errorf("a link trigger's event is bill.received, bill.paid, order.received, order.delivered, thread.message or link.accepted")
 	case "form":
 		// The pages, conditions and fields are checked by wd.Validate.
 		_, err := def.FormTriggerConfig()
@@ -294,24 +373,32 @@ func SyncEnvironments(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, envs
 		case "storefront":
 			// One workflow per storefront form in an environment: a
 			// submission starts the one deployed for its form.
-			action := str(c, "action")
-			var other string
-			e := tx.QueryRow(ctx, `SELECT w.name FROM triggers t JOIN workflows w ON w.id = t.workflow_id
-				WHERE t.type = 'storefront' AND t.environment = $1 AND t.storefront_action = $2 AND t.workflow_id <> $3`, env, action, wf).Scan(&other)
-			if e == nil {
-				return fmt.Errorf("%w: the storefront's %s form already starts workflow %q in %s", ErrTriggerTaken, action, other, env)
-			}
-			if !errors.Is(e, pgx.ErrNoRows) {
+			// One workflow per action in an environment (fronts §5.3): the
+			// action by id, or the built-in one of the kind.
+			actionID, action, e := StorefrontAction(ctx, tx, c)
+			if e != nil {
 				return e
 			}
-			_, err = tx.Exec(ctx, `INSERT INTO triggers (id, tenant_id, workflow_id, version, environment, type, storefront_action)
-				VALUES ($1, $2, $3, $4, $5, 'storefront', $6)`, id, tenant, wf, version, env, action)
+			held, e := StorefrontActionHolderOf(ctx, tx, env, action, actionID, wf)
+			if e != nil {
+				return e
+			}
+			if held != nil {
+				return held
+			}
+			_, err = tx.Exec(ctx, `INSERT INTO triggers (id, tenant_id, workflow_id, version, environment, type, storefront_action, storefront_action_id)
+				VALUES ($1, $2, $3, $4, $5, 'storefront', $6, $7)`, id, tenant, wf, version, env, action, actionID)
 		case "invoice":
 			// Any number of workflows may start on an invoice being paid.
 			// Payments are counted in prod only, so only prod's start; the
 			// other environments' rows say what is deployed there.
 			_, err = tx.Exec(ctx, `INSERT INTO triggers (id, tenant_id, workflow_id, version, environment, type, events)
 				VALUES ($1, $2, $3, $4, $5, 'invoice', $6)`, id, tenant, wf, version, env, []string{str(c, "event")})
+		case "link":
+			// Any number of workflows may start on a link event; events
+			// start runs in prod only, as invoices' do.
+			_, err = tx.Exec(ctx, `INSERT INTO triggers (id, tenant_id, workflow_id, version, environment, type, events)
+				VALUES ($1, $2, $3, $4, $5, 'link', $6)`, id, tenant, wf, version, env, []string{str(c, "event")})
 		case "form":
 			// The form is live at its endpoint's public id, which stays
 			// the same across versions; a paused or closed form stays so.

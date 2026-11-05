@@ -28,6 +28,7 @@ One JSON object per line; lines starting with `//` are comments (every file star
 | `tags` | The first is the case's group (payouts, collections, reconciliation, kyc, notifications, approvals, reporting, messaging, multistep, sme, products, connectors; composition for `composition.jsonl`, goals that two or three callable templates answer together); the rest are chips for the per-tag breakdown |
 | `difficulty` | easy (one step), medium (a few steps, an approval), hard (branches, loops, parallel work, several providers) |
 | `source` | synthetic, dogfood or partner |
+| `context` | What the builder knows beyond the request, when a case needs it: `linked_businesses` (name and role: supplier, customer or both), the businesses linked to the one asking ([business links](../../docs/spec/business-links.md) §11), so a goal may name one |
 
 Expectations are minimums, never an exact shape: a draft may use more connectors or steps.
 

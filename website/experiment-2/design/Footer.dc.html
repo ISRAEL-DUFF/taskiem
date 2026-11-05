@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Footer</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/50a98d2917f323d39577f6eb0dc5de03">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&family=Plus+Jakarta+Sans:wght@400;500;800&display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="tk" data-theme="{{theme}}">
+<footer class="onpine" style="background:#0d3b2e;color:#ffffff">
+  <div class="container" style="border-top:1px solid rgba(255,255,255,.16);padding-top:56px;padding-bottom:40px;display:flex;flex-direction:column;gap:48px">
+    <div style="display:flex;flex-wrap:wrap;gap:40px 64px;justify-content:space-between">
+      <div style="flex:1 1 280px;min-width:0;max-width:380px;display:flex;flex-direction:column;gap:20px">
+        <a href="Home.dc.html" aria-label="Taskiem home" style="display:flex;align-items:center;gap:20px;min-height:44px">
+          <img src="/_blob/883c87704e19d22b80e24a64c63ed9de" alt="" width="40" height="40" style="width:40px;height:40px">
+          <img src="/_blob/8c096f830081fc34bad0c5ab0c1c76ab" alt="" width="102" height="22" style="width:102px;height:22px">
+        </a>
+        <p style="font-size:16px;line-height:1.55;color:rgba(255,255,255,.82)">Business workflow automation Nigerian businesses can trust with their money, from the corner shop to the regulated lender.</p>
+      </div>
+      <div style="flex:2 1 420px;min-width:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(130px,100%),1fr));gap:32px">
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <p class="label" style="margin-bottom:8px">Product</p>
+          <a class="link" href="/how-it-works" style="color:#ffffff;font-weight:500">How it works</a>
+          <a class="link" href="/templates" style="color:#ffffff;font-weight:500">Templates</a>
+          <a class="link" href="/integrations" style="color:#ffffff;font-weight:500">Works with</a>
+          <a class="link" href="/pricing" style="color:#ffffff;font-weight:500">Pricing</a>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <p class="label" style="margin-bottom:8px">Features</p>
+          <a class="link" href="/security" style="color:#ffffff;font-weight:500">Security</a>
+          <a class="link" href="/tables" style="color:#ffffff;font-weight:500">Your records</a>
+          <a class="link" href="/storefront" style="color:#ffffff;font-weight:500">Your page</a>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <p class="label" style="margin-bottom:8px">Company</p>
+          <a class="link" href="/partners" style="color:#ffffff;font-weight:500">For fintechs</a>
+          <a class="link" href="/about" style="color:#ffffff;font-weight:500">About</a>
+          <a class="link" href="/contact" style="color:#ffffff;font-weight:500">Contact</a>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px 24px;padding-top:24px;border-top:1px solid rgba(255,255,255,.16);font-size:15px;color:rgba(255,255,255,.78)">
+      <p>Built by the team behind Xenibase.</p>
+      <p>© 2026 Taskiem</p>
+    </div>
+  </div>
+</footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Theme"},"$preview":{"width":1440,"height":380}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { theme: this.props.theme === 'dark' ? 'dark' : 'light' };
+  }
+}
+</script>
+</body>
+</html>

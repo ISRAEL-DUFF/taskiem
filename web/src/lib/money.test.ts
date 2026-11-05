@@ -47,6 +47,8 @@ import {
   statementFormatPath,
   statementRefusal,
   statementRequest,
+  waitingDecision,
+  waitingPath,
   today,
   whoWords,
   type ColumnsForm,
@@ -198,6 +200,16 @@ describe("statements", () => {
   it("says what an upload added", () => {
     expect(addedLine({ added: 3, skipped: 0 })).toBe("Added 3 lines, skipped 0 already in the log.");
     expect(addedLine({ added: 1, skipped: 2 })).toBe("Added 1 line, skipped 2 already in the log.");
+  });
+
+  it("words what an upload paired and what waits", () => {
+    expect(addedLine({ added: 3, skipped: 1 })).toBe("Added 3 lines, skipped 1 already in the log.");
+    expect(addedLine({ added: 2, skipped: 0, paired: 1, waiting: 2 })).toBe(
+      "Added 2 lines, skipped 0 already in the log. 1 line confirmed a transfer entered by hand. 2 lines wait for you below.",
+    );
+    expect(waitingDecision("e1")).toEqual({ decision: "same", entry_id: "e1" });
+    expect(waitingDecision(null)).toEqual({ decision: "different" });
+    expect(waitingPath("a/b")).toBe("/v1/money/statement-waiting/a%2Fb");
   });
 
   it("suggests the accounts already used", () => {

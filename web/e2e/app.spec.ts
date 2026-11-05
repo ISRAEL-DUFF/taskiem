@@ -46,7 +46,7 @@ test("the signed-out pages show the brand above the card, and fit the phone", as
 test("the tab bar, tabs on one line and folded descriptions", async ({ page }) => {
   await signIn(page);
   const quick = page.getByRole("navigation", { name: "Quick" });
-  await expect(quick.getByRole("link")).toHaveText(["Home", "Money", "Orders", "Workflows"]);
+  await expect(quick.getByRole("link")).toHaveText(["Home", "Chat", "Money", "Orders"]);
   await expect(quick.getByRole("button", { name: "Open menu" })).toBeVisible();
 
   // Money's tabs stay on one row and scroll inside it; the page does not.
@@ -74,7 +74,7 @@ test("the tab bar, tabs on one line and folded descriptions", async ({ page }) =
     .toBe(true);
 
   // A page's description is behind "About this page".
-  await quick.getByRole("link", { name: "Workflows" }).click();
+  await page.goto("/workflows");
   const about = page.getByRole("button", { name: "About this page" });
   const desc = page.locator(".page-desc");
   await expect(desc).toBeHidden();
@@ -216,7 +216,7 @@ test("Activity, Workflows and Invoices are lists of rows that open the item", as
   await expect(card).toContainText("Steps: 1 done");
 
   // Workflows: the live one, running, opens its editor.
-  await page.getByRole("navigation", { name: "Quick" }).getByRole("link", { name: "Workflows" }).click();
+  await page.goto("/workflows");
   const w = page.getByTestId("workflow").filter({ hasText: "Daily tally" });
   await expect(w).toContainText("Running");
   await expect(w.getByRole("link")).toHaveAttribute("href", `/workflows/${String(wf.id)}`);

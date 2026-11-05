@@ -160,7 +160,7 @@ $$;
 -- +goose StatementEnd
 
 -- +goose StatementBegin
-CREATE OR REPLACE FUNCTION taskiem_ops_tenants(p_query text, p_limit int)
+CREATE OR REPLACE FUNCTION taskiem_ops_tenants(p_query text, p_limit int, p_offset int)
 RETURNS TABLE (id uuid, name text, parent_id uuid, status text, created_at timestamptz, plan_id text, subscription_status text, pool text)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
   SELECT t.id, t.name, t.parent_id, t.status, t.created_at, s.plan_id, s.status, taskiem_tenant_worker_pool(t.id)
@@ -168,6 +168,7 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
    WHERE COALESCE(p_query, '') = '' OR t.id::text = lower(p_query) OR t.name ILIKE '%' || p_query || '%'
    ORDER BY t.id::text = lower(COALESCE(p_query, '')) DESC, t.created_at DESC, t.id
    LIMIT LEAST(GREATEST(COALESCE(p_limit, 100), 1), 500)
+  OFFSET GREATEST(COALESCE(p_offset, 0), 0)
 $$;
 -- +goose StatementEnd
 
@@ -208,6 +209,23 @@ $$;
 ALTER FUNCTION taskiem_ops_page_report(uuid) OWNER TO taskiem_dispatch;
 REVOKE EXECUTE ON FUNCTION taskiem_ops_page_report(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION taskiem_ops_page_report(uuid) TO taskiem_app;
+
+-- Four definers made after the review (00273, 00284, 00286) kept the
+-- migrating user as owner. They run as taskiem_dispatch like the rest,
+-- with the columns they read: an order's due and paid amounts beside the
+-- totals dispatch already reads, a catalogue row's id, and for the
+-- erasure trigger the customer's tenant and subject, to blank the search
+-- name. The trigger runs inside Vault.Erase as taskiem_app, which may not
+-- change search itself.
+GRANT SELECT (due_kobo, paid_kobo) ON storefront_orders TO taskiem_dispatch;
+GRANT SELECT (row_id) ON storefront_catalogue TO taskiem_dispatch;
+GRANT SELECT (tenant_id, subject_id), UPDATE (search, updated_at) ON invoice_customers TO taskiem_dispatch;
+CREATE POLICY dispatch ON invoice_customers FOR SELECT TO taskiem_dispatch USING (true);
+CREATE POLICY dispatch_erase ON invoice_customers FOR UPDATE TO taskiem_dispatch USING (true) WITH CHECK (true);
+ALTER FUNCTION taskiem_invoice_customers_erased() OWNER TO taskiem_dispatch;
+ALTER FUNCTION taskiem_public_order_money(text, bytea) OWNER TO taskiem_dispatch;
+ALTER FUNCTION taskiem_public_taken(uuid, timestamptz, timestamptz) OWNER TO taskiem_dispatch;
+ALTER FUNCTION taskiem_public_claim(uuid, text, bytea, bytea, bytea, text, int, timestamptz, timestamptz) OWNER TO taskiem_dispatch;
 
 -- +goose Down
 SELECT 'down migration not supported; restore from backup';

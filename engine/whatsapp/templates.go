@@ -140,6 +140,16 @@ var (
 		Examples: []string{"Ada Stores", "A run took longer than 10 minutes.", "https://app.example.com/runs/1"},
 		Purpose:  "Any other alert rule (slow runs, drift, credentials, plan limits).",
 	}
+	// A linked business's message (business links L3, §5.5): the
+	// conversation's mirror to the other side's people, outside the window.
+	TplLinkMessage = Template{
+		Name: "taskiem_link_message", Category: "UTILITY",
+		Body:     "[{{1}}] has a message for you: {{2}} Tap Open to see the conversation and reply.",
+		Vars:     []string{"business", "message"},
+		Examples: []string{"Dangote Stores", "Musa: Rice is ₦45,000 a bag this week."},
+		Buttons:  []TemplateButton{{Type: "url", Text: "Open", Host: HostApp, Path: "/chat"}},
+		Purpose:  "A message from a linked business in the conversation between them, to the people who write in it, outside the window; {{2}} is the sender's first name and the words on one line (or what was sent: a photo, a voice note, a file), or 'open the chat' when they are not shown.",
+	}
 	TplUpdate = Template{
 		Name: "taskiem_update", Category: "UTILITY",
 		Body:     "[{{1}}] Update on {{2}}: {{3}}",
@@ -159,6 +169,14 @@ var (
 			{Type: "url", Text: "Open invoice", Host: HostForms, Path: "/i/{{1}}", Var: "link", Example: "abc123"}},
 		Purpose: "An invoice to a customer who gets the business's updates on WhatsApp, outside the window; the quick reply carries the signed invoice button, the url button opens the invoice's page.",
 	}
+	TplBalance = Template{
+		Name: "taskiem_balance", Category: "UTILITY",
+		Body:     "[{{1}}] You owe {{2}} on {{3}} bill(s). Tap Pay now to see them and pay all or part.",
+		Vars:     []string{"tenant", "amount", "count"},
+		Examples: []string{"Ada Stores", "₦25,000", "2"},
+		Buttons:  []TemplateButton{{Type: "url", Text: "Pay now", Host: HostForms, Path: "/c/{{1}}", Var: "link", Example: "abc123"}},
+		Purpose:  "What a customer owes in all, to a customer who gets the business's updates on WhatsApp, outside the window: their balance sent from chat, or a reminder per customer; the url button opens their payment link's page.",
+	}
 	// Dispatch (docs/dispatch.md): an offer to a business's rider outside
 	// the window; the quick replies carry the signed Accept and Can't.
 	TplDeliveryOffer = Template{
@@ -168,6 +186,18 @@ var (
 		Examples: []string{"Ada Stores", "AK-7QX4KD to Lekki, 2 × Jollof rice, your fee ₦1,500"},
 		Buttons:  []TemplateButton{{Type: "quick_reply", Text: "Accept"}, {Type: "quick_reply", Text: "Can't"}},
 		Purpose:  "An order offered to one of the business's riders outside the window; the quick replies carry the signed Accept and Can't.",
+	}
+	// One person, many doors (docs/spec/chat-way-in.md 10.2): an owner
+	// invited a number that may never have written to Taskiem. The
+	// owner's invitation is the opt-in; the quick replies carry Join and
+	// Stop for this invitation.
+	TplInvite = Template{
+		Name: "taskiem_invite", Category: "UTILITY",
+		Body:     "[{{1}}] {{2}} invited you to work with {{1}} on Taskiem, as {{3}}. Tap Join to accept. If you do not want this, tap Stop and nothing more is sent.",
+		Vars:     []string{"tenant", "inviter", "role"},
+		Examples: []string{"Ada Stores", "Ada Obi", "viewer"},
+		Buttons:  []TemplateButton{{Type: "quick_reply", Text: "Join"}, {Type: "quick_reply", Text: "Stop"}},
+		Purpose:  "An invitation from an owner to join their business, to a number that may never have written to Taskiem; the quick replies carry Join and Stop.",
 	}
 	TplMatchQuestion = Template{
 		Name: "taskiem_match_question", Category: "UTILITY",
@@ -238,8 +268,8 @@ var (
 )
 
 // AllTemplates lists the library, for documentation, submission and tests.
-var AllTemplates = []Template{TplOTP, TplApprovalRequest, TplStepUpLink, TplRunFailed, TplRunCompleted, TplNeedsReconciliation, TplApprovalWaiting, TplAlert, TplUpdate,
-	TplInvoice, TplDeliveryOffer, TplMatchQuestion, TplFeeReminder, TplReceipt, TplAccountNumber, TplPlanDecision, TplFamilyLink, TplDailySummary, TplDailyClose}
+var AllTemplates = []Template{TplOTP, TplApprovalRequest, TplStepUpLink, TplRunFailed, TplRunCompleted, TplNeedsReconciliation, TplApprovalWaiting, TplAlert, TplUpdate, TplLinkMessage,
+	TplInvoice, TplBalance, TplDeliveryOffer, TplMatchQuestion, TplFeeReminder, TplReceipt, TplAccountNumber, TplPlanDecision, TplFamilyLink, TplDailySummary, TplDailyClose, TplInvite}
 
 var placeholder = regexp.MustCompile(`\{\{(\d+)\}\}`)
 

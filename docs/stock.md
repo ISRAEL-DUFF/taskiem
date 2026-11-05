@@ -57,6 +57,8 @@ A sale is items, how many, the amount and how it was paid: `cash`, `transfer` or
 
 With no amount, the amount is the items' catalogue prices; an item with no price needs the amount.
 
+**On credit.** In chat, `sold 3 bags of rice 45,000 credit to Ada` (also `on credit to Ada`, `to Ada on credit`) is a sale no money pays yet: the stock moves as for any sale, and what Ada owes is a [notebook debt](invoices.md#the-debtor-book) with the sale's lines (one line when one price was given for all of it), recorded in the same transaction; the sale is `paid_how` and `status` `credit` and names it (`invoice_id`). Ada is found in the debtor book as `Ada owes` finds her; a name not in it is a new customer, and several matches ask for the full name. The read-back says what she will owe in all. It needs `invoice.manage` besides changing stock. Her payments count towards the debt as towards any of hers, never towards the sale; the evening total lists it as **On credit**.
+
 **Matching.** A sale by transfer or on the terminal waits for its money. Every minute, a waiting sale is matched to money in of that amount (a transfer or payment for `transfer`, a terminal's `pos_sale` for `pos`) within 12 hours of it, the sale's reference in the money's reference first, then the nearest in time. Each money entry counts for one sale only, and once matched it is no longer an unmatched leak. Money a sale takes (its cash takings too) counts like an invoice's or an order's: it is not offered for an invoice or order, cannot be matched to one, and what the matcher had offered it for is closed. A sale naming an item on two lines moves its stock by both.
 
 **Terminal sales with no items.** A terminal's sale is money, not items. Those of a day that no sale names are listed on the Stock page and in the evening total, so the owner can say what was sold (**Say what was sold**, or `sold … pos`): the sale takes that money, for its amount, and the items come off the stock. Nothing is guessed.
@@ -75,7 +77,9 @@ A **purchase order** is a supplier, lines (an item, how many, the price of one: 
 4. **Received**, in part or in full (**Goods came in**, `received 10 bags of rice` in chat, `receive` with `purchase` in a workflow): a `received` movement per item naming the order, the item's cost price set to the order's, and the value received owed to the supplier until paid. Once every line has come, the order is received.
 5. **Paid**, in cash or by transfer (**Record a payment**, `paid Dangote 425,000 transfer`): an `expense` in the [money log](money-log.md) with the supplier as its vendor and the order in its description. What is received and not yet paid is owed to the supplier, shown on **Suppliers** and in chat (`suppliers`).
 
-An order can be cancelled until anything is received on it. The morning [money summary](money-reports.md#the-daily-summary-in-chat) lists what is low, with how many to order.
+An order can be cancelled until anything is received on it. A supplier that is also a business on Taskiem, linked to yours, can be marked as that business (**On Taskiem** on the Suppliers page): its orders then arrive as orders in its business rather than messages, and its answers come back to the order. Before it accepts an order, a cancel cancels it on both sides; once it has, a cancel is a request it accepts or declines, which is narrower than the rule above. Say where they deliver (**Where linked suppliers deliver** on the Suppliers page) and their rider brings your orders there. When it delivers, **All came** or **Not all came** records what came; with neither, its count is taken a day later. Those are the only way such an order is received: **Goods came in** on the Stock page opens the order's page for it once it is delivered, and `received …` in chat answers with **All came**; neither records a receipt by hand. **Not all came** after the day still counts: your count is kept as a dispute on the order, and when the supplier agrees it, what did not come is taken off its invoice (your bill) and off your stock. It may also draft an order for you (an order taken by phone): it waits on its page for your **Confirm**, where you say which of your items each line is ([business links](spec/business-links.md) §16.3). A linked supplier may share a **price list** with you (**Prices** on its row; `prices from Dangote` in chat): its items at your prices, with a minimum and whether each is available. Order from it (**Draft the order**, or `order 20 bags of rice from Dangote`), saying the first time which of your items each of theirs is; that is remembered, and those items reach them as their own. Your own price lists, for the businesses you supply, are under **Storefront > Price lists** ([business links](spec/business-links.md) §16.5). The morning [money summary](money-reports.md#the-daily-summary-in-chat) lists what is low, with how many to order.
+
+**Credit with a linked supplier.** A linked supplier may give your business **days to pay** and a **credit limit** (its trade settings for the link). You see both, and what is left to use, on the link's **Statement** (**Statement** on the supplier's row), and the days set the due date of every bill they send you. An order that would take what you owe them, across open bills and accepted orders not yet invoiced, past the limit still reaches them, but waits flagged rather than being accepted by itself: your purchase order says why, and the people who pay your bills are told, with the bills to pay. Paying brings it within the limit on the next hourly check, or the supplier accepts it anyway. A workflow's `link@1 low_orders` lists what the low items would order from each linked supplier at their prices, and `place_order` sends such an order; `reorder-from-linked-suppliers` (below) does both every morning ([business links](spec/business-links.md) §16.6, §16.7).
 
 ## Counts, shrinkage and leaks
 
@@ -87,12 +91,13 @@ Three things are **leaks**, valued at cost and closed with a reason as other [le
 
 ## Templates
 
-Four templates start from the Stock record (Templates, or the Start page):
+Four templates start from the Stock record (Templates, or the Start page), and a fifth needs a linked supplier's price list:
 
 | Template | What it does |
 | --- | --- |
 | `low-stock-alert` | Every morning, the items at or below their reorder level, each with how many are left and how many to order |
 | `reorder-from-supplier` | Every morning, an order to each supplier for their low items (on no open order), sent after one approval; above the business's limit an order is left for a second person |
+| `reorder-from-linked-suppliers` | Every morning, one order per linked supplier for the low items on its price list (on no open order), at its prices and minimums, shown to the approver as one list and sent on approval; above the business's limit an order is left for a second person; low items no linked supplier lists are named ([business links](spec/business-links.md) §16.7) |
 | `sales-day-total` | Every evening, the day's sales recorded by chat or the Stock page, by cash, transfer and terminal, with what sold most |
 | `stock-count-reminder` | Once a week, a reminder to count the shelf |
 
@@ -116,7 +121,7 @@ On WhatsApp and Telegram (each change shown first, written on **yes**):
 | `paid Dangote 425,000 transfer` | A payment on the supplier's oldest order with something owed |
 | `confirmed P-7QX4KD` | The supplier said yes by phone |
 | `count rice 12, indomie 40: rats` | A count, with its reason; `count` alone asks item by item |
-| `sold 3 bags of rice 45,000 cash` | A sale (`transfer`, `pos`; several items: `sold 2 cartons indomie, 1 bag rice 60,000 transfer`; no amount takes the prices) |
+| `sold 3 bags of rice 45,000 cash` | A sale (`transfer`, `pos`; several items: `sold 2 cartons indomie, 1 bag rice 60,000 transfer`; no amount takes the prices; `credit to Ada` records it as her debt) |
 
 Items are found as `price` finds them: the exact name, else the one the words start, else one containing them, a unit's plural or singular alike; several give a numbered list. Seeing stock needs `table.read`; changing it, `table.edit`; starting to keep stock where nothing does, `storefront.manage` too. Recording a sale needs `table.edit`. The stock words are English; the sale words come in Pidgin, Yoruba, Hausa and Igbo too (`i don sell 3 bags rice 45,000 cash`), after the person's language is set (drafts, under review), and so do the words for goods received (`i don receive 10 bags rice`), a count (`i don count rice 12`), an item's stock or what is low (`check stock`, `mélòó ni rice`), and stock taken off with why (`comot rice 2 spoil`). Suppliers and their orders need `storefront.manage`; goods received, `table.edit`. A voice note is read the same way, where voice notes are on.
 
@@ -140,7 +145,9 @@ Items are found as `price` finds them: the exact name, else the one the words st
 | `GET`/`POST /v1/stock/counts` | Counts; a count is `lines` (`item_id`, `count`) and a `reason`, with an `Idempotency-Key` |
 | `GET /v1/stock/shrinkage?from=&to=` | A period's received, sold and lost, at cost (this month by default) |
 | `GET`/`POST /v1/stock/purchases`, `POST /v1/stock/purchases/low` | Orders, drafted by hand or for what is low, with an `Idempotency-Key` |
+| `GET /v1/stock/purchases/{id}` | One order, with a linked supplier's side of it |
 | `POST /v1/stock/purchases/{id}/send`, `/confirm`, `/cancel`, `/receive`, `/pay` | An order's steps; `receive` and `pay` take an `Idempotency-Key` |
+| `PUT /v1/stock/suppliers/{id}/link`; `POST /v1/stock/purchases/{id}/accept-change`, `/all-came`, `/not-all-came` | A linked supplier, and an order's steps with it ([business links](spec/business-links.md) §16.3) |
 | `GET /v1/stock/sales?day=2026-10-29` | A day's sales (today in Lagos by default), added up by how paid, the top items, how many wait, and the terminal's sales with no items |
 
 ## In workflows: `stock@1`
@@ -168,7 +175,7 @@ Changes carry the step's idempotency key: a retried step moves stock once.
 
 `engine/stock` records and sends movements (`RecordTx`, `Apply`, `Outside`, `OrderLines`), reads items (`Items`), and sweeps (`Sweeper`: pending movements, and the kept copy). The table is reached through `storefront.XenibaseStock`, whose `Change` is the storefront's compare-and-set. The movements are migration 00261; `taskiem_stock_due_tenants` (a definer) finds the businesses with work for the sweep, and `storefronts.keeps_stock` makes `taskiem_storefronts_due` refresh a catalogue keeping stock whether or not its page is published.
 
-Sales are `engine/stock/sales.go` (`RecordSale`, `MatchSales`, `DayTx`), the sentence parser `salewords.go`, and the evening total `evening.go` (`Evening`, queued as `money_digests` kind `sales_evening` and sent by the WhatsApp/Telegram outbox, written at send time). Migration 00262 holds `stock_sales`; a sale's money entry is unique to it.
+Sales are `engine/stock/sales.go` (`RecordSale`, `MatchSales`, `DayTx`), the sentence parser `salewords.go`, and the evening total `evening.go` (`Evening`, queued as `money_digests` kind `sales_evening` and sent by the WhatsApp/Telegram outbox, written at send time). Migration 00262 holds `stock_sales`; a sale's money entry is unique to it. Migration 00276 adds `credit` and `invoice_id` (a sale on credit, `SaleIn.OnCredit`, which the chat gives `RecordCredit`).
 
 Suppliers and purchase orders are `engine/stock/purchases.go` (`Purchases`: suppliers, `DraftLowTx`, `SendTx`, `ConfirmTx`, `CounterTx`, `ReceiveTx`, `PayTx`) and migration 00263 (`suppliers`, `purchase_orders`, `purchase_payments`, `stock_settings`, `taskiem_supplier_orders`). The order goes through the chat outbox (kind `supplier`, the order and the supplier's contact); its buttons are signed for the business, the order and the contact (`api/whatsapp_purchases.go`).
 

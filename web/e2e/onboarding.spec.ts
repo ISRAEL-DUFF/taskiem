@@ -10,6 +10,7 @@ test("sign up, set up a template, and run it once", async ({ page }) => {
 
   await page.goto("/login");
   await page.getByRole("link", { name: "Create an account" }).click();
+  await page.getByLabel("I sell things").check();
   await page.getByLabel("Business or organisation name").fill("Ada Stores");
   await page.getByLabel("Your name").fill("Ada Obi");
   await page.getByLabel("Email").fill(email);

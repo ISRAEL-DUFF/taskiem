@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 
@@ -398,7 +399,16 @@ func (b *Builder) Build(ctx context.Context, req Request) (*Proposal, error) {
 	}
 	p.Warnings = append(p.Warnings, findings...)
 	var tableWarnings []Warning
-	p.Tables, tableWarnings = reviewTables(env.Tables, req.Context.Tables, doc, b.CheckTable)
+	// A draft made from a template makes the tables the template declares
+	// (decision 0060), as well as any the model describes: the template's
+	// first, so its columns win over a description of the same table.
+	proposed := env.Tables
+	if use != nil && b.Templates != nil {
+		if tpl, ok := b.Templates.Get(use.ID); ok {
+			proposed = append(TemplateTableSpecs(tpl, use.Params), env.Tables...)
+		}
+	}
+	p.Tables, tableWarnings = reviewTables(proposed, req.Context.Tables, doc, b.CheckTable)
 	p.Warnings = append(p.Warnings, tableWarnings...)
 
 	// Dry run, when the definition loads.
@@ -568,6 +578,11 @@ func (b *Builder) contextDoc(req Request, reg connector.Lookup) (map[string]any,
 		if len(refs) >= n {
 			break
 		}
+		// link@1 works only between linked businesses: a business with
+		// none is not offered it (business links L6).
+		if strings.HasPrefix(r.Ref, "link@") && len(req.Context.Linked) == 0 {
+			continue
+		}
 		if !seen[r.Ref] {
 			seen[r.Ref] = true
 			refs = append(refs, r.Ref)
@@ -576,9 +591,17 @@ func (b *Builder) contextDoc(req Request, reg connector.Lookup) (map[string]any,
 	offered := []string{}
 	var tpls []map[string]any
 	if b.Templates != nil && len(req.Base) == 0 {
-		for i, m := range b.Templates.Match(req.Goal, 2) {
+		goal := req.Goal
+		if req.Context.NamesLinked(goal) {
+			// A business linked on Taskiem, named: the link templates
+			// (business links L6) are offered as for "a linked business".
+			goal += ", a linked business"
+		}
+		for i, m := range b.Templates.MatchFor(goal, 2, req.Context.Holds) {
 			tc := TemplateContext(m.Template)
-			tc["match"] = map[string]any{"score": m.Score, "matched_words": m.Matched}
+			// The score to a tenth, not rounded to a whole: a near miss
+			// of a reader's threshold stays one.
+			tc["match"] = map[string]any{"score": math.Round(m.Exact*10) / 10, "matched_words": m.Matched}
 			tpls = append(tpls, tc)
 			offered = append(offered, m.Template.ID)
 			// The best template brings its connectors' schemas, after the

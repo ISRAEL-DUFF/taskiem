@@ -228,6 +228,14 @@
       "text": "{name}: your order {reference} don ready.",
       "reviewed": false
     },
+    "invoice.pay_unavailable_title": {
+      "text": "A customer could not pay online",
+      "reviewed": false
+    },
+    "invoice.pay_unavailable": {
+      "text": "A customer tried to pay {what} by {how}, but no payments service of yours can do that, so they were asked to pay you directly. Connect Paystack, Flutterwave, OPay or another payments service under Connections, and they can pay online.",
+      "reviewed": false
+    },
     "invoice.chat.account": {
       "text": "Pay {amount} for invoice {number} with bank transfer to:\nAccount number: {account}\nBank: {bank}\nAccount name: {name}\nE go work reach {until}. Use am for dis payment only.",
       "reviewed": false
@@ -266,6 +274,10 @@
     },
     "invoice.chat.sent": {
       "text": "Invoice {number} from {business}: {amount} to pay. Tap Pay with transfer make you get account number to pay enter, or Open invoice make you see am.",
+      "reviewed": false
+    },
+    "invoice.chat.balance": {
+      "text": "You dey owe {business} {amount} for {count} bill(s). See dem and pay all or small: {link}",
       "reviewed": false
     },
     "invoice.chat.wait": {
@@ -662,6 +674,234 @@
     },
     "slack.not_linked": {
       "text": "Dis Slack account never link to you for Taskiem, so e no fit decide dis one. Link am from your Taskiem profile.",
+      "reviewed": false
+    },
+    "slack.install.welcome": {
+      "text": "Thank you as you add Taskiem to {workspace}. Make we set your business up here for Slack: small questions, like one minute.",
+      "reviewed": false
+    },
+    "slack.install.known": {
+      "text": "Taskiem don already dey {workspace}, for {businesses}. If you wan work there, tell the owner make e add you for Taskiem. If you wan your own separate business, press the button wey dey below.",
+      "reviewed": false
+    },
+    "slack.install.back": {
+      "text": "Taskiem don come back for {workspace}. Dey write me here like before; send new business if you wan start another one.",
+      "reviewed": false
+    },
+    "slack.install.email_taken": {
+      "text": "{email} don get Taskiem account already. If you wan use am here, sign in for {where} come link Slack from your profile. Or press the button wey dey below make you start business here for Slack, under another account.",
+      "reviewed": false
+    },
+    "slack.install.button_separate": {
+      "text": "Start my own business",
+      "reviewed": false
+    },
+    "slack.install.button_new": {
+      "text": "Start new business",
+      "reviewed": false
+    },
+    "door.ask_email": {
+      "text": "Which email you dey take sign in for Taskiem? Send am here, we go send link to that email so you fit join this chat to your account.",
+      "reviewed": false
+    },
+    "door.email_bad": {
+      "text": "That one no be email address. Send am like this: ada@example.com",
+      "reviewed": false
+    },
+    "door.too_many": {
+      "text": "Dem don ask for link many times already. Check your inbox and spam, or try again after one hour.",
+      "reviewed": false
+    },
+    "door.email_sent": {
+      "text": "If {email} get Taskiem account, link dey go there now. Open am for phone or computer wey you don sign in to Taskiem; e go work once, for one hour. After that, this chat na your own.",
+      "reviewed": false
+    },
+    "door.linked": {
+      "text": "E don do: this chat don join your Taskiem account. Send help make you see wetin you fit do here.",
+      "reviewed": false
+    },
+    "door.tg_joined": {
+      "text": "That number don already be your Taskiem account from WhatsApp. This Telegram don join am too: your business dem dey here. Send help, or new business if you wan start another one.",
+      "reviewed": false
+    },
+    "door.tg_number_email": {
+      "text": "That number don dey for Taskiem account already. We don send link to that account email: open am when you don sign in to Taskiem, this Telegram go join am.",
+      "reviewed": false
+    },
+    "door.email_is": {
+      "text": "Your account email na {email}. If you wan change am, use your profile for web.",
+      "reviewed": false
+    },
+    "door.email_ask": {
+      "text": "Add your email so Taskiem go dey send receipt and invoice to your mail. Send email, then the address, like this: email ada@example.com",
+      "reviewed": false
+    },
+    "door.email_off": {
+      "text": "Taskiem no fit send email for here yet, so you no fit add email now.",
+      "reviewed": false
+    },
+    "door.email_confirm": {
+      "text": "Link dey go {email} now. Open am to confirm; e go work once, for 24 hours. Till then, nothing go change.",
+      "reviewed": false
+    },
+    "door.plan_off": {
+      "text": "Nothing dey to pay for this Taskiem.",
+      "reviewed": false
+    },
+    "door.plan_partner": {
+      "text": "This business dey on {plan} through the company wey set am up; na dem dey handle payment.",
+      "reviewed": false
+    },
+    "door.plan_trial": {
+      "text": "You dey on {plan}, free for {days} more days. After that na {price} every month.",
+      "reviewed": false
+    },
+    "door.plan_due": {
+      "text": "Payment for {plan} don pass time. Pay now make everything continue to run.",
+      "reviewed": false
+    },
+    "door.plan_active": {
+      "text": "You dey on {plan}, {price} every month. E go renew on {date}.",
+      "reviewed": false
+    },
+    "door.button_pay": {
+      "text": "Pay",
+      "reviewed": false
+    },
+    "door.pay_denied": {
+      "text": "Na only person wey dey manage billing for {org} fit pay.",
+      "reviewed": false
+    },
+    "door.pay_email": {
+      "text": "Dem dey send receipt by email. Send pay, then your email, like this: pay ada@example.com",
+      "reviewed": false
+    },
+    "door.pay_failed": {
+      "text": "Payment no fit start: {reason}",
+      "reviewed": false
+    },
+    "door.pay_nothing": {
+      "text": "Nothing dey owe now.",
+      "reviewed": false
+    },
+    "door.pay_link": {
+      "text": "Pay {amount} here, by card or bank transfer:",
+      "reviewed": false
+    },
+    "invite.denied": {
+      "text": "Na only person wey dey manage people for {org} fit invite or approve.",
+      "reviewed": false
+    },
+    "invite.how": {
+      "text": "To invite person, send: invite +2348012345678 as viewer. For Slack, mention dem: invite @ada as viewer.",
+      "reviewed": false
+    },
+    "invite.owner_only": {
+      "text": "Na only owner fit make another person owner.",
+      "reviewed": false
+    },
+    "invite.role_unknown": {
+      "text": "No role wey dem call {role}. Roles: {roles}.",
+      "reviewed": false
+    },
+    "invite.cannot_grant": {
+      "text": "You no fit give {role} role: e fit do things wey you no fit do.",
+      "reviewed": false
+    },
+    "invite.confirm": {
+      "text": "Make we invite {who} join {org} as {role}?",
+      "reviewed": false
+    },
+    "invite.cancelled": {
+      "text": "We no send any invitation.",
+      "reviewed": false
+    },
+    "invite.send_failed": {
+      "text": "The invitation no fit go now. Try again later, or invite dem for web.",
+      "reviewed": false
+    },
+    "invite.sent": {
+      "text": "Invitation don go to {who}. Dem go join when dem tap Join; e go work for 7 days.",
+      "reviewed": false
+    },
+    "invite.sent_telegram": {
+      "text": "Forward this link give {who}: {link}\nWhen dem open am, Taskiem go ask dem to share dem own number, wey must be {who}. E go work for 7 days.",
+      "reviewed": false
+    },
+    "invite.offer": {
+      "text": "{inviter} don invite you to work with {org} for Taskiem, as {role}. You go join?",
+      "reviewed": false
+    },
+    "invite.button_join": {
+      "text": "Join",
+      "reviewed": false
+    },
+    "invite.gone": {
+      "text": "That invitation don end or dem don answer am already.",
+      "reviewed": false
+    },
+    "invite.declined": {
+      "text": "OK, you no join. We no go send anything again about am.",
+      "reviewed": false
+    },
+    "invite.terms": {
+      "text": "To join {org}, agree to Taskiem terms and privacy notice: {link}\nReply Yes to agree and join.",
+      "reviewed": false
+    },
+    "invite.ask_contact": {
+      "text": "To join, share your own number with the button wey dey below. E must be the number wey dem invite.",
+      "reviewed": false
+    },
+    "invite.contact_wrong": {
+      "text": "That no be the number wey this invitation dey for. Share your own number, the one wey dem invite.",
+      "reviewed": false
+    },
+    "invite.chat_taken": {
+      "text": "This chat don join another Taskiem account, so e no fit join here.",
+      "reviewed": false
+    },
+    "invite.joined": {
+      "text": "You don join {org}. Send help make you see wetin you fit do here.",
+      "reviewed": false
+    },
+    "invite.button_ask": {
+      "text": "Ask to join {org}",
+      "reviewed": false
+    },
+    "invite.ask_offer": {
+      "text": "Na {businesses} dey run Taskiem for this workspace. To dey the workspace no reach to see dem business: ask to join, and the owner go decide.",
+      "reviewed": false
+    },
+    "invite.asked": {
+      "text": "Your request don reach the owners of {org}. You go hear here when dem decide.",
+      "reviewed": false
+    },
+    "invite.ask_owner": {
+      "text": "{who} for your Slack workspace dey ask to join {org}. Make dem enter as?",
+      "reviewed": false
+    },
+    "invite.button_viewer": {
+      "text": "Viewer",
+      "reviewed": false
+    },
+    "invite.button_operator": {
+      "text": "Operator",
+      "reviewed": false
+    },
+    "invite.button_decline": {
+      "text": "Decline",
+      "reviewed": false
+    },
+    "invite.ask_declined": {
+      "text": "The owners of {org} no let you enter this time.",
+      "reviewed": false
+    },
+    "invite.decided_no": {
+      "text": "E don decline: dem don tell {who}.",
+      "reviewed": false
+    },
+    "invite.decided_yes": {
+      "text": "Dem don invite {who} as {role}. Dem go join when dem tap Join.",
       "reviewed": false
     },
     "sms.reconcile": {
@@ -1088,6 +1328,146 @@
       "text": "Before you publish am, create the tables wey e need for the app: {tables} ({link}).",
       "reviewed": false
     },
+    "wa.build.tables_setting_up": {
+      "text": "I dey set up your records. E go take one or two minutes.",
+      "reviewed": false
+    },
+    "wa.build.table_lacks": {
+      "text": "Your table {table} never get {columns} column, wey e dey use. Add am for the app{link}, or those steps go fail.",
+      "reviewed": false
+    },
+    "wa.tablemake.denied": {
+      "text": "You no fit make or change tables for {org} (e need table.edit).",
+      "reviewed": false
+    },
+    "wa.tablemake.pick": {
+      "text": "Which list you wan keep?\n{list}\nReply with the number.",
+      "reviewed": false
+    },
+    "wa.tablemake.something_else": {
+      "text": "Another thing",
+      "reviewed": false
+    },
+    "wa.tablemake.ask_name": {
+      "text": "Wetin be the name of the list? Like: Debtors, Suppliers, Members.",
+      "reviewed": false
+    },
+    "wa.tablemake.name_long": {
+      "text": "Give am shorter name, wey no pass 60 letters.",
+      "reviewed": false
+    },
+    "wa.tablemake.name_bad": {
+      "text": "Give am name wey get letters, like Debtors.",
+      "reviewed": false
+    },
+    "wa.tablemake.exists": {
+      "text": "You don get table wey dem call {table} before. Send *add to {table}* to add to am.",
+      "reviewed": false
+    },
+    "wa.tablemake.ask_columns": {
+      "text": "Wetin you dey write for each one for {table}? Separate dem with comma, like: name, phone, wetin dem buy, date.",
+      "reviewed": false
+    },
+    "wa.tablemake.no_columns": {
+      "text": "I no fit read any column from that one. Send dem with comma, like: name, phone, amount.",
+      "reviewed": false
+    },
+    "wa.tablemake.readback": {
+      "text": "*{table}* go keep, for each one:\n{columns}\n\nReply *yes* make I create am, or send the list again to change am.",
+      "reviewed": false
+    },
+    "wa.tablemake.not_made": {
+      "text": "Nothing change.",
+      "reviewed": false
+    },
+    "wa.tablemake.made": {
+      "text": "I don make *{table}*. Add to am with *add to {name}*, or see am for the app{link}.",
+      "reviewed": false
+    },
+    "wa.tablemake.failed": {
+      "text": "I no fit set up your records now, so {table} never make. Reply *try again* after small time (I go keep am for one day), or *cancel*.",
+      "reviewed": false
+    },
+    "wa.tablemake.retry_reminder": {
+      "text": "Reply *try again* make I create {table}, or *cancel*.",
+      "reviewed": false
+    },
+    "wa.tablemake.refused": {
+      "text": "E no work: {reason}",
+      "reviewed": false
+    },
+    "wa.tablemake.renamed": {
+      "text": "{old} don change name to *{table}*.",
+      "reviewed": false
+    },
+    "wa.tablemake.drop_web": {
+      "text": "To remove column or table go delete everything wey dey inside, so e dey happen for the app, where you go type the name to confirm{link}.",
+      "reviewed": false
+    },
+    "wa.tablemake.which": {
+      "text": "Which one?\n{list}\nSend am again with the full name of the table.",
+      "reviewed": false
+    },
+    "wa.tablemake.type.text": {
+      "text": "words",
+      "reviewed": false
+    },
+    "wa.tablemake.type.number": {
+      "text": "number (amount, price)",
+      "reviewed": false
+    },
+    "wa.tablemake.type.integer": {
+      "text": "whole number (count)",
+      "reviewed": false
+    },
+    "wa.tablemake.type.boolean": {
+      "text": "yes or no",
+      "reviewed": false
+    },
+    "wa.tablemake.type.date": {
+      "text": "date",
+      "reviewed": false
+    },
+    "wa.tablemake.type.datetime": {
+      "text": "date and time",
+      "reviewed": false
+    },
+    "wa.tablemake.type.phone": {
+      "text": "phone number",
+      "reviewed": false
+    },
+    "wa.tablemake.type.email": {
+      "text": "email address",
+      "reviewed": false
+    },
+    "wa.tablemake.type.json": {
+      "text": "plenty values together",
+      "reviewed": false
+    },
+    "wa.tablecol.ask_type": {
+      "text": "Wetin go dey inside *{column}*?\n{list}\nReply with the number.",
+      "reviewed": false
+    },
+    "wa.tablecol.readback": {
+      "text": "Make I add column *{column}* ({type}) to *{table}*? Reply *yes* or *cancel*.",
+      "reviewed": false
+    },
+    "wa.tablecol.name_bad": {
+      "text": "Give the column name wey get letters, like phone.",
+      "reviewed": false
+    },
+    "wa.tablecol.exists": {
+      "text": "{table} don get column {column} before.",
+      "reviewed": false
+    },
+    "wa.tablecol.added": {
+      "text": "I don add *{column}* to *{table}*.",
+      "reviewed": false
+    },
+    "button.try_again": {
+      "text": "Try again",
+      "reviewed": false
+    },
     "wa.build.too_long": {
       "text": "E too long for me; talk am for less than {max} characters.",
       "reviewed": false
@@ -1317,7 +1697,107 @@
       "reviewed": false
     },
     "wa.help.find": {
-      "text": "• *find*, the table name and one word: look for rows",
+      "text": "• *find*, the table name and one word: look for rows, then *change 1* or *delete 1*",
+      "reviewed": false
+    },
+    "wa.help.ask": {
+      "text": "• Ask about your tables: *how many customers*, *total balance*, or any question like *who owe pass 10k?*",
+      "reviewed": false
+    },
+    "wa.ask.what": {
+      "text": "Wetin you wan know? Like: *ask how many customers dey Ikeja*.",
+      "reviewed": false
+    },
+    "wa.ask.no_model": {
+      "text": "I no fit read questions like that here yet. These ones dey work: *how many customers*, *total balance* (number column), and *find customers Ikeja*.",
+      "reviewed": false
+    },
+    "wa.ask.cant": {
+      "text": "I no fit answer that one from your tables. Try *find*, the table name and one word, or *tables* to see them.",
+      "reviewed": false
+    },
+    "wa.ask.budget": {
+      "text": "This month AI allowance don finish, so I no fit read that question. *how many customers*, *total balance* and *find* still dey work.",
+      "reviewed": false
+    },
+    "wa.ask.limit": {
+      "text": "Na {count} questions be that for this hour. Ask again small time later, or use *find*.",
+      "reviewed": false
+    },
+    "wa.ask.added": {
+      "text": "Added",
+      "reviewed": false
+    },
+    "wa.ask.where": {
+      "text": "{table} wey {conditions}",
+      "reviewed": false
+    },
+    "wa.ask.and": {
+      "text": " and ",
+      "reviewed": false
+    },
+    "wa.ask.op_eq": {
+      "text": "{column} na {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_neq": {
+      "text": "{column} no be {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_lt": {
+      "text": "{column} dey less than {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_lte": {
+      "text": "{column} no pass {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_gt": {
+      "text": "{column} pass {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_gte": {
+      "text": "{column} reach {value} or pass am",
+      "reviewed": false
+    },
+    "wa.ask.op_contains": {
+      "text": "{column} get \"{value}\" inside",
+      "reviewed": false
+    },
+    "wa.ask.op_is_null": {
+      "text": "{column} empty",
+      "reviewed": false
+    },
+    "wa.ask.op_not_null": {
+      "text": "{column} get something",
+      "reviewed": false
+    },
+    "wa.ask.order_desc": {
+      "text": "{column} highest first",
+      "reviewed": false
+    },
+    "wa.ask.order_asc": {
+      "text": "{column} lowest first",
+      "reviewed": false
+    },
+    "wa.ask.count": {
+      "text": "{reading}: {count}",
+      "reviewed": false
+    },
+    "wa.ask.sum": {
+      "text": "Total {column}, {reading}: {total}",
+      "reviewed": false
+    },
+    "wa.ask.sum_over": {
+      "text": "(for the first {count} rows)",
+      "reviewed": false
+    },
+    "wa.ask.none": {
+      "text": "{reading}: none.",
+      "reviewed": false
+    },
+    "wa.ask.rows_head": {
+      "text": "{reading} ({count}):",
       "reviewed": false
     },
     "wa.help.intro": {
@@ -1378,6 +1858,18 @@
     },
     "wa.invoice.confirm": {
       "text": "Make I send {name} ({to}) invoice of {amount}: {for}?",
+      "reviewed": false
+    },
+    "wa.invoice.confirm_linked": {
+      "text": "Send {name}, a business on Taskiem you are linked with, an invoice for {amount}: {for}? It goes into their bills.",
+      "reviewed": false
+    },
+    "wa.invoice.sent_linked": {
+      "text": "Sent {number} to {name}'s bills on Taskiem for {amount}. You can see it under Invoices in the web app.",
+      "reviewed": false
+    },
+    "wa.invoice.pick_linked": {
+      "text": "Which {name} do you mean?\n{list}\nReply with its number, or send a phone number or email to invoice someone else.",
       "reviewed": false
     },
     "wa.invoice.confirm_reminder": {
@@ -2480,6 +2972,10 @@
       "text": "for POS",
       "reviewed": false
     },
+    "sales.how_credit": {
+      "text": "for credit",
+      "reviewed": false
+    },
     "sales.by_cash": {
       "text": "Cash",
       "reviewed": false
@@ -2490,6 +2986,10 @@
     },
     "sales.by_pos": {
       "text": "POS",
+      "reviewed": false
+    },
+    "sales.by_credit": {
+      "text": "Credit",
       "reviewed": false
     },
     "sales.evening.title": {
@@ -2562,6 +3062,18 @@
     },
     "wa.sale.matched": {
       "text": "E don match di money wey enter.",
+      "reviewed": false
+    },
+    "wa.sale.credit_owes": {
+      "text": "{name} go owe {total} in all.",
+      "reviewed": false
+    },
+    "wa.sale.credit_new": {
+      "text": "{name} new for your debt book.",
+      "reviewed": false
+    },
+    "wa.sale.credit_recorded": {
+      "text": "I don write am as debt: {name} owe am ({number}), {total} in all now.",
       "reviewed": false
     },
     "wa.sale.short": {
@@ -2877,7 +3389,7 @@
       "reviewed": false
     },
     "wa.table.find_more": {
-      "text": "… and {count} more. Find with more words, or open Tables for Taskiem.",
+      "text": "… and {count} more. Send *more* to see the next five.",
       "reviewed": false
     },
     "wa.table.find_no_column": {
@@ -2890,6 +3402,458 @@
     },
     "wa.table.find_what": {
       "text": "Send *find*, the table name and wetin you dey find.",
+      "reviewed": false
+    },
+    "wa.rows.find_tail": {
+      "text": "Send *change 1* to correct row 1, or *delete 1* to comot am.",
+      "reviewed": false
+    },
+    "wa.rows.no_more": {
+      "text": "Na everything wey dey {table} for that search be dat.",
+      "reviewed": false
+    },
+    "wa.rows.no_number": {
+      "text": "No row {n} dey the list. Send number from 1 reach {max}.",
+      "reviewed": false
+    },
+    "wa.rows.denied": {
+      "text": "You no fit change rows for {org} (e need table.edit).",
+      "reviewed": false
+    },
+    "wa.rows.table_gone": {
+      "text": "{table} no dey again. Send *tables* to see wetin dey.",
+      "reviewed": false
+    },
+    "wa.rows.gone": {
+      "text": "Row {id} no dey {table} again.",
+      "reviewed": false
+    },
+    "wa.rows.pick_column": {
+      "text": "Row {id} for {table}:\n{row}\n\nWhich one you wan change? Send im number.",
+      "reviewed": false
+    },
+    "wa.rows.pick_again": {
+      "text": "Send number from 1 reach {max}, or *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.ask_value": {
+      "text": "The new one:\n{prompt}",
+      "reviewed": false
+    },
+    "wa.rows.form": {
+      "text": "{table}: tap *{cta}* to enter the new one; you go confirm before I save am. Send *cancel* to stop.",
+      "reviewed": false
+    },
+    "wa.rows.confirm_change": {
+      "text": "Make I save this change for row {id} for {table}?\n{changes}\n\nReply *yes* to save am, another detail number to change am too, or *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.confirm_delete": {
+      "text": "Make I comot row {id} from {table}? You no go fit get am back.\n{row}\n\nReply *yes* to comot am or *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.reminder": {
+      "text": "Reply *yes* to continue or *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.left": {
+      "text": "Nothing change. The rows wey I find still get dia numbers.",
+      "reviewed": false
+    },
+    "wa.rows.too_many": {
+      "text": "You don change plenty rows just now. Wait small, then try again.",
+      "reviewed": false
+    },
+    "wa.rows.not_saved": {
+      "text": "I no save am: {reason}",
+      "reviewed": false
+    },
+    "wa.rows.failed": {
+      "text": "E no go: {reason}\n\nReply *yes* to try again or *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.changed_since": {
+      "text": "Row {id} don change after you see am, so I no write anything. See am as e be now.",
+      "reviewed": false
+    },
+    "wa.rows.saved": {
+      "text": "I don save row {id} for {table}.",
+      "reviewed": false
+    },
+    "wa.rows.deleted": {
+      "text": "I don comot row {id} from {table}.",
+      "reviewed": false
+    },
+    "button.file_new": {
+      "text": "New table",
+      "reviewed": false
+    },
+    "button.file_add": {
+      "text": "Add am to table",
+      "reviewed": false
+    },
+    "button.not_now": {
+      "text": "No be now",
+      "reviewed": false
+    },
+    "wa.file.denied": {
+      "text": "You no fit bring list enter tables for {org} (e need table.edit).",
+      "reviewed": false
+    },
+    "wa.file.unsupported": {
+      "text": "I fit read CSV and Excel (.xlsx) files. Save the list as one of dem and send am again.",
+      "reviewed": false
+    },
+    "wa.file.too_many": {
+      "text": "You don send plenty files just now. Wait small, then send am again.",
+      "reviewed": false
+    },
+    "wa.file.too_big": {
+      "text": "That file pass 2 MB. Send smaller one, or use Import for the Tables page{link}.",
+      "reviewed": false
+    },
+    "wa.file.too_many_rows": {
+      "text": "That file get pass {limit} rows, pass wetin one import fit take. Divide am into small files and send each one.",
+      "reviewed": false
+    },
+    "wa.file.unreadable": {
+      "text": "I no fit read that file: {reason}.",
+      "reviewed": false
+    },
+    "wa.file.not_fetched": {
+      "text": "I no fit collect that file. Send am again small time.",
+      "reviewed": false
+    },
+    "wa.file.got": {
+      "text": "*{file}*: {rows} row(s) with {columns}.",
+      "reviewed": false
+    },
+    "wa.file.offer": {
+      "text": "*Add am to table* go add dem to {table}.",
+      "reviewed": false
+    },
+    "wa.file.choose": {
+      "text": "*New table* go make table from am. To add the rows to another table, send *add to* and im name. *No be now* no go keep anything.",
+      "reviewed": false
+    },
+    "wa.file.pick_reminder": {
+      "text": "Tap *New table*, or send *add to* and table name, or *No be now*.",
+      "reviewed": false
+    },
+    "wa.file.which": {
+      "text": "Plenty tables match:\n{list}\n\nSend *add to* and the full name.",
+      "reviewed": false
+    },
+    "wa.file.not_now": {
+      "text": "Nothing enter, and I no keep the file.",
+      "reviewed": false
+    },
+    "wa.file.table_gone": {
+      "text": "That table no dey again. Send the file again.",
+      "reviewed": false
+    },
+    "wa.file.ask_header": {
+      "text": "Which column for *{table}* *{header}* go enter?\n{list}\n0. Leave am out",
+      "reviewed": false
+    },
+    "wa.file.map_again": {
+      "text": "Send number from 0 reach {max}.",
+      "reviewed": false
+    },
+    "wa.file.no_columns": {
+      "text": "None of the file headings be column for *{table}*, so nothing enter.",
+      "reviewed": false
+    },
+    "wa.file.row_bad": {
+      "text": "Nothing enter: {reason}. Correct the file and send am again.",
+      "reviewed": false
+    },
+    "wa.file.confirm_new": {
+      "text": "Make I create *{table}* with these columns:\n{columns}\n\nand add im {rows} row(s)? The first ones:\n{first}\n\nReply *yes* or *cancel*.",
+      "reviewed": false
+    },
+    "wa.file.confirm_add": {
+      "text": "Make I add {rows} row(s) to *{table}*? The first ones:\n{first}\n\nReply *yes* or *cancel*.",
+      "reviewed": false
+    },
+    "wa.file.again": {
+      "text": "I no fit collect that file again as e be. Send am again.",
+      "reviewed": false
+    },
+    "wa.file.failed": {
+      "text": "E no go: {reason}\n\nReply *yes* to try again or *cancel*. Rows wey don enter no go enter twice.",
+      "reviewed": false
+    },
+    "wa.file.made": {
+      "text": "I don make *{table}* and add {rows} row(s) from {file}. I no keep the file. Send *find {name}* and one word to look for rows.",
+      "reviewed": false
+    },
+    "wa.file.added": {
+      "text": "I don add {rows} row(s) to *{table}* from {file}. I no keep the file.",
+      "reviewed": false
+    },
+    "wa.file.already": {
+      "text": "The rows for {file} don already enter *{table}*, so nothing enter twice.",
+      "reviewed": false
+    },
+    "wa.file.slack": {
+      "text": "I never fit open files wey dem send for Slack. Import am for the Tables page{link}, or send am give me for WhatsApp or Telegram.",
+      "reviewed": false
+    },
+    "wa.sheet.link": {
+      "text": "Send *copy my sheet* and the sheet link (open the sheet for your browser and copy the address).",
+      "reviewed": false
+    },
+    "wa.sheet.connect_first": {
+      "text": "Connect Google Sheets first: send *connect Google Sheets*. Then send *copy my sheet* and the link again.",
+      "reviewed": false
+    },
+    "wa.sheet.cannot": {
+      "text": "I no fit read that sheet: {reason}.",
+      "reviewed": false
+    },
+    "wa.sheet.cannot_open": {
+      "text": "Taskiem no fit open that sheet with your Google account. Check the link, and make sure the account wey you connect fit open am.",
+      "reviewed": false
+    },
+    "wa.sheet.changed": {
+      "text": "The sheet don change since I read am, so nothing enter. Send *copy my sheet* and the link again.",
+      "reviewed": false
+    },
+    "wa.sheet.no_sync": {
+      "text": "Na copy be this: anything wey you change for the sheet later no go enter. Dey keep the list for the table from now.",
+      "reviewed": false
+    },
+    "wa.debt.owes_short": {
+      "text": "dey owe {amount}",
+      "reviewed": false
+    },
+    "wa.debt.someone_new": {
+      "text": "Another person",
+      "reviewed": false
+    },
+    "wa.debt.ask_phone": {
+      "text": "{name} na new person. Send {name} phone number make receipt and reminder fit reach dem, or *skip*.",
+      "reviewed": false
+    },
+    "wa.debt.which": {
+      "text": "Which {name}?\n{list}\n\nSend number.",
+      "reviewed": false
+    },
+    "wa.debt.ask_terms": {
+      "text": "How long you dey give customers to pay wetin dem owe? Reminder go only after this time.\n{list}\n\nSend number. You fit change am later with *credit terms 14 days*.",
+      "reviewed": false
+    },
+    "wa.debt.no_fixed_time": {
+      "text": "No fixed time (no reminder)",
+      "reviewed": false
+    },
+    "wa.debt.days": {
+      "text": "{days} days",
+      "reviewed": false
+    },
+    "wa.debt.no_due": {
+      "text": "No due date.",
+      "reviewed": false
+    },
+    "wa.debt.no_terms_yet": {
+      "text": "Na owner go set how long customers get to pay; until then this debt no get due date.",
+      "reviewed": false
+    },
+    "wa.debt.due_on": {
+      "text": "E due {date}.",
+      "reviewed": false
+    },
+    "wa.debt.confirm_owes": {
+      "text": "Make I write say {name} dey owe {amount}? {due}\n{name} go owe {total} for everything. Nothing go reach dem.\n\nReply *yes* or *cancel*.",
+      "reviewed": false
+    },
+    "wa.debt.refused": {
+      "text": "I no write am: {reason}",
+      "reviewed": false
+    },
+    "wa.debt.recorded": {
+      "text": "I don write am: {name} dey owe {amount} ({number}). {name} dey owe {total} for everything.",
+      "reviewed": false
+    },
+    "wa.debt.denied": {
+      "text": "You no fit write debt or payment for {org} (e need invoice.manage).",
+      "reviewed": false
+    },
+    "wa.debt.denied_read": {
+      "text": "You no fit see who dey owe {org} (e need invoice.read).",
+      "reviewed": false
+    },
+    "wa.debt.no_one": {
+      "text": "Nobody wey dem dey call {name} dey owe you. Write debt with *{name} owes* and the amount.",
+      "reviewed": false
+    },
+    "wa.debt.ask_how": {
+      "text": "How {name} take pay?\n1. Cash\n2. Transfer",
+      "reviewed": false
+    },
+    "wa.debt.account_connected": {
+      "text": "Your {name} account ({connection})",
+      "reviewed": false
+    },
+    "wa.debt.account_new": {
+      "text": "Another account",
+      "reviewed": false
+    },
+    "wa.debt.ask_account": {
+      "text": "Which account {name} send am enter?\n{list}\n\nSend number.",
+      "reviewed": false
+    },
+    "wa.debt.how_cash": {
+      "text": "for cash",
+      "reviewed": false
+    },
+    "wa.debt.how_transfer": {
+      "text": "by transfer enter {account}",
+      "reviewed": false
+    },
+    "wa.debt.confirm_paid": {
+      "text": "Make I write {amount} from {name} {how}? E go first pay their oldest debt. {name} go still owe {total}.\n\nReply *yes* or *cancel*.",
+      "reviewed": false
+    },
+    "wa.debt.extra_credit": {
+      "text": "{amount} wey pass wetin dem owe go stay as their credit, for their next debt.",
+      "reviewed": false
+    },
+    "wa.debt.paid_recorded": {
+      "text": "I don write {amount} from {name}. {name} dey owe {total} now.",
+      "reviewed": false
+    },
+    "wa.debt.credit_held": {
+      "text": "Credit wey dem get: {amount}.",
+      "reviewed": false
+    },
+    "wa.debt.phone_bad": {
+      "text": "I no fit use that phone number. Send am with country code (+234…), or *skip*.",
+      "reviewed": false
+    },
+    "wa.debt.applied": {
+      "text": "E don do: {count} debt(s) wey still dey now follow these terms.",
+      "reviewed": false
+    },
+    "wa.debt.transfer_rail": {
+      "text": "Nothing to write: Taskiem dey see money wey enter {account}. {name} balance go reduce when the transfer land and match.",
+      "reviewed": false
+    },
+    "wa.debt.ask_account_name": {
+      "text": "Wetin you dey call that account? Use the bank and short name, like *gtbank/shop*.",
+      "reviewed": false
+    },
+    "wa.debt.account_name_bad": {
+      "text": "Use small letters and numbers, and only one /, like *gtbank/shop*.",
+      "reviewed": false
+    },
+    "wa.debt.not_recorded": {
+      "text": "I no write anything.",
+      "reviewed": false
+    },
+    "wa.debt.terms_bad": {
+      "text": "Credit terms na 1 reach 365 days, or *credit terms none*.",
+      "reviewed": false
+    },
+    "wa.debt.terms_set": {
+      "text": "Customers now get {terms} to pay wetin dem owe. New debt go follow am.",
+      "reviewed": false
+    },
+    "wa.debt.terms_none_note": {
+      "text": "Debt wey you write no go get due date or reminder.",
+      "reviewed": false
+    },
+    "wa.debt.ask_apply": {
+      "text": "Make I apply am to the {count} debt(s) wey don dey before, each one from the day dem write am?",
+      "reviewed": false
+    },
+    "wa.debt.nobody": {
+      "text": "Nobody dey owe you. Write debt with *Ada owes 5,000*.",
+      "reviewed": false
+    },
+    "wa.debt.who_head": {
+      "text": "{count} customer(s) dey owe you {total}:",
+      "reviewed": false
+    },
+    "wa.debt.who_line": {
+      "text": "{n}. {name}: {amount} ({lines} line(s))",
+      "reviewed": false
+    },
+    "wa.debt.who_due": {
+      "text": "due {date}",
+      "reviewed": false
+    },
+    "wa.debt.who_more": {
+      "text": "… and {count} more.",
+      "reviewed": false
+    },
+    "wa.debt.who_tail": {
+      "text": "Send *balance* and name to see one customer debt.",
+      "reviewed": false
+    },
+    "wa.debt.which_balance": {
+      "text": "Pass one person match:\n{list}\n\nSend the full name.",
+      "reviewed": false
+    },
+    "wa.debt.statement_head": {
+      "text": "{name} dey owe {amount}:",
+      "reviewed": false
+    },
+    "wa.debt.statement_last": {
+      "text": "Last pay {amount} on {date}.",
+      "reviewed": false
+    },
+    "wa.debt.owes_nothing": {
+      "text": "{name} no owe anything.",
+      "reviewed": false
+    },
+    "wa.debt.send_no_address": {
+      "text": "{name} no get phone number yet. Send *{name}'s number is 0803…* first.",
+      "reviewed": false
+    },
+    "wa.debt.send_pay_account": {
+      "text": "their own account number wey dem go pay enter",
+      "reviewed": false
+    },
+    "wa.debt.send_pay_link": {
+      "text": "link to pay am, all or small small",
+      "reviewed": false
+    },
+    "wa.debt.send_pay_none": {
+      "text": "no way to pay online (dem go ask you how)",
+      "reviewed": false
+    },
+    "wa.debt.send_confirm": {
+      "text": "Make I send {name} wetin dem owe, {amount} ({lines}), to {to}, with {pay}?",
+      "reviewed": false
+    },
+    "wa.debt.send_recorded": {
+      "text": "Their {count} notebook line(s) go show as sent.",
+      "reviewed": false
+    },
+    "wa.debt.sent": {
+      "text": "I don send {name} their balance of {amount} by {channels}.",
+      "reviewed": false
+    },
+    "wa.debt.sent_nothing": {
+      "text": "Nothing reach {name} now: too many messages to dem this hour, or your plan SMS don finish. Try again later.",
+      "reviewed": false
+    },
+    "wa.debt.send_refused": {
+      "text": "E no go: {reason}",
+      "reviewed": false
+    },
+    "wa.debt.phone_set": {
+      "text": "{name} number na {phone} now: receipt and reminder fit reach dem.",
+      "reviewed": false
+    },
+    "wa.help.debts": {
+      "text": "• *Ada owes 5,000*, *Ada paid 2,000 cash*, *who owes me?*, *send Ada her balance*: the debt wey customers dey owe you",
+      "reviewed": false
+    },
+    "wa.help.direct": {
+      "text": "• Message business wey you link with: start am with *...*, like *... @Dangote how much is a bag of cement?*",
       "reviewed": false
     },
     "wa.table.form": {
@@ -2957,7 +3921,7 @@
       "reviewed": false
     },
     "wa.table.none": {
-      "text": "{org} never get any data table. Create one for Taskiem, under Tables{link}.",
+      "text": "{org} never get any data table. Send *new table* make I create one here, or create one for Taskiem, under Tables{link}.",
       "reviewed": false
     },
     "wa.table.not_added": {
@@ -2994,6 +3958,238 @@
     },
     "wa.unbound": {
       "text": "This number never join any Taskiem account. To use Taskiem here, sign in, open {where}, add this number under WhatsApp, then type or send back the code wey we go send you.",
+      "reviewed": false
+    },
+    "signup.offer": {
+      "text": "Hello! Taskiem dey run your business work from this chat: payment, invoice, stock, reminder, your shop page. You wan start am, free?\n\nTo yarn for another language, type im name: {languages}.",
+      "reviewed": false
+    },
+    "signup.button_start": {
+      "text": "Start my business",
+      "reviewed": false
+    },
+    "signup.button_have": {
+      "text": "I dey use Taskiem",
+      "reviewed": false
+    },
+    "signup.button_no": {
+      "text": "No be now",
+      "reviewed": false
+    },
+    "signup.later": {
+      "text": "No wahala. Send *start* any time wey you ready.",
+      "reviewed": false
+    },
+    "signup.no_org": {
+      "text": "Your Taskiem account no get business now. You wan start one?",
+      "reviewed": false
+    },
+    "signup.country": {
+      "text": "Sign up from chat never open for your country. You fit sign up for Taskiem website instead.",
+      "reviewed": false
+    },
+    "signup.too_many": {
+      "text": "This number don make {count} business today, na the most for one day. Try again tomorrow.",
+      "reviewed": false
+    },
+    "signup.busy": {
+      "text": "We dey busy dey sign people up now. Abeg try again after one hour.",
+      "reviewed": false
+    },
+    "signup.terms": {
+      "text": "Taskiem dey keep your business record and the details wey you give am. Read how, plus the terms: {link}\n\nReply *Yes* to agree and start. (To yarn for another language, type im name: {languages}.)",
+      "reviewed": false
+    },
+    "signup.declined": {
+      "text": "We no make anything. Send *start* if you change your mind.",
+      "reviewed": false
+    },
+    "signup.cancelled": {
+      "text": "E don stop: we no make anything. Send *start* to begin again.",
+      "reviewed": false
+    },
+    "signup.ask_business": {
+      "text": "Wetin be your business name? (Send *cancel* to stop any time.)",
+      "reviewed": false
+    },
+    "signup.ask_name": {
+      "text": "And your own name?",
+      "reviewed": false
+    },
+    "signup.ask_sells": {
+      "text": "Wetin you dey sell or do? Reply with number:\n1. Food\n2. Provisions\n3. Fashion\n4. Phone and gadget\n5. School\n6. Salon\n7. Services\n8. Another thing",
+      "reviewed": false
+    },
+    "signup.ask_pays": {
+      "text": "How customers dey pay you? Reply with the numbers wey fit, like 1 2 3:\n1. Cash\n2. Bank transfer\n3. POS\n4. Paystack\n5. Moniepoint\n6. OPay",
+      "reviewed": false
+    },
+    "signup.ask_contact": {
+      "text": "Last step: tap *Share my number* make we know say na you, so we fit text you when Telegram no work. Send *cancel* to stop.",
+      "reviewed": false
+    },
+    "signup.contact_own": {
+      "text": "That one no be your own number. Tap *Share my number* to share your own.",
+      "reviewed": false
+    },
+    "signup.number_taken": {
+      "text": "This number don dey use Taskiem before. To use Taskiem here too, sign in, open {where}, and link this chat.",
+      "reviewed": false
+    },
+    "signup.business_bad": {
+      "text": "Business name need 2 to 80 letters, and no link or email. Wetin be your business name?",
+      "reviewed": false
+    },
+    "signup.name_bad": {
+      "text": "Name need at most 80 letters, and no link or email. Wetin be your name?",
+      "reviewed": false
+    },
+    "signup.done": {
+      "text": "E don do: *{business}* don dey Taskiem.",
+      "reviewed": false
+    },
+    "signup.done_trial": {
+      "text": "E don do: *{business}* don dey Taskiem, free for {days} days.",
+      "reviewed": false
+    },
+    "signup.starters": {
+      "text": "See three things wey businesses like your own dey start with:",
+      "reviewed": false
+    },
+    "signup.own_words": {
+      "text": "Tap one, or talk wetin you want for your own words.",
+      "reviewed": false
+    },
+    "signup.pin_hint": {
+      "text": "This chat na your account. Send *pin* to set six-number PIN wey go keep am for you.",
+      "reviewed": false
+    },
+    "signup.tpl.daily-reminder": {
+      "text": "Daily reminder",
+      "reviewed": false
+    },
+    "signup.tpl.sales-day-total": {
+      "text": "Today sales total",
+      "reviewed": false
+    },
+    "signup.tpl.school-fee-reminders": {
+      "text": "School fee reminder",
+      "reviewed": false
+    },
+    "signup.tpl.send-invoice": {
+      "text": "Send invoice",
+      "reviewed": false
+    },
+    "signup.tpl.pos-daily-summary": {
+      "text": "POS evening summary",
+      "reviewed": false
+    },
+    "signup.tpl.payment-receipt-whatsapp": {
+      "text": "Payment receipt",
+      "reviewed": false
+    },
+    "signup.tpl.low-stock-alert": {
+      "text": "Low stock alert",
+      "reviewed": false
+    },
+    "signup.tpl.stock-count-reminder": {
+      "text": "Count my shelf",
+      "reviewed": false
+    },
+    "dormant.form_title": {
+      "text": "Show say na you",
+      "reviewed": false
+    },
+    "dormant.prove": {
+      "text": "This chat don quiet for {days} days, so Taskiem stop to use am until you show say na still you. Enter your chat PIN for the form.",
+      "reviewed": false
+    },
+    "dormant.relink": {
+      "text": "This chat don quiet for {days} days, so Taskiem stop to use am until you show say na still you. Sign in, open {where} and link am again, or use Taskiem from your other chat. If you no prove am, we go unlink am after another {days} days.",
+      "reviewed": false
+    },
+    "chatpin.web": {
+      "text": "Set your PIN for the web app, for {where}: e go first ask for your passkey, authenticator or password.",
+      "reviewed": false
+    },
+    "chatpin.set_already": {
+      "text": "You don get chat PIN already. If you wan change am, sign in for web (send sign in make we give you link), add passkey or authenticator, then change am for your Account page for {where}.",
+      "reviewed": false
+    },
+    "chatpin.not_here": {
+      "text": "You no fit set chat PIN from here yet: set am from WhatsApp, where Taskiem dey send secure form.",
+      "reviewed": false
+    },
+    "chatpin.form_title": {
+      "text": "Your chat PIN",
+      "reviewed": false
+    },
+    "chatpin.form": {
+      "text": "Choose six-number PIN for the form. Keep am for yourself: e dey show say this chat na your own, and e dey approve wetin ask for am.",
+      "reviewed": false
+    },
+    "chatpin.summary": {
+      "text": "Six numbers wey keep this chat for you",
+      "reviewed": false
+    },
+    "connect.hint": {
+      "text": "Send *connect {service}* to connect am from here.",
+      "reviewed": false
+    },
+    "connect.link": {
+      "text": "Connect {service} for here: {link}\n\nThe link go work once, for {minutes} minutes, and na only you fit use am. No ever send key for this chat: type am for that page.",
+      "reviewed": false
+    },
+    "connect.link_button": {
+      "text": "Tap the button wey dey below to connect {service}. E go work once, for {minutes} minutes, and na only you fit use am. No ever send key for this chat: type am for the form.",
+      "reviewed": false
+    },
+    "connect.button": {
+      "text": "Connect {service}",
+      "reviewed": false
+    },
+    "connect.denied": {
+      "text": "Na only person wey dey manage connections for {org} fit connect services. Ask the owner.",
+      "reviewed": false
+    },
+    "connect.unknown": {
+      "text": "Taskiem no get service wey dem call {service}. Check the name, like *connect paystack*.",
+      "reviewed": false
+    },
+    "connect.done": {
+      "text": "{service} don connect to *{org}*.",
+      "reviewed": false
+    },
+    "connect.carry_on": {
+      "text": "We dey continue with *{name}*:",
+      "reviewed": false
+    },
+    "connect.key_in_chat": {
+      "text": "That one be like secret key, so Taskiem no keep am or use am. Na only for the secure form key dey go: send *connect* and the service. The chat app don get the key now, so change am for the service and use the new one.",
+      "reviewed": false
+    },
+    "connect.form": {
+      "text": "Tap the button to connect {service}. Type the key for the form, no type am for this chat: Taskiem go check am with {service} before e save am.",
+      "reviewed": false
+    },
+    "connect.form_intro": {
+      "text": "Copy each value from {service} and paste am here. Taskiem go check am with {service} before e save am.",
+      "reviewed": false
+    },
+    "connect.form_cta": {
+      "text": "Connect",
+      "reviewed": false
+    },
+    "terms.ask": {
+      "text": "Taskiem get terms and privacy notice wey you never agree to: {link}\n\nTap *I agree*, or reply *I agree*. Taskiem go still dey work anyhow.",
+      "reviewed": false
+    },
+    "terms.button": {
+      "text": "I agree",
+      "reviewed": false
+    },
+    "terms.thanks": {
+      "text": "Thank you: we don record say you agree.",
       "reviewed": false
     },
     "wd.ai": {
@@ -3320,6 +4516,10 @@
       "text": "When person send the shop {form} form",
       "reviewed": false
     },
+    "wd.trigger.storefront_action": {
+      "text": "When person send form for the storefront",
+      "reviewed": false
+    },
     "wd.trigger.subflow": {
       "text": "When another workflow call am",
       "reviewed": false
@@ -3390,6 +4590,1149 @@
     },
     "wd.workflow.does": {
       "text": "Use your own workflow: {template}, wey {does}",
+      "reviewed": false
+    },
+    "link.how": {
+      "text": "To link with another business for Taskiem, send *link Dangote*, *who sells cement*, or *link 0803 123 4567*.",
+      "reviewed": false
+    },
+    "link.none": {
+      "text": "No business don link with you yet. Send *who sells cement* or *link Dangote* to find one.",
+      "reviewed": false
+    },
+    "link.list_title": {
+      "text": "Businesses for Taskiem wey una dey do business:",
+      "reviewed": false
+    },
+    "link.list_active": {
+      "text": "• *{name}*: don link, {role}",
+      "reviewed": false
+    },
+    "link.list_asked": {
+      "text": "• *{name}* wan link with you",
+      "reviewed": false
+    },
+    "link.list_requested": {
+      "text": "• *{name}*: you don ask, dey wait for dem",
+      "reviewed": false
+    },
+    "link.list_not_accepted": {
+      "text": "• *{name}*: dem no accept",
+      "reviewed": false
+    },
+    "link.list_blocked": {
+      "text": "• *{name}*: you don block dem",
+      "reviewed": false
+    },
+    "link.list_ended": {
+      "text": "• *{name}*: link don end",
+      "reviewed": false
+    },
+    "link.list_sent": {
+      "text": "• {shown}: request don go",
+      "reviewed": false
+    },
+    "link.role.supplier": {
+      "text": "dem dey supply you",
+      "reviewed": false
+    },
+    "link.role.customer": {
+      "text": "dem dey buy from you",
+      "reviewed": false
+    },
+    "link.role.both": {
+      "text": "dem dey supply you and buy from you",
+      "reviewed": false
+    },
+    "link.asked_title": {
+      "text": "{name} wan link with you",
+      "reviewed": false
+    },
+    "link.asked_body": {
+      "text": "*{name}* wan link with {org} for Taskiem ({role}). If una link, una invoice and order go reach each other by demself. Nothing go share until you accept.",
+      "reviewed": false
+    },
+    "link.button_accept": {
+      "text": "Accept",
+      "reviewed": false
+    },
+    "link.button_decline": {
+      "text": "No",
+      "reviewed": false
+    },
+    "link.button_block": {
+      "text": "Block",
+      "reviewed": false
+    },
+    "link.button_role_supplier": {
+      "text": "Dem dey supply us",
+      "reviewed": false
+    },
+    "link.button_role_customer": {
+      "text": "Dem dey buy from us",
+      "reviewed": false
+    },
+    "link.button_role_both": {
+      "text": "Both",
+      "reviewed": false
+    },
+    "link.found_title": {
+      "text": "Businesses for Taskiem:",
+      "reviewed": false
+    },
+    "link.found_linked": {
+      "text": "(don link)",
+      "reviewed": false
+    },
+    "link.found_requested": {
+      "text": "(you don ask)",
+      "reviewed": false
+    },
+    "link.found_asked_us": {
+      "text": "(dem don ask you)",
+      "reviewed": false
+    },
+    "link.found_pick": {
+      "text": "Send the number of the one wey you wan link with, or *cancel*.",
+      "reviewed": false
+    },
+    "link.found_owner_only": {
+      "text": "Na owner or admin fit ask to link with dem.",
+      "reviewed": false
+    },
+    "link.found_none": {
+      "text": "No business for Taskiem wey others fit find match {query}.",
+      "reviewed": false
+    },
+    "link.pick_number": {
+      "text": "Send one number from the list, or *cancel*.",
+      "reviewed": false
+    },
+    "link.which_role": {
+      "text": "How you dey do business with *{name}*?",
+      "reviewed": false
+    },
+    "link.which_role_blind": {
+      "text": "Ask anybody wey dey use {shown} for Taskiem to link. How you dey do business with dem?",
+      "reviewed": false
+    },
+    "link.sent": {
+      "text": "We don ask *{name}* to link. You go hear when dem accept.",
+      "reviewed": false
+    },
+    "link.blind_sent": {
+      "text": "If any business for Taskiem dey use {shown}, e don get your request. You go hear only if dem accept.",
+      "reviewed": false
+    },
+    "link.already": {
+      "text": "You don already link with *{name}*.",
+      "reviewed": false
+    },
+    "link.waiting": {
+      "text": "You don ask *{name}* before. E dey wait for dia answer.",
+      "reviewed": false
+    },
+    "link.denied": {
+      "text": "Na only owner or admin of {org} fit link with other businesses.",
+      "reviewed": false
+    },
+    "link.too_many": {
+      "text": "Link request don reach for today. Try again tomorrow.",
+      "reviewed": false
+    },
+    "link.gone": {
+      "text": "That request no dey wait again.",
+      "reviewed": false
+    },
+    "link.done_accept": {
+      "text": "Una don link with *{name}*. Send *links* to see una linked businesses.",
+      "reviewed": false
+    },
+    "link.done_decline": {
+      "text": "You don say no. Nobody go tell *{name}*.",
+      "reviewed": false
+    },
+    "link.done_block": {
+      "text": "You don block am. Request from *{name}* no go reach you again.",
+      "reviewed": false
+    },
+    "link.accepted_title": {
+      "text": "{name} don accept your link",
+      "reviewed": false
+    },
+    "link.accepted_body": {
+      "text": "*{name}* don accept the link with {org}. Una businesses don link for Taskiem.",
+      "reviewed": false
+    },
+    "link.ended_title": {
+      "text": "{name} don end the link",
+      "reviewed": false
+    },
+    "link.ended_body": {
+      "text": "*{name}* don end the link with {org}. Wetin don pass between una go still dey both sides.",
+      "reviewed": false
+    },
+    "link.they_asked": {
+      "text": "*{name}* don ask you before. Send *links* to answer.",
+      "reviewed": false
+    },
+    "link.offer_line": {
+      "text": "{org} dey Taskiem too. Link with us: {url}",
+      "reviewed": false
+    },
+    "link.button_offer": {
+      "text": "Link",
+      "reviewed": false
+    },
+    "link.offer_open": {
+      "text": "Open {url} as you don sign in to your business for Taskiem to link.",
+      "reviewed": false
+    },
+    "signup.findable": {
+      "text": "Other businesses for Taskiem fit find you to do business, by your name, wetin you dey sell and your area: send *find us* make dem find you, or *hide us*.",
+      "reviewed": false
+    },
+    "link.findable_on": {
+      "text": "Other businesses for Taskiem fit find {org} now by im name, wetin e dey sell and im area. Send *hide us* to stop am.",
+      "reviewed": false
+    },
+    "link.findable_off": {
+      "text": "Other businesses no go find {org} for search again. Person wey get your phone number or link fit still ask to link. Send *find us* to change am.",
+      "reviewed": false
+    },
+    "bill.arrived_title": {
+      "text": "Bill from {supplier}",
+      "reviewed": false
+    },
+    "bill.arrived_body": {
+      "text": "*{supplier}* send invoice {reference}: {amount} to pay. E dey under Bills.",
+      "reviewed": false
+    },
+    "bill.due_on": {
+      "text": "E due {date}.",
+      "reviewed": false
+    },
+    "bill.denied": {
+      "text": "Na only people wey fit see {org} invoice fit see im bills.",
+      "reviewed": false
+    },
+    "bill.not_found": {
+      "text": "No bill {reference}. Send *bills* to see dem.",
+      "reviewed": false
+    },
+    "bill.none": {
+      "text": "No bill to pay from linked suppliers.",
+      "reviewed": false
+    },
+    "bill.list_title": {
+      "text": "Bills to pay:",
+      "reviewed": false
+    },
+    "bill.list_line": {
+      "text": "• {reference} from {supplier}: {amount}",
+      "reviewed": false
+    },
+    "bill.list_total": {
+      "text": "Everything: {amount}",
+      "reviewed": false
+    },
+    "bill.detail_head": {
+      "text": "*{reference}* from *{supplier}*: {status}",
+      "reviewed": false
+    },
+    "bill.detail_sums": {
+      "text": "Total {total} · paid {paid} · {due} to pay.",
+      "reviewed": false
+    },
+    "bill.status.open": {
+      "text": "to pay",
+      "reviewed": false
+    },
+    "bill.status.paying": {
+      "text": "dey pay",
+      "reviewed": false
+    },
+    "bill.status.part_paid": {
+      "text": "part-paid",
+      "reviewed": false
+    },
+    "bill.status.paid": {
+      "text": "paid",
+      "reviewed": false
+    },
+    "bill.status.disputed": {
+      "text": "you don query am",
+      "reviewed": false
+    },
+    "bill.status.void": {
+      "text": "supplier don cancel am",
+      "reviewed": false
+    },
+    "bill.pay_into": {
+      "text": "Pay into {account} ({bank}) and put {reference} for the transfer note: e go count for that invoice by itself (without am, e go count for your oldest invoice first).",
+      "reviewed": false
+    },
+    "bill.pay_page": {
+      "text": "Or pay with card or transfer for im page: {link}",
+      "reviewed": false
+    },
+    "bill.how.transfer": {
+      "text": "by transfer",
+      "reviewed": false
+    },
+    "bill.how.cash": {
+      "text": "with cash",
+      "reviewed": false
+    },
+    "bill.how.other": {
+      "text": "another way",
+      "reviewed": false
+    },
+    "bill.notice.declared_title": {
+      "text": "{from} talk say e don pay {reference}",
+      "reviewed": false
+    },
+    "bill.notice.declared": {
+      "text": "*{from}* talk say e don pay {amount} {how} for {reference}. E go count for the invoice when the money reach you and dem match am.",
+      "reviewed": false
+    },
+    "bill.notice.queried_title": {
+      "text": "{from} query {reference}",
+      "reviewed": false
+    },
+    "bill.notice.queried": {
+      "text": "*{from}* query {reference}: {note}. Money wey no name am no go count for am until you settle the query for the invoice.",
+      "reviewed": false
+    },
+    "bill.notice.resolved_title": {
+      "text": "{from} don settle your query for {reference}",
+      "reviewed": false
+    },
+    "bill.notice.resolved": {
+      "text": "*{from}* don settle your query for {reference}. {note}",
+      "reviewed": false
+    },
+    "bill.unknown_title": {
+      "text": "Payment for {reference}: check am",
+      "reviewed": false
+    },
+    "bill.unknown": {
+      "text": "Your payment of {amount} to *{supplier}* for {reference} don go out, but Taskiem no fit record how e end. The bill go stay as e dey paid until you check: check the payment for your bank app before you pay again.",
+      "reviewed": false
+    },
+    "bill.unpaired_title": {
+      "text": "{reference}: the money reach {supplier}, no bill pair am",
+      "reviewed": false
+    },
+    "bill.unpaired": {
+      "text": "Your {amount} for {reference} reach *{supplier}* three days ago, but their Taskiem never count am for that invoice. Dem fit don count am for older invoice. If na for {reference}, confirm am, and dem go hear.",
+      "reviewed": false
+    },
+    "bill.button_confirm_pair": {
+      "text": "Na for this bill",
+      "reviewed": false
+    },
+    "bill.pair_gone": {
+      "text": "That payment don already pair, or no be your own to confirm.",
+      "reviewed": false
+    },
+    "bill.pair_confirmed": {
+      "text": "Noted: your payment na for {reference}. *{supplier}* don hear.",
+      "reviewed": false
+    },
+    "bill.notice.paired_title": {
+      "text": "{from}: one payment na for {reference}",
+      "reviewed": false
+    },
+    "bill.notice.paired": {
+      "text": "*{from}* talk say their transfer of {amount} ({note}) na for invoice {reference}. If e don count for another invoice, move am for the invoice page.",
+      "reviewed": false
+    },
+    "order.link.ordered_title": {
+      "text": "{from} send order {reference}",
+      "reviewed": false
+    },
+    "order.link.ordered": {
+      "text": "*{from}* order {note}. Accept am, change am or decline am for Taskiem.",
+      "reviewed": false
+    },
+    "order.link.cancelled_by_buyer_title": {
+      "text": "{from} cancel {reference}",
+      "reviewed": false
+    },
+    "order.link.cancelled_by_buyer": {
+      "text": "*{from}* cancel order {reference} before you accept am.",
+      "reviewed": false
+    },
+    "order.link.cancel_asked_title": {
+      "text": "{from} wan cancel {reference}",
+      "reviewed": false
+    },
+    "order.link.cancel_asked": {
+      "text": "*{from}* dey ask make you cancel order {reference} wey you don accept. Cancel am, or keep am.",
+      "reviewed": false
+    },
+    "order.link.change_accepted_title": {
+      "text": "{from} accept your change for {reference}",
+      "reviewed": false
+    },
+    "order.link.change_accepted": {
+      "text": "*{from}* accept your change for order {reference}. The order don dey accepted.",
+      "reviewed": false
+    },
+    "order.link.received_title": {
+      "text": "{from} receive {reference}",
+      "reviewed": false
+    },
+    "order.link.received": {
+      "text": "*{from}* talk say everything for order {reference} don land.",
+      "reviewed": false
+    },
+    "order.link.short_title": {
+      "text": "{from} talk say no be everything for {reference} land",
+      "reviewed": false
+    },
+    "order.link.short": {
+      "text": "*{from}* talk say no be everything for order {reference} land. Wetin dem count: {note}. Agree with their count, or talk to dem.",
+      "reviewed": false
+    },
+    "order.link.accept_title": {
+      "text": "{from} accept {reference}",
+      "reviewed": false
+    },
+    "order.link.accept": {
+      "text": "*{from}* accept your order {reference}.",
+      "reviewed": false
+    },
+    "order.link.decline_title": {
+      "text": "{from} decline {reference}",
+      "reviewed": false
+    },
+    "order.link.decline": {
+      "text": "*{from}* decline your order {reference}. {note}",
+      "reviewed": false
+    },
+    "order.link.change_title": {
+      "text": "{from} wan change {reference}",
+      "reviewed": false
+    },
+    "order.link.change": {
+      "text": "*{from}* fit supply order {reference} like this: {note}. Accept the change, or cancel the order.",
+      "reviewed": false
+    },
+    "order.link.ready_title": {
+      "text": "{reference} don ready",
+      "reviewed": false
+    },
+    "order.link.ready": {
+      "text": "*{from}* talk say your order {reference} don ready. {note}",
+      "reviewed": false
+    },
+    "order.link.dispatched_title": {
+      "text": "{reference} dey come",
+      "reviewed": false
+    },
+    "order.link.dispatched": {
+      "text": "*{from}* don send your order {reference}, e dey come. {note}",
+      "reviewed": false
+    },
+    "order.link.delivered_title": {
+      "text": "{from} deliver {reference}",
+      "reviewed": false
+    },
+    "order.link.delivered": {
+      "text": "*{from}* don deliver your order {reference}: {note}. Tap All came, or Not all came, before one day pass; after that, na their count we go use.",
+      "reviewed": false
+    },
+    "order.link.cancel_title": {
+      "text": "{from} cancel {reference}",
+      "reviewed": false
+    },
+    "order.link.cancel": {
+      "text": "*{from}* cancel your order {reference}. {note}",
+      "reviewed": false
+    },
+    "order.link.cancel_agreed_title": {
+      "text": "{from} cancel {reference} as you ask",
+      "reviewed": false
+    },
+    "order.link.cancel_agreed": {
+      "text": "*{from}* agree to cancel your order {reference}.",
+      "reviewed": false
+    },
+    "order.link.keep_title": {
+      "text": "{from} no cancel {reference}",
+      "reviewed": false
+    },
+    "order.link.keep": {
+      "text": "*{from}* no cancel your order {reference}. {note}",
+      "reviewed": false
+    },
+    "order.link.agree_title": {
+      "text": "{from} agree your count for {reference}",
+      "reviewed": false
+    },
+    "order.link.agree": {
+      "text": "*{from}* agree with your count of wetin land for order {reference}.",
+      "reviewed": false
+    },
+    "order.link.button_accept": {
+      "text": "Accept",
+      "reviewed": false
+    },
+    "order.link.button_decline": {
+      "text": "Decline",
+      "reviewed": false
+    },
+    "order.link.button_all_came": {
+      "text": "Everything land",
+      "reviewed": false
+    },
+    "order.link.done_accept": {
+      "text": "You don accept {reference}. We don tell dem.",
+      "reviewed": false
+    },
+    "order.link.done_decline": {
+      "text": "You don decline {reference}. We don tell dem.",
+      "reviewed": false
+    },
+    "order.link.done_all_came": {
+      "text": "We don write am: everything for {reference} don land. Your stock don go up, and we don tell the supplier.",
+      "reviewed": false
+    },
+    "order.link.gone": {
+      "text": "That order don move pass that one; open am for Taskiem to see where e reach.",
+      "reviewed": false
+    },
+    "order.link.denied": {
+      "text": "Na only person wey dey manage orders for {org} fit answer that one.",
+      "reviewed": false
+    },
+    "order.link.open": {
+      "text": "{reason}. Open the order for Taskiem to do am.",
+      "reviewed": false
+    },
+    "order.link.auto_accepted_title": {
+      "text": "{from} send order {reference}, e don accept",
+      "reviewed": false
+    },
+    "order.link.auto_accepted": {
+      "text": "*{from}* order {note}. E don accept by itself, as you set am for dem.",
+      "reviewed": false
+    },
+    "order.link.proposed_title": {
+      "text": "{from} draft order {reference} for you",
+      "reviewed": false
+    },
+    "order.link.proposed": {
+      "text": "*{from}* draft order for you: {note}. Confirm am, or cancel am, for Taskiem.",
+      "reviewed": false
+    },
+    "order.link.confirmed_title": {
+      "text": "{from} confirm {reference}",
+      "reviewed": false
+    },
+    "order.link.confirmed": {
+      "text": "*{from}* confirm order {reference} wey you draft for dem. E don accept.",
+      "reviewed": false
+    },
+    "order.link.message_title": {
+      "text": "{from} about {reference}",
+      "reviewed": false
+    },
+    "chat.link.about": {
+      "text": "About {reference}:",
+      "reviewed": false
+    },
+    "chat.link.denied": {
+      "text": "Na only person wey dey write to linked businesses for {org} fit send that one.",
+      "reviewed": false
+    },
+    "chat.link.ask_what": {
+      "text": "Wetin you wan tell *{name}*? Send *ask {name}* and your message.",
+      "reviewed": false
+    },
+    "chat.link.not_sent": {
+      "text": "E no send: {reason}.",
+      "reviewed": false
+    },
+    "chat.link.sent": {
+      "text": "E don reach *{name}*. Their reply go come here, and for Chat for the web.",
+      "reviewed": false
+    },
+    "chat.direct.wait": {
+      "text": "Now send the message, put *@business* for who e be for, like *@Dangote how much is a bag of cement?*",
+      "reviewed": false
+    },
+    "chat.direct.who": {
+      "text": "Na who e be for? Add *@business*, like *... @Dangote how much is a bag of cement?*",
+      "reviewed": false
+    },
+    "chat.direct.empty": {
+      "text": "Wetin you wan tell *{name}*? Send *... @{name}* and your message.",
+      "reviewed": false
+    },
+    "chat.direct.files": {
+      "text": "Na only words dey go straight to business with *...* for now. Send photo and file give them for the Chat page.",
+      "reviewed": false
+    },
+    "chat.direct.hint": {
+      "text": "To send am to *{name}* as message, start am with *...*",
+      "reviewed": false
+    },
+    "chat.direct.sent": {
+      "text": "✓ E don reach {names}.",
+      "reviewed": false
+    },
+    "chat.direct.not_sent": {
+      "text": "E no reach *{name}*: {reason}.",
+      "reviewed": false
+    },
+    "chat.link.photo": {
+      "text": "Foto",
+      "reviewed": false
+    },
+    "chat.link.voice": {
+      "text": "Voice note",
+      "reviewed": false
+    },
+    "chat.link.file": {
+      "text": "File",
+      "reviewed": false
+    },
+    "chat.link.reacted": {
+      "text": "{name} react {emoji} to “{what}”",
+      "reviewed": false
+    },
+    "chat.link.reacted_plain": {
+      "text": "{name} react {emoji} to one message",
+      "reviewed": false
+    },
+    "wa.prices.list": {
+      "text": "*{name}* price for you:\n{items}\n\nOrder like *order 20 bags of rice from {name}*.",
+      "reviewed": false
+    },
+    "wa.prices.per": {
+      "text": "for one {unit}",
+      "reviewed": false
+    },
+    "wa.prices.min": {
+      "text": "(at least {count})",
+      "reviewed": false
+    },
+    "wa.prices.out": {
+      "text": "(e no dey now)",
+      "reviewed": false
+    },
+    "wa.prices.more": {
+      "text": "… and {count} more for web.",
+      "reviewed": false
+    },
+    "wa.prices.none": {
+      "text": "*{name}* never share price list with you. Ask dem, or send *order from {name}*.",
+      "reviewed": false
+    },
+    "wa.prices.no_item": {
+      "text": "*{item}* no dey *{name}* price list. Send *prices from {name}* to see am.",
+      "reviewed": false
+    },
+    "wa.prices.unlinked": {
+      "text": "Which of your items be their *{item}*? Talk am once for web, for {name} price for Suppliers page, then order again.",
+      "reviewed": false
+    },
+    "wa.prices.refused": {
+      "text": "E no draft: {reason}.",
+      "reviewed": false
+    },
+    "wa.prices.how": {
+      "text": "Talk how many, like *order 20 bags of rice from Dangote*.",
+      "reviewed": false
+    },
+    "wa.mention.unlinked": {
+      "text": "You never link with *{name}*. Send *link with {name}* to ask dem, then order from dem.",
+      "reviewed": false
+    },
+    "wa.mention.how": {
+      "text": "Talk how many and wetin from *{name}*, like *20 bags of rice from @{name}*. To send am to *{name}* as message, start am with *...*",
+      "reviewed": false
+    },
+    "wa.mention.draft": {
+      "text": "*{reference}* to *{supplier}*: {items}, {total}",
+      "reviewed": false
+    },
+    "wa.mention.confirm": {
+      "text": "{count} orders, one for each business:\n{orders}\n\nMake I send all?",
+      "reviewed": false
+    },
+    "wa.mention.sent_one": {
+      "text": "{reference} to *{supplier}*",
+      "reviewed": false
+    },
+    "wa.mention.sent": {
+      "text": "I don send:\n{orders}",
+      "reviewed": false
+    },
+    "wa.mention.second": {
+      "text": "{references} pass your limit: another owner or admin go send dem, from Suppliers page.",
+      "reviewed": false
+    },
+    "bill.reminder_title": {
+      "text": "{from}: reminder about {reference}",
+      "reviewed": false
+    },
+    "bill.reminder": {
+      "text": "*{from}* about bill {reference} ({amount} remain): {note}",
+      "reviewed": false
+    },
+    "bill.button_pay": {
+      "text": "Pay",
+      "reviewed": false
+    },
+    "bill.pay_started": {
+      "text": "We dey pay {reference}: {amount} go reach {supplier} once dem approve am as your policy talk. Send *bill {reference}* make you follow am.",
+      "reviewed": false
+    },
+    "bill.pay_refused": {
+      "text": "{reference} no pay: {reason}",
+      "reviewed": false
+    },
+    "order.link.over_limit_note": {
+      "text": "E dey wait: this order pass the {limit} credit wey {business} give you (you owe {owed}). Pay your bills, or ask dem make dem accept am.",
+      "reviewed": false
+    },
+    "order.link.over_limit_title": {
+      "text": "Order {reference} dey wait: e pass your credit limit",
+      "reviewed": false
+    },
+    "order.link.over_limit": {
+      "text": "Order {reference} to *{business}* pass the {limit} credit wey dem give you (you owe {owed}). E go wait until you pay your bills or dem accept am. Pay now from Bills.",
+      "reviewed": false
+    },
+    "order.link.within_limit_title": {
+      "text": "Order {reference} don dey inside your credit limit",
+      "reviewed": false
+    },
+    "order.link.within_limit": {
+      "text": "Order {reference} to *{business}* no dey wait again: you dey inside your credit limit.",
+      "reviewed": false
+    },
+    "order.link.over_limit_seller_title": {
+      "text": "{buyer} order {reference} pass dem limit",
+      "reviewed": false
+    },
+    "order.link.over_limit_seller": {
+      "text": "Order {reference} from *{buyer}* pass the {limit} wey you allow (dem owe {owed}). E no go accept by itself; you fit still accept am.",
+      "reviewed": false
+    },
+    "money.daily.bills_due": {
+      "text": "Bills wey don due: {n}, {amount}. Send *bills due* to see dem.",
+      "reviewed": false
+    },
+    "money.daily.bills_due_overdue": {
+      "text": "Bills wey don due: {n}, {amount}, {overdue} don pass date. Send *bills due* to see dem.",
+      "reviewed": false
+    },
+    "wd.trigger.link_bill_received": {
+      "text": "When supplier wey you link send you bill",
+      "reviewed": false
+    },
+    "wd.trigger.link_bill_paid": {
+      "text": "When dem pay one of your bills from supplier wey you link",
+      "reviewed": false
+    },
+    "wd.trigger.link_order_received": {
+      "text": "When business wey you link send you order",
+      "reviewed": false
+    },
+    "wd.trigger.link_order_delivered": {
+      "text": "When supplier wey you link deliver your order",
+      "reviewed": false
+    },
+    "wd.trigger.link_thread_message": {
+      "text": "When business wey you link write you",
+      "reviewed": false
+    },
+    "wd.trigger.link_link_accepted": {
+      "text": "When business link with you",
+      "reviewed": false
+    },
+    "wa.received.linked": {
+      "text": "{supplier} delivered order {reference} through Taskiem. Tap *All came* if it all came, or say what came of each item on the order's page.",
+      "reviewed": false
+    },
+    "wa.received.linked_wait": {
+      "text": "Order {reference} is with {supplier} on Taskiem and is not delivered yet; when it is, you record what came with *All came* or *Not all came*.",
+      "reviewed": false
+    },
+    "wa.mention.which": {
+      "text": "More than one of your linked businesses is called *{name}*: {list}. Pick it on the Chat page, where each is its own conversation.",
+      "reviewed": false
+    },
+    "order.link.auto_changed_title": {
+      "text": "{from} sent order {reference}, at your prices",
+      "reviewed": false
+    },
+    "order.link.auto_changed": {
+      "text": "*{from}* ordered {note}. It proposed other prices, so it is sent back at yours for them to accept, as you set for them."
+    },
+    "wa.help.fronts": {
+      "text": "• *fronts*: your other pages, like menu; *add front Snacks*; *add dish Jollof rice 2500*; *turn on orders for Snacks*; *front Snacks on*; *orders Snacks*",
+      "reviewed": false
+    },
+    "wa.front.list_head": {
+      "text": "Your fronts:",
+      "reviewed": false
+    },
+    "wa.front.on": {
+      "text": "on",
+      "reviewed": false
+    },
+    "wa.front.off": {
+      "text": "off",
+      "reviewed": false
+    },
+    "wa.front.home": {
+      "text": "home page",
+      "reviewed": false
+    },
+    "wa.front.items": {
+      "text": "{n} items",
+      "reviewed": false
+    },
+    "wa.front.forms_on": {
+      "text": "{n} forms dey on",
+      "reviewed": false
+    },
+    "wa.front.list_tail": {
+      "text": "Add one with *add front Snacks*. Switch one with *front Snacks on* or *front Snacks off*.",
+      "reviewed": false
+    },
+    "wa.front.none_named": {
+      "text": "No front get the name {name}. Your fronts na: {fronts}.",
+      "reviewed": false
+    },
+    "wa.front.how_add": {
+      "text": "Write am like *add front Snacks*, or *add food front Snacks*: name wey no pass 80 letters.",
+      "reviewed": false
+    },
+    "wa.front.exists": {
+      "text": "You don get front wey dem call *{name}* before. Send *fronts* to see dem.",
+      "reviewed": false
+    },
+    "wa.front.which_kind": {
+      "text": "Wetin *{name}* dey for?\n{list}\nReply with the number.",
+      "reviewed": false
+    },
+    "wa.front.confirm_add": {
+      "text": "Make I add *{name}*, {kind} front?",
+      "reviewed": false
+    },
+    "wa.front.confirm_table": {
+      "text": "E go get im own list, {table}, wey you go add things to.",
+      "reviewed": false
+    },
+    "wa.front.confirm_forms": {
+      "text": "Im forms: {forms}.",
+      "reviewed": false
+    },
+    "wa.front.confirm_off": {
+      "text": "E go start off, so customers go see am only when you on am.",
+      "reviewed": false
+    },
+    "wa.front.not_made": {
+      "text": "We no fit make the front: {reason}",
+      "reviewed": false
+    },
+    "wa.front.made": {
+      "text": "We don make *{name}*, {kind} front. E dey off for now.",
+      "reviewed": false
+    },
+    "wa.front.next_dish": {
+      "text": "Add your first food: *add dish Jollof rice 2500 to {front}*",
+      "reviewed": false
+    },
+    "wa.front.next_item": {
+      "text": "Add your first item: *add item Chin chin 500 to {front}*",
+      "reviewed": false
+    },
+    "wa.front.next_forms": {
+      "text": "On im form: *turn on {what} for {front}*",
+      "reviewed": false
+    },
+    "wa.front.next_on": {
+      "text": "When e ready: *front {front} on*",
+      "reviewed": false
+    },
+    "wa.front.home_always_on": {
+      "text": "*{name}* na your home page, and e dey on every time. To stop orders small, send *close shop*.",
+      "reviewed": false
+    },
+    "wa.front.already_on": {
+      "text": "*{name}* don dey on before.",
+      "reviewed": false
+    },
+    "wa.front.already_off": {
+      "text": "*{name}* don dey off before.",
+      "reviewed": false
+    },
+    "wa.front.confirm_on": {
+      "text": "Make I on *{name}*? Customers go see am for your page.",
+      "reviewed": false
+    },
+    "wa.front.confirm_off_now": {
+      "text": "Make I off *{name}*? Customers no go see am again. We go keep im items and orders.",
+      "reviewed": false
+    },
+    "wa.front.gone": {
+      "text": "*{name}* no dey again. Send *fronts* to see your fronts.",
+      "reviewed": false
+    },
+    "wa.front.not_changed": {
+      "text": "Nothing change: {reason}",
+      "reviewed": false
+    },
+    "wa.front.now_off": {
+      "text": "*{name}* don off. We keep im items and orders.",
+      "reviewed": false
+    },
+    "wa.front.now_on": {
+      "text": "*{name}* don on.",
+      "reviewed": false
+    },
+    "wa.front.forms_off": {
+      "text": "Im form still dey off: *turn on {what} for {front}*",
+      "reviewed": false
+    },
+    "wa.front.no_food": {
+      "text": "You never get Food front. Make one with *add food front Kitchen*.",
+      "reviewed": false
+    },
+    "wa.front.no_item_fronts": {
+      "text": "None of your fronts get list wey you fit add to. Add to your page with *add product Jollof rice 2000*, or make front with *add food front Kitchen*.",
+      "reviewed": false
+    },
+    "wa.front.say_which": {
+      "text": "Talk which front e be for, like *add item Chin chin 500 to Snacks*. Your fronts wey get items: {fronts}.",
+      "reviewed": false
+    },
+    "wa.front.no_list": {
+      "text": "*{front}* no get list of items: na only im forms e dey show.",
+      "reviewed": false
+    },
+    "wa.front.how_item": {
+      "text": "Write am like *add item Chin chin 500 to {front}*: the name, then the price.",
+      "reviewed": false
+    },
+    "wa.front.item_exists": {
+      "text": "*{name}* don dey for {front} before, for {price}. Change im price with *price {name} 3000*.",
+      "reviewed": false
+    },
+    "wa.front.confirm_item": {
+      "text": "Make I add this one to *{front}*?\n*{name}* {price}{photo}",
+      "reviewed": false
+    },
+    "wa.front.item_added": {
+      "text": "We don add *{name}* for {price} to *{front}*.",
+      "reviewed": false
+    },
+    "wa.quote.sent": {
+      "text": "We don send *{reference}*: {total}, {now} to pay when dem accept. E dey till {until}.",
+      "reviewed": false
+    },
+    "wa.quote.price": {
+      "text": "Talk the price for *{reference}* for naira, like *quote {reference} 45000*.",
+      "reviewed": false
+    },
+    "wa.quote.none": {
+      "text": "No quote request get the reference *{reference}*.",
+      "reviewed": false
+    },
+    "wa.quote.refused": {
+      "text": "We no fit quote *{reference}*: {why}",
+      "reviewed": false
+    },
+    "wa.quotes.head": {
+      "text": "Quote requests wey dey wait for price:",
+      "reviewed": false
+    },
+    "wa.quotes.by": {
+      "text": "(need am by {date})",
+      "reviewed": false
+    },
+    "wa.quotes.how": {
+      "text": "Reply *quote <reference> <price>* to send price.",
+      "reviewed": false
+    },
+    "wa.quotes.none": {
+      "text": "No quote request dey wait for price.",
+      "reviewed": false
+    },
+    "wa.ticket.in": {
+      "text": "E don enter: *{code}*, seat {seat} of {of}, {event}.",
+      "reviewed": false
+    },
+    "wa.ticket.already": {
+      "text": "*{code}* don already enter: dem check am {at}.",
+      "reviewed": false
+    },
+    "wa.ticket.none": {
+      "text": "No ticket get the code *{code}*. Check am with the customer message.",
+      "reviewed": false
+    },
+    "wa.ticket.refused": {
+      "text": "*{code}* no fit enter: dem don refund or cancel the order.",
+      "reviewed": false
+    },
+    "wa.tickets.left": {
+      "text": "Tickets wey remain:",
+      "reviewed": false
+    },
+    "wa.tickets.left_line": {
+      "text": "*{name}* ({front}): {left} of {total} remain, {in} don enter",
+      "reviewed": false
+    },
+    "wa.tickets.none": {
+      "text": "No event dey sell tickets now.",
+      "reviewed": false
+    },
+    "wa.places.left": {
+      "text": "Spaces wey remain:",
+      "reviewed": false
+    },
+    "wa.places.left_line": {
+      "text": "*{name}* ({front}): {left} of {total} spaces remain",
+      "reviewed": false
+    },
+    "wa.places.none": {
+      "text": "No class dey open for enrolment now.",
+      "reviewed": false
+    },
+    "wa.front.turn_on_hint": {
+      "text": "*{front}* dey off: send *front {front} on* make e show.",
+      "reviewed": false
+    },
+    "wa.front.catalogue": {
+      "text": "home page",
+      "reviewed": false
+    },
+    "wa.front.stock_catalogue_only": {
+      "text": "Na only the products for your home page dey keep stock. *{name}* for {front} fit dey available or finish: *sold out {name}*.",
+      "reviewed": false
+    },
+    "wa.front.changed": {
+      "text": "E don do: *{name}* for {front} don change.",
+      "reviewed": false
+    },
+    "wa.front.no_form": {
+      "text": "*{front}* no get form for {what}.",
+      "reviewed": false
+    },
+    "wa.front.no_deliveries": {
+      "text": "Deliveries by your riders never dey here yet.",
+      "reviewed": false
+    },
+    "wa.front.confirm_deliveries": {
+      "text": "Make I on deliveries for *{front}*? Every order wey you confirm for delivery go reach your riders one by one. Im order form go remain as e be.",
+      "reviewed": false
+    },
+    "wa.front.form_already_on": {
+      "text": "*{form}* for {front} don dey on before.",
+      "reviewed": false
+    },
+    "wa.front.confirm_form_on": {
+      "text": "Make I on *{form}* for *{front}*? Customers fit use am, and every one go come meet you here.",
+      "reviewed": false
+    },
+    "wa.front.form_on": {
+      "text": "*{front}* dey take {what} now: every one go come meet you here.",
+      "reviewed": false
+    },
+    "wa.front.no_orders": {
+      "text": "No open orders for *{front}*.",
+      "reviewed": false
+    },
+    "wa.front.orders_head": {
+      "text": "Open orders for *{front}*, the new ones first:",
+      "reviewed": false
+    },
+    "customer.deposit_received": {
+      "text": "We don receive your payment of {amount} for {reference}. {balance} remain to pay.",
+      "reviewed": false
+    },
+    "customer.balance_due": {
+      "text": "{balance} remain to pay for {reference}. Pay am here: {url}",
+      "reviewed": false
+    },
+    "customer.hire_confirmed": {
+      "text": "Your hire {reference} don confirm: {item}, from {from}. Make you return am before {due_back} end.",
+      "reviewed": false
+    },
+    "customer.hire_due_back": {
+      "text": "Reminder: {item} for {reference} suppose return today, {due_back}.",
+      "reviewed": false
+    },
+    "customer.space_confirmed": {
+      "text": "Your booking {reference} don confirm: {space}, {when}.",
+      "reviewed": false
+    },
+    "customer.space_reminder": {
+      "text": "Reminder: your booking {reference} for {space} na tomorrow, {when}.",
+      "reviewed": false
+    },
+    "customer.quote_requested": {
+      "text": "We don get your request {reference}. You go get price by SMS, with link to accept am.",
+      "reviewed": false
+    },
+    "customer.quote_sent": {
+      "text": "Your quote {reference} don ready: {total}. Pay {now} to continue, before {until}: {link}",
+      "reviewed": false
+    },
+    "customer.quote_accepted": {
+      "text": "Thank you: {reference} don accept and your money don enter. We go tell you when e ready.",
+      "reviewed": false
+    },
+    "customer.quote_expired": {
+      "text": "Your quote {reference} don close. Contact us if you still want am.",
+      "reviewed": false
+    },
+    "customer.work_ready": {
+      "text": "{reference} don ready. Pay the balance, {balance}, here: {url}",
+      "reviewed": false
+    },
+    "customer.ticket_issued": {
+      "text": "Your tickets for {event}, {when}: {codes}. Show one code for door. Reference {reference}.",
+      "reviewed": false
+    },
+    "customer.event_reminder": {
+      "text": "Reminder: {event} na tomorrow, {when}. Your tickets: {codes}.",
+      "reviewed": false
+    },
+    "customer.enrolled": {
+      "text": "You don enrol for {class}, e go start {when}. Reference {reference}.",
+      "reviewed": false
+    },
+    "customer.instalment_due": {
+      "text": "The next part of the fee for {class}, {amount}, don reach. Pay here: {url}",
+      "reviewed": false
+    },
+    "customer.session_reminder": {
+      "text": "Reminder: {class} go start tomorrow, {when}.",
+      "reviewed": false
+    },
+    "customer.waiting_list": {
+      "text": "{class} don full, so you dey for the waiting list (reference {reference}). We go tell you when space free.",
+      "reviewed": false
+    },
+    "customer.place_offered": {
+      "text": "One space for {class} don free for you. Pay {total} here inside one day to take am: {url}",
+      "reviewed": false
+    },
+    "customer.hire_returned": {
+      "text": "Thank you: {reference} don reach us back.",
+      "reviewed": false
+    },
+    "customer.hire_late": {
+      "text": "{reference} come back {days} days late, so we add late fee of {late_fee}. Wetin remain to pay: {balance}.",
       "reviewed": false
     }
   }

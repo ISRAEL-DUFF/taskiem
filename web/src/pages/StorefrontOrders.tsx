@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useState, type ReactNode } from "react";
+import { TradeOrdersCard } from "./TradeOrders";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ApiError, get, post } from "../api";
 import { useAuth } from "../auth";
@@ -35,6 +36,7 @@ import {
   type Order,
 } from "../lib/orders";
 import { timeSpan, whenLabel } from "../lib/bookings";
+import type { Front, FrontsView } from "../lib/fronts";
 import {
   howMatchedOrder,
   orderPaymentRows,
@@ -136,15 +138,36 @@ function DecideWhere() {
 export function StorefrontOrders() {
   const [params, setParams] = useSearchParams();
   const status = params.get("status") ?? "open";
+  const front = params.get("front") ?? "";
   // A 404: this Taskiem takes no storefront orders (no public host key).
   const list = useLoad(
     () =>
-      get<{ orders: Order[] }>(ordersPath(status)).catch((e: unknown) => {
+      get<{ orders: Order[] }>(ordersPath(status, front)).catch((e: unknown) => {
         if (e instanceof ApiError && e.status === 404) return null;
         throw e;
       }),
-    [status],
+    [status, front],
   );
+  // The fronts, to filter by and to name each submission's (fronts F3);
+  // with one front there is nothing to choose.
+  const fronts = useLoad(
+    () =>
+      get<FrontsView>("/v1/storefront/fronts")
+        .then((v) => v.fronts)
+        .catch(() => [] as Front[]),
+    [],
+  );
+  const frontList = fronts.data ?? [];
+  const frontName = (id?: string) =>
+    frontList.length > 1 ? frontList.find((f) => f.id === id)?.name : undefined;
+  const setFilter = (next: { status?: string; front?: string }) => {
+    const s = next.status ?? status;
+    const f = next.front ?? front;
+    setParams(
+      { ...(s === "open" ? {} : { status: s }), ...(f ? { front: f } : {}) },
+      { replace: true },
+    );
+  };
   const sf = useLoad(
     () =>
       get<Storefront>("/v1/storefront").catch((e: unknown) => {
@@ -167,17 +190,13 @@ export function StorefrontOrders() {
       {header}
       <StorefrontTabs />
       <DecideWhere />
+      <TradeOrdersCard />
       <div className="filters" role="search" aria-label="Filter orders">
         <label>
           Show{" "}
           <select
             value={status}
-            onChange={(e) =>
-              setParams(
-                e.target.value === "open" ? {} : { status: e.target.value },
-                { replace: true },
-              )
-            }
+            onChange={(e) => setFilter({ status: e.target.value })}
           >
             {ORDER_FILTERS.map((f) => (
               <option key={f.label} value={f.value}>
@@ -186,6 +205,22 @@ export function StorefrontOrders() {
             ))}
           </select>
         </label>
+        {frontList.length > 1 && (
+          <label>
+            From{" "}
+            <select
+              value={front}
+              onChange={(e) => setFilter({ front: e.target.value })}
+            >
+              <option value="">Every front</option>
+              {frontList.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <button type="button" onClick={list.reload}>
           Refresh
         </button>
@@ -240,7 +275,7 @@ export function StorefrontOrders() {
                   ? "refund"
                   : o.kind === "booking"
                     ? "clock"
-                    : o.kind === "order"
+                    : o.kind === "order" || o.kind === "trade"
                       ? "orders"
                       : "inbox"
               }
@@ -254,7 +289,10 @@ export function StorefrontOrders() {
               title={
                 <>
                   {o.customer.name || o.customer.phone || "A customer"}{" "}
-                  <span className="hint">· {KIND_LABEL[o.kind] ?? o.kind}</span>
+                  <span className="hint">
+                    · {KIND_LABEL[o.kind] ?? o.kind}
+                    {frontName(o.front_id) ? ` · ${frontName(o.front_id)}` : ""}
+                  </span>
                 </>
               }
               sub={
@@ -532,7 +570,18 @@ export function StorefrontOrder() {
               </>
             )}
           </section>
-          {o.kind === "order" && (
+          {o.kind === "trade" && (
+            <section className="card" aria-labelledby="order-linked" data-testid="order-linked">
+              <h2 id="order-linked">From a linked business</h2>
+              <p className="hint">
+                {o.customer.name || "A business"} ordered on Taskiem. Its items, a change to them, and what was delivered of each are on the linked order.
+              </p>
+              <Link className="button" to={`/trade-orders/${encodeURIComponent(o.reference)}`}>
+                Open the linked order
+              </Link>
+            </section>
+          )}
+          {(o.kind === "order" || o.kind === "trade") && (
             <OrderDelivery
               reference={o.reference}
               delivery={o.fulfilment === "delivery"}
@@ -584,7 +633,7 @@ export function StorefrontOrder() {
 /** The top of an order's or a booking's page, on pine: its total, how it is
  * paid, the customer and when. Questions and call-backs carry no money and have none. */
 function OrderHero({ o }: { o: Order }) {
-  if (o.kind !== "order" && o.kind !== "booking") return null;
+  if (o.kind !== "order" && o.kind !== "booking" && o.kind !== "trade") return null;
   const booking = o.kind === "booking";
   const total = orderTotal(o);
   return (

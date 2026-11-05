@@ -65,6 +65,19 @@ Files go to the organisation's private Xenibase storage ([media](media.md)), nev
 
 Every file is scanned for malware before the submission is accepted. The scanner is the operator's: a ClamAV daemon at `TASKIEM_CLAMD_ADDR` (host:port), with no network of its own. Without one, forms that ask for files cannot be deployed. (Which scanner Taskiem runs is an S0 decision.)
 
+## Storefront forms and their fields
+
+A storefront's forms are forms too ([fronts](spec/fronts.md), decision 0059): each is an action of a front, with its own questions written the same way (a JSON Schema object with `x-form` hints), its answers reaching the run as `trigger.answers` apart from Taskiem's record of the submission (`trigger.submission`). Beside the field types above, a storefront form draws on its front's list with one of four fields, each checked again on the server and, where something is held, in the database:
+
+| Field | Used by | What the customer does | What is held |
+| --- | --- | --- | --- |
+| **basket** | Order now (Shop, Food) | Picks items and how many, with a Food dish's options | Nothing: prices are checked again before the run, stock on the catalogue only |
+| **time** | Book, Book the space | Picks a service and a slot, or a space by the day or the hour on its list's own calendar | A claim on the calendar, one party at a time with setup time for a space |
+| **dates and quantity** | Hire now | Picks an item, a first and a last day, and how many | A claim on the item for those days, refused beyond its count |
+| **quantity against a count** | Buy tickets, Enrol | Picks an event or a class and how many | A claim on the item while the order lives, refused beyond its tickets or places |
+
+Claims are one table (`storefront_claims`), taken by the public host with the submission in one transaction under the list's lock, so two customers cannot both take the last canopy or seat. A question form with questions of its own (a front's blank form) asks only those. A storefront form never asks for a file. See [storefronts](storefronts.md) for the kinds.
+
 ## The form connector
 
 `form@1` (no connection) acts for the run's own organisation:

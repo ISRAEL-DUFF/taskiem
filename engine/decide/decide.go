@@ -93,6 +93,11 @@ type decider struct {
 	cancel                *history.CancelPayload // a person cancelled the run, reversing it
 	compStarted, compDone bool
 	out                   []NewEvent
+	// fault is the first event this pass could not record (a payload that
+	// cannot be written as JSON, or one that does not apply). It is not
+	// possible for the engine's own types; if it happens the decision is
+	// an error, not a crash: nothing it decided is recorded.
+	fault error
 
 	memo map[string]status
 }
@@ -274,16 +279,20 @@ func (d *decider) apply(typ, inst string, attempt int, raw json.RawMessage, seq 
 
 // emit records a new event and folds it into the facts immediately.
 func (d *decider) emit(typ, inst string, attempt int, payload any) {
+	if d.fault != nil {
+		return // the decision is already an error: nothing more is recorded
+	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
-		panic(fmt.Sprintf("decide: marshal %s payload: %v", typ, err))
+		d.fault = fmt.Errorf("decide: marshal %s payload: %w", typ, err)
+		return
 	}
 	if payload == nil {
 		raw = nil
 	}
 	d.out = append(d.out, NewEvent{Type: typ, StepID: inst, Attempt: attempt, Payload: payload})
 	if err := d.apply(typ, inst, attempt, raw, d.seq+1); err != nil {
-		panic(fmt.Sprintf("decide: apply own %s: %v", typ, err))
+		d.fault = fmt.Errorf("decide: apply own %s: %w", typ, err)
 	}
 }
 

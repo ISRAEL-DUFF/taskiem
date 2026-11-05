@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pricing</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/50a98d2917f323d39577f6eb0dc5de03">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&family=Plus+Jakarta+Sans:wght@400;500;800&display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="tk" data-theme="{{theme}}">
+<dc-import name="Header" theme="{{theme}}" hint-size="100%,88px"></dc-import>
+<main>
+
+<section class="page-top" style="padding-bottom:clamp(32px,4vw,48px)">
+  <div class="container" style="display:flex;flex-direction:column;gap:20px">
+    <p class="label">Pricing</p>
+    <h1 class="h1" style="max-width:1000px">One flat price in naira. Never a charge per task.</h1>
+    <p class="lede" style="max-width:640px">Three plans, paid monthly or yearly. A year costs ten months. Start with 14 days free.</p>
+    <div class="seg" role="group" aria-label="Billing period" style="align-self:flex-start;margin-top:8px">
+      <button type="button" aria-pressed="{{monthlyOn}}" onClick="{{setMonthly}}">Monthly</button>
+      <button type="button" aria-pressed="{{yearlyOn}}" onClick="{{setYearly}}">Yearly, 2 months free</button>
+    </div>
+  </div>
+</section>
+
+<section style="padding-bottom:clamp(40px,5vw,64px)">
+  <div class="container" style="display:flex;flex-direction:column;gap:20px">
+    <div class="grid" style="--min:300px;align-items:stretch">
+
+      <div class="card" style="padding:32px;gap:16px">
+        <h2 class="h3">Starter Trader</h2>
+        <p class="small">For one trader or one shop.</p>
+        <p style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-top:6px"><span class="num" style="font-weight:800;font-size:clamp(38px,3.6vw,48px);line-height:1;letter-spacing:-0.03em;color:var(--head)">{{prices.starter}}</span><span class="small">{{per}}</span></p>
+        <a class="btn btn-alt" href="#start-web">Start 14 days free</a>
+        <ul class="checks" style="margin-top:8px">
+          <sc-for list="{{features.starter}}" as="f" hint-placeholder-count="4">
+            <li><span class="tick" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span>{{f}}</li>
+          </sc-for>
+        </ul>
+      </div>
+
+      <div class="card-pine" style="padding:32px;gap:16px">
+        <h2 class="h3">Growing Business</h2>
+        <p class="small">For a business with staff, customers and more to chase.</p>
+        <p style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-top:6px"><span class="num" style="font-weight:800;font-size:clamp(38px,3.6vw,48px);line-height:1;letter-spacing:-0.03em;color:#c8f169">{{prices.growing}}</span><span class="small">{{per}}</span></p>
+        <a class="btn btn-pine-main" href="#start-web">Start 14 days free</a>
+        <ul class="checks" style="margin-top:8px">
+          <sc-for list="{{features.growing}}" as="f" hint-placeholder-count="5">
+            <li style="color:#ffffff"><span class="tick" aria-hidden="true" style="background:#c8f169;color:#0d3b2e"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span>{{f}}</li>
+          </sc-for>
+        </ul>
+      </div>
+
+      <div class="card" style="padding:32px;gap:16px">
+        <h2 class="h3">Enterprise &amp; Regulated</h2>
+        <p class="small">For lenders, payroll companies and banks.</p>
+        <p style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-top:6px"><span class="small">from</span><span class="num" style="font-weight:800;font-size:clamp(38px,3.6vw,48px);line-height:1;letter-spacing:-0.03em;color:var(--head)">{{prices.enterprise}}</span><span class="small">{{per}}</span></p>
+        <a class="btn btn-alt" href="/partners">Talk to us</a>
+        <ul class="checks" style="margin-top:8px">
+          <sc-for list="{{features.enterprise}}" as="f" hint-placeholder-count="5">
+            <li><span class="tick" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span>{{f}}</li>
+          </sc-for>
+        </ul>
+      </div>
+
+    </div>
+    <p class="small" style="font-weight:500;color:var(--ink)">No charge per run. VAT shown separately. 14 days free.</p>
+  </div>
+</section>
+
+<section class="sec" style="padding-top:clamp(24px,4vw,48px)">
+  <div class="container" style="display:flex;flex-direction:column;gap:32px">
+    <h2 class="h2" style="font-size:clamp(28px,3.4vw,42px)">Compare the plans</h2>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead>
+          <tr><th scope="col">What is included</th><th scope="col" class="c">Starter Trader</th><th scope="col" class="c hl">Growing Business</th><th scope="col" class="c">Enterprise &amp; Regulated</th></tr>
+        </thead>
+        <tbody>
+          <sc-for list="{{rows}}" as="r" hint-placeholder-count="8">
+            <tr>
+              <th scope="row" style="font-weight:500">{{r.name}}</th>
+              <td class="c"><sc-if value="{{r.a.yes}}" hint-placeholder-val="{{true}}"><svg role="img" aria-label="Included" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:#1f7a50"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></sc-if><sc-if value="{{r.a.no}}" hint-placeholder-val="{{false}}"><span aria-label="Not included" style="color:var(--muted)">–</span></sc-if><sc-if value="{{r.a.text}}" hint-placeholder-val="{{false}}"><span style="color:var(--muted)">{{r.a.text}}</span></sc-if></td>
+              <td class="c hl"><sc-if value="{{r.b.yes}}" hint-placeholder-val="{{true}}"><svg role="img" aria-label="Included" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:#1f7a50"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></sc-if><sc-if value="{{r.b.no}}" hint-placeholder-val="{{false}}"><span aria-label="Not included" style="color:var(--muted)">–</span></sc-if><sc-if value="{{r.b.text}}" hint-placeholder-val="{{false}}"><span style="color:var(--muted)">{{r.b.text}}</span></sc-if></td>
+              <td class="c"><sc-if value="{{r.c.yes}}" hint-placeholder-val="{{true}}"><svg role="img" aria-label="Included" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:#1f7a50"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></sc-if><sc-if value="{{r.c.no}}" hint-placeholder-val="{{false}}"><span aria-label="Not included" style="color:var(--muted)">–</span></sc-if><sc-if value="{{r.c.text}}" hint-placeholder-val="{{false}}"><span style="color:var(--muted)">{{r.c.text}}</span></sc-if></td>
+            </tr>
+          </sc-for>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section style="padding-bottom:clamp(56px,8vw,104px)">
+  <div class="container" style="display:flex;flex-direction:column;gap:28px;max-width:900px;margin:0 auto">
+    <h2 class="h2" style="font-size:clamp(28px,3.4vw,42px)">Questions about price</h2>
+    <div style="border-top:1px solid var(--line)">
+      <details class="faq">
+        <summary>Do you charge for each task Taskiem does?<svg class="plus" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></summary>
+        <div class="faq-body"><p class="small">No. You pay a flat price each month, however many times your jobs run.</p></div>
+      </details>
+      <details class="faq">
+        <summary>Is VAT included?<svg class="plus" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></summary>
+        <div class="faq-body"><p class="small">VAT is shown separately, so you always see the price and the VAT as two lines.</p></div>
+      </details>
+      <details class="faq">
+        <summary>What do I get in the 14 free days?<svg class="plus" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></summary>
+        <div class="faq-body"><p class="small">You can set up your jobs and try them on your own business for 14 days before you choose a plan.</p></div>
+      </details>
+      <details class="faq">
+        <summary>How does yearly billing work?<svg class="plus" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></summary>
+        <div class="faq-body"><p class="small">A year costs ten months. You pay once for the year and get the other two months free.</p></div>
+      </details>
+      <details class="faq">
+        <summary>Which plan do I need to pay my staff?<svg class="plus" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></summary>
+        <div class="faq-body"><p class="small">Paying staff after you approve comes with Growing Business and above.</p></div>
+      </details>
+    </div>
+  </div>
+</section>
+
+</main>
+<dc-import name="Cta" theme="{{theme}}" hint-size="100%,430px"></dc-import>
+<dc-import name="Footer" theme="{{theme}}" hint-size="100%,380px"></dc-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Theme"},"$preview":{"width":1440,"height":4000}}'>
+class Component extends DCLogic {
+  state = { yearly: false };
+  renderVals() {
+    const y = this.state.yearly;
+    const yes = { yes: true };
+    const no = { no: true };
+    return {
+      theme: this.props.theme === 'dark' ? 'dark' : 'light',
+      monthlyOn: y ? 'false' : 'true',
+      yearlyOn: y ? 'true' : 'false',
+      setMonthly: () => this.setState({ yearly: false }),
+      setYearly: () => this.setState({ yearly: true }),
+      per: y ? 'a year' : 'a month',
+      prices: y
+        ? { starter: '₦150,000', growing: '₦450,000', enterprise: '₦1,800,000' }
+        : { starter: '₦15,000', growing: '₦45,000', enterprise: '₦180,000' },
+      features: {
+        starter: ['WhatsApp, Telegram and the web app', 'Ready-made templates', 'Approvals with your PIN', 'Records tables, private by default'],
+        growing: ['Everything in Starter Trader', 'Pay staff after you approve', 'Invoices that mark themselves paid', 'Team roles', 'Business page and forms'],
+        enterprise: ['Everything in Growing Business', 'Embed Taskiem inside your product', 'White-label under your own brand', 'Built for regulated money movement', 'Self-hosting']
+      },
+      rows: [
+        { name: 'WhatsApp, Telegram and web app', a: yes, b: yes, c: yes },
+        { name: 'Ready-made templates', a: yes, b: yes, c: yes },
+        { name: 'Approvals with your PIN', a: yes, b: yes, c: yes },
+        { name: 'Records tables', a: yes, b: yes, c: yes },
+        { name: 'Pay staff after you approve', a: no, b: yes, c: yes },
+        { name: 'Invoices that mark themselves paid', a: no, b: yes, c: yes },
+        { name: 'Team roles', a: no, b: yes, c: yes },
+        { name: 'Business page and forms', a: no, b: yes, c: yes },
+        { name: 'Embedding and white-label', a: no, b: no, c: yes },
+        { name: 'Self-hosting', a: no, b: no, c: yes },
+        { name: 'Jobs included', a: { text: '[YOUR LIMIT]' }, b: { text: '[YOUR LIMIT]' }, c: { text: '[YOUR LIMIT]' } },
+        { name: 'Team members', a: { text: '[YOUR LIMIT]' }, b: { text: '[YOUR LIMIT]' }, c: { text: '[YOUR LIMIT]' } }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

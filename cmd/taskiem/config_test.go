@@ -89,3 +89,23 @@ func TestConfigRefusesContainerInADedicatedPool(t *testing.T) {
 		t.Errorf("container in the shared pool: %v", err)
 	}
 }
+
+// TestChatSignupChannels: the three chat ways in, Slack's among them,
+// and a channel that signs nobody up stops the process.
+func TestChatSignupChannels(t *testing.T) {
+	t.Setenv("TASKIEM_DATABASE_URL", "postgres://localhost/taskiem")
+	t.Setenv("TASKIEM_TERMS_VERSION", "2026-10")
+	t.Setenv("TASKIEM_PRIVACY_VERSION", "2026-10p")
+	t.Setenv("TASKIEM_CHAT_SIGNUP", " WhatsApp, telegram,slack,slack ")
+	cfg, err := loadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(cfg.ChatSignup.Channels, ","); got != "whatsapp,telegram,slack" {
+		t.Errorf("channels: %s", got)
+	}
+	t.Setenv("TASKIEM_CHAT_SIGNUP", "whatsapp,sms")
+	if _, err := loadConfig(); err == nil || !strings.Contains(err.Error(), "TASKIEM_CHAT_SIGNUP") {
+		t.Errorf("sms: %v", err)
+	}
+}

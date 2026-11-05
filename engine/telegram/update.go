@@ -42,12 +42,18 @@ type Update struct {
 	// Photo is a photo (message.photo, its largest size, or an image sent
 	// as a file), its caption in Text: fetched with getFile too.
 	Photo *Photo
+	// Document is any other file sent (message.document): a list brought
+	// into a table. Fetched with getFile.
+	Document *Document
 	// Contact is a shared contact (message.contact). Own reports whether it
 	// is the sender's own, shared with Telegram's "share my number"
 	// button: then Telegram vouches for the number.
 	Contact *Contact
 	// Location is a shared location (message.location) as a maps link.
 	Location string
+	// ReplyTo is the message this one replies to, quoting it
+	// (message.reply_to_message), 0 for none.
+	ReplyTo int64
 }
 
 // Contact is a shared phone contact.
@@ -60,6 +66,14 @@ type Contact struct {
 type Photo struct {
 	FileID   string
 	MimeType string
+	Size     int64 // 0 when not reported
+}
+
+// Document is a file's reference.
+type Document struct {
+	FileID   string
+	MimeType string
+	Name     string
 	Size     int64 // 0 when not reported
 }
 
@@ -90,6 +104,7 @@ type tgFile struct {
 	MimeType string `json:"mime_type"`
 	Duration int    `json:"duration"`
 	Size     int64  `json:"file_size"`
+	Name     string `json:"file_name"`
 }
 
 type tgPhotoSize struct {
@@ -120,6 +135,9 @@ type tgMessage struct {
 		Latitude  float64 `json:"latitude"`
 		Longitude float64 `json:"longitude"`
 	} `json:"location"`
+	ReplyTo *struct {
+		MessageID int64 `json:"message_id"`
+	} `json:"reply_to_message"`
 }
 
 // imageTypes are the files read as photos when sent uncompressed.
@@ -160,6 +178,9 @@ func Parse(body []byte) (Update, error) {
 			return u, nil
 		}
 		u.Kind, u.ChatID, u.ChatType, u.MessageID = "message", m.Chat.ID, m.Chat.Type, m.MessageID
+		if m.ReplyTo != nil {
+			u.ReplyTo = m.ReplyTo.MessageID
+		}
 		u.Text = m.Text
 		if u.Text == "" {
 			u.Text = m.Caption
@@ -185,6 +206,8 @@ func Parse(body []byte) (Update, error) {
 			}
 		case m.Document != nil && m.Document.FileID != "" && imageTypes[m.Document.MimeType]:
 			u.Photo = &Photo{FileID: m.Document.FileID, MimeType: m.Document.MimeType, Size: m.Document.Size}
+		case m.Document != nil && m.Document.FileID != "":
+			u.Document = &Document{FileID: m.Document.FileID, MimeType: m.Document.MimeType, Name: m.Document.Name, Size: m.Document.Size}
 		case m.Contact != nil && m.Contact.Phone != "":
 			u.Contact = &Contact{Phone: m.Contact.Phone, Own: m.Contact.UserID == u.FromID}
 		}

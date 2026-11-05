@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"slices"
 	"strconv"
@@ -25,6 +26,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/expansion"
 	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/runtime"
+	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/wdcheck"
 	"github.com/israel-duff/taskiem/engine/wddiff"
@@ -698,12 +700,35 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	var in struct {
+		// Replace takes the workflow that holds this one's storefront
+		// action out of use, in the same change (storefront_replace.go).
+		Replace bool `json:"replace"`
+		// NewAction gives this workflow a copy of the storefront action
+		// another workflow holds, off, instead (fronts F2): a new version
+		// naming the copy is saved and published.
+		NewAction bool `json:"new_action"`
+	}
+	if r.ContentLength != 0 {
+		if err := decodeBody(r, &in); err != nil && !errors.Is(err, io.EOF) {
+			s.fail(w, r, err)
+			return
+		}
+	}
 	p := principalFrom(r.Context())
 	var probs []problem
 	published, pending := false, false
+	var made *storefront.CopiedAction
 	err = s.tx(r, func(tx pgx.Tx) error {
 		if err := s.refuseGitManaged(r.Context(), tx, wf); err != nil {
 			return err
+		}
+		if in.NewAction {
+			nv, c, err := newActionVersion(r, tx, wf, v)
+			if err != nil {
+				return err
+			}
+			v, made = nv, c
 		}
 		// Ready: nothing a run would fail on at once is missing.
 		if err := s.checkReady(r.Context(), tx, p.TenantID, wf, v); err != nil {
@@ -727,6 +752,16 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 			if state == "published" {
 				return nil
 			}
+			// A storefront action another workflow holds would refuse the
+			// publish once approved: said now, with why Replace is not
+			// offered here.
+			held, err := actionHolders(r.Context(), tx, wf, v)
+			if err != nil {
+				return err
+			}
+			if len(held) > 0 {
+				return actionTaken{ActionTaken: held[0], Refused: fourEyesRefusal(held[0].Name)}
+			}
 			// A person asks, or an embed app's end user (docs/embedding.md):
 			// a platform person approves. API keys do not ask.
 			if p.UserID == uuid.Nil && p.EndUser == nil {
@@ -739,6 +774,13 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 				return err
 			}
 			return auditTx(r, tx, "publish_request.create", fmt.Sprintf("%s/%d", wf, v), nil)
+		}
+		if in.Replace {
+			if err := s.replaceActionHolders(r.Context(), tx, wf, v, func(action, target string, detail map[string]any) error {
+				return auditTx(r, tx, action, target, detail)
+			}); err != nil {
+				return err
+			}
 		}
 		by := p.id()
 		var digest string
@@ -762,15 +804,26 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 		writeNotReady(w, notReady.needs)
 		return
 	}
+	if at, ok := asActionTaken(err); ok {
+		writeActionTaken(w, at)
+		return
+	}
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	if pending {
-		writeJSON(w, http.StatusAccepted, map[string]any{"id": wf, "version": v, "state": "pending_approval"})
+		out := map[string]any{"id": wf, "version": v, "state": "pending_approval"}
+		if made != nil {
+			out["new_action"] = made
+		}
+		writeJSON(w, http.StatusAccepted, out)
 		return
 	}
 	out := map[string]any{"id": wf, "version": v, "state": "published"}
+	if made != nil {
+		out["new_action"] = made
+	}
 	if published {
 		if g := s.proposeToGit(r, wf, v); g != nil {
 			out["git"] = g

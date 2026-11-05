@@ -229,7 +229,14 @@ func (d describer) trigger(t wd.Trigger) string {
 		return d.t("wd.trigger.polling", "interval", DurationIn(str("interval"), d.lang), "connector", d.connectorName(str("connector")),
 			"action", d.actionTitle(str("connector"), str("action")))
 	case "storefront":
+		// An action named by id may be on any front (fronts §5.3): it is
+		// read as a form on the storefront, its name unknown here.
+		if str("action_id") != "" {
+			return d.t("wd.trigger.storefront_action")
+		}
 		return d.t("wd.trigger.storefront", "form", str("action"))
+	case "link":
+		return d.t("wd.trigger.link_" + strings.ReplaceAll(str("event"), ".", "_"))
 	case "invoice":
 		if str("event") == "payment" {
 			return d.t("wd.trigger.invoice_payment")

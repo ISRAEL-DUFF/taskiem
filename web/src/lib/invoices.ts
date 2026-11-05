@@ -10,7 +10,7 @@ import { formatPrice } from "./storefront";
 import { parseNaira } from "./forms";
 import type { Tone } from "./orders";
 
-export type InvoiceStatus = "draft" | "sent" | "part_paid" | "paid" | "overdue" | "void";
+export type InvoiceStatus = "draft" | "recorded" | "sent" | "part_paid" | "paid" | "overdue" | "void";
 export type FeePaidBy = "business" | "customer";
 
 export interface InvoiceCustomer {
@@ -65,6 +65,8 @@ export interface InvoicePayment {
 
 /** One invoice (CustomerInvoice). */
 export interface CustomerInvoice {
+  /** A linked buyer queried it (business links): oldest-first matching passes over it. */
+  disputed?: boolean;
   id: string;
   number: string;
   status: InvoiceStatus;
@@ -79,6 +81,9 @@ export interface CustomerInvoice {
   connection: string;
   fee_paid_by: FeePaidBy;
   allow_part_payments: boolean;
+  /** invoice, or credit: a notebook debt recorded in chat ("Ada owes 5,000"), owed but not sent. */
+  kind?: "invoice" | "credit";
+  recorded_at?: string | null;
   sent_at: string | null;
   paid_at: string | null;
   voided_at: string | null;
@@ -120,6 +125,10 @@ export interface InvoiceSettings {
   allow_part_payments: boolean;
   /** A strong suggestion is matched without asking (off by default). */
   auto_match?: boolean;
+  /** How long customers have to pay a notebook debt, in days; null for no fixed time. */
+  credit_days?: number | null;
+  /** When the owner set it; until then notebook debts have no due date. */
+  credit_terms_at?: string | null;
 }
 
 /** The limits the server holds an invoice to (engine/invoicing, openapi InvoiceDraft). */
@@ -148,6 +157,7 @@ export function koboInput(kobo: number): string {
 
 export const INVOICE_STATUS: Record<InvoiceStatus, { label: string; tone: Tone }> = {
   draft: { label: "Draft", tone: "muted" },
+  recorded: { label: "Recorded", tone: "info" },
   sent: { label: "Sent", tone: "info" },
   part_paid: { label: "Part-paid", tone: "warn" },
   paid: { label: "Paid", tone: "ok" },
@@ -163,12 +173,54 @@ export function invoiceStatus(s: string): { label: string; tone: Tone } {
 /** The list's filter, as the page's ?status= holds it ("" is all). */
 export const INVOICE_FILTERS: { value: string; label: string }[] = [
   { value: "", label: "All" },
+  { value: "credit", label: "Notebook debts" },
   ...(Object.keys(INVOICE_STATUS) as InvoiceStatus[]).map((s) => ({ value: s, label: INVOICE_STATUS[s].label })),
 ];
 
 /** The GET /v1/invoices call for a filter. */
 export function invoicesPath(status: string): string {
+  if (status === "credit") return `/v1/invoices?${new URLSearchParams({ kind: "credit" })}`;
   return status && status in INVOICE_STATUS ? `/v1/invoices?${new URLSearchParams({ status })}` : "/v1/invoices";
+}
+
+// --- credit terms (notebook debts) ---
+
+export const CREDIT_TERMS_PATH = "/v1/invoice-settings/credit-terms";
+
+/** The terms offered, as chat offers them; "other" takes a number of days. */
+export const CREDIT_CHOICES: { value: string; label: string }[] = [
+  { value: "7", label: "7 days" },
+  { value: "14", label: "14 days" },
+  { value: "30", label: "30 days" },
+  { value: "none", label: "No fixed time (no reminders)" },
+  { value: "other", label: "Another number of days" },
+];
+
+/** The terms in words, as the settings show them. */
+export function creditTermsWords(s: Pick<InvoiceSettings, "credit_days" | "credit_terms_at">): string {
+  if (!s.credit_terms_at) return "Not chosen yet: notebook debts have no due date until you choose.";
+  if (s.credit_days == null) return "No fixed time: notebook debts are never overdue or reminded.";
+  return `${s.credit_days} ${s.credit_days === 1 ? "day" : "days"} from the day a debt is recorded.`;
+}
+
+/** The choice for saved terms. */
+export function creditChoice(days: number | null | undefined, chosen: boolean): { choice: string; other: string } {
+  if (!chosen) return { choice: "14", other: "" };
+  if (days == null) return { choice: "none", other: "" };
+  return ["7", "14", "30"].includes(String(days)) ? { choice: String(days), other: "" } : { choice: "other", other: String(days) };
+}
+
+/** What is wrong with the terms chosen, or null. */
+export function creditProblem(choice: string, other: string): string | null {
+  if (choice !== "other") return null;
+  const n = Number(other.trim());
+  return Number.isInteger(n) && n >= 1 && n <= 365 ? null : "Type a number of days from 1 to 365.";
+}
+
+/** The PUT /v1/invoice-settings/credit-terms body. */
+export function creditRequest(choice: string, other: string, applyOpen: boolean): { credit_days: number | null; apply_open: boolean } {
+  const days = choice === "none" ? null : choice === "other" ? Number(other.trim()) : Number(choice);
+  return { credit_days: days, apply_open: applyOpen };
 }
 
 /** An invoice's own path in the API ({id} is its id or number). */
@@ -222,7 +274,7 @@ export function invoiceActions(status: InvoiceStatus | string, can: (perm: strin
   const manage = can("invoice.manage");
   return {
     edit: manage && status === "draft",
-    send: manage && status === "draft",
+    send: manage && (status === "draft" || status === "recorded"),
     sendAgain: manage && (status === "sent" || status === "part_paid" || status === "overdue"),
     void: manage && status !== "paid" && status !== "void",
     undo: manage,
@@ -360,6 +412,9 @@ export interface ItemInput {
 
 /** A draft as the form holds it: text as typed. */
 export interface InvoiceForm {
+  /** A linked business the invoice is for (business links): its id. Its
+   * invoice reaches it as a bill, so no phone or email is needed. */
+  linked?: string;
   name: string;
   phone: string;
   email: string;
@@ -394,6 +449,9 @@ export function newInvoiceForm(s?: Pick<InvoiceSettings, "fee_paid_by" | "allow_
   };
 }
 
+/** The key that names a linked business as an invoice's customer. */
+export const LINK_KEY = "link:";
+
 /** A draft's form: one line of quantity 1 is a single amount. */
 export function formFromInvoice(x: CustomerInvoice): InvoiceForm {
   const lines = x.lines ?? [];
@@ -411,6 +469,7 @@ export function formFromInvoice(x: CustomerInvoice): InvoiceForm {
     connection: x.connection ?? "",
     feePaidBy: x.fee_paid_by ?? "business",
     partPayments: !!x.allow_part_payments,
+    ...(x.customer.key?.startsWith(LINK_KEY) ? { linked: x.customer.key.slice(LINK_KEY.length) } : {}),
   };
 }
 
@@ -442,7 +501,7 @@ const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 export function invoiceProblem(f: InvoiceForm): string | null {
   if (!f.name.trim()) return "Give the customer's name.";
   if (f.name.trim().length > INVOICE_LIMITS.name) return `The customer's name is at most ${INVOICE_LIMITS.name} characters.`;
-  if (!f.phone.trim() && !f.email.trim()) return "Give the customer's phone number or email, or both, so the invoice can be sent.";
+  if (!f.linked && !f.phone.trim() && !f.email.trim()) return "Give the customer's phone number or email, or both, so the invoice can be sent.";
   if (f.email.trim() && !EMAIL.test(f.email.trim())) return "The email does not look right.";
   if (f.mode === "amount") {
     const k = toKobo(f.amount);
@@ -469,8 +528,11 @@ export function invoiceProblem(f: InvoiceForm): string | null {
 /** The POST/PUT body for the form. Call it once invoiceProblem is null. */
 export function draftRequest(f: InvoiceForm): InvoiceDraft {
   const customer: InvoiceCustomer = { name: f.name.trim() };
-  if (f.phone.trim()) customer.phone = f.phone.trim();
-  if (f.email.trim()) customer.email = f.email.trim();
+  if (f.linked) customer.key = LINK_KEY + f.linked;
+  else {
+    if (f.phone.trim()) customer.phone = f.phone.trim();
+    if (f.email.trim()) customer.email = f.email.trim();
+  }
   const d: InvoiceDraft = { customer };
   if (f.mode === "amount") {
     d.amount_kobo = toKobo(f.amount) ?? 0;
@@ -763,7 +825,20 @@ export interface RememberedPayer {
 }
 
 /** GET /v1/invoices/{id}/customer. */
+/** One line of a customer's statement: an open invoice or notebook debt. */
+export interface StatementLine {
+  id: string;
+  number: string;
+  kind: "invoice" | "credit";
+  status: InvoiceStatus;
+  due_kobo: number;
+  due_on?: string;
+}
+
 export interface InvoiceCustomerView {
+  /** The customer's statement: their open invoices and notebook debts, oldest first. */
+  open?: StatementLine[] | null;
+  owed_kobo?: number;
   credit_kobo: number;
   accounts: CustomerAccount[] | null;
   payers: RememberedPayer[] | null;

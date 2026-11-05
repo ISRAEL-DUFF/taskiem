@@ -14,6 +14,12 @@ type Match struct {
 	Score    int
 	// Matched are the goal's words the template answered to.
 	Matched []string
+	// Exact is the score before rounding: two templates whose scores
+	// round to the same number are ordered by it, not by id, and a
+	// caller with a threshold of its own reads it, so a library growing
+	// by a few templates (every score grows a little with it) does not
+	// flip a near-tie or lift a near miss over the threshold.
+	Exact float64
 }
 
 // MinScore is the score below which a template is not offered as a
@@ -130,7 +136,8 @@ func (l *Library) index() *index {
 // template shares says little). A word matched in a template's keywords,
 // tags or title is scaled by how many templates have it there, never by
 // what other templates say in their prose: a description elsewhere
-// cannot weaken a template's own keywords. Ties keep id order. Only templates
+// cannot weaken a template's own keywords. A tie in the rounded score is
+// decided by the score itself, then id order. Only templates
 // scoring at least MinScore, from at least two distinct words one of
 // which is a distinctive keyword, are returned, at most n.
 func (l *Library) Match(goal string, n int) []Match {
@@ -191,10 +198,56 @@ func (l *Library) Match(goal string, n int) []Match {
 		s := int(math.Round(score))
 		if s >= MinScore && len(matched) >= 2 && distinctive {
 			sort.Strings(matched)
-			out = append(out, Match{Template: t, Score: s, Matched: matched})
+			out = append(out, Match{Template: t, Score: s, Matched: matched, Exact: score})
 		}
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].Score > out[j].Score })
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Exact > out[j].Exact })
+	if n > 0 && len(out) > n {
+		out = out[:n]
+	}
+	return out
+}
+
+// MatchFor is Match for a business where the conditions in holds hold
+// (decision 0060): a template replaced there is never offered, and the
+// template replacing it takes its place when the goal met it, so a goal
+// that names a sheet template's job still gets its twin. Where a template
+// and its twin are both offered (a business with Google Sheets connected),
+// the twin ranks first unless the goal names a sheet or a spreadsheet.
+func (l *Library) MatchFor(goal string, n int, holds map[string]bool) []Match {
+	var out []Match
+	at := map[string]int{}
+	for _, m := range l.Match(goal, 0) {
+		if by := m.Template.ReplacedWhere.By(holds); by != "" {
+			if t, ok := l.Get(by); ok {
+				if _, seen := at[by]; !seen {
+					at[by] = len(out)
+					out = append(out, Match{Template: t, Score: m.Score, Matched: m.Matched})
+				}
+			}
+			continue
+		}
+		if _, seen := at[m.Template.ID]; seen {
+			continue
+		}
+		at[m.Template.ID] = len(out)
+		out = append(out, m)
+	}
+	if !strings.Contains(strings.ToLower(goal), "sheet") {
+		for i := 0; i < len(out); i++ {
+			for _, r := range out[i].Template.ReplacedWhere {
+				if j, ok := at[r.By]; ok && j > i {
+					twin := out[j]
+					copy(out[i+1:j+1], out[i:j])
+					out[i] = twin
+					for k := i; k <= j; k++ {
+						at[out[k].Template.ID] = k
+					}
+					break
+				}
+			}
+		}
+	}
 	if n > 0 && len(out) > n {
 		out = out[:n]
 	}

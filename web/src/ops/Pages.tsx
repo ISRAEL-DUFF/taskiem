@@ -269,7 +269,28 @@ function IncidentCard({ incident: i, onChange }: { incident: Incident; onChange:
 export function Tenants() {
   const [q, setQ] = useState("");
   const [query, setQuery] = useState("");
-  const { data, error } = useLoad(() => opsGet<{ tenants: TenantRow[] }>(`/tenants?q=${encodeURIComponent(query)}`), [query]);
+  const { data, error } = useLoad(() => opsGet<{ tenants: TenantRow[]; has_more: boolean }>(`/tenants?q=${encodeURIComponent(query)}`), [query]);
+  // Pages after the first, fetched by "Load more"; a new search starts over.
+  const [more, setMore] = useState<{ query: string; rows: TenantRow[]; hasMore: boolean } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [moreError, setMoreError] = useState<unknown>();
+  const extra = more && more.query === query ? more : null;
+  // A tenant registered while the list is open shifts the pages by one, so a
+  // row can arrive twice: keep the first.
+  const rows = data ? [...new Map([...data.tenants, ...(extra?.rows ?? [])].map((t) => [t.id, t])).values()] : [];
+  const hasMore = data ? (extra ? extra.hasMore : data.has_more) : false;
+  async function loadMore() {
+    setLoading(true);
+    setMoreError(undefined);
+    try {
+      const page = await opsGet<{ tenants: TenantRow[]; has_more: boolean }>(`/tenants?q=${encodeURIComponent(query)}&offset=${rows.length}`);
+      setMore({ query, rows: [...(extra?.rows ?? []), ...page.tenants], hasMore: page.has_more });
+    } catch (e) {
+      setMoreError(e);
+    } finally {
+      setLoading(false);
+    }
+  }
   return (
     <>
       <h1>Tenants</h1>
@@ -278,6 +299,8 @@ export function Tenants() {
         className="toolbar"
         onSubmit={(e) => {
           e.preventDefault();
+          setMore(null);
+          setMoreError(undefined);
           setQuery(q.trim());
         }}
       >
@@ -298,7 +321,7 @@ export function Tenants() {
             </tr>
           </thead>
           <tbody>
-            {data.tenants.map((t) => (
+            {rows.map((t) => (
               <tr key={t.id}>
                 <td>
                   <Link to={`/ops/tenants/${t.id}`}>{t.name}</Link>
@@ -319,6 +342,14 @@ export function Tenants() {
           </tbody>
         </table>
       )}
+      <ErrorBox error={moreError} />
+      {hasMore && (
+        <p>
+          <button type="button" onClick={() => void loadMore()} disabled={loading}>
+            {loading ? "Loading…" : "Load more"}
+          </button>
+        </p>
+      )}
     </>
   );
 }
@@ -326,7 +357,7 @@ export function Tenants() {
 export function Tenant() {
   const { id = "" } = useParams();
   const { data, error } = useLoad(
-    () => opsGet<{ tenant: TenantRow; subscription: Record<string, unknown> | null; limits: { limits: Record<string, unknown>; overrides: Record<string, unknown>; usage: Record<string, unknown> } }>(`/tenants/${id}`),
+    () => opsGet<{ tenant: TenantRow; subscription: Record<string, unknown> | null; limits: { limits: Record<string, unknown>; overrides: Record<string, unknown>; usage: Record<string, unknown> }; areas?: { area: string; name: string; enabled: boolean }[] }>(`/tenants/${id}`),
     [id],
   );
   if (error) return <ErrorBox error={error} />;
@@ -347,6 +378,16 @@ export function Tenant() {
         <dd>{data.tenant.status}</dd>
         <dt>Worker pool</dt>
         <dd>{data.tenant.pool}</dd>
+      </dl>
+      <h2>Parts of Taskiem it uses</h2>
+      <p className="hint">Read-only. The business's owner turns these on and off (What your business uses).</p>
+      <dl className="kv">
+        {(data.areas ?? []).map((a) => (
+          <div key={a.area} style={{ display: "contents" }}>
+            <dt>{a.name}</dt>
+            <dd>{a.enabled ? "On" : "Off"}</dd>
+          </div>
+        ))}
       </dl>
       <h2>Subscription</h2>
       {data.subscription ? <Json value={data.subscription} /> : <p className="hint">No subscription (billing off, or never set up).</p>}

@@ -89,13 +89,56 @@ channel_digest() {
   docker buildx imagetools inspect "$IMAGE_REPO:$(conf CHANNEL)" --format '{{.Manifest.Digest}}'
 }
 
+# cosign checks a signature against Sigstore's trust metadata (which keys
+# and certificate authorities count), a signed TUF repository it refreshes
+# from Sigstore's CDN at most once a day. On 2 November 2026 that CDN began
+# answering a staging server with 403 for every file, and cosign fails the
+# whole check when the refresh fails. So the metadata is taken from the
+# first of three sources that answers: Sigstore's CDN, the same repository
+# as published on GitHub Pages (the same signed files, so the same
+# verification), and the trusted root saved here after the last check that
+# got through (verified offline against metadata known good then). Only a
+# metadata problem moves on to the next source: a signature verdict is
+# final whichever source gave it.
+TUF_SOURCES=${TASKIEM_VPS_TUF_SOURCES:-"https://tuf-repo-cdn.sigstore.dev https://sigstore.github.io/root-signing"}
+
 verify_image() { # REF
   if [ "${TASKIEM_VPS_VERIFY:-1}" = 0 ]; then
     log "WARNING: signature check skipped (TASKIEM_VPS_VERIFY=0); never do this on a real server"
     return 0
   fi
-  cosign verify "$1" --certificate-identity-regexp "$SIGNER" --certificate-oidc-issuer "$ISSUER" >/dev/null ||
-    die "$1 is not signed by Taskiem's CI: refusing it"
+  local src out
+  for src in $TUF_SOURCES pinned; do
+    if [ "$src" = pinned ]; then
+      [ -s "$STATE/trusted_root.json" ] || continue
+      log "checking the signature against the trust metadata saved on $(date -u -r "$STATE/trusted_root.json" +%F)"
+      cosign verify "$1" --trusted-root "$STATE/trusted_root.json" --certificate-identity-regexp "$SIGNER" --certificate-oidc-issuer "$ISSUER" >/dev/null 2>&1 && return 0
+      break
+    fi
+    if ! out=$(cosign initialize --mirror "$src" 2>&1 >/dev/null); then
+      log "no trust metadata from $src: $(printf '%s' "$out" | tail -1 | cut -c1-160)"
+      continue
+    fi
+    if out=$(cosign verify "$1" --certificate-identity-regexp "$SIGNER" --certificate-oidc-issuer "$ISSUER" 2>&1 >/dev/null); then
+      save_trusted_root
+      return 0
+    fi
+    case $out in
+      *"trusted root"* | *"TUF"* | *"tuf refresh"* | *"load metadata"*)
+        log "no trust metadata from $src: $(printf '%s' "$out" | tail -1 | cut -c1-160)" ;;
+      *) break ;; # a verdict on the signature, not a problem fetching metadata
+    esac
+  done
+  die "$1 is not signed by Taskiem's CI: refusing it"
+}
+
+# Keep the newest trusted root cosign fetched, for a day the metadata
+# sources are all unreachable.
+save_trusted_root() {
+  local f
+  f=$(find "${HOME:-/root}/.sigstore/root" -name trusted_root.json -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+  [ -n "$f" ] || return 0
+  cmp -s "$f" "$STATE/trusted_root.json" 2>/dev/null || install -m 0644 "$f" "$STATE/trusted_root.json"
 }
 
 # The commit an image was built from (OCI revision label), for the matching kit.
@@ -732,7 +775,28 @@ run_checks() {
     fi
   fi
   [ ! -s "$STATE/update-failed" ] || echo "release $(cat "$STATE/update-failed") failed to upgrade and was rolled back"
+  staging_behind
   ! ls /root/taskiem-recovery-*.txt >/dev/null 2>&1 || echo "the recovery sheet is still on the server (/root/taskiem-recovery-*.txt)"
+}
+
+# A staging server runs every merge to main, so main ahead of the running
+# release by a merge older than a day means releases are not being tagged
+# (CI's image job skipped or failing) or this server is not taking them.
+# Compared through GitHub's API from the running image's revision label;
+# nothing to say when GitHub cannot be asked.
+staging_behind() {
+  local rev cmp ahead oldest age
+  [ "$(conf CHANNEL)" = staging ] || return 0
+  test_mode && return 0
+  rev=$(image_revision "$(cat "$STATE/current" 2>/dev/null)")
+  [ -n "$rev" ] || return 0
+  cmp=$(curl -fsS --max-time 10 -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/$REPO_SLUG/compare/$rev...main" 2>/dev/null) || return 0
+  ahead=$(jq -r '.ahead_by // 0' <<<"$cmp" 2>/dev/null) || return 0
+  [ "${ahead:-0}" -gt 0 ] || return 0
+  oldest=$(jq -r '[.commits[].commit.committer.date] | min // empty' <<<"$cmp" 2>/dev/null)
+  [ -n "$oldest" ] || return 0
+  age=$(( ($(date +%s) - $(date -d "$oldest" +%s)) / 3600 ))
+  [ "$age" -lt 24 ] || echo "staging is $ahead merge(s) behind main, the oldest $age hours old: check that CI's image job tagged staging (taskiem-vps update --now if it did)"
 }
 
 cmd_check() {

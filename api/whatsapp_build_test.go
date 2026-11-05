@@ -55,6 +55,9 @@ func TestWhatsAppBuild(t *testing.T) {
 	f := waBuildModel(t, slow)
 	w.srv.AI = &api.AISettings{Provider: f}
 	owner := w.tenant(t, "Acme", "owner@acme.test")
+	// The debtors sheet template is a sheet business's (decision 0060).
+	owner.must(201, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "googlesheets@1",
+		"credentials": map[string]string{"client_id": "app.apps.googleusercontent.com", "client_secret": "s", "refresh_token": "1//r"}})
 	const on = "+2348010000021"
 	w.bind(t, owner, on)
 
@@ -63,7 +66,7 @@ func TestWhatsAppBuild(t *testing.T) {
 	}
 	// Natural phrasing, without "build".
 	before := len(w.graph.Sent(on))
-	if r := w.say(t, on, "Every Friday at 9am, text my customers who owe me"); !strings.Contains(r, "Working on it") {
+	if r := w.say(t, on, "Every Friday at 9am, text the customers on my debtors sheet who owe me"); !strings.Contains(r, "Working on it") {
 		t.Fatalf("start: %q", r)
 	}
 	got := w.lastTo(t, on, before+1)
@@ -125,6 +128,11 @@ func TestWhatsAppBuild(t *testing.T) {
 	var n int
 	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE action = 'ai.save' AND detail->>'channel' = 'whatsapp' AND detail->>'template' = 'debtor-reminder-sms'`).Scan(&n); err != nil || n != 1 {
 		t.Errorf("audit: %d %v", n, err)
+	}
+
+	// Ready to publish (Google Sheets is connected): not now.
+	if r := w.say(t, on, "no"); !strings.Contains(r, "send *publish") {
+		t.Errorf("publish later: %q", r)
 	}
 
 	// "build" with a goal no template fits; "no" saves nothing.

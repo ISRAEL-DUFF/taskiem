@@ -50,12 +50,40 @@ type Submission struct {
 	Submitted time.Time `json:"submitted_at"`
 	// Booking is a booking's service and time, held when it was sent.
 	Booking *Booked `json:"booking,omitempty"`
+	// Hire is a hire's item, quantity and dates, or a space booking's
+	// space and times (fronts F5); its claim was taken by the public host
+	// with the submission.
+	Hire *Hired `json:"hire,omitempty"`
+	// Instalments is how many parts a class's fee is paid in, the first
+	// as DepositKobo; Waitlist a name for a full class's waiting list,
+	// with no claim (fronts F6).
+	Instalments int  `json:"instalments,omitempty"`
+	Waitlist    bool `json:"waitlist,omitempty"`
 	// DepositKobo is what a booking pays online when less than the total.
 	DepositKobo int64 `json:"deposit_kobo,omitempty"`
+	// Answers are the customer's answers to the action's own questions
+	// (fronts §5.5); only the questions its form asks are kept.
+	Answers map[string]any `json:"answers,omitempty"`
 }
 
 // Booked is the slot a booking holds: Until is the end plus the service's
 // buffer, Capacity the customers it takes at once.
+// Hired is what a hire takes: qty of an item from the From day to the To
+// day, both whole days in Lagos (Until is the midnight after To, the end
+// of its claim).
+type Hired struct {
+	ItemID string    `json:"item_id"`
+	Item   string    `json:"item"`
+	Qty    int       `json:"qty"`
+	From   time.Time `json:"from"`
+	To     time.Time `json:"to"`
+	Until  time.Time `json:"until"`
+	Days   int       `json:"days"`
+	// Hours is a space booked by the hour: From and Until are on one day,
+	// and Days is 0.
+	Hours int `json:"hours,omitempty"`
+}
+
 type Booked struct {
 	ServiceID   string    `json:"service_id"`
 	ServiceName string    `json:"service_name"`
@@ -88,6 +116,12 @@ type Line struct {
 	Quantity  int    `json:"quantity"`
 	PriceKobo int64  `json:"price_kobo"`
 	LineKobo  int64  `json:"line_kobo"`
+	// Unit is what Quantity counts when it is time, a space's "day" or
+	// "hour" (fronts F5); "" for items.
+	Unit string `json:"unit,omitempty"`
+	// Options are the choices a Food dish took (fronts F3); PriceKobo is
+	// the dish's price with them.
+	Options []LineOption `json:"options,omitempty"`
 }
 
 // SealSubmission encrypts a submission for the inbox, bound to its

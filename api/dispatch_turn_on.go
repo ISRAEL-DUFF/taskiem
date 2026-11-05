@@ -48,12 +48,29 @@ func orderWorkflowTx(ctx context.Context, tx pgx.Tx) (*uuid.UUID, string, error)
 	return wf, tpl, err
 }
 
-func orderWorkflowNamedTx(ctx context.Context, tx pgx.Tx) (*uuid.UUID, string, string, error) {
+// actionWorkflowNamedTx is orderWorkflowNamedTx for an action by its id.
+func actionWorkflowNamedTx(ctx context.Context, tx pgx.Tx, action uuid.UUID) (*uuid.UUID, string, string, error) {
 	var wf uuid.UUID
 	var tpl, name string
 	err := tx.QueryRow(ctx, `SELECT t.workflow_id, COALESCE(v.template_id, ''), w.name FROM triggers t
 		JOIN workflow_versions v ON v.workflow_id = t.workflow_id AND v.version = t.version JOIN workflows w ON w.id = t.workflow_id
-		WHERE t.type = 'storefront' AND t.environment = 'prod' AND t.storefront_action = 'order'`).Scan(&wf, &tpl, &name)
+		WHERE t.type = 'storefront' AND t.environment = 'prod' AND t.storefront_action_id = $1`, action).Scan(&wf, &tpl, &name)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, "", "", nil
+	}
+	if err != nil {
+		return nil, "", "", err
+	}
+	return &wf, tpl, name, nil
+}
+
+func orderWorkflowNamedTx(ctx context.Context, tx pgx.Tx) (*uuid.UUID, string, string, error) {
+	var wf uuid.UUID
+	var tpl, name string
+	//sqlcheck:built BuiltinTriggerSQL is given the alias t and the literal 'order'
+	err := tx.QueryRow(ctx, `SELECT t.workflow_id, COALESCE(v.template_id, ''), w.name FROM triggers t
+		JOIN workflow_versions v ON v.workflow_id = t.workflow_id AND v.version = t.version JOIN workflows w ON w.id = t.workflow_id
+		WHERE t.type = 'storefront' AND t.environment = 'prod' AND `+storefront.BuiltinTriggerSQL("t", "'order'")).Scan(&wf, &tpl, &name)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, "", "", nil
 	}
@@ -68,7 +85,11 @@ func orderWorkflowNamedTx(ctx context.Context, tx pgx.Tx) (*uuid.UUID, string, s
 // form to deliver; under four-eyes publishing it is refused, since the
 // form would start nothing while the new workflow waited. A workflow other
 // than the plain storefront-order one is replaced only with replace.
-func (s *Server) turnOnDeliveriesTx(ctx context.Context, tx pgx.Tx, p *Principal, replace bool, audit func(action, target string, detail map[string]any) error) (deliveriesView, error) {
+//
+// action names another front's order action (fronts F4) instead of the
+// built-in order form: its own delivery setting is read, and the workflow
+// made names it by id.
+func (s *Server) turnOnDeliveriesTx(ctx context.Context, tx pgx.Tx, p *Principal, action *uuid.UUID, replace bool, audit func(action, target string, detail map[string]any) error) (deliveriesView, error) {
 	actions, err := storefront.Actions(ctx, tx, p.TenantID)
 	if errors.Is(err, storefront.ErrNotFound) {
 		return deliveriesView{}, fmt.Errorf("%w: set up your page and turn on delivery on your order form first", errConflict)
@@ -76,16 +97,25 @@ func (s *Server) turnOnDeliveriesTx(ctx context.Context, tx pgx.Tx, p *Principal
 	if err != nil {
 		return deliveriesView{}, err
 	}
-	var delivers bool
+	var delivers, found bool
 	for _, a := range actions {
-		if a.Kind == "order" {
-			delivers = a.Options.Delivery
+		if action == nil && a.Builtin && a.Kind == "order" || action != nil && a.ID != nil && *a.ID == *action && a.Kind == "order" {
+			delivers, found = a.Options.Delivery, true
 		}
+	}
+	if action != nil && !found {
+		return deliveriesView{}, fmt.Errorf("%w: that front has no order form", errConflict)
 	}
 	if !delivers {
 		return deliveriesView{}, fmt.Errorf("%w: turn on delivery on your order form first", errConflict)
 	}
-	old, tplID, oldName, err := orderWorkflowNamedTx(ctx, tx)
+	var old *uuid.UUID
+	var tplID, oldName string
+	if action == nil {
+		old, tplID, oldName, err = orderWorkflowNamedTx(ctx, tx)
+	} else {
+		old, tplID, oldName, err = actionWorkflowNamedTx(ctx, tx, *action)
+	}
 	if err != nil {
 		return deliveriesView{}, err
 	}
@@ -110,20 +140,47 @@ func (s *Server) turnOnDeliveriesTx(ctx context.Context, tx pgx.Tx, p *Principal
 	if !ok {
 		return deliveriesView{}, fmt.Errorf("%w: deliveries are not available here", errConflict)
 	}
-	wf, _, err := s.instantiateTx(ctx, tx, p, tpl, map[string]any{}, "Storefront orders with deliveries", audit)
+	name := "Storefront orders with deliveries"
+	if action != nil {
+		var front string
+		if err := tx.QueryRow(ctx, `SELECT f.name FROM storefront_actions a JOIN storefront_fronts f ON f.id = a.front_id WHERE a.id = $1`, *action).Scan(&front); err != nil {
+			return deliveriesView{}, err
+		}
+		name = front + ": orders with deliveries"
+		if tpl, err = templateForAction(tpl, *action); err != nil {
+			return deliveriesView{}, err
+		}
+	}
+	wf, _, err := s.instantiateTx(ctx, tx, p, tpl, map[string]any{}, name, audit)
 	if err != nil {
 		return deliveriesView{}, err
 	}
 	if old != nil {
-		v, err := deployedVersion(ctx, tx, *old, "prod")
+		// Out of every environment it is deployed in: publishing deploys
+		// to dev as well as prod, and one workflow holds a form in each.
+		rows, err := tx.Query(ctx, `SELECT environment, max(version) FROM (SELECT environment, version FROM deployments WHERE workflow_id = $1
+			UNION SELECT environment, version FROM triggers WHERE workflow_id = $1) d GROUP BY environment ORDER BY environment`, *old)
 		if err != nil {
 			return deliveriesView{}, err
 		}
-		if err := undeployTx(ctx, tx, *old, "prod"); err != nil {
+		type deployed struct {
+			env string
+			v   int
+		}
+		envs, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (deployed, error) {
+			var d deployed
+			return d, r.Scan(&d.env, &d.v)
+		})
+		if err != nil {
 			return deliveriesView{}, err
 		}
-		if err := audit("workflow.undeploy", fmt.Sprintf("%s/%d", *old, v), map[string]any{"environment": "prod", "via": "dispatch", "replaced_by": wf.String()}); err != nil {
-			return deliveriesView{}, err
+		for _, d := range envs {
+			if err := undeployTx(ctx, tx, *old, d.env); err != nil {
+				return deliveriesView{}, err
+			}
+			if err := audit("workflow.undeploy", fmt.Sprintf("%s/%d", *old, d.v), map[string]any{"environment": d.env, "via": "dispatch", "replaced_by": wf.String()}); err != nil {
+				return deliveriesView{}, err
+			}
 		}
 	}
 	var by *uuid.UUID
@@ -183,7 +240,7 @@ func (s *Server) turnOnDeliveries(w http.ResponseWriter, r *http.Request) {
 	var out deliveriesView
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
-		out, err = s.turnOnDeliveriesTx(r.Context(), tx, p, in.Replace, func(action, target string, detail map[string]any) error {
+		out, err = s.turnOnDeliveriesTx(r.Context(), tx, p, nil, in.Replace, func(action, target string, detail map[string]any) error {
 			return auditTx(r, tx, action, target, detail)
 		})
 		return err
@@ -201,12 +258,13 @@ func (s *Server) turnOnDeliveries(w http.ResponseWriter, r *http.Request) {
 
 // shopTurnOnDeliveries turns deliveries on from chat, once the owner said
 // yes.
-func (s *Server) shopTurnOnDeliveries(ctx context.Context, c *chat) error {
+// action is another front's order action (F4), or nil for the order form.
+func (s *Server) shopTurnOnDeliveries(ctx context.Context, c *chat, action *uuid.UUID) error {
 	if !c.p.Can(PermWorkflowEdit) || !c.p.Can(PermWorkflowPublish) || !c.p.Can(PermStorefrontManage) {
 		return c.say(ctx, s, c.t("wa.publish.denied", "org", c.tenant.Name))
 	}
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
-		_, err := s.turnOnDeliveriesTx(ctx, tx, c.p, false, func(action, target string, detail map[string]any) error {
+		_, err := s.turnOnDeliveriesTx(ctx, tx, c.p, action, false, func(action, target string, detail map[string]any) error {
 			return waAudit(ctx, tx, c.ch.Name(), c.p, action, target, detail)
 		})
 		return err

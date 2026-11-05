@@ -10,10 +10,11 @@ import { EmailAddressCard, EmailTriggerSettings } from "../canvas/EmailTrigger";
 import { WebhookListener, WebhookTriggerSettings } from "../canvas/WebhookTrigger";
 import { connectIn, definitionProblem, disconnectIn, emptyPaths, forSaving, insertStep, placed, removeAnywhere, renameAnywhere, updateAnywhere, type InsertAt } from "../lib/flow";
 import { merge } from "../lib/schema";
-import { triggerWords } from "../lib/home";
+import { LINK_EVENTS, triggerWords } from "../lib/home";
 import { runLook } from "../lib/lists";
 import { EnvSelect, useEnvironments, type Deployment } from "../environments";
 import { Badge, ErrorBox, Field, Item, Items, JsonInput, Modal, Skeleton, fmtTime, useAction, useLoad } from "../ui";
+import { toast } from "../toast";
 import { AIBuilder } from "./AIBuild";
 import { MergeDialog } from "./MergeDialog";
 import { resolveSchema } from "../lib/values";
@@ -81,6 +82,10 @@ export function Editor() {
   const [problems, setProblems] = useState<Problem[]>([]);
   // A publish refused for what the version still needs.
   const [needs, setNeeds] = useState<{ version: number; needs: ReadyNeed[] }>();
+  // A publish refused because the storefront form it starts on already
+  // starts another workflow (one workflow per form): Replace offers to
+  // swap them in one change, unless four-eyes publishing refuses it.
+  const [held, setHeld] = useState<{ version: number; words: string; name: string; canReplace: boolean; canNewAction: boolean; refused: string }>();
   const [selected, setSelected] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [picking, setPicking] = useState<{ at: InsertAt; where: string } | null>(null);
@@ -251,34 +256,61 @@ export function Editor() {
       setNotice(r.valid ? "Valid: this version can be published." : "");
     }, false);
 
-  const publish = () =>
+  // How a publish deals with a storefront action another workflow holds:
+  // take it over (replace), or make a new action for this one (fronts F2).
+  const publish = (how?: "replace" | "new_action") =>
     act.run(async () => {
-      const v = await save();
-      let r: { state: string; git?: Record<string, { url?: string; error?: string }> };
+      let v = await save();
+      let r: {
+        state: string;
+        version?: number;
+        new_action?: { label: string; slug: string };
+        git?: Record<string, { url?: string; error?: string }>;
+      };
       try {
-        r = await post(`/v1/workflows/${id}/versions/${v}/publish`);
+        r = await post(`/v1/workflows/${id}/versions/${v}/publish`, how ? { [how]: true } : undefined);
       } catch (e) {
         // Not ready: what it needs, each with its fix, instead of an error.
         if (e instanceof ApiError && e.status === 422 && e.body.code === "not_ready") {
           setNeeds({ version: v, needs: (e.body.needs as ReadyNeed[] | undefined) ?? [] });
           return;
         }
+        // The storefront form already starts another workflow.
+        if (e instanceof ApiError && e.status === 409 && e.body.code === "action_taken") {
+          const other = e.body.workflow as { name?: string } | undefined;
+          setHeld({
+            version: v,
+            words: typeof e.body.action_words === "string" ? e.body.action_words : "form",
+            name: other?.name ?? "another workflow",
+            canReplace: e.body.can_replace === true,
+            canNewAction: e.body.can_new_action === true,
+            refused: typeof e.body.refused === "string" ? e.body.refused : "",
+          });
+          return;
+        }
         if (e instanceof ApiError && e.status === 422) setProblems(e.problems as Problem[]);
         throw e;
       }
       setNeeds(undefined);
+      setHeld(undefined);
+      // A new action is made with a new version that names it.
+      if (typeof r.version === "number") v = r.version;
+      const made = r.new_action
+        ? ` It starts on a new form, “${r.new_action.label}”, which is off: switch it on under Storefront → Forms.`
+        : "";
       if (r.state === "pending_approval") {
-        setNotice(`Version ${v} is waiting for a second person to publish it (Approvals → Publishing to review).`);
+        setNotice(`Version ${v} is waiting for a second person to publish it (Approvals → Publishing to review).${made}`);
         wf.reload();
         return;
       }
       const git = Object.entries(r.git ?? {})
         .map(([env, g]) => (g.url ? `Pull request for ${env}: ${g.url}` : `The pull request for ${env} could not be opened: ${g.error ?? "unknown error"}`))
         .join(" ");
-      setNotice(`Version ${v} is published; new runs use it.${git ? " " + git : ""}`);
+      setNotice(`Version ${v} is published; new runs use it.${how === "replace" ? " The form starts this workflow now." : ""}${made}${git ? " " + git : ""}`);
+      toast("Published");
       wf.reload();
       doc.reload();
-    }, "Published");
+    }, false);
 
   // Test with sample data: the draft as it is now, nothing sent.
   const test = () =>
@@ -403,6 +435,36 @@ export function Editor() {
               </button>
               <button type="button" onClick={throwAway}>
                 Throw them away
+              </button>
+            </div>
+          </div>
+        )}
+        {held && (
+          <div className="notice" data-testid="action-taken">
+            <p>
+              This action already runs <strong>{held.name}</strong>: your storefront&apos;s {held.words} starts one workflow. Version {held.version} is saved, but not published yet.
+            </p>
+            {held.canReplace ? (
+              <p>Replace it with this one: {held.name} stops taking the form&apos;s submissions and this workflow starts on them instead, in one change. Runs already started carry on.</p>
+            ) : (
+              <p>{held.refused}</p>
+            )}
+            {held.canNewAction && (
+              <p>Or make a new action for this workflow: a second {held.words} like it, off until you switch it on, and {held.name} keeps its own.</p>
+            )}
+            <div className="row">
+              {held.canReplace && (
+                <button type="button" className="primary" disabled={act.busy} onClick={() => void publish("replace")}>
+                  Replace it with this one
+                </button>
+              )}
+              {held.canNewAction && (
+                <button type="button" disabled={act.busy} onClick={() => void publish("new_action")}>
+                  Make a new action for this workflow
+                </button>
+              )}
+              <button type="button" onClick={() => setHeld(undefined)}>
+                Keep {held.name}
               </button>
             </div>
           </div>
@@ -762,6 +824,7 @@ function SettingsTab({ workflow, def, onChange, connectors, problems }: { workfl
             if (choice) return onChange(choice.apply(def));
             if (type === "connector_event") onChange({ ...def, trigger: { type, config: { connector: "paystack@1", trigger: "transfer_event" } } });
             else if (type === "invoice") onChange({ ...def, trigger: { type, config: { event: "paid" } } });
+            else if (type === "link") onChange({ ...def, trigger: { type, config: { event: "order.received" } } });
           }}
         >
           {TRIGGER_CHOICES.map((c) => (
@@ -770,10 +833,22 @@ function SettingsTab({ workflow, def, onChange, connectors, problems }: { workfl
             </option>
           ))}
           <option value="invoice">{advanced ? "An invoice is paid (invoice)" : "An invoice is paid"}</option>
+          <option value="link">{advanced ? "A linked business does something (link)" : "A linked business does something"}</option>
           <option value="connector_event">{advanced ? "Something happens in a service (connector_event)" : "Something happens in a service"}</option>
-          {![...TRIGGER_CHOICES.map((c) => c.type), "invoice", "connector_event"].includes(t.type) && <option value={t.type}>{triggerWords(t)}</option>}
+          {![...TRIGGER_CHOICES.map((c) => c.type), "invoice", "link", "connector_event"].includes(t.type) && <option value={t.type}>{triggerWords(t)}</option>}
         </select>
       </Field>
+      {t.type === "link" && (
+        <Field label="When">
+          <select value={String(cfg.event ?? "order.received")} onChange={(e) => setCfg({ event: e.target.value })}>
+            {LINK_EVENTS.map((e) => (
+              <option key={e.value} value={e.value}>
+                {e.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
       {t.type === "webhook" && !advanced && <p className="hint">Another system starts it at its web address (under Web addresses). Turn on Advanced in Settings to change how.</p>}
       {t.type === "webhook" && advanced && (
         <>

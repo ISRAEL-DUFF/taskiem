@@ -215,7 +215,7 @@ func TestFlowTokens(t *testing.T) {
 }
 
 func TestFlowJSONDocumented(t *testing.T) {
-	for name, gen := range map[string][]byte{FlowInputs: InputsFlowJSON(), FlowPin: PinFlowJSON()} {
+	for name, gen := range map[string][]byte{FlowInputs: InputsFlowJSON(), FlowPin: PinFlowJSON(), FlowConnect: ConnectFlowJSON()} {
 		var v struct {
 			Version string         `json:"version"`
 			Routing map[string]any `json:"routing_model"`

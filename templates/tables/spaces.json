@@ -1,0 +1,15 @@
+{
+  "name": "spaces",
+  "front": true,
+  "title": "Spaces",
+  "description": "Spaces a business lets out: halls, event centres, a church's auditorium, a training room, a studio. Each with its photo and description, how many people it holds, its rate per day or per hour in naira (as its calendar books), what is included, and whether it is available.",
+  "columns": [
+    {"name": "name", "title": "Space", "type": "text", "required": true},
+    {"name": "photo", "title": "Photo", "type": "text"},
+    {"name": "description", "title": "Description", "type": "text"},
+    {"name": "capacity", "title": "People it holds", "type": "integer"},
+    {"name": "rate", "title": "Rate per day or hour (₦)", "type": "number", "required": true},
+    {"name": "included", "title": "What is included", "type": "text"},
+    {"name": "available", "title": "Available", "type": "boolean"}
+  ]
+}

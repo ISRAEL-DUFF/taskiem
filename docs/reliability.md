@@ -21,7 +21,7 @@ Every objective is over a rolling 30 days. The SLI is good events over all event
 
 | SLO | Target | Good events | All events | Metric |
 | --- | --- | --- | --- | --- |
-| `api_availability` | 99.9% | API requests answered without a 5xx | API requests, except `/healthz`, `/readyz`, the status page and run streams (`/v1/runs/{run}/stream`) | `taskiem_http_requests_total` |
+| `api_availability` | 99.9% | API requests answered without a 5xx | API requests, except `/healthz`, `/readyz`, the status page and run streams (`/v1/runs/{run}/stream`) and the Chat stream (`/v1/chat/stream`) | `taskiem_http_requests_total` |
 | `api_latency` | 99% | Those requests answered within 1 s | The same requests | `taskiem_http_request_duration_seconds` |
 | `webhook_ingest` | 99.9% | Webhook and connector-event deliveries answered without a 5xx | Deliveries to `/hooks` | `taskiem_ingest_deliveries_total` |
 | `run_start` | 99% | Runs whose first worker step is claimed within 5 s of the trigger being accepted | Runs whose first step runs on a worker | `taskiem_run_start_seconds` |
@@ -59,8 +59,8 @@ Recording rules: `taskiem:slo_errors:ratio_rate<window>{slo}` for 5m, 30m, 1h, 2
 G4's availability criterion is `api_availability` and `webhook_ingest`, each at or above 99.9% over 60 consecutive days, plus the canary. Take the SLI over each 30-day half from `1 - taskiem:slo_errors:ratio_rate30d`, or for one 60-day figure, from the counters:
 
 ```promql
-1 - sum(rate(taskiem_http_requests_total{route!~"/healthz|/readyz|/status|/status.json|/status/feed.atom|/v1/runs/\\{run\\}/stream",code=~"5.."}[60d]))
-  / sum(rate(taskiem_http_requests_total{route!~"/healthz|/readyz|/status|/status.json|/status/feed.atom|/v1/runs/\\{run\\}/stream"}[60d]))
+1 - sum(rate(taskiem_http_requests_total{route!~"/healthz|/readyz|/status|/status.json|/status/feed.atom|/v1/runs/\\{run\\}/stream|/v1/chat/stream",code=~"5.."}[60d]))
+  / sum(rate(taskiem_http_requests_total{route!~"/healthz|/readyz|/status|/status.json|/status/feed.atom|/v1/runs/\\{run\\}/stream|/v1/chat/stream"}[60d]))
 ```
 
 Keep Prometheus retention (or a long-term store) above 60 days. Record any period excluded from the window (declared maintenance) in the status page; maintenance does not pause the measurement unless the decision owner says so beforehand. The owner of this measurement is a needs-people item (P4-R4).
@@ -260,7 +260,7 @@ Spec 15.4: rolling upgrades never stop running workflows, and workers finish or 
 
 1. **Flips readiness.** `/readyz` answers 503 `draining` on the API (8080), the edge (8081) and the metrics port (9090); `taskiem_draining` becomes 1. Liveness (`/healthz`) stays 200.
 2. **Keeps serving for `TASKIEM_SHUTDOWN_DELAY`** (default 0; the chart sets 10 s), so the Service and ingress take the pod out before it stops listening. Without this, requests routed in the meantime fail.
-3. **Stops taking work.** HTTP servers stop accepting and finish open requests (up to 20 s). Long-lived run streams end. Workers claim nothing new; schedulers stop ticking.
+3. **Stops taking work.** HTTP servers stop accepting and finish open requests (up to 20 s). Long-lived run and chat streams end. Workers claim nothing new; schedulers stop ticking.
 4. **Drains.** Workers let in-flight steps finish for up to `TASKIEM_WORKER_DRAIN` (30 s). Steps still running then are cancelled.
 5. **Releases leases.** Each worker and scheduler hands back the task, timer and orchestration leases it still holds (`taskiem_release_leases`, migration 00122; `taskiem_leases_released_total`), so another pod takes them at once instead of after the lease expires (60 s for tasks). The lease epoch is kept, so anything the stopping process still tries to write is fenced out. A write step cut off mid-call is reconciled by the next worker before anything is re-sent (decision 0009).
 

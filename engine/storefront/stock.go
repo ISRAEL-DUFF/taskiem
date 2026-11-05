@@ -240,7 +240,18 @@ const stockAttempts = 5
 // same change with the same key: it lands once.
 func (o *Orders) lowerStock(ctx context.Context, tenant uuid.UUID, ord Order) ([]string, error) {
 	short := []string{}
-	if o.Stock == nil || ord.Kind != "order" || len(ord.Basket) == 0 {
+	if ord.Kind == "trade" {
+		// A linked business's order (business links §7): its lines matched
+		// to the catalogue's items are lowered, the rest are not ours.
+		var mine []Line
+		for _, l := range ord.Basket {
+			if l.ID != "" {
+				mine = append(mine, l)
+			}
+		}
+		ord.Basket = mine
+	}
+	if o.Stock == nil || (ord.Kind != "order" && ord.Kind != "trade") || len(ord.Basket) == 0 {
 		return short, nil
 	}
 	var rec map[string]stockStep
@@ -346,8 +357,9 @@ func (o *Orders) lowerStock(ctx context.Context, tenant uuid.UUID, ord Order) ([
 // and forms show it at once rather than at the next refresh.
 func (o *Orders) copyStock(ctx context.Context, tenant, sf uuid.UUID, row string, n int64) error {
 	return db.InTenantTx(ctx, o.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `UPDATE storefront_catalogue SET item = jsonb_set(item, '{stock}', to_jsonb($4::bigint))
-			WHERE tenant_id = $1 AND storefront_id = $2 AND row_id = $3`, tenant, sf, row, n)
+		// Stock is kept on the catalogue's table only (fronts §5.2).
+		_, err := tx.Exec(ctx, `UPDATE storefront_catalogue c SET item = jsonb_set(item, '{stock}', to_jsonb($4::bigint))
+			WHERE c.tenant_id = $1 AND c.storefront_id = $2 AND c.row_id = $3 AND c.table_name = `+catalogueTableSQL, tenant, sf, row, n)
 		return err
 	})
 }

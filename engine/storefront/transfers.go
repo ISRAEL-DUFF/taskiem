@@ -58,8 +58,8 @@ func (o *Orders) TransferRequested(ctx context.Context, tenant, order uuid.UUID)
 		if ord.Status != "awaiting_payment" || ord.ExpiresAt != nil && !ord.ExpiresAt.After(now) {
 			return fmt.Errorf("%w: %s is not waiting for its payment", ErrDecision, ord.Reference)
 		}
-		if err := tx.QueryRow(ctx, `SELECT COALESCE(options->>'connection', '') FROM storefront_actions WHERE storefront_id = $1 AND kind = $2`,
-			ord.storefront, ord.Kind).Scan(&connection); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		if err := tx.QueryRow(ctx, `SELECT COALESCE(options->>'connection', '') FROM storefront_actions WHERE storefront_id = $1 AND id = $2`,
+			ord.storefront, ord.action).Scan(&connection); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
 		least := transferOrderMinutes
@@ -75,7 +75,7 @@ func (o *Orders) TransferRequested(ctx context.Context, tenant, order uuid.UUID)
 			if _, err := tx.Exec(ctx, `UPDATE storefront_orders SET expires_at = $3, updated_at = now() WHERE tenant_id = $1 AND id = $2`, tenant, ord.ID, until); err != nil {
 				return err
 			}
-			if _, err := tx.Exec(ctx, `UPDATE storefront_holds SET expires_at = $2 WHERE reference = $1 AND expires_at IS NOT NULL`, ord.Reference, until); err != nil {
+			if _, err := tx.Exec(ctx, `UPDATE storefront_claims SET expires_at = $2 WHERE reference = $1 AND expires_at IS NOT NULL`, ord.Reference, until); err != nil {
 				return err
 			}
 		}
@@ -92,7 +92,7 @@ func (o *Orders) TransferRequested(ctx context.Context, tenant, order uuid.UUID)
 	if ord.Customer.Phone != "" {
 		payer["phone"] = ord.Customer.Phone
 	}
-	return o.IssueTransfer(ctx, tenant, ord.ID, checkoutChannel(connection), ord.Payable(), what+ord.Reference, payer, minutes)
+	return o.IssueTransfer(ctx, tenant, ord.ID, checkoutChannel(connection), ord.AskedKobo(), what+ord.Reference, payer, minutes)
 }
 
 // TransferReceived counts a payment the rail confirmed into an order's
@@ -142,7 +142,7 @@ func (o *Orders) statusLinkFor(ctx context.Context, tenant uuid.UUID, ord Order)
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"reference": ord.Reference, "url": link, "total": FormatNaira(ord.Payable())}, nil
+	return map[string]any{"reference": ord.Reference, "url": link, "total": FormatNaira(ord.AskedKobo())}, nil
 }
 
 // refundByHandNote is what a refund_due order paid by transfer says.
@@ -151,7 +151,7 @@ func refundByHandNote(ord Order) string {
 	if ord.PaidBy != "transfer" {
 		how = "with money matched to it, not through its card page"
 	}
-	return "Paid " + how + ": send " + FormatNaira(ord.Payable()) + " back to the customer from your bank, then mark it refunded."
+	return "Paid " + how + ": send " + FormatNaira(ord.RefundKobo()) + " back to the customer from your bank, then mark it refunded."
 }
 
 // askRefundByHand leaves a refund_due order with the note saying how to
@@ -196,7 +196,7 @@ func (o *Orders) MarkRefunded(ctx context.Context, tenant uuid.UUID, reference, 
 			return err
 		}
 		ord.Status, ord.Note, marked = "refunded", note, true
-		if err := audit(ctx, tx, tenant, "storefront.refunded", reference, map[string]any{"by": actor, "by_hand": true, "total_kobo": ord.Payable()}); err != nil {
+		if err := audit(ctx, tx, tenant, "storefront.refunded", reference, map[string]any{"by": actor, "by_hand": true, "total_kobo": ord.RefundKobo()}); err != nil {
 			return err
 		}
 		return o.open(ctx, tx, tenant, &ord)
@@ -204,7 +204,7 @@ func (o *Orders) MarkRefunded(ctx context.Context, tenant uuid.UUID, reference, 
 	if err != nil || !marked {
 		return ord, err
 	}
-	err = o.tell(ctx, tenant, reference, "Your payment of "+FormatNaira(ord.Payable())+" for "+reference+" has been sent back to you. Contact us if it has not reached you.",
+	err = o.tell(ctx, tenant, reference, "Your payment of "+FormatNaira(ord.RefundKobo())+" for "+reference+" has been sent back to you. Contact us if it has not reached you.",
 		"refund:"+reference)
 	return ord, err
 }
@@ -232,8 +232,8 @@ func (o *Orders) DoorTransfer(ctx context.Context, tenant, order uuid.UUID) erro
 		if ord.Payment != "on_delivery" || ord.PaidAt != nil || ord.Status != "arrived" {
 			return fmt.Errorf("%w: %s is not waiting for its payment at the door", ErrDecision, ord.Reference)
 		}
-		if err := tx.QueryRow(ctx, `SELECT COALESCE(options->>'connection', '') FROM storefront_actions WHERE storefront_id = $1 AND kind = $2`,
-			ord.storefront, ord.Kind).Scan(&connection); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		if err := tx.QueryRow(ctx, `SELECT COALESCE(options->>'connection', '') FROM storefront_actions WHERE storefront_id = $1 AND id = $2`,
+			ord.storefront, ord.action).Scan(&connection); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
 		return o.open(ctx, tx, tenant, &ord)
@@ -245,7 +245,7 @@ func (o *Orders) DoorTransfer(ctx context.Context, tenant, order uuid.UUID) erro
 	if ord.Customer.Phone != "" {
 		payer["phone"] = ord.Customer.Phone
 	}
-	return o.IssueTransfer(ctx, tenant, ord.ID, checkoutChannel(connection), ord.Payable(), "Order "+ord.Reference, payer, doorMinutes)
+	return o.IssueTransfer(ctx, tenant, ord.ID, checkoutChannel(connection), ord.AskedKobo(), "Order "+ord.Reference, payer, doorMinutes)
 }
 
 // DoorAccount is the account number an order is paid into at the door:

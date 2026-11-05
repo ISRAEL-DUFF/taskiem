@@ -82,14 +82,14 @@ wd/v1 needs at least one step in each list. When an If's **No** has nothing in i
 
 ## Saving and publishing
 
-**Save draft** saves a new version. Someone else's version saved meanwhile is merged, or its conflicts are shown to choose from. **Publish** saves, checks the version and publishes it; what it still needs is listed, each with its fix. **Start run** appears once a version is published. The problems the last save found are listed under the bar. A step with a problem has a red border, and opening it shows the problem.
+**Save draft** saves a new version. Someone else's version saved meanwhile is merged, or its conflicts are shown to choose from. **Publish** saves, checks the version and publishes it; what it still needs is listed, each with its fix. A workflow that starts from a storefront form another workflow already starts is not published: the builder says which workflow runs the form and offers **Replace it with this one**, which takes that one out of use and publishes this one in one change ([storefronts](storefronts.md)); under four-eyes publishing it says why it cannot. It also offers **Make a new action for this workflow**: a second form like it, off, which this workflow starts (not for the booking form); switch it on under Storefront > Forms. **Start run** appears once a version is published. The problems the last save found are listed under the bar. A step with a problem has a red border, and opening it shows the problem.
 
 ## Tabs
 
 - **Build:** the canvas.
 - **Runs:** this workflow's runs, newest first.
 - **Settings:** the name, **When it runs**, environments and promotion, the form editor for a form trigger, the email address for an email trigger, and **Where it starts** (its web addresses, schedules and signing secrets).
-- **Code** and **JSON** (with Advanced): the workflow as TypeScript or as its wd/v1 definition, both editable.
+- **Code** and **JSON** (with Advanced): the workflow as TypeScript or as its wd/v1 definition, both editable. Both are plain text boxes today; a proper editor is planned in [a proper code editor](spec/code-editor.md).
 
 ## On a phone
 

@@ -159,6 +159,10 @@ Order: K1 to K5, on one branch, in one PR (#117).
 | Suppliers who answer by phone or SMS, not in chat | The order's status can be set by the owner (`confirmed`); the message is the record. Taskiem receives no SMS |
 | Cost prices and shrinkage at cost need a cost per item | The last price received; items with none show shrinkage in units only |
 
+## 11.1 Fronts (added with fronts F8)
+
+Fronts ([plan](fronts.md), decision 0059) add pages beside the home page, each with its own list. Stock stays on the catalogue, the home page's list, as this plan has it: an order on a front's own list neither checks nor lowers stock, and no front makes a stock movement. What the kinds hold instead are **claims** (`storefront_claims`), not stock: a hire holds qty of an item for its days and gives it back when it is returned, so the item's count is what the owner has and never goes down; a space is held one party at a time on its list's calendar; a ticket or a class place is held against the event's tickets or the class's places while its order lives, and given back on a refund or when an unpaid order lapses. A Food menu has no count: a dish is hidden with `sold out` until `show`. Stock on a front's own table (a Food menu first) is the one follow-up both plans leave to a change to 0057.
+
 ## 12. Out of scope
 
 Barcodes and scanning; multiple shops or stores per business (one stock per business); batches and expiry dates (pharmacies: section M later); fractional quantities and selling by weight; supplier catalogues and price lists (story 55 is the wholesaler's side); accounting valuation methods beyond last cost.

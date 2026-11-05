@@ -3,6 +3,7 @@
   "title": "Record every payment in a Google Sheet",
   "summary": "When Paystack confirms a payment, add a row to your sales ledger sheet.",
   "description": "Keeps your books up to date without typing: every successful Paystack payment adds a row (date, reference, customer email, amount in naira, channel) to the Google Sheet you choose.",
+  "replaced_where": {"by": "payment-received-tell-owner", "when": "no_sheets"},
   "category": "reporting",
   "tags": ["bookkeeping", "ledger", "payments", "google sheets", "paystack", "reporting"],
   "keywords": ["record", "log", "ledger", "books", "bookkeeping", "sheet", "spreadsheet", "payment", "sales", "row"],

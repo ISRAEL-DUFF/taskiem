@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Security</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/50a98d2917f323d39577f6eb0dc5de03">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&family=Plus+Jakarta+Sans:wght@400;500;800&display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="tk" data-theme="{{theme}}">
+<dc-import name="Header" theme="{{theme}}" hint-size="100%,88px"></dc-import>
+<main>
+
+<section class="page-top">
+  <div class="container" style="display:flex;flex-direction:column;gap:20px">
+    <p class="label">Trust</p>
+    <h1 class="h1" style="max-width:1000px">Built like banking software, explained in plain words.</h1>
+    <p class="lede" style="max-width:660px">You are trusting Taskiem with your customers and your money. Here is exactly how it behaves, in eight promises.</p>
+  </div>
+</section>
+
+<section style="padding-bottom:clamp(48px,6vw,80px)">
+  <div class="container">
+    <div class="grid" style="--min:440px">
+      <sc-for list="{{promises}}" as="p" hint-placeholder-count="8">
+        <div class="card" style="padding:clamp(24px,3vw,36px);gap:12px">
+          <p class="label">{{p.n}}</p>
+          <h2 class="h3" style="font-size:clamp(22px,2.2vw,28px)">{{p.title}}</h2>
+          <p class="small">{{p.text}}</p>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+</section>
+
+<section style="padding-bottom:clamp(56px,8vw,104px)">
+  <div class="container">
+    <div class="card-pine" style="border-radius:24px;padding:clamp(28px,4vw,48px);flex-direction:row;flex-wrap:wrap;align-items:center;gap:24px 40px">
+      <div style="flex:1 1 360px;min-width:0;display:flex;flex-direction:column;gap:10px">
+        <h2 class="h3" style="font-size:clamp(24px,2.6vw,32px)">Running a lender, a wallet or a payroll company?</h2>
+        <p class="small">Taskiem is built for regulated money movement. Talk to us about embedding it, white-labelling it or hosting it yourself.</p>
+      </div>
+      <a class="btn btn-pine-main" href="/partners">Talk to us</a>
+    </div>
+  </div>
+</section>
+
+</main>
+<dc-import name="Cta" theme="{{theme}}" hint-size="100%,430px"></dc-import>
+<dc-import name="Footer" theme="{{theme}}" hint-size="100%,380px"></dc-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Theme"},"$preview":{"width":1440,"height":3000}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      theme: this.props.theme === 'dark' ? 'dark' : 'light',
+      promises: [
+        { n: '01', title: 'Nothing moves without your yes', text: 'Taskiem reads back every job before it starts. Messages wait for your yes. Payments wait for your yes and your PIN.' },
+        { n: '02', title: 'Done once, never twice', text: 'Every payment carries its own mark. If the network drops and Taskiem tries again, the bank sees the same payment, not a new one.' },
+        { n: '03', title: 'Everything on record', text: 'Every action is written to a record that nobody can quietly change. You can see what happened, when it happened and who approved it.' },
+        { n: '04', title: 'Customers\' details stay private', text: 'Your lists are private by default. Only you and the team members you choose can open them.' },
+        { n: '05', title: 'Your keys stay sealed', text: 'The keys that connect Paystack, Moniepoint and your other services are stored sealed. Your team never sees them.' },
+        { n: '06', title: 'Every business kept apart', text: 'Each business has its own space. Your customers, records and keys never mix with another business.' },
+        { n: '07', title: 'The AI drafts but never approves or moves money', text: 'Taskiem uses AI to understand what you wrote and to draft the steps. Only you can approve. Only the payment service moves money.' },
+        { n: '08', title: 'You can take your records with you', text: 'Export any list whenever you like. Your records are yours, and leaving never means losing them.' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

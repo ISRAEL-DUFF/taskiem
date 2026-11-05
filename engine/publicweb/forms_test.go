@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"regexp"
 	"strings"
 	"sync"
@@ -16,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/time/rate"
 
+	"github.com/israel-duff/taskiem/engine/brand"
 	"github.com/israel-duff/taskiem/engine/formguard"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
@@ -38,11 +41,12 @@ type fakeInbox struct {
 
 type inboxRow struct {
 	sf                  uuid.UUID
+	action              *uuid.UUID
 	kind                string
 	idem, hash, payload []byte
 }
 
-func (f *fakeInbox) submit(_ context.Context, sf uuid.UUID, kind, ref string, idem, hash, payload []byte) (string, bool, error) {
+func (f *fakeInbox) submit(_ context.Context, sf uuid.UUID, action *uuid.UUID, kind, ref string, idem, hash, payload []byte) (string, bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if r, ok := f.byIdem[hex.EncodeToString(idem)]; ok {
@@ -56,7 +60,7 @@ func (f *fakeInbox) submit(_ context.Context, sf uuid.UUID, kind, ref string, id
 		return "", false, ErrReferenceTaken
 	}
 	f.byIdem[hex.EncodeToString(idem)] = ref
-	f.rows[ref] = inboxRow{sf: sf, kind: kind, idem: idem, hash: hash, payload: payload}
+	f.rows[ref] = inboxRow{sf: sf, action: action, kind: kind, idem: idem, hash: hash, payload: payload}
 	return ref, true, nil
 }
 
@@ -214,7 +218,7 @@ func TestOrderSubmission(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []storefront.Line{{ID: "2", Name: "Dish number 2", Quantity: 2, PriceKobo: 150050, LineKobo: 300100}, {ID: "3", Name: "Dish number 3", Quantity: 1, PriceKobo: 150100, LineKobo: 150100}}
-	if len(sub.Basket) != 2 || sub.Basket[0] != want[0] || sub.Basket[1] != want[1] || sub.TotalKobo != 450200 {
+	if !reflect.DeepEqual(sub.Basket, want) || sub.TotalKobo != 450200 {
 		t.Fatalf("basket %+v total %d", sub.Basket, sub.TotalKobo)
 	}
 	c := sub.Customer
@@ -411,6 +415,13 @@ func TestStatusPage(t *testing.T) {
 		{OrderState{Status: "expired", Kind: "order"}, []string{"expired"}, false},
 		{OrderState{Status: "cancelled", Kind: "order"}, []string{"cancelled"}, false},
 		{OrderState{Status: "refund_due", Kind: "order"}, []string{"refunded"}, false},
+		// Paid in parts (fronts F5): what is paid of what it costs, and a
+		// later step's own page for what is asked now.
+		{OrderState{Status: "accepted", Kind: "order", TotalKobo: 450200, DueKobo: 450200, PaidKobo: 200000}, []string{"Paid ₦2,000 of ₦4,502."}, false},
+		{OrderState{Status: "accepted", Kind: "order", TotalKobo: 450200, DueKobo: 450200, PaidKobo: 200000, AskedKobo: 250200, PaymentURL: "https://checkout.paystack.test/bal"},
+			[]string{"Paid ₦2,000 of ₦4,502.", "₦2,502 is due now.", `href="https://checkout.paystack.test/bal" rel="noopener noreferrer">Pay the balance, ₦2,502</a>`}, false},
+		{OrderState{Status: "accepted", Kind: "order", TotalKobo: 450200, DueKobo: 450200, PaidKobo: 200000, AskedKobo: 100000, PaymentURL: "https://checkout.paystack.test/part"},
+			[]string{"₦1,000 is due now.", `>Pay ₦1,000</a>`}, false},
 	} {
 		e.inbox.states[ref] = c.state
 		w := get(e.h, "GET", sfHost, loc)
@@ -705,5 +716,320 @@ func TestOrderDropAndPayAtDoor(t *testing.T) {
 	e = formServer(t, orderPage())
 	if body, _ := e.form(t, "/a/order"); strings.Contains(body, `value="on_delivery"`) {
 		t.Error("pay at the door offered without the setting")
+	}
+}
+
+// Fronts F1 (§5.4): the order and booking pages are drawn from the
+// action's form. A snapshot that carries the built-in forms (the basket,
+// the time) renders exactly what one without forms does; an action's own
+// question is shown with the hosted forms' fields, refused when required
+// and missing, and sent as the submission's answers.
+func TestPagesDrawnFromTheActionsForm(t *testing.T) {
+	render := func(withForms bool, extra string) (*formEnv, map[string]string) {
+		p := orderPage()
+		p.Model.HasServices = true
+		p.Model.Actions = append(p.Model.Actions, storefront.PublicAction{Kind: "booking", Label: "Book", Payment: "none"})
+		if withForms {
+			for i := range p.Model.Actions {
+				p.Model.Actions[i].Form = storefront.BuiltinForm(p.Model.Actions[i].Kind)
+				if extra != "" && (p.Model.Actions[i].Kind == "order" || p.Model.Actions[i].Kind == "booking") {
+					var f map[string]any
+					_ = json.Unmarshal(p.Model.Actions[i].Form, &f)
+					var q any
+					_ = json.Unmarshal([]byte(extra), &q)
+					f["properties"].(map[string]any)["spice"] = q
+					f["required"] = []any{"spice"}
+					p.Model.Actions[i].Form, _ = json.Marshal(f)
+				}
+			}
+		}
+		e := formServer(t, p)
+		c := &fakeCalendar{e: e, holds: map[string]storefront.Busy{}, bookings: map[string]BookingState{}}
+		var days [7][]storefront.Span
+		for i := range 6 {
+			days[i] = []storefront.Span{{Open: "09:00", Close: "12:00"}}
+		}
+		c.page = ServicesPage{Availability: storefront.Availability{Days: days}, Services: []storefront.Item{haircut}}
+		e.s.Services, e.s.Busy, e.s.Book, e.s.Booking, e.s.Change, e.s.PriceChange = c.services, c.busy, c.book, c.booking, c.change, c.priceChange
+		out := map[string]string{}
+		for _, path := range []string{"/a/order", "/a/enquiry", "/a/callback", "/a/booking?service=7"} {
+			out[path] = tokenRe.ReplaceAllString(get(e.h, "GET", sfHost, path).Body.String(), `name="token" value="T"`)
+		}
+		return e, out
+	}
+	_, without := render(false, "")
+	_, with := render(true, "")
+	for path, body := range without {
+		if with[path] != body {
+			t.Errorf("%s: the built-in form changes the page", path)
+		}
+	}
+
+	e, pages := render(true, `{"type": "string", "title": "How hot?", "enum": ["mild", "hot"], "x-form": {"widget": "radio"}}`)
+	for _, path := range []string{"/a/order", "/a/booking?service=7"} {
+		if !strings.Contains(pages[path], "How hot?") || !strings.Contains(pages[path], `name="a.spice" value="hot"`) {
+			t.Fatalf("%s: the question is not shown", path)
+		}
+	}
+	if strings.Contains(pages["/a/enquiry"], "How hot?") {
+		t.Fatal("another action's question shown")
+	}
+	_, tok := e.form(t, "/a/order")
+	*e.now = e.now.Add(20 * time.Second)
+	w := e.post("/a/order", goodOrder(tok))
+	if w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), "How hot?") || !strings.Contains(w.Body.String(), "4 Akoka Road, Yaba</textarea>") {
+		t.Fatalf("a required question left out: %d %s", w.Code, w.Body.String())
+	}
+	v := goodOrder(tok)
+	v.Set("a.spice", "hot")
+	if w = e.post("/a/order", v); w.Code != http.StatusSeeOther {
+		t.Fatalf("answered: %d %s", w.Code, w.Body.String())
+	}
+	ref := regexp.MustCompile(`^/o/(AD-[A-Z2-9]{6})`).FindStringSubmatch(w.Header().Get("Location"))[1]
+	sub, err := storefront.OpenSubmission(e.s.InboxKey, e.sf, ref, e.inbox.rows[ref].payload)
+	if err != nil || len(sub.Answers) != 1 || sub.Answers["spice"] != "hot" || sub.TotalKobo != 450200 {
+		t.Fatalf("the submission's answers: %v %v", sub.Answers, err)
+	}
+}
+
+// Fronts F2: an action copied for another workflow and switched on is
+// served at /a/<its slug>, has its own button after the built-in forms,
+// posts to its own address and is sent to the inbox naming it.
+func TestCopiedActionServed(t *testing.T) {
+	builtin, copied := uuid.New(), uuid.New()
+	p := orderPage()
+	home := storefront.PublicFront{Slug: "", Kind: "shop", Name: "Ada's <Kitchen>"}
+	for _, a := range p.Model.Actions {
+		a.Slug, a.Form = a.Kind, storefront.BuiltinForm(a.Kind)
+		if a.Kind == "order" {
+			a.ID = &builtin
+		}
+		home.Actions = append(home.Actions, a)
+	}
+	home.Actions = append(home.Actions, storefront.PublicAction{ID: &copied, Slug: "order-2", Kind: "order", Label: "Food delivery", Payment: "after_accept",
+		Pickup: true, Form: storefront.BuiltinForm("order")})
+	p.Model.Fronts = []storefront.PublicFront{home}
+	e := formServer(t, p)
+
+	page := get(e.h, "GET", sfHost, "/").Body.String()
+	if !strings.Contains(page, `href="/a/order-2">Food delivery</a>`) || !strings.Contains(page, `href="/a/order"`) {
+		t.Fatalf("the buttons: %s", page)
+	}
+	body, tok := e.form(t, "/a/order-2")
+	if !strings.Contains(body, `action="/a/order-2"`) || !strings.Contains(body, "<h1>Food delivery</h1>") {
+		t.Fatal("the copy's page")
+	}
+	if w := get(e.h, "GET", sfHost, "/a/order-3"); w.Code != http.StatusNotFound {
+		t.Fatalf("an action the storefront does not have: %d", w.Code)
+	}
+	*e.now = e.now.Add(20 * time.Second)
+	v := goodOrder(tok)
+	v.Set("fulfilment", "pickup")
+	w := e.post("/a/order-2", v)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("%d %s", w.Code, w.Body.String())
+	}
+	ref := regexp.MustCompile(`^/o/(AD-[A-Z2-9]{6})`).FindStringSubmatch(w.Header().Get("Location"))[1]
+	if row := e.inbox.rows[ref]; row.action == nil || *row.action != copied || row.kind != "order" {
+		t.Fatalf("sent to %+v", row)
+	}
+}
+
+// Fronts F3 (§7.3): a front is its own page at /<slug>: the business's
+// card, the front's header, its own list and its buttons; its order form
+// at /<slug>/a/order takes its basket from that list and sends the order
+// to its action. The home page lists the other fronts; an address the
+// page does not have answers 404.
+func TestFrontPages(t *testing.T) {
+	order := uuid.New()
+	p := orderPage()
+	home := storefront.PublicFront{Slug: "", Kind: "shop", Name: "Ada's <Kitchen>"}
+	for _, a := range p.Model.Actions {
+		a.Slug, a.Form = a.Kind, storefront.BuiltinForm(a.Kind)
+		home.Actions = append(home.Actions, a)
+	}
+	snacks := storefront.PublicFront{Slug: "snacks", Kind: "food", Name: "Snacks", Tagline: "Fried fresh",
+		Blocks:  []storefront.PublicBlock{{Kind: "list", Config: json.RawMessage(`{"table": "00000000-0000-0000-0000-000000000001", "table_name": "menu", "columns": {"name": "name"}}`)}},
+		Actions: []storefront.PublicAction{{ID: &order, Slug: "order", Kind: "order", Label: "Order snacks", Payment: "after_accept", Pickup: true, Form: storefront.BuiltinForm("order")}}}
+	p.Model.Fronts = []storefront.PublicFront{home, snacks}
+	p.Lists = map[string][]storefront.Item{"menu": {{ID: "1", Name: "Puff puff", PriceKobo: kobo(50000), Available: true}}}
+	e := formServer(t, p)
+
+	if page := get(e.h, "GET", sfHost, "/").Body.String(); !strings.Contains(page, `<a href="/snacks">Snacks</a>`) || !strings.Contains(page, "Fried fresh") {
+		t.Fatalf("the home page's other fronts: %s", page)
+	}
+	w := get(e.h, "GET", sfHost, "/snacks")
+	page := w.Body.String()
+	if w.Code != 200 || !strings.Contains(page, `<h2 id="front-h">Snacks</h2>`) || !strings.Contains(page, "Puff puff") || strings.Contains(page, "Dish number") ||
+		!strings.Contains(page, `href="/snacks/a/order"`) || !strings.Contains(page, `href="/snacks/a/order?item=1"`) || strings.Contains(page, `href="/a/enquiry"`) {
+		t.Fatalf("the front's page: %d %s", w.Code, page)
+	}
+	body, tok := e.form(t, "/snacks/a/order")
+	if !strings.Contains(body, `action="/snacks/a/order"`) || !strings.Contains(body, `name="q.1"`) || strings.Contains(body, `name="q.2"`) {
+		t.Fatal("the front's order form")
+	}
+	*e.now = e.now.Add(20 * time.Second)
+	v := url.Values{"token": {tok}, "website": {""}, "name": {"Ada Obi"}, "phone": {"0803 123 4567"}, "q.1": {"3"}}
+	if w = e.post("/snacks/a/order", v); w.Code != http.StatusSeeOther {
+		t.Fatalf("%d %s", w.Code, w.Body.String())
+	}
+	ref := regexp.MustCompile(`^/o/(AD-[A-Z2-9]{6})`).FindStringSubmatch(w.Header().Get("Location"))[1]
+	row := e.inbox.rows[ref]
+	sub, err := storefront.OpenSubmission(e.s.InboxKey, e.sf, ref, row.payload)
+	if err != nil || row.action == nil || *row.action != order || sub.TotalKobo != 150000 || sub.Basket[0].Name != "Puff puff" {
+		t.Fatalf("sent: %+v %+v %v", row, sub, err)
+	}
+	for _, path := range []string{"/nothing", "/snacks/a/enquiry", "/nothing/a/order"} {
+		if w := get(e.h, "GET", sfHost, path); w.Code != http.StatusNotFound {
+			t.Errorf("%s: %d", path, w.Code)
+		}
+	}
+}
+
+// No route the public host has itself is an address a front can take.
+func TestFrontSlugsMissTheRoutes(t *testing.T) {
+	for _, route := range []string{"a", "o", "f", "r", "report", "embed", "pay", "static"} {
+		if err := storefront.CheckFrontSlug(route); err == nil {
+			t.Errorf("a front may take /%s", route)
+		}
+	}
+	for _, route := range []string{"qr.png", "_static"} {
+		if frontPath.MatchString("/" + route) {
+			t.Errorf("/%s reads as a front", route)
+		}
+	}
+}
+
+// Fronts F3, Food: a dish with options asks a choice from each group
+// under its quantity, the price of each choice shown; the order is priced
+// as the dish plus the choices taken, from the copy; the page shows how
+// long a dish takes.
+func TestFoodOptionsOnTheForm(t *testing.T) {
+	order := uuid.New()
+	p := orderPage()
+	home := storefront.PublicFront{Slug: "", Kind: "shop", Name: "Ada's <Kitchen>"}
+	snacks := storefront.PublicFront{Slug: "food", Kind: "food", Name: "Food",
+		Blocks:  []storefront.PublicBlock{{Kind: "list", Config: json.RawMessage(`{"table": "00000000-0000-0000-0000-000000000001", "table_name": "menu", "columns": {"name": "name"}}`)}},
+		Actions: []storefront.PublicAction{{ID: &order, Slug: "order", Kind: "order", Label: "Order food", Payment: "after_accept", Pickup: true, Form: storefront.BuiltinForm("order")}}}
+	p.Model.Fronts = []storefront.PublicFront{home, snacks}
+	rice := storefront.Item{ID: "1", Name: "Jollof rice", PriceKobo: kobo(150000), Available: true, ReadyIn: 25,
+		Options: storefront.ParseOptions(`[{"name": "Size", "choices": ["Regular", {"name": "Large", "price": 500}]}]`)}
+	p.Lists = map[string][]storefront.Item{"menu": {rice}}
+	e := formServer(t, p)
+	if page := get(e.h, "GET", sfHost, "/food").Body.String(); !strings.Contains(page, "Ready in 25 min") {
+		t.Fatal("the dish's time")
+	}
+	body, tok := e.form(t, "/food/a/order")
+	if !strings.Contains(body, `<select class="opt" name="o.1.0" aria-label="Size">`) || !strings.Contains(body, `<option value="1">Large (&#43;₦500)</option>`) {
+		t.Fatalf("the dish's choices: %s", body)
+	}
+	*e.now = e.now.Add(20 * time.Second)
+	v := url.Values{"token": {tok}, "website": {""}, "name": {"Ada Obi"}, "phone": {"0803 123 4567"}, "q.1": {"2"}, "o.1.0": {"7"}}
+	if w := e.post("/food/a/order", v); w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), "Please choose from the options for Jollof rice") {
+		t.Fatalf("a choice the dish has not: %d", w.Code)
+	}
+	v.Set("o.1.0", "1")
+	w := e.post("/food/a/order", v)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("%d %s", w.Code, w.Body.String())
+	}
+	ref := regexp.MustCompile(`^/o/(AD-[A-Z2-9]{6})`).FindStringSubmatch(w.Header().Get("Location"))[1]
+	sub, err := storefront.OpenSubmission(e.s.InboxKey, e.sf, ref, e.inbox.rows[ref].payload)
+	if err != nil || len(sub.Basket) != 1 || sub.Basket[0].PriceKobo != 200000 || sub.TotalKobo != 400000 || sub.Basket[0].LineName() != "Jollof rice (Large)" {
+		t.Fatalf("priced: %+v %v", sub.Basket, err)
+	}
+}
+
+// A quote form asks what is wanted and by when (fronts F7); a blank form
+// asks only its own questions, its message optional.
+func TestQuoteAndBlankForms(t *testing.T) {
+	quote, blank := uuid.New(), uuid.New()
+	p := orderPage()
+	home := storefront.PublicFront{Slug: "", Kind: "shop", Name: "Ada"}
+	repairs := storefront.PublicFront{Slug: "repairs", Kind: "custom", Name: "Repairs",
+		Actions: []storefront.PublicAction{
+			{ID: &quote, Slug: "quote", Kind: "quote", Label: "Request a quote", Payment: "after_accept", Form: storefront.BuiltinForm("quote")},
+			{ID: &blank, Slug: "form", Kind: "enquiry", Label: "Send", Payment: "none",
+				Form: []byte(`{"type":"object","required":["device"],"properties":{"device":{"type":"string","title":"What needs fixing?"}}}`)}}}
+	p.Model.Fronts = []storefront.PublicFront{home, repairs}
+	e := formServer(t, p)
+
+	body, tok := e.form(t, "/repairs/a/quote")
+	if !strings.Contains(body, "What do you need?") || !strings.Contains(body, `name="a.needed_by"`) || !strings.Contains(body, "send you a price") {
+		t.Fatalf("the quote form: %s", body)
+	}
+	*e.now = e.now.Add(20 * time.Second)
+	v := url.Values{"token": {tok}, "website": {""}, "name": {"Bola"}, "phone": {"0803 123 4567"}}
+	if w := e.post("/repairs/a/quote", v); w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("no details: %d", w.Code)
+	}
+	_, tok = e.form(t, "/repairs/a/quote")
+	*e.now = e.now.Add(20 * time.Second)
+	v = url.Values{"token": {tok}, "website": {""}, "name": {"Bola"}, "phone": {"0803 123 4567"}, "a.details": {"A wardrobe, 2m wide"}, "a.needed_by": {"2026-12-20"}}
+	w := e.post("/repairs/a/quote", v)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("sent: %d %s", w.Code, w.Body.String())
+	}
+	ref := refOf(w.Header().Get("Location"))
+	row := e.inbox.rows[ref]
+	sub, err := storefront.OpenSubmission(e.s.InboxKey, e.sf, ref, row.payload)
+	if err != nil || row.kind != "quote" || sub.Answers["details"] != "A wardrobe, 2m wide" || sub.Answers["needed_by"] != "2026-12-20" || sub.TotalKobo != 0 {
+		t.Fatalf("the request: %+v %+v %v", row, sub, err)
+	}
+
+	// The blank form: its own question, no message needed.
+	_, tok = e.form(t, "/repairs/a/form")
+	*e.now = e.now.Add(20 * time.Second)
+	w = e.post("/repairs/a/form", url.Values{"token": {tok}, "website": {""}, "name": {"Bola"}, "phone": {"0803 123 4567"}, "a.device": {"Fridge"}})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("a blank form: %d %s", w.Code, w.Body.String())
+	}
+}
+
+// An item is opened by its name (an own view, with no script): with the
+// order form on it offers Add to order; with no form at all the page and
+// the item say that orders are not open yet, and where to ask, instead of
+// leaving the item doing nothing. In every theme.
+func TestItemsOpenAndSayWhenOrdersAreNotOpen(t *testing.T) {
+	order := uuid.New()
+	for _, theme := range brand.Themes {
+		p := orderPage()
+		home := storefront.PublicFront{Slug: "", Kind: "shop", Name: "Ada's Kitchen"}
+		snacks := storefront.PublicFront{Slug: "snacks", Kind: "food", Name: "Snacks",
+			Blocks:  []storefront.PublicBlock{{Kind: "list", Config: json.RawMessage(`{"table": "00000000-0000-0000-0000-000000000001", "table_name": "menu", "columns": {"name": "name"}}`)}},
+			Actions: []storefront.PublicAction{{ID: &order, Slug: "order", Kind: "order", Label: "Order snacks", Payment: "after_accept", Pickup: true, Form: storefront.BuiltinForm("order")}}}
+		cold := storefront.PublicFront{Slug: "cold", Kind: "food", Name: "Cold drinks", Blocks: snacks.Blocks}
+		p.Model.Fronts = []storefront.PublicFront{home, snacks, cold}
+		p.Model.WhatsLink = "https://wa.me/2348031234567"
+		p.Lists = map[string][]storefront.Item{"menu": {{ID: "1", Name: "Puff puff", PriceKobo: kobo(50000), Description: "Fried fresh", Available: true},
+			{ID: "2", Name: "Zobo", PriceKobo: kobo(30000), Available: false}}}
+		e := formServer(t, p)
+		withBrand(e.s, brand.Brand{Theme: theme})
+		e.h = e.s.Handler()
+
+		// With the order form on: the name opens the item, which offers Add to order.
+		page := get(e.h, "GET", sfHost, "/snacks").Body.String()
+		for _, want := range []string{`class="item-open" href="#i-1"`, `id="i-1"`, `href="/snacks/a/order?item=1"`, "Add to order", "Unavailable for now."} {
+			if !strings.Contains(page, want) {
+				t.Errorf("%s: with the order form on, missing %q", theme, want)
+			}
+		}
+		if strings.Contains(page, "Orders are not open on this page yet") {
+			t.Errorf("%s: the page says orders are not open while they are", theme)
+		}
+
+		// With no form: the page and each item say so, and where to ask.
+		page = get(e.h, "GET", sfHost, "/cold").Body.String()
+		for _, want := range []string{`href="#i-1"`, "Orders are not open on this page yet.", `href="https://wa.me/2348031234567"`, "on WhatsApp"} {
+			if !strings.Contains(page, want) {
+				t.Errorf("%s: with no form, missing %q", theme, want)
+			}
+		}
+		if strings.Contains(page, "Add to order") || strings.Contains(page, `class="add"`) {
+			t.Errorf("%s: an order button on a front that takes no orders", theme)
+		}
+		if !strings.Contains(page, "/_static/item-sheet.") {
+			t.Errorf("%s: the item view's stylesheet is not linked", theme)
+		}
 	}
 }

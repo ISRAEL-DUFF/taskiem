@@ -147,18 +147,21 @@ func (s *Server) needLines(c *chat, needs []readyNeed) string {
 	var lines []string
 	for _, n := range needsShown(needs) {
 		if n.Capability != "" {
-			// Any rail that can: named, and connected on the Connections page.
+			// Any rail that can: named, and connected from the chat.
 			line := "• " + n.Message
 			if len(n.Rails) > 0 {
-				line += " (" + strings.Join(s.railNames(c, n.Rails), ", ") + ")"
+				line += " (" + strings.Join(s.railNames(c, n.Rails), ", ") + "). " + c.t("connect.hint", "service", n.Rails[0])
+			} else {
+				line += " " + s.waLink(c, "/connections")
 			}
-			lines = append(lines, line+" "+s.waLink(c, "/connections"))
+			lines = append(lines, line)
 			continue
 		}
 		line := "• " + needMessage(c.lang.Tag, n.Kind, n.Problem, n.Service, n.Name)
 		switch n.Kind {
 		case "connection":
-			line += " " + s.waLink(c, "/connections?connect="+n.Connector)
+			// Connected from the chat (connect_links.go).
+			line += " " + c.t("connect.hint", "service", n.Connector)
 		case "secret":
 			line += " " + s.waLink(c, "/settings")
 		}
@@ -194,6 +197,12 @@ func (s *Server) waBuildFinish(ctx context.Context, c *chat, b *waBuild, specs [
 			for _, t := range specs {
 				failed = append(failed, t.Name)
 			}
+		} else if s.tablesProvisioning(ctx, c.tenant.ID) {
+			// The first table makes the business's records project, which
+			// takes a minute or two: say so first (decision 0060, §9.1).
+			if err := c.say(ctx, s, c.t("wa.build.tables_setting_up")); err != nil {
+				return "", err
+			}
 		}
 		for _, spec := range specs {
 			if !c.p.Can(PermTableEdit) {
@@ -205,7 +214,12 @@ func (s *Server) waBuildFinish(ctx context.Context, c *chat, b *waBuild, specs [
 			case err == nil:
 				made = append(made, spec.Name)
 			case errors.Is(err, datatables.ErrConflict):
-				// It exists already: the draft uses it as it is.
+				// It exists already: the draft uses it as it is, and what
+				// it lacks is said.
+				if missing := s.tableMissing(ctx, c.tenant.ID, spec.Name, tableReqOf(spec).Columns); len(missing) > 0 {
+					notes = append(notes, c.t("wa.build.table_lacks", "table", whatsapp.SafeText(spec.Name),
+						"columns", whatsapp.SafeText(strings.Join(missing, ", ")), "link", s.waLink(c, "/tables")))
+				}
 			default:
 				s.Logger.Warn("chat: making a draft's table", "tenant", c.tenant.ID, "table", spec.Name, "err", err)
 				failed = append(failed, spec.Name)
@@ -279,7 +293,9 @@ func (s *Server) waBuildNext(ctx context.Context, c *chat, b *waBuild) (string, 
 		return "", err
 	}
 	if blocking := blockingNeeds(needs); len(blocking) > 0 {
-		if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
+		// What it waits for may be connected from here: "connect ..." then
+		// carries on with it.
+		if err := s.connectWaiting(ctx, c, b); err != nil {
 			return "", err
 		}
 		return c.t("wa.build.before_publish") + "\n" + s.needLines(c, blocking) + "\n\n" + c.t("wa.build.publish_later", "name", whatsapp.SafeText(b.Name)), nil
@@ -367,6 +383,12 @@ func (s *Server) waPublishWorkflow(ctx context.Context, c *chat, name string) (b
 	if err != nil {
 		return true, c.say(ctx, s, c.t("wa.publish.failed", "reason", whatsapp.SafeText(plainError(err))))
 	}
+	if state == publishNotReady {
+		// What it waits for may be connected from here (connect_links.go).
+		if err := s.connectWaiting(ctx, c, &waBuild{Workflow: wf, Version: v, Name: real}); err != nil {
+			return true, err
+		}
+	}
 	return true, c.say(ctx, s, s.publishReply(ctx, c, state, real, needs, wf))
 }
 
@@ -437,7 +459,7 @@ func (s *Server) shopTurnOnOrders(ctx context.Context, c *chat) error {
 	for _, f := range forms {
 		var have *uuid.UUID
 		for _, a := range actions {
-			if a.Kind == f.kind {
+			if a.Builtin && a.Kind == f.kind {
 				have = a.Workflow
 			}
 		}
@@ -493,7 +515,7 @@ func (s *Server) shopTurnOnOrders(ctx context.Context, c *chat) error {
 		msg += " " + c.t("wa.shop.bookings_on")
 	}
 	if !paystack {
-		msg += "\n" + c.t("wa.shop.orders_no_paystack", "link", s.waLink(c, "/connections?connect=paystack"))
+		msg += "\n" + c.t("wa.shop.orders_no_paystack", "link", c.t("connect.hint", "service", "paystack"))
 	}
 	return c.say(ctx, s, msg)
 }
@@ -543,4 +565,16 @@ func (s *Server) railNames(c *chat, ids []string) []string {
 		out = append(out, name)
 	}
 	return out
+}
+
+// tablesProvisioning reports whether making a table now would first make
+// the business's records project: data tables are on, and the project is
+// not ready.
+func (s *Server) tablesProvisioning(ctx context.Context, tenant uuid.UUID) bool {
+	svc, err := s.tables()
+	if err != nil {
+		return false
+	}
+	st, err := svc.Status(ctx, tenant)
+	return err == nil && st.Available && !st.Ready()
 }

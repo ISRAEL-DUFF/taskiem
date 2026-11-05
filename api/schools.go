@@ -277,6 +277,11 @@ func (s *Server) putSchoolSettings(w http.ResponseWriter, r *http.Request) {
 	var issuing schools.Issuing
 	var wording map[int]string
 	if err := s.tx(r, func(tx pgx.Tx) error {
+		if req.Enabled {
+			if err := schoolsNeedMoney(r, tx, p); err != nil {
+				return err
+			}
+		}
 		changed, err := schools.SetEnabled(r.Context(), tx, p.TenantID, req.Enabled, p.Actor())
 		if err != nil {
 			return err

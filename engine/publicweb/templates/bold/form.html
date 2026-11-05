@@ -13,13 +13,14 @@
 <div class="line{{if not .Orderable}} is-unavailable{{end}}">
 <span class="line-img" aria-hidden="true"></span>
 {{if .Orderable}}<label for="q-{{.N}}"><span class="line-name">{{.Name}}</span> <span class="line-price">{{.Price}}</span></label>
-<input id="q-{{.N}}" class="qty" type="number" name="q.{{.ID}}" value="{{.Qty}}" min="0" max="{{.Max}}" step="1" inputmode="numeric" data-price="{{.PriceKobo}}">
+<input id="q-{{.N}}" class="qty" type="number" name="q.{{.ID}}" value="{{.Qty}}" min="0" max="{{.Max}}" step="1" inputmode="numeric" data-price="{{.PriceKobo}}">{{range .Options}}
+<select class="opt" name="{{.Input}}" aria-label="{{.Name}}">{{range .Choices}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select>{{end}}
 {{else}}<span>{{.Name}}</span> <span class="badge">{{if .SoldOut}}Sold out{{else}}Unavailable{{end}}</span>{{end}}
 </div>
 {{end}}
 </fieldset>
 {{end}}
-{{if eq .Kind "order"}}
+{{template "hire" .}}{{if eq .Kind "order"}}
 {{if and .Pickup .Delivery}}
 <fieldset class="segment">
 <legend>Delivery or pickup?</legend>
@@ -69,7 +70,7 @@
 {{else if eq .Kind "callback"}}
 <div class="box"><label for="f-best">Best time to call · optional</label>
 <input id="f-best" type="text" name="best_time" value="{{.BestTime}}" maxlength="60" placeholder="Weekdays after 5pm"></div>
-{{end}}
+{{end}}{{range .Questions}}{{template "hfield" .}}{{end}}
 </div>
 <div class="dark sum">
 {{if .Items}}<p class="total" data-total aria-live="polite"></p>{{end}}

@@ -22,6 +22,21 @@ export default tseslint.config(
       globals: { process: "readonly", console: "readonly", window: "readonly", document: "readonly" },
     },
   },
+  // Website experiment 2 (website/experiment-2/README.md): its build runs on
+  // Node and in Chromium, its page script in browsers.
+  {
+    files: ["website/experiment-2/*.mjs"],
+    languageOptions: {
+      globals: { process: "readonly", console: "readonly", window: "readonly", document: "readonly", DOMParser: "readonly", Node: "readonly" },
+    },
+  },
+  {
+    files: ["website/experiment-2/site.js"],
+    languageOptions: {
+      sourceType: "script",
+      globals: { window: "readonly", document: "readonly", setTimeout: "readonly", performance: "readonly", requestAnimationFrame: "readonly", IntersectionObserver: "readonly", ResizeObserver: "readonly" },
+    },
+  },
   // The engineering atlas (docs/atlas/README.md): its build runs on Node,
   // its page script in browsers.
   {

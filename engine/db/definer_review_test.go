@@ -11,7 +11,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db/dbtest"
 )
 
-// What the definer review changed (migration 00266), as each caller meets it.
+// What the definer review changed (migration 00314), as each caller meets it.
 func TestDefinerReview(t *testing.T) {
 	d := dbtest.New(t)
 	partner := d.SeedTenant(t, nil)
@@ -89,7 +89,7 @@ func TestDefinerReview(t *testing.T) {
 	if _, err := d.Admin.Exec(ctx, `UPDATE tenants SET name = 'mimic ' || $1::text WHERE id = $2`, a.ID, b.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.App.QueryRow(ctx, `SELECT id FROM taskiem_ops_tenants($1, 1)`, a.ID.String()).Scan(&id); err != nil || id != a.ID {
+	if err := d.App.QueryRow(ctx, `SELECT id FROM taskiem_ops_tenants($1, 1, 0)`, a.ID.String()).Scan(&id); err != nil || id != a.ID {
 		t.Errorf("looking up %s found %s: %v", a.ID, id, err)
 	}
 

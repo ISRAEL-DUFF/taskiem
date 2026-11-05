@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import type { StepType, Trigger } from "./wd.js";
+import type { StepType, StorefrontTriggerConfig, Trigger } from "./wd.js";
 
 // wd.ts is written by hand from schemas/wd-v1.schema.json. These lists are
 // checked against the types by `pnpm typecheck` (satisfies: every member,
@@ -14,11 +14,19 @@ const stepTypes = {
 
 const triggerTypes = {
   webhook: true, schedule: true, connector_event: true, capability_event: true, polling: true, database_change: true,
-  manual: true, whatsapp: true, ussd: true, email: true, subflow: true, storefront: true, form: true, invoice: true,
+  manual: true, whatsapp: true, ussd: true, email: true, subflow: true, storefront: true, form: true, invoice: true, link: true,
 } satisfies Record<Trigger["type"], true>;
 
+const storefrontConfig = { action: true, action_id: true } satisfies Record<keyof StorefrontTriggerConfig, true>;
+
 interface Schema {
-  $defs: { stepCommon: { properties: { type: { enum: string[] } } }; trigger: { properties: { type: { enum: string[] } } } };
+  $defs: {
+    stepCommon: { properties: { type: { enum: string[] } } };
+    trigger: {
+      properties: { type: { enum: string[] } };
+      allOf: { if: { properties: { type: { const: string } } }; then: { properties?: { config?: { properties?: Record<string, unknown> } } } }[];
+    };
+  };
 }
 
 const schema = JSON.parse(readFileSync(new URL("../../schemas/wd-v1.schema.json", import.meta.url), "utf8")) as Schema;
@@ -29,5 +37,9 @@ describe("wd.ts matches schemas/wd-v1.schema.json", () => {
   });
   it("has the schema's trigger types", () => {
     expect(Object.keys(triggerTypes).sort()).toEqual([...schema.$defs.trigger.properties.type.enum].sort());
+  });
+  it("has the storefront trigger's config", () => {
+    const sf = schema.$defs.trigger.allOf.find((c) => c.if.properties.type.const === "storefront");
+    expect(Object.keys(sf?.then.properties?.config?.properties ?? {}).sort()).toEqual(Object.keys(storefrontConfig).sort());
   });
 });

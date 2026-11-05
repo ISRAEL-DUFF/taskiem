@@ -40,8 +40,16 @@ func main() {
 	app := flag.String("app", "", "the web app's address, for the site's sign-up buttons; empty leaves them out")
 	whatsapp := flag.String("whatsapp", "", "Taskiem's WhatsApp number with the country code, for the site's chat buttons; empty leaves them out")
 	email := flag.String("email", "", "the contact email the site shows; empty leaves it out")
+	data := flag.String("data", "", "only write what the website lists (templates, connectors, plans) as JSON to this file, for other builds of the website")
 	flag.Parse()
 	cfg := Config{Base: *base, Source: *source, Site: *site, App: *app, WhatsApp: *whatsapp, Email: *email}
+	if *data != "" {
+		if err := writeWebsiteData(*root, cfg, *data); err != nil {
+			fmt.Fprintln(os.Stderr, "docsite:", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if err := run(*root, *out, cfg, *check); err != nil {
 		fmt.Fprintln(os.Stderr, "docsite:", err)
 		os.Exit(1)

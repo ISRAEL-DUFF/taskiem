@@ -13,15 +13,16 @@
   {{with .M.Card.Tagline}}<p class="lede">{{.}}</p>{{end}}
   {{if or .Verified .M.Card.Area}}<p class="facts">{{if .Verified}}{{template "i-check"}}Verified business{{end}}{{if and .Verified .M.Card.Area}} · {{end}}{{.M.Card.Area}}</p>{{end}}
   <div class="hero-actions">
-    {{range .Forms}}{{if or (eq .Kind "order") (and (eq .Kind "booking") (not $.Ordering))}}<a class="btn btn-light" href="/a/{{.Kind}}">{{.Label}}</a>{{end}}{{end}}
+    {{range .Forms}}{{if or (eq .Ref "order") (and (eq .Kind "booking") (not $.Ordering))}}<a class="btn btn-light" href="{{$.Base}}/a/{{.Ref}}">{{.Label}}</a>{{end}}{{end}}
     {{with .M.WhatsLink}}<a class="round{{if not $.Forms}} round-wide{{end}}" href="{{.}}" rel="noopener" aria-label="Chat on WhatsApp">{{template "i-whatsapp"}}{{if not $.Forms}}<span>Chat on WhatsApp</span>{{end}}</a>{{end}}
     {{with .Phone}}<a class="round" href="tel:{{.}}" aria-label="Call">{{template "i-call"}}</a>{{end}}
     {{with .M.MapLink}}<a class="round" href="{{.}}" rel="noopener" aria-label="Directions">{{template "i-map"}}</a>{{end}}
   </div>
-  {{if .Forms}}<nav class="more" aria-label="Order and contact forms">{{range .Forms}}{{if not (or (eq .Kind "order") (and (eq .Kind "booking") (not $.Ordering)))}}<a href="/a/{{.Kind}}">{{.Label}}</a>{{end}}{{end}}</nav>{{end}}
+  {{if .Forms}}<nav class="more" aria-label="Order and contact forms">{{range .Forms}}{{if not (or (eq .Ref "order") (and (eq .Kind "booking") (not $.Ordering)))}}<a href="{{$.Base}}/a/{{.Ref}}">{{.Label}}</a>{{end}}{{end}}</nav>{{end}}
 </header>
 <main class="page">
-  {{if .Closed}}<p class="notice" role="status">{{.Closed}}</p>{{end}}
+{{with .Front}}<section class="panel front" aria-labelledby="front-h"><h2 id="front-h">{{.Name}}</h2>{{with .Tagline}}<p>{{.}}</p>{{end}}<p><a href="{{$.Home}}">All of {{$.M.Card.Name}}</a></p></section>
+{{end}}  {{if .Closed}}<p class="notice" role="status">{{.Closed}}</p>{{end}}
   {{if gt (len .Sections) 1}}<nav class="tabs" aria-label="Sections">
     {{range $i, $s := .Sections}}{{if .Title}}<a href="#s{{$i}}">{{.Title}}</a>{{end}}
     {{end}}
@@ -41,6 +42,7 @@
     </div>
   </section>
   {{end}}
+  {{if and .HasItems (not .Forms) (not .Closed)}}<p class="notice" role="status">Orders are not open on this page yet.{{with .M.WhatsLink}} <a href="{{.}}" rel="noopener">Message {{$.M.Card.Name}} on WhatsApp</a> to order.{{else}}{{with .Phone}} Call <a href="tel:{{.}}">{{.}}</a> to order.{{end}}{{end}}</p>{{end}}
   {{if .HasItems}}
   {{range $i, $s := .Sections}}
   <section id="s{{$i}}" aria-label="{{if .Title}}{{.Title}}{{else}}Catalogue{{end}}">
@@ -50,9 +52,10 @@
       <article class="tile{{if or (not .Available) .SoldOut}} is-unavailable{{end}}">
         <div class="tile-img">{{if .Small}}<img src="{{.Small}}" srcset="{{.Small}} 320w, {{.Large}} 800w" sizes="(min-width: 40rem) 13rem, 45vw" alt="{{.Name}}" loading="lazy" decoding="async">{{end}}
         {{if not .Available}}<span class="badge">Unavailable</span>{{else if .SoldOut}}<span class="badge">Sold out</span>{{end}}</div>
-        <h3>{{.Name}}</h3>
-        {{with .Description}}<p class="tile-sub">{{.}}</p>{{end}}
-        <p class="tile-row"><span class="price">{{.Price}}</span>{{if and $.Ordering .Orderable}}<a class="add" href="/a/order?item={{.ID}}" aria-label="Add {{.Name}}">{{template "i-plus"}}</a>{{end}}</p>
+        <h3><a class="item-open" href="#i-{{.ID}}">{{.Name}}</a></h3>
+        {{with .Description}}<p class="tile-sub">{{.}}</p>{{end}}{{if .ReadyIn}}<p class="tile-sub">Ready in {{.ReadyIn}} min</p>{{end}}
+        <p class="tile-row"><span class="price">{{.Price}}</span>{{if and $.Ordering .Orderable}}<a class="add" href="{{$.Base}}/a/order?item={{.ID}}" aria-label="Add {{.Name}}">{{template "i-plus"}}</a>{{end}}</p>
+        {{template "itemsheet" (sheet . $)}}
       </article>
       {{end}}
     </div>
@@ -71,11 +74,18 @@
     {{with .M.Card.Address}}<h2>Where to find us</h2><p>{{.}}</p>{{with $.M.MapLink}}<p><a href="{{.}}" rel="noopener">Get directions</a></p>{{end}}{{end}}
   </section>
   {{end}}
-</main>
+{{if .Fronts}}<section aria-labelledby="fronts-h">
+    <h2 id="fronts-h">More from {{.M.Card.Name}}</h2>
+    <ul class="items">
+      {{range .Fronts}}<li class="item">{{if .Small}}<img class="thumb" src="{{.Small}}" alt="" loading="lazy" decoding="async">{{else}}<span class="thumb thumb-icon">{{template "i-photo"}}</span>{{end}}<div class="item-text"><h3><a href="{{.Href}}">{{.Name}}</a></h3>{{with .Tagline}}<p class="item-sub">{{.}}</p>{{end}}</div></li>
+      {{end}}
+    </ul>
+  </section>
+{{end}}</main>
 <footer class="foot">
 <p>Powered by Taskiem · <a href="/report">Report this page</a></p>
 <p class="safety">Taskiem never asks for card details, PINs or OTPs. {{template "safety"}}</p>
 </footer>
-{{if .Ordering}}<a class="sticky" href="/a/order"><span>Ready to order?</span><span class="sticky-go">Order now{{template "i-next"}}</span></a>{{end}}
+{{if .Ordering}}<a class="sticky" href="{{.Base}}/a/order"><span>Ready to order?</span><span class="sticky-go">Order now{{template "i-next"}}</span></a>{{end}}
 </body>
 </html>

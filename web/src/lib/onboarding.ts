@@ -1,6 +1,8 @@
 // Getting started (GET /v1/onboarding, docs/onboarding.md): the checklist's
 // wording, the guided first workflow's helpers, and the in-product help.
 import type { JSONSchema } from "../api";
+import type { Me } from "../api";
+import { areaOn } from "./areas";
 import type { Template } from "./templates";
 
 export interface Onboarding {
@@ -19,6 +21,15 @@ export interface Onboarding {
 }
 
 export type ChecklistId = "verify_email" | "chat" | "page" | "connection" | "workflow" | "publish" | "first_run" | "invite";
+
+/** The checklist for a business that has turned parts of Taskiem off: a
+ * step about a part it does not use (making the shop page) is left out, and
+ * the counts follow. */
+export function forAreas(o: Onboarding, areas: Me["areas"]): Onboarding {
+  const items = o.items.filter((it) => !(it.id === "page" && !areaOn(areas, "storefront")));
+  if (items.length === o.items.length) return o;
+  return { ...o, items, done: items.filter((i) => i.done).length, total: items.length, complete: o.complete || items.every((i) => i.done) };
+}
 
 /** Each checklist step: what it says, and where it is done. */
 export const CHECKLIST: Record<ChecklistId, { title: string; text: string; href: string; action: string }> = {

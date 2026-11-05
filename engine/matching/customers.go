@@ -2,6 +2,9 @@ package matching
 
 import (
 	"context"
+	"encoding/json"
+	"slices"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -28,6 +31,7 @@ import (
 // Reasons the permanent-account rule gives. They name no one.
 const (
 	ReasonOwnAccount = "paid into the customer's own account number"
+	ReasonOwnLink    = "paid through the customer's own payment link"
 	ReasonOldest     = "the customer's oldest open invoice"
 	ReasonNext       = "what was left after the customer's older open invoices"
 	// ReasonSibling: what was left after the student's own invoices, where
@@ -72,7 +76,8 @@ func (m *Matcher) permanent(ctx context.Context, tenant uuid.UUID, e entry) (boo
 			return err
 		}
 		var err error
-		done, err = m.CountCustomer(ctx, tx, tenant, e.ID, acct.CustomerID(), CustomerCounting{Connection: e.Channel, How: "exact", By: "system:" + e.Channel, Reasons: []string{ReasonOwnAccount}})
+		done, err = m.CountCustomer(ctx, tx, tenant, e.ID, acct.CustomerID(), CustomerCounting{Connection: e.Channel, How: "exact", By: "system:" + e.Channel,
+			Reasons: []string{ReasonOwnAccount}, Note: e.Description, AmountKobo: e.AmountKobo})
 		return err
 	})
 	if err != nil {
@@ -90,6 +95,12 @@ type CustomerCounting struct {
 	How        string
 	By         string
 	Reasons    []string
+	// Note is what the payment carried (the rail's note), and AmountKobo
+	// what it was: for a linked business (link:<its id>), the invoice
+	// named in the note, or by the pairing token of its payout of that
+	// amount, is counted first (docs/spec/business-links.md §6.3).
+	Note       string
+	AmountKobo int64
 }
 
 // CountedPart is one part CountCustomer counted: the invoice as it is
@@ -134,12 +145,47 @@ func (m *Matcher) CountCustomer(ctx context.Context, tx pgx.Tx, tenant, entryID 
 	if err != nil {
 		return nil, err
 	}
+	// A linked business's money goes first to the invoice it names: in the
+	// note, or by its payout's pairing token when the rail dropped the
+	// note. Oldest-first then passes over invoices it queried.
+	linked := strings.HasPrefix(customer, "key:link:")
+	var token string
+	if linked {
+		var named int
+		if named, token = namedInvoice(list, c.Note); named < 0 && c.AmountKobo > 0 {
+			if err := tx.QueryRow(ctx, `SELECT COALESCE(taskiem_link_payout_token($1, $2), '')`, customer, c.AmountKobo).Scan(&token); err != nil {
+				return nil, err
+			}
+			named, _ = namedInvoice(list, token)
+		}
+		if named >= 0 {
+			if err := count(list[named], ReasonNamed); err != nil {
+				return nil, err
+			}
+			list = slices.Delete(slices.Clone(list), named, named+1)
+		} else {
+			// A token that names no open invoice pairs nothing: the money
+			// goes oldest first, and the payout stays unpaired.
+			token = ""
+		}
+		list = slices.DeleteFunc(list, func(x invoicing.Invoice) bool { return x.Disputed })
+	}
 	reason := ReasonOldest
 	for _, x := range list {
 		if err := count(x, reason); err != nil {
 			return nil, err
 		}
 		reason = ReasonNext
+	}
+	if linked && token != "" {
+		// The buyer's payout and this credit are one transfer: the buyer's
+		// payment is marked paired, through the one door into its side,
+		// after everything here is written (the scope is the buyer's
+		// from then on).
+		if err := matched(ctx, tx, tenant, entryID, m.now()); err != nil {
+			return nil, err
+		}
+		return done, pairPayout(ctx, tx, customer, token)
 	}
 	// Where the school shares family credit, what is left counts towards
 	// the siblings' open invoices, each sibling's oldest first.
@@ -162,6 +208,88 @@ func (m *Matcher) CountCustomer(ctx context.Context, tx pgx.Tx, tenant, entryID 
 	return done, matched(ctx, tx, tenant, entryID, m.now())
 }
 
+// ReasonNamed: the invoice a linked business's payment named, in its note
+// or by its payout's pairing token.
+const ReasonNamed = "the invoice the payment named"
+
+// namedInvoice is the open invoice whose number note carries as a word of
+// its own ("INV-0042/7QX4", "for inv-0042"), and the token it was found
+// in; -1 when none, or more than one, is named.
+func namedInvoice(list []invoicing.Invoice, note string) (int, string) {
+	if note == "" {
+		return -1, ""
+	}
+	words := strings.FieldsFunc(strings.ToUpper(note), func(r rune) bool { return r == ' ' || r == '/' || r == ',' || r == ';' || r == ':' })
+	found := -1
+	for i, x := range list {
+		if slices.Contains(words, strings.ToUpper(x.Number)) {
+			if found >= 0 {
+				return -1, ""
+			}
+			found = i
+		}
+	}
+	if found < 0 {
+		return -1, ""
+	}
+	// A payout from Taskiem carries NUMBER/CODE, its pairing token.
+	up, num := strings.ToUpper(note), strings.ToUpper(list[found].Number)
+	if i := strings.Index(up, num+"/"); i >= 0 {
+		rest := up[i+len(num)+1:]
+		if n := strings.IndexFunc(rest, func(r rune) bool { return (r < 'A' || r > 'Z') && (r < '0' || r > '9') }); n != 0 {
+			if n < 0 {
+				n = len(rest)
+			}
+			return found, num + "/" + rest[:n]
+		}
+	}
+	return found, ""
+}
+
+// linkBuyer is the buyer behind a link customer key (key:link:<buyer>),
+// and whether the key is one.
+func linkBuyer(customer string) (uuid.UUID, bool) {
+	id, err := uuid.Parse(strings.TrimPrefix(customer, "key:link:"))
+	return id, err == nil
+}
+
+// pairPayout marks the linked buyer's payment that carried token as
+// paired with this credit, entering the buyer's side (link:<buyer>)
+// through taskiem_link_enter: the last write of the transaction. The
+// link is found among the seller's own links, read whole, so no statement
+// of the seller's names the buyer outside the door.
+func pairPayout(ctx context.Context, tx pgx.Tx, customer, token string) error {
+	rows, err := tx.Query(ctx, `SELECT id, business FROM taskiem_links_of() WHERE state = 'active'`)
+	if err != nil {
+		return err
+	}
+	type side struct {
+		id, business uuid.UUID
+	}
+	sides, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (side, error) {
+		var x side
+		return x, r.Scan(&x.id, &x.business)
+	})
+	if err != nil {
+		return err
+	}
+	buyer, linked := linkBuyer(customer)
+	if !linked {
+		return nil
+	}
+	i := slices.IndexFunc(sides, func(x side) bool { return x.business == buyer })
+	if i < 0 {
+		return nil
+	}
+	link := sides[i].id
+	detail, _ := json.Marshal(map[string]any{"token": token})
+	if _, err := tx.Exec(ctx, `SELECT taskiem_link_enter($1, 'system', 'matching', 'link.paired', $2)`, link, detail); err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `UPDATE bill_payments SET paired_at = now() WHERE token = $1 AND paired_at IS NULL`, token)
+	return err
+}
+
 // TellPaid tells the runs waiting on the invoices that CountCustomer's
 // parts paid in full, after the transaction that counted them commits.
 func (m *Matcher) TellPaid(ctx context.Context, tenant uuid.UUID, parts []CountedPart) error {
@@ -173,4 +301,60 @@ func (m *Matcher) TellPaid(ctx context.Context, tenant uuid.UUID, parts []Counte
 		}
 	}
 	return nil
+}
+
+// LinkPaid counts a payment the invoices' checker found through a
+// customer's payment link (invoicing.Invoices.LinkReceived): the money is
+// recorded in the log as the rail's payment event would be (one entry
+// whichever is heard first) and counted as the customer's, exactly.
+func (m *Matcher) LinkPaid(ctx context.Context, tenant, link uuid.UUID, r invoicing.Received) error {
+	if m.Invoices.MoneyLog == nil {
+		// Counted when the rail's event is heard and matched (exact).
+		return nil
+	}
+	var entry uuid.UUID
+	err := db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		amount := r.AmountKobo
+		var err error
+		entry, _, err = m.Invoices.MoneyLog.RecordTx(ctx, tx, tenant, moneylog.Entry{Direction: "in", Kind: "payment", Status: "settled", Channel: r.Connection,
+			Reference: r.PaymentID, Event: "payment.received", AmountKobo: &amount, Source: "lookup"})
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	return m.linkEntry(ctx, tenant, entry, link, r.Account, r.Connection)
+}
+
+// linkEntry counts an entry paid through a customer's payment link
+// towards the customer's open invoices, oldest first, the rest their
+// credit, with no one asked: the reference is one Taskiem gave for that
+// customer. Counting again finds nothing left of the entry.
+func (m *Matcher) linkEntry(ctx context.Context, tenant, entry, link, account uuid.UUID, channel string) error {
+	var done []CountedPart
+	err := db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		if err := moneylog.LockEntry(ctx, tx, entry); err != nil {
+			return err
+		}
+		customer, err := invoicing.LinkCustomer(ctx, tx, tenant, link)
+		if err != nil {
+			return err
+		}
+		if err := invoicing.MarkCustomers(ctx, tx, tenant, entry, customer, nil, "link", "system:"+channel); err != nil {
+			return err
+		}
+		if done, err = m.CountCustomer(ctx, tx, tenant, entry, customer, CustomerCounting{Connection: channel, How: "exact", By: "system:" + channel,
+			Reasons: []string{ReasonOwnLink}}); err != nil {
+			return err
+		}
+		if account != uuid.Nil {
+			_, err = tx.Exec(ctx, `UPDATE customer_invoice_accounts SET status = 'paid', updated_at = now() WHERE tenant_id = $1 AND id = $2 AND customer_link_id = $3`,
+				tenant, account, link)
+		}
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	return m.TellPaid(ctx, tenant, done)
 }

@@ -77,6 +77,7 @@ An upgrade stops Taskiem for about 30 seconds while workers drain, so keep payro
 - the certificate expiring within 14 days;
 - no successful backup for 36 hours;
 - a release that failed to upgrade and was rolled back;
+- on the staging channel, main ahead of the running release by a merge more than a day old (CI did not tag the release, or the server did not take it);
 - the recovery sheet still on the server;
 - the public host or the mail server unhealthy, when they are on.
 
@@ -151,7 +152,7 @@ Emptying the answer later stops `taskiem-mail`. Published email triggers then re
 - The mail server takes mail only for addresses of live email triggers, refusing everything else before the message is sent: it is not a relay, and it sends nothing.
 - The public host and the mail server sign in as a separate user, a member of `taskiem_public` only, which reads no table; their env files hold nothing else.
 - The database user Taskiem signs in as is a member of `taskiem_app` only; row-level security applies to it ([operations](operations.md#database-roles)). The owner's URL is used for migrations only.
-- Images are accepted only with a cosign signature from this repository's CI workflow on main or a version tag.
+- Images are accepted only with a cosign signature from this repository's CI workflow on main or a version tag. cosign checks it against Sigstore's signed trust metadata, taken from the first source that answers: Sigstore's CDN, the same repository on GitHub Pages (`sigstore.github.io/root-signing`), or the trusted root saved under `/var/lib/taskiem-vps` after the last check that got through. A refused signature is final whichever source gave the verdict; only a source that cannot be fetched moves on to the next. (`TASKIEM_VPS_TUF_SOURCES` overrides the list.)
 
 ## What is in deploy/vm
 

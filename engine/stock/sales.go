@@ -22,12 +22,16 @@ import (
 // sale, a movement per item (reason sale) and, for cash, a takings entry
 // in the money log, in one transaction. A sale paid by transfer or on the
 // terminal waits for its money, which is matched to it once (MatchSales).
+// A sale on credit moves no money: what the customer owes is a notebook
+// debt (an invoice of kind credit) made in the same transaction by
+// SaleIn.OnCredit, and the customer's payments count towards it.
 
 // How a sale was paid.
 const (
 	Cash     = "cash"
 	Transfer = "transfer"
 	POS      = "pos"
+	Credit   = "credit"
 )
 
 // SaleLine is one item of a sale.
@@ -54,6 +58,10 @@ type SaleIn struct {
 	Key        string
 	SoldAt     time.Time
 	Entry      *uuid.UUID
+	// OnCredit records what the customer owes for a sale on credit, in
+	// the sale's transaction, and answers its invoice: required with
+	// PaidHow credit, which writes no money.
+	OnCredit func(ctx context.Context, tx pgx.Tx, lines []SaleLine, amountKobo int64) (uuid.UUID, error)
 }
 
 // CounterSale is a recorded sale.
@@ -74,6 +82,8 @@ type CounterSale struct {
 	// Short is the items sold beyond the stock there was, once its
 	// movements landed.
 	Short []string `json:"short,omitempty"`
+	// InvoiceID is a sale on credit's: what the customer owes for it.
+	InvoiceID *uuid.UUID `json:"invoice_id,omitempty"`
 }
 
 var (
@@ -93,6 +103,10 @@ func (in *SaleIn) check() error {
 	}
 	switch in.PaidHow {
 	case Cash, Transfer, POS:
+	case Credit:
+		if in.OnCredit == nil {
+			return fmt.Errorf("%w: a sale on credit names who owes for it", ErrSaleInvalid)
+		}
 	default:
 		return fmt.Errorf("%w: paid in cash, by transfer or on the terminal (pos)", ErrSaleInvalid)
 	}
@@ -136,12 +150,12 @@ func (in *SaleIn) check() error {
 	return nil
 }
 
-const saleCols = `id, reference, lines, amount_kobo, paid_how, status, entry_id, COALESCE(matched_how, ''), COALESCE(note, ''), actor, sold_at`
+const saleCols = `id, reference, lines, amount_kobo, paid_how, status, entry_id, COALESCE(matched_how, ''), COALESCE(note, ''), actor, sold_at, invoice_id`
 
 func scanSale(r pgx.Row) (CounterSale, error) {
 	var x CounterSale
 	var lines []byte
-	err := r.Scan(&x.ID, &x.Reference, &lines, &x.AmountKobo, &x.PaidHow, &x.Status, &x.EntryID, &x.MatchedHow, &x.Note, &x.Actor, &x.SoldAt)
+	err := r.Scan(&x.ID, &x.Reference, &lines, &x.AmountKobo, &x.PaidHow, &x.Status, &x.EntryID, &x.MatchedHow, &x.Note, &x.Actor, &x.SoldAt, &x.InvoiceID)
 	if err == nil {
 		err = json.Unmarshal(lines, &x.Lines)
 	}
@@ -220,6 +234,14 @@ func (s *Stock) RecordSale(ctx context.Context, tenant uuid.UUID, in SaleIn, log
 			}
 			entry, status, matchedHow = in.Entry, "matched", "owner"
 		}
+		var invoice *uuid.UUID
+		if in.PaidHow == Credit {
+			id, err := in.OnCredit(ctx, tx, in.Lines, *in.AmountKobo)
+			if err != nil {
+				return err
+			}
+			status, invoice = Credit, &id
+		}
 		for attempt := 0; ; attempt++ {
 			sp, err := tx.Begin(ctx)
 			if err != nil {
@@ -227,10 +249,10 @@ func (s *Stock) RecordSale(ctx context.Context, tenant uuid.UUID, in SaleIn, log
 			}
 			ref := saleReference()
 			x, err = scanSale(sp.QueryRow(ctx, `INSERT INTO stock_sales (id, tenant_id, reference, lines, amount_kobo, paid_how, status, entry_id, matched_how, matched_at,
-					note, actor, key, sold_at)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULLIF($9, ''), CASE WHEN $9 = '' THEN NULL ELSE now() END, NULLIF($10, ''), $11, $12, $13)
+					note, actor, key, sold_at, invoice_id)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULLIF($9, ''), CASE WHEN $9 = '' THEN NULL ELSE now() END, NULLIF($10, ''), $11, $12, $13, $14)
 				RETURNING `+saleCols, uuid.Must(uuid.NewV7()), tenant, ref, lines, *in.AmountKobo, in.PaidHow, status, entry, matchedHow, in.Note, in.Actor,
-				in.Key, in.SoldAt))
+				in.Key, in.SoldAt, invoice))
 			var pe *pgconn.PgError
 			if errors.As(err, &pe) && pe.Code == "23505" && strings.Contains(pe.ConstraintName, "reference") && attempt < 5 {
 				_ = sp.Rollback(ctx)

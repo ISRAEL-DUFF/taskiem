@@ -212,6 +212,9 @@ func (s *Server) startAIBuild(ctx context.Context, who aiActor, req aiBuildReq, 
 	if err != nil {
 		return uuid.Nil, err
 	}
+	// Which templates the business is offered: a sheet template's twin
+	// where it has no Google Sheets (decision 0060).
+	breq.Context.Holds = s.templateHolds(ctx, who.tenant)
 	s.bg.Add(1)
 	go func() {
 		defer s.bg.Done()
@@ -503,6 +506,19 @@ func aiContext(ctx context.Context, tx pgx.Tx, reg connector.Lookup, env string,
 	if err := tx.QueryRow(ctx, `SELECT COALESCE(bool_or(enabled), false) FROM school_settings`).Scan(&c.Schools); err != nil {
 		return c, err
 	}
+	// The businesses linked to this one on Taskiem (business links L6):
+	// names and roles only, for link@1 and the link trigger.
+	rows, err = tx.Query(ctx, `SELECT name, role FROM taskiem_links_of() WHERE state = 'active' ORDER BY name LIMIT 200`)
+	if err != nil {
+		return c, err
+	}
+	c.Linked, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (builder.LinkedBusiness, error) {
+		var x builder.LinkedBusiness
+		return x, r.Scan(&x.Name, &x.Role)
+	})
+	if err != nil {
+		return c, err
+	}
 	// The business's own workflows a template step may use (decision
 	// 0048), with their interface.
 	callable, err := runtime.CallableWorkflows(ctx, tx, reg)
@@ -741,6 +757,7 @@ func (s *Server) aiSave(w http.ResponseWriter, r *http.Request) {
 			res.Status, res.Error = "failed", errorText(s, r, err)
 			if errors.Is(err, errConflict) && strings.Contains(err.Error(), "already exists") {
 				res.Status = "exists"
+				res.Missing = s.tableMissing(r.Context(), p.TenantID, t.Name, t.Columns)
 			}
 		}
 		tables = append(tables, res)
@@ -754,13 +771,15 @@ type aiTableResult struct {
 	Name   string `json:"name"`
 	Status string `json:"status"` // created, exists, skipped or failed
 	Error  string `json:"error,omitempty"`
+	// Missing are the columns a table that exists already lacks.
+	Missing []string `json:"missing,omitempty"`
 }
 
 // tableReqOf is a proposed table as the Tables page would send it.
 func tableReqOf(t builder.TableSpec) tableReq {
 	out := tableReq{Name: t.Name, Title: t.Title}
 	for _, c := range t.Columns {
-		out.Columns = append(out.Columns, columnReq{Name: c.Name, Title: c.Title, Type: c.Type, Required: c.Required})
+		out.Columns = append(out.Columns, columnReq{Name: c.Name, Title: c.Title, Type: c.Type, Required: c.Required, Personal: c.Personal})
 	}
 	return out
 }
@@ -800,12 +819,12 @@ func (s *Server) saveAIBuildTx(ctx context.Context, tx pgx.Tx, p *Principal, id 
 	audit func(action, target string, detail map[string]any) error) (uuid.UUID, int, []byte, error) {
 	var wf uuid.UUID
 	var version int
-	var status, model string
+	var status, model, provider string
 	var target *uuid.UUID
 	var templateID *string
 	var prop, base []byte
-	if err := tx.QueryRow(ctx, `SELECT status, workflow_id, proposal, model, template_id, base_digest FROM ai_builds WHERE id = $1 FOR UPDATE`, id).
-		Scan(&status, &target, &prop, &model, &templateID, &base); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT status, workflow_id, proposal, model, provider, template_id, base_digest FROM ai_builds WHERE id = $1 FOR UPDATE`, id).
+		Scan(&status, &target, &prop, &model, &provider, &templateID, &base); err != nil {
 		return wf, 0, nil, err
 	}
 	if status != "proposed" {
@@ -885,6 +904,11 @@ func (s *Server) saveAIBuildTx(ctx context.Context, tx pgx.Tx, p *Principal, id 
 		return wf, 0, nil, err
 	}
 	detail := map[string]any{"build": id.String(), "ai_assisted": true, "co_author": "ai:" + model, "state": "draft"}
+	if provider == "template" {
+		// A template picked in chat, filled in without the model
+		// (chatTemplateBuild).
+		detail = map[string]any{"build": id.String(), "ai_assisted": false, "state": "draft"}
+	}
 	if templateID != nil {
 		detail["template"] = *templateID
 	}

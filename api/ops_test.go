@@ -364,9 +364,30 @@ func TestOperatorConsoleWork(t *testing.T) {
 	if len(ts) != 1 || ts[0].(map[string]any)["id"] != acmeID.String() || ts[0].(map[string]any)["pool"] != "shared" {
 		t.Fatalf("tenants: %v", ts)
 	}
+	// The list pages: no limit lists every tenant (it once showed only the
+	// newest), and limit/offset walk the same order with has_more.
+	whole := c.must(200, "GET", "/v1/ops/tenants", nil)
+	tenantList := whole["tenants"].([]any)
+	if len(tenantList) > 1 {
+		if whole["has_more"] != false {
+			t.Errorf("tenants: has_more with the whole tenantList: %v", whole["has_more"])
+		}
+		first := c.must(200, "GET", "/v1/ops/tenants?limit=1", nil)
+		if len(first["tenants"].([]any)) != 1 || first["has_more"] != true || first["tenants"].([]any)[0].(map[string]any)["id"] != tenantList[0].(map[string]any)["id"] {
+			t.Errorf("tenants limit=1: %v", first)
+		}
+		next := c.must(200, "GET", "/v1/ops/tenants?limit=1&offset=1", nil)["tenants"].([]any)
+		if len(next) != 1 || next[0].(map[string]any)["id"] != tenantList[1].(map[string]any)["id"] {
+			t.Errorf("tenants offset=1: %v", next)
+		}
+	}
 	one := c.must(200, "GET", "/v1/ops/tenants/"+acmeID.String(), nil)
 	if one["limits"] == nil || one["tenant"].(map[string]any)["name"] != "Acme" {
 		t.Errorf("tenant: %v", one)
+	}
+	// Which parts of Taskiem the business uses are shown, read-only.
+	if parts, _ := one["areas"].([]any); len(parts) != 6 || parts[0].(map[string]any)["area"] != "storefront" || parts[0].(map[string]any)["enabled"] != true {
+		t.Errorf("tenant areas: %v", one["areas"])
 	}
 	c.must(404, "GET", "/v1/ops/tenants/"+uuid.NewString(), nil)
 	if st, _ := c.do("PUT", "/v1/ops/tenants/"+acmeID.String(), map[string]any{}); st != 405 {
@@ -489,7 +510,7 @@ func TestOperatorSSO(t *testing.T) {
 	c.must(403, "POST", "/v1/ops/status/incidents", map[string]any{"kind": "incident", "title": "x", "components": []string{"api"}, "message": "x"})
 }
 
-// Operator accounts are the CLI's alone (migration 00266): the API
+// Operator accounts are the CLI's alone (migration 00314): the API
 // server's role may not make, reset, disable, list or enrol operators, so
 // SQL that runs in the server cannot either; the CLI's role can, and each
 // change is in the platform audit chain.

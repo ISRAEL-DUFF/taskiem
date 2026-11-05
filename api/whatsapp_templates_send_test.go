@@ -239,3 +239,58 @@ func TestFamilyTemplateOutsideWindow(t *testing.T) {
 		t.Fatalf("the link template: %+v (link %s)", msg, link)
 	}
 }
+
+// What a customer owes in all (decision 0060, R5), to a customer who asked
+// for updates on WhatsApp: a reminder carrying {customer_link} goes there
+// too, as taskiem_balance outside the window once approved, its Pay now
+// button the customer's payment link, the balance as it stands when sent.
+func TestBalanceTemplateOutsideWindow(t *testing.T) {
+	w := newReachWorld(t)
+	ctx := context.Background()
+	inv := &invoicing.Invoices{Pool: w.env.DB.App, Vault: w.env.Vault, PageBase: "https://" + reachFormHost, Messages: w.srv.Messages,
+		Signal: w.env.Store.DeliverSignalOnce, Reach: w.srv.Reach, Chat: []string{"whatsapp", "telegram"}}
+	w.srv.Invoices = inv
+	owner := w.tenant(t, "Ada Stores", "ada@ada.test")
+	tenant := tenantIDNamed(t, w.world, "Ada Stores")
+	const chidi = "+2348039998888"
+	linkChidi(t, w, owner, chidi)
+	closeWindow(t, w.world, chidi)
+	gatePlatform(t, w.graph, w.srv.WhatsApp)
+	var numbers []string
+	for i, kobo := range []int{2500000, 1000000} {
+		x := owner.must(201, "POST", "/v1/invoices", map[string]any{"customer": map[string]any{"name": "Chidi Eze", "phone": "0803 999 8888"}, "amount_kobo": kobo})
+		owner.must(200, "POST", "/v1/invoices/"+x["id"].(string)+"/send", nil, "Idempotency-Key", fmt.Sprintf("send-%d", i))
+		numbers = append(numbers, x["number"].(string))
+	}
+	w.tick(t)
+	remind := func(key string) {
+		t.Helper()
+		out, err := inv.NotifyCustomer(ctx, tenant, numbers[0], "You owe {customer_due}. Pay: {customer_link}", "", key)
+		if err != nil || toJSON(out["queued"]) != `["sms","whatsapp"]` {
+			t.Fatalf("notify: %v %v", out, err)
+		}
+	}
+	// Not approved: SMS only, and the chat message says why.
+	before := len(w.graph.Sent(chidi))
+	remind("r1")
+	w.tick(t)
+	if len(w.graph.Sent(chidi)) != before {
+		t.Fatalf("sent without an approved template: %+v", w.graph.Sent(chidi)[before:])
+	}
+	if d := droppedErrors(t, owner); !strings.Contains(d, "the balance went by SMS or email only") {
+		t.Fatalf("dropped: %s", d)
+	}
+	// Approved: the template, with the payment link's token.
+	approve(t, w.graph, w.srv.WhatsApp, "taskiem_balance")
+	remind("r2")
+	w.tick(t)
+	msg := w.graph.Last(t, chidi)
+	if msg.Type != "template" || msg.Template != "taskiem_balance" || !strings.Contains(msg.Text, "[Ada Stores] You owe ₦35,000 on 2 bill(s).") ||
+		len(msg.URLParams) != 1 || len(msg.URLParams[0]) != 32 {
+		t.Fatalf("the balance template: %+v", msg)
+	}
+	var links int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM invoice_customer_links WHERE tenant_id = $1`, tenant).Scan(&links); err != nil || links != 1 {
+		t.Errorf("one link: %d %v", links, err)
+	}
+}

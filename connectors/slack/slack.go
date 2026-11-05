@@ -59,6 +59,7 @@ func New(o Options) *connector.Connector {
 		"list_conversations":   connector.ActionFunc(c.listConversations),
 		"get_conversation":     connector.ActionFunc(c.getConversation),
 		"lookup_user_by_email": connector.ActionFunc(c.lookupUserByEmail),
+		"get_user":             connector.ActionFunc(c.getUser),
 		"upload_file":          connector.ActionFunc(c.uploadFile),
 		"list_users":           connector.ActionFunc(c.listUsers),
 		"open_conversation":    connector.ActionFunc(c.openConversation),
@@ -461,6 +462,43 @@ func (c *client) lookupUserByEmail(ctx context.Context, req connector.Request) (
 	}
 	return connector.Response{Output: map[string]any{"found": true, "id": u.ID, "team_id": u.TeamID, "name": u.Name,
 		"real_name": realName, "display_name": u.Profile.DisplayName, "tz": u.TZ, "is_bot": u.IsBot}}, nil
+}
+
+func (c *client) getUser(ctx context.Context, req connector.Request) (connector.Response, error) {
+	in := req.Input
+	if err := required("get_user", in, "user"); err != nil {
+		return connector.Response{}, err
+	}
+	var r struct {
+		User struct {
+			ID       string `json:"id"`
+			TeamID   string `json:"team_id"`
+			Name     string `json:"name"`
+			RealName string `json:"real_name"`
+			TZ       string `json:"tz"`
+			IsBot    bool   `json:"is_bot"`
+			Deleted  bool   `json:"deleted"`
+			Profile  struct {
+				DisplayName string `json:"display_name"`
+				RealName    string `json:"real_name"`
+				Email       string `json:"email"`
+			} `json:"profile"`
+		} `json:"user"`
+	}
+	err := c.call(ctx, req, "users.info", url.Values{"user": {strings.TrimSpace(str(in, "user"))}}, &r)
+	if Code(err) == "user_not_found" {
+		return connector.Response{Output: map[string]any{"found": false}}, nil
+	}
+	if err != nil {
+		return connector.Response{}, err
+	}
+	u := r.User
+	realName := u.RealName
+	if realName == "" {
+		realName = u.Profile.RealName
+	}
+	return connector.Response{Output: map[string]any{"found": true, "id": u.ID, "team_id": u.TeamID, "name": u.Name, "real_name": realName,
+		"display_name": u.Profile.DisplayName, "email": u.Profile.Email, "tz": u.TZ, "is_bot": u.IsBot, "deleted": u.Deleted}}, nil
 }
 
 func (c *client) listUsers(ctx context.Context, req connector.Request) (connector.Response, error) {

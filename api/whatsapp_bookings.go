@@ -146,7 +146,7 @@ func (s *Server) waBookingAsk(ctx context.Context, c *chat, b *chatBooking) erro
 			if err != nil {
 				return err
 			}
-			total := storefront.FormatNaira(o.Payable())
+			total := storefront.FormatNaira(o.RefundKobo())
 			ask := c.t("wa.booking.confirm_refunded", "ref", b.Reference, "total", total)
 			if b.Action == "refund" {
 				if o.PaidBy != "card" {
@@ -208,18 +208,18 @@ func (s *Server) waBookingApply(ctx context.Context, c *chat) error {
 	case "refund":
 		var o storefront.Order
 		if o, err = s.Orders.Refund(ctx, c.tenant.ID, b.Reference, actor); err == nil {
-			return c.say(ctx, s, c.t("wa.booking.refunded", "ref", b.Reference, "total", storefront.FormatNaira(o.Payable())))
+			return c.say(ctx, s, c.t("wa.booking.refunded", "ref", b.Reference, "total", storefront.FormatNaira(o.RefundKobo())))
 		}
 		if errors.Is(err, storefront.ErrRefund) {
 			return c.say(ctx, s, c.t("wa.booking.refund_failed", "ref", b.Reference, "why", plainError(err)))
 		}
 		if errors.Is(err, storefront.ErrRefundByHand) {
-			return c.say(ctx, s, c.t("wa.booking.refund_by_hand", "ref", b.Reference, "total", storefront.FormatNaira(o.Payable())))
+			return c.say(ctx, s, c.t("wa.booking.refund_by_hand", "ref", b.Reference, "total", storefront.FormatNaira(o.RefundKobo())))
 		}
 	case "refunded":
 		var o storefront.Order
 		if o, err = s.Orders.MarkRefunded(ctx, c.tenant.ID, b.Reference, actor, ""); err == nil {
-			return c.say(ctx, s, c.t("wa.booking.marked_refunded", "ref", b.Reference, "total", storefront.FormatNaira(o.Payable())))
+			return c.say(ctx, s, c.t("wa.booking.marked_refunded", "ref", b.Reference, "total", storefront.FormatNaira(o.RefundKobo())))
 		}
 	case "move":
 		if _, err = s.Orders.OwnerMove(ctx, c.tenant.ID, b.Reference, b.Start, actor); err == nil {

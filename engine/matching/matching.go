@@ -137,6 +137,9 @@ type entry struct {
 	// Source is who said it moved: a rail (event, lookup, step) or a
 	// person (entered, upload).
 	Source string
+	// Description is what the rail passed on of the payer's note, where
+	// it gives one: an invoice it names (business links).
+	Description string
 }
 
 // Tenant looks at up to 100 of a tenant's new money-in entries.
@@ -144,7 +147,7 @@ func (m *Matcher) Tenant(ctx context.Context, tenant uuid.UUID) error {
 	var list []entry
 	err := db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT e.id, COALESCE(e.occurred_at, e.recorded_at), e.amount_kobo, e.fee_kobo, e.net, e.channel, e.reference,
-				COALESCE(e.account_number, ''), e.payer, taskiem_money_entry_reversed(e.id), e.source
+				COALESCE(e.account_number, ''), e.payer, taskiem_money_entry_reversed(e.id), e.source, COALESCE(e.description, '')
 			FROM money_entries e WHERE e.tenant_id = $1 AND e.direction = 'in' AND e.status = 'settled'
 			  AND e.kind IN ('payment', 'account_credit', 'pos_sale', 'statement', 'cash')
 			  AND NOT EXISTS (SELECT 1 FROM money_match_state s WHERE s.entry_id = e.id)
@@ -159,7 +162,7 @@ func (m *Matcher) Tenant(ctx context.Context, tenant uuid.UUID) error {
 		rs, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (raw, error) {
 			var x raw
 			var m moneylog.Entry
-			err := r.Scan(&x.e.ID, &x.e.When, &m.AmountKobo, &m.FeeKobo, &m.Net, &x.e.Channel, &x.e.Reference, &x.e.AccountNumber, &x.payer, &x.e.Reversed, &x.e.Source)
+			err := r.Scan(&x.e.ID, &x.e.When, &m.AmountKobo, &m.FeeKobo, &m.Net, &x.e.Channel, &x.e.Reference, &x.e.AccountNumber, &x.payer, &x.e.Reversed, &x.e.Source, &x.e.Description)
 			x.e.AmountKobo = moneylog.CountableKobo(m) - x.e.Reversed
 			return x, err
 		})
@@ -226,13 +229,19 @@ func (m *Matcher) exact(ctx context.Context, tenant uuid.UUID, e entry) (bool, e
 	// Exact: the reference is one Taskiem gave for an invoice, or for a
 	// storefront order's account number (N3).
 	var account uuid.UUID
-	var invoice *uuid.UUID
+	var invoice, link *uuid.UUID
 	var order string
 	err := db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT a.id, a.invoice_id, COALESCE(o.reference, '') FROM customer_invoice_accounts a LEFT JOIN storefront_orders o ON o.id = a.order_id
-			WHERE a.tenant_id = $1 AND a.payment_id = $2 AND a.connector || '/' || a.connection = $3`, tenant, e.Reference, e.Channel).Scan(&account, &invoice, &order)
+		return tx.QueryRow(ctx, `SELECT a.id, a.invoice_id, a.customer_link_id, COALESCE(o.reference, '') FROM customer_invoice_accounts a LEFT JOIN storefront_orders o ON o.id = a.order_id
+			WHERE a.tenant_id = $1 AND a.payment_id = $2 AND a.connector || '/' || a.connection = $3`, tenant, e.Reference, e.Channel).Scan(&account, &invoice, &link, &order)
 	})
 	switch {
+	case err == nil && link != nil:
+		// Through a customer's payment link: their money (customers.go).
+		if e.AmountKobo <= 0 {
+			return true, m.mark(ctx, tenant, e.ID, "unmatched")
+		}
+		return true, m.linkEntry(ctx, tenant, e.ID, *link, account, e.Channel)
 	case err == nil && invoice == nil:
 		if order == "" || m.Orders == nil {
 			return true, m.mark(ctx, tenant, e.ID, "unmatched")
@@ -299,8 +308,8 @@ func (m *Matcher) suggest(ctx context.Context, tenant uuid.UUID, e entry) error 
 		if err != nil {
 			return err
 		}
-		rows, err := tx.Query(ctx, `SELECT id FROM customer_invoices WHERE tenant_id = $1 AND status IN ('sent', 'part_paid', 'overdue')
-			ORDER BY sent_at DESC LIMIT 500`, tenant)
+		rows, err := tx.Query(ctx, `SELECT id FROM customer_invoices WHERE tenant_id = $1 AND status IN ('recorded', 'sent', 'part_paid', 'overdue')
+			ORDER BY COALESCE(sent_at, recorded_at) DESC LIMIT 500`, tenant)
 		if err != nil {
 			return err
 		}
@@ -459,7 +468,8 @@ func ScoreRemembered(amount int64, payer, reference string, when time.Time, x in
 // ScoreOrder rates an open storefront order as Score does an invoice:
 // what is due is what is paid online (the deposit, or the total), the
 // customer is the order's, and the days count from when it was placed.
-// An order takes no part payments.
+// What is due is what the order asks now (fronts F5): the rest of its
+// deposit or total, or of a later step; a smaller payment is a part.
 func ScoreOrder(amount int64, payer, reference string, when time.Time, x storefront.Order) (Suggestion, bool) {
 	return ScoreOrderRemembered(amount, payer, reference, when, x, "")
 }
@@ -469,7 +479,7 @@ func ScoreOrder(amount int64, payer, reference string, when time.Time, x storefr
 // their paying "account" or their "name" (or "" for not remembered).
 func ScoreOrderRemembered(amount int64, payer, reference string, when time.Time, x storefront.Order, remembered string) (Suggestion, bool) {
 	id, placed := x.ID, x.CreatedAt
-	return score(amount, payer, reference, when, candidate{order: &id, number: x.Reference, due: x.Payable(), customer: x.Customer.Name, since: &placed, verb: "placed", remembered: remembered})
+	return score(amount, payer, reference, when, candidate{order: &id, number: x.Reference, due: x.AskedKobo(), part: true, customer: x.Customer.Name, since: &placed, verb: "placed", remembered: remembered})
 }
 
 func score(amount int64, payer, reference string, when time.Time, x candidate) (Suggestion, bool) {

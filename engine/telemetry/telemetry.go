@@ -47,6 +47,24 @@ var (
 		Name: "taskiem_step_duration_seconds", Help: "Worker step execution time, by queue and connector (or step type).",
 		Buckets: []float64{.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10, 30, 60},
 	}, []string{"queue", "target"})
+	// The Chat page's live stream (api/chat_stream.go): how many are open,
+	// what each look costs, what is sent, and who is turned away.
+	ChatStreamsOpen = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "taskiem_chat_streams_open", Help: "Chat page live streams open now (server-sent events, GET /v1/chat/stream).",
+	})
+	ChatStreamPolls = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "taskiem_chat_stream_polls_total", Help: "Looks the open chat streams made at what changed (about one a second each).",
+	})
+	ChatStreamPollSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name: "taskiem_chat_stream_poll_duration_seconds", Help: "Time one chat stream look took (its database transaction).",
+		Buckets: []float64{.001, .0025, .005, .01, .025, .05, .1, .25, .5, 1},
+	})
+	ChatStreamEvents = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "taskiem_chat_stream_events_total", Help: "Events sent on chat streams, by event (message, gone, conversation, taskiem, typing, ping).",
+	}, []string{"event"})
+	ChatStreamRefused = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "taskiem_chat_stream_refused_total", Help: "Chat streams refused for the cap (business: its twelve are open; server: the server's are), which the page answers by polling.",
+	}, []string{"cap"})
 	TimersFired = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "taskiem_timers_fired_total", Help: "Timers fired by the scheduler.",
 	})
@@ -94,8 +112,8 @@ var (
 		Buckets: []float64{60, 120, 300, 600, 900, 1800, 3600, 4 * 3600, 24 * 3600, 7 * 24 * 3600},
 	})
 	Signups = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "taskiem_signups_total", Help: "Self-serve signups by outcome (created, rate_limited, blocked_domain, invalid, exists, honeypot).",
-	}, []string{"outcome"})
+		Name: "taskiem_signups_total", Help: "Self-serve signups by way in (signup: the web form, agent, whatsapp, telegram, slack) and outcome (created, rate_limited, blocked_domain, invalid, exists, honeypot, declined, cancelled, country).",
+	}, []string{"source", "outcome"})
 	// KeyChecksFailed counts key job checks where a tenant's key did not
 	// work, by whether a customer key (BYOK) is involved; which tenant is in
 	// the logs, the tenant's audit log and its key_health alerts.

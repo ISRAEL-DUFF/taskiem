@@ -34,6 +34,7 @@ var covered = []string{
 	"github.com/israel-duff/taskiem/engine/ai/builder",
 	"github.com/israel-duff/taskiem/engine/ai/intent",
 	"github.com/israel-duff/taskiem/engine/ai/repair",
+	"github.com/israel-duff/taskiem/engine/ai/tablequery",
 }
 
 func TestImportGraphExcludesPrivilegedCode(t *testing.T) {

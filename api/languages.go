@@ -276,29 +276,7 @@ func (s *Server) waModelIntent(ctx context.Context, c *chat, text string) lang.M
 }
 
 func (s *Server) recordIntent(ctx context.Context, c *chat, text string, resp *ai.Response, outcome, errText string) {
-	var u ai.Usage
-	var respText *string
-	var stop, model string
-	if resp != nil {
-		r := pii.Redact(resp.Text)
-		respText, stop, model, u = &r, resp.StopReason, resp.Model, resp.Usage
-	}
-	if model == "" {
-		model = s.Languages.Model.Model()
-	}
-	ctx = context.WithoutCancel(ctx)
-	msgs := []map[string]string{{"role": "user", "text": pii.Redact(text)}}
-	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `INSERT INTO ai_interactions (id, tenant_id, build_id, round, kind, actor, provider, model, system_digest, messages,
-			response, stop_reason, outcome, error, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, total_tokens)
-			VALUES ($1, $2, NULL, 0, 'intent', $3, $4, $5, 'intent', $6, $7, NULLIF($8, ''), $9, NULLIF($10, ''), $11, $12, $13, $14, $15)`,
-			uuid.Must(uuid.NewV7()), c.tenant.ID, c.p.Actor(), s.Languages.Model.Name(), model, msgs, respText, stop, outcome, pii.Redact(errText),
-			u.InputTokens, u.OutputTokens, u.CacheCreationTokens, u.CacheReadTokens, u.Total())
-		return err
-	})
-	if err != nil {
-		s.Logger.Error("whatsapp: recording a model routing", "err", err)
-	}
+	s.recordModelCall(ctx, c, "intent", "intent", s.Languages.Model, text, resp, outcome, errText)
 }
 
 // --- settings API ---

@@ -1,0 +1,51 @@
+{
+  "name": "staff",
+  "title": "Staff",
+  "description": "The people payroll pays, with their bank details.",
+  "columns": [
+    {
+      "name": "name",
+      "title": "Name",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "phone",
+      "title": "Phone",
+      "type": "phone"
+    },
+    {
+      "name": "email",
+      "title": "Email",
+      "type": "email"
+    },
+    {
+      "name": "net_pay",
+      "title": "Net pay (naira)",
+      "type": "number",
+      "required": true
+    },
+    {
+      "name": "bank_code",
+      "title": "Bank code",
+      "type": "text"
+    },
+    {
+      "name": "account_number",
+      "title": "Account number",
+      "type": "text",
+      "personal": true
+    },
+    {
+      "name": "account_name",
+      "title": "Account name",
+      "type": "text",
+      "personal": true
+    },
+    {
+      "name": "active",
+      "title": "Paid this month",
+      "type": "boolean"
+    }
+  ]
+}

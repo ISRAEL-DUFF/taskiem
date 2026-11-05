@@ -61,10 +61,25 @@ func (s *Server) priceWords(ctx context.Context, d *statusData, site Site, ref, 
 	} else {
 		d.Lines = []string{d.Business + "'s prices changed; the new total was sent to you by SMS."}
 	}
+	quote := o.Kind == "quote"
+	if quote {
+		// A quote (fronts F7): the price the business set, to take or not.
+		d.Headline = "Your quote is ready"
+		d.Lines = []string{d.Business + " sent you a price for your request."}
+		if known && offer.TotalKobo > 0 {
+			line := "The price is " + storefront.FormatNaira(offer.TotalKobo) + "."
+			if offer.DepositKobo > 0 && offer.DepositKobo < offer.TotalKobo {
+				line += " You pay " + storefront.FormatNaira(offer.DepositKobo) + " now to go ahead, and the rest later."
+			}
+			d.Lines = append(d.Lines, line)
+		}
+	}
 	if !s.changesOpen() {
 		return nil
 	}
-	d.Lines = append(d.Lines, "Please confirm or cancel within a day.")
+	if !quote {
+		d.Lines = append(d.Lines, "Please confirm or cancel within a day.")
+	}
 	if d.Token == "" {
 		t, err := s.guard.Issue(changeForm(site.ID, ref, "prices"), s.now(), 0)
 		if err != nil {
@@ -73,7 +88,12 @@ func (s *Server) priceWords(ctx context.Context, d *statusData, site Site, ref, 
 		d.Token = string(t)
 	}
 	action := statusLink(prefix, ref, key, "prices")
-	if accept {
+	switch {
+	case quote:
+		d.Buttons = append(d.Buttons, changeButton{Action: action, Do: "accept", Label: "Accept the quote", Primary: true},
+			changeButton{Action: action, Do: "decline", Label: "Decline"})
+		return nil
+	case accept:
 		d.Buttons = append(d.Buttons, changeButton{Action: action, Do: "accept", Label: "Confirm new total", Primary: true})
 	}
 	d.Buttons = append(d.Buttons, changeButton{Action: action, Do: "decline", Label: "Cancel"})

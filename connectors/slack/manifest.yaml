@@ -5,7 +5,7 @@
 #   https://docs.slack.dev/apis/web-api/rate-limits/
 #   https://docs.slack.dev/reference/methods/chat.postMessage/ (and chat.update,
 #     chat.postEphemeral, reactions.add, conversations.list, conversations.info,
-#     users.lookupByEmail, auth.test, files.getUploadURLExternal,
+#     users.lookupByEmail, users.info, auth.test, files.getUploadURLExternal,
 #     files.completeUploadExternal)
 #   https://docs.slack.dev/authentication/verifying-requests-from-slack/
 #   https://docs.slack.dev/apis/events-api/
@@ -23,7 +23,7 @@
 # See docs/integrations/slack.md.
 manifest: connector/v1
 id: slack
-version: 1.1.0
+version: 1.2.0
 name: Slack
 description: Post, update and react to messages, upload files, look up channels and people, and start or resume workflows from Slack events and button clicks.
 category: messaging
@@ -244,6 +244,33 @@ actions:
       - { field: output.name, category: name }
       - { field: output.real_name, category: name }
       - { field: output.display_name, category: name }
+  get_user:
+    title: Get a user
+    description: users.info (needs users:read; the email needs users:read.email). An unknown user returns found false. The email is the workspace's record of it, not proof that the person holds the mailbox.
+    class: read
+    input:
+      type: object
+      required: [user]
+      properties:
+        user: { type: string, description: "The user's id (U…)" }
+    output:
+      type: object
+      properties:
+        found:        { type: boolean }
+        id:           { type: string }
+        team_id:      { type: string }
+        name:         { type: string }
+        real_name:    { type: string }
+        display_name: { type: string }
+        email:        { type: string }
+        tz:           { type: string }
+        is_bot:       { type: boolean }
+        deleted:      { type: boolean }
+    pii:
+      - { field: output.name, category: name }
+      - { field: output.real_name, category: name }
+      - { field: output.display_name, category: name }
+      - { field: output.email, category: email }
   list_users:
     title: List the workspace's people
     description: >-

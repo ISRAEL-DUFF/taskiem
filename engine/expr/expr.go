@@ -282,6 +282,12 @@ func native(v ref.Val) (any, error) {
 	case types.Uint:
 		return uint64(t), nil
 	case types.Double:
+		// Infinity and NaN (1.0 / 0.0) are not JSON: a value that is kept in
+		// a step's input, output or history could not be written. It is an
+		// error of the expression, as an integer division by zero is.
+		if f := float64(t); math.IsNaN(f) || math.IsInf(f, 0) {
+			return nil, fmt.Errorf("the result is not a finite number (%v)", f)
+		}
 		return float64(t), nil
 	case types.String:
 		return string(t), nil

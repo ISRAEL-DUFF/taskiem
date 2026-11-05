@@ -73,10 +73,11 @@ jobs:
           curl -sf -H "X-Vault-Token: dev" -X POST -d '{"type":"transit"}' http://127.0.0.1:8200/v1/sys/mounts/transit
           curl -sf -H "X-Vault-Token: dev" -X POST http://127.0.0.1:8200/v1/transit/keys/taskiem-root
           echo "TASKIEM_TEST_OPENBAO_ADDR=http://127.0.0.1:8200" >> "$GITHUB_ENV"
-      # The api package's database tests take close to Go's default
-      # 10-minute limit on a CI runner; a slow runner should not fail it.
+      # The api package's database tests take about 20 minutes on a CI
+      # runner (they hit 25 on a slow one, on 2 November 2026); the limit
+      # is there for a hung test, not a slow runner.
       - name: Unit and database tests
-        run: go test -count=1 -timeout 25m -tags e2e ./...
+        run: go test -count=1 -timeout 45m -tags e2e ./...
       # Each theme draws every public page with its own templates (decision
       # 0042): the public host's suite runs again in the other two.
       - name: Public pages in every theme
@@ -399,11 +400,11 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
         run: |
           if [ "$EVENT" != "pull_request" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
-          if git diff --name-only "origin/$BASE_REF...HEAD" | grep -qE '^(engine/ai/|evals/|templates/|tools/aieval/|api/ai\.go$|api/repair\.go$|engine/shadow/|engine/pii/|engine/wd/|engine/wdcheck/|engine/expansion/|connectors/[^/]+/manifest\.yaml$)'; then
+          if git diff --name-only "origin/$BASE_REF...HEAD" | grep -qE '^(engine/ai/|evals/|templates/|tools/aieval/|api/ai\.go$|api/repair\.go$|engine/shadow/|engine/pii/|engine/wd/|engine/wdcheck/|engine/expansion/|engine/datatables/query\.go$|engine/lang/intents|connectors/[^/]+/manifest\.yaml$)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "No change to the AI layer (engine/ai, evals, templates, tools/aieval, api/ai.go, api/repair.go, the checks, masking, shadow runs or connector manifests): the AI evaluation is skipped." >> "$GITHUB_STEP_SUMMARY"
+            echo "No change to the AI layer (engine/ai, evals, templates, tools/aieval, api/ai.go, api/repair.go, the checks, masking, shadow runs, query checks, intents or connector manifests): the AI evaluation is skipped." >> "$GITHUB_STEP_SUMMARY"
           fi
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         if: steps.changes.outputs.run == 'true'
@@ -415,9 +416,12 @@ jobs:
       - name: Repair suite against its baseline
         if: steps.changes.outputs.run == 'true'
         run: go run ./tools/aieval -mode repair -compare evals/repair/baseline.json -tolerance 0 -out repair-eval.json -markdown repair-eval.md
+      - name: Chat suite against its baseline
+        if: steps.changes.outputs.run == 'true'
+        run: go run ./tools/aieval -mode chat -compare evals/chat/baseline.json -tolerance 0 -out chat-eval.json -markdown chat-eval.md
       - name: Summary
         if: always() && steps.changes.outputs.run == 'true'
-        run: cat builder-eval.md repair-eval.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+        run: cat builder-eval.md repair-eval.md chat-eval.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always() && steps.changes.outputs.run == 'true'
         with:
@@ -427,6 +431,8 @@ jobs:
             builder-eval.md
             repair-eval.json
             repair-eval.md
+            chat-eval.json
+            chat-eval.md
           if-no-files-found: ignore
 
   # The engineering atlas (docs/atlas/README.md). Every reference on its pages
@@ -535,19 +541,34 @@ jobs:
           docker tag taskiem:ci taskiem:ci-next
           printf 'FROM taskiem:ci\nENTRYPOINT ["/taskiem", "no-such-command"]\n' | docker build -t taskiem:broken -
           PGPASSWORD=postgres createdb -h 127.0.0.1 -U postgres taskiem_ci
+      - name: A sudo that keeps this job's settings
+        # The runner's sudo (sudo-rs) refuses -E, so the TASKIEM_VPS_*
+        # settings are handed over by name; arguments such as
+        # TASKIEM_VPS_IMAGE_OVERRIDE=… after them win.
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          cat > "$RUNNER_TEMP/bin/sudo-vps" <<'SH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          keep=()
+          while IFS= read -r v; do keep+=("$v=${!v}"); done < <(compgen -e | grep '^TASKIEM_VPS_' || true)
+          exec sudo env "${keep[@]}" "$@"
+          SH
+          chmod +x "$RUNNER_TEMP/bin/sudo-vps"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: Install
         run: |
           # The runner's own address: Taskiem's containers reach Postgres as a server reaches its database host.
           export TASKIEM_VPS_DATABASE_URL="postgres://postgres:postgres@$(hostname -I | awk '{print $1}'):5432/taskiem_ci?sslmode=disable"
-          sudo -E bash deploy/vm/install.sh 2>&1 | tee install.log
+          sudo-vps bash deploy/vm/install.sh 2>&1 | tee install.log
       - name: Installed, healthy, owner created
         run: |
           curl -fsk https://localhost/readyz
           PW=$(sed -n 's/.*first password[^:]*: //p' install.log | tail -n1)
           test -n "$PW"
           sudo sh -c 'grep -q "unseal key" /root/taskiem-recovery-*.txt && shred -u /root/taskiem-recovery-*.txt'
-          sudo -E taskiem-vps backup
-          sudo -E taskiem-vps check
+          sudo-vps taskiem-vps backup
+          sudo-vps taskiem-vps check
           # Test only: an https public URL holds admins to passkeys, which a script cannot use.
           echo "TASKIEM_REQUIRE_ADMIN_PASSKEYS='false'" | sudo tee -a /opt/taskiem/taskiem.env >/dev/null
           sudo docker compose --project-directory /opt/taskiem up -d --wait taskiem
@@ -578,7 +599,7 @@ jobs:
           out=$(curl -sS smtp://127.0.0.1:25 --mail-from a@example.com --mail-rcpt nobodyhere12@in.localhost -T msg.eml 2>&1 || true)
           echo "$out"
           grep -q 550 <<<"$out"
-          sudo -E taskiem-vps check
+          sudo-vps taskiem-vps check
       - name: A secret goes through OpenBao, before and after OpenBao restarts (auto-unseal)
         run: |
           put() { curl -fsk -X PUT -H "Authorization: Bearer $(cat token)" -H 'Content-Type: application/json' -d '{"value":"v"}' "https://localhost/v1/secrets/prod/$1"; }
@@ -586,32 +607,32 @@ jobs:
           sudo docker compose --project-directory /opt/taskiem restart openbao
           for i in $(seq 30); do sudo docker compose --project-directory /opt/taskiem exec -T openbao bao status >/dev/null 2>&1 && break; sleep 2; done
           put ci_two
-          sudo -E taskiem-vps check
+          sudo-vps taskiem-vps check
       - name: A broken release is rolled back
         run: |
-          if sudo -E TASKIEM_VPS_IMAGE_OVERRIDE=taskiem:broken taskiem-vps update --now; then echo "the broken release was accepted"; exit 1; fi
+          if sudo-vps TASKIEM_VPS_IMAGE_OVERRIDE=taskiem:broken taskiem-vps update --now; then echo "the broken release was accepted"; exit 1; fi
           test "$(sudo cat /var/lib/taskiem-vps/current)" = taskiem:ci
           curl -fsk https://localhost/readyz
-          out=$(sudo -E taskiem-vps check || true)
+          out=$(sudo-vps taskiem-vps check || true)
           grep -q 'taskiem:broken failed to upgrade' <<<"$out"
       - name: A good release upgrades; rollback returns to the one before
         run: |
-          sudo -E TASKIEM_VPS_IMAGE_OVERRIDE=taskiem:ci-next taskiem-vps update --now
+          sudo-vps TASKIEM_VPS_IMAGE_OVERRIDE=taskiem:ci-next taskiem-vps update --now
           test "$(sudo cat /var/lib/taskiem-vps/current)" = taskiem:ci-next
-          sudo -E taskiem-vps rollback
+          sudo-vps taskiem-vps rollback
           test "$(sudo cat /var/lib/taskiem-vps/current)" = taskiem:ci
           curl -fsk https://localhost/readyz
-          sudo -E taskiem-vps status
+          sudo-vps taskiem-vps status
       - name: Disaster and restore from the backup and the recovery sheet
         run: |
-          sudo -E taskiem-vps backup
+          sudo-vps taskiem-vps backup
           UNSEAL=$(sudo sed -n "s/^BAO_STATIC_UNSEAL_KEY='\(.*\)'$/\1/p" /opt/taskiem/openbao-unseal.env)
           RESTIC=$(sudo sed -n "s/^RESTIC_PASSWORD='\(.*\)'$/\1/p" /etc/taskiem/backup.env)
           test -n "$UNSEAL" && test -n "$RESTIC"
           # Lose the server: containers, volumes (OpenBao's storage included) and every setting.
           sudo docker compose --project-directory /opt/taskiem down -v
           sudo sh -c 'rm -rf /opt/taskiem/.env /opt/taskiem/*.env /etc/taskiem /var/lib/taskiem-vps'
-          sudo -E TASKIEM_VPS_RESTIC_PASSWORD="$RESTIC" TASKIEM_VPS_UNSEAL_KEY="$UNSEAL" taskiem-vps restore
+          sudo-vps TASKIEM_VPS_RESTIC_PASSWORD="$RESTIC" TASKIEM_VPS_UNSEAL_KEY="$UNSEAL" taskiem-vps restore
           curl -fsk https://localhost/readyz
           # Writing a secret unwraps the tenant key through the restored OpenBao.
           curl -fsk -X PUT -H "Authorization: Bearer $(cat token)" -H 'Content-Type: application/json' -d '{"value":"v"}' https://localhost/v1/secrets/prod/ci_three
@@ -635,8 +656,17 @@ jobs:
   # commit whose run finishes last keeps its sha- tag and signature but does
   # not move staging servers back. (GitHub keeps one waiting run per group: a
   # third merge replaces the waiting one, whose image is then not tagged.)
+  #
+  # The condition names each gate's result, one by one. A plain `if:` gets
+  # success() added, and success() looks through the whole chain of needs:
+  # docker and vps need image-build-pr, which is skipped on a push, so
+  # success() was false and this job was skipped on every merge (staging did
+  # not move from 29 October to 2 November 2026). contains(needs.*.result,
+  # 'skipped') sees that skipped job too (tested: it skips the job as well);
+  # needs.<job>.result does not. The same goes for release-build and promote
+  # below, and the tagged job turns a skip here red.
   image:
-    if: github.event_name == 'push'
+    if: ${{ !cancelled() && github.event_name == 'push' && needs.image-build.result == 'success' && needs.go.result == 'success' && needs.typescript.result == 'success' && needs.web.result == 'success' && needs.docker.result == 'success' && needs.licences.result == 'success' && needs.vps.result == 'success' && needs.deploy.result == 'success' }}
     needs: [image-build, go, typescript, web, docker, licences, vps, deploy]
     runs-on: ubuntu-latest
     concurrency:
@@ -705,13 +735,31 @@ jobs:
           done
           { echo "Signed and tagged \`$IMAGE@$DIGEST\`"; echo; echo "Tags: $(echo "$TAGS" | tr '\n' ' ')"; } >> "$GITHUB_STEP_SUMMARY"
 
+  # A merge to main whose image was not signed and tagged is a failed run.
+  # The image job above is the only thing that moves the staging tag, and a
+  # skipped job is grey, which nobody reads; this job is red in its place.
+  tagged:
+    if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    needs: [image]
+    runs-on: ubuntu-latest
+    steps:
+      - name: The image job signed and tagged this merge
+        env:
+          RESULT: ${{ needs.image.result }}
+        run: |
+          if [ "$RESULT" != success ]; then
+            echo "::error title=staging not tagged::the image job ended '$RESULT', so this merge was not signed or tagged and staging servers will not upgrade to it"
+            exit 1
+          fi
+          echo "signed and tagged"
+
   # Production servers follow the "production" tag. A version tag (v1.2.0)
   # builds and signs its image above; this job moves "production" to it once
   # someone approves the deployment in the "production" GitHub environment
   # (Settings → Environments → production → required reviewers). Servers then
   # upgrade themselves inside their upgrade window, rolling back on failure.
   promote:
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: ${{ !cancelled() && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && needs.image.result == 'success' }}
     needs: [image]
     runs-on: ubuntu-latest
     environment: production
@@ -738,7 +786,7 @@ jobs:
   # workflow artifact, for every merge to main and every v* tag (a release
   # has a signed binary as well as a signed image).
   release-build:
-    if: github.event_name == 'push'
+    if: ${{ !cancelled() && github.event_name == 'push' && needs.go.result == 'success' && needs.typescript.result == 'success' && needs.web.result == 'success' && needs.docker.result == 'success' && needs.licences.result == 'success' && needs.vps.result == 'success' && needs.deploy.result == 'success' }}
     needs: [go, typescript, web, docker, licences, vps, deploy]
     runs-on: ubuntu-latest
     permissions:

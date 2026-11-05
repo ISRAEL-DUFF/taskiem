@@ -1,56 +1,174 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { post } from "../api";
+import { get, post, type TermsAsked } from "../api";
 import { useAuth } from "../auth";
 import { useOnboarding } from "../onboarding";
 import { ErrorBox, Field, useAction } from "../ui";
+
+/** What a business says it does, in its own words (lib/areas.ts has the
+ * parts each switches on). */
+type SignupKind = "shop" | "service" | "school" | "workflows";
+const SIGNUP_KINDS: { id: SignupKind; label: string }[] = [
+  { id: "shop", label: "I sell things" },
+  { id: "service", label: "I bill customers for a service" },
+  { id: "school", label: "I run a school" },
+  { id: "workflows", label: "Just workflows for now" },
+];
+/** The kinds sent to the server: "just workflows" is none. */
+const kindsOf = (k: SignupKind): string[] => (k === "workflows" ? [] : [k]);
 
 /** Self-serve signup (POST /v1/signup, docs/onboarding.md): an
  * organisation and its owner, signed in at once, then Get started. */
 export function Signup() {
   const { refresh } = useAuth();
   const nav = useNavigate();
-  const [f, setF] = useState({ tenant: "", name: "", email: "", password: "", website: "" });
+  const [f, setF] = useState({
+    tenant: "",
+    name: "",
+    email: "",
+    password: "",
+    website: "",
+    accept_terms: false,
+  });
+  // What the business does (docs/spec/business-areas.md): it decides which
+  // parts of Taskiem it starts with. Asked, never guessed.
+  const [kind, setKind] = useState<SignupKind | "">("");
+  const [terms, setTerms] = useState<TermsAsked | undefined>();
+  const [slack, setSlack] = useState<string | undefined>();
+  useEffect(() => {
+    get<{ enabled: boolean; terms?: TermsAsked; slack?: string }>(
+      "/v1/signup",
+    ).then(
+      (o) => {
+        setTerms(o.terms);
+        setSlack(o.slack);
+      },
+      () => undefined,
+    );
+  }, []);
   const act = useAction();
-  const set = (k: keyof typeof f) => (e: ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
+  const set = (k: keyof typeof f) => (e: ChangeEvent<HTMLInputElement>) =>
+    setF({ ...f, [k]: e.target.value });
   return (
     <div className="login card">
       <h1>Start with Taskiem</h1>
-      <p className="hint">Create your organisation. You can run your first workflow in a few minutes.</p>
+      <p className="hint">
+        Create your organisation. You can run your first workflow in a few
+        minutes.
+      </p>
       <form
         onSubmit={(e) => {
           e.preventDefault();
           void act.run(async () => {
-            await post("/v1/signup", f);
+            await post("/v1/signup", { ...f, kinds: kindsOf(kind as SignupKind) });
             await refresh();
             nav("/start", { replace: true });
           }, false);
         }}
       >
         <Field label="Business or organisation name">
-          <input value={f.tenant} onChange={set("tenant")} required minLength={2} maxLength={80} autoComplete="organization" autoFocus />
+          <input
+            value={f.tenant}
+            onChange={set("tenant")}
+            required
+            minLength={2}
+            maxLength={80}
+            autoComplete="organization"
+            autoFocus
+          />
         </Field>
+        <div role="radiogroup" aria-labelledby="signup-kind" data-testid="signup-kind">
+          <p id="signup-kind" style={{ margin: "12px 0 4px", fontWeight: 600 }}>
+            What does your business do?
+          </p>
+          <p className="hint" style={{ marginTop: 0 }}>
+            This sets up what you see first. Workflows, forms and chat are always there, and you can change it any time.
+          </p>
+          {SIGNUP_KINDS.map((k) => (
+            <label key={k.id} className="row">
+              <input type="radio" name="kind" value={k.id} checked={kind === k.id} onChange={() => setKind(k.id)} required />
+              <span style={{ flex: "1 1 auto", whiteSpace: "normal" }}>{k.label}</span>
+            </label>
+          ))}
+        </div>
         <Field label="Your name">
-          <input value={f.name} onChange={set("name")} maxLength={80} autoComplete="name" />
+          <input
+            value={f.name}
+            onChange={set("name")}
+            maxLength={80}
+            autoComplete="name"
+          />
         </Field>
         <Field label="Email">
-          <input type="email" value={f.email} onChange={set("email")} required autoComplete="email" />
+          <input
+            type="email"
+            value={f.email}
+            onChange={set("email")}
+            required
+            autoComplete="email"
+          />
         </Field>
-        <Field label="Password" hint="At least 12 characters. A short sentence is easy to remember.">
-          <input type="password" value={f.password} onChange={set("password")} required minLength={12} autoComplete="new-password" />
+        <Field
+          label="Password"
+          hint="At least 12 characters. A short sentence is easy to remember."
+        >
+          <input
+            type="password"
+            value={f.password}
+            onChange={set("password")}
+            required
+            minLength={12}
+            autoComplete="new-password"
+          />
         </Field>
+        {terms && (
+          <label className="row" data-testid="signup-terms">
+            <input
+              type="checkbox"
+              checked={f.accept_terms}
+              onChange={(e) => setF({ ...f, accept_terms: e.target.checked })}
+              required
+            />
+            <span style={{ flex: "1 1 auto", whiteSpace: "normal" }}>
+              I agree to Taskiem's{" "}
+              <a href={terms.url} target="_blank" rel="noreferrer">
+                terms and privacy notice
+              </a>
+            </span>
+          </label>
+        )}
         {/* People never see this field; form-filling bots do. */}
         <div className="honeypot" aria-hidden="true">
           <label>
             Website
-            <input tabIndex={-1} autoComplete="off" value={f.website} onChange={set("website")} />
+            <input
+              tabIndex={-1}
+              autoComplete="off"
+              value={f.website}
+              onChange={set("website")}
+            />
           </label>
         </div>
         <ErrorBox error={act.error} />
-        <button className="primary" type="submit" disabled={act.busy} style={{ width: "100%" }}>
+        <button
+          className="primary"
+          type="submit"
+          disabled={act.busy}
+          style={{ width: "100%" }}
+        >
           {act.busy ? "Creating…" : "Create account"}
         </button>
       </form>
+      {slack && (
+        <p
+          className="hint"
+          style={{ textAlign: "center" }}
+          data-testid="signup-slack"
+        >
+          Your team works in Slack? <a href={slack}>Start in Slack</a> instead:
+          Taskiem joins your workspace and sets up your business in a message.
+        </p>
+      )}
       <p className="hint" style={{ textAlign: "center" }}>
         Already have an account? <Link to="/login">Sign in</Link>
       </p>
@@ -62,14 +180,17 @@ export function Signup() {
  * the fragment (never sent to a server) and then dropped from the address
  * bar. */
 export function VerifyEmail() {
-  const [token] = useState(() => new URLSearchParams(window.location.hash.slice(1)).get("token") ?? "");
+  const [token] = useState(
+    () => new URLSearchParams(window.location.hash.slice(1)).get("token") ?? "",
+  );
   const { refresh } = useAuth();
   const onboarding = useOnboarding();
   const [done, setDone] = useState(false);
   const act = useAction();
   const tried = useRef(false);
   useEffect(() => {
-    if (window.location.hash) window.history.replaceState(null, "", window.location.pathname);
+    if (window.location.hash)
+      window.history.replaceState(null, "", window.location.pathname);
     if (!token || tried.current) return;
     tried.current = true;
     void act.run(async () => {
@@ -82,13 +203,54 @@ export function VerifyEmail() {
   return (
     <div className="card" style={{ maxWidth: 560 }}>
       <h1>Confirm your email</h1>
-      {!token && <p className="error">This page needs the link from your email.</p>}
+      {!token && (
+        <p className="error">This page needs the link from your email.</p>
+      )}
       {act.busy && <p>Confirming…</p>}
-      {done && <p role="status">Your email is confirmed. You can now invite people and make API keys.</p>}
+      {done && (
+        <p role="status">
+          Your email is confirmed. You can now invite people and make API keys.
+        </p>
+      )}
       <ErrorBox error={act.error} />
       <p>
         <Link to="/start">Back to Get started</Link>
       </p>
+    </div>
+  );
+}
+
+/** Terms the signed-in person has not answered yet (an account from
+ * before them): asked once, at the top of every page, until they agree or
+ * say not now. */
+export function TermsBanner() {
+  const { me } = useAuth();
+  const [gone, setGone] = useState(false);
+  const act = useAction();
+  if (!me?.terms || gone) return null;
+  const answer = (accept: boolean) =>
+    void act.run(async () => {
+      await post("/v1/me/terms", { accept });
+      setGone(true);
+    }, false);
+  return (
+    <div className="warning" role="status" data-testid="terms-banner">
+      Taskiem has terms and a privacy notice you have not agreed to yet:{" "}
+      <a href={me.terms.url} target="_blank" rel="noreferrer">
+        read them
+      </a>
+      .{" "}
+      <button
+        className="primary"
+        onClick={() => answer(true)}
+        disabled={act.busy}
+      >
+        I agree
+      </button>{" "}
+      <button onClick={() => answer(false)} disabled={act.busy}>
+        Not now
+      </button>
+      <ErrorBox error={act.error} />
     </div>
   );
 }
