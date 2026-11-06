@@ -331,7 +331,15 @@ test("a message the server has, when the page was away, is not put back", async 
   await pane(page).locator("#taskiem-text").fill("status");
   await pane(page).locator("#taskiem-text").press("Enter");
   await expect(ours(page)).toHaveCount(1);
-  await page.waitForTimeout(500);
+  // Wait until the server really has it (not a fixed pause: a slow runner
+  // may need longer, and a message it does not have is rightly put back).
+  await expect
+    .poll(async () => {
+      const r = await page.request.get("/v1/taskiem-chat");
+      const j = (await r.json()) as { messages?: { text?: string }[] };
+      return (j.messages ?? []).some((m) => m.text === "status");
+    })
+    .toBe(true);
   await page.reload();
   await expect(ours(page)).toHaveCount(1);
   await expect(pane(page).locator("#taskiem-text")).toHaveValue("");
