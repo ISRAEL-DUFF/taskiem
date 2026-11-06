@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { del, get, post, put, type Invitation } from "../api";
+import { ApiError, del, get, post, put, type Invitation } from "../api";
 import { useAuth } from "../auth";
 import { addPasskey, passkeysSupported, proof, stepUpAssert } from "../passkeys";
 import {
@@ -64,6 +64,48 @@ function ProofField({
   return null;
 }
 
+/** Offers a new confirmation link when a factor change was refused
+ * because the person's email is not confirmed yet: a password on an
+ * unconfirmed email may be one whoever added them chose. */
+export function ConfirmEmailFirst({ error }: { error: unknown }) {
+  const [sent, setSent] = useState("");
+  const act = useAction();
+  const reauth = error instanceof ApiError ? error.body.reauth : undefined;
+  if (!Array.isArray(reauth) || !reauth.includes("verify_email")) return null;
+  return (
+    <div className="notice" role="status" data-testid="confirm-email-first">
+      <p>
+        Confirm your email with the link we sent you, then try again. Until then
+        your password cannot add a passkey or authenticator.
+      </p>
+      <ErrorBox error={act.error} />
+      {sent ? (
+        <p>{sent}</p>
+      ) : (
+        <button
+          className="small"
+          disabled={act.busy}
+          onClick={() =>
+            void act.run(
+              async () =>
+                setSent(
+                  (
+                    await post<{ status?: string }>(
+                      "/v1/me/email/verify/resend",
+                    )
+                  ).status ?? "Your email is confirmed: try again.",
+                ),
+              false,
+            )
+          }
+        >
+          Send me a new link
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** The member's passkeys: sign-in and step-up with the device's lock. */
 export function Passkeys({ onAdded }: { onAdded?: () => void }) {
   const { me, refresh } = useAuth();
@@ -82,6 +124,7 @@ export function Passkeys({ onAdded }: { onAdded?: () => void }) {
         cannot be phished. It also answers step-up on approvals.
       </p>
       <ErrorBox error={list.error ?? act.error} />
+      <ConfirmEmailFirst error={act.error} />
       {list.data && list.data.passkeys.length > 0 && (
         <Items label="Passkeys">
           {list.data.passkeys.map((k) => (
@@ -332,7 +375,13 @@ function Telegram() {
             className="danger"
             disabled={act.busy}
             onClick={() =>
-              confirm("Unlink Telegram?") &&
+              confirm(
+                /^owner\+.*@telegram\.taskiem\.invalid$/.test(
+                  me?.user?.email ?? "",
+                )
+                  ? "Unlink Telegram? Your account was made in a chat: its sign-in name comes from this Telegram account and is released with it. Add your email first, so you can still sign in."
+                  : "Unlink Telegram?",
+              ) &&
               void act.run(
                 async () => (
                   await del("/v1/me/telegram"),
@@ -531,7 +580,13 @@ function WhatsApp() {
             className="danger"
             disabled={act.busy}
             onClick={() =>
-              confirm("Unlink this number?") &&
+              confirm(
+                /^owner\+.*@phone\.taskiem\.invalid$/.test(
+                  me?.user?.email ?? "",
+                )
+                  ? "Unlink this number? Your account was made in a chat: its sign-in name comes from this number and is released with it. Add your email first, so you can still sign in."
+                  : "Unlink this number?",
+              ) &&
               void act.run(
                 async () => (await del("/v1/me/whatsapp"), b.reload()),
                 "WhatsApp unlinked",
@@ -797,6 +852,7 @@ export function Account() {
           fifteen minutes lock codes out for fifteen minutes.
         </p>
         <ErrorBox error={act.error} />
+        <ConfirmEmailFirst error={act.error} />
         {me?.totp && !pending && (
           <>
             <p>

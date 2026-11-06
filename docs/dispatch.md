@@ -107,7 +107,7 @@ When it lands, the rider gets **Paid. Hand it over and tap Delivered.** **New nu
 
 **Cash received**, shown while the order is unpaid at the door, completes the order as paid in cash. The money log records a cash receipt for the order. The rider then **owes** that amount until they hand it in:
 
-- A transfer from the rider whose narration names the order's reference counts by itself, oldest debt first.
+- A transfer from the rider whose narration names the order's reference counts by itself, oldest debt first. It is then used up in the money log, as a payment counted towards an invoice or order is: it cannot also count towards an invoice, an order or a sale, and a transfer one of those already took is not counted for the rider.
 - Cash handed in is recorded under **Pay riders > Record cash handed in**, and is added to the money log as cash.
 - What a rider still owes when they are paid is taken off their pay.
 

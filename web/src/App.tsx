@@ -9,6 +9,7 @@ import {
 } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth";
 import { PageBoundary } from "./PageBoundary";
+import { safeNext } from "./lib/safePath";
 import { Login } from "./pages/Login";
 import { Workflows } from "./pages/Workflows";
 import { NewWorkflow } from "./pages/NewWorkflow";
@@ -290,16 +291,21 @@ function Shell() {
     );
   }
   if (me.invitations_only) return alone(<InviteeHome />);
-  if (me.enrol_passkey) return alone(<EnrolPasskey />);
+  // An enrol-only session may confirm its email: until then its password
+  // adds no passkey.
+  if (me.enrol_passkey)
+    return alone(
+      loc.pathname === "/verify-email" ? <VerifyEmail /> : <EnrolPasskey />,
+    );
   // The gate role: one screen, whatever the address; the server refuses every other route.
   if (me.gate_only) return <GateHome />;
   if (loc.pathname === "/login")
     return (
       <Navigate
-        to={
-          new URLSearchParams(loc.search).get("next") ||
-          (me.field_agent ? "/agent" : "/home")
-        }
+        to={safeNext(
+          new URLSearchParams(loc.search).get("next"),
+          me.field_agent ? "/agent" : "/home",
+        )}
         replace
       />
     );
@@ -685,6 +691,8 @@ function SignedIn() {
           <TermsBanner />
           <NotifyBanner />
           <PasskeyNudge />
+          {/* Keyed by the address: a page for another :id (an invoice, a run)
+              starts afresh, its keys, notices and streams with it. */}
           <div className="page" key={`${pathname}#${fresh}`}>
             <PageBoundary>
               {off ? (

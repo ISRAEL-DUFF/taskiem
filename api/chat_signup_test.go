@@ -490,3 +490,83 @@ func TestSignupInOwnWords(t *testing.T) {
 		t.Fatalf("a command for a stranger: %+v", got)
 	}
 }
+
+// emailOf is a person's sign-in name.
+func emailOf(t *testing.T, w *world, user uuid.UUID) string {
+	t.Helper()
+	var email string
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT email FROM users WHERE id = $1`, user).Scan(&email); err != nil {
+		t.Fatal(err)
+	}
+	return email
+}
+
+// A reissued number is a stranger however its binding ends (F18): after
+// a chat-born owner unlinks their number on the web, or links another,
+// the sign-in name made from the old number is released, so the number's
+// next holder signing up is a new person, not the old owner.
+func TestReleasedNumberIsAStranger(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	chatSignupOn(w.world, "whatsapp")
+	const n1, n2, n3 = "+2348031235501", "+2348031235502", "+2348031235503"
+	anon := &client{t: t, base: w.base}
+	// born signs up from number and signs in on the web with the chat's
+	// one-time sign-in link.
+	born := func(number, business string) (uuid.UUID, *client) {
+		for _, m := range []string{"start", "yes", business, "Ada", "1", "1"} {
+			w.say(t, number, m)
+		}
+		u, _ := w.wa.UserOf(ctx, number)
+		if u == uuid.Nil {
+			t.Fatalf("no chat-born account for %s", number)
+		}
+		m := signinLinkRe.FindStringSubmatch(w.say(t, number, "sign in"))
+		if m == nil {
+			t.Fatalf("no sign-in link for %s", number)
+		}
+		out := anon.must(200, "POST", "/v1/auth/chat/link", map[string]any{"token": m[1], "bearer": true})
+		return u, &client{t: t, base: w.base, token: out["token"].(string)}
+	}
+
+	// Unlinked on the web.
+	a, web := born(n1, "Ada Foods")
+	web.must(204, "DELETE", "/v1/me/whatsapp", nil)
+	if e := emailOf(t, w.world, a); !strings.HasPrefix(e, "released+") {
+		t.Fatalf("after unlinking, the sign-in name is %s", e)
+	}
+	for _, m := range []string{"hello", "start", "yes", "Bola Phones", "Bola", "4", "1"} {
+		w.say(t, n1, m)
+	}
+	if b, _ := w.wa.UserOf(ctx, n1); b == uuid.Nil || b == a || memberRoles(t, w.world, b, "Ada Foods") != "" {
+		t.Fatalf("the number's next holder is %v (the old owner %v), in Ada Foods as %q", b, a, memberRoles(t, w.world, b, "Ada Foods"))
+	}
+
+	// Linked to another number on the web.
+	c, web := born(n2, "Chi Foods")
+	web.must(202, "POST", "/v1/me/whatsapp", map[string]any{"number": n3, "password": "chi-web-password-1"})
+	web.must(200, "POST", "/v1/me/whatsapp/verify", map[string]any{"code": codeRe.FindString(w.graph.Last(t, n3).Text)})
+	if e := emailOf(t, w.world, c); !strings.HasPrefix(e, "released+") {
+		t.Fatalf("after linking another number, the sign-in name is %s", e)
+	}
+	for _, m := range []string{"hello", "start", "yes", "Dayo Phones", "Dayo", "4", "1"} {
+		w.say(t, n2, m)
+	}
+	if d, _ := w.wa.UserOf(ctx, n2); d == uuid.Nil || d == c {
+		t.Fatalf("the old number's next holder is %v (the old owner %v)", d, c)
+	}
+
+	// A Telegram account's sign-in name goes with its binding the same way.
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE users SET email = 'owner+0123456789abcdef@telegram.taskiem.invalid' WHERE id = $1`, c); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO telegram_bindings (user_id, telegram_id) VALUES ($1, 8201)`, c); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.env.DB.App.Exec(ctx, `SELECT taskiem_tg_unbind($1)`, c); err != nil {
+		t.Fatal(err)
+	}
+	if e := emailOf(t, w.world, c); e != "released+"+c.String()+"@telegram.taskiem.invalid" {
+		t.Fatalf("after unlinking Telegram, the sign-in name is %s", e)
+	}
+}

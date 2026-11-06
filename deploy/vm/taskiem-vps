@@ -16,13 +16,16 @@ set -Eeuo pipefail
 KIT=${TASKIEM_VPS_KIT:-/opt/taskiem}
 ETC=${TASKIEM_VPS_ETC:-/etc/taskiem}
 STATE=${TASKIEM_VPS_STATE:-/var/lib/taskiem-vps}
+BIN=${TASKIEM_VPS_BIN:-/usr/local/bin} # where this tool is installed (tests change it)
 REPO_SLUG=ISRAEL-DUFF/taskiem
 IMAGE_REPO=ghcr.io/israel-duff/taskiem
 SIGNER='^https://github\.com/ISRAEL-DUFF/taskiem/\.github/workflows/ci\.yml@refs/(heads/main|tags/v.+)$'
 ISSUER=https://token.actions.githubusercontent.com
-PSQL_IMAGE=postgres:16-alpine
-RESTIC_IMAGE=restic/restic:0.19.1
-OPENBAO_IMAGE=openbao/openbao:2.7.1
+# Third-party images, pinned by digest (the tag is kept for people), as the
+# Dockerfile pins its bases; docker-compose.yml pins the same OpenBao.
+PSQL_IMAGE=postgres:16.15-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab
+RESTIC_IMAGE=restic/restic:0.19.1@sha256:136600b6ff6843d61d355f7f71f460a166429f35de6fd11b568fece3c9a4d510
+OPENBAO_IMAGE=openbao/openbao:2.7.1@sha256:6d2b93856e3fcf7b18ad855a0b51eaba474dc8b79cf554379ea32034797d2acf
 
 # --- helpers -----------------------------------------------------------------
 
@@ -169,11 +172,21 @@ install_kit() { # DIR
   else
     rm -f "$KIT/caddy.d/public.caddy"
   fi
-  install -m 0755 "$src/taskiem-vps" "/usr/local/bin/taskiem-vps.new" && mv -f /usr/local/bin/taskiem-vps.new /usr/local/bin/taskiem-vps
+  install -m 0755 "$src/taskiem-vps" "$BIN/taskiem-vps.new" && mv -f "$BIN/taskiem-vps.new" "$BIN/taskiem-vps"
   if [ -z "${TASKIEM_VPS_NO_TIMERS:-}" ] && [ -d /run/systemd/system ]; then
     install -m 0644 "$src"/systemd/taskiem-vps-*.service "$src"/systemd/taskiem-vps-*.timer /etc/systemd/system/
     systemctl daemon-reload
   fi
+}
+
+# The SCRAM-SHA-256 verifier of a password (read on stdin, so it is on no
+# command line), from the release's own taskiem, without a network.
+scram_verifier() { # IMAGE PASSWORD
+  local v
+  v=$(printf '%s\n' "$2" | docker run --rm -i --network none "$1" scram-verifier) || die "could not make the password's verifier with $1"
+  case $v in SCRAM-SHA-256\$*) ;; *) die "unexpected password verifier from $1" ;; esac
+  case $v in *"'"* | *'$$'*) die "unexpected password verifier from $1" ;; esac
+  printf '%s' "$v"
 }
 
 set_image() { # REF
@@ -429,7 +442,7 @@ cmd_setup() {
   env_set "$KIT/.env" COMPOSE_PROFILES "$(IFS=,; echo "${profiles[*]}")"
   touch "$KIT/openbao.env" && chmod 600 "$KIT/openbao.env"
   env_set "$KIT/.env" TASKIEM_DOMAIN "$DOMAIN"
-  env_set "$KIT/.env" OPENBAO_VERSION "${OPENBAO_IMAGE#*:}"
+  env_set "$KIT/.env" OPENBAO_IMAGE "$OPENBAO_IMAGE"
   if [ -n "$BACKUP_REPO" ]; then
     env_set "$ETC/backup.env" RESTIC_REPOSITORY "$BACKUP_REPO"
     env_set "$ETC/backup.env" RESTIC_PASSWORD "$resticpw"
@@ -491,12 +504,17 @@ cmd_setup() {
   compose run --rm migrate
 
   log "creating the database role Taskiem signs in as ($approle)"
+  # Each login's password goes to Postgres as its SCRAM verifier, made by
+  # this release's taskiem from stdin: Postgres logs a failing statement's
+  # text, and the password is never in it.
+  local appver pubver
+  appver=$(scram_verifier "$ref" "$apppw")
   docker run --rm -i --network host -e DSN="$DATABASE_URL" "$PSQL_IMAGE" sh -c 'psql "$DSN" -qAt -v ON_ERROR_STOP=1' <<SQL >/dev/null
 DO \$\$ BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '$approle') THEN
-    CREATE ROLE "$approle" LOGIN PASSWORD '$apppw';
+    CREATE ROLE "$approle" LOGIN PASSWORD '$appver';
   ELSE
-    ALTER ROLE "$approle" LOGIN PASSWORD '$apppw';
+    ALTER ROLE "$approle" LOGIN PASSWORD '$appver';
   END IF;
 END \$\$;
 GRANT taskiem_app TO "$approle";
@@ -506,12 +524,13 @@ SQL
   [ -n "$MAIL_DOMAIN" ] || compose rm -sf taskiem-mail >/dev/null 2>&1 || true
   if [ "$PUBLIC" = yes ] || [ -n "$MAIL_DOMAIN" ]; then
     log "creating the database role the public host signs in as ($pubrole)"
+    pubver=$(scram_verifier "$ref" "$pubpw")
     docker run --rm -i --network host -e DSN="$DATABASE_URL" "$PSQL_IMAGE" sh -c 'psql "$DSN" -qAt -v ON_ERROR_STOP=1' <<SQL >/dev/null
 DO \$\$ BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '$pubrole') THEN
-    CREATE ROLE "$pubrole" LOGIN NOINHERIT PASSWORD '$pubpw';
+    CREATE ROLE "$pubrole" LOGIN NOINHERIT PASSWORD '$pubver';
   ELSE
-    ALTER ROLE "$pubrole" LOGIN NOINHERIT PASSWORD '$pubpw';
+    ALTER ROLE "$pubrole" LOGIN NOINHERIT PASSWORD '$pubver';
   END IF;
 END \$\$;
 GRANT taskiem_public TO "$pubrole";
@@ -611,6 +630,12 @@ cmd_update() {
   current=$(cat "$STATE/current" 2>/dev/null || true)
   if test_mode; then target=$TASKIEM_VPS_IMAGE_OVERRIDE; else target="$IMAGE_REPO@$(channel_digest)"; fi
   if [ "$target" = "$current" ]; then [ -n "$auto" ] || log "already on the newest $(conf CHANNEL) release"; return 0; fi
+  # A release that failed and was rolled back waits for a newer one; only
+  # --now tries it again (the timer would otherwise retry it every tick).
+  if [ -z "$now" ] && [ "$target" = "$(cat "$STATE/update-failed" 2>/dev/null || true)" ]; then
+    [ -n "$auto" ] || log "$target failed to upgrade before and was rolled back: not trying it again (use --now to retry)"
+    return 0
+  fi
   if [ -z "$now" ] && ! in_window; then
     [ -n "$auto" ] || log "outside the upgrade window ($(conf WINDOW)); use --now to upgrade anyway"
     return 0
@@ -630,6 +655,9 @@ cmd_update() {
     return 0
   fi
   log "the new release did not become healthy: rolling back to $current"
+  # With its own kit: the Compose file, configs and this tool of the
+  # release being returned to, not of the one that failed.
+  (sync_kit "$(image_revision "$current")") || log "could not restore the deployment kit of $current: keeping $target's"
   set_image "$current"
   compose up -d --remove-orphans >/dev/null 2>&1 || true
   printf '%s\n' "$target" >"$STATE/update-failed"
@@ -647,6 +675,7 @@ cmd_rollback() {
   previous=$(cat "$STATE/previous" 2>/dev/null || true)
   [ -n "$previous" ] || die "no previous release recorded"
   log "rolling back to $previous"
+  sync_kit "$(image_revision "$previous")" # its own kit, before anything changes
   printf '%s\n' "$(cat "$STATE/current")" >"$STATE/previous"
   set_image "$previous"
   compose up -d --remove-orphans

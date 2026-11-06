@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/smtp"
 	"net/textproto"
@@ -31,9 +32,13 @@ type fakeStore struct {
 	endpoints map[string]uuid.UUID
 	got       []received
 	full      bool
+	lookups   int
 }
 
 func (f *fakeStore) Recipient(_ context.Context, id string) (uuid.UUID, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.lookups++
 	ep, ok := f.endpoints[id]
 	return ep, ok, nil
 }
@@ -195,5 +200,77 @@ func TestServerAsksToRetryWhenFull(t *testing.T) {
 	err := send(addr, "a@b.example", "k3x9q2m7a1bz@in.taskiem.test", gmailForwarded)
 	if code(err) != 451 {
 		t.Errorf("want 451 (try later), got %v", err)
+	}
+}
+
+// A connection that names unknown recipients is cut off after a few: each
+// one costs a lookup on the mail role's small pool, and go-smtp's
+// recipient cap counts only accepted ones (F66).
+func TestServerHangsUpOnUnknownRecipients(t *testing.T) {
+	st := &fakeStore{endpoints: map[string]uuid.UUID{"abcdefabcdef": uuid.New()}}
+	addr := startServer(t, st)
+	dial := func() *textproto.Conn {
+		c, err := textproto.Dial("tcp", addr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = c.Close() })
+		if _, _, err := c.ReadResponse(220); err != nil {
+			t.Fatal(err)
+		}
+		for _, cmd := range []string{"EHLO mx.example.net", "MAIL FROM:<a@example.net>"} {
+			if err := c.PrintfLine("%s", cmd); err != nil {
+				t.Fatal(err)
+			}
+			if _, _, err := c.ReadResponse(250); err != nil {
+				t.Fatal(cmd, err)
+			}
+		}
+		return c
+	}
+	rcpt := func(c *textproto.Conn, local string) (int, error) {
+		if err := c.PrintfLine("RCPT TO:<%s@in.taskiem.test>", local); err != nil {
+			return 0, err
+		}
+		code, _, err := c.ReadResponse(0)
+		return code, err
+	}
+
+	// A real recipient after a few unknown ones is still taken.
+	c := dial()
+	for i := range maxBadRcpts - 1 {
+		if code, err := rcpt(c, fmt.Sprintf("%012d", i)); code != 550 {
+			t.Fatalf("unknown recipient %d: %d %v", i, code, err)
+		}
+	}
+	if code, err := rcpt(c, "abcdefabcdef"); code != 250 {
+		t.Fatalf("known recipient: %d %v", code, err)
+	}
+
+	st.mu.Lock()
+	st.lookups = 0
+	st.mu.Unlock()
+	c = dial()
+	var last int
+	for i := range 20 {
+		code, err := rcpt(c, fmt.Sprintf("%012d", i))
+		if err != nil {
+			break
+		}
+		last = code
+	}
+	if last != 421 {
+		t.Errorf("last answer %d, want 421", last)
+	}
+	if err := c.PrintfLine("NOOP"); err == nil {
+		if code, _, err := c.ReadResponse(0); err == nil {
+			t.Errorf("the connection is still open: NOOP %d", code)
+		}
+	}
+	st.mu.Lock()
+	n := st.lookups
+	st.mu.Unlock()
+	if n > maxBadRcpts {
+		t.Errorf("%d lookups for one connection, want at most %d", n, maxBadRcpts)
 	}
 }

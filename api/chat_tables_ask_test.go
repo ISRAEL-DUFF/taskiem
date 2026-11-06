@@ -96,6 +96,12 @@ func TestChatQuestionsOverTables(t *testing.T) {
 	if !strings.Contains(last, `"balance"`) || strings.Contains(last, "Bisi") || strings.Contains(last, "Lekki") {
 		t.Fatalf("the model saw rows or no columns: %s", last)
 	}
+	// The record of the call keeps no words of the chat (finding F50).
+	var words int
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT count(*) FROM ai_interactions WHERE kind = 'table_query'
+		AND (messages::text LIKE '%Ikeja%' OR response LIKE '%Ikeja%')`).Scan(&words); err != nil || words != 0 {
+		t.Fatalf("the question kept in ai_interactions: %d %v", words, err)
+	}
 	// Rows, ordered, personal values masked, ready for change.
 	r := w.say(t, on, "who owes more than 10k?")
 	if !strings.Contains(r, "Customers where Balance is more than 10000, Balance highest first (2):") || !strings.Contains(r, "1. #3 · Name: Chidi") ||

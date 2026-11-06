@@ -63,6 +63,30 @@ type Storefront struct {
 	// Domain is the primary of the business's own verified domains
 	// (domains.go), where the page is served once published.
 	Domain *string `json:"domain"`
+	// RetentionDays is how long ended orders keep their customer's
+	// details (SetRetention).
+	RetentionDays int `json:"retention_days"`
+}
+
+// Retention bounds: ended orders keep their customer's details for 30
+// days to 10 years; 365 by default.
+const (
+	MinRetentionDays     = 30
+	MaxRetentionDays     = 3650
+	DefaultRetentionDays = 365
+)
+
+// SetRetention sets how long ended orders keep their customer's details
+// before they are erased (Orders.ForgetExpired).
+func SetRetention(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, days int) error {
+	if days < MinRetentionDays || days > MaxRetentionDays {
+		return fmt.Errorf("%w: orders are kept %d to %d days", ErrInvalid, MinRetentionDays, MaxRetentionDays)
+	}
+	tag, err := tx.Exec(ctx, `UPDATE storefronts SET retention_days = $2, updated_at = now() WHERE tenant_id = $1`, tenant, days)
+	if err == nil && tag.RowsAffected() == 0 {
+		err = ErrNotFound
+	}
+	return err
 }
 
 // URL is the published page's public address: its own primary domain
@@ -135,14 +159,14 @@ const cols = `id, slug, status, draft, catalogue_table, catalogue_columns, publi
 	catalogue_synced_at, catalogue_error, updated_at, services_table, services_columns, availability, review_note, suspended_reason, orders_paused,
 	(SELECT m.urls FROM storefront_media m WHERE m.tenant_id = storefronts.tenant_id AND m.id::text = storefronts.draft->>'logo' AND m.moderation <> 'rejected'),
 	(SELECT d.host FROM storefront_domains d WHERE d.storefront_id = storefronts.id AND d.verified_at IS NOT NULL
-	  ORDER BY d.is_primary DESC, d.verified_at, d.host LIMIT 1)`
+	  ORDER BY d.is_primary DESC, d.verified_at, d.host LIMIT 1), retention_days`
 
 func scan(r pgx.Row) (Storefront, error) {
 	var s Storefront
 	var draft, columns, scols, avail, logo []byte
 	err := r.Scan(&s.ID, &s.Slug, &s.Status, &draft, &s.CatalogueTable, &columns, &s.PublishedVersion, &s.PublishedSlug, &s.PublishedAt,
 		&s.ClosedMessage, &s.CatalogueSynced, &s.CatalogueError, &s.UpdatedAt, &s.ServicesTable, &scols, &avail,
-		&s.ReviewNote, &s.SuspendedReason, &s.OrdersPaused, &logo, &s.Domain)
+		&s.ReviewNote, &s.SuspendedReason, &s.OrdersPaused, &logo, &s.Domain, &s.RetentionDays)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Storefront{}, ErrNotFound
 	}

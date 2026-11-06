@@ -239,3 +239,64 @@ func (w *world) accounts(invoice uuid.UUID) []invoicing.Account {
 	})
 	return out
 }
+
+// slowRails answers get_payment after a pause, as a slow provider does.
+type slowRails struct {
+	*fakeRails
+	pause time.Duration
+}
+
+func (s *slowRails) Call(ctx context.Context, tenant uuid.UUID, r invoicing.Rail, capability string, in map[string]any, k effects.KeyInput) (map[string]any, error) {
+	if capability == "get_payment" {
+		time.Sleep(s.pause)
+	}
+	return s.fakeRails.Call(ctx, tenant, r, capability, in, k)
+}
+
+// Two api replicas checking payments at once split the accounts between
+// them: each payment is looked up once, not once per replica.
+func TestPaymentChecksClaimTheirAccounts(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	rails := &fakeRails{paid: map[string]int64{}}
+	w.inv.Rails = rails
+	var accounts []invoicing.Account
+	for i := range 4 {
+		x := w.create(invoicing.Draft{Customer: ada, AmountKobo: int64(100000 * (i + 1))})
+		if _, err := w.inv.Send(ctx, w.env.Tenant, x.Number, "user:ada", "k"+x.Number); err != nil {
+			t.Fatal(err)
+		}
+		a, err := w.inv.Issue(ctx, w.env.Tenant, x.ID, "transfer", 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		accounts = append(accounts, a)
+	}
+	w.inv.Rails = &slowRails{fakeRails: rails, pause: 200 * time.Millisecond}
+	other := *w.inv
+	var wg sync.WaitGroup
+	for _, inv := range []*invoicing.Invoices{w.inv, &other} {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := inv.CheckPayments(ctx); err != nil {
+				t.Error(err)
+			}
+		}()
+	}
+	wg.Wait()
+	looked := map[string]int{}
+	rails.mu.Lock()
+	for i, c := range rails.calls {
+		if c == "get_payment" {
+			id, _ := rails.ins[i]["payment_id"].(string)
+			looked[id]++
+		}
+	}
+	rails.mu.Unlock()
+	for _, a := range accounts {
+		if looked[a.PaymentID] != 1 {
+			t.Errorf("payment %s looked up %d times", a.PaymentID, looked[a.PaymentID])
+		}
+	}
+}

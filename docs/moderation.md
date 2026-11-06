@@ -18,7 +18,7 @@ Every way of publishing (the web app, chat, a field agent, a settings change tha
 
 1. **A word list** catches the obvious first: "double your money", "verify your account", weapons, drugs, counterfeit and the like, after undoing look-alike characters (`d0uble`, `p1stol`). Some words block; others (loans, "first copy", tramadol) only flag, since they are often innocent.
 2. **Prices:** ₦0, or above ₦10,000,000, is flagged.
-3. **A model** through Taskiem's AI layer (`TASKIEM_AI_MODERATION_MODEL` when set, else the building model) judges the words against a written policy (below), in the five languages. A piece of text is checked once per organisation: the verdict is kept by its digest. If no model is configured, or it fails, the words and prices still apply.
+3. **A model** through Taskiem's AI layer (`TASKIEM_AI_MODERATION_MODEL` when set, else the building model) judges the words against a written policy (below), in the five languages. A piece of text is checked once per organisation: the verdict is kept by its digest. The pieces not yet judged go to the model together, at most 40 to a request so that no answer is cut short, and no database transaction waits on its answer. If no model is configured, or it fails, the words and prices still apply, for a first publish too, and what it did not judge is asked again next time; the review queue's `model_skipped` says when a held page was not judged by the model.
 
 Each answers **allowed**, **flagged** (a person looks) or **blocked** (refused), with a category and a reason.
 
@@ -36,7 +36,7 @@ Weapons and ammunition; illegal drugs, and prescription drugs sold without a pha
 
 ## Reports
 
-Every page's footer has **Report this page**: a reason (a scam, pretending to be someone else, selling something not allowed, offensive, something else), an optional message and an optional phone or email. It works without JavaScript, has a honeypot, and takes three a day from one address for one page. The contact is sealed by the public host; an operator reveals it only to ask the reporter more, and that is audited. Hosted forms' **Report this form** reaches the same list.
+Every page's footer has **Report this page**: a reason (a scam, pretending to be someone else, selling something not allowed, offensive, something else), an optional message and an optional phone or email. It works without JavaScript, has a honeypot, and takes three a day from one address for one page. An IPv6 address counts by its /64, which one subscriber holds whole, so one person cannot pose as several reporters. The contact is sealed by the public host; an operator reveals it only to ask the reporter more, and that is audited. Hosted forms' **Report this form** reaches the same list.
 
 When **three different people** have open reports on a page in the last 30 days, it is **suspended pending review** within a few minutes, and the owner is told.
 

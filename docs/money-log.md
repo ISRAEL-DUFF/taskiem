@@ -55,7 +55,7 @@ The log is copied to a data table named `money_log`, a [kept table](data-tables.
 | `status` | `settled`, `pending`, `failed` or `reversed` |
 | `channel` | The connection, such as `paystack/main` |
 | `reference` | The payment service's reference |
-| `payer` | The payer's name and account, where the service gives them (personal data) |
+| `payer` | The payer's name and account, where the service gives them (personal data); `[erased]` once the payer is erased, the one change Taskiem makes to a row |
 | `source` | `event` (the service told Taskiem), `lookup` (Taskiem asked), `step` (a workflow's payout the service answered as settled at once), `upload` (a statement) or `entered` (typed in) |
 | `note`, `corrects` | A short explanation, and the entry a later status refers to |
 

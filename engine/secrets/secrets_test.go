@@ -13,6 +13,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/db/dbtest"
+	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/secrets"
 )
 
@@ -197,4 +198,122 @@ func TestFirstKeyMadeOnceUnderConcurrency(t *testing.T) {
 	if err := d.Admin.QueryRow(ctx, `SELECT count(*) FROM tenant_keys WHERE tenant_id = $1`, a.ID).Scan(&n); err != nil || n != 1 {
 		t.Fatalf("tenant keys: %d %v", n, err)
 	}
+}
+
+// An erased person who comes back is a new subject: what was sealed for
+// them before stays erased, and their value can be sealed again (it was
+// refused for good, and inboxes retried it forever).
+func TestErasedSubjectComesBackAsANewOne(t *testing.T) {
+	d := dbtest.New(t)
+	v := localVault(t, d)
+	a := d.SeedTenant(t, nil)
+	in := func(fn func(tx pgx.Tx) error) {
+		t.Helper()
+		if err := db.InTenantTx(ctx, d.App, []uuid.UUID{a.ID}, fn); err != nil {
+			t.Fatal(err)
+		}
+	}
+	seal := func() map[string]any {
+		t.Helper()
+		var env map[string]any
+		in(func(tx pgx.Tx) error {
+			var err error
+			env, err = v.SealTx(ctx, tx, a.ID, "phone", "+2348031234567")
+			return err
+		})
+		return env
+	}
+	open := func(env map[string]any) (any, error) {
+		var out any
+		err := db.InTenantTx(ctx, d.App, []uuid.UUID{a.ID}, func(tx pgx.Tx) error {
+			var err error
+			out, err = v.OpenTx(ctx, tx, a.ID, env)
+			return err
+		})
+		return out, err
+	}
+	seen := map[string]bool{}
+	var before []map[string]any
+	for i := range 3 {
+		env := seal()
+		subject, _ := env["subject"].(string)
+		if seen[subject] {
+			t.Fatalf("generation %d reused the subject %s", i, subject)
+		}
+		seen[subject] = true
+		if cur, err := v.SubjectFor(ctx, a.ID, "phone", "+2348031234567"); err != nil || cur != subject {
+			t.Fatalf("generation %d: SubjectFor %q %v, sealed under %q", i, cur, err, subject)
+		}
+		if got, err := open(env); err != nil || got != "+2348031234567" {
+			t.Fatalf("generation %d opens to %v %v", i, got, err)
+		}
+		for _, old := range before {
+			if _, err := open(old); !errors.Is(err, pii.ErrErased) {
+				t.Fatalf("an earlier generation opens: %v", err)
+			}
+		}
+		if err := v.Erase(ctx, a.ID, subject, "user:test"); err != nil {
+			t.Fatal(err)
+		}
+		before = append(before, env)
+	}
+}
+
+// A person's value in another format is the same subject, so erasing them
+// by value reaches what detection sealed as it was typed; and data sealed
+// before ids were canonical, under the format as typed, is found too.
+func TestOneSubjectWhateverTheFormat(t *testing.T) {
+	d := dbtest.New(t)
+	v := localVault(t, d)
+	a := d.SeedTenant(t, nil)
+	in := func(fn func(tx pgx.Tx) error) {
+		t.Helper()
+		if err := db.InTenantTx(ctx, d.App, []uuid.UUID{a.ID}, fn); err != nil {
+			t.Fatal(err)
+		}
+	}
+	e164, err := v.SubjectFor(ctx, a.ID, "phone", "+2348031234567")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{"08031234567", "0803 123 4567", " +2348031234567", "+234 (0)803 123 4567"} {
+		if s, err := v.SubjectFor(ctx, a.ID, "phone", f); err != nil || s != e164 {
+			t.Errorf("SubjectFor(phone, %q) = %s %v, want %s", f, s, err, e164)
+		}
+	}
+	if x, _ := v.SubjectFor(ctx, a.ID, "email", "Ada@X.com"); x == "" {
+		t.Fatal("no email subject")
+	} else if y, _ := v.SubjectFor(ctx, a.ID, "email", "ada@x.com"); x != y {
+		t.Errorf("an email's case made another subject: %s %s", x, y)
+	}
+	var detected, legacy any
+	in(func(tx pgx.Tx) error {
+		var err error
+		if detected, err = pii.SealDetected(ctx, v, tx, a.ID, map[string]any{"note": "0803 123 4567"}, pii.Taint{}); err != nil {
+			return err
+		}
+		legacy, err = v.SealRawTx(ctx, tx, a.ID, "phone", "08031234567")
+		return err
+	})
+	subjects, err := v.SubjectsFor(ctx, a.ID, "phone", "+2348031234567")
+	if err != nil || len(subjects) != 2 || subjects[0] != e164 {
+		t.Fatalf("subjects of the number: %v %v", subjects, err)
+	}
+	for _, s := range subjects {
+		if err := v.Erase(ctx, a.ID, s, "user:test"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	in(func(tx pgx.Tx) error {
+		for _, x := range []any{detected, legacy} {
+			got, err := pii.Open(ctx, v, tx, a.ID, x, pii.Taint{})
+			if err != nil {
+				return err
+			}
+			if s := fmt.Sprint(got); s != "map[note:[erased]]" && s != pii.Erased {
+				t.Errorf("after erasing the number: %v", got)
+			}
+		}
+		return nil
+	})
 }

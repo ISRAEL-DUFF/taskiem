@@ -64,6 +64,12 @@ type Limits struct {
 	// least recently used beyond it are closed once no call uses them,
 	// and compiled again when next needed. Default 32.
 	MaxCompiled int
+	// MaxCallTime bounds one call when the caller's context has no
+	// earlier deadline: a guest is interrupted only when its context
+	// ends, so a caller without a deadline (the poller) would otherwise
+	// wait for a module that loops for ever. Default 30s, the worker's
+	// call timeout and the egress client's.
+	MaxCallTime time.Duration
 }
 
 func (l Limits) withDefaults() Limits {
@@ -81,6 +87,9 @@ func (l Limits) withDefaults() Limits {
 	def(&l.MaxHTTPCalls, 20)
 	def(&l.MaxLogs, 16<<10)
 	def(&l.MaxCompiled, 32)
+	if l.MaxCallTime <= 0 {
+		l.MaxCallTime = 30 * time.Second
+	}
 	return l
 }
 
@@ -168,6 +177,11 @@ func (r *Runtime) load(ctx context.Context, manifest, module []byte, prefix, wha
 	}
 	if !strings.HasPrefix(m.ID, prefix) {
 		return nil, fmt.Errorf("%w: %s id must start with %q, not %q", ErrInvalid, what, prefix, m.ID)
+	}
+	if uses := m.PlatformAppUses(); len(uses) > 0 {
+		// Taskiem's OAuth apps are its built-ins' (F1): their secrets
+		// would go to this manifest's token URL, or into its credentials.
+		return nil, fmt.Errorf("%w: %s manifest cannot use Taskiem's own OAuth apps (%s); its OAuth must be a client of its own", ErrInvalid, what, strings.Join(uses, ", "))
 	}
 	for name, t := range m.Triggers {
 		// Anyone could deliver to an unverified trigger of a tenant's own connector.
@@ -412,6 +426,11 @@ type wireError struct {
 }
 
 func (a *action) Execute(ctx context.Context, req connector.Request) (connector.Response, error) {
+	if d, ok := ctx.Deadline(); !ok || time.Until(d) > a.r.lim.MaxCallTime {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, a.r.lim.MaxCallTime)
+		defer cancel()
+	}
 	in := execInput{Action: a.name, BaseURL: strings.TrimRight(a.manifest.BaseURL, "/"), Input: req.Input, Credentials: req.Credentials,
 		IdempotencyKey: req.IdempotencyKey, Attempt: req.Attempt}
 	if in.Input == nil {
@@ -554,27 +573,49 @@ func httpResponseRead(ctx context.Context, m api.Module, stack []uint64) {
 
 func logLine(ctx context.Context, m api.Module, stack []uint64) {
 	c := callFrom(ctx)
-	b, ok := m.Memory().Read(api.DecodeU32(stack[0]), api.DecodeU32(stack[1]))
-	if c == nil || !ok {
+	ptr, n := api.DecodeU32(stack[0]), api.DecodeU32(stack[1])
+	if c == nil || uint64(ptr)+uint64(n) > uint64(m.Memory().Size()) {
 		panic("taskiem.log: bad pointer")
 	}
+	// Copy no more than the call may still log (and the margin masking
+	// needs), however long the line.
+	n = uint32(min(int(n), c.logRoom()+logMargin)) //nolint:gosec // bounded by n
+	b, _ := m.Memory().Read(ptr, n)
 	c.log(string(b))
 }
 
+// logMargin is how far past the cap a line is read and masked before it
+// is cut, so personal data straddling the cut is masked whole.
+const logMargin = 256
+
+// logRoom is how many bytes of log lines the call may still keep.
+func (c *call) logRoom() int { return max(c.lim.MaxLogs-c.logBytes, 0) }
+
 func (c *call) log(s string) {
 	s = strings.TrimRight(s, "\n")
-	if s == "" || c.logBytes >= c.lim.MaxLogs || c.req.Logger == nil {
+	room := c.logRoom()
+	if s == "" || room == 0 || c.req.Logger == nil {
 		return
 	}
-	c.logBytes += len(s)
-	c.req.Logger.Info("connector log", "line", pii.Redact(s))
+	if len(s) <= room {
+		c.logBytes += len(s)
+		c.req.Logger.Info("connector log", "line", pii.Redact(s))
+		return
+	}
+	// Over the cap: mask a bounded prefix, then cut it to what is left.
+	s = pii.Redact(s[:min(len(s), room+logMargin)])
+	s = strings.ToValidUTF8(s[:min(len(s), room)], "")
+	c.logBytes = c.lim.MaxLogs
+	c.req.Logger.Info("connector log", "line", s+" …[truncated]")
 }
 
 type logWriter struct{ c *call }
 
 func (w *logWriter) Write(p []byte) (int, error) {
-	for _, l := range strings.Split(string(p), "\n") {
-		w.c.log(l)
+	for rest := p; len(rest) > 0 && w.c.logRoom() > 0; {
+		line, next, _ := bytes.Cut(rest, []byte("\n"))
+		w.c.log(string(line[:min(len(line), w.c.logRoom()+logMargin)]))
+		rest = next
 	}
 	return len(p), nil
 }

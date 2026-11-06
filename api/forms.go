@@ -792,7 +792,8 @@ func (s *Server) answerFormRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 // RunForms takes form submissions from the inbox every second, and every
-// 10 seconds sends form steps' links, reminders and codes.
+// 10 seconds sends form steps' links, reminders and codes and removes the
+// stored files of submissions retention or erasure deleted.
 func (s *Server) RunForms(ctx context.Context) error {
 	s.chatHooks()
 	if s.Forms == nil {
@@ -813,6 +814,9 @@ func (s *Server) RunForms(ctx context.Context) error {
 		case <-tick.C:
 			if err := s.Forms.Tick(ctx); err != nil && ctx.Err() == nil {
 				s.Logger.Error("forms: links and codes", "err", err)
+			}
+			if err := s.Forms.DrainDeletions(ctx); err != nil && ctx.Err() == nil {
+				s.Logger.Error("forms: deleting stored files", "err", err)
 			}
 		}
 	}

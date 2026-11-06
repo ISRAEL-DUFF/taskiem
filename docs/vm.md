@@ -50,7 +50,7 @@ CI publishes a signed image for every merge to main and every version tag. Serve
 | `staging` | Every merge to main that passes CI | Within 15 minutes, at any time unless a window is set |
 | `production` | A version tag (`git tag v1.2.0 && git push --tags`) is **approved** in the `production` environment on GitHub | In the server's upgrade window (default 01:00–05:00 Lagos time) |
 
-An upgrade checks the signature, fetches the matching deployment kit, runs the migration, starts the new release and waits for it to be healthy behind HTTPS. If the migration fails or the release is not healthy within four minutes, the server **rolls back** to the release it was on, alerts you, and does not try that release again. Every release works with the schema of the one before it, so rolling back is always safe.
+An upgrade checks the signature, fetches the matching deployment kit, runs the migration, starts the new release and waits for it to be healthy behind HTTPS. If the migration fails or the release is not healthy within four minutes, the server **rolls back** to the release it was on (its image and its deployment kit), alerts you, and does not try that release again until a newer one is published (`taskiem-vps update --now` retries it, for example after fixing a setting it needed). Every release works with the schema of the one before it, so rolling back is always safe.
 
 An upgrade stops Taskiem for about 30 seconds while workers drain, so keep payroll-heavy hours outside the window. Webhooks sent in that gap are retried by their senders.
 
@@ -59,8 +59,8 @@ An upgrade stops Taskiem for about 30 seconds while workers drain, so keep payro
 | Command | Does |
 | --- | --- |
 | `sudo taskiem-vps status` | Channel, release and commit, last upgrade and backup, services, problems |
-| `sudo taskiem-vps update --now` | Upgrade now, outside the window |
-| `sudo taskiem-vps rollback` | Back to the release before the current one |
+| `sudo taskiem-vps update --now` | Upgrade now, outside the window, even to a release that failed and was rolled back |
+| `sudo taskiem-vps rollback` | Back to the release before the current one, with its deployment kit |
 | `sudo taskiem-vps backup` | Back up now |
 | `sudo taskiem-vps check` | Run the health checks |
 | `sudo taskiem-vps logs [service]` | Follow logs (`taskiem`, `openbao`, `caddy`, `openbao-renew`; `taskiem-public`, `taskiem-mail` and `clamav` when on) |
@@ -160,7 +160,7 @@ Emptying the answer later stops `taskiem-mail`. Published email triggers then re
 | --- | --- |
 | `install.sh` | The one-line installer |
 | `taskiem-vps` | Setup, update, rollback, backup, restore, checks (installed to `/usr/local/bin`) |
-| `docker-compose.yml`, `Caddyfile`, `public.caddy`, `openbao.hcl`, `openbao-taskiem-policy.hcl` | The stack, installed to `/opt/taskiem` and replaced on each upgrade with the release's own copy (`public.caddy` is used only with public pages on) |
+| `docker-compose.yml`, `Caddyfile`, `public.caddy`, `openbao.hcl`, `openbao-taskiem-policy.hcl` | The stack, installed to `/opt/taskiem` and replaced on each upgrade with the release's own copy (`public.caddy` is used only with public pages on). Its third-party images (Caddy, OpenBao, ClamAV), like the helpers `taskiem-vps` runs (psql, restic), are pinned by digest, so a setup or pull gets the image the release was reviewed with; `CLAMAV_IMAGE` and `OPENBAO_IMAGE` in `/opt/taskiem/.env` override them |
 | `systemd/` | The update, check and backup timers |
 
 The server's settings are in `/opt/taskiem/*.env` and `/etc/taskiem` (root only); its state (current and previous release, last backup) is in `/var/lib/taskiem-vps`.

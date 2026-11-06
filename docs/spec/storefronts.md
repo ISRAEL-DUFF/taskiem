@@ -358,7 +358,7 @@ A verification is a record with who did it, how and when, and appears in the aud
 
 ### 7.2 Names and impersonation
 
-- **Reserved slugs:** platform words (`www`, `app`, `api`, `admin`, `login`, `secure`, `support`...).
+- **Reserved slugs:** platform words (`www`, `app`, `api`, `admin`, `login`, `secure`, `support`, `pages`, `forms`...). A page is not published at a preview address that is the platform's own: the name owners point their domains at (`TASKIEM_PUBLIC_CNAME`) or the form host.
 - **Look-alike slugs refused:** names of banks, fintechs, telcos, government agencies and large brands, from a maintained list, compared after normalising look-alike characters (`0`/`o`, `1`/`l`, repeated letters).
 - **Business names** are checked against the same list. A match goes to review instead of being refused outright.
 - A storefront can never show "bank", "verify your account" or similar flows: its actions are only the kinds in [6.3](#63-actions-and-hosted-forms).
@@ -394,11 +394,11 @@ A verification is a record with who did it, how and when, and appears in the aud
 - **Rate limits:**
   - per page and per visitor IP, in buckets: 20 submissions in 10 minutes, 100 a day. These are deliberately generous: Nigerian mobile networks put thousands of phones behind one IP address (carrier-grade NAT), so an IP is not a person. The per-form token, the bot defences and phone codes are the real controls;
   - per phone number on orders;
-  - per page per hour, with alerts to the owner and operators when one trips.
+  - per page per hour, with alerts to the owner and operators when one trips (as hosted forms do: [forms 7.3](forms.md#73-abuse)).
 - **Bot defences without third-party trackers:**
   - a honeypot field;
   - a minimum fill time;
-  - a light proof-of-work in the form's script, which falls back to a phone OTP for a page under attack.
+  - a light proof-of-work in the form's script, which falls back to a phone OTP for a page under attack (an hour after its per-page limit last tripped).
 - **Phone OTP on orders (optional):** the customer gets a code by SMS before the order is taken. Off by default, on automatically for a page seeing spam.
 - **Plan limits:** submissions per day and orders per day per plan; beyond them, the form shows "orders are paused" and the owner is told.
 
@@ -521,7 +521,7 @@ Page views far outnumber submissions and arrive in bursts (a status shared to 2,
 - **Roles:** the business is the **data controller** for its customers' details, and Taskiem the processor. The storefront terms, which owners accept before publishing, say so.
 - **Notice:** every form shows a short notice: who receives the details (the business by name), why (to handle the order), and a link to a privacy page Taskiem generates for the business from its card.
 - **Collection:** only the fields the action needs. Personal fields are sealed at rest, masked in messages and the web app (spec 9.3), and access to unmasked values is audited.
-- **Retention:** submissions and their personal fields are kept for the business's retention setting (default 12 months) and then erased. The existing erasure function applies to a customer's request through the business.
+- **Retention:** submissions and their personal fields are kept for the business's retention setting (`retention_days` on `PUT /v1/storefront`, 30 days to 10 years, default 12 months) and then erased: an hourly pass replaces the customer's details of each ended order (declined, expired, completed, cancelled, no-show, price changed, refunded) not changed for that long, and ends its status link; orders still open wait until they end. The customer's subject key is not destroyed, so their newer orders keep their details. The existing erasure function applies to a customer's request through the business.
 - **No tracking:** no analytics scripts, no third-party fonts or trackers, and no cookies on pages. Visit counts for the owner come from server logs, aggregated without IPs ([10](#10-what-the-owner-sees)).
 
 ## 10. What the owner sees

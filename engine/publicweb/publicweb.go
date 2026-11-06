@@ -23,6 +23,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/time/rate"
 
 	"github.com/israel-duff/taskiem/engine/formguard"
 	"github.com/israel-duff/taskiem/engine/forms"
@@ -175,6 +176,9 @@ type Server struct {
 	// FormSubmissions limits form submissions and code requests per
 	// client address; nil uses FormSubmissionsPerIP (50 an hour).
 	FormSubmissions *formguard.Limiter
+	// FormPerForm limits one form's submissions from every address
+	// together; nil uses FormSubmissionsPerForm (500 an hour).
+	FormPerForm *formguard.Limiter
 	// Invoices reads the invoices businesses send their customers, for
 	// their pages on the form host, /i/{token} (invoice.go); nil: none.
 	Invoices Invoices
@@ -201,6 +205,7 @@ type Server struct {
 
 	hosts         *lru.Cache[string, hostEntry]
 	formCache     *lru.Cache[string, formEntry]
+	tripNotes     *formguard.Limiter // a tripped form recorded once a minute
 	fguard, fstep *formguard.Guard
 	origins       *lru.Cache[uuid.UUID, []string]
 	pages         *lru.Cache[uuid.UUID, pageEntry]
@@ -248,6 +253,13 @@ func (s *Server) Handler() http.Handler {
 	if s.FormSubmissions == nil {
 		b := FormSubmissionsPerIP
 		s.FormSubmissions = formguard.NewLimiter(b.Rate, b.Burst, SubmissionLimiterSize, 2*time.Hour)
+	}
+	if s.FormPerForm == nil {
+		b := FormSubmissionsPerForm
+		s.FormPerForm = formguard.NewLimiter(b.Rate, b.Burst, formLimiterSize, 2*time.Hour)
+	}
+	if s.tripNotes == nil {
+		s.tripNotes = formguard.NewLimiter(rate.Every(time.Minute), 1, formLimiterSize, 2*time.Minute)
 	}
 	s.FormHost = strings.ToLower(strings.TrimSuffix(s.FormHost, "."))
 	if s.fguard == nil && s.FormKeys != nil {
@@ -323,7 +335,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Static files are immutable and cheap, so only pages are counted.
-	if !s.Views.Allow(s.ClientIP(r)) {
+	if !s.Views.Allow(s.clientKey(r)) {
 		w.Header().Set("Retry-After", "60")
 		s.page(w, r, http.StatusTooManyRequests, "unavailable", pageData{Title: "Too many requests"})
 		return
@@ -514,6 +526,12 @@ func hostOf(r *http.Request) string {
 		host = h
 	}
 	return strings.TrimSuffix(host, ".")
+}
+
+// clientKey is the client's address for limits and identities: an IPv6
+// address cut to its /64, which one subscriber holds whole (F69).
+func (s *Server) clientKey(r *http.Request) string {
+	return formguard.ClientKey(s.ClientIP(r))
 }
 
 // ClientIP is the request's client address: the last X-Forwarded-For

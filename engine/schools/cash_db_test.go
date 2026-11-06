@@ -532,6 +532,39 @@ func TestEnteredMoneyMatchedByHandNeedsASecondPerson(t *testing.T) {
 	if x := w.invoiceOf(w.invA.ID); x.PaidKobo != 6_000_000 || x.Payments[0].By != "user:ada" {
 		t.Fatalf("after approval %+v", x)
 	}
+	// An invoice made to the student as the school's customer, outside
+	// any term (an excursion fee), is the student's too: held.
+	var extra invoicing.Invoice
+	w.in(func(tx pgx.Tx) error {
+		var err error
+		extra, err = w.s.Invoices.Create(ctx, tx, tn, invoicing.Draft{Customer: invoicing.Customer{Name: "Ngozi Eze", Phone: "+2348031234567", Key: schools.StudentKey(w.a.ID)},
+			AmountKobo: 25_000_000}, "user:ada")
+		return err
+	})
+	if _, err := w.s.Invoices.Send(ctx, tn, extra.Number, "user:ada", "send:"+extra.Number); err != nil {
+		t.Fatal(err)
+	}
+	_, err = m.Match(ctx, tn, enter(25_000_000), extra.Number, "user:ada")
+	held = nil
+	if !errors.As(err, &held) || held.AmountKobo != 25_000_000 {
+		t.Fatalf("a student's own invoice, matched by hand at the threshold: %v", err)
+	}
+	if x := w.invoiceOf(extra.ID); x.PaidKobo != 0 {
+		t.Fatalf("held money reached the extra fee: %+v", x)
+	}
+	w.in(func(tx pgx.Tx) error {
+		p, err := w.s.Posting(ctx, tx, tn, held.RequestID)
+		if err != nil || p.StudentID == nil || *p.StudentID != w.a.ID || p.InvoiceNumber != extra.Number {
+			t.Fatalf("the extra fee's request %v %+v", err, p)
+		}
+		return nil
+	})
+	if _, err := w.decide(held.RequestID, true, "", "user:bola"); err != nil {
+		t.Fatal(err)
+	}
+	if x := w.invoiceOf(extra.ID); x.PaidKobo != 25_000_000 {
+		t.Fatalf("the extra fee after approval %+v", x)
+	}
 	// Another of the business's invoices, not a student's: not held.
 	var shop invoicing.Invoice
 	w.in(func(tx pgx.Tx) error {

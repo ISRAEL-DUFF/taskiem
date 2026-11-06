@@ -57,6 +57,11 @@ type Bill struct {
 	// bank confirmed the business sent from Taskiem (its own record).
 	PayingKobo int64 `json:"paying_kobo"`
 	SentKobo   int64 `json:"sent_kobo"`
+	// UncountedKobo is what the bank confirmed the business sent from
+	// Taskiem that the supplier's figure does not show yet (its match has
+	// not paired it, or the mirror has not brought the count back): it is
+	// not due again, so the bill is not paid twice (uncountedSQL).
+	UncountedKobo int64 `json:"uncounted_kobo"`
 	// The way to pay, the seller's: the account number it issued us, and
 	// the invoice's page.
 	PayAccountNumber string    `json:"pay_account_number,omitempty"`
@@ -134,16 +139,24 @@ func MirrorBillTx(ctx context.Context, tx pgx.Tx, buyer uuid.UUID, m Mirror) (bo
 	return inserted, nil
 }
 
+// uncountedSQL is a bill's UncountedKobo: the payments the bank
+// confirmed that the supplier's match has not paired, and, of those it
+// paired, what the supplier's figure (paid_kobo) does not show yet, as
+// the mirror brings it later. Read FROM bills, unaliased.
+const uncountedSQL = `(SELECT u + GREATEST(bills.sent_kobo - u - bills.paid_kobo, 0) FROM (SELECT COALESCE(sum(p.amount_kobo), 0)::bigint AS u
+	FROM bill_payments p WHERE p.bill_id = bills.id AND p.status = 'paid' AND p.paired_at IS NULL) x)`
+
 const billCols = `id, link_id, supplier_tenant, supplier_name, reference, lines, amount_kobo, paid_kobo, COALESCE(to_char(due_on, 'YYYY-MM-DD'), ''),
-	status, allow_part_payments, disputed, declared_paid_kobo, paying_kobo, sent_kobo, COALESCE(pay_account_number, ''), COALESCE(pay_bank_name, ''), COALESCE(pay_link, ''),
+	status, allow_part_payments, disputed, declared_paid_kobo, paying_kobo, sent_kobo, ` + uncountedSQL + `, COALESCE(pay_account_number, ''), COALESCE(pay_bank_name, ''), COALESCE(pay_link, ''),
 	mirrored_at, created_at`
 
 func scanBill(r pgx.Row) (Bill, error) {
 	var b Bill
 	err := r.Scan(&b.ID, &b.LinkID, &b.Supplier, &b.SupplierName, &b.Reference, &b.Lines, &b.AmountKobo, &b.PaidKobo, &b.DueOn,
-		&b.Status, &b.AllowParts, &b.Disputed, &b.DeclaredPaidKobo, &b.PayingKobo, &b.SentKobo, &b.PayAccountNumber, &b.PayBankName, &b.PayLink, &b.MirroredAt, &b.CreatedAt)
-	if b.Status != "void" && b.AmountKobo > b.PaidKobo {
-		b.DueKobo = b.AmountKobo - b.PaidKobo
+		&b.Status, &b.AllowParts, &b.Disputed, &b.DeclaredPaidKobo, &b.PayingKobo, &b.SentKobo, &b.UncountedKobo, &b.PayAccountNumber, &b.PayBankName, &b.PayLink, &b.MirroredAt, &b.CreatedAt)
+	// What was sent and is not counted yet is not due again.
+	if b.Status != "void" && b.AmountKobo > b.PaidKobo+b.UncountedKobo {
+		b.DueKobo = b.AmountKobo - b.PaidKobo - b.UncountedKobo
 	}
 	return b, err
 }
@@ -297,33 +310,39 @@ type PayIn struct {
 
 // StartBillPaymentTx records a payment of a bill under way and marks the
 // bill paying, so a second Pay is refused until it is settled, refused or
-// rejected. The token, the bill's reference and a short code, is what the
+// rejected; what the bank confirmed sent and the supplier has not counted
+// yet is not due again, so the bill is not paid twice before its count
+// comes back. The token, the bill's reference and a short code, is what the
 // payout's narration carries.
 func StartBillPaymentTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, in PayIn) (BillPayment, error) {
 	var b struct {
 		ref                   string
-		due, paying           int64
+		due, paying, sent     int64
 		status                string
 		parts, disputed, void bool
 	}
-	err := tx.QueryRow(ctx, `SELECT reference, amount_kobo - paid_kobo, paying_kobo, status, allow_part_payments, disputed, voided FROM bills WHERE id = $1 FOR UPDATE`, in.Bill).
-		Scan(&b.ref, &b.due, &b.paying, &b.status, &b.parts, &b.disputed, &b.void)
+	err := tx.QueryRow(ctx, `SELECT reference, amount_kobo - paid_kobo, paying_kobo, `+uncountedSQL+`, status, allow_part_payments, disputed, voided
+		FROM bills WHERE id = $1 FOR UPDATE`, in.Bill).
+		Scan(&b.ref, &b.due, &b.paying, &b.sent, &b.status, &b.parts, &b.disputed, &b.void)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return BillPayment{}, ErrNotFound
 	}
 	if err != nil {
 		return BillPayment{}, err
 	}
+	left := b.due - b.sent
 	switch {
 	case b.void || b.status == "paid":
 		return BillPayment{}, fmt.Errorf("%w: the bill is %s", ErrState, map[bool]string{true: "cancelled", false: "paid"}[b.void])
 	case b.paying > 0:
 		return BillPayment{}, fmt.Errorf("%w: a payment of this bill is already under way", ErrState)
+	case b.sent > 0 && left <= 0:
+		return BillPayment{}, fmt.Errorf("%w: you sent %d kobo for this bill that the supplier has not counted yet; confirm the payment was for this bill instead of paying again", ErrState, b.sent)
 	case b.disputed:
 		return BillPayment{}, fmt.Errorf("%w: the bill is queried; settle the query with the supplier first", ErrState)
-	case in.AmountKobo <= 0 || in.AmountKobo > b.due:
-		return BillPayment{}, fmt.Errorf("%w: pay up to what is left, %d kobo", ErrInvalid, b.due)
-	case in.AmountKobo < b.due && !b.parts:
+	case in.AmountKobo <= 0 || in.AmountKobo > left:
+		return BillPayment{}, fmt.Errorf("%w: pay up to what is left, %d kobo", ErrInvalid, left)
+	case in.AmountKobo < left && !b.parts:
 		return BillPayment{}, fmt.Errorf("%w: the supplier takes this bill paid in full", ErrInvalid)
 	}
 	p := BillPayment{ID: uuid.Must(uuid.NewV7()), BillID: in.Bill, Reference: b.ref, AmountKobo: in.AmountKobo, Connection: in.Connection,

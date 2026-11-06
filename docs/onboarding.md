@@ -94,6 +94,7 @@ With `slack` in `TASKIEM_CHAT_SIGNUP` and Taskiem's Slack app registered ([Slack
 
 - **The email** Slack holds for them becomes the account's, **unconfirmed** (a workspace's administrators set members' emails), so nothing is emailed for the business until they confirm it. When that email is already someone's account, nothing is merged: they are told so before any question, and may start a new business under a Slack-only account instead.
 - **A workspace already on Taskiem**: its businesses' Slack connections take the new install's token and work again; the installer is told whose workspace it is and offered **Start a separate business**. Nothing is made unless they choose it.
+- **Another business from a Slack DM** (`new business`) gets the workspace's Slack from a business the person is still a member of, and only a connection made through Taskiem's app there; a token a business pasted from its own Slack app is never lent. A Slack link speaks only for a current member: someone removed from a business is no longer linked there, so its Slack is not theirs to use.
 - **An install nobody finishes** waits a day; then its token is given back to Slack. Removing the app forgets it at once.
 - The request works once, for ten minutes, only in the browser that started it.
 

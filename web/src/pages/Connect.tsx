@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { useLocation, useParams } from "react-router-dom";
 import { get, post, type AuthField, type ConnectorInfo } from "../api";
-import { keyProblem, modesOf, splitFields } from "../lib/connections";
+import { keyProblem, modesOf, splitFields, type ConnectionWebhook } from "../lib/connections";
 import { ErrorBox, Field, Skeleton, useAction } from "../ui";
+import { MadeWebhooks } from "./MadeWebhooks";
 
 interface LinkView {
   business: string;
@@ -33,7 +34,7 @@ export function ConnectPage() {
   const [gone, setGone] = useState("");
   const [creds, setCreds] = useState<Record<string, string>>({});
   const [mode, setMode] = useState("");
-  const [done, setDone] = useState<{ connected: string; back?: string }>();
+  const [done, setDone] = useState<{ connected: string; back?: string; webhooks?: ConnectionWebhook[] }>();
   const act = useAction();
   useEffect(() => {
     // The fragment holds the Mini App's data: kept in memory, dropped
@@ -59,6 +60,7 @@ export function ConnectPage() {
         service={done.connected}
         business={view.business}
         back={done.back}
+        webhooks={done.webhooks}
       />
     );
   const modes = modesOf(c);
@@ -169,7 +171,7 @@ export function ConnectPage() {
           onSubmit={(e) => {
             e.preventDefault();
             void act.run(async () => {
-              const out = await post<{ connected: string; back?: string }>(
+              const out = await post<{ connected: string; back?: string; webhooks?: ConnectionWebhook[] }>(
                 `/v1/connect/${token}`,
                 {
                   credentials: creds,
@@ -236,10 +238,12 @@ function Connected({
   service,
   business,
   back,
+  webhooks,
 }: {
   service: string;
   business: string;
   back?: string;
+  webhooks?: ConnectionWebhook[];
 }) {
   return (
     <div className="login card" role="status" data-testid="connect-done">
@@ -248,6 +252,9 @@ function Connected({
         {service} is connected to {business}. Taskiem has told your chat, and
         carries on there.
       </p>
+      {webhooks && webhooks.length > 0 && (
+        <MadeWebhooks service={service} hooks={webhooks} />
+      )}
       {back && (
         <p>
           <a className="button primary" href={back}>

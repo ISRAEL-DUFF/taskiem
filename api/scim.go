@@ -96,7 +96,20 @@ func (s *Server) SCIM() http.Handler {
 	return r
 }
 
-// scimAuth admits API keys holding scim.provision, never sessions.
+// scimGrantorKey holds, in a SCIM request's context, the standing of the
+// person whose key made it.
+type scimGrantorKey struct{}
+
+// scimGrantor is the standing a SCIM request moves people with (scimAuth).
+func scimGrantor(ctx context.Context) *Principal {
+	g, _ := ctx.Value(scimGrantorKey{}).(*Principal)
+	return g
+}
+
+// scimAuth admits API keys holding scim.provision, never sessions, and
+// not keys limited to one environment: people reach every environment. The key
+// moves people only as far as its owner could by hand: their standing
+// now goes with the request (scimSync).
 func (s *Server) scimAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer "+apiKeyPrefix) {
@@ -112,7 +125,17 @@ func (s *Server) scimAuth(next http.Handler) http.Handler {
 			s.scimFail(w, r, scimErr(http.StatusForbidden, "", "requires %s", PermSCIM))
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ctxKey{}, p)))
+		if p.Environment != "" { // people are the whole tenant's (tenantWide)
+			s.scimFail(w, r, scimErr(http.StatusForbidden, "", "this key is limited to %s; people reach every environment", p.Environment))
+			return
+		}
+		grantor := &Principal{TenantID: p.TenantID, UserID: p.KeyOwner, Permissions: map[string]bool{}}
+		if err := s.loadRoles(r.Context(), grantor); err != nil {
+			s.scimFail(w, r, err)
+			return
+		}
+		ctx := context.WithValue(r.Context(), ctxKey{}, p)
+		next.ServeHTTP(w, r.WithContext(context.WithValue(ctx, scimGrantorKey{}, grantor)))
 	})
 }
 
@@ -456,7 +479,7 @@ func (s *Server) scimCreateUser(w http.ResponseWriter, r *http.Request) {
 			p.TenantID, user, in.UserName, email, in.ExternalID, displayName(&in), in.Name.GivenName, in.Name.FamilyName, active); err != nil {
 			return err
 		}
-		ch, err := s.scimSync(ctx, tx, p.TenantID, user)
+		ch, err := s.scimSync(ctx, tx, p.TenantID, user, scimGrantor(ctx))
 		if err != nil {
 			return err
 		}
@@ -507,7 +530,7 @@ func (s *Server) scimUpdateUser(w http.ResponseWriter, r *http.Request, action s
 			WHERE user_id = $1`, id, u.UserName, u.ExternalID, u.DisplayName, u.GivenName, u.FamilyName, u.Active); err != nil {
 			return err
 		}
-		ch, err := s.scimSync(ctx, tx, p.TenantID, id)
+		ch, err := s.scimSync(ctx, tx, p.TenantID, id, scimGrantor(ctx))
 		if err != nil {
 			return err
 		}
@@ -665,7 +688,7 @@ func (s *Server) scimDeleteUser(w http.ResponseWriter, r *http.Request) {
 		if tag.RowsAffected() == 0 {
 			return pgx.ErrNoRows
 		}
-		ch, err := s.scimSync(ctx, tx, p.TenantID, id)
+		ch, err := s.scimSync(ctx, tx, p.TenantID, id, scimGrantor(ctx))
 		if err != nil {
 			return err
 		}
@@ -722,8 +745,12 @@ func (m scimMapping) rolesFor(group string) []string {
 // hold the default roles and their groups' roles (as SCIM memberships,
 // leaving roles granted otherwise); inactive or forgotten, they hold
 // nothing and are signed out. An owner keeps everything: owners are
-// removed by owners.
-func (s *Server) scimSync(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID) (scimChange, error) {
+// removed by owners. Every role it gives or takes needs grantor's standing
+// (canGrant), as by hand: a SCIM key acts with its owner's (scimGrantor).
+// grantor is nil when whoever caused the sync already had it checked: an
+// owner or administrator saving the mapping, or the person accepting an
+// invitation.
+func (s *Server) scimSync(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID, grantor *Principal) (scimChange, error) {
 	var ch scimChange
 	m, err := loadSCIMMapping(ctx, tx)
 	if err != nil {
@@ -733,15 +760,6 @@ func (s *Server) scimSync(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID
 	err = tx.QueryRow(ctx, `SELECT active FROM scim_users WHERE user_id = $1`, user).Scan(&active)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return ch, err
-	}
-	// Someone invited, not yet accepted, holds nothing whatever SCIM says;
-	// accepting syncs them.
-	var pending bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM member_invitations WHERE user_id = $1 AND source = 'scim')`, user).Scan(&pending); err != nil {
-		return ch, err
-	}
-	if pending {
-		return ch, nil
 	}
 	var want []string
 	if active {
@@ -760,6 +778,29 @@ func (s *Server) scimSync(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID
 		want = slices.DeleteFunc(want, func(r string) bool { return r == "owner" })
 		slices.Sort(want)
 		want = slices.Compact(want)
+	}
+	may := func(role string) error {
+		if grantor == nil {
+			return nil
+		}
+		if err := canGrant(ctx, tx, grantor, []string{role}); err != nil {
+			return scimErr(http.StatusForbidden, "", "this key's owner cannot change %s's roles this way: %s", user, strings.TrimPrefix(err.Error(), "forbidden: "))
+		}
+		return nil
+	}
+	// Someone invited, not yet accepted, holds nothing whatever SCIM says;
+	// accepting syncs them, so what they will hold is checked now.
+	var pending bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM member_invitations WHERE user_id = $1 AND source = 'scim')`, user).Scan(&pending); err != nil {
+		return ch, err
+	}
+	if pending {
+		for _, role := range want {
+			if err := may(role); err != nil {
+				return ch, err
+			}
+		}
+		return ch, nil
 	}
 	rows, err := tx.Query(ctx, `SELECT role, source FROM memberships WHERE user_id = $1`, user)
 	if err != nil {
@@ -781,6 +822,9 @@ func (s *Server) scimSync(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID
 	}
 	for _, role := range want {
 		if _, ok := have[role]; !ok {
+			if err := may(role); err != nil {
+				return ch, err
+			}
 			if _, err := tx.Exec(ctx, `INSERT INTO memberships (tenant_id, user_id, role, source) VALUES ($1, $2, $3, 'scim')`, tenant, user, role); err != nil {
 				return ch, err
 			}
@@ -790,6 +834,9 @@ func (s *Server) scimSync(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID
 	for role, src := range have {
 		if slices.Contains(want, role) || (active && src != "scim") {
 			continue
+		}
+		if err := may(role); err != nil {
+			return ch, err // taking a role away needs the same standing as giving it
 		}
 		if _, err := tx.Exec(ctx, `DELETE FROM memberships WHERE user_id = $1 AND role = $2`, user, role); err != nil {
 			return ch, err
@@ -808,10 +855,10 @@ func (s *Server) scimSync(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID
 	return ch, nil
 }
 
-func (s *Server) scimSyncAll(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, users []uuid.UUID) error {
+func (s *Server) scimSyncAll(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, users []uuid.UUID, grantor *Principal) error {
 	slices.SortFunc(users, func(a, b uuid.UUID) int { return strings.Compare(a.String(), b.String()) })
 	for _, u := range slices.Compact(users) {
-		if _, err := s.scimSync(ctx, tx, tenant, u); err != nil {
+		if _, err := s.scimSync(ctx, tx, tenant, u, grantor); err != nil {
 			return err
 		}
 	}
@@ -1027,7 +1074,7 @@ func (s *Server) setGroupMembers(ctx context.Context, tx pgx.Tx, tenant, group u
 		}
 		affected = append(affected, id)
 	}
-	return affected, s.scimSyncAll(ctx, tx, tenant, affected)
+	return affected, s.scimSyncAll(ctx, tx, tenant, affected, scimGrantor(ctx))
 }
 
 func groupMembers(ctx context.Context, tx pgx.Tx, group uuid.UUID) ([]uuid.UUID, error) {
@@ -1091,7 +1138,7 @@ func (s *Server) renameGroup(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUI
 	if err != nil {
 		return err
 	}
-	return s.scimSyncAll(ctx, tx, tenant, members)
+	return s.scimSyncAll(ctx, tx, tenant, members, scimGrantor(ctx))
 }
 
 func (s *Server) scimPutGroup(w http.ResponseWriter, r *http.Request) {
@@ -1245,7 +1292,7 @@ func (s *Server) scimDeleteGroup(w http.ResponseWriter, r *http.Request) {
 		if tag.RowsAffected() == 0 {
 			return pgx.ErrNoRows
 		}
-		if err := s.scimSyncAll(ctx, tx, p.TenantID, members); err != nil {
+		if err := s.scimSyncAll(ctx, tx, p.TenantID, members, scimGrantor(ctx)); err != nil {
 			return err
 		}
 		return auditTx(r, tx, "scim.group.delete", id.String(), map[string]any{"members": len(members)})
@@ -1364,7 +1411,8 @@ func (s *Server) putSCIM(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		if err := s.scimSyncAll(ctx, tx, p.TenantID, users); err != nil {
+		// The mapping was checked against whoever saved it (canGrant above).
+		if err := s.scimSyncAll(ctx, tx, p.TenantID, users, nil); err != nil {
 			return err
 		}
 		return auditTx(r, tx, "scim.config", "scim", map[string]any{"default_roles": req.DefaultRoles, "group_roles": req.GroupRoles,

@@ -34,6 +34,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/dispatch"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/embedsites"
+	"github.com/israel-duff/taskiem/engine/formguard"
 	"github.com/israel-duff/taskiem/engine/forms"
 	"github.com/israel-duff/taskiem/engine/httpsec"
 	"github.com/israel-duff/taskiem/engine/inmail"
@@ -414,14 +415,14 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermPIIReveal)).Get("/languages/transcripts", s.getTranscripts)
 			r.With(s.need(PermSecretManage), s.tenantWide).Put("/ussd/channels/{provider}", s.putUSSDChannel)
 			r.With(s.need(PermSecretManage), s.tenantWide).Delete("/ussd/channels/{provider}", s.deleteUSSDChannel)
-			r.With(s.need(PermMemberManage)).Delete("/members/{user}/passkeys", s.resetPasskeys)
+			r.With(s.need(PermMemberManage), s.tenantWide).Delete("/members/{user}/passkeys", s.resetPasskeys)
 			r.With(s.need(PermMemberManage)).Get("/scim", s.getSCIM)
-			r.With(s.need(PermMemberManage), s.feature(billing.FeatureSCIM, false)).Put("/scim", s.putSCIM)
+			r.With(s.need(PermMemberManage), s.tenantWide, s.feature(billing.FeatureSCIM, false)).Put("/scim", s.putSCIM)
 			r.With(s.need(PermMemberManage)).Get("/sso", s.listSSO)
-			r.With(s.need(PermMemberManage), s.feature(billing.FeatureSSO, false)).Post("/sso", s.createSSO)
-			r.With(s.need(PermMemberManage), s.feature(billing.FeatureSSO, false)).Put("/sso/{id}", s.updateSSO)
-			r.With(s.need(PermMemberManage), s.feature(billing.FeatureSSO, false)).Post("/sso/{id}/domains", s.addSSODomain)
-			r.With(s.need(PermMemberManage)).Post("/sso/domains/{domain}/verify", s.verifySSODomain)
+			r.With(s.need(PermMemberManage), s.tenantWide, s.feature(billing.FeatureSSO, false)).Post("/sso", s.createSSO)
+			r.With(s.need(PermMemberManage), s.tenantWide, s.feature(billing.FeatureSSO, false)).Put("/sso/{id}", s.updateSSO)
+			r.With(s.need(PermMemberManage), s.tenantWide, s.feature(billing.FeatureSSO, false)).Post("/sso/{id}/domains", s.addSSODomain)
+			r.With(s.need(PermMemberManage), s.tenantWide).Post("/sso/domains/{domain}/verify", s.verifySSODomain)
 			r.Get("/connectors", s.listConnectors)
 			r.Get("/capabilities", s.listCapabilities)
 			r.With(s.need(PermWorkflowRead)).Get("/connector-drift", s.listDrift)
@@ -641,7 +642,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermMemberManage)).Get("/settings/security", s.getSecurity) // who must sign in with a passkey (passkey_rule.go)
 			r.With(s.need(PermMemberManage), s.tenantWide).Put("/settings/security", s.putSecurity)
 			r.Get("/settings/advanced", s.getAdvanced) // the Advanced switch (advanced.go)
-			r.With(s.need(PermMemberManage)).Put("/settings/advanced", s.putAdvanced)
+			r.With(s.need(PermMemberManage), s.tenantWide).Put("/settings/advanced", s.putAdvanced)
 			r.Get("/settings/areas", s.getAreas) // which parts of Taskiem the business uses (areas.go)
 			r.With(s.tenantWide).Put("/settings/areas", s.putAreas)
 			r.Get("/settings/schools", s.getSchoolSettings) // the Schools area's switch (schools.go)
@@ -680,7 +681,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermRoleManage), s.tenantWide).Delete("/roles/{name}", s.deleteRole)
 			r.With(s.need(PermMemberManage)).Get("/api-keys", s.listKeys)
 			r.With(s.need(PermMemberManage)).Post("/api-keys", s.createKey)
-			r.With(s.need(PermMemberManage)).Delete("/api-keys/{id}", s.revokeKey)
+			r.With(s.need(PermMemberManage), s.tenantWide).Delete("/api-keys/{id}", s.revokeKey)
 
 			r.With(s.need(PermAuditRead), s.tenantWide).Get("/audit", s.listAudit)
 			r.With(s.need(PermAuditRead), s.tenantWide).Get("/audit/verify", s.verifyAudit)
@@ -952,6 +953,11 @@ func clientIP(r *http.Request) string {
 	}
 	return host
 }
+
+// limitIP is the client's address as per-address limits key it: an IPv4
+// address as is, an IPv6 address cut to its /64, which one subscriber
+// holds whole (formguard.ClientKey, as the public host's limits).
+func limitIP(r *http.Request) string { return formguard.ClientKey(clientIP(r)) }
 
 // loginLimiter paces sign-in attempts by key: "login:" and an address, or
 // "login-email:" and an email.

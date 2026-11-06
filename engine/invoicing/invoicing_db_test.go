@@ -188,9 +188,14 @@ func TestVoidOverdueAndSettings(t *testing.T) {
 	if n, err := w.inv.Overdue(ctx); err != nil || n != 0 {
 		t.Fatalf("overdue %d %v", n, err)
 	}
+	// A part paid before it is voided stays.
+	w.in(func(tx pgx.Tx) error {
+		_, _, err := w.inv.RecordPayment(ctx, tx, w.env.Tenant, x.Number, invoicing.PaymentIn{AmountKobo: 10000, PaymentID: "early", How: "exact", By: "test"})
+		return err
+	})
 	w.in(func(tx pgx.Tx) error {
 		y, err := w.inv.Get(ctx, tx, w.env.Tenant, x.Number)
-		if err != nil || y.Status != "overdue" {
+		if err != nil || y.Status != "overdue" || y.PaidKobo != 10000 {
 			t.Errorf("status %v %q", err, y.Status)
 		}
 		if _, err := w.inv.Void(ctx, tx, w.env.Tenant, x.Number, "", "user:ada"); !errors.Is(err, invoicing.ErrInvalid) {
@@ -205,11 +210,36 @@ func TestVoidOverdueAndSettings(t *testing.T) {
 	if _, err := w.inv.Send(ctx, w.env.Tenant, x.Number, "user:ada", ""); !errors.Is(err, invoicing.ErrState) {
 		t.Errorf("sending a void invoice: %v", err)
 	}
-	// A void invoice counts no payment towards being paid.
+	// A void invoice takes no new payment (409): the money is left for a
+	// person, not absorbed. The payment counted before is the same again,
+	// and can still be undone.
 	w.in(func(tx pgx.Tx) error {
-		y, _, err := w.inv.RecordPayment(ctx, tx, w.env.Tenant, x.Number, invoicing.PaymentIn{AmountKobo: 50000, PaymentID: "late", How: "exact", By: "test"})
-		if err != nil || y.Status != "void" {
-			t.Errorf("payment to void %v %+v", err, y)
+		if _, _, err := w.inv.RecordPayment(ctx, tx, w.env.Tenant, x.Number, invoicing.PaymentIn{AmountKobo: 40000, PaymentID: "late", How: "exact", By: "test"}); !errors.Is(err, invoicing.ErrState) {
+			t.Errorf("payment to void: %v", err)
+		}
+		y, _, err := w.inv.RecordPayment(ctx, tx, w.env.Tenant, x.Number, invoicing.PaymentIn{AmountKobo: 10000, PaymentID: "early", How: "exact", By: "test"})
+		if err != nil || y.Status != "void" || y.PaidKobo != 10000 || len(y.Payments) != 1 {
+			t.Errorf("the early payment again: %v %+v", err, y)
+		}
+		return nil
+	})
+	// The database refuses it too, whoever writes.
+	err := db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{w.env.Tenant}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `INSERT INTO customer_invoice_payments (id, tenant_id, invoice_id, amount_kobo, payment_id, how, by)
+			VALUES (gen_random_uuid(), $1, $2, 40000, 'direct', 'manual', 'test')`, w.env.Tenant, x.ID)
+		return err
+	})
+	if err == nil || !strings.Contains(err.Error(), "a void invoice takes no payment") {
+		t.Errorf("a payment written to a void invoice: %v", err)
+	}
+	w.in(func(tx pgx.Tx) error {
+		y, err := w.inv.Get(ctx, tx, w.env.Tenant, x.Number)
+		if err != nil {
+			return err
+		}
+		y, err = w.inv.UndoPayment(ctx, tx, w.env.Tenant, x.Number, y.Payments[0].ID, "user:ada")
+		if err != nil || y.Status != "void" || y.PaidKobo != 0 {
+			t.Errorf("undo on a void invoice: %v %+v", err, y)
 		}
 		return nil
 	})
@@ -360,5 +390,30 @@ func TestSendPastTheRecipientLimit(t *testing.T) {
 		if i >= 5 && len(sent.Queued) != 0 {
 			t.Errorf("send %d queued %v past the limit", i+1, sent.Queued)
 		}
+	}
+}
+
+// A sending key stands for one invoice's messages: the same key sent with
+// another invoice (a page that kept its key when it moved to the next
+// invoice) still reaches that invoice's customer, while a retry of the
+// same invoice with it sends nothing more.
+func TestSendKeyIsPerInvoice(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	bola := invoicing.Customer{Name: "Bola Ade", Phone: "+2348039999999", Email: "bola@example.com"}
+	a := w.create(invoicing.Draft{Customer: ada, AmountKobo: 100000})
+	b := w.create(invoicing.Draft{Customer: bola, AmountKobo: 200000})
+	if sa, err := w.inv.Send(ctx, w.env.Tenant, a.Number, "user:ada", "same-key"); err != nil || len(sa.Queued) != 2 {
+		t.Fatalf("A: %v %+v", err, sa.Queued)
+	}
+	if sb, err := w.inv.Send(ctx, w.env.Tenant, b.Number, "user:ada", "same-key"); err != nil || len(sb.Queued) != 2 {
+		t.Fatalf("B sent with A's key queued %v (%v): its customer was never told", sb.Queued, err)
+	}
+	if again, err := w.inv.Send(ctx, w.env.Tenant, b.Number, "user:ada", "same-key"); err != nil || len(again.Queued) != 0 {
+		t.Fatalf("B retried with its key queued %v (%v)", again.Queued, err)
+	}
+	var n int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM platform_messages WHERE tenant_id = $1`, w.env.Tenant).Scan(&n); err != nil || n != 4 {
+		t.Fatalf("messages %d (%v), want 4", n, err)
 	}
 }

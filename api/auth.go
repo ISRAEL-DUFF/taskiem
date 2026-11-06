@@ -470,7 +470,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	if !jsonOnly(w, r) {
 		return
 	}
-	if !s.loginLimiter("login:" + clientIP(r)).Allow() {
+	if !s.loginLimiter("login:" + limitIP(r)).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "too many login attempts")
 		return
 	}
@@ -515,10 +515,9 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
-	tok := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-	if c, err := r.Cookie(sessionCookie); err == nil {
-		tok = c.Value
-	}
+	// The session that authenticated this request, chosen as resolve
+	// chooses it: a bearer token before a cookie.
+	tok := sessionToken(r)
 	var err error
 	if principalFrom(r.Context()).Invitee {
 		_, err = s.Store.Pool.Exec(r.Context(), `SELECT taskiem_auth_invitee_end($1)`, hashToken(tok))
@@ -608,9 +607,16 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 }
 
 // CreateTenant creates a tenant with its owner, a default workspace, and
-// the dev and prod environments (signup, and `taskiem bootstrap`).
+// the dev and prod environments, for operators' tools (`taskiem bootstrap`,
+// the demo school). The operator names the owner's email, so it is taken as
+// confirmed, as CreateMember does: an unconfirmed email may not enrol a
+// passkey or authenticator (F9), and no one else could have chosen it.
+// Signup goes through createTenant and confirms the email by link.
 func CreateTenant(ctx context.Context, pool *pgxpool.Pool, name, email, userName, password string) (tenant, user uuid.UUID, err error) {
-	return createTenant(ctx, pool, name, email, userName, password, nil)
+	return createTenant(ctx, pool, name, email, userName, password, func(tx pgx.Tx, _, user uuid.UUID) error {
+		_, err := tx.Exec(ctx, `UPDATE users SET email_verified_at = now() WHERE id = $1`, user)
+		return err
+	})
 }
 
 // createTenant is CreateTenant; then, when given, runs in the same
@@ -880,7 +886,7 @@ func (s *Server) acceptInvitation(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if source == "scim" {
-			ch, err := s.scimSync(ctx, tx, tenant, p.UserID)
+			ch, err := s.scimSync(ctx, tx, tenant, p.UserID, nil)
 			if err != nil {
 				return err
 			}

@@ -107,6 +107,20 @@ func TestDedicatedWorkerPools(t *testing.T) {
 		}
 	}
 
+	// The operators' listing has every tenant's routing (read in the
+	// platform chain: the change log's policy shows no tenant's to others).
+	routes, err := e.Store.PoolAssignments(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var acmeRouted bool
+	for _, r := range routes {
+		acmeRouted = acmeRouted || r.Tenant != nil && *r.Tenant == acme && r.Pool == "acme"
+	}
+	if !acmeRouted {
+		t.Errorf("routes %+v: acme's routing is missing", routes)
+	}
+
 	// Removing the routing puts acme back in the shared pool; the change
 	// log and acme's audit chain both have it.
 	if err := e.Store.AssignTenantPool(ctx, acme, "", "cli:ops", false); err != nil {
@@ -122,7 +136,7 @@ func TestDedicatedWorkerPools(t *testing.T) {
 	if err := e.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM worker_pool_changes`).Scan(&logged); err != nil || logged != 3 {
 		t.Errorf("change log %d (%v), want 3", logged, err)
 	}
-	routes, err := e.Store.PoolAssignments(ctx)
+	routes, err = e.Store.PoolAssignments(ctx)
 	if err != nil || len(routes) != 1 || routes[0].Plan != "ent_test" || routes[0].Pool != "ent" {
 		t.Errorf("routes %+v (%v)", routes, err)
 	}

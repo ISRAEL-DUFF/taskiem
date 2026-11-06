@@ -261,6 +261,9 @@ type tenantGate struct {
 	mu      sync.Mutex
 	entries map[uuid.UUID]*gateEntry
 	lookups *rate.Limiter // database checks for tenants not cached
+	// refresh re-checks tenants already known to exist, apart from
+	// lookups, which made-up ids can spend (F29).
+	refresh *rate.Limiter
 }
 
 type gateEntry struct {
@@ -305,6 +308,7 @@ const (
 	gateTTL    = time.Minute      // how long whether a tenant exists is trusted
 	gateIdle   = 10 * time.Minute // a tenant not seen for this long may be forgotten
 	gateLookup = 100              // tenant checks per second, across all tenants
+	gateStale  = gateIdle         // a known tenant's last answer, kept while re-checks are spent
 )
 
 // errBusy: too many unknown tenants are being looked up; retry shortly.
@@ -319,6 +323,7 @@ func (h *Handler) gate(ctx context.Context, tenant uuid.UUID) (gateEntry, error)
 	if g.entries == nil {
 		g.entries = map[uuid.UUID]*gateEntry{}
 		g.lookups = rate.NewLimiter(gateLookup, gateLookup)
+		g.refresh = rate.NewLimiter(gateLookup, gateLookup)
 	}
 	e := g.entries[tenant]
 	if e != nil && now.Sub(e.checked) < gateTTL {
@@ -326,7 +331,23 @@ func (h *Handler) gate(ctx context.Context, tenant uuid.UUID) (gateEntry, error)
 		g.mu.Unlock()
 		return *e, nil
 	}
-	allowed := g.lookups.Allow()
+	// Ids that are not known tenants share lookups, which anyone can
+	// spend by making ids up; a known tenant's re-check comes from its
+	// own budget, and while that is spent too it keeps its last answer
+	// for a while rather than being turned away.
+	known := e != nil && e.hard != nil
+	var allowed bool
+	if known {
+		allowed = g.refresh.Allow()
+		if !allowed && now.Sub(e.checked) < gateStale {
+			e.seen = now
+			out := *e
+			g.mu.Unlock()
+			return out, nil
+		}
+	} else {
+		allowed = g.lookups.Allow()
+	}
 	g.mu.Unlock()
 	if !allowed {
 		return gateEntry{}, errBusy
@@ -1084,7 +1105,21 @@ const enrichTimeout = 3 * time.Second
 func (h *Handler) enrich(ctx context.Context, f connector.Enricher, tenant uuid.UUID, env string, conn *connector.Connector, connection string, opts map[string]any, body any) (any, error) {
 	ctx, cancel := context.WithTimeout(ctx, enrichTimeout)
 	defer cancel()
-	call := connector.EventCall{Options: opts, Connect: func() (map[string]string, *http.Client, error) {
+	return f(ctx, h.eventCall(ctx, tenant, env, conn, connection, opts), body)
+}
+
+// key asks a connector's keyer for a verified event's dedup key, as enrich
+// asks its enricher, with no trigger options.
+func (h *Handler) key(ctx context.Context, f connector.Keyer, tenant uuid.UUID, env string, conn *connector.Connector, connection string, body any) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, enrichTimeout)
+	defer cancel()
+	return f(ctx, h.eventCall(ctx, tenant, env, conn, connection, nil), body)
+}
+
+// eventCall is what an enricher or a keyer gets: the options, and the
+// connection on demand.
+func (h *Handler) eventCall(ctx context.Context, tenant uuid.UUID, env string, conn *connector.Connector, connection string, opts map[string]any) connector.EventCall {
+	return connector.EventCall{Options: opts, Connect: func() (map[string]string, *http.Client, error) {
 		if h.Egress == nil {
 			return nil, nil, errors.New("no egress guard: this edge cannot call providers")
 		}
@@ -1096,7 +1131,6 @@ func (h *Handler) enrich(ctx context.Context, f connector.Enricher, tenant uuid.
 		pol := egress.Policy{Tenant: tenant.String(), Hosts: conn.Manifest.HostsFor(creds), Purpose: "connector:" + conn.Manifest.ID + ":ingest"}
 		return creds, h.Egress.Client(pol, enrichTimeout), nil
 	}}
-	return f(ctx, call, body)
 }
 
 func nullUUID(id uuid.UUID) *uuid.UUID {

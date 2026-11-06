@@ -1,6 +1,11 @@
 package db_test
 
 import (
+	"io/fs"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -50,7 +55,7 @@ func TestClaimsRespectTenantCap(t *testing.T) {
 	addTasks(t, d, a, d.StartRun(t, a), 20)
 	addTasks(t, d, b, d.StartRun(t, b), 20)
 	if err := scoped(t, d, []uuid.UUID{b.ID}, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `SELECT taskiem_set_tenant_limits($1, '{"worker_concurrency": 5}', 'test')`, b.ID)
+		_, err := tx.Exec(ctx, `SELECT taskiem_ops_set_tenant_limits($1, '{"worker_concurrency": 5}', 'test')`, b.ID)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -75,17 +80,31 @@ func TestClaimsRespectTenantCap(t *testing.T) {
 	}
 }
 
-// The application role reads a tenant's limits but cannot write the table;
-// the operators' function (the CLI) works only inside the tenant's scope.
+// The application role reads a tenant's limits but cannot write the table.
+// The operators' function (the CLI) works only inside the tenant's scope;
+// the partner API's sets only a sub-tenant's, so a tenant's own transaction
+// cannot raise its own limits through it (F78).
 func TestTenantsCannotChangeTheirLimits(t *testing.T) {
 	d := dbtest.New(t)
 	a := d.SeedTenant(t, nil)
 	b := d.SeedTenant(t, nil)
 	if err := scoped(t, d, []uuid.UUID{a.ID}, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `SELECT taskiem_set_tenant_limits($1, '{"runs_per_month": 100}', 'operator')`, a.ID)
+		_, err := tx.Exec(ctx, `SELECT taskiem_ops_set_tenant_limits($1, '{"runs_per_month": 100}', 'operator')`, a.ID)
 		return err
 	}); err != nil {
 		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`SELECT taskiem_set_tenant_limits($1, '{"runs_per_month": null, "max_running_runs": 100000}', 'me')`,
+		`SELECT taskiem_limits_apply($1, '{"runs_per_month": null}', 'me')`,
+	} {
+		err := scoped(t, d, []uuid.UUID{a.ID}, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, q, a.ID)
+			return err
+		})
+		if sqlState(err) != "42501" {
+			t.Errorf("%s on a top-level tenant's own scope: %v, want permission denied", q, err)
+		}
 	}
 	for _, q := range []string{
 		`UPDATE tenant_limits SET runs_per_month = 1000000`,
@@ -105,7 +124,7 @@ func TestTenantsCannotChangeTheirLimits(t *testing.T) {
 		}
 	}
 	err := scoped(t, d, []uuid.UUID{a.ID}, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `SELECT taskiem_set_tenant_limits($1, '{"runs_per_month": 5}', 'a')`, b.ID)
+		_, err := tx.Exec(ctx, `SELECT taskiem_ops_set_tenant_limits($1, '{"runs_per_month": 5}', 'a')`, b.ID)
 		return err
 	})
 	if sqlState(err) != "42501" {
@@ -152,5 +171,88 @@ func TestClaimWalksOnlyTenantsWithTasksDue(t *testing.T) {
 	}
 	if lookups != 1 {
 		t.Errorf("the claim looked up %d tenants' worker pools, want 1 (only the tenant with work due)", lookups)
+	}
+}
+
+// A partner sets a sub-tenant's limits (the partner API, in the
+// sub-tenant's scope) no higher than its own explicit ones, read as
+// runtime.Limits.Exceeds reads them (F78).
+func TestSubTenantLimitsStayWithinThePartners(t *testing.T) {
+	d := dbtest.New(t)
+	p := d.SeedTenant(t, nil)
+	sub := d.SeedTenant(t, &p.ID)
+	if err := scoped(t, d, []uuid.UUID{p.ID}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `SELECT taskiem_ops_set_tenant_limits($1, '{"runs_per_month": 1000, "max_workflows": 0, "container_minutes_monthly": 0}', 'operator')`, p.ID)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	set := func(values string) error {
+		return scoped(t, d, []uuid.UUID{sub.ID}, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `SELECT taskiem_set_tenant_limits($1, $2, 'partner')`, sub.ID, values)
+			return err
+		})
+	}
+	for _, ok := range []string{
+		`{"runs_per_month": 500}`,
+		`{"runs_per_month": 1000}`,
+		`{"runs_per_month": null}`,     // the partner's applies
+		`{"max_workflows": 50000}`,     // the partner's 0 is no limit
+		`{"max_running_runs": 100000}`, // the partner set none (Go checks the platform's)
+		`{"container_minutes_monthly": 0}`,
+	} {
+		if err := set(ok); err != nil {
+			t.Errorf("%s: %v", ok, err)
+		}
+	}
+	for _, over := range []string{
+		`{"runs_per_month": 1001}`,
+		`{"runs_per_month": 0}`, // no limit, under the partner's 1000
+		`{"container_minutes_monthly": 10}`,
+	} {
+		if err := set(over); sqlState(err) != "42501" {
+			t.Errorf("%s: %v, want refused", over, err)
+		}
+	}
+}
+
+// Only the operators' CLI sets limits through the operators' function: the
+// API never names it, and only cmd/taskiem calls Store.SetLimits (F78).
+func TestOperatorLimitsCallers(t *testing.T) {
+	root := filepath.Join("..", "..")
+	want := map[string]*regexp.Regexp{
+		"taskiem_ops_set_tenant_limits": regexp.MustCompile(`^engine/runtime/limits\.go$`),
+		".SetLimits(":                   regexp.MustCompile(`^cmd/taskiem/`),
+	}
+	err := filepath.WalkDir(root, func(path string, e fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if e.IsDir() && (e.Name() == "node_modules" || e.Name() == "web" || strings.HasPrefix(e.Name(), ".")) && path != root {
+			return filepath.SkipDir
+		}
+		if e.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		src, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(root, path)
+		rel = filepath.ToSlash(rel)
+		for _, line := range strings.Split(string(src), "\n") {
+			if strings.HasPrefix(strings.TrimSpace(line), "//") {
+				continue
+			}
+			for name, allowed := range want {
+				if strings.Contains(line, name) && !allowed.MatchString(rel) {
+					t.Errorf("%s names %s: operators' limits are set only by the CLI", rel, name)
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }

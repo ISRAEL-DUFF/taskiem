@@ -1205,7 +1205,8 @@ func (d *decider) compensations(insts []string) bool {
 				return false
 			}
 			d.emit(history.StepScheduled, cinst, 1, history.ScheduledPayload{
-				Kind: history.KindTask, Queue: "connector", Connector: s.Connector, Action: s.Compensate.Action,
+				// The connection the step itself used: the account its effect is on.
+				Kind: history.KindTask, Queue: "connector", Connector: s.Connector, Action: s.Compensate.Action, Connection: s.Connection,
 				Input: in, KeyStep: cinst, Compensates: inst, AvailableAt: history.FormatTime(d.now),
 			})
 			return false

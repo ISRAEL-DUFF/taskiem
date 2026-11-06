@@ -19,6 +19,14 @@ updates:
     schedule:
       interval: weekly
 
+  # The VM kit's Caddy, OpenBao and ClamAV, pinned by digest with the tag
+  # kept. The images taskiem-vps runs itself (PSQL_IMAGE, RESTIC_IMAGE,
+  # OPENBAO_IMAGE) are moved by hand, with OpenBao kept the same in both.
+  - package-ecosystem: docker-compose
+    directory: /deploy/vm
+    schedule:
+      interval: weekly
+
   - package-ecosystem: gomod
     directories: [/, /third_party/qjs]
     schedule:

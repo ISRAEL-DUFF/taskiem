@@ -61,7 +61,7 @@ The form is part of the workflow: its questions are the workflow's inputs schema
 
 ## Files
 
-Files go to the organisation's private Xenibase storage ([media](media.md)), never into run history. A file field's value is `{id, name, type, size, sha256}`; a step reads the content through `form@1` `file_url`, a link that expires within an hour. JPEG, PNG and PDF are taken, checked by their content; photos are cleaned of their metadata; at most 25 MB each and 10 a submission.
+Files go to the organisation's private Xenibase storage ([media](media.md)), never into run history. A submission and its files are deleted with the run's data when the workflow's retention purges it, and when the respondent is erased ([privacy](privacy.md#erasure)); the api removes the stored files within a minute. A submission that starts no run (refused, or not started because a plan limit was reached) is kept as long as its run would have been, then deleted the same way, and a refused submission's files are removed at once. A file field's value is `{id, name, type, size, sha256}`; a step reads the content through `form@1` `file_url`, a link that expires within an hour. JPEG, PNG and PDF are taken, checked by their content; photos are cleaned of their metadata; at most 25 MB each and 10 a submission.
 
 Every file is scanned for malware before the submission is accepted. The scanner is the operator's: a ClamAV daemon at `TASKIEM_CLAMD_ADDR` (host:port), with no network of its own. Without one, forms that ask for files cannot be deployed. (Which scanner Taskiem runs is an S0 decision.)
 
@@ -108,5 +108,5 @@ Claims are one table (`storefront_claims`), taken by the public host with the su
 ## How it is kept safe
 
 - The form host is its own name, with no cookies and a strict Content-Security-Policy; it runs as the `public` role, which holds no vault key. It seals what it receives with the public key (`TASKIEM_PUBLIC_KEY`); the api role opens it, checks the answers again, seals personal answers under the respondent's subject and starts the run.
-- Bots meet a honeypot, a minimum time to fill in and signed one-time form tokens; addresses are limited per IP hash.
+- Bots meet a honeypot, a minimum time to fill in and signed one-time form tokens; addresses are limited per IP hash, and each form across every address (500 an hour). A form over its limit is treated as under attack: for the next hour it asks each person for a code sent to their phone before its questions, and the business's owners are alerted.
 - One-time links carry 24 random bytes and are stored only as a hash; form steps' links are derived from the request, so nothing secret is stored at all.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/db/dbtest"
+	"github.com/israel-duff/taskiem/engine/ops"
 )
 
 var ctx = context.Background()
@@ -77,6 +79,86 @@ func TestEveryTenantTableIsProtected(t *testing.T) {
 	}
 	if leaked != 0 {
 		t.Errorf("%d partitions are directly readable by application roles", leaked)
+	}
+	tenantPoliciesAreScoped(t, d)
+}
+
+// tenantPoliciesAreScoped: an application policy on a table with a
+// tenant_id column scopes rows to the caller's tenants (threat model B7).
+// A policy that exists but admits every row (USING (true)), or that lets a
+// tenant write rows of no tenant, passed the check above unnoticed (F75,
+// F36). Each policy for taskiem_app (or PUBLIC) must name
+// taskiem_tenant_scope() in its USING and WITH CHECK, or be false, and a
+// write policy must not admit tenant_id IS NULL. The reviewed exceptions
+// are in wide_policies.tsv.
+func tenantPoliciesAreScoped(t *testing.T, d *dbtest.DB) {
+	t.Helper()
+	allowed := map[string]bool{}
+	for _, line := range lines(t, "wide_policies.tsv") {
+		f := strings.Split(line, "\t")
+		if len(f) != 3 || strings.TrimSpace(f[1]) == "" || strings.TrimSpace(f[2]) == "" {
+			t.Errorf("wide_policies.tsv: want table.policy, owner and reason separated by tabs: %q", line)
+			continue
+		}
+		allowed[f[0]] = true
+	}
+	rows, err := d.Admin.Query(ctx, `
+	  SELECT c.relname || '.' || p.polname, p.polcmd::text,
+	         COALESCE(pg_get_expr(p.polqual, p.polrelid), ''), COALESCE(pg_get_expr(p.polwithcheck, p.polrelid), '')
+	    FROM pg_policy p JOIN pg_class c ON c.oid = p.polrelid JOIN pg_namespace n ON n.oid = c.relnamespace
+	   WHERE n.nspname = 'public' AND p.polpermissive
+	     AND ('taskiem_app'::regrole = ANY (p.polroles) OR 0::oid = ANY (p.polroles))
+	     AND EXISTS (SELECT FROM pg_attribute a WHERE a.attrelid = c.oid AND a.attname = 'tenant_id' AND NOT a.attisdropped)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	scoped := func(e string) bool { return e == "" || e == "false" || strings.Contains(e, "taskiem_tenant_scope()") }
+	for rows.Next() {
+		var pol, cmd, qual, check string
+		if err := rows.Scan(&pol, &cmd, &qual, &check); err != nil {
+			t.Fatal(err)
+		}
+		wide := !scoped(qual) || !scoped(check) ||
+			(cmd != "r" && (strings.Contains(qual, "IS NULL") || strings.Contains(check, "IS NULL")))
+		switch {
+		case wide && !allowed[pol]:
+			t.Errorf("%s (%s) is not scoped to the caller's tenants: USING %q WITH CHECK %q; scope it, or review it and add it to wide_policies.tsv", pol, cmd, qual, check)
+		case !wide && allowed[pol]:
+			t.Errorf("wide_policies.tsv lists %s, which is scoped: remove it", pol)
+		}
+		delete(allowed, pol)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	for pol := range allowed {
+		t.Errorf("wide_policies.tsv lists %s, which is not an application policy on a tenant table (or no longer exists): remove it", pol)
+	}
+}
+
+// The worker-pool change log holds which tenant runs where and who moved
+// it: a tenant's transaction sees its own rows only, and the operators'
+// listing (scoped to the platform chain) sees every tenant's (F82).
+func TestWorkerPoolChangesAreScoped(t *testing.T) {
+	d := dbtest.New(t)
+	a, b := d.SeedTenant(t, nil), d.SeedTenant(t, nil)
+	if _, err := d.Admin.Exec(ctx, `INSERT INTO worker_pool_changes (tenant_id, pool, changed_by) VALUES ($1, 'dedicated-bank', 'cli:ada'), ($2, 'acme', 'cli:ada')`, b.ID, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	q := `SELECT count(*) FROM worker_pool_changes WHERE tenant_id = $1`
+	if n := count(t, d, []uuid.UUID{a.ID}, q, b.ID); n != 0 {
+		t.Errorf("tenant A's transaction sees %d of B's pool changes", n)
+	}
+	if n := count(t, d, []uuid.UUID{b.ID}, q, b.ID); n != 1 {
+		t.Errorf("tenant B sees %d of its own pool changes, want 1", n)
+	}
+	var n int
+	if err := d.App.QueryRow(ctx, `SELECT count(*) FROM worker_pool_changes`).Scan(&n); err != nil || n != 0 {
+		t.Errorf("a query with no scope sees %d pool changes (%v)", n, err)
+	}
+	if n := count(t, d, []uuid.UUID{ops.PlatformChain}, `SELECT count(*) FROM worker_pool_changes`); n != 2 {
+		t.Errorf("the platform chain sees %d pool changes, want 2", n)
 	}
 }
 

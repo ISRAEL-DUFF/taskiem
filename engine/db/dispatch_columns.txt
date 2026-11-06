@@ -225,6 +225,7 @@ connections.id
 connections.mode
 connections.name
 connections.platform
+connections.provisioned_by
 connections.status
 connections.tenant_id
 connector_publishers.key_id
@@ -443,6 +444,8 @@ form_endpoints.closes_at
 form_endpoints.created_at
 form_endpoints.environment
 form_endpoints.form
+form_endpoints.guarded_since
+form_endpoints.guarded_until
 form_endpoints.id
 form_endpoints.max_submissions
 form_endpoints.opens_at
@@ -453,6 +456,13 @@ form_endpoints.tenant_id
 form_endpoints.updated_at
 form_endpoints.version
 form_endpoints.workflow_id
+form_file_deletions.claimed_until
+form_file_deletions.queued_at
+form_file_deletions.storage_key
+form_file_deletions.tenant_id
+form_files.storage_key
+form_files.submission_id
+form_files.tenant_id
 form_inbox.claimed_until
 form_inbox.created_at
 form_inbox.endpoint_id
@@ -499,13 +509,19 @@ form_requests.title
 form_requests.token_hash
 form_requests.verify
 form_requests.via
+form_submissions.answers
 form_submissions.created_at
 form_submissions.endpoint_id
+form_submissions.id
 form_submissions.message
 form_submissions.reference
 form_submissions.request_id
+form_submissions.respondent
+form_submissions.retain_until
+form_submissions.run_id
 form_submissions.status
 form_submissions.status_hash
+form_submissions.tenant_id
 form_uploads.created_at
 form_uploads.data
 form_uploads.field
@@ -612,6 +628,7 @@ money_entries.vendor
 money_entry_customers.customer_id
 money_entry_customers.entry_id
 money_entry_customers.tenant_id
+money_log_erasures.tenant_id
 money_lookbacks.account
 money_lookbacks.channel
 money_lookbacks.last_run_at
@@ -817,9 +834,12 @@ rider_presence.phone_hash
 rider_presence.said
 rider_presence.said_at
 rider_presence.until
+rider_remittance_parts.amount_kobo
+rider_remittance_parts.entry_id
 rider_remittances.settled_at
 rider_remittances.tenant_id
 riders.id
+riders.phone
 riders.phone_hash
 riders.retired_at
 riders.tenant_id
@@ -929,6 +949,7 @@ school_students.family_id
 school_students.id
 school_students.mirrored_at
 school_students.status
+school_students.subject_id
 school_students.tenant_id
 school_students.updated_at
 school_term_invoices.invoice_id
@@ -1000,6 +1021,7 @@ sso_connections.group_roles
 sso_connections.id
 sso_connections.jit
 sso_connections.name
+sso_connections.owner_approved_at
 sso_connections.protocol
 sso_connections.tenant_id
 sso_connections.updated_at
@@ -1113,6 +1135,7 @@ storefront_orders.created_at
 storefront_orders.deposit_kobo
 storefront_orders.ends_at
 storefront_orders.expires_at
+storefront_orders.forgotten_at
 storefront_orders.front_id
 storefront_orders.id
 storefront_orders.kind
@@ -1129,6 +1152,7 @@ storefront_orders.status_hash
 storefront_orders.storefront_id
 storefront_orders.tenant_id
 storefront_orders.total_kobo
+storefront_orders.updated_at
 storefront_orders.version
 storefront_reviews.created_at
 storefront_reviews.created_by
@@ -1158,6 +1182,7 @@ storefronts.orders_paused
 storefronts.published_slug
 storefronts.published_version
 storefronts.reopen_at
+storefronts.retention_days
 storefronts.services_table
 storefronts.slug
 storefronts.status
@@ -1167,6 +1192,7 @@ subscriptions.plan_id
 subscriptions.status
 subscriptions.tenant_id
 suppliers.id
+suppliers.phone
 suppliers.phone_hash
 suppliers.retired_at
 suppliers.tenant_id
@@ -1273,6 +1299,7 @@ tenants.plan_id
 tenants.region
 tenants.require_admin_passkeys
 tenants.status
+tenants.suspended_by
 terms_acceptances.accepted_at
 terms_acceptances.asked_at
 terms_acceptances.channel
@@ -1352,6 +1379,12 @@ whatsapp_pins.locked_until
 whatsapp_pins.pin_hash
 whatsapp_pins.set_at
 whatsapp_pins.user_id
+whatsapp_templates.language
+whatsapp_templates.meta_id
+whatsapp_templates.name
+whatsapp_templates.submitted_at
+whatsapp_templates.tenant_id
+whatsapp_templates.waba_id
 worker_pool_changes.changed_at
 worker_pool_changes.changed_by
 worker_pool_changes.id

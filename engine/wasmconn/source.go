@@ -16,6 +16,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/lru"
 )
 
 // Source loads tenants' connectors from the database: for each id and
@@ -32,10 +33,29 @@ type Source struct {
 	// BaseURLs override manifests' base_url by connector id (sandboxes,
 	// tests), as builtin.Options does for built-ins.
 	BaseURLs map[string]string
+	// MaxLoaded bounds the connector versions kept loaded (each holds
+	// its module's bytes, up to 32 MiB), least recently used out first;
+	// an evicted one loads again from the database when next asked for.
+	// Default 128.
+	MaxLoaded int
 
 	mu      sync.Mutex
 	tenants map[string]cached
-	loaded  map[string]*connector.Connector // by tenant, id and version
+	loaded  *lru.Cache[string, *connector.Connector] // by tenant, id and version
+}
+
+// cache is the loaded connectors, made on first use.
+func (s *Source) cache() *lru.Cache[string, *connector.Connector] {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.loaded == nil {
+		n := s.MaxLoaded
+		if n <= 0 {
+			n = 128
+		}
+		s.loaded = lru.New[string, *connector.Connector](n, 0)
+	}
+	return s.loaded
 }
 
 // maxTenantLists bounds the tenants whose connector lists are kept.
@@ -186,10 +206,7 @@ func (s *Source) Connectors(ctx context.Context, tenant string) ([]*connector.Co
 
 func (s *Source) load(ctx context.Context, tenant uuid.UUID, id, version string) (*connector.Connector, error) {
 	key := tenant.String() + "/" + id + "@" + version
-	s.mu.Lock()
-	c, ok := s.loaded[key]
-	s.mu.Unlock()
-	if ok {
+	if c, ok := s.cache().Get(key); ok {
 		return c, nil
 	}
 	var manifest string
@@ -200,7 +217,7 @@ func (s *Source) load(ctx context.Context, tenant uuid.UUID, id, version string)
 	if err != nil {
 		return nil, err
 	}
-	c, err = s.Runtime.Load(ctx, []byte(manifest), module)
+	c, err := s.Runtime.Load(ctx, []byte(manifest), module)
 	if err != nil {
 		return nil, err
 	}
@@ -208,12 +225,7 @@ func (s *Source) load(ctx context.Context, tenant uuid.UUID, id, version string)
 		return nil, fmt.Errorf("stored as %s %s but the manifest says %s %s", id, version, c.Manifest.ID, c.Manifest.Version)
 	}
 	c.Manifest.OverrideBaseURL(s.BaseURLs[id])
-	s.mu.Lock()
-	if s.loaded == nil {
-		s.loaded = map[string]*connector.Connector{}
-	}
-	s.loaded[key] = c
-	s.mu.Unlock()
+	s.cache().Put(key, c)
 	return c, nil
 }
 
@@ -222,10 +234,7 @@ func (s *Source) load(ctx context.Context, tenant uuid.UUID, id, version string)
 // all its sub-tenants; reading it goes through the sub-tenant's scope.
 func (s *Source) loadShared(ctx context.Context, tenant, partner uuid.UUID, id, version string) (*connector.Connector, error) {
 	key := partner.String() + "/" + id + "@" + version
-	s.mu.Lock()
-	c, ok := s.loaded[key]
-	s.mu.Unlock()
-	if ok {
+	if c, ok := s.cache().Get(key); ok {
 		return c, nil
 	}
 	var manifest string
@@ -236,7 +245,7 @@ func (s *Source) loadShared(ctx context.Context, tenant, partner uuid.UUID, id, 
 	if err != nil {
 		return nil, err
 	}
-	c, err = s.Runtime.Load(ctx, []byte(manifest), module)
+	c, err := s.Runtime.Load(ctx, []byte(manifest), module)
 	if err != nil {
 		return nil, err
 	}
@@ -244,12 +253,7 @@ func (s *Source) loadShared(ctx context.Context, tenant, partner uuid.UUID, id, 
 		return nil, fmt.Errorf("stored as %s %s but the manifest says %s %s", id, version, c.Manifest.ID, c.Manifest.Version)
 	}
 	c.Manifest.OverrideBaseURL(s.BaseURLs[id])
-	s.mu.Lock()
-	if s.loaded == nil {
-		s.loaded = map[string]*connector.Connector{}
-	}
-	s.loaded[key] = c
-	s.mu.Unlock()
+	s.cache().Put(key, c)
 	return c, nil
 }
 
@@ -262,10 +266,7 @@ func (s *Source) loadInstalled(ctx context.Context, tenant uuid.UUID, id, versio
 	if connector.IsManifestsOnly(ctx) {
 		key = manifestsKey + key
 	}
-	s.mu.Lock()
-	c, ok := s.loaded[key]
-	s.mu.Unlock()
-	if ok {
+	if c, ok := s.cache().Get(key); ok {
 		return c, nil
 	}
 	var manifest string
@@ -279,7 +280,7 @@ func (s *Source) loadInstalled(ctx context.Context, tenant uuid.UUID, id, versio
 	if Digest(module) != fmt.Sprintf("%x", digest) {
 		return nil, fmt.Errorf("the module stored for %s %s does not match its digest", id, version)
 	}
-	c, err = s.Runtime.LoadPublished(ctx, []byte(manifest), module)
+	c, err := s.Runtime.LoadPublished(ctx, []byte(manifest), module)
 	if err != nil {
 		return nil, err
 	}
@@ -287,12 +288,7 @@ func (s *Source) loadInstalled(ctx context.Context, tenant uuid.UUID, id, versio
 		return nil, fmt.Errorf("stored as %s %s but the manifest says %s %s", id, version, c.Manifest.ID, c.Manifest.Version)
 	}
 	c.Manifest.OverrideBaseURL(s.BaseURLs[id])
-	s.mu.Lock()
-	if s.loaded == nil {
-		s.loaded = map[string]*connector.Connector{}
-	}
-	s.loaded[key] = c
-	s.mu.Unlock()
+	s.cache().Put(key, c)
 	return c, nil
 }
 

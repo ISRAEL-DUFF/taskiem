@@ -74,6 +74,13 @@ func (s *Server) oauthFor(c *connector.Connector, mode string) (oauthProvider, e
 	if o == nil {
 		return oauthProvider{}, fmt.Errorf("%w: %s does not connect by OAuth; add a connection with its credentials", errBadRequest, c.Manifest.Name)
 	}
+	if !connector.BuiltIn(c.Manifest.ID) {
+		// Taskiem's registrations are for its own connectors (F1): a
+		// tenant's or a publisher's connector never borrows one, whose
+		// secret would go to the token URL that connector names.
+		return oauthProvider{}, fmt.Errorf("%w: %s is not one of Taskiem's own connectors, so it cannot be linked with Taskiem's OAuth apps; add a connection with its credentials instead",
+			errOAuthUnavailable, c.Manifest.Name)
+	}
 	name := c.Manifest.ClientFor(mode)
 	client, ok := s.OAuthClients[name]
 	if !ok || client.ID == "" {
@@ -507,7 +514,10 @@ func (s *Server) oauthExchange(ctx context.Context, tenant uuid.UUID, c *connect
 	req.Header.Set("Accept", "application/json")
 	resp, err := hc.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %s did not answer the token exchange: %w", errOAuthProvider, c.Manifest.Name, err)
+		// The URL carries the client secret and the code where the
+		// exchange is a GET (Meta's): the error names only where it went,
+		// since it is logged and shown to the person (F11).
+		return nil, fmt.Errorf("%w: %s did not answer the token exchange: %w", errOAuthProvider, c.Manifest.Name, connector.RedactURLError(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
@@ -709,7 +719,7 @@ func (s *Server) oauthRevoke(ctx context.Context, tenant uuid.UUID, c *connector
 	req.SetBasicAuth(prov.client.ID, prov.client.Secret)
 	resp, err := hc.Do(req)
 	if err != nil {
-		s.Logger.Warn("oauth: token not revoked", "connector", c.Manifest.ID, "err", err)
+		s.Logger.Warn("oauth: token not revoked", "connector", c.Manifest.ID, "err", connector.RedactURLError(err))
 		return
 	}
 	_ = resp.Body.Close()
@@ -771,6 +781,9 @@ func (s *Server) mergeConnectionCredentials(w http.ResponseWriter, r *http.Reque
 		c, ok := connectorByID(reg, connID)
 		if !ok {
 			return fmt.Errorf("%w: connector %s is no longer available", errConflict, connID)
+		}
+		if err := refuseMadeFields(c, req.Credentials); err != nil {
+			return err
 		}
 		existing, err := s.Vault.ConnectionCredentialsTx(ctx, tx, p.TenantID, id)
 		if err != nil {

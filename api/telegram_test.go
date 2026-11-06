@@ -7,10 +7,12 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httputil"
 	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/engine/alerts"
@@ -311,5 +313,73 @@ func TestTelegramAlertsAndBlockedBot(t *testing.T) {
 	w.bot.Block(on, true)
 	if _, err := w.tg.Send(context.Background(), telegram.Address(on), whatsapp.Message{Text: "x"}); err == nil {
 		t.Error("send to a blocked chat succeeded")
+	}
+}
+
+// An update, once claimed, is handled to the end even when Telegram stops
+// waiting for the answer (F52): its redelivery is dropped as a duplicate,
+// so handling cut short would be lost.
+func TestTelegramHandlesAClaimedUpdateToTheEnd(t *testing.T) {
+	e := rt.New(t)
+	bot := telegramtest.New(t, tgToken)
+	bot.Username = tgBot
+	target, _ := url.Parse(bot.URL)
+	rp := httputil.NewSingleHostReverseProxy(target)
+	var armed atomic.Bool
+	var cancelClient atomic.Value
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if armed.Load() && strings.HasSuffix(r.URL.Path, "/sendMessage") {
+			armed.Store(false)
+			// Read first, so a closed connection cancels r.Context.
+			body, _ := io.ReadAll(r.Body)
+			r.Body = io.NopCloser(bytes.NewReader(body))
+			// Telegram gives up on the webhook call while the reply is
+			// being sent; the server notices the closed connection.
+			cancelClient.Load().(context.CancelFunc)()
+			time.Sleep(300 * time.Millisecond)
+			if r.Context().Err() != nil {
+				http.Error(w, "gone", http.StatusBadGateway)
+				return
+			}
+		}
+		rp.ServeHTTP(w, r)
+	}))
+	t.Cleanup(proxy.Close)
+	tg := telegram.New(e.Store.Pool, telegram.Config{BotToken: tgToken, WebhookSecret: tgSecret, BotUsername: tgBot, APIURL: proxy.URL},
+		e.Egress, slog.New(slog.DiscardHandler))
+	srv := &api.Server{Store: e.Store, Vault: e.Vault, Registry: e.Registry, Connectors: e.Connectors, AllowSignup: true, Egress: e.Egress,
+		Logger: slog.New(slog.DiscardHandler), Telegram: tg, ChatSigner: whatsapp.Signer{Key: waKey}, PublicURL: waPublicURL}
+	ts := httptest.NewServer(srv.TelegramHooks())
+	t.Cleanup(ts.Close)
+	post := func(ctx context.Context, body []byte) error {
+		req, _ := http.NewRequestWithContext(ctx, "POST", ts.URL, bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Telegram-Bot-Api-Secret-Token", tgSecret)
+		resp, err := http.DefaultClient.Do(req)
+		if err == nil {
+			_, _ = io.Copy(io.Discard, resp.Body)
+			_ = resp.Body.Close()
+		}
+		return err
+	}
+	const acct = int64(9301)
+	if err := post(context.Background(), telegramtest.Message(100, acct, "", "hello")); err != nil || len(bot.Sent(acct)) != 1 {
+		t.Fatalf("control: %v, %d replies", err, len(bot.Sent(acct)))
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cancelClient.Store(cancel)
+	armed.Store(true)
+	_ = post(ctx, telegramtest.Message(101, acct, "", "hello again")) // Telegram stops waiting
+	deadline := time.Now().Add(5 * time.Second)
+	for len(bot.Sent(acct)) < 2 && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if n := len(bot.Sent(acct)); n != 2 {
+		t.Fatalf("the update Telegram stopped waiting for: %d replies, want 2", n)
+	}
+	// Telegram's resend: a duplicate, answered once already.
+	if err := post(context.Background(), telegramtest.Message(101, acct, "", "hello again")); err != nil || len(bot.Sent(acct)) != 2 {
+		t.Fatalf("the resend: %v, %d replies", err, len(bot.Sent(acct)))
 	}
 }

@@ -120,21 +120,29 @@ func (r *Repairer) Repair(ctx context.Context, req Request) (*Result, error) {
 	sysDigest := hex.EncodeToString(digest[:])
 	messages := []ai.Message{{Role: "user", Text: userPrompt(req, orig, reg)}}
 
+	// An attempt's reservation is held until its call is recorded:
+	// released as the next attempt starts, or as the repair ends.
+	release := func() {}
+	defer func() { release() }()
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		release()
+		release = func() {}
+		kind := "repair"
+		if attempt > 1 {
+			kind = "repair_correct"
+		}
+		areq := ai.Request{System: system, Messages: messages, Schema: envelopeSchema, MaxTokens: maxTokens, Effort: effort}
 		if r.Meter != nil {
-			if err := r.Meter.Allow(ctx); err != nil {
+			rel, err := r.Meter.Reserve(ctx, areq.Estimate())
+			if err != nil {
 				if attempt == 1 {
 					return res, err
 				}
 				res.Feedback = append(res.Feedback, "the monthly AI budget ran out between attempts")
 				break
 			}
+			release = rel
 		}
-		kind := "repair"
-		if attempt > 1 {
-			kind = "repair_correct"
-		}
-		areq := ai.Request{System: system, Messages: messages, Schema: envelopeSchema, MaxTokens: maxTokens, Effort: effort}
 		resp, err := provider.Complete(ctx, areq)
 		it := builder.Interaction{Round: attempt, Kind: kind, Request: ai.RedactRequest(areq), Response: resp, SystemDigest: sysDigest}
 		if err != nil {

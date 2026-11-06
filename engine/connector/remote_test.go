@@ -125,9 +125,19 @@ func TestRemoteTriggerNeedsRegistrar(t *testing.T) {
 		t.Errorf("enricher for no trigger: %v", err)
 	}
 	delete(c.Enrichers, "nope")
+	c.Keyers = map[string]Keyer{"nope": nil}
+	if err := c.Check(); err == nil || !strings.Contains(err.Error(), "keyer") {
+		t.Errorf("keyer for no trigger: %v", err)
+	}
+	c.Keyers = map[string]Keyer{"plain": nil}
 	if err := c.Check(); err != nil {
 		t.Error(err)
 	}
+	c.Manifest.Triggers["plain"] = TriggerSpec{Type: "webhook", Split: "=body.items"}
+	if err := c.Check(); err == nil || !strings.Contains(err.Error(), "splits") {
+		t.Errorf("keyer for a split trigger: %v", err)
+	}
+	delete(c.Keyers, "plain")
 }
 
 func TestHostsFor(t *testing.T) {

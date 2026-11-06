@@ -193,16 +193,25 @@ func maskCustomer(c *storefront.Customer) {
 // RunStorefrontOrders takes submissions from the inbox every second, asks
 // the payment provider about waiting payments every 30 seconds, and every
 // 15 applies customers' and owners' changes, sweeps bookings and moves
-// riders' deliveries on (offers that ran out, quiet riders).
+// riders' deliveries on (offers that ran out, quiet riders); every hour it
+// erases the customer's details of ended orders past retention.
 func (s *Server) RunStorefrontOrders(ctx context.Context) error {
 	s.chatHooks()
 	if s.Orders == nil {
 		<-ctx.Done()
 		return nil
 	}
-	tick, payments, bookings := time.NewTicker(time.Second), time.NewTicker(30*time.Second), time.NewTicker(15*time.Second)
+	// The provider lookups run in a loop of their own (as invoices' do,
+	// invoices.go): a slow provider must not hold back the order inbox.
+	go every(ctx, 30*time.Second, func() {
+		if err := s.Orders.CheckPayments(ctx); err != nil && ctx.Err() == nil {
+			s.Logger.Error("storefront: payments", "err", err)
+		}
+	})
+	tick, bookings := time.NewTicker(time.Second), time.NewTicker(15*time.Second)
+	retention := time.NewTicker(time.Hour)
+	defer retention.Stop()
 	defer tick.Stop()
-	defer payments.Stop()
 	defer bookings.Stop()
 	for {
 		select {
@@ -212,9 +221,11 @@ func (s *Server) RunStorefrontOrders(ctx context.Context) error {
 			if err := s.Orders.Drain(ctx); err != nil && ctx.Err() == nil {
 				s.Logger.Error("storefront: inbox", "err", err)
 			}
-		case <-payments.C:
-			if err := s.Orders.CheckPayments(ctx); err != nil && ctx.Err() == nil {
-				s.Logger.Error("storefront: payments", "err", err)
+		case <-retention.C:
+			// Ended orders past the business's retention lose their
+			// customer's details (docs/storefronts.md, Privacy).
+			if err := s.Orders.ForgetExpired(ctx); err != nil && ctx.Err() == nil {
+				s.Logger.Error("storefront: retention", "err", err)
 			}
 		case <-bookings.C:
 			if err := s.Orders.CheckBookings(ctx); err != nil && ctx.Err() == nil {

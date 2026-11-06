@@ -211,6 +211,11 @@ func (s *Server) waVerifyCode(ctx context.Context, user uuid.UUID, code, channel
 	if len(code) != 6 || strings.Trim(code, "0123456789") != "" {
 		return "", errWaCodeWrong
 	}
+	// The number bound until now: its PIN does not pass to another.
+	var before *string
+	if err := s.Store.Pool.QueryRow(ctx, `SELECT number FROM taskiem_wa_binding($1)`, user).Scan(&before); err != nil {
+		return "", err
+	}
 	var outcome string
 	var number *string
 	if err := s.Store.Pool.QueryRow(ctx, `SELECT outcome, number FROM taskiem_wa_otp_verify($1, $2, $3)`, user, code, waOTPMaxFailures).Scan(&outcome, &number); err != nil {
@@ -227,8 +232,20 @@ func (s *Server) waVerifyCode(ctx context.Context, user uuid.UUID, code, channel
 	default:
 		return "", errWaCodeGone
 	}
-	err := s.auditEverywhere(ctx, user, "whatsapp.bind", map[string]any{"number": whatsapp.MaskNumber(*number), "channel": channel, "ip": ip})
-	return *number, err
+	// The PIN goes with the number: a new number starts without one (F53).
+	removed := false
+	if before != nil && *before != *number {
+		if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_wa_pin_remove($1)`, user).Scan(&removed); err != nil {
+			return *number, err
+		}
+	}
+	if err := s.auditEverywhere(ctx, user, "whatsapp.bind", map[string]any{"number": whatsapp.MaskNumber(*number), "channel": channel, "ip": ip}); err != nil {
+		return *number, err
+	}
+	if removed {
+		return *number, s.auditEverywhere(ctx, user, "whatsapp.pin.remove", map[string]any{"reason": "number_changed", "channel": channel, "ip": ip})
+	}
+	return *number, nil
 }
 
 // unbindWhatsApp removes the caller's number.

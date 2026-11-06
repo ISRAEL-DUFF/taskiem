@@ -185,10 +185,16 @@ func (s *Server) ussdCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	// Authenticate before reading anything of the request into the
 	// database: the channel row is looked up by the URL's tenant only.
-	ch, err := s.ussdChannelFor(ctx, tenant, provider)
+	ch, err := s.ussdChannelFor(ctx, tenant, provider, limitIP(r))
 	if err != nil {
 		s.Logger.Warn("ussd: channel lookup", "tenant", tenant, "err", err)
-		ad.Reply(w, true, s.ussdLocal(ctx, tenant, ussdTextBusy))
+		in := tenant
+		if errors.Is(err, errUSSDLookupsPaced) {
+			// A paced caller costs no lookup of the URL's tenant at all,
+			// not even for the language of the answer.
+			in = uuid.Nil
+		}
+		ad.Reply(w, true, s.ussdLocal(ctx, in, ussdTextBusy))
 		return
 	}
 	if ch == nil || !ch.active {
@@ -310,7 +316,10 @@ func (ch *ussdChannel) allows(token, ip string) bool {
 }
 
 // ussdChannelFor reads a tenant's channel, cached briefly.
-func (s *Server) ussdChannelFor(ctx context.Context, tenant uuid.UUID, provider string) (*ussdChannel, error) {
+// errUSSDLookupsPaced: a caller has missed the channel cache too often.
+var errUSSDLookupsPaced = errors.New("ussd: too many channel lookups")
+
+func (s *Server) ussdChannelFor(ctx context.Context, tenant uuid.UUID, provider, ipKey string) (*ussdChannel, error) {
 	key := tenant.String() + "/" + provider
 	st := &s.ussd
 	st.mu.Lock()
@@ -319,10 +328,13 @@ func (s *Server) ussdChannelFor(ctx context.Context, tenant uuid.UUID, provider 
 		return e.ch, nil
 	}
 	st.mu.Unlock()
-	// Unknown tenants cost a lookup each; pace them like other
-	// unauthenticated attempts.
-	if !s.limiter("ussd-lookup:"+key, 100*time.Millisecond, 20).Allow() {
-		return nil, errors.New("ussd: too many channel lookups")
+	// Cache misses cost a lookup each; pace them per caller address, as
+	// other unauthenticated attempts are. The URL's tenant is the
+	// caller's choice, so a bucket per tenant would pace nothing and fill
+	// the shared limiter set (F28). Aggregators call from a few fixed
+	// addresses, and the cache answers their tenants between misses.
+	if !s.limiter("ussd-lookup:"+ipKey, 100*time.Millisecond, 20).Allow() {
+		return nil, errUSSDLookupsPaced
 	}
 	var ch *ussdChannel
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
@@ -345,8 +357,20 @@ func (s *Server) ussdChannelFor(ctx context.Context, tenant uuid.UUID, provider 
 		return nil, err
 	}
 	st.mu.Lock()
-	if st.channels == nil || len(st.channels) >= ussdCacheMax {
+	if st.channels == nil {
 		st.channels = map[string]ussdChannelEntry{}
+	}
+	if len(st.channels) >= ussdCacheMax {
+		// Shed expired entries and tenants with no channel first, so
+		// made-up tenants cannot push out the channels real ones use.
+		for k, e := range st.channels {
+			if e.ch == nil || time.Since(e.at) >= ussdChannelTTL {
+				delete(st.channels, k)
+			}
+		}
+		if len(st.channels) >= ussdCacheMax {
+			st.channels = map[string]ussdChannelEntry{}
+		}
 	}
 	st.channels[key] = ussdChannelEntry{ch: ch, at: time.Now()}
 	st.mu.Unlock()

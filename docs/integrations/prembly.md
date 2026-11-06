@@ -7,7 +7,7 @@ Prembly (IdentityPass) verifies identities and documents. The connector is `conn
 | Field | |
 | --- | --- |
 | `api_key` | The secret key from the dashboard (API Integrations), sent as `x-api-key`. Sandbox and live share `api.prembly.com`; the key decides the environment |
-| `public_key` | The public key; Prembly signs webhooks with it. Needed only for the `verification` trigger |
+| `callback_token` | **Made by Taskiem**, never typed (`generate: webhook_token`): a random token made when the connection is saved and carried by the webhook address (see Webhooks). The API refuses a value given for it |
 
 ## Actions
 
@@ -41,7 +41,11 @@ Every action is a read: Prembly bills each check, but none has an effect.
 
 ## Webhooks
 
-Prembly posts SDK (widget) results, and results of checks that were `PENDING`, to the webhook URL in its dashboard; the payload is the same as the API response. One trigger, `verification`, at `/hooks/{tenant}/connectors/prembly@1/verification?env=prod&connection=<name>`. Deliveries are verified as Prembly documents: `x-prembly-signature` is base64 HMAC-SHA256 of the body keyed with the public key. Repeats are dropped on what the signature covers: the verification's `reference` and `status`, or, without a reference, a hash of the body. The `token` header is not used, because the signature does not cover it and a replayed delivery could carry a new one.
+Prembly posts SDK (widget) results, and results of checks that were `PENDING`, to the webhook URL in its dashboard; the payload is the same as the API response. One trigger, `verification`, at `/hooks/{tenant}/connectors/prembly@1/verification?env=prod&connection=<name>&token=<callback_token>`.
+
+**Setting it up.** When you connect Prembly, Taskiem makes the connection's `callback_token` and shows the whole webhook address, token included, once (the connection screen, the connect link page, or the `webhooks` of `POST /v1/connections`). Copy it into Prembly's dashboard (Settings → Webhook URL). Taskiem does not show it again; to get a new one (it leaked, or it was lost), connect Prembly again and paste the new address.
+
+**Deliveries are authenticated by the URL token, not by Prembly's signature.** Prembly signs webhooks (`x-prembly-signature`, base64 HMAC-SHA256 of the body) with the business's public key, and its widget is given that same key in the business's web page, so anyone who reads it there could sign a made-up `VERIFIED` delivery. The trigger therefore uses the `query_secret` scheme: a delivery whose `token` does not match the connection's `callback_token` is refused with 401 before anything is recorded, however it is signed, and the token is stripped before the event reaches a workflow. The token is only as secret as the address: keep it out of tickets and screenshots, and connect again if it leaks. Repeats are dropped on the verification's `reference` and `status`, or, without a reference, a hash of the body; Prembly's `token` header is not used, since a retry could carry a new one.
 
 | Event (`verification.status`) | Correlation |
 | --- | --- |
@@ -53,5 +57,6 @@ Prembly posts SDK (widget) results, and results of checks that were `PENDING`, t
 2. The wallet balance response (documented as `{}`); the connector returns it as given.
 3. Whether an `app-id` header is still needed (Prembly 2.0 documents only `x-api-key`).
 4. `nin_w_face` documents `number_nin` as an integer; the connector sends it as a JSON number.
-5. Whether the signature covers the raw body (the connector verifies the raw body), and whether a retried delivery repeats the body byte for byte.
+5. Whether a retried delivery repeats the body byte for byte (repeats are dropped on the body).
 6. Whether the webhook carries the same `verification.reference` the API call returned.
+7. That the dashboard's Webhook URL keeps the query string (`?env=…&connection=…&token=…`) when Prembly delivers.

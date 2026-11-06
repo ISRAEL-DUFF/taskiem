@@ -65,7 +65,7 @@ The same message delivered twice starts one run (by its Message-ID, or the whole
 
 The `mail` role (`serve --role mail`, or inside `all` with `TASKIEM_MAIL_ENABLED=true`) is an SMTP server for the mail domain. It:
 
-- takes mail only for addresses of live email triggers, refusing anything else at `RCPT` (`550`), so nothing is accepted and bounced later;
+- takes mail only for addresses of live email triggers, refusing anything else at `RCPT` (`550`), so nothing is accepted and bounced later; a connection that names five unknown addresses is closed with `421` (the sender retries later), so one connection cannot look up addresses without end;
 - checks SPF, DKIM and DMARC and records the results with the message, but filters nothing by content: most mail comes already filtered by the mailbox that forwards it;
 - offers STARTTLS and takes messages up to 25 MB, with at most 200 connections at once;
 - like the public host, connects as `taskiem_public`, holds only the public key, and leaves messages sealed in the inbox, which the api role drains every 2 seconds. A message is acknowledged (`250`) only once it is stored.

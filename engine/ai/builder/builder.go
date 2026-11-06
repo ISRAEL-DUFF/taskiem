@@ -81,10 +81,12 @@ type Recorder interface {
 	Record(ctx context.Context, it Interaction) error
 }
 
-// Meter enforces a budget before each call: it returns
-// ai.ErrBudgetExhausted when the tenant's monthly budget is spent.
+// Meter enforces a budget before each call: Reserve returns
+// ai.ErrBudgetExhausted when the tenant's monthly budget is spent, and
+// otherwise holds estimate tokens against it, seen by every other call's
+// check, until release is called once the call is recorded (finding F49).
 type Meter interface {
-	Allow(ctx context.Context) error
+	Reserve(ctx context.Context, estimate int64) (release func(), err error)
 }
 
 // Builder runs the pipeline.
@@ -274,7 +276,13 @@ func (b *Builder) Build(ctx context.Context, req Request) (*Proposal, error) {
 	var env *Envelope
 	var doc []byte
 	var findings []Warning
+	// A round's reservation is held until its call is recorded: released
+	// as the next round starts, or as the build ends.
+	release := func() {}
+	defer func() { release() }()
 	for round := 1; round <= maxCorr+1; round++ {
+		release()
+		release = func() {}
 		kind := "draft"
 		if round > 1 {
 			kind = "correct"
@@ -282,16 +290,18 @@ func (b *Builder) Build(ctx context.Context, req Request) (*Proposal, error) {
 		} else {
 			b.progress("draft")
 		}
+		areq := ai.Request{System: system, Messages: messages, Schema: envelopeSchema, MaxTokens: maxTokens, Effort: effort}
 		if b.Meter != nil {
-			if err := b.Meter.Allow(ctx); err != nil {
+			rel, err := b.Meter.Reserve(ctx, areq.Estimate())
+			if err != nil {
 				if round == 1 {
 					return nil, err
 				}
 				p.Warnings = append(p.Warnings, Warning{Kind: "budget", Message: "the monthly AI budget ran out during self-correction; the last draft is shown as it stands"})
 				break
 			}
+			release = rel
 		}
-		areq := ai.Request{System: system, Messages: messages, Schema: envelopeSchema, MaxTokens: maxTokens, Effort: effort}
 		resp, err := provider.Complete(ctx, areq)
 		it := Interaction{Round: round, Kind: kind, Request: ai.RedactRequest(areq), Response: resp, SystemDigest: sysDigest}
 		if err != nil {

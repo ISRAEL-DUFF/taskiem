@@ -427,8 +427,8 @@ export interface AuthField {
   refuse?: { prefix: string; message: string }[];
   /** The value spans lines (a PEM key): a text area. */
   multiline?: boolean;
-  /** A value Taskiem makes for the person: rsa_key_pair makes a key pair in the browser, keeps the private key and shows the public key to paste at the provider. */
-  generate?: "rsa_key_pair";
+  /** A value Taskiem makes for the person: rsa_key_pair makes a key pair in the browser, keeps the private key and shows the public key to paste at the provider; webhook_token is made by the server when the connection is saved, never typed, and shown once inside the webhook address (ConnectionWebhook). */
+  generate?: "rsa_key_pair" | "webhook_token";
 }
 
 /** A capability (schemas/capabilities-v1.json) and the rails that can do it (GET /v1/capabilities). */

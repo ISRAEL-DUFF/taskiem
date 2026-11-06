@@ -23,6 +23,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/media"
 	rt "github.com/israel-duff/taskiem/engine/runtime/runtimetest"
 	"github.com/israel-duff/taskiem/engine/sender"
+	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
 
@@ -41,6 +42,15 @@ func (f *memFiles) PutFile(_ context.Context, _ uuid.UUID, data []byte) (media.F
 	p := "files/" + uuid.NewString()
 	f.files[p] = data
 	return media.File{Path: p, Type: "application/pdf", Size: int64(len(data))}, nil
+}
+
+func (f *memFiles) Delete(_ context.Context, _ uuid.UUID, _ string, paths []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, p := range paths {
+		delete(f.files, p)
+	}
+	return nil
 }
 
 func (f *memFiles) SignURL(_ context.Context, _ uuid.UUID, path string, ttl time.Duration) (string, time.Time, error) {
@@ -120,6 +130,23 @@ func TestHostedFormThroughTheDatabase(t *testing.T) {
 	}
 	statusLink := regexpFind(t, done, `href="(/s/[^"]+)"`)
 	must(t, e.get(htmlUnescape(statusLink)), 200, "Your answers have arrived")
+	// The status names the form it was sent to, in the inbox and once
+	// taken, so the result page can refuse another form's (F30).
+	link, err := url.Parse(htmlUnescape(statusLink))
+	if err != nil {
+		t.Fatal(err)
+	}
+	formOf := func() uuid.UUID {
+		t.Helper()
+		st, ok, err := s.Forms.Status(ctx, ref, storefront.StatusHash(link.Query().Get("k")))
+		if err != nil || !ok {
+			t.Fatalf("status: %v %v", ok, err)
+		}
+		return st.Endpoint
+	}
+	if got := formOf(); got != endpoint {
+		t.Errorf("an inbox row's form %v, want %v", got, endpoint)
+	}
 
 	// The api role takes it, and the run starts with the answers.
 	svc := &forms.Service{Pool: env.DB.App, Vault: env.Vault, Keys: keys, Files: &memFiles{files: map[string][]byte{}}, Scanner: cleanScanner{},
@@ -142,6 +169,9 @@ func TestHostedFormThroughTheDatabase(t *testing.T) {
 		t.Fatalf("the run read: %s", out)
 	}
 	must(t, e.get(htmlUnescape(statusLink)), 200, "being handled")
+	if got := formOf(); got != endpoint {
+		t.Errorf("a submission's form %v, want %v", got, endpoint)
+	}
 
 	// once_per phone: the same phone again is refused.
 	body = must(t, e.get(path), 200)

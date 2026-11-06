@@ -35,7 +35,7 @@ PNGs with transparency (logos) stay PNG; everything else becomes JPEG. Paths are
 - **PDFs** are refused if they carry JavaScript, actions run on opening, embedded files, rich media or XFA forms. This is a quick check of the file's text, not a scanner: form files are also scanned for malware before a run sees them ([forms 6.5](spec/forms.md#65-files)), which comes with S7.
 - **Anything else** is refused.
 
-Files go under `files/<random id>`, so a path reveals nothing about its content.
+Files go under `files/<random id>`, so a path reveals nothing about its content. A form's files are removed from storage when retention or erasure deletes their submission ([forms](forms.md)).
 
 ## Checking a tenant's storage
 

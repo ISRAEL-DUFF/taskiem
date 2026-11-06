@@ -119,8 +119,14 @@ func TestStorefront(t *testing.T) {
 		owner.must(400, "PUT", "/v1/storefront", bad)
 	}
 	sf := owner.must(200, "PUT", "/v1/storefront", map[string]any{"slug": "Ada-Kitchen", "draft": card, "catalogue_table": table, "catalogue_columns": columns})
-	if sf["slug"] != "ada-kitchen" || sf["status"] != "draft" || sf["preview_url"] != "" {
+	if sf["slug"] != "ada-kitchen" || sf["status"] != "draft" || sf["preview_url"] != "" || sf["retention_days"] != float64(365) {
 		t.Fatalf("%v", sf)
+	}
+	// How long ended orders keep their customer's details: 30 days to 10 years.
+	owner.must(400, "PUT", "/v1/storefront", map[string]any{"slug": "ada-kitchen", "draft": card, "catalogue_table": table, "catalogue_columns": columns, "retention_days": 7})
+	if sf := owner.must(200, "PUT", "/v1/storefront", map[string]any{"slug": "ada-kitchen", "draft": card, "catalogue_table": table, "catalogue_columns": columns,
+		"retention_days": 90}); sf["retention_days"] != float64(90) {
+		t.Fatalf("retention: %v", sf)
 	}
 
 	// A name that may not be published is refused at publishing.

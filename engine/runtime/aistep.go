@@ -7,11 +7,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/db"
@@ -299,33 +301,58 @@ func redactAnswer(taint pii.Taint, s string) string { return taint.RedactText(pi
 // another's whole output to the model, but not an unbounded one.
 const maxAIQuestion = maxStepOutput
 
-// reserveAI checks the tenant's monthly AI budget, counting the tokens
-// recorded and those the ai steps calling now have reserved, and reserves
-// estimate tokens for this step until release is called (or ttl passes,
-// if its worker dies first). Checks are serialised per tenant, so steps
-// starting at once see each other's reservations. over: the budget is
-// used up, and nothing was reserved; release is safe to call either way.
+// reserveAI checks the tenant's monthly AI budget for an ai step and
+// reserves estimate tokens for it until release is called (ReserveAI).
 func (w *Worker) reserveAI(ctx context.Context, p *plan, limit, estimate int64, ttl time.Duration) (release func(), over bool, err error) {
+	return ReserveAI(ctx, w.Store.Pool, w.Logger, p.c.tenant, Reservation{Run: &p.c.run, Step: p.c.step, Purpose: "step"}, limit, estimate, ttl)
+}
+
+// Reservation is whose model call reserves: an ai step names its run and
+// step; a build, a repair or a chat's call only its purpose.
+type Reservation struct {
+	Run     *uuid.UUID
+	Step    string
+	Purpose string
+}
+
+// AIReserved is the tokens the model calls running now have reserved
+// against the tenant's monthly budget.
+func AIReserved(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (int64, error) {
+	var n int64
+	err := tx.QueryRow(ctx, `SELECT COALESCE(sum(tokens), 0)::bigint FROM ai_reservations WHERE tenant_id = $1 AND expires_at > now()`, tenant).Scan(&n)
+	return n, err
+}
+
+// ReserveAI checks the tenant's monthly AI budget, counting the tokens
+// recorded and those the model calls running now have reserved (ai
+// steps', builds', repairs' and chats'), and reserves estimate tokens for
+// this call until release is called (or ttl passes, if its process dies
+// first). Checks are serialised per tenant, so calls starting at once see
+// each other's reservations (decision 0050, finding F49). over: the
+// budget is used up, and nothing was reserved; release is safe to call
+// either way.
+func ReserveAI(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger, tenant uuid.UUID, who Reservation, limit, estimate int64,
+	ttl time.Duration) (release func(), over bool, err error) {
 	id := uuid.Must(uuid.NewV7())
 	release = func() {}
-	err = db.InTenantTx(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('taskiem ai budget ' || $1::text, 0))`, p.c.tenant); err != nil {
+	err = db.InTenantTx(ctx, pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('taskiem ai budget ' || $1::text, 0))`, tenant); err != nil {
 			return err
 		}
-		used, err := AITokensThisMonth(ctx, tx, p.c.tenant)
+		used, err := AITokensThisMonth(ctx, tx, tenant)
 		if err != nil {
 			return err
 		}
-		var reserved int64
-		if err := tx.QueryRow(ctx, `SELECT COALESCE(sum(tokens), 0)::bigint FROM ai_reservations WHERE tenant_id = $1 AND expires_at > now()`,
-			p.c.tenant).Scan(&reserved); err != nil {
+		reserved, err := AIReserved(ctx, tx, tenant)
+		if err != nil {
 			return err
 		}
 		if over = used+reserved >= limit; over {
 			return nil
 		}
-		_, err = tx.Exec(ctx, `INSERT INTO ai_reservations (id, tenant_id, run_id, step_id, tokens, expires_at) VALUES ($1, $2, $3, $4, $5, now() + make_interval(secs => $6))`,
-			id, p.c.tenant, p.c.run, p.c.step, estimate, ttl.Seconds())
+		_, err = tx.Exec(ctx, `INSERT INTO ai_reservations (id, tenant_id, run_id, step_id, purpose, tokens, expires_at)
+			VALUES ($1, $2, $3, NULLIF($4, ''), $5, $6, now() + make_interval(secs => $7))`,
+			id, tenant, who.Run, who.Step, who.Purpose, estimate, ttl.Seconds())
 		return err
 	})
 	if err != nil || over {
@@ -333,11 +360,11 @@ func (w *Worker) reserveAI(ctx context.Context, p *plan, limit, estimate int64, 
 	}
 	return func() {
 		ctx := context.WithoutCancel(ctx)
-		if err := db.InTenantTx(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, func(tx pgx.Tx) error {
-			_, err := tx.Exec(ctx, `DELETE FROM ai_reservations WHERE id = $1 OR (tenant_id = $2 AND expires_at <= now())`, id, p.c.tenant)
+		if err := db.InTenantTx(ctx, pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `DELETE FROM ai_reservations WHERE id = $1 OR (tenant_id = $2 AND expires_at <= now())`, id, tenant)
 			return err
-		}); err != nil {
-			w.Logger.Error("releasing an ai step's budget reservation", "run", p.c.run, "step", p.c.step, "err", err)
+		}); err != nil && logger != nil {
+			logger.Error("releasing an AI budget reservation", "tenant", tenant, "purpose", who.Purpose, "run", who.Run, "step", who.Step, "err", err)
 		}
 	}, false, nil
 }
