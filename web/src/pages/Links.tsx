@@ -681,7 +681,7 @@ export function ChatPage() {
                 <Skeleton rows={2} label="Searching businesses…" />
               ) : others.length === 0 ? (
                 <EmptyState icon="search">
-                  No business that lets others find it matches “{query}”.
+                  No business found for “{query}”. Only businesses that chose to be found are listed.
                 </EmptyState>
               ) : (
                 <Items label="Businesses on Taskiem">
