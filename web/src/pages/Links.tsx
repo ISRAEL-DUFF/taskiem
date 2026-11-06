@@ -970,6 +970,9 @@ export function ChatPage() {
             key={open.link}
             conv={open}
             others={all}
+            roles={Object.fromEntries(
+              (view.data?.links ?? []).map((l) => [l.id, l.role]),
+            )}
             onBack={() => setParams({})}
             onChanged={reloadConvs}
             focus={params.get("msg") ?? undefined}

@@ -15,6 +15,7 @@ import {
   cardLine,
   cardSub,
   clock,
+  dayLabel,
   fileSize,
   fileURL,
   merge,
@@ -37,6 +38,7 @@ import { ContactInfo } from "./ContactInfo";
 import { useConfirm } from "./ConfirmSheet";
 import { useChatTools } from "../lib/useChatTools";
 import { ORDER_STEPS, cardKicker, cardStatus, isDiary } from "../lib/cardframe";
+import { DiaryLine } from "../kit";
 import {
   BUSINESS_FILES,
   ComposerView,
@@ -67,7 +69,13 @@ import { ChatSearchPanel } from "./ChatSearch";
 import { BubbleShell, CopyItem, PopItem, Ticks } from "./BubbleShell";
 import { ReadMore, useFold } from "./ReadMore";
 import { useChatLive } from "./ChatLive";
-import { roleLine, type BusinessLink, type LinkCard } from "../lib/links";
+import {
+  linkedLine,
+  roleLine,
+  type BusinessLink,
+  type LinkCard,
+  type LinkRole,
+} from "../lib/links";
 import { ErrorBox, fmtTime, Modal, useAction, useLoad } from "../ui";
 
 // The conversation with a linked business (business links L3; §5.5): the
@@ -480,6 +488,7 @@ function Bubble({
   onInfo,
   onRetry,
   onDiscard,
+  arrive = false,
 }: {
   m: LinkMessage;
   other: string;
@@ -504,6 +513,8 @@ function Bubble({
   /** Not sent: tries again, or gives up on the message. */
   onRetry?: (clientId: string) => void;
   onDiscard?: (clientId: string) => void;
+  /** A card that just arrived: it slides in with a little bounce. */
+  arrive?: boolean;
 }) {
   const card = m.kind === "card" ? m.card : undefined;
   const fold = useFold(m.body ?? "");
@@ -525,7 +536,7 @@ function Bubble({
       mine={m.mine}
       first={first}
       testid={card ? "chat-card" : "chat-message"}
-      className={`${card ? "card-bubble" : ""}${flash ? " flash" : ""}${m.reactions?.length ? " has-reactions" : ""}${local === "failed" ? " failed" : ""}`.trim()}
+      className={`${card ? "card-bubble" : ""}${arrive ? " tk-arrive" : ""}${flash ? " flash" : ""}${m.reactions?.length ? " has-reactions" : ""}${local === "failed" ? " failed" : ""}`.trim()}
       what={what}
       onReply={canReply ? () => onReply(m) : undefined}
       quickReact={!!onReact}
@@ -721,7 +732,10 @@ function Bubble({
       {card ? (
         <CardFrame card={card} title={cardLine(card, m.mine, other)}>
           <Link to={cardHref(card)} className="button small">
-            Open<span className="sr-only"> {card.reference}</span>
+            {card.doc === "order" || card.doc === "purchase"
+              ? "View order"
+              : "View invoice"}
+            <span className="sr-only"> {card.reference}</span>
           </Link>
           {latest && !m.mine && <CardActions card={card} onDone={onDone} />}
         </CardFrame>
@@ -796,28 +810,66 @@ function CardFrame({
   );
 }
 
-/** A diary line (chat-tools.md §3): a change we made, told in the chat
- * as a line, not a card. It opens the document. */
-function DiaryLine({ m, other }: { m: LinkMessage; other: string }) {
-  const card = m.card;
-  if (!card) return null;
-  return (
-    <div className="tk-diary" data-testid="chat-diary" id={`m-${m.id}`}>
-      <Link to={cardHref(card)} className="tk-diary-pill tk-land">
-        <Icon name="tick" />
-        <span>{cardLine(card, true, other)}</span>
-        {cardSub(card) && <span className="tk-diary-sub">{cardSub(card)}</span>}
-      </Link>
-      <time
-        className="tk-diary-when"
-        dateTime={m.created_at}
-        title={fmtTime(m.created_at)}
+/** Diary lines (chat-tools.md §3): changes we made ourselves, told as
+ * lines; several made close together are one line that unfolds. */
+function DiaryRun({
+  run,
+  other,
+  fresh,
+}: {
+  run: LinkMessage[];
+  other: string;
+  /** Arrived while the conversation is open: it lands, lit in lime. */
+  fresh: (m: LinkMessage) => boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const lead = run[0];
+  if (!lead?.card) return null;
+  const rest = run.slice(1);
+  const line = (m: LinkMessage, more?: ReactNode) =>
+    m.card && (
+      <DiaryLine
+        key={m.id}
+        msg={m.id}
+        to={cardHref(m.card)}
+        fresh={fresh(m)}
+        more={more}
+        when={
+          <time dateTime={m.created_at} title={fmtTime(m.created_at)}>
+            You, {clock(m.created_at)}
+          </time>
+        }
       >
-        You, {clock(m.created_at)}
-      </time>
-    </div>
+        {cardLine(m.card, true, other)}
+        {cardSub(m.card) && (
+          <span className="tk-diary-sub"> {cardSub(m.card)}</span>
+        )}
+      </DiaryLine>
+    );
+  return (
+    <>
+      {line(
+        lead,
+        rest.length > 0 && (
+          <button
+            type="button"
+            className="tk-diary-more"
+            aria-expanded={open}
+            onClick={() => setOpen(!open)}
+          >
+            {open
+              ? "Fold"
+              : `and ${rest.length} more ${rest.length === 1 ? "change" : "changes"}`}
+          </button>
+        ),
+      )}
+      {open && rest.map((m) => line(m))}
+    </>
   );
 }
+
+/** Diary lines made within this long of each other are one line. */
+const DIARY_RUN_MS = 5 * 60_000;
 
 /** One conversation: its stream, following it while open, and the
  * composer. */
@@ -826,6 +878,7 @@ export function ConversationPane({
   onBack,
   onChanged,
   others = [],
+  roles = {},
   link,
   onEndLink,
   focus,
@@ -833,6 +886,8 @@ export function ConversationPane({
   conv: Conversation;
   onBack: () => void;
   onChanged: () => void;
+  /** How we trade with each linked business, by link (the picker's lines). */
+  roles?: Record<string, LinkRole>;
   /** The link with this business, for the contact panel. */
   link?: BusinessLink;
   /** Ends the link (only for a member who may manage links). */
@@ -892,12 +947,16 @@ export function ConversationPane({
       // With chat tools, the business we are talking to is not offered:
       // it gets the message already.
       "@": others
-        .filter((o) => o.state === "active" && !(chatTools && o.link === conv.link))
+        .filter(
+          (o) =>
+            o.state === "active" &&
+            !(chatTools && (o.link === conv.link || !can("chat.trade"))),
+        )
         .map((o) => ({
           kind: "business" as const,
           id: o.link,
           name: o.name,
-          sub: chatTools ? "Linked" : undefined,
+          sub: chatTools ? linkedLine(roles[o.link]) : undefined,
         })),
       "#": (items.data ?? [])
         .filter((it) => it.available)
@@ -914,6 +973,10 @@ export function ConversationPane({
     tools: chatTools,
     // We are typing: the other side's typing line, told at most every 3 s.
     onType: (v) => {
+      // "/pro" opens the tools and "@Taskiem" asks Taskiem: neither reaches
+      // them, so they are not told we are typing.
+      if (chatTools && (/^\//.test(v) || /(^|[\s,(])@taskiem\b/i.test(v)))
+        return;
       const now = Date.now();
       if (v.trim() && now - typedAt.current > 3000) {
         typedAt.current = now;
@@ -1247,6 +1310,37 @@ export function ConversationPane({
     }, "Deleted for you");
   };
   const shown = threadItems;
+  // What arrives while the conversation is open lands with its motion;
+  // what was there already, or loads from further back, just shows.
+  const openedNewest = useRef<string | undefined>(undefined);
+  if (shown && shown.length > 0 && openedNewest.current === undefined)
+    openedNewest.current = shown[shown.length - 1]?.created_at ?? "";
+  const fresh = (m: LinkMessage) =>
+    openedNewest.current !== undefined && m.created_at > openedNewest.current;
+  // Diary lines made close together on one day are one line (its first).
+  const runs = useMemo(() => {
+    const lead = new Map<string, LinkMessage[]>();
+    const member = new Set<string>();
+    let run: LinkMessage[] | undefined;
+    for (const m of shown ?? []) {
+      const diary = chatTools && !!m.card && isDiary(m.card, m.mine);
+      const last = run?.[run.length - 1];
+      if (
+        diary &&
+        run &&
+        last &&
+        dayLabel(last.created_at) === dayLabel(m.created_at) &&
+        Date.parse(m.created_at) - Date.parse(last.created_at) <= DIARY_RUN_MS
+      ) {
+        run.push(m);
+        member.add(m.id);
+      } else if (diary) {
+        run = [m];
+        lead.set(m.id, run);
+      } else run = undefined;
+    }
+    return { lead, member };
+  }, [shown, chatTools]);
   // A card's actions are offered on its document's newest card only.
   const newest = new Set<string>();
   const seen = new Set<string>();
@@ -1373,8 +1467,12 @@ export function ConversationPane({
         unread={unread}
         empty={`No messages yet. Say hello to ${conv.name}.`}
         render={(m, { first }) =>
-          chatTools && m.card && isDiary(m.card, m.mine) ? (
-            <DiaryLine m={m} other={conv.name} />
+          runs.member.has(m.id) ? null : runs.lead.has(m.id) ? (
+            <DiaryRun
+              run={runs.lead.get(m.id) ?? [m]}
+              other={conv.name}
+              fresh={fresh}
+            />
           ) : (
             <Bubble
               m={m}
@@ -1397,6 +1495,7 @@ export function ConversationPane({
               onReact={write && !m.local ? react : undefined}
               onStar={m.local ? undefined : star}
               onInfo={m.local ? undefined : setInfo}
+              arrive={!!m.card && fresh(m)}
             />
           )
         }

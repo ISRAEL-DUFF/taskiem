@@ -121,8 +121,13 @@ for (const [size, viewport] of [
     await axeBoth(buyer, "the picker");
     await box.press("Enter");
     await expect(box).toHaveValue("Need 20 more @Rice, 50kg bag ");
-    await box.fill("@task");
+    // Taskiem is always offered last, but Enter never turns "@4500" into it.
+    await box.fill("cement @4500");
     await expect(picker.getByRole("button", { name: /Taskiem/ })).toBeVisible();
+    await expect(pane.getByTestId("emoji-button")).toHaveCount(0);
+    await box.fill("@task");
+    await box.press("Enter");
+    await expect(box).toHaveValue("@Taskiem ");
     await box.fill("");
 
     // The tools: the button, or "/" and a word.
@@ -132,6 +137,10 @@ for (const [size, viewport] of [
     await axeBoth(buyer, "the tools");
     await pane.getByRole("button", { name: "Close tools" }).click();
     await expect(tools).toHaveCount(0);
+    await box.fill("/5");
+    await expect(tools).toContainText("No tool called “5”");
+    await box.press("Enter");
+    await expect(pane.locator('[data-testid="chat-message"][data-mine="true"]').last()).toContainText("/5");
     await box.fill("/pro");
     await expect(tools.getByRole("button")).toHaveCount(1);
     await box.press("Enter");
@@ -141,6 +150,12 @@ for (const [size, viewport] of [
     const sheet = buyer.getByRole("dialog", { name: /Products/ });
     await expect(sheet.getByRole("link", { name: /Rice, 25kg bag/ })).toContainText("4 left");
     await axeBoth(buyer, "a tool's sheet");
+    if (viewport.width >= 1200) {
+      // Beside the chat, not over it: the chat can still be used.
+      await pane.getByLabel("Message").click();
+      await expect(sheet).toBeVisible();
+      await sheet.getByLabel("Search products").click();
+    }
     await sheet.getByRole("button", { name: "Low stock · 1" }).click();
     await expect(sheet.getByRole("listitem")).toHaveCount(1);
     await sheet.getByRole("button", { name: "All" }).click();
@@ -155,10 +170,29 @@ for (const [size, viewport] of [
     await pane.getByRole("button", { name: "Open tools" }).click();
     await tools.getByRole("button", { name: "Products", exact: true }).last().click();
     await expect(sheet).toBeVisible();
-    await sheet.getByRole("button", { name: "Close" }).click();
+    await sheet.getByRole("button", { name: viewport.width >= 1200 ? "Close panel" : "Close" }).click();
     await expect(sheet).toHaveCount(0);
   });
 }
+
+test("a tool that cannot load says so, and tries again", async ({ browser }) => {
+  const { buyer, link } = await linked(browser);
+  await buyer.request.put("/v1/settings/chat-tools", { headers: H, data: { chat_tools: true } });
+  let fail = true;
+  await buyer.route("**/v1/stock", (r) => (fail ? r.fulfill({ status: 500, body: "{}" }) : r.fulfill(json(stock))));
+  await buyer.goto(`/chat?with=${link}`);
+  const pane = buyer.getByTestId("chat-pane");
+  await pane.getByRole("button", { name: "Open tools" }).click();
+  const tools = buyer.getByRole("region", { name: "Tools" });
+  await expect(tools.getByRole("button", { name: /^Products/ })).toContainText("Could not load");
+  await tools.getByRole("button", { name: /^Products/ }).click();
+  const sheet = buyer.getByRole("dialog", { name: /Products/ });
+  await expect(sheet).toContainText("Your products could not be loaded");
+  await axeBoth(buyer, "a tool that could not load");
+  fail = false;
+  await sheet.getByRole("button", { name: "Try again" }).click();
+  await expect(sheet.getByRole("listitem")).toHaveCount(3);
+});
 
 test("our own changes are diary lines; theirs are cards with their progress", async ({ browser }) => {
   const { buyer, link } = await linked(browser);
@@ -171,6 +205,7 @@ test("our own changes are diary lines; theirs are cards with their progress", as
             messages: [
               { id: "m1", link, mine: false, kind: "card", card: { doc: "order", event: "accept", reference: "AD-7Q4K2P", amount_kobo: 82_000_000 }, created_at: at },
               { id: "m2", link, mine: true, kind: "card", card: { doc: "bill", event: "declared", reference: "INV-0042", amount_kobo: 41_000_000 }, created_at: at },
+              { id: "m3", link, mine: true, kind: "card", card: { doc: "order", event: "dispatched", reference: "AD-1", amount_kobo: 100_000 }, created_at: at },
             ],
           }),
         )
@@ -181,7 +216,16 @@ test("our own changes are diary lines; theirs are cards with their progress", as
   const card = pane.getByRole("article", { name: "Order · AD-7Q4K2P" });
   await expect(card).toContainText("Accepted");
   await expect(card.getByRole("img", { name: "Accepted: step 2 of 4" })).toBeVisible();
-  await expect(pane.getByTestId("chat-diary")).toContainText("You said it paid invoice INV-0042");
+  // Two changes made together are one line, which unfolds.
+  const diary = pane.getByTestId("chat-diary");
+  await expect(diary).toHaveCount(1);
+  await expect(diary).toContainText("You said it paid invoice INV-0042");
+  await expect(diary).toHaveAttribute("data-msg", "m2");
+  // Lines already there when it opens do not land again.
+  await expect(diary.locator(".tk-land")).toHaveCount(0);
+  await diary.getByRole("button", { name: "and 1 more change" }).click();
+  await expect(diary).toHaveCount(2);
+  await expect(diary.nth(1)).toContainText("AD-1");
   await expect(pane.getByTestId("chat-card")).toHaveCount(1);
   await axeBoth(buyer, "a card and a diary line");
 });

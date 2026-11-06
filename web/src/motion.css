@@ -35,11 +35,14 @@
 @keyframes tk-sheet-up { from { transform: translateY(100%); } }
 @keyframes tk-grow { from { opacity: 0; transform: translateY(10px) scale(0.96); } }
 @keyframes tk-spring-up { 0% { opacity: 0; transform: translateY(14px) scale(0.98); } 70% { opacity: 1; } }
-@keyframes tk-arrive { 0% { opacity: 0; transform: translateX(24px); } 60% { opacity: 1; } }
+@keyframes tk-arrive { 0% { opacity: 0; transform: translateY(16px) scale(0.96); } 60% { opacity: 1; } }
+@keyframes tk-shrink { to { opacity: 0; transform: translateY(8px) scale(0.97); } }
+@keyframes tk-drop { to { transform: translateY(100%); } }
 @keyframes tk-roll { from { opacity: 0; transform: translateY(0.6em); } }
 @keyframes tk-land { from { opacity: 0; transform: translateY(-10px); } }
 @keyframes tk-glow { from { background-color: color-mix(in srgb, var(--brand-dark) 55%, transparent); } }
 @keyframes tk-draw { from { stroke-dashoffset: var(--len, 24); } }
+@keyframes tk-unfade { to { opacity: 0; } }
 @keyframes tk-cheer { 0% { opacity: 0; transform: scale(0.4); } 40% { opacity: 1; } 100% { opacity: 0; transform: scale(1.6); } }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -78,8 +81,14 @@
   .tk-cheer { pointer-events: none; animation: tk-cheer var(--t-cheer) var(--ease-out) forwards; }
 }
 
+/* Leaving: a dialog shrinks away (drops on a phone) as the veil lifts. */
+@media (prefers-reduced-motion: no-preference) {
+  .modal-backdrop.leaving { animation: tk-unfade 200ms var(--ease-out) forwards; }
+  .modal.leaving { animation: tk-shrink 200ms var(--ease-out) forwards; }
+}
 @media (prefers-reduced-motion: no-preference) and (max-width: 860px) {
   .modal { animation: tk-sheet-up var(--t-sheet) var(--spring-settle) backwards; }
+  .modal.leaving { animation: tk-drop 200ms var(--ease-out) forwards; }
 }
 
 /* Motion turned down: nothing moves or fades; things are simply there. */
@@ -91,16 +100,6 @@
 }
 
 /* ---------- Shared parts ---------- */
-
-/* A card: lifts on hover, gives on press. */
-.tk-card {
-  background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
-  box-shadow: 0 1px 2px rgba(14, 26, 20, 0.12);
-  transition: box-shadow var(--t-picker) var(--ease-out), transform var(--t-picker) var(--ease-out);
-}
-@media (hover: hover) and (prefers-reduced-motion: no-preference) {
-  .tk-card:hover { box-shadow: 0 14px 28px -10px rgba(14, 26, 20, 0.35); transform: translateY(-1px); }
-}
 
 /* The shimmer while something loads. */
 .tk-shimmer {

@@ -102,6 +102,20 @@ export const ROLE_CHOICES: { role: LinkRole; label: string }[] = [
   { role: "both", label: "Both" },
 ];
 
+/** A linked business in the chat tools picker: "Linked · buys from you". */
+export function linkedLine(role?: LinkRole): string {
+  switch (role) {
+    case "supplier":
+      return "Linked · supplies you";
+    case "customer":
+      return "Linked · buys from you";
+    case "both":
+      return "Linked · supplies you and buys from you";
+    default:
+      return "Linked";
+  }
+}
+
 /** How we trade with a linked business, as a row's line. */
 export function roleLine(role: LinkRole): string {
   switch (role) {

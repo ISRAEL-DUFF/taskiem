@@ -4,6 +4,7 @@ import "@fontsource-variable/inter";
 import "@xyflow/react/dist/style.css";
 import "./styles.css";
 import "./motion.css";
+import "./kit.css";
 import "./chat.css";
 import { App } from "./App";
 import { Skeleton } from "./ui";

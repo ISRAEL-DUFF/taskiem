@@ -1,6 +1,7 @@
 import { useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { Link } from "react-router-dom";
 import { Icon } from "../icons";
+import { usePresence } from "../kit";
 import { initialsOf } from "./ChatAvatar";
 import {
   groupSuggestions,
@@ -39,13 +40,24 @@ export function useMentions(
     q && grouped && q.mark === "@"
       ? groupSuggestions(
           q.query,
-          { items: sources["#"], services: sources.services, businesses: sources["@"] },
+          {
+            items: sources["#"],
+            services: sources.services,
+            businesses: sources["@"],
+          },
           grouped.taskiem,
         )
       : q
         ? [{ label: "", items: suggest(sources[q.mark], q.query) }]
         : [];
   const shown = groups.flatMap((g) => g.items);
+  // What Enter takes: the first match. The Taskiem row, always offered,
+  // only when "Taskiem" is what is being typed ("@4500" stays as typed).
+  const enterPick = shown.find(
+    (s) =>
+      s.kind !== "taskiem" ||
+      (q && q.query.length > 0 && "taskiem".startsWith(q.query.toLowerCase())),
+  );
   const update = (value: string, caret: number | null) =>
     setQ(mentionQuery(value, caret ?? value.length));
   const pick = (s: Suggestion) => {
@@ -70,7 +82,7 @@ export function useMentions(
   /** Keys in the text box: true when a suggestion took them. */
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): boolean => {
     if (shown.length === 0) return false;
-    const first = shown[0];
+    const first = enterPick;
     if ((e.key === "Enter" || e.key === "Tab") && !e.shiftKey && first) {
       e.preventDefault();
       pick(first);
@@ -102,6 +114,7 @@ export function useMentions(
   return {
     q,
     shown,
+    enterPick,
     groups,
     grouped: !!grouped,
     list,
@@ -119,8 +132,30 @@ export function useMentions(
 export function MentionList({ m }: { m: Mentions }) {
   if (!m.q || m.shown.length === 0) return null;
   const mark = m.q.mark;
-  if (m.grouped && mark === "@") return <Picker m={m} />;
+  // The grouped picker floats over the chat from inside the composer.
+  if (m.grouped && mark === "@") return null;
   return <PlainList m={m} />;
+}
+
+/** The picker of chat tools, springing up and leaving with a little
+ * motion: while it leaves it shows what it last showed. */
+export function GroupedPicker({ m }: { m: Mentions }) {
+  const open = !!m.grouped && m.q?.mark === "@" && m.shown.length > 0;
+  const p = usePresence(open, 150);
+  const last = useRef<{ query: string; groups: SuggestionGroup[] }>({
+    query: "",
+    groups: [],
+  });
+  if (open) last.current = { query: m.q?.query ?? "", groups: m.groups };
+  if (!p.mounted) return null;
+  return (
+    <Picker
+      m={m}
+      query={last.current.query}
+      groups={last.current.groups}
+      leaving={p.leaving}
+    />
+  );
 }
 
 /** Arrow keys between the suggestions, and back to the text box. */
@@ -141,12 +176,15 @@ function moveIn(m: Mentions, e: KeyboardEvent<HTMLButtonElement>) {
   }
 }
 
-
 /** A suggestion's picture: a product's box, a service's clock, a
  * business's initials, Taskiem's spark. */
 function PickIcon({ s }: { s: Suggestion }) {
   if (s.kind === "business")
-    return <span className="pick-icon round lime" aria-hidden="true">{initialsOf(s.name)}</span>;
+    return (
+      <span className="pick-icon round lime" aria-hidden="true">
+        {initialsOf(s.name)}
+      </span>
+    );
   if (s.kind === "taskiem")
     return (
       <span className="pick-icon round pine" aria-hidden="true">
@@ -154,7 +192,10 @@ function PickIcon({ s }: { s: Suggestion }) {
       </span>
     );
   return (
-    <span className={`pick-icon ${s.kind === "service" ? "blue" : "soft"}`} aria-hidden="true">
+    <span
+      className={`pick-icon ${s.kind === "service" ? "blue" : "soft"}`}
+      aria-hidden="true"
+    >
       <Icon name={s.kind === "service" ? "clock" : "box"} />
     </span>
   );
@@ -162,13 +203,23 @@ function PickIcon({ s }: { s: Suggestion }) {
 
 /** The picker of the designs: matches in groups, the first ready for
  * Enter, springing up from the composer. */
-function Picker({ m }: { m: Mentions }) {
-  const query = m.q?.query ?? "";
+function Picker({
+  m,
+  query,
+  groups,
+  leaving,
+}: {
+  m: Mentions;
+  query: string;
+  groups: SuggestionGroup[];
+  leaving: boolean;
+}) {
   let n = 0;
   return (
     <section
-      ref={m.list}
-      className="tk-picker"
+      ref={leaving ? undefined : m.list}
+      className={`tk-picker${leaving ? " leaving" : ""}`}
+      aria-hidden={leaving || undefined}
       aria-label="Tag something"
       data-testid="mention-list"
     >
@@ -184,17 +235,24 @@ function Picker({ m }: { m: Mentions }) {
         </span>
         {query && <span>Tag a thing or a business</span>}
       </div>
-      {m.groups.map((g) => (
-        <div key={g.label || "taskiem"} role="group" aria-label={g.label || "Taskiem"}>
+      {groups.map((g) => (
+        <div
+          key={g.label || "taskiem"}
+          role="group"
+          aria-label={g.label || "Taskiem"}
+        >
           {g.label && <div className="tk-picker-label">{g.label}</div>}
           {g.items.map((s) => {
-            const first = n++ === 0;
+            n++;
+            const first = s === m.enterPick;
             return (
               <button
                 key={`${s.kind}:${s.id}`}
                 type="button"
                 className={`tk-pick${first ? " first" : ""}`}
-                style={{ animationDelay: `calc(var(--t-stagger) * ${Math.min(n, 6)})` }}
+                style={{
+                  animationDelay: `calc(var(--t-stagger) * ${Math.min(n, 6)})`,
+                }}
                 onClick={() => m.pick(s)}
                 onKeyDown={(e) => moveIn(m, e)}
               >

@@ -164,7 +164,8 @@ export function groupSuggestions(
   add("Products", src.items, 4);
   add("Services", src.services, 3);
   add("Businesses", src.businesses, 4);
-  if (taskiem && suggest([TASKIEM], query).length > 0)
-    out.push({ label: "", items: [TASKIEM] });
+  // Taskiem is always offered last, as the designs show: it can do what
+  // the words ask, whatever they name.
+  if (taskiem) out.push({ label: "", items: [TASKIEM] });
   return out;
 }

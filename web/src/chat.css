@@ -1,31 +1,8 @@
-/* The chat redrawn to the designs (docs/spec/chat-tools.md §2, §3; the
+/* The chat redrawn to the designs. The shared parts (pills, the sheet,
+   rows, diary lines) are in kit.css (docs/spec/chat-tools.md §2, §3; the
    design canvas "Taskiem chat: picker, cards and tool sheets"). WhatsApp's
    behaviours stay; the look is Taskiem's. Loaded after styles.css and
    motion.css. Colours come from tokens, light and dark. */
-
-:root {
-  --tk-soft: #f1f4ef;          /* footer, search, chips */
-  --tk-tile: #f6f8f4;          /* tiles, the order card */
-  --tk-lime-soft: #e9f7d0;     /* a product's tile */
-  --tk-warn-bg: #fdf0dc;       /* "4 left", "3 low" */
-  --tk-warn-ink: #8a3410;
-  --tk-blue-bg: #e6eefc;       /* a service's tile */
-  --tk-blue-ink: #2f5bd3;
-  --tk-lift: 0 30px 60px -20px rgba(14, 15, 12, 0.35), 0 2px 8px rgba(14, 15, 12, 0.06);
-  --tk-veil: rgba(14, 26, 20, 0.38);
-}
-:root[data-theme="dark"] {
-  --tk-soft: #1f2a26; --tk-tile: #1a2420; --tk-lime-soft: rgba(200, 241, 105, 0.14);
-  --tk-warn-bg: rgba(253, 176, 34, 0.16); --tk-warn-ink: #fdc565; --tk-blue-bg: rgba(132, 173, 255, 0.16); --tk-blue-ink: #a8c5ff;
-  --tk-lift: 0 30px 60px -20px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--border); --tk-veil: rgba(0, 0, 0, 0.55);
-}
-@media (prefers-color-scheme: dark) {
-  :root[data-theme="system"] {
-    --tk-soft: #1f2a26; --tk-tile: #1a2420; --tk-lime-soft: rgba(200, 241, 105, 0.14);
-    --tk-warn-bg: rgba(253, 176, 34, 0.16); --tk-warn-ink: #fdc565; --tk-blue-bg: rgba(132, 173, 255, 0.16); --tk-blue-ink: #a8c5ff;
-    --tk-lift: 0 30px 60px -20px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--border); --tk-veil: rgba(0, 0, 0, 0.55);
-  }
-}
 
 /* ---------- The conversation ---------- */
 
@@ -59,14 +36,6 @@
 .composer-tools.open, .composer-tools.open:hover:not(:disabled) { background: var(--brand); color: var(--brand-dark); }
 :root[data-theme="dark"] .composer-tools { color: var(--brand-dark); }
 .composer-tools:focus-visible { box-shadow: var(--ring); }
-
-/* ---------- Pills and tiles shared by the parts ---------- */
-
-.tk-pill { flex: none; display: inline-flex; align-items: center; font-size: 12px; font-weight: 700; padding: 4px 9px; border-radius: 999px; background: var(--tk-soft); color: var(--text); white-space: nowrap; }
-.tk-pill.lime { background: var(--brand-dark); color: var(--brand-dark-text); }
-.tk-pill.warn { background: var(--tk-warn-bg); color: var(--tk-warn-ink); }
-.tk-pill.danger { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); }
-.tk-kicker { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 
 /* ---------- The picker (over the composer) ---------- */
 
@@ -118,84 +87,22 @@
 .tk-tile-icon svg { width: 20px; height: 20px; }
 .tk-tile-name { display: block; font-weight: 700; font-size: 14px; }
 .tk-tile-line { display: block; font-size: 12px; color: var(--muted); min-height: 1.2em; }
-.tk-tile-badge { position: absolute; top: 10px; right: 10px; font-size: 11px; padding: 2px 7px; }
+.tk-tile-badge { position: absolute; top: 10px; right: 10px; }
+.tk-tile-badge .tk-pill { font-size: 11px; padding: 2px 7px; }
 .tk-tools-recent { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; padding: 10px 6px 2px; border-top: 1px solid var(--border); font-size: 13px; color: var(--muted); }
 .tk-tools-recent button { font-weight: 600; color: var(--brand); background: var(--tk-soft); border: 0; box-shadow: none; padding: 7px 12px; border-radius: 999px; min-height: 36px; }
 :root[data-theme="dark"] .tk-tools-recent button { color: var(--brand-dark); }
 @media (max-width: 360px) { .tk-tools-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
-/* ---------- The sheet a tool opens in ---------- */
-
-.tk-veil { position: fixed; inset: 0; z-index: 60; background: var(--tk-veil); backdrop-filter: blur(2px); }
-.tk-sheet {
-  position: fixed; z-index: 61; background: var(--panel); color: var(--text); display: flex; flex-direction: column; overflow: hidden; outline: none;
-  /* A phone: up from the bottom, under the head. */
-  left: 0; right: 0; bottom: 0; top: 84px; border-radius: 28px 28px 0 0; box-shadow: 0 -20px 50px -20px rgba(14, 15, 12, 0.4);
-}
-.tk-sheet-grab { display: grid; place-items: center; padding: 10px 0 4px; touch-action: none; cursor: grab; }
-.tk-sheet-grab::before { content: ""; width: 40px; height: 5px; border-radius: 3px; background: var(--border-strong); }
-.tk-sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 20px 12px; }
-.tk-sheet-head h2 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.02em; display: flex; align-items: baseline; gap: 8px; }
-.tk-sheet-count { font-size: 14px; font-weight: 400; color: var(--muted); letter-spacing: 0; }
-.tk-round { flex: none; width: 40px; height: 40px; padding: 0; border-radius: 50%; display: grid; place-items: center; background: var(--tk-soft); border: 0; box-shadow: none; color: var(--text); }
-.tk-round svg { width: 18px; height: 18px; }
-.tk-search { display: flex; align-items: center; gap: 10px; min-height: 46px; margin: 0 20px 12px; padding: 0 14px; border-radius: 14px; background: var(--tk-soft); color: var(--muted); }
-.tk-search svg { width: 18px; height: 18px; flex: none; }
-.tk-sheet .tk-search input[type="search"], .tk-sheet .tk-search input[type="search"]:hover:not(:disabled):not([aria-invalid]), .tk-sheet .tk-search input[type="search"]:focus:not(:disabled):not([aria-invalid]) {
-  flex: 1; min-width: 0; min-height: 0; border: 0; border-radius: 0; background: none; box-shadow: none; outline: none; font-size: 15px; padding: 0; color: var(--text);
-}
-.tk-search:focus-within { box-shadow: var(--ring); }
-.tk-chips { display: flex; gap: 8px; padding: 0 20px 10px; overflow-x: auto; }
-.tk-chips button { flex: none; min-height: 36px; padding: 0 14px; border-radius: 999px; background: var(--tk-soft); border: 0; box-shadow: none; font-weight: 600; font-size: 14px; color: var(--text); }
-.tk-chips button[aria-pressed="true"] { background: var(--brand); color: #ffffff; }
-:root[data-theme="dark"] .tk-chips button[aria-pressed="true"] { background: var(--brand-dark); color: var(--brand-dark-text); }
-.tk-sheet-list { flex: 1; overflow: auto; padding: 0 12px; }
-.tk-sheet-list ul { list-style: none; margin: 0; padding: 0; }
-.tk-row { display: flex; align-items: center; gap: 14px; padding: 10px 8px; border-radius: 16px; color: var(--text); text-decoration: none; }
-.tk-row:hover, .tk-row:focus-visible { background: var(--tk-soft); text-decoration: none; }
-.tk-row-tile { flex: none; width: 52px; height: 52px; border-radius: 14px; background: var(--tk-lime-soft); color: var(--brand); display: grid; place-items: center; font-weight: 800; font-size: 16px; }
-:root[data-theme="dark"] .tk-row-tile { color: var(--brand-dark); }
-.tk-row-words { flex: 1; min-width: 0; }
-.tk-row-name { display: block; font-weight: 600; font-size: 16px; overflow-wrap: anywhere; }
-.tk-row-sub { display: block; font-size: 14px; color: var(--muted); }
-.tk-sheet-empty { padding: 24px 8px; color: var(--muted); text-align: center; }
-.tk-sheet-loading { display: grid; gap: 18px; padding: 18px 8px; }
-.tk-sheet-loading .tk-shimmer { height: 14px; }
-.tk-sheet-loading .tk-shimmer:nth-child(2) { width: 80%; }
-.tk-sheet-loading .tk-shimmer:nth-child(3) { width: 60%; }
-.tk-sheet-foot { padding: 12px 20px calc(18px + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); }
-.tk-cta { width: 100%; min-height: 56px; border-radius: 999px; background: var(--brand); color: #ffffff; font-weight: 700; font-size: 16px; display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; }
-.tk-cta:hover { background: var(--brand-hover); text-decoration: none; }
-:root[data-theme="dark"] .tk-cta { background: var(--brand-dark); color: var(--brand-dark-text); }
-
-/* A tablet: a drawer from the right. */
-@media (min-width: 861px) {
-  .tk-sheet { top: 0; left: auto; width: 470px; max-width: 100vw; border-radius: 28px 0 0 28px; box-shadow: -30px 0 60px -30px rgba(14, 15, 12, 0.5); }
-  .tk-sheet-grab { display: none; }
-  .tk-sheet-head { padding-top: 22px; }
-}
-/* A computer: a panel beside the conversation; the chat stays lit and
-   makes room for it. The picker and the tools keep to the composer's side. */
-@media (min-width: 1200px) {
-  .tk-tool-open .chat-mode .chat-layout { padding-right: 420px; }
-  .tk-picker, .tk-tools { max-width: 520px; }
-  .tk-veil { background: transparent; backdrop-filter: none; }
-  .tk-sheet { width: 420px; border-radius: 0; border-left: 1px solid var(--border); box-shadow: -20px 0 40px -30px rgba(14, 15, 12, 0.35); }
-}
-
 @media (prefers-reduced-motion: no-preference) {
   .tk-picker, .tk-tools { animation: tk-spring-up var(--t-picker) var(--spring) backwards; }
   .tk-pick { animation: tk-rise var(--t-picker) var(--ease-out) backwards; }
-  .tk-veil { animation: tk-fade var(--t-sheet) var(--ease-out); }
-  .tk-sheet { animation: tk-sheet-up var(--t-sheet) var(--spring-settle) backwards; }
-}
-@media (prefers-reduced-motion: no-preference) and (min-width: 861px) {
-  @keyframes tk-drawer-in { from { transform: translateX(100%); } }
-  .tk-sheet { animation-name: tk-drawer-in; }
+  .tk-picker.leaving, .tk-tools.leaving { animation: tk-leave-down 180ms var(--ease-out) forwards; pointer-events: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .tk-picker, .tk-tools, .tk-pick, .tk-veil, .tk-sheet { animation: none; }
+  .tk-picker, .tk-tools, .tk-pick { animation: none; }
 }
+@media (min-width: 1200px) { .tk-picker, .tk-tools { max-width: 520px; } }
 
 /* ---------- The card frame ---------- */
 
@@ -221,14 +128,14 @@
 .tk-chatcard-actions .button.small:not(.primary), .tk-chatcard-actions button.small:not(.primary) { background: var(--panel); border: 1px solid var(--border-strong); color: var(--brand); }
 :root[data-theme="dark"] .tk-chatcard-actions .button.small:not(.primary), :root[data-theme="dark"] .tk-chatcard-actions button.small:not(.primary) { color: var(--text); }
 
-/* ---------- Diary lines ---------- */
 
-.tk-diary { align-self: center; display: flex; flex-direction: column; align-items: center; gap: 4px; margin: 6px 0; max-width: 92%; border-radius: 999px; }
-.tk-diary-pill {
-  display: inline-flex; align-items: center; flex-wrap: wrap; justify-content: center; gap: 4px 8px; padding: 8px 14px; border-radius: 999px;
-  background: var(--panel); color: var(--text); font-size: 13px; text-decoration: none; box-shadow: 0 2px 8px var(--chat-shadow);
+/* The picker and the tools float over the chat from the composer. */
+.composer { position: relative; }
+.composer > .tk-picker, .composer > .tk-tools { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); margin: 0 10px; z-index: 20; }
+@media (min-width: 1200px) {
+  .composer > .tk-picker, .composer > .tk-tools { left: 14px; right: auto; width: min(520px, calc(100% - 48px)); margin: 0; }
 }
-.tk-diary-pill:hover { text-decoration: none; background: var(--panel-2); }
-.tk-diary-pill svg { width: 16px; height: 16px; color: var(--ok); flex: none; }
-.tk-diary-sub { color: var(--muted); }
-.tk-diary-when { font-size: 12px; color: var(--muted); }
+
+/* A run of diary lines folded into one. */
+.tk-diary-more { background: none; border: 0; box-shadow: none; padding: 0 0 0 6px; min-height: 0; font: inherit; font-size: 12px; font-weight: 600; color: var(--tint-text); cursor: pointer; text-decoration: underline; }
+.tk-diary-more:hover:not(:disabled) { background: none; }

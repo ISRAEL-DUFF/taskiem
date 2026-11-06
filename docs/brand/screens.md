@@ -223,6 +223,24 @@ The rules of the [no-technical-steps plan](../spec/no-technical-steps.md) apply 
 
 Use the line icons in `web/src/icons.tsx` by name: `home`, `money`, `invoices`, `orders`, `storefront`, `workflows`, `runs`, `activity`, `approvals`, `forms`, `tables`, `schools`, `members`, `keys`, `lock`, `bell`, `alerts`, `clock`, `start`, `refund`, `connections`, `settings`, `billing`, `reports`, `audit`, `inbox`, `templates`, `search`, `plus`, `close`, `chevron`, `info`, `sparkle`, `bolt`, `back`, `more`, `menu`, `tick`, `tick-double`, `emoji`, `send`, `down`, `pin`, `mute`, `image`, `star`, `dashboard`, `catalogue`, `policies`, `box`, `grid`, `store`, `tag`. One icon per row; the same thing always has the same icon. Add a new icon to `icons.tsx` in the same 24-unit line style rather than using an emoji or another set.
 
+## The new kit
+
+The new look is built as shared parts in `web/src/kit.tsx` and `kit.css`, with
+the timings in `motion.css` ([chat tools](../spec/chat-tools.md) §2). The chat
+uses them first; every other page moves onto them whole, one page at a time, so
+no page mixes the old look and the new.
+
+- **Sheet**: the one frame for anything that opens over a page: a sheet from the
+  bottom on a phone, a drawer on a tablet, a panel beside the page on a computer.
+  Give it `from` (the tile's rectangle) and it grows out of it.
+- **Pill** (lime, warn, danger, plain), **buttons** `.tk-btn` (primary, soft,
+  ghost), **cards** `.tk-card`, **rows** `.tk-row`, **fields** `KitField`.
+- **KitEmpty** (an icon, a title, a line and what to do) and **KitLoading**
+  (shimmering rows) for every list's empty and loading states.
+- **DiaryLine**: a change told in a conversation as a line.
+- **usePresence**: a part that leaves with a little motion. With motion turned
+  down nothing moves.
+
 ## The Chat page
 
 The Chat page is the one screen that does **not** follow Taskiem's look. Business links §5.5 makes it WhatsApp Web's look, feel and way of working, deliberately and in detail, so a person who knows WhatsApp has nothing to learn. Copy it for any other conversation screen.

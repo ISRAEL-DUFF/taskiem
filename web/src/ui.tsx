@@ -150,13 +150,26 @@ export function useFocusTrap(ref: RefObject<HTMLElement | null>, open: boolean, 
 export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const id = useId();
+  // Closed from inside (Esc, a tap outside, pulled down): it leaves with
+  // its motion first. Its own buttons close it at once, as they decide.
+  const [leaving, setLeaving] = useState(false);
+  const shut = () => {
+    if (leaving) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return onClose();
+    setLeaving(true);
+    window.setTimeout(onClose, 200);
+  };
   // A modal opened from inside this one is on top and owns the keys.
-  useFocusTrap(ref, true, onClose, () => !ref.current?.querySelector(".modal"));
+  useFocusTrap(ref, true, shut, () => !ref.current?.querySelector(".modal"));
   const drag = useSheetDrag(ref, onClose);
+  // Only a dialog without fields can be pulled down to close: one being
+  // filled in is never thrown away by a slip of the thumb.
+  const [fields, setFields] = useState(true);
+  useEffect(() => setFields(!!ref.current?.querySelector('input:not([type="hidden"]), textarea, select')), []);
   return (
-    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" role="dialog" aria-modal="true" aria-labelledby={id} tabIndex={-1} ref={ref}>
-        <div className="modal-grab" aria-hidden="true" {...drag} />
+    <div className={`modal-backdrop${leaving ? " leaving" : ""}`} onMouseDown={(e) => e.target === e.currentTarget && shut()}>
+      <div className={`modal${leaving ? " leaving" : ""}`} role="dialog" aria-modal="true" aria-labelledby={id} tabIndex={-1} ref={ref}>
+        {!fields && <div className="modal-grab" aria-hidden="true" {...drag} />}
         <h2 id={id} style={{ marginTop: 0 }}>
           {title}
         </h2>

@@ -61,8 +61,17 @@ swipe to reply, long-press, hold to record, search, pin, mute, archive).
   1.4 s glow, `--t-roll` 450 ms, `--t-arrive` 600 ms, 40 ms between rows; the
   curves `--spring`, `--spring-settle`, `--spring-bounce`. App-wide: presses give
   to 97%, dialogs grow (and rise as sheets on a phone, pulled down to close),
-  toasts arrive with a bounce, lists rise one after another (`.tk-stagger`).
-  With motion turned down nothing moves: things are simply there.
+  toasts and newly arrived cards come in with a bounce, lists rise one after
+  another (`.tk-stagger`), a count rolls into place (`.tk-roll`), and things
+  leave the way they came (a dialog shrinks or drops, the picker and the tools
+  sink away, a sheet slides back). With motion turned down nothing moves or
+  fades: things are simply there (the designs said 150 ms fades; turned off so
+  that what is checked is never half-faded).
+- **The kit** (`web/src/kit.tsx`, `kit.css`): the new look as shared parts, used
+  first by the chat, the rest of the app moving onto them page by page:
+  `Sheet`, `Pill`, `KitEmpty`, `KitLoading`, `KitField`, `DiaryLine`, buttons
+  (`.tk-btn` primary, soft, ghost), cards (`.tk-card`), rows (`.tk-row`),
+  `usePresence` (leaving with motion) and `useMediaQuery`.
 - **The chat** (`web/src/chat.css`): bubbles with soft corners (one sharp where a
   tail was), the business's initials in pine and lime, a footer with the tools
   button, the pill (emoji, clip, camera) and the round send or microphone.
@@ -73,26 +82,47 @@ All of them show only with chat tools on; the redrawn chat is for everyone.
 
 - **The picker.** In a business conversation `@` tags things and businesses in
   groups: Products (the conversation's price list, with price), Services (from
-  phase 2), Businesses (linked; not the one you are talking to), and the Taskiem
-  row. The first match takes Enter; arrows move; Esc closes. An item tagged with
+  phase 2), Businesses (linked, with how we trade: "Linked · buys from you"; not
+  the one you are talking to; only for those who may write to businesses), and
+  the Taskiem row, always last. It floats over the chat. The first match takes
+  Enter (the Taskiem row only when "Taskiem" is being typed, so "@4500" stays as
+  typed); arrows move; Esc closes. With chat tools on the composer has no emoji
+  button, as in the designs: keyboards have emoji. An item tagged with
   `@` is the same mention as `#` (the server accepts both). The Taskiem
   conversation keeps `@` for businesses and `#` for items.
 - **The tools.** The grid button beside the composer, or `/` and a word as the
   whole message (`/pro`), opens the tools: Products, Services, Stock, Price
   lists, Orders and Tables, each with its count or a badge ("3 low", "4 new"),
-  only those the person's role may open, and the two used last.
-- **The sheet.** A tool opens in one frame on every screen: up from the bottom on
-  a phone (pulled down to close), a drawer from the right on a tablet, a panel
-  beside the conversation on a computer (the chat makes room). It has the tool's
+  only those the person's role may open, and the two used last. Arrows move
+  between tiles; Esc or a tap outside closes it. "/" and a word that names no
+  tool is an ordinary message: Enter sends it. "/pro" is never kept as a draft,
+  and neither it nor "@Taskiem …" tells the other business we are typing.
+- **The sheet.** A tool opens in one frame on every screen, growing out of the
+  tile that opened it (the same shape expands; its content fades in once it has
+  room): up from the bottom on a phone (pulled down to close), a drawer from the
+  right on a tablet, a panel beside the conversation on a computer, where the
+  chat makes room and stays usable (no veil, focus is not held). A list that
+  cannot be loaded says so, with Try again. It has the tool's
   name and count, a search, chips ("Low stock · 2"), the list and the full page.
   In phase 1 the lists are read-only and open the full page; phase 2 makes them
   work in place. Esc closes the sheet and only the sheet.
 - **The card frame.** A document in the conversation is a card: its kind and
   reference, its state as a pill, what happened, the amount, an order's four
-  steps (Placed, Accepted, On the way, Delivered) and its buttons.
+  steps (Placed, Accepted, On the way, Delivered), View order or View invoice,
+  and its next step as a filled button. A card that arrives while the
+  conversation is open slides in.
 - **Diary lines.** A change we made ourselves (accepting an order, saying an
   invoice is paid) is a line in the middle of the chat, not a card: what changed,
-  and "You, 10:42". It drops in lit in lime. A new document is always a card.
+  and "You, 10:42". One that arrives while the conversation is open drops in lit
+  in lime; those already there just show. Changes made within five minutes of
+  each other on one day are one line, "and 2 more changes", which unfolds. A
+  new document is always a card. Search results and quotes jump to a diary line
+  as to any message.
+
+**Moved to phase 2** (they need the tools that make changes): diary lines told
+on WhatsApp, Telegram and Slack, and in the Taskiem conversation; the save tick
+with its buzz; the sound for a new order or payment (with its switch); the
+burst for good moments; live product cards.
 
 ## 4. Tests
 

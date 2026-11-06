@@ -83,12 +83,12 @@ describe("the grouped picker (chat tools)", () => {
   const businesses = [{ kind: "business" as const, id: "l1", name: "Rivers Foods Ltd" }];
   it("groups things, then businesses, then Taskiem", () => {
     const g = groupSuggestions("ri", { items, businesses }, true);
-    expect(g.map((x) => x.label)).toEqual(["Products", "Businesses"]);
+    expect(g.map((x) => x.label)).toEqual(["Products", "Businesses", ""]);
     expect(g[0]?.items.map((x) => x.id)).toEqual(["i1", "i2"]);
     const all = groupSuggestions("", { items, businesses }, true);
     expect(all.map((x) => x.label)).toEqual(["Products", "Businesses", ""]);
     expect(all[2]?.items[0]?.kind).toBe("taskiem");
-    expect(groupSuggestions("task", { items, businesses }, true).map((x) => x.label)).toEqual([""]);
+    expect(groupSuggestions("zzz", { items, businesses }, true).map((x) => x.label)).toEqual([""]);
     expect(groupSuggestions("", { items, businesses }, false).some((x) => x.label === "")).toBe(false);
   });
   it("knows an item written with @ or #", () => {
