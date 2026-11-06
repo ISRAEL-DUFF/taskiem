@@ -8650,7 +8650,7 @@ paths:
       tags:
       - Links
       summary: Set the profile's words
-      description: Empty text clears a field.
+      description: Replaces the words. A field left out or empty is cleared, so send all four.
       security:
       - sessionCookie: []
         csrfHeader: []

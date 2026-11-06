@@ -91,6 +91,7 @@ export function BusinessProfilePage() {
   const [loadError, setLoadError] = useState<unknown>();
   const settings = useLoad(() => get<LinkSettings>("/v1/link-settings"), []);
   const act = useAction();
+  const capAct = useAction();
   const [form, setForm] = useState({
     name: "",
     tagline: "",
@@ -203,15 +204,23 @@ export function BusinessProfilePage() {
     );
   const caption = (g: GalleryPhoto, text: string) => {
     if (text === g.caption) return;
-    void act.run(
-      async () =>
-        apply(
-          await patch<BusinessProfile>(`/v1/business-profile/gallery/${g.id}`, {
-            caption: text,
-          }),
-        ),
-      false,
-    );
+    // Its own action, so saving a caption never switches the other buttons
+    // off under a click that is on its way, and only this photo's words change
+    // here, so a late answer cannot bring back a photo that was removed.
+    void capAct.run(async () => {
+      await patch<BusinessProfile>(`/v1/business-profile/gallery/${g.id}`, {
+        caption: text,
+      });
+      setData(
+        (d) =>
+          d && {
+            ...d,
+            gallery: d.gallery.map((x) =>
+              x.id === g.id ? { ...x, caption: text } : x,
+            ),
+          },
+      );
+    }, false);
   };
 
   return (
@@ -225,7 +234,9 @@ export function BusinessProfilePage() {
         title="Your business in Explore"
         description="What other businesses see when they look for a business to trade with: your name, a line about what you do, your area, a logo and photos."
       />
-      <ErrorBox error={loadError ?? settings.error ?? act.error} />
+      <ErrorBox
+        error={loadError ?? settings.error ?? act.error ?? capAct.error}
+      />
       {!data ? (
         <Skeleton rows={3} label="Loading your profile…" />
       ) : (
@@ -235,9 +246,34 @@ export function BusinessProfilePage() {
             aria-label="Being found"
             data-testid="profile-found"
           >
-            <p>
-              {settings.data ? findableLine(settings.data) : "Checking…"}{" "}
-              <Link to="/settings/links">Change this</Link>
+            {settings.data ? (
+              <label className="switch-line">
+                <input
+                  type="checkbox"
+                  aria-label="Let other businesses find us"
+                  checked={settings.data.findable_now}
+                  disabled={!manage || act.busy}
+                  onChange={(e) =>
+                    void act.run(
+                      async () => (
+                        await put("/v1/link-settings", {
+                          findable: e.target.checked,
+                        }),
+                        settings.reload()
+                      ),
+                      "Saved",
+                    )
+                  }
+                  data-testid="profile-findable"
+                />
+                <span>{findableLine(settings.data)}</span>
+              </label>
+            ) : (
+              <p className="hint">Checking…</p>
+            )}
+            <p className="hint">
+              A business is listed only while this is on. What is on this page
+              is shown to every business that finds you.
             </p>
             <ProfileCard
               name={form.name}
@@ -388,6 +424,11 @@ export function BusinessProfilePage() {
                   className="gallery-tile"
                   data-testid="profile-photo"
                 >
+                  {g.photo.moderation === "rejected" && (
+                    <span className="hint gallery-rejected" role="status">
+                      Not accepted for a public page. Remove it.
+                    </span>
+                  )}
                   <img
                     src={photoSrc(g.photo)}
                     alt={g.caption || `Photo ${i + 1}`}

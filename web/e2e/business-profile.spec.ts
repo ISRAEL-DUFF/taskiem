@@ -77,6 +77,13 @@ test("the words are saved and kept; the page is reached from Chat and from Linke
   await expect(page.getByTestId("profile-about")).toHaveValue(
     "Family-run since 1998.",
   );
+  // Being found is switched on here, and kept.
+  const found = page.getByTestId("profile-findable");
+  await expect(found).not.toBeChecked();
+  await found.click();
+  await expect(found).toBeChecked();
+  await page.reload();
+  await expect(page.getByTestId("profile-findable")).toBeChecked();
   await axeBoth(page, "your business in Explore");
 
   // From Linked businesses too.
@@ -199,7 +206,13 @@ test("photos: added, counted, captioned, put in order, removed; twelve at most; 
     "The shop front",
   );
 
+  // Typing a caption and going straight to Remove: the caption's save (on
+  // leaving the box) must not swallow the click.
+  await page.getByLabel("Caption for photo 2").fill("Delete me");
   await page.getByRole("button", { name: "Remove photo 2" }).click();
+  await expect
+    .poll(() => log.slice(-2).join("|"))
+    .toBe("caption Delete me|remove");
   await expect(count).toContainText("2 of 12 photos");
   await axeBoth(page, "the gallery");
 
@@ -212,13 +225,15 @@ test("photos: added, counted, captioned, put in order, removed; twelve at most; 
         id: `p${i}`,
         width: 1,
         height: 1,
-        moderation: "unreviewed",
+        moderation: i === 5 ? "rejected" : "unreviewed",
         urls: { "320": `https://x/p${i}.png` },
       },
     });
   await page.reload();
   await expect(count).toContainText("12 of 12 photos");
   await expect(page.getByRole("button", { name: "Add photos" })).toBeDisabled();
+  // A photo the moderator refused says so, and can be removed.
+  await expect(page.getByText("Not accepted for a public page")).toHaveCount(1);
 
   // On a phone it fits, nothing scrolls sideways.
   await page.setViewportSize({ width: 360, height: 740 });
