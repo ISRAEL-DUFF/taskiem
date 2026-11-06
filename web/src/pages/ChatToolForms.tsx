@@ -23,6 +23,7 @@ import {
   type PriceChange,
 } from "../lib/toolforms";
 import { ErrorBox, useLoad } from "../ui";
+import type { Prefill } from "../lib/intents";
 
 // The chat tools' forms (docs/spec/chat-tools.md §3, phase 2): each does
 // the common task in the sheet and saves through the same API as the
@@ -109,8 +110,10 @@ function Money({ label, value, onChange }: { label: string; value: string; onCha
 }
 
 /** A product: its price and its count on the shelf. */
-export function ProductForm({ item, onSaved }: { item: StockItem; onSaved: (line: string | null) => void }) {
-  const [price, setPrice] = useState(item.price_kobo !== undefined ? nairaText(item.price_kobo) : "");
+export function ProductForm({ item, onSaved, prefill }: { item: StockItem; onSaved: (line: string | null) => void; prefill?: Prefill }) {
+  const [price, setPrice] = useState(
+    prefill?.priceKobo !== undefined ? nairaText(prefill.priceKobo) : item.price_kobo !== undefined ? nairaText(item.price_kobo) : "",
+  );
   const [count, setCount] = useState(item.stock ?? 0);
   const kobo = nairaKobo(price);
   const save: Saver = async () => {
@@ -168,8 +171,8 @@ export function ProductAdd({ onSaved }: { onSaved: (line: string | null) => void
 }
 
 /** Goods that came in. */
-export function StockInForm({ item, onSaved }: { item: StockItem; onSaved: (line: string | null) => void }) {
-  const [n, setN] = useState(1);
+export function StockInForm({ item, onSaved, prefill }: { item: StockItem; onSaved: (line: string | null) => void; prefill?: Prefill }) {
+  const [n, setN] = useState(prefill?.count ?? 1);
   const [note, setNote] = useState("");
   const save: Saver = async () => {
     await postOnce("/v1/stock/movements", key(), { item_id: item.id, reason: "received", change: n, note: note.trim() || "Recorded in chat" });
@@ -190,11 +193,11 @@ export function StockInForm({ item, onSaved }: { item: StockItem; onSaved: (line
 }
 
 /** A new service: its name, how long it takes and its price. */
-export function ServiceAdd({ onSaved }: { onSaved: (line: string | null) => void }) {
+export function ServiceAdd({ onSaved, prefill }: { onSaved: (line: string | null) => void; prefill?: Prefill }) {
   const sf = useLoad(() => get<{ services_table?: string | null; services_columns?: ServiceColumns }>("/v1/storefront"), []);
-  const [name, setName] = useState("");
-  const [minutes, setMinutes] = useState(30);
-  const [price, setPrice] = useState("");
+  const [name, setName] = useState(prefill?.name ?? "");
+  const [minutes, setMinutes] = useState(prefill?.minutes ?? 30);
+  const [price, setPrice] = useState(prefill?.priceKobo !== undefined ? nairaText(prefill.priceKobo) : "");
   if (!sf.data) return sf.error ? <ErrorBox error={sf.error} /> : <KitLoading />;
   const table = sf.data.services_table;
   if (!table)

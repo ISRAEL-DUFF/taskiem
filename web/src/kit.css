@@ -230,3 +230,6 @@ button.tk-cta:hover:not(:disabled) { background: var(--brand-hover); }
   :root[data-theme="system"] .tk-cta { background: var(--brand-dark); color: var(--brand-dark-text); }
   :root[data-theme="system"] button.tk-cta, :root[data-theme="system"] button.tk-cta:hover:not(:disabled), :root[data-theme="system"] button.tk-cta:disabled { background: var(--brand-dark); color: var(--brand-dark-text); }
 }
+
+/* The bare inputs inside the money box and the stepper: no box of their own. */
+.tk-money input[inputmode], .tk-stepper input[inputmode] { background: transparent !important; box-shadow: none !important; border: 0 !important; }

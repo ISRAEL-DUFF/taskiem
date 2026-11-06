@@ -71,7 +71,7 @@ export function useMentions(
       s.name,
     );
     setText(next.text);
-    if (s.kind === "business" || s.kind === "item")
+    if (s.kind !== "taskiem")
       setPicked((cur) => [...cur, s]);
     setQ(null);
     requestAnimationFrame(() => {
@@ -105,7 +105,9 @@ export function useMentions(
     stillNamed(text, picked).map((p) =>
       p.kind === "business"
         ? { kind: p.kind, link: p.id }
-        : { kind: p.kind, item_id: p.id },
+        : p.kind === "service"
+          ? { kind: p.kind, service_id: p.id }
+          : { kind: p.kind, item_id: p.id },
     );
   const reset = () => {
     setPicked([]);

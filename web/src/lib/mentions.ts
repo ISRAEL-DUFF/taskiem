@@ -16,12 +16,15 @@ export interface Suggestion {
 
 /** A mention as a message stores it. */
 export interface Mention {
-  kind: "business" | "item";
+  kind: "business" | "item" | "service";
   name: string;
   link?: string;
   item_id?: string;
   unit?: string;
   price_kobo?: number;
+  /** One of the sender's own services, and how long it takes. */
+  service_id?: string;
+  minutes?: number;
 }
 
 export interface MentionQuery {
@@ -91,7 +94,7 @@ export function stillNamed<T extends { kind: string; name: string }>(
     // An item may be written "#Rice" or, from the picker, "@Rice".
     const named =
       lower.includes("@" + name) ||
-      (p.kind === "item" && lower.includes("#" + name));
+      (p.kind !== "business" && lower.includes("#" + name));
     if (
       named &&
       !out.some((o) => o.kind === p.kind && o.name === p.name)
@@ -110,7 +113,7 @@ export function mentionParts(
   const lower = text.toLowerCase();
   const found: { at: number; len: number; m: Mention }[] = [];
   for (const m of mentions) {
-    const tokens = m.kind === "item" ? ["#" + m.name, "@" + m.name] : ["@" + m.name];
+    const tokens = m.kind === "business" ? ["@" + m.name] : ["#" + m.name, "@" + m.name];
     for (const token of tokens) {
       let from = 0;
       for (;;) {

@@ -76,12 +76,16 @@ type Preview struct {
 // composer: a linked business ("@Dangote Stores") or an item of the
 // conversation's price list ("#Rice, 50 kg", with its unit and price).
 type Mention struct {
-	Kind      string    `json:"kind"` // business or item
+	Kind      string    `json:"kind"` // business, item or service
 	Name      string    `json:"name"`
 	Link      uuid.UUID `json:"link,omitzero"` // a business, on our copy only
 	ItemID    string    `json:"item_id,omitempty"`
 	Unit      string    `json:"unit,omitempty"`
 	PriceKobo int64     `json:"price_kobo,omitempty"`
+	// A service of the sender's own (chat tools): what it is and how long
+	// it takes, as the sender offers it.
+	ServiceID string `json:"service_id,omitempty"`
+	Minutes   int    `json:"minutes,omitempty"`
 }
 
 // Quote is the message a reply quotes, as the reply shows it.

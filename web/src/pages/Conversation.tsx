@@ -39,6 +39,11 @@ import { useConfirm } from "./ConfirmSheet";
 import { useChatTools } from "../lib/useChatTools";
 import { ORDER_STEPS, cardKicker, cardStatus, isDiary } from "../lib/cardframe";
 import { DiaryLine } from "../kit";
+import { chime, isGoodMoment, isNews, soundOn } from "../lib/moments";
+import { LiveCard, liveMention, type Live } from "./ChatLiveCard";
+import { formatPrice } from "../lib/storefront";
+import type { StockItem, StockView } from "../lib/stock";
+import type { Service } from "../lib/bookings";
 import {
   BUSINESS_FILES,
   ComposerView,
@@ -489,6 +494,8 @@ function Bubble({
   onRetry,
   onDiscard,
   arrive = false,
+  cheer = false,
+  live,
 }: {
   m: LinkMessage;
   other: string;
@@ -515,6 +522,10 @@ function Bubble({
   onDiscard?: (clientId: string) => void;
   /** A card that just arrived: it slides in with a little bounce. */
   arrive?: boolean;
+  /** A good moment: a short burst around it. */
+  cheer?: boolean;
+  /** Chat tools: a tagged product or service shows as a live card. */
+  live?: Live;
 }) {
   const card = m.kind === "card" ? m.card : undefined;
   const fold = useFold(m.body ?? "");
@@ -729,6 +740,7 @@ function Bubble({
           </span>
         </span>
       )}
+      {cheer && <span className="tk-cheer" aria-hidden="true" />}
       {card ? (
         <CardFrame card={card} title={cardLine(card, m.mine, other)}>
           <Link to={cardHref(card)} className="button small">
@@ -743,6 +755,9 @@ function Bubble({
         <>
           {m.attachment && (
             <AttachmentView m={m} a={m.attachment} other={other} />
+          )}
+          {live && liveMention(m.mentions) && (
+            <LiveCard m={liveMention(m.mentions) as NonNullable<ReturnType<typeof liveMention>>} live={live} />
           )}
           {m.body && (
             <span className="text">
@@ -935,14 +950,42 @@ export function ConversationPane({
   const chatTools = useChatTools();
   // A diary line kept: what is newer is pulled in (set once pull exists).
   const afterDiary = useRef<() => void>(() => undefined);
-  const items = useLoad(
+  const priced = useLoad(
     () =>
-      get<{ items: PriceItem[] }>(`/v1/link-chats/${conv.link}/items`).then(
-        (r) => r.items,
-        () => [] as PriceItem[],
-      ),
+      get<{ items: PriceItem[]; whose?: "ours" | "theirs" }>(
+        `/v1/link-chats/${conv.link}/items`,
+      ).catch(() => ({ items: [] as PriceItem[], whose: undefined })),
     [conv.link],
   );
+  const items = { data: priced.data?.items };
+  // Live cards read our own stock, and the picker offers our own services
+  // (chat tools; each only to those who may see it).
+  const ownStock = useLoad(
+    () =>
+      chatTools && can("table.read")
+        ? get<StockView>("/v1/stock").then(
+            (r) => r.items,
+            () => [] as StockItem[],
+          )
+        : Promise.resolve([] as StockItem[]),
+    [chatTools],
+  );
+  const ownServices = useLoad(
+    () =>
+      chatTools && can("storefront.manage")
+        ? get<{ items: Service[] }>("/v1/storefront/services").then(
+            (r) => r.items.filter((x) => x.available),
+            () => [] as Service[],
+          )
+        : Promise.resolve([] as Service[]),
+    [chatTools],
+  );
+  const liveNow: Live = {
+    items: priced.data?.items ?? [],
+    whose: priced.data?.whose ?? "",
+    stock: ownStock.data ?? [],
+    link: conv.link,
+  };
   const c = useComposer<LinkMessage>({
     draftKey: conv.link,
     rules: BUSINESS_FILES,
@@ -962,6 +1005,17 @@ export function ConversationPane({
           name: o.name,
           sub: chatTools ? linkedLine(roles[o.link]) : undefined,
         })),
+      services: (ownServices.data ?? []).map((x) => ({
+        kind: "service" as const,
+        id: x.id,
+        name: x.name,
+        sub: [
+          x.price_kobo != null ? formatPrice(x.price_kobo) : "Price on the day",
+          x.duration_minutes ? `${x.duration_minutes} min` : "",
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      })),
       "#": (items.data ?? [])
         .filter((it) => it.available)
         .map((it) => ({
@@ -1325,6 +1379,32 @@ export function ConversationPane({
     openedNewest.current = shown[shown.length - 1]?.created_at ?? "";
   const fresh = (m: LinkMessage) =>
     openedNewest.current !== undefined && m.created_at > openedNewest.current;
+  // News that arrives while the conversation is open: a sound (unless
+  // switched off) for an order or a payment, and a burst for a good moment.
+  const told = useRef(new Set<string>());
+  const [cheer, setCheer] = useState<string>();
+  useEffect(() => {
+    if (!chatTools || !shown) return;
+    const today = new Date().toDateString();
+    let firstOrder = !shown.some(
+      (m) =>
+        !m.mine &&
+        m.card &&
+        (m.card.event === "ordered" || m.card.event === "auto_accepted") &&
+        new Date(m.created_at).toDateString() === today &&
+        !fresh(m),
+    );
+    for (const m of shown) {
+      if (!m.card || !fresh(m) || told.current.has(m.id)) continue;
+      told.current.add(m.id);
+      if (isNews(m.card, m.mine) && soundOn()) chime();
+      if (isGoodMoment(m.card, m.mine, firstOrder)) {
+        setCheer(m.id);
+        window.setTimeout(() => setCheer(undefined), 900);
+      }
+      if (m.card.event === "ordered" || m.card.event === "auto_accepted") firstOrder = false;
+    }
+  }, [shown, chatTools]);
   // Diary lines made close together on one day are one line (its first).
   const runs = useMemo(() => {
     const lead = new Map<string, LinkMessage[]>();
@@ -1504,6 +1584,8 @@ export function ConversationPane({
               onStar={m.local ? undefined : star}
               onInfo={m.local ? undefined : setInfo}
               arrive={!!m.card && fresh(m)}
+              cheer={cheer === m.id}
+              live={chatTools ? liveNow : undefined}
             />
           )
         }

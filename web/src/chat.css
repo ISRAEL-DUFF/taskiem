@@ -149,3 +149,41 @@
   :root[data-theme="system"] .tk-progress-bar span.done { background: var(--brand-dark); }
   :root[data-theme="system"] .tk-chatcard-actions .button.small:not(.primary), :root[data-theme="system"] .tk-chatcard-actions button.small:not(.primary) { color: var(--text); }
 }
+
+/* A good moment: a short lime ring around the card, never in the way. */
+.bubble { position: relative; }
+.tk-cheer { position: absolute; inset: -6px; border-radius: 22px; border: 3px solid var(--brand-dark); pointer-events: none; opacity: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .tk-cheer { animation: tk-cheer var(--t-cheer) var(--ease-out) forwards; }
+}
+
+/* A live card: a tagged product or service, with what is true now. */
+.tk-live { display: flex; flex-direction: column; background: var(--panel); border-radius: 12px; overflow: hidden; margin: 0 0 6px; box-shadow: 0 0 0 1px var(--border); }
+.tk-live-top { display: flex; gap: 12px; padding: 12px; }
+.tk-live-tile { flex: none; width: 56px; height: 56px; border-radius: 12px; display: grid; place-items: center; background: var(--tk-lime-soft); color: var(--brand); }
+.tk-live-tile.blue { background: var(--tk-blue-bg); color: var(--tk-blue-ink); }
+.tk-live-tile svg { width: 24px; height: 24px; }
+:root[data-theme="dark"] .tk-live-tile:not(.blue) { color: var(--brand-dark); }
+.tk-live-words { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tk-live-name { font-weight: 700; font-size: 16px; color: var(--text); overflow-wrap: anywhere; }
+.tk-live-sub { font-size: 14px; color: var(--muted); }
+.tk-live-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--border); }
+.tk-live-foot .tk-btn { min-height: 40px; padding: 0 16px; font-size: 14px; }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .tk-live-tile:not(.blue) { color: var(--brand-dark); } }
+
+/* A typed request's chip, over the composer: opens the form filled in. */
+.composer > .tk-request { position: absolute; left: 10px; right: 10px; bottom: calc(100% + 8px); z-index: 19; display: flex; }
+@media (min-width: 1200px) { .composer > .tk-request { left: 14px; right: auto; max-width: 520px; } }
+.tk-request-btn {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 14px 10px 10px; border-radius: 18px; border: 0;
+  background: var(--panel); color: var(--text); text-align: left; box-shadow: var(--tk-lift); min-height: 56px;
+}
+.tk-request-btn:hover:not(:disabled) { background: var(--panel-2); }
+.tk-request-btn:focus-visible { box-shadow: var(--ring); }
+.tk-request-icon { flex: none; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: var(--brand); color: var(--brand-dark); }
+.tk-request-icon svg { width: 18px; height: 18px; }
+.tk-request-words { display: flex; flex-direction: column; font-size: 14px; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.tk-request-kicker { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+@media (prefers-reduced-motion: no-preference) {
+  .tk-request { animation: tk-spring-up var(--t-picker) var(--spring) backwards; }
+}

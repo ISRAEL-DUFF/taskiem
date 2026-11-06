@@ -156,3 +156,86 @@ test("in the Taskiem chat, a change is a diary line there", async ({ browser }) 
   await owner.reload();
   await expect(owner.getByTestId("chat-diary")).toContainText("counted: 4 bags → 5 bags");
 });
+
+test("typed words open the form filled in, and saving stays a tap", async ({ browser }) => {
+  const { owner, link } = await linked(browser, { width: 390, height: 844 });
+  const sent = await shop(owner);
+  await owner.goto(`/chat?with=${link}`);
+  const pane = owner.getByTestId("chat-pane");
+  const box = pane.getByLabel("Message");
+  await box.fill("change the price of rice 50kg to 80k");
+  const chip = pane.getByTestId("request-chip");
+  await expect(chip).toContainText("Change the price of Rice, 50kg bag to ₦80,000");
+  await axeBoth(owner, "a typed request");
+  // Nothing is saved by the words alone.
+  expect(sent.filter((x) => x.method === "PATCH")).toEqual([]);
+  await chip.getByRole("button").click();
+  const sheet = owner.getByTestId("tool-sheet");
+  await expect(sheet.getByLabel("Price in naira")).toHaveValue("80,000");
+  await expect(box).toHaveValue("");
+  await sheet.getByRole("button", { name: "Save" }).click();
+  await expect(pane.getByTestId("chat-diary")).toContainText("Price of Rice, 50kg bag: ₦76,000 → ₦80,000");
+  expect(sent.find((x) => x.method === "PATCH")?.body).toEqual({ price_kobo: 8_000_000 });
+
+  // Ordinary words offer nothing.
+  await box.fill("How much is rice 50kg this week?");
+  await expect(pane.getByTestId("request-chip")).toHaveCount(0);
+});
+
+test("a tagged product is a live card; our own services can be tagged", async ({ browser }) => {
+  const { owner, link } = await linked(browser, { width: 390, height: 844 });
+  await shop(owner);
+  await owner.route(`**/v1/link-chats/${link}/items`, (r) =>
+    r.fulfill(json({ whose: "theirs", items: [{ item_id: "i2", name: "Rice, 25kg bag", unit: "bag", price_kobo: 4_300_000, min_quantity: 5, available: true }] })),
+  );
+  await owner.route("**/v1/storefront/services", (r) =>
+    r.fulfill(json({ items: [{ id: "sv1", name: "Rice milling", price_kobo: 250_000, duration_minutes: 30, available: true }], availability: {}, synced_at: null, error: null })),
+  );
+  const at = new Date().toISOString();
+  await owner.route(`**/v1/link-chats/${link}/messages**`, (r) =>
+    r.request().method() === "GET"
+      ? r.fulfill(
+          json({
+            messages: [
+              {
+                id: "m1",
+                link,
+                mine: true,
+                kind: "text",
+                body: "@Rice, 25kg bag is almost out here, can you send 20?",
+                mentions: [{ kind: "item", name: "Rice, 25kg bag", item_id: "i2", unit: "bag", price_kobo: 4_100_000 }],
+                created_at: at,
+              },
+            ],
+          }),
+        )
+      : r.continue(),
+  );
+  await owner.goto(`/chat?with=${link}`);
+  const pane = owner.getByTestId("chat-pane");
+  const card = pane.getByRole("article", { name: "Product: Rice, 25kg bag" });
+  // What is true now: today's price (and what it was), our own stock, Order.
+  await expect(card).toContainText("₦43,000 a bag · min 5 (was ₦41,000)");
+  await expect(card).toContainText("Your stock: 4 bags left");
+  await expect(card.getByRole("link", { name: "Order Rice, 25kg bag" })).toHaveAttribute("href", `/storefront/suppliers/${link}/prices`);
+  await axeBoth(owner, "a live card");
+
+  // Our own service, from the picker's Services.
+  const box = pane.getByLabel("Message");
+  await box.fill("We can also do @mill");
+  const picker = owner.getByRole("region", { name: "Tag something" });
+  await expect(picker.getByRole("group", { name: "Services" })).toContainText("₦2,500 · 30 min");
+  await box.press("Enter");
+  await expect(box).toHaveValue("We can also do @Rice milling ");
+});
+
+test("the sound for new orders and payments can be switched off", async ({ browser }) => {
+  const { owner } = await linked(browser, { width: 1440, height: 900 });
+  await owner.goto("/chat");
+  await owner.getByRole("button", { name: "More about the chats" }).click();
+  const sw = owner.getByRole("button", { name: /Sound for new orders and payments/ });
+  await expect(sw).toHaveAttribute("aria-pressed", "true");
+  await sw.click();
+  await owner.getByRole("button", { name: "More about the chats" }).click();
+  await expect(owner.getByRole("button", { name: "Sound for new orders and payments: off" })).toHaveAttribute("aria-pressed", "false");
+});

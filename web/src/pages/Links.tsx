@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { useChatTools } from "../lib/useChatTools";
+import { setSound, soundOn } from "../lib/moments";
 import {
   Link,
   useNavigate,
@@ -253,6 +255,8 @@ function useLinks() {
  */
 export function ChatPage() {
   const { me, can } = useAuth();
+  const chatTools = useChatTools();
+  const [sound, setSoundState] = useState(soundOn);
   // Chat is also the person's own conversation with Taskiem: with Linked
   // businesses off it shows that alone, and asks for no business's chats.
   const linksOn = areaOn(me?.areas, "links");
@@ -536,6 +540,20 @@ export function ChatPage() {
                   >
                     Your business in Explore
                   </Link>
+                  {chatTools && (
+                    <button
+                      type="button"
+                      className="menu-link"
+                      aria-pressed={sound}
+                      onClick={() => {
+                        setSound(!sound);
+                        setSoundState(!sound);
+                        close();
+                      }}
+                    >
+                      Sound for new orders and payments: {sound ? "on" : "off"}
+                    </button>
+                  )}
                 </>
               )}
             />

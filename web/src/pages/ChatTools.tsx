@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
+import type { Prefill } from "../lib/intents";
 import { Link } from "react-router-dom";
 import { get } from "../api";
 import { useAuth } from "../auth";
@@ -231,13 +232,24 @@ const tileLetters = (name: string) =>
   );
 
 /** What a tool's row opens: its form, or a look at it. */
-function Detail({ tool, row, onSaved }: { tool: ToolKey; row: ToolRow | "add"; onSaved: (line: string | null) => void }) {
-  if (row === "add") return tool === "services" ? <ServiceAdd onSaved={onSaved} /> : <ProductAdd onSaved={onSaved} />;
+function Detail({
+  tool,
+  row,
+  onSaved,
+  prefill,
+}: {
+  tool: ToolKey;
+  row: ToolRow | "add";
+  onSaved: (line: string | null) => void;
+  prefill?: Prefill;
+}) {
+  if (row === "add")
+    return tool === "services" ? <ServiceAdd onSaved={onSaved} prefill={prefill} /> : <ProductAdd onSaved={onSaved} />;
   switch (tool) {
     case "products":
-      return <ProductForm item={row.data as StockItem} onSaved={onSaved} />;
+      return <ProductForm item={row.data as StockItem} onSaved={onSaved} prefill={prefill} />;
     case "stock":
-      return <StockInForm item={row.data as StockItem} onSaved={onSaved} />;
+      return <StockInForm item={row.data as StockItem} onSaved={onSaved} prefill={prefill} />;
     case "services":
       return <ServiceView service={row.data as Service} />;
     case "prices":
@@ -260,10 +272,13 @@ export function ToolSheet({
   from,
   onClose,
   onSaved,
+  start,
 }: {
   tool: ToolKey;
   from?: DOMRect | null;
   onClose: () => void;
+  /** Where a typed request points: a row, or a new one, filled in. */
+  start?: { rowId?: string; add?: boolean; prefill?: Prefill };
   /** Tells a change (its diary line). */
   onSaved?: (line: string) => Promise<void> | void;
 }) {
@@ -271,12 +286,20 @@ export function ToolSheet({
   const tool = toolsFor(can).find((t) => t.key === key);
   const [search, setSearch] = useState("");
   const [chip, setChip] = useState<string>();
-  const [open, setOpen] = useState<ToolRow | "add">();
+  const [open, setOpen] = useState<ToolRow | "add" | undefined>(start?.add ? "add" : undefined);
   const [saved, setSaved] = useState(false);
   const [shut, setShut] = useState(false);
   const { rows: all, retry } = useToolRows(tool ? [tool] : []);
   const rows = all[key];
   useEffect(() => remember(key), [key]);
+  // A request about a row opens its form once the rows are here.
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current || !start?.rowId || !Array.isArray(rows)) return;
+    started.current = true;
+    const r = rows.find((x) => x.id === start.rowId);
+    if (r) setOpen(r);
+  }, [rows, start?.rowId]);
   if (!tool) return null;
   const list = Array.isArray(rows) ? rows : undefined;
   const shown = list ? filterRows(list, chip, search) : [];
@@ -314,7 +337,7 @@ export function ToolSheet({
     >
       {saved && <SavedTick />}
       {open ? (
-        <Detail tool={key} row={open} onSaved={done} />
+        <Detail tool={key} row={open} onSaved={done} prefill={start?.prefill} />
       ) : (
         <>
           <label className="tk-search">

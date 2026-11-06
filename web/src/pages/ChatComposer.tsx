@@ -27,6 +27,10 @@ import { AttachMenu } from "./AttachMenu";
 import { CameraSheet } from "./CameraSheet";
 import { ToolSheet, ToolsPanel } from "./ChatTools";
 import { toolsFor, type ToolKey } from "../lib/tools";
+import type { Prefill, Request } from "../lib/intents";
+import { RequestChip } from "./RequestChip";
+
+type ToolStart = { rowId?: string; add?: boolean; prefill?: Prefill };
 import { useAuth } from "../auth";
 import { usePresence } from "../kit";
 
@@ -136,7 +140,7 @@ export function useComposer<R>(o: ComposerOptions<R>) {
   const mentions = useMentions(text, setText, textBox, o.sources, o.grouped);
   // The tools panel: the grid button, or "/" and a word as the whole message.
   const [toolsOpen, setToolsOpen] = useState(false);
-  const [tool, setTool] = useState<{ key: ToolKey; from?: DOMRect }>();
+  const [tool, setTool] = useState<{ key: ToolKey; from?: DOMRect; start?: ToolStart }>();
   const { can } = useAuth();
   const slash = o.tools ? /^\/(\S*)$/.exec(text) : null;
   const toolsShown = !!o.tools && (toolsOpen || !!slash);
@@ -146,9 +150,14 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     setToolsOpen(false);
     if (slash) setText("");
   };
-  const openTool = (k: ToolKey, from?: DOMRect) => {
+  const openTool = (k: ToolKey, from?: DOMRect, start?: ToolStart) => {
     closeTools();
-    setTool({ key: k, from });
+    setTool({ key: k, from, start });
+  };
+  // A typed request: its tool opens at the form, filled in; the words go.
+  const openRequest = (r: Request) => {
+    setText("");
+    openTool(r.tool, undefined, { rowId: r.rowId, add: r.add, prefill: r.prefill });
   };
   // A voice note held and released goes at once; one tapped waits for Send.
   const sendRef = useRef<(f?: File) => void>(() => undefined);
@@ -319,6 +328,7 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     setToolsOpen,
     closeTools,
     toolMatches,
+    openRequest,
     tool,
     setTool,
     openTool,
@@ -410,6 +420,7 @@ export function ComposerView<R>({
         <ToolSheet
           tool={c.tool.key}
           from={c.tool.from}
+          start={c.tool.start}
           onClose={() => c.setTool(undefined)}
           onSaved={async (text) => {
             const where = c.o.diaryWhere;
@@ -434,6 +445,9 @@ export function ComposerView<R>({
           }}
         >
           <GroupedPicker m={c.mentions} />
+          {c.o.tools && !c.toolsShown && !c.mentions.q && (
+            <RequestChip text={c.text} onOpen={c.openRequest} />
+          )}
           {toolsP.mounted && (
             <ToolsPanel
               query={c.toolsQuery}

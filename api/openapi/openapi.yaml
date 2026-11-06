@@ -7293,7 +7293,7 @@ paths:
                 mentions:
                   type: array
                   maxItems: 10
-                  description: 'Each a business you are linked with ({kind: business, link}) or an item of this conversation''s price list ({kind: item, item_id}), named in the text as @Name or #Name; one the text does not name is left out.'
+                  description: 'Each a business you are linked with ({kind: business, link}), an item of this conversation''s price list ({kind: item, item_id}) or one of your own services ({kind: service, service_id}), named in the text as @Name (an item or a service also #Name); one the text does not name is left out.'
                   items:
                     type: object
                     additionalProperties: false
@@ -7301,11 +7301,13 @@ paths:
                     properties:
                       kind:
                         type: string
-                        enum: [business, item]
+                        enum: [business, item, service]
                       link:
                         type: string
                         format: uuid
                       item_id:
+                        type: string
+                      service_id:
                         type: string
       responses:
         '201':
@@ -31445,7 +31447,7 @@ components:
       properties:
         kind:
           type: string
-          enum: [business, item]
+          enum: [business, item, service]
         name:
           type: string
         link:
@@ -31458,6 +31460,12 @@ components:
           type: string
         price_kobo:
           type: integer
+        service_id:
+          type: string
+          description: One of the sender's own services
+        minutes:
+          type: integer
+          description: How long the service takes
     LinkReaction:
       type: object
       additionalProperties: false

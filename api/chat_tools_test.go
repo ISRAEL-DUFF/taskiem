@@ -195,3 +195,39 @@ func TestChatToolsFiles(t *testing.T) {
 		t.Fatalf("a photo naming no one: %q", r)
 	}
 }
+
+// A service of our own tagged in a conversation (chat tools): the message
+// carries it with its price and how long it takes, on both sides; one that
+// is not ours is refused.
+func TestServiceMention(t *testing.T) {
+	w := shopWorld(t)
+	seller, buyer, _, _ := linkedPair(t, w.waWorld)
+	verifyPhone(t, w.world, seller, "phone", "business")
+	slug := strings.ToLower(strings.ReplaceAll(tenantOf(t, seller), "-", ""))[:12]
+	seller.must(200, "PUT", "/v1/storefront", map[string]any{"slug": "mill-" + slug, "draft": map[string]any{"name": "The mill"}})
+	svc := seller.must(201, "POST", "/v1/storefront/catalogue/make", map[string]any{"kind": "services"})
+	seller.must(201, "POST", "/v1/tables/"+svc["table_id"].(string)+"/rows", map[string]any{"row": map[string]any{"name": "Rice milling", "price": 2500, "duration_minutes": 30}})
+	seller.must(200, "POST", "/v1/storefront/catalogue/refresh", nil)
+	id := seller.must(200, "GET", "/v1/storefront/services", nil)["items"].([]any)[0].(map[string]any)["id"].(string)
+	link := seller.must(200, "GET", "/v1/link-chats", nil)["conversations"].([]any)[0].(map[string]any)["link"].(string)
+
+	msg := seller.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{
+		"text": "@Rice milling is free this afternoon", "mentions": []any{map[string]any{"kind": "service", "service_id": id}}})["message"].(map[string]any)
+	ms, _ := msg["mentions"].([]any)
+	if len(ms) != 1 {
+		t.Fatalf("mentions: %v", msg)
+	}
+	m := ms[0].(map[string]any)
+	if m["kind"] != "service" || m["name"] != "Rice milling" || m["minutes"] != float64(30) || m["price_kobo"] != float64(250000) {
+		t.Fatalf("the service: %v", m)
+	}
+	w.srv.WaitBackground()
+	bl := buyer.must(200, "GET", "/v1/link-chats", nil)["conversations"].([]any)[0].(map[string]any)["link"].(string)
+	got := buyer.must(200, "GET", "/v1/link-chats/"+bl+"/messages", nil)["messages"].([]any)
+	if theirs := got[len(got)-1].(map[string]any)["mentions"].([]any)[0].(map[string]any); theirs["kind"] != "service" || theirs["minutes"] != float64(30) {
+		t.Fatalf("their copy: %v", theirs)
+	}
+	// Not one of ours.
+	seller.must(400, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{
+		"text": "@Rice milling", "mentions": []any{map[string]any{"kind": "service", "service_id": "nope"}}})
+}
