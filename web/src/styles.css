@@ -1870,11 +1870,6 @@ button.chat-avatar { border: 0; padding: 0; cursor: pointer; }
 /* Instant send (Phase 4): a clock while it is sent; "Not sent" with Retry
    and Delete when it cannot be. */
 .bubble .ticks.pending svg { width: 14px; height: 14px; stroke-width: 2; }
-.chat-failed { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 4px; font-size: 13px; color: var(--danger); }
-.bubble.mine .chat-failed { color: var(--chat-out-danger); }
-.chat-failed .bang { flex: none; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; background: var(--danger); color: var(--panel); font-weight: 700; font-size: 12px; }
-.chat-failed .why { flex: 1 1 160px; min-width: 0; }
-.chat-failed button { min-height: 28px; }
 
 /* The composer (Phase 4): the emoji panel above it, the clip's menu, a drop
    target, the camera. */
@@ -2179,7 +2174,7 @@ fieldset.sf-choices label.row > span, label.row > input[type="checkbox"] + span 
 .bubble .ticks.failed { width: 16px; height: 16px; border-radius: 50%; background: var(--danger); color: var(--panel); font-size: 11px; font-weight: 800; line-height: 1; align-items: center; justify-content: center; }
 .chat-failed { position: absolute; right: calc(100% + 6px); top: 50%; transform: translateY(-50%); display: flex; flex-direction: row; gap: 6px; margin: 0; flex-wrap: nowrap; }
 .chat-failed .fail-act { flex: none; width: 34px; height: 34px; min-height: 34px; padding: 0; border-radius: 50%; display: grid; place-items: center; background: var(--panel); border: 0; box-shadow: 0 1px 3px var(--chat-shadow); color: var(--muted); }
-.chat-failed .fail-act:first-of-type { color: var(--accent-strong, var(--text)); }
+.chat-failed .fail-act:first-of-type { color: var(--text); }
 .chat-failed .fail-act:last-of-type { color: var(--danger); }
 .chat-failed .fail-act svg { width: 18px; height: 18px; }
 @media (prefers-reduced-motion: no-preference) { .chat-failed { animation: chip-pop 0.2s ease-out; transform-origin: right center; } }

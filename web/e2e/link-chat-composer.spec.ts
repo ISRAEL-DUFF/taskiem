@@ -7,6 +7,10 @@ import { axe, describe } from "./a11y";
 test.use({ bypassCSP: true, viewport: { width: 390, height: 844 } });
 
 const H = { "X-Taskiem-Request": "1" };
+const must = <T>(v: T | null | undefined): T => {
+  if (v == null) throw new Error("nothing there");
+  return v;
+};
 const letters = () =>
   String(Date.now()).replace(/\d/g, (d) => "abcdefghij".charAt(Number(d)));
 
@@ -1050,4 +1054,54 @@ test("an emoji put in the box tells the other side we are typing, as typing does
   await pane.getByTestId("emoji-panel").locator(".emoji").first().click();
   await expect.poll(() => told).toBe(1);
   await expect(pane.getByLabel("Message")).not.toHaveValue("");
+});
+
+test("a message that was not sent keeps its two icon buttons on the screen, beside the bubble, on a phone: text and a photo with a caption, light and dark", async ({
+  browser,
+}) => {
+  const { buyer, link } = await linked(browser);
+  await buyer.setViewportSize({ width: 360, height: 740 });
+  await buyer.route(`**/v1/link-chats/${link}/messages`, (route) =>
+    route.request().method() === "POST"
+      ? route.abort("connectionfailed")
+      : route.continue(),
+  );
+  await buyer.goto(`/chat?with=${link}`);
+  const pane = buyer.getByTestId("chat-pane");
+  await pane
+    .getByLabel("Message")
+    .fill("A long message that wraps onto several lines so the bubble is as wide as it can be on a phone");
+  await pane.getByLabel("Message").press("Enter");
+  await pane
+    .getByTestId("chat-file")
+    .setInputFiles({ name: "bags.png", mimeType: "image/png", buffer: PNG });
+  await pane.getByLabel("Message").fill("The new bags");
+  await pane.getByLabel("Message").press("Enter");
+  const failed = pane.getByTestId("chat-failed");
+  await expect(failed).toHaveCount(2);
+  for (const scheme of ["light", "dark"] as const) {
+    await buyer.evaluate((t) => {
+      if (t === "dark") document.documentElement.dataset.theme = "dark";
+      else delete document.documentElement.dataset.theme;
+    }, scheme);
+    await buyer.waitForTimeout(300);
+    for (let i = 0; i < 2; i++) {
+      const row = failed.nth(i);
+      const bubble = row.locator("xpath=ancestor::*[@data-testid='chat-message'][1]");
+      const b = must(await bubble.boundingBox());
+      for (const name of ["Retry", "Delete"]) {
+        const btn = row.getByRole("button", { name });
+        await expect(btn).toBeVisible();
+        const r = must(await btn.boundingBox());
+        expect(r.x, `${name} starts on the screen`).toBeGreaterThanOrEqual(0);
+        expect(r.x + r.width, `${name} is left of the bubble`).toBeLessThanOrEqual(b.x + 0.5);
+        expect(r.width).toBeGreaterThanOrEqual(32);
+      }
+    }
+    await axeBoth(buyer, "failed messages");
+  }
+  await buyer.screenshot({ path: "/tmp/claude-0/-home-user-taskier/ee15d754-4291-5a7a-bc3f-fed0af824ab6/scratchpad/failed-360.png" });
+  expect(
+    await buyer.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1),
+  ).toBe(false);
 });
