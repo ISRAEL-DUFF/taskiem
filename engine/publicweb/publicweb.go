@@ -405,6 +405,13 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request, site Site) {
 	case embed:
 		// The other embedded views arrive with S6.
 		s.page(w, r, http.StatusOK, "embedsetup", pageData{Title: "Coming soon"})
+	case site.Kind == "storefront" && !embed && itemPath.MatchString(path):
+		// An item's page on the home page, /i/<id>.
+		s.serveItem(w, r, site, "", itemPath.FindStringSubmatch(path)[1])
+	case site.Kind == "storefront" && !embed && frontItemPath.MatchString(path):
+		// An item's page on a front, /<front>/i/<id> (fronts F3).
+		m := frontItemPath.FindStringSubmatch(path)
+		s.serveItem(w, r, site, m[1], m[2])
 	case site.Kind == "storefront" && !embed && frontPath.MatchString(path):
 		// A front's page, /<front> (fronts F3).
 		s.serveFront(w, r, site, path[1:])

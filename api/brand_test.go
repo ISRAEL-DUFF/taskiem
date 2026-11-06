@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/israel-duff/taskiem/engine/brand"
 	"github.com/israel-duff/taskiem/engine/forms"
 	"github.com/israel-duff/taskiem/engine/publicweb"
 )
@@ -16,7 +17,7 @@ func TestBrandSettings(t *testing.T) {
 	owner := w.tenant(t, "Adunni Bakes", "owner@adunni.test")
 
 	got := owner.must(200, "GET", "/v1/settings/brand", nil)
-	if got["theme"] != "clean" || got["color"] != "#0b6e4f" || len(got["themes"].([]any)) != 3 {
+	if got["theme"] != "clean" || got["color"] != "#0b6e4f" || len(got["themes"].([]any)) != len(brand.Themes) {
 		t.Fatalf("default: %v", got)
 	}
 

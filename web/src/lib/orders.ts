@@ -285,7 +285,7 @@ export interface ActionForm {
   payOnDelivery: boolean;
   /** The delivery areas as typed: a name and a fee in naira. */
   zones: { name: string; fee: string }[];
-  /** A booking's deposit in per cent; blank is the full price. */
+  /** A booking's or an order's deposit in per cent; blank is the full price. */
   deposit: string;
   /** Whether a customer cancelling a paid booking keeps their deposit back. */
   keepDeposit: boolean;
@@ -359,6 +359,15 @@ export function actionRequest(kind: FormKind, f: ActionForm): ActionRequest {
   const zones = zoneList(f.zones);
   if (f.delivery && zones.length > 0) options.zones = zones;
   if (f.delivery && f.payOnDelivery) options.pay_on_delivery = true;
+  const deposit = Number(f.deposit.trim());
+  if (
+    f.payment !== "none" &&
+    f.deposit.trim() &&
+    Number.isInteger(deposit) &&
+    deposit >= 1 &&
+    deposit <= 99
+  )
+    options.deposit_percent = deposit;
   return {
     enabled: f.enabled,
     label: f.label.trim(),
@@ -383,7 +392,7 @@ export function actionProblem(kind: FormKind, f: ActionForm): string | null {
     if (z) return z;
   }
   if (
-    kind === "booking" &&
+    (kind === "booking" || kind === "order") &&
     f.payment !== "none" &&
     f.deposit.trim() &&
     !/^(100|[1-9][0-9]?)$/.test(f.deposit.trim())

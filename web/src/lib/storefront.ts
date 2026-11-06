@@ -96,6 +96,9 @@ export interface Item {
   price_kobo?: number;
   description?: string;
   photo?: Image;
+  /** The photos after the first, and every photo's media id in order. */
+  gallery?: Image[];
+  photo_ids?: string[];
   available: boolean;
   category?: string;
   /** How many are left, when the catalogue tracks stock. */

@@ -1,6 +1,5 @@
-// The order form's live total and its − and + buttons. It only shows a sum:
-// the server prices the order from the catalogue, and the form works
-// without this script (the quantities are plain number boxes then).
+// An order's live total, deposit and − + buttons: only shown, the server
+// prices the order, and the form works without this script.
 (function () {
   "use strict";
   var form = document.querySelector("form[data-order]");
@@ -21,13 +20,24 @@
       var most = parseInt(inputs[i].getAttribute("max"), 10) || 20;
       if (q > 0 && q <= most && p >= 0) total += q * p;
     }
-    // The delivery area's fee, while delivery is what is chosen.
+    // The area's fee, while delivery is chosen.
     var fee = 0;
     var how = form.querySelector("input[name=fulfilment]:checked");
     var opt = zone && zone.options[zone.selectedIndex];
     if (total > 0 && opt && opt.value && (!form.querySelector("input[name=fulfilment]") || (how && how.value === "delivery"))) {
       fee = parseInt(opt.getAttribute("data-fee"), 10) || 0;
     }
+    // No deposit paying at the door; one is ₦1 or more and less than the
+    // whole (as the server takes it). The button says what is paid now.
+    var later = form.querySelector("input[name=pay]:checked"), off = !!(later && later.value === "on_delivery");
+    var split = form.querySelectorAll(".bag-split"), el = function (x) { return form.querySelector(x); };
+    var pct = parseInt(form.getAttribute("data-deposit-pct"), 10) || 0, due = total + fee, part = Math.floor((due * pct + 99) / 100);
+    var dep = el("[data-deposit]"), bal = el("[data-balance]"), now = el("[data-pay-now]"), lat = el("[data-pay-later]");
+    if (!(pct > 0 && pct < 100 && part >= 100 && part < due)) { off = off || pct > 0; part = due; }
+    for (var s = 0; s < split.length; s++) split[s].hidden = off;
+    if (dep && bal) { dep.textContent = naira(part); bal.textContent = naira(due - part); }
+    if (el("[data-pay]")) el("[data-pay]").textContent = naira(part);
+    if (lat) { lat.hidden = !(later && later.value === "on_delivery"); now.hidden = !lat.hidden; }
     out.textContent = total > 0 ? "Total: " + naira(total + fee) + (fee > 0 ? " with " + naira(fee) + " delivery" : "") : "";
   }
   function step(input, by, label) {
@@ -46,6 +56,7 @@
   }
   for (var i = 0; i < inputs.length; i++) {
     var input = inputs[i];
+    if (input.type === "hidden") continue;
     var name = (form.querySelector('label[for="' + input.id + '"] .line-name') || {}).textContent || "";
     var box = document.createElement("span");
     box.className = "stepper";
@@ -54,8 +65,7 @@
     box.appendChild(input);
     box.appendChild(step(input, 1, "One more " + name));
   }
-  // The map pin: the browser's location, when the customer asks for it
-  // (offered, never required; the server turns it into a maps link).
+  // The map pin: the browser's location, if asked (the server makes it a link).
   var pin = form.querySelector("input[data-pin]");
   if (pin && window.navigator.geolocation) {
     var here = document.createElement("button");
@@ -80,5 +90,13 @@
   }
   form.addEventListener("input", update);
   form.addEventListener("change", update);
+  // Sent once on a slow connection; back on the page frees the button.
+  if ((form.getAttribute("method") || "").toLowerCase() === "post") {
+    var sends = form.querySelectorAll("button[type=submit]");
+    form.addEventListener("submit", function () {
+      setTimeout(function () { for (var i = 0; i < sends.length; i++) sends[i].disabled = true; }, 0);
+    });
+    window.addEventListener("pageshow", function () { for (var i = 0; i < sends.length; i++) sends[i].disabled = false; });
+  }
   update();
 })();

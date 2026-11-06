@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -65,6 +66,25 @@ func TestFrontItemsInPlace(t *testing.T) {
 	it = owner.must(200, "GET", base, nil)["items"].([]any)[0].(map[string]any)
 	if p, _ := it["photo"].(map[string]any); p["800"] == nil || !strings.Contains(p["800"].(string), "/images/") {
 		t.Fatalf("the photo is not on the item: %v", it)
+	}
+	// A second photo joins it; made the main one, then taken out.
+	s, two := owner.rawPost(t, base+"/"+row+"/photo?add=1", "image/jpeg", photoN(t, 1))
+	if s != 200 {
+		t.Fatalf("a second photo: %d %v", s, two)
+	}
+	ids := func() string {
+		return fmt.Sprint(owner.must(200, "GET", base, nil)["items"].([]any)[0].(map[string]any)["photo_ids"])
+	}
+	if got := ids(); got != fmt.Sprint([]any{m["id"], two["id"]}) {
+		t.Fatalf("two photos: %s", got)
+	}
+	owner.must(204, "PUT", base+"/"+row+"/photo/main?media="+two["id"].(string), nil)
+	if got := ids(); got != fmt.Sprint([]any{two["id"], m["id"]}) {
+		t.Fatalf("made the main one: %s", got)
+	}
+	owner.must(204, "DELETE", base+"/"+row+"/photo?media="+two["id"].(string), nil)
+	if got := ids(); got != fmt.Sprint([]any{m["id"]}) {
+		t.Fatalf("taken out: %s", got)
 	}
 	// The copy the page reads follows the changes.
 	for _, f := range owner.must(200, "GET", "/v1/storefront/fronts", nil)["fronts"].([]any) {

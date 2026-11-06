@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="{{.Lang}}">
+<head>
+{{template "meta" .}}{{template "og" .}}</head>
+<body class="sf fx{{if .Ordering}} has-sticky{{end}}">
+{{with .Closed}}{{else}}{{if .Ordering}}<p class="fx-strip">Order online, pay securely.{{if .M.WhatsLink}} We confirm on WhatsApp.{{end}}</p>{{end}}{{end}}
+<header class="fx-top">
+  <a class="fx-link" href="#shop">Shop</a>
+  <a class="fx-name" href="{{if .Home}}{{.Home}}{{else}}#{{end}}">{{.M.Card.Name}}</a>
+  {{if .Ordering}}<a class="fx-link fx-bag" href="{{.Base}}/a/order" data-bag-link>Bag<b class="bag-n" data-bag-n data-bag-show hidden></b></a>{{else}}<span></span>{{end}}
+</header>
+<section class="fx-hero">
+  <div class="fx-copy">
+    {{with .M.Card.Area}}<p class="fx-kicker">{{.}}</p>{{end}}
+    {{$a := accent (or .M.Card.Tagline .M.Card.Name)}}<h1>{{index $a 0}}{{with index $a 1}} <em>{{.}}</em>{{end}}</h1>
+    {{with .M.Card.About}}<p class="fx-lead">{{.}}</p>{{end}}
+    <p class="fx-cta">
+      {{if .HasItems}}<a class="btn btn-primary" href="#shop">Shop the collection</a>{{end}}
+      {{range .Forms}}{{if eq .Kind "booking"}}<a class="fx-under" href="{{$.Base}}/a/{{.Ref}}">{{.Label}}</a>{{end}}{{end}}
+      {{with .M.WhatsLink}}{{if not $.HasItems}}<a class="btn btn-primary" href="{{.}}" rel="noopener">Chat on WhatsApp</a>{{end}}{{end}}
+    </p>
+  </div>
+  <div class="fx-feature">{{template "heropic" .}}</div>
+</section>
+<main class="fx-main">
+{{template "sfnotes" .}}
+{{if .Services}}<section aria-labelledby="services-h"><h2 id="services-h">Fittings and services</h2>
+<ul class="fx-list">{{range .Services}}<li><span><strong>{{.Name}}</strong><em>{{.Length}} · {{.Price}}</em></span><a class="fx-under" href="{{.Href}}" aria-label="Book {{.Name}}">Book</a></li>
+{{end}}</ul></section>{{end}}
+{{if .HasItems}}<div id="shop">
+<div class="fx-shophead"><h2>The collection</h2>{{if gt (len .Sections) 1}}<nav class="fx-tabs" aria-label="Sections">{{range $i, $s := .Sections}}{{if .Title}}<a href="#s{{$i}}">{{.Title}}</a>{{end}}{{end}}</nav>{{end}}</div>
+{{range $i, $s := .Sections}}<section id="s{{$i}}" aria-label="{{if .Title}}{{.Title}}{{else}}Collection{{end}}">
+  {{if .Title}}{{if gt (len $.Sections) 1}}<h3 class="fx-cat">{{.Title}}</h3>{{end}}{{end}}
+  <ul class="fx-grid">{{range .Items}}<li class="fx-piece{{if or (not .Available) .SoldOut}} is-unavailable{{end}}">
+    <a class="fx-img" href="{{if .ID}}{{$.Base}}/i/{{.ID}}{{else}}#{{end}}" tabindex="-1" aria-hidden="true">{{if .Small}}<img src="{{.Small}}" srcset="{{.Small}} 320w, {{.Large}} 800w" sizes="(min-width: 900px) 18vw, 45vw" alt="" loading="lazy" decoding="async">{{else}}{{template "i-photo"}}{{end}}</a>
+    <p class="fx-line"><a class="item-open" href="{{if .ID}}{{$.Base}}/i/{{.ID}}{{else}}#{{end}}">{{.Name}}</a><span>{{.Price}}</span></p>
+    {{range .Options}}{{if eq (optkind .Name) "colour"}}<span class="fx-dots">{{range .Choices}}<i class="sw {{swatch .Name}}" title="{{.Name}}"></i>{{end}}</span>{{end}}{{end}}{{if .Few}}<span class="badge badge-few">Few left</span>{{end}}
+    {{if not .Available}}<p class="item-sub">Unavailable</p>{{else if .SoldOut}}<p class="item-sub">Sold out</p>{{else if and $.Ordering .Orderable}}{{if .Options}}<a class="fx-under" href="{{$.Base}}/i/{{.ID}}">Choose<span class="sr"> {{.Name}}</span></a>{{else}}<form class="fx-buy" data-merge method="get" action="{{$.Base}}/a/order"><input type="hidden" name="step" value="bag"><input type="hidden" name="q.{{.ID}}" value="1"><button class="fx-under" type="submit">Add to bag<span class="sr"> {{.Name}}</span></button></form>{{end}}{{end}}
+  </li>{{end}}</ul>
+</section>{{end}}</div>{{end}}
+{{if .HasItems}}<section class="fx-steps" aria-label="How it works"><div><span>1</span><h3>Choose a piece</h3><p>Add it to your bag.</p></div><div><span>2</span><h3>Send your details</h3><p>Fill in your details and place the order.</p></div><div><span>3</span><h3>We confirm</h3><p>{{.M.Card.Name}} gets in touch to confirm and arrange delivery.</p></div></section>{{end}}
+{{template "sfinfo" .}}
+</main>
+<footer class="foot sf-foot fx-foot">
+<p class="sf-foot-name">{{.M.Card.Name}}</p>
+<nav class="fx-foot-links" aria-label="Links">{{if .HasItems}}<a href="#shop">Shop</a>{{end}}{{range .Forms}}{{if eq .Kind "booking"}}<a href="{{$.Base}}/a/{{.Ref}}">{{.Label}}</a>{{end}}{{end}}{{with .M.WhatsLink}}<a href="{{.}}" rel="noopener">Chat on WhatsApp</a>{{end}}{{with .Phone}}<a href="tel:{{.}}">Call</a>{{end}}</nav>
+<p class="sf-foot-meta">Powered by Taskiem · <a href="/report">Report this page</a></p>
+<p class="safety">Taskiem never asks for card details, PINs or OTPs. {{template "safety"}}</p>
+</footer>
+{{if .Ordering}}<a class="sticky" href="{{.Base}}/a/order" data-bag-link><span data-bag-hide>Checkout</span><span class="sticky-sum" data-bag-show hidden><small><b data-bag-n></b> items</small> <b data-bag-t></b></span><span class="sticky-go"><span data-bag-show hidden>Checkout&nbsp;</span>{{template "i-next"}}</span></a>{{end}}
+</body>
+</html>

@@ -1,0 +1,7 @@
+{{template "fhead" .}}{{template "fbody" .}}
+<h1>Get updates from {{.Business}}</h1>
+{{if .Links}}<div class="panel updates"><p>{{.Business}} can send you updates on your phone: about your orders, requests and bookings. Tap the app you use, then send the message or press Start.</p>
+<p class="update-links">{{range .Links}}<a class="btn btn-{{.App}}" href="{{.URL}}" rel="nofollow">{{.Label}}</a> {{end}}</p>
+<p class="hint">You can stop at any time by sending STOP.</p></div>
+{{else}}<p class="notice" role="status">Updates on WhatsApp and Telegram are not available right now.</p>
+{{end}}{{template "ffoot" .}}
