@@ -79,6 +79,9 @@ func TestExploreBrowse(t *testing.T) {
 	if d["logo"] != true || d["photos"] != float64(3) || d["tagline"] != "Cement and sand, delivered" || d["about"] != "Family-run since 1998." || d["state"] != "none" || d["business"] != dangoteID {
 		t.Errorf("a card: %v", d)
 	}
+	if d["v"] == nil || d["v"] == "" || page["near_more"] != false {
+		t.Errorf("a card's version and paging: %v %v", d["v"], page["near_more"])
+	}
 	c := page["fresh"].([]any)[0].(map[string]any)
 	if c["logo"] != false || c["photos"] != float64(1) { // the product photo that is available
 		t.Errorf("a card with no gallery: %v", c)
@@ -120,6 +123,14 @@ func TestExploreBrowse(t *testing.T) {
 		}
 	}
 
+	// The version changes with the photos (so a changed picture is not served from the cache).
+	before := d["v"]
+	g := dangote.must(200, "GET", "/v1/business-profile", nil)["gallery"].([]any)
+	dangote.must(200, "PUT", "/v1/business-profile/gallery/order", map[string]any{"ids": []any{g[2].(map[string]any)["id"], g[1].(map[string]any)["id"], g[0].(map[string]any)["id"]}})
+	if after := ada.must(200, "GET", "/v1/explore?q=cement", nil)["results"].([]any)[0].(map[string]any)["v"]; after == before || after == "" {
+		t.Errorf("the version did not change with the order: %v -> %v", before, after)
+	}
+
 	// A refused photo is not shown, and not counted.
 	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE storefront_media SET moderation = 'rejected' WHERE id = (SELECT media_id FROM business_gallery WHERE tenant_id = $1 ORDER BY position LIMIT 1)`, dangoteID); err != nil {
 		t.Fatal(err)
@@ -154,5 +165,46 @@ func TestExploreBrowse(t *testing.T) {
 	}
 	if got := names(ada.must(200, "GET", "/v1/explore?section=new", nil)["fresh"]); len(got) != 0 {
 		t.Errorf("the new list: %v", got)
+	}
+}
+
+// Near you and New on Taskiem page: twelve at a time, another page when there
+// are more, and no business twice.
+func TestExplorePaging(t *testing.T) {
+	w := newWAWorld(t)
+	w.srv.LoginBurst = 1000     // fifteen businesses sign up from one address,
+	w.srv.SignupPerAddress = -1 // and the daily limit is off
+	ada := w.tenant(t, "Ada's Kitchen", "ada@kitchen.test")
+	ada.must(200, "PUT", "/v1/business-profile", map[string]any{"name": "", "tagline": "", "area": "Ikeja", "about": ""})
+	for i := range 14 {
+		c := w.tenant(t, "Shop "+string(rune('A'+i))+" Stores", "s"+string(rune('a'+i))+"@paging.test")
+		c.must(200, "PUT", "/v1/link-settings", map[string]any{"findable": true})
+		c.must(200, "PUT", "/v1/business-profile", map[string]any{"name": "", "tagline": "", "area": "Ikeja", "about": ""})
+	}
+	ids := func(cards any) (out []string) {
+		for _, c := range cards.([]any) {
+			out = append(out, c.(map[string]any)["business"].(string))
+		}
+		return out
+	}
+	first := ada.must(200, "GET", "/v1/explore", nil)
+	if len(ids(first["near"])) != 12 || first["near_more"] != true || len(ids(first["fresh"])) != 12 || first["more"] != true {
+		t.Fatalf("the first page: near %d/%v, new %d/%v", len(ids(first["near"])), first["near_more"], len(ids(first["fresh"])), first["more"])
+	}
+	for _, sec := range []struct{ name, key, more string }{{"near", "near", "near_more"}, {"new", "fresh", "more"}} {
+		second := ada.must(200, "GET", "/v1/explore?section="+sec.name+"&offset=12", nil)
+		if got := ids(second[sec.key]); len(got) != 2 || second[sec.more] != false {
+			t.Fatalf("the second page of %s: %v %v", sec.name, got, second[sec.more])
+		}
+		seen := map[string]bool{}
+		for _, id := range append(ids(first[sec.key]), ids(second[sec.key])...) {
+			if seen[id] {
+				t.Errorf("%s: a business listed twice: %s", sec.name, id)
+			}
+			seen[id] = true
+		}
+		if len(seen) != 14 {
+			t.Errorf("%s: %d businesses over two pages, want 14", sec.name, len(seen))
+		}
 	}
 }

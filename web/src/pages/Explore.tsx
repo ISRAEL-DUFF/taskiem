@@ -34,10 +34,12 @@ function Carousel({
   business,
   name,
   count,
+  v,
 }: {
   business: string;
   name: string;
   count: number;
+  v?: string;
 }) {
   const track = useRef<HTMLDivElement>(null);
   const [at, setAt] = useState(0);
@@ -88,7 +90,7 @@ function Carousel({
           >
             {!bad.has(n) && (
               <img
-                src={explorePhoto(business, n)}
+                src={explorePhoto(business, n, v)}
                 alt={`Photo ${n + 1} of ${name}`}
                 loading={n === 0 ? "eager" : "lazy"}
                 draggable={false}
@@ -150,12 +152,13 @@ function Card({
           business={card.business}
           name={card.name}
           count={card.photos}
+          v={card.v}
         />
       )}
       <div className="explore-head">
         <ChatAvatar
           name={card.name}
-          logo={card.logo ? exploreLogo(card.business) : undefined}
+          logo={card.logo ? exploreLogo(card.business, card.v) : undefined}
         />
         <div className="explore-who">
           <strong>{card.name}</strong>
@@ -238,6 +241,7 @@ export function Explore({
   const [error, setError] = useState<unknown>();
   const [more, setMore] = useState(false);
   const act = useAction();
+  const [blindSent, setBlindSent] = useState<string>();
   const [asked, setAsked] = useState<Record<string, BusinessLink | true>>({});
   const typed = q.trim();
 
@@ -304,17 +308,24 @@ export function Explore({
   const blindSend = (shown: string) =>
     void act.run(async () => {
       await post("/v1/links", { phone: typed, role: "both" });
+      setBlindSent(typed);
       onChanged();
     }, `Request sent to ${shown}`);
-  const loadMore = () =>
+  const loadMore = (section: "near" | "new") =>
     void act.run(async () => {
       setMore(true);
       try {
+        const have =
+          (section === "near" ? start?.near : start?.fresh)?.length ?? 0;
         const r = await get<ExploreResult>(
-          `/v1/explore?section=new&offset=${start?.fresh.length ?? 0}`,
+          `/v1/explore?section=${section}&offset=${have}`,
         );
         setStart(
-          (s) => s && { ...s, fresh: [...s.fresh, ...r.fresh], more: r.more },
+          (s) =>
+            s &&
+            (section === "near"
+              ? { ...s, near: [...s.near, ...r.near], near_more: r.near_more }
+              : { ...s, fresh: [...s.fresh, ...r.fresh], more: r.more }),
         );
       } finally {
         setMore(false);
@@ -349,8 +360,10 @@ export function Explore({
               ).catch(() => undefined);
               conv = r?.conversations.find((x) => x.business === c.business);
             }
-            onClose();
-            navigate(conv ? `/chat?with=${conv.link}` : "/chat");
+            // The chat takes the place of Explore in the history.
+            navigate(conv ? `/chat?with=${conv.link}` : "/chat", {
+              replace: true,
+            });
           })()
         }
       />
@@ -414,16 +427,19 @@ export function Explore({
                       {blindRowLine(results.blind.kind)}
                     </span>
                   </div>
-                  {manage && (
-                    <button
-                      type="button"
-                      className="primary small"
-                      disabled={act.busy}
-                      onClick={() => blindSend(results.blind?.shown ?? "")}
-                    >
-                      Send request
-                    </button>
-                  )}
+                  {manage &&
+                    (blindSent === typed ? (
+                      <span className="explore-state">Request sent</span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="primary small"
+                        disabled={act.busy}
+                        onClick={() => blindSend(results.blind?.shown ?? "")}
+                      >
+                        Send request
+                      </button>
+                    ))}
                 </div>
               </li>
             </ul>
@@ -450,6 +466,16 @@ export function Explore({
               <section aria-labelledby="explore-near">
                 <h3 id="explore-near">Near you</h3>
                 <ul className="explore-list">{start.near.map(cardOf)}</ul>
+                {start.near_more && (
+                  <button
+                    type="button"
+                    className="explore-more"
+                    disabled={act.busy || more}
+                    onClick={() => loadMore("near")}
+                  >
+                    Show more
+                  </button>
+                )}
               </section>
             )}
             {start.fresh.length > 0 && (
@@ -461,7 +487,7 @@ export function Explore({
                     type="button"
                     className="explore-more"
                     disabled={act.busy || more}
-                    onClick={loadMore}
+                    onClick={() => loadMore("new")}
                   >
                     Show more
                   </button>

@@ -2257,14 +2257,14 @@ img.chat-avatar { object-fit: cover; background: var(--tint); }
 /* Dots over a photo stay white in both themes. */
 :root { --on-photo: #ffffff; }
 .explore { position: fixed; inset: 0; z-index: 85; display: flex; flex-direction: column; background: var(--bg); }
-.explore-bar { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--panel); border-bottom: 1px solid var(--border); }
+.explore-bar { display: flex; align-items: center; gap: 8px; padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 10px max(12px, env(safe-area-inset-left)); background: var(--panel); border-bottom: 1px solid var(--border); }
 .explore-bar h2 { margin: 0; font-size: 18px; }
 .explore-search { padding: 10px 12px; background: var(--panel); }
 .explore-search .search { display: flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: 999px; background: var(--field); transition: background-color 0.18s ease, box-shadow 0.18s ease; }
 .explore-search .search:focus-within { background: var(--field-focus); box-shadow: var(--ring); }
 .explore-search .search svg { flex: none; width: 18px; height: 18px; color: var(--muted); }
 .explore .explore-search label.search input[type="search"]:focus:not(:disabled):not([aria-invalid]), .explore .explore-search label.search input[type="search"]:hover:not(:disabled):not([aria-invalid]), .explore-search .search input { flex: 1; min-width: 0; background: transparent; box-shadow: none; min-height: 42px; padding: 0; font-size: 15px; }
-.explore-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; padding: 4px 12px 24px; width: 100%; max-width: 720px; margin: 0 auto; }
+.explore-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; padding: 4px 12px calc(24px + env(safe-area-inset-bottom)); width: 100%; max-width: 720px; margin: 0 auto; }
 .explore-body h3 { margin: 18px 4px 8px; font-size: 15px; }
 .explore-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
 .explore-list > .explore-card { margin-top: 0; }

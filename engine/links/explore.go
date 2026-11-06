@@ -33,6 +33,8 @@ type ExploreCard struct {
 	Logo     bool      `json:"logo"`
 	Photos   int       `json:"photos"`
 	State    string    `json:"state"`
+	// Ver changes when its logo or photos do: it keys the pictures' cache.
+	Ver string `json:"v"`
 }
 
 // ExploreTx lists businesses for a section: what a search for q finds
@@ -40,14 +42,14 @@ type ExploreCard struct {
 // (SectionNear) or the newest (SectionNew); the last two page by offset and
 // leave out the businesses already linked with.
 func ExploreTx(ctx context.Context, tx pgx.Tx, section, q string, limit, offset int) ([]ExploreCard, error) {
-	rows, err := tx.Query(ctx, `SELECT business, name, COALESCE(slug, ''), COALESCE(area, ''), COALESCE(tagline, ''), COALESCE(about, ''), has_logo, photos, state
+	rows, err := tx.Query(ctx, `SELECT business, name, COALESCE(slug, ''), COALESCE(area, ''), COALESCE(tagline, ''), COALESCE(about, ''), has_logo, photos, state, ver
 		FROM taskiem_link_explore($1, $2, $3, $4)`, section, q, limit, offset)
 	if err != nil {
 		return nil, pgErr(err)
 	}
 	out, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (ExploreCard, error) {
 		var c ExploreCard
-		return c, r.Scan(&c.Business, &c.Name, &c.Slug, &c.Area, &c.Tagline, &c.About, &c.Logo, &c.Photos, &c.State)
+		return c, r.Scan(&c.Business, &c.Name, &c.Slug, &c.Area, &c.Tagline, &c.About, &c.Logo, &c.Photos, &c.State, &c.Ver)
 	})
 	if out == nil {
 		out = []ExploreCard{}

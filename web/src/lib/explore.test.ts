@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   cardLine,
   cardOffer,
+  exploreLogo,
   explorePhoto,
   slideAt,
   slideNext,
@@ -26,6 +27,12 @@ describe("explore", () => {
   });
   it("names a photo by its place", () => {
     expect(explorePhoto("b1", 2)).toBe("/v1/explore/b1/photos/2?size=800");
+    expect(explorePhoto("b1", 2, "ab12")).toBe(
+      "/v1/explore/b1/photos/2?size=800&v=ab12",
+    );
+    expect(exploreLogo("b1", "ab12")).toBe(
+      "/v1/explore/b1/logo?size=320&v=ab12",
+    );
   });
   it("finds the slide a scroll stopped at, within the photos", () => {
     expect(slideAt(0, 300, 4)).toBe(0);

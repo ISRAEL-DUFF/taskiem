@@ -31,12 +31,27 @@ const explorePage = 12
 
 type exploreOut struct {
 	// Results are what a search found; Near and Fresh are the page's two
-	// sections when nothing is typed. More says Fresh has another page.
-	Results []links.ExploreCard `json:"results"`
-	Near    []links.ExploreCard `json:"near"`
-	Fresh   []links.ExploreCard `json:"fresh"`
-	More    bool                `json:"more"`
-	Blind   *blindOffer         `json:"blind,omitempty"`
+	// sections when nothing is typed, each with whether another page waits
+	// (section=near or section=new, with offset, gives it).
+	Results  []links.ExploreCard `json:"results"`
+	Near     []links.ExploreCard `json:"near"`
+	NearMore bool                `json:"near_more"`
+	Fresh    []links.ExploreCard `json:"fresh"`
+	More     bool                `json:"more"`
+	Blind    *blindOffer         `json:"blind,omitempty"`
+}
+
+// section lists one page of a browse section: one more than a page, to tell
+// whether there is another.
+func (s *Server) exploreSection(r *http.Request, tx pgx.Tx, section string, offset int) ([]links.ExploreCard, bool, error) {
+	cards, err := links.ExploreTx(r.Context(), tx, section, "", explorePage+1, offset)
+	if err != nil {
+		return nil, false, err
+	}
+	if len(cards) > explorePage {
+		return cards[:explorePage], true, nil
+	}
+	return cards, false, nil
 }
 
 func (s *Server) explore(w http.ResponseWriter, r *http.Request) {
@@ -61,19 +76,14 @@ func (s *Server) explore(w http.ResponseWriter, r *http.Request) {
 		case q != "":
 			out.Results, err = links.ExploreTx(r.Context(), tx, links.SectionSearch, q, 20, 0)
 		case section == links.SectionNew:
-			// One more than a page tells whether there is another.
-			out.Fresh, err = links.ExploreTx(r.Context(), tx, links.SectionNew, "", explorePage+1, offset)
-			if len(out.Fresh) > explorePage {
-				out.Fresh, out.More = out.Fresh[:explorePage], true
-			}
+			out.Fresh, out.More, err = s.exploreSection(r, tx, links.SectionNew, offset)
+		case section == links.SectionNear:
+			out.Near, out.NearMore, err = s.exploreSection(r, tx, links.SectionNear, offset)
 		default:
-			if out.Near, err = links.ExploreTx(r.Context(), tx, links.SectionNear, "", explorePage, 0); err != nil {
+			if out.Near, out.NearMore, err = s.exploreSection(r, tx, links.SectionNear, 0); err != nil {
 				return err
 			}
-			out.Fresh, err = links.ExploreTx(r.Context(), tx, links.SectionNew, "", explorePage+1, 0)
-			if len(out.Fresh) > explorePage {
-				out.Fresh, out.More = out.Fresh[:explorePage], true
-			}
+			out.Fresh, out.More, err = s.exploreSection(r, tx, links.SectionNew, 0)
 		}
 		return err
 	}); err != nil {

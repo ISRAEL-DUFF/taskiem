@@ -3,6 +3,7 @@ import {
   Link,
   useNavigate,
   useParams,
+  useLocation,
   useSearchParams,
 } from "react-router-dom";
 import { del, get, getBlob, post, put, whenOff } from "../api";
@@ -258,6 +259,15 @@ export function ChatPage() {
   const manage = can("link.manage") && linksOn;
   const { view, act, answer } = useLinks();
   const [params, setParams] = useSearchParams();
+  // Explore is a step in the browser history (a state of this same address),
+  // so the phone's Back closes it, as it closes WhatsApp's.
+  const here = useLocation();
+  const navigate = useNavigate();
+  const loc = useRef(here);
+  loc.current = here;
+  const go = useRef(navigate);
+  go.current = navigate;
+  const exploring = (here.state as { explore?: boolean } | null)?.explore === true;
   const convs = useLoad(
     () =>
       linksOn
@@ -377,7 +387,6 @@ export function ChatPage() {
   const searchBox = useRef<HTMLInputElement>(null);
   const [keysOpen, setKeysOpen] = useState(false);
   const [hint, setHint] = useState("");
-  const [exploring, setExploring] = useState(false);
   const order = ["taskiem", ...listed.map((c) => c.link)];
   const keys = useRef({ order, openID: openID ?? undefined, setParams });
   keys.current = { order, openID: openID ?? undefined, setParams };
@@ -394,8 +403,9 @@ export function ChatPage() {
       );
     startNew.current = () => {
       // Finding a business has a screen of its own (Explore).
-      keys.current.setParams({});
-      setExploring(true);
+      go.current(`${loc.current.pathname}${loc.current.search}`, {
+        state: { explore: true },
+      });
     };
     const onKey = (e: KeyboardEvent) => {
       const k = keys.current;
@@ -405,7 +415,7 @@ export function ChatPage() {
         if (e.defaultPrevented || !k.openID) return;
         if (
           document.querySelector(
-            '[data-testid="chat-more"], [data-testid="chat-recording"], .chat-menu, .attach-menu, .chat-info, .modal, .mention-list, .emoji-panel',
+            '[data-testid="chat-more"], [data-testid="chat-recording"], .chat-menu, .attach-menu, .chat-info, .modal, .mention-list, .emoji-panel, .explore',
           )
         )
           return;
@@ -421,7 +431,7 @@ export function ChatPage() {
       }
       // Not under an open menu, sheet or panel: the letters are theirs.
       const covered = !!document.querySelector(
-        '[data-testid="chat-more"], [data-testid="chat-recording"], .chat-menu, .attach-menu, .chat-info, .modal, .mention-list, .emoji-panel',
+        '[data-testid="chat-more"], [data-testid="chat-recording"], .chat-menu, .attach-menu, .chat-info, .modal, .mention-list, .emoji-panel, .explore',
       );
       const what = shortcutOf(e, covered || isTyping(document.activeElement));
       if (!what || e.defaultPrevented) return;
@@ -942,7 +952,7 @@ export function ChatPage() {
               links={view.data?.links ?? []}
               convs={all}
               manage={manage}
-              onClose={() => setExploring(false)}
+              onClose={() => go.current(-1)}
               onChanged={() => view.reload()}
             />
           )}

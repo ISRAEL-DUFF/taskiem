@@ -257,3 +257,86 @@ test("Explore on a phone fits the screen: nothing scrolls sideways, the photos s
   });
   await axeBoth(buyer, "Explore on a phone");
 });
+
+test("with Explore open over a conversation, the keys and Esc belong to Explore, not to the chat behind it; the phone's Back closes it", async ({
+  browser,
+}) => {
+  const { seller, buyer, name } = await twoBusinesses(browser);
+  // A chat to have open behind it: the buyer asks, the seller accepts.
+  const cards = (await (
+    await buyer.request.get("/v1/explore", { headers: H })
+  ).json()) as {
+    fresh: { business: string; name: string }[];
+  };
+  const sellerId = cards.fresh.find((c) => c.name === name)?.business;
+  expect(
+    (
+      await buyer.request.post("/v1/links", {
+        headers: H,
+        data: { business: sellerId, role: "both" },
+      })
+    ).ok(),
+  ).toBe(true);
+  const asked = (await (
+    await seller.request.get("/v1/links", { headers: H })
+  ).json()) as { links: { id: string }[] };
+  expect(
+    (
+      await seller.request.post(`/v1/links/${asked.links[0]?.id}/accept`, {
+        headers: H,
+      })
+    ).ok(),
+  ).toBe(true);
+  const link = (
+    (await (
+      await buyer.request.get("/v1/link-chats", { headers: H })
+    ).json()) as { conversations: { link: string }[] }
+  ).conversations[0]?.link;
+  const here = new RegExp(`with=${link}`);
+
+  await buyer.goto(`/chat?with=${link}`);
+  await expect(buyer.getByTestId("chat-pane")).toBeVisible();
+  await buyer.getByTestId("new-chat").click();
+  const ex = buyer.getByTestId("explore");
+  await expect(ex).toBeVisible();
+  await expect(buyer).toHaveURL(here); // the chat stays open behind it
+
+  // The chat page's shortcuts do nothing behind Explore.
+  await ex.getByTestId("explore-back").focus();
+  for (const key of ["j", "k", "n", "/", "?"]) await buyer.keyboard.press(key);
+  await expect(buyer).toHaveURL(here);
+  await expect(ex).toBeVisible();
+  await expect(
+    buyer.getByRole("dialog", { name: /keyboard|shortcuts/i }),
+  ).toHaveCount(0);
+
+  // Esc closes Explore only: the conversation is still open.
+  await buyer.keyboard.press("Escape");
+  await expect(ex).toHaveCount(0);
+  await expect(buyer).toHaveURL(here);
+  await expect(buyer.getByTestId("chat-pane")).toBeVisible();
+
+  // The phone's Back closes it too, and stays on the chat.
+  await buyer.getByTestId("new-chat").click();
+  await expect(ex).toBeVisible();
+  await buyer.goBack();
+  await expect(ex).toHaveCount(0);
+  await expect(buyer).toHaveURL(here);
+  await expect(buyer.getByTestId("chat-pane")).toBeVisible();
+});
+
+test("a request to a phone number from Explore says it was sent, and does not offer to send it again", async ({
+  browser,
+}) => {
+  const { buyer } = await twoBusinesses(browser);
+  await buyer.goto("/chat");
+  await buyer.getByTestId("new-chat").click();
+  const ex = buyer.getByTestId("explore");
+  await ex.getByTestId("explore-search").fill("0803 123 4567");
+  const blind = ex.getByTestId("explore-blind");
+  await blind.getByRole("button", { name: "Send request" }).click();
+  await expect(blind.getByText("Request sent")).toBeVisible();
+  await expect(blind.getByRole("button", { name: "Send request" })).toHaveCount(
+    0,
+  );
+});

@@ -14,26 +14,30 @@ export interface ExploreCard {
   /** How many photos it shows, at most eight. */
   photos: number;
   state: LinkState | "none";
+  /** Changes when its logo or photos do (keys the pictures' cache). */
+  v?: string;
 }
 
 export interface ExploreResult {
   results: ExploreCard[];
   near: ExploreCard[];
+  near_more: boolean;
   fresh: ExploreCard[];
   more: boolean;
   blind?: BlindOffer;
 }
 
-/** A photo a business shows, through the API (the app's content policy allows images from its own origin only). */
+/** A photo a business shows, through the API (the app's content policy allows images from its own origin only). `v` is the card's version: a changed picture is asked for again. */
 export const explorePhoto = (
   business: string,
   n: number,
+  v?: string,
   size: "320" | "800" = "800",
-) => `/v1/explore/${business}/photos/${n}?size=${size}`;
+) => `/v1/explore/${business}/photos/${n}?size=${size}${v ? `&v=${v}` : ""}`;
 
 /** A business's logo through the API. */
-export const exploreLogo = (business: string) =>
-  `/v1/explore/${business}/logo?size=320`;
+export const exploreLogo = (business: string, v?: string) =>
+  `/v1/explore/${business}/logo?size=320${v ? `&v=${v}` : ""}`;
 
 /** What a card offers, from our link with the business. */
 export type CardAction = "connect" | "requested" | "message" | "asked" | null;

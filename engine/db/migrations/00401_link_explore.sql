@@ -55,6 +55,17 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
 $$;
 -- +goose StatementEnd
 
+-- A short tag that changes when a business's logo or photos do: it keys the
+-- pictures' cache in the browser (a photo is addressed by its place, and its
+-- place changes when the owner reorders or removes one).
+-- +goose StatementBegin
+CREATE FUNCTION taskiem_link_explore_ver(p_business uuid) RETURNS text
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  SELECT left(md5(COALESCE((SELECT string_agg(l.urls::text, '|' ORDER BY l.n) FROM taskiem_link_photo_list(p_business) l), '')
+                  || '#' || COALESCE(taskiem_link_explore_logo(p_business)::text, '')), 8)
+$$;
+-- +goose StatementEnd
+
 -- Businesses to browse. p_section: 'search' (what a search for p_query finds,
 -- as taskiem_link_search does, at most 20), 'near' (findable businesses in our
 -- own area, by name) or 'new' (the newest findable ones). 'near' and 'new'
@@ -63,7 +74,7 @@ $$;
 -- as variables.
 -- +goose StatementBegin
 CREATE FUNCTION taskiem_link_explore(p_section text, p_query text, p_limit int, p_offset int)
-RETURNS TABLE (business uuid, name text, slug text, area text, tagline text, about text, has_logo boolean, photos int, state text)
+RETURNS TABLE (business uuid, name text, slug text, area text, tagline text, about text, has_logo boolean, photos int, state text, ver text)
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
   v_me uuid := taskiem_link_self();
@@ -76,7 +87,8 @@ BEGIN
     SELECT s.business, s.name, s.slug, s.area, s.tagline, bp.about,
            EXISTS (SELECT 1 FROM business_profile b2 JOIN storefront_media m ON m.id = b2.logo_media AND m.tenant_id = b2.tenant_id AND m.moderation <> 'rejected' WHERE b2.tenant_id = s.business),
            (SELECT count(*)::int FROM taskiem_link_photo_list(s.business)),
-           s.state
+           s.state,
+           taskiem_link_explore_ver(s.business)
       FROM taskiem_link_search(p_query, v_lim) s
       LEFT JOIN business_profile bp ON bp.tenant_id = s.business;
     RETURN;
@@ -108,7 +120,8 @@ BEGIN
   SELECT c.biz, c.shown_name, c.shown_slug, c.shown_area, c.shown_tagline, c.shown_about,
          EXISTS (SELECT 1 FROM business_profile b2 JOIN storefront_media m ON m.id = b2.logo_media AND m.tenant_id = b2.tenant_id AND m.moderation <> 'rejected' WHERE b2.tenant_id = c.biz),
          (SELECT count(*)::int FROM taskiem_link_photo_list(c.biz)),
-         COALESCE((SELECT taskiem_link_view(l, v_me) FROM business_links l WHERE l.a_tenant = LEAST(v_me, c.biz) AND l.b_tenant = GREATEST(v_me, c.biz)), 'none')
+         COALESCE((SELECT taskiem_link_view(l, v_me) FROM business_links l WHERE l.a_tenant = LEAST(v_me, c.biz) AND l.b_tenant = GREATEST(v_me, c.biz)), 'none'),
+         taskiem_link_explore_ver(c.biz)
     FROM cand c
    WHERE p_section = 'new' OR (v_area IS NOT NULL AND lower(c.shown_area) = v_area)
    ORDER BY CASE WHEN p_section = 'near' THEN c.shown_name END, c.made DESC, c.biz
@@ -121,7 +134,7 @@ $$;
 DO $$
 DECLARE f text;
 BEGIN
-  FOREACH f IN ARRAY ARRAY['taskiem_link_photo_list(uuid)', 'taskiem_link_explore_logo(uuid)', 'taskiem_link_explore(text, text, int, int)'] LOOP
+  FOREACH f IN ARRAY ARRAY['taskiem_link_photo_list(uuid)', 'taskiem_link_explore_logo(uuid)', 'taskiem_link_explore_ver(uuid)', 'taskiem_link_explore(text, text, int, int)'] LOOP
     EXECUTE format('ALTER FUNCTION %s OWNER TO taskiem_dispatch', f);
     EXECUTE format('REVOKE EXECUTE ON FUNCTION %s FROM PUBLIC', f);
   END LOOP;
@@ -133,6 +146,7 @@ END $$;
 
 -- +goose Down
 DROP FUNCTION taskiem_link_explore(text, text, int, int);
+DROP FUNCTION taskiem_link_explore_ver(uuid);
 DROP FUNCTION taskiem_link_explore_logo(uuid);
 DROP FUNCTION taskiem_link_photo_list(uuid);
 REVOKE SELECT (created_at) ON business_gallery FROM taskiem_dispatch;

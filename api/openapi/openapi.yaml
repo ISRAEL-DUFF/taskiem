@@ -8591,7 +8591,7 @@ paths:
       tags:
       - Links
       summary: Businesses to browse
-      description: With q, what a search finds (at most 20) and, for a phone number, the one row that sends a request. Without it, two sections, Near you (findable businesses in our own area) and New on Taskiem (the newest, a page of 12 and more when there is another; section=new&offset= gives the next page). Only businesses that chose to be found are listed, each with its profile, whether it has a logo and how many photos it shows (at most 8). Businesses already linked with are left out of the two sections.
+      description: With q, what a search finds (at most 20) and, for a phone number, the one row that sends a request. Without it, two sections, Near you (findable businesses in our own area) and New on Taskiem (the newest, a page of 12 and more when there is another; section=new or section=near with offset= gives the next page of that section, and near_more says Near you has another). Only businesses that chose to be found are listed, each with its profile, whether it has a logo and how many photos it shows (at most 8). Businesses already linked with are left out of the two sections.
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -8607,7 +8607,7 @@ paths:
         required: false
         schema:
           type: string
-          enum: [new]
+          enum: [new, near]
       - name: offset
         in: query
         required: false
@@ -8648,6 +8648,12 @@ paths:
         schema:
           type: string
           enum: ['320', '800', '2000']
+      - name: v
+        in: query
+        required: false
+        schema:
+          type: string
+        description: The card's v, only to key the browser's cache
       responses:
         '200':
           description: The image
@@ -8697,6 +8703,12 @@ paths:
         schema:
           type: string
           enum: ['320', '800', '2000']
+      - name: v
+        in: query
+        required: false
+        schema:
+          type: string
+        description: The card's v, only to key the browser's cache
       responses:
         '200':
           description: The image
@@ -32934,7 +32946,7 @@ components:
     ExploreCard:
       type: object
       additionalProperties: false
-      required: [business, name, logo, photos, state]
+      required: [business, name, logo, photos, state, v]
       properties:
         business:
           type: string
@@ -32958,10 +32970,13 @@ components:
         state:
           type: string
           description: Our link with it, as in a search (none when there is none)
+        v:
+          type: string
+          description: Changes when its logo or photos do; send it as v on the picture requests so a changed picture is not served from the browser's cache
     ExploreResult:
       type: object
       additionalProperties: false
-      required: [results, near, fresh, more]
+      required: [results, near, near_more, fresh, more]
       properties:
         results:
           type: array
@@ -32975,6 +32990,8 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ExploreCard'
+        near_more:
+          type: boolean
         more:
           type: boolean
         blind:
