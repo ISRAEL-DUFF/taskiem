@@ -71,7 +71,7 @@ export function reactionWords(r: Reaction): string {
 export interface Quote {
   pair_id: string;
   mine: boolean;
-  kind: "text" | "card";
+  kind: "text" | "card" | "diary";
   body?: string;
   card?: DocCard;
   attachment?: Attachment;
@@ -98,7 +98,8 @@ export interface LinkMessage {
   id: string;
   link: string;
   mine: boolean;
-  kind: "text" | "card";
+  /** diary: a change we made with a chat tool, on our side only. */
+  kind: "text" | "card" | "diary";
   body?: string;
   sender_name?: string;
   card?: DocCard;
@@ -222,6 +223,7 @@ export function previewLine(
   other: string,
 ): string {
   if (m.kind === "card" && m.card) return cardLine(m.card, m.mine, other);
+  if (m.kind === "diary") return `✓ ${m.body ?? ""}`;
   const words = m.attachment
     ? [attachmentLabel(m.attachment), m.body].filter(Boolean).join(": ")
     : (m.body ?? "");

@@ -66,6 +66,22 @@ export function usePresence(
   return { mounted, leaving };
 }
 
+/** A save, done: the tick draws itself, with a light buzz. */
+export function SavedTick({ words = "Saved" }: { words?: string }) {
+  useEffect(() => {
+    if (!reducedMotion()) navigator.vibrate?.(12);
+  }, []);
+  return (
+    <div className="tk-saved" role="status">
+      <svg viewBox="0 0 52 52" aria-hidden="true" className="tk-tick">
+        <circle cx="26" cy="26" r="24" />
+        <path d="M15 27l7 7 15-16" style={{ ["--len" as string]: 34 }} />
+      </svg>
+      <span>{words}</span>
+    </div>
+  );
+}
+
 /** A small word in a round pill: "4 left", "Accepted". */
 export function Pill({
   tone = "plain",
@@ -203,6 +219,8 @@ export function Sheet({
   onClose,
   footer,
   testid,
+  onBack,
+  shut = false,
   children,
 }: {
   title: string;
@@ -212,6 +230,10 @@ export function Sheet({
   onClose: () => void;
   footer?: ReactNode;
   testid?: string;
+  /** A step back inside the sheet (from a form to its list). */
+  onBack?: () => void;
+  /** Closes it, with its motion (after a save). */
+  shut?: boolean;
   children: ReactNode;
 }) {
   const ref = useRef<HTMLElement>(null);
@@ -229,6 +251,9 @@ export function Sheet({
     window.setTimeout(onClose, 260);
   };
   useFocusTrap(ref, !docked, close);
+  useEffect(() => {
+    if (shut) close();
+  }, [shut]);
   const drag = useSheetDrag(ref, onClose);
   // On a computer the page makes room for the panel beside it.
   useEffect(() => {
@@ -292,6 +317,11 @@ export function Sheet({
         <div className="tk-sheet-grab" aria-hidden="true" {...drag} />
         <div ref={body} className="tk-sheet-body">
           <div className="tk-sheet-head">
+            {onBack && (
+              <button type="button" className="tk-round tk-back" aria-label="Back" onClick={onBack}>
+                <Icon name="back" />
+              </button>
+            )}
             <h2 id={id}>
               {title}
               {count !== undefined && (

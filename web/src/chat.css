@@ -139,3 +139,13 @@
 /* A run of diary lines folded into one. */
 .tk-diary-more { background: none; border: 0; box-shadow: none; padding: 0 0 0 6px; min-height: 0; font: inherit; font-size: 12px; font-weight: 600; color: var(--tint-text); cursor: pointer; text-decoration: underline; }
 .tk-diary-more:hover:not(:disabled) { background: none; }
+
+/* The same with the theme following the system, when it is dark. */
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] .composer-tools { color: var(--brand-dark); }
+  :root[data-theme="system"] .pick-icon.soft { color: var(--brand-dark); }
+  :root[data-theme="system"] .pick-enter { color: var(--brand-dark); }
+  :root[data-theme="system"] .tk-tools-recent button { color: var(--brand-dark); }
+  :root[data-theme="system"] .tk-progress-bar span.done { background: var(--brand-dark); }
+  :root[data-theme="system"] .tk-chatcard-actions .button.small:not(.primary), :root[data-theme="system"] .tk-chatcard-actions button.small:not(.primary) { color: var(--text); }
+}

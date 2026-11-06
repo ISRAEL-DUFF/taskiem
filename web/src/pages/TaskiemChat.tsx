@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DiaryLine } from "../kit";
 import { useChatTools } from "../lib/useChatTools";
 import { useThread } from "../lib/useThread";
 import { ThreadJump } from "./ThreadParts";
@@ -99,6 +100,8 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
     draftKey: "taskiem",
     rules: TASKIEM_FILES,
     tools: chatTools,
+    diaryWhere: "taskiem",
+    onDiary: (line) => setMessages((cur) => mergeTaskiem(cur ?? [], [line as TaskiemMessage])),
     sources: {
       "@": (convs.data ?? [])
         .filter((x) => x.state === "active")
@@ -368,6 +371,21 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
           </>
         }
         render={(m, { first }) => {
+          // A change made with a chat tool: a line, not a bubble.
+          if (m.kind === "diary")
+            return (
+              <DiaryLine
+                msg={m.id}
+                fresh={Date.now() - Date.parse(m.created_at) < 60_000}
+                when={
+                  <time dateTime={m.created_at} title={fmtTime(m.created_at)}>
+                    You, {clock(m.created_at)}
+                  </time>
+                }
+              >
+                {m.text}
+              </DiaryLine>
+            );
           const choice = pressed.get(m.id);
           const pressable = m.id === pressableId;
           // The time sits in the corner of the last line when there are no

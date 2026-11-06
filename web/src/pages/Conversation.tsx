@@ -811,7 +811,8 @@ function CardFrame({
 }
 
 /** Diary lines (chat-tools.md §3): changes we made ourselves, told as
- * lines; several made close together are one line that unfolds. */
+ * lines; several made close together are one line, the newest, under
+ * which the earlier ones unfold. */
 function DiaryRun({
   run,
   other,
@@ -823,15 +824,16 @@ function DiaryRun({
   fresh: (m: LinkMessage) => boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const lead = run[0];
-  if (!lead?.card) return null;
-  const rest = run.slice(1);
+  // The newest change shows; the ones before it fold under it.
+  const lead = run[run.length - 1];
+  if (!lead) return null;
+  const rest = run.slice(0, -1);
   const line = (m: LinkMessage, more?: ReactNode) =>
-    m.card && (
+    (m.card || m.kind === "diary") && (
       <DiaryLine
         key={m.id}
         msg={m.id}
-        to={cardHref(m.card)}
+        to={m.card ? cardHref(m.card) : undefined}
         fresh={fresh(m)}
         more={more}
         when={
@@ -840,14 +842,15 @@ function DiaryRun({
           </time>
         }
       >
-        {cardLine(m.card, true, other)}
-        {cardSub(m.card) && (
+        {m.card ? cardLine(m.card, true, other) : m.body}
+        {m.card && cardSub(m.card) && (
           <span className="tk-diary-sub"> {cardSub(m.card)}</span>
         )}
       </DiaryLine>
     );
   return (
     <>
+      {open && rest.map((m) => line(m))}
       {line(
         lead,
         rest.length > 0 && (
@@ -859,11 +862,10 @@ function DiaryRun({
           >
             {open
               ? "Fold"
-              : `and ${rest.length} more ${rest.length === 1 ? "change" : "changes"}`}
+              : `and ${rest.length} earlier ${rest.length === 1 ? "change" : "changes"}`}
           </button>
         ),
       )}
-      {open && rest.map((m) => line(m))}
     </>
   );
 }
@@ -931,6 +933,8 @@ export function ConversationPane({
   const typedAt = useRef(0);
   const [error, setError] = useState<unknown>();
   const chatTools = useChatTools();
+  // A diary line kept: what is newer is pulled in (set once pull exists).
+  const afterDiary = useRef<() => void>(() => undefined);
   const items = useLoad(
     () =>
       get<{ items: PriceItem[] }>(`/v1/link-chats/${conv.link}/items`).then(
@@ -971,6 +975,8 @@ export function ConversationPane({
     closes: [infoOpen, !!forwarding],
     grouped: chatTools ? { taskiem: true } : undefined,
     tools: chatTools,
+    diaryWhere: conv.link,
+    onDiary: () => afterDiary.current(),
     // We are typing: the other side's typing line, told at most every 3 s.
     onType: (v) => {
       // "/pro" opens the tools and "@Taskiem" asks Taskiem: neither reaches
@@ -1048,6 +1054,8 @@ export function ConversationPane({
     },
     [path, markRead],
   );
+  afterDiary.current = () => void pull(last).catch(setError);
+
   // Open at the newest page (the first unread is marked), or, from a
   // search result or a quote, at that message.
   const openNewest = useCallback(async () => {
@@ -1323,7 +1331,7 @@ export function ConversationPane({
     const member = new Set<string>();
     let run: LinkMessage[] | undefined;
     for (const m of shown ?? []) {
-      const diary = chatTools && !!m.card && isDiary(m.card, m.mine);
+      const diary = m.kind === "diary" || (chatTools && !!m.card && isDiary(m.card, m.mine));
       const last = run?.[run.length - 1];
       if (
         diary &&

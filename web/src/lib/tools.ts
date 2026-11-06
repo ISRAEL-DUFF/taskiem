@@ -28,6 +28,8 @@ export interface ToolRow {
   href: string;
   /** For the chips: which it is in ("low", "hidden", "new"). */
   tags: string[];
+  /** What it is, for its form (a stock item, an order, a table…). */
+  data?: unknown;
 }
 
 export interface Tool {
@@ -74,6 +76,7 @@ function stockRows(data: unknown): ToolRow[] {
     pill: stockPill(it),
     href: "/storefront/stock",
     tags: [...(it.low ? ["low"] : []), ...(!it.available ? ["hidden"] : [])],
+    data: it,
   }));
 }
 
@@ -132,6 +135,7 @@ export const TOOLS: Tool[] = [
         pill: s.available ? undefined : { text: "Hidden", tone: "plain" },
         href: "/storefront/bookings",
         tags: s.available ? [] : ["hidden"],
+        data: s,
       })),
     line: (r) => count(r.length, "service"),
     more: "Open services",
@@ -169,6 +173,7 @@ export const TOOLS: Tool[] = [
         sub: `${count(l.items.length, "item")} · ${l.links.length > 0 ? `shared with ${count(l.links.length, "business", "businesses")}` : "not shared"}`,
         href: "/storefront/price-lists",
         tags: l.links.length > 0 ? ["shared"] : [],
+        data: l,
       })),
     line: (r) => `${tagged(r, "shared")} shared`,
     more: "Open price lists",
@@ -197,6 +202,7 @@ export const TOOLS: Tool[] = [
           },
           href: `/trade-orders/${encodeURIComponent(o.id)}`,
           tags: o.status === "received" ? ["new"] : [],
+          data: o,
         }),
       ),
     line: () => "From businesses",
@@ -222,6 +228,7 @@ export const TOOLS: Tool[] = [
           t.row_count !== undefined ? count(t.row_count, "row") : t.description,
         href: `/tables/${encodeURIComponent(t.id)}`,
         tags: [],
+        data: t,
       })),
     line: (r) => count(r.length, "table"),
     more: "Open tables",

@@ -148,7 +148,7 @@ for (const [size, viewport] of [
 
     // The sheet: its list, its chips, its search; Esc closes it and only it.
     const sheet = buyer.getByRole("dialog", { name: /Products/ });
-    await expect(sheet.getByRole("link", { name: /Rice, 25kg bag/ })).toContainText("4 left");
+    await expect(sheet.getByRole("button", { name: /Rice, 25kg bag/ })).toContainText("4 left");
     await axeBoth(buyer, "a tool's sheet");
     if (viewport.width >= 1200) {
       // Beside the chat, not over it: the chat can still be used.
@@ -219,13 +219,14 @@ test("our own changes are diary lines; theirs are cards with their progress", as
   // Two changes made together are one line, which unfolds.
   const diary = pane.getByTestId("chat-diary");
   await expect(diary).toHaveCount(1);
-  await expect(diary).toContainText("You said it paid invoice INV-0042");
-  await expect(diary).toHaveAttribute("data-msg", "m2");
+  // The newest shows; the earlier one folds under it.
+  await expect(diary).toContainText("AD-1");
+  await expect(diary).toHaveAttribute("data-msg", "m3");
   // Lines already there when it opens do not land again.
   await expect(diary.locator(".tk-land")).toHaveCount(0);
-  await diary.getByRole("button", { name: "and 1 more change" }).click();
+  await diary.getByRole("button", { name: "and 1 earlier change" }).click();
   await expect(diary).toHaveCount(2);
-  await expect(diary.nth(1)).toContainText("AD-1");
+  await expect(diary.first()).toContainText("You said it paid invoice INV-0042");
   await expect(pane.getByTestId("chat-card")).toHaveCount(1);
   await axeBoth(buyer, "a card and a diary line");
 });
