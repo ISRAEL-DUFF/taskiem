@@ -5,6 +5,7 @@ import { ApiError } from "./api";
 import { Icon } from "./icons";
 import { redact } from "./lib/timeline";
 import { whenWords } from "./lib/time";
+import { useSheetDrag } from "./lib/sheetDrag";
 
 /** Loads data, reloads on demand, and optionally polls while `poll` is true. */
 export function useLoad<T>(load: () => Promise<T>, deps: unknown[], poll = false): { data: T | undefined; error: unknown; reload: () => void } {
@@ -151,9 +152,11 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
   const id = useId();
   // A modal opened from inside this one is on top and owns the keys.
   useFocusTrap(ref, true, onClose, () => !ref.current?.querySelector(".modal"));
+  const drag = useSheetDrag(ref, onClose);
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal" role="dialog" aria-modal="true" aria-labelledby={id} tabIndex={-1} ref={ref}>
+        <div className="modal-grab" aria-hidden="true" {...drag} />
         <h2 id={id} style={{ marginTop: 0 }}>
           {title}
         </h2>

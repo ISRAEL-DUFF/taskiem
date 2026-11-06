@@ -209,6 +209,9 @@ type chat struct {
 	// in another language, by its words or the model's routing, still
 	// finds it (R6).
 	letGo *chatFound
+	// tools is the business's chat tools switch (chat_tools.go), and
+	// toTaskiem that this message called Taskiem with "@Taskiem".
+	tools, toTaskiem bool
 }
 
 // t is a message in the conversation's language.
@@ -443,6 +446,10 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	if err := s.loadSession(ctx, c); err != nil {
 		return err
 	}
+	// Chat tools: the switch, and "@Taskiem" taken off (chat_tools.go).
+	if err := s.chatToolsRead(ctx, c); err != nil {
+		return err
+	}
 	// A template a new business was offered (chat_signup.go).
 	if id, ok := strings.CutPrefix(in.Reply, signupTplPrefix); ok {
 		return s.chatTemplateBuild(ctx, c, id)
@@ -464,6 +471,15 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 		}
 		if marked && strings.Contains(caption, "@") {
 			return s.waDirectFile(ctx, c, caption)
+		}
+		// With chat tools, a caption naming linked businesses is for them.
+		if !marked {
+			if to, err := s.toolsFileTo(ctx, c, in.Text); err != nil || to {
+				if err != nil {
+					return err
+				}
+				return s.waDirectFile(ctx, c, strings.TrimSpace(in.Text))
+			}
 		}
 	}
 	// A completed WhatsApp form carries its flow token.
@@ -676,6 +692,11 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	// "..." first: a message straight to the linked businesses it
 	// mentions (chat_direct.go), read by no command and no model.
 	if done, err := s.waDirect(ctx, c); done || err != nil {
+		return err
+	}
+	// With chat tools, a message naming linked businesses is for them,
+	// unless it calls Taskiem (chat_tools.go).
+	if done, err := s.toolsDirect(ctx, c); done || err != nil {
 		return err
 	}
 	// Accept or Decline on a linked business's order, All came on its

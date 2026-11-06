@@ -7319,6 +7319,29 @@ paths:
                 properties:
                   message:
                     $ref: '#/components/schemas/LinkMessage'
+                  also:
+                    type: array
+                    description: With chat tools on, the other linked businesses the message named, each sent it as its own message in our conversation with it.
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [link, name, sent]
+                      properties:
+                        link:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        sent:
+                          type: boolean
+                        reason:
+                          type: string
+        '202':
+          description: With chat tools on, a message with @Taskiem goes to the sender's own Taskiem conversation and to no business; the answer is what Taskiem said there
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskiemChat'
         '200':
           description: The same send repeated (its client_id), answered with the first message and not sent again
           content:
@@ -21611,6 +21634,58 @@ paths:
                 $ref: '#/components/schemas/AdvancedSetting'
         default:
           $ref: '#/components/responses/Error'
+  /v1/settings/chat-tools:
+    get:
+      operationId: getChatTools
+      tags:
+      - Account
+      summary: Whether the business has chat tools on
+      description: The chat tools switch (docs/spec/chat-tools.md). Off until an owner or admin turns it on.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatToolsSetting'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putChatTools
+      tags:
+      - Account
+      summary: Turn chat tools on or off
+      description: For everyone in the business. With it on, a message's recipients decide who gets it (linked businesses it names, and @Taskiem). Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: member.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [chat_tools]
+              properties:
+                chat_tools:
+                  type: boolean
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatToolsSetting'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/settings/schools/wallet:
     post:
       operationId: createSchoolWallet
@@ -28901,6 +28976,12 @@ components:
                   type: string
               enabled:
                 type: boolean
+    ChatToolsSetting:
+      type: object
+      required: [chat_tools]
+      properties:
+        chat_tools:
+          type: boolean
     AdvancedSetting:
       type: object
       required: [advanced, chosen]

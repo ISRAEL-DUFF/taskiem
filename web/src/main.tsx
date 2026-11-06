@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import "@fontsource-variable/inter";
 import "@xyflow/react/dist/style.css";
 import "./styles.css";
+import "./motion.css";
 import { App } from "./App";
 import { Skeleton } from "./ui";
 import { applyTheme, savedTheme } from "./theme";

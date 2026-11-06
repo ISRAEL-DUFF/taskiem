@@ -227,6 +227,8 @@ Use the line icons in `web/src/icons.tsx` by name: `home`, `money`, `invoices`, 
 
 The Chat page is the one screen that does **not** follow Taskiem's look. Business links §5.5 makes it WhatsApp Web's look, feel and way of working, deliberately and in detail, so a person who knows WhatsApp has nothing to learn. Copy it for any other conversation screen.
 
+> **Being replaced.** Chat tools ([spec](../spec/chat-tools.md) §2) redraws the chat in Taskiem's own look from the designs, keeping WhatsApp's behaviours. Until that lands, what follows is how the page is built today.
+
 - **It fills the window.** `/chat` sets `chat-mode` on the shell (`App.tsx`), which reuses the builder's rail: a 64px menu on a computer, no top or tab bar on a phone. There is no page title or padding; a visually hidden `h1` stays for screen readers. The list pane and the open conversation each scroll inside; the composer stays at the bottom. On a phone one pane shows at a time and the thread has an arrow back to the list.
 - **Chat colours are tokens**, not brand colours: `--chat-wallpaper`, `--chat-in`, `--chat-out`, `--chat-out-meta`, `--chat-tick-read`, `--chat-select`, each with a light and a dark value in `styles.css`. Use them for bubbles, the wallpaper, read ticks and the selected row; never a hex colour in a component.
 - **What stays Taskiem's:** the name and logo (the chat never carries WhatsApp's name, logo or traced icon artwork), the type, the document cards, and the business's card where a contact's profile would be.

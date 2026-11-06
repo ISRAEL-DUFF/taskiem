@@ -47,6 +47,35 @@ function AdvancedSwitch() {
   );
 }
 
+/** Chat tools (docs/spec/chat-tools.md): a message goes to the businesses
+ * it names, and @Taskiem calls Taskiem. Owners and admins turn it on for
+ * everyone. */
+function ChatToolsSwitch() {
+  const view = useLoad(() => get<{ chat_tools: boolean }>("/v1/settings/chat-tools"), []);
+  const act = useAction();
+  return (
+    <div className="card">
+      <h2 style={{ marginTop: 0 }}>Chat tools</h2>
+      <label>
+        <input
+          type="checkbox"
+          checked={!!view.data?.chat_tools}
+          disabled={act.busy || !view.data}
+          onChange={(e) => {
+            const on = e.target.checked;
+            void act.run(async () => (await put("/v1/settings/chat-tools", { chat_tools: on }), view.reload()), "Saved");
+          }}
+        />{" "}
+        Name a business to message it
+      </label>
+      <p className="hint">
+        On WhatsApp, Telegram, Slack and in your Taskiem chat, a message naming linked businesses goes straight to them. Write @Taskiem to ask Taskiem instead. Everyone in the business gets the same.
+      </p>
+      <ErrorBox error={act.error ?? view.error} />
+    </div>
+  );
+}
+
 interface SecurityView {
   require_admin_passkeys: boolean;
   admins_without_passkey: number;
@@ -127,6 +156,7 @@ export function Settings() {
         actions={<EnvSelect value={env} onChange={setEnv} />}
       />
       {can("member.manage") && <AdvancedSwitch />}
+      {can("member.manage") && <ChatToolsSwitch />}
       {can("member.manage") && <Security />}
       {me?.roles.includes("owner") && <SchoolsSwitch />}
       {advanced && <Environments editable={can("secret.manage")} />}
