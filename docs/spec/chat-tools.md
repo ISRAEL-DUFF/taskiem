@@ -1,6 +1,6 @@
 # Chat tools: the chat as the business's control room
 
-Status: **phase 1 in progress** (agreed with the founder). The plan, with every
+Status: **phase 1 built** (agreed with the founder). The plan, with every
 decision and the six-phase build order, is the shared doc "Taskiem chat as the
 business's control room"; the designs are the canvas "Taskiem chat: picker,
 cards and tool sheets". This file is what is built, and it amends
@@ -54,16 +54,45 @@ seen by one side only comes in a later phase.
 
 The designs win, everywhere, the conversation included: the chat is redrawn in
 Taskiem's own look rather than WhatsApp's, keeping WhatsApp's behaviours (ticks,
-swipe to reply, long-press, hold to record, search, pin, mute, archive). The look
-and motion apply app-wide: tokens, timings and springs, reduced motion respected,
-and shared parts (buttons, cards, the sheet/panel/drawer frame, toasts, empty
-states, shimmer). Bold and rich, made for good phones.
+swipe to reply, long-press, hold to record, search, pin, mute, archive).
 
-## 3. Phase 1 parts still to come
+- **Motion** (`web/src/motion.css`): one token per moment, from the Motion
+  artboard: `--t-picker` 280 ms, `--t-sheet` 360 ms, `--t-land` 400 ms with a
+  1.4 s glow, `--t-roll` 450 ms, `--t-arrive` 600 ms, 40 ms between rows; the
+  curves `--spring`, `--spring-settle`, `--spring-bounce`. App-wide: presses give
+  to 97%, dialogs grow (and rise as sheets on a phone, pulled down to close),
+  toasts arrive with a bounce, lists rise one after another (`.tk-stagger`).
+  With motion turned down nothing moves: things are simply there.
+- **The chat** (`web/src/chat.css`): bubbles with soft corners (one sharp where a
+  tail was), the business's initials in pine and lime, a footer with the tools
+  button, the pill (emoji, clip, camera) and the round send or microphone.
 
-- The picker for recipients and things, grouped and limited by role.
-- The tools button and `/` in the composer, beside the clip, camera and microphone.
-- The card frame and the sheet frame (phone, tablet and desktop), and diary lines.
+## 3. The parts (phase 1)
+
+All of them show only with chat tools on; the redrawn chat is for everyone.
+
+- **The picker.** In a business conversation `@` tags things and businesses in
+  groups: Products (the conversation's price list, with price), Services (from
+  phase 2), Businesses (linked; not the one you are talking to), and the Taskiem
+  row. The first match takes Enter; arrows move; Esc closes. An item tagged with
+  `@` is the same mention as `#` (the server accepts both). The Taskiem
+  conversation keeps `@` for businesses and `#` for items.
+- **The tools.** The grid button beside the composer, or `/` and a word as the
+  whole message (`/pro`), opens the tools: Products, Services, Stock, Price
+  lists, Orders and Tables, each with its count or a badge ("3 low", "4 new"),
+  only those the person's role may open, and the two used last.
+- **The sheet.** A tool opens in one frame on every screen: up from the bottom on
+  a phone (pulled down to close), a drawer from the right on a tablet, a panel
+  beside the conversation on a computer (the chat makes room). It has the tool's
+  name and count, a search, chips ("Low stock · 2"), the list and the full page.
+  In phase 1 the lists are read-only and open the full page; phase 2 makes them
+  work in place. Esc closes the sheet and only the sheet.
+- **The card frame.** A document in the conversation is a card: its kind and
+  reference, its state as a pill, what happened, the amount, an order's four
+  steps (Placed, Accepted, On the way, Delivered) and its buttons.
+- **Diary lines.** A change we made ourselves (accepting an order, saying an
+  invoice is paid) is a line in the middle of the chat, not a card: what changed,
+  and "You, 10:42". It drops in lit in lime. A new document is always a card.
 
 ## 4. Tests
 
@@ -74,3 +103,10 @@ states, shimmer). Bold and rich, made for good phones.
   conversation with nothing sent, `also` copies; photos by caption.
 - `api/chat_tools_internal_test.go`: cutting `@Taskiem`.
 - `api/authz_test.go`: a key limited to one environment cannot flip the switch.
+- `api/mentions_test.go`: an item written `@Cement` is the same mention as `#Cement`.
+- `web/e2e/chat-tools.spec.ts`: the switch; `@Taskiem` in a business
+  conversation; the picker, the tools and a sheet on a phone and a computer
+  (axe in both themes, nothing scrolling sideways, Esc closing only the sheet);
+  a card with its progress and a diary line.
+- Unit tests: `lib/tools`, `lib/cardframe`, `lib/mentions` (the groups),
+  `lib/sheetDrag`, `lib/chattools`.

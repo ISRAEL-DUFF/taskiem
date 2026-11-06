@@ -1,7 +1,7 @@
 /* Taskiem's motion, app-wide (docs/spec/chat-tools.md §2; the Motion
    artboard of the designs). Every moving thing takes its time and its
-   curve from these tokens. With motion turned down, things fade in
-   150 ms and nothing moves across the screen. Loaded after styles.css. */
+   curve from these tokens. With motion turned down nothing moves: things
+   are simply there. Loaded after styles.css. */
 
 :root {
   /* Curves. --spring overshoots a touch; --spring-settle has no bounce at
@@ -12,7 +12,7 @@
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 
   /* Times, one per moment. */
-  --t-quick: 150ms;      /* motion turned down; small state changes */
+  --t-quick: 150ms;      /* small state changes */
   --t-press: 90ms;       /* a press in */
   --t-tick: 260ms;       /* a save's tick draws itself */
   --t-picker: 280ms;     /* the picker springs up; a sheet closes */
@@ -82,10 +82,10 @@
   .modal { animation: tk-sheet-up var(--t-sheet) var(--spring-settle) backwards; }
 }
 
-/* Motion turned down: fades only, 150 ms, nothing moves. */
+/* Motion turned down: nothing moves or fades; things are simply there. */
 @media (prefers-reduced-motion: reduce) {
-  .modal-backdrop, .modal, .toast, .tk-arrive, .tk-stagger > *, .tk-roll, .tk-land {
-    animation: tk-fade var(--t-quick) linear !important;
+  .modal-backdrop, .modal, .modal > *, .toast, .tk-arrive, .tk-stagger > *, .tk-roll, .tk-land {
+    animation: none !important;
   }
   .tk-cheer { display: none; }
 }

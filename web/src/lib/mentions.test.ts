@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  groupSuggestions,
   insertMention,
   mentionParts,
   mentionQuery,
@@ -70,5 +71,31 @@ describe("mentions in the composer", () => {
       [".", ""],
     ]);
     expect(mentionParts("plain")).toEqual([{ text: "plain" }]);
+  });
+});
+
+describe("the grouped picker (chat tools)", () => {
+  const items = [
+    { kind: "item" as const, id: "i1", name: "Rice, 50kg bag", sub: "₦78,000 a bag" },
+    { kind: "item" as const, id: "i2", name: "Rice, 25kg bag" },
+    { kind: "item" as const, id: "i3", name: "Beans" },
+  ];
+  const businesses = [{ kind: "business" as const, id: "l1", name: "Rivers Foods Ltd" }];
+  it("groups things, then businesses, then Taskiem", () => {
+    const g = groupSuggestions("ri", { items, businesses }, true);
+    expect(g.map((x) => x.label)).toEqual(["Products", "Businesses"]);
+    expect(g[0]?.items.map((x) => x.id)).toEqual(["i1", "i2"]);
+    const all = groupSuggestions("", { items, businesses }, true);
+    expect(all.map((x) => x.label)).toEqual(["Products", "Businesses", ""]);
+    expect(all[2]?.items[0]?.kind).toBe("taskiem");
+    expect(groupSuggestions("task", { items, businesses }, true).map((x) => x.label)).toEqual([""]);
+    expect(groupSuggestions("", { items, businesses }, false).some((x) => x.label === "")).toBe(false);
+  });
+  it("knows an item written with @ or #", () => {
+    const picked = [{ kind: "item", name: "Rice, 25kg bag" }];
+    expect(stillNamed("@Rice, 25kg bag is out", picked)).toHaveLength(1);
+    expect(stillNamed("#Rice, 25kg bag is out", picked)).toHaveLength(1);
+    const parts = mentionParts("@Rice, 25kg bag is out", [{ kind: "item", name: "Rice, 25kg bag" }]);
+    expect(parts[0]).toEqual({ text: "@Rice, 25kg bag", mention: { kind: "item", name: "Rice, 25kg bag" } });
   });
 });

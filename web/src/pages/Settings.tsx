@@ -10,6 +10,7 @@ import { USSDChannels } from "./USSDChannels";
 import { Help } from "../onboarding";
 import { proof } from "../passkeys";
 import { SchoolsSwitch } from "./Schools";
+import { setChatTools } from "../lib/useChatTools";
 
 interface Secret {
   environment: string;
@@ -70,6 +71,7 @@ function ChatToolsSwitch() {
             void act.run(async () => {
               try {
                 await put("/v1/settings/chat-tools", { chat_tools: next });
+                setChatTools(next);
               } catch (err) {
                 setChosen(null);
                 throw err;

@@ -3,12 +3,15 @@
 // in the text and, in a conversation, a structured reference beside it.
 
 export interface Suggestion {
-  kind: "business" | "item";
+  /** A linked business, an item of a price list, a service, or Taskiem. */
+  kind: "business" | "item" | "service" | "taskiem";
   /** The link (a business) or the seller's item id. */
   id: string;
   name: string;
   /** A second line: "₦9,500 a bag", or the business. */
   sub?: string;
+  /** A short word on the right: "4 left". */
+  badge?: string;
 }
 
 /** A mention as a message stores it. */
@@ -84,9 +87,13 @@ export function stillNamed<T extends { kind: string; name: string }>(
   const lower = text.toLowerCase();
   const out: T[] = [];
   for (const p of picked) {
-    const token = (p.kind === "item" ? "#" : "@") + p.name.toLowerCase();
+    const name = p.name.toLowerCase();
+    // An item may be written "#Rice" or, from the picker, "@Rice".
+    const named =
+      lower.includes("@" + name) ||
+      (p.kind === "item" && lower.includes("#" + name));
     if (
-      lower.includes(token) &&
+      named &&
       !out.some((o) => o.kind === p.kind && o.name === p.name)
     )
       out.push(p);
@@ -103,14 +110,16 @@ export function mentionParts(
   const lower = text.toLowerCase();
   const found: { at: number; len: number; m: Mention }[] = [];
   for (const m of mentions) {
-    const token = (m.kind === "item" ? "#" : "@") + m.name;
-    let from = 0;
-    for (;;) {
-      const at = lower.indexOf(token.toLowerCase(), from);
-      if (at < 0) break;
-      if (!found.some((f) => at < f.at + f.len && f.at < at + token.length))
-        found.push({ at, len: token.length, m });
-      from = at + token.length;
+    const tokens = m.kind === "item" ? ["#" + m.name, "@" + m.name] : ["@" + m.name];
+    for (const token of tokens) {
+      let from = 0;
+      for (;;) {
+        const at = lower.indexOf(token.toLowerCase(), from);
+        if (at < 0) break;
+        if (!found.some((f) => at < f.at + f.len && f.at < at + token.length))
+          found.push({ at, len: token.length, m });
+        from = at + token.length;
+      }
     }
   }
   found.sort((a, b) => a.at - b.at);
@@ -122,5 +131,40 @@ export function mentionParts(
     pos = f.at + f.len;
   }
   if (pos < text.length) out.push({ text: text.slice(pos) });
+  return out;
+}
+
+/** A group of the picker: "Products", "Services", "Businesses", or the
+ * Taskiem row (no heading). */
+export interface SuggestionGroup {
+  label: string;
+  items: Suggestion[];
+}
+
+export const TASKIEM: Suggestion = {
+  kind: "taskiem",
+  id: "taskiem",
+  name: "Taskiem",
+  sub: "Ask Taskiem to do it for you",
+};
+
+/** The picker's groups for "@" with chat tools (chat-tools.md §3): things
+ * first (products, services), then businesses, then Taskiem; a few of
+ * each, the ones a word of the name starts with first. */
+export function groupSuggestions(
+  query: string,
+  src: { items: Suggestion[]; services?: Suggestion[]; businesses: Suggestion[] },
+  taskiem: boolean,
+): SuggestionGroup[] {
+  const out: SuggestionGroup[] = [];
+  const add = (label: string, list: Suggestion[] | undefined, n: number) => {
+    const got = suggest(list ?? [], query).slice(0, n);
+    if (got.length > 0) out.push({ label, items: got });
+  };
+  add("Products", src.items, 4);
+  add("Services", src.services, 3);
+  add("Businesses", src.businesses, 4);
+  if (taskiem && suggest([TASKIEM], query).length > 0)
+    out.push({ label: "", items: [TASKIEM] });
   return out;
 }

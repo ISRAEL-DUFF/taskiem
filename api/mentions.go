@@ -478,11 +478,10 @@ func checkMentions(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, text 
 		default:
 			return nil, fmt.Errorf("%w: a mention is a business or an item", links.ErrInvalid)
 		}
-		mark := "@"
-		if m.Kind == "item" {
-			mark = "#"
-		}
-		if strings.Contains(lower, strings.ToLower(mark+m.Name)) {
+		// A business is "@Name"; an item "#Name", or "@Name" as the chat
+		// tools picker writes it (docs/spec/chat-tools.md §3).
+		name := strings.ToLower(m.Name)
+		if strings.Contains(lower, "@"+name) || (m.Kind == "item" && strings.Contains(lower, "#"+name)) {
 			out = append(out, m)
 		}
 	}

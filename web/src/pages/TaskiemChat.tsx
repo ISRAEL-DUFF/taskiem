@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useChatTools } from "../lib/useChatTools";
 import { useThread } from "../lib/useThread";
 import { ThreadJump } from "./ThreadParts";
 import { ChatStream } from "./ChatStream";
@@ -92,10 +93,12 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
     [],
   );
   const act = useAction();
+  const chatTools = useChatTools();
   const localN = useRef(0);
   const c = useComposer<never>({
     draftKey: "taskiem",
     rules: TASKIEM_FILES,
+    tools: chatTools,
     sources: {
       "@": (convs.data ?? [])
         .filter((x) => x.state === "active")

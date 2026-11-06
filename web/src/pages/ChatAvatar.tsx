@@ -1,8 +1,20 @@
 import { useEffect, useState } from "react";
 
+
+/** Up to two initials: "Bayo Rice Mills" is "BR". */
+export function initialsOf(name: string): string {
+  const words = name.split(/\s+/).filter((w) => /^[\p{L}\p{N}]/u.test(w));
+  return (
+    words
+      .slice(0, 2)
+      .map((w) => w.charAt(0).toUpperCase())
+      .join("") || name.slice(0, 1).toUpperCase()
+  );
+}
+
 /**
  * A contact's round picture in the chat: the business's logo when it has
- * one, else the first letter of its name (also when the logo cannot be
+ * one, else its initials (also when the logo cannot be
  * loaded). It is decoration: the name is always next to it.
  */
 export function ChatAvatar({
@@ -30,8 +42,8 @@ export function ChatAvatar({
       />
     );
   return (
-    <span className={cls} aria-hidden="true">
-      {name.slice(0, 1).toUpperCase()}
-    </span>
+    // The initials are drawn, not text: a button showing the avatar is
+    // named by its label alone.
+    <span className={cls} aria-hidden="true" data-initials={initialsOf(name)} />
   );
 }

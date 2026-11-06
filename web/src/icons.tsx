@@ -82,6 +82,11 @@ const paths: Record<string, string> = {
   camera: "M3 8h4l2-3h6l2 3h4v12H3zM12 10a4 4 0 100 8 4 4 0 000-8z",
   mic: "M12 3a3 3 0 00-3 3v6a3 3 0 006 0V6a3 3 0 00-3-3zM5 11a7 7 0 0014 0M12 18v3",
   file: "M6 3h9l4 4v14H6zM14 3v5h5",
+  // Chat tools (chat-tools.md): a product, the tools button, stock, a price list.
+  box: "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7M12 11v10",
+  grid: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z",
+  store: "M4 20V10l8-6 8 6v10zM9 20v-6h6v6",
+  tag: "M20 12l-8 8-9-9V3h8zM7.5 7.5h.01",
 };
 
 export function Icon({ name, className }: { name: string; className?: string }) {

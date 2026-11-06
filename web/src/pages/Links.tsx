@@ -415,7 +415,7 @@ export function ChatPage() {
         if (e.defaultPrevented || !k.openID) return;
         if (
           document.querySelector(
-            '[data-testid="chat-more"], [data-testid="chat-recording"], .chat-menu, .attach-menu, .chat-info, .modal, .mention-list, .emoji-panel, .explore',
+            '[data-testid="chat-more"], [data-testid="chat-recording"], .chat-menu, .attach-menu, .chat-info, .modal, .mention-list, .emoji-panel, .explore, .tk-sheet, .tk-tools, .tk-picker',
           )
         )
           return;

@@ -35,6 +35,8 @@ import { MentionText } from "./Mentions";
 import { ChatAvatar } from "./ChatAvatar";
 import { ContactInfo } from "./ContactInfo";
 import { useConfirm } from "./ConfirmSheet";
+import { useChatTools } from "../lib/useChatTools";
+import { ORDER_STEPS, cardKicker, cardStatus, isDiary } from "../lib/cardframe";
 import {
   BUSINESS_FILES,
   ComposerView,
@@ -717,16 +719,12 @@ function Bubble({
         </span>
       )}
       {card ? (
-        <>
-          <span className="card-title">{cardLine(card, m.mine, other)}</span>
-          {cardSub(card) && <span className="block hint">{cardSub(card)}</span>}
-          <span className="row-actions" style={{ marginTop: 4 }}>
-            <Link to={cardHref(card)} className="button small">
-              Open<span className="sr-only"> {card.reference}</span>
-            </Link>
-          </span>
+        <CardFrame card={card} title={cardLine(card, m.mine, other)}>
+          <Link to={cardHref(card)} className="button small">
+            Open<span className="sr-only"> {card.reference}</span>
+          </Link>
           {latest && !m.mine && <CardActions card={card} onDone={onDone} />}
-        </>
+        </CardFrame>
       ) : (
         <>
           {m.attachment && (
@@ -748,6 +746,76 @@ function Bubble({
         </>
       )}
     </BubbleShell>
+  );
+}
+
+/** The card frame (chat-tools.md §3): the document's kind and reference,
+ * its state as a pill, what it is, an order's progress, and its buttons. */
+function CardFrame({
+  card,
+  title,
+  children,
+}: {
+  card: DocCard;
+  title: string;
+  children: ReactNode;
+}) {
+  const st = cardStatus(card);
+  return (
+    <article className="tk-chatcard" aria-label={cardKicker(card)}>
+      <span className="tk-chatcard-top">
+        <span className="tk-kicker">{cardKicker(card)}</span>
+        <span className={`tk-pill ${st.tone}`}>{st.word}</span>
+      </span>
+      <span className="card-title">{title}</span>
+      {cardSub(card) && (
+        <span className="tk-chatcard-sub">{cardSub(card)}</span>
+      )}
+      {st.step !== undefined && (
+        <span className="tk-progress">
+          <span
+            className="tk-progress-bar"
+            role="img"
+            aria-label={`${ORDER_STEPS[st.step]}: step ${st.step + 1} of ${ORDER_STEPS.length}`}
+          >
+            {ORDER_STEPS.map((w, i) => (
+              <span key={w} className={i <= (st.step ?? -1) ? "done" : ""} />
+            ))}
+          </span>
+          <span className="tk-progress-words" aria-hidden="true">
+            {ORDER_STEPS.map((w, i) => (
+              <span key={w} className={i === st.step ? "now" : ""}>
+                {w}
+              </span>
+            ))}
+          </span>
+        </span>
+      )}
+      <span className="tk-chatcard-actions">{children}</span>
+    </article>
+  );
+}
+
+/** A diary line (chat-tools.md §3): a change we made, told in the chat
+ * as a line, not a card. It opens the document. */
+function DiaryLine({ m, other }: { m: LinkMessage; other: string }) {
+  const card = m.card;
+  if (!card) return null;
+  return (
+    <div className="tk-diary" data-testid="chat-diary" id={`m-${m.id}`}>
+      <Link to={cardHref(card)} className="tk-diary-pill tk-land">
+        <Icon name="tick" />
+        <span>{cardLine(card, true, other)}</span>
+        {cardSub(card) && <span className="tk-diary-sub">{cardSub(card)}</span>}
+      </Link>
+      <time
+        className="tk-diary-when"
+        dateTime={m.created_at}
+        title={fmtTime(m.created_at)}
+      >
+        You, {clock(m.created_at)}
+      </time>
+    </div>
   );
 }
 
@@ -807,6 +875,7 @@ export function ConversationPane({
   const [forwarding, setForwarding] = useState<LinkMessage>();
   const typedAt = useRef(0);
   const [error, setError] = useState<unknown>();
+  const chatTools = useChatTools();
   const items = useLoad(
     () =>
       get<{ items: PriceItem[] }>(`/v1/link-chats/${conv.link}/items`).then(
@@ -820,9 +889,16 @@ export function ConversationPane({
     rules: BUSINESS_FILES,
     enabled: write,
     sources: {
+      // With chat tools, the business we are talking to is not offered:
+      // it gets the message already.
       "@": others
-        .filter((o) => o.state === "active")
-        .map((o) => ({ kind: "business" as const, id: o.link, name: o.name })),
+        .filter((o) => o.state === "active" && !(chatTools && o.link === conv.link))
+        .map((o) => ({
+          kind: "business" as const,
+          id: o.link,
+          name: o.name,
+          sub: chatTools ? "Linked" : undefined,
+        })),
       "#": (items.data ?? [])
         .filter((it) => it.available)
         .map((it) => ({
@@ -834,6 +910,8 @@ export function ConversationPane({
     },
     replyLine: (r) => previewLine(r, conv.name),
     closes: [infoOpen, !!forwarding],
+    grouped: chatTools ? { taskiem: true } : undefined,
+    tools: chatTools,
     // We are typing: the other side's typing line, told at most every 3 s.
     onType: (v) => {
       const now = Date.now();
@@ -1232,7 +1310,10 @@ export function ConversationPane({
         }
         items={(close) => (
           <>
-            <button type="button" onClick={() => (close(), setSearchOpen(false), setInfoOpen(true))}>
+            <button
+              type="button"
+              onClick={() => (close(), setSearchOpen(false), setInfoOpen(true))}
+            >
               Contact info
             </button>
             {can("chat.trade") && (
@@ -1291,30 +1372,34 @@ export function ConversationPane({
         startsRun={startsRun}
         unread={unread}
         empty={`No messages yet. Say hello to ${conv.name}.`}
-        render={(m, { first }) => (
-          <Bubble
-            m={m}
-            other={conv.name}
-            canReply={write && !m.local}
-            onRetry={retry}
-            onDiscard={discard}
-            onReply={setReply}
-            onJump={jump}
-            first={first}
-            flash={flashId === m.id}
-            latest={newest.has(m.id)}
-            onDone={() => pull(last).catch(setError)}
-            onForward={
-              write && others.some((o) => o.state === "active")
-                ? setForwarding
-                : undefined
-            }
-            onHide={can("chat.trade") ? hide : undefined}
-            onReact={write && !m.local ? react : undefined}
-            onStar={m.local ? undefined : star}
-            onInfo={m.local ? undefined : setInfo}
-          />
-        )}
+        render={(m, { first }) =>
+          chatTools && m.card && isDiary(m.card, m.mine) ? (
+            <DiaryLine m={m} other={conv.name} />
+          ) : (
+            <Bubble
+              m={m}
+              other={conv.name}
+              canReply={write && !m.local}
+              onRetry={retry}
+              onDiscard={discard}
+              onReply={setReply}
+              onJump={jump}
+              first={first}
+              flash={flashId === m.id}
+              latest={newest.has(m.id)}
+              onDone={() => pull(last).catch(setError)}
+              onForward={
+                write && others.some((o) => o.state === "active")
+                  ? setForwarding
+                  : undefined
+              }
+              onHide={can("chat.trade") ? hide : undefined}
+              onReact={write && !m.local ? react : undefined}
+              onStar={m.local ? undefined : star}
+              onInfo={m.local ? undefined : setInfo}
+            />
+          )
+        }
         overlay={
           thread.away || detached ? (
             <ThreadJump

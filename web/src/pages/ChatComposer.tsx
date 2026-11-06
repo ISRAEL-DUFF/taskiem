@@ -18,6 +18,8 @@ import { MicButton, RecordingBar, useVoiceNote } from "./VoiceNote";
 import { PendingFile } from "./PendingFile";
 import { AttachMenu } from "./AttachMenu";
 import { CameraSheet } from "./CameraSheet";
+import { ToolSheet, ToolsPanel } from "./ChatTools";
+import type { ToolKey } from "../lib/tools";
 
 // The composer of every conversation (a business's and Taskiem's): the box
 // that grows, emoji, a photo (and, where it is taken, a PDF), the camera,
@@ -92,6 +94,11 @@ export type ComposerOptions<R> = {
   closes?: boolean[];
   /** Drops and the box are off (a conversation one may only read). */
   enabled?: boolean;
+  /** Chat tools (chat-tools.md §3): "@" tags things and businesses in
+   * groups (with the Taskiem row when taskiem). */
+  grouped?: { taskiem: boolean };
+  /** Chat tools: the tools button, and "/". */
+  tools?: boolean;
 };
 
 export function useComposer<R>(o: ComposerOptions<R>) {
@@ -112,7 +119,20 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     setDraft(o.draftKey, text);
     // Only a change of the words is kept: a switch of conversation loads one.
   }, [text]);
-  const mentions = useMentions(text, setText, textBox, o.sources);
+  const mentions = useMentions(text, setText, textBox, o.sources, o.grouped);
+  // The tools panel: the grid button, or "/" and a word as the whole message.
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [tool, setTool] = useState<ToolKey>();
+  const slash = o.tools ? /^\/(\S*)$/.exec(text) : null;
+  const toolsShown = !!o.tools && (toolsOpen || !!slash);
+  const closeTools = () => {
+    setToolsOpen(false);
+    if (slash) setText("");
+  };
+  const openTool = (k: ToolKey) => {
+    closeTools();
+    setTool(k);
+  };
   // A voice note held and released goes at once; one tapped waits for Send.
   const sendRef = useRef<(f?: File) => void>(() => undefined);
   const voice = useVoiceNote(
@@ -128,7 +148,7 @@ export function useComposer<R>(o: ComposerOptions<R>) {
   // photo to caption asks for it.
   useComposerFocus(
     textBox,
-    [emojiOpen, !!file, !!reply, voice.secs !== undefined, ...(o.closes ?? [])],
+    [emojiOpen, !!file, !!reply, voice.secs !== undefined, !!tool, ...(o.closes ?? [])],
     [!!reply, !!file],
   );
   const send = (held?: File) => {
@@ -270,6 +290,13 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     addEmoji,
     onPaneKeyDown,
     dropProps,
+    toolsShown,
+    toolsQuery: slash?.[1] ?? "",
+    setToolsOpen,
+    closeTools,
+    tool,
+    setTool,
+    openTool,
   };
 }
 
@@ -353,6 +380,8 @@ export function ComposerView<R>({
         </Suspense>
       )}
       <MentionList m={c.mentions} />
+      {c.toolsShown && <ToolsPanel query={c.toolsQuery} onOpen={c.openTool} onClose={c.closeTools} />}
+      {c.tool && <ToolSheet tool={c.tool} onClose={() => c.setTool(undefined)} />}
       {voice.secs !== undefined || voice.holding ? (
         <RecordingBar voice={voice} />
       ) : (
@@ -363,6 +392,18 @@ export function ComposerView<R>({
             c.send();
           }}
         >
+          {c.o.tools && (
+            <button
+              type="button"
+              className={`composer-tools${c.toolsShown ? " open" : ""}`}
+              aria-label={c.toolsShown ? "Close tools" : "Open tools"}
+              aria-expanded={c.toolsShown}
+              data-testid="tools-button"
+              onClick={() => (c.toolsShown ? c.closeTools() : c.setToolsOpen(true))}
+            >
+              <Icon name="grid" />
+            </button>
+          )}
           <div className="composer-pill">
             <button
               type="button"
@@ -383,7 +424,7 @@ export function ComposerView<R>({
               ref={c.textBox}
               rows={1}
               maxLength={4000}
-              placeholder={file ? "Add a caption" : "Type a message"}
+              placeholder={file ? "Add a caption" : c.o.grouped ? "Message, @ to tag" : "Type a message"}
               value={text}
               onChange={(e) => {
                 c.typed(e.target.value);
@@ -401,6 +442,14 @@ export function ComposerView<R>({
               }}
               onKeyDown={(e) => {
                 if (c.mentions.onKeyDown(e)) return;
+                if (c.toolsShown && (e.key === "Escape" || e.key === "Enter" || e.key === "ArrowUp")) {
+                  // The tools panel takes the keys: Esc closes it, Enter
+                  // or the up arrow goes to its first tile.
+                  e.preventDefault();
+                  if (e.key === "Escape") c.closeTools();
+                  else (document.querySelector(".tk-tools .tk-tile") as HTMLButtonElement | null)?.focus();
+                  return;
+                }
                 if (e.key === "Escape") {
                   // Esc gives up what is being prepared: the panel, a photo
                   // waiting for its caption, then a reply.
