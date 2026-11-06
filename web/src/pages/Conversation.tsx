@@ -33,6 +33,8 @@ import {
 import { Icon } from "../icons";
 import { MentionText } from "./Mentions";
 import { ChatAvatar } from "./ChatAvatar";
+import { ContactInfo } from "./ContactInfo";
+import { useConfirm } from "./ConfirmSheet";
 import {
   BUSINESS_FILES,
   ComposerView,
@@ -94,6 +96,7 @@ const PAGE = 50;
 function CardActions({ card, onDone }: { card: DocCard; onDone: () => void }) {
   const { can } = useAuth();
   const act = useAction();
+  const { confirm, node: confirmNode } = useConfirm();
   const id = encodeURIComponent(card.id ?? card.reference);
   const go = (path: string, done: string) =>
     void act.run(async () => (await post(path), onDone()), done);
@@ -121,8 +124,12 @@ function CardActions({ card, onDone }: { card: DocCard; onDone: () => void }) {
               type="button"
               className="small"
               disabled={act.busy}
-              onClick={() =>
-                confirm(`Decline ${card.reference}?`) &&
+              onClick={async () =>
+                (await confirm({
+                  title: `Decline ${card.reference}?`,
+                  ok: "Decline",
+                  danger: true,
+                })) &&
                 go(
                   `/v1/trade-orders/${id}/decline`,
                   `${card.reference} declined`,
@@ -192,6 +199,7 @@ function CardActions({ card, onDone }: { card: DocCard; onDone: () => void }) {
       data-testid="card-actions"
     >
       {buttons}
+      {confirmNode}
       {!!act.error && <ErrorBox error={act.error} />}
     </span>
   );
@@ -263,20 +271,49 @@ function MediaAndFiles({
   messages: LinkMessage[];
   other: string;
 }) {
+  const [open, setOpen] = useState(false);
   const kept = messages.filter((m) => m.attachment).reverse();
   if (kept.length === 0) return null;
+  // Closed: a strip of the latest pictures; open: every picture, voice note and file.
+  const strip = kept.filter((m) => m.attachment?.kind === "photo").slice(0, 4);
   return (
-    <section className="chat-info-media" aria-label="Media and files">
-      <h4>Media and files ({kept.length})</h4>
-      <ul>
-        {kept.map((m) => (
-          <li key={m.id}>
-            {m.attachment && (
-              <AttachmentView m={m} a={m.attachment} other={other} />
-            )}
-          </li>
-        ))}
-      </ul>
+    <section className="info-media" aria-label="Media and files">
+      <button
+        type="button"
+        className="info-row"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+        data-testid="info-media"
+      >
+        <Icon name="image" />
+        <span className="info-row-main">
+          <span className="info-row-label">Media and files</span>
+        </span>
+        <span className="info-count">{kept.length}</span>
+        <Icon name="chevron" className={open ? "turned" : undefined} />
+      </button>
+      {!open && strip.length > 0 && (
+        <ul className="info-thumbs">
+          {strip.map((m) => (
+            <li key={m.id}>
+              {m.attachment && (
+                <AttachmentView m={m} a={m.attachment} other={other} />
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {open && (
+        <ul className="info-media-all">
+          {kept.map((m) => (
+            <li key={m.id}>
+              {m.attachment && (
+                <AttachmentView m={m} a={m.attachment} other={other} />
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }
@@ -1114,8 +1151,16 @@ export function ConversationPane({
     body: { muted?: boolean; archived?: boolean; pinned?: boolean },
     done: string,
   ) => void act.run(async () => (await put(path, body), onChanged()), done);
-  const hide = (m: LinkMessage) => {
-    if (!confirm("Delete this message for your business? They keep theirs."))
+  const { confirm, node: confirmNode } = useConfirm();
+  const hide = async (m: LinkMessage) => {
+    if (
+      !(await confirm({
+        title: "Delete this message?",
+        body: "It goes from your business's side. They keep theirs.",
+        ok: "Delete for me",
+        danger: true,
+      }))
+    )
       return;
     void act.run(async () => {
       await post(`${path}/messages/${m.id}/hide`);
@@ -1151,7 +1196,10 @@ export function ConversationPane({
             className="chat-avatar-btn"
             aria-label={`About ${conv.name}`}
             aria-expanded={infoOpen}
-            onClick={() => setInfoOpen(!infoOpen)}
+            onClick={() => {
+              setSearchOpen(false);
+              setInfoOpen(!infoOpen);
+            }}
           >
             <ChatAvatar name={conv.name} logo={logo} />
           </button>
@@ -1174,14 +1222,17 @@ export function ConversationPane({
             aria-expanded={searchOpen}
             ref={searchButton}
             data-testid="chat-search-open"
-            onClick={() => setSearchOpen(!searchOpen)}
+            onClick={() => {
+              setInfoOpen(false);
+              setSearchOpen(!searchOpen);
+            }}
           >
             <Icon name="search" />
           </button>
         }
         items={(close) => (
           <>
-            <button type="button" onClick={() => (close(), setInfoOpen(true))}>
+            <button type="button" onClick={() => (close(), setSearchOpen(false), setInfoOpen(true))}>
               Contact info
             </button>
             {can("chat.trade") && (
@@ -1317,106 +1368,38 @@ export function ConversationPane({
         />
       )}
       {infoOpen && (
-        <aside
-          className="chat-info"
-          aria-label={`About ${conv.name}`}
-          data-testid="chat-info"
-        >
-          <div className="chat-info-head">
-            <h3>Contact info</h3>
-            <button
-              type="button"
-              className="icon-button"
-              aria-label="Close contact info"
-              onClick={() => setInfoOpen(false)}
-            >
-              <Icon name="close" />
-            </button>
-          </div>
-          <div className="chat-info-body">
-            <ChatAvatar name={conv.name} logo={logo} className="big" />
-            <p className="chat-info-name">{conv.name}</p>
-            {link && <p className="hint">{roleLine(link.role)}</p>}
-            {link?.state === "active" && link.answered_at && (
-              <p className="hint">Linked {fmtTime(link.answered_at)}</p>
-            )}
-            {card && (card.area || card.tagline || card.items.length > 0) && (
-              <section
-                className="chat-info-card"
-                aria-label="About the business"
-              >
-                {card.tagline && <p>{card.tagline}</p>}
-                {card.area && <p className="hint">{card.area}</p>}
-                {card.items.length > 0 && (
-                  <ul className="chat-info-items">
-                    {card.items.slice(0, 5).map((it) => (
-                      <li key={it.name}>{it.name}</li>
-                    ))}
-                  </ul>
-                )}
-              </section>
-            )}
-            {conv.state !== "active" && (
-              <p className="hint">The link has ended.</p>
-            )}
-            {can("chat.trade") && (
-              <div className="chat-info-actions">
-                <button
-                  type="button"
-                  disabled={act.busy}
-                  onClick={() =>
-                    settings(
-                      { pinned: !conv.pinned },
-                      conv.pinned ? "Unpinned" : "Pinned",
-                    )
-                  }
-                >
-                  {conv.pinned ? "Unpin this chat" : "Pin this chat"}
-                </button>
-                <button
-                  type="button"
-                  disabled={act.busy}
-                  onClick={() =>
-                    settings(
-                      { muted: !conv.muted },
-                      conv.muted ? "Unmuted" : "Muted",
-                    )
-                  }
-                >
-                  {conv.muted ? "Unmute notifications" : "Mute notifications"}
-                </button>
-                <button
-                  type="button"
-                  disabled={act.busy}
-                  onClick={() =>
-                    settings(
-                      { archived: !conv.archived },
-                      conv.archived ? "Unarchived" : "Archived",
-                    )
-                  }
-                >
-                  {conv.archived ? "Unarchive this chat" : "Archive this chat"}
-                </button>
-                {link && link.state === "active" && onEndLink && (
-                  <button
-                    type="button"
-                    className="danger"
-                    disabled={act.busy}
-                    onClick={() =>
-                      confirm(
-                        `End the link with ${link.name}? What passed between you stays on both sides.`,
-                      ) && onEndLink(link)
-                    }
-                  >
-                    End link
-                  </button>
-                )}
-              </div>
-            )}
-            <MediaAndFiles messages={messages ?? []} other={conv.name} />
-          </div>
-        </aside>
+        <ContactInfo
+          conv={conv}
+          logo={logo}
+          link={link}
+          card={card}
+          canManage={can("chat.trade")}
+          busy={act.busy}
+          media={<MediaAndFiles messages={messages ?? []} other={conv.name} />}
+          onClose={() => setInfoOpen(false)}
+          onSetting={settings}
+          onEndLink={
+            link && link.state === "active" && onEndLink
+              ? async () => {
+                  if (
+                    await confirm({
+                      title: `End the link with ${link.name}?`,
+                      body: "What passed between you stays on both sides.",
+                      ok: "End link",
+                      danger: true,
+                    })
+                  )
+                    onEndLink(link);
+                }
+              : undefined
+          }
+          onSearch={() => {
+            setInfoOpen(false);
+            setSearchOpen(true);
+          }}
+        />
       )}
+      {confirmNode}
     </section>
   );
 }

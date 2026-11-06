@@ -41,6 +41,7 @@ import {
 import { ConversationPane } from "./Conversation";
 import { TaskiemPane } from "./TaskiemChat";
 import { ChatRow } from "./ChatRow";
+import { useConfirm } from "./ConfirmSheet";
 import { HeadMenu } from "./ChatHead";
 import { useChatLive } from "./ChatLive";
 import { useDrafts } from "../lib/drafts";
@@ -175,8 +176,10 @@ function AnswerButtons({
   busy: boolean;
 }) {
   const who = <span className="sr-only"> {link.name}</span>;
+  const { confirm, node } = useConfirm();
   return (
     <>
+      {node}
       <button
         type="button"
         className="primary small"
@@ -197,10 +200,13 @@ function AnswerButtons({
         type="button"
         className="small danger"
         disabled={busy}
-        onClick={() =>
-          confirm(
-            `Block ${link.name}? Their requests will not reach you, and they are not told.`,
-          ) && answer(link, "block", "Blocked")
+        onClick={async () =>
+          (await confirm({
+            title: `Block ${link.name}?`,
+            body: "Their requests will not reach you, and they are not told.",
+            ok: "Block",
+            danger: true,
+          })) && answer(link, "block", "Blocked")
         }
       >
         Block{who}
@@ -1171,23 +1177,30 @@ function LinkActions({
   busy: boolean;
 }) {
   const who = <span className="sr-only"> {link.name}</span>;
+  const { confirm, node } = useConfirm();
   switch (link.state) {
     case "asked_us":
       return <AnswerButtons link={link} answer={answer} busy={busy} />;
     case "active":
       return (
-        <button
-          type="button"
-          className="small danger"
-          disabled={busy}
-          onClick={() =>
-            confirm(
-              `End the link with ${link.name}? What passed between you stays on both sides.`,
-            ) && answer(link, "end", "Link ended")
-          }
-        >
-          End link{who}
-        </button>
+        <>
+          {node}
+          <button
+            type="button"
+            className="small danger"
+            disabled={busy}
+            onClick={async () =>
+              (await confirm({
+                title: `End the link with ${link.name}?`,
+                body: "What passed between you stays on both sides.",
+                ok: "End link",
+                danger: true,
+              })) && answer(link, "end", "Link ended")
+            }
+          >
+            End link{who}
+          </button>
+        </>
       );
     case "requested":
     case "not_accepted":

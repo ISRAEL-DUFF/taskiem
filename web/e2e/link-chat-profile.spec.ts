@@ -124,7 +124,7 @@ test("the chat shows a linked business by its profile name and logo; the links l
     )
     .toBeGreaterThan(0);
   await pane.getByRole("button", { name: `About ${profileName}` }).click();
-  await expect(buyer.locator(".chat-info-body img.chat-avatar")).toBeVisible();
+  await expect(buyer.locator(".info-hero img.chat-avatar")).toBeVisible();
   await axeBoth(buyer, "a conversation with a logo");
 
   // The registered name stays where it is the legal one.

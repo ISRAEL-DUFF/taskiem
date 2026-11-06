@@ -98,8 +98,8 @@ test("two businesses find each other and link", async ({ browser }) => {
   await ada.goto("/settings/links");
   const row = ada.getByTestId("link-row").filter({ hasText: dangoteName });
   await expect(row).toHaveAttribute("data-state", "active");
-  ada.once("dialog", (d) => void d.accept());
   await row.getByRole("button", { name: `End link ${dangoteName}` }).click();
+  await ada.getByTestId("confirm-ok").click(); // the app's own confirmation
   await expect(row).toHaveAttribute("data-state", "ended");
   await axeBoth(ada, "/settings/links, a link ended");
 });
