@@ -501,6 +501,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage), s.need(PermWorkflowEdit), s.tenantWide).Post("/storefront/actions/{kind}/setup", s.setupAction)
 			s.invoiceRoutes(r)
 			s.linkRoutes(r)        // business links (links.go)
+			s.profileRoutes(r)     // a business's profile and gallery (business_profile.go)
 			s.billRoutes(r)        // their bills (bills.go)
 			s.linkOrderRoutes(r)   // their orders (link_orders.go)
 			s.linkChatRoutes(r)    // their conversations (link_chat.go)

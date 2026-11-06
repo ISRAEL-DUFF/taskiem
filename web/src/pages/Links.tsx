@@ -504,13 +504,22 @@ export function ChatPage() {
             <HeadMenu
               label="More about the chats"
               items={(close) => (
-                <Link
-                  className="menu-link"
-                  to="/settings/links"
-                  onClick={close}
-                >
-                  Linked businesses
-                </Link>
+                <>
+                  <Link
+                    className="menu-link"
+                    to="/settings/links"
+                    onClick={close}
+                  >
+                    Linked businesses
+                  </Link>
+                  <Link
+                    className="menu-link"
+                    to="/settings/links/profile"
+                    onClick={close}
+                  >
+                    Your business in Explore
+                  </Link>
+                </>
               )}
             />
           </div>
@@ -1063,6 +1072,20 @@ export function LinkedBusinessesPage() {
           <Skeleton rows={1} label="Loading the setting…" />
         )}
       </section>
+      <section
+        className="card"
+        aria-labelledby="link-profile"
+        data-testid="link-profile-card"
+      >
+        <h2 id="link-profile">How other businesses see you</h2>
+        <p className="hint">
+          Your name, a line about what you do, your area, a logo and up to 12
+          photos.
+        </p>
+        <Link className="button" to="/settings/links/profile">
+          Edit your business in Explore
+        </Link>
+      </section>
       {settings.data?.url && <CodeCard url={settings.data.url} />}
       <section aria-label="Links">
         {!view.data ? (
@@ -1407,7 +1430,9 @@ function FindableQuestion({
       <h2 id="link-findable-ask">Let other businesses on Taskiem find you?</h2>
       <p className="hint">
         They would find you by your name, what you sell and your area, from what
-        your storefront already shows. {findableLine(settings)}
+        your storefront already shows, or from your{" "}
+        <Link to="/settings/links/profile">business profile</Link>.{" "}
+        {findableLine(settings)}
       </p>
       <div className="row-actions">
         <button

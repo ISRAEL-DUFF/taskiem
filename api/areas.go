@@ -56,6 +56,7 @@ var areaPaths = []struct {
 	{"/v1/links", areas.Links},
 	{"/v1/link-settings", areas.Links},
 	{"/v1/link-chats", areas.Links},
+	{"/v1/business-profile", areas.Links},
 }
 
 // areaOfPath names the area a request path belongs to, if any.

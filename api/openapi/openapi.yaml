@@ -8625,6 +8625,313 @@ paths:
                 $ref: '#/components/schemas/LinkSettings'
         default:
           $ref: '#/components/responses/Error'
+  /v1/business-profile:
+    get:
+      operationId: getBusinessProfile
+      tags:
+      - Links
+      summary: What this business says about itself to the businesses that find it
+      description: The name, one-line description, area, text about the business, logo and gallery. They win over the storefront's card where both exist.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessProfile'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putBusinessProfile
+      tags:
+      - Links
+      summary: Set the profile's words
+      description: Empty text clears a field.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                name:
+                  type: string
+                  maxLength: 80
+                tagline:
+                  type: string
+                  maxLength: 140
+                area:
+                  type: string
+                  maxLength: 80
+                about:
+                  type: string
+                  maxLength: 1000
+      responses:
+        '200':
+          description: The profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessProfile'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/business-profile/image:
+    get:
+      operationId: businessProfileImage
+      tags:
+      - Links
+      summary: One of the business's profile photos, through the API
+      description: For the web app, whose Content-Security-Policy allows images from its own origin only. Only the organisation's own images are fetched.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: src
+        in: query
+        required: true
+        schema:
+          type: string
+        description: A URL from a photo's `urls`
+      responses:
+        '200':
+          description: The image
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/business-profile/logo:
+    post:
+      operationId: uploadBusinessLogo
+      tags:
+      - Links
+      summary: Set the logo
+      description: The image is checked, stripped of its metadata and stored at three sizes, as the storefront's photos are.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          image/jpeg:
+            schema:
+              type: string
+              format: binary
+          image/png:
+            schema:
+              type: string
+              format: binary
+          image/webp:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: The profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessProfile'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: removeBusinessLogo
+      tags:
+      - Links
+      summary: Take the logo off
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      x-taskiem-all-environments: true
+      responses:
+        '200':
+          description: The profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessProfile'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/business-profile/gallery:
+    post:
+      operationId: addGalleryPhoto
+      tags:
+      - Links
+      summary: Add a photo to the end of the gallery
+      description: At most 12 photos. The caption is optional (at most 120 letters).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: caption
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 120
+      requestBody:
+        required: true
+        content:
+          image/jpeg:
+            schema:
+              type: string
+              format: binary
+          image/png:
+            schema:
+              type: string
+              format: binary
+          image/webp:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '201':
+          description: The profile with the photo added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessProfile'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/business-profile/gallery/order:
+    put:
+      operationId: orderGallery
+      tags:
+      - Links
+      summary: Put the gallery in an order
+      description: The ids name every photo once.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '200':
+          description: The profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessProfile'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/business-profile/gallery/{id}:
+    patch:
+      operationId: captionGalleryPhoto
+      tags:
+      - Links
+      summary: Set or clear a photo's caption
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                caption:
+                  type: string
+                  maxLength: 120
+      responses:
+        '200':
+          description: The profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessProfile'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: removeGalleryPhoto
+      tags:
+      - Links
+      summary: Take a photo out of the gallery
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessProfile'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/invoice-settings:
     get:
       operationId: getInvoiceSettings
@@ -32394,6 +32701,61 @@ components:
           type: boolean
         message:
           type: string
+    BusinessPhoto:
+      type: object
+      additionalProperties: false
+      required: [id, width, height, urls, moderation]
+      properties:
+        id:
+          type: string
+          format: uuid
+        width:
+          type: integer
+        height:
+          type: integer
+        urls:
+          type: object
+          additionalProperties:
+            type: string
+          description: The sizes it was stored at (320, 800 and 2000 pixels wide)
+        moderation:
+          type: string
+          enum: [unreviewed, approved, rejected]
+    BusinessGalleryPhoto:
+      type: object
+      additionalProperties: false
+      required: [id, caption, photo]
+      properties:
+        id:
+          type: string
+          format: uuid
+        caption:
+          type: string
+        photo:
+          $ref: '#/components/schemas/BusinessPhoto'
+    BusinessProfile:
+      type: object
+      additionalProperties: false
+      required: [name, tagline, area, about, logo, gallery, max_gallery]
+      properties:
+        name:
+          type: string
+        tagline:
+          type: string
+        area:
+          type: string
+        about:
+          type: string
+        logo:
+          oneOf:
+          - $ref: '#/components/schemas/BusinessPhoto'
+          - type: 'null'
+        gallery:
+          type: array
+          items:
+            $ref: '#/components/schemas/BusinessGalleryPhoto'
+        max_gallery:
+          type: integer
     LinkSettings:
       type: object
       additionalProperties: false

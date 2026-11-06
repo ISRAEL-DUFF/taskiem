@@ -2192,3 +2192,23 @@ fieldset.sf-choices label.row > span, label.row > input[type="checkbox"] + span 
 .sf-gallery { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
 .sf-gallery-pic { display: inline-flex; align-items: center; gap: 6px; }
 .sf-gallery-pic img { border-radius: var(--radius-sm, 6px); object-fit: cover; }
+
+/* Your business in Explore: the card as another business sees it, the logo, and the gallery. */
+.explore-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-top: 12px; }
+.explore-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; background: var(--panel-2); }
+.explore-strip img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
+.explore-head { display: flex; align-items: center; gap: 12px; padding: 12px; }
+.explore-head .chat-avatar { width: 48px; height: 48px; font-size: 20px; }
+.explore-logo { flex: none; border-radius: 50%; object-fit: cover; background: var(--panel-2); }
+.explore-who { min-width: 0; display: flex; flex-direction: column; }
+.explore-who strong { overflow-wrap: anywhere; }
+.profile-logo { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.profile-logo .chat-avatar.big { width: 64px; height: 64px; font-size: 26px; }
+.gallery-grid { list-style: none; padding: 0; margin: 12px 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.gallery-tile { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.gallery-tile img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--radius-sm); background: var(--panel-2); }
+.gallery-caption { font-size: 13px; min-height: 34px; }
+.gallery-tools { display: flex; gap: 4px; }
+.gallery-tools .icon-button { width: 34px; height: 34px; min-height: 34px; }
+.gallery-wait { align-items: center; justify-content: center; min-height: 100px; color: var(--muted); background: var(--field); border-radius: var(--radius-sm); }
+@media (prefers-reduced-motion: no-preference) { .gallery-tile { animation: rise-in 0.2s ease-out; } }
