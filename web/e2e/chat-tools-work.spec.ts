@@ -1,4 +1,4 @@
-import { expect, test, type Browser, type Page } from "@playwright/test";
+import { expect, test, type Browser, type Page, type Route } from "@playwright/test";
 import { axe, describe } from "./a11y";
 
 // Chat tools, phase 2 (docs/spec/chat-tools.md): from chat, an owner
@@ -56,7 +56,7 @@ async function shop(page: Page) {
     { id: "s1", name: "Rice, 50kg bag", available: true, stock: 42, unit: "bag", price_kobo: 7_600_000 },
     { id: "s2", name: "Rice, 25kg bag", available: true, stock: 4, low: true, unit: "bag", price_kobo: 4_100_000 },
   ];
-  const remember = async (route: import("@playwright/test").Route) => {
+  const remember = async (route: Route) => {
     const r = route.request();
     sent.push({ method: r.method(), path: new URL(r.url()).pathname, body: r.postData() ? r.postDataJSON() : undefined });
   };
