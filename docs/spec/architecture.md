@@ -111,11 +111,11 @@ Requests flow top to bottom: clients and providers hit the edge, the edge record
 | Size | Topology |
 | --- | --- |
 | Dev and self-hosted single node | One binary with all roles, Postgres, SeaweedFS, OpenBao via Docker Compose |
-| Cloud v1 (Nigeria region) | 2× api/edge, 2× orchestrator, 1–2× scheduler (leader-elected), N× workers by queue; Postgres primary plus synchronous standby |
+| Cloud v1 (Nigeria region) | 2× api/edge, 2× orchestrator, 1× scheduler (2 only with the archive in a bucket: [Kubernetes](../kubernetes.md#storage)), N× workers by queue; Postgres primary plus synchronous standby |
 | Cloud at scale | Workers split by queue (connector, sandbox, AI, dedicated tenants); read replicas for inspector queries; a larger Postgres primary before any change of queue (section 4.3) |
 | Enterprise dedicated | Single-tenant stack in the customer's chosen region or on their infrastructure |
 
-Scheduler instances use a session-level Postgres advisory lock for leader election, so only one fires timers at a time while others stand by. The lock is held on a dedicated, direct connection (never through a transaction-pooling proxy such as PgBouncer), and the leader re-checks it before each batch so a lost connection cannot leave two leaders.
+There is no leader election: every scheduler replica runs every loop. Work that must happen once is claimed instead: timers, lease recovery and the orchestration sweep with `SKIP LOCKED` and conditional updates (a timer's firing is guarded by `fired_at`), runs past retention with a 10-minute purge lease, and alert and partner-webhook deliveries one at a time, each claimed for five minutes just before its send (at most 15 seconds) and recorded only while that claim holds. Two loops are not claimed and run on every replica: the canary, and the renewal of data-table tokens (two replicas starting together can each mint a token for the same project; the later one is kept). The files the scheduler writes (archives, audit anchors) are why a second replica needs a bucket ([Kubernetes](../kubernetes.md#storage)).
 
 ## 3. Workflow definition format
 

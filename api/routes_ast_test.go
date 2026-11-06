@@ -28,7 +28,8 @@ type routeMeta struct {
 
 // routeSource extracts every route the API declares with its middleware,
 // keyed "METHOD /path" with chi's patterns. It understands the shapes the
-// router uses: r.Use, r.With(...).Method, r.Route, r.Group, r.Mount (not
+// router uses: r.Use, r.With(...).Method, r.Route, r.Group, route
+// functions called on the same router (s.invoiceRoutes(r)), r.Mount (not
 // followed: mounted handlers are edge routes) and if blocks.
 // Markers on a feature: needed only by writes, or only under /domains.
 const (
@@ -248,6 +249,13 @@ func routeSource(t *testing.T) map[string]routeMeta {
 					}
 				}
 			} else if id, ok := sel.X.(*ast.Ident); !ok || id.Name != "r" {
+				// s.invoiceRoutes(r): a route function registering on this
+				// router, so with this scope's prefix and middleware.
+				if ok && id.Name == "s" && len(call.Args) == 1 {
+					if a, ok := call.Args[0].(*ast.Ident); ok && a.Name == "r" {
+						follow(sc, sel)
+					}
+				}
 				continue
 			}
 			path := func() string {

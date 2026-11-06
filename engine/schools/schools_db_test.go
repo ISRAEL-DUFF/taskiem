@@ -512,4 +512,39 @@ func TestMirror(t *testing.T) {
 		list[0].(map[string]any)["term"] != "First term 2026/2027" {
 		t.Fatalf("term fees %v", list)
 	}
+
+	// Erasing a student reaches the kept copies of their name: the
+	// student's row and their term fees are copied again as erased.
+	var subj string
+	if err := e.DB.Admin.QueryRow(ctx, `SELECT subject_id FROM school_students WHERE admission_number = 'GCA/002'`).Scan(&subj); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Vault.Erase(ctx, e.Tenant, subj, "user:ada"); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if err := m.Tick(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tbl := range []string{schools.StudentsTable, schools.TermFeesTable} {
+		got, err = rows.Call(ctx, e.Tenant, "read_rows", map[string]any{"table": tbl, "limit": 10}, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		list, _ := got["rows"].([]any)
+		for _, r := range list {
+			row := r.(map[string]any)
+			want := "Ebube Eze"
+			if row["admission_number"] == "GCA/002" {
+				want = schools.Erased
+			}
+			if row["name"] != want {
+				t.Fatalf("%s after erasure: %v", tbl, list)
+			}
+		}
+		if len(list) == 0 {
+			t.Fatalf("%s: no rows", tbl)
+		}
+	}
 }

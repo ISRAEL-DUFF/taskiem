@@ -1,0 +1,68 @@
+{{define "hfield"}}<div class="ln field{{if .Error}} has-error{{end}}">
+{{- if eq .Widget "checkbox"}}
+<label class="check"><input id="{{.ID}}" type="checkbox" name="{{.Input}}" value="true"{{if .Checked}} checked{{end}}> {{.Label}}</label>
+{{- else if eq .Widget "consent"}}
+<label class="check"><input id="{{.ID}}" type="checkbox" name="{{.Input}}" value="true" required{{if .Checked}} checked{{end}}> {{.Consent}}</label>
+{{- else if or (eq .Widget "radio") (eq .Widget "checkboxes")}}
+<fieldset class="options"><legend>{{.Label}}{{if .Required}} <span class="req" aria-hidden="true">*</span>{{end}}</legend>
+{{- $f := .}}{{range .Options}}
+<label class="check option"><input type="{{if eq $f.Widget "radio"}}radio{{else}}checkbox{{end}}" name="{{$f.Input}}" value="{{.Value}}"{{if .Checked}} checked{{end}}{{if and $f.Required (eq $f.Widget "radio")}} required{{end}}> {{.Label}}</label>
+{{- end}}
+</fieldset>
+{{- else}}
+<label for="{{.ID}}">{{.Label}}{{if .Required}} <span class="req" aria-hidden="true">*</span>{{else}} <span class="hint">(optional)</span>{{end}}</label>
+{{- if eq .Widget "textarea"}}
+<textarea id="{{.ID}}" name="{{.Input}}" rows="4"{{if .MaxLen}} maxlength="{{.MaxLen}}"{{end}}{{if .Required}} required{{end}}{{with .Place}} placeholder="{{.}}"{{end}}>{{.Value}}</textarea>
+{{- else if eq .Widget "select"}}
+<select id="{{.ID}}" name="{{.Input}}"{{if .Required}} required{{end}}><option value="">Choose…</option>{{range .Options}}<option value="{{.Value}}"{{if .Checked}} selected{{end}}>{{.Label}}</option>{{end}}</select>
+{{- else if eq .Widget "file"}}
+{{with .Held}}<p class="hint">Attached: {{.}}. Choose another file to replace it.</p>{{end}}
+<input id="{{.ID}}" type="file" name="{{.Input}}"{{with .Accept}} accept="{{.}}"{{end}}{{if and .Required (not .Held)}} required{{end}}>
+{{- else if eq .Widget "number"}}
+<span class="num">{{with .Unit}}<span class="unit">{{.}}</span>{{end}}<input id="{{.ID}}" {{if .Unit}}type="text" inputmode="decimal"{{else}}type="number"{{with .Min}} min="{{.}}"{{end}}{{with .Max}} max="{{.}}"{{end}} step="{{.Step}}"{{end}} name="{{.Input}}" value="{{.Value}}"{{if .Required}} required{{end}}{{with .Place}} placeholder="{{.}}"{{end}}></span>
+{{- else}}
+<input id="{{.ID}}" type="{{.InputType}}" name="{{.Input}}" value="{{.Value}}"{{if .MaxLen}} maxlength="{{.MaxLen}}"{{end}}{{if .Required}} required{{end}}{{with .Place}} placeholder="{{.}}"{{end}}{{if eq .Widget "tel"}} inputmode="tel" autocomplete="tel"{{else if eq .Widget "email"}} autocomplete="email"{{end}}>
+{{- end}}
+{{- end}}
+{{with .Help}}<p class="hint">{{.}}</p>{{end}}
+{{with .Error}}<p class="field-error">{{.}}</p>{{end}}
+</div>
+{{end}}
+{{- template "fhead" .}}{{if .Embed}}<script src="{{asset "form-embed.js"}}" defer></script>
+{{end}}{{template "fbody" .}}
+{{if .Embed}}<div hidden data-embed data-origins="{{.Origins}}"></div>
+{{end}}<p class="kicker">From {{.Business}}</p>
+<h1>{{.Title}}</h1>
+{{with .Description}}<p class="tagline">{{.}}</p>{{end}}
+{{with .Error}}<p class="form-error" role="alert">{{.}}</p>{{end}}
+{{with .Notice}}<p class="notice" role="status">{{.}}</p>{{end}}
+<form method="post" action="{{.Action}}" class="form"{{if .Multipart}} enctype="multipart/form-data"{{end}}>
+<input type="hidden" name="token" value="{{.Token}}">
+<input type="hidden" name="state" value="{{.State}}">
+{{if .Embed}}<input type="hidden" name="site" value="" data-site>
+{{end}}<div class="hp" aria-hidden="true"><label>Leave this empty <input type="text" name="{{.Honeypot}}" value="" autocomplete="off" tabindex="-1"></label></div>
+{{if eq .Step "verify"}}
+<div class="lines">
+{{if .Fixed}}<p>First, we will send a 6-digit code to {{.Hint}} to check this is you.</p>
+{{else}}<div class="ln"><label for="f-address">{{if eq .Channel "email"}}Your email address{{else}}Your phone number{{end}}</label>
+<input id="f-address" type="{{if eq .Channel "email"}}email{{else}}tel{{end}}" name="address" value="{{.Address}}" required{{if eq .Channel "email"}} autocomplete="email"{{else}} inputmode="tel" autocomplete="tel" placeholder="0803 123 4567"{{end}}>
+<p class="row-sub">We will send a 6-digit code there to check it is yours.</p></div>
+{{end}}</div>
+<button class="btn btn-primary btn-block" type="submit" name="do" value="code" formaction="{{.CodeAction}}">Send code</button>
+{{else if eq .Step "code"}}
+<div class="lines"><div class="ln"><label for="f-code">The 6-digit code</label>
+<input id="f-code" class="code" type="text" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required></div></div>
+<button class="btn btn-primary btn-block" type="submit" name="do" value="verify">Continue</button>
+<button class="btn btn-block" type="submit" name="do" value="code" formaction="{{.CodeAction}}" formnovalidate>Send another code</button>
+{{else}}
+{{with .PageTitle}}<h2>{{.}}</h2>{{end}}
+<div class="lines">
+{{range .Fields}}{{template "hfield" .}}{{end}}
+</div>
+<p class="row-sub">Your answers go to {{.Business}}{{with .Purpose}}, for: {{.}}{{else}} only{{end}}. Taskiem runs this form for them.</p>
+<button class="btn btn-primary btn-block" type="submit" name="do" value="{{if .Last}}send{{else}}next{{end}}">{{if .Last}}Send{{else}}Next{{end}}</button>
+{{if .CanBack}}<button class="btn btn-block" type="submit" name="do" value="back" formnovalidate>Back</button>{{end}}
+{{end}}
+</form>
+<form method="post" action="/report" class="report"><input type="hidden" name="form" value="{{.Report}}"><button class="btn-link" type="submit">Report this form</button></form>
+{{template "ffoot" .}}

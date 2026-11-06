@@ -142,6 +142,9 @@ func TestCheckSlug(t *testing.T) {
 
 		// Reserved, exactly or by skeleton.
 		{"www", ErrReserved},
+		{"pages", ErrReserved}, // pages.<preview domain> is the CNAME target (F67)
+		{"page", ErrReserved},
+		{"p-a-g-e-s", ErrReserved},
 		{"admin", ErrReserved},
 		{"ADMIN", ErrReserved},
 		{"4dmin", ErrReserved},

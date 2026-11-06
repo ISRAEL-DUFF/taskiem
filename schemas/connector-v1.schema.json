@@ -490,9 +490,10 @@
               "generate": {
                 "type": "string",
                 "enum": [
-                  "rsa_key_pair"
+                  "rsa_key_pair",
+                  "webhook_token"
                 ],
-                "description": "A value Taskiem makes for the person: rsa_key_pair makes an RSA key pair in their browser, keeps the private key as the value and shows the public key to paste into the provider's dashboard."
+                "description": "A value Taskiem makes for the person: rsa_key_pair makes an RSA key pair in their browser, keeps the private key as the value and shows the public key to paste into the provider's dashboard; webhook_token is a random token the server makes when the connection is saved (never typed or chosen by anyone), shown once inside the webhook URL to paste into the provider's dashboard. A webhook_token field is secret and not required."
               }
             }
           }

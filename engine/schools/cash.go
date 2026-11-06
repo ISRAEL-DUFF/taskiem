@@ -206,6 +206,18 @@ func userOf(by string) *uuid.UUID {
 	return nil
 }
 
+// personOf is the person behind an actor string: a user's id, or the
+// owner of the API key ("key:<id>") that acted (taskiem_actor_human), so
+// a request asked with a person's key is theirs for four-eyes; nil for
+// anything else (the system).
+func personOf(ctx context.Context, tx pgx.Tx, by string) (*uuid.UUID, error) {
+	var human string
+	if err := tx.QueryRow(ctx, `SELECT taskiem_actor_human($1)`, by).Scan(&human); err != nil {
+		return nil, err
+	}
+	return userOf(human), nil
+}
+
 // PostPayment posts money a family paid at the desk for a student, or,
 // at or above the school's cash threshold, records it as pending and
 // returns ApprovalNeeded. The same key again answers the same posting.
@@ -324,8 +336,12 @@ func (s *Schools) request(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, kind
 	if key != "" {
 		k = &key
 	}
-	_, err := tx.Exec(ctx, `INSERT INTO school_pending_postings (id, tenant_id, kind, status, student_id, invoice_id, term_id, amount_kobo, details, key, requested_by, requested_user)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`, id, tenant, kind, status, student, invoice, term, amount, raw, k, by, userOf(by))
+	person, err := personOf(ctx, tx, by)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO school_pending_postings (id, tenant_id, kind, status, student_id, invoice_id, term_id, amount_kobo, details, key, requested_by, requested_user)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`, id, tenant, kind, status, student, invoice, term, amount, raw, k, by, person)
 	if code, _ := pgCode(err); code == "23505" {
 		return uuid.Nil, refused("that request was made already")
 	}
@@ -661,8 +677,20 @@ func (s *Schools) Decide(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, a
 	if p.Status != StatePending {
 		return Decision{}, refused("the request was decided already (%s)", p.Status)
 	}
-	user := userOf(by)
-	if user != nil && p.RequestedUser != nil && *user == *p.RequestedUser || by == p.RequestedBy {
+	// People are compared, not actor strings: a request asked with a
+	// person's API key is theirs (one recorded before the key's owner was,
+	// too).
+	user, err := personOf(ctx, tx, by)
+	if err != nil {
+		return Decision{}, err
+	}
+	asker := p.RequestedUser
+	if asker == nil {
+		if asker, err = personOf(ctx, tx, p.RequestedBy); err != nil {
+			return Decision{}, err
+		}
+	}
+	if user != nil && asker != nil && *user == *asker || by == p.RequestedBy {
 		return Decision{}, refused("the person who asked cannot decide their own request: a second person approves or declines it")
 	}
 	status := StateDeclined

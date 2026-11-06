@@ -176,6 +176,25 @@ describe("a form's settings", () => {
     ).toEqual({});
   });
 
+  it("sends an order's deposit, and holds it to 1 to 100 per cent", () => {
+    const f = actionForm({
+      kind: "order",
+      enabled: false,
+      label: "Order",
+      payment: "after_accept",
+      options: { deposit_percent: 40 },
+      workflow_id: null,
+    });
+    expect(f.deposit).toBe("40");
+    expect(actionRequest("order", f).options?.deposit_percent).toBe(40);
+    // Blank, or the full price, sends no deposit.
+    expect(
+      actionRequest("order", { ...f, deposit: "" }).options,
+    ).not.toHaveProperty("deposit_percent");
+    expect(actionProblem("order", { ...f, deposit: "100" })).toBeNull();
+    expect(actionProblem("order", { ...f, deposit: "0" })).toMatch(/1 to 100/);
+  });
+
   it("holds a deposit to 1 to 100 per cent", () => {
     const f = actionForm({
       kind: "booking",
@@ -240,7 +259,9 @@ describe("order statuses", () => {
   it("asks the API for the filter's status", () => {
     expect(ordersPath("open")).toBe("/v1/storefront/orders?status=open");
     expect(ordersPath("all", "f1")).toBe("/v1/storefront/orders?front=f1");
-    expect(ordersPath("open", "f1")).toBe("/v1/storefront/orders?status=open&front=f1");
+    expect(ordersPath("open", "f1")).toBe(
+      "/v1/storefront/orders?status=open&front=f1",
+    );
     expect(ordersPath("")).toBe("/v1/storefront/orders?status=open");
     expect(ordersPath("all")).toBe("/v1/storefront/orders");
     expect(ordersPath("refund_due")).toBe(

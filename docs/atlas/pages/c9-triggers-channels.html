@@ -92,7 +92,7 @@
 <div class="callout risk"><span class="callout-label">Risk</span>
   <ul>
     <li>The rate limiters live in each edge process. With three edge replicas a tenant's ceiling is three times what the plan says.</li>
-    <li>Looking up a tenant that is not cached is limited to 100 a second across all tenants. Requests for random tenant ids can use that up, and real tenants whose cache entry has just expired then get <code>429</code> for a moment.</li>
+    <li>Looking up a tenant that is not cached is limited to 100 a second across all tenants, and requests for random tenant ids can use that up, so a new tenant's first delivery may get <code>429</code> during such a flood. Re-checks of tenants already known draw on a budget of their own, and while that is spent a known tenant keeps its last answer for up to 10 minutes rather than being turned away.</li>
   </ul>
 </div>
 

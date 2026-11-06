@@ -63,6 +63,30 @@ type Storefront struct {
 	// Domain is the primary of the business's own verified domains
 	// (domains.go), where the page is served once published.
 	Domain *string `json:"domain"`
+	// RetentionDays is how long ended orders keep their customer's
+	// details (SetRetention).
+	RetentionDays int `json:"retention_days"`
+}
+
+// Retention bounds: ended orders keep their customer's details for 30
+// days to 10 years; 365 by default.
+const (
+	MinRetentionDays     = 30
+	MaxRetentionDays     = 3650
+	DefaultRetentionDays = 365
+)
+
+// SetRetention sets how long ended orders keep their customer's details
+// before they are erased (Orders.ForgetExpired).
+func SetRetention(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, days int) error {
+	if days < MinRetentionDays || days > MaxRetentionDays {
+		return fmt.Errorf("%w: orders are kept %d to %d days", ErrInvalid, MinRetentionDays, MaxRetentionDays)
+	}
+	tag, err := tx.Exec(ctx, `UPDATE storefronts SET retention_days = $2, updated_at = now() WHERE tenant_id = $1`, tenant, days)
+	if err == nil && tag.RowsAffected() == 0 {
+		err = ErrNotFound
+	}
+	return err
 }
 
 // URL is the published page's public address: its own primary domain
@@ -105,8 +129,14 @@ type Item struct {
 	PriceKobo   *int64 `json:"price_kobo,omitempty"`
 	Description string `json:"description,omitempty"`
 	Photo       Image  `json:"photo,omitempty"`
-	Available   bool   `json:"available"`
-	Category    string `json:"category,omitempty"`
+	// Gallery is the photos after the first, when the photo column holds
+	// several media ids separated by commas.
+	Gallery []Image `json:"gallery,omitempty"`
+	// PhotoIDs are the media ids of the photo and the gallery, in order,
+	// for the owner's screens to remove one.
+	PhotoIDs  []string `json:"photo_ids,omitempty"`
+	Available bool     `json:"available"`
+	Category  string   `json:"category,omitempty"`
 	// Stock is how many are left, when the catalogue tracks it.
 	Stock *int64 `json:"stock,omitempty"`
 	// A service's length, customers at once and time kept free after.
@@ -129,14 +159,14 @@ const cols = `id, slug, status, draft, catalogue_table, catalogue_columns, publi
 	catalogue_synced_at, catalogue_error, updated_at, services_table, services_columns, availability, review_note, suspended_reason, orders_paused,
 	(SELECT m.urls FROM storefront_media m WHERE m.tenant_id = storefronts.tenant_id AND m.id::text = storefronts.draft->>'logo' AND m.moderation <> 'rejected'),
 	(SELECT d.host FROM storefront_domains d WHERE d.storefront_id = storefronts.id AND d.verified_at IS NOT NULL
-	  ORDER BY d.is_primary DESC, d.verified_at, d.host LIMIT 1)`
+	  ORDER BY d.is_primary DESC, d.verified_at, d.host LIMIT 1), retention_days`
 
 func scan(r pgx.Row) (Storefront, error) {
 	var s Storefront
 	var draft, columns, scols, avail, logo []byte
 	err := r.Scan(&s.ID, &s.Slug, &s.Status, &draft, &s.CatalogueTable, &columns, &s.PublishedVersion, &s.PublishedSlug, &s.PublishedAt,
 		&s.ClosedMessage, &s.CatalogueSynced, &s.CatalogueError, &s.UpdatedAt, &s.ServicesTable, &scols, &avail,
-		&s.ReviewNote, &s.SuspendedReason, &s.OrdersPaused, &logo, &s.Domain)
+		&s.ReviewNote, &s.SuspendedReason, &s.OrdersPaused, &logo, &s.Domain, &s.RetentionDays)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Storefront{}, ErrNotFound
 	}
@@ -352,6 +382,9 @@ func MediaImage(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, id string) (Im
 }
 
 // mediaImage is a media record's URLs, refusing rejected or unknown ids.
+// MaxGallery is the most photos after the first an item has.
+const MaxGallery = 5
+
 func mediaImage(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, id string) (Image, error) {
 	mid, err := uuid.Parse(id)
 	if err != nil {
@@ -372,6 +405,23 @@ func mediaImage(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, id string) (Im
 	var img Image
 	_ = json.Unmarshal(raw, &img)
 	return img, nil
+}
+
+// Shown keeps the media ids of a photo column a page can show (stored,
+// and not refused by review), in order.
+func Shown(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, ids []string) ([]string, error) {
+	var out []string
+	for _, id := range ids {
+		_, err := mediaImage(ctx, tx, tenant, id)
+		if errors.Is(err, ErrInvalid) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, nil
 }
 
 // --- the catalogue copy ---
@@ -451,11 +501,25 @@ func Items(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]a
 			}
 		}
 		if m.Photo != "" {
-			if id := str(r[m.Photo]); id != "" {
-				if img, err := mediaImage(ctx, tx, tenant, id); err == nil {
-					it.Photo = img
-				} else if !errors.Is(err, ErrInvalid) {
+			// One media id, or several separated by commas: the first is
+			// the photo, the rest its gallery (at most MaxGallery).
+			for _, id := range strings.Split(str(r[m.Photo]), ",") {
+				id = strings.TrimSpace(id)
+				if id == "" || len(it.Gallery) >= MaxGallery {
+					continue
+				}
+				img, err := mediaImage(ctx, tx, tenant, id)
+				if errors.Is(err, ErrInvalid) {
+					continue
+				}
+				if err != nil {
 					return nil, err
+				}
+				it.PhotoIDs = append(it.PhotoIDs, id)
+				if it.Photo == nil {
+					it.Photo = img
+				} else {
+					it.Gallery = append(it.Gallery, img)
 				}
 			}
 		}

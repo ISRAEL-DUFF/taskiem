@@ -13,6 +13,9 @@ import (
 // Internals the external tests reach.
 var SafeReturn = safeReturn
 
+// BillOut is a bill as link@1 gives it to a workflow.
+var BillOut = billOut
+
 // WaitBackground waits for work done after answering (reset emails).
 func (s *Server) WaitBackground() { s.bg.Wait() }
 

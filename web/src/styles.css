@@ -931,6 +931,16 @@ a.inline-link { text-decoration: underline; text-underline-offset: 2px; }
 .look-mini-editorial { background: #fff; border: 1px solid #eee; }
 .look-mini-editorial .look-mini-line { margin: 0 auto; width: 60%; border-radius: 0; background: #1c1c1c; }
 .look-mini-editorial .look-mini-line.short { width: 40%; background: #b9b4ac; }
+.look-mini-kitchen { background: #fff6e8; border: 1px solid #ecdcc4; }
+.look-mini-kitchen .look-mini-btn { border-radius: 999px; }
+.look-mini-fashion { background: #f4f0e8; border: 1px solid #d9d2c5; }
+.look-mini-fashion .look-mini-line { margin: 0 auto; width: 50%; border-radius: 0; background: #14110f; }
+.look-mini-fashion .look-mini-btn { border-radius: 0; }
+.look-mini-salon { background: #fbebe6; border: 1px solid #ecd3cb; }
+.look-mini-salon .look-mini-top { border-radius: 999px 999px 8px 8px; }
+.look-mini-salon .look-mini-btn { border-radius: 999px; }
+.look-mini-grocery { background: #fafaf4; border: 1px solid #e3e6d8; }
+.look-mini-grocery .look-mini-btn { border-radius: 8px; }
 .look-mini-editorial .look-mini-btn { border-radius: 0; }
 .look-colour { display: flex; align-items: flex-end; gap: 12px; margin-bottom: 10px; }
 .look-colour input[type="color"] { width: 52px; height: 40px; padding: 2px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--panel); cursor: pointer; }
@@ -2178,3 +2188,7 @@ fieldset.sf-choices label.row > span, label.row > input[type="checkbox"] + span 
 .chat-failed .fail-act:last-of-type { color: var(--danger); }
 .chat-failed .fail-act svg { width: 18px; height: 18px; }
 @media (prefers-reduced-motion: no-preference) { .chat-failed { animation: chip-pop 0.2s ease-out; transform-origin: right center; } }
+
+.sf-gallery { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.sf-gallery-pic { display: inline-flex; align-items: center; gap: 6px; }
+.sf-gallery-pic img { border-radius: var(--radius-sm, 6px); object-fit: cover; }

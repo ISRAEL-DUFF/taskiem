@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="{{.Lang}}">
+<head>
+{{template "meta" .}}{{template "og" .}}</head>
+<body class="sf gx{{if .Ordering}} has-sticky{{end}}">
+<header class="gx-top">
+  <a class="gx-name" href="{{if .Home}}{{.Home}}{{else}}#{{end}}">{{with .Brand.Logo}}<img src="{{.}}" alt="" width="32" height="32">{{else}}<span class="gx-mark" aria-hidden="true">{{.Brand.Initials}}</span>{{end}}{{.M.Card.Name}}</a>
+  {{if .Ordering}}<a class="gx-bag" href="{{.Base}}/a/order" data-bag-link>{{template "i-bag"}}<span>Order</span><b class="bag-n" data-bag-n data-bag-show hidden></b></a>{{end}}
+</header>
+{{with .M.Card.Tagline}}<p class="gx-strip">{{.}}</p>{{end}}
+<form class="gx-search" role="search" method="get" action="{{if .Base}}{{.Base}}{{else}}/{{end}}"><label class="sr" for="gx-q">Search</label>{{template "i-search"}}<input id="gx-q" type="search" name="q" value="{{.Search}}" maxlength="40" placeholder="Search {{.M.Card.Name}}" autocomplete="off"></form>
+<main class="gx-main">
+{{template "sfnotes" .}}
+{{if gt (len .Sections) 1}}<nav class="gx-cats" aria-label="Aisles">{{range $i, $s := .Sections}}{{if .Title}}<a href="#s{{$i}}">{{$pic := ""}}{{range .Items}}{{if and (not $pic) .Small}}{{$pic = .Small}}{{end}}{{end}}<span class="gx-dot c{{$i}}" aria-hidden="true">{{if $pic}}<img src="{{$pic}}" alt="" width="64" height="64" loading="lazy" decoding="async">{{else}}{{initial .Title}}{{end}}</span>{{.Title}}</a>{{end}}{{end}}</nav>{{end}}
+{{if not .Search}}<section class="gx-promo">
+  <div><p class="gx-tag">{{if .OpenKnown}}{{if .OpenNow}}Open now{{else}}Closed now{{end}}{{else}}Welcome{{end}}</p>
+  <h1>{{.M.Card.Name}}</h1>
+  {{with .M.Card.About}}<p>{{.}}</p>{{end}}
+  <p class="gx-cta">{{if .HasItems}}<a class="btn btn-light" href="#shop">Shop now</a>{{end}}{{with .M.WhatsLink}}<a class="btn btn-ghost" href="{{.}}" rel="noopener">WhatsApp</a>{{end}}</p></div>
+  {{with .Brand.Cover}}<img class="gx-promo-img" src="{{.}}" srcset="{{.}} 800w, {{$.Brand.CoverLarge}} 2000w" sizes="(min-width: 900px) 30vw, 0px" alt="">{{end}}
+</section>{{end}}
+{{if .Services}}<section aria-labelledby="services-h"><h2 id="services-h">Services</h2>
+<ul class="items">{{range .Services}}<li class="item"><span class="thumb thumb-icon">{{template "i-clock"}}</span><div class="item-text"><h3>{{.Name}}</h3><p class="item-sub">{{.Length}} · {{.Price}}</p><p class="item-row"><span></span><a class="btn btn-small btn-primary" href="{{.Href}}" aria-label="Book {{.Name}}">Book</a></p></div></li>
+{{end}}</ul></section>{{end}}
+{{if and .Search (not .Found)}}<p class="notice" role="status">Nothing matches “{{.Search}}”. <a href="{{if .Base}}{{.Base}}{{else}}/{{end}}">See everything</a></p>{{end}}
+{{if .HasItems}}<div id="shop">
+{{range $i, $s := .Sections}}<section id="s{{$i}}" aria-label="{{if .Title}}{{.Title}}{{else}}Fresh today{{end}}">
+  <h2>{{if .Title}}{{.Title}}{{else}}Fresh today{{end}}</h2>
+  <ul class="gx-grid">{{range .Items}}<li class="gx-card{{if or (not .Available) .SoldOut}} is-unavailable{{end}}">{{if .Few}}<span class="badge badge-few">Few left</span>{{end}}
+    <a class="gx-img" href="{{if .ID}}{{$.Base}}/i/{{.ID}}{{else}}#{{end}}" tabindex="-1" aria-hidden="true">{{if .Small}}<img src="{{.Small}}" srcset="{{.Small}} 320w, {{.Large}} 800w" sizes="(min-width: 900px) 15vw, 45vw" alt="" loading="lazy" decoding="async">{{else}}{{template "i-photo"}}{{end}}</a>
+    <h3>{{if .ID}}<a class="item-open" href="{{$.Base}}/i/{{.ID}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}</h3>
+    <p class="item-sub">{{.Price}}</p>
+    {{if not .Available}}<span class="badge">Unavailable</span>{{else if .SoldOut}}<span class="badge">Sold out</span>{{else if and $.Ordering .Orderable}}{{if .Options}}<a class="gx-add" href="{{$.Base}}/i/{{.ID}}">Choose</a>{{else}}<form class="gx-buy" data-merge method="get" action="{{$.Base}}/a/order"><input type="hidden" name="step" value="bag"><span class="gx-qty"><input class="qty" type="number" name="q.{{.ID}}" value="1" min="1" max="{{.Max}}" step="1" inputmode="numeric" data-stepper="{{.Name}}" aria-label="Quantity of {{.Name}}"></span><button class="gx-add" type="submit" aria-label="Add {{.Name}}">Add</button></form>{{end}}{{end}}
+  </li>{{end}}</ul>
+</section>{{end}}</div>{{end}}
+{{template "sfinfo" .}}
+</main>
+{{template "sffoot" .}}
+{{if .Ordering}}<a class="sticky" href="{{.Base}}/a/order" data-bag-link><span data-bag-hide>Checkout</span><span class="sticky-sum" data-bag-show hidden><small><b data-bag-n></b> items</small> <b data-bag-t></b></span><span class="sticky-go"><span data-bag-show hidden>Checkout&nbsp;</span>{{template "i-next"}}</span></a>{{end}}
+</body>
+</html>

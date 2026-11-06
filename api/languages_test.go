@@ -252,3 +252,32 @@ func countRows(t *testing.T, w *world, q string) int {
 	}
 	return n
 }
+
+// A chat's words do not stay in ai_interactions (finding F50): a message
+// routed through the model, and the model's answer, named people and
+// amounts that pattern redaction leaves, kept in plain text for good. The
+// record keeps the tokens and what happened, for the budget and billing.
+func TestChatModelCallsKeepNoText(t *testing.T) {
+	w := newWAWorld(t)
+	fake := &ai.Fake{Respond: func(req ai.Request) (*ai.Response, error) {
+		return &ai.Response{Text: `{"intent":"owes","argument":"Chinedu Okafor owes 15000 for rice"}`, StopReason: "end_turn", Model: "fake-model",
+			Usage: ai.Usage{InputTokens: 300, OutputTokens: 20}}, nil
+	}}
+	w.srv.Languages = &api.LanguageSettings{Enabled: []lang.Tag{lang.EN, lang.PCM}, Model: fake}
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	w.bind(t, owner, "+2348010000004")
+	w.say(t, "+2348010000004", "language pcm")
+	w.say(t, "+2348010000004", "Chinedu Okafor for Ikeja owe me 15k for rice")
+	if n := len(fake.Requests()); n != 1 {
+		t.Fatalf("%d model requests", n)
+	}
+	var kept string
+	var tokens int64
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT messages::text || ' ' || COALESCE(response, ''), total_tokens FROM ai_interactions
+		WHERE kind = 'intent' AND outcome = 'valid' AND build_id IS NULL`).Scan(&kept, &tokens); err != nil {
+		t.Fatal(err)
+	}
+	if tokens != 320 || strings.Contains(kept, "Chinedu") || strings.Contains(kept, "15") || strings.Contains(kept, "rice") {
+		t.Fatalf("recorded %q, %d tokens", kept, tokens)
+	}
+}

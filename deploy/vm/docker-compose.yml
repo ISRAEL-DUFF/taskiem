@@ -20,7 +20,7 @@ x-hardening: &hardening
 services:
   caddy:
     <<: *hardening
-    image: caddy:2
+    image: caddy:2.11.8@sha256:4fcafa98afd1c2e642e353e3c5cf9ddbe892fcee14bc990e7ba2c5b78e51f9cf
     ports: ["80:80", "443:443", "443:443/udp"]
     environment:
       TASKIEM_DOMAIN: ${TASKIEM_DOMAIN:?set TASKIEM_DOMAIN in .env}
@@ -39,7 +39,7 @@ services:
   # the Compose network.
   openbao:
     <<: *hardening
-    image: openbao/openbao:${OPENBAO_VERSION:-2.7.1}
+    image: ${OPENBAO_IMAGE:-openbao/openbao:2.7.1@sha256:6d2b93856e3fcf7b18ad855a0b51eaba474dc8b79cf554379ea32034797d2acf}
     command: ["server"]
     environment:
       BAO_ADDR: http://127.0.0.1:8200
@@ -58,7 +58,7 @@ services:
   # not renew it, and an expired token makes every secret unreadable.
   openbao-renew:
     <<: *hardening
-    image: openbao/openbao:${OPENBAO_VERSION:-2.7.1}
+    image: ${OPENBAO_IMAGE:-openbao/openbao:2.7.1@sha256:6d2b93856e3fcf7b18ad855a0b51eaba474dc8b79cf554379ea32034797d2acf}
     entrypoint: ["sh", "-c"]
     command:
       - |
@@ -166,7 +166,7 @@ services:
   clamav:
     <<: *hardening
     profiles: [public, mail]
-    image: clamav/clamav:${CLAMAV_VERSION:-1.4}
+    image: ${CLAMAV_IMAGE:-clamav/clamav:1.4.6@sha256:8ad6197396974726c35d017e50aaaaf4b91745726a04faec8480c203edd98052}
     volumes:
       - clamav_db:/var/lib/clamav
     healthcheck:

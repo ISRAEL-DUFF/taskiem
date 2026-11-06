@@ -80,6 +80,19 @@ type eventItem struct {
 // deduplicated on the event's dedup key. On failure it has answered the
 // delivery (503 so the provider retries, 429, 423) and returns false.
 func (h *Handler) deliverInto(ctx context.Context, w http.ResponseWriter, r *http.Request, t target, ev eventItem) (map[string]any, bool) {
+	// A connector that reads the event's own key (OPay's is encrypted to
+	// this tenant's connection) keys it here: a retry the provider signed
+	// again is still the same event.
+	if keyer := keyerOf(ev); keyer != nil && !ev.test {
+		key, err := h.key(ctx, keyer, t.tenant, ev.env, ev.conn, t.connection, ev.body)
+		if err != nil {
+			h.unavailable(w, r, fmt.Errorf("keying the event: %w", err))
+			return nil, false
+		}
+		if key != "" {
+			ev.dedup = key
+		}
+	}
 	out := map[string]any{"event": ev.event}
 	payload := map[string]any{"event": ev.event, "body": ev.body}
 	trig := map[string]any{"type": "connector_event", "connector": ev.ref, "trigger": ev.name, "event": ev.event, "body": ev.body}
@@ -154,6 +167,13 @@ func (h *Handler) deliverInto(ctx context.Context, w http.ResponseWriter, r *htt
 	}
 	out["runs"] = runs
 	return out, true
+}
+
+func keyerOf(ev eventItem) connector.Keyer {
+	if ev.conn == nil {
+		return nil
+	}
+	return ev.conn.Keyers[ev.name]
 }
 
 // routeEvent delivers an event a partner received into each of its

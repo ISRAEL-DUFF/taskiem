@@ -148,7 +148,7 @@ export function StorefrontReview() {
     .map(([k]) => k);
   const decide = (decision: "approve" | "reject") =>
     act.run(async () => {
-      const out = await withStepUp<{ status: string }>("ops.storefront.review", r.id, `/storefront-reviews/${r.id}/${decision}`, {
+      const out = await withStepUp<{ status: string }>("ops.storefront.review", `${r.id}/${decision}`, `/storefront-reviews/${r.id}/${decision}`, {
         note: note.trim(),
         reject_photos: photos,
       });

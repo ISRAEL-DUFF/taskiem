@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -18,8 +19,8 @@ import (
 // A tenant's own WhatsApp number (spec 11.4). An admin holding
 // secret.manage connects the tenant's WhatsApp Business number by hand:
 // its phone number id, WhatsApp Business Account id, a system user's
-// access token and, for a number on the tenant's own Meta app, that app's
-// secret and a verify token. The token is checked against the Graph API,
+// access token and, for a number on the tenant's own Meta app (an owner
+// only), that app's secret and a verify token. The token is checked against the Graph API,
 // the credentials go in the tenant's vault, and from then on the
 // tenant's people hear from, and write to, that number for this tenant.
 // Embedded signup is a hook only (waEmbeddedSignup) until a Business
@@ -121,6 +122,14 @@ func (s *Server) putWhatsAppNumber(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ownApp := req.OwnApp == nil || *req.OwnApp
+	// A number on the tenant's own Meta app is verified with a secret the
+	// tenant chose: whoever holds it can sign a delivery from any member's
+	// number, so only an owner, who already holds every right, connects one
+	// (F2).
+	if ownApp && !slices.Contains(p.Roles, "owner") {
+		s.fail(w, r, fmt.Errorf("%w: only an owner can connect a number on your own Meta app", errForbidden))
+		return
+	}
 	req.AccessToken, req.AppSecret, req.VerifyToken = strings.TrimSpace(req.AccessToken), strings.TrimSpace(req.AppSecret), strings.TrimSpace(req.VerifyToken)
 	switch {
 	case !graphID.MatchString(req.PhoneNumberID):
@@ -137,6 +146,11 @@ func (s *Server) putWhatsAppNumber(w http.ResponseWriter, r *http.Request) {
 		return
 	case req.PhoneNumberID == s.WhatsApp.Config.PhoneNumberID:
 		s.fail(w, r, fmt.Errorf("%w: that is the shared number", errConflict))
+		return
+	case s.WhatsApp.WABA != "" && req.WABAID == s.WhatsApp.WABA:
+		// Template statuses are kept per account: the shared number's
+		// account is the platform's (F36).
+		s.fail(w, r, fmt.Errorf("%w: that is the shared number's WhatsApp Business Account", errConflict))
 		return
 	}
 	// One number, one organisation.

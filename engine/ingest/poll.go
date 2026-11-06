@@ -42,6 +42,10 @@ type Poller struct {
 	// carry money events, workflow or not, so the money log hears them
 	// (decision 0045; spec 7.3).
 	MoneyLog bool
+	// CallTimeout bounds one target's poll action, so a connector that
+	// never answers holds up neither the tick nor the other tenants'
+	// targets. Default 30s.
+	CallTimeout time.Duration
 	// Now is the clock (tests).
 	Now func() time.Time
 }
@@ -71,6 +75,14 @@ func (p *Poller) Run(ctx context.Context) error {
 		case <-time.After(time.Minute):
 		}
 	}
+}
+
+// callTimeout is CallTimeout or its default.
+func (p *Poller) callTimeout() time.Duration {
+	if p.CallTimeout > 0 {
+		return p.CallTimeout
+	}
+	return 30 * time.Second
 }
 
 func (p *Poller) log() *slog.Logger {
@@ -210,7 +222,9 @@ func (p *Poller) fetchAndDeliver(ctx context.Context, t pollTarget, conn *connec
 			return r.RotateCredentials(use, t.tenant, ScheduleEnvironment, conn.Manifest.ID, t.connection, fn)
 		}
 	}
-	resp, err := action.Execute(ctx, req)
+	actx, cancel := context.WithTimeout(ctx, p.callTimeout())
+	resp, err := action.Execute(actx, req)
+	cancel()
 	if err != nil {
 		return 0, err
 	}

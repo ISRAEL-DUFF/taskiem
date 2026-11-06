@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"runtime/debug"
 	"slices"
 	"strings"
 	"sync"
@@ -276,7 +277,7 @@ func (w *Worker) Run(ctx context.Context) error {
 		go func() {
 			defer wg.Done()
 			for c := range work {
-				if err := w.execute(execCtx, c); err != nil && execCtx.Err() == nil {
+				if err := recovered(func() error { return w.execute(execCtx, c) }); err != nil && execCtx.Err() == nil {
 					w.Logger.Error("task failed to execute", "run", c.run, "step", c.step, "attempt", c.attempt, "err", err)
 				}
 				free <- struct{}{}
@@ -319,6 +320,19 @@ func (w *Worker) Run(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// recovered runs fn, turning a panic into an error: one task that trips
+// a bug has its lease expire and is logged, rather than ending the process
+// that serves every other tenant's tasks too.
+func recovered(fn func() error) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			telemetry.TaskPanics.Inc()
+			err = fmt.Errorf("panic executing task: %v\n%s", r, debug.Stack())
+		}
+	}()
+	return fn()
 }
 
 // RunOnce claims and executes every available task once, sequentially.
@@ -605,9 +619,9 @@ func failed(c claim, kind, msg, next string) history.Event {
 // maxStepOutput bounds a step's output kept in its history (spec 4.9:
 // 256 KB inline). A larger one would be copied into the decision cache and
 // every replay of the run; until outputs over it move to object storage, a
-// step that returns one fails. http steps cut their response body to the
-// same size instead (maxHTTPBody), and container steps keep to their own
-// limits.output_bytes.
+// step that returns one fails. http steps refuse a response body over the
+// same size in doHTTP (maxHTTPBody; a write's parks as maybe applied, as
+// here), and container steps keep to their own limits.output_bytes.
 const maxStepOutput = 256 << 10
 
 // capOutput turns a completion whose output is over maxStepOutput into a
@@ -655,11 +669,18 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 		if err != nil {
 			return err
 		}
-		raw, err := History(ctx, tx, c.run)
+		// The run's personal values, read once as the run goes (runTaint),
+		// and only this step's events opened: a task does not reopen the
+		// whole history (a foreach would cost n squared).
+		taint, err := w.Store.runTaint(ctx, tx, c.tenant, c.run)
 		if err != nil {
 			return err
 		}
-		hist, taint, err := w.Store.openHistory(ctx, tx, c.tenant, raw)
+		raw, err := stepHistory(ctx, tx, c.run, c.step)
+		if err != nil {
+			return err
+		}
+		hist, taint, err := w.Store.openHistoryInto(ctx, tx, c.tenant, raw, taint)
 		if err != nil {
 			return err
 		}
@@ -1098,6 +1119,12 @@ func (w *Worker) finish(ctx context.Context, p *plan, result *history.Event) err
 
 // reconcile asks the provider whether an earlier attempt's effect happened.
 func (w *Worker) reconcile(ctx context.Context, p *plan) (history.Event, error) {
+	if p.conn == nil {
+		// An http step has no reconcile action, whatever class it declares
+		// (publishing refuses reconcilable_write on one; older versions
+		// may have it): a person checks with the partner and resolves it.
+		return failed(p.c, "unknown_outcome", "no reconcile action", "park"), nil
+	}
 	spec := p.conn.Manifest.Actions[p.action]
 	action := p.conn.Actions[spec.Reconcile]
 	if action == nil {

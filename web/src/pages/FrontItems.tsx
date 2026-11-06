@@ -28,6 +28,7 @@ import {
 } from "../lib/fronts";
 import { formatPrice, imageProblem, thumb, tidy } from "../lib/storefront";
 import { refusalOf } from "../lib/trust";
+import { MAX_GALLERY, PhotoStrip } from "./PhotoStrip";
 
 /** A front's items, edited where the front is (docs/spec/fronts.md §7.1):
  * what is on its list, with a photo, a price and whether it can be ordered
@@ -45,6 +46,7 @@ export function FrontItems({
   const act = useAction();
   const [editing, setEditing] = useState<FrontItem | "new" | null>(null);
   const photoFor = useRef<string | null>(null);
+  const photoAdd = useRef(false);
   const picker = useRef<HTMLInputElement>(null);
   const v = view.data;
 
@@ -52,10 +54,15 @@ export function FrontItems({
     view.reload();
     onChanged();
   };
-  const sendPhoto = async (row: string, file: File) => {
+  const sendPhoto = async (row: string, file: File, add = false) => {
     const bad = imageProblem(file);
     if (bad) throw new Error(bad);
-    await tidy(uploadFile(`${base}/${encodeURIComponent(row)}/photo`, file));
+    await tidy(
+      uploadFile(
+        `${base}/${encodeURIComponent(row)}/photo${add ? "?add=1" : ""}`,
+        file,
+      ),
+    );
   };
 
   return (
@@ -116,6 +123,34 @@ export function FrontItems({
                   ]
                     .filter(Boolean)
                     .join(" · ")}
+                  <PhotoStrip
+                    name={it.name}
+                    gallery={it.gallery}
+                    ids={it.photo_ids}
+                    busy={act.busy}
+                    onRemove={(id) =>
+                      void act.run(
+                        async () => (
+                          await del(
+                            `${base}/${encodeURIComponent(it.id)}/photo?media=${encodeURIComponent(id)}`,
+                          ),
+                          await after()
+                        ),
+                        "Photo removed",
+                      )
+                    }
+                    onMain={(id) =>
+                      void act.run(
+                        async () => (
+                          await put(
+                            `${base}/${encodeURIComponent(it.id)}/photo/main?media=${encodeURIComponent(id)}`,
+                          ),
+                          await after()
+                        ),
+                        "Main photo changed",
+                      )
+                    }
+                  />
                 </span>
               }
               testid="front-item"
@@ -135,6 +170,7 @@ export function FrontItems({
                   disabled={act.busy}
                   onClick={() => {
                     photoFor.current = it.id;
+                    photoAdd.current = false;
                     picker.current?.click();
                   }}
                 >
@@ -144,6 +180,24 @@ export function FrontItems({
                   <span className="sr-only"> for {it.name}</span>
                 </button>
               )}
+              {v.takes.photo &&
+                it.photo &&
+                Object.keys(it.photo).length > 0 &&
+                (it.gallery?.length ?? 0) < MAX_GALLERY && (
+                  <button
+                    type="button"
+                    className="small"
+                    disabled={act.busy}
+                    onClick={() => {
+                      photoFor.current = it.id;
+                      photoAdd.current = true;
+                      picker.current?.click();
+                    }}
+                  >
+                    Add another photo
+                    <span className="sr-only"> for {it.name}</span>
+                  </button>
+                )}
               {v.takes.available && (
                 <button
                   type="button"
@@ -201,7 +255,9 @@ export function FrontItems({
           const row = photoFor.current;
           if (!file || !row) return;
           void act.run(
-            async () => (await sendPhoto(row, file), await after()),
+            async () => (
+              await sendPhoto(row, file, photoAdd.current), await after()
+            ),
             "Photo added",
           );
         }}

@@ -52,10 +52,9 @@
       <article class="tile{{if or (not .Available) .SoldOut}} is-unavailable{{end}}">
         <div class="tile-img">{{if .Small}}<img src="{{.Small}}" srcset="{{.Small}} 320w, {{.Large}} 800w" sizes="(min-width: 40rem) 13rem, 45vw" alt="{{.Name}}" loading="lazy" decoding="async">{{end}}
         {{if not .Available}}<span class="badge">Unavailable</span>{{else if .SoldOut}}<span class="badge">Sold out</span>{{end}}</div>
-        <h3><a class="item-open" href="#i-{{.ID}}">{{.Name}}</a></h3>
+        <h3>{{if .ID}}<a class="item-open" href="{{$.Base}}/i/{{.ID}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}</h3>
         {{with .Description}}<p class="tile-sub">{{.}}</p>{{end}}{{if .ReadyIn}}<p class="tile-sub">Ready in {{.ReadyIn}} min</p>{{end}}
         <p class="tile-row"><span class="price">{{.Price}}</span>{{if and $.Ordering .Orderable}}<a class="add" href="{{$.Base}}/a/order?item={{.ID}}" aria-label="Add {{.Name}}">{{template "i-plus"}}</a>{{end}}</p>
-        {{template "itemsheet" (sheet . $)}}
       </article>
       {{end}}
     </div>

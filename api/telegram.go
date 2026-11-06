@@ -172,7 +172,11 @@ func (s *Server) tgReceive(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	ctx := r.Context()
+	// Once claimed, an update is handled to the end whether or not
+	// Telegram waits for the answer: its resend would be dropped as a
+	// duplicate. Bounded as WhatsApp's are (F52).
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 30*time.Second)
+	defer cancel()
 	// At most once: an update is claimed before it is acted on.
 	fresh, err := tg.ClaimInbound(ctx, u.ID)
 	if err != nil {

@@ -165,6 +165,21 @@ func TestSchoolCashApprovalsAndReceipts(t *testing.T) {
 	if items := admin.must(200, "GET", "/v1/notifications", nil)["notifications"].([]any); len(items) == 0 || !strings.HasPrefix(items[0].(map[string]any)["title"].(string), "Approved: a cash posting") {
 		t.Fatalf("the requester's notifications %v", items)
 	}
+	// Asked with the owner's API key, it is still the owner's request: the
+	// owner does not decide it; a second person does.
+	key := keyFor(t, owner, "", "school.manage", "invoice.manage")
+	code, out = key.do("POST", "/v1/schools/payments", map[string]any{"student": "GCA/002", "amount_kobo": 6_000_000, "how": "cash", "note": "via key"})
+	if code != 202 {
+		t.Fatalf("the key's request: %d %v", code, out)
+	}
+	byKey := out["request"].(map[string]any)["id"].(string)
+	if mine := owner.must(200, "GET", "/v1/schools/approvals", nil)["requests"].([]any); len(mine) != 1 || mine[0].(map[string]any)["yours"] != true {
+		t.Fatalf("the owner's key's request in the inbox %v", mine)
+	}
+	if e := owner.must(409, "POST", "/v1/schools/approvals/"+byKey, map[string]any{"decision": "approved"}); !strings.Contains(e["error"].(string), "cannot decide their own request") {
+		t.Fatalf("the owner approved their own key's request: %v", e)
+	}
+	second.must(200, "POST", "/v1/schools/approvals/"+byKey, map[string]any{"decision": "declined", "reason": "Not in the box"})
 
 	// Discounts at or above the discount threshold wait the same way.
 	owner.must(200, "PUT", "/v1/settings/schools", map[string]any{"enabled": true, "discount_threshold_naira": 20000})
@@ -209,6 +224,17 @@ func TestSchoolCashApprovalsAndReceipts(t *testing.T) {
 	if x := owner.must(200, "GET", "/v1/invoices/"+inv["number"].(string), nil)["invoice"].(map[string]any); x["paid_kobo"] != float64(7_000_000) {
 		t.Fatalf("after approval %v", x)
 	}
+	// Matched by hand with the owner's key: the owner does not approve it.
+	entered = key.must(201, "POST", "/v1/money/entries", map[string]any{"kind": "cash", "direction": "in", "amount_kobo": 5_000_000, "description": "More at the gate"})
+	code, out = key.do("POST", "/v1/money/entries/"+entered["entry_id"].(string)+"/match", map[string]any{"invoice": inv["number"]})
+	if code != 202 || out["request"].(map[string]any)["kind"] != "cash_match" {
+		t.Fatalf("matched by hand with a key: %d %v", code, out)
+	}
+	held := out["request"].(map[string]any)["id"].(string)
+	if e := owner.must(409, "POST", "/v1/schools/approvals/"+held, map[string]any{"decision": "approved"}); !strings.Contains(e["error"].(string), "cannot decide their own request") {
+		t.Fatalf("the owner approved their own key's match: %v", e)
+	}
+	second.must(200, "POST", "/v1/schools/approvals/"+held, map[string]any{"decision": "declined", "reason": "Counted already"})
 
 	// Undoing Ebube's payment voids its receipt, which stays.
 	pid := inv["payments"].([]any)[0].(map[string]any)["id"].(string)

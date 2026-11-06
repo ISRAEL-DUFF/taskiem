@@ -83,7 +83,7 @@ func (s *Server) statusAdmin(next http.Handler) http.Handler {
 			writeErr(w, http.StatusNotFound, "not found")
 			return
 		}
-		lim := s.limiter("status-admin:"+clientIP(r), 6*time.Second, 10)
+		lim := s.limiter("status-admin:"+limitIP(r), 6*time.Second, 10)
 		name := s.operator(r)
 		if name == "" {
 			if !lim.Allow() {

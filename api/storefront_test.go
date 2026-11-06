@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -44,11 +45,14 @@ func fakeStorage(t *testing.T) *httptest.Server {
 	return srv
 }
 
-func photo(t *testing.T) []byte {
+func photo(t *testing.T) []byte { return photoN(t, 0) }
+
+// photoN is a photo of its own for each n (another image, another record).
+func photoN(t *testing.T, n int) []byte {
 	img := image.NewRGBA(image.Rect(0, 0, 900, 600))
 	for y := range 600 {
 		for x := range 900 {
-			img.Set(x, y, color.RGBA{R: uint8(x / 4), G: 90, B: uint8(y / 3), A: 255}) //nolint:gosec // bounded
+			img.Set(x, y, color.RGBA{R: uint8(x / 4), G: uint8(90 + 20*n), B: uint8(y / 3), A: 255}) //nolint:gosec // bounded
 		}
 	}
 	var b bytes.Buffer
@@ -115,8 +119,14 @@ func TestStorefront(t *testing.T) {
 		owner.must(400, "PUT", "/v1/storefront", bad)
 	}
 	sf := owner.must(200, "PUT", "/v1/storefront", map[string]any{"slug": "Ada-Kitchen", "draft": card, "catalogue_table": table, "catalogue_columns": columns})
-	if sf["slug"] != "ada-kitchen" || sf["status"] != "draft" || sf["preview_url"] != "" {
+	if sf["slug"] != "ada-kitchen" || sf["status"] != "draft" || sf["preview_url"] != "" || sf["retention_days"] != float64(365) {
 		t.Fatalf("%v", sf)
+	}
+	// How long ended orders keep their customer's details: 30 days to 10 years.
+	owner.must(400, "PUT", "/v1/storefront", map[string]any{"slug": "ada-kitchen", "draft": card, "catalogue_table": table, "catalogue_columns": columns, "retention_days": 7})
+	if sf := owner.must(200, "PUT", "/v1/storefront", map[string]any{"slug": "ada-kitchen", "draft": card, "catalogue_table": table, "catalogue_columns": columns,
+		"retention_days": 90}); sf["retention_days"] != float64(90) {
+		t.Fatalf("retention: %v", sf)
 	}
 
 	// A name that may not be published is refused at publishing.
@@ -168,6 +178,66 @@ func TestStorefront(t *testing.T) {
 	}
 	if s, logo := owner.rawPost(t, "/v1/storefront/media", "image/jpeg", photo(t)); s != 201 || logo["id"] != m["id"] {
 		t.Fatalf("the same image is one record: %d %v", s, logo)
+	}
+
+	// The gallery: photos added with add=1 join the main one, up to six;
+	// a new main photo keeps them; any can be taken out, even an entry
+	// that is not a photo at all, and the next becomes the main one.
+	base := "/v1/storefront/catalogue/rows/" + jsonNum(row) + "/photo"
+	photos := func() []any {
+		t.Helper()
+		got := owner.must(200, "POST", "/v1/storefront/catalogue/refresh", nil)["items"].([]any)[0].(map[string]any)
+		ids, _ := got["photo_ids"].([]any)
+		return ids
+	}
+	want := []any{m["id"]}
+	for n := 1; n <= 5; n++ {
+		s, g := owner.rawPost(t, base+"?add=1", "image/jpeg", photoN(t, n))
+		if s != 200 {
+			t.Fatalf("photo %d: %d %v", n+1, s, g)
+		}
+		want = append(want, g["id"])
+	}
+	if got := photos(); fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("the gallery: %v, want %v", got, want)
+	}
+	if s, _ := owner.rawPost(t, base+"?add=1", "image/jpeg", photoN(t, 6)); s != 409 {
+		t.Fatalf("a seventh photo: %d", s)
+	}
+	s, main := owner.rawPost(t, base, "image/jpeg", photoN(t, 7))
+	if s != 200 {
+		t.Fatalf("a new main photo: %d %v", s, main)
+	}
+	want[0] = main["id"]
+	if got := photos(); fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("a new main photo keeps the gallery: %v, want %v", got, want)
+	}
+	// Another made the main one: first, the rest in their order.
+	owner.must(204, "PUT", base+"/main?media="+want[3].(string), nil)
+	if got := photos(); fmt.Sprint(got) != fmt.Sprint([]any{want[3], want[0], want[1], want[2], want[4], want[5]}) {
+		t.Fatalf("made the main one: %v", got)
+	}
+	owner.must(404, "PUT", base+"/main?media="+uuid.NewString(), nil)
+	owner.must(204, "PUT", base+"/main?media="+main["id"].(string), nil)
+	want = []any{want[0], want[3], want[1], want[2], want[4], want[5]}
+	owner.must(204, "DELETE", base+"?media="+main["id"].(string), nil)
+	owner.must(404, "DELETE", base+"?media="+main["id"].(string), nil)
+	if got := photos(); fmt.Sprint(got) != fmt.Sprint(want[1:]) {
+		t.Fatalf("the next is the main one: %v, want %v", got, want[1:])
+	}
+	cellNow := ""
+	for _, id := range want[1:] {
+		cellNow += id.(string) + ","
+	}
+	owner.must(200, "PATCH", "/v1/tables/"+table+"/rows/"+jsonNum(row), map[string]any{"set": map[string]any{"photo": cellNow + "not-a-photo"}})
+	owner.must(204, "DELETE", base+"?media=not-a-photo", nil)
+	if s, g := owner.rawPost(t, base+"?add=1", "image/jpeg", photoN(t, 8)); s != 200 || len(photos()) != 6 {
+		t.Fatalf("its place is free again: %d %v", s, g)
+	}
+	// A full gallery holding what the page cannot show lets go of it.
+	owner.must(200, "PATCH", "/v1/tables/"+table+"/rows/"+jsonNum(row), map[string]any{"set": map[string]any{"photo": cellNow + "not-a-photo"}})
+	if s, g := owner.rawPost(t, base+"?add=1", "image/jpeg", photoN(t, 9)); s != 200 || len(photos()) != 6 {
+		t.Fatalf("a full gallery with an entry it cannot show: %d %v", s, g)
 	}
 
 	// Closed and reopened; the QR code is the preview address.

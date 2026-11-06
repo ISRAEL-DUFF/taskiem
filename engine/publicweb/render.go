@@ -50,19 +50,27 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+	// Files that are not stylesheets are named first, so a stylesheet can
+	// point at them (a font) by their own names and be served with their
+	// hashed ones.
+	var sheets []fs.DirEntry
 	for _, e := range entries {
-		body, err := staticFS.ReadFile("static/" + e.Name())
-		if err != nil {
-			panic(err)
+		if path.Ext(e.Name()) == ".css" {
+			sheets = append(sheets, e)
+			continue
 		}
-		sum := sha256.Sum256(body)
-		ext := path.Ext(e.Name())
-		hashed := strings.TrimSuffix(e.Name(), ext) + "." + hex.EncodeToString(sum[:5]) + ext
-		assetNames[e.Name()] = staticPrefix + hashed
-		assets[hashed] = asset{body: body, ctype: mime.TypeByExtension(ext)}
+		addAsset(e.Name(), mustRead(e.Name()))
+	}
+	for _, e := range sheets {
+		body := mustRead(e.Name())
+		for name, hashed := range assetNames {
+			if path.Ext(name) == ".woff2" {
+				body = bytes.ReplaceAll(body, []byte("url("+name+")"), []byte("url("+hashed+")"))
+			}
+		}
+		addAsset(e.Name(), body)
 	}
 	funcs := template.FuncMap{
-		"sheet": sheetFor,
 		"asset": func(name string) (string, error) {
 			p, ok := assetNames[name]
 			if !ok {
@@ -70,10 +78,42 @@ func init() {
 			}
 			return p, nil
 		},
+		"accent":  accent,
+		"swatch":  swatch,
+		"optkind": optkind,
+		"add":     func(a, b int) int { return a + b },
+		// initial is a name's first letter, for a circle with no photo.
+		"initial": func(s string) string {
+			for _, r := range strings.TrimSpace(s) {
+				return strings.ToUpper(string(r))
+			}
+			return ""
+		},
 	}
 	for _, theme := range brand.Themes {
 		themed[theme] = template.Must(template.New("").Funcs(funcs).ParseFS(templateFS, "templates/shared/*.html", "templates/"+theme+"/*.html"))
 	}
+}
+
+func mustRead(name string) []byte {
+	body, err := staticFS.ReadFile("static/" + name)
+	if err != nil {
+		panic(err)
+	}
+	return body
+}
+
+// addAsset names a static file by a hash of its content and keeps it.
+func addAsset(name string, body []byte) {
+	sum := sha256.Sum256(body)
+	ext := path.Ext(name)
+	hashed := strings.TrimSuffix(name, ext) + "." + hex.EncodeToString(sum[:5]) + ext
+	ctype := mime.TypeByExtension(ext)
+	if ext == ".woff2" {
+		ctype = "font/woff2"
+	}
+	assetNames[name] = staticPrefix + hashed
+	assets[hashed] = asset{body: body, ctype: ctype}
 }
 
 func serveStatic(w http.ResponseWriter, r *http.Request) {
@@ -95,6 +135,9 @@ type pageData struct {
 	Title string
 	Lang  string
 	Look  look
+	// BagHref is the order this page's bag belongs to, for the shop
+	// looks' bag in the header ("" for none).
+	BagHref string
 }
 
 // Brand is the page's look, the default when it has none.
@@ -160,4 +203,53 @@ func (s *Server) renderWith(w http.ResponseWriter, r *http.Request, status int, 
 	if r.Method != http.MethodHead {
 		_, _ = w.Write(buf.Bytes())
 	}
+}
+
+// accent splits a headline in two so a look can set the second part in
+// its accent style: at the first comma ("Hot food," / "made fresh today."),
+// else before the last word ("Book your" / "glow."). A one-word headline
+// has no second part.
+func accent(s string) [2]string {
+	s = strings.TrimSpace(s)
+	if i := strings.Index(s, ","); i >= 0 && i < len(s)-1 {
+		return [2]string{s[:i+1], strings.TrimSpace(s[i+1:])}
+	}
+	if i := strings.LastIndex(s, " "); i > 0 {
+		return [2]string{s[:i], s[i+1:]}
+	}
+	return [2]string{s, ""}
+}
+
+// swatchNames are the colour words a choice's dot can be drawn in; the
+// stylesheet has a class for each (sw-black, sw-red, ...).
+var swatchNames = map[string]bool{
+	"black": true, "white": true, "grey": true, "gray": true, "red": true, "orange": true, "yellow": true, "green": true,
+	"blue": true, "navy": true, "purple": true, "pink": true, "brown": true, "cream": true, "beige": true, "gold": true,
+	"moss": true, "olive": true, "teal": true, "maroon": true, "burgundy": true, "ivory": true, "tan": true, "khaki": true,
+}
+
+// swatch is the class of a colour choice's dot ("Black" gives sw-black), or
+// sw-none when the choice is not a colour the stylesheet knows.
+func swatch(name string) string {
+	w := strings.ToLower(strings.TrimSpace(name))
+	if i := strings.IndexAny(w, " (/-"); i > 0 {
+		w = w[:i]
+	}
+	if swatchNames[w] {
+		return "sw-" + w
+	}
+	return "sw-none"
+}
+
+// optkind is what a group of choices is, so a look can draw it: "colour"
+// (dots), "size" (square buttons), or "other".
+func optkind(name string) string {
+	w := strings.ToLower(name)
+	switch {
+	case strings.Contains(w, "colour"), strings.Contains(w, "color"):
+		return "colour"
+	case strings.Contains(w, "size"):
+		return "size"
+	}
+	return "other"
 }

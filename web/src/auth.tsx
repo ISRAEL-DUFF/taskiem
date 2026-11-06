@@ -9,8 +9,7 @@ import {
 import { get, post, type Me } from "./api";
 import { passkeyLogin } from "./passkeys";
 import { toast } from "./toast";
-import { clearDrafts } from "./lib/drafts";
-import { clearOutbox } from "./lib/outboxStore";
+import { claimTab, forgetTab } from "./lib/tabOwner";
 
 interface Auth {
   me: Me | null | undefined; // undefined while loading
@@ -26,7 +25,16 @@ const Ctx = createContext<Auth | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
   const refresh = useCallback(
-    () => get<Me>("/v1/me").then(setMe, () => setMe(null)),
+    () =>
+      get<Me>("/v1/me").then(
+        (m) => {
+          // A session that ran out keeps the tab's drafts for the same
+          // person; someone else signing in here does not see them.
+          claimTab(m.user?.id ?? "");
+          setMe(m);
+        },
+        () => setMe(null),
+      ),
     [],
   );
   useEffect(() => {
@@ -55,10 +63,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     logout: async () => {
       await post("/v1/auth/logout").catch(() => undefined);
-      // What the person had half written, and what was not yet sent, is theirs
-      // alone: it does not wait for whoever signs in next in this tab.
-      clearDrafts();
-      clearOutbox();
+      // What the person had half written, what was not yet sent, the gate's
+      // checks and a business session are theirs alone: they do not wait
+      // for whoever signs in next in this tab.
+      forgetTab();
       setMe(null);
     },
   };

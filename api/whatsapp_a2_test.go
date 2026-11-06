@@ -389,6 +389,11 @@ func TestWhatsAppOwnNumbers(t *testing.T) {
 		t.Error("the Flows key was not uploaded")
 	}
 	gamma.must(409, "PUT", "/v1/whatsapp/number", map[string]any{"phone_number_id": pnA, "waba_id": "300000000000009", "access_token": tokA, "app_secret": secA, "verify_token": vtA})
+	// The shared number's account is the platform's: its template registry
+	// is not an own number's to write (F36).
+	w.wa.WABA = "300000000000777"
+	beta.must(409, "PUT", "/v1/whatsapp/number", map[string]any{"phone_number_id": pnB, "waba_id": "300000000000777", "access_token": tokB, "own_app": false})
+	w.wa.WABA = ""
 	// Beta's number is on Taskiem's app (as after embedded signup).
 	beta.must(200, "PUT", "/v1/whatsapp/number", map[string]any{"phone_number_id": pnB, "waba_id": "300000000000002", "access_token": tokB, "own_app": false})
 	var raw string
@@ -627,5 +632,90 @@ func TestWhatsAppPublicMenu(t *testing.T) {
 	}
 	if n > 6 {
 		t.Errorf("%d replies to 12 messages", n)
+	}
+}
+
+// A number on a tenant's own Meta app is verified with a secret the tenant
+// chose, so who sent a delivery to it is only as sure as that secret
+// (F2): only an owner connects one, and what is said on it never brings
+// people in, makes businesses or exercises the rights over who holds
+// which rights, whoever it claims to come from.
+func TestWhatsAppOwnAppSendersCapped(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	chatSignupOn(w.world, "whatsapp")
+	w.graph.AddNumber(pnA, tokA, "+234 800 000 0001")
+	alpha := w.tenant(t, "Alpha", "owner@alpha.test")
+	beta := w.tenant(t, "Beta", "owner@beta.test")
+	admin := w.member(t, alpha, "admin@alpha.test", "admin")
+	const ownerNum, adaNum, attacker = "+2348011110001", "+2348011110002", "+2348099990009"
+	ada := w.member(t, alpha, "ada@alpha.test", "operator")
+	w.bind(t, alpha, ownerNum)
+	w.bind(t, ada, adaNum)
+	w.bind(t, beta, "+2348011110003")
+
+	// Only an owner connects a number on the tenant's own app; an admin may
+	// still connect one through Taskiem's app.
+	connectA := map[string]any{"phone_number_id": pnA, "waba_id": "300000000000001", "access_token": tokA, "app_secret": secA, "verify_token": vtA}
+	admin.must(403, "PUT", "/v1/whatsapp/number", connectA)
+	admin.must(200, "PUT", "/v1/whatsapp/number", map[string]any{"phone_number_id": pnA, "waba_id": "300000000000001", "access_token": tokA, "own_app": false})
+	alpha.must(200, "PUT", "/v1/whatsapp/number", connectA)
+
+	// Ordinary work still answers on the own number.
+	if got := w.sendTo(t, "/channels/whatsapp/n/"+pnA, pnA, secA, ownerNum, whatsapptest.Text("status")); len(got) != 1 || !strings.HasPrefix(got[0].Text, "No runs") {
+		t.Fatalf("status on the own number: %+v", got)
+	}
+	// An invitation "from" the owner: refused, nothing kept.
+	got := w.sendTo(t, "/channels/whatsapp/n/"+pnA, pnA, secA, ownerNum, whatsapptest.Text("invite "+attacker+" as owner"))
+	if len(got) != 1 || !strings.Contains(got[0].Text, "Only someone who manages the people") {
+		t.Fatalf("invite on the own number: %+v", got)
+	}
+	w.sendTo(t, "/channels/whatsapp/n/"+pnA, pnA, secA, ownerNum, whatsapptest.Text("yes"))
+	var n int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM chat_invites WHERE address = $1`, attacker).Scan(&n); err != nil || n != 0 {
+		t.Fatalf("invitations kept: %d %v", n, err)
+	}
+	// A new business from the own number: not started.
+	if got := w.sendTo(t, "/channels/whatsapp/n/"+pnA, pnA, secA, ownerNum, whatsapptest.Text("new business")); len(got) == 1 && strings.Contains(got[0].Text, "What is your business called") {
+		t.Fatalf("sign-up on the own number: %+v", got)
+	}
+	// Beta invites Ada on the shared number; a "join" said on Alpha's own
+	// number does not answer it.
+	if got := w.say(t, "+2348011110003", "invite "+adaNum+" as viewer"); !strings.Contains(got, "Invite "+adaNum+" to Beta") {
+		t.Fatalf("beta's invitation: %q", got)
+	}
+	w.say(t, "+2348011110003", "yes")
+	w.sendTo(t, "/channels/whatsapp/n/"+pnA, pnA, secA, adaNum, whatsapptest.Text("join"))
+	if r := memberRoles(t, w.world, userID(t, ada), "Beta"); r != "" {
+		t.Fatalf("joined Beta from Alpha's own number: %q", r)
+	}
+	// The same word on the shared number is Ada's own.
+	w.say(t, adaNum, "join")
+	if got := w.say(t, adaNum, "yes"); memberRoles(t, w.world, userID(t, ada), "Beta") != "viewer" {
+		t.Fatalf("join on the shared number: %q", got)
+	}
+}
+
+// The PIN goes with the number (F53): linking a different number removes
+// it, audited, as unlinking does; linking the same number again keeps it.
+func TestWhatsAppPinGoesWithTheNumber(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	const n1, n2 = "+2348031235601", "+2348031235602"
+	w.bind(t, owner, n1)
+	if _, err := w.env.DB.Admin.Exec(ctx, `SELECT taskiem_wa_pin_set($1, $2)`, userID(t, owner), "$argon2id$v=19$m=65536,t=1,p=4$c2FsdHNhbHQ$aGFzaGhhc2g"); err != nil {
+		t.Fatal(err)
+	}
+	w.bind(t, owner, n1)
+	if p := owner.must(200, "GET", "/v1/me/whatsapp", nil)["pin"].(map[string]any); p["set"] != true {
+		t.Fatalf("after linking the same number again: %v", p)
+	}
+	w.bind(t, owner, n2)
+	if p := owner.must(200, "GET", "/v1/me/whatsapp", nil)["pin"].(map[string]any); p["set"] != false {
+		t.Fatalf("after linking another number: %v", p)
+	}
+	if !strings.Contains(toJSON(owner.must(200, "GET", "/v1/audit", nil)), `"whatsapp.pin.remove"`) {
+		t.Error("the removal is not audited")
 	}
 }

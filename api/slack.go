@@ -163,6 +163,17 @@ func clip(s string, n int) string {
 // one made through Taskiem's app for it, else its only active connection
 // in prod (an own app). team may be empty: any workspace.
 func (s *Server) slackConnection(ctx context.Context, tenant uuid.UUID, team string) (env, name string, err error) {
+	return s.slackConnectionOf(ctx, tenant, team, true)
+}
+
+// slackAppConnection is only the business's connection made through
+// Taskiem's app for the workspace, never an own app's pasted token: the
+// only one another business may be given (F19).
+func (s *Server) slackAppConnection(ctx context.Context, tenant uuid.UUID, team string) (env, name string, err error) {
+	return s.slackConnectionOf(ctx, tenant, team, false)
+}
+
+func (s *Server) slackConnectionOf(ctx context.Context, tenant uuid.UUID, team string, ownApp bool) (env, name string, err error) {
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		if team != "" {
 			err := tx.QueryRow(ctx, `SELECT a.environment, a.connection FROM connection_app_accounts a JOIN connections c ON c.id = a.connection_id AND c.status = 'active'
@@ -170,6 +181,9 @@ func (s *Server) slackConnection(ctx context.Context, tenant uuid.UUID, team str
 			if !errors.Is(err, pgx.ErrNoRows) {
 				return err
 			}
+		}
+		if !ownApp {
+			return fmt.Errorf("%w: no Slack connection through Taskiem's app for this workspace", whatsapp.ErrNothingToSend)
 		}
 		rows, err := tx.Query(ctx, `SELECT environment, name FROM connections WHERE connector = 'slack' AND environment = 'prod' AND status = 'active' LIMIT 2`)
 		if err != nil {

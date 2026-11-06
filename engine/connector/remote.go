@@ -115,3 +115,12 @@ type EventCall struct {
 // refuses the delivery so the provider sends it again; a fatal one is the
 // connector's to describe in the body it returns instead.
 type Enricher func(ctx context.Context, c EventCall, body any) (any, error)
+
+// Keyer gives a verified delivery's dedup key from what only the
+// connector can read (a notification encrypted to the business), in place
+// of the manifest's dedup expression: a provider that re-signs a retry
+// sends another envelope for the same event, so a key read from the
+// envelope would take the retry for news. An empty key leaves the
+// manifest's; an error refuses the delivery (503) so the provider sends
+// it again.
+type Keyer func(ctx context.Context, c EventCall, body any) (string, error)

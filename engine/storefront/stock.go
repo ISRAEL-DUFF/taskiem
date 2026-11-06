@@ -300,7 +300,9 @@ func (o *Orders) lowerStock(ctx context.Context, tenant uuid.UUID, ord Order) ([
 			return err
 		})
 	}
-	for _, l := range ord.Basket {
+	// One change per catalogue row: an item in the basket twice (two
+	// sizes of it) takes both lines' quantities at once.
+	for _, l := range perItem(ord.Basket) {
 		for attempt := 0; ; attempt++ {
 			st, ok := rec[l.ID]
 			if ok && st.Done {
@@ -369,4 +371,23 @@ func (o *Orders) copyStock(ctx context.Context, tenant, sf uuid.UUID, row string
 func stockKey(order uuid.UUID, row string, from int64) string {
 	h := sha256.Sum256([]byte(order.String() + "\x00" + row + "\x00" + strconv.FormatInt(from, 10)))
 	return "tsk-sf-" + hex.EncodeToString(h[:16])
+}
+
+// perItem is a basket with each item once, its lines' quantities together
+// (as the stock movements count them).
+func perItem(basket []Line) []Line {
+	var out []Line
+	at := map[string]int{}
+	for _, l := range basket {
+		if l.Quantity <= 0 {
+			continue
+		}
+		if i, ok := at[l.ID]; ok {
+			out[i].Quantity += l.Quantity
+			continue
+		}
+		at[l.ID] = len(out)
+		out = append(out, Line{ID: l.ID, Name: l.Name, Quantity: l.Quantity})
+	}
+	return out
 }

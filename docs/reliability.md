@@ -94,6 +94,7 @@ Planned maintenance spends budget like any outage. During the G4 window a spent 
 | `TaskiemQueueBacklog` | page | A task in some worker pool and queue has waited over 10 min | [runbook](#runbook-taskiemqueuebacklog) |
 | `TaskiemLeaseExpiries` | ticket | Over 10 leases expired in 15 min | [runbook](#runbook-taskiemleaseexpiries) |
 | `TaskiemRetentionPurgeBehind` | ticket | A run past retention has waited over 6 h to be purged | [runbook](#runbook-taskiemretentionpurgebehind) |
+| `TaskiemFormUnderAttack` | ticket | A form went over its own submission limit | [runbook](#runbook-taskiemformunderattack) |
 | `TaskiemTargetDown` | ticket | A pod's metrics cannot be scraped for 10 min | [runbook](#runbook-taskiemtargetdown) |
 
 Every alert carries `severity` and a `runbook_url` to its section below. Route `severity="page"` to the paging tool and `severity="ticket"` to the team's tracker or channel in Alertmanager:
@@ -324,6 +325,7 @@ Timers and schedules fire late.
 2. Is a scheduler running and ticking (`taskiem_scheduler_last_tick_timestamp_seconds`)? Its logs for `scheduler tick failed`.
 3. A large backlog of due timers after an outage drains at 100 per tick; it catches up on its own. Several schedulers are safe (claims use `SKIP LOCKED`) if it does not.
 4. The database: slow claims, lock waits.
+5. One run that cannot be decided (a tenant's own key unavailable, a decision that faults) does not hold up the others: its timer or sweep entry is logged (`scheduler: could not handle timer` or `run`, with the run's id), counted in `taskiem_scheduler_item_failures_total`, and retried a minute later while the rest of its batch goes on. Such failures do not stop the tick from counting, so `TaskiemSchedulerStalled` is not raised for them; look at the run instead.
 
 ### Runbook: TaskiemCanaryFailing
 
@@ -378,6 +380,14 @@ The oldest run past its retention date has waited over 6 hours to be archived an
 2. Every run failing (`archive run ...: ...`): the archive refuses writes. Check the bucket's credentials, policy, KMS key and reachability (`TASKIEM_ARCHIVE_S3_*`), or the directory's space and permissions (`TASKIEM_ARCHIVE_DIR`). A pass stops early when a whole batch fails, so an outage does not spin through the backlog. Once it is fixed, failed runs come back on their own as their backoff ends; to retry them at once, `UPDATE runs SET purge_after = NULL WHERE purge_attempts > 0`.
 3. One run failing (`read run ...` or `delete run ...`): its history cannot be read or deleted. Look at the error; the run stays, and nothing else waits on it.
 4. No failures, but `taskiem_retention_purge_backlog_runs` keeps growing and `taskiem_runs_purged_total` is flat: is a scheduler running (`TaskiemSchedulerStalled`)? Rising steadily: purging is too slow for the volume (a slow archive is the usual cause). More schedulers split the work (each claim leases its runs for 10 minutes, `SKIP LOCKED`), but only with the S3 archive.
+
+### Runbook: TaskiemFormUnderAttack
+
+A form host turned away submissions because one form went over its own limit, every address together (`taskiem_form_limit_trips_total`; [forms 7.3](spec/forms.md#73-abuse)). The form is guarded for an hour, so it asks each person for a code sent to their phone first, and its business's owners are alerted (`form.guarded`).
+
+1. Which form: the public host logs `form host: a form's hourly submission limit tripped` with the tenant and the form's endpoint; `SELECT tenant_id, id, public_id, guarded_since, guarded_until FROM form_endpoints WHERE guarded_until > now()` lists every form guarded now.
+2. A campaign the business expected (a launch, a school's admission day): nothing to do; the guard lapses an hour after the last trip.
+3. A flood: the per-address limit and the phone code hold it; if it keeps on, or the form is abusive, suspend the form from the [operator console](operator-console.md).
 
 ### Runbook: TaskiemTargetDown
 

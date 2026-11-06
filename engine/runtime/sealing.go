@@ -52,7 +52,8 @@ var invoicePaths = []pii.Path{
 }
 
 // emailPaths are an email trigger's personal parts (decision 0038): who
-// sent the message and to whom, and what it says.
+// sent the message and to whom, and what it says, which is sealed under
+// its sender.
 var emailPaths = func() []pii.Path {
 	var out []pii.Path
 	add := func(cat string, segs ...string) {
@@ -65,11 +66,11 @@ var emailPaths = func() []pii.Path {
 		add("name", list, "*", "name")
 	}
 	add("email", "forwarded_by")
-	for _, f := range []string{"subject", "text", "latest", "html"} {
-		add("other", f)
+	// What the message says is its sender's: sealed under them (F62b).
+	sender := []string{"trigger", "body", "from", "address"}
+	for _, segs := range [][]string{{"subject"}, {"text"}, {"latest"}, {"html"}, {"attachments", "*", "name"}, {"skipped", "*", "name"}} {
+		out = append(out, pii.Path{Segments: append([]string{"trigger", "body"}, segs...), Category: "other", Owner: sender, OwnerCategory: "email"})
 	}
-	add("other", "attachments", "*", "name")
-	add("other", "skipped", "*", "name")
 	return out
 }()
 

@@ -2,7 +2,7 @@
 // colour, a logo and a cover photo, used by every public page of the
 // business: the storefront, its forms and status pages, hosted forms.
 
-export type Theme = "clean" | "bold" | "editorial";
+export type Theme = "clean" | "bold" | "editorial" | "kitchen" | "fashion" | "salon" | "grocery";
 
 export interface Palette {
   brand: string;
@@ -28,6 +28,10 @@ export const THEMES: { id: Theme; title: string; help: string }[] = [
   { id: "clean", title: "Clean", help: "Light cards, a cover photo and soft corners. Suits almost any business." },
   { id: "bold", title: "Bold", help: "Your colour fills the top, with big type and a photo grid. For food, fashion and beauty." },
   { id: "editorial", title: "Editorial", help: "Black and white with serif headings and fine lines. Quiet and premium." },
+  { id: "kitchen", title: "Kitchen", help: "Warm cream, a heavy serif and big round plates. For restaurants, bakers and caterers." },
+  { id: "fashion", title: "Fashion", help: "Bone white, tall serif type and square buttons. For clothing and made-to-order." },
+  { id: "salon", title: "Salon", help: "Blush tones, soft shapes and round photos. For beauty, hair and anything you book." },
+  { id: "grocery", title: "Grocery", help: "Fresh and bright with tidy cards and a clear total. For groceries and household goods." },
 ];
 
 /** Colours to start from: the storefront colours offered before any colour could be picked. */

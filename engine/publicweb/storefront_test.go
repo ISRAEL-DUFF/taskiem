@@ -61,15 +61,21 @@ func TestStorefrontPage(t *testing.T) {
 		withBrand(s, brand.Brand{Theme: tmpl, Color: "#c2410c"})
 		w := get(s.Handler(), "GET", "ada-kitchen.shops.test", "/")
 		body := w.Body.String()
-		for _, want := range []string{
+		wants := []string{
 			"<title>Ada&#39;s &lt;Kitchen&gt;</title>", // escaped
 			`/_static/theme-` + tmpl + `.`, `href="/_brand/1/c2410c.css"`,
-			"Open now", "₦1,500", "Dish number 2", "<h2>Soups</h2>", "Unavailable",
-			`href="https://wa.me/2348031234567"`, `href="tel:&#43;2348031234567"`, "Directions",
+			"₦1,500", "Dish number 2", ">Soups</h", "Unavailable",
+			`href="https://wa.me/2348031234567"`, `href="tel:&#43;2348031234567"`, "irections</a>",
 			`property="og:image" content="https://ref.xb.test/l/800.jpg"`,
 			`srcset="https://ref.xb.test/storage/v1/public/taskiem-public/images/h001/320.jpg 320w`,
 			`loading="lazy"`, "Opening hours", "12 Herbert Macaulay Way",
-		} {
+		}
+		// Every look says whether it is open now but Fashion, whose design
+		// carries no such line (its hours are in Opening hours).
+		if tmpl != "fashion" {
+			wants = append(wants, "Open now")
+		}
+		for _, want := range wants {
 			if !strings.Contains(body, want) {
 				t.Errorf("%s: no %q", tmpl, want)
 			}

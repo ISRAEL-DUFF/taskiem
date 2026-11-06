@@ -99,6 +99,7 @@ Usage:
   taskiem canary setup|probe|run     set up and run the synthetic end-to-end probe (docs/reliability.md)
   taskiem media check TENANT_ID      round trip through a tenant's Xenibase storage (docs/media.md)
   taskiem healthcheck [ADDR]         probe the local API, or ADDR's /readyz (container health checks)
+  taskiem scram-verifier             read a password on stdin, print its SCRAM-SHA-256 verifier (for CREATE ROLE)
   taskiem version                    print the version
 
 diff, deploy, promote, runs and connector push use $TASKIEM_URL (default http://localhost:8080) and an
@@ -183,6 +184,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return canaryCmd(ctx, args[1:], stdout)
 	case "healthcheck":
 		return healthcheck(args[1:])
+	case "scram-verifier":
+		return scramVerifierCmd(os.Stdin, stdout)
 	case "help", "-h", "--help":
 		fmt.Fprint(stdout, usage)
 		return nil

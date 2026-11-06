@@ -567,6 +567,42 @@ func TestConnectorCredentialsFromConnections(t *testing.T) {
 	}
 }
 
+// A compensation runs with the connection the step it undoes named: with
+// two accounts for the connector, the refund goes to the one that paid.
+func TestCompensationUsesTheStepsConnection(t *testing.T) {
+	e := rt.New(t)
+	var refundedWith string
+	conn := e.Provider.Connector()
+	conn.Manifest.ID = "twopay"
+	conn.Manifest.Auth.Type = "api_key"
+	conn.Manifest.Auth.Fields = []connector.AuthField{{Key: "secret_key"}}
+	refund := conn.Actions["refund"]
+	conn.Actions["refund"] = connector.ActionFunc(func(c context.Context, r connector.Request) (connector.Response, error) {
+		refundedWith = r.Credentials["secret_key"]
+		return refund.Execute(c, r)
+	})
+	if err := e.Registry.Register(conn); err != nil {
+		t.Fatal(err)
+	}
+	for name, key := range map[string]string{"main": "sk_main", "payroll": "sk_payroll"} {
+		if _, err := e.Vault.CreateConnection(ctx, e.Tenant, "prod", "twopay", name, "api_key", map[string]string{"secret_key": key}, "admin"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	wf := e.Publish(t, wfDoc(`{"id":"pay","type":"connector","connector":"twopay@1","action":"transfer","connection":"payroll",
+	  "input":{"amount":1,"logical_id":"=run.id + ':pay'"},"compensate":{"action":"refund","input":{"reference":"=steps.pay.output.reference"}}},
+	  {"id":"ok","type":"approval","needs":["pay"],"config":{"role":"officer"}}`, ""))
+	ref := e.Start(t, wf, map[string]any{})
+	e.Drain(t)
+	if err := e.Store.CancelRun(ctx, ref, "u1", true); err != nil {
+		t.Fatal(err)
+	}
+	e.Drain(t)
+	if st := e.Status(t, ref); st != "cancelled" || refundedWith != "sk_payroll" {
+		t.Errorf("status %s, refund sent with %q, want the payroll connection: %s", st, refundedWith, types(events(t, e, ref)))
+	}
+}
+
 // A step output over 256 KB is not kept: a read fails saying so, and a
 // write, which has already happened, parks for an operator.
 func TestLargeOutputsAreRefused(t *testing.T) {
@@ -606,6 +642,96 @@ func TestLargeOutputsAreRefused(t *testing.T) {
 	}
 	if st := e.Status(t, write); st != "completed" {
 		t.Errorf("resolved write: %s", st)
+	}
+}
+
+// An http step declared reconcilable_write has no reconcile action: an
+// unknown outcome parks it for a person instead of crashing the worker on
+// the reconcile it cannot do.
+func TestHTTPReconcilableWriteParks(t *testing.T) {
+	e := rt.New(t)
+	e.CallTimeout = 300 * time.Millisecond
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		select {
+		case <-time.After(2 * time.Second):
+		case <-r.Context().Done():
+		}
+	}))
+	defer srv.Close()
+	if err := e.Store.AllowEgress(ctx, e.Tenant, "prod", "127.0.0.1", "admin"); err != nil {
+		t.Fatal(err)
+	}
+	wf := e.Publish(t, wfDoc(`{"id":"post","type":"http","retry":{"max":2,"initial":"10ms","backoff":"fixed"},
+	  "config":{"method":"POST","url":"`+srv.URL+`","body":{"a":1},"class":"reconcilable_write"}}`, ""))
+	ref := e.Start(t, wf, map[string]any{})
+	for i := 0; i < 20 && e.Status(t, ref) != "needs_reconciliation"; i++ {
+		e.Drain(t)
+		time.Sleep(20 * time.Millisecond)
+	}
+	h := events(t, e, ref)
+	var last history.FailedPayload
+	for _, ev := range h {
+		if ev.Type == history.StepFailed && ev.StepID == "post" {
+			last = history.FailedPayload{}
+			_ = json.Unmarshal(ev.Payload, &last)
+		}
+	}
+	if st := e.Status(t, ref); st != "needs_reconciliation" || count(h, history.StepFailed, "post") != 2 ||
+		last.Error.Kind != "unknown_outcome" || last.Error.Next != "park" || !strings.Contains(last.Error.Message, "no reconcile action") {
+		t.Fatalf("status %s, last failure %+v: %s", st, last.Error, types(h))
+	}
+	if n := hits.Load(); n != 1 {
+		t.Errorf("partner hit %d times, want once", n)
+	}
+}
+
+// An http write whose partner accepted it but answered with a body over
+// the size kept may have happened: it parks for a person, as a connector
+// write with too large an output does, rather than failing as if nothing
+// was sent (a resume would then send it again under a new key). A read
+// with too large an answer still fails.
+func TestHTTPWriteOversizeResponseParks(t *testing.T) {
+	e := rt.New(t)
+	var keys []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			keys = append(keys, r.Header.Get("Idempotency-Key"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"rows":"` + strings.Repeat("x", 300<<10) + `"}`))
+	}))
+	defer srv.Close()
+	if err := e.Store.AllowEgress(ctx, e.Tenant, "prod", "127.0.0.1", "admin"); err != nil {
+		t.Fatal(err)
+	}
+	wf := e.Publish(t, wfDoc(`{"id":"post","type":"http","retry":{"max":2,"initial":"10ms","backoff":"fixed"},
+	  "config":{"method":"POST","url":"`+srv.URL+`","body":{"a":1},"class":"idempotent_write","idempotency_header":"Idempotency-Key"}}`, ""))
+	ref := e.Start(t, wf, map[string]any{})
+	e.Drain(t)
+	h := events(t, e, ref)
+	var fp history.FailedPayload
+	for _, ev := range h {
+		if ev.Type == history.StepFailed && ev.StepID == "post" {
+			_ = json.Unmarshal(ev.Payload, &fp)
+		}
+	}
+	if st := e.Status(t, ref); st != "needs_reconciliation" || fp.Error.Kind != "indeterminate" || !fp.Error.MaybeApplied || !strings.Contains(fp.Error.Message, "record the step as completed") {
+		t.Fatalf("status %s, failure %+v maybe_applied %v: %s", st, fp.Error, fp.Error.MaybeApplied, types(h))
+	}
+	if _, err := fork(t, e, wf, 1, ref); err == nil {
+		t.Error("a write that may have happened was resumed")
+	}
+	if len(keys) != 1 {
+		t.Errorf("partner received %d POSTs (%q), want one", len(keys), keys)
+	}
+
+	read := e.Publish(t, wfDoc(`{"id":"get","type":"http","retry":{"max":0},"config":{"method":"GET","url":"`+srv.URL+`"}}`, ""))
+	ref = e.Start(t, read, map[string]any{})
+	e.Drain(t)
+	if st, msg := e.Status(t, ref), failure(events(t, e, ref), "get"); st != "failed" || !strings.Contains(msg, "larger than") {
+		t.Errorf("oversize read: %s %q", st, msg)
 	}
 }
 

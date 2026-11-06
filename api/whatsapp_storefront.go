@@ -654,6 +654,7 @@ func (s *Server) waShopPublish(ctx context.Context, c *chat) error {
 		s.Logger.Warn("chat: refreshing the catalogue", "tenant", c.tenant.ID, "err", err)
 		return c.say(ctx, s, c.t("wa.shop.publish_failed", "reason", tablesChatReason(err)))
 	}
+	s.prewarmPublish(ctx, c.tenant.ID, false)
 	var sf storefront.Storefront
 	var held bool
 	err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
@@ -1159,6 +1160,7 @@ func (s *Server) shopRepublish(ctx context.Context, c *chat) (storefront.Storefr
 	if err := s.SyncStorefront(ctx, c.tenant.ID); err != nil {
 		s.Logger.Warn("chat: refreshing the catalogue", "tenant", c.tenant.ID, "err", err)
 	}
+	s.prewarmPublish(ctx, c.tenant.ID, true)
 	var sf storefront.Storefront
 	err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
 		var err error

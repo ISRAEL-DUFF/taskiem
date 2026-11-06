@@ -24,7 +24,7 @@ import (
 
 // Limits bound one execution (spec 7.2).
 type Limits struct {
-	Memory    int           // bytes for QuickJS's heap; the WebAssembly memory cap is process-wide
+	Memory    int           // bytes the script may hold (0: DefaultLimits.Memory); its WebAssembly memory is capped at this plus stepHeadroom
 	Timeout   time.Duration // wall-clock budget
 	MaxOutput int           // bytes of JSON output
 	MaxLogs   int           // bytes of log output kept
@@ -146,11 +146,32 @@ delete globalThis.__taskiem_host_installed;
 
 var initOnce sync.Once
 
+// MaxMemory is the largest heap a JavaScript step may ask for
+// (limits.memory_mb, wd.MaxCodeMemoryMB).
+const MaxMemory = 256 << 20
+
+// stepHeadroom is what one runtime's WebAssembly memory may hold beyond the
+// step's Limits.Memory: the C stack, QuickJS's start-up structures (under
+// 1 MiB) and the allocator's slack. The cap is the step's memory limit:
+// QuickJS's own JS_SetMemoryLimit does not hold in this build (it counts a
+// fixed overhead per allocation, not the size, since wasi-libc gives it no
+// malloc_usable_size), so many 1 MiB arrays passed it.
+const stepHeadroom = 8 << 20
+
+// jsHeadroom is the WebAssembly memory QuickJS needs beyond a script's
+// heap: its own structures, stack and the module's data.
+const jsHeadroom = 64 << 20
+
 // Init sets the process-wide WebAssembly memory cap and compiles the QuickJS
 // module (about a second), so no script's time limit pays for it. Call it
-// at worker start; Run calls it with the default cap otherwise.
+// at worker start; Run calls it with the default cap otherwise. 0 is the
+// default: room for MaxMemory, the largest heap a step may ask for. Each
+// script's own Limits.Memory caps its runtime's memory below that.
 func Init(maxMemoryBytes int) {
 	initOnce.Do(func() {
+		if maxMemoryBytes <= 0 {
+			maxMemoryBytes = MaxMemory + jsHeadroom
+		}
 		if pages := maxMemoryBytes / 65536; pages > 0 && pages <= 65536 {
 			qjs.MemoryLimitPages = uint32(pages) //nolint:gosec // bounded above
 		}
@@ -175,6 +196,9 @@ func Run(ctx context.Context, script string, input any, host Host, lim Limits) (
 	if lim.Timeout <= 0 {
 		lim = DefaultLimits
 	}
+	if lim.Memory <= 0 {
+		lim.Memory = DefaultLimits.Memory
+	}
 	inJSON, err := json.Marshal(input)
 	if err != nil {
 		return res, fmt.Errorf("%w: input is not JSON: %w", ErrScript, err)
@@ -183,6 +207,7 @@ func Run(ctx context.Context, script string, input any, host Host, lim Limits) (
 	defer cancel()
 
 	logs := &logBuffer{max: lim.MaxLogs}
+	var rt *qjs.Runtime
 	defer func() {
 		res.Logs = logs.lines
 		if r := recover(); r != nil {
@@ -190,6 +215,8 @@ func Run(ctx context.Context, script string, input any, host Host, lim Limits) (
 			switch {
 			case ctx.Err() != nil:
 				err = ErrTimeout
+			case rt.MemoryExhausted():
+				err = ErrMemory
 			default:
 				err = fmt.Errorf("%w: sandbox failure: %v", ErrScript, firstLine(fmt.Sprint(r)))
 			}
@@ -199,13 +226,13 @@ func Run(ctx context.Context, script string, input any, host Host, lim Limits) (
 		}
 	}()
 
-	opt := qjs.Option{Context: ctx, CloseOnContextDone: true, MemoryLimit: lim.Memory, MaxStackSize: 1 << 20, Stdout: logs, Stderr: logs}
+	opt := qjs.Option{Context: ctx, CloseOnContextDone: true, MemoryLimit: lim.Memory, MaxMemory: lim.Memory + stepHeadroom, MaxStackSize: 1 << 20, Stdout: logs, Stderr: logs}
 	if t := host.Now; !t.IsZero() {
 		// Date is the run's logical time, as host.now() is, so a retry or a
 		// fork sees the same clock.
 		opt.Walltime = func() (int64, int32) { return t.Unix(), int32(t.Nanosecond()) } //nolint:gosec // nanoseconds fit
 	}
-	rt, err := qjs.New(opt)
+	rt, err = qjs.New(opt)
 	if err != nil {
 		return res, fmt.Errorf("%w: %w", ErrScript, err)
 	}
@@ -259,7 +286,7 @@ func Run(ctx context.Context, script string, input any, host Host, lim Limits) (
 	}
 	c.Global().SetPropertyStr("__input", c.ParseJSON(string(inJSON)))
 	if _, err := c.Eval("step.js", qjs.Code(script)); err != nil {
-		return res, classify(ctx, err)
+		return res, classify(ctx, rt, err)
 	}
 	v, err := c.Eval("main.js", qjs.Code(`(async () => {
 		const m = globalThis.__taskiem_module;
@@ -275,7 +302,7 @@ func Run(ctx context.Context, script string, input any, host Host, lim Limits) (
 		if strings.Contains(err.Error(), "__noexport__") {
 			return res, ErrNoExport
 		}
-		return res, classify(ctx, err)
+		return res, classify(ctx, rt, err)
 	}
 	s := v.String()
 	if lim.MaxOutput > 0 && len(s) > lim.MaxOutput {
@@ -288,12 +315,12 @@ func Run(ctx context.Context, script string, input any, host Host, lim Limits) (
 	return res, nil
 }
 
-func classify(ctx context.Context, err error) error {
+func classify(ctx context.Context, rt *qjs.Runtime, err error) error {
 	msg := err.Error()
 	switch {
 	case ctx.Err() != nil:
 		return ErrTimeout
-	case strings.Contains(msg, "out of memory"):
+	case strings.Contains(msg, "out of memory"), rt.MemoryExhausted():
 		return ErrMemory
 	}
 	return fmt.Errorf("%w: %s", ErrScript, firstLine(msg))

@@ -21,6 +21,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/forms"
 	"github.com/israel-duff/taskiem/engine/ingest"
 	"github.com/israel-duff/taskiem/engine/media"
+	"github.com/israel-duff/taskiem/engine/runtime"
 	rt "github.com/israel-duff/taskiem/engine/runtime/runtimetest"
 	"github.com/israel-duff/taskiem/engine/sender"
 	"github.com/israel-duff/taskiem/engine/wd"
@@ -48,6 +49,30 @@ func (f *fakeFiles) PutFile(_ context.Context, _ uuid.UUID, data []byte) (media.
 	return media.File{Path: p, Type: "application/pdf", Size: int64(len(data))}, nil
 }
 
+func (f *fakeFiles) Delete(_ context.Context, _ uuid.UUID, bucket string, paths []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, p := range paths {
+		if bucket == media.PrivateBucket {
+			delete(f.files, p)
+		}
+	}
+	return nil
+}
+
+func (f *fakeFiles) count() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.files)
+}
+
+func (f *fakeFiles) has(path string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	_, ok := f.files[path]
+	return ok
+}
+
 func (f *fakeFiles) SignURL(_ context.Context, _ uuid.UUID, path string, ttl time.Duration) (string, time.Time, error) {
 	return "https://storage.test/" + path + "?sig=1", time.Now().Add(ttl), nil
 }
@@ -66,7 +91,7 @@ func newWorld(t *testing.T) *world {
 	}
 	svc := &forms.Service{Pool: env.DB.App, Vault: env.Vault, Keys: keys, Files: &fakeFiles{files: map[string][]byte{}}, Scanner: fakeScanner{bad: "EICAR"},
 		Messages: &sender.Queue{Vault: env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)},
-		Start:    env.Store.Start, Signal: env.Store.DeliverSignalOnce, FormHost: "forms.shops.test", AppURL: "https://app.test"}
+		Start:    env.Store.Start, Signal: env.Store.DeliverSignalOnce, Retention: env.Store.Retention, FormHost: "forms.shops.test", AppURL: "https://app.test"}
 	return &world{t: t, env: env, svc: svc}
 }
 
@@ -313,6 +338,303 @@ func TestFormStepLinkAndAnswer(t *testing.T) {
 	_ = w.env.DB.Admin.QueryRow(ctx, `SELECT answers::text FROM form_submissions WHERE reference = $1`, ref).Scan(&answers)
 	if status != "answered" || strings.Contains(answers, "0123456789") {
 		t.Fatalf("after: %s %s", status, answers)
+	}
+}
+
+// A tenant's older requests waiting for a reminder that is not due yet do
+// not hold back a newer request's first link: the batch takes only what is
+// due now, unsent requests first.
+func TestFormLinksNotStarvedByPendingReminders(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	wf := w.env.Publish(t, askFlow)
+	run := w.env.Start(t, wf, map[string]any{"body": map[string]any{"phone": "+2348031234567", "name": "Bola Ade"}})
+	w.env.Drain(t)
+	req := uuid.MustParse(decide.FormRequestID(run.ID.String(), "ask"))
+	// Sixty older requests, already sent, their one-hour reminder not due.
+	if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO form_requests (id, tenant_id, run_id, step_id, environment, recipient, title, schema, prefill, via, verify, remind, sent_at, expires_at, created_at)
+		SELECT gen_random_uuid(), tenant_id, run_id, step_id || g, environment, recipient, title, schema, prefill, via, verify, remind, now(), expires_at, now() - interval '1 hour' + g * interval '1 second'
+		FROM form_requests, generate_series(1, 60) g WHERE id = $1`, req); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.svc.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var sent *time.Time
+	var queued int
+	_ = w.env.DB.Admin.QueryRow(ctx, `SELECT sent_at FROM form_requests WHERE id = $1`, req).Scan(&sent)
+	_ = w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM platform_messages WHERE dedup_key = $1`, "form:"+req.String()+":link:sms").Scan(&queued)
+	if sent == nil || queued != 1 {
+		t.Fatalf("the newer request's link: sent_at=%v queued=%d", sent, queued)
+	}
+	// When the reminders fall due, every one of them goes, over the ticks.
+	w.svc.Now = func() time.Time { return time.Now().Add(61 * time.Minute) }
+	for i := 0; i < 3; i++ {
+		if err := w.svc.Tick(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var left int
+	_ = w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM form_requests WHERE status = 'pending' AND reminders_sent < cardinality(remind)`).Scan(&left)
+	if left != 0 {
+		t.Fatalf("reminders not sent: %d", left)
+	}
+}
+
+// A submission and its files go with the run's data when retention purges
+// the run, and with the respondent when they are erased: the rows, and the
+// stored bytes after the api's deletion pass (docs/spec/forms.md).
+func TestFormDataFollowsRetentionAndErasure(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	wf := w.deploy(intake)
+	var endpoint uuid.UUID
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT id FROM form_endpoints WHERE workflow_id = $1 AND environment = 'prod'`, wf).Scan(&endpoint); err != nil {
+		t.Fatal(err)
+	}
+	files := w.svc.Files.(*fakeFiles)
+	send := func(phone string) (ref string, run, file uuid.UUID, key string) {
+		t.Helper()
+		ref, err := w.submit(&endpoint, nil, forms.Submission{Answers: map[string]any{"full_name": "Ada Obi", "phone": phone},
+			Respondent: forms.Respondent{Kind: "anonymous"}, Channel: "direct",
+			Files: []forms.FileMeta{{Field: "payslip", Name: "Ada_Obi_NIN.pdf", Type: "application/pdf", Size: 10}}}, []byte("%PDF-1.4 x"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		w.drain()
+		if err := w.env.DB.Admin.QueryRow(ctx, `SELECT s.run_id, f.id, f.storage_key FROM form_submissions s JOIN form_files f ON f.submission_id = s.id
+			WHERE s.reference = $1`, ref).Scan(&run, &file, &key); err != nil {
+			t.Fatal(err)
+		}
+		if !files.has(key) {
+			t.Fatalf("stored: %s", key)
+		}
+		return ref, run, file, key
+	}
+	gone := func(what, ref string, file uuid.UUID, key string) {
+		t.Helper()
+		var subs, rows int
+		_ = w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM form_submissions WHERE reference = $1`, ref).Scan(&subs)
+		_ = w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM form_files WHERE id = $1`, file).Scan(&rows)
+		if subs != 0 || rows != 0 {
+			t.Fatalf("%s: submissions=%d files=%d left", what, subs, rows)
+		}
+		if _, err := w.svc.FileURL(ctx, w.env.Tenant, file.String(), time.Minute); !errors.Is(err, forms.ErrNoRequest) {
+			t.Fatalf("%s: file url: %v", what, err)
+		}
+		if err := w.svc.DrainDeletions(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if files.has(key) {
+			t.Fatalf("%s: the stored file is still there", what)
+		}
+		var queued int
+		_ = w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM form_file_deletions`).Scan(&queued)
+		if queued != 0 {
+			t.Fatalf("%s: %d deletions still queued", what, queued)
+		}
+	}
+
+	// Retention: the run's purge takes its submission and files.
+	ref, run, file, key := send("+2348031234567")
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE runs SET retain_until = now() - interval '1 second' WHERE id = $1`, run); err != nil {
+		t.Fatal(err)
+	}
+	var purged bool
+	w.in(func(tx pgx.Tx) error { return tx.QueryRow(ctx, `SELECT taskiem_purge_run($1)`, run).Scan(&purged) })
+	if !purged {
+		t.Fatal("not purged")
+	}
+	gone("retention", ref, file, key)
+
+	// Erasure: erasing the respondent's phone takes them too; another
+	// respondent's submission stays.
+	ref, _, file, key = send("+2348031234568")
+	other, _, otherFile, otherKey := send("+2348031234569")
+	subj, err := w.env.Vault.SubjectFor(ctx, w.env.Tenant, "phone", "+2348031234568")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.env.Vault.Erase(ctx, w.env.Tenant, subj, "user:test"); err != nil {
+		t.Fatal(err)
+	}
+	gone("erasure", ref, file, key)
+	var left int
+	_ = w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM form_submissions s JOIN form_files f ON f.submission_id = s.id WHERE s.reference = $1 AND f.id = $2`, other, otherFile).Scan(&left)
+	if left != 1 || !files.has(otherKey) {
+		t.Fatalf("another respondent's submission went too: %d %v", left, files.has(otherKey))
+	}
+	// The erased respondent can submit again, as someone new.
+	send("+2348031234568")
+}
+
+// A submission that starts no run (refused, or not started at a plan
+// limit) has no run whose retention would delete it: it carries its own
+// retain_until, set as its run's would be, and goes when that passes.
+// Files stored before a refusal are removed from storage at once.
+func TestRunlessSubmissionsFollowRetention(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	wf := w.deploy(intake)
+	var endpoint uuid.UUID
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT id FROM form_endpoints WHERE workflow_id = $1 AND environment = 'prod'`, wf).Scan(&endpoint); err != nil {
+		t.Fatal(err)
+	}
+	files := w.svc.Files.(*fakeFiles)
+	payslip := []forms.FileMeta{{Field: "payslip", Name: "Ada_Obi_NIN.pdf", Type: "application/pdf", Size: 10}}
+	row := func(ref string) (status string, run *uuid.UUID, until *time.Time) {
+		t.Helper()
+		if err := w.env.DB.Admin.QueryRow(ctx, `SELECT status, run_id, retain_until FROM form_submissions WHERE reference = $1`, ref).Scan(&status, &run, &until); err != nil {
+			t.Fatal(err)
+		}
+		return status, run, until
+	}
+	kept := func(what string, until *time.Time) {
+		t.Helper()
+		if until == nil || time.Until(*until) < runtime.DefaultRetention-time.Hour || time.Until(*until) > runtime.DefaultRetention+time.Hour {
+			t.Fatalf("%s: retain_until %v, want the run's retention (%v) from now", what, until, runtime.DefaultRetention)
+		}
+	}
+
+	// Refused after its file was stored (full_name is required): the file
+	// is removed, and the refusal is kept as long as a run would be.
+	refused, err := w.submit(&endpoint, nil, forms.Submission{Answers: map[string]any{"phone": "+2348031234567"},
+		Respondent: forms.Respondent{Kind: "anonymous"}, Channel: "direct", Files: payslip}, []byte("%PDF-1.4 x"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.drain()
+	status, run, until := row(refused)
+	if status != "refused" || run != nil {
+		t.Fatalf("refused: %s %v", status, run)
+	}
+	kept("refused", until)
+	if err := w.svc.DrainDeletions(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if n := files.count(); n != 0 {
+		t.Fatalf("a refused submission's file stayed in storage (%d files)", n)
+	}
+
+	// Not started at a plan limit: answers and file are kept, as long as
+	// its run would have been.
+	start := w.svc.Start
+	w.svc.Start = func(context.Context, runtime.StartRequest) (runtime.Started, error) {
+		return runtime.Started{}, &runtime.LimitError{Limit: "runs_per_day", Code: "quota_exceeded", Message: "quota"}
+	}
+	held, err := w.submit(&endpoint, nil, forms.Submission{Answers: map[string]any{"full_name": "Ada Obi", "phone": "+2348031234568"},
+		Respondent: forms.Respondent{Kind: "anonymous"}, Channel: "direct", Files: payslip}, []byte("%PDF-1.4 y"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.drain()
+	w.svc.Start = start
+	status, run, until = row(held)
+	if status != "received" || run != nil {
+		t.Fatalf("not started: %s %v", status, run)
+	}
+	kept("not started", until)
+	var key string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT f.storage_key FROM form_files f JOIN form_submissions s ON s.id = f.submission_id WHERE s.reference = $1`, held).Scan(&key); err != nil {
+		t.Fatal(err)
+	}
+
+	// A submission whose run started goes with its run, not on its own.
+	started, err := w.submit(&endpoint, nil, forms.Submission{Answers: map[string]any{"full_name": "Ada Obi", "phone": "+2348031234569"},
+		Respondent: forms.Respondent{Kind: "anonymous"}, Channel: "direct"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.drain()
+	if _, run, until := row(started); run == nil || until != nil {
+		t.Fatalf("started: run %v retain_until %v", run, until)
+	}
+
+	// Past their retention, both go, with the stored file.
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE form_submissions SET retain_until = now() - interval '1 second' WHERE reference = ANY ($1)`, []string{refused, held}); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.svc.DrainDeletions(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var left int
+	_ = w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM form_submissions WHERE reference = ANY ($1)`, []string{refused, held}).Scan(&left)
+	if left != 0 {
+		t.Fatalf("%d run-less submissions outlived their retention", left)
+	}
+	if files.has(key) {
+		t.Fatal("the not-started submission's file is still stored")
+	}
+	_ = w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM form_submissions WHERE reference = $1`, started).Scan(&left)
+	if left != 1 {
+		t.Fatal("a started submission went before its run")
+	}
+}
+
+// A form over its own submission limit is recorded by the form host (as
+// taskiem_public): it is guarded for an hour, the form host learns so, and
+// its owners get one alert per guard (forms 7.3, F68b).
+func TestTrippedFormIsGuardedAndAlerted(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	wf := w.deploy(intake)
+	var endpoint uuid.UUID
+	var public string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT id, public_id FROM form_endpoints WHERE workflow_id = $1 AND environment = 'prod'`, wf).Scan(&endpoint, &public); err != nil {
+		t.Fatal(err)
+	}
+	pub := w.env.DB.PublicPool(t, 1)
+	guarded := func() bool {
+		t.Helper()
+		var g bool
+		if err := pub.QueryRow(ctx, `SELECT COALESCE((taskiem_public_form($1)->>'guarded')::boolean, false)`, public).Scan(&g); err != nil {
+			t.Fatal(err)
+		}
+		return g
+	}
+	if guarded() {
+		t.Fatal("guarded before any trip")
+	}
+	for range 2 {
+		if _, err := pub.Exec(ctx, `SELECT taskiem_public_form_tripped($1)`, endpoint); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !guarded() {
+		t.Fatal("not guarded after a trip")
+	}
+	alertsOf := func() int {
+		t.Helper()
+		var n int
+		if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM alerts WHERE tenant_id = $1 AND kind = $2`, w.env.Tenant, forms.AlertFormGuarded).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	for range 2 {
+		if err := w.svc.Tick(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := alertsOf(); n != 1 {
+		t.Fatalf("%d alerts for one guard, want 1", n)
+	}
+	// An hour later the guard is over; another trip is a new guard, and a
+	// new alert.
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE form_endpoints SET guarded_until = now() - interval '1 second', guarded_since = now() - interval '2 hours' WHERE id = $1`, endpoint); err != nil {
+		t.Fatal(err)
+	}
+	if guarded() {
+		t.Fatal("still guarded after the hour")
+	}
+	if _, err := pub.Exec(ctx, `SELECT taskiem_public_form_tripped($1)`, endpoint); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.svc.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if n := alertsOf(); n != 2 {
+		t.Fatalf("%d alerts after a second guard, want 2", n)
 	}
 }
 

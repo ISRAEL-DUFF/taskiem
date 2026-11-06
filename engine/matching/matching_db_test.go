@@ -3,6 +3,8 @@ package matching_test
 import (
 	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -111,6 +113,58 @@ func TestExactMatch(t *testing.T) {
 	w.heard("payment.received", map[string]any{"payment_id": "tsk_acct_1", "amount_kobo": int64(2500000)})
 	if y := w.read(x.Number); len(y.Payments) != 1 {
 		t.Errorf("payments %+v", y.Payments)
+	}
+}
+
+// Money paid into a void invoice's account, heard by its webhook or found
+// by polling, is not counted towards it: the entry is left for a person
+// (To match), and the account is no longer polled.
+func TestExactMatchToVoidInvoice(t *testing.T) {
+	w := newWorld(t)
+	for i, heard := range []bool{true, false} {
+		x := w.invoice("Ada Obi", 5000000)
+		ref := fmt.Sprintf("tsk_acct_v%d", i)
+		w.in(func(tx pgx.Tx) error {
+			if _, err := tx.Exec(ctx, `INSERT INTO customer_invoice_accounts (id, tenant_id, invoice_id, seq, kind, connector, connection, payment_id, amount_kobo, status)
+				VALUES (gen_random_uuid(), $1, $2, 1, 'transfer', 'paystack', 'main', $3, 5000000, 'open')`, w.env.Tenant, x.ID, ref); err != nil {
+				return err
+			}
+			_, err := w.inv.Void(ctx, tx, w.env.Tenant, x.Number, "Raised in error", "user:ada")
+			return err
+		})
+		if heard {
+			w.heard("payment.received", map[string]any{"payment_id": ref, "amount_kobo": int64(5000000)})
+		} else {
+			var account uuid.UUID
+			w.in(func(tx pgx.Tx) error {
+				return tx.QueryRow(ctx, `SELECT id FROM customer_invoice_accounts WHERE payment_id = $1`, ref).Scan(&account)
+			})
+			// What the poll does when the rail says the account was paid.
+			if err := w.inv.Received(ctx, w.env.Tenant, x.ID, invoicing.Received{PaymentID: ref, AmountKobo: 5000000, Connection: "paystack/main", Account: account}); !errors.Is(err, invoicing.ErrState) {
+				t.Errorf("polled: %v", err)
+			}
+			if err := w.m.Tick(ctx); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if y := w.read(x.Number); y.Status != "void" || y.PaidKobo != 0 || len(y.Payments) != 0 {
+			t.Errorf("heard %v: counted towards the void invoice: %+v", heard, y)
+		}
+		var state, account string
+		w.in(func(tx pgx.Tx) error {
+			return tx.QueryRow(ctx, `SELECT s.state, a.status FROM money_entries e JOIN money_match_state s ON s.entry_id = e.id
+				JOIN customer_invoice_accounts a ON a.payment_id = e.reference WHERE e.reference = $1`, ref).Scan(&state, &account)
+		})
+		if state != "unmatched" || account != "paid" {
+			t.Errorf("heard %v: entry %s, account %s", heard, state, account)
+		}
+		found := false
+		for _, p := range w.unmatched() {
+			found = found || p.Reference == ref
+		}
+		if !found {
+			t.Errorf("heard %v: not in To match: %+v", heard, w.unmatched())
+		}
 	}
 }
 

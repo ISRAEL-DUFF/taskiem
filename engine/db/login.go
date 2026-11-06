@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -57,19 +58,35 @@ func EnsureAppLogin(ctx context.Context, ownerDSN, appDSN string) (string, error
 	case owns:
 		return "", fmt.Errorf("the app login %s owns tables: it could bypass row-level security", login)
 	}
+	// A login can SET ROLE to every role it is a member of, directly or
+	// through another role, whatever INHERIT says. An existing login that
+	// is already a member of anything but taskiem_app (taskiem_dispatch,
+	// which sees every tenant's routing rows; the owner; a superuser role;
+	// a role that owns tables) would give the pods that role, so it is
+	// refused rather than blessed: the operator revokes it, or names a new
+	// login (F76).
+	if exists {
+		var extra []string
+		if err := conn.QueryRow(ctx, `SELECT COALESCE(array_agg(r.rolname::text ORDER BY r.rolname), '{}')
+			FROM pg_roles r
+			WHERE r.rolname NOT IN ($1, 'taskiem_app') AND pg_has_role($1, r.oid, 'MEMBER')`, login).Scan(&extra); err != nil {
+			return "", err
+		}
+		if len(extra) > 0 {
+			return "", fmt.Errorf("the app login %s is also a member of %s: the pods could SET ROLE past row-level security; REVOKE those from it, or give the pods a new login (docs/kubernetes.md#database-logins)", login, strings.Join(extra, ", "))
+		}
+	}
 	verb := "CREATE"
 	if exists {
 		verb = "ALTER"
 	}
-	var stmt string
-	if password != "" {
-		err = conn.QueryRow(ctx, "SELECT format('"+verb+" ROLE %I LOGIN NOBYPASSRLS PASSWORD %L', $1::text, $2::text)", login, password).Scan(&stmt)
-	} else {
-		err = conn.QueryRow(ctx, "SELECT format('"+verb+" ROLE %I LOGIN NOBYPASSRLS', $1::text)", login).Scan(&stmt)
-	}
+	// The password goes as its SCRAM verifier (scram.go), never in the
+	// statement's text, which Postgres may log.
+	stmt, err := loginStatement(verb, login, password)
 	if err != nil {
 		return "", err
 	}
+	//sqlcheck:built verb is "CREATE" or "ALTER"; the login is quoted with pgx.Identifier and the password is its SCRAM verifier, a quoted literal
 	if _, err := conn.Exec(ctx, stmt); err != nil {
 		return "", fmt.Errorf("%s ROLE %s (the owner needs CREATEROLE): %w", verb, login, err)
 	}

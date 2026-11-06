@@ -66,7 +66,7 @@ A definition asking for more than a maximum is refused when it is validated; a d
 
 The plan sets two more limits (operators: `taskiem tenants limits`):
 
-- `container_minutes_monthly`: container time per UTC month, counted from when the program started to when it ended, as the sandbox (not the program) reports it, rounded up to the second. **0 means container steps are off**, and 0 is the platform default (`TASKIEM_DEFAULT_CONTAINER_MINUTES_MONTHLY`). Once the month's minutes are used up, container steps fail until next month; a step already running finishes. Usage is shown in `GET /v1/limits` (`container_seconds_this_month`).
+- `container_minutes_monthly`: container time per UTC month, counted from when the program started to when it ended, as the sandbox (not the program) reports it, rounded up to the second. A step that ends without a result after its program started (cancelled, timed out, its Pod lost) is counted up to when the runner saw it end. **0 means container steps are off**, and 0 is the platform default (`TASKIEM_DEFAULT_CONTAINER_MINUTES_MONTHLY`). Once the month's minutes are used up, container steps fail until next month; a step already running finishes. Usage is shown in `GET /v1/limits` (`container_seconds_this_month`).
 - `container_concurrency`: the tenant's container steps running at once (default 2, `TASKIEM_DEFAULT_CONTAINER_CONCURRENCY`); more wait in the queue.
 
 A partner's sub-tenants inherit both and can only be given less; a partner without container minutes cannot give them to its sub-tenants.

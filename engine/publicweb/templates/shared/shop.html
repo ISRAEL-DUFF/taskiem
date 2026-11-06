@@ -1,0 +1,139 @@
+{{/* A shop's own pages, the same in every theme (the theme draws the page
+around them and the colours through its variables): an item's page, and
+an order's two steps, the bag and then the details. Nothing here needs a
+script and nothing is kept in a cookie: the bag is in the address and in
+the form's own fields. */}}
+
+{{/* An item's page: its photo, words, price, its choices and a quantity,
+     and Add to bag (or why there is nothing to press). */}}
+{{define "itempage"}}<article class="pdp">
+  <div class="pdp-media">{{template "itemimg" .}}</div>
+  <div class="pdp-main">
+    <h1>{{.It.Name}}</h1>
+    {{template "itembody" .}}
+  </div>
+</article>{{end}}
+
+{{/* An item's photos: the main one, and every photo as a thumbnail that
+     shows it there (a link to the photo itself without a script). */}}
+{{define "itemimg"}}{{if .It.Large}}<img class="pdp-img" src="{{.It.Large}}"{{if .It.Small}} srcset="{{.It.Small}} 320w, {{.It.Large}} 800w" sizes="(min-width: 48rem) 28rem, 100vw"{{end}} alt="{{.It.Name}}" width="800" height="800" decoding="async" data-pic-main>{{end}}{{if and .It.Large .It.Pics}}{{$n := len .It.Pics}}<ul class="pdp-thumbs" aria-label="Photos of {{.It.Name}}">
+<li><a class="pdp-thumb" href="{{.It.Large}}" data-pic="{{.It.Large}}" aria-current="true"><img src="{{or .It.Small .It.Large}}" alt="Photo 1 of {{add $n 1}}" width="120" height="120" loading="lazy" decoding="async"></a></li>
+{{range $i, $p := .It.Pics}}<li><a class="pdp-thumb" href="{{$p.Large}}" data-pic="{{$p.Large}}"><img src="{{$p.Small}}" alt="Photo {{add $i 2}} of {{add $n 1}}" width="120" height="120" loading="lazy" decoding="async"></a></li>
+{{end}}</ul>{{end}}{{end}}
+
+{{/* What is under an item's name: a theme that draws the name in its
+     own header (bold) calls this and itemimg itself. A shop look draws
+     the kicker above the name itself. Choices are chips; the button says
+     what it adds, and the sum as the choices change (item.js). */}}
+{{define "itembody"}}{{$w := .Brand.Words}}{{if not .Brand.Shop}}{{with .Kicker}}<p class="pdp-kicker">{{.}}</p>{{end}}{{end}}
+    {{with .It.Price}}<p class="pdp-price">{{.}}</p>{{end}}
+    {{with .It.Description}}<p class="pdp-desc">{{.}}</p>{{end}}
+    {{if .Book}}<div class="pdp-cta"><a class="btn btn-primary btn-brand btn-block pdp-go" href="{{.Book}}">Choose a time</a>{{with .DepositNote}}<p class="pdp-meta">{{.}}</p>{{end}}</div>
+    {{else if .Add}}<form method="get" action="{{.Action}}" class="pdp-form" data-merge data-run>
+      <input type="hidden" name="step" value="bag">
+      {{range .Options}}{{$in := .Input}}{{$k := optkind .Name}}<fieldset class="pdp-opt pdp-opt-{{$k}}"><legend>{{.Name}}</legend>
+      {{range .Choices}}<label class="pdp-choice"><input type="radio" name="{{$in}}" value="{{.Value}}" data-add="{{.PriceKobo}}"{{if .Selected}} checked{{end}}>{{if eq $k "colour"}}<i class="sw {{swatch .Name}}" aria-hidden="true"></i>{{end}}<span>{{if eq $k "size"}}{{.Name}}{{else}}{{.Label}}{{end}}</span></label>
+      {{end}}</fieldset>
+      {{end}}<div class="pdp-qty"><label for="pdp-qty">Quantity</label>
+      <span class="pdp-q"><input id="pdp-qty" class="qty" type="number" name="q.{{.It.ID}}" value="1" min="1" max="{{.Max}}" step="1" inputmode="numeric" data-stepper="{{.It.Name}}"></span></div>
+      <div class="pdp-cta"><button class="btn btn-primary btn-brand btn-block pdp-go" type="submit" data-price="{{.It.PriceKobo}}">{{$w.Add}}{{with .It.Price}}<span class="pdp-run" data-run-total>· {{.}}</span>{{end}}</button>
+      {{if or .It.ReadyIn .DepositNote}}<p class="pdp-meta">{{if .It.ReadyIn}}Ready in about {{.It.ReadyIn}} minutes. {{end}}{{.DepositNote}}</p>{{end}}</div>
+    </form>
+    {{else if not .It.Available}}<p class="pdp-note">Unavailable for now.</p>
+    {{else if .It.SoldOut}}<p class="pdp-note">Sold out.</p>
+    {{else if .Note}}<p class="pdp-note">{{.Note}}{{with .Whats}} <a href="{{.}}" rel="noopener">Message {{$.Business}} on WhatsApp</a> to order.{{else}}{{with .Phone}} Call <a href="tel:{{.}}">{{.}}</a> to order.{{end}}{{end}}</p>
+    {{end}}{{end}}
+
+{{/* The bag, as a step of its own: what is in it, to change or take out,
+     then Continue. A GET form, so the bag goes on in the address. */}}
+{{define "bagsplit"}}{{if .Deposit}}<p class="bag-split bag-dep"><span>Deposit today</span> <strong data-deposit>{{.Deposit}}</strong></p>
+<p class="bag-split bag-bal"><span>{{.Brand.Words.Balance}}</span> <span data-balance>{{.Balance}}</span></p>{{end}}{{end}}
+
+{{define "bagmark"}}<span hidden data-bag-count="{{.BagCount}}" data-bag-total="{{.Subtotal}}" data-bag-href="{{.ChangeHref}}"></span>{{end}}
+
+{{define "bagstep"}}{{$w := .Brand.Words}}{{if not .Bag}}<div class="bag bag-empty">
+<span hidden data-bag-clear></span>
+<h2 class="bag-h">Your {{$w.Bag}} is empty</h2>
+{{with .MoreHref}}<p class="bag-more"><a class="btn btn-primary btn-brand" href="{{.}}">See what we have</a></p>{{end}}
+</div>{{else}}<form method="get" action="{{.Action}}" class="bag" data-order{{with .DepositPercent}} data-deposit-pct="{{.}}"{{end}}>
+{{template "bagmark" .}}
+<input type="hidden" name="step" value="details">
+<ul class="bag-items" aria-label="{{$w.Your}}">{{range .Bag}}<li class="bag-line">
+  {{if .Small}}<img class="bag-thumb" src="{{.Small}}" alt="" width="96" height="96" loading="lazy">{{end}}
+  <div class="bag-text">
+  <div class="bag-top"><label for="q-{{.N}}" class="line-name">{{.Name}}</label><span class="bag-amt">{{.Line}}</span></div>
+  {{with .Choices}}<span class="bag-opts">{{.}}</span>{{end}}
+  <span class="bag-unit">{{.Unit}} each</span>
+  <div class="bag-act"><span class="bag-q"><input id="q-{{.N}}" class="qty" type="number" name="q.{{.Key}}" value="{{.Qty}}" min="0" max="{{.Max}}" step="1" inputmode="numeric" data-price="{{.UnitKobo}}"></span>{{$n := .Name}}{{with .Remove}}<a class="bag-remove" href="{{.}}">Remove<span class="sr"> {{$n}}</span></a>{{end}}</div>
+  {{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{.Value}}">
+  {{end}}</div></li>
+{{end}}
+</ul>
+<aside class="bag-box" aria-labelledby="bag-box-h"><h2 id="bag-box-h" class="bag-box-h">Summary</h2>
+<p class="bag-count">{{.BagCount}} {{if eq .BagCount 1}}item{{else}}items{{end}}</p>
+<p class="total" data-total aria-live="polite">Total: {{.Subtotal}}</p>
+{{template "bagsplit" .}}
+{{if .Delivery}}<p class="bag-hint">Delivery is added at checkout.</p>{{end}}
+<button class="btn btn-primary btn-brand btn-block pdp-go" type="submit">Checkout</button>
+{{with .MoreHref}}<p class="bag-more"><a href="{{.}}">{{$w.More}}</a></p>{{end}}
+</aside>
+</form>{{end}}{{end}}
+
+{{/* The bag on the details step: a summary beside the details, its
+     quantities and choices kept in hidden fields, the server pricing
+     the order from the catalogue as it always did. It ends with the
+     form's button: Pay, and how much, when the order is paid now. */}}
+{{define "bagsummary"}}{{$w := .Brand.Words}}<section class="bag-sum" aria-labelledby="bag-sum-h">
+{{template "bagmark" .}}
+<div class="bag-head"><h2 id="bag-sum-h" class="bag-h">{{$w.Your}}</h2>{{with .ChangeHref}}<a href="{{.}}">Change</a>{{end}}</div>
+{{range .Bag}}<div class="bag-row">
+  {{if .Small}}<img class="bag-thumb bag-thumb-s" src="{{.Small}}" alt="" width="56" height="56" loading="lazy">{{end}}
+  <span class="bag-what">{{.Qty}} × {{.Name}}{{with .Choices}} <span class="bag-opts">{{.}}</span>{{end}}</span><span class="bag-amt">{{.Line}}</span>
+  <input type="hidden" name="q.{{.Key}}" value="{{.Qty}}" max="{{.Max}}" data-price="{{.UnitKobo}}">
+  {{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{.Value}}">
+  {{end}}</div>
+{{end}}
+<p class="total" data-total aria-live="polite">Total: {{.Subtotal}}</p>
+{{template "bagsplit" .}}
+<button class="btn btn-primary btn-brand btn-block pdp-go" type="submit">{{if .PayNow}}<span data-pay-now>Pay <span data-pay>{{or .Deposit .Subtotal}}</span>{{if .Deposit}} deposit{{end}}</span>{{if .PayOnDelivery}}<span data-pay-later hidden>Send order</span>{{end}}{{else}}Send order{{end}}</button>
+{{with .Whats}}<p class="bag-hint">We confirm your {{$w.Bag}} on WhatsApp.</p>{{end}}
+</section>{{end}}
+
+{{/* The parts of a storefront page every look shows the same way: what
+comes after the catalogue (about, hours, address, more fronts) and the
+notices before it. A look's stylesheet draws them. */}}
+{{define "sfnotes"}}{{with .Front}}<section class="panel front" aria-labelledby="front-h"><h2 id="front-h">{{.Name}}</h2>{{with .Tagline}}<p>{{.}}</p>{{end}}<p><a href="{{$.Home}}">All of {{$.M.Card.Name}}</a></p></section>
+{{end}}{{if .Closed}}<p class="notice" role="status">{{.Closed}}</p>{{end}}{{if and .HasItems (not .Forms) (not .Closed)}}<p class="notice" role="status">Orders are not open on this page yet.{{with .M.WhatsLink}} <a href="{{.}}" rel="noopener">Message {{$.M.Card.Name}} on WhatsApp</a> to order.{{else}}{{with .Phone}} Call <a href="tel:{{.}}">{{.}}</a> to order.{{end}}{{end}}</p>{{end}}{{end}}
+
+{{define "sfinfo"}}{{if not .Brand.Shop}}{{with .M.Card.About}}<section class="panel"><h2>About</h2><p>{{.}}</p></section>{{end}}{{end}}
+{{if .Hours}}<section class="panel hours">
+<h2>Opening hours</h2>
+<table>{{range .Hours}}<tr{{if .Today}} class="is-today"{{end}}><th scope="row">{{.Day}}{{if .Today}} · today{{end}}</th><td>{{.Spans}}</td></tr>{{end}}</table>
+{{with .M.Card.Hours.Note}}<p class="item-sub">{{.}}</p>{{end}}
+</section>{{end}}
+{{with .M.Card.Address}}<section class="panel"><h2>Where to find us</h2><p>{{.}}</p>{{with $.M.MapLink}}<p><a href="{{.}}" rel="noopener">Get directions</a></p>{{end}}</section>{{end}}
+{{if .Fronts}}<section aria-labelledby="fronts-h"><h2 id="fronts-h">More from {{.M.Card.Name}}</h2>
+<ul class="items">{{range .Fronts}}<li class="item">{{if .Small}}<img class="thumb" src="{{.Small}}" alt="" loading="lazy" decoding="async">{{else}}<span class="thumb thumb-icon">{{template "i-photo"}}</span>{{end}}<div class="item-text"><h3><a href="{{.Href}}">{{.Name}}</a></h3>{{with .Tagline}}<p class="item-sub">{{.}}</p>{{end}}</div></li>
+{{end}}</ul></section>{{end}}{{end}}
+
+{{define "sfcontact"}}{{with .M.WhatsLink}}<a class="btn" href="{{.}}" rel="noopener">{{template "i-whatsapp"}}WhatsApp</a>{{end}}{{with .Phone}}<a class="btn" href="tel:{{.}}">{{template "i-call"}}Call</a>{{end}}{{end}}
+
+{{define "sffoot"}}<footer class="foot sf-foot">
+<p class="sf-foot-name">{{.M.Card.Name}}</p>
+{{with .M.Card.Tagline}}<p class="sf-foot-line">{{.}}</p>{{end}}
+<p class="sf-foot-contact">{{template "sfcontact" .}}</p>
+<p class="sf-foot-meta">Powered by Taskiem · <a href="/report">Report this page</a></p>
+<p class="safety">Taskiem never asks for card details, PINs or OTPs. {{template "safety"}}</p>
+</footer>{{end}}
+
+{{/* The picture a look's hero shows: the cover photo, else the first
+     item's photo, else the logo or initials. */}}
+{{define "heropic"}}{{$img := ""}}{{$name := ""}}{{$price := ""}}{{range .Sections}}{{range .Items}}{{if and (not $img) .Large}}{{$img = .Large}}{{$name = .Name}}{{$price = .Price}}{{end}}{{end}}{{end}}{{with .Brand.Cover}}<img src="{{.}}" srcset="{{.}} 800w, {{$.Brand.CoverLarge}} 2000w" sizes="(min-width: 900px) 50vw, 100vw" alt="">{{else}}{{if $img}}<img src="{{$img}}" sizes="(min-width: 900px) 50vw, 100vw" alt="">{{if $name}}<span class="hero-tag"><strong>{{$name}}</strong> {{$price}}</span>{{end}}{{else}}{{with .Brand.Logo}}<img class="hero-logo" src="{{.}}" alt="">{{else}}<span class="hero-initials" aria-hidden="true">{{.Brand.Initials}}</span>{{end}}{{end}}{{end}}{{end}}
+
+{{/* Under an item's form: its details, delivery and where to ask, each
+     opening on its own, with no script. */}}
+{{define "itemmore"}}<div class="pdp-more">
+{{if or .It.ReadyIn .It.Few .It.Category}}<details open><summary>Details</summary><p>{{with .It.Category}}{{.}}. {{end}}{{if .It.ReadyIn}}Ready in about {{.It.ReadyIn}} minutes. {{end}}{{if .It.Few}}Only a few left.{{end}}</p></details>{{end}}
+{{if or .Delivery .Pickup}}<details><summary>Delivery</summary><p>{{if .Delivery}}{{.Business}} delivers{{with .DeliveryNote}}: {{.}}{{end}}.{{end}}{{if .Pickup}} You can also pick it up.{{end}}</p></details>{{end}}
+{{if or .Whats .Phone}}<details><summary>Questions and changes</summary><p>{{with .Whats}}<a href="{{.}}" rel="noopener">Message {{$.Business}} on WhatsApp</a>{{else}}Call <a href="tel:{{.Phone}}">{{.Phone}}</a>{{end}} to ask about this item or to change an order.</p></details>{{end}}
+</div>{{end}}

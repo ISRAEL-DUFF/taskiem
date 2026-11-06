@@ -354,7 +354,7 @@ func (s *Server) opsVerifyPasskey(ctx context.Context, c credentialJSON, purpose
 }
 
 func (s *Server) opsLimit(w http.ResponseWriter, r *http.Request) bool {
-	if !s.loginLimiter("ops-login:" + clientIP(r)).Allow() {
+	if !s.loginLimiter("ops-login:" + limitIP(r)).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "too many sign-in attempts")
 		return false
 	}
@@ -365,7 +365,7 @@ func (s *Server) opsLoginOptions(w http.ResponseWriter, r *http.Request) {
 	if !s.passkeysOn(w) {
 		return
 	}
-	if !s.limiter("ops-challenge:"+clientIP(r), time.Second, 30).Allow() {
+	if !s.limiter("ops-challenge:"+limitIP(r), time.Second, 30).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "too many requests")
 		return
 	}
@@ -560,6 +560,14 @@ func (s *Server) opsEnrol(w http.ResponseWriter, r *http.Request) {
 //	ops.status.update        <incident id>/<status>
 //	ops.tenant.suspend, ops.tenant.resume
 //	                         <tenant id>
+//	ops.storefront.review    <review id>/<approve|reject>
+//	ops.storefront.suspend, ops.storefront.restore
+//	                         <tenant id>
+//	ops.report.dismiss, ops.report.action, ops.report.contact
+//	                         <report id>
+//	ops.agent.add            <email, lower case>
+//	ops.agent.suspend, ops.agent.reactivate, ops.agent.retire
+//	                         <agent id>
 var opsStepUpOps = map[string]bool{
 	"ops.catalogue.review": true, "ops.catalogue.revoke": true,
 	"ops.publisher.verify": true, "ops.publisher.suspend": true, "ops.publisher.reinstate": true,

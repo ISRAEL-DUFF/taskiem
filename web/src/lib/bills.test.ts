@@ -17,6 +17,7 @@ const bill: Bill = {
   declared_paid_kobo: 0,
   paying_kobo: 0,
   sent_kobo: 0,
+  uncounted_kobo: 0,
   mirrored_at: "2026-10-31T09:00:00Z",
   created_at: "2026-10-31T09:00:00Z",
 };
