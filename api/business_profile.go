@@ -240,3 +240,39 @@ func (s *Server) removeGalleryPhoto(w http.ResponseWriter, r *http.Request) {
 	}
 	s.getBusinessProfile(w, r)
 }
+
+// linkLogo serves the logo of a business we are actively linked with, for
+// the chat list and a conversation's head. Nothing is served for a business
+// we are not linked with, one with no logo and one whose logo was refused:
+// the same 404 for each. The picture is fetched with the owning business's
+// own storage connection, from a URL it stored (media.FetchPublic checks it).
+func (s *Server) linkLogo(w http.ResponseWriter, r *http.Request) {
+	business, err := uuid.Parse(chi.URLParam(r, "business"))
+	if err != nil || s.Media == nil {
+		s.fail(w, r, pgx.ErrNoRows)
+		return
+	}
+	var urls map[string]string
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		var err error
+		urls, err = links.LogoURLsTx(r.Context(), tx, business)
+		return err
+	}); err != nil {
+		s.fail(w, r, linkErr(err))
+		return
+	}
+	src := urls[r.URL.Query().Get("size")]
+	for _, k := range []string{"320", "800", "2000"} {
+		if src == "" {
+			src = urls[k]
+		}
+	}
+	data, ctype, err := s.Media.FetchPublic(r.Context(), business, src)
+	if err != nil {
+		s.fail(w, r, pgx.ErrNoRows)
+		return
+	}
+	w.Header().Set("Content-Type", ctype)
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	_, _ = w.Write(data) //nolint:gosec // a JPEG or PNG by its bytes (FetchPublic), sent as that type with nosniff
+}

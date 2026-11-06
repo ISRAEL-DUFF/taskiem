@@ -41,6 +41,7 @@ func (s *Server) linkRoutes(r chi.Router) {
 	r.With(manage, s.tenantWide).Post("/links/{id}/{answer}", s.answerLink)
 	r.With(manage, s.tenantWide).Delete("/links/sent/{id}", s.cancelBlindLink)
 	r.Get("/links/code/{code}", s.linkByCode)
+	r.Get("/links/{business}/logo", s.linkLogo)
 	r.Get("/link-settings", s.getLinkSettings)
 	r.With(manage, s.tenantWide).Put("/link-settings", s.putLinkSettings)
 	r.Get("/link-settings/qr", s.linkQR)

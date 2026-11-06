@@ -28,9 +28,11 @@ import {
   type LinkMessage,
   type LinkPreview,
   type Reaction,
+  logoSrc,
 } from "../lib/linkchat";
 import { Icon } from "../icons";
 import { MentionText } from "./Mentions";
+import { ChatAvatar } from "./ChatAvatar";
 import {
   BUSINESS_FILES,
   ComposerView,
@@ -740,6 +742,7 @@ export function ConversationPane({
   const [messages, setMessages] = useState<LinkMessage[]>();
   const [typing, setTyping] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
+  const logo = conv.logo ? logoSrc(conv.business) : undefined;
   // The business's card (area, what it sells), as its public page shows
   // it: found by the same search, so only a business that lets others find
   // it has one.
@@ -1145,12 +1148,12 @@ export function ConversationPane({
         avatar={
           <button
             type="button"
-            className="chat-avatar"
+            className="chat-avatar-btn"
             aria-label={`About ${conv.name}`}
             aria-expanded={infoOpen}
             onClick={() => setInfoOpen(!infoOpen)}
           >
-            {conv.name.slice(0, 1).toUpperCase()}
+            <ChatAvatar name={conv.name} logo={logo} />
           </button>
         }
         title={conv.name}
@@ -1331,9 +1334,7 @@ export function ConversationPane({
             </button>
           </div>
           <div className="chat-info-body">
-            <span className="chat-avatar big" aria-hidden="true">
-              {conv.name.slice(0, 1).toUpperCase()}
-            </span>
+            <ChatAvatar name={conv.name} logo={logo} className="big" />
             <p className="chat-info-name">{conv.name}</p>
             {link && <p className="hint">{roleLine(link.role)}</p>}
             {link?.state === "active" && link.answered_at && (

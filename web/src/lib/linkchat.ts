@@ -125,6 +125,8 @@ export interface Conversation {
   link: string;
   business: string;
   name: string;
+  /** The business has a logo (see `logoSrc`). */
+  logo?: boolean;
   state: "active" | "ended";
   last?: LinkMessage;
   unread: number;
@@ -294,3 +296,6 @@ export function merge(a: LinkMessage[], b: LinkMessage[]): LinkMessage[] {
       cmpTime(x.created_at, y.created_at) || x.id.localeCompare(y.id),
   );
 }
+
+/** A linked business's logo through the API (the app's content policy allows images from its own origin only). */
+export const logoSrc = (business: string) => `/v1/links/${business}/logo`;

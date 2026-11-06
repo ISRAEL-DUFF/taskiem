@@ -122,12 +122,14 @@ type Conversation struct {
 	LinkID   uuid.UUID `json:"link"`
 	Business uuid.UUID `json:"business"`
 	Name     string    `json:"name"`
-	State    string    `json:"state"`
-	Last     *Message  `json:"last,omitempty"`
-	Unread   int       `json:"unread"`
-	Muted    bool      `json:"muted"`
-	Archived bool      `json:"archived"`
-	Pinned   bool      `json:"pinned"`
+	// Logo: the business has a logo, at GET /v1/links/{business}/logo.
+	Logo     bool     `json:"logo"`
+	State    string   `json:"state"`
+	Last     *Message `json:"last,omitempty"`
+	Unread   int      `json:"unread"`
+	Muted    bool     `json:"muted"`
+	Archived bool     `json:"archived"`
+	Pinned   bool     `json:"pinned"`
 	// Typing: someone on the other side is typing now.
 	Typing   bool `json:"typing"`
 	pinnedAt *time.Time
@@ -218,6 +220,19 @@ func ConversationsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]Conver
 	}
 	if len(out) == 0 {
 		return out, nil
+	}
+	// A business is shown by the name and logo it chose (its profile).
+	shown, err := ShownTx(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	for i := range out {
+		if sh, ok := shown[out[i].Business]; ok && out[i].State == Active {
+			if sh.Name != "" {
+				out[i].Name = sh.Name
+			}
+			out[i].Logo = sh.HasLogo
+		}
 	}
 	// Two queries for every conversation (the list is polled often): each
 	// link's settings, unread count and typing line, then its last message.

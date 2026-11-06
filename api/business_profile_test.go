@@ -150,3 +150,63 @@ func TestBusinessProfileAndGallery(t *testing.T) {
 		t.Errorf("ada removed dangote's photo: %d", s)
 	}
 }
+
+// A linked business is shown in chat by the name and logo it chose; the
+// logo is served only for an active link, and the registered name stays
+// where it is the legal one (the links list that bills and orders read).
+func TestLinkedBusinessShownByItsProfile(t *testing.T) {
+	w := newWAWorld(t)
+	w.srv.Media = newProjectStorage(t).service()
+	seller, buyer, sellerID, _ := linkedPair(t, w)
+	stranger := w.tenant(t, "Cherry Blocks", "c@cherry.test")
+	conv := func(c *client) map[string]any {
+		return c.must(200, "GET", "/v1/link-chats", nil)["conversations"].([]any)[0].(map[string]any)
+	}
+
+	// Nothing chosen yet: the registered name, no logo.
+	if c := conv(buyer); c["name"] != "Dangote Stores" || c["logo"] != false {
+		t.Fatalf("before a profile: %v", c)
+	}
+	if s, _, _ := buyer.getRaw(t, "/v1/links/"+sellerID+"/logo"); s != 404 {
+		t.Errorf("a logo that does not exist: %d", s)
+	}
+
+	// A profile name and a logo: chat shows them.
+	seller.must(200, "PUT", "/v1/business-profile", map[string]any{"name": "Dangote Cement & Sons", "tagline": "", "area": "", "about": ""})
+	if s, _ := seller.rawPost(t, "/v1/business-profile/logo", "image/jpeg", photo(t)); s != 200 {
+		t.Fatalf("logo: %d", s)
+	}
+	c := conv(buyer)
+	if c["name"] != "Dangote Cement & Sons" || c["logo"] != true {
+		t.Fatalf("after a profile: %v", c)
+	}
+	s, hdr, body := buyer.getRaw(t, "/v1/links/"+sellerID+"/logo")
+	if s != 200 || !strings.HasPrefix(hdr.Get("Content-Type"), "image/") || len(body) == 0 || hdr.Get("Cache-Control") != "private, max-age=3600" {
+		t.Errorf("the logo: %d %v %d bytes", s, hdr, len(body))
+	}
+	// The registered name stays in the links list (bills and orders read it).
+	if l := buyer.must(200, "GET", "/v1/links", nil)["links"].([]any)[0].(map[string]any); l["name"] != "Dangote Stores" {
+		t.Errorf("the links list: %v", l)
+	}
+
+	// Not linked: no logo and the same 404 as no logo; the seller's own
+	// conversation names the buyer as it is.
+	if s, _, _ := stranger.getRaw(t, "/v1/links/"+sellerID+"/logo"); s != 404 {
+		t.Errorf("a stranger read the logo: %d", s)
+	}
+	if s, _, _ := buyer.getRaw(t, "/v1/links/not-an-id/logo"); s != 404 {
+		t.Errorf("a bad id: %d", s)
+	}
+	if c := conv(seller); c["name"] != "Ada's Kitchen" || c["logo"] != false {
+		t.Errorf("the other side: %v", c)
+	}
+
+	// The logo taken off: back to none.
+	seller.must(200, "DELETE", "/v1/business-profile/logo", nil)
+	if c := conv(buyer); c["logo"] != false || c["name"] != "Dangote Cement & Sons" {
+		t.Errorf("after the logo came off: %v", c)
+	}
+	if s, _, _ := buyer.getRaw(t, "/v1/links/"+sellerID+"/logo"); s != 404 {
+		t.Errorf("the logo came off: %d", s)
+	}
+}

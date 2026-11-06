@@ -296,3 +296,48 @@ func ReorderTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, ids []uuid.UUID
 	}
 	return nil
 }
+
+// Shown is how a linked business shows in chat: the name it chose (empty when
+// it has chosen none) and whether it has a logo.
+type Shown struct {
+	Name    string
+	HasLogo bool
+}
+
+// ShownTx is the profile name and logo of each business the business in scope
+// is actively linked with and that has said something (migration 00400).
+func ShownTx(ctx context.Context, tx pgx.Tx) (map[uuid.UUID]Shown, error) {
+	rows, err := tx.Query(ctx, `SELECT business, COALESCE(name, ''), has_logo FROM taskiem_link_profiles()`)
+	if err != nil {
+		return nil, pgErr(err)
+	}
+	defer rows.Close()
+	out := map[uuid.UUID]Shown{}
+	for rows.Next() {
+		var b uuid.UUID
+		var s Shown
+		if err := rows.Scan(&b, &s.Name, &s.HasLogo); err != nil {
+			return nil, err
+		}
+		out[b] = s
+	}
+	return out, rows.Err()
+}
+
+// LogoURLsTx is a linked business's logo, the sizes it was stored at; it is
+// ErrNotFound for a business we are not linked with, one with no logo and one
+// whose logo was refused, the same for each.
+func LogoURLsTx(ctx context.Context, tx pgx.Tx, business uuid.UUID) (map[string]string, error) {
+	var raw []byte
+	if err := tx.QueryRow(ctx, `SELECT taskiem_link_logo($1)`, business).Scan(&raw); err != nil {
+		return nil, pgErr(err)
+	}
+	if len(raw) == 0 {
+		return nil, ErrNotFound
+	}
+	urls := map[string]string{}
+	if err := json.Unmarshal(raw, &urls); err != nil || len(urls) == 0 {
+		return nil, ErrNotFound
+	}
+	return urls, nil
+}

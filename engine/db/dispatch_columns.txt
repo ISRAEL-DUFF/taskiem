@@ -1127,6 +1127,10 @@ storefront_inbox.reference
 storefront_inbox.status_hash
 storefront_inbox.storefront_id
 storefront_inbox.tenant_id
+storefront_media.id
+storefront_media.moderation
+storefront_media.tenant_id
+storefront_media.urls
 storefront_order_payments.amount_kobo
 storefront_order_payments.by
 storefront_order_payments.created_at

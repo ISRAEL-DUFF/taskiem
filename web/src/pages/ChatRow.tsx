@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Icon } from "../icons";
+import { ChatAvatar } from "./ChatAvatar";
 
 /**
  * One conversation in the chat list, as WhatsApp's row: a round avatar, the
@@ -11,6 +12,7 @@ import { Icon } from "../icons";
 export function ChatRow({
   to,
   letter,
+  logo,
   title,
   time,
   preview,
@@ -25,6 +27,8 @@ export function ChatRow({
 }: {
   to: string;
   letter: string;
+  /** The logo's address, when the business has one. */
+  logo?: string;
   title: ReactNode;
   time?: string;
   preview: ReactNode;
@@ -46,12 +50,11 @@ export function ChatRow({
         to={to}
         aria-current={selected ? "true" : undefined}
       >
-        <span
-          className={`chat-avatar${accent ? " accent" : ""}`}
-          aria-hidden="true"
-        >
-          {letter.slice(0, 1).toUpperCase()}
-        </span>
+        <ChatAvatar
+          name={letter}
+          logo={logo}
+          className={accent ? "accent" : ""}
+        />
         <span className="chat-row-main">
           <span className="chat-row-top">
             <span className="title">{title}</span>

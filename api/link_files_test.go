@@ -77,6 +77,18 @@ func newProjectStorage(t *testing.T) *projectStorage {
 			}
 			ps.fetched = append(ps.fetched, k)
 			_, _ = w.Write(data)
+		case r.Method == "GET" && strings.HasPrefix(r.URL.Path, "/storage/v1/public/"):
+			// A public image by its address, from whichever project holds it.
+			rest := strings.TrimPrefix(r.URL.Path, "/storage/v1/public/")
+			rest = rest[strings.Index(rest, "/")+1:] // past the bucket
+			for k, data := range ps.files {
+				if strings.HasSuffix(k, "/"+rest) {
+					w.Header().Set("Content-Type", http.DetectContentType(data))
+					_, _ = w.Write(data)
+					return
+				}
+			}
+			w.WriteHeader(404)
 		case r.Method == "DELETE" && strings.HasSuffix(r.URL.Path, "/objects"):
 			var in struct {
 				Paths []string `json:"paths"`

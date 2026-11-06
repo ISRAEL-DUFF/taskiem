@@ -2212,3 +2212,9 @@ fieldset.sf-choices label.row > span, label.row > input[type="checkbox"] + span 
 .gallery-tools .icon-button { width: 34px; height: 34px; min-height: 34px; }
 .gallery-wait { align-items: center; justify-content: center; min-height: 100px; color: var(--muted); background: var(--field); border-radius: var(--radius-sm); }
 @media (prefers-reduced-motion: no-preference) { .gallery-tile { animation: rise-in 0.2s ease-out; } }
+
+/* The logo in a contact's round picture: the chat list, a conversation's head and its info. */
+img.chat-avatar { object-fit: cover; background: var(--tint); }
+.chat-avatar-btn { flex: none; display: block; width: auto; min-height: 0; padding: 0; border: 0; border-radius: 50%; background: none; box-shadow: none; cursor: pointer; }
+.chat-head .chat-avatar-btn .chat-avatar { width: 40px; height: 40px; }
+.chat-avatar-btn:focus-visible { box-shadow: var(--ring); }

@@ -32,6 +32,7 @@ import {
 } from "../lib/links";
 import {
   listTime,
+  logoSrc,
   matchChats,
   previewLine,
   type Conversation,
@@ -625,8 +626,9 @@ export function ChatPage() {
                         <ChatRow
                           key={l.id}
                           to={`/chat?with=${conv.link}`}
-                          letter={l.name}
-                          title={l.name}
+                          letter={conv.name}
+                          logo={conv.logo ? logoSrc(conv.business) : undefined}
+                          title={conv.name}
                           preview={roleLine(l.role)}
                           unread={conv.unread}
                           selected={openID === conv.link}
@@ -828,6 +830,7 @@ export function ChatPage() {
                         key={c.link}
                         to={`/chat?with=${c.link}`}
                         letter={c.name}
+                        logo={c.logo ? logoSrc(c.business) : undefined}
                         title={c.name}
                         time={c.last ? listTime(c.last.created_at) : undefined}
                         lead={
