@@ -217,7 +217,9 @@ test("a photo with a caption, a PDF and a voice note", async ({ browser }) => {
   // The contact panel lists them: Media and files.
   await pane.getByRole("button", { name: /^About / }).click();
   const media = pane.getByRole("region", { name: "Media and files" });
-  await expect(media).toContainText("Media and files (4)");
+  await expect(media).toContainText("Media and files");
+  await expect(media.getByTestId("info-media")).toContainText("4");
+  await media.getByTestId("info-media").click(); // opens: every picture, voice note and file
   await expect(media.getByRole("link", { name: /waybill\.pdf/ })).toBeVisible();
   await axeBoth(buyer, "the contact info with its media");
 });

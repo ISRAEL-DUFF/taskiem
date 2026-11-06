@@ -119,7 +119,7 @@ test("two linked businesses talk", async ({ browser }) => {
   const info = pane.getByTestId("chat-info");
   await expect(info).toContainText("They supply you");
   await expect(
-    info.getByRole("button", { name: "Mute notifications" }),
+    info.getByRole("switch", { name: "Mute notifications" }),
   ).toBeVisible();
   await axeBoth(buyer, "the contact info");
   await buyer.keyboard.press("Escape");
@@ -460,9 +460,9 @@ test("pin, the typing line, forward and delete for me", async ({ browser }) => {
   expect(theirs.messages[0].forwarded).toBe(true);
 
   // Deleted for the buyer; the seller keeps it.
-  buyer.once("dialog", (d) => void d.accept());
   await msg.getByRole("button", { name: /^More/ }).click();
   await msg.getByRole("button", { name: "Delete for me" }).click();
+  await buyer.getByTestId("confirm-ok").click(); // the app's own confirmation
   await expect(pane.getByTestId("chat-message")).toHaveCount(0);
   const kept = await (
     await seller.request.get(`/v1/link-chats/${withSeller}/messages`, {

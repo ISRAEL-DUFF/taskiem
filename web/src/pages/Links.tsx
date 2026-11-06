@@ -3,6 +3,7 @@ import {
   Link,
   useNavigate,
   useParams,
+  useLocation,
   useSearchParams,
 } from "react-router-dom";
 import { del, get, getBlob, post, put, whenOff } from "../api";
@@ -32,6 +33,7 @@ import {
 } from "../lib/links";
 import {
   listTime,
+  logoSrc,
   matchChats,
   previewLine,
   type Conversation,
@@ -40,6 +42,8 @@ import {
 import { ConversationPane } from "./Conversation";
 import { TaskiemPane } from "./TaskiemChat";
 import { ChatRow } from "./ChatRow";
+import { useConfirm } from "./ConfirmSheet";
+import { Explore } from "./Explore";
 import { HeadMenu } from "./ChatHead";
 import { useChatLive } from "./ChatLive";
 import { useDrafts } from "../lib/drafts";
@@ -174,8 +178,10 @@ function AnswerButtons({
   busy: boolean;
 }) {
   const who = <span className="sr-only"> {link.name}</span>;
+  const { confirm, node } = useConfirm();
   return (
     <>
+      {node}
       <button
         type="button"
         className="primary small"
@@ -196,10 +202,13 @@ function AnswerButtons({
         type="button"
         className="small danger"
         disabled={busy}
-        onClick={() =>
-          confirm(
-            `Block ${link.name}? Their requests will not reach you, and they are not told.`,
-          ) && answer(link, "block", "Blocked")
+        onClick={async () =>
+          (await confirm({
+            title: `Block ${link.name}?`,
+            body: "Their requests will not reach you, and they are not told.",
+            ok: "Block",
+            danger: true,
+          })) && answer(link, "block", "Blocked")
         }
       >
         Block{who}
@@ -250,6 +259,15 @@ export function ChatPage() {
   const manage = can("link.manage") && linksOn;
   const { view, act, answer } = useLinks();
   const [params, setParams] = useSearchParams();
+  // Explore is a step in the browser history (a state of this same address),
+  // so the phone's Back closes it, as it closes WhatsApp's.
+  const here = useLocation();
+  const navigate = useNavigate();
+  const loc = useRef(here);
+  loc.current = here;
+  const go = useRef(navigate);
+  go.current = navigate;
+  const exploring = (here.state as { explore?: boolean } | null)?.explore === true;
   const convs = useLoad(
     () =>
       linksOn
@@ -384,11 +402,10 @@ export function ChatPage() {
         }),
       );
     startNew.current = () => {
-      setHint(
-        "Type the business's name or phone number, then choose Request link.",
-      );
-      keys.current.setParams({});
-      focusSearch();
+      // Finding a business has a screen of its own (Explore).
+      go.current(`${loc.current.pathname}${loc.current.search}`, {
+        state: { explore: true },
+      });
     };
     const onKey = (e: KeyboardEvent) => {
       const k = keys.current;
@@ -398,7 +415,7 @@ export function ChatPage() {
         if (e.defaultPrevented || !k.openID) return;
         if (
           document.querySelector(
-            '[data-testid="chat-more"], [data-testid="chat-recording"], .chat-menu, .attach-menu, .chat-info, .modal, .mention-list, .emoji-panel',
+            '[data-testid="chat-more"], [data-testid="chat-recording"], .chat-menu, .attach-menu, .chat-info, .modal, .mention-list, .emoji-panel, .explore',
           )
         )
           return;
@@ -414,7 +431,7 @@ export function ChatPage() {
       }
       // Not under an open menu, sheet or panel: the letters are theirs.
       const covered = !!document.querySelector(
-        '[data-testid="chat-more"], [data-testid="chat-recording"], .chat-menu, .attach-menu, .chat-info, .modal, .mention-list, .emoji-panel',
+        '[data-testid="chat-more"], [data-testid="chat-recording"], .chat-menu, .attach-menu, .chat-info, .modal, .mention-list, .emoji-panel, .explore',
       );
       const what = shortcutOf(e, covered || isTyping(document.activeElement));
       if (!what || e.defaultPrevented) return;
@@ -504,13 +521,22 @@ export function ChatPage() {
             <HeadMenu
               label="More about the chats"
               items={(close) => (
-                <Link
-                  className="menu-link"
-                  to="/settings/links"
-                  onClick={close}
-                >
-                  Linked businesses
-                </Link>
+                <>
+                  <Link
+                    className="menu-link"
+                    to="/settings/links"
+                    onClick={close}
+                  >
+                    Linked businesses
+                  </Link>
+                  <Link
+                    className="menu-link"
+                    to="/settings/links/profile"
+                    onClick={close}
+                  >
+                    Your business in Explore
+                  </Link>
+                </>
               )}
             />
           </div>
@@ -616,8 +642,9 @@ export function ChatPage() {
                         <ChatRow
                           key={l.id}
                           to={`/chat?with=${conv.link}`}
-                          letter={l.name}
-                          title={l.name}
+                          letter={conv.name}
+                          logo={conv.logo ? logoSrc(conv.business) : undefined}
+                          title={conv.name}
                           preview={roleLine(l.role)}
                           unread={conv.unread}
                           selected={openID === conv.link}
@@ -681,7 +708,7 @@ export function ChatPage() {
                 <Skeleton rows={2} label="Searching businesses…" />
               ) : others.length === 0 ? (
                 <EmptyState icon="search">
-                  No business that lets others find it matches “{query}”.
+                  No business found for “{query}”. Only businesses that chose to be found are listed.
                 </EmptyState>
               ) : (
                 <Items label="Businesses on Taskiem">
@@ -819,6 +846,7 @@ export function ChatPage() {
                         key={c.link}
                         to={`/chat?with=${c.link}`}
                         letter={c.name}
+                        logo={c.logo ? logoSrc(c.business) : undefined}
                         title={c.name}
                         time={c.last ? listTime(c.last.created_at) : undefined}
                         lead={
@@ -919,6 +947,15 @@ export function ChatPage() {
               />
             )}
           {keysOpen && <KeysSheet onClose={() => setKeysOpen(false)} />}
+          {exploring && (
+            <Explore
+              links={view.data?.links ?? []}
+              convs={all}
+              manage={manage}
+              onClose={() => go.current(-1)}
+              onChanged={() => view.reload()}
+            />
+          )}
           {asking && (
             <RequestSheet
               asking={asking}
@@ -1063,6 +1100,20 @@ export function LinkedBusinessesPage() {
           <Skeleton rows={1} label="Loading the setting…" />
         )}
       </section>
+      <section
+        className="card"
+        aria-labelledby="link-profile"
+        data-testid="link-profile-card"
+      >
+        <h2 id="link-profile">How other businesses see you</h2>
+        <p className="hint">
+          Your name, a line about what you do, your area, a logo and up to 12
+          photos.
+        </p>
+        <Link className="button" to="/settings/links/profile">
+          Edit your business in Explore
+        </Link>
+      </section>
       {settings.data?.url && <CodeCard url={settings.data.url} />}
       <section aria-label="Links">
         {!view.data ? (
@@ -1145,23 +1196,30 @@ function LinkActions({
   busy: boolean;
 }) {
   const who = <span className="sr-only"> {link.name}</span>;
+  const { confirm, node } = useConfirm();
   switch (link.state) {
     case "asked_us":
       return <AnswerButtons link={link} answer={answer} busy={busy} />;
     case "active":
       return (
-        <button
-          type="button"
-          className="small danger"
-          disabled={busy}
-          onClick={() =>
-            confirm(
-              `End the link with ${link.name}? What passed between you stays on both sides.`,
-            ) && answer(link, "end", "Link ended")
-          }
-        >
-          End link{who}
-        </button>
+        <>
+          {node}
+          <button
+            type="button"
+            className="small danger"
+            disabled={busy}
+            onClick={async () =>
+              (await confirm({
+                title: `End the link with ${link.name}?`,
+                body: "What passed between you stays on both sides.",
+                ok: "End link",
+                danger: true,
+              })) && answer(link, "end", "Link ended")
+            }
+          >
+            End link{who}
+          </button>
+        </>
       );
     case "requested":
     case "not_accepted":
@@ -1407,7 +1465,9 @@ function FindableQuestion({
       <h2 id="link-findable-ask">Let other businesses on Taskiem find you?</h2>
       <p className="hint">
         They would find you by your name, what you sell and your area, from what
-        your storefront already shows. {findableLine(settings)}
+        your storefront already shows, or from your{" "}
+        <Link to="/settings/links/profile">business profile</Link>.{" "}
+        {findableLine(settings)}
       </p>
       <div className="row-actions">
         <button

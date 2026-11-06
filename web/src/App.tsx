@@ -133,6 +133,7 @@ import { ChatLiveProvider, NotifyBanner, useChatLive } from "./pages/ChatLive";
 import { PasskeyNudge } from "./pages/PasskeyNudge";
 import { useTaskiemUnread } from "./lib/taskiemSeen";
 import { standalone, useInstall } from "./install";
+import { BusinessProfilePage } from "./pages/BusinessProfile";
 import { PULL_AT, insideScroller, pullRefreshes, pullShown } from "./lib/pull";
 
 export function App() {
@@ -749,6 +750,10 @@ function SignedIn() {
                   <Route
                     path="/settings/links"
                     element={<LinkedBusinessesPage />}
+                  />
+                  <Route
+                    path="/settings/links/profile"
+                    element={<BusinessProfilePage />}
                   />
                   <Route path="/l/:code" element={<LinkCodePage />} />
                   <Route path="/bills" element={<BillsPage />} />

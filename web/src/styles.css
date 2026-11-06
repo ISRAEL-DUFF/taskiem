@@ -1779,28 +1779,14 @@ button.chat-avatar { border: 0; padding: 0; cursor: pointer; }
 .chat-info { position: absolute; inset: 0 0 0 auto; width: min(360px, 100%); z-index: 10; background: var(--panel); border-left: 1px solid var(--border); display: flex; flex-direction: column; box-shadow: var(--shadow-md); }
 .chat-info-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
 .chat-info-head h3 { margin: 0; flex: 1; font-size: 16px; }
-.chat-info-body { padding: 20px 16px; display: flex; flex-direction: column; align-items: center; gap: 4px; overflow-y: auto; }
 .chat-avatar.big { width: 96px; height: 96px; font-size: 36px; }
 .chat-info-name { margin: 8px 0 0; font-size: 18px; font-weight: 600; text-align: center; overflow-wrap: anywhere; }
-.chat-info-body .hint { text-align: center; }
-.chat-info-actions { align-self: stretch; display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
-.chat-info-actions button { justify-content: center; min-height: 44px; }
-.chat-info-card { align-self: stretch; text-align: center; margin-top: 8px; }
-.chat-info-card p { margin: 0 0 4px; }
 .chat-info-items { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
 .chat-info-items li { background: var(--panel-2); border-radius: 999px; padding: 2px 10px; font-size: 13px; }
-.chat-info-media { align-self: stretch; margin-top: 20px; border-top: 1px solid var(--border); padding-top: 12px; }
-.chat-info-media h4 { margin: 0 0 8px; font-size: 14px; }
-.chat-info-media ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
-.chat-info-media li { min-width: 0; }
-.chat-info-media .chat-photo img { width: 100%; height: 96px; object-fit: cover; }
-.chat-info-media .chat-voice { width: 100%; }
-.chat-info-media .chat-file { margin: 0; flex-wrap: wrap; }
-.chat-info-media .chat-photo { display: block; }
-.chat-info-media .chat-file { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 8px; background: var(--panel-2); color: var(--text); text-decoration: none; }
-.chat-info-media .chat-file svg { width: 22px; height: 22px; flex: none; }
-.chat-info-media .chat-file .name { flex: 1; min-width: 0; overflow-wrap: anywhere; font-weight: 600; font-size: 13px; }
-.chat-info-media li:has(.chat-file, .chat-voice) { grid-column: 1 / -1; }
+.info-media-all .chat-file { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 8px; background: var(--panel-2); color: var(--text); text-decoration: none; }
+.info-media-all .chat-file svg { width: 22px; height: 22px; flex: none; }
+.info-media-all .chat-file .name { flex: 1; min-width: 0; overflow-wrap: anywhere; font-weight: 600; font-size: 13px; }
+.info-media-all li:has(.chat-file, .chat-voice) { grid-column: 1 / -1; }
 .bubble.mine .hint, .bubble.mine .quote { color: var(--chat-out-meta); }
 
 /* The thread (Phase 2): a day's messages group so its chip sticks while they
@@ -1880,11 +1866,6 @@ button.chat-avatar { border: 0; padding: 0; cursor: pointer; }
 /* Instant send (Phase 4): a clock while it is sent; "Not sent" with Retry
    and Delete when it cannot be. */
 .bubble .ticks.pending svg { width: 14px; height: 14px; stroke-width: 2; }
-.chat-failed { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 4px; font-size: 13px; color: var(--danger); }
-.bubble.mine .chat-failed { color: var(--chat-out-danger); }
-.chat-failed .bang { flex: none; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; background: var(--danger); color: var(--panel); font-weight: 700; font-size: 12px; }
-.chat-failed .why { flex: 1 1 160px; min-width: 0; }
-.chat-failed button { min-height: 28px; }
 
 /* The composer (Phase 4): the emoji panel above it, the clip's menu, a drop
    target, the camera. */
@@ -2182,6 +2163,136 @@ fieldset.sf-choices label.row > input, label.row > input[type="checkbox"] { flex
 fieldset.sf-choices label.row > span, label.row > input[type="checkbox"] + span { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
 /* Reading back through a conversation or the list of them never pulls the app or the browser to refresh. */
 .chat-stream, .chat-list, .search-results { overscroll-behavior-y: contain; }
+
+/* A message that was not sent, as WhatsApp's: a red "!" where the ticks go, and the two
+   ways out as round icon buttons beside the bubble (try again, delete), no words. */
+.bubble.failed { max-width: min(80%, 520px, calc(100% - 84px)); }
+.bubble .ticks.failed { width: 16px; height: 16px; border-radius: 50%; background: var(--danger); color: var(--panel); font-size: 11px; font-weight: 800; line-height: 1; align-items: center; justify-content: center; }
+.chat-failed { position: absolute; right: calc(100% + 6px); top: 50%; transform: translateY(-50%); display: flex; flex-direction: row; gap: 6px; margin: 0; flex-wrap: nowrap; }
+.chat-failed .fail-act { flex: none; width: 34px; height: 34px; min-height: 34px; padding: 0; border-radius: 50%; display: grid; place-items: center; background: var(--panel); border: 0; box-shadow: 0 1px 3px var(--chat-shadow); color: var(--muted); }
+.chat-failed .fail-act:first-of-type { color: var(--text); }
+.chat-failed .fail-act:last-of-type { color: var(--danger); }
+.chat-failed .fail-act svg { width: 18px; height: 18px; }
+@media (prefers-reduced-motion: no-preference) { .chat-failed { animation: chip-pop 0.2s ease-out; transform-origin: right center; } }
+
 .sf-gallery { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
 .sf-gallery-pic { display: inline-flex; align-items: center; gap: 6px; }
 .sf-gallery-pic img { border-radius: var(--radius-sm, 6px); object-fit: cover; }
+
+/* Your business in Explore: the card as another business sees it, the logo, and the gallery. */
+.explore-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-top: 12px; }
+.explore-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; background: var(--panel-2); }
+.explore-strip img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
+.explore-head { display: flex; align-items: center; gap: 12px; padding: 12px; }
+.explore-head .chat-avatar { width: 48px; height: 48px; font-size: 20px; }
+.explore-logo { flex: none; border-radius: 50%; object-fit: cover; background: var(--panel-2); }
+.explore-who { min-width: 0; display: flex; flex-direction: column; }
+.explore-who strong { overflow-wrap: anywhere; }
+.profile-logo { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.profile-logo .chat-avatar.big { width: 64px; height: 64px; font-size: 26px; }
+.gallery-grid { list-style: none; padding: 0; margin: 12px 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.gallery-tile { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.gallery-tile img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--radius-sm); background: var(--panel-2); }
+.gallery-caption { font-size: 13px; min-height: 34px; }
+.gallery-tools { display: flex; gap: 4px; }
+.gallery-tools .icon-button { width: 34px; height: 34px; min-height: 34px; }
+.gallery-wait { align-items: center; justify-content: center; min-height: 100px; color: var(--muted); background: var(--field); border-radius: var(--radius-sm); }
+@media (prefers-reduced-motion: no-preference) { .gallery-tile { animation: rise-in 0.2s ease-out; } }
+
+/* The logo in a contact's round picture: the chat list, a conversation's head and its info. */
+img.chat-avatar { object-fit: cover; background: var(--tint); }
+.chat-avatar-btn { flex: none; display: block; width: auto; min-height: 0; padding: 0; border: 0; border-radius: 50%; background: none; box-shadow: none; cursor: pointer; }
+.chat-head .chat-avatar-btn .chat-avatar { width: 40px; height: 40px; }
+.chat-avatar-btn:focus-visible { box-shadow: var(--ring); }
+
+/* Contact info, as WhatsApp's: the picture and name, round actions, rows with an icon each, a switch for muting, and what cannot be undone last, in red. */
+.chat-info { overflow: hidden; }
+.info-scroll { overflow-y: auto; flex: 1; min-height: 0; overscroll-behavior-y: contain; }
+.info-hero { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 20px 16px 16px; }
+.info-hero .hint { text-align: center; margin: 0; }
+.info-round-row { display: flex; gap: 22px; justify-content: center; margin-top: 14px; }
+.info-round { display: flex; flex-direction: column; align-items: center; gap: 6px; min-height: 0; padding: 0; border: 0; background: none; box-shadow: none; font-size: 13px; color: var(--text); }
+.info-round:hover:not(:disabled) { background: none; border: 0; }
+.info-round-dot { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; background: var(--panel-2); transition: background-color 0.15s ease; }
+.info-round:hover:not(:disabled) .info-round-dot { background: var(--chat-select); }
+.info-round.on .info-round-dot { background: var(--tint); color: var(--tint-text); }
+.info-round svg { width: 22px; height: 22px; }
+.info-section { padding: 12px 16px; border-top: 1px solid var(--border); }
+.info-section.flush { padding: 4px 0; }
+.info-section h4 { margin: 0 0 6px; font-size: 13px; font-weight: 500; color: var(--muted); }
+.info-section p { margin: 0 0 4px; }
+.info-row { display: flex; align-items: center; justify-content: flex-start; gap: 16px; width: 100%; min-height: 52px; padding: 8px 16px; border: 0; border-radius: 0; background: none; box-shadow: none; text-align: left; font-size: 15px; font-weight: 400; color: var(--text); }
+.info-row:hover:not(:disabled) { background: var(--chat-select); border: 0; }
+.info-row:active:not(:disabled) { transform: none; }
+.info-row svg { flex: none; width: 22px; height: 22px; color: var(--muted); transition: transform 0.18s ease; }
+.info-row svg.turned { transform: rotate(90deg); }
+.info-row.danger, .info-row.danger svg { color: var(--danger-text, var(--danger)); }
+.info-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.info-row-sub { font-size: 13px; color: var(--muted); }
+.info-count { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+.info-switch { position: relative; flex: none; width: 38px; height: 22px; border-radius: 999px; background: var(--border-strong); transition: background-color 0.18s ease; }
+.info-switch span { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--panel); box-shadow: 0 1px 2px var(--chat-shadow); transition: transform 0.18s ease; }
+.info-switch.on { background: var(--accent); }
+.info-switch.on span { transform: translateX(16px); }
+.info-thumbs { list-style: none; margin: 0; padding: 0 16px 10px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.info-thumbs li { min-width: 0; }
+.info-thumbs .chat-photo { display: block; }
+.info-thumbs .chat-photo img { display: block; width: 100%; height: auto; aspect-ratio: 1; object-fit: cover; border-radius: 6px; }
+.info-media-all { list-style: none; margin: 0; padding: 4px 16px 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+.info-media-all li { min-width: 0; }
+.info-media-all .chat-photo { display: block; }
+.info-media-all .chat-photo img { width: 100%; height: 96px; object-fit: cover; border-radius: 6px; }
+.info-media-all .chat-voice { width: 100%; }
+.info-media-all .chat-file { margin: 0; flex-wrap: wrap; }
+.info-list { overflow-y: auto; flex: 1; min-height: 0; }
+.info-list ul { list-style: none; margin: 0; padding: 0; }
+.info-starred { display: flex; flex-direction: column; gap: 2px; padding: 10px 16px; color: var(--text); border-bottom: 1px solid var(--border); }
+.info-starred:hover { background: var(--chat-select); text-decoration: none; }
+.info-starred-line { overflow-wrap: anywhere; }
+.info-empty { padding: 20px 16px; text-align: center; }
+.chat-info-head .icon-button + h3 { margin-left: 2px; }
+.chat-info-head h3 { flex: 1; }
+
+/* Explore: a screen of its own over the chats, with a back arrow, a search box and cards. */
+/* Dots over a photo stay white in both themes. */
+:root { --on-photo: #ffffff; }
+.explore { position: fixed; inset: 0; z-index: 85; display: flex; flex-direction: column; background: var(--bg); }
+.explore-bar { display: flex; align-items: center; gap: 8px; padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 10px max(12px, env(safe-area-inset-left)); background: var(--panel); border-bottom: 1px solid var(--border); }
+.explore-bar h2 { margin: 0; font-size: 18px; }
+.explore-search { padding: 10px 12px; background: var(--panel); }
+.explore-search .search { display: flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: 999px; background: var(--field); transition: background-color 0.18s ease, box-shadow 0.18s ease; }
+.explore-search .search:focus-within { background: var(--field-focus); box-shadow: var(--ring); }
+.explore-search .search svg { flex: none; width: 18px; height: 18px; color: var(--muted); }
+.explore .explore-search label.search input[type="search"]:focus:not(:disabled):not([aria-invalid]), .explore .explore-search label.search input[type="search"]:hover:not(:disabled):not([aria-invalid]), .explore-search .search input { flex: 1; min-width: 0; background: transparent; box-shadow: none; min-height: 42px; padding: 0; font-size: 15px; }
+.explore-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; padding: 4px 12px calc(24px + env(safe-area-inset-bottom)); width: 100%; max-width: 720px; margin: 0 auto; }
+.explore-body h3 { margin: 18px 4px 8px; font-size: 15px; }
+.explore-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.explore-list > .explore-card { margin-top: 0; }
+.explore-act { flex: none; display: flex; align-items: center; gap: 8px; }
+.explore-state { font-size: 13px; color: var(--muted); }
+.explore-about { margin: 0; padding: 0 12px 12px; font-size: 14px; color: color-mix(in srgb, var(--text) 80%, var(--muted)); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.explore-more { align-self: center; margin: 14px auto 0; display: block; }
+.explore-who { flex: 1 1 0; min-width: 0; }
+.explore-who .hint { overflow-wrap: anywhere; }
+.carousel { position: relative; background: var(--panel-2); }
+.carousel-track { list-style: none; margin: 0; padding: 0; display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; }
+.carousel-track::-webkit-scrollbar { display: none; }
+.carousel-track:focus-visible { box-shadow: inset 0 0 0 3px var(--accent); outline: none; }
+.carousel-slide { flex: 0 0 100%; scroll-snap-align: center; scroll-snap-stop: always; aspect-ratio: 4 / 3; max-height: 360px; background: var(--panel-2); }
+.carousel-slide img { display: block; width: 100%; height: 100%; object-fit: cover; user-select: none; -webkit-user-drag: none; }
+.carousel-dots { position: absolute; left: 0; right: 0; bottom: 6px; display: flex; justify-content: center; gap: 0; pointer-events: none; }
+.carousel-dot { pointer-events: auto; position: relative; width: 24px; height: 24px; min-height: 24px; min-width: 24px; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.carousel-dot::after { content: ""; position: absolute; left: 50%; top: 50%; width: 7px; height: 7px; border-radius: 4px; transform: translate(-50%, -50%); background: color-mix(in srgb, var(--on-photo) 70%, transparent); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18); transition: width 0.22s ease, background-color 0.22s ease; }
+.carousel-dot[aria-current="true"]::after { width: 18px; background: var(--on-photo); }
+.carousel-dot:focus-visible { box-shadow: none; }
+.carousel-dot:focus-visible::after { box-shadow: 0 0 0 2px var(--accent); }
+.carousel-dot:hover:not(:disabled), .carousel-dot:active:not(:disabled) { background: none; border: 0; transform: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .explore { animation: explore-in 0.22s ease-out; }
+  @keyframes explore-in { from { opacity: 0; transform: translateY(14px); } }
+  .carousel-slide img { animation: fade-in 0.3s ease-out; }
+  .explore-list > .explore-card { animation: rise-in 0.24s ease-out backwards; }
+  .explore-list > .explore-card:nth-child(2) { animation-delay: 40ms; }
+  .explore-list > .explore-card:nth-child(3) { animation-delay: 80ms; }
+}
+@media (prefers-reduced-motion: reduce) { .carousel-track { scroll-behavior: auto; } }

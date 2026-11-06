@@ -8543,6 +8543,190 @@ paths:
                     type: integer
         default:
           $ref: '#/components/responses/Error'
+  /v1/links/{business}/logo:
+    get:
+      operationId: getLinkedBusinessLogo
+      tags:
+      - Links
+      summary: The logo of a business we are linked with
+      description: Shown in the chat list and a conversation's head. Nothing is served for a business we are not actively linked with, one with no logo, or one whose logo was refused; each answers 404.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: business
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: ['320', '800', '2000']
+      responses:
+        '200':
+          description: The image
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/explore:
+    get:
+      operationId: explore
+      tags:
+      - Links
+      summary: Businesses to browse
+      description: With q, what a search finds (at most 20) and, for a phone number, the one row that sends a request. Without it, two sections, Near you (findable businesses in our own area) and New on Taskiem (the newest, a page of 12 and more when there is another; section=new or section=near with offset= gives the next page of that section, and near_more says Near you has another). Only businesses that chose to be found are listed, each with its profile, whether it has a logo and how many photos it shows (at most 8). Businesses already linked with are left out of the two sections.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: section
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [new, near]
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          maximum: 1000
+      responses:
+        '200':
+          description: The businesses
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExploreResult'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/explore/{business}/logo:
+    get:
+      operationId: exploreLogo
+      tags:
+      - Links
+      summary: The logo of a business that is findable or linked
+      description: Nothing is served for a business that is not findable (unless we are linked with it), one with no logo, one whose logo was refused, or ourselves; each answers 404.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: business
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: ['320', '800', '2000']
+      - name: v
+        in: query
+        required: false
+        schema:
+          type: string
+        description: The card's v, only to key the browser's cache
+      responses:
+        '200':
+          description: The image
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/explore/{business}/photos/{photo}:
+    get:
+      operationId: explorePhoto
+      tags:
+      - Links
+      summary: One of the photos a business shows
+      description: The nth photo (from 0) of its gallery, or, with no gallery, of its published catalogue. The same 404 as the logo for anything that is not to be shown.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: business
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: photo
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+          maximum: 7
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: ['320', '800', '2000']
+      - name: v
+        in: query
+        required: false
+        schema:
+          type: string
+        description: The card's v, only to key the browser's cache
+      responses:
+        '200':
+          description: The image
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
   /v1/link-settings/qr:
     get:
       operationId: linkQR
@@ -8623,6 +8807,313 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LinkSettings'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/business-profile:
+    get:
+      operationId: getBusinessProfile
+      tags:
+      - Links
+      summary: What this business says about itself to the businesses that find it
+      description: The name, one-line description, area, text about the business, logo and gallery. They win over the storefront's card where both exist.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessProfile'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putBusinessProfile
+      tags:
+      - Links
+      summary: Set the profile's words
+      description: Replaces the words. A field left out or empty is cleared, so send all four.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                name:
+                  type: string
+                  maxLength: 80
+                tagline:
+                  type: string
+                  maxLength: 140
+                area:
+                  type: string
+                  maxLength: 80
+                about:
+                  type: string
+                  maxLength: 1000
+      responses:
+        '200':
+          description: The profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessProfile'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/business-profile/image:
+    get:
+      operationId: businessProfileImage
+      tags:
+      - Links
+      summary: One of the business's profile photos, through the API
+      description: For the web app, whose Content-Security-Policy allows images from its own origin only. Only the organisation's own images are fetched.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: src
+        in: query
+        required: true
+        schema:
+          type: string
+        description: A URL from a photo's `urls`
+      responses:
+        '200':
+          description: The image
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/business-profile/logo:
+    post:
+      operationId: uploadBusinessLogo
+      tags:
+      - Links
+      summary: Set the logo
+      description: The image is checked, stripped of its metadata and stored at three sizes, as the storefront's photos are.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          image/jpeg:
+            schema:
+              type: string
+              format: binary
+          image/png:
+            schema:
+              type: string
+              format: binary
+          image/webp:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: The profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessProfile'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: removeBusinessLogo
+      tags:
+      - Links
+      summary: Take the logo off
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      x-taskiem-all-environments: true
+      responses:
+        '200':
+          description: The profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessProfile'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/business-profile/gallery:
+    post:
+      operationId: addGalleryPhoto
+      tags:
+      - Links
+      summary: Add a photo to the end of the gallery
+      description: At most 12 photos. The caption is optional (at most 120 letters).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: caption
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 120
+      requestBody:
+        required: true
+        content:
+          image/jpeg:
+            schema:
+              type: string
+              format: binary
+          image/png:
+            schema:
+              type: string
+              format: binary
+          image/webp:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '201':
+          description: The profile with the photo added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessProfile'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/business-profile/gallery/order:
+    put:
+      operationId: orderGallery
+      tags:
+      - Links
+      summary: Put the gallery in an order
+      description: The ids name every photo once.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '200':
+          description: The profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessProfile'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/business-profile/gallery/{id}:
+    patch:
+      operationId: captionGalleryPhoto
+      tags:
+      - Links
+      summary: Set or clear a photo's caption
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                caption:
+                  type: string
+                  maxLength: 120
+      responses:
+        '200':
+          description: The profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessProfile'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: removeGalleryPhoto
+      tags:
+      - Links
+      summary: Take a photo out of the gallery
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessProfile'
         default:
           $ref: '#/components/responses/Error'
   /v1/invoice-settings:
@@ -30978,7 +31469,7 @@ components:
     LinkConversation:
       type: object
       additionalProperties: false
-      required: [link, business, name, state, unread, muted, archived, pinned, typing]
+      required: [link, business, name, logo, state, unread, muted, archived, pinned, typing]
       properties:
         link:
           type: string
@@ -30988,6 +31479,9 @@ components:
           format: uuid
         name:
           type: string
+        logo:
+          type: boolean
+          description: The business has a logo, at GET /v1/links/{business}/logo
         state:
           type: string
           enum: [active, ended]
@@ -32394,6 +32888,121 @@ components:
           type: boolean
         message:
           type: string
+    BusinessPhoto:
+      type: object
+      additionalProperties: false
+      required: [id, width, height, urls, moderation]
+      properties:
+        id:
+          type: string
+          format: uuid
+        width:
+          type: integer
+        height:
+          type: integer
+        urls:
+          type: object
+          additionalProperties:
+            type: string
+          description: The sizes it was stored at (320, 800 and 2000 pixels wide)
+        moderation:
+          type: string
+          enum: [unreviewed, approved, rejected]
+    BusinessGalleryPhoto:
+      type: object
+      additionalProperties: false
+      required: [id, caption, photo]
+      properties:
+        id:
+          type: string
+          format: uuid
+        caption:
+          type: string
+        photo:
+          $ref: '#/components/schemas/BusinessPhoto'
+    BusinessProfile:
+      type: object
+      additionalProperties: false
+      required: [name, tagline, area, about, logo, gallery, max_gallery]
+      properties:
+        name:
+          type: string
+        tagline:
+          type: string
+        area:
+          type: string
+        about:
+          type: string
+        logo:
+          oneOf:
+          - $ref: '#/components/schemas/BusinessPhoto'
+          - type: 'null'
+        gallery:
+          type: array
+          items:
+            $ref: '#/components/schemas/BusinessGalleryPhoto'
+        max_gallery:
+          type: integer
+    ExploreCard:
+      type: object
+      additionalProperties: false
+      required: [business, name, logo, photos, state, v]
+      properties:
+        business:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        area:
+          type: string
+        tagline:
+          type: string
+        about:
+          type: string
+        logo:
+          type: boolean
+          description: Whether it has a logo, at GET /v1/explore/{business}/logo
+        photos:
+          type: integer
+          description: How many photos it shows, at GET /v1/explore/{business}/photos/{photo}
+        state:
+          type: string
+          description: Our link with it, as in a search (none when there is none)
+        v:
+          type: string
+          description: Changes when its logo or photos do; send it as v on the picture requests so a changed picture is not served from the browser's cache
+    ExploreResult:
+      type: object
+      additionalProperties: false
+      required: [results, near, near_more, fresh, more]
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExploreCard'
+        near:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExploreCard'
+        fresh:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExploreCard'
+        near_more:
+          type: boolean
+        more:
+          type: boolean
+        blind:
+          type: object
+          additionalProperties: false
+          required: [kind, shown]
+          properties:
+            kind:
+              type: string
+            shown:
+              type: string
     LinkSettings:
       type: object
       additionalProperties: false
