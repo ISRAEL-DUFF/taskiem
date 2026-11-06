@@ -53,17 +53,28 @@ function AdvancedSwitch() {
 function ChatToolsSwitch() {
   const view = useLoad(() => get<{ chat_tools: boolean }>("/v1/settings/chat-tools"), []);
   const act = useAction();
+  // What was just chosen shows at once; the saved value once it is back.
+  const [chosen, setChosen] = useState<boolean | null>(null);
+  const on = chosen ?? !!view.data?.chat_tools;
   return (
     <div className="card">
       <h2 style={{ marginTop: 0 }}>Chat tools</h2>
       <label>
         <input
           type="checkbox"
-          checked={!!view.data?.chat_tools}
+          checked={on}
           disabled={act.busy || !view.data}
           onChange={(e) => {
-            const on = e.target.checked;
-            void act.run(async () => (await put("/v1/settings/chat-tools", { chat_tools: on }), view.reload()), "Saved");
+            const next = e.target.checked;
+            setChosen(next);
+            void act.run(async () => {
+              try {
+                await put("/v1/settings/chat-tools", { chat_tools: next });
+              } catch (err) {
+                setChosen(null);
+                throw err;
+              }
+            }, "Saved");
           }}
         />{" "}
         Name a business to message it
