@@ -63,6 +63,7 @@ const paths: Record<string, string> = {
   mail: "M3 5h18v14H3zM3 7l9 6 9-6",
   card: "M2 5h20v14H2zM2 10h20M6 15h4",
   split: "M4 12h6l4-6h6M10 12l4 6h6",
+  retry: "M20 12a8 8 0 11-2.3-5.6M20 4v4h-4",
   loop: "M17 2l4 4-4 4M3 11V9a3 3 0 013-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 01-3 3H3",
   code: "M8 7l-5 5 5 5M16 7l5 5-5 5",
   play: "M7 5l12 7-12 7z",

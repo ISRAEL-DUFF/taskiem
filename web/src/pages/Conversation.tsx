@@ -484,7 +484,7 @@ function Bubble({
       mine={m.mine}
       first={first}
       testid={card ? "chat-card" : "chat-message"}
-      className={`${card ? "card-bubble" : ""}${flash ? " flash" : ""}${m.reactions?.length ? " has-reactions" : ""}`.trim()}
+      className={`${card ? "card-bubble" : ""}${flash ? " flash" : ""}${m.reactions?.length ? " has-reactions" : ""}${local === "failed" ? " failed" : ""}`.trim()}
       what={what}
       onReply={canReply ? () => onReply(m) : undefined}
       quickReact={!!onReact}
@@ -574,24 +574,26 @@ function Bubble({
               className="chat-failed"
               role="alert"
               data-testid="chat-failed"
+              title={`Not sent. ${m.localError ?? ""}`}
             >
-              <span className="bang" aria-hidden="true">
-                !
-              </span>
-              <span className="why">Not sent. {m.localError}</span>
+              <span className="sr-only">Not sent. {m.localError}</span>
               <button
                 type="button"
-                className="small"
+                className="fail-act"
+                aria-label="Retry"
+                title="Try again"
                 onClick={() => onRetry?.(m.id.replace("local-", ""))}
               >
-                Retry
+                <Icon name="retry" />
               </button>
               <button
                 type="button"
-                className="small"
+                className="fail-act"
+                aria-label="Delete"
+                title="Delete"
                 onClick={() => onDiscard?.(m.id.replace("local-", ""))}
               >
-                Delete
+                <Icon name="trash" />
               </button>
             </span>
           )}
@@ -610,6 +612,11 @@ function Bubble({
             {local === "sending" && (
               <span className="ticks pending" role="img" aria-label="Sending">
                 <Icon name="clock" />
+              </span>
+            )}
+            {local === "failed" && (
+              <span className="ticks failed" role="img" aria-label="Not sent">
+                <span aria-hidden="true">!</span>
               </span>
             )}
             {m.mine && !card && !local && <Ticks read={!!m.read_at} />}
