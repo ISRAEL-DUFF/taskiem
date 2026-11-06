@@ -1,6 +1,6 @@
 # Chat tools: the chat as the business's control room
 
-Status: **phase 1 built** (agreed with the founder). The plan, with every
+Status: **phases 1 and 2 built** (agreed with the founder). The plan, with every
 decision and the six-phase build order, is the shared doc "Taskiem chat as the
 business's control room"; the designs are the canvas "Taskiem chat: picker,
 cards and tool sheets". This file is what is built, and it amends
@@ -115,16 +115,59 @@ All of them show only with chat tools on; the redrawn chat is for everyone.
   invoice is paid) is a line in the middle of the chat, not a card: what changed,
   and "You, 10:42". One that arrives while the conversation is open drops in lit
   in lime; those already there just show. Changes made within five minutes of
-  each other on one day are one line, "and 2 more changes", which unfolds. A
+  each other on one day are one line, the newest, with "and 2 earlier
+  changes", which unfolds. A
   new document is always a card. Search results and quotes jump to a diary line
   as to any message.
 
-**Moved to phase 2** (they need the tools that make changes): diary lines told
-on WhatsApp, Telegram and Slack, and in the Taskiem conversation; the save tick
-with its buzz; the sound for a new order or payment (with its switch); the
-burst for good moments; live product cards.
+## 4. Phase 2: the seller's tools
 
-## 4. Tests
+Status: **built**. Done when an owner changes a price, records stock in and
+accepts an order from chat, a service business adds a service with its duration
+and price, and each change shows as a diary line (`web/e2e/chat-tools-work.spec.ts`).
+
+- **The sheets work.** Each tool does the common task in place, through the same
+  API as its page; "Open full page" is for the rest.
+  - Products: the price and the count on the shelf (a count movement); a new
+    product.
+  - Stock: goods that came in (a received movement).
+  - Services: a new service with how long it takes and its price (a row of the
+    storefront's services table, then the catalogue refreshed).
+  - Price lists: each item's price.
+  - Orders: what a linked business asks for, Accept or Decline (confirmed).
+  - Tables: any data table's latest rows, and a row added.
+- **Saving.** The tick draws itself (260 ms, a light buzz), the sheet closes at
+  1.3 s and the change lands as a diary line where the tool was opened.
+- **Diary lines** (`POST /v1/chat-diary`, `api/chat_diary.go`): in a business
+  conversation a row on our side only (kind `diary`: no pair on the other side,
+  which never sees it; reactions and replies to it are refused); in the Taskiem
+  conversation a line of the person's own history (kind `diary`). Either way it
+  is told on the person's own WhatsApp and Telegram as "✓ …" (the alert template
+  outside the window) and not kept twice. Only with chat tools on, and only for a
+  person (an API key is refused). A line reaches no one but the person who made
+  the change. The words come from the tool that saved: changes made on other
+  pages are not told yet.
+- **Live cards.** A product tagged in a message is a card with what is true now:
+  today's price on the conversation's price list (and what it was when tagged),
+  our own stock of it (to those who may see stock), and Order when we buy from
+  them. A service of our own (from the picker's Services; `{kind: service,
+  service_id}`, checked against our storefront's services) shows its price and
+  minutes, on both sides.
+- **Typed requests** (`web/src/lib/intents.ts`): "change the price of rice 50kg
+  to 80k", "20 bags of rice 25kg came in", "add a service: rice milling, 30 min,
+  2500", "accept order AD-…" offer a chip over the composer that opens the
+  form filled in. Words never save anything: the form's Save does. A thing is
+  never guessed between two that fit as well. The words are matched in the
+  browser, not by a model, for now.
+- **Moments.** A soft sound for a new order or payment while the chat is open,
+  switched off from the chat menu ("Sound for new orders and payments"); a short
+  lime ring around a payment or the day's first order. Neither with motion
+  turned down.
+- **Still to come:** a product's photo and "show on your storefront" in its form;
+  diary lines for changes made on the other pages; requests read by Taskiem's
+  model on WhatsApp.
+
+## 5. Tests
 
 - `api/chat_tools_test.go`: the switch (off by default, a viewer refused, on for
   everyone, off again); on, names straight to businesses with and without `...`,
@@ -138,5 +181,14 @@ burst for good moments; live product cards.
   conversation; the picker, the tools and a sheet on a phone and a computer
   (axe in both themes, nothing scrolling sideways, Esc closing only the sheet);
   a card with its progress and a diary line.
+- `api/chat_diary_test.go`: a diary line in each place, the other business never
+  seeing it, refused reactions and replies, told once on WhatsApp, who may.
+- `api/chat_tools_test.go` (`TestServiceMention`): a service of ours tagged, on
+  both sides; one not ours refused.
+- `web/e2e/chat-tools-work.spec.ts`: price, stock in, order and service from
+  chat on a phone and a computer, each a diary line, ours alone; the Taskiem
+  conversation's diary line kept; a typed request; a live card; tagging a
+  service; the sound switch.
+- Unit tests: `lib/toolforms`, `lib/intents`, `lib/moments`.
 - Unit tests: `lib/tools`, `lib/cardframe`, `lib/mentions` (the groups),
   `lib/sheetDrag`, `lib/chattools`.

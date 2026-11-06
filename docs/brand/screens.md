@@ -238,6 +238,10 @@ no page mixes the old look and the new.
 - **KitEmpty** (an icon, a title, a line and what to do) and **KitLoading**
   (shimmering rows) for every list's empty and loading states.
 - **DiaryLine**: a change told in a conversation as a line.
+- **SavedTick**: a save, done; the tick draws itself with a light buzz. A form
+  in a sheet (`ChatToolForms.tsx`) has its fields in the body and one main
+  button at the foot (`.tk-cta`); money in a tall `.tk-money` box with ₦, counts
+  in a `.tk-stepper` (− n +).
 - **usePresence**: a part that leaves with a little motion. With motion turned
   down nothing moves.
 
