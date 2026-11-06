@@ -123,9 +123,12 @@ test("on a phone the list has the tab bar and a round button to start a chat; a 
   expect(await sideways(buyer)).toBe(false);
   await axeBoth(buyer, "the list on a phone");
 
-  // The button starts a link request: the search box takes the focus.
+  // The button opens Explore, a screen of its own with its search box ready.
   await fab.click();
-  await expect(buyer.getByTestId("link-search")).toBeFocused();
+  await expect(buyer.getByTestId("explore")).toBeVisible();
+  await expect(buyer.getByTestId("explore-search")).toBeFocused();
+  await buyer.getByTestId("explore-back").click();
+  await expect(buyer.getByTestId("explore")).toHaveCount(0);
 
   // A conversation: no tab bar, no button; back brings them again.
   await buyer.goto(`/chat?with=${link}`);
@@ -214,7 +217,9 @@ test("on a computer the round button is in the list's head, and the list and the
   await expect(buyer.getByTestId("chat-pane")).toBeVisible();
   await expect(buyer.getByRole("navigation", { name: "Quick" })).toBeHidden();
   await btn.click();
-  await expect(buyer.getByTestId("link-search")).toBeFocused();
+  await expect(buyer.getByTestId("explore-search")).toBeFocused();
+  await buyer.keyboard.press("Escape");
+  await expect(buyer.getByTestId("explore")).toHaveCount(0);
   await axeBoth(buyer, "the list on a computer");
 });
 

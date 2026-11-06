@@ -261,18 +261,5 @@ func (s *Server) linkLogo(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, linkErr(err))
 		return
 	}
-	src := urls[r.URL.Query().Get("size")]
-	for _, k := range []string{"320", "800", "2000"} {
-		if src == "" {
-			src = urls[k]
-		}
-	}
-	data, ctype, err := s.Media.FetchPublic(r.Context(), business, src)
-	if err != nil {
-		s.fail(w, r, pgx.ErrNoRows)
-		return
-	}
-	w.Header().Set("Content-Type", ctype)
-	w.Header().Set("Cache-Control", "private, max-age=3600")
-	_, _ = w.Write(data) //nolint:gosec // a JPEG or PNG by its bytes (FetchPublic), sent as that type with nosniff
+	s.sendBusinessImage(w, r, business, urls)
 }

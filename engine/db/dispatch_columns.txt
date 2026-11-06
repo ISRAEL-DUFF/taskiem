@@ -91,6 +91,7 @@ business_areas.area
 business_areas.enabled
 business_areas.tenant_id
 business_gallery.caption
+business_gallery.created_at
 business_gallery.media_id
 business_gallery.position
 business_gallery.tenant_id

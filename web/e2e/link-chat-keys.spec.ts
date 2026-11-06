@@ -178,11 +178,14 @@ test("the keys of the list: / searches, j and k move between chats, ? lists them
   await expect(sheet).toHaveCount(0);
   expect(withParam(buyer)).toBe(second);
 
-  // n goes to the list and the search box, ready for a new link request.
+  // n opens Explore (finding a business), its search box ready, off any chat.
   await buyer.locator("h2", { hasText: "Chat" }).first().click();
   await buyer.keyboard.press("n");
-  await expect(search).toBeFocused();
+  await expect(buyer.getByTestId("explore")).toBeVisible();
+  await expect(buyer.getByTestId("explore-search")).toBeFocused();
   expect(withParam(buyer)).toBeNull();
+  await buyer.keyboard.press("Escape");
+  await expect(buyer.getByTestId("explore")).toHaveCount(0);
 });
 
 test("arrows go down the list and back to the search box, Enter opens a chat", async ({

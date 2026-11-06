@@ -8585,6 +8585,136 @@ paths:
                 format: binary
         default:
           $ref: '#/components/responses/Error'
+  /v1/explore:
+    get:
+      operationId: explore
+      tags:
+      - Links
+      summary: Businesses to browse
+      description: With q, what a search finds (at most 20) and, for a phone number, the one row that sends a request. Without it, two sections, Near you (findable businesses in our own area) and New on Taskiem (the newest, a page of 12 and more when there is another; section=new&offset= gives the next page). Only businesses that chose to be found are listed, each with its profile, whether it has a logo and how many photos it shows (at most 8). Businesses already linked with are left out of the two sections.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: section
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [new]
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          maximum: 1000
+      responses:
+        '200':
+          description: The businesses
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExploreResult'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/explore/{business}/logo:
+    get:
+      operationId: exploreLogo
+      tags:
+      - Links
+      summary: The logo of a business that is findable or linked
+      description: Nothing is served for a business that is not findable (unless we are linked with it), one with no logo, one whose logo was refused, or ourselves; each answers 404.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: business
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: ['320', '800', '2000']
+      responses:
+        '200':
+          description: The image
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/explore/{business}/photos/{photo}:
+    get:
+      operationId: explorePhoto
+      tags:
+      - Links
+      summary: One of the photos a business shows
+      description: The nth photo (from 0) of its gallery, or, with no gallery, of its published catalogue. The same 404 as the logo for anything that is not to be shown.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: business
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: photo
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+          maximum: 7
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: ['320', '800', '2000']
+      responses:
+        '200':
+          description: The image
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
   /v1/link-settings/qr:
     get:
       operationId: linkQR
@@ -32801,6 +32931,61 @@ components:
             $ref: '#/components/schemas/BusinessGalleryPhoto'
         max_gallery:
           type: integer
+    ExploreCard:
+      type: object
+      additionalProperties: false
+      required: [business, name, logo, photos, state]
+      properties:
+        business:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        area:
+          type: string
+        tagline:
+          type: string
+        about:
+          type: string
+        logo:
+          type: boolean
+          description: Whether it has a logo, at GET /v1/explore/{business}/logo
+        photos:
+          type: integer
+          description: How many photos it shows, at GET /v1/explore/{business}/photos/{photo}
+        state:
+          type: string
+          description: Our link with it, as in a search (none when there is none)
+    ExploreResult:
+      type: object
+      additionalProperties: false
+      required: [results, near, fresh, more]
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExploreCard'
+        near:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExploreCard'
+        fresh:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExploreCard'
+        more:
+          type: boolean
+        blind:
+          type: object
+          additionalProperties: false
+          required: [kind, shown]
+          properties:
+            kind:
+              type: string
+            shown:
+              type: string
     LinkSettings:
       type: object
       additionalProperties: false

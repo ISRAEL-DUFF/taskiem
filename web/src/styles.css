@@ -2252,3 +2252,47 @@ img.chat-avatar { object-fit: cover; background: var(--tint); }
 .info-empty { padding: 20px 16px; text-align: center; }
 .chat-info-head .icon-button + h3 { margin-left: 2px; }
 .chat-info-head h3 { flex: 1; }
+
+/* Explore: a screen of its own over the chats, with a back arrow, a search box and cards. */
+/* Dots over a photo stay white in both themes. */
+:root { --on-photo: #ffffff; }
+.explore { position: fixed; inset: 0; z-index: 85; display: flex; flex-direction: column; background: var(--bg); }
+.explore-bar { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--panel); border-bottom: 1px solid var(--border); }
+.explore-bar h2 { margin: 0; font-size: 18px; }
+.explore-search { padding: 10px 12px; background: var(--panel); }
+.explore-search .search { display: flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: 999px; background: var(--field); transition: background-color 0.18s ease, box-shadow 0.18s ease; }
+.explore-search .search:focus-within { background: var(--field-focus); box-shadow: var(--ring); }
+.explore-search .search svg { flex: none; width: 18px; height: 18px; color: var(--muted); }
+.explore .explore-search label.search input[type="search"]:focus:not(:disabled):not([aria-invalid]), .explore .explore-search label.search input[type="search"]:hover:not(:disabled):not([aria-invalid]), .explore-search .search input { flex: 1; min-width: 0; background: transparent; box-shadow: none; min-height: 42px; padding: 0; font-size: 15px; }
+.explore-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; padding: 4px 12px 24px; width: 100%; max-width: 720px; margin: 0 auto; }
+.explore-body h3 { margin: 18px 4px 8px; font-size: 15px; }
+.explore-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.explore-list > .explore-card { margin-top: 0; }
+.explore-act { flex: none; display: flex; align-items: center; gap: 8px; }
+.explore-state { font-size: 13px; color: var(--muted); }
+.explore-about { margin: 0; padding: 0 12px 12px; font-size: 14px; color: color-mix(in srgb, var(--text) 80%, var(--muted)); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.explore-more { align-self: center; margin: 14px auto 0; display: block; }
+.explore-who { flex: 1 1 0; min-width: 0; }
+.explore-who .hint { overflow-wrap: anywhere; }
+.carousel { position: relative; background: var(--panel-2); }
+.carousel-track { list-style: none; margin: 0; padding: 0; display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; }
+.carousel-track::-webkit-scrollbar { display: none; }
+.carousel-track:focus-visible { box-shadow: inset 0 0 0 3px var(--accent); outline: none; }
+.carousel-slide { flex: 0 0 100%; scroll-snap-align: center; scroll-snap-stop: always; aspect-ratio: 4 / 3; max-height: 360px; background: var(--panel-2); }
+.carousel-slide img { display: block; width: 100%; height: 100%; object-fit: cover; user-select: none; -webkit-user-drag: none; }
+.carousel-dots { position: absolute; left: 0; right: 0; bottom: 6px; display: flex; justify-content: center; gap: 0; pointer-events: none; }
+.carousel-dot { pointer-events: auto; position: relative; width: 24px; height: 24px; min-height: 24px; min-width: 24px; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.carousel-dot::after { content: ""; position: absolute; left: 50%; top: 50%; width: 7px; height: 7px; border-radius: 4px; transform: translate(-50%, -50%); background: color-mix(in srgb, var(--on-photo) 70%, transparent); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18); transition: width 0.22s ease, background-color 0.22s ease; }
+.carousel-dot[aria-current="true"]::after { width: 18px; background: var(--on-photo); }
+.carousel-dot:focus-visible { box-shadow: none; }
+.carousel-dot:focus-visible::after { box-shadow: 0 0 0 2px var(--accent); }
+.carousel-dot:hover:not(:disabled), .carousel-dot:active:not(:disabled) { background: none; border: 0; transform: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .explore { animation: explore-in 0.22s ease-out; }
+  @keyframes explore-in { from { opacity: 0; transform: translateY(14px); } }
+  .carousel-slide img { animation: fade-in 0.3s ease-out; }
+  .explore-list > .explore-card { animation: rise-in 0.24s ease-out backwards; }
+  .explore-list > .explore-card:nth-child(2) { animation-delay: 40ms; }
+  .explore-list > .explore-card:nth-child(3) { animation-delay: 80ms; }
+}
+@media (prefers-reduced-motion: reduce) { .carousel-track { scroll-behavior: auto; } }

@@ -42,6 +42,7 @@ import { ConversationPane } from "./Conversation";
 import { TaskiemPane } from "./TaskiemChat";
 import { ChatRow } from "./ChatRow";
 import { useConfirm } from "./ConfirmSheet";
+import { Explore } from "./Explore";
 import { HeadMenu } from "./ChatHead";
 import { useChatLive } from "./ChatLive";
 import { useDrafts } from "../lib/drafts";
@@ -376,6 +377,7 @@ export function ChatPage() {
   const searchBox = useRef<HTMLInputElement>(null);
   const [keysOpen, setKeysOpen] = useState(false);
   const [hint, setHint] = useState("");
+  const [exploring, setExploring] = useState(false);
   const order = ["taskiem", ...listed.map((c) => c.link)];
   const keys = useRef({ order, openID: openID ?? undefined, setParams });
   keys.current = { order, openID: openID ?? undefined, setParams };
@@ -391,11 +393,9 @@ export function ChatPage() {
         }),
       );
     startNew.current = () => {
-      setHint(
-        "Type the business's name or phone number, then choose Request link.",
-      );
+      // Finding a business has a screen of its own (Explore).
       keys.current.setParams({});
-      focusSearch();
+      setExploring(true);
     };
     const onKey = (e: KeyboardEvent) => {
       const k = keys.current;
@@ -937,6 +937,15 @@ export function ChatPage() {
               />
             )}
           {keysOpen && <KeysSheet onClose={() => setKeysOpen(false)} />}
+          {exploring && (
+            <Explore
+              links={view.data?.links ?? []}
+              convs={all}
+              manage={manage}
+              onClose={() => setExploring(false)}
+              onChanged={() => view.reload()}
+            />
+          )}
           {asking && (
             <RequestSheet
               asking={asking}

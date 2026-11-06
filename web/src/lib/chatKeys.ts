@@ -60,7 +60,7 @@ export function step(
 
 export const SHORTCUTS: { keys: string[]; does: string }[] = [
   { keys: ["/"], does: "Find a business or a message" },
-  { keys: ["n"], does: "Ask a business to link" },
+  { keys: ["n"], does: "Find a business to link with" },
   { keys: ["j"], does: "Next chat" },
   { keys: ["k"], does: "Previous chat" },
   {
