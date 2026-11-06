@@ -24,8 +24,9 @@ import (
 
 // Message kinds.
 const (
-	KindText = "text"
-	KindCard = "card"
+	KindText  = "text"
+	KindCard  = "card"
+	KindDiary = "diary" // a change this side made, on this side only
 )
 
 // MaxMessage is the most a message may say.
@@ -521,7 +522,7 @@ func SendWithTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body str
 	}
 	if replyTo != nil {
 		var ok bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM link_messages WHERE tenant_id = $1 AND link_id = $2 AND pair_id = $3)`, tenant, link, *replyTo).Scan(&ok); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM link_messages WHERE tenant_id = $1 AND link_id = $2 AND pair_id = $3 AND kind <> 'diary')`, tenant, link, *replyTo).Scan(&ok); err != nil {
 			return Message{}, uuid.Nil, err
 		}
 		if !ok {
@@ -671,6 +672,24 @@ func CardTx(ctx context.Context, tx pgx.Tx, tenant, link, pair uuid.UUID, mine b
 	_, err := tx.Exec(ctx, `INSERT INTO link_messages (id, tenant_id, link_id, pair_id, mine, kind, card) VALUES ($1, $2, $3, $4, $5, 'card', $6)
 		ON CONFLICT (tenant_id, pair_id) DO NOTHING`, uuid.Must(uuid.NewV7()), tenant, link, pair, mine, raw)
 	return err
+}
+
+// DiaryTx writes a diary line into the business in scope's conversation
+// with a link (docs/spec/chat-tools.md §3): a change this side made with a
+// chat tool, on this side only. It has no pair on the other side, which
+// never sees it.
+func DiaryTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body string, from Sender) (Message, error) {
+	body = strings.TrimSpace(body)
+	if body == "" || len([]rune(body)) > 300 {
+		return Message{}, fmt.Errorf("%w: a diary line is 1 to 300 characters", ErrInvalid)
+	}
+	id := uuid.Must(uuid.NewV7())
+	if _, err := tx.Exec(ctx, `INSERT INTO link_messages (id, tenant_id, link_id, pair_id, mine, kind, body, sender_name, sender_id)
+		VALUES ($1, $2, $3, $1, true, 'diary', $4, $5, NULLIF($6, ''))`, id, tenant, link, body, from.FirstName, from.ID); err != nil {
+		return Message{}, err
+	}
+	row := tx.QueryRow(ctx, `SELECT `+messageCols+messageFrom+` WHERE m.tenant_id = $1 AND m.id = $2`, tenant, id)
+	return scanMessage(row)
 }
 
 // ThreadTx is a document's thread in the business in scope: the cards of

@@ -21634,6 +21634,45 @@ paths:
                 $ref: '#/components/schemas/AdvancedSetting'
         default:
           $ref: '#/components/responses/Error'
+  /v1/chat-diary:
+    post:
+      operationId: postChatDiary
+      tags:
+      - Account
+      summary: Tell a change made with a chat tool as a diary line
+      description: With chat tools on, a line where the tool was used (the person's Taskiem conversation, or our side of a conversation with a business, which the other business never sees), also told on the person's own WhatsApp and Telegram (docs/spec/chat-tools.md).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [where, text]
+              properties:
+                where:
+                  type: string
+                  description: taskiem, or a link's id
+                text:
+                  type: string
+                  maxLength: 300
+      responses:
+        '201':
+          description: Kept
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [line]
+                properties:
+                  line:
+                    description: A TaskiemChat message, or a LinkMessage of kind diary
+        default:
+          $ref: '#/components/responses/Error'
   /v1/settings/chat-tools:
     get:
       operationId: getChatTools
@@ -31380,7 +31419,7 @@ components:
                 description: The person said it (else Taskiem did)
               kind:
                 type: string
-                enum: [text, button, voice, photo, form, location]
+                enum: [text, button, voice, photo, form, location, diary]
               text:
                 type: string
               buttons:
@@ -31455,7 +31494,8 @@ components:
           description: We sent it (a card, we acted)
         kind:
           type: string
-          enum: [text, card]
+          enum: [text, card, diary]
+          description: A diary line is a change we made with a chat tool, on our side only
         body:
           type: string
         sender_name:

@@ -266,9 +266,18 @@ func openText(ctx context.Context, c pii.Cipher, tx pgx.Tx, tenant uuid.UUID, en
 	return nil, errors.New("chat history: a message sealed too deep")
 }
 
+// unkept marks a send that is already in the history in another form (a
+// diary line told on the phone): recordSent leaves it out.
+type unkeptKey struct{}
+
+func unkept(ctx context.Context) context.Context { return context.WithValue(ctx, unkeptKey{}, true) }
+
 // recordSent keeps a message a channel sent to a member: in the business
 // it names, or the one the conversation is with.
 func (s *Server) recordSent(ctx context.Context, channel, addr string, m whatsapp.Message) {
+	if ctx.Value(unkeptKey{}) != nil {
+		return
+	}
 	tenant := m.Tenant
 	if tenant == uuid.Nil {
 		tenant = chatTenantOf(ctx)
