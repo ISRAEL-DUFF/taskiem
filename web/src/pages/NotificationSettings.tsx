@@ -8,6 +8,7 @@ import {
 } from "../lib/notifications";
 import { ErrorBox, Items, PageHeader, Row, useAction, useLoad } from "../ui";
 import { onPrefs, readPrefs, writePrefs, playPing } from "../lib/chatNotify";
+import { ChatPush } from "./ChatPush";
 
 /**
  * How a person hears beyond the app (no-technical-steps N12). The bell
@@ -153,6 +154,7 @@ export function NotificationSettings() {
         </p>
       </section>
       <ChatOnThisComputer />
+      <ChatPush />
     </>
   );
 }

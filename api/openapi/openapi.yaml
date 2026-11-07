@@ -16932,6 +16932,197 @@ paths:
           $ref: '#/components/responses/NoContent'
         default:
           $ref: '#/components/responses/Error'
+  /v1/me/push/key:
+    get:
+      operationId: getPushKey
+      tags:
+      - Notifications
+      summary: The public key a browser subscribes with
+      description: Chat push (docs/spec/chat-push.md). 404 when the server has no VAPID keys (the feature is off).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The key
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [public_key]
+                properties:
+                  public_key:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/push:
+    get:
+      operationId: listPush
+      tags:
+      - Notifications
+      summary: The browsers this person allowed to be notified when the app is closed
+      description: In the business they are in. Never the browsers' addresses or keys. Only for a person (not an API key); 404 when the feature is off.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: This person's browsers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushDevices'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putPush
+      tags:
+      - Notifications
+      summary: Allow this browser to be notified
+      description: The address must be a push service's (https, on Google's, Mozilla's, Apple's or Microsoft's host). The same browser again is updated, not added twice; at most 10 browsers a person in a business, the oldest replaced.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [endpoint, keys]
+              properties:
+                endpoint:
+                  type: string
+                  maxLength: 2048
+                keys:
+                  type: object
+                  additionalProperties: false
+                  required: [p256dh, auth]
+                  properties:
+                    p256dh:
+                      type: string
+                      maxLength: 200
+                    auth:
+                      type: string
+                      maxLength: 100
+                label:
+                  type: string
+                  maxLength: 80
+                preview:
+                  type: [boolean, 'null']
+                  description: Whether the notification says what the message says (default on)
+      responses:
+        '200':
+          description: This person's browsers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushDevices'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deletePushEndpoint
+      tags:
+      - Notifications
+      summary: This browser takes itself off
+      description: By its address, which only it knows. Nothing there is not an error.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [endpoint]
+              properties:
+                endpoint:
+                  type: string
+      responses:
+        '200':
+          description: This person's browsers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushDevices'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/push/{id}:
+    patch:
+      operationId: patchPush
+      tags:
+      - Notifications
+      summary: Rename a browser or switch its preview
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                label:
+                  type: [string, 'null']
+                  maxLength: 80
+                preview:
+                  type: [boolean, 'null']
+      responses:
+        '200':
+          description: This person's browsers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushDevices'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deletePush
+      tags:
+      - Notifications
+      summary: Take a browser off
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: This person's browsers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushDevices'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/me/notification-settings:
     get:
       operationId: getNotificationSettings
@@ -33003,6 +33194,42 @@ components:
               type: string
             shown:
               type: string
+    PushDevice:
+      type: object
+      additionalProperties: false
+      required: [id, label, preview, created_at, last_sent_at, last_ok_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        label:
+          type: string
+        preview:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        last_sent_at:
+          type: [string, 'null']
+          format: date-time
+        last_ok_at:
+          type: [string, 'null']
+          format: date-time
+    PushDevices:
+      type: object
+      additionalProperties: false
+      required: [devices, max]
+      properties:
+        devices:
+          type: array
+          items:
+            $ref: '#/components/schemas/PushDevice'
+        max:
+          type: integer
+        added:
+          type: string
+          format: uuid
+          description: The browser a PUT just added or updated
     LinkSettings:
       type: object
       additionalProperties: false

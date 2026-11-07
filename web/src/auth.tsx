@@ -10,6 +10,8 @@ import { get, post, type Me } from "./api";
 import { passkeyLogin } from "./passkeys";
 import { toast } from "./toast";
 import { claimTab, forgetTab } from "./lib/tabOwner";
+import { disablePush } from "./lib/push";
+import { setAppBadge } from "./lib/badge";
 
 interface Auth {
   me: Me | null | undefined; // undefined while loading
@@ -62,6 +64,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await refresh();
     },
     logout: async () => {
+      // This browser stops being notified for this person (it needs the session).
+      await disablePush().catch(() => undefined);
+      setAppBadge(0);
       await post("/v1/auth/logout").catch(() => undefined);
       // What the person had half written, what was not yet sent, the gate's
       // checks and a business session are theirs alone: they do not wait
