@@ -4919,6 +4919,11 @@
       "reviewed": true,
       "context": "add to a table Taskiem keeps (the money log)"
     },
+    "wa.table.restricted": {
+      "text": "{table} is for {readers} only, and the owner: your roles cannot read or change its rows. Ask the owner if you need it.",
+      "reviewed": true,
+      "context": "find, add, change or delete on a table whose readers the person holds none of (HR tickets)"
+    },
     "wa.table.list_head": {
       "text": "Data tables in {org}:",
       "reviewed": true,

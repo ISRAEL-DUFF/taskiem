@@ -129,7 +129,7 @@ func (s *Server) waFileStart(ctx context.Context, c *chat, f *chatFile) error {
 	}
 	best := 0
 	for _, t := range tables {
-		if t.Kept() {
+		if t.Kept() || !c.p.readsTable(t) {
 			continue
 		}
 		names, _, _ := headerColumns(f.Header, t.Columns, nil)
@@ -342,6 +342,9 @@ func (s *Server) waFileNew(ctx context.Context, c *chat, f *chatFile) error {
 // waFileAdd matches the file's headings to the table's columns, asking
 // about each that matches none.
 func (s *Server) waFileAdd(ctx context.Context, c *chat, f *chatFile, t datatables.Table) error {
+	if !c.p.readsTable(t) {
+		return s.waTableRestricted(ctx, c, t)
+	}
 	if t.Kept() {
 		return s.waTableKept(ctx, c, t)
 	}
@@ -483,6 +486,9 @@ func (s *Server) waFileImport(ctx context.Context, c *chat, f *chatFile) error {
 	t, err := s.waGetTable(ctx, c.tenant.ID, f.Table)
 	if err != nil {
 		return s.waFileGone(ctx, c, err)
+	}
+	if !c.p.readsTable(t) {
+		return s.waTableRestricted(ctx, c, t)
 	}
 	if t.Kept() {
 		return s.waTableKept(ctx, c, t)

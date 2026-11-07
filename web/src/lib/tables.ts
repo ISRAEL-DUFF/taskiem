@@ -37,6 +37,10 @@ export interface Table {
   row_count?: number;
   /** The Taskiem feature that keeps the table (money_log), or null: a kept table is read-only here. */
   kept_by?: string | null;
+  /** The roles whose holders, and the owner, may see and change the rows (decision 0065); null for everyone with table access. */
+  readers?: string[] | null;
+  /** Whether the person looking may see the rows. */
+  can_read?: boolean;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -247,10 +251,37 @@ export const KEPT_OWN_NOTE = "Your organisation uses its own Xenibase project, s
 /** Whether Taskiem keeps the table. */
 export const isKept = (table: Pick<Table, "kept_by">) => !!table.kept_by;
 
-/** What the table page offers: a kept table only reads, searches and exports, whoever looks. */
-export function tableControls(table: Pick<Table, "kept_by">, canEdit: boolean): { addRow: boolean; editRows: boolean; importCSV: boolean; columns: boolean; deleteTable: boolean; export: boolean; search: boolean } {
-  const edit = canEdit && !isKept(table);
-  return { addRow: edit, editRows: edit, importCSV: edit, columns: edit, deleteTable: edit, export: true, search: true };
+/** What the table page offers: a kept table only reads, searches and exports, whoever looks; a table whose rows are for other roles offers nothing. */
+export function tableControls(table: Pick<Table, "kept_by" | "can_read">, canEdit: boolean): { addRow: boolean; editRows: boolean; importCSV: boolean; columns: boolean; deleteTable: boolean; export: boolean; search: boolean } {
+  const read = table.can_read !== false;
+  const edit = read && canEdit && !isKept(table);
+  return { addRow: edit, editRows: edit, importCSV: edit, columns: edit, deleteTable: edit, export: read, search: read };
+}
+
+/** Whether the table's rows are for some roles only (decision 0065). */
+export const isRestricted = (table: Pick<Table, "readers">) => !!table.readers && table.readers.length > 0;
+
+/** The roles as words: "hr", "hr or hr_lead", "a, b or c". */
+export function rolesText(roles: string[]): string {
+  if (roles.length <= 1) return roles.join("");
+  return `${roles.slice(0, -1).join(", ")} or ${roles[roles.length - 1]}`;
+}
+
+/** Who may see the table's rows, in a sentence. */
+export function readersText(table: Pick<Table, "readers">): string {
+  if (!isRestricted(table)) return "Everyone with access to your tables can see and change its rows.";
+  const roles = table.readers ?? [];
+  return `Only members with the ${rolesText(roles)} role, and the owner, can see and change its rows.`;
+}
+
+/** A list of roles typed as "hr, hr_lead" (commas or spaces), checked: the roles, or why not. */
+export function parseReaders(text: string): { roles: string[] } | { error: string } {
+  const roles = [...new Set(text.split(/[\s,]+/).map((r) => r.trim().toLowerCase()).filter(Boolean))];
+  if (roles.length === 0) return { error: "Name at least one role: with none, nobody but the owner could see the rows." };
+  const bad = roles.find((r) => !NAME.test(r));
+  if (bad) return { error: `${bad} is not a role's name (lower-case letters, digits and underscores).` };
+  if (roles.length > 20) return { error: "Name at most 20 roles." };
+  return { roles: roles.sort() };
 }
 
 /** The kept table's notice: the sentence, and the own-project note when the business brought its own project; null for an ordinary table. */

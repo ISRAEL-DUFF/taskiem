@@ -2,7 +2,7 @@
   "id": "staff-hr-desk",
   "title": "An HR help desk for your staff, with a manager's approval where needed",
   "summary": "Your people ask HR with a form in Taskiem; each request gets a number and goes to the right person, and leave waits for a manager's approval.",
-  "description": "Your staff sign in to Taskiem and fill in a short form: what they need from HR and the details. Their name and email come from their sign-in. Each request becomes a ticket with a number (T-1042) in your tickets table, the page shows its number, and the people who look after that kind of request (leave, payroll, benefits, policy, or something confidential, which goes to a role of its own) are told on WhatsApp, Telegram or by email. Requests of the kinds you choose (leave, unless you change it) first go to a manager to approve or decline in Taskiem, WhatsApp or Telegram; the member hears the decision, and HR is told. HR answers with the Answer customers' tickets form; the member hears the answer on WhatsApp, Telegram or by email. Requests are sorted by your words, not by AI, unless you choose otherwise, since they can be personal. They are kept in the same tickets table as your customers' tickets: give access to your tables only to people who may see them.",
+  "description": "Your staff sign in to Taskiem and fill in a short form: what they need from HR and the details. Their name and email come from their sign-in. Each request becomes a request with a number (HR-1042) in your HR requests table, the page shows its number, and the people who look after that kind of request (leave, payroll, benefits or policy, role hr; something confidential, role hr_lead) are told on WhatsApp, Telegram or by email. Requests of the kinds you choose (leave, unless you change it) first go to a manager to approve or decline in Taskiem, WhatsApp or Telegram; the member hears the decision, and HR is told. HR answers with the Answer HR requests form, and hr_lead answers confidential ones (HC-1042) with the Answer confidential HR requests form; the member hears the answer on WhatsApp, Telegram or by email. Requests are sorted by your words, not by AI, unless you choose otherwise, since they can be personal. They are kept apart from your customers' tickets, in tables only members with the hr or hr_lead role and the owner can read, and confidential ones in tables only hr_lead and the owner can read: give your HR people those roles under Members.",
   "category": "approvals",
   "tags": [
     "support",
@@ -35,8 +35,12 @@
   ],
   "variables": [
     {
-      "name": "ticket_reply_form",
-      "why": "The link of your ticket reply form (the Answer customers' tickets workflow), put in each message to a department so they can answer at once."
+      "name": "hr_ticket_reply_form",
+      "why": "The link of your HR reply form (the Answer HR requests workflow), put in each message to HR about a new request so they can answer at once."
+    },
+    {
+      "name": "hr_confidential_reply_form",
+      "why": "The link of your HR confidential reply form (the Answer confidential HR requests workflow), put in each message to hr_lead about a new confidential request."
     }
   ],
   "params": [
@@ -44,7 +48,7 @@
       "name": "departments",
       "type": "text",
       "title": "Departments",
-      "description": "One kind of request per line: its name, the role whose members answer it, what it looks after, and words that send a request there, separated by a | sign. Give each the role of your HR people (hr, and hr_lead for confidential matters, unless you use others).",
+      "description": "One kind of request per line: its name, the role whose members answer it, what it looks after, and words that send a request there, separated by a | sign. Give each the role hr, and hr_lead for confidential matters: only those roles can read the HR tables, and a request whose role is hr_lead is kept as confidential.",
       "required": false,
       "example": "Leave | hr | Time off: annual, sick, maternity and paternity leave | leave, holiday, vacation, sick, maternity, paternity, time off, day off\nPayroll | hr | Salary, deductions, payslips and tax | salary, pay, payslip, deduction, tax, paye, arrears\nBenefits | hr | Health insurance, pension and other benefits | insurance, hmo, pension, benefit, allowance\nPolicy | hr | How things are done: rules, hours and the handbook | policy, rule, handbook, hours, dress\nConfidential | hr_lead | Something to raise in confidence: a complaint, a concern or a personal matter | confidential, harassment, bullying, complaint, concern",
       "max_length": 2000,
@@ -108,10 +112,16 @@
   ],
   "tables": [
     {
-      "known": "tickets"
+      "known": "hr_tickets"
     },
     {
-      "known": "ticket_messages"
+      "known": "hr_ticket_messages"
+    },
+    {
+      "known": "hr_confidential_tickets"
+    },
+    {
+      "known": "hr_confidential_messages"
     }
   ],
   "definition": {
@@ -235,7 +245,8 @@
           "customer_email": "=trigger.body.?requester_email.orValue('')",
           "department": "=trigger.body.?department.orValue('')",
           "mail": "member",
-          "received_at": "=trigger.form.?submitted_at.orValue(run.started_at)"
+          "received_at": "=trigger.form.?submitted_at.orValue(run.started_at)",
+          "desk": "hr"
         }
       },
       {

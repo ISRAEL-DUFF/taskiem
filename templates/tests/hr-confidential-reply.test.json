@@ -1,0 +1,353 @@
+{
+  "schema": "wd-test/v1",
+  "template": "hr-confidential-reply",
+  "params": {},
+  "cases": [
+    {
+      "name": "an answer goes to the member who asked, from the confidential tables, and the request waits on them",
+      "trigger": {
+        "body": {
+          "ticket": "hc 1042",
+          "what": "Answer and wait for the member",
+          "message": "Your leave is booked.",
+          "agent": "Bola Ade",
+          "agent_email": "bola@adacakes.ng"
+        },
+        "form": {
+          "submission_id": "00000000-0000-7000-8000-000000000001",
+          "reference": "F-1",
+          "submitted_at": "2026-11-07T10:00:00Z",
+          "respondent": {
+            "kind": "member",
+            "member_id": "00000000-0000-7000-8000-000000000002"
+          },
+          "channel": "direct",
+          "consents": []
+        }
+      },
+      "mocks": {
+        "find": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "HC-1042",
+                "subject": "Leave in December",
+                "customer_name": "Ada Obi",
+                "customer_email": "ada@adacakes.ng",
+                "customer_phone": "",
+                "channel": "staff",
+                "status": "open",
+                "assigned_to": "",
+                "thread": "HC-1042",
+                "mail": "member",
+                "mailbox": ""
+              }
+            ]
+          }
+        },
+        "answer__find": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "HC-1042",
+                "subject": "Leave in December",
+                "customer_name": "Ada Obi",
+                "customer_email": "ada@adacakes.ng",
+                "customer_phone": "",
+                "channel": "staff",
+                "status": "open",
+                "assigned_to": "",
+                "thread": "HC-1042",
+                "mail": "member",
+                "mailbox": ""
+              }
+            ]
+          }
+        },
+        "answer__member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "answer__record": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "answer__update": {
+          "output": {
+            "affected": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "find": {
+            "table": "hr_confidential_tickets",
+            "filters": [
+              {
+                "column": "reference",
+                "op": "eq",
+                "value": "HC-1042"
+              }
+            ]
+          },
+          "answer__find": {
+            "table": "hr_confidential_tickets",
+            "filters": [
+              {
+                "column": "reference",
+                "op": "eq",
+                "value": "HC-1042"
+              }
+            ]
+          },
+          "answer__member": {
+            "to": "members",
+            "members": [
+              "ada@adacakes.ng"
+            ],
+            "title": "Your request HC-1042",
+            "message": "HC-1042 (Leave in December):\nYour leave is booked."
+          },
+          "answer__record": {
+            "table": "hr_confidential_messages",
+            "row": {
+              "reference": "HC-1042",
+              "author": "Bola Ade",
+              "direction": "out",
+              "mail": "member"
+            }
+          },
+          "answer__update": {
+            "table": "hr_confidential_tickets",
+            "set": {
+              "status": "waiting_on_customer",
+              "assigned_to": "bola@adacakes.ng"
+            }
+          }
+        },
+        "steps": {
+          "note": "not_run",
+          "missing": "not_run",
+          "answer__email": "not_run",
+          "answer__message": "not_run"
+        }
+      }
+    },
+    {
+      "name": "answer and resolve",
+      "trigger": {
+        "body": {
+          "ticket": "HC-1042",
+          "what": "Answer, and the request is resolved",
+          "message": "Done.",
+          "agent": "Bola Ade",
+          "agent_email": "bola@adacakes.ng"
+        },
+        "form": {
+          "submission_id": "00000000-0000-7000-8000-000000000001",
+          "reference": "F-1",
+          "submitted_at": "2026-11-07T10:00:00Z",
+          "respondent": {
+            "kind": "member",
+            "member_id": "00000000-0000-7000-8000-000000000002"
+          },
+          "channel": "direct",
+          "consents": []
+        }
+      },
+      "mocks": {
+        "find": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "HC-1042",
+                "subject": "Leave in December",
+                "customer_name": "Ada Obi",
+                "customer_email": "ada@adacakes.ng",
+                "customer_phone": "",
+                "channel": "staff",
+                "status": "open",
+                "assigned_to": "",
+                "thread": "HC-1042",
+                "mail": "member",
+                "mailbox": ""
+              }
+            ]
+          }
+        },
+        "answer__find": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "HC-1042",
+                "subject": "Leave in December",
+                "customer_name": "Ada Obi",
+                "customer_email": "ada@adacakes.ng",
+                "customer_phone": "",
+                "channel": "staff",
+                "status": "open",
+                "assigned_to": "",
+                "thread": "HC-1042",
+                "mail": "member",
+                "mailbox": ""
+              }
+            ]
+          }
+        },
+        "answer__member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "answer__record": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "answer__update": {
+          "output": {
+            "affected": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "answer__update": {
+            "table": "hr_confidential_tickets",
+            "set": {
+              "status": "resolved"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "a note stays with HR",
+      "trigger": {
+        "body": {
+          "ticket": "1042",
+          "what": "A note for HR (the member does not see it)",
+          "message": "Checked with payroll.",
+          "agent": "Bola Ade",
+          "agent_email": "bola@adacakes.ng"
+        },
+        "form": {
+          "submission_id": "00000000-0000-7000-8000-000000000001",
+          "reference": "F-1",
+          "submitted_at": "2026-11-07T10:00:00Z",
+          "respondent": {
+            "kind": "member",
+            "member_id": "00000000-0000-7000-8000-000000000002"
+          },
+          "channel": "direct",
+          "consents": []
+        }
+      },
+      "mocks": {
+        "find": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "HC-1042",
+                "subject": "Leave in December",
+                "customer_name": "Ada Obi",
+                "customer_email": "ada@adacakes.ng",
+                "customer_phone": "",
+                "channel": "staff",
+                "status": "open",
+                "assigned_to": "",
+                "thread": "HC-1042",
+                "mail": "member",
+                "mailbox": ""
+              }
+            ]
+          }
+        },
+        "note": {
+          "output": {
+            "affected": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "note": {
+            "table": "hr_confidential_messages",
+            "row": {
+              "reference": "HC-1042",
+              "direction": "note",
+              "author": "Bola Ade",
+              "body": "Checked with payroll.",
+              "channel": "note"
+            }
+          }
+        },
+        "steps": {
+          "answer__find": "not_run",
+          "missing": "not_run"
+        }
+      }
+    },
+    {
+      "name": "a wrong number is told to the member, and nothing is sent",
+      "trigger": {
+        "body": {
+          "ticket": "HC-9999",
+          "what": "Answer and wait for the member",
+          "message": "Hello",
+          "agent": "Bola Ade",
+          "agent_email": "bola@adacakes.ng"
+        },
+        "form": {
+          "submission_id": "00000000-0000-7000-8000-000000000001",
+          "reference": "F-1",
+          "submitted_at": "2026-11-07T10:00:00Z",
+          "respondent": {
+            "kind": "member",
+            "member_id": "00000000-0000-7000-8000-000000000002"
+          },
+          "channel": "direct",
+          "consents": []
+        }
+      },
+      "mocks": {
+        "find": {
+          "output": {
+            "rows": []
+          }
+        },
+        "missing": {
+          "output": {
+            "people": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "missing": {
+            "to": "members",
+            "members": [
+              "bola@adacakes.ng"
+            ],
+            "title": "No request HC-9999"
+          }
+        },
+        "steps": {
+          "answer__find": "not_run",
+          "note": "not_run"
+        }
+      }
+    }
+  ]
+}

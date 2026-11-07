@@ -43,3 +43,39 @@ for (const scheme of ["light", "dark"] as const) {
     expect(vs, describe(`/tables/${KEPT}`, vs)).toEqual([]);
   });
 }
+
+const HR = "0192e2e0-0000-7000-8000-000000000002";
+
+// A table whose rows are for some roles (decision 0065), seeded by
+// serve.sh with readers hr and hr_lead: listed with them, its page says
+// who can see the rows, and the owner changes them and back.
+for (const scheme of ["light", "dark"] as const) {
+  test(`a table for some roles says who can see it, and passes axe in the ${scheme} theme`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+    await signIn(page);
+    await page.goto("/tables");
+    await expect(page.getByRole("link", { name: "HR requests" })).toBeVisible();
+    await expect(page.getByText("for hr or hr_lead only")).toBeVisible();
+    await page.goto(`/tables/${HR}`);
+    await expect(page.getByRole("heading", { level: 1, name: "HR requests" })).toBeVisible();
+    const who = page.getByRole("region", { name: "Who can see the rows" });
+    await expect(who).toContainText("Only members with the hr or hr_lead role, and the owner, can see and change its rows.");
+    await expect(who).toContainText("whoever can change and publish workflows");
+    let vs = await axe(page);
+    expect(vs, describe(`/tables/${HR}`, vs)).toEqual([]);
+    await who.getByRole("button", { name: "Change who can see it" }).click();
+    const dialog = page.getByRole("dialog", { name: "Who can see the rows" });
+    await expect(dialog.getByLabel("Roles")).toHaveValue("hr, hr_lead");
+    vs = await axe(page);
+    expect(vs, describe(`/tables/${HR} (who can see it)`, vs)).toEqual([]);
+    await dialog.getByLabel("Roles").fill(" ");
+    await expect(dialog.getByRole("button", { name: "Save" })).toBeDisabled();
+    await dialog.getByLabel("Roles").fill("hr_lead");
+    await dialog.getByRole("button", { name: "Save" }).click();
+    await expect(who).toContainText("Only members with the hr_lead role, and the owner");
+    await who.getByRole("button", { name: "Change who can see it" }).click();
+    await dialog.getByLabel("Roles").fill("hr, hr_lead");
+    await dialog.getByRole("button", { name: "Save" }).click();
+    await expect(who).toContainText("hr or hr_lead role");
+  });
+}

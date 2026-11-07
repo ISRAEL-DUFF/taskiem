@@ -24,7 +24,7 @@ Then add the two that work for every kind:
 
 You can use several: every ticket, however it came, is in the same tickets table, gets the next number and is answered with the same form.
 
-For your own people's requests to IT or HR, there are two more ([below](#it-and-hr-requests-from-your-staff)).
+For your own people's requests to IT or HR, there are two more ([below](#it-and-hr-requests-from-your-staff)); HR's are kept where only HR can read them.
 
 ## Your departments
 
@@ -108,13 +108,28 @@ The first person to answer a ticket is the one it is assigned to; from then on, 
 
 ## IT and HR requests from your staff
 
-**An IT help desk for your staff** and **An HR help desk for your staff** are forms your own people fill in, signed in to Taskiem: what they need and the details. Their name and email come from their sign-in. Each request gets a ticket number, shown when they send it, and goes to the people who look after that kind of request; the member who asked hears every answer on WhatsApp, Telegram or by email, like a message to your team.
+**An IT help desk for your staff** and **An HR help desk for your staff** are forms your own people fill in, signed in to Taskiem: what they need and the details. Their name and email come from their sign-in. Each request gets a number, shown when they send it, and goes to the people who look after that kind of request; the member who asked hears every answer on WhatsApp, Telegram or by email, like a message to your team.
 
-- **Kinds of request** work like departments. IT's are Accounts and access, Hardware, Software, Network and Other, answered by the **it** role; HR's are Leave, Payroll, Benefits and Policy, answered by **hr**, and Confidential, answered by **hr_lead**, so a complaint or personal matter reaches only the people you give that role. Change them as you like, and give the roles to the right people under **Members**.
+- **Kinds of request** work like departments. IT's are Accounts and access, Hardware, Software, Network and Other, answered by the **it** role; HR's are Leave, Payroll, Benefits and Policy, answered by **hr**, and Confidential, answered by **hr_lead**. Change IT's as you like. For HR, keep the roles **hr** and **hr_lead**: they decide who can read the requests (below).
 - HR requests are sorted by your words (**rules**), as every ticket template is unless you choose **ai**. Think twice before choosing **ai** here: HR requests can be personal, and with rules nothing your staff write goes to an AI model.
-- **Kinds of request a manager approves** (HR only; Leave unless you change it, or **none**): those requests first go to the people with the **Who approves** role (manager unless you change it) to approve or decline in Taskiem, WhatsApp or Telegram. Nobody approves their own request. The member hears the decision; HR is told, and finishes an approved request; a declined one, or one no manager decided within three days, is resolved.
-- They answer with **Answer customers' tickets**, and **Follow up tickets nobody has answered** reminds them, as for customers.
-- Staff requests are kept in the same **Tickets** table as your customers' tickets. Anyone who may open your tables can read them, HR's included: give table access only to people who may see them.
+- **Kinds of request a manager approves** (HR only; Leave unless you change it, or **none**): those requests first go to the people with the **Who approves** role (manager unless you change it) to approve or decline in Taskiem, WhatsApp or Telegram; they see the request to decide on it. Nobody approves their own request. The member hears the decision; HR is told, and finishes an approved request; a declined one, or one no manager decided within three days, is resolved.
+- IT requests are kept in your **Tickets** table with your customers' tickets, and answered with **Answer customers' tickets**.
+
+### Who sees HR requests
+
+HR requests are kept apart from your customers' tickets, in tables only HR can read:
+
+| What | Kept in | Numbers | Who can read and answer it |
+| --- | --- | --- | --- |
+| Leave, payroll, benefits, policy | **HR requests** and **HR request messages** | HR-1042 | Members with the **hr** or **hr_lead** role, and you as the owner |
+| Confidential matters | **HR confidential requests** and **HR confidential messages** | HC-1042 | Members with the **hr_lead** role, and you as the owner |
+
+1. Under **Members**, give your HR people the role **hr**, and the person who handles confidential matters **hr_lead** (they see every HR request). Type it under **A new business role** when you add or change a member, or tick it once someone has it.
+2. Add **Answer HR requests**: the form HR answers requests with. Only members with **hr** or **hr_lead** can open it, and it answers HR- numbers only. Save its link in **Settings** as `hr_ticket_reply_form`.
+3. Add **Answer confidential HR requests**: only members with **hr_lead** can open it, and it answers HC- numbers only. Save its link as `hr_confidential_reply_form`.
+4. Add **Follow up tickets nobody has answered** once with **Which tickets** set to **hr**, and once more with **hr_confidential**. HR requests are reminded to their role and, when still waiting, told to **hr_lead**, never to anyone else.
+
+Everyone else with access to your tables sees that the HR tables are there and who can read them, never their rows, on the web or in the chat; **Answer customers' tickets** cannot answer an HR request. Whoever can change and publish workflows can still make one that reads them, so keep that to people you trust. HR requests sent before this change stay in your **Tickets** table.
 
 ## Good to know
 

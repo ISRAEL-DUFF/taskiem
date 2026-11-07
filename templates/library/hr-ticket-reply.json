@@ -1,0 +1,238 @@
+{
+  "id": "hr-ticket-reply",
+  "title": "Answer HR requests",
+  "summary": "A form for your HR people: pick a request, write the answer, and the member who asked gets it.",
+  "description": "Your HR people's form for answering the requests your staff send with the HR help desk, open only to members with the hr or hr_lead role when they are signed in to Taskiem. They type the request's number (HR-1042; the message telling HR about a new request has a link that fills it in), write the answer and choose: answer and wait for the member, answer and mark it resolved, or write a note only HR sees. The member gets the answer on WhatsApp, Telegram or by email. The answer is saved with the request in your HR tables, the request is marked, and the first person to answer it is the one it is assigned to. Confidential requests (HC-1042) are answered with the Answer confidential HR requests form, by hr_lead alone. Put this form's link in the setting hr_ticket_reply_form so every new request's message carries it.",
+  "category": "approvals",
+  "tags": [
+    "support",
+    "tickets",
+    "helpdesk",
+    "hr",
+    "form"
+  ],
+  "keywords": [
+    "hr",
+    "human resources",
+    "hr desk",
+    "request",
+    "requests",
+    "answer",
+    "reply",
+    "respond",
+    "staff",
+    "form"
+  ],
+  "requires": [
+    "hr requests",
+    "hr desk",
+    "hr help desk",
+    "answer hr requests",
+    "hr tickets"
+  ],
+  "connectors": [
+    "xenibase@1",
+    "notify@1"
+  ],
+  "params": [],
+  "tables": [
+    {
+      "known": "hr_tickets"
+    },
+    {
+      "known": "hr_ticket_messages"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_hrTicketReply",
+    "version": 1,
+    "name": "Answer HR requests",
+    "description": "A form for hr and hr_lead that answers a member's HR request, resolves it, or adds a note for HR.",
+    "trigger": {
+      "type": "form",
+      "config": {
+        "title": "Answer an HR request",
+        "access": "members",
+        "roles": [
+          "hr",
+          "hr_lead"
+        ],
+        "description": "The member gets your answer on WhatsApp, Telegram or by email.",
+        "after": {
+          "mode": "message",
+          "message": "Done. If the request number was wrong, you will be told."
+        }
+      }
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "ticket",
+          "what",
+          "message"
+        ],
+        "properties": {
+          "ticket": {
+            "type": "string",
+            "title": "Request number",
+            "maxLength": 24,
+            "pattern": "^([Hh][Rr])?-? ?[0-9]{1,9}$",
+            "x-form": {
+              "prefill": true,
+              "placeholder": "HR-1042"
+            }
+          },
+          "what": {
+            "type": "string",
+            "title": "What you are doing",
+            "enum": [
+              "Answer and wait for the member",
+              "Answer, and the request is resolved",
+              "A note for HR (the member does not see it)"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "title": "Your answer or note",
+            "maxLength": 5000,
+            "x-pii": "other",
+            "x-form": {
+              "widget": "textarea"
+            }
+          },
+          "agent": {
+            "type": "string",
+            "title": "Your name",
+            "maxLength": 120,
+            "x-pii": "name",
+            "x-form": {
+              "from": "member.name"
+            }
+          },
+          "agent_email": {
+            "type": "string",
+            "title": "Your email",
+            "maxLength": 200,
+            "x-pii": "email",
+            "x-form": {
+              "from": "member.email"
+            }
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "ref",
+        "type": "transform",
+        "name": "Read the request number",
+        "config": {
+          "output": {
+            "reference": "='HR-' + trigger.body.ticket.upperAscii().replace('HR', '').replace('-', '').replace(' ', '')"
+          }
+        }
+      },
+      {
+        "id": "find",
+        "type": "connector",
+        "name": "Find the request",
+        "connector": "xenibase@1",
+        "action": "read_rows",
+        "connection": "data_tables",
+        "needs": [
+          "ref"
+        ],
+        "input": {
+          "table": "hr_tickets",
+          "filters": [
+            {
+              "column": "reference",
+              "op": "eq",
+              "value": "=steps.ref.output.reference"
+            }
+          ],
+          "limit": 1
+        }
+      },
+      {
+        "id": "act",
+        "type": "branch",
+        "name": "Answer the member, or note it for HR",
+        "needs": [
+          "find"
+        ],
+        "config": {
+          "paths": [
+            {
+              "name": "note",
+              "when": "=steps.find.output.rows.size() > 0 && steps.find.output.rows[0].?reference.orValue('') != '' && trigger.body.what == 'A note for HR (the member does not see it)'",
+              "steps": [
+                {
+                  "id": "note",
+                  "type": "connector",
+                  "name": "Save the note with the request",
+                  "connector": "xenibase@1",
+                  "action": "insert_rows",
+                  "connection": "data_tables",
+                  "input": {
+                    "table": "hr_ticket_messages",
+                    "row": {
+                      "reference": "=steps.ref.output.reference",
+                      "direction": "note",
+                      "author": "=trigger.body.?agent.orValue('')",
+                      "body": "=trigger.body.message",
+                      "at": "=run.started_at",
+                      "channel": "note"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "answer",
+              "when": "=steps.find.output.rows.size() > 0 && steps.find.output.rows[0].?reference.orValue('') != ''",
+              "steps": [
+                {
+                  "id": "answer",
+                  "type": "template",
+                  "template": "ticket-answer",
+                  "name": "Answer the member",
+                  "params": {},
+                  "input": {
+                    "reference": "=steps.ref.output.reference",
+                    "message": "=trigger.body.message",
+                    "author": "=trigger.body.?agent.orValue('')",
+                    "status": "=trigger.body.what == 'Answer, and the request is resolved' ? 'resolved' : 'waiting_on_customer'",
+                    "assign_to": "=trigger.body.?agent_email.orValue('')"
+                  }
+                }
+              ]
+            }
+          ],
+          "default": {
+            "steps": [
+              {
+                "id": "missing",
+                "type": "connector",
+                "name": "Tell you there is no such request",
+                "connector": "notify@1",
+                "action": "tell",
+                "input": {
+                  "to": "=trigger.body.?agent_email.orValue('') != '' ? 'members' : 'owner'",
+                  "members": "=trigger.body.?agent_email.orValue('') != '' ? [trigger.body.agent_email] : []",
+                  "title": "='No request ' + steps.ref.output.reference",
+                  "message": "='There is no request ' + steps.ref.output.reference + ', so your answer was not sent. Check the number and send the form again.'"
+                }
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "30m"
+    }
+  }
+}

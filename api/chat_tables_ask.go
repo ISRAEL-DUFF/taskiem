@@ -129,7 +129,7 @@ func (s *Server) waAskCommand(ctx context.Context, c *chat, text, cmd string) (b
 	if (!how && !total) || !c.p.Can(PermTableRead) {
 		return false, nil
 	}
-	tables, err := s.waListTables(ctx, c.tenant.ID)
+	tables, err := s.waReadableTables(ctx, c)
 	if err != nil || len(tables) == 0 {
 		return false, err
 	}
@@ -190,7 +190,7 @@ func (s *Server) waAskFallback(ctx context.Context, c *chat, text, cmd string) (
 	if !s.aiOnPlan(ctx, c) {
 		return false, nil
 	}
-	tables, err := s.waListTables(ctx, c.tenant.ID)
+	tables, err := s.waReadableTables(ctx, c)
 	if err != nil || len(tables) == 0 {
 		return false, err
 	}
@@ -222,7 +222,7 @@ func (s *Server) waAskFrom(ctx context.Context, c *chat, question string, fallba
 	if question == "" {
 		return say("wa.ask.what")
 	}
-	tables, err := s.waListTables(ctx, c.tenant.ID)
+	tables, err := s.waReadableTables(ctx, c)
 	if err != nil {
 		return true, err
 	}
@@ -419,6 +419,9 @@ func numberOf(v any) (float64, bool) {
 func (s *Server) waAnswer(ctx context.Context, c *chat, q datatables.CheckedQuery, before int64) error {
 	tctx := s.waTablesCtx(ctx, c)
 	tr, err := s.tableRowsFor(tctx, c.tenant.ID, q.Table, tablesChatPurpose)
+	if errors.Is(err, datatables.ErrRestricted) {
+		return s.waTableRestricted(ctx, c, q.Table)
+	}
 	if err != nil {
 		s.Logger.Warn("whatsapp: the data tables connection", "err", err)
 		return c.say(ctx, s, c.t("wa.table.unavailable"))
@@ -520,7 +523,7 @@ func (s *Server) waAnswer(ctx context.Context, c *chat, q datatables.CheckedQuer
 
 // waAskMore pages a question's rows on (*more*).
 func (s *Server) waAskMore(ctx context.Context, c *chat, f *chatFound) error {
-	tables, err := s.waListTables(ctx, c.tenant.ID)
+	tables, err := s.waReadableTables(ctx, c)
 	if err != nil {
 		return err
 	}

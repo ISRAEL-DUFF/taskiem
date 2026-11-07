@@ -432,9 +432,225 @@
             "row": {
               "channel": "staff",
               "mail": "member"
+            },
+            "table": "ticket_messages"
+          },
+          "update": {
+            "set": {
+              "status": "resolved"
+            },
+            "table": "tickets"
+          }
+        },
+        "steps": {
+          "email": "not_run",
+          "message": "not_run"
+        },
+        "outputs": {
+          "how": {
+            "found": true,
+            "how": "member"
+          }
+        }
+      }
+    },
+    {
+      "name": "an HR request (HR-) is found, answered and recorded in the HR tables",
+      "trigger": {
+        "body": {
+          "reference": "hr-1042",
+          "message": "Your leave balance is 12 days.",
+          "author": "Chidi",
+          "status": "resolved"
+        }
+      },
+      "mocks": {
+        "record": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "update": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "find": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "HR-1042",
+                "subject": "Leave balance",
+                "customer_name": "Bola Ade",
+                "customer_email": "bola@adacakes.ng",
+                "customer_phone": "",
+                "channel": "staff",
+                "status": "open",
+                "assigned_to": "",
+                "thread": "HR-1042",
+                "mail": "member",
+                "mailbox": ""
+              }
+            ]
+          }
+        },
+        "email": {
+          "output": {
+            "message_id": "x"
+          }
+        },
+        "message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "member": {
+          "output": {
+            "people": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "find": {
+            "table": "hr_tickets",
+            "filters": [
+              {
+                "column": "reference",
+                "op": "eq",
+                "value": "HR-1042"
+              }
+            ]
+          },
+          "member": {
+            "to": "members",
+            "members": [
+              "bola@adacakes.ng"
+            ],
+            "title": "Your request HR-1042",
+            "message": "HR-1042 (Leave balance):\nYour leave balance is 12 days."
+          },
+          "record": {
+            "table": "hr_ticket_messages",
+            "row": {
+              "reference": "HR-1042",
+              "direction": "out",
+              "channel": "staff",
+              "mail": "member"
             }
           },
           "update": {
+            "table": "hr_tickets",
+            "key": 42,
+            "set": {
+              "status": "resolved"
+            }
+          }
+        },
+        "steps": {
+          "email": "not_run",
+          "message": "not_run"
+        },
+        "outputs": {
+          "how": {
+            "found": true,
+            "how": "member"
+          }
+        }
+      }
+    },
+    {
+      "name": "a confidential HR request (HC-) is found, answered and recorded in the confidential tables",
+      "trigger": {
+        "body": {
+          "reference": "HC-1042",
+          "message": "Your leave balance is 12 days.",
+          "author": "Chidi",
+          "status": "resolved"
+        }
+      },
+      "mocks": {
+        "record": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "update": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "find": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "HC-1042",
+                "subject": "Leave balance",
+                "customer_name": "Bola Ade",
+                "customer_email": "bola@adacakes.ng",
+                "customer_phone": "",
+                "channel": "staff",
+                "status": "open",
+                "assigned_to": "",
+                "thread": "HC-1042",
+                "mail": "member",
+                "mailbox": ""
+              }
+            ]
+          }
+        },
+        "email": {
+          "output": {
+            "message_id": "x"
+          }
+        },
+        "message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "member": {
+          "output": {
+            "people": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "find": {
+            "table": "hr_confidential_tickets",
+            "filters": [
+              {
+                "column": "reference",
+                "op": "eq",
+                "value": "HC-1042"
+              }
+            ]
+          },
+          "member": {
+            "to": "members",
+            "members": [
+              "bola@adacakes.ng"
+            ],
+            "title": "Your request HC-1042",
+            "message": "HC-1042 (Leave balance):\nYour leave balance is 12 days."
+          },
+          "record": {
+            "table": "hr_confidential_messages",
+            "row": {
+              "reference": "HC-1042",
+              "direction": "out",
+              "channel": "staff",
+              "mail": "member"
+            }
+          },
+          "update": {
+            "table": "hr_confidential_tickets",
+            "key": 42,
             "set": {
               "status": "resolved"
             }

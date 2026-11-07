@@ -161,7 +161,8 @@
                 "op": "lt",
                 "value": "2026-11-07T06:00:00Z"
               }
-            ]
+            ],
+            "table": "tickets"
           },
           "remind[0].tell_department": {
             "to": "role",
@@ -227,7 +228,8 @@
             ],
             "set": {
               "status": "closed"
-            }
+            },
+            "table": "tickets"
           }
         },
         "calls": {
@@ -288,6 +290,364 @@
           "tell_department": 0,
           "tell_escalation": 0
         }
+      }
+    },
+    {
+      "name": "desk hr: its requests are read from hr_tickets, reminded to hr, escalated to hr_lead whatever the escalation role, resolved to the member",
+      "trigger": {
+        "type": "schedule",
+        "scheduled_time": "2026-11-07T10:00:00Z"
+      },
+      "mocks": {
+        "late": {
+          "output": {
+            "rows": [
+              {
+                "id": 1,
+                "reference": "HR-1001",
+                "subject": "Payslip short",
+                "department": "Payroll",
+                "role": "hr",
+                "priority": "normal",
+                "assigned_to": "",
+                "status": "new",
+                "last_customer_at": "2026-11-07T01:00:00Z",
+                "last_reply_at": null,
+                "reminded_at": null,
+                "escalated_at": null
+              }
+            ]
+          }
+        },
+        "quiet": {
+          "output": {
+            "rows": [
+              {
+                "id": 9,
+                "reference": "HR-1009",
+                "status": "waiting_on_customer",
+                "last_reply_at": "2026-11-01T10:00:00Z"
+              }
+            ]
+          }
+        },
+        "tell_department": {
+          "output": {
+            "people": 1
+          }
+        },
+        "reminded": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell_escalation": {
+          "output": {
+            "people": 1
+          }
+        },
+        "escalated": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "bye__find": {
+          "output": {
+            "rows": [
+              {
+                "id": 9,
+                "reference": "HR-1009",
+                "subject": "Leave",
+                "customer_name": "Bola Ade",
+                "customer_email": "bola@adacakes.ng",
+                "customer_phone": "",
+                "channel": "staff",
+                "status": "waiting_on_customer",
+                "thread": "HR-1009",
+                "mail": "member",
+                "mailbox": "",
+                "assigned_to": ""
+              }
+            ]
+          }
+        },
+        "bye__email": {
+          "output": {
+            "message_id": "tk-9@in.taskiem.app"
+          }
+        },
+        "bye__record": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "bye__update": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "close": {
+          "output": {
+            "affected": 3
+          }
+        },
+        "bye__member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "bye__message": {
+          "output": {
+            "via": "sms"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "late": {
+            "table": "hr_tickets"
+          },
+          "remind[0].tell_department": {
+            "to": "role",
+            "role": "hr",
+            "title": "Ticket HR-1001 is waiting for an answer"
+          },
+          "remind[0].reminded": {
+            "table": "hr_tickets",
+            "key": 1
+          },
+          "escalate[0].tell_escalation": {
+            "to": "role",
+            "role": "hr_lead",
+            "title": "Ticket HR-1001 is still not answered"
+          },
+          "escalate[0].escalated": {
+            "table": "hr_tickets",
+            "key": 1
+          },
+          "quiet": {
+            "table": "hr_tickets"
+          },
+          "resolve[0].bye__find": {
+            "table": "hr_tickets",
+            "filters": [
+              {
+                "column": "reference",
+                "op": "eq",
+                "value": "HR-1009"
+              }
+            ]
+          },
+          "resolve[0].bye__member": {
+            "to": "members",
+            "members": [
+              "bola@adacakes.ng"
+            ]
+          },
+          "resolve[0].bye__record": {
+            "table": "hr_ticket_messages"
+          },
+          "resolve[0].bye__update": {
+            "table": "hr_tickets",
+            "key": 9,
+            "set": {
+              "status": "resolved"
+            }
+          },
+          "close": {
+            "table": "hr_tickets",
+            "set": {
+              "status": "closed"
+            }
+          }
+        },
+        "calls": {
+          "tell_department": 1,
+          "tell_escalation": 1
+        }
+      },
+      "params": {
+        "desk": "hr"
+      }
+    },
+    {
+      "name": "desk hr_confidential: its requests are read from hr_confidential_tickets, reminded to hr_lead, escalated to hr_lead whatever the escalation role, resolved to the member",
+      "trigger": {
+        "type": "schedule",
+        "scheduled_time": "2026-11-07T10:00:00Z"
+      },
+      "mocks": {
+        "late": {
+          "output": {
+            "rows": [
+              {
+                "id": 1,
+                "reference": "HC-1001",
+                "subject": "Payslip short",
+                "department": "Confidential",
+                "role": "hr_lead",
+                "priority": "normal",
+                "assigned_to": "",
+                "status": "new",
+                "last_customer_at": "2026-11-07T01:00:00Z",
+                "last_reply_at": null,
+                "reminded_at": null,
+                "escalated_at": null
+              }
+            ]
+          }
+        },
+        "quiet": {
+          "output": {
+            "rows": [
+              {
+                "id": 9,
+                "reference": "HC-1009",
+                "status": "waiting_on_customer",
+                "last_reply_at": "2026-11-01T10:00:00Z"
+              }
+            ]
+          }
+        },
+        "tell_department": {
+          "output": {
+            "people": 1
+          }
+        },
+        "reminded": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell_escalation": {
+          "output": {
+            "people": 1
+          }
+        },
+        "escalated": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "bye__find": {
+          "output": {
+            "rows": [
+              {
+                "id": 9,
+                "reference": "HC-1009",
+                "subject": "Leave",
+                "customer_name": "Bola Ade",
+                "customer_email": "bola@adacakes.ng",
+                "customer_phone": "",
+                "channel": "staff",
+                "status": "waiting_on_customer",
+                "thread": "HC-1009",
+                "mail": "member",
+                "mailbox": "",
+                "assigned_to": ""
+              }
+            ]
+          }
+        },
+        "bye__email": {
+          "output": {
+            "message_id": "tk-9@in.taskiem.app"
+          }
+        },
+        "bye__record": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "bye__update": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "close": {
+          "output": {
+            "affected": 3
+          }
+        },
+        "bye__member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "bye__message": {
+          "output": {
+            "via": "sms"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "late": {
+            "table": "hr_confidential_tickets"
+          },
+          "remind[0].tell_department": {
+            "to": "role",
+            "role": "hr_lead",
+            "title": "Ticket HC-1001 is waiting for an answer"
+          },
+          "remind[0].reminded": {
+            "table": "hr_confidential_tickets",
+            "key": 1
+          },
+          "escalate[0].tell_escalation": {
+            "to": "role",
+            "role": "hr_lead",
+            "title": "Ticket HC-1001 is still not answered"
+          },
+          "escalate[0].escalated": {
+            "table": "hr_confidential_tickets",
+            "key": 1
+          },
+          "quiet": {
+            "table": "hr_confidential_tickets"
+          },
+          "resolve[0].bye__find": {
+            "table": "hr_confidential_tickets",
+            "filters": [
+              {
+                "column": "reference",
+                "op": "eq",
+                "value": "HC-1009"
+              }
+            ]
+          },
+          "resolve[0].bye__member": {
+            "to": "members",
+            "members": [
+              "bola@adacakes.ng"
+            ]
+          },
+          "resolve[0].bye__record": {
+            "table": "hr_confidential_messages"
+          },
+          "resolve[0].bye__update": {
+            "table": "hr_confidential_tickets",
+            "key": 9,
+            "set": {
+              "status": "resolved"
+            }
+          },
+          "close": {
+            "table": "hr_confidential_tickets",
+            "set": {
+              "status": "closed"
+            }
+          }
+        },
+        "calls": {
+          "tell_department": 1,
+          "tell_escalation": 1
+        }
+      },
+      "params": {
+        "desk": "hr_confidential"
       }
     }
   ]

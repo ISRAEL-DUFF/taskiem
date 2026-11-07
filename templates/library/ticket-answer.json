@@ -2,7 +2,7 @@
   "id": "ticket-answer",
   "title": "Answer a customer's ticket",
   "summary": "Send a customer the answer to their ticket the way they wrote to you, and record it on the ticket.",
-  "description": "Sends the answer to the customer of a ticket the way the ticket came: by email in the same conversation (through your Taskiem helpdesk address), from your own Zoho Mail or Gmail mailbox or WhatsApp number (its sending workflow sends it), to a member of your business who asked (IT and HR requests), or on WhatsApp, Telegram or by text. The answer is saved with the ticket's messages, and the ticket is marked waiting on the customer or resolved. The ticket reply form and the follow-up workflow use it.",
+  "description": "Sends the answer to the customer of a ticket the way the ticket came: by email in the same conversation (through your Taskiem helpdesk address), from your own Zoho Mail or Gmail mailbox or WhatsApp number (its sending workflow sends it), to a member of your business who asked (IT and HR requests), or on WhatsApp, Telegram or by text. The answer is saved with the ticket's messages, and the ticket is marked waiting on the customer or resolved. The ticket reply form and the follow-up workflow use it. An HR request's reference (HR-1042, or HC-1042 for a confidential one) finds it in the HR tables instead.",
   "category": "customers",
   "tags": [
     "support",
@@ -44,7 +44,7 @@
       "name": "found",
       "type": "boolean",
       "title": "Ticket found",
-      "description": "Whether the ticket is in the tickets table.",
+      "description": "Whether the ticket is in its tickets table (the HR ones for HR- and HC- references).",
       "value": "=steps.how.output.found"
     },
     {
@@ -76,7 +76,8 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 24,
-            "title": "Ticket"
+            "title": "Ticket",
+            "description": "T-1042 is a customer's ticket (the tickets tables); HR-1042 an HR request (hr_tickets and hr_ticket_messages) and HC-1042 a confidential one (hr_confidential_tickets and hr_confidential_messages)"
           },
           "message": {
             "type": "string",
@@ -111,6 +112,17 @@
     },
     "steps": [
       {
+        "id": "tables",
+        "type": "transform",
+        "name": "Choose the tables by the reference",
+        "config": {
+          "output": {
+            "tickets": "=trigger.body.reference.upperAscii().startsWith('HR-') ? 'hr_tickets' : trigger.body.reference.upperAscii().startsWith('HC-') ? 'hr_confidential_tickets' : 'tickets'",
+            "messages": "=trigger.body.reference.upperAscii().startsWith('HR-') ? 'hr_ticket_messages' : trigger.body.reference.upperAscii().startsWith('HC-') ? 'hr_confidential_messages' : 'ticket_messages'"
+          }
+        }
+      },
+      {
         "id": "find",
         "type": "connector",
         "name": "Find the ticket",
@@ -118,7 +130,7 @@
         "action": "read_rows",
         "connection": "data_tables",
         "input": {
-          "table": "tickets",
+          "table": "=steps.tables.output.tickets",
           "filters": [
             {
               "column": "reference",
@@ -127,7 +139,10 @@
             }
           ],
           "limit": 1
-        }
+        },
+        "needs": [
+          "tables"
+        ]
       },
       {
         "id": "how",
@@ -226,7 +241,7 @@
         ],
         "when": "=steps.how.output.found",
         "input": {
-          "table": "ticket_messages",
+          "table": "=steps.tables.output.messages",
           "row": {
             "reference": "=steps.find.output.rows[0].reference",
             "direction": "out",
@@ -252,7 +267,7 @@
         ],
         "when": "=steps.how.output.found",
         "input": {
-          "table": "tickets",
+          "table": "=steps.tables.output.tickets",
           "key": "=steps.find.output.rows[0].id",
           "set": {
             "status": "=trigger.body.?status.orValue(steps.find.output.rows[0].?status.orValue(''))",

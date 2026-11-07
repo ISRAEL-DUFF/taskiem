@@ -362,6 +362,7 @@ data_tables.description
 data_tables.id
 data_tables.kept_by
 data_tables.name
+data_tables.readers
 data_tables.tenant_id
 data_tables.title
 data_tables.updated_at
