@@ -110,7 +110,11 @@ type Table struct {
 	// Front marks a known table a storefront's front makes (products,
 	// menu: docs/spec/fronts.md §6). It is filled where the front is, so
 	// chat does not offer it as a new table.
-	Front       bool     `json:"front,omitempty"`
+	Front bool `json:"front,omitempty"`
+	// Kit marks a known table a family of templates keeps (the ticket
+	// kit's tickets and ticket_messages). It is made when one of them is
+	// used, so chat does not offer it as a new table either.
+	Kit         bool     `json:"kit,omitempty"`
 	Name        string   `json:"name"`
 	Title       string   `json:"title,omitempty"`
 	Description string   `json:"description,omitempty"`

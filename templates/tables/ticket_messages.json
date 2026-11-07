@@ -1,5 +1,6 @@
 {
   "name": "ticket_messages",
+  "kit": true,
   "title": "Ticket messages",
   "description": "Every message of every ticket, oldest first: the ticket's reference, whether the customer wrote it (in), the business answered (out) or a member noted it for the team (note), who wrote it, what it says, when, and how it came or went. An answer to go out through the business's own mailbox waits here until it is sent.",
   "columns": [

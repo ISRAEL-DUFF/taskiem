@@ -76,8 +76,9 @@ func (s *Server) waNewTable(ctx context.Context, c *chat, arg string) error {
 	}
 	m := &chatTableMake{Kind: "new"}
 	for _, kt := range templates.KnownTables() {
-		// A front's table is made with its front, not from chat.
-		if !have[kt.Name] && !kt.Front {
+		// A front's table is made with its front, and a kit's by its
+		// templates, not from chat.
+		if !have[kt.Name] && !kt.Front && !kt.Kit {
 			m.Known = append(m.Known, kt.Name)
 		}
 	}

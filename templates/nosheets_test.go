@@ -140,6 +140,11 @@ func TestKnownTables(t *testing.T) {
 	if !reflect.DeepEqual(names, []string{"classes", "customers", "events", "hire_items", "menu", "products", "spaces", "staff", "subscribers", "ticket_messages", "tickets"}) {
 		t.Errorf("known tables: %v", names)
 	}
+	for _, name := range []string{"tickets", "ticket_messages"} {
+		if kt, _ := templates.KnownTable(name); !kt.Kit || kt.Front {
+			t.Errorf("%s is the ticket kit's, not offered in chat", name)
+		}
+	}
 	staff, _ := templates.KnownTable("staff")
 	payroll, _ := templates.Default().Get("run-payroll")
 	if got := payroll.Tables[0]; got.Name != "{{staff_table}}" || got.Title != staff.Title || !reflect.DeepEqual(got.Columns, staff.Columns) || got.Known != "" {
