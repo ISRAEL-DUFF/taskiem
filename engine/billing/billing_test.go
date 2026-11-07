@@ -151,6 +151,20 @@ func (c *clock) add(d time.Duration) {
 	c.mu.Unlock()
 }
 
+// withinYear moves the clock to the start of next year when the next days
+// of test time would cross it. Invoice numbers restart each year
+// (TKM-2027-000001), so a test that walks weeks forward and expects
+// -000002 fails from early November on a clock that starts at the real
+// time; moving forward keeps the walk inside one year without backdating
+// anything the database stamps with its own now.
+func (c *clock) withinYear(days int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if end := c.t.AddDate(0, 0, days); end.Year() != c.t.Year() {
+		c.t = time.Date(end.Year(), time.January, 2, 12, 0, 0, 0, time.UTC)
+	}
+}
+
 type mailer struct {
 	mu   sync.Mutex
 	sent []string
@@ -481,6 +495,7 @@ const approvalFlow = `{"schema":"wd/v1","id":"wf_t","version":1,"name":"t","trig
 // refuses new runs but never blocks approvals of running ones.
 func TestLifecycle(t *testing.T) {
 	w := newWorld(t)
+	w.clock.withinYear(120)
 	tenant := w.e.Tenant
 	if err := w.svc.Ensure(ctx, tenant, "test"); err != nil {
 		t.Fatal(err)
@@ -1064,6 +1079,7 @@ func TestRetentionCappedByPlan(t *testing.T) {
 // review 2026-10-08, R1).
 func TestInvoicePaidTwice(t *testing.T) {
 	w := newWorld(t)
+	w.clock.withinYear(60)
 	tenant := w.e.Tenant
 	if err := w.svc.Ensure(ctx, tenant, "test"); err != nil {
 		t.Fatal(err)
@@ -1133,6 +1149,7 @@ func TestInvoicePaidTwice(t *testing.T) {
 // reconciliation settles it.
 func TestChargeAnswerLostIsNotChargedAgain(t *testing.T) {
 	w := newWorld(t)
+	w.clock.withinYear(120)
 	tenant := w.e.Tenant
 	w.checkoutAndPay(t, tenant, "growth") // saves the card
 	w.pay.lose = 1
@@ -1167,6 +1184,7 @@ func TestChargeAnswerLostIsNotChargedAgain(t *testing.T) {
 
 func TestDunningWaitsForPendingCharge(t *testing.T) {
 	w := newWorld(t)
+	w.clock.withinYear(90)
 	tenant := w.e.Tenant
 	w.checkoutAndPay(t, tenant, "growth") // saves the card
 	w.pay.charge = "send_otp"             // the renewal charge waits on the bank
