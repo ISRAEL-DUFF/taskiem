@@ -138,6 +138,8 @@ func (e errorLog) Println(v ...any)               { e.l.Debug("smtp: " + fmt.Spr
 type rcpt struct {
 	address  string
 	endpoint uuid.UUID
+	// tag is the subaddress the message came to (name+tag@), if any.
+	tag string
 }
 
 type session struct {
@@ -173,9 +175,9 @@ func (ss *session) Rcpt(to string, _ *smtp.RcptOptions) error {
 	if at < 0 || to[at+1:] != strings.ToLower(ss.s.Domain) {
 		return errNotOurs
 	}
-	local := to[:at]
+	local, tag := to[:at], ""
 	if i := strings.IndexByte(local, '+'); i >= 0 { // name+tag@ reaches name@
-		local = local[:i]
+		local, tag = local[:i], Tag(local[i+1:])
 	}
 	if !localPart.MatchString(local) {
 		return errNoSuchAddress
@@ -196,12 +198,16 @@ func (ss *session) Rcpt(to string, _ *smtp.RcptOptions) error {
 		ss.bad++
 		return errNoSuchAddress
 	}
-	for _, r := range ss.rcpts {
+	for i, r := range ss.rcpts {
 		if r.endpoint == ep {
+			// One message per address: a tagged copy's tag is kept.
+			if r.tag == "" {
+				ss.rcpts[i].tag = tag
+			}
 			return nil
 		}
 	}
-	ss.rcpts = append(ss.rcpts, rcpt{address: local + "@" + ss.s.Domain, endpoint: ep})
+	ss.rcpts = append(ss.rcpts, rcpt{address: local + "@" + ss.s.Domain, endpoint: ep, tag: tag})
 	return nil
 }
 
@@ -246,7 +252,7 @@ func (ss *session) Data(r io.Reader) error {
 		} else {
 			h.Write(raw)
 		}
-		meta := Meta{Reference: id.String(), Address: rc.address, MailFrom: ss.from, Helo: ss.conn.Hostname(), ReceivedAt: ss.s.now().UTC(), Auth: auth}
+		meta := Meta{Reference: id.String(), Address: rc.address, Tag: rc.tag, MailFrom: ss.from, Helo: ss.conn.Hostname(), ReceivedAt: ss.s.now().UTC(), Auth: auth}
 		if ip != nil {
 			meta.RemoteIP = ip.String()
 		}
