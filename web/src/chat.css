@@ -189,3 +189,177 @@
 }
 
 img.tk-live-tile { object-fit: cover; }
+
+/* ---------- Motion, as the boards draw it (designs 1 to 9) ----------
+   Each moment takes the keyframes, times, curves and staggers of its
+   board, so the app moves as the designs do. Motion turned down: nothing
+   moves (the block below the last). */
+@keyframes tkd-rise { from { opacity: 0; transform: translateY(18px) scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes tkd-up8 { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes tkd-up10 { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes tkd-sheet { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes tkd-dim { from { opacity: 0; } to { opacity: 1; } }
+@keyframes tkd-panel { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: none; } }
+@keyframes tkd-drawer { from { transform: translateX(100%); } to { transform: none; } }
+@keyframes tkd-in-l { from { opacity: 0; transform: translateX(-14px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes tkd-in-r { from { opacity: 0; transform: translateX(14px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes tkd-land { 0% { opacity: 0; transform: translateY(-14px) scale(0.96); background: #c8f169; } 40% { opacity: 1; transform: none; background: #c8f169; } }
+@keyframes tkd-bounce { 0% { opacity: 0; transform: translateY(24px) scale(0.96); } 60% { opacity: 1; transform: translateY(-4px) scale(1.01); } 100% { transform: none; } }
+@keyframes tkd-roll { from { transform: translateY(100%); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes tkd-pulse-warn { 0%, 100% { box-shadow: 0 0 0 0 rgba(180, 83, 9, 0.35); } 50% { box-shadow: 0 0 0 6px rgba(180, 83, 9, 0); } }
+@keyframes tkd-card-rise { from { opacity: 0; transform: translateY(22px) scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes tkd-grow-bar { from { transform: scaleY(0); } to { transform: none; } }
+@keyframes tkd-pulse-lime { 0%, 100% { box-shadow: 0 0 0 0 rgba(200, 241, 105, 0.55); } 50% { box-shadow: 0 0 0 8px rgba(200, 241, 105, 0); } }
+@keyframes tkd-bar-up { from { transform: translateY(120%); } to { transform: none; } }
+@keyframes tkd-pop { 0% { transform: scale(0.6); opacity: 0; } 60% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); } }
+@keyframes tkd-draw { from { stroke-dashoffset: 34; } to { stroke-dashoffset: 0; } }
+
+@media (prefers-reduced-motion: no-preference) {
+  /* 1 · The picker and the tools spring up from the composer; their rows
+     follow 40 ms apart (Main). */
+  .tk-picker, .tk-tools { transform-origin: 50% 100%; animation: tkd-rise 0.36s cubic-bezier(0.2, 0.9, 0.25, 1.12) both; }
+  .tk-pick { animation: tkd-up8 0.32s ease both; }
+  .tk-tools-grid > * { animation: tkd-up8 0.32s ease both; }
+  .tk-tools-grid > :nth-child(1) { animation-delay: 0.06s; }
+  .tk-tools-grid > :nth-child(2) { animation-delay: 0.1s; }
+  .tk-tools-grid > :nth-child(3) { animation-delay: 0.14s; }
+  .tk-tools-grid > :nth-child(4) { animation-delay: 0.18s; }
+  .tk-tools-grid > :nth-child(5) { animation-delay: 0.22s; }
+  .tk-tools-grid > :nth-child(n + 6) { animation-delay: 0.26s; }
+  .tk-tile { transition: transform 0.2s cubic-bezier(0.2, 0.9, 0.25, 1.1), box-shadow 0.2s; }
+
+  /* 2 · Messages slide in from their side; a diary line lands lit in lime
+     and settles over 1.8 s; a card arrives with a little bounce; a number
+     rolls up; a low stock pill pulses (Card). */
+  .chat-stream > .bubble:last-child { animation: tkd-in-l 0.4s ease both; }
+  .chat-stream > .bubble.mine:last-child { animation: tkd-in-r 0.45s cubic-bezier(0.2, 0.9, 0.25, 1.12) both; }
+  .tk-land { animation: tkd-land 1.8s cubic-bezier(0.2, 0.9, 0.25, 1.05) both; }
+  .tk-arrive { animation: tkd-bounce 0.6s cubic-bezier(0.2, 0.9, 0.25, 1.1) both; }
+  .tk-roll { display: inline-block; animation: tkd-roll 0.45s cubic-bezier(0.2, 0.9, 0.25, 1.1) both; }
+  .tk-pill.warn.tk-pulse { animation: tkd-pulse-warn 1.8s 1.6s infinite; }
+
+  /* 3 · A sheet rises (0.42 s) over a veil that dims (0.3 s); its rows
+     follow 40 ms apart from 120 ms; a save's tick pops and draws (Sheet). */
+  .tk-veil { animation: tkd-dim 0.3s both; }
+  .tk-sheet { animation: tkd-sheet 0.42s cubic-bezier(0.2, 0.95, 0.25, 1.04) both; }
+  .tk-sheet .tk-stagger > * { animation: tkd-up10 0.3s ease both; }
+  .tk-sheet .tk-stagger > :nth-child(1) { animation-delay: 0.12s; }
+  .tk-sheet .tk-stagger > :nth-child(2) { animation-delay: 0.16s; }
+  .tk-sheet .tk-stagger > :nth-child(3) { animation-delay: 0.2s; }
+  .tk-sheet .tk-stagger > :nth-child(4) { animation-delay: 0.24s; }
+  .tk-sheet .tk-stagger > :nth-child(5) { animation-delay: 0.28s; }
+  .tk-sheet .tk-stagger > :nth-child(n + 6) { animation-delay: 0.32s; }
+  .tk-tick circle { transform-origin: center; animation: tkd-pop 0.45s cubic-bezier(0.2, 0.9, 0.25, 1.2) both; }
+  .tk-tick path { stroke-dasharray: 34; animation: tkd-draw 0.35s 0.2s ease-out both; }
+
+  /* 4 · The order bag slides up from below (Buyer). */
+  .tk-bag { animation: tkd-bar-up 0.5s 0.35s cubic-bezier(0.2, 0.9, 0.25, 1.15) both; }
+
+  /* 5 · The briefing and the alert cards rise 300 ms apart; the week's
+     bars grow one after another; the live dot pulses (Alerts). */
+  .tk-brief, .tk-alerts > li { animation: tkd-card-rise 0.5s cubic-bezier(0.2, 0.9, 0.25, 1.12) both; }
+  .tk-brief { animation-delay: 0.05s; }
+  .tk-alerts > li:nth-child(1) { animation-delay: 0.35s; }
+  .tk-alerts > li:nth-child(2) { animation-delay: 0.65s; }
+  .tk-alerts > li:nth-child(n + 3) { animation-delay: 0.95s; }
+  .tk-brief-bars > span { transform-origin: 50% 100%; animation: tkd-grow-bar 0.6s cubic-bezier(0.2, 0.9, 0.25, 1.1) both; }
+  .tk-brief-bars > span:nth-child(1) { animation-delay: 0.3s; }
+  .tk-brief-bars > span:nth-child(2) { animation-delay: 0.35s; }
+  .tk-brief-bars > span:nth-child(3) { animation-delay: 0.4s; }
+  .tk-brief-bars > span:nth-child(4) { animation-delay: 0.45s; }
+  .tk-brief-bars > span:nth-child(5) { animation-delay: 0.5s; }
+  .tk-brief-bars > span:nth-child(6) { animation-delay: 0.55s; }
+  .tk-brief-bars > span:nth-child(n + 7) { animation-delay: 0.6s; }
+  .tk-brief-live { animation: tkd-pulse-lime 2s 1.2s infinite; }
+}
+/* 7, 8 · On a computer a panel slides in from 40 px; 9 · on a tablet a
+   drawer slides in from the edge. */
+@media (prefers-reduced-motion: no-preference) and (min-width: 768px) {
+  .tk-sheet { animation: tkd-drawer 0.45s cubic-bezier(0.2, 0.95, 0.25, 1.04) both; }
+}
+@media (prefers-reduced-motion: no-preference) and (min-width: 1200px) {
+  .tk-sheet { animation: tkd-panel 0.42s cubic-bezier(0.2, 0.95, 0.25, 1.04) both; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .tk-sheet.tk-morphing { animation: none; }
+  .tk-sheet.leaving { animation: tk-sheet-down var(--t-picker) var(--ease-out) forwards; }
+  .tk-picker.leaving, .tk-tools.leaving { animation: tk-leave-down 180ms var(--ease-out) forwards; }
+  .tk-veil.leaving { animation: tk-unfade var(--t-picker) var(--ease-out) forwards; }
+}
+@media (prefers-reduced-motion: no-preference) and (min-width: 768px) {
+  .tk-sheet.leaving { animation-name: tk-drawer-out; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tk-picker, .tk-tools, .tk-pick, .tk-tools-grid > *, .chat-stream > .bubble, .tk-land, .tk-arrive, .tk-roll, .tk-pulse,
+  .tk-veil, .tk-sheet, .tk-sheet .tk-stagger > *, .tk-tick circle, .tk-tick path, .tk-bag, .tk-brief, .tk-alerts > li,
+  .tk-brief-bars > span, .tk-brief-live { animation: none !important; transition: none !important; }
+}
+
+/* ---------- The composer and the head, as the boards draw them ---------- */
+/* A white pill with no line round it; the clip and the camera inside; the
+   tools, send and mic in round buttons, pine with lime on a light page. */
+.composer-pill, .composer-pill:focus-within { border: 0; background: var(--panel); box-shadow: 0 1px 2px rgba(14, 26, 20, 0.08); }
+.composer-pill:focus-within { box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-dark) 55%, transparent), 0 1px 2px rgba(14, 26, 20, 0.08); }
+.composer-pill textarea::placeholder { color: var(--muted); }
+.camera-quick { display: grid; }
+.composer > .send-button, .composer > .icon-button.primary, .composer > .send-button:hover:not(:disabled), .composer > .icon-button.primary:hover:not(:disabled) { background: var(--brand); color: var(--brand-dark); border: 0; box-shadow: none; }
+.composer > .send-button:disabled { opacity: 1; background: var(--brand); color: var(--brand-dark); }
+.composer > .send-button svg, .composer > .icon-button.primary svg { color: var(--brand-dark); stroke-width: 2.4; }
+:root[data-theme="dark"] .composer > .send-button, :root[data-theme="dark"] .composer > .icon-button.primary { background: var(--brand-dark); color: var(--brand-dark-text); }
+:root[data-theme="dark"] .composer > .send-button svg, :root[data-theme="dark"] .composer > .icon-button.primary svg { color: var(--brand-dark-text); }
+.composer-tools { background: var(--panel); color: var(--brand); box-shadow: 0 1px 2px rgba(14, 26, 20, 0.08); }
+:root[data-theme="dark"] .composer-tools { color: var(--text); }
+/* The head: on a phone only search (the board), Order as a pine pill on a
+   computer (DeskBuyer); Taskiem's mark is the spark. */
+.tk-head-order svg { display: none; }
+@media (max-width: 860px) { .tk-head-order { display: none; } }
+.chat-head .chat-avatar.accent svg, .chat-row .chat-avatar.accent svg { width: 20px; height: 20px; color: var(--brand-dark); }
+.chat-head .chat-sub { font-size: 13px; color: var(--muted); }
+.chat-head .chat-sub .typing { color: var(--brand); font-weight: 600; }
+:root[data-theme="dark"] .chat-head .chat-sub .typing { color: var(--brand-dark); }
+/* Diary lines: the pill alone (when it was is for a screen reader). */
+.tk-diary-when:not(:has(button)) { display: contents; }
+
+/* ---------- Sheets, as the boards draw them ---------- */
+/* A row's tile in its name's tone (lib/tone.ts), over the kit's lime. */
+.tk-row-tile[data-tone="pine"] { background: var(--tone-pine-bg); color: var(--tone-pine-ink); }
+.tk-row-tile[data-tone="lime"] { background: var(--tone-lime-bg); color: var(--tone-lime-ink); }
+.tk-row-tile[data-tone="peach"] { background: var(--tone-peach-bg); color: var(--tone-peach-ink); }
+.tk-row-tile[data-tone="yellow"] { background: var(--tone-yellow-bg); color: var(--tone-yellow-ink); }
+.tk-row-tile[data-tone="green"] { background: var(--tone-green-bg); color: var(--tone-green-ink); }
+.tk-row-tile[data-tone="lavender"] { background: var(--tone-lavender-bg); color: var(--tone-lavender-ink); }
+.tk-row-tile[data-tone="blue"] { background: var(--tone-blue-bg); color: var(--tone-blue-ink); }
+.tk-row-tile[data-tone="sand"] { background: var(--tone-sand-bg); color: var(--tone-sand-ink); }
+.tk-cta svg { width: 20px; height: 20px; color: var(--brand-dark); stroke-width: 2.4; }
+:root[data-theme="dark"] .tk-cta svg { color: var(--brand-dark-text); }
+.tk-sheet-more { display: flex; align-items: center; justify-content: center; gap: 4px; margin: 14px auto 4px; min-height: 40px; font-size: 14px; font-weight: 600; color: var(--muted); text-decoration: none; }
+.tk-sheet-more:hover { color: var(--text); text-decoration: none; }
+.tk-sheet-more svg { width: 16px; height: 16px; }
+/* A computer: the panel is 380px, beside the conversation (DeskSeller). */
+@media (min-width: 1200px) {
+  .tk-sheet { width: 380px; }
+  .tk-sheet-open .chat-mode .chat-layout, .tk-sheet-open .shell:not(.chat-mode) #main { padding-right: 380px; }
+}
+/* A sheet's head with a mark before the title and a line under it (Buyer). */
+.tk-sheet-titles { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tk-sheet-sub { font-size: 13px; color: var(--muted); }
+.tk-sheet-head .tk-sheet-lead { flex: none; width: 48px; height: 48px; font-size: 16px; }
+.tk-sheet-head:has(.tk-sheet-lead) h2 { font-size: 22px; line-height: 1.2; }
+.tk-order-row .tk-qty button:disabled { opacity: 1; }
+.tk-order-row .tk-row-tile svg { width: 22px; height: 22px; stroke-width: 1.8; }
+.tk-bag-go svg { width: 18px; height: 18px; }
+
+/* ---------- The chat list and the picker on a computer (DeskSeller) ---------- */
+.chat-list-head h2 { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; }
+.chat-list-biz { margin-left: auto; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.chat-list-head .chat-list-biz + * { margin-left: 8px; }
+.tk-picker-keys { display: none; }
+@media (min-width: 861px) and (pointer: fine) {
+  .tk-picker-keys { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 8px -12px -12px; padding: 10px 16px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); }
+  .tk-picker-keys kbd { display: inline-grid; place-items: center; min-width: 20px; padding: 1px 6px; border: 1px solid var(--border-strong); border-radius: 5px; background: var(--panel); font: inherit; font-size: 11px; font-weight: 700; color: var(--text); }
+}
+/* A computer: the order panel's head is its title and line (DeskBuyer). */
+@media (min-width: 1200px) { .tk-sheet-head .tk-sheet-lead { display: none; } }
+.chat-avatar.accent { background: var(--brand); color: var(--brand-dark); }
+.chat-avatar.accent svg { width: 20px; height: 20px; }
+.composer > .send-button:focus-visible, .composer > .icon-button.primary:focus-visible, .composer-tools:focus-visible { box-shadow: var(--ring); }

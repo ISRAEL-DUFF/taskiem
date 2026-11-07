@@ -514,7 +514,10 @@ export function ChatPage() {
       <div className={`chat-layout${open || taskiemOpen ? " open" : ""}`}>
         <div className="chat-list-pane" onKeyDown={onListKey}>
           <div className="chat-list-head">
-            <h2>Chat</h2>
+            <h2>Chats</h2>
+            {me?.tenant_name && (
+              <span className="chat-list-biz">{me.tenant_name}</span>
+            )}
             {linksOn && (
               <button
                 type="button"
@@ -571,7 +574,7 @@ export function ChatPage() {
                 <input
                   type="search"
                   ref={searchBox}
-                  placeholder="Search or find a business"
+                  placeholder="Search chats, messages, businesses"
                   value={q}
                   onChange={(e) => (setQ(e.target.value), setHint(""))}
                   onKeyDown={(e) => {

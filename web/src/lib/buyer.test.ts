@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bagOf, priceLine, purchaseState, quoteText, reorderQty, stepQty } from "./buyer";
+import { bagOf, orderLine, priceLine, purchaseState, quoteText, reorderQty, stepQty } from "./buyer";
 import type { PriceItem } from "./pricelists";
 
 const item = (id: string, name: string, price: number, min = 1, available = true): PriceItem => ({
@@ -27,6 +27,7 @@ describe("the buyer's tools", () => {
     expect(b.count).toBe("1 item in your order");
     expect(quoteText(b.lines)).toBe("Could you quote me for:\n• 20 × Rice, 25kg bag");
     expect(priceLine(items[1] as (typeof items)[number])).toBe("₦41,000 a bag · min 5");
+    expect(orderLine(items[1] as (typeof items)[number])).toBe("₦41,000 · min 5");
   });
   it("says where an order is, and when a quote waits", () => {
     expect(purchaseState({ status: "sent", seller_status: "proposed" })).toMatchObject({ quote: true, step: 0 });

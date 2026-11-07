@@ -7,7 +7,7 @@ import {
 } from "react";
 import { get } from "../api";
 import { Link } from "react-router-dom";
-import { Icon } from "../icons";
+import { Icon, TaskiemMark } from "../icons";
 import { usePresence } from "../kit";
 import { initialsOf } from "./ChatAvatar";
 import {
@@ -276,7 +276,7 @@ function PickIcon({ s }: { s: Suggestion }) {
   if (s.kind === "taskiem")
     return (
       <span className="pick-icon round pine" aria-hidden="true">
-        <Icon name="sparkle" />
+        <TaskiemMark />
       </span>
     );
   return (
@@ -339,7 +339,7 @@ function Picker({
                 type="button"
                 className={`tk-pick${first ? " first" : ""}`}
                 style={{
-                  animationDelay: `calc(var(--t-stagger) * ${Math.min(n, 6)})`,
+                  animationDelay: `calc(20ms + var(--t-stagger) * ${Math.min(n, 6)})`,
                 }}
                 onClick={(e) =>
                   m.pick(s, e.currentTarget.getBoundingClientRect())
@@ -363,6 +363,21 @@ function Picker({
           })}
         </div>
       ))}
+      {/* On a computer, the keys (DeskSeller). */}
+      <div className="tk-picker-keys" aria-hidden="true">
+        <span>
+          <kbd>↑</kbd> <kbd>↓</kbd> to move
+        </span>
+        <span>
+          <kbd>Enter</kbd> to tag
+        </span>
+        <span>
+          <kbd>/</kbd> for tools
+        </span>
+        <span>
+          <kbd>Esc</kbd> to close
+        </span>
+      </div>
     </section>
   );
 }

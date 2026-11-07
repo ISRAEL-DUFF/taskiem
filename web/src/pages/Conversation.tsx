@@ -82,7 +82,7 @@ import { ReadMore, useFold } from "./ReadMore";
 import { useChatLive } from "./ChatLive";
 import {
   linkedLine,
-  roleLine,
+  headLine,
   type BusinessLink,
   type LinkCard,
   type LinkRole,
@@ -742,8 +742,10 @@ function Bubble({
         </>
       }
     >
+      {/* The boards draw no sender's name in a business's conversation;
+          it is still said to a screen reader. */}
       {first && !m.mine && !card && m.sender_name && (
-        <span className="who">{m.sender_name}</span>
+        <span className="sr-only">{m.sender_name}: </span>
       )}
       {m.forwarded && (
         <span className="forwarded" data-testid="chat-forwarded">
@@ -1578,7 +1580,7 @@ export function ConversationPane({
               typing…
             </span>
           ) : link ? (
-            roleLine(link.role)
+            headLine(link.role)
           ) : undefined
         }
         actions={
@@ -1592,8 +1594,7 @@ export function ConversationPane({
                   c.openTool("order", e.currentTarget.getBoundingClientRect())
                 }
               >
-                <Icon name="orders" />
-                <span className="tk-head-order-word">Order</span>
+                Order
               </button>
             )}
             <button

@@ -13,6 +13,7 @@ import { Link } from "react-router-dom";
 import { get } from "../api";
 import { useAuth } from "../auth";
 import { Icon } from "../icons";
+import { toneOf } from "../lib/tone";
 import { KitEmpty, KitLoading, Pill, SavedTick, Sheet } from "../kit";
 import type { Service } from "../lib/bookings";
 import type { PriceList } from "../lib/pricelists";
@@ -266,14 +267,18 @@ export function ToolsPanel({
   );
 }
 
-/** A row's tile: the first letters of the name's first two words. */
-const tileLetters = (name: string) =>
-  initialsOf(
-    name
-      .split(/\s+/)
-      .filter((w) => /^\p{L}/u.test(w))
-      .join(" ") || name,
-  );
+/** A row's tile: the first letters of the name's first two words ("Jollof
+ * rice" JR); one word gives its first letter and the next consonant ("Zobo"
+ * ZB, "Chapman" CH), as the boards draw them. */
+export const tileLetters = (name: string) => {
+  const words = name.split(/\s+/).filter((w) => /^\p{L}/u.test(w));
+  if (words.length === 1) {
+    const w = words[0] ?? "";
+    const next = w.slice(1).match(/[b-df-hj-np-tv-z]/i)?.[0] ?? w.charAt(1);
+    return (w.charAt(0) + next).toUpperCase();
+  }
+  return initialsOf(words.join(" ") || name);
+};
 
 /** What a tool's row opens: its form, or a look at it. */
 /** Whether the person may change what a tool shows (else they see it). */
@@ -474,12 +479,6 @@ export function ToolSheet({
       onBack={open ? () => setOpen(undefined) : undefined}
       shut={shut}
       testid="tool-sheet"
-      headExtra={
-        // The full page, for what the sheet does not do.
-        <Link className="tk-head-link" to={tool.page} onClick={onClose}>
-          Full page<span className="sr-only">: {tool.more.toLowerCase()}</span>
-        </Link>
-      }
       footer={
         open ? undefined : key === "purchases" && onNewOrder ? (
           <button type="button" className="tk-cta" onClick={onNewOrder}>
@@ -491,6 +490,7 @@ export function ToolSheet({
             className="tk-cta"
             onClick={() => setOpen("add")}
           >
+            <Icon name="plus" />
             {add}
           </button>
         ) : (
@@ -574,30 +574,48 @@ export function ToolSheet({
                 </KitEmpty>
               )
             ) : (
-              <ul className="tk-stagger">
-                {shown.map((r) => (
-                  <li key={r.id}>
-                    <button
-                      type="button"
-                      className="tk-row"
-                      onClick={() => setOpen(r)}
-                    >
-                      <span className="tk-row-tile" aria-hidden="true">
-                        {tool.rowIcon ? (
-                          <Icon name={tool.rowIcon} />
-                        ) : (
-                          tileLetters(r.name)
+              <>
+                <ul className="tk-stagger">
+                  {shown.map((r) => (
+                    <li key={r.id}>
+                      <button
+                        type="button"
+                        className="tk-row"
+                        onClick={() => setOpen(r)}
+                      >
+                        <span
+                          className="tk-row-tile"
+                          aria-hidden="true"
+                          data-tone={tool.rowIcon ? undefined : toneOf(r.name)}
+                        >
+                          {tool.rowIcon ? (
+                            <Icon name={tool.rowIcon} />
+                          ) : (
+                            tileLetters(r.name)
+                          )}
+                        </span>
+                        <span className="tk-row-words">
+                          <span className="tk-row-name">{r.name}</span>
+                          <span className="tk-row-sub">{r.sub}</span>
+                        </span>
+                        {r.pill && (
+                          <Pill tone={r.pill.tone}>{r.pill.text}</Pill>
                         )}
-                      </span>
-                      <span className="tk-row-words">
-                        <span className="tk-row-name">{r.name}</span>
-                        <span className="tk-row-sub">{r.sub}</span>
-                      </span>
-                      {r.pill && <Pill tone={r.pill.tone}>{r.pill.text}</Pill>}
-                    </button>
-                  </li>
-                ))}
-              </ul>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                {/* The full page, for what the sheet does not do: after the
+                  list, as the boards keep the head to the title. */}
+                <Link
+                  className="tk-sheet-more"
+                  to={tool.page}
+                  onClick={onClose}
+                >
+                  {tool.more}
+                  <Icon name="chevron" />
+                </Link>
+              </>
             )}
           </div>
         </>

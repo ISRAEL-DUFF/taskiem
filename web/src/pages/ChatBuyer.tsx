@@ -14,7 +14,7 @@ import {
 } from "../lib/bills";
 import {
   bagOf,
-  priceLine,
+  orderLine,
   purchaseState,
   quoteText,
   reorderQty,
@@ -276,6 +276,17 @@ export function OrderSheet({
       onBack={step === "review" ? () => setStep("pick") : undefined}
       shut={shut}
       testid="order-sheet"
+      lead={
+        step === "pick" ? (
+          <span
+            className="chat-avatar tk-sheet-lead"
+            aria-hidden="true"
+            data-initials={initialsOf(business)}
+            data-tone="pine"
+          />
+        ) : undefined
+      }
+      sub={step === "pick" ? `Your prices · ${updated}` : undefined}
       footer={
         step === "pick" ? (
           <div className="tk-bag" data-testid="order-bag">
@@ -289,7 +300,7 @@ export function OrderSheet({
               disabled={bag.lines.length === 0}
               onClick={() => setStep("review")}
             >
-              Review order <Icon name="chevron" />
+              Review order <Icon name="arrow-right" />
             </button>
           </div>
         ) : (
@@ -324,32 +335,24 @@ export function OrderSheet({
       }
     >
       {done && <SavedTick words={done} />}
-      {step === "pick" && (
+      {step === "pick" && last.data && bag.lines.length === 0 && list && (
         <div className="tk-order-who">
-          <span
-            className="chat-avatar"
-            aria-hidden="true"
-            data-initials={initialsOf(business)}
-          />
-          <span className="tk-row-sub">Your prices · {updated}</span>
-          {last.data && bag.lines.length === 0 && list && (
-            <button
-              type="button"
-              className="tk-chip-btn"
-              onClick={() =>
-                setQty(
-                  reorderQty(
-                    last.data as Purchase,
-                    links.data?.item_links ?? [],
-                    list.items,
-                  ),
-                )
-              }
-            >
-              Same as last time
-              <span className="sr-only">: {last.data.reference}</span>
-            </button>
-          )}
+          <button
+            type="button"
+            className="tk-chip-btn"
+            onClick={() =>
+              setQty(
+                reorderQty(
+                  last.data as Purchase,
+                  links.data?.item_links ?? [],
+                  list.items,
+                ),
+              )
+            }
+          >
+            Same as last time
+            <span className="sr-only">: {last.data.reference}</span>
+          </button>
         </div>
       )}
       {!prices.data ? (
@@ -386,13 +389,17 @@ export function OrderSheet({
                   className={`tk-order-row${n > 0 ? " on" : ""}`}
                   data-testid="order-row"
                 >
-                  <span className="tk-row-tile" aria-hidden="true">
-                    <Icon name="box" />
+                  <span
+                    className="tk-row-tile"
+                    aria-hidden="true"
+                    data-tone="sand"
+                  >
+                    <Icon name="package" />
                   </span>
                   <span className="tk-row-words">
                     <span className="tk-row-name">{it.name}</span>
                     <span className="tk-row-sub">
-                      {it.available ? priceLine(it) : "Not available now"}
+                      {it.available ? orderLine(it) : "Not available now"}
                     </span>
                   </span>
                   <span

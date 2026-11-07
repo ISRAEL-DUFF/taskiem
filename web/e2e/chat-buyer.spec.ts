@@ -112,12 +112,12 @@ for (const [size, viewport] of [
     const pane = buyer.getByTestId("chat-pane");
     const order = buyer.getByTestId("order-sheet");
 
-    // Nothing scrolls sideways with Order in the head.
-    await expect(pane.getByTestId("chat-order")).toBeVisible();
+    // Nothing scrolls sideways; on a computer Order is in the head, on a
+    // phone it is a tool (the boards draw no Order in a phone's head).
     expect(await buyer.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     if (size === "a phone") await buyer.screenshot({ path: "test-results/buyer-head.png" });
-    // Order, from the conversation's head: their prices, steppers, the bag.
-    await pane.getByTestId("chat-order").click();
+    // Order: their prices, steppers, the bag.
+    await openOrder(buyer);
     await expect(order.getByRole("heading", { name: `Order from ${name}` })).toBeVisible();
     await expect(order.getByTestId("order-row")).toHaveCount(3);
     await expect(order).toContainText("Not available now");
@@ -152,7 +152,7 @@ for (const [size, viewport] of [
     expect(sent.some((x) => x.path === "/v1/stock/purchases/u2/send")).toBe(true);
 
     // Ask for a quote: the lines go to them as a message.
-    await pane.getByTestId("chat-order").click();
+    await openOrder(buyer);
     await order.getByRole("button", { name: "One more Rice, 25kg bag" }).click();
     await order.getByRole("button", { name: "Review order" }).click();
     await order.getByRole("button", { name: "Ask for a quote" }).click();
@@ -304,9 +304,8 @@ test("a supplier added and linked once, a retry that does nothing twice, and the
     return r.fulfill(json({ purchase: { id: "u2", reference: "PO-0099", status: "drafted" } }, 201));
   });
   await buyer.goto(`/chat?with=${link}`);
-  const pane = buyer.getByTestId("chat-pane");
   const order = buyer.getByTestId("order-sheet");
-  await pane.getByTestId("chat-order").click();
+  await openOrder(buyer);
   // Same as last time: the last order's lines at today's prices.
   await order.getByRole("button", { name: /Same as last time/ }).click();
   await expect(order.getByRole("group", { name: "How many Rice, 50kg bag" })).toContainText("4");
@@ -344,3 +343,17 @@ test("without leave to send orders, there is no Order, and the card's Order is t
   await expect(panel.getByRole("button", { name: /^Your orders/ })).toBeVisible();
   await expect(panel.getByRole("button", { name: /^Order From/ })).toHaveCount(0);
 });
+
+/** Order with a supplier: the head's Order on a computer, the Order tool on
+ * a phone (the boards draw no Order in a phone's head). */
+async function openOrder(page: Page) {
+  const pane = page.getByTestId("chat-pane");
+  if ((page.viewportSize()?.width ?? 1440) >= 861) {
+    await expect(pane.getByTestId("chat-order")).toBeVisible();
+    await pane.getByTestId("chat-order").click();
+    return;
+  }
+  await expect(pane.getByTestId("chat-order")).toBeHidden();
+  await pane.getByRole("button", { name: "Open tools" }).click();
+  await page.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Order/ }).first().click();
+}

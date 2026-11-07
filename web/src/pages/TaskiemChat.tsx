@@ -28,7 +28,7 @@ import { useChatLive } from "./ChatLive";
 import { get, post, upload } from "../api";
 import type { Conversation } from "../lib/linkchat";
 import { priceWords, type SupplierPrices } from "../lib/pricelists";
-import { Icon } from "../icons";
+import { Icon, TaskiemMark } from "../icons";
 import { clock } from "../lib/linkchat";
 import {
   boldParts,
@@ -111,7 +111,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
   );
   const act = useAction();
   const chatTools = useChatTools();
-  const { can } = useAuth();
+  const { can, me } = useAuth();
   // Alerts you can act on, as cards at the end (chat-tools.md §6).
   const alerts = useChatAlerts(!!chatTools);
   const afterDiary = useRef<() => void>(() => undefined);
@@ -124,6 +124,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
     // businesses not yet linked (their card, with Connect); Taskiem is
     // who is being talked to, so it is not offered.
     grouped: chatTools ? { taskiem: false } : undefined,
+    placeholder: chatTools ? "Ask Taskiem, or @ to tag" : undefined,
     diaryWhere: "taskiem",
     // A tool saved: the server's diary line is pulled in.
     // A tool saved a change: its diary line, and the cards it settles.
@@ -384,8 +385,8 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
         onBack={onBack}
         menuLabel="More about this conversation"
         avatar={
-          <span className="chat-avatar" aria-hidden="true">
-            T
+          <span className="chat-avatar accent" aria-hidden="true">
+            <TaskiemMark />
           </span>
         }
         title="Taskiem"
@@ -395,7 +396,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
               typing…
             </span>
           ) : (
-            "Your assistant, as on your phone"
+            (me?.tenant_name ?? "Your assistant")
           )
         }
       />

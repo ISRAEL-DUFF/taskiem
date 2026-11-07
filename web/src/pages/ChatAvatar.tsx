@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { toneOf } from "../lib/tone";
 
 
 /** Up to two initials: "Bayo Rice Mills" is "BR". */
@@ -44,6 +45,11 @@ export function ChatAvatar({
   return (
     // The initials are drawn, not text: a button showing the avatar is
     // named by its label alone.
-    <span className={cls} aria-hidden="true" data-initials={initialsOf(name)} />
+    <span
+      className={cls}
+      aria-hidden="true"
+      data-initials={initialsOf(name)}
+      data-tone={toneOf(name)}
+    />
   );
 }

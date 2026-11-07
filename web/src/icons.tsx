@@ -56,6 +56,9 @@ const paths: Record<string, string> = {
   emoji: "M12 21a9 9 0 100-18 9 9 0 000 18zM8.5 14a4.5 4.5 0 007 0M9 9.5v.01M15 9.5v.01",
   send: "M21 3L3 11l7 3 3 7zM10 14L21 3",
   down: "M6 9l6 6 6-6",
+  "arrow-up": "M12 19V5M5 12l7-7 7 7",
+  "arrow-right": "M5 12h14M13 5l7 7-7 7",
+  package: "M4 8h16v11a2 2 0 01-2 2H6a2 2 0 01-2-2zM3 4h18v4H3zM10 12h4",
   star: "M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z",
   image: "M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4M15 9h.01",
   pin: "M9 3h6l-1 6 3 3H7l3-3zM12 12v9",
@@ -97,6 +100,17 @@ export function Icon({ name, className }: { name: string; className?: string }) 
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false" className={className}>
       <path d={d} />
+    </svg>
+  );
+}
+
+/** Taskiem's mark in the chat (the boards): a filled four-point spark with
+ * a small one beside it, in the colour around it. */
+export function TaskiemMark() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
+      <path d="M12 2l1.8 5.6L19.5 9l-5.7 1.5L12 16l-1.8-5.5L4.5 9l5.7-1.4z" />
+      <path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" />
     </svg>
   );
 }

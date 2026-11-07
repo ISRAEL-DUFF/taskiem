@@ -117,6 +117,8 @@ export type ComposerOptions<R> = {
   /** Chat tools (chat-tools.md §3): "@" tags things and businesses in
    * groups (with the Taskiem row when taskiem). */
   grouped?: { taskiem: boolean };
+  /** The box's words when empty ("Ask Taskiem, or @ to tag"). */
+  placeholder?: string;
   /** Chat tools: the tools button, and "/". */
   tools?: boolean;
   /** Where the tools are open: "taskiem" or a link. */
@@ -551,9 +553,11 @@ export function ComposerView<R>({
               placeholder={
                 file
                   ? "Add a caption"
-                  : c.o.grouped
-                    ? "Message, @ to tag"
-                    : "Type a message"
+                  : c.o.placeholder
+                    ? c.o.placeholder
+                    : c.o.grouped
+                      ? "Message, @ to tag"
+                      : "Type a message"
               }
               value={text}
               onChange={(e) => {
@@ -607,7 +611,7 @@ export function ComposerView<R>({
               }}
             />
             <AttachMenu onChoose={c.attach} documents={c.o.rules.documents} />
-            {!text.trim() && !file && (
+            {!file && (
               <button
                 type="button"
                 className="icon-button camera-quick"
@@ -631,7 +635,7 @@ export function ComposerView<R>({
               className="primary icon-button send-button"
               disabled={busy || (!text.trim() && !file)}
             >
-              <Icon name="send" />
+              <Icon name="arrow-up" />
               <span className="sr-only">
                 {busy && file ? "Sending…" : "Send"}
               </span>

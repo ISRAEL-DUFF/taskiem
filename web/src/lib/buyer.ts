@@ -108,3 +108,7 @@ export function reorderQty(
 /** "₦78,000 · min 2". */
 export const priceLine = (it: PriceItem) =>
   `${formatPrice(it.price_kobo)}${it.unit ? ` a ${it.unit}` : ""}${it.min_quantity > 1 ? ` · min ${it.min_quantity}` : ""}`;
+
+/** An order row's line, as the Buyer board draws it: "₦78,000 · min 2". */
+export const orderLine = (it: PriceItem) =>
+  `${formatPrice(it.price_kobo)}${it.min_quantity > 1 ? ` · min ${it.min_quantity}` : ""}`;

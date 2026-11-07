@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { Icon } from "../icons";
+import { Icon, TaskiemMark } from "../icons";
 import { ChatAvatar } from "./ChatAvatar";
 
 /**
@@ -50,11 +50,14 @@ export function ChatRow({
         to={to}
         aria-current={selected ? "true" : undefined}
       >
-        <ChatAvatar
-          name={letter}
-          logo={logo}
-          className={accent ? "accent" : ""}
-        />
+        {accent ? (
+          // Taskiem's own mark: the spark, lime on pine (the boards).
+          <span className="chat-avatar accent" aria-hidden="true">
+            <TaskiemMark />
+          </span>
+        ) : (
+          <ChatAvatar name={letter} logo={logo} />
+        )}
         <span className="chat-row-main">
           <span className="chat-row-top">
             <span className="title">{title}</span>

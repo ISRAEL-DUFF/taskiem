@@ -209,8 +209,9 @@ export function DiaryLine({
           {body}
         </span>
       )}
+      {/* When it was, for a screen reader; the boards draw the line alone. */}
       <span className="tk-diary-when">
-        {when}
+        <span className="sr-only">{when}</span>
         {more}
       </span>
     </div>
@@ -234,6 +235,8 @@ export function Sheet({
   onBack,
   shut = false,
   headExtra,
+  lead,
+  sub,
   children,
 }: {
   title: string;
@@ -249,6 +252,10 @@ export function Sheet({
   shut?: boolean;
   /** Beside the title: a link to the full page. */
   headExtra?: ReactNode;
+  /** Before the title: the business's mark (the Buyer board). */
+  lead?: ReactNode;
+  /** Under the title: "Your prices · updated today". */
+  sub?: ReactNode;
   children: ReactNode;
 }) {
   const ref = useRef<HTMLElement>(null);
@@ -269,7 +276,8 @@ export function Sheet({
   // sheet: what was tapped is gone, and Esc must still reach it.
   useEffect(() => {
     const el = ref.current;
-    if (el && !el.contains(document.activeElement)) el.focus({ preventScroll: true });
+    if (el && !el.contains(document.activeElement))
+      el.focus({ preventScroll: true });
   }, [title]);
   // Esc steps back from a form to its list, then closes the sheet only.
   const escape = () => (onBack ? onBack() : close());
@@ -352,12 +360,16 @@ export function Sheet({
                 <Icon name="back" />
               </button>
             )}
-            <h2 id={id}>
-              {title}
-              {count !== undefined && (
-                <span className="tk-sheet-count">{count}</span>
-              )}
-            </h2>
+            {lead}
+            <div className="tk-sheet-titles">
+              <h2 id={id}>
+                {title}
+                {count !== undefined && (
+                  <span className="tk-sheet-count">{count}</span>
+                )}
+              </h2>
+              {sub && <span className="tk-sheet-sub">{sub}</span>}
+            </div>
             {headExtra}
             <button
               type="button"

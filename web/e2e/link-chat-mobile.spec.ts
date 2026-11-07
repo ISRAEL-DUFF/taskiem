@@ -153,7 +153,7 @@ test("the conversation's head shows who they are, search and the menu as plain i
   const pane = buyer.getByTestId("chat-pane");
   const head = pane.locator(".chat-head");
   await expect(head.getByRole("heading", { name })).toBeVisible();
-  await expect(head.locator(".chat-sub")).toHaveText("They supply you");
+  await expect(head.locator(".chat-sub")).toHaveText("Your supplier · linked");
   // The search is a panel behind its icon, as WhatsApp's: its own head, a
   // calendar and the box, the messages found as rows.
   await expect(pane.getByTestId("chat-search-panel")).toHaveCount(0);
@@ -325,14 +325,15 @@ test("the camera is beside the clip on a touch screen, inside the pill; a comput
   expect(q.x).toBeGreaterThanOrEqual(p.x);
   expect(q.x + q.width).toBeLessThanOrEqual(p.x + p.width + 1); // inside the pill
   await pane.locator("#chat-text").fill("hi");
-  await expect(quick).toBeHidden(); // the send button takes over, as WhatsApp's
+  await expect(quick).toBeVisible(); // it stays while typing, as the boards draw the pill
 
   for (const viewport of [PHONE, { width: 1280, height: 800 }]) {
     const computer = await linked(browser, { viewport }); // a mouse: no touch
     await computer.buyer.goto(`/chat?with=${computer.link}`);
+    // A computer has the camera in the pill too (DeskSeller, DeskBuyer).
     await expect(
       computer.buyer.getByTestId("chat-pane").getByTestId("camera-quick"),
-    ).toBeHidden();
+    ).toBeVisible();
   }
 });
 

@@ -21,6 +21,15 @@
   --tk-photo-dark: rgba(14, 26, 20, 0.55);
   --tk-photo-notice: rgba(14, 26, 20, 0.75);
   --tk-photo-on-dark: #ffffff;
+  /* The boards' pairs for a name with no picture (lib/tone.ts). */
+  --tone-pine-bg: #0d3b2e; --tone-pine-ink: #c8f169;
+  --tone-lime-bg: #c8f169; --tone-lime-ink: #0d3b2e;
+  --tone-peach-bg: #fde3d8; --tone-peach-ink: #a3401c;
+  --tone-yellow-bg: #fbf0c4; --tone-yellow-ink: #7a5a00;
+  --tone-green-bg: #e1f0d8; --tone-green-ink: #2f5d3a;
+  --tone-lavender-bg: #ece6f4; --tone-lavender-ink: #5b3d86;
+  --tone-blue-bg: #dce8fb; --tone-blue-ink: #2f5bd3;
+  --tone-sand-bg: #f3ead2; --tone-sand-ink: #6f5420;
 }
 :root[data-theme="dark"] {
   --tk-soft: #1f2a26; --tk-tile: #1a2420; --tk-lime-soft: rgba(200, 241, 105, 0.14);
@@ -34,6 +43,37 @@
     --tk-lift: 0 30px 60px -20px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--border); --tk-veil: rgba(0, 0, 0, 0.55);
   }
 }
+
+
+:root[data-theme="dark"] {
+  --tone-pine-bg: #164a3b; --tone-lime-bg: #c8f169;
+  --tone-peach-bg: #3b2a24; --tone-peach-ink: #f6b39a;
+  --tone-yellow-bg: #36311d; --tone-yellow-ink: #f0d27a;
+  --tone-green-bg: #22301f; --tone-green-ink: #a8d6a0;
+  --tone-lavender-bg: #2e2738; --tone-lavender-ink: #c9b5ec;
+  --tone-blue-bg: #1f2a3d; --tone-blue-ink: #a8c5ff;
+  --tone-sand-bg: #342f22; --tone-sand-ink: #e6cf98;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] {
+    --tone-pine-bg: #164a3b; --tone-lime-bg: #c8f169;
+    --tone-peach-bg: #3b2a24; --tone-peach-ink: #f6b39a;
+    --tone-yellow-bg: #36311d; --tone-yellow-ink: #f0d27a;
+    --tone-green-bg: #22301f; --tone-green-ink: #a8d6a0;
+    --tone-lavender-bg: #2e2738; --tone-lavender-ink: #c9b5ec;
+    --tone-blue-bg: #1f2a3d; --tone-blue-ink: #a8c5ff;
+    --tone-sand-bg: #342f22; --tone-sand-ink: #e6cf98;
+  }
+}
+[data-tone="pine"] { background: var(--tone-pine-bg); color: var(--tone-pine-ink); }
+[data-tone="lime"] { background: var(--tone-lime-bg); color: var(--tone-lime-ink); }
+[data-tone="peach"] { background: var(--tone-peach-bg); color: var(--tone-peach-ink); }
+[data-tone="yellow"] { background: var(--tone-yellow-bg); color: var(--tone-yellow-ink); }
+[data-tone="green"] { background: var(--tone-green-bg); color: var(--tone-green-ink); }
+[data-tone="lavender"] { background: var(--tone-lavender-bg); color: var(--tone-lavender-ink); }
+[data-tone="blue"] { background: var(--tone-blue-bg); color: var(--tone-blue-ink); }
+[data-tone="sand"] { background: var(--tone-sand-bg); color: var(--tone-sand-ink); }
+.chat-avatar[data-tone] { font-weight: 800; letter-spacing: 0.01em; }
 
 /* ---------- Pills and tiles shared by the parts ---------- */
 
@@ -133,7 +173,7 @@
 :root[data-theme="dark"] .tk-cta { background: var(--brand-dark); color: var(--brand-dark-text); }
 
 /* A tablet: a drawer from the right. */
-@media (min-width: 861px) {
+@media (min-width: 768px) {
   .tk-sheet { top: 0; left: auto; width: 470px; max-width: 100vw; border-radius: 28px 0 0 28px; box-shadow: -30px 0 60px -30px rgba(14, 15, 12, 0.5); }
   .tk-sheet-grab { display: none; }
   .tk-sheet-head { padding-top: 22px; }
@@ -159,7 +199,7 @@
   .tk-sheet.leaving { animation: tk-sheet-down var(--t-picker) var(--ease-out) forwards; pointer-events: none; }
   .tk-veil.leaving { animation: tk-unfade var(--t-picker) var(--ease-out) forwards; }
 }
-@media (prefers-reduced-motion: no-preference) and (min-width: 861px) {
+@media (prefers-reduced-motion: no-preference) and (min-width: 768px) {
   @keyframes tk-drawer-in { from { transform: translateX(100%); } }
   .tk-sheet { animation-name: tk-drawer-in; }
   .tk-sheet.leaving { animation-name: tk-drawer-out; }
