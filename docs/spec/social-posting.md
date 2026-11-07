@@ -69,13 +69,13 @@ What this means for "anyone": a person needs a Page or a Creator account on Meta
 
 ### 6.1 The record: two known tables
 
-Two [known tables](no-sheet-needed.md#54-known-tables), made in the organisation the first time anything needs them:
+Two [known tables](no-sheet-needed.md#54-known-tables), the organisation's own data tables (rows in its own data project, listed on the Tables page, read by any workflow, exported like any other), not tables in Taskiem's own schema; made in the organisation the first time anything needs them:
 
-**`social_accounts`**: one row per connected account. `network` (`facebook`, `instagram`, `linkedin`, `tiktok`, `youtube`), `account_id`, `name` (the Page's name, the Instagram username), `connection` (the connection's name), `connected_at`, `status` (`connected`, `expired`). Written by the connection, read by the chat and the templates so "my Instagram" resolves to one row. Never edited by hand.
+**`social_accounts`**: one row per connected account. `network` (`facebook`, `instagram`, `linkedin`, `tiktok`, `youtube`), `account_id`, `name` (the Page's name, the Instagram username), `connection` (the connection's name), `connected_at`, `status` (`connected`, `expired`). Written by the connection, read by the chat and the templates so "my Instagram" resolves to one row. A [kept table](../data-tables.md#kept-tables) (`kept_by: social`, as the money log is kept): read, searched and exported like any table, written only by Taskiem, never edited by hand. The connection's token is in the connection's vault, never in a row.
 
 **`posts`**: one row per post per account. `caption` (text), `media` (links into the organisation's storage, 0 to 10), `network`, `account_id`, `publish_at` (time), `status` (`draft`, `scheduled`, `publishing`, `published`, `failed`, `cancelled`), `published_at`, `post_id` and `permalink` (from the network), `error`, `source` (`chat`, `template:<id>`, `web`, `api`), `run_id`. Insights (§6.6) are their own columns filled later: `reach`, `likes`, `comments`, `saves`, `insights_at`.
 
-A post made from chat, from a template or on the web is the same row. Changing a row's `publish_at` or `caption` from chat ("move today's post to 7pm") is a table change after a yes, as R4 defines it; the scheduler reads the row when the time comes, so the change holds.
+A post made from chat, from a template or on the web is the same row, and `posts` is an ordinary table, not a kept one: the person edits a row, and the publishing workflow writes its status through the ordinary data-tables connection, so the person's edits and Taskiem's updates share one row. Changing a row's `publish_at` or `caption` from chat ("move today's post to 7pm") is a table change after a yes, as R4 defines it; the scheduler reads the row when the time comes, so the change holds.
 
 ### 6.2 Media
 
