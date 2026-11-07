@@ -38,8 +38,12 @@ actions:
       reply tag and wake the run waiting on email.reply for that thread
       (docs/email.md#threads); mail apps keep the conversation together
       (Reply-To, Message-ID, In-Reply-To, References, and [#T-1042] in the
-      subject once). Needs the workflow's email trigger with threads on.
-      Counted and limited per recipient like every email Taskiem sends.
+      subject once). Needs the workflow's email trigger with threads on;
+      or, with address, sends from another email workflow of the business
+      in the same environment with threads on (a helpdesk address), so a
+      ticket opened by a form, WhatsApp or a person is answered by email and
+      the customer's replies reach that workflow. Counted and limited per
+      recipient like every email Taskiem sends.
     class: idempotent_write
     idempotency:
       field: idempotency_key
@@ -57,6 +61,7 @@ actions:
         thread:      { type: string, minLength: 1, maxLength: 24, description: "The ticket key (T-1042): letters, digits and single hyphens" }
         in_reply_to: { type: string, description: "The customer's message this answers (trigger.body.message_id); default: the last email sent in the thread" }
         references:  { type: array, maxItems: 20, items: { type: string }, description: "The thread's earlier Message-IDs (trigger.body.references)" }
+        address:     { type: string, maxLength: 200, description: "Send from another email workflow's address, whose run gets the replies: its Taskiem email address (trigger.email.address) or its workflow id. It must have threads on and be of this business and environment. Default: this workflow's own address" }
     output:
       type: object
       properties:

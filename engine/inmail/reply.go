@@ -130,7 +130,8 @@ func (s *Service) threaded(ctx context.Context, x inboxRow, meta Meta, msg *Mess
 			return err
 		}
 		return tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM email_thread_messages m JOIN runs r ON r.id = m.run_id
-			WHERE m.endpoint_id = $1 AND m.thread = $2 AND r.status NOT IN ('completed', 'failed', 'cancelled'))`, ep.id, th.thread).Scan(&live)
+			WHERE m.endpoint_id = $1 AND m.thread = $2 AND r.workflow_id = $3 AND r.status NOT IN ('completed', 'failed', 'cancelled'))`,
+			ep.id, th.thread, ep.workflow).Scan(&live)
 	})
 	if err != nil {
 		return record{}, nil, err
@@ -204,6 +205,12 @@ type ThreadEmail struct {
 	Thread      string
 	InReplyTo   string
 	References  []string
+	// Address names the threaded email workflow whose address the email
+	// is sent from and replies come back to: its Taskiem address
+	// (trigger.email.address, with or without a tag) or its workflow id.
+	// Empty is the run's own workflow. Another workflow must be of the
+	// same business and environment, with threads on.
+	Address string
 	// Key is the step's idempotency key: a retry sends nothing new and
 	// answers the same.
 	Key string
@@ -248,22 +255,9 @@ func (s *Service) SendInThread(ctx context.Context, e ThreadEmail) (map[string]a
 	}
 	var out map[string]any
 	err = db.InTenantTx(ctx, s.Pool, []uuid.UUID{e.Tenant}, func(tx pgx.Tx) error {
-		var ep endpoint
-		var status string
-		var threads *string
-		err := tx.QueryRow(ctx, `SELECT e.id, e.public_id, e.status, e.reply_key, v.definition->'trigger'->'config'->>'threads'
-			FROM runs r JOIN email_endpoints e ON e.workflow_id = r.workflow_id AND e.environment = $2
-			JOIN workflow_versions v ON v.workflow_id = e.workflow_id AND v.version = e.version
-			WHERE r.id = $1`, e.Run, e.Environment).Scan(&ep.id, &ep.publicID, &status, &ep.replyKey, &threads)
-		switch {
-		case errors.Is(err, pgx.ErrNoRows):
-			return fatalf("sending in a thread needs this workflow to start when an email comes in, with threads on")
-		case err != nil:
+		ep, err := s.threadEndpoint(ctx, tx, e)
+		if err != nil {
 			return err
-		case threads == nil || *threads != "true":
-			return fatalf("sending in a thread needs threads on in this workflow's email trigger, so replies come back to the ticket")
-		case status != "live":
-			return fatalf("this workflow's email address is %s, so replies could not come back", status)
 		}
 		if len(ep.replyKey) == 0 {
 			key := make([]byte, 32)
@@ -328,6 +322,79 @@ func (s *Service) SendInThread(ctx context.Context, e ThreadEmail) (map[string]a
 		return nil, fmt.Errorf("%w: %w", effects.ErrRetryable, err)
 	}
 	return out, nil
+}
+
+// threadEndpoint is the address an email in a thread is sent from: the
+// run's own workflow's, or the one e.Address names, which must be an
+// email workflow of the run's business in the run's environment, live and
+// with threads on.
+func (s *Service) threadEndpoint(ctx context.Context, tx pgx.Tx, e ThreadEmail) (endpoint, error) {
+	const cols = `SELECT e.id, e.public_id, e.status, e.environment, e.reply_key, v.definition->'trigger'->'config'->>'threads'
+			FROM email_endpoints e JOIN workflow_versions v ON v.workflow_id = e.workflow_id AND v.version = e.version `
+	var ep endpoint
+	var status, env string
+	var threads *string
+	scan := func(row pgx.Row) error {
+		return row.Scan(&ep.id, &ep.publicID, &status, &env, &ep.replyKey, &threads)
+	}
+	name := strings.TrimSpace(e.Address)
+	var err error
+	switch {
+	case name == "":
+		err = scan(tx.QueryRow(ctx, cols+`JOIN runs r ON r.workflow_id = e.workflow_id WHERE r.id = $1 AND e.environment = $2`, e.Run, e.Environment))
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			return ep, fatalf("sending in a thread needs this workflow to start when an email comes in, with threads on, or the address of one that does")
+		case err != nil:
+			return ep, err
+		}
+	default:
+		if wf, perr := uuid.Parse(name); perr == nil {
+			// One address per environment: this environment's first.
+			err = scan(tx.QueryRow(ctx, cols+`WHERE e.workflow_id = $1 AND e.tenant_id = $2 ORDER BY e.environment = $3 DESC LIMIT 1`, wf, e.Tenant, e.Environment))
+		} else {
+			public, ok := s.addressID(name)
+			if !ok {
+				return ep, fatalf("address %q is not a Taskiem email address of this business (k3x9q2m7a1bz@%s) or a workflow id", name, s.Domain)
+			}
+			err = scan(tx.QueryRow(ctx, cols+`WHERE e.public_id = $1 AND e.tenant_id = $2`, public, e.Tenant))
+		}
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			return ep, fatalf("address %q is not the email address of a workflow of this business", name)
+		case err != nil:
+			return ep, err
+		case env != e.Environment:
+			return ep, fatalf("address %q belongs to the workflow's %s environment, not %s, where this run is", name, env, e.Environment)
+		}
+	}
+	switch {
+	case threads == nil || *threads != "true":
+		if name == "" {
+			return ep, fatalf("sending in a thread needs threads on in this workflow's email trigger, so replies come back to the ticket")
+		}
+		return ep, fatalf("sending in a thread needs threads on in the email trigger of the workflow at %q, so replies come back to the ticket", name)
+	case status != "live":
+		return ep, fatalf("the email address is %s, so replies could not come back", status)
+	}
+	return ep, nil
+}
+
+// addressID is the public id of a Taskiem address given as
+// <id>[+tag]@<domain>, or as the bare id.
+func (s *Service) addressID(addr string) (string, bool) {
+	addr = strings.ToLower(strings.Trim(addr, "<>"))
+	local := addr
+	if at := strings.LastIndexByte(addr, '@'); at >= 0 {
+		if addr[at+1:] != strings.ToLower(s.Domain) {
+			return "", false
+		}
+		local = addr[:at]
+	}
+	if i := strings.IndexByte(local, '+'); i >= 0 {
+		local = local[:i]
+	}
+	return local, localPart.MatchString(local)
 }
 
 // threadReferences is an email's References: those given (the

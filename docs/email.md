@@ -53,11 +53,11 @@ A step gets a file through the `email` connector's **Get a link to an attachment
 
 ## Threads
 
-A workflow can carry an email conversation per ticket or order: it emails the customer, and their reply comes back to the run that waits for it, instead of starting a new one. The design is [decision 0063](decisions/0063-email-threads.md); the ticket templates built on it are [planned](spec/tickets.md).
+A workflow can carry an email conversation per ticket or order: it emails the customer, and their reply comes back to the run that waits for it, instead of starting a new one. The design is [decision 0063](decisions/0063-email-threads.md); the [ticket templates](guide/tickets.md) are built on it ([spec](spec/tickets.md)).
 
 1. Tick **Replies continue the conversation** in the **When it runs** tab (`threads: true` in the email trigger's `config`).
 2. Give each conversation a key, such as `T-1042`: letters, digits and single hyphens, up to 24 characters.
-3. Email the customer with the `email` connector's **Email a customer in a conversation** (`email@1 send_in_thread`): `to`, `subject`, `message`, `thread`, and optionally `in_reply_to` (the customer's `message_id`) and `references`.
+3. Email the customer with the `email` connector's **Email a customer in a conversation** (`email@1 send_in_thread`): `to`, `subject`, `message`, `thread`, and optionally `in_reply_to` (the customer's `message_id`), `references` and `address` (below).
 4. Wait for the answer with a `signal` step on event `email.reply`, correlated by the key (`=steps.ack.output.thread`). Its output is the reply: `body` is shaped as `trigger.body` (so `body.latest` is what they wrote), and `email` as `trigger.email`.
 
 The email comes from Taskiem's sending address in the business's name ("Ada's Kitchen via Taskiem"), like every message Taskiem sends a customer, and is counted and limited the same way. It carries:
@@ -67,10 +67,12 @@ The email comes from Taskiem's sending address in the business's name ("Ada's Ki
 - **In-Reply-To and References:** the customer's message it answers, else the last email sent in the conversation, so mail apps show one conversation;
 - **the subject** with `[#T-1042]` before it, once.
 
+**Sending from a helpdesk address.** A workflow without an email trigger of its own (a department's reply form, a ticket opened from a web form or WhatsApp, a scheduled follow-up) can email a customer in a conversation through another workflow's address: give `address` the threaded workflow's Taskiem address (`k3x9q2m7a1bz@in.taskiem.app`, as its `trigger.email.address` reads, a tagged one also does) or its workflow id. That workflow must be of the same business, in the same environment as the run, with **Replies continue the conversation** ticked and its address live; anything else fails the step for good, saying why, and sends nothing. The email then belongs to that address in every way: its Reply-To, its Message-ID and the conversation's records, so the customer's reply goes to that workflow, never to the sender. Since no run of that workflow waits for it, the reply starts a run of it carrying `trigger.email.thread`, as the [ticket templates](guide/tickets.md) want: the helpdesk workflow appends it to the ticket. A run of another workflow that is still going never holds a reply back.
+
 A reply is matched to its conversation by, in order: its verified reply tag; its `In-Reply-To` or `References` naming an email this workflow sent; or a `[#T-1042]` in its subject, only when the sender is proven (`auth.aligned`) and is someone the workflow emailed in that conversation. Then:
 
 - a run of the workflow waiting on `email.reply` for that key gets it, and nothing starts. The tab lists the message as **a reply, given to the conversation's run**. Runs of other workflows never get it, even with the same key;
-- a run that emailed in the conversation and is still going, but is not waiting yet (it is between steps), gets it when it waits: the message is looked at again every 5 minutes, for up to 7 days;
+- a run of the workflow that emailed in the conversation and is still going, but is not waiting yet (it is between steps), gets it when it waits: the message is looked at again every 5 minutes, for up to 7 days;
 - otherwise (the conversation's run ended) a new run starts with `trigger.email.thread` set, so the workflow can reopen the ticket.
 
 The reply's sender, recipients, subject and text are sealed before the run gets them, as a trigger's are. A message matched to nothing starts a run as usual. Without **Replies continue the conversation**, every message starts a run as before; the tag and the threading headers are only shown to it.

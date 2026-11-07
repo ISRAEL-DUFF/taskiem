@@ -18,9 +18,11 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/effects"
 	"github.com/israel-duff/taskiem/engine/history"
+	"github.com/israel-duff/taskiem/engine/ingest"
 	"github.com/israel-duff/taskiem/engine/inmail"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/sender"
+	"github.com/israel-duff/taskiem/engine/wd"
 )
 
 // A ticket: the first email starts it, an acknowledgement goes out in
@@ -489,5 +491,160 @@ func TestNoThreadsStartsRunsAsBefore(t *testing.T) {
 	out := w.event(runs[0], history.StepCompleted, "read")["output"].(map[string]any)
 	if out["tag"] != "shop-2" || out["irt"] != "tk-1@in.taskiem.test" || out["refs"] != float64(2) || out["threaded"] != false {
 		t.Fatalf("read: %v", out)
+	}
+}
+
+// A helpdesk: the email workflow whose address a ticket's other
+// workflows send from. A reply starts a run of it carrying the thread.
+const helpdesk = `{"schema":"wd/v1","id":"wf_helpdesk","version":1,"name":"Helpdesk",
+ "trigger":{"type":"email","config":{"threads":true}},
+ "steps":[{"id":"read","type":"transform","config":{"output":{
+   "thread":"=has(trigger.email.thread) ? trigger.email.thread : ''","by":"=has(trigger.email.matched_by) ? trigger.email.matched_by : ''",
+   "latest":"=trigger.body.latest"}}}]}`
+
+// A ticket's answer, sent by a workflow with no email trigger of its own
+// (a department's reply form), which then waits for something else.
+const answerer = `{"schema":"wd/v1","id":"wf_answer","version":1,"name":"Answer a ticket",
+ "trigger":{"type":"manual"},
+ "steps":[{"id":"later","type":"signal","config":{"event":"ticket.closed","correlation":"='T-1042'","timeout":"7d"}}]}`
+
+// A ticket workflow opened another way emails the customer in the thread
+// through the helpdesk's address: Reply-To, Message-ID and the thread's
+// records are the helpdesk's, and the customer's reply starts a run of
+// the helpdesk with the thread, even while the sending run is going.
+func TestSendInThreadThroughAnotherWorkflow(t *testing.T) {
+	w := newThreadWorld(t)
+	ctx := context.Background()
+	desk := w.deploy(helpdesk)
+	var public string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT public_id FROM email_endpoints WHERE workflow_id = $1`, desk).Scan(&public); err != nil {
+		t.Fatal(err)
+	}
+	const ada = "ada@customer.example"
+	proven := inmail.Auth{SPF: "pass", DKIM: []string{"customer.example"}, Aligned: true}
+	ans := w.env.Publish(t, answerer)
+	run := w.env.Start(t, ans, map[string]any{"type": "manual"})
+	w.env.Drain(t)
+
+	send := inmail.ThreadEmail{Tenant: w.env.Tenant, Run: run.ID, Environment: "prod", To: ada, Subject: "Your ticket", Message: "We are on it.",
+		Thread: "T-1042", Key: "tsk_cross_one", Address: strings.ToUpper(public) + "@in.taskiem.test"}
+	out, err := w.svc.SendInThread(ctx, send)
+	if err != nil {
+		t.Fatal(err)
+	}
+	msgID, _ := out["message_id"].(string)
+	replyTo, _ := out["reply_to"].(string)
+	if !strings.HasPrefix(replyTo, public+"+t-1042-") || !strings.HasSuffix(msgID, "@in.taskiem.test") {
+		t.Fatalf("output: %v", out)
+	}
+	emails := w.sent()
+	if len(emails) != 1 || header(emails[0], "Reply-To") != replyTo || header(emails[0], "Subject") != "[#T-1042] Your ticket" {
+		t.Fatalf("sent: %q", emails)
+	}
+	var endpoint, sender uuid.UUID
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT m.run_id, e.workflow_id FROM email_thread_messages m JOIN email_endpoints e ON e.id = m.endpoint_id
+		WHERE m.message_id = $1`, msgID).Scan(&sender, &endpoint); err != nil || sender != run.ID || endpoint != desk {
+		t.Fatalf("the thread's record: run %s, address of %s (%v)", sender, endpoint, err)
+	}
+
+	// The same by the workflow's id, or by a tagged address: the same
+	// thread, the earlier email answered.
+	send.Address, send.Key = desk.String(), "tsk_cross_two"
+	two, err := w.svc.SendInThread(ctx, send)
+	if err != nil || two["in_reply_to"] != msgID || two["reply_to"] != replyTo {
+		t.Fatalf("by workflow id: %v %v", two, err)
+	}
+	send.Address, send.Key = replyTo, "tsk_cross_three"
+	if _, err := w.svc.SendInThread(ctx, send); err != nil {
+		t.Fatalf("by a tagged address: %v", err)
+	}
+
+	// The customer's reply: no run of the helpdesk waits, and the
+	// answering run is going but is not the helpdesk's, so a run of the
+	// helpdesk starts with the thread.
+	tag := strings.TrimSuffix(strings.TrimPrefix(replyTo, public+"+"), "@in.taskiem.test")
+	w.receiveTo(public, tag, customerMail("r1@customer.example", ada, "Re: [#T-1042] Your ticket", "", "Thanks, any news?"), proven, ada)
+	w.drain()
+	runs := w.runs(desk)
+	if len(runs) != 1 {
+		t.Fatalf("helpdesk runs: %d (inbox held it?)", len(runs))
+	}
+	got := w.event(runs[0], history.StepCompleted, "read")["output"].(map[string]any)
+	if got["thread"] != "T-1042" || got["by"] != "tag" || got["latest"] != "Thanks, any news?" {
+		t.Fatalf("the helpdesk's run: %v", got)
+	}
+	// Found by its headers alone, too.
+	w.receiveTo(public, "", customerMail("r2@customer.example", ada, "Re: Your ticket", "In-Reply-To: <"+msgID+">\n", "Hello?"), proven, ada)
+	w.drain()
+	runs = w.runs(desk)
+	if len(runs) != 2 {
+		t.Fatalf("helpdesk runs: %d", len(runs))
+	}
+	if got := w.event(runs[1], history.StepCompleted, "read")["output"].(map[string]any); got["thread"] != "T-1042" || got["by"] != "headers" {
+		t.Fatalf("by headers: %v", got)
+	}
+	if st := w.env.Status(t, run); st == "completed" || st == "failed" {
+		t.Fatalf("the answering run: %s", st)
+	}
+}
+
+// The address another workflow names must be a threaded, live email
+// workflow of the same business and environment; anything else is refused
+// for good, before anything is sent.
+func TestSendInThreadThroughAnotherWorkflowRefused(t *testing.T) {
+	w := newThreadWorld(t)
+	ctx := context.Background()
+	desk := w.deploy(helpdesk)
+	plain := w.deploy(alerts)
+	addr := func(wf uuid.UUID) string {
+		var public string
+		if err := w.env.DB.Admin.QueryRow(ctx, `SELECT public_id FROM email_endpoints WHERE workflow_id = $1`, wf).Scan(&public); err != nil {
+			t.Fatal(err)
+		}
+		return public + "@in.taskiem.test"
+	}
+	other := w.env.AddTenant(t)
+	theirs := w.env.PublishIn(t, other, helpdesk)
+	def, err := wd.Load([]byte(helpdesk))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{other}, func(tx pgx.Tx) error {
+		return ingest.SyncEnvironments(ctx, tx, other, theirs, []string{"prod"}, 1, def, w.env.Registry, time.Now())
+	}); err != nil {
+		t.Fatal(err)
+	}
+	ans := w.env.Publish(t, answerer)
+	run := w.env.Start(t, ans, map[string]any{"type": "manual"})
+	closed := w.deploy(strings.Replace(helpdesk, "wf_helpdesk", "wf_closed", 1))
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE email_endpoints SET status = 'closed' WHERE workflow_id = $1`, closed); err != nil {
+		t.Fatal(err)
+	}
+
+	base := inmail.ThreadEmail{Tenant: w.env.Tenant, Run: run.ID, Environment: "prod", To: "ada@customer.example", Subject: "S", Message: "M", Thread: "T-1"}
+	for name, c := range map[string]struct {
+		address, env, want string
+	}{
+		"own workflow, no email trigger": {"", "prod", "address of one"},
+		"no threads":                     {addr(plain), "prod", "threads"},
+		"another business's address":     {addr(theirs), "prod", "not the email address"},
+		"another business's workflow":    {theirs.String(), "prod", "not the email address"},
+		"a workflow without an address":  {ans.String(), "prod", "not the email address"},
+		"another environment":            {addr(desk), "staging", "prod environment"},
+		"another domain":                 {strings.Replace(addr(desk), "in.taskiem.test", "example.com", 1), "prod", "not a Taskiem email address"},
+		"an address that is not one":     {"helpdesk", "prod", "not a Taskiem email address"},
+		"an unknown address":             {"zzzzzzzzzzzz@in.taskiem.test", "prod", "not the email address"},
+		"a closed address":               {addr(closed), "prod", "closed"},
+	} {
+		e := base
+		e.Address, e.Environment, e.Key = c.address, c.env, "tsk_refused_"+strings.ReplaceAll(name, " ", "_")
+		if _, err := w.svc.SendInThread(ctx, e); !errors.Is(err, effects.ErrFatal) || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	var queued int
+	_ = w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM platform_messages`).Scan(&queued)
+	if queued != 0 {
+		t.Errorf("refused emails queued: %d", queued)
 	}
 }

@@ -30,7 +30,7 @@ Phase 1, this document, builds the threading. Phase 2 builds the templates on it
 
 ## 4. Sending in a thread
 
-`email@1 send_in_thread` takes `to`, `subject`, `message`, `thread` and optionally `in_reply_to` and `references`. It belongs to the email connector, not to Tell me, because everything it needs is the email trigger's: the workflow's address, the address's secret and the record of what was sent in each thread. It sends through the same outbox as Tell me's `message` (the platform's sending address, in the business's name, counted and limited per recipient, the recipient and text sealed).
+`email@1 send_in_thread` takes `to`, `subject`, `message`, `thread` and optionally `in_reply_to`, `references` and `address` (below). It belongs to the email connector, not to Tell me, because everything it needs is the email trigger's: the workflow's address, the address's secret and the record of what was sent in each thread. It sends through the same outbox as Tell me's `message` (the platform's sending address, in the business's name, counted and limited per recipient, the recipient and text sealed).
 
 The email:
 
@@ -44,6 +44,8 @@ Its output is `{message_id, thread, reply_to, subject, queued}`. A step retried 
 
 The workflow must have an email trigger with `threads: true` in the run's environment; otherwise the step fails with a message saying so.
 
+**From another workflow's address** (built 7 November 2026, for the ticket kit, §7). `address` names the threaded email workflow whose address the email is sent from: its Taskiem address (`trigger.email.address`; a tagged one also does) or its workflow id. So a ticket opened by a form, WhatsApp, a webhook or a member, and the department's reply form, email the customer through the business's helpdesk address. The step refuses, for good and before anything is queued, an address or id that is not an email workflow of the run's business, one in another environment, one without `threads: true`, and a closed or suspended address. Reply-To, the Message-ID and the `email_thread_messages` row are the helpdesk address's (the row's `run_id` is the sending run). A reply then reaches the helpdesk workflow (§5): no run of it waits, and only a still-going run **of that workflow** holds a reply back, so it starts a run of the helpdesk carrying `trigger.email.thread`.
+
 ## 5. Finding a reply's ticket
 
 For a threaded workflow, in this order:
@@ -55,7 +57,7 @@ For a threaded workflow, in this order:
 Then:
 
 - **A run of the workflow waits** on `email.reply` for that key in the same environment: the reply is delivered to it, and no run starts. The trigger's tab lists the message as a reply given to the run (status `replied`).
-- **A run of the workflow that sent in the thread is still going but not waiting** (it is between steps, or waiting on something else): the message stays in the inbox and is looked at again every 5 minutes, for up to 7 days. If the run waits by then, it gets the reply; if it ends, the reply starts a new run.
+- **A run of the workflow, which sent in the thread, is still going but not waiting** (it is between steps, or waiting on something else): the message stays in the inbox and is looked at again every 5 minutes, for up to 7 days. If the run waits by then, it gets the reply; if it ends, the reply starts a new run.
 - **Otherwise** (the ticket's run ended, or there never was one): a new run starts, with `trigger.email.thread` set, so the workflow can reopen the ticket.
 
 A message whose ticket cannot be found starts a run as in any email workflow.

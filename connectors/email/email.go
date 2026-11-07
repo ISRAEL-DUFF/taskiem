@@ -82,6 +82,7 @@ func (a *actions) sendInThread(ctx context.Context, req connector.Request) (conn
 	e.Message, _ = req.Input["message"].(string)
 	e.Thread, _ = req.Input["thread"].(string)
 	e.InReplyTo, _ = req.Input["in_reply_to"].(string)
+	e.Address, _ = req.Input["address"].(string)
 	if list, ok := req.Input["references"].([]any); ok {
 		for _, v := range list {
 			if s, ok := v.(string); ok && s != "" {
