@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/areas"
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/media"
@@ -126,12 +127,22 @@ func (s *Server) waShopCommand(ctx context.Context, c *chat, text, cmd string) (
 	if len(words) == 0 {
 		return false, nil
 	}
+	// A part the business turned off has no words here: the shop's, then the
+	// stock's (docs/spec/business-areas.md).
+	on := s.chatAreas(ctx, c)
 	// Fronts first: "sold out <dish>" is not a sale.
-	if done, err := s.waFrontCommand(ctx, c, text, cmd); done || err != nil {
-		return done, err
+	if on.On(areas.Storefront) {
+		if done, err := s.waFrontCommand(ctx, c, text, cmd); done || err != nil {
+			return done, err
+		}
 	}
-	if done, err := s.waStockCommand(ctx, c, text, cmd); done || err != nil {
-		return done, err
+	if on.On(areas.Stock) {
+		if done, err := s.waStockCommand(ctx, c, text, cmd); done || err != nil {
+			return done, err
+		}
+	}
+	if !on.On(areas.Storefront) {
+		return false, nil
 	}
 	args := func(n int) string {
 		f := strings.Fields(text)
@@ -643,6 +654,7 @@ func (s *Server) waShopPublish(ctx context.Context, c *chat) error {
 		s.Logger.Warn("chat: refreshing the catalogue", "tenant", c.tenant.ID, "err", err)
 		return c.say(ctx, s, c.t("wa.shop.publish_failed", "reason", tablesChatReason(err)))
 	}
+	s.prewarmPublish(ctx, c.tenant.ID, false)
 	var sf storefront.Storefront
 	var held bool
 	err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
@@ -1148,6 +1160,7 @@ func (s *Server) shopRepublish(ctx context.Context, c *chat) (storefront.Storefr
 	if err := s.SyncStorefront(ctx, c.tenant.ID); err != nil {
 		s.Logger.Warn("chat: refreshing the catalogue", "tenant", c.tenant.ID, "err", err)
 	}
+	s.prewarmPublish(ctx, c.tenant.ID, true)
 	var sf storefront.Storefront
 	err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
 		var err error

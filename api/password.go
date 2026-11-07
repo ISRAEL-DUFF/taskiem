@@ -106,7 +106,7 @@ func (s *Server) forgotPassword(w http.ResponseWriter, r *http.Request) {
 	if !jsonOnly(w, r) {
 		return
 	}
-	if !s.loginLimiter("forgot:" + clientIP(r)).Allow() {
+	if !s.loginLimiter("forgot:" + limitIP(r)).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "too many attempts")
 		return
 	}
@@ -185,7 +185,7 @@ func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	if !s.loginLimiter("reset:" + clientIP(r)).Allow() {
+	if !s.loginLimiter("reset:" + limitIP(r)).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "too many attempts")
 		return
 	}
@@ -229,7 +229,7 @@ func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	newHash := hashPassword(req.Password)
-	email, err := s.setPassword(ctx, *user, newHash, nil, func(tx pgx.Tx) error {
+	email, err := s.setPassword(ctx, *user, newHash, nil, func(tx pgx.Tx, tenants []uuid.UUID) error {
 		var used *uuid.UUID
 		if err := tx.QueryRow(ctx, `SELECT taskiem_auth_password_reset_use($1, $2)`, selector, secretHash).Scan(&used); err != nil {
 			return err
@@ -237,7 +237,7 @@ func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 		if used == nil || *used != *user {
 			return errResetLink
 		}
-		return nil
+		return clearUnclaimedFactors(ctx, tx, *user, tenants, clientIP(r))
 	}, "auth.password.reset", clientIP(r))
 	switch {
 	case errors.Is(err, errResetLink):
@@ -253,8 +253,9 @@ func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 
 // setPassword stores a new password hash for user and ends their sessions
 // but keep, auditing action in every tenant they belong to. check runs
-// first in the same transaction. It answers the person's email.
-func (s *Server) setPassword(ctx context.Context, user uuid.UUID, hash string, keep []byte, check func(pgx.Tx) error, action, ip string) (string, error) {
+// first in the same transaction, given those tenants. It answers the
+// person's email.
+func (s *Server) setPassword(ctx context.Context, user uuid.UUID, hash string, keep []byte, check func(tx pgx.Tx, tenants []uuid.UUID) error, action, ip string) (string, error) {
 	var tenants []uuid.UUID
 	if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_tenant_scope($1, false)`, user).Scan(&tenants); err != nil {
 		return "", err
@@ -264,7 +265,7 @@ func (s *Server) setPassword(ctx context.Context, user uuid.UUID, hash string, k
 	}
 	var email string
 	err := db.InTenantTx(ctx, s.Store.Pool, tenants, func(tx pgx.Tx) error {
-		if err := check(tx); err != nil {
+		if err := check(tx, tenants); err != nil {
 			return err
 		}
 		var status string
@@ -287,6 +288,46 @@ func (s *Server) setPassword(ctx context.Context, user uuid.UUID, hash string, k
 		return nil
 	})
 	return email, err
+}
+
+// clearUnclaimedFactors runs when a reset link, which proves the mailbox,
+// is used on an account whose email was never confirmed. Such an account
+// was made for the person by someone else (POST /v1/members, with a
+// password that someone chose), so the passkeys, authenticators and API
+// keys on it until now are not known to be theirs: they go, and the email
+// counts as confirmed from here (finding F9). A confirmed account keeps
+// its factors (docs/governance.md, Forgot password).
+func clearUnclaimedFactors(ctx context.Context, tx pgx.Tx, user uuid.UUID, tenants []uuid.UUID, ip string) error {
+	var unconfirmed bool
+	if err := tx.QueryRow(ctx, `SELECT email_verified_at IS NULL FROM users WHERE id = $1 FOR UPDATE`, user).Scan(&unconfirmed); err != nil {
+		return err
+	}
+	if !unconfirmed {
+		return nil
+	}
+	passkeys, err := tx.Exec(ctx, `DELETE FROM webauthn_credentials WHERE user_id = $1`, user)
+	if err != nil {
+		return err
+	}
+	totp, err := tx.Exec(ctx, `UPDATE member_mfa SET totp_confirmed_at = NULL WHERE user_id = $1 AND totp_confirmed_at IS NOT NULL`, user)
+	if err != nil {
+		return err
+	}
+	keys, err := tx.Exec(ctx, `UPDATE api_keys SET revoked_at = now() WHERE owner_id = $1 AND revoked_at IS NULL`, user)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE users SET email_verified_at = now() WHERE id = $1`, user); err != nil {
+		return err
+	}
+	for _, t := range tenants {
+		if _, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'user', $2, 'auth.factors.clear', $2,
+			jsonb_build_object('ip', $3::text, 'passkeys', $4::bigint, 'authenticators', $5::bigint, 'api_keys', $6::bigint, 'reason', 'first confirmed reset'))`,
+			t, user.String(), ip, passkeys.RowsAffected(), totp.RowsAffected(), keys.RowsAffected()); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // notifyPasswordChanged tells the person, so a change they did not make
@@ -355,7 +396,7 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	newHash := hashPassword(req.NewPassword)
-	email, err := s.setPassword(ctx, p.UserID, newHash, hashToken(sessionToken(r)), func(pgx.Tx) error { return nil }, "auth.password.change", clientIP(r))
+	email, err := s.setPassword(ctx, p.UserID, newHash, hashToken(sessionToken(r)), func(pgx.Tx, []uuid.UUID) error { return nil }, "auth.password.change", clientIP(r))
 	if err != nil {
 		s.fail(w, r, err)
 		return

@@ -62,7 +62,10 @@ type ssoConnection struct {
 	JIT          bool                `json:"jit"`
 	Enforce      bool                `json:"enforce"`
 	Disabled     bool                `json:"disabled"`
-	Domains      []ssoDomain         `json:"domains"`
+	// OwnerApproved: an owner set the connection up or approved it, so it
+	// may sign in owners (finishSSO).
+	OwnerApproved bool        `json:"owner_approved"`
+	Domains       []ssoDomain `json:"domains"`
 	// For the IdP's administrator.
 	RedirectURI string `json:"redirect_uri,omitempty"` // OIDC
 	EntityID    string `json:"entity_id,omitempty"`    // SAML
@@ -201,8 +204,25 @@ func (s *Server) checkRoleMapping(r *http.Request, tx pgx.Tx, req ssoReq) error 
 	return canGrant(r.Context(), tx, principalFrom(r.Context()), roles)
 }
 
+// ssoSetupOwner refuses anyone but an owner adding a connection or a
+// domain, or verifying one: the provider and its domains decide who signs
+// in as an existing member, owners included, so an administrator who could
+// point a provider they run at the owners' domain could sign in as an
+// owner. Keys hold no roles, so they are refused too. Roles on an existing
+// connection (updateSSO) stay with member.manage and checkRoleMapping.
+func ssoSetupOwner(r *http.Request) error {
+	if !slices.Contains(principalFrom(r.Context()).Roles, "owner") {
+		return fmt.Errorf("%w: only an owner sets up single sign-on and its domains", errForbidden)
+	}
+	return nil
+}
+
 func (s *Server) createSSO(w http.ResponseWriter, r *http.Request) {
 	if !s.ssoOn(w) {
+		return
+	}
+	if err := ssoSetupOwner(r); err != nil {
+		s.fail(w, r, err)
 		return
 	}
 	var req ssoReq
@@ -230,8 +250,9 @@ func (s *Server) createSSO(w http.ResponseWriter, r *http.Request) {
 		if err := s.checkRoleMapping(r, tx, req); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(r.Context(), `INSERT INTO sso_connections (id, tenant_id, protocol, name, config, default_roles, group_roles, jit, enforce, created_by)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`, id, p.TenantID, req.Protocol, req.Name, cfg, nonNil(req.DefaultRoles), groups, jit, req.Enforce, p.Actor()); err != nil {
+		// Only an owner creates one (ssoSetupOwner), so it is theirs.
+		if _, err := tx.Exec(r.Context(), `INSERT INTO sso_connections (id, tenant_id, protocol, name, config, default_roles, group_roles, jit, enforce, created_by, owner_approved_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())`, id, p.TenantID, req.Protocol, req.Name, cfg, nonNil(req.DefaultRoles), groups, jit, req.Enforce, p.Actor()); err != nil {
 			return err
 		}
 		return auditTx(r, tx, "sso.create", id.String(), map[string]any{"protocol": req.Protocol, "default_roles": req.DefaultRoles, "group_roles": req.GroupRoles, "jit": jit, "enforce": req.Enforce})
@@ -250,7 +271,7 @@ func (s *Server) createSSO(w http.ResponseWriter, r *http.Request) {
 	// settings just saved.
 	out := s.describeSSO(id, req.Protocol)
 	out.Name, out.Config, out.DefaultRoles, out.GroupRoles = req.Name, cfg, nonNil(req.DefaultRoles), req.GroupRoles
-	out.JIT, out.Enforce, out.Domains = jit, req.Enforce, []ssoDomain{}
+	out.JIT, out.Enforce, out.OwnerApproved, out.Domains = jit, req.Enforce, true, []ssoDomain{}
 	writeJSON(w, http.StatusCreated, out)
 }
 
@@ -267,14 +288,14 @@ func (s *Server) describeSSO(id uuid.UUID, protocol string) ssoConnection {
 func (s *Server) listSSO(w http.ResponseWriter, r *http.Request) {
 	var out []ssoConnection
 	err := s.tx(r, func(tx pgx.Tx) error {
-		rows, err := tx.Query(r.Context(), `SELECT id, protocol, name, config, default_roles, group_roles, jit, enforce, disabled_at IS NOT NULL FROM sso_connections ORDER BY created_at`)
+		rows, err := tx.Query(r.Context(), `SELECT id, protocol, name, config, default_roles, group_roles, jit, enforce, disabled_at IS NOT NULL, owner_approved_at IS NOT NULL FROM sso_connections ORDER BY created_at`)
 		if err != nil {
 			return err
 		}
 		for rows.Next() {
 			var c ssoConnection
 			var groups []byte
-			if err := rows.Scan(&c.ID, &c.Protocol, &c.Name, &c.Config, &c.DefaultRoles, &groups, &c.JIT, &c.Enforce, &c.Disabled); err != nil {
+			if err := rows.Scan(&c.ID, &c.Protocol, &c.Name, &c.Config, &c.DefaultRoles, &groups, &c.JIT, &c.Enforce, &c.Disabled, &c.OwnerApproved); err != nil {
 				rows.Close()
 				return err
 			}
@@ -313,6 +334,8 @@ func (s *Server) listSSO(w http.ResponseWriter, r *http.Request) {
 }
 
 // updateSSO changes the role mapping, JIT and enforcement, or disables.
+// An owner also approves the connection for signing in owners, or takes
+// that back, with owner_approved; left out, it stays as it is.
 func (s *Server) updateSSO(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
@@ -321,11 +344,18 @@ func (s *Server) updateSSO(w http.ResponseWriter, r *http.Request) {
 	}
 	var req struct {
 		ssoReq
-		Disabled bool `json:"disabled"`
+		Disabled      bool  `json:"disabled"`
+		OwnerApproved *bool `json:"owner_approved"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
 		return
+	}
+	if req.OwnerApproved != nil {
+		if err := ssoSetupOwner(r); err != nil {
+			s.fail(w, r, err)
+			return
+		}
 	}
 	if req.GroupRoles == nil {
 		req.GroupRoles = map[string][]string{}
@@ -337,15 +367,21 @@ func (s *Server) updateSSO(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		tag, err := tx.Exec(r.Context(), `UPDATE sso_connections SET default_roles = $2, group_roles = $3, jit = $4, enforce = $5,
-			disabled_at = CASE WHEN $6 THEN COALESCE(disabled_at, now()) END, updated_at = now() WHERE id = $1`,
-			id, nonNil(req.DefaultRoles), groups, jit, req.Enforce, req.Disabled)
+			disabled_at = CASE WHEN $6 THEN COALESCE(disabled_at, now()) END,
+			owner_approved_at = CASE WHEN $7::boolean IS NULL THEN owner_approved_at WHEN $7 THEN COALESCE(owner_approved_at, now()) END,
+			updated_at = now() WHERE id = $1`,
+			id, nonNil(req.DefaultRoles), groups, jit, req.Enforce, req.Disabled, req.OwnerApproved)
 		if err != nil {
 			return err
 		}
 		if tag.RowsAffected() == 0 {
 			return pgx.ErrNoRows
 		}
-		return auditTx(r, tx, "sso.update", id.String(), map[string]any{"default_roles": req.DefaultRoles, "group_roles": req.GroupRoles, "jit": jit, "enforce": req.Enforce, "disabled": req.Disabled})
+		detail := map[string]any{"default_roles": req.DefaultRoles, "group_roles": req.GroupRoles, "jit": jit, "enforce": req.Enforce, "disabled": req.Disabled}
+		if req.OwnerApproved != nil {
+			detail["owner_approved"] = *req.OwnerApproved
+		}
+		return auditTx(r, tx, "sso.update", id.String(), detail)
 	})
 	if err != nil {
 		s.fail(w, r, err)
@@ -357,6 +393,10 @@ func (s *Server) updateSSO(w http.ResponseWriter, r *http.Request) {
 // addSSODomain claims a domain for a connection; it routes nobody until
 // verified.
 func (s *Server) addSSODomain(w http.ResponseWriter, r *http.Request) {
+	if err := ssoSetupOwner(r); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "not found")
@@ -416,6 +456,10 @@ var (
 )
 
 func (s *Server) verifySSODomain(w http.ResponseWriter, r *http.Request) {
+	if err := ssoSetupOwner(r); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	domain := strings.ToLower(chi.URLParam(r, "domain"))
 	var token string
 	err := s.tx(r, func(tx pgx.Tx) error {
@@ -548,7 +592,7 @@ func safeReturn(v string) string {
 // discovery and starting a sign-in reach the database before anyone is
 // known.
 func (s *Server) ssoLimit(w http.ResponseWriter, r *http.Request) bool {
-	if !s.limiter("sso:"+clientIP(r), 2*time.Second, 30).Allow() {
+	if !s.limiter("sso:"+limitIP(r), 2*time.Second, 30).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "too many requests")
 		return false
 	}
@@ -778,6 +822,8 @@ func (s *Server) ssoFail(w http.ResponseWriter, r *http.Request, err error) {
 		msg = "You are not a member of this organisation in Taskiem. Ask your administrator."
 	case errors.Is(err, errSSODomain):
 		msg = "This sign-in is not for your email domain."
+	case errors.Is(err, errSSOOwnerUnapproved):
+		msg = "Owners cannot use this single sign-on until an owner approves it. Sign in with your password or passkey."
 	}
 	http.Redirect(w, r, "/login?sso_error="+url.QueryEscape(msg), http.StatusFound)
 }
@@ -785,6 +831,10 @@ func (s *Server) ssoFail(w http.ResponseWriter, r *http.Request, err error) {
 var (
 	errSSODomain    = errors.New("email not on the connection's verified domains")
 	errSSONotMember = errors.New("not a member, and the connection does not create members")
+	// An owner signs in only through a connection an owner set up or
+	// approved: one an administrator added before only owners could
+	// (F39) would otherwise sign in as an owner whoever its provider says.
+	errSSOOwnerUnapproved = errors.New("an owner, through a connection no owner has approved")
 )
 
 // finishSSO turns a verified identity into a member and a session.
@@ -797,15 +847,17 @@ func (s *Server) finishSSO(w http.ResponseWriter, r *http.Request, c ssoConn, re
 		return
 	}
 	var settings struct {
-		DefaultRoles []string
-		GroupRoles   map[string][]string
-		JIT          bool
+		DefaultRoles  []string
+		GroupRoles    map[string][]string
+		JIT           bool
+		OwnerApproved bool
 	}
 	var user uuid.UUID
 	var granted, revoked []string
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant}, func(tx pgx.Tx) error {
 		var groupsRaw []byte
-		if err := tx.QueryRow(ctx, `SELECT default_roles, group_roles, jit FROM sso_connections WHERE id = $1`, c.id).Scan(&settings.DefaultRoles, &groupsRaw, &settings.JIT); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT default_roles, group_roles, jit, owner_approved_at IS NOT NULL FROM sso_connections WHERE id = $1`, c.id).
+			Scan(&settings.DefaultRoles, &groupsRaw, &settings.JIT, &settings.OwnerApproved); err != nil {
 			return err
 		}
 		_ = json.Unmarshal(groupsRaw, &settings.GroupRoles)
@@ -847,6 +899,11 @@ func (s *Server) finishSSO(w http.ResponseWriter, r *http.Request, c ssoConn, re
 		rows.Close()
 		if len(have) == 0 && !settings.JIT {
 			return errSSONotMember
+		}
+		if !settings.OwnerApproved {
+			if _, owner := have["owner"]; owner || slices.Contains(want, "owner") {
+				return errSSOOwnerUnapproved
+			}
 		}
 		for _, role := range want {
 			if _, ok := have[role]; !ok {

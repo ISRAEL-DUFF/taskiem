@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"regexp"
 	"slices"
 	"strconv"
@@ -14,6 +15,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/lang"
+	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/sender"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
@@ -31,6 +33,55 @@ type chatInvoice struct {
 	For        string         `json:"for,omitempty"`
 	Contact    map[string]any `json:"contact,omitempty"` // sealed
 	Email      bool           `json:"email,omitempty"`
+	// LinkKey and LinkName are the linked business the invoice is for
+	// (customer key link:<id>): it goes into their bills, with no phone or
+	// email asked. Pick is the linked businesses the name could mean, while
+	// the person says which.
+	LinkKey  string       `json:"link_key,omitempty"`
+	LinkName string       `json:"link_name,omitempty"`
+	Pick     []linkedPick `json:"pick,omitempty"`
+}
+
+// linkedPick is a linked business an invoice's customer name could mean.
+type linkedPick struct {
+	Key  string `json:"key"`
+	Name string `json:"name"`
+}
+
+// linkedCustomersNamed lists the linked businesses, active and buying from
+// us, that a customer name typed in chat could mean: the one whose name is
+// the same, else those whose names have every word of it.
+func (s *Server) linkedCustomersNamed(ctx context.Context, c *chat, name string) ([]linkedPick, error) {
+	var list []links.Link
+	if err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
+		var err error
+		list, _, err = links.ListTx(ctx, tx)
+		return err
+	}); err != nil {
+		return nil, err
+	}
+	words := strings.Fields(strings.ToLower(name))
+	if len(words) == 0 {
+		return nil, nil
+	}
+	var all, exact []linkedPick
+	for _, l := range list {
+		if l.State != links.Active || l.Role != links.RoleCustomer && l.Role != links.RoleBoth {
+			continue
+		}
+		lower := strings.ToLower(l.Name)
+		if !slices.ContainsFunc(words, func(w string) bool { return !strings.Contains(lower, w) }) {
+			p := linkedPick{Key: "link:" + l.Business.String(), Name: l.Name}
+			all = append(all, p)
+			if strings.EqualFold(strings.TrimSpace(l.Name), strings.TrimSpace(name)) {
+				exact = append(exact, p)
+			}
+		}
+	}
+	if len(exact) == 1 {
+		return exact, nil
+	}
+	return all, nil
 }
 
 var invoiceAmount = regexp.MustCompile(`^(?i)(?:₦|n|ngn)?\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{1,2}))?(k)?$`)
@@ -141,10 +192,46 @@ func (s *Server) waInvoiceStart(ctx context.Context, c *chat, name string, kobo 
 	}); err != nil {
 		return err
 	}
+	// A business the owner is linked with, who buys from them, is invoiced
+	// as a bill in its own account: no phone or email to ask.
+	linked, err := s.linkedCustomersNamed(ctx, c, name)
+	if err != nil {
+		return err
+	}
+	switch {
+	case len(linked) == 1:
+		inv.LinkKey, inv.LinkName = linked[0].Key, linked[0].Name
+		return s.waInvoiceConfirmLinked(ctx, c, inv)
+	case len(linked) > 1:
+		inv.Pick = linked[:min(len(linked), 8)]
+		if err := s.saveSession(ctx, c, stateCollecting, chatData{Invoice: inv}, waPendingTTL); err != nil {
+			return err
+		}
+		var list []string
+		for i, p := range inv.Pick {
+			list = append(list, fmt.Sprintf("%d. %s", i+1, whatsapp.SafeText(p.Name)))
+		}
+		return c.say(ctx, s, c.t("wa.invoice.pick_linked", "name", whatsapp.SafeText(sender.CleanName(name)), "list", strings.Join(list, "\n")))
+	}
 	if err := s.saveSession(ctx, c, stateCollecting, chatData{Invoice: inv}, waPendingTTL); err != nil {
 		return err
 	}
 	return c.say(ctx, s, c.t("wa.invoice.contact", "name", whatsapp.SafeText(sender.CleanName(name))))
+}
+
+// waInvoiceConfirmLinked shows an invoice for a linked business and waits
+// for Yes.
+func (s *Server) waInvoiceConfirmLinked(ctx context.Context, c *chat, inv *chatInvoice) error {
+	inv.Pick = nil
+	if err := s.saveSession(ctx, c, stateConfirming, chatData{Invoice: inv, Nonce: uuid.NewString()}, waPendingTTL); err != nil {
+		return err
+	}
+	what := inv.For
+	if what == "" {
+		what = c.t("wa.invoice.amount_due")
+	}
+	return c.say(ctx, s, c.t("wa.invoice.confirm_linked", "name", whatsapp.SafeText(inv.LinkName), "amount", invoicing.Naira(inv.AmountKobo),
+		"for", whatsapp.SafeText(what)), confirmButtons(c)...)
 }
 
 // waInvoiceReply takes the customer's address, then Yes or No.
@@ -155,6 +242,12 @@ func (s *Server) waInvoiceReply(ctx context.Context, c *chat, text, cmd string) 
 		return err
 	}
 	if c.state == stateCollecting {
+		// Which linked business was meant, by its number.
+		if n, err := strconv.Atoi(strings.TrimSpace(text)); len(inv.Pick) > 0 && err == nil && n >= 1 && n <= len(inv.Pick) {
+			inv.LinkKey, inv.LinkName = inv.Pick[n-1].Key, inv.Pick[n-1].Name
+			return s.waInvoiceConfirmLinked(ctx, c, inv)
+		}
+		inv.Pick = nil // an address typed instead: someone else
 		addr, isEmail := "", false
 		if e, err := sender.NormaliseEmail(strings.TrimSpace(text)); err == nil && strings.Contains(text, "@") {
 			addr, isEmail = e, true
@@ -200,13 +293,19 @@ func (s *Server) waInvoiceReply(ctx context.Context, c *chat, text, cmd string) 
 	if !c.p.Can(PermInvoiceManage) {
 		return c.say(ctx, s, c.t("wa.invoice.denied", "org", c.tenant.Name))
 	}
-	addr, err := s.openString(ctx, c, inv.Contact)
-	if err != nil {
-		return err
-	}
-	cust := invoicing.Customer{Name: name, Phone: addr}
-	if inv.Email {
-		cust = invoicing.Customer{Name: name, Email: addr}
+	var cust invoicing.Customer
+	if inv.LinkKey != "" {
+		// A linked business: its bills, with no address.
+		name, cust = inv.LinkName, invoicing.Customer{Name: inv.LinkName, Key: inv.LinkKey}
+	} else {
+		addr, err := s.openString(ctx, c, inv.Contact)
+		if err != nil {
+			return err
+		}
+		cust = invoicing.Customer{Name: name, Phone: addr}
+		if inv.Email {
+			cust = invoicing.Customer{Name: name, Email: addr}
+		}
 	}
 	svc := invoicing.Service{Invoices: s.Invoices}
 	actor := "user:" + c.p.UserID.String()
@@ -224,6 +323,9 @@ func (s *Server) waInvoiceReply(ctx context.Context, c *chat, text, cmd string) 
 	}
 	if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
 		return err
+	}
+	if inv.LinkKey != "" {
+		return c.say(ctx, s, c.t("wa.invoice.sent_linked", "number", x.Number, "name", whatsapp.SafeText(name), "amount", invoicing.Naira(x.TotalKobo)))
 	}
 	if len(sent.Queued) == 0 {
 		return c.say(ctx, s, c.t("wa.invoice.saved_not_sent", "number", x.Number))

@@ -1,4 +1,4 @@
-# 0062 — Social posting: a person or a business posts to their own social accounts from workflows and from chat, on the connectors and the Meta app that exist
+# 0063 — Social posting: a person or a business posts to their own social accounts from workflows and from chat, on the connectors and the Meta app that exist
 
 Date: 2026-11-06 · Status: **Proposed** · Plan: [social posting](../spec/social-posting.md)
 

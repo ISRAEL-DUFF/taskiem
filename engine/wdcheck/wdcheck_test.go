@@ -96,3 +96,21 @@ func TestConnectorInputChecks(t *testing.T) {
 		}
 	}
 }
+
+// An http step has no reconcile action to ask the partner with, so it may
+// not declare reconcilable_write (the worker would have nothing to run).
+func TestHTTPStepClass(t *testing.T) {
+	reg := registry(t)
+	step := func(class string) []byte {
+		return doc(`{"type":"manual"}`, `[{"id":"post","type":"http","config":{"method":"POST","url":"https://partner.example/x","class":"`+class+`"}}]`)
+	}
+	for _, class := range []string{"idempotent_write", "unsafe_write"} {
+		if probs := wdcheck.Check(step(class), reg); len(probs) > 0 {
+			t.Errorf("%s: %v", class, probs)
+		}
+	}
+	probs := wdcheck.Check(step("reconcilable_write"), reg)
+	if len(probs) != 1 || probs[0].Path != "/steps/post/config/class" || !strings.Contains(probs[0].Message, "no reconcile action") {
+		t.Errorf("reconcilable_write: %v", probs)
+	}
+}

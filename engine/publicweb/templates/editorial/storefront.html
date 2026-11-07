@@ -35,6 +35,7 @@
     {{end}}
   </section>
   {{end}}
+  {{if and .HasItems (not .Forms) (not .Closed)}}<p class="notice" role="status">Orders are not open on this page yet.{{with .M.WhatsLink}} <a href="{{.}}" rel="noopener">Message {{$.M.Card.Name}} on WhatsApp</a> to order.{{else}}{{with .Phone}} Call <a href="tel:{{.}}">{{.}}</a> to order.{{end}}{{end}}</p>{{end}}
   {{if .HasItems}}
   {{range $i, $s := .Sections}}
   <section id="s{{$i}}" aria-label="{{if .Title}}{{.Title}}{{else}}Catalogue{{end}}">
@@ -44,7 +45,7 @@
     <article class="row{{if or (not .Available) .SoldOut}} is-unavailable{{end}}">
       {{if and (gt $j 0) .Small}}<img class="row-img" src="{{.Small}}" alt="{{.Name}}" width="64" height="64" loading="lazy" decoding="async">{{end}}
       <div class="row-text">
-        <h3>{{.Name}}</h3>
+        <h3>{{if .ID}}<a class="item-open" href="{{$.Base}}/i/{{.ID}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}</h3>
         {{with .Description}}<p class="row-sub">{{.}}</p>{{end}}{{if .ReadyIn}}<p class="row-sub">Ready in {{.ReadyIn}} min</p>{{end}}
         <p class="row-price">{{.Price}}</p>
       </div>

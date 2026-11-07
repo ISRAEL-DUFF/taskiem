@@ -88,7 +88,7 @@ func TestStorefrontTrust(t *testing.T) {
 	decide := func(id, decision, note string) map[string]any {
 		t.Helper()
 		return op.must(200, "POST", "/v1/ops/storefront-reviews/"+id+"/"+decision, map[string]any{"note": note,
-			"step_up": op.stepUp(a, "ops.storefront.review", id)})
+			"step_up": op.stepUp(a, "ops.storefront.review", id+"/"+decision)})
 	}
 
 	// A page needs a verified phone; a first publish from a business not
@@ -109,7 +109,15 @@ func TestStorefrontTrust(t *testing.T) {
 	}
 	first := review("first_publish")
 	op.must(403, "POST", "/v1/ops/storefront-reviews/"+first["id"].(string)+"/approve", map[string]any{})
-	op.must(422, "POST", "/v1/ops/storefront-reviews/"+first["id"].(string)+"/reject", map[string]any{"step_up": op.stepUp(a, "ops.storefront.review", first["id"].(string))})
+	op.must(422, "POST", "/v1/ops/storefront-reviews/"+first["id"].(string)+"/reject", map[string]any{"step_up": op.stepUp(a, "ops.storefront.review", first["id"].(string)+"/reject")})
+	// The passkey confirms the decision too: one made to reject, or for
+	// the review alone, does not approve (finding F72).
+	for _, target := range []string{first["id"].(string) + "/reject", first["id"].(string)} {
+		op.must(403, "POST", "/v1/ops/storefront-reviews/"+first["id"].(string)+"/approve", map[string]any{"step_up": op.stepUp(a, "ops.storefront.review", target)})
+	}
+	if got := review("first_publish"); got["id"] != first["id"] {
+		t.Fatalf("the review is no longer pending: %v", got)
+	}
 	decide(first["id"].(string), "approve", "")
 	if got := live(); got != "published" {
 		t.Fatalf("approved, the page is %s", got)

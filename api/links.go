@@ -41,6 +41,7 @@ func (s *Server) linkRoutes(r chi.Router) {
 	r.With(manage, s.tenantWide).Post("/links/{id}/{answer}", s.answerLink)
 	r.With(manage, s.tenantWide).Delete("/links/sent/{id}", s.cancelBlindLink)
 	r.Get("/links/code/{code}", s.linkByCode)
+	r.Get("/links/{business}/logo", s.linkLogo)
 	r.Get("/link-settings", s.getLinkSettings)
 	r.With(manage, s.tenantWide).Put("/link-settings", s.putLinkSettings)
 	r.Get("/link-settings/qr", s.linkQR)
@@ -109,12 +110,10 @@ func (s *Server) searchLinks(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, linkErr(err))
 		return
 	}
-	// One word that names no business found may be a storefront's address
-	// (as "link <address>" in chat): the one row that sends a request to
-	// whoever uses it, the same whether or not anyone does.
-	if len(out.Results) == 0 && links.LooksLikeAddress(q) {
-		out.Blind = &blindOffer{Kind: "address", Shown: links.Address(q)}
-	}
+	// A name that finds no one finds no one: the page says so. The one row
+	// that sends a request blind is for a phone number (above); a request to
+	// a storefront's address is asked in chat (`link <address>`), so a name
+	// that merely looks like an address is never offered as one.
 	writeJSON(w, http.StatusOK, out)
 }
 

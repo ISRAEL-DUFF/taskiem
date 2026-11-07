@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 
@@ -228,10 +229,42 @@ func TestSSOMappingCannotEscalate(t *testing.T) {
 	owner.must(201, "POST", "/v1/members", map[string]any{"email": "adm@bank.test", "password": "correct horse battery", "roles": []string{"admin"}})
 	adm := w.login(t, "adm@bank.test", "correct horse battery")
 	cfg := map[string]any{"issuer": idp.URL, "client_id": idp.ClientID, "client_secret": idp.ClientSecret}
-	adm.must(403, "POST", "/v1/sso", map[string]any{"protocol": "oidc", "name": "x", "oidc": cfg, "group_roles": map[string]any{"it": []string{"owner"}}})
+	// An administrator changes the roles of a connection an owner set up,
+	// held to what they could grant.
+	conn := owner.must(201, "POST", "/v1/sso", map[string]any{"protocol": "oidc", "name": "x", "oidc": cfg, "default_roles": []string{"viewer"}})["id"].(string)
+	adm.must(403, "PUT", "/v1/sso/"+conn, map[string]any{"group_roles": map[string]any{"it": []string{"owner"}}})
 	owner.must(201, "PUT", "/v1/roles/privacy", map[string]any{"permissions": []string{"pii.reveal"}})
-	adm.must(403, "POST", "/v1/sso", map[string]any{"protocol": "oidc", "name": "x", "oidc": cfg, "default_roles": []string{"privacy"}})
-	adm.must(201, "POST", "/v1/sso", map[string]any{"protocol": "oidc", "name": "x", "oidc": cfg, "default_roles": []string{"viewer"}})
+	adm.must(403, "PUT", "/v1/sso/"+conn, map[string]any{"default_roles": []string{"privacy"}})
+	adm.must(204, "PUT", "/v1/sso/"+conn, map[string]any{"default_roles": []string{"viewer"}, "group_roles": map[string]any{"ops": []string{"operator"}}})
+}
+
+// TestSSOSetupIsOwners: a provider and its domains decide who can sign in
+// as an existing member, owners included, so only an owner adds a
+// connection, adds a domain or verifies one. Otherwise an administrator
+// could point a provider they run at the owners' domain and sign in as
+// an owner (finding F39).
+func TestSSOSetupIsOwners(t *testing.T) {
+	w := ssoWorld(t)
+	idp := oidctest.New()
+	defer idp.Close()
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	owner.must(201, "POST", "/v1/members", map[string]any{"email": "adm@acme.test", "password": "correct horse battery", "roles": []string{"admin"}})
+	adm := w.login(t, "adm@acme.test", "correct horse battery")
+	cfg := map[string]any{"issuer": idp.URL, "client_id": idp.ClientID, "client_secret": idp.ClientSecret}
+
+	adm.must(403, "POST", "/v1/sso", map[string]any{"protocol": "oidc", "name": "mine", "oidc": cfg, "default_roles": []string{"viewer"}})
+	id := owner.must(201, "POST", "/v1/sso", map[string]any{"protocol": "oidc", "name": "Okta", "oidc": cfg, "default_roles": []string{"viewer"}})["id"].(string)
+	adm.must(403, "POST", "/v1/sso/"+id+"/domains", map[string]any{"domain": "acme.test"})
+	dom := owner.must(201, "POST", "/v1/sso/"+id+"/domains", map[string]any{"domain": "acme.test"})
+	w.txt["_taskiem-verify.acme.test"] = []string{dom["txt_value"].(string)}
+	adm.must(403, "POST", "/v1/sso/domains/acme.test/verify", nil)
+	owner.must(204, "POST", "/v1/sso/domains/acme.test/verify", nil)
+	// An owner's key acts with no roles of its own: setup stays a person's.
+	key := keyFor(t, owner, "", "member.manage", "workflow.read", "run.read", "table.read", "invoice.read", "school.read")
+	key.must(403, "POST", "/v1/sso", map[string]any{"protocol": "oidc", "name": "k", "oidc": cfg, "default_roles": []string{"viewer"}})
+	// The administrator still sees connections and changes their roles.
+	adm.must(200, "GET", "/v1/sso", nil)
+	adm.must(204, "PUT", "/v1/sso/"+id, map[string]any{"default_roles": []string{"viewer"}})
 }
 
 func TestSSODomainClaims(t *testing.T) {
@@ -393,4 +426,86 @@ func TestSSOAdminsAreHeldToPasskeys(t *testing.T) {
 	idp.Claims = map[string]any{"sub": "u-bob", "email": "bob@bank.test", "email_verified": true}
 	_, bob := w.oidcSignIn(t, idp, id)
 	bob.must(200, "GET", "/v1/workflows", nil)
+}
+
+// samlSignIn signs nameID in through a SAML connection and returns where
+// it lands and the session, if one was made.
+func (w *world) samlSignIn(t *testing.T, idp *samltest.IdP, conn, nameID string) (string, *client) {
+	t.Helper()
+	toIdP, bind := ssoStart(t, w.base+"/v1/auth/sso/"+conn+"/start")
+	u, _ := url.Parse(toIdP)
+	a := samltest.Assertion{InResponseTo: requestID(t, u.Query().Get("SAMLRequest")),
+		Audience: publicURL + "/v1/auth/sso/saml/" + conn + "/metadata", Recipient: publicURL + "/v1/auth/sso/saml/acs", NameID: nameID}
+	form := url.Values{"SAMLResponse": {idp.Response(a)}, "RelayState": {u.Query().Get("RelayState")}}
+	req, _ := http.NewRequest("POST", w.base+"/v1/auth/sso/saml/acs", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	landed, tok := follow(t, with(req, bind))
+	if tok == "" {
+		return landed, nil
+	}
+	return landed, &client{t: t, base: w.base, token: tok}
+}
+
+// TestSSOAdminConnectionsDoNotSignInOwners: before owners alone set up
+// single sign-on, an administrator could add a provider they run and
+// verify the owners' domain on it. Such a connection still signs members
+// in, but not an owner, until an owner approves it (finding F39b).
+func TestSSOAdminConnectionsDoNotSignInOwners(t *testing.T) {
+	w := ssoWorld(t)
+	ctx := context.Background()
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	owner.must(201, "POST", "/v1/members", map[string]any{"email": "adm@acme.test", "password": "correct horse battery", "roles": []string{"admin"}})
+	owner.must(201, "POST", "/v1/members", map[string]any{"email": "bob@acme.test", "password": "correct horse battery", "roles": []string{"viewer"}})
+	adm := w.login(t, "adm@acme.test", "correct horse battery")
+	idp := samltest.New("https://idp.evil.test", "https://idp.evil.test/sso")
+	mine := owner.must(201, "POST", "/v1/sso", map[string]any{"protocol": "saml", "name": "Owner's",
+		"saml": map[string]any{"metadata_xml": string(idp.Metadata())}, "default_roles": []string{"viewer"}})["id"].(string)
+
+	// The connection as the administrator made it before the rule: their
+	// provider, the owners' domain verified on it.
+	var legacy string
+	if err := w.env.DB.Admin.QueryRow(ctx, `INSERT INTO sso_connections (id, tenant_id, protocol, name, config, default_roles, group_roles, jit, enforce, created_by)
+		SELECT gen_random_uuid(), c.tenant_id, c.protocol, 'Admin''s', c.config, c.default_roles, c.group_roles, c.jit, c.enforce, u.id::text
+		  FROM sso_connections c, users u WHERE c.id = $1 AND u.email = 'adm@acme.test' RETURNING id::text`, mine).Scan(&legacy); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO sso_domains (domain, connection_id, tenant_id, token, verified_at)
+		SELECT 'acme.test', id, tenant_id, 'x', now() FROM sso_connections WHERE id = $1`, legacy); err != nil {
+		t.Fatal(err)
+	}
+
+	if landed, c := w.samlSignIn(t, idp, legacy, "owner@acme.test"); c != nil || !strings.Contains(landed, "sso_error") {
+		t.Fatalf("an administrator's connection signed in the owner: %s", landed)
+	}
+	// Members who are not owners still sign in with it.
+	if _, c := w.samlSignIn(t, idp, legacy, "bob@acme.test"); c == nil {
+		t.Fatal("the connection no longer signs in a viewer")
+	}
+	// Only an owner approves it for owners, and then it signs them in.
+	adm.must(403, "PUT", "/v1/sso/"+legacy, map[string]any{"default_roles": []string{"viewer"}, "owner_approved": true})
+	approved := func(id string) any {
+		for _, c := range owner.must(200, "GET", "/v1/sso", nil)["connections"].([]any) {
+			if c := c.(map[string]any); c["id"] == id {
+				return c["owner_approved"]
+			}
+		}
+		return nil
+	}
+	if approved(mine) != true || approved(legacy) != false {
+		t.Fatalf("owner_approved: mine %v, legacy %v", approved(mine), approved(legacy))
+	}
+	// An administrator's change of roles leaves the approval as it is.
+	adm.must(204, "PUT", "/v1/sso/"+legacy, map[string]any{"default_roles": []string{"viewer"}})
+	owner.must(204, "PUT", "/v1/sso/"+legacy, map[string]any{"default_roles": []string{"viewer"}, "owner_approved": true})
+	adm.must(204, "PUT", "/v1/sso/"+legacy, map[string]any{"default_roles": []string{"viewer"}})
+	if approved(legacy) != true {
+		t.Fatal("the owner's approval did not hold")
+	}
+	_, c := w.samlSignIn(t, idp, legacy, "owner@acme.test")
+	if c == nil {
+		t.Fatal("an approved connection does not sign in the owner")
+	}
+	if roles := toStrings(c.must(200, "GET", "/v1/me", nil)["roles"]); !slices.Contains(roles, "owner") {
+		t.Fatalf("roles %v", roles)
+	}
 }

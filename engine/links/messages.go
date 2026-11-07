@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // The conversation (L3, docs/spec/business-links.md §5.5, §8): what two
@@ -109,6 +110,9 @@ type Message struct {
 	Reply      *Quote      `json:"reply,omitempty"`
 	ReadAt     *time.Time  `json:"read_at,omitempty"`
 	CreatedAt  time.Time   `json:"created_at"`
+	// Reactions on it, and whether the person reading starred it (see DecorateTx).
+	Reactions []Reaction `json:"reactions,omitempty"`
+	Starred   bool       `json:"starred,omitempty"`
 }
 
 // Conversation is one linked business's conversation, as the list shows
@@ -118,12 +122,14 @@ type Conversation struct {
 	LinkID   uuid.UUID `json:"link"`
 	Business uuid.UUID `json:"business"`
 	Name     string    `json:"name"`
-	State    string    `json:"state"`
-	Last     *Message  `json:"last,omitempty"`
-	Unread   int       `json:"unread"`
-	Muted    bool      `json:"muted"`
-	Archived bool      `json:"archived"`
-	Pinned   bool      `json:"pinned"`
+	// Logo: the business has a logo, at GET /v1/links/{business}/logo.
+	Logo     bool     `json:"logo"`
+	State    string   `json:"state"`
+	Last     *Message `json:"last,omitempty"`
+	Unread   int      `json:"unread"`
+	Muted    bool     `json:"muted"`
+	Archived bool     `json:"archived"`
+	Pinned   bool     `json:"pinned"`
 	// Typing: someone on the other side is typing now.
 	Typing   bool `json:"typing"`
 	pinnedAt *time.Time
@@ -215,6 +221,19 @@ func ConversationsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]Conver
 	if len(out) == 0 {
 		return out, nil
 	}
+	// A business is shown by the name and logo it chose (its profile).
+	shown, err := ShownTx(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	for i := range out {
+		if sh, ok := shown[out[i].Business]; ok && out[i].State == Active {
+			if sh.Name != "" {
+				out[i].Name = sh.Name
+			}
+			out[i].Logo = sh.HasLogo
+		}
+	}
 	// Two queries for every conversation (the list is polled often): each
 	// link's settings, unread count and typing line, then its last message.
 	byLink := map[uuid.UUID]int{}
@@ -286,6 +305,10 @@ func ConversationsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]Conver
 type Page struct {
 	Before *time.Time
 	After  *time.Time
+	// Around is a message (its id, the pair): the page is the messages
+	// either side of it, and it, so a quote or a search result can be
+	// shown in place. Before, After and Q are not used with it.
+	Around *uuid.UUID
 	Q      string
 	Limit  int
 }
@@ -296,11 +319,22 @@ func MessagesTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, p Page) 
 	if p.Limit <= 0 || p.Limit > 200 {
 		p.Limit = 50
 	}
+	if p.Around != nil {
+		return messagesAroundTx(ctx, tx, tenant, link, *p.Around, p.Limit)
+	}
 	q := strings.TrimSpace(p.Q)
+	// Following (after, with no before): the oldest of what is newer, so a
+	// reader who was away for more than a page gets all of it, a page at a
+	// time. Otherwise the newest page (before a time, or at all).
+	following := p.After != nil && p.Before == nil && q == ""
+	order := `ORDER BY m.created_at DESC, m.id DESC`
+	if following {
+		order = `ORDER BY m.created_at, m.id`
+	}
 	rows, err := tx.Query(ctx, `SELECT `+messageCols+messageFrom+`
 		WHERE m.tenant_id = $1 AND m.link_id = $2 AND m.hidden_at IS NULL AND ($3::timestamptz IS NULL OR m.created_at < $3) AND ($4::timestamptz IS NULL OR m.created_at > $4)
 		  AND ($5 = '' OR m.body ILIKE '%' || $5 || '%' OR m.card ->> 'reference' ILIKE '%' || $5 || '%' OR m.card ->> 'note' ILIKE '%' || $5 || '%')
-		ORDER BY m.created_at DESC, m.id DESC LIMIT $6`, tenant, link, p.Before, p.After, likeSafe(q), p.Limit)
+		`+order+` LIMIT $6`, tenant, link, p.Before, p.After, likeSafe(q), p.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -308,8 +342,47 @@ func MessagesTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, p Page) 
 	if out == nil {
 		out = []Message{}
 	}
-	slices.Reverse(out) // the newest page, oldest first
+	if !following {
+		slices.Reverse(out) // the newest page, oldest first
+	}
 	return out, err
+}
+
+// messagesAroundTx is up to limit messages centred on one (the older half,
+// it, and the newer half), oldest first.
+func messagesAroundTx(ctx context.Context, tx pgx.Tx, tenant, link, pair uuid.UUID, limit int) ([]Message, error) {
+	var at time.Time
+	var id uuid.UUID
+	err := tx.QueryRow(ctx, `SELECT created_at, id FROM link_messages WHERE tenant_id = $1 AND link_id = $2 AND pair_id = $3 AND hidden_at IS NULL`, tenant, link, pair).Scan(&at, &id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	half := limit / 2
+	collect := func(sql string, args ...any) ([]Message, error) {
+		rows, err := tx.Query(ctx, sql, args...)
+		if err != nil {
+			return nil, err
+		}
+		return pgx.CollectRows(rows, func(r pgx.CollectableRow) (Message, error) { return scanMessage(r) })
+	}
+	// It and the older ones, newest first; then the newer ones, oldest first.
+	older, err := collect(`SELECT `+messageCols+messageFrom+`
+		WHERE m.tenant_id = $1 AND m.link_id = $2 AND m.hidden_at IS NULL AND (m.created_at, m.id) <= ($3, $4)
+		ORDER BY m.created_at DESC, m.id DESC LIMIT $5`, tenant, link, at, id, half+1)
+	if err != nil {
+		return nil, err
+	}
+	newer, err := collect(`SELECT `+messageCols+messageFrom+`
+		WHERE m.tenant_id = $1 AND m.link_id = $2 AND m.hidden_at IS NULL AND (m.created_at, m.id) > ($3, $4)
+		ORDER BY m.created_at, m.id LIMIT $5`, tenant, link, at, id, limit-half)
+	if err != nil {
+		return nil, err
+	}
+	slices.Reverse(older)
+	return append(older, newer...), nil
 }
 
 // likeSafe takes the wildcards out of a search's words.
@@ -377,6 +450,28 @@ type SendOpts struct {
 	// Mentions are the message's structured references (checked by the
 	// caller); the other side's copy names a business without our link.
 	Mentions []Mention
+	// ClientID is an id the sender made for this message: a send repeated
+	// with the same one is the same message (see MessageByClientTx).
+	ClientID *uuid.UUID
+}
+
+// ErrDuplicate is a message with this client id already sent: a send
+// repeated while the first was still being written.
+var ErrDuplicate = errors.New("links: message already sent")
+
+// MessageByClientTx is the message this business sent in a conversation
+// with a client id, or nil when there is none: a repeated send answers the
+// first rather than sending again.
+func MessageByClientTx(ctx context.Context, tx pgx.Tx, tenant, link, client uuid.UUID) (*Message, error) {
+	m, err := scanMessage(tx.QueryRow(ctx, `SELECT `+messageCols+messageFrom+`
+		WHERE m.tenant_id = $1 AND m.link_id = $2 AND m.client_id = $3 AND m.hidden_at IS NULL`, tenant, link, client))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &m, nil
 }
 
 // SendWithTx is SendTx with what o carries.
@@ -435,8 +530,12 @@ func SendWithTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body str
 	}
 	name := cutRunes(strings.TrimSpace(from.FirstName), 80)
 	pair := uuid.Must(uuid.NewV7())
-	if _, err := tx.Exec(ctx, `INSERT INTO link_messages (id, tenant_id, link_id, pair_id, mine, kind, body, sender_name, sender_id, reply_to, attachment, forwarded, preview, mentions)
-		VALUES ($1, $2, $3, $4, true, 'text', $5, $6, $7, $8, $9, $10, $11, $12)`, uuid.Must(uuid.NewV7()), tenant, link, pair, body, name, from.ID, replyTo, jsonOf(ourFile), o.Forwarded, preview, ours); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO link_messages (id, tenant_id, link_id, pair_id, mine, kind, body, sender_name, sender_id, reply_to, attachment, forwarded, preview, mentions, client_id)
+		VALUES ($1, $2, $3, $4, true, 'text', $5, $6, $7, $8, $9, $10, $11, $12, $13)`, uuid.Must(uuid.NewV7()), tenant, link, pair, body, name, from.ID, replyTo, jsonOf(ourFile), o.Forwarded, preview, ours, o.ClientID); err != nil {
+		var pe *pgconn.PgError
+		if errors.As(err, &pe) && pe.Code == "23505" && pe.ConstraintName == "link_messages_client" {
+			return Message{}, uuid.Nil, ErrDuplicate
+		}
 		return Message{}, uuid.Nil, err
 	}
 	m, err := scanMessage(tx.QueryRow(ctx, `SELECT `+messageCols+messageFrom+` WHERE m.tenant_id = $1 AND m.pair_id = $2`, tenant, pair))
@@ -478,8 +577,12 @@ func SendWithTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body str
 // businesses this UTC day (its plan's messages per day, §13).
 func SentTodayTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (int64, error) {
 	var n int64
-	err := tx.QueryRow(ctx, `SELECT count(*) FROM link_messages WHERE tenant_id = $1 AND mine AND kind = 'text'
-		AND created_at >= date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'`, tenant).Scan(&n)
+	// A reaction counts as a message, when it is first given.
+	err := tx.QueryRow(ctx, `SELECT
+		(SELECT count(*) FROM link_messages WHERE tenant_id = $1 AND mine AND kind = 'text'
+			AND created_at >= date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')
+		+ (SELECT count(*) FROM link_message_reactions WHERE tenant_id = $1 AND mine
+			AND created_at >= date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')`, tenant).Scan(&n)
 	return n, err
 }
 

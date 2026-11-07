@@ -31,21 +31,23 @@ const formHost = "forms.shops.test"
 
 // fakeForms stands in for the taskiem_public_form* functions.
 type fakeForms struct {
-	mu       sync.Mutex
-	forms    map[string]PublicForm
-	links    map[string]FormLink    // by token
-	requests map[string]FormRequest // by token
-	writes   []FormWrite
-	byIdem   map[string]string
-	states   map[string]FormState
-	hashes   map[string][]byte
-	once     map[string]bool
-	used     map[uuid.UUID]bool
-	answered map[uuid.UUID]bool
-	codes    []fakeCode
-	limited  bool
-	closed   bool
-	taken    int
+	mu        sync.Mutex
+	forms     map[string]PublicForm
+	links     map[string]FormLink    // by token
+	requests  map[string]FormRequest // by token
+	writes    []FormWrite
+	byIdem    map[string]string
+	states    map[string]FormState
+	endpoints map[string]uuid.UUID // the form each reference was sent to
+	hashes    map[string][]byte
+	once      map[string]bool
+	used      map[uuid.UUID]bool
+	answered  map[uuid.UUID]bool
+	codes     []fakeCode
+	limited   bool
+	closed    bool
+	taken     int
+	tripped   []uuid.UUID
 }
 
 type fakeCode struct {
@@ -57,7 +59,21 @@ type fakeCode struct {
 
 func newFakeForms() *fakeForms {
 	return &fakeForms{forms: map[string]PublicForm{}, links: map[string]FormLink{}, requests: map[string]FormRequest{}, byIdem: map[string]string{},
-		states: map[string]FormState{}, hashes: map[string][]byte{}, once: map[string]bool{}, used: map[uuid.UUID]bool{}, answered: map[uuid.UUID]bool{}}
+		states: map[string]FormState{}, endpoints: map[string]uuid.UUID{}, hashes: map[string][]byte{}, once: map[string]bool{}, used: map[uuid.UUID]bool{}, answered: map[uuid.UUID]bool{}}
+}
+
+// Tripped guards the form, as taskiem_public_form_tripped does.
+func (f *fakeForms) Tripped(_ context.Context, endpoint uuid.UUID) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.tripped = append(f.tripped, endpoint)
+	for id, p := range f.forms {
+		if p.Endpoint == endpoint {
+			p.Guarded = true
+			f.forms[id] = p
+		}
+	}
+	return nil
 }
 
 func (f *fakeForms) Form(_ context.Context, id string) (PublicForm, bool, error) {
@@ -126,6 +142,9 @@ func (f *fakeForms) Submit(_ context.Context, w FormWrite) (bool, error) {
 	f.writes = append(f.writes, w)
 	f.states[w.Reference] = FormState{Status: "received", Created: time.Now()}
 	f.hashes[w.Reference] = w.StatusHash
+	if w.Endpoint != nil {
+		f.endpoints[w.Reference] = *w.Endpoint
+	}
 	return true, nil
 }
 
@@ -162,6 +181,7 @@ func (f *fakeForms) Status(_ context.Context, ref string, hash []byte) (FormStat
 	if !ok || !bytes.Equal(f.hashes[ref], hash) {
 		return FormState{}, false, nil
 	}
+	st.Endpoint = f.endpoints[ref]
 	return st, true, nil
 }
 
@@ -694,6 +714,13 @@ func TestHostedFormAfter(t *testing.T) {
 		t.Fatal("waited more than 30 seconds")
 	}
 	must(t, e.get("/f/result000001/done/"+ref+"?k=wrong"), 404)
+	// Another form's page does not show this submission's message under
+	// its own business and look, framed or not (F30).
+	e.f.states[ref] = FormState{Status: "started", Created: *e.now, Message: "Pay N50,000 to 0123456789"}
+	e.add("victim000001", `{"title":"V","after":{"mode":"result","message":"Thanks."}}`, schema)
+	must(t, e.get("/f/victim000001/done/"+ref+"?k="+url.QueryEscape(key)), 404)
+	must(t, e.get("/embed/f/victim000001/done/"+ref+"?k="+url.QueryEscape(key)), 404)
+	must(t, e.get(done), 200, "Pay N50,000")
 
 	// The status link: plain words and the message, nothing else.
 	must(t, e.get("/s/"+ref+"?k="+url.QueryEscape(key)), 200, "being handled", "Reference <strong>"+ref)
@@ -800,4 +827,70 @@ func TestFormHostTLSAsk(t *testing.T) {
 			t.Errorf("%s: %d", host, w.Code)
 		}
 	}
+}
+
+// One form takes only so many submissions an hour from every address
+// together (forms 7.3, storefronts 7.5); other forms are not held back
+// (F68).
+func TestHostedFormPerFormLimit(t *testing.T) {
+	e := newFormHost(t)
+	schema := `{"type":"object","properties":{"x":{"type":"string"}}}`
+	e.add("busy00000001", `{"title":"B"}`, schema)
+	e.add("calm00000001", `{"title":"C"}`, schema)
+	send := func(id string) *httptest.ResponseRecorder {
+		b := must(t, e.get("/f/"+id), 200)
+		e.tick(5 * time.Second)
+		return e.next("/f/"+id, b, url.Values{"do": {"send"}, "a.x": {"y"}})
+	}
+	sent := 0
+	for range 300 {
+		w := send("busy00000001")
+		if w.Code == http.StatusTooManyRequests {
+			if !strings.Contains(w.Body.String(), "This form is busy") {
+				t.Fatalf("429 says %s", w.Body.String())
+			}
+			break
+		}
+		if w.Code != 200 {
+			t.Fatalf("submission %d: %d", sent, w.Code)
+		}
+		sent++
+	}
+	if sent >= 300 {
+		t.Fatal("one form took 300 submissions at once")
+	}
+	must(t, send("calm00000001"), 200, "Thank you")
+}
+
+// A form that trips its limit is recorded (its owners and operators are
+// alerted, and it is guarded for an hour), at most once a minute from one
+// process, and while guarded a public form asks for a phone code first
+// (forms 7.3, storefronts 7.5) (F68b).
+func TestHostedFormUnderAttackRequiresTheCode(t *testing.T) {
+	e := newFormHost(t)
+	e.s.FormPerForm = formguard.NewLimiter(rate.Every(time.Hour), 2, 100, time.Hour)
+	schema := `{"type":"object","properties":{"x":{"type":"string"}}}`
+	pub := e.add("busy00000002", `{"title":"B"}`, schema)
+	e.add("calm00000002", `{"title":"C"}`, schema)
+	send := func(id string) *httptest.ResponseRecorder {
+		b := must(t, e.get("/f/"+id), 200)
+		e.tick(5 * time.Second)
+		return e.next("/f/"+id, b, url.Values{"do": {"send"}, "a.x": {"y"}})
+	}
+	must(t, send("busy00000002"), 200, "Thank you")
+	must(t, send("busy00000002"), 200, "Thank you")
+	// Before the trip is seen, the form is still sent in one page.
+	b := must(t, e.get("/f/busy00000002"), 200)
+	e.tick(5 * time.Second)
+	must(t, e.next("/f/busy00000002", b, url.Values{"do": {"send"}, "a.x": {"y"}}), 429, "This form is busy")
+	// Another trip within the minute is not recorded again.
+	e.s.tripped(context.Background(), pub)
+	if len(e.f.tripped) != 1 || e.f.tripped[0] != pub.Endpoint {
+		t.Fatalf("trips recorded: %v, want one for %s", e.f.tripped, pub.Endpoint)
+	}
+	body := must(t, e.get("/f/busy00000002"), 200, "Your phone number", "Send code")
+	if strings.Contains(body, `name="a.x"`) {
+		t.Fatal("a guarded form shows its questions before the code")
+	}
+	must(t, e.get("/f/calm00000002"), 200, `name="a.x"`)
 }

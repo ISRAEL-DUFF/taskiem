@@ -174,6 +174,17 @@ export function MicButton({
  * Done, or while held, how to send or cancel it. */
 export function RecordingBar({ voice }: { voice: VoiceNote }) {
   const secs = voice.secs ?? 0;
+  // Esc cancels the recording (and only that: the chat stays open).
+  const { stop } = voice;
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      e.preventDefault();
+      stop(false);
+    };
+    document.addEventListener("keydown", esc);
+    return () => document.removeEventListener("keydown", esc);
+  }, [stop]);
   return (
     <div className="composer" data-testid="chat-recording">
       <span className="recording" role="status">

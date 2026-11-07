@@ -5,6 +5,18 @@ import { useAuth } from "../auth";
 import { useOnboarding } from "../onboarding";
 import { ErrorBox, Field, useAction } from "../ui";
 
+/** What a business says it does, in its own words (lib/areas.ts has the
+ * parts each switches on). */
+type SignupKind = "shop" | "service" | "school" | "workflows";
+const SIGNUP_KINDS: { id: SignupKind; label: string }[] = [
+  { id: "shop", label: "I sell things" },
+  { id: "service", label: "I bill customers for a service" },
+  { id: "school", label: "I run a school" },
+  { id: "workflows", label: "Just workflows for now" },
+];
+/** The kinds sent to the server: "just workflows" is none. */
+const kindsOf = (k: SignupKind): string[] => (k === "workflows" ? [] : [k]);
+
 /** Self-serve signup (POST /v1/signup, docs/onboarding.md): an
  * organisation and its owner, signed in at once, then Get started. */
 export function Signup() {
@@ -18,6 +30,9 @@ export function Signup() {
     website: "",
     accept_terms: false,
   });
+  // What the business does (docs/spec/business-areas.md): it decides which
+  // parts of Taskiem it starts with. Asked, never guessed.
+  const [kind, setKind] = useState<SignupKind | "">("");
   const [terms, setTerms] = useState<TermsAsked | undefined>();
   const [slack, setSlack] = useState<string | undefined>();
   useEffect(() => {
@@ -45,7 +60,7 @@ export function Signup() {
         onSubmit={(e) => {
           e.preventDefault();
           void act.run(async () => {
-            await post("/v1/signup", f);
+            await post("/v1/signup", { ...f, kinds: kindsOf(kind as SignupKind) });
             await refresh();
             nav("/start", { replace: true });
           }, false);
@@ -62,6 +77,20 @@ export function Signup() {
             autoFocus
           />
         </Field>
+        <div role="radiogroup" aria-labelledby="signup-kind" data-testid="signup-kind">
+          <p id="signup-kind" style={{ margin: "12px 0 4px", fontWeight: 600 }}>
+            What does your business do?
+          </p>
+          <p className="hint" style={{ marginTop: 0 }}>
+            This sets up what you see first. Workflows, forms and chat are always there, and you can change it any time.
+          </p>
+          {SIGNUP_KINDS.map((k) => (
+            <label key={k.id} className="row">
+              <input type="radio" name="kind" value={k.id} checked={kind === k.id} onChange={() => setKind(k.id)} required />
+              <span style={{ flex: "1 1 auto", whiteSpace: "normal" }}>{k.label}</span>
+            </label>
+          ))}
+        </div>
         <Field label="Your name">
           <input
             value={f.name}

@@ -54,13 +54,12 @@ func TestBusinessLinksByChat(t *testing.T) {
 	if out := search(ada, "0803 123 4567"); len(out["results"].([]any)) != 0 || out["blind"].(map[string]any)["shown"] != "0803…4567" {
 		t.Errorf("a phone searched: %v", out)
 	}
-	// So is a storefront address that names no business found: the same
-	// row, whether or not a page is behind it; a name found is a result.
-	for _, q := range []string{"adas-kitchen", "/dangote-stores/", "nobody-here"} {
+	// A word that names no business found is not offered as a request: the
+	// page says nothing matches (an address is asked in chat).
+	for _, q := range []string{"adas-kitchen", "/dangote-stores/", "nobody-here", "nug"} {
 		out := search(ada, q)
-		b, _ := out["blind"].(map[string]any)
-		if len(out["results"].([]any)) != 0 || b == nil || b["kind"] != "address" || b["shown"] != strings.Trim(q, "/") {
-			t.Errorf("an address searched (%s): %v", q, out)
+		if len(out["results"].([]any)) != 0 || out["blind"] != nil {
+			t.Errorf("a word that names no one offered a request (%s): %v", q, out)
 		}
 	}
 	if out := search(ada, "dangote"); out["blind"] != nil {

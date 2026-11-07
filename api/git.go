@@ -490,7 +490,8 @@ func (s *Server) gitHook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	secret, err := s.Vault.Get(secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindGit, Purpose: secrets.PurposeIngestVerify}), tenant, gitVaultEnv, gitHookName(env))
-	if errors.Is(err, secrets.ErrNotFound) {
+	// An empty secret verifies nothing, whichever provider checks it.
+	if errors.Is(err, secrets.ErrNotFound) || (err == nil && secret == "") {
 		deny()
 		return
 	}
@@ -664,31 +665,42 @@ func (s *Server) RunGitSyncs(ctx context.Context) error {
 	}
 }
 
-// GitSyncOnce claims and runs the queued syncs; it returns how many ran.
+// GitSyncOnce claims and runs the queued syncs, one claim at a time, up to
+// gitSyncsPerPass; it returns how many ran. Each sync is claimed just
+// before it runs, so none waits behind another under a claim that could
+// lapse.
 func (s *Server) GitSyncOnce(ctx context.Context) (int, error) {
-	rows, err := s.Store.Pool.Query(ctx, `SELECT sync_id, tenant_id FROM taskiem_claim_git_syncs(5)`)
-	if err != nil {
-		return 0, err
-	}
-	type claim struct{ id, tenant uuid.UUID }
-	var claims []claim
-	for rows.Next() {
-		var c claim
-		if err := rows.Scan(&c.id, &c.tenant); err != nil {
-			rows.Close()
-			return 0, err
+	n := 0
+	for n < gitSyncsPerPass && ctx.Err() == nil {
+		var id, tenant uuid.UUID
+		var lease time.Time
+		err := s.Store.Pool.QueryRow(ctx, `SELECT sync_id, tenant_id, lease_until FROM taskiem_claim_git_syncs(1, $1)`, gitSyncLease).Scan(&id, &tenant, &lease)
+		if errors.Is(err, pgx.ErrNoRows) {
+			break
 		}
-		claims = append(claims, c)
+		if err != nil {
+			return n, err
+		}
+		s.runSync(ctx, tenant, id, lease)
+		n++
 	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return 0, err
-	}
-	for _, c := range claims {
-		s.runSync(ctx, c.tenant, c.id)
-	}
-	return len(claims), nil
+	return n, nil
 }
+
+// A sync's claim lasts gitSyncLease; the sync itself is given
+// gitSyncTimeout, well within it. The lease the claim set fences the
+// sync: it deploys, and records its outcome, only while the lease is
+// still the one it claimed, so a sync another replica took over (its
+// claim having lapsed) is deployed once.
+const (
+	gitSyncsPerPass = 5
+	gitSyncLease    = 5 * time.Minute
+	gitSyncTimeout  = 4 * time.Minute
+)
+
+// errSyncTakenOver is a sync whose claim lapsed and was taken by another
+// replica: it deploys nothing and records nothing.
+var errSyncTakenOver = errors.New("the sync's claim lapsed and another replica took it over")
 
 // syncReport is what a sync did, kept with it.
 type syncReport struct {
@@ -717,17 +729,27 @@ type syncWorkflowNote struct {
 // is checked and every workflow test run first; only if all pass is
 // anything deployed, all in one transaction (spec 10.5: tests gate Git-led
 // deploys).
-func (s *Server) runSync(ctx context.Context, tenant, id uuid.UUID) {
+func (s *Server) runSync(ctx context.Context, tenant, id uuid.UUID, lease time.Time) {
 	rep := &syncReport{}
-	status, err := s.sync(ctx, tenant, id, rep)
+	sctx, cancel := context.WithTimeout(ctx, gitSyncTimeout)
+	status, err := s.sync(sctx, tenant, id, lease, rep)
+	cancel()
+	if errors.Is(err, errSyncTakenOver) {
+		return
+	}
 	if err != nil {
 		status, rep.Error = "failed", err.Error()
+		if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
+			rep.Error = fmt.Sprintf("the sync took longer than %s: %s", gitSyncTimeout, err)
+		}
 	}
 	raw, _ := json.Marshal(rep)
 	_ = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `UPDATE git_syncs SET status = $2, report = $3, finished_at = now(), lease_until = NULL, commit = COALESCE(NULLIF($4, ''), commit) WHERE id = $1`,
-			id, status, raw, rep.Commit); err != nil {
-			return err
+		tag, err := tx.Exec(ctx, `UPDATE git_syncs SET status = $2, report = $3, finished_at = now(), lease_until = NULL, commit = COALESCE(NULLIF($4, ''), commit)
+			WHERE id = $1 AND status = 'running' AND lease_until = $5`,
+			id, status, raw, rep.Commit, lease)
+		if err != nil || tag.RowsAffected() == 0 {
+			return err // taken over: the replica holding it records its own outcome
 		}
 		var env string
 		_ = tx.QueryRow(ctx, `SELECT environment FROM git_syncs WHERE id = $1`, id).Scan(&env)
@@ -741,7 +763,7 @@ func auditSystem(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, actor, action
 	return err
 }
 
-func (s *Server) sync(ctx context.Context, tenant, id uuid.UUID, rep *syncReport) (string, error) {
+func (s *Server) sync(ctx context.Context, tenant, id uuid.UUID, lease time.Time, rep *syncReport) (string, error) {
 	var conn gitConnection
 	var commit string
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
@@ -872,6 +894,16 @@ func (s *Server) sync(ctx context.Context, tenant, id uuid.UUID, rep *syncReport
 
 	changed := false
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		// Deploy only while the claim is still this sync's, holding the
+		// row so it cannot be taken over until this commits.
+		var held uuid.UUID
+		err := tx.QueryRow(ctx, `SELECT id FROM git_syncs WHERE id = $1 AND status = 'running' AND lease_until = $2 FOR UPDATE`, id, lease).Scan(&held)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return errSyncTakenOver
+		}
+		if err != nil {
+			return err
+		}
 		actor := "git:" + conn.Environment
 		// Policies first: the workflows' checks need them active. Review
 		// in Git stands in for four-eyes on these edits.

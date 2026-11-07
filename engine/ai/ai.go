@@ -56,6 +56,24 @@ type Request struct {
 	Effort string
 }
 
+// Estimate is the most tokens a request may use, as a budget reserves
+// them before the call: its prompt, at about 4 characters a token, and
+// its longest answer (DefaultMaxTokens when MaxTokens is 0).
+func (r Request) Estimate() int64 {
+	n := 0
+	for _, b := range r.System {
+		n += len(b.Text)
+	}
+	for _, m := range r.Messages {
+		n += len(m.Text)
+	}
+	answer := r.MaxTokens
+	if answer <= 0 {
+		answer = DefaultMaxTokens
+	}
+	return int64(n/4 + answer)
+}
+
 // Usage is what one completion consumed.
 type Usage struct {
 	InputTokens         int64 `json:"input_tokens"`

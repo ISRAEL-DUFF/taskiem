@@ -165,3 +165,86 @@ func basic(user, pass string) string {
 	r.SetBasicAuth(user, pass)
 	return strings.TrimPrefix(r.Header.Get("Authorization"), "Basic ")
 }
+
+// openTunnel CONNECTs through p to target and returns the tunnel.
+func openTunnel(t *testing.T, proxyURL, token, target string) (net.Conn, *bufio.Reader) {
+	t.Helper()
+	conn, err := net.Dial("tcp", strings.TrimPrefix(proxyURL, "http://"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	_, _ = fmt.Fprintf(conn, "CONNECT %s HTTP/1.1\r\nHost: %s\r\nProxy-Authorization: Basic %s\r\n\r\n", target, target, basic("x", token))
+	br := bufio.NewReader(conn)
+	if line, err := br.ReadString('\n'); err != nil || !strings.Contains(line, "200") {
+		t.Fatalf("CONNECT: %q %v", line, err)
+	}
+	_, _ = br.ReadString('\n')
+	return conn, br
+}
+
+// TestProxyLongDownloadSurvivesIdleClient: during a download the client
+// sends nothing for longer than the idle timeout. The tunnel stays whole
+// while the other direction moves: the upstream is not half-closed (many
+// servers take that as the client going away and stop the response).
+func TestProxyLongDownloadSurvivesIdleClient(t *testing.T) {
+	cancelled := make(chan struct{}, 1)
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fl := w.(http.Flusher)
+		for range 30 {
+			select {
+			case <-r.Context().Done():
+				cancelled <- struct{}{}
+				return
+			case <-time.After(50 * time.Millisecond):
+			}
+			_, _ = w.Write([]byte(strings.Repeat("x", 1000)))
+			fl.Flush()
+		}
+	}))
+	t.Cleanup(origin.Close)
+	loop := netip.MustParseAddr("127.0.0.1")
+	_, port, _ := net.SplitHostPort(origin.Listener.Addr().String())
+	p := &Proxy{Guard: &Guard{Resolver: fakeResolver{"example.com": {loop}}, Blocked: func(a netip.Addr) bool { return a != loop }},
+		Ports: []string{port}, IdleTimeout: 300 * time.Millisecond}
+	ps := httptest.NewServer(p)
+	t.Cleanup(ps.Close)
+	token, revoke := p.Grant(Policy{Tenant: "t1", Hosts: []string{"example.com"}})
+	defer revoke()
+	target := "example.com:" + port
+	conn, br := openTunnel(t, ps.URL, token, target)
+	_, _ = fmt.Fprintf(conn, "GET /model.bin HTTP/1.1\r\nHost: %s\r\n\r\n", target)
+	resp, err := http.ReadResponse(br, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	n, err := io.Copy(io.Discard, resp.Body)
+	if n != 30000 || err != nil {
+		t.Errorf("received %d of 30000 bytes: %v", n, err)
+	}
+	select {
+	case <-cancelled:
+		t.Error("the origin saw the client go away mid-download")
+	default:
+	}
+}
+
+// TestProxyClosesIdleTunnel: a tunnel idle both ways is closed after the
+// idle timeout.
+func TestProxyClosesIdleTunnel(t *testing.T) {
+	f := newProxyFixture(t)
+	f.proxy.IdleTimeout = 200 * time.Millisecond
+	token, revoke := f.proxy.Grant(Policy{Tenant: "t1", Hosts: []string{"example.com"}})
+	defer revoke()
+	conn, br := openTunnel(t, f.proxyURL, token, strings.TrimPrefix(f.url("https", "example.com", ""), "https://"))
+	_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	start := time.Now()
+	_, err := br.ReadByte()
+	if ne := net.Error(nil); err == nil || (errors.As(err, &ne) && ne.Timeout()) {
+		t.Fatalf("idle tunnel not closed: %v", err)
+	}
+	if took := time.Since(start); took < 150*time.Millisecond {
+		t.Errorf("closed after %s, before the idle timeout", took)
+	}
+}

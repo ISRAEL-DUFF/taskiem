@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/israel-duff/taskiem/engine/areas"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/moneydigest"
 	"github.com/israel-duff/taskiem/engine/storefront"
@@ -121,6 +122,10 @@ func (e *Evening) Tick(ctx context.Context) (int, error) {
 	}
 	tenants, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
 	if err != nil {
+		return 0, err
+	}
+	// Only businesses that use Stock (docs/spec/business-areas.md).
+	if tenants, err = areas.Only(ctx, e.Pool, tenants, areas.Stock); err != nil {
 		return 0, err
 	}
 	n := 0

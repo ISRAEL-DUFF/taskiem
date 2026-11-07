@@ -228,6 +228,14 @@
       "text": "{name}: iwu gị {reference} adịla njikere.",
       "reviewed": false
     },
+    "invoice.pay_unavailable_title": {
+      "text": "A customer could not pay online",
+      "reviewed": false
+    },
+    "invoice.pay_unavailable": {
+      "text": "A customer tried to pay {what} by {how}, but no payments service of yours can do that, so they were asked to pay you directly. Connect Paystack, Flutterwave, OPay or another payments service under Connections, and they can pay online.",
+      "reviewed": false
+    },
     "invoice.chat.account": {
       "text": "Kwụọ {amount} maka invoice {number} site na bank transfer gaa na:\nNọmba akaụntụ: {account}\nBank: {bank}\nAha akaụntụ: {name}\nỌ ga-arụ ọrụ ruo {until}. Jiri ya maka ịkwụ ụgwọ a naanị.",
       "reviewed": false
@@ -1680,6 +1688,10 @@
       "text": "• *build* na ihe ị chọrọ ka ọ na-eme onwe ya, dịka *build every Friday text my customers who owe me* (a ga-echekwa ya dịka mbido mgbe ị kwadoro)",
       "reviewed": false
     },
+    "wa.help.signin": {
+      "text": "• *sign in* maka njikọ banye na ngwa weebụ; *password* iji email banye; *sign out everywhere*",
+      "reviewed": false
+    },
     "wa.help.cancel": {
       "text": "• *cancel*: hapụ ihe na-aga n'ihu",
       "reviewed": false
@@ -1850,6 +1862,18 @@
     },
     "wa.invoice.confirm": {
       "text": "Ka m ziga {name} ({to}) akwụkwọ ụgwọ nke {amount}: {for}?",
+      "reviewed": false
+    },
+    "wa.invoice.confirm_linked": {
+      "text": "Send {name}, a business on Taskiem you are linked with, an invoice for {amount}: {for}? It goes into their bills.",
+      "reviewed": false
+    },
+    "wa.invoice.sent_linked": {
+      "text": "Sent {number} to {name}'s bills on Taskiem for {amount}. You can see it under Invoices in the web app.",
+      "reviewed": false
+    },
+    "wa.invoice.pick_linked": {
+      "text": "Which {name} do you mean?\n{list}\nReply with its number, or send a phone number or email to invoice someone else.",
       "reviewed": false
     },
     "wa.invoice.confirm_reminder": {
@@ -3269,7 +3293,15 @@
       "reviewed": false
     },
     "wa.signin.link": {
-      "text": "Mepee njikọ a ka ị họrọ okwuntughe gị ma banye Taskiem na weebụ. Ọ na-arụ ọrụ otu ugboro, maka otu awa; edobe ya naanị gị:\n{link}",
+      "text": "Mepee njikọ a ka ịhọrọ okwuntughe gị. Ọ na-arụ ọrụ otu ugboro, maka otu awa; debe ya n'onwe gị:\n{link}\nMgbe ahụ banye na weebụ site na email gị (nke dị na *{domain}*) na okwuntughe ahụ.",
+      "reviewed": false
+    },
+    "wa.signin.chat_link": {
+      "text": "Mepee njikọ a ka ịbanye na Taskiem na weebụ. Ọ na-arụ ọrụ otu ugboro, maka nkeji 10; debe ya n'onwe gị:\n{link}",
+      "reviewed": false
+    },
+    "door.signin_email": {
+      "text": "Iji jiri okwuntughe banye, ị chọrọ email mbụ: zipu *email you@example.com* ma mepee njikọ anyị ezigara gị na email. Mgbe ahụ zipu *password* ọzọ.\nMa ọ bụ zipu *sign in* maka njikọ ga-abanye gị ozugbo.",
       "reviewed": false
     },
     "wa.signin.sso": {
@@ -3278,6 +3310,38 @@
     },
     "wa.signin.unavailable": {
       "text": "Edobeghị ịbanye na weebụ na Taskiem a.",
+      "reviewed": false
+    },
+    "wa.signin.off": {
+      "text": "Ịbanye site na WhatsApp ma ọ bụ Telegram agbanyụọla maka gị (Account na weebụ). Zipu *password* ka i jiri email na okwuntughe banye kama.",
+      "reviewed": false
+    },
+    "wa.signin.passkey": {
+      "text": "Ndị nchịkwa na-abanye na Taskiem site na passkey ha: {link}",
+      "reviewed": false
+    },
+    "chat.signin.code": {
+      "text": "{code} bụ koodu ịbanye Taskiem gị. Ọ ga-agwụ na nkeji 10. Ekesala ya; ọ bụrụ na ọ bụghị gị rịọrọ ya, leghara ozi a anya.",
+      "reviewed": false
+    },
+    "chat.signin.told": {
+      "text": "Ị banyere na Taskiem na weebụ site na nkata gị ({device}). Ọ bụghị gị? Zipu *sign out everywhere*.",
+      "reviewed": false
+    },
+    "account.passkey_only.on": {
+      "text": "Ịbanye na Taskiem naanị site na passkey gị agbanyela ugbu a: okwuntughe gị na nkata gị agaghị abanye gị na weebụ ọzọ. Ọ bụghị gị? Zipu *sign out everywhere*.",
+      "reviewed": false
+    },
+    "account.passkey_only.off": {
+      "text": "Ịbanye na Taskiem naanị site na passkey gị agbanyụọla ugbu a: okwuntughe gị na nkata gị na-abanye gị ọzọ. Ọ bụghị gị? Zipu *sign out everywhere*.",
+      "reviewed": false
+    },
+    "chat.signout.done": {
+      "text": "Ị pụọla na weebụ ebe niile: oge {count} kwụsịrị. Nkata gị na-aga n'ihu dịka ọ dị na mbụ.",
+      "reviewed": false
+    },
+    "chat.signout.none": {
+      "text": "Ị banyeghị na weebụ ebe ọ bụla.",
       "reviewed": false
     },
     "wa.status.denied": {
@@ -3830,6 +3894,10 @@
     },
     "wa.help.debts": {
       "text": "• *Ada owes 5,000*, *Ada paid 2,000 cash*, *who owes me?*, *send Ada her balance*: ụgwọ ndị ahịa ji gị",
+      "reviewed": false
+    },
+    "wa.help.direct": {
+      "text": "• Zipu ozi na azụmahịa ejikọrọ: bido ya na *...*, dịka *... @Dangote how much is a bag of cement?*",
       "reviewed": false
     },
     "wa.table.form": {
@@ -5136,6 +5204,34 @@
       "text": "Ezigala ya *{name}*. Azịza ha ga-abịa ebe a, na Chat na weebụ.",
       "reviewed": false
     },
+    "chat.direct.wait": {
+      "text": "Ugbu a zipu ozi ahụ, tinye *@business* maka onye ọ bụ, dịka *@Dangote how much is a bag of cement?*",
+      "reviewed": false
+    },
+    "chat.direct.who": {
+      "text": "Ọ bụ maka onye? Tinye *@business*, dịka *... @Dangote how much is a bag of cement?*",
+      "reviewed": false
+    },
+    "chat.direct.empty": {
+      "text": "Gịnị ka ị chọrọ ịgwa *{name}*? Zipu *... @{name}* na ozi gị.",
+      "reviewed": false
+    },
+    "chat.direct.hint": {
+      "text": "Iji zipu ya *{name}* dịka ozi, bido ya na *...*",
+      "reviewed": false
+    },
+    "chat.direct.sent": {
+      "text": "✓ Ezigara ya {names}.",
+      "reviewed": false
+    },
+    "chat.direct.not_sent": {
+      "text": "E zighị ya *{name}*: {reason}.",
+      "reviewed": false
+    },
+    "chat.direct.failed": {
+      "text": "E zighị ya *{name}*: ihe mebiri emebi. Zigharịa ya ọzọ.",
+      "reviewed": false
+    },
     "chat.link.photo": {
       "text": "Foto",
       "reviewed": false
@@ -5146,6 +5242,14 @@
     },
     "chat.link.file": {
       "text": "Faịlụ",
+      "reviewed": false
+    },
+    "chat.link.reacted": {
+      "text": "{name} zara {emoji} na “{what}”",
+      "reviewed": false
+    },
+    "chat.link.reacted_plain": {
+      "text": "{name} zara {emoji} n'otu ozi",
       "reviewed": false
     },
     "wa.prices.list": {
@@ -5193,7 +5297,7 @@
       "reviewed": false
     },
     "wa.mention.how": {
-      "text": "Kwuo ole na ihe ị chọrọ n'aka *{name}*, dịka *20 bags of rice from @{name}*.",
+      "text": "Kwuo ole na ihe ị chọrọ n'aka *{name}*, dịka *20 bags of rice from @{name}*. Iji zipu ya *{name}* dịka ozi, bido ya na *...*",
       "reviewed": false
     },
     "wa.mention.draft": {
@@ -5305,7 +5409,7 @@
       "reviewed": false
     },
     "wa.mention.which": {
-      "text": "More than one of your linked businesses is called *{name}*: {list}. Pick it on the Chat page, where each is its own conversation.",
+      "text": "*@{name}* nwere ike ịbụ ihe karịrị otu n'ime azụmahịa ejikọrọ gị: {list}. Jiri ọtụtụ aha ahụ, ma ọ bụ họrọ ya na ibe Chat.",
       "reviewed": false
     },
     "order.link.auto_changed_title": {

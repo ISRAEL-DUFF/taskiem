@@ -1,11 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Link,
   useNavigate,
   useParams,
+  useLocation,
   useSearchParams,
 } from "react-router-dom";
-import { del, get, getBlob, post, put } from "../api";
+import { del, get, getBlob, post, put, whenOff } from "../api";
+import { areaOn } from "../lib/areas";
 import { useAuth } from "../auth";
 import { Icon } from "../icons";
 import {
@@ -31,17 +33,33 @@ import {
 } from "../lib/links";
 import {
   listTime,
+  logoSrc,
+  matchChats,
   previewLine,
   type Conversation,
   type LinkMessage,
 } from "../lib/linkchat";
 import { ConversationPane } from "./Conversation";
 import { TaskiemPane } from "./TaskiemChat";
+import { ChatRow } from "./ChatRow";
+import { useConfirm } from "./ConfirmSheet";
+import { Explore } from "./Explore";
+import { HeadMenu } from "./ChatHead";
+import { useChatLive } from "./ChatLive";
+import { useDrafts } from "../lib/drafts";
+import { useTaskiemUnread } from "../lib/taskiemSeen";
+import {
+  isTyping,
+  KEYS_EVENT,
+  shortcutOf,
+  SHORTCUTS,
+  step,
+} from "../lib/chatKeys";
+import { Ticks } from "./BubbleShell";
 import {
   EmptyState,
   ErrorBox,
   fmtTime,
-  Item,
   Items,
   Modal,
   PageHeader,
@@ -160,8 +178,10 @@ function AnswerButtons({
   busy: boolean;
 }) {
   const who = <span className="sr-only"> {link.name}</span>;
+  const { confirm, node } = useConfirm();
   return (
     <>
+      {node}
       <button
         type="button"
         className="primary small"
@@ -182,10 +202,13 @@ function AnswerButtons({
         type="button"
         className="small danger"
         disabled={busy}
-        onClick={() =>
-          confirm(
-            `Block ${link.name}? Their requests will not reach you, and they are not told.`,
-          ) && answer(link, "block", "Blocked")
+        onClick={async () =>
+          (await confirm({
+            title: `Block ${link.name}?`,
+            body: "Their requests will not reach you, and they are not told.",
+            ok: "Block",
+            danger: true,
+          })) && answer(link, "block", "Blocked")
         }
       >
         Block{who}
@@ -194,8 +217,19 @@ function AnswerButtons({
   );
 }
 
+const NO_LINKS: LinksView = { links: [], sent: [] };
+
 function useLinks() {
-  const view = useLoad(() => get<LinksView>("/v1/links"), []);
+  // With Linked businesses turned off there is nothing to ask for.
+  const { me } = useAuth();
+  const on = areaOn(me?.areas, "links");
+  const view = useLoad(
+    () =>
+      on
+        ? whenOff(get<LinksView>("/v1/links"), NO_LINKS)
+        : Promise.resolve(NO_LINKS),
+    [on],
+  );
   const act = useAction();
   const answer = (
     l: BusinessLink | BlindLinkRequest,
@@ -218,34 +252,87 @@ function useLinks() {
  * that sends a request to it.
  */
 export function ChatPage() {
-  const { can } = useAuth();
-  const manage = can("link.manage");
+  const { me, can } = useAuth();
+  // Chat is also the person's own conversation with Taskiem: with Linked
+  // businesses off it shows that alone, and asks for no business's chats.
+  const linksOn = areaOn(me?.areas, "links");
+  const manage = can("link.manage") && linksOn;
   const { view, act, answer } = useLinks();
   const [params, setParams] = useSearchParams();
+  // Explore is a step in the browser history (a state of this same address),
+  // so the phone's Back closes it, as it closes WhatsApp's.
+  const here = useLocation();
+  const navigate = useNavigate();
+  const loc = useRef(here);
+  loc.current = here;
+  const go = useRef(navigate);
+  go.current = navigate;
+  const exploring = (here.state as { explore?: boolean } | null)?.explore === true;
   const convs = useLoad(
-    () => get<{ conversations: Conversation[] }>("/v1/link-chats"),
-    [],
+    () =>
+      linksOn
+        ? whenOff(get<{ conversations: Conversation[] }>("/v1/link-chats"), {
+            conversations: [],
+          })
+        : Promise.resolve({ conversations: [] as Conversation[] }),
+    [linksOn],
   );
   useLiveRefresh(convs.reload);
   const reloadConvs = convs.reload; // stable
   // The list follows the conversations every few seconds while the page
   // is seen (the typing line, the unread counts, the last message), as
   // the open conversation follows itself; 30 s otherwise (useLiveRefresh).
+  const live = useChatLive();
+  const connected = live.connected;
   useEffect(() => {
+    if (!linksOn) return;
     const t = setInterval(
       () => document.visibilityState === "visible" && reloadConvs(),
-      5_000,
+      connected ? 20_000 : 5_000,
     );
     return () => clearInterval(t);
-  }, [reloadConvs]);
+  }, [reloadConvs, connected, linksOn]);
+  // The stream says when a conversation changed: the list follows at once.
+  useEffect(() => {
+    let soon: number | undefined;
+    const off = live.subscribe(() => {
+      window.clearTimeout(soon);
+      soon = window.setTimeout(reloadConvs, 300);
+    });
+    return () => {
+      off();
+      window.clearTimeout(soon);
+    };
+  }, [live, reloadConvs]);
   // A link accepted or ended here changes the chats too.
   const linksSeen = view.data;
   useEffect(() => {
     if (linksSeen) reloadConvs();
   }, [linksSeen, reloadConvs]);
-  const [archived, setArchived] = useState(false);
+  const [filter, setFilter] = useState<
+    "all" | "unread" | "starred" | "archived"
+  >("all");
+  // The messages this person starred, when that view is chosen (again: a
+  // star may have changed since).
+  const [starTick, setStarTick] = useState(0);
+  const starredMsgs = useLoad(
+    () =>
+      filter === "starred"
+        ? get<{ messages: LinkMessage[] }>("/v1/link-chats/starred").then(
+            (r) => r.messages,
+          )
+        : Promise.resolve([] as LinkMessage[]),
+    [filter, starTick],
+  );
+  const archived = filter === "archived";
   const [foundMessages, setFoundMessages] = useState<LinkMessage[]>();
-  const settings = useLoad(() => get<LinkSettings>("/v1/link-settings"), []);
+  const settings = useLoad(
+    () =>
+      linksOn
+        ? get<LinkSettings>("/v1/link-settings")
+        : Promise.resolve(undefined),
+    [linksOn],
+  );
   const [q, setQ] = useState("");
   const [found, setFound] = useState<LinkSearch>();
   const [searchError, setSearchError] = useState<unknown>();
@@ -255,7 +342,7 @@ export function ChatPage() {
   const [searchTick, setSearchTick] = useState(0);
   const query = q.trim();
   useEffect(() => {
-    if (query.length < 2) {
+    if (!linksOn || query.length < 2) {
       setFound(undefined);
       return;
     }
@@ -271,119 +358,328 @@ export function ChatPage() {
         (r) => live && setFoundMessages(r.messages),
         () => undefined,
       );
-    }, 250);
+    }, 150);
     return () => {
       live = false;
       clearTimeout(t);
     };
-  }, [query, searchTick]);
+  }, [query, searchTick, linksOn]);
   const g = groupLinks(view.data);
-  const searching = query.length >= 2;
+  // From the first letter the list narrows to what matches, as WhatsApp's
+  // does; from two, other businesses and messages are looked for too.
+  const searching = linksOn && query.length >= 2;
   const all = convs.data?.conversations ?? [];
+  const drafts = useDrafts();
+  const taskiemUnread = useTaskiemUnread();
   const openID = params.get("with");
   const open = all.find((c) => c.link === openID);
   // The person's own conversation with Taskiem, pinned at the top (§5.5).
   const taskiemOpen = openID === "taskiem";
-  const listed = all.filter((c) => c.archived === archived);
+  const unreadCount = all.filter((c) => !c.archived && c.unread > 0).length;
+  const archivedCount = all.filter((c) => c.archived).length;
+  const narrowed = linksOn && query.length === 1 ? matchChats(all, query) : all;
+  const listed = narrowed.filter(
+    (c) => c.archived === archived && (filter !== "unread" || c.unread > 0),
+  );
+  // The keyboard (a desktop reader's hands): shortcuts that are off while a
+  // field has the focus, arrows through the list, and Esc, which closes the
+  // chat after whatever panel is open has closed.
+  const searchBox = useRef<HTMLInputElement>(null);
+  const [keysOpen, setKeysOpen] = useState(false);
+  const [hint, setHint] = useState("");
+  const order = ["taskiem", ...listed.map((c) => c.link)];
+  const keys = useRef({ order, openID: openID ?? undefined, setParams });
+  keys.current = { order, openID: openID ?? undefined, setParams };
+  // Asking a business to link starts at the search box (the "n" key, and the
+  // round button of the list).
+  const startNew = useRef<() => void>(() => undefined);
+  useEffect(() => {
+    const focusSearch = () =>
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          searchBox.current?.focus();
+          searchBox.current?.select();
+        }),
+      );
+    startNew.current = () => {
+      // Finding a business has a screen of its own (Explore).
+      go.current(`${loc.current.pathname}${loc.current.search}`, {
+        state: { explore: true },
+      });
+    };
+    const onKey = (e: KeyboardEvent) => {
+      const k = keys.current;
+      if (e.key === "Escape") {
+        // The panel, the menu, the sheet or the reply is closed first, by
+        // whatever owns it (it says so by taking the key).
+        if (e.defaultPrevented || !k.openID) return;
+        if (
+          document.querySelector(
+            '[data-testid="chat-more"], [data-testid="chat-recording"], .chat-menu, .attach-menu, .chat-info, .modal, .mention-list, .emoji-panel, .explore',
+          )
+        )
+          return;
+        if (e.target === searchBox.current) return;
+        const id = k.openID;
+        k.setParams({});
+        requestAnimationFrame(() =>
+          document
+            .querySelector<HTMLElement>(`.chat-list-pane a[href$="with=${id}"]`)
+            ?.focus(),
+        );
+        return;
+      }
+      // Not under an open menu, sheet or panel: the letters are theirs.
+      const covered = !!document.querySelector(
+        '[data-testid="chat-more"], [data-testid="chat-recording"], .chat-menu, .attach-menu, .chat-info, .modal, .mention-list, .emoji-panel, .explore',
+      );
+      const what = shortcutOf(e, covered || isTyping(document.activeElement));
+      if (!what || e.defaultPrevented) return;
+      e.preventDefault();
+      if (what === "help") setKeysOpen(true);
+      else if (what === "search" || what === "new") {
+        if (what === "new") return startNew.current();
+        k.setParams({});
+        focusSearch();
+      } else {
+        const to = step(k.order, k.openID, what === "next" ? 1 : -1);
+        if (to) k.setParams({ with: to });
+      }
+    };
+    const showKeys = () => setKeysOpen(true);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener(KEYS_EVENT, showKeys);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener(KEYS_EVENT, showKeys);
+    };
+  }, []);
+  // Arrows in the list: down from the search box to the first chat, then
+  // chat to chat; up from the first back to the box. Enter opens (a link).
+  const onListKey = (e: React.KeyboardEvent) => {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    const box = searchBox.current;
+    // Everything that can be pressed below the search box and the chips: the
+    // chats, and the results, requests and asks the lists hold.
+    const rows = Array.from(
+      e.currentTarget.querySelectorAll<HTMLElement>(
+        ":is(section, ul.chat-rows) :is(a[href], button:not(:disabled))",
+      ),
+    ).filter((x) => !x.closest(".chat-chips, .chat-list-head, .card"));
+    const at = rows.indexOf(e.target as HTMLElement);
+    if (at < 0 && e.target !== box) return;
+    const next =
+      e.target === box
+        ? e.key === "ArrowDown"
+          ? rows[0]
+          : undefined
+        : e.key === "ArrowDown"
+          ? rows[at + 1]
+          : (rows[at - 1] ?? box ?? undefined);
+    if (!next) return;
+    e.preventDefault();
+    next.focus();
+  };
   const nameOf = (link: string) =>
     all.find((c) => c.link === link)?.name ?? "They";
   const roleOf = (link: string) => {
     const l = view.data?.links.find((x) => x.id === link);
     return l ? roleLine(l.role) : "";
   };
-  const chats = searching ? matchLinked(view.data?.links ?? [], query) : [];
+  // A chat is found by its name or by a word of its last message.
+  const chatHits = searching ? matchChats(all, query) : [];
+  const chats = searching
+    ? (view.data?.links ?? []).filter(
+        (l) =>
+          matchLinked([l], query).length > 0 ||
+          chatHits.some((c) => c.business === l.business),
+      )
+    : [];
   const blind = found?.blind;
   const others = (found?.results ?? []).filter(
     (c) => !chats.some((l) => l.business === c.business),
   );
   return (
     <>
-      <PageHeader
-        title="Chat"
-        description="The businesses on Taskiem you trade with. Find another by its name, what it sells or its area, and ask to link."
-        actions={
-          <Link className="button" to="/settings/links">
-            Linked businesses
-          </Link>
-        }
-      />
+      <h1 className="sr-only">Chat</h1>
       <div className={`chat-layout${open || taskiemOpen ? " open" : ""}`}>
-        <div className="chat-list-pane">
-          <div className="filters" role="search" aria-label="Find a business">
-            <label className="search">
-              <span className="sr-only">Find a business</span>
-              <Icon name="search" />
-              <input
-                type="search"
-                placeholder="Cement, catering in Ikeja, Dangote…"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                data-testid="link-search"
-              />
-            </label>
-          </div>
-          <ErrorBox error={view.error ?? act.error ?? searchError} />
-          {manage && settings.data && !settings.data.asked_at && !searching && (
-            <FindableQuestion
-              settings={settings.data}
-              busy={act.busy}
-              answer={(findable) =>
-                void act.run(
-                  async () => (
-                    await put("/v1/link-settings", { findable }),
-                    settings.reload()
-                  ),
-                  findable ? "Other businesses can find you" : false,
-                )
-              }
+        <div className="chat-list-pane" onKeyDown={onListKey}>
+          <div className="chat-list-head">
+            <h2>Chat</h2>
+            {linksOn && (
+              <button
+                type="button"
+                className="new-chat"
+                data-testid="new-chat"
+                aria-label="Find a business to link with"
+                onClick={() => startNew.current()}
+              >
+                <Icon name="plus" />
+                <span className="fab-label">Find a business</span>
+              </button>
+            )}
+            <HeadMenu
+              label="More about the chats"
+              items={(close) => (
+                <>
+                  <Link
+                    className="menu-link"
+                    to="/settings/links"
+                    onClick={close}
+                  >
+                    Linked businesses
+                  </Link>
+                  <Link
+                    className="menu-link"
+                    to="/settings/links/profile"
+                    onClick={close}
+                  >
+                    Your business in Explore
+                  </Link>
+                </>
+              )}
             />
+          </div>
+          {linksOn && (
+            <div className="filters" role="search" aria-label="Find a business">
+              <label className="search">
+                <span className="sr-only">Find a business</span>
+                <Icon name="search" />
+                <input
+                  type="search"
+                  ref={searchBox}
+                  placeholder="Search or find a business"
+                  value={q}
+                  onChange={(e) => (setQ(e.target.value), setHint(""))}
+                  onKeyDown={(e) => {
+                    // Esc empties the box; with it empty, the key goes on.
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      if (q) {
+                        setQ("");
+                        setHint("");
+                      } else e.currentTarget.blur();
+                    }
+                  }}
+                  data-testid="link-search"
+                />
+              </label>
+            </div>
           )}
-          {!searching && !archived && (
-            <Items label="Your conversation with Taskiem">
-              <Item
-                to="/chat?with=taskiem"
-                icon="sparkle"
-                title="Taskiem"
-                sub="Your own conversation with Taskiem, as on your phone"
-                testid="taskiem-chat"
-              />
-            </Items>
+          <p className="sr-only" role="status">
+            {hint}
+          </p>
+          {!searching && all.length > 0 && (
+            <div className="chat-chips" role="group" aria-label="Show">
+              {(
+                [
+                  ["all", "All"],
+                  [
+                    "unread",
+                    unreadCount ? `Unread (${unreadCount})` : "Unread",
+                  ],
+                  ["starred", "Starred"],
+                  ["archived", `Archived (${archivedCount})`],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  className="chat-chip"
+                  aria-pressed={filter === key}
+                  onClick={() => {
+                    setFilter(key);
+                    if (key === "starred") setStarTick((n) => n + 1);
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           )}
+          <ErrorBox error={view.error ?? act.error ?? searchError} />
+          {!searching &&
+            !archived &&
+            filter !== "starred" &&
+            (query.length === 0 ||
+              "taskiem".startsWith(query.toLowerCase())) && (
+              <ul
+                className="chat-rows"
+                aria-label="Your conversation with Taskiem"
+              >
+                <ChatRow
+                  to="/chat?with=taskiem"
+                  letter="T"
+                  accent
+                  title="Taskiem"
+                  preview={
+                    drafts.taskiem ? (
+                      <>
+                        <span className="draft">Draft:</span> {drafts.taskiem}
+                      </>
+                    ) : (
+                      "Your own conversation with Taskiem, as on your phone"
+                    )
+                  }
+                  selected={taskiemOpen}
+                  unread={taskiemUnread}
+                  testid="taskiem-chat"
+                />
+              </ul>
+            )}
           {searching ? (
             <section aria-label="Search results" data-testid="link-results">
               {chats.length > 0 && (
                 <>
                   <h2>Chats</h2>
-                  <Items label="Linked businesses found">
-                    {chats.map((l) => (
-                      <Row
-                        key={l.id}
-                        letter={l.name}
-                        title={l.name}
-                        side={<StateBadge state={l.state} />}
-                        sub={<span className="sub">{roleLine(l.role)}</span>}
-                        testid="link-chat"
-                      />
-                    ))}
-                  </Items>
+                  <ul
+                    className="chat-rows"
+                    aria-label="Linked businesses found"
+                  >
+                    {chats.map((l) => {
+                      const conv = all.find((c) => c.business === l.business);
+                      return conv ? (
+                        <ChatRow
+                          key={l.id}
+                          to={`/chat?with=${conv.link}`}
+                          letter={conv.name}
+                          logo={conv.logo ? logoSrc(conv.business) : undefined}
+                          title={conv.name}
+                          preview={roleLine(l.role)}
+                          unread={conv.unread}
+                          selected={openID === conv.link}
+                          testid="link-chat"
+                        />
+                      ) : (
+                        <Row
+                          key={l.id}
+                          letter={l.name}
+                          title={l.name}
+                          side={<StateBadge state={l.state} />}
+                          sub={<span className="sub">{roleLine(l.role)}</span>}
+                          testid="link-chat"
+                        />
+                      );
+                    })}
+                  </ul>
                 </>
               )}
               {(foundMessages?.length ?? 0) > 0 && (
                 <>
                   <h2>Messages</h2>
-                  <Items label="Messages found">
+                  <ul className="chat-rows" aria-label="Messages found">
                     {foundMessages?.map((m) => (
-                      <Item
+                      <ChatRow
                         key={m.id}
-                        to={`/chat?with=${m.link}`}
-                        icon="chat"
+                        to={`/chat?with=${m.link}&msg=${m.id}`}
+                        letter={nameOf(m.link)}
                         title={nameOf(m.link)}
-                        sub={previewLine(m, nameOf(m.link))}
-                        side={listTime(m.created_at)}
+                        time={listTime(m.created_at)}
+                        preview={previewLine(m, nameOf(m.link))}
                         testid="chat-found-message"
                       />
                     ))}
-                  </Items>
+                  </ul>
                 </>
               )}
               <h2>Businesses on Taskiem</h2>
@@ -392,7 +688,9 @@ export function ChatPage() {
                   <Row
                     icon="chat"
                     title={`Send a link request to ${blind.shown}`}
-                    sub={<span className="sub">{blindRowLine(blind.kind)}</span>}
+                    sub={
+                      <span className="sub">{blindRowLine(blind.kind)}</span>
+                    }
                     testid="link-blind"
                   >
                     {manage && (
@@ -410,12 +708,15 @@ export function ChatPage() {
                 <Skeleton rows={2} label="Searching businesses…" />
               ) : others.length === 0 ? (
                 <EmptyState icon="search">
-                  No business that lets others find it matches “{query}”.
+                  No business found for “{query}”. Only businesses that chose to be found are listed.
                 </EmptyState>
               ) : (
                 <Items label="Businesses on Taskiem">
                   {others.map((c) => {
-                    const pending = requestTo(view.data?.links ?? [], c.business);
+                    const pending = requestTo(
+                      view.data?.links ?? [],
+                      c.business,
+                    );
                     return (
                       <FoundRow
                         key={c.business}
@@ -488,60 +789,103 @@ export function ChatPage() {
                   </Items>
                 </section>
               )}
-              {all.length > 0 && (
+              {filter === "starred" && (
+                <section aria-label="Starred messages">
+                  <h2>Starred messages</h2>
+                  {!starredMsgs.data ? (
+                    <Skeleton rows={2} label="Loading your starred messages…" />
+                  ) : starredMsgs.data.length === 0 ? (
+                    <p className="hint">
+                      Nothing starred yet. Open a message’s menu and choose Star
+                      to keep it here.
+                    </p>
+                  ) : (
+                    <ul className="chat-rows" aria-label="Starred messages">
+                      {starredMsgs.data.map((m) => (
+                        <ChatRow
+                          key={m.id}
+                          to={`/chat?with=${m.link}&msg=${m.id}`}
+                          letter={nameOf(m.link)}
+                          title={nameOf(m.link)}
+                          time={listTime(m.created_at)}
+                          preview={previewLine(m, nameOf(m.link))}
+                          testid="starred-message"
+                        />
+                      ))}
+                    </ul>
+                  )}
+                </section>
+              )}
+              {filter !== "starred" && all.length > 0 && (
                 <section aria-label="Chats">
                   <div className="toolbar" style={{ marginBottom: 6 }}>
-                    <h2 className="grow" style={{ margin: 0 }}>
+                    <h2
+                      className={archived ? "grow" : "grow sr-only"}
+                      style={{ margin: 0 }}
+                    >
                       {archived ? "Archived" : "Chats"}
                     </h2>
-                    {(archived || all.some((c) => c.archived)) && (
-                      <button
-                        type="button"
-                        className="small"
-                        onClick={() => setArchived(!archived)}
-                      >
-                        {archived
-                          ? "Back to chats"
-                          : `Archived (${all.filter((c) => c.archived).length})`}
-                      </button>
-                    )}
                   </div>
-                  <Items label={archived ? "Archived chats" : "Chats"}>
+                  {listed.length === 0 && (
+                    <p className="hint">
+                      {query.length === 1
+                        ? `No chat matches “${query}”.`
+                        : archived
+                          ? "No archived chats."
+                          : filter === "unread"
+                            ? "Nothing unread."
+                            : "No chats."}
+                    </p>
+                  )}
+                  <ul
+                    className="chat-rows"
+                    aria-label={archived ? "Archived chats" : "Chats"}
+                  >
                     {listed.map((c) => (
-                      <Item
+                      <ChatRow
                         key={c.link}
                         to={`/chat?with=${c.link}`}
-                        icon="chat"
-                        tone={c.state === "active" ? "ok" : "muted"}
+                        letter={c.name}
+                        logo={c.logo ? logoSrc(c.business) : undefined}
                         title={c.name}
-                        sub={
-                          c.typing
-                            ? "typing…"
-                            : c.last
-                              ? previewLine(c.last, c.name)
-                              : c.state === "active"
-                                ? `Linked · ${roleOf(c.link)}`
-                                : "The link has ended"
-                        }
-                        side={c.last ? listTime(c.last.created_at) : undefined}
-                        sideSub={
-                          c.unread > 0 ? (
-                            <span
-                              className="unread-count"
-                              aria-label={`${c.unread} unread`}
-                            >
-                              {c.unread}
-                            </span>
-                          ) : c.pinned ? (
-                            <span className="hint">Pinned</span>
-                          ) : c.muted ? (
-                            <span className="hint">Muted</span>
+                        time={c.last ? listTime(c.last.created_at) : undefined}
+                        lead={
+                          c.last?.mine && c.last.kind !== "card" ? (
+                            <Ticks read={!!c.last.read_at} />
                           ) : undefined
                         }
+                        preview={
+                          drafts[c.link] ? (
+                            <>
+                              <span className="draft">Draft:</span>{" "}
+                              {drafts[c.link]}
+                            </>
+                          ) : (
+                              connected ? live.typing.has(c.link) : c.typing
+                            ) ? (
+                            "typing…"
+                          ) : c.last ? (
+                            previewLine(c.last, c.name).replace(
+                              c.last.mine && c.last.kind !== "card"
+                                ? /^You: /
+                                : /^$/,
+                              "",
+                            )
+                          ) : c.state === "active" ? (
+                            `Linked · ${roleOf(c.link)}`
+                          ) : (
+                            "The link has ended"
+                          )
+                        }
+                        typing={connected ? live.typing.has(c.link) : c.typing}
+                        unread={c.unread}
+                        pinned={c.pinned}
+                        muted={c.muted}
+                        selected={openID === c.link}
                         testid="link-linked"
                       />
                     ))}
-                  </Items>
+                  </ul>
                 </section>
               )}
               {g.waiting.length + g.sent.length > 0 && (
@@ -583,6 +927,35 @@ export function ChatPage() {
               )}
             </>
           )}
+          {manage &&
+            settings.data &&
+            !settings.data.asked_at &&
+            !searching &&
+            filter !== "starred" && (
+              <FindableQuestion
+                settings={settings.data}
+                busy={act.busy}
+                answer={(findable) =>
+                  void act.run(
+                    async () => (
+                      await put("/v1/link-settings", { findable }),
+                      settings.reload()
+                    ),
+                    findable ? "Other businesses can find you" : false,
+                  )
+                }
+              />
+            )}
+          {keysOpen && <KeysSheet onClose={() => setKeysOpen(false)} />}
+          {exploring && (
+            <Explore
+              links={view.data?.links ?? []}
+              convs={all}
+              manage={manage}
+              onClose={() => go.current(-1)}
+              onChanged={() => view.reload()}
+            />
+          )}
           {asking && (
             <RequestSheet
               asking={asking}
@@ -594,10 +967,21 @@ export function ChatPage() {
         {taskiemOpen && <TaskiemPane onBack={() => setParams({})} />}
         {open && (
           <ConversationPane
+            key={open.link}
             conv={open}
             others={all}
             onBack={() => setParams({})}
             onChanged={reloadConvs}
+            focus={params.get("msg") ?? undefined}
+            link={view.data?.links.find((l) => l.id === open.link)}
+            onEndLink={
+              manage
+                ? (l) => {
+                    answer(l, "end", "Link ended");
+                    reloadConvs();
+                  }
+                : undefined
+            }
           />
         )}
       </div>
@@ -716,6 +1100,20 @@ export function LinkedBusinessesPage() {
           <Skeleton rows={1} label="Loading the setting…" />
         )}
       </section>
+      <section
+        className="card"
+        aria-labelledby="link-profile"
+        data-testid="link-profile-card"
+      >
+        <h2 id="link-profile">How other businesses see you</h2>
+        <p className="hint">
+          Your name, a line about what you do, your area, a logo and up to 12
+          photos.
+        </p>
+        <Link className="button" to="/settings/links/profile">
+          Edit your business in Explore
+        </Link>
+      </section>
       {settings.data?.url && <CodeCard url={settings.data.url} />}
       <section aria-label="Links">
         {!view.data ? (
@@ -798,23 +1196,30 @@ function LinkActions({
   busy: boolean;
 }) {
   const who = <span className="sr-only"> {link.name}</span>;
+  const { confirm, node } = useConfirm();
   switch (link.state) {
     case "asked_us":
       return <AnswerButtons link={link} answer={answer} busy={busy} />;
     case "active":
       return (
-        <button
-          type="button"
-          className="small danger"
-          disabled={busy}
-          onClick={() =>
-            confirm(
-              `End the link with ${link.name}? What passed between you stays on both sides.`,
-            ) && answer(link, "end", "Link ended")
-          }
-        >
-          End link{who}
-        </button>
+        <>
+          {node}
+          <button
+            type="button"
+            className="small danger"
+            disabled={busy}
+            onClick={async () =>
+              (await confirm({
+                title: `End the link with ${link.name}?`,
+                body: "What passed between you stays on both sides.",
+                ok: "End link",
+                danger: true,
+              })) && answer(link, "end", "Link ended")
+            }
+          >
+            End link{who}
+          </button>
+        </>
       );
     case "requested":
     case "not_accepted":
@@ -1060,7 +1465,9 @@ function FindableQuestion({
       <h2 id="link-findable-ask">Let other businesses on Taskiem find you?</h2>
       <p className="hint">
         They would find you by your name, what you sell and your area, from what
-        your storefront already shows. {findableLine(settings)}
+        your storefront already shows, or from your{" "}
+        <Link to="/settings/links/profile">business profile</Link>.{" "}
+        {findableLine(settings)}
       </p>
       <div className="row-actions">
         <button
@@ -1076,5 +1483,34 @@ function FindableQuestion({
         </button>
       </div>
     </section>
+  );
+}
+
+/** The keys of the Chat page, for a reader who has a keyboard. */
+function KeysSheet({ onClose }: { onClose: () => void }) {
+  return (
+    <Modal title="Keyboard" onClose={onClose}>
+      <dl className="keys" data-testid="keys-sheet">
+        {SHORTCUTS.map((s) => (
+          <div key={s.does} className="keys-row">
+            <dt>
+              {s.keys.map((k, i) => (
+                <span key={k}>
+                  {i > 0 && <span className="sr-only"> then </span>}
+                  <kbd>{k}</kbd>{" "}
+                </span>
+              ))}
+            </dt>
+            <dd>{s.does}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="hint">The letters work when no box is being typed in.</p>
+      <div className="row-actions">
+        <button type="button" onClick={onClose}>
+          Close
+        </button>
+      </div>
+    </Modal>
   );
 }

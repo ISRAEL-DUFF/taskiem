@@ -1,6 +1,6 @@
 # Social posting: a person or a business posts to their social accounts from a workflow, and from WhatsApp
 
-Status: **Plan** (proposed 6 November 2026) · Decision: [0062](../decisions/0062-social-posting.md) (proposed) · Builds on: [business connectors](business-connectors.md) §6 (K5, the Meta app, `messenger@1`, `instagram@1`), [platform apps](../decisions/0051-platform-apps.md), [chat as the way in](chat-way-in.md), [no sheet needed](no-sheet-needed.md) (known tables), [moderation](../moderation.md), [AI steps](../ai.md#ai-steps), [storefronts](../storefronts.md) (the catalogue) · Strategy: [chat-first](../strategy/chat-first-nigeria.md) · Stories: [user stories](../strategy/user-stories.md) Y
+Status: **Plan** (proposed 6 November 2026) · Decision: [0063](../decisions/0063-social-posting.md) (proposed) · Builds on: [business connectors](business-connectors.md) §6 (K5, the Meta app, `messenger@1`, `instagram@1`), [platform apps](../decisions/0051-platform-apps.md), [chat as the way in](chat-way-in.md), [no sheet needed](no-sheet-needed.md) (known tables), [moderation](../moderation.md), [AI steps](../ai.md#ai-steps), [storefronts](../storefronts.md) (the catalogue) · Strategy: [chat-first](../strategy/chat-first-nigeria.md) · Stories: [user stories](../strategy/user-stories.md) Y
 
 ## 1. Summary
 

@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/time/rate"
 
+	"github.com/israel-duff/taskiem/engine/brand"
 	"github.com/israel-duff/taskiem/engine/formguard"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
@@ -404,6 +405,9 @@ func TestStatusPage(t *testing.T) {
 	}{
 		{OrderState{Status: "awaiting_payment", Kind: "order", TotalKobo: 450200, PaymentURL: "https://checkout.paystack.test/abc"},
 			[]string{`href="https://checkout.paystack.test/abc" rel="noopener noreferrer">Pay ₦4,502</a>`, "Your order is held for 30 minutes"}, false},
+		// A deposit: the card page charges the deposit, and the button says so.
+		{OrderState{Status: "awaiting_payment", Kind: "order", TotalKobo: 450200, AskedKobo: 135060, PaymentURL: "https://checkout.paystack.test/dep"},
+			[]string{`href="https://checkout.paystack.test/dep" rel="noopener noreferrer">Pay ₦1,350.60</a>`}, false},
 		{OrderState{Status: "awaiting_payment", Kind: "order", TotalKobo: 450200}, []string{"preparing your payment"}, true},
 		{OrderState{Status: "awaiting_payment", Kind: "order", TotalKobo: 450200, PaymentURL: "javascript:alert(1)"}, []string{"preparing your payment"}, true},
 		{OrderState{Status: "received", Kind: "order", TotalKobo: 450200}, []string{"Order received", "Ada&#39;s &lt;Kitchen&gt; will confirm by SMS", "₦4,502"}, false},
@@ -887,7 +891,7 @@ func TestFrontPages(t *testing.T) {
 
 // No route the public host has itself is an address a front can take.
 func TestFrontSlugsMissTheRoutes(t *testing.T) {
-	for _, route := range []string{"a", "o", "f", "r", "report", "embed", "pay", "static"} {
+	for _, route := range []string{"a", "o", "f", "i", "r", "report", "embed", "pay", "static"} {
 		if err := storefront.CheckFrontSlug(route); err == nil {
 			t.Errorf("a front may take /%s", route)
 		}
@@ -982,5 +986,273 @@ func TestQuoteAndBlankForms(t *testing.T) {
 	w = e.post("/repairs/a/form", url.Values{"token": {tok}, "website": {""}, "name": {"Bola"}, "phone": {"0803 123 4567"}, "a.device": {"Fridge"}})
 	if w.Code != http.StatusSeeOther {
 		t.Fatalf("a blank form: %d %s", w.Code, w.Body.String())
+	}
+}
+
+// An item is opened by its name, on a page of its own (/<front>/i/<id>):
+// with the order form on it offers Add to bag; with no form at all the page
+// and the item say that orders are not open yet, and where to ask, instead
+// of leaving the item doing nothing. In every theme.
+func TestItemsOpenAndSayWhenOrdersAreNotOpen(t *testing.T) {
+	order := uuid.New()
+	for _, theme := range brand.Themes {
+		p := orderPage()
+		home := storefront.PublicFront{Slug: "", Kind: "shop", Name: "Ada's Kitchen"}
+		snacks := storefront.PublicFront{Slug: "snacks", Kind: "food", Name: "Snacks",
+			Blocks:  []storefront.PublicBlock{{Kind: "list", Config: json.RawMessage(`{"table": "00000000-0000-0000-0000-000000000001", "table_name": "menu", "columns": {"name": "name"}}`)}},
+			Actions: []storefront.PublicAction{{ID: &order, Slug: "order", Kind: "order", Label: "Order snacks", Payment: "after_accept", Pickup: true, Form: storefront.BuiltinForm("order")}}}
+		cold := storefront.PublicFront{Slug: "cold", Kind: "food", Name: "Cold drinks", Blocks: snacks.Blocks}
+		p.Model.Fronts = []storefront.PublicFront{home, snacks, cold}
+		p.Model.WhatsLink = "https://wa.me/2348031234567"
+		p.Lists = map[string][]storefront.Item{"menu": {{ID: "1", Name: "Puff puff", PriceKobo: kobo(50000), Description: "Fried fresh", Available: true},
+			{ID: "2", Name: "Zobo", PriceKobo: kobo(30000), Available: false}}}
+		e := formServer(t, p)
+		withBrand(e.s, brand.Brand{Theme: theme})
+		e.h = e.s.Handler()
+
+		// With the order form on: the name opens the item's page, which
+		// offers Add to bag and goes to the order form.
+		page := get(e.h, "GET", sfHost, "/snacks").Body.String()
+		if !strings.Contains(page, `class="item-open" href="/snacks/i/1"`) {
+			t.Errorf("%s: with the order form on, the item's page is not linked", theme)
+		}
+		// A card adds: by the order form (the older looks), or straight to
+		// the bag (the shop looks: a form with the item's quantity).
+		toBag := strings.Contains(page, `action="/snacks/a/order"`) && strings.Contains(page, `name="q.1"`) && strings.Contains(page, `name="step" value="bag"`)
+		if !strings.Contains(page, `href="/snacks/a/order?item=1"`) && !toBag {
+			t.Errorf("%s: with the order form on, a card does not add the item", theme)
+		}
+		if strings.Contains(page, `id="i-1"`) {
+			t.Errorf("%s: the item's pop-up is still on the page", theme)
+		}
+		if strings.Contains(page, "Orders are not open on this page yet") {
+			t.Errorf("%s: the page says orders are not open while they are", theme)
+		}
+		item := get(e.h, "GET", sfHost, "/snacks/i/1")
+		if item.Code != http.StatusOK {
+			t.Fatalf("%s: the item's page: %d", theme, item.Code)
+		}
+		add := lookOf(brand.Brand{Theme: theme}, "").Words().Add
+		for _, want := range []string{"Puff puff", "Fried fresh", add, `action="/snacks/a/order"`, `name="step" value="bag"`, `name="q.1"`, "/_static/item-sheet."} {
+			if !strings.Contains(item.Body.String(), want) {
+				t.Errorf("%s: the item's page is missing %q", theme, want)
+			}
+		}
+		if page := get(e.h, "GET", sfHost, "/snacks/i/2").Body.String(); !strings.Contains(page, "Unavailable for now.") || strings.Contains(page, add) {
+			t.Errorf("%s: an unavailable item offers to be bagged", theme)
+		}
+		if w := get(e.h, "GET", sfHost, "/snacks/i/99"); w.Code != http.StatusNotFound {
+			t.Errorf("%s: an item that is not there: %d", theme, w.Code)
+		}
+		if w := get(e.h, "GET", sfHost, "/nothing/i/1"); w.Code != http.StatusNotFound {
+			t.Errorf("%s: an item on a front that is not there: %d", theme, w.Code)
+		}
+
+		// With no form: the page and each item say so, and where to ask.
+		page = get(e.h, "GET", sfHost, "/cold").Body.String()
+		for _, want := range []string{`href="/cold/i/1"`, "Orders are not open on this page yet.", `href="https://wa.me/2348031234567"`, "on WhatsApp"} {
+			if !strings.Contains(page, want) {
+				t.Errorf("%s: with no form, missing %q", theme, want)
+			}
+		}
+		if strings.Contains(page, "Add to order") || strings.Contains(page, `class="add"`) {
+			t.Errorf("%s: an order button on a front that takes no orders", theme)
+		}
+		if page := get(e.h, "GET", sfHost, "/cold/i/1").Body.String(); !strings.Contains(page, "Orders are not open on this page yet.") || !strings.Contains(page, "on WhatsApp") || strings.Contains(page, add) {
+			t.Errorf("%s: an item on a front that takes no orders: %s", theme, page)
+		}
+		if !strings.Contains(page, "/_static/item-sheet.") {
+			t.Errorf("%s: the item view's stylesheet is not linked", theme)
+		}
+	}
+}
+
+// An order is two pages, the bag and then the details, with nothing kept
+// between them but the address and the form's own fields (no cookie): the
+// bag step lists what is in it and takes it on, the details step shows it
+// as a summary above the details and posts it, and a refused submission
+// stays on the details step. Without a step in the address the order is
+// the one page it always was. In every theme.
+func TestOrderBagAndDetailsSteps(t *testing.T) {
+	order := uuid.New()
+	for _, theme := range brand.Themes {
+		p := orderPage()
+		home := storefront.PublicFront{Slug: "", Kind: "shop", Name: "Ada"}
+		food := storefront.PublicFront{Slug: "food", Kind: "food", Name: "Food",
+			Blocks:  []storefront.PublicBlock{{Kind: "list", Config: json.RawMessage(`{"table": "00000000-0000-0000-0000-000000000001", "table_name": "menu", "columns": {"name": "name"}}`)}},
+			Actions: []storefront.PublicAction{{ID: &order, Slug: "order", Kind: "order", Label: "Order food", Payment: "after_accept", Pickup: true, Form: storefront.BuiltinForm("order")}}}
+		p.Model.Fronts = []storefront.PublicFront{home, food}
+		rice := storefront.Item{ID: "1", Name: "Jollof rice", PriceKobo: kobo(150000), Available: true,
+			Options: storefront.ParseOptions(`[{"name": "Size", "choices": ["Regular", {"name": "Large", "price": 500}]}]`)}
+		p.Lists = map[string][]storefront.Item{"menu": {rice}}
+		e := formServer(t, p)
+		withBrand(e.s, brand.Brand{Theme: theme})
+		e.h = e.s.Handler()
+
+		// The bag: what is in it, with the choices and the sum.
+		bagPage := get(e.h, "GET", sfHost, "/food/a/order?step=bag&q.1=2&o.1.0=1")
+		if bagPage.Code != http.StatusOK {
+			t.Fatalf("%s: the bag step: %d", theme, bagPage.Code)
+		}
+		bag := bagPage.Body.String()
+		words := lookOf(brand.Brand{Theme: theme}, "").Words()
+		for _, want := range []string{words.Your, `name="step" value="details"`, `name="q.1" value="2"`, "Large", "₦2,000 each", "Total: ₦4,000", `method="get"`} {
+			if !strings.Contains(bag, want) {
+				t.Errorf("%s: the bag step is missing %q", theme, want)
+			}
+		}
+		if strings.Contains(bag, `name="token"`) || strings.Contains(bag, "Send order") {
+			t.Errorf("%s: the bag step is the details form", theme)
+		}
+
+		// The details: the bag as a summary, its fields kept, the form to post.
+		details, tok := e.form(t, "/food/a/order?step=details&q.1=2&o.1.0=1")
+		for _, want := range []string{words.Your, "2 × Jollof rice", "Total: ₦4,000", `name="q.1" value="2"`, `name="o.1.0" value="1"`, `step=bag`, "Send order", `method="post"`} {
+			if !strings.Contains(details, want) {
+				t.Errorf("%s: the details step is missing %q", theme, want)
+			}
+		}
+		if strings.Contains(details, `<select class="opt"`) {
+			t.Errorf("%s: the details step asks the choices again", theme)
+		}
+
+		// No step: the one page it always was.
+		if body, _ := e.form(t, "/food/a/order"); !strings.Contains(body, `<select class="opt" name="o.1.0"`) || strings.Contains(body, "Total: ₦") {
+			t.Errorf("%s: no step is not the one-page order", theme)
+		}
+		// An emptied bag says so, and is forgotten in the browser.
+		for _, path := range []string{"/food/a/order?step=bag", "/food/a/order?step=details&q.1=0"} {
+			if body := get(e.h, "GET", sfHost, path).Body.String(); !strings.Contains(body, "Your "+words.Bag+" is empty") || !strings.Contains(body, "data-bag-clear") || strings.Contains(body, `name="token"`) {
+				t.Errorf("%s: %s is not the empty bag", theme, path)
+			}
+		}
+
+		// A refused submission stays on the details step, its bag kept.
+		*e.now = e.now.Add(20 * time.Second)
+		v := url.Values{"token": {tok}, "website": {""}, "name": {""}, "phone": {"0803 123 4567"}, "q.1": {"2"}, "o.1.0": {"1"}}
+		w := e.post("/food/a/order", v)
+		if w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), "2 × Jollof rice") || !strings.Contains(w.Body.String(), "Please enter your name") {
+			t.Fatalf("%s: a refused order: %d %s", theme, w.Code, w.Body.String())
+		}
+
+		// And an order from the details step is priced from the catalogue.
+		_, tok = e.form(t, "/food/a/order?step=details&q.1=2&o.1.0=1")
+		*e.now = e.now.Add(20 * time.Second)
+		v = url.Values{"token": {tok}, "website": {""}, "name": {"Ada Obi"}, "phone": {"0803 123 4567"}, "q.1": {"2"}, "o.1.0": {"1"}}
+		w = e.post("/food/a/order", v)
+		if w.Code != http.StatusSeeOther {
+			t.Fatalf("%s: %d %s", theme, w.Code, w.Body.String())
+		}
+	}
+}
+
+// One item twice in a bag, with different choices: two lines (q.1 and
+// q.1~2), priced each with its own; together they are held to what is
+// left. A choice the dish no longer has takes its line out, saying so,
+// rather than putting the first choice in its place.
+func TestBagLinesOfOneItem(t *testing.T) {
+	order := uuid.New()
+	p := orderPage()
+	home := storefront.PublicFront{Slug: "", Kind: "shop", Name: "Ada"}
+	food := storefront.PublicFront{Slug: "food", Kind: "food", Name: "Food",
+		Blocks:  []storefront.PublicBlock{{Kind: "list", Config: json.RawMessage(`{"table": "00000000-0000-0000-0000-000000000001", "table_name": "menu", "columns": {"name": "name"}}`)}},
+		Actions: []storefront.PublicAction{{ID: &order, Slug: "order", Kind: "order", Label: "Order food", Payment: "after_accept", Pickup: true, Form: storefront.BuiltinForm("order")}}}
+	p.Model.Fronts = []storefront.PublicFront{home, food}
+	left := int64(3)
+	rice := storefront.Item{ID: "1", Name: "Jollof rice", PriceKobo: kobo(150000), Available: true, Stock: &left,
+		Options: storefront.ParseOptions(`[{"name": "Size", "choices": ["Regular", {"name": "Large", "price": 500}]}]`)}
+	p.Lists = map[string][]storefront.Item{"menu": {rice}}
+	e := formServer(t, p)
+	withBrand(e.s, brand.Brand{Theme: "kitchen"})
+	e.h = e.s.Handler()
+
+	bag := get(e.h, "GET", sfHost, "/food/a/order?step=bag&q.1=1&o.1.0=0&q.1~2=2&o.1~2.0=1").Body.String()
+	for _, want := range []string{`name="q.1" value="1"`, `name="q.1~2" value="2"`, `name="o.1~2.0" value="1"`, "Regular", "Large", "Total: ₦5,500", "Remove<span class=\"sr\"> Jollof rice</span>"} {
+		if !strings.Contains(bag, want) {
+			t.Errorf("two lines of one dish: missing %q", want)
+		}
+	}
+	for _, want := range []string{`href="/food/a/order?o.1~2.0=1&amp;q.1~2=2&amp;step=bag"`, `href="/food/a/order?o.1.0=0&amp;q.1=1&amp;step=bag"`} {
+		if !strings.Contains(bag, want) {
+			t.Errorf("removing one line keeps the other: missing %s", want)
+		}
+	}
+
+	stale := get(e.h, "GET", sfHost, "/food/a/order?step=bag&q.1=1&o.1.0=7").Body.String()
+	if !strings.Contains(stale, "The choices for Jollof rice have changed") || !strings.Contains(stale, "Your order is empty") {
+		t.Errorf("a choice no longer offered: %s", stale)
+	}
+
+	_, tok := e.form(t, "/food/a/order?step=details&q.1=1&o.1.0=0&q.1~2=2&o.1~2.0=1")
+	*e.now = e.now.Add(20 * time.Second)
+	v := url.Values{"token": {tok}, "website": {""}, "name": {"Ada Obi"}, "phone": {"0803 123 4567"}, "q.1": {"2"}, "o.1.0": {"0"}, "q.1~2": {"2"}, "o.1~2.0": {"1"}}
+	if w := e.post("/food/a/order", v); w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), "Only 3 of Jollof rice left") {
+		t.Fatalf("four of three left, over two lines: %d", w.Code)
+	}
+	_, tok = e.form(t, "/food/a/order?step=details&q.1=1&o.1.0=0&q.1~2=2&o.1~2.0=1")
+	*e.now = e.now.Add(20 * time.Second)
+	v = url.Values{"token": {tok}, "website": {""}, "name": {"Ada Obi"}, "phone": {"0803 123 4567"}, "q.1": {"1"}, "o.1.0": {"0"}, "q.1~2": {"2"}, "o.1~2.0": {"1"}}
+	w := e.post("/food/a/order", v)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("%d %s", w.Code, w.Body.String())
+	}
+	ref := regexp.MustCompile(`^/o/(AD-[A-Z2-9]{6})`).FindStringSubmatch(w.Header().Get("Location"))[1]
+	sub, err := storefront.OpenSubmission(e.s.InboxKey, e.sf, ref, e.inbox.rows[ref].payload)
+	if err != nil || len(sub.Basket) != 2 || sub.Basket[0].LineName() != "Jollof rice (Regular)" || sub.Basket[1].LineName() != "Jollof rice (Large)" || sub.TotalKobo != 550000 {
+		t.Fatalf("priced: %+v %v", sub.Basket, err)
+	}
+}
+
+// The shop looks' pages as their designs have them: a service's page says
+// what kind and how long above its name and opens the booking form with
+// it chosen, saying the deposit; an item's photos are all thumbnails,
+// the first among them; the bag pill knows the order; and the details
+// step's button says what is paid now.
+func TestShopPagesAsDesigned(t *testing.T) {
+	order, book := uuid.New(), uuid.New()
+	p := orderPage()
+	home := storefront.PublicFront{Slug: "", Kind: "shop", Name: "Bloom"}
+	studio := storefront.PublicFront{Slug: "studio", Kind: "food", Name: "Studio",
+		Blocks: []storefront.PublicBlock{{Kind: "list", Config: json.RawMessage(`{"table": "00000000-0000-0000-0000-000000000001", "table_name": "menu", "columns": {"name": "name"}}`)}},
+		Actions: []storefront.PublicAction{
+			{ID: &order, Slug: "order", Kind: "order", Label: "Order", Payment: "at_order", Pickup: true, DepositPercent: 50, Form: storefront.BuiltinForm("order")},
+			{ID: &book, Slug: "booking", Kind: "booking", Label: "Book", Payment: "at_order", DepositPercent: 20, Form: storefront.BuiltinForm("booking")}}}
+	p.Model.Fronts = []storefront.PublicFront{home, studio}
+	press := storefront.Item{ID: "1", Name: "Silk press", Category: "Hair", PriceKobo: kobo(2500000), Available: true, DurationMinutes: 120}
+	oil := storefront.Item{ID: "2", Name: "Hair oil", PriceKobo: kobo(800000), Available: true,
+		Photo: storefront.Image{"320": "/s0.jpg", "800": "/l0.jpg"}, Gallery: []storefront.Image{{"320": "/s1.jpg", "800": "/l1.jpg"}}}
+	p.Lists = map[string][]storefront.Item{"menu": {press, oil}}
+	e := formServer(t, p)
+	withBrand(e.s, brand.Brand{Theme: "salon"})
+	e.h = e.s.Handler()
+
+	svc := get(e.h, "GET", sfHost, "/studio/i/1").Body.String()
+	for _, want := range []string{`<p class="pdp-kicker">Hair · 2 hours</p>`, `href="/studio/a/booking?service=1">Choose a time</a>`, "Pay a ₦5,000 deposit to hold your time."} {
+		if !strings.Contains(svc, want) {
+			t.Errorf("the service's page is missing %q", want)
+		}
+	}
+	if strings.Contains(svc, "Add to booking") {
+		t.Error("a service is booked, not added to a bag")
+	}
+	pics := get(e.h, "GET", sfHost, "/studio/i/2").Body.String()
+	for _, want := range []string{`data-pic="/l0.jpg" aria-current="true"`, `alt="Photo 1 of 2"`, `data-pic="/l1.jpg"`, `alt="Photo 2 of 2"`, "Add to booking", `data-run-total>· ₦8,000</span>`, "Pay a 50% deposit now.",
+		`class="sf-pill" href="/studio/a/order?step=bag" data-bag-link`, "/_static/item."} {
+		if !strings.Contains(pics, want) {
+			t.Errorf("the item's page is missing %q", want)
+		}
+	}
+
+	details, _ := e.form(t, "/studio/a/order?step=details&q.2=2")
+	for _, want := range []string{"<h1>Checkout</h1>", `class="form co"`, "Your booking", `Pay <span data-pay>₦8,000</span> deposit`, "Balance at the studio"} {
+		if !strings.Contains(details, want) {
+			t.Errorf("the details step is missing %q", want)
+		}
+	}
+	if strings.Contains(details, ">Send order</button>") {
+		t.Error("the details step has two buttons")
+	}
+	if bag := get(e.h, "GET", sfHost, "/studio/a/order?step=bag&q.2=1").Body.String(); !strings.Contains(bag, "<h1>Your booking</h1>") || !strings.Contains(bag, ">Add another service</a>") {
+		t.Errorf("the bag step: %s", bag)
 	}
 }

@@ -141,26 +141,32 @@ func (m *Matcher) holdMatch(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, c 
 			return nil, err
 		}
 		// Only a student's invoice is the school's to hold: a shop's or
-		// any other invoice of the business is matched as before.
-		var sid uuid.UUID
-		if err := tx.QueryRow(ctx, `SELECT student_id FROM school_term_invoices WHERE invoice_id = $1`, x.ID).Scan(&sid); errors.Is(err, pgx.ErrNoRows) {
-			continue
-		} else if err != nil {
+		// any other invoice of the business is matched as before. A
+		// student's are their term invoices and any invoice made to them
+		// as the school's customer (key:student:<id>), as desk money and
+		// StudentInvoicesSQL have it.
+		var sid *uuid.UUID
+		if err := tx.QueryRow(ctx, `SELECT COALESCE((SELECT ti.student_id FROM school_term_invoices ti WHERE ti.invoice_id = $1),
+			(SELECT st.id FROM customer_invoices ci JOIN school_students st ON st.tenant_id = ci.tenant_id AND ci.customer_id = 'key:student:' || st.id::text
+			  WHERE ci.id = $1))`, x.ID).Scan(&sid); err != nil {
 			return nil, err
+		}
+		if sid == nil {
+			continue
 		}
 		towards += p.AmountKobo
 		if invoice == nil {
 			id := x.ID
-			invoice, student = &id, &sid
+			invoice, student = &id, sid
 		}
-		of[sid] = append(of[sid], x.ID)
-		kobo[sid] += p.AmountKobo
+		of[*sid] = append(of[*sid], x.ID)
+		kobo[*sid] += p.AmountKobo
 		if !over {
-			prior, err := EnteredUnapproved(ctx, tx, tenant, &sid, of[sid])
+			prior, err := EnteredUnapproved(ctx, tx, tenant, sid, of[*sid])
 			if err != nil {
 				return nil, err
 			}
-			over = prior+kobo[sid] >= *limit
+			over = prior+kobo[*sid] >= *limit
 		}
 	}
 	if invoice == nil || !over {
@@ -178,8 +184,14 @@ func (m *Matcher) holdMatch(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, c 
 		return nil, fmt.Errorf("%w: a match of this payment already waits for a second person's approval", invoicing.ErrState)
 	}
 	raw, _ := json.Marshal(heldRequest{Entry: c.entry, Suggestion: c.suggestion, Parts: c.parts, CreditRest: c.creditRest, How: c.how, Reasons: c.reasons})
+	// The person who asked: a user, or the owner of the API key that
+	// asked (taskiem_actor_human), so they never approve it themselves.
 	var user *uuid.UUID
-	if id, err := uuid.Parse(c.by); err == nil {
+	var human string
+	if err := tx.QueryRow(ctx, `SELECT taskiem_actor_human($1)`, c.by).Scan(&human); err != nil {
+		return nil, err
+	}
+	if id, err := uuid.Parse(human); err == nil {
 		user = &id
 	}
 	h := &Held{RequestID: uuid.New(), AmountKobo: towards}

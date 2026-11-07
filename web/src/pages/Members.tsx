@@ -442,6 +442,8 @@ interface SSOConnection {
   jit: boolean;
   enforce: boolean;
   disabled: boolean;
+  /** An owner set it up or approved it; until then it signs in no owner. */
+  owner_approved: boolean;
   domains: SSODomain[] | null;
   redirect_uri?: string;
   entity_id?: string;
@@ -451,6 +453,9 @@ interface SSOConnection {
 
 /** Single sign-on: the tenant's OIDC or SAML identity providers. */
 function SingleSignOn() {
+  // A provider and its domains decide who signs in as whom, owners
+  // included: only an owner adds or verifies them (the API refuses others).
+  const owner = !!useAuth().me?.roles.includes("owner");
   const list = useLoad(() => get<{ connections: SSOConnection[] }>("/v1/sso"), []);
   const [adding, setAdding] = useState(false);
   const [domain, setDomain] = useState<Record<string, string>>({});
@@ -467,10 +472,11 @@ function SingleSignOn() {
         <h2 className="grow" style={{ margin: 0 }}>
           Single sign-on
         </h2>
-        <button onClick={() => setAdding(true)}>Add identity provider</button>
+        {owner && <button onClick={() => setAdding(true)}>Add identity provider</button>}
       </div>
       <p className="hint">
         People sign in through your identity provider when their email is on a domain you have verified. Roles follow their groups; single sign-on only manages the roles it gave. Enforced, members on those domains cannot use passwords or passkeys (owners excepted, so a broken provider cannot lock you out).
+        {!owner && " Only an owner adds identity providers and verifies their domains."}
       </p>
       <ErrorBox error={list.error ?? act.error} />
       {list.data?.connections.map((c) => (
@@ -498,6 +504,23 @@ function SingleSignOn() {
               </>
             )}
           </p>
+          {!c.owner_approved && (
+            <p className="hint">
+              No owner has set up or approved this provider, so it signs in no owner. Owners sign in with their password or passkey meanwhile.{" "}
+              {owner && (
+                <button
+                  onClick={() =>
+                    void act.run(async () => {
+                      await put(`/v1/sso/${c.id}`, { default_roles: c.default_roles, group_roles: c.group_roles, jit: c.jit, enforce: c.enforce, disabled: c.disabled, owner_approved: true });
+                      list.reload();
+                    }, "Approved for owners")
+                  }
+                >
+                  Approve for owners
+                </button>
+              )}
+            </p>
+          )}
           <p className="hint">
             Default roles: {c.default_roles.join(", ") || "none"} · Groups: {Object.entries(c.group_roles).map(([g, r]) => `${g} → ${r.join(", ")}`).join("; ") || "none"}
           </p>
@@ -522,19 +545,21 @@ function SingleSignOn() {
                       </>
                     )}
                   </td>
-                  <td>{!d.verified_at && <button onClick={() => void act.run(async () => (await post(`/v1/sso/domains/${d.domain}/verify`), list.reload()), "Checked")}>Verify</button>}</td>
+                  <td>{!d.verified_at && owner && <button onClick={() => void act.run(async () => (await post(`/v1/sso/domains/${d.domain}/verify`), list.reload()), "Checked")}>Verify</button>}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <div className="row" style={{ alignItems: "flex-end" }}>
-            <Field label="Add a domain">
-              <input value={domain[c.id] ?? ""} placeholder="bank.com" onChange={(e) => setDomain({ ...domain, [c.id]: e.target.value })} />
-            </Field>
-            <button disabled={!domain[c.id]} onClick={() => void act.run(async () => (await post(`/v1/sso/${c.id}/domains`, { domain: domain[c.id] }), setDomain({ ...domain, [c.id]: "" }), list.reload()), "Domain added")}>
-              Add
-            </button>
-          </div>
+          {owner && (
+            <div className="row" style={{ alignItems: "flex-end" }}>
+              <Field label="Add a domain">
+                <input value={domain[c.id] ?? ""} placeholder="bank.com" onChange={(e) => setDomain({ ...domain, [c.id]: e.target.value })} />
+              </Field>
+              <button disabled={!domain[c.id]} onClick={() => void act.run(async () => (await post(`/v1/sso/${c.id}/domains`, { domain: domain[c.id] }), setDomain({ ...domain, [c.id]: "" }), list.reload()), "Domain added")}>
+                Add
+              </button>
+            </div>
+          )}
         </section>
       ))}
       {adding && <AddSSO onClose={() => setAdding(false)} onDone={() => (setAdding(false), list.reload())} />}

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="{{.Lang}}">
+<head>
+{{template "meta" .}}{{template "og" .}}</head>
+<body class="sf kx{{if .Ordering}} has-sticky{{end}}">
+<div class="kx-top">
+  <a class="kx-name" href="{{if .Home}}{{.Home}}{{else}}#{{end}}">{{.M.Card.Name}}</a>
+  {{if .Ordering}}<a class="kx-bag" href="{{.Base}}/a/order" data-bag-link>{{template "i-bag"}}<span>Order</span><b class="bag-n" data-bag-n hidden data-bag-show></b></a>{{end}}
+</div>
+<section class="kx-hero">
+  <div class="kx-copy">
+    {{if .OpenKnown}}<p class="kx-pill {{if .OpenNow}}is-open{{else}}is-closed{{end}}">{{if .OpenNow}}Open now{{else}}Closed now{{end}}</p>{{end}}
+    {{$a := accent (or .M.Card.Tagline .M.Card.Name)}}<h1>{{index $a 0}}{{with index $a 1}} <em>{{.}}</em>{{end}}</h1>
+    {{with .M.Card.About}}<p class="kx-lead">{{.}}</p>{{end}}
+    <p class="kx-cta">
+      {{if .HasItems}}<a class="btn btn-primary" href="#menu">See the menu</a>{{end}}
+      {{range .Forms}}{{if eq .Kind "booking"}}<a class="btn" href="{{$.Base}}/a/{{.Ref}}">{{.Label}}</a>{{end}}{{end}}
+      {{with .M.WhatsLink}}<a class="btn" href="{{.}}" rel="noopener">Order on WhatsApp</a>{{end}}
+    </p>
+  </div>
+  <div class="kx-plate">{{template "heropic" .}}</div>
+</section>
+<main class="kx-main">
+{{template "sfnotes" .}}
+{{if gt (len .Sections) 1}}<nav class="chips" aria-label="Sections">
+  {{range $i, $s := .Sections}}{{if .Title}}<a class="chip{{if eq $i 0}} is-on{{end}}" href="#s{{$i}}">{{.Title}}</a>{{end}}
+  {{end}}
+</nav>{{end}}
+{{if .Services}}<section aria-labelledby="services-h"><h2 id="services-h">Services</h2>
+<ul class="items">{{range .Services}}<li class="item"><span class="thumb thumb-icon">{{template "i-clock"}}</span><div class="item-text"><h3>{{.Name}}</h3><p class="item-sub">{{.Length}} · {{.Price}}</p><p class="item-row"><span></span><a class="btn btn-small btn-primary" href="{{.Href}}" aria-label="Book {{.Name}}">Book</a></p></div></li>
+{{end}}</ul></section>{{end}}
+{{if .HasItems}}<div id="menu">
+{{range $i, $s := .Sections}}
+<section id="s{{$i}}" aria-label="{{if .Title}}{{.Title}}{{else}}Catalogue{{end}}">
+  <h2>{{if .Title}}{{.Title}}{{else}}Today's plates{{end}}</h2>
+  <ul class="kx-grid">
+    {{range .Items}}
+    <li class="kx-card{{if or (not .Available) .SoldOut}} is-unavailable{{end}}">
+      <a class="kx-img" href="{{if .ID}}{{$.Base}}/i/{{.ID}}{{else}}#{{end}}" tabindex="-1" aria-hidden="true">{{if .Small}}<img src="{{.Small}}" srcset="{{.Small}} 320w, {{.Large}} 800w" sizes="(min-width: 900px) 18vw, 45vw" alt="" loading="lazy" decoding="async">{{else}}{{template "i-photo"}}{{end}}</a>
+      <div class="kx-meta">
+        <div><h3>{{if .ID}}<a class="item-open" href="{{$.Base}}/i/{{.ID}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}</h3>
+        <p class="price">{{.Price}}</p>{{if .Few}}<span class="badge badge-few">Few left</span>{{end}}{{if .ReadyIn}}<p class="item-sub">Ready in {{.ReadyIn}} min</p>{{end}}</div>
+        {{if not .Available}}<span class="badge">Unavailable</span>{{else if .SoldOut}}<span class="badge">Sold out</span>{{else if and $.Ordering .Orderable}}{{if .Options}}<a class="add" href="{{$.Base}}/i/{{.ID}}" aria-label="Choose {{.Name}}">{{template "i-plus"}}</a>{{else}}<form class="kx-buy" data-merge method="get" action="{{$.Base}}/a/order"><input type="hidden" name="step" value="bag"><input type="hidden" name="q.{{.ID}}" value="1"><button class="add" type="submit" aria-label="Add {{.Name}}">{{template "i-plus"}}</button></form>{{end}}{{end}}
+      </div>
+    </li>
+    {{end}}
+  </ul>
+</section>
+{{end}}</div>{{end}}
+{{template "sfinfo" .}}
+</main>
+{{template "sffoot" .}}
+{{if .Ordering}}<a class="sticky" href="{{.Base}}/a/order" data-bag-link><span data-bag-hide>Start your order</span><span class="sticky-sum" data-bag-show hidden><small><b data-bag-n></b> items</small> <b data-bag-t></b></span><span class="sticky-go"><span data-bag-show hidden>Checkout&nbsp;</span>{{template "i-next"}}</span></a>{{end}}
+</body>
+</html>

@@ -31,7 +31,7 @@ type Account struct {
 	Connection    string     `json:"connection"`
 	PaymentID     string     `json:"payment_id"`
 	AmountKobo    int64      `json:"amount_kobo"`
-	Status        string     `json:"status"` // requested, open, failed, paid, returned
+	Status        string     `json:"status"` // requested, open, failed, paid, returned, unavailable (no payments connection could open it)
 	AccountNumber string     `json:"account_number,omitempty"`
 	BankName      string     `json:"bank_name,omitempty"`
 	AccountName   string     `json:"account_name,omitempty"`
@@ -398,6 +398,7 @@ func (s *Invoices) Drain(ctx context.Context) error {
 			if s.OrderRequested != nil {
 				if err := s.OrderRequested(ctx, q.Tenant, *q.Order); err != nil {
 					s.log().Warn("order account", "tenant", q.Tenant, "order", *q.Order, "err", err)
+					s.noteUnavailable(ctx, q, err)
 				}
 			}
 			if _, err := s.Pool.Exec(ctx, `SELECT taskiem_invoice_requests_done($1)`, q.ID); err != nil {
@@ -409,6 +410,7 @@ func (s *Invoices) Drain(ctx context.Context) error {
 			// A customer's page: what it asked for is on the page.
 			if _, err := s.IssueForCustomer(ctx, q.Tenant, *q.Link, q.Kind, q.AmountKobo); err != nil {
 				s.log().Warn("customer link account", "tenant", q.Tenant, "link", *q.Link, "kind", q.Kind, "err", err)
+				s.noteUnavailable(ctx, q, err)
 			}
 			if _, err := s.Pool.Exec(ctx, `SELECT taskiem_invoice_requests_done($1)`, q.ID); err != nil {
 				return err
@@ -418,6 +420,7 @@ func (s *Invoices) Drain(ctx context.Context) error {
 		a, err := s.Issue(ctx, q.Tenant, q.Invoice, q.Kind, q.AmountKobo)
 		if err != nil {
 			s.log().Warn("invoice account", "tenant", q.Tenant, "invoice", q.Invoice, "kind", q.Kind, "err", err)
+			s.noteUnavailable(ctx, q, err)
 		}
 		if s.Answered != nil && q.Channel != "page" {
 			s.Answered(ctx, q, a, err)
@@ -457,13 +460,31 @@ type watched struct {
 	invoice, order, link *uuid.UUID
 }
 
+// checkEvery is how often an account's payment is looked up, and so how
+// long a pass's claim on it lasts; checkBudget is how long one tenant's
+// pass starts new lookups, below it. A lookup still under way when the
+// claim lapses may be asked again by another replica: that is a read, and
+// a payment is counted once (Received).
+const (
+	checkEvery  = 30 * time.Second
+	checkBudget = 20 * time.Second
+)
+
 func (s *Invoices) checkTenant(ctx context.Context, tenant uuid.UUID) error {
 	now := s.now()
 	var list []watched
 	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT `+accountCols+`, invoice_id, order_id, customer_link_id FROM customer_invoice_accounts
-			WHERE tenant_id = $1 AND status IN ('requested', 'open') AND (checked_at IS NULL OR checked_at < $2)
-			ORDER BY checked_at NULLS FIRST LIMIT 50`, tenant, now.Add(-30*time.Second))
+		// The accounts are claimed as they are read (checked_at set now,
+		// rows another replica is reading skipped), so api replicas split
+		// the lookups rather than each asking the provider about every one.
+		// The pick is materialised: as an IN subquery the planner may
+		// rescan it, and each rescan skips the rows just locked.
+		//nolint:misspell // MATERIALIZED is the SQL keyword
+		rows, err := tx.Query(ctx, `WITH c AS MATERIALIZED (SELECT id AS claimed FROM customer_invoice_accounts
+			  WHERE tenant_id = $1 AND status IN ('requested', 'open') AND (checked_at IS NULL OR checked_at < $2)
+			  ORDER BY checked_at NULLS FIRST LIMIT 50 FOR UPDATE SKIP LOCKED)
+			UPDATE customer_invoice_accounts SET checked_at = $3 FROM c WHERE id = c.claimed
+			RETURNING `+accountCols+`, invoice_id, order_id, customer_link_id`, tenant, now.Add(-checkEvery), now)
 		if err != nil {
 			return err
 		}
@@ -479,7 +500,15 @@ func (s *Invoices) checkTenant(ctx context.Context, tenant uuid.UUID) error {
 	if err != nil {
 		return err
 	}
+	started := time.Now()
 	for _, w := range list {
+		// The claim lasts checkEvery: past checkBudget, the rest is left
+		// for the next pass (any replica's), so a slow provider neither
+		// holds this tenant's pass for minutes nor lets another replica
+		// look up what this one is about to.
+		if time.Since(started) > checkBudget {
+			break
+		}
 		// Stop watching an account well after it expired, and a link after
 		// a week: nothing more will come.
 		end := w.CreatedAt.Add(WatchLinks)
@@ -545,10 +574,12 @@ type Received struct {
 
 // Received counts a payment into an invoice's account or link towards
 // it, exactly (the reference is the one Taskiem gave), once, and tells a
-// run waiting on the invoice when it becomes paid.
+// run waiting on the invoice when it becomes paid. An invoice that takes
+// no payment (void) is ErrState, with the money recorded all the same.
 func (s *Invoices) Received(ctx context.Context, tenant, invoice uuid.UUID, r Received) error {
 	var x Invoice
 	var became bool
+	var refused error
 	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		var entry *uuid.UUID
 		if s.MoneyLog != nil {
@@ -562,19 +593,77 @@ func (s *Invoices) Received(ctx context.Context, tenant, invoice uuid.UUID, r Re
 			}
 			entry = &id
 		}
-		var err error
-		x, became, err = s.RecordPayment(ctx, tx, tenant, invoice.String(), PaymentIn{AmountKobo: r.AmountKobo, PaymentID: r.PaymentID, EntryID: entry,
-			Connection: r.Connection, How: "exact", By: "system:" + r.Connection, Reasons: []string{"paid into the account Taskiem gave for this invoice"}})
+		// Counted in a savepoint: an invoice that takes no payment (void)
+		// leaves the money recorded for a person to match, and the account
+		// paid, so it is not polled again.
+		sp, err := tx.Begin(ctx)
 		if err != nil {
 			return err
+		}
+		x, became, err = s.RecordPayment(ctx, sp, tenant, invoice.String(), PaymentIn{AmountKobo: r.AmountKobo, PaymentID: r.PaymentID, EntryID: entry,
+			Connection: r.Connection, How: "exact", By: "system:" + r.Connection, Reasons: []string{"paid into the account Taskiem gave for this invoice"}})
+		switch {
+		case errors.Is(err, ErrState):
+			if rerr := sp.Rollback(ctx); rerr != nil {
+				return rerr
+			}
+			refused, became = err, false
+		case err != nil:
+			return err
+		default:
+			if err := sp.Commit(ctx); err != nil {
+				return err
+			}
 		}
 		if r.Account != uuid.Nil {
 			_, err = tx.Exec(ctx, `UPDATE customer_invoice_accounts SET status = 'paid', updated_at = now() WHERE tenant_id = $1 AND id = $2`, tenant, r.Account)
 		}
 		return err
 	})
+	if err == nil {
+		err = refused
+	}
 	if err != nil || !became {
 		return err
 	}
 	return s.Paid(ctx, tenant, x)
+}
+
+// noteUnavailable records that a request found no payments connection able
+// to do it, so the page can say so instead of looking as if nothing
+// happened, and tells the business once (PayUnavailable). Anything else
+// that went wrong already left a failed account, or is the rail's to
+// answer. One row stays per invoice (or order, or customer page) and kind:
+// asking again updates it, and a later account that works comes after it.
+func (s *Invoices) noteUnavailable(ctx context.Context, q Request, cause error) {
+	if !errors.Is(cause, ErrNoRail) {
+		return
+	}
+	col, owner := "invoice_id", q.Invoice
+	switch {
+	case q.Order != nil:
+		col, owner = "order_id", *q.Order
+	case q.Link != nil:
+		col, owner = "customer_link_id", *q.Link
+	}
+	first := false
+	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{q.Tenant}, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `UPDATE customer_invoice_accounts SET error = $4, updated_at = now()
+			WHERE tenant_id = $1 AND `+col+` = $2 AND kind = $3 AND status = 'unavailable'`, q.Tenant, owner, q.Kind, shortErr(cause))
+		if err != nil || tag.RowsAffected() > 0 {
+			return err
+		}
+		first = true
+		_, err = tx.Exec(ctx, `INSERT INTO customer_invoice_accounts (id, tenant_id, `+col+`, seq, kind, connector, connection, payment_id, amount_kobo, status, error)
+			SELECT $1::uuid, $2::uuid, $3::uuid, COALESCE(max(seq), 0) + 1, $4::text, 'none', 'none', 'unavailable:' || $1::uuid::text, $5::bigint, 'unavailable', $6::text
+			  FROM customer_invoice_accounts WHERE `+col+` = $3 AND kind = $4`, uuid.New(), q.Tenant, owner, q.Kind, max(q.AmountKobo, 100), shortErr(cause))
+		return err
+	})
+	if err != nil {
+		s.log().Warn("recording that payment is unavailable", "tenant", q.Tenant, "err", err)
+		return
+	}
+	if first && s.PayUnavailable != nil {
+		s.PayUnavailable(ctx, q, cause)
+	}
 }

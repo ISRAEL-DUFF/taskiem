@@ -121,6 +121,11 @@ type Connector struct {
 	// Enrichers complete a verified delivery before its runs start (a
 	// record the provider left out). Keyed by trigger; optional.
 	Enrichers map[string]Enricher
+	// Keyers give a verified delivery's dedup key, for triggers whose
+	// manifest dedup cannot read the event itself (an encrypted body).
+	// Keyed by trigger; optional. Deliveries to a tenant's own address
+	// only.
+	Keyers map[string]Keyer
 	// CheckCredentials, when set, refuses a connection's credentials
 	// before they are saved (a combination of fields the connector cannot
 	// use safely). Its error is shown to whoever saves them.
@@ -182,6 +187,12 @@ const TenantPrefix = "x_"
 // (docs/connector-submissions.md), distinct from built-ins and from
 // tenants' own x_ connectors.
 const CataloguePrefix = "p_"
+
+// BuiltIn says whether id is one of Taskiem's own connectors: neither a
+// tenant's (x_) nor a publisher's in the catalogue (p_).
+func BuiltIn(id string) bool {
+	return !strings.HasPrefix(id, TenantPrefix) && !strings.HasPrefix(id, CataloguePrefix)
+}
 
 // TenantSource returns a tenant's own connectors and the catalogue
 // connectors it installed.
@@ -344,6 +355,17 @@ func (c *Connector) Check() error {
 	for name := range c.Enrichers {
 		if _, ok := c.Manifest.Triggers[name]; !ok {
 			return fmt.Errorf("connector %s: enricher %q is not a trigger in the manifest", c.Manifest.ID, name)
+		}
+	}
+	for name := range c.Keyers {
+		t, ok := c.Manifest.Triggers[name]
+		if !ok {
+			return fmt.Errorf("connector %s: keyer %q is not a trigger in the manifest", c.Manifest.ID, name)
+		}
+		if t.Split != "" {
+			// A keyer reads the whole delivery: it would give every item
+			// one key.
+			return fmt.Errorf("connector %s: keyer %q is for a trigger that splits its deliveries", c.Manifest.ID, name)
 		}
 	}
 	if o := c.Manifest.Auth.OAuth2; o != nil && (len(o.LinkedFields) > 0) != (c.Link != nil) {

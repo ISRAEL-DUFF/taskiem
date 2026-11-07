@@ -393,7 +393,8 @@ paths:
       tags:
       - Storefront
       summary: Save the storefront's draft
-      description: The slug and the catalogue mapping are checked now; the card when it is published.
+      description: The slug and the catalogue mapping are checked now; the card when it is published. `retention_days`
+        sets how long ended orders keep their customer's details.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -596,6 +597,14 @@ paths:
         schema:
           type: integer
         description: The row's id
+      - name: add
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - '1'
+        description: 1 adds the photo to the item's gallery (up to 6 photos; 409 past that). Without it the photo takes the place of the main photo, the rest kept.
       requestBody:
         required: true
         content:
@@ -618,6 +627,69 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StorefrontMedia'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: removeStorefrontItemPhoto
+      tags:
+      - Storefront
+      summary: Take a photo off a catalogue row
+      description: The next photo becomes the main one when the main one is taken out. Any entry the photo column holds can be taken out, so one the page cannot show does not keep its place.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: row
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: The row's id
+      - name: media
+        in: query
+        required: true
+        schema:
+          type: string
+        description: The photo's media id, as the item lists it
+      responses:
+        '204':
+          description: Taken out
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/catalogue/rows/{row}/photo/main:
+    put:
+      operationId: mainStorefrontItemPhoto
+      tags:
+      - Storefront
+      summary: Make one of a catalogue row's photos its main photo
+      description: The photo moves to the front; the others keep their order after it.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: row
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: The row's id
+      - name: media
+        in: query
+        required: true
+        schema:
+          type: string
+        description: The photo's media id, as the item lists it
+      responses:
+        '204':
+          description: It is the main photo
         default:
           $ref: '#/components/responses/Error'
   /v1/storefront/media:
@@ -1329,6 +1401,289 @@ paths:
                       type: string
         default:
           $ref: '#/components/responses/Error'
+  /v1/storefront/fronts/{id}/items:
+    get:
+      operationId: listStorefrontFrontItems
+      tags:
+      - Storefront
+      summary: A front's items
+      description: The rows of the table the front's list shows, as the table has them now, with their photos, and which of price, description, category, availability and photo the list takes (takes). 400 for a front with no list.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The front's id
+      responses:
+        '200':
+          description: The items
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FrontItems'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: addStorefrontFrontItem
+      tags:
+      - Storefront
+      summary: Add an item to a front
+      description: A row in the front's table, checked by its columns (a name is needed; the price is in naira; an item starts available). The page's copy is refreshed. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The front's id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FrontItemRequest'
+      responses:
+        '201':
+          description: Added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/fronts/{id}/items/{row}:
+    patch:
+      operationId: patchStorefrontFrontItem
+      tags:
+      - Storefront
+      summary: Change an item on a front
+      description: Only what is sent changes. 404 for an item that is not there, 400 when nothing is sent. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The front's id
+      - name: row
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: The item's row id in the front's table
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FrontItemRequest'
+      responses:
+        '200':
+          description: Changed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteStorefrontFrontItem
+      tags:
+      - Storefront
+      summary: Remove an item from a front
+      description: Deletes its row from the front's table. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The front's id
+      - name: row
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: The item's row id in the front's table
+      responses:
+        '204':
+          description: Removed
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/fronts/{id}/items/{row}/photo:
+    post:
+      operationId: setStorefrontFrontItemPhoto
+      tags:
+      - Storefront
+      summary: Store a photo and set it on a front's item
+      description: As the catalogue's photos are, for any front whose list has a photo column (400 otherwise).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The front's id
+      - name: row
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: The item's row id in the front's table
+      - name: add
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - '1'
+        description: 1 adds the photo to the item's gallery (up to 6 photos; 409 past that). Without it the photo takes the place of the main photo, the rest kept.
+      requestBody:
+        required: true
+        content:
+          image/jpeg:
+            schema:
+              type: string
+              format: binary
+          image/png:
+            schema:
+              type: string
+              format: binary
+          image/webp:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: Stored, and the item updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorefrontMedia'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: removeStorefrontFrontItemPhoto
+      tags:
+      - Storefront
+      summary: Take a photo off a front's item
+      description: The next photo becomes the main one when the main one is taken out. Any entry the photo column holds can be taken out, so one the page cannot show does not keep its place.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The front's id
+      - name: row
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: The item's row id in the front's table
+      - name: media
+        in: query
+        required: true
+        schema:
+          type: string
+        description: The photo's media id, as the item lists it
+      responses:
+        '204':
+          description: Taken out
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/fronts/{id}/items/{row}/photo/main:
+    put:
+      operationId: mainStorefrontFrontItemPhoto
+      tags:
+      - Storefront
+      summary: Make one of a front's item's photos its main photo
+      description: The photo moves to the front; the others keep their order after it.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The front's id
+      - name: row
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: The item's row id in the front's table
+      - name: media
+        in: query
+        required: true
+        schema:
+          type: string
+        description: The photo's media id, as the item lists it
+      responses:
+        '204':
+          description: It is the main photo
+        default:
+          $ref: '#/components/responses/Error'
   /v1/storefront/fronts/{id}:
     patch:
       operationId: patchStorefrontFront
@@ -1455,9 +1810,11 @@ paths:
       description: With the business's next number. Give amount_kobo (one line) or lines. Send it with /send.
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: Idempotency-Key
         in: header
@@ -1526,9 +1883,11 @@ paths:
       description: 'Only a draft can be changed (409 otherwise): void a sent invoice and send another.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path
@@ -1560,9 +1919,11 @@ paths:
       description: By SMS and email with its page's link, and marks it sent. Sending again resends the same link. A void or paid invoice is not sent (409).
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path
@@ -1575,7 +1936,7 @@ paths:
         schema:
           type: string
           maxLength: 255
-        description: 'Makes the request safe to retry: the same key answers the same invoice, or sends nothing more'
+        description: 'Makes the request safe to retry: the same key on the same invoice sends nothing more. The key belongs to that invoice: on another invoice it sends that invoice.'
       responses:
         '200':
           description: What was sent
@@ -1594,9 +1955,11 @@ paths:
       description: With the reason. A paid invoice cannot be voided (409). A void invoice takes no new payment.
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path
@@ -1633,9 +1996,11 @@ paths:
       description: 'A recorded change with a reason, added as a line of its own: a line added (add, with description and amount_kobo, optionally pass_through_for), an earlier item taken out (remove, with line, its position from 0) or a discount (discount, with amount_kobo; never of money collected for others). The total and status follow from the lines and the payments counted: the total never goes below what was paid (409), and a paid invoice whose total rises is part-paid again. A draft is changed instead (409). Where the Schools area is on, a discount at or above the school''s discount threshold waits for a second person instead: 202 with code needs_approval and the request recorded; the invoice is amended when someone with school.approve approves it. Audited.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path
@@ -1694,9 +2059,11 @@ paths:
       description: For a payment matched to the wrong invoice. Both the payment and its undoing stay in the invoice's history.
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path
@@ -1806,9 +2173,11 @@ paths:
       description: "With no body, what is left of the payment (all of it, unless part of it counts elsewhere) counts towards the invoice or storefront order; the payment's other suggestions close, and the payer is remembered for the invoice's customer. With parts, the payment is split: each part counts towards its invoice or order (the suggested one among them, or not), never more in all than is left of the payment; credit_rest leaves what the parts do not count as the customer's credit (every part must then be for one customer's invoices), else it waits in To match. split: true splits it as the suggestion's split offers (the customer's open invoices oldest first, the rest as their credit). Undo each part as any payment of its invoice, or with /v1/money/order-payments/{id}/undo (docs/matching.md#split-payments). Where the business runs Schools with a cash threshold, money a person entered (cash, or a statement line uploaded) counted towards an invoice when it is at or above the threshold is recorded for a second person instead (202, code needs_approval, with the request, kind cash_match): nothing is counted until someone with school.approve who is not the requester approves it."
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path
@@ -1856,9 +2225,11 @@ paths:
       description: "It is not offered again."
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path
@@ -1887,12 +2258,14 @@ paths:
       tags:
       - Invoices
       summary: Match a payment to an invoice or order by hand
-      description: "For money in that no suggestion fits. {id} is the money log entry. Give invoice or order, not both, and what is left of the payment counts towards it; or give parts to split the payment across invoices and orders (credit_rest leaves the rest as the customer's credit). The parts of a payment never add up to more than it; an order takes one payment of at least what is due. The payer is remembered for the invoices' customers. Where the business runs Schools with a cash threshold, money a person entered (cash, or a statement line uploaded) counted towards an invoice when it is at or above the threshold is recorded for a second person instead (202, code needs_approval, with the request, kind cash_match): nothing is counted until someone with school.approve who is not the requester approves it."
+      description: "For money in that no suggestion fits. {id} is the money log entry. Give invoice or order, not both, and what is left of the payment counts towards it (a void invoice takes no new payment: 409); or give parts to split the payment across invoices and orders (credit_rest leaves the rest as the customer's credit). The parts of a payment never add up to more than it; an order takes one payment of at least what is due. The payer is remembered for the invoices' customers. Where the business runs Schools with a cash threshold, money a person entered (cash, or a statement line uploaded) counted towards an invoice when it is at or above the threshold is recorded for a second person instead (202, code needs_approval, with the request, kind cash_match): nothing is counted until someone with school.approve who is not the requester approves it."
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path
@@ -1948,9 +2321,11 @@ paths:
       description: "The payment stays, and a row naming it takes it out; the money goes back to be matched. When that payment paid the order, the order goes back to unpaid. Refused (409) when the order went on: its workflow was started or told it was paid, it was paid through its checkout page, or it has been decided since (docs/matching.md)."
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path
@@ -1976,9 +2351,11 @@ paths:
       description: "A payer remembered for a customer (GET /v1/invoices/{id}/customer) is forgotten: their next payment is suggested as anyone's would be (docs/matching.md#payer-memory). Audited."
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path
@@ -2081,9 +2458,11 @@ paths:
       description: "Links a customer's permanent account (a virtual_account issued for them on a connection) to the customer, so money paid into it is matched exactly to their oldest open invoice, then the next, the rest kept as their credit (docs/matching.md#customers-own-account-numbers). The customer is as their invoices have them: by key when given, else by phone, else email. The same account for the same customer again returns it; an account already another customer's, or registered with another number or reference, is refused (409)."
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       requestBody:
         required: true
         content:
@@ -2149,9 +2528,11 @@ paths:
       description: "Gives the invoice's customer a permanent account number: issued on a connection that can (issue true; GET /v1/customer-accounts/issuers lists them), or the one the business already has for them (account_number and reference), registered as POST /v1/customer-accounts does. The customer is the invoice's, so no details travel. The same customer and connection again answers the account already issued; a connection that cannot issue, or a payment service's refusal, is 400 or 409 with the reason. Money paid into the account is matched to the customer's oldest open invoice, then the next, the rest kept as their credit (docs/matching.md#customers-own-account-numbers). Audited."
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path
@@ -2254,9 +2635,11 @@ paths:
       description: "member null gives it to no one."
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path
@@ -2294,9 +2677,11 @@ paths:
       description: "As recovered (with the amount got back), written_off or not_a_leak."
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path
@@ -2365,9 +2750,11 @@ paths:
       description: "Percent in basis points of the amount, plus a flat fee, up to a cap."
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       requestBody:
         required: true
         content:
@@ -2425,9 +2812,11 @@ paths:
       description: "A CSV in the common format (date, description, amount, and optionally reference and balance), or with its columns matched to it. A file with any line Taskiem cannot read adds nothing and answers 422 with the lines and why. Lines already in the log are skipped."
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       requestBody:
         required: true
         content:
@@ -2504,9 +2893,11 @@ paths:
       description: "same with entry_id records the line as the bank's confirmation of that transfer (counted once, never matched again); different records it as money of its own, which matching then looks at."
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path
@@ -2556,9 +2947,11 @@ paths:
       description: "Once per Idempotency-Key. An expense is money out; cash goes in or out."
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       requestBody:
         required: true
         content:
@@ -5553,6 +5946,7 @@ paths:
       description: 'Name a business a search listed, or send blind to whoever uses a phone number (an owner''s linked number or a business''s own WhatsApp number) or a storefront address. A blind request answers 202 with the same words whether or not a business is behind it. At most 20 requests a day (409).'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: link.manage
@@ -5689,6 +6083,7 @@ paths:
       description: 'As the side allowed to: accept and decline a request made to us; block a request or a link (a block is never told); unblock; cancel a request we made; end a link. Audited in both businesses where the other side may know of it. 409 when the link is not in a state for that answer.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: link.manage
@@ -5726,6 +6121,7 @@ paths:
       description: A request that reached a business stays with it until answered or expired; we cannot know whether it did.
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: link.manage
@@ -5821,6 +6217,7 @@ paths:
       description: The payments account bills are paid from (Taskiem's own wallet when left out) and who approves, written into a managed workflow made from the pay-linked-bill template, under the business's governance.
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
@@ -5868,9 +6265,10 @@ paths:
       tags:
       - Links
       summary: Pay a bill from Taskiem
-      description: 'A payout to the account the supplier issued the business, through the managed workflow: the name on the account found, approved under the business''s policy, paid once carrying the bill''s token (its reference and a short code), which the supplier''s Taskiem reads to count it towards the invoice. The supplier''s bank is found by name among the banks the payments account pays; with no single match it is refused (409). The bill is paying until the bank confirms or refuses, or the payment is rejected.'
+      description: 'A payout to the account the supplier issued the business, through the managed workflow: the name on the account found, approved under the business''s policy, paid once carrying the bill''s token (its reference and a short code), which the supplier''s Taskiem reads to count it towards the invoice. The supplier''s bank is found by name among the banks the payments account pays; with no single match it is refused (409). The bill is paying until the bank confirms or refuses, or the payment is rejected. What the bank confirmed sent and the supplier has not counted yet is not due again: with nothing else left, Pay is refused (409), to confirm the payment was for this bill instead.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
@@ -5919,6 +6317,7 @@ paths:
       description: The business's own word, kept beside what the supplier counted (declared_paid_kobo), never in paid_kobo; the supplier is told.
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
@@ -5965,6 +6364,7 @@ paths:
       description: 'The bill is queried: not paid from Taskiem until the query is settled, and the supplier''s invoice is passed over by its oldest-first matching (money that names it still pays it). The supplier is told the reason.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
@@ -6005,6 +6405,7 @@ paths:
       description: As it stands, or with an amount taken off (an amendment of the invoice, which its bill follows); the invoice is matched oldest-first again and the buyer's bill is no longer queried; the buyer is told, and both conversations show it. 409 when it is not queried.
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
@@ -6092,6 +6493,7 @@ paths:
       description: It reaches them as a purchase order to us waiting for their Confirm, and goes no further until then. 409 when they have not marked us as their supplier on Taskiem.
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: storefront.manage
@@ -6188,6 +6590,7 @@ paths:
       description: Remembered for the link's next orders; the line takes our price. 409 once the order is no longer new.
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: storefront.manage
@@ -6238,6 +6641,7 @@ paths:
       description: 'accept, decline, change (with lines), ready, dispatched, delivered (with what was delivered), cancel (our own, or yes to the buyer''s request), keep (no to the buyer''s request to cancel), or agree (the buyer''s count of a short delivery). The buyer''s purchase order follows in the same transaction, and the buyer is told. An invoice to the buyer is raised at acceptance or once the delivery is received, as set for the link (PUT /v1/links/{id}/trade), and becomes its bill. 409 when the order''s status does not allow the step.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: storefront.manage
@@ -6344,6 +6748,7 @@ paths:
       description: When their invoice is raised, at acceptance or once the delivery is received (the default), and whether they are accepted by themselves when they arrive priced (off by default). A PUT changes only what it names.
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: link.manage
@@ -6578,6 +6983,7 @@ paths:
       description: 'For a payout the bank confirmed that the supplier''s matching did not pair within three days: the business''s own word that the money was for this bill. The payment is marked paired, and the supplier is told which invoice the money was for, so its side can re-aim its match.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
@@ -6737,6 +7143,7 @@ paths:
       description: Muted, the business's people are not told of its messages on their phones; archived, it is off the list until unarchived; pinned, it is at the top of the list (up to three, the last pinned first; a fourth is refused with 409). A PUT changes only what it names.
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: chat.trade
@@ -6789,7 +7196,7 @@ paths:
       tags:
       - Links
       summary: A page of a conversation
-      description: Oldest first; before (older), after (newer, to follow an open conversation), q (the messages saying it).
+      description: Oldest first; before (older), after (newer, oldest first and a page at a time, to follow an open conversation), around (a message and those either side of it; 404 when it is not in this conversation), q (the messages saying it).
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -6811,6 +7218,11 @@ paths:
         schema:
           type: string
           format: date-time
+      - name: around
+        in: query
+        schema:
+          type: string
+          format: uuid
       - name: q
         in: query
         schema:
@@ -6845,9 +7257,10 @@ paths:
       tags:
       - Links
       summary: Send a message to a linked business
-      description: Written in both businesses at once; its people who write to linked businesses are told on their phones unless they muted the conversation. reply_to quotes a message, and a card's makes it a reply about that card's document.
+      description: Written in both businesses at once; its people who write to linked businesses are told on their phones unless they muted the conversation. reply_to quotes a message, and a card's makes it a reply about that card's document. client_id is an id the sender made, and the same send repeated (a retry after a dropped connection) is answered with the first message (200), never sent again. A client_id reused for different words, or for a message since deleted for your side, is refused (409).
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: chat.trade
@@ -6874,6 +7287,9 @@ paths:
                 reply_to:
                   type: string
                   format: uuid
+                client_id:
+                  type: string
+                  format: uuid
                 mentions:
                   type: array
                   maxItems: 10
@@ -6894,6 +7310,17 @@ paths:
       responses:
         '201':
           description: Sent
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [message]
+                properties:
+                  message:
+                    $ref: '#/components/schemas/LinkMessage'
+        '200':
+          description: The same send repeated (its client_id), answered with the first message and not sent again
           content:
             application/json:
               schema:
@@ -6941,6 +7368,7 @@ paths:
       description: 'An empty list, by name.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: storefront.manage
@@ -6980,6 +7408,7 @@ paths:
       description: 'The buyers it is shared with see the new name.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: storefront.manage
@@ -7027,6 +7456,7 @@ paths:
       description: 'Withdrawn from every buyer it was shared with.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: storefront.manage
@@ -7063,6 +7493,7 @@ paths:
       description: 'Replaces the items: each one of your own stock items, with the price a linked buyer pays, a minimum quantity (1 by default) and whether it is available (yes by default). The buyers it is shared with see the change at once; an open order keeps its prices.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: storefront.manage
@@ -7126,6 +7557,7 @@ paths:
       description: 'Exactly the linked buyers named: a link has one list, so one shared with another moves here, and one not named is withdrawn.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: storefront.manage
@@ -7215,6 +7647,7 @@ paths:
       description: 'prices maps your item to its price for this buyer; an item not named has the lists price.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: storefront.manage
@@ -7304,6 +7737,7 @@ paths:
       description: 'A purchase order drafted at the lists prices (each line at least its minimum, while available), sent as any order is. Needs an Idempotency-Key. A line whose item you have not said is one of yours answers 422 with code item_unlinked and the item, unless item_id says which, which then links it.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: table.edit
@@ -7397,6 +7831,7 @@ paths:
       description: 'Its orders then reach the supplier as that item. One each way: a link made again replaces the old one.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: storefront.manage
@@ -7446,6 +7881,7 @@ paths:
       description: ''
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: storefront.manage
@@ -7506,6 +7942,7 @@ paths:
       description: 'Read as a message typed on WhatsApp (the same words: status, orders, cash in, invoice, building by chat): text, or reply (a button''s id from an answer, with its title as text). The answer is what Taskiem said, its buttons pressable by their ids. A person only: not an API key.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       requestBody:
@@ -7540,6 +7977,7 @@ paths:
       description: 'A multipart form: file (a voice note in Ogg, WebM, MP3 or MP4 audio, or a JPEG, PNG or WebP photo) and text (a photo''s caption). Read as one sent on WhatsApp: a voice note is transcribed when the business has voice notes on, and read as typed; a photo with a caption adds a product, or is the logo the set-up asked for. The file is held in memory only. A person only: not an API key.'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       requestBody:
@@ -7574,6 +8012,7 @@ paths:
       description: 'A multipart form: `file` (a JPEG, PNG or WebP photo, cleaned of its metadata; a PDF without scripts or actions; or a voice note in Ogg, WebM, MP3 or MP4 audio, up to 16 MB), an optional `text` caption and `reply_to`. Each business keeps its own copy in its own storage: the file is stored in both before the message is written in both, and if either copy cannot be kept, nothing is sent (409).'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: chat.trade
@@ -7602,9 +8041,24 @@ paths:
                 reply_to:
                   type: string
                   format: uuid
+                client_id:
+                  type: string
+                  format: uuid
+                  description: An id the sender made; the same send repeated is answered with the first message and stores nothing again.
       responses:
         '201':
           description: Sent
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [message]
+                properties:
+                  message:
+                    $ref: '#/components/schemas/LinkMessage'
+        '200':
+          description: The same send repeated (its client_id), answered with the first message and not sent again
           content:
             application/json:
               schema:
@@ -7720,6 +8174,7 @@ paths:
       description: The other side's typing line shows for six seconds. Not audited; no words are sent.
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: chat.trade
@@ -7745,6 +8200,7 @@ paths:
       description: 'One of this conversation''s messages, sent to 1 to 5 other conversations, marked Forwarded. A photo, PDF or voice note goes as a copy into each business''s own storage and ours, from our copy; a document''s card is not forwarded (400).'
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: chat.trade
@@ -7801,6 +8257,7 @@ paths:
       description: Our copy is hidden from our view; the other business keeps its own, as each keeps the record of the trade. A document's card is never hidden (400).
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: chat.trade
@@ -7823,6 +8280,236 @@ paths:
           description: Hidden
         default:
           $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/messages/{id}/reaction:
+    put:
+      operationId: reactLinkMessage
+      tags:
+      - Links
+      summary: React to a message
+      description: Your emoji on a message, any one emoji (the six first offered are 👍 ❤️ 😂 😮 😢 🙏), replacing the one you gave, seen by both businesses. One reaction per member per message. The other side's people are told on their phones unless they muted the conversation, and a first reaction counts against the plan's messages per day. Refused once the link has ended (409).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: chat.trade
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [emoji]
+              properties:
+                emoji:
+                  type: string
+                  maxLength: 64
+                  description: Exactly one emoji
+      responses:
+        '200':
+          description: The reactions on the message, as this business sees them
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [reactions]
+                properties:
+                  reactions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LinkReaction'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: unreactLinkMessage
+      tags:
+      - Links
+      summary: Take a reaction back
+      description: Your reaction is taken off the message, on both sides. Nothing is told, and taking back one you did not give is nothing.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: chat.trade
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The reactions on the message, as this business sees them
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [reactions]
+                properties:
+                  reactions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LinkReaction'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/messages/{id}/star:
+    put:
+      operationId: starLinkMessage
+      tags:
+      - Links
+      summary: Star a message
+      description: Kept for you alone, so no one is told and no one else can see it. An API key has no stars of its own (403).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Whether it is starred now
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [starred]
+                properties:
+                  starred:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: unstarLinkMessage
+      tags:
+      - Links
+      summary: Unstar a message
+      description: The star is taken off.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Whether it is starred now
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [starred]
+                properties:
+                  starred:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/chat/stream:
+    get:
+      operationId: chatStream
+      tags:
+      - Links
+      summary: Stream the changes in your conversations
+      description: 'Server-sent events: what changes in your conversations with linked businesses, as it happens. A message event is a message of a conversation, new or changed (its read mark, its reactions), as the messages API gives it. A gone event is a message deleted for your side. A conversation event is a change of a conversation''s settings (muted, archived, pinned). A typing event is the conversations whose other side is typing now. A taskiem event is the person''s own conversation with Taskiem, on every channel (what GET /v1/taskiem-chat gives). Each has an id, its time in microseconds, so a client that reconnects with Last-Event-ID is sent what it missed and nothing twice, going back at most an hour. A ready event comes on connecting and a ping event at least every ten seconds, so a client can tell a quiet stream from a stalled one; the stream closes after half an hour and clients reconnect. A business may hold twelve open (429 with Retry-After past that), and a client that cannot should poll the messages API as before. With Linked businesses turned off, no message, gone, conversation or typing event comes (nor is replayed); taskiem events still do.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: Last-Event-ID
+        in: header
+        schema:
+          type: string
+        description: Resume after this event
+      responses:
+        '200':
+          description: Server-sent events
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/starred:
+    get:
+      operationId: starredLinkMessages
+      tags:
+      - Links
+      summary: Your starred messages
+      description: The messages you starred, across conversations, the most recently starred first (up to 100).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The messages
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [messages]
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LinkMessage'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/link-chats/{link}/read:
     post:
       operationId: readLinkChat
@@ -7832,9 +8519,9 @@ paths:
       description: Its messages are read here, and the sender sees the double tick.
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
-      x-taskiem-all-environments: true
       parameters:
       - name: link
         in: path
@@ -7854,6 +8541,190 @@ paths:
                 properties:
                   read:
                     type: integer
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/links/{business}/logo:
+    get:
+      operationId: getLinkedBusinessLogo
+      tags:
+      - Links
+      summary: The logo of a business we are linked with
+      description: Shown in the chat list and a conversation's head. Nothing is served for a business we are not actively linked with, one with no logo, or one whose logo was refused; each answers 404.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: business
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: ['320', '800', '2000']
+      responses:
+        '200':
+          description: The image
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/explore:
+    get:
+      operationId: explore
+      tags:
+      - Links
+      summary: Businesses to browse
+      description: With q, what a search finds (at most 20) and, for a phone number, the one row that sends a request. Without it, two sections, Near you (findable businesses in our own area) and New on Taskiem (the newest, a page of 12 and more when there is another; section=new or section=near with offset= gives the next page of that section, and near_more says Near you has another). Only businesses that chose to be found are listed, each with its profile, whether it has a logo and how many photos it shows (at most 8). Businesses already linked with are left out of the two sections.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: section
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [new, near]
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          maximum: 1000
+      responses:
+        '200':
+          description: The businesses
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExploreResult'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/explore/{business}/logo:
+    get:
+      operationId: exploreLogo
+      tags:
+      - Links
+      summary: The logo of a business that is findable or linked
+      description: Nothing is served for a business that is not findable (unless we are linked with it), one with no logo, one whose logo was refused, or ourselves; each answers 404.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: business
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: ['320', '800', '2000']
+      - name: v
+        in: query
+        required: false
+        schema:
+          type: string
+        description: The card's v, only to key the browser's cache
+      responses:
+        '200':
+          description: The image
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/explore/{business}/photos/{photo}:
+    get:
+      operationId: explorePhoto
+      tags:
+      - Links
+      summary: One of the photos a business shows
+      description: The nth photo (from 0) of its gallery, or, with no gallery, of its published catalogue. The same 404 as the logo for anything that is not to be shown.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: business
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: photo
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+          maximum: 7
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: ['320', '800', '2000']
+      - name: v
+        in: query
+        required: false
+        schema:
+          type: string
+        description: The card's v, only to key the browser's cache
+      responses:
+        '200':
+          description: The image
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
         default:
           $ref: '#/components/responses/Error'
   /v1/link-settings/qr:
@@ -7914,6 +8785,7 @@ paths:
       description: findable null goes back to the default, on with a published storefront.
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: link.manage
@@ -7935,6 +8807,313 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LinkSettings'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/business-profile:
+    get:
+      operationId: getBusinessProfile
+      tags:
+      - Links
+      summary: What this business says about itself to the businesses that find it
+      description: The name, one-line description, area, text about the business, logo and gallery. They win over the storefront's card where both exist.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessProfile'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putBusinessProfile
+      tags:
+      - Links
+      summary: Set the profile's words
+      description: Replaces the words. A field left out or empty is cleared, so send all four.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                name:
+                  type: string
+                  maxLength: 80
+                tagline:
+                  type: string
+                  maxLength: 140
+                area:
+                  type: string
+                  maxLength: 80
+                about:
+                  type: string
+                  maxLength: 1000
+      responses:
+        '200':
+          description: The profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessProfile'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/business-profile/image:
+    get:
+      operationId: businessProfileImage
+      tags:
+      - Links
+      summary: One of the business's profile photos, through the API
+      description: For the web app, whose Content-Security-Policy allows images from its own origin only. Only the organisation's own images are fetched.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: src
+        in: query
+        required: true
+        schema:
+          type: string
+        description: A URL from a photo's `urls`
+      responses:
+        '200':
+          description: The image
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/business-profile/logo:
+    post:
+      operationId: uploadBusinessLogo
+      tags:
+      - Links
+      summary: Set the logo
+      description: The image is checked, stripped of its metadata and stored at three sizes, as the storefront's photos are.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          image/jpeg:
+            schema:
+              type: string
+              format: binary
+          image/png:
+            schema:
+              type: string
+              format: binary
+          image/webp:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: The profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessProfile'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: removeBusinessLogo
+      tags:
+      - Links
+      summary: Take the logo off
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      x-taskiem-all-environments: true
+      responses:
+        '200':
+          description: The profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessProfile'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/business-profile/gallery:
+    post:
+      operationId: addGalleryPhoto
+      tags:
+      - Links
+      summary: Add a photo to the end of the gallery
+      description: At most 12 photos. The caption is optional (at most 120 letters).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: caption
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 120
+      requestBody:
+        required: true
+        content:
+          image/jpeg:
+            schema:
+              type: string
+              format: binary
+          image/png:
+            schema:
+              type: string
+              format: binary
+          image/webp:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '201':
+          description: The profile with the photo added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessProfile'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/business-profile/gallery/order:
+    put:
+      operationId: orderGallery
+      tags:
+      - Links
+      summary: Put the gallery in an order
+      description: The ids name every photo once.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '200':
+          description: The profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessProfile'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/business-profile/gallery/{id}:
+    patch:
+      operationId: captionGalleryPhoto
+      tags:
+      - Links
+      summary: Set or clear a photo's caption
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                caption:
+                  type: string
+                  maxLength: 120
+      responses:
+        '200':
+          description: The profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessProfile'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: removeGalleryPhoto
+      tags:
+      - Links
+      summary: Take a photo out of the gallery
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessProfile'
         default:
           $ref: '#/components/responses/Error'
   /v1/invoice-settings:
@@ -7966,9 +9145,11 @@ paths:
       description: The next number may only move forward.
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       requestBody:
         required: true
         content:
@@ -7993,9 +9174,11 @@ paths:
       description: "credit_days for lines recorded from now on (null: no fixed time, so notebook debts are never overdue or reminded); apply_open dates the open notebook debts by it too, each from the day it was recorded."
       security:
       - sessionCookie: []
+        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
       requestBody:
         required: true
         content:
@@ -11557,6 +12740,7 @@ paths:
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: member.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path
@@ -11908,6 +13092,133 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/auth/chat/start:
+    post:
+      operationId: chatSigninStart
+      tags:
+      - Authentication
+      summary: Ask for a sign-in code on WhatsApp or Telegram
+      description: 'Takes only `application/json`. Sends a six-digit code, good for 10 minutes, to the WhatsApp or Telegram
+        of the person the phone number is bound to, when they may sign in with their chat. The answer is the same whether
+        or not the number is on an account; the look-up and the send happen after it. Limited per address and per number.'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              properties:
+                phone:
+                  type: string
+                  description: The number, in any usual form; the deployment's default country when it has none.
+      responses:
+        '202':
+          description: Sent, if the number is on an account.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  expires_in:
+                    type: integer
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/auth/chat/verify:
+    post:
+      operationId: chatSigninVerify
+      tags:
+      - Authentication
+      summary: Sign in with a code sent to the chat
+      description: 'Takes only `application/json`. A code works once, for the number it was sent to; five wrong lock it.
+        An administrator with a passkey signs in with it where the deployment requires it (401 `passkey_required`); an
+        organisation with single sign-on signs in with it (401 `sso_required`). The session''s `auth_method` is `chat`.'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, code]
+              properties:
+                phone:
+                  type: string
+                code:
+                  type: string
+                tenant_id:
+                  type: string
+                  format: uuid
+                bearer:
+                  type: boolean
+      responses:
+        '200':
+          description: Signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/auth/chat/link/peek:
+    post:
+      operationId: chatSigninLinkPeek
+      tags:
+      - Authentication
+      summary: Whether a sign-in link from chat is still good, without using it
+      description: Says nothing about whose it is.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+      responses:
+        '204':
+          $ref: '#/components/responses/NoContent'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/auth/chat/link:
+    post:
+      operationId: chatSigninLink
+      tags:
+      - Authentication
+      summary: Sign in with a link sent in chat
+      description: '"sign in" in chat sends a one-time link, good for 10 minutes. Only this POST uses its token, so fetching
+        the link ahead of time signs no one in. The same rules as `/v1/auth/chat/verify`.'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                tenant_id:
+                  type: string
+                  format: uuid
+                bearer:
+                  type: boolean
       responses:
         '200':
           description: Signed in
@@ -13124,7 +14435,7 @@ paths:
       tags:
       - Connectors
       summary: Add a connection
-      description: Saves a connector's credentials, encrypted, under a name in one environment.
+      description: "Saves a connector's credentials, encrypted, under a name in one environment. A field the connector's manifest says Taskiem makes (`generate: webhook_token`) is refused if given; Taskiem makes a random value for it and returns it once, inside `webhooks`."
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -13353,6 +14664,11 @@ paths:
                     type: string
                   back:
                     type: string
+                  webhooks:
+                    type: array
+                    description: As in POST /v1/connections; shown only in this answer.
+                    items:
+                      $ref: '#/components/schemas/ConnectionWebhook'
         '400':
           description: A key refused, by its start or by the service.
           content:
@@ -13538,7 +14854,8 @@ paths:
       description: |
         Merges the given fields into the connection's credentials, keeping the rest: the secret key and data API URL a linked
         Xenibase connection gets afterwards. An empty value clears a field. The result must still fit the connector's auth
-        (every required field present, no unknown one). Refused for a connection Taskiem keeps, and for an expired one.
+        (every required field present, no unknown one). Refused for a connection Taskiem keeps, and for an expired one. A field
+        Taskiem makes (`generate: webhook_token`) cannot be set or cleared: connect again for a new token.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -15877,6 +17194,80 @@ paths:
                 $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
+  /v1/me/chat-signin:
+    put:
+      operationId: setChatSignin
+      tags:
+      - Account
+      summary: Turn signing in with WhatsApp or Telegram on or off
+      description: On by default. Off, no code is sent to the person's chat and links from chat are refused. Not for API
+        keys.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: ['on']
+              properties:
+                'on':
+                  type: boolean
+      responses:
+        '200':
+          description: The setting.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  chat_signin:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/passkey-only:
+    put:
+      operationId: setPasskeyOnly
+      tags:
+      - Account
+      summary: Only sign in with my passkey, on or off
+      description: Off by default. On, the person's password and chat sign-in are refused in every business. Turning it
+        on needs a passkey; on or off is confirmed with a passkey assertion for `account.reauth` and `passkey_only.on` or
+        `passkey_only.off` (an authenticator code or the password is not enough). Removing the last passkey turns it off.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: ['on']
+              properties:
+                'on':
+                  type: boolean
+                passkey:
+                  type: object
+                  description: The step-up assertion.
+      responses:
+        '200':
+          description: The setting.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  passkey_only:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
   /v1/me/password:
     post:
       operationId: changePassword
@@ -16748,6 +18139,7 @@ paths:
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: member.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: user
         in: path
@@ -18065,6 +19457,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SubTenantStatus'
+        '403':
+          description: A Taskiem operator suspended the sub-tenant; only an operator resumes it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: No such sub-tenant.
           content:
@@ -18632,7 +20030,10 @@ paths:
       - Audit
       summary: Erase a data subject
       description: Destroys the subject's key, so every sealed copy of their data becomes unreadable. Cannot be
-        undone, so a person confirms it with a passkey or authenticator code.
+        undone, so a person confirms it with a passkey or authenticator code. It is never applied under a running
+        workflow; runs in flight that hold the subject finish first, or are cancelled with `cancel_runs`. A value is
+        matched in its canonical form (a phone in E.164, an email in lower case, an identity number's digits), so the
+        same person written another way is erased too.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -18654,7 +20055,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Erased'
         '400':
-          description: Neither a subject nor a category and value.
+          description: Neither a subject nor a category and value; or the category `other`, or the organisation's free-text subject, which hold no person (erase the people the text names).
           content:
             application/json:
               schema:
@@ -18672,6 +20073,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '409':
+          description: Runs in flight hold the subject (`code` `runs_in_flight`, `runs` lists up to 50); let them finish,
+            or erase with `cancel_runs`.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error, code, runs]
+                properties:
+                  error:
+                    type: string
+                  code:
+                    type: string
+                    enum: [runs_in_flight]
+                  runs:
+                    type: array
+                    items:
+                      type: string
+                      format: uuid
+                additionalProperties: false
         default:
           $ref: '#/components/responses/Error'
   /v1/policies:
@@ -19309,7 +20730,8 @@ paths:
       tags:
       - Members
       summary: Create or change a role
-      description: Nobody can create or widen a role carrying a permission they do not hold.
+      description: Nobody can create or widen a role carrying a permission they do not hold, or change one at all
+        that they could not grant as it stands; widening a role members hold also needs `member.manage`.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -19667,6 +21089,7 @@ paths:
       x-taskiem-permission: member.manage
       x-taskiem-plan-feature:
       - scim
+      x-taskiem-all-environments: true
       requestBody:
         content:
           application/json:
@@ -20062,6 +21485,80 @@ paths:
                           type: integer
         default:
           $ref: '#/components/responses/Error'
+  /v1/settings/security:
+    get:
+      operationId: getSecurity
+      tags:
+      - Account
+      summary: Who must sign in with a passkey here
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: member.manage
+      responses:
+        '200':
+          description: The business's setting, how many administrators have no passkey, and whether the person asking has
+            one and may change it.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  require_admin_passkeys:
+                    type: boolean
+                  admins_without_passkey:
+                    type: integer
+                  you_have_passkey:
+                    type: boolean
+                  deployment_requires:
+                    type: boolean
+                  can_change:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putSecurity
+      tags:
+      - Account
+      summary: Require passkeys for administrators, on or off
+      description: Owners only, confirmed as a factor change is (`account.reauth`, target `business.require_passkeys`).
+        Turning it on needs a passkey of the owner's own.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: member.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [require_admin_passkeys]
+              properties:
+                require_admin_passkeys:
+                  type: boolean
+                password:
+                  type: string
+                totp:
+                  type: string
+                passkey:
+                  type: object
+      responses:
+        '200':
+          description: The setting.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  require_admin_passkeys:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
   /v1/settings/advanced:
     get:
       operationId: getAdvanced
@@ -20094,6 +21591,7 @@ paths:
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: member.manage
+      x-taskiem-all-environments: true
       requestBody:
         required: true
         content:
@@ -20458,6 +21956,63 @@ paths:
                 $ref: '#/components/schemas/Withdrawal'
         default:
           $ref: '#/components/responses/Error'
+  /v1/settings/areas:
+    get:
+      operationId: getAreas
+      tags:
+      - Account
+      summary: Which parts of Taskiem the business uses
+      description: Any member. Every area (storefront, orders, stock, money, links, schools) in plain words, whether it is on, and which areas it needs. A business that has never chosen has everything but Schools on. An area that is off is refused on its routes with 404 and area_off; nothing in it is deleted.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AreaSettings'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putAreas
+      tags:
+      - Account
+      summary: Turn parts of Taskiem on or off
+      description: Owners only (403 otherwise). Turning an area on turns on the areas it needs (the shop needs orders; schools need money). Turning one off is refused with 409 while an area that needs it stays on. When published workflows use an area being turned off, the answer is 409 with affected and nothing changes until the request is sent again with confirm. Off hides and refuses; nothing is deleted, and turning it back on restores everything. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [areas]
+              properties:
+                areas:
+                  type: object
+                  description: Area name to on (true) or off (false). Only the areas named change.
+                  additionalProperties:
+                    type: boolean
+                confirm:
+                  type: boolean
+                  description: Turn an area off although published workflows use it.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AreaSettings'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/settings/schools:
     get:
       operationId: getSchoolSettings
@@ -20804,7 +22359,7 @@ paths:
       tags:
       - Members
       summary: Add a single sign-on connection
-      description: An OpenID Connect or SAML 2.0 identity provider.
+      description: An OpenID Connect or SAML 2.0 identity provider. Owners only (403 otherwise, API keys included).
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -20813,6 +22368,7 @@ paths:
       x-taskiem-permission: member.manage
       x-taskiem-plan-feature:
       - sso
+      x-taskiem-all-environments: true
       requestBody:
         content:
           application/json:
@@ -20853,13 +22409,14 @@ paths:
       tags:
       - Members
       summary: Verify a single sign-on domain
-      description: Checks the DNS TXT record.
+      description: Checks the DNS TXT record. Owners only (403 otherwise, API keys included).
       security:
       - sessionCookie: []
         csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: member.manage
+      x-taskiem-all-environments: true
       parameters:
       - name: domain
         in: path
@@ -20878,6 +22435,8 @@ paths:
       tags:
       - Members
       summary: Change a single sign-on connection
+      description: Roles, JIT, enforcement and disabled, held to what the caller could grant. owner_approved
+        is an owner's alone.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -20886,6 +22445,7 @@ paths:
       x-taskiem-permission: member.manage
       x-taskiem-plan-feature:
       - sso
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path
@@ -20903,7 +22463,8 @@ paths:
         '204':
           $ref: '#/components/responses/NoContent'
         '403':
-          description: A role mapping the caller cannot grant.
+          description: A role mapping the caller cannot grant, or owner_approved from someone who is not an
+            owner.
           content:
             application/json:
               schema:
@@ -20922,7 +22483,7 @@ paths:
       tags:
       - Members
       summary: Add a domain to a single sign-on connection
-      description: Answers with the DNS TXT record to publish.
+      description: Answers with the DNS TXT record to publish. Owners only (403 otherwise, API keys included).
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -20931,6 +22492,7 @@ paths:
       x-taskiem-permission: member.manage
       x-taskiem-plan-feature:
       - sso
+      x-taskiem-all-environments: true
       parameters:
       - name: id
         in: path
@@ -21110,7 +22672,7 @@ paths:
       tags:
       - Connectors
       summary: Upload a connector
-      description: 'A WebAssembly connector: multipart fields `manifest` and `module`.'
+      description: 'A WebAssembly connector: multipart fields `manifest` and `module`. A manifest that names one of Taskiem''s own OAuth apps (`auth.oauth2.client`, `platform_client_fields`, a mode''s `client`) is refused.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -21490,7 +23052,7 @@ paths:
       tags:
       - WhatsApp
       summary: Set the tenant's WhatsApp number
-      description: The tenant's own WhatsApp Business number in place of the platform's.
+      description: The tenant's own WhatsApp Business number in place of the platform's. A number on the organisation's own Meta app (own_app, the default) is connected by an owner only.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -21517,8 +23079,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '403':
+          description: Only an owner connects a number on the organisation's own Meta app.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '409':
-          description: WhatsApp is not set up, the shared number, or a number another organisation connected.
+          description: WhatsApp is not set up, the shared number or its WhatsApp Business Account, or a number another organisation connected.
           content:
             application/json:
               schema:
@@ -24501,7 +26069,8 @@ components:
           type: array
           items:
             type: string
-          description: The proofs that will do to change a factor.
+          description: The proofs that will do to change a factor (`passkey`, `totp`, `password`, `sign_in`), or `verify_email`
+            when the password cannot count until the person confirms their email.
         passkey_required:
           type: boolean
         sso_required:
@@ -25371,6 +26940,11 @@ components:
         schools:
           type: boolean
           description: Whether the business has the Schools area on (docs/schools.md).
+        areas:
+          type: object
+          description: Which parts of Taskiem the business uses, by area name (storefront, orders, stock, money, links, schools), each true when on (docs/spec/business-areas.md). GET /v1/settings/areas has them in plain words.
+          additionalProperties:
+            type: boolean
         gate_only:
           type: boolean
           description: "A gate session: the gate role's school.gate and nothing else. Every route but GET /v1/me and sign-out answers 403 with gate_only."
@@ -27304,6 +28878,29 @@ components:
                 type: array
                 items: *id002
         saved: *id001
+    AreaSettings:
+      type: object
+      required: [areas]
+      properties:
+        areas:
+          type: array
+          items:
+            type: object
+            required: [area, name, covers, depends_on, enabled]
+            properties:
+              area:
+                type: string
+                enum: [storefront, orders, stock, money, links, schools]
+              name:
+                type: string
+              covers:
+                type: string
+              depends_on:
+                type: array
+                items:
+                  type: string
+              enabled:
+                type: boolean
     AdvancedSetting:
       type: object
       required: [advanced, chosen]
@@ -27411,6 +29008,12 @@ components:
           type: boolean
           description: The person agrees to the terms and privacy notice (`terms` on GET /v1/signup). Required
             true when the deployment has them.
+        kinds:
+          type: array
+          description: What the business does. Each kind switches on the parts of Taskiem that go with it (shop - the online shop, orders, stock, money and linked businesses; service - money and linked businesses; school - schools, with money). An empty list is just workflows - every part off. Left out, the business has every part. 400 for any other word. The owner changes them later with PUT /v1/settings/areas.
+          items:
+            type: string
+            enum: [shop, service, school]
     SignupResult:
       type: object
       required:
@@ -28081,6 +29684,7 @@ components:
               description: The plan's monthly token budget; 0 is no limit (or overage billed).
             used_tokens:
               type: integer
+              description: This UTC month's tokens recorded, plus those the model calls running now have reserved.
           additionalProperties: false
         step_models:
           type: array
@@ -28300,7 +29904,7 @@ components:
           description: Why a failed build failed.
         goal:
           type: string
-          description: The goal, with personal data redacted.
+          description: The goal, with personal data redacted; for a build asked for in chat, the goal as the member typed it, opened from its seal (`[erased]` once the member is erased, empty for chat builds made before this was kept).
         workflow:
           $ref: '#/components/schemas/NullableUUID'
           description: The workflow the build changes, if any.
@@ -28663,6 +30267,11 @@ components:
           format: uuid
         catalogue_columns:
           $ref: '#/components/schemas/StorefrontColumns'
+        retention_days:
+          type: integer
+          minimum: 30
+          maximum: 3650
+          description: How long ended orders keep their customer's details before they are erased; unchanged when left out
     Storefront:
       type: object
       required: [id, slug, status, draft, catalogue_table, catalogue_columns, published_version, preview_url, templates, accents]
@@ -28735,6 +30344,9 @@ components:
           - string
           - 'null'
           description: The primary of the business's own verified domains
+        retention_days:
+          type: integer
+          description: How long ended orders keep their customer's details before they are erased (30 to 3650, 365 by default)
         templates:
           type: array
           items:
@@ -28901,6 +30513,56 @@ components:
           type:
           - string
           - 'null'
+    FrontItemRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          maxLength: 120
+        price_naira:
+          type: number
+          minimum: 0
+        description:
+          type: string
+          maxLength: 1000
+        category:
+          type: string
+          maxLength: 60
+        available:
+          type: boolean
+    FrontItems:
+      type: object
+      required: [table_id, items, takes]
+      properties:
+        table_id:
+          type: string
+        items:
+          type: array
+          items:
+            type: object
+            required: [id, name, available]
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+              price_kobo:
+                type: integer
+              description:
+                type: string
+              category:
+                type: string
+              available:
+                type: boolean
+              photo:
+                type: object
+                additionalProperties:
+                  type: string
+        takes:
+          type: object
+          additionalProperties:
+            type: boolean
     StorefrontMedia:
       type: object
       required: [id, width, height, urls, moderation]
@@ -29676,6 +31338,25 @@ components:
           type: string
         price_kobo:
           type: integer
+    LinkReaction:
+      type: object
+      additionalProperties: false
+      required: [emoji, count]
+      properties:
+        emoji:
+          type: string
+          description: One emoji
+        count:
+          type: integer
+          description: How many people gave it, on both sides
+        mine:
+          type: boolean
+          description: You gave it
+        by:
+          type: array
+          items:
+            type: string
+          description: Their first names
     LinkMessage:
       type: object
       additionalProperties: false
@@ -29739,6 +31420,13 @@ components:
           maxItems: 10
           items:
             $ref: '#/components/schemas/LinkMention'
+        reactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/LinkReaction'
+        starred:
+          type: boolean
+          description: You starred it
         reply:
           type: object
           additionalProperties: false
@@ -29781,7 +31469,7 @@ components:
     LinkConversation:
       type: object
       additionalProperties: false
-      required: [link, business, name, state, unread, muted, archived, pinned, typing]
+      required: [link, business, name, logo, state, unread, muted, archived, pinned, typing]
       properties:
         link:
           type: string
@@ -29791,6 +31479,9 @@ components:
           format: uuid
         name:
           type: string
+        logo:
+          type: boolean
+          description: The business has a logo, at GET /v1/links/{business}/logo
         state:
           type: string
           enum: [active, ended]
@@ -31075,7 +32766,7 @@ components:
     Bill:
       type: object
       additionalProperties: false
-      required: [id, link, supplier, supplier_name, reference, lines, amount_kobo, paid_kobo, due_kobo, status, allow_part_payments, disputed, declared_paid_kobo, paying_kobo, sent_kobo, mirrored_at, created_at]
+      required: [id, link, supplier, supplier_name, reference, lines, amount_kobo, paid_kobo, due_kobo, status, allow_part_payments, disputed, declared_paid_kobo, paying_kobo, sent_kobo, uncounted_kobo, mirrored_at, created_at]
       properties:
         id:
           type: string
@@ -31102,6 +32793,7 @@ components:
           description: What the supplier's match has counted paid
         due_kobo:
           type: integer
+          description: What is left to pay; what was sent from Taskiem and is not counted yet (uncounted_kobo) is not due again
         due_on:
           type: string
           format: date
@@ -31121,6 +32813,9 @@ components:
         sent_kobo:
           type: integer
           description: What the bank confirmed the business sent from Taskiem; the supplier's match counts it in paid_kobo
+        uncounted_kobo:
+          type: integer
+          description: Of what was sent from Taskiem, what the supplier's figure does not show yet (its match has not paired the payment, or its count has not come back); not due again, so the bill is not paid twice
         pay_account_number:
           type: string
           description: The account number the supplier issued this business; a transfer into it is matched to the supplier's invoices exactly
@@ -31193,6 +32888,121 @@ components:
           type: boolean
         message:
           type: string
+    BusinessPhoto:
+      type: object
+      additionalProperties: false
+      required: [id, width, height, urls, moderation]
+      properties:
+        id:
+          type: string
+          format: uuid
+        width:
+          type: integer
+        height:
+          type: integer
+        urls:
+          type: object
+          additionalProperties:
+            type: string
+          description: The sizes it was stored at (320, 800 and 2000 pixels wide)
+        moderation:
+          type: string
+          enum: [unreviewed, approved, rejected]
+    BusinessGalleryPhoto:
+      type: object
+      additionalProperties: false
+      required: [id, caption, photo]
+      properties:
+        id:
+          type: string
+          format: uuid
+        caption:
+          type: string
+        photo:
+          $ref: '#/components/schemas/BusinessPhoto'
+    BusinessProfile:
+      type: object
+      additionalProperties: false
+      required: [name, tagline, area, about, logo, gallery, max_gallery]
+      properties:
+        name:
+          type: string
+        tagline:
+          type: string
+        area:
+          type: string
+        about:
+          type: string
+        logo:
+          oneOf:
+          - $ref: '#/components/schemas/BusinessPhoto'
+          - type: 'null'
+        gallery:
+          type: array
+          items:
+            $ref: '#/components/schemas/BusinessGalleryPhoto'
+        max_gallery:
+          type: integer
+    ExploreCard:
+      type: object
+      additionalProperties: false
+      required: [business, name, logo, photos, state, v]
+      properties:
+        business:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        area:
+          type: string
+        tagline:
+          type: string
+        about:
+          type: string
+        logo:
+          type: boolean
+          description: Whether it has a logo, at GET /v1/explore/{business}/logo
+        photos:
+          type: integer
+          description: How many photos it shows, at GET /v1/explore/{business}/photos/{photo}
+        state:
+          type: string
+          description: Our link with it, as in a search (none when there is none)
+        v:
+          type: string
+          description: Changes when its logo or photos do; send it as v on the picture requests so a changed picture is not served from the browser's cache
+    ExploreResult:
+      type: object
+      additionalProperties: false
+      required: [results, near, near_more, fresh, more]
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExploreCard'
+        near:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExploreCard'
+        fresh:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExploreCard'
+        near_more:
+          type: boolean
+        more:
+          type: boolean
+        blind:
+          type: object
+          additionalProperties: false
+          required: [kind, shown]
+          properties:
+            kind:
+              type: string
+            shown:
+              type: string
     LinkSettings:
       type: object
       additionalProperties: false
@@ -31947,6 +33757,10 @@ components:
           description: A personal data category (`email`, `phone`, …).
         value:
           description: The value in that category.
+        cancel_runs:
+          type: boolean
+          description: Cancel the runs in flight that hold the subject (ended at once, not reversed), then erase. Without
+            it, such runs refuse the erasure with 409 `runs_in_flight`.
         totp:
           type: string
           description: A current authenticator code. Erasure needs it or a passkey, from a person.
@@ -31965,6 +33779,12 @@ components:
           type: boolean
           enum:
           - true
+        subjects:
+          type: array
+          description: Every subject erased. By value, the person as they are sealed now and under the ways the value was
+            commonly written before subject ids were canonical (`0803 123 4567` beside `+2348031234567`).
+          items:
+            type: string
       additionalProperties: false
     BillingInterval:
       type: string
@@ -33322,7 +35142,7 @@ components:
           description: How the connector authenticates (its manifest's `auth`, with `oauth2` when it connects by OAuth).
         oauth_linkable:
           type: boolean
-          description: For a connector that declares `auth.oauth2`, whether it can be connected by OAuth on this platform.
+          description: For a connector that declares `auth.oauth2`, whether it can be connected by OAuth on this platform. Always false for a tenant's own (`x_`) or a catalogue (`p_`) connector, which Taskiem's OAuth apps are never lent to.
         oauth_modes:
           type: array
           items:
@@ -34328,6 +36148,30 @@ components:
           type: string
         name:
           type: string
+        webhooks:
+          type: array
+          description: "For a connector with a field Taskiem makes (`generate: webhook_token`, Prembly), the webhook addresses to paste into the provider's dashboard, each carrying the random token made for this connection. Shown only in this answer; to get a new token, connect again."
+          items:
+            $ref: '#/components/schemas/ConnectionWebhook'
+      additionalProperties: false
+    ConnectionWebhook:
+      type: object
+      required:
+      - trigger
+      - title
+      - url
+      - where
+      properties:
+        trigger:
+          type: string
+        title:
+          type: string
+        url:
+          type: string
+          description: The absolute address, under the server's hooks URL, with the connection's token in it. A secret.
+        where:
+          type: string
+          description: Where in the provider's dashboard it is pasted.
       additionalProperties: false
     OAuthStartRequest:
       type: object
@@ -36110,6 +37954,7 @@ components:
       - jit
       - enforce
       - disabled
+      - owner_approved
       - domains
       properties:
         id:
@@ -36150,6 +37995,10 @@ components:
           description: Members with the connection's domains must sign in this way.
         disabled:
           type: boolean
+        owner_approved:
+          type: boolean
+          description: An owner set the connection up or approved it. Until then it signs in no one who holds
+            owner (they use their password or passkey); other members sign in as usual.
         domains:
           type:
           - array
@@ -36244,6 +38093,10 @@ components:
         disabled:
           type: boolean
           description: Update only.
+        owner_approved:
+          type: boolean
+          description: Update only, owners only (403 otherwise). True lets the connection sign in owners; false
+            stops it. Left out, it stays as it is. A connection an owner creates starts approved.
       additionalProperties: false
     DomainRequest:
       type: object
@@ -36851,6 +38704,11 @@ components:
           type: string
         provisioned_by:
           type: string
+        webhooks:
+          type: array
+          description: "For a connector with a field Taskiem makes (`generate: webhook_token`, Prembly), the webhook addresses to paste into the provider's dashboard, each carrying the random token made for this connection. Shown only in this answer; to get a new token, connect again."
+          items:
+            $ref: '#/components/schemas/ConnectionWebhook'
       additionalProperties: false
     CredentialsRequest:
       type: object

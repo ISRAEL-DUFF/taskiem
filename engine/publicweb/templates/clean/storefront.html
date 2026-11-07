@@ -46,6 +46,7 @@
     </ul>
   </section>
   {{end}}
+  {{if and .HasItems (not .Forms) (not .Closed)}}<p class="notice" role="status">Orders are not open on this page yet.{{with .M.WhatsLink}} <a href="{{.}}" rel="noopener">Message {{$.M.Card.Name}} on WhatsApp</a> to order.{{else}}{{with .Phone}} Call <a href="tel:{{.}}">{{.}}</a> to order.{{end}}{{end}}</p>{{end}}
   {{if .HasItems}}
   {{range $i, $s := .Sections}}
   <section id="s{{$i}}" aria-label="{{if .Title}}{{.Title}}{{else}}Catalogue{{end}}">
@@ -55,7 +56,7 @@
       <li class="item{{if or (not .Available) .SoldOut}} is-unavailable{{end}}">
         {{if .Small}}<img class="thumb" src="{{.Small}}" srcset="{{.Small}} 320w, {{.Large}} 800w" sizes="88px" alt="{{.Name}}" loading="lazy" decoding="async">{{else}}<span class="thumb thumb-icon">{{template "i-photo"}}</span>{{end}}
         <div class="item-text">
-          <h3>{{.Name}}</h3>
+          <h3>{{if .ID}}<a class="item-open" href="{{$.Base}}/i/{{.ID}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}</h3>
           {{with .Description}}<p class="item-sub">{{.}}</p>{{end}}{{if .ReadyIn}}<p class="item-sub">Ready in {{.ReadyIn}} min</p>{{end}}
           <p class="item-row"><span class="price">{{.Price}}</span>
           {{if not .Available}}<span class="badge">Unavailable</span>{{else if .SoldOut}}<span class="badge">Sold out</span>{{else if and $.Ordering .Orderable}}<a class="add" href="{{$.Base}}/a/order?item={{.ID}}" aria-label="Add {{.Name}}">{{template "i-plus"}}</a>{{end}}</p>

@@ -149,7 +149,6 @@ export function StepPanel({ step, others, connectors, onChange, onRename, onDele
               <select value={String(cfg.class ?? "")} onChange={(e) => setCfg({ class: e.target.value })}>
                 <option value="">read (GET/HEAD only)</option>
                 <option value="idempotent_write">idempotent write</option>
-                <option value="reconcilable_write">reconcilable write</option>
                 <option value="unsafe_write">unsafe write</option>
               </select>
             </Field>

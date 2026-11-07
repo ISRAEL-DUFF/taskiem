@@ -1,0 +1,11 @@
+-- Each reconcile pass marks the remote subscriptions it leases with its
+-- own token (F20). A tenant's batch is leased once for two minutes and
+-- applied row by row with slow provider calls, so a later row's lease
+-- could lapse while the pass still held it in memory; another pass (the
+-- API's ReconcileTenant, another replica) then took it too, and whichever
+-- wrote last kept its secret, though the provider signed with the other.
+-- A pass now renews a row's lease before it calls the provider, skips a
+-- row another pass took over, and records the outcome, secret and row
+-- together, only while the row is still its own.
+-- +goose Up
+ALTER TABLE remote_subscriptions ADD COLUMN lease_owner uuid;

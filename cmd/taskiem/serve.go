@@ -513,7 +513,9 @@ func loadConfig() (config, error) {
 	if c.HooksURL == "" && c.PublicURL != "" {
 		c.HooksURL = c.PublicURL + "/hooks"
 	}
-	c.RequireAdminPasskeys = flag("TASKIEM_REQUIRE_ADMIN_PASSKEYS", c.PublicURL != "")
+	// Off by default: owners and administrators choose passkeys for
+	// themselves, or a business requires them (docs/spec/optional-passkeys.md).
+	c.RequireAdminPasskeys = flag("TASKIEM_REQUIRE_ADMIN_PASSKEYS", false)
 	// Read here so a bad value stops every role, not only the one serving
 	// the profiler.
 	flag("TASKIEM_PPROF", false)
@@ -1246,6 +1248,8 @@ func serve(ctx context.Context, args []string) error {
 			// A linked business's terms set its invoices' due dates, and a
 			// reminder reaches it in its own business (business links L5).
 			e.invoices.DueFor, e.invoices.Reminded = srv.InvoiceDueFor, srv.InvoiceReminded
+			// A customer who could not pay online tells the business to connect payments.
+			e.invoices.PayUnavailable = srv.InvoicePayUnavailable
 		}
 		srv.Forms = e.forms
 		if e.forms != nil {

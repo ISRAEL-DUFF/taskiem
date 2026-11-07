@@ -151,8 +151,26 @@ No difference beyond the noise, as expected: about one trigger call per worker s
 - **The run row.** `FOR UPDATE` on the run row in decide waits on the worker's and the orchestrator's transactions for the same run (transactionid waits of 6 to 25% at and above the knee); expected, but it lengthens commits.
 - **Profiles.** The CPU and heap profiles of the baseline ramp were not captured (the profiler was turned on with `TASKIEM_PPROF=on`, which the server then read as false; the tool now sets `true`, and the server now accepts `on` and refuses values it does not understand). The database-side evidence above stands without them; take profiles on the next run.
 - **Run lists for large tenants.** Resolved: `GET /v1/runs` names the tenant in its query (row-level security alone gives the planner `tenant_id = ANY (...)`, which cannot read an index in order) and migration 00260 adds `runs (tenant_id, started_at DESC)`, built `CONCURRENTLY`. With 30,000 runs for one tenant among 300,000, the first page went from a bitmap scan of all 30,000 and a sort (23 to 33 ms) to an index scan that reads 50 rows (0.08 ms) on this machine. Not yet measured through the API at that size.
+- **Retention purge of timers.** Resolved: `taskiem_purge_run` deletes a run's timers by `run_id` and deleting the run checks the timers' foreign key, and `timers` had no index on `run_id`, so each purged run scanned every timer kept for every retained run (fired timers stay until their run is purged), twice. Migration 00354 adds `timers (run_id)`, built `CONCURRENTLY`. With 200,000 timers the delete went from a sequential scan (11 ms) to an index scan (0.5 ms) on the review machine (`TestTimersAreIndexedByRun` pins the index).
 - **Failure tests and failover**: run the three scenarios and a real standby promotion on a host where Postgres can be started and replicated (P4-R5).
 - **Target hardware**: everything here again on production-like hardware with no neighbours, before quoting capacity.
+
+## The Chat page's live stream
+
+`GET /v1/chat/stream` (server-sent events, `api/chat_stream.go`) tells a person's open pages what changed in their conversations: a message, a read mark, a reaction, a deletion, a setting, someone typing. It is built so that it does **not** use `NOTIFY`, for the reason above: chat writes go to the same database as the runs, and a `NOTIFY` from every message would queue on the commit lock. Instead each open stream asks, once a second, what changed since it last looked, from an index on `link_messages (tenant_id, updated_at)` (migration 00306; a trigger keeps `updated_at` for reads, hides and reactions): one short transaction, a lookup when nothing has changed and a few rows when something has. A look-back of ten seconds and a record of the events already sent make a change that commits a little after it was written arrive once. A business may hold twelve streams open (a thirteenth is answered 429 with `Retry-After`, and that tab polls as before) and a server 2,000.
+
+Measured with `TASKIEM_STREAM_LOAD=<businesses> go test ./api -run TestChatStreamLoad -v` (twelve streams per business, plus a pair talking; the server, the test and Postgres on one machine, so the figures show direction):
+
+| Streams open | Transactions per second | Per stream | Send to arrival, median | 95th percentile |
+| --- | --- | --- | --- | --- |
+| 482 | 495 | 1.03 | 0.30 s | 1.00 s |
+| 1,202 | 1,175 | 0.98 | 0.30 s | 1.00 s |
+
+What the stream sends: `ready`, `ping` (every ten seconds of silence, so a page can tell a held-up stream from a quiet one and reopen it), `message`, `gone`, `conversation`, `typing`, and `taskiem` (the person's own conversation with Taskiem, from the same lookup, with its own cursor). A page that reconnects with `Last-Event-ID` is caught up from that id, but never from further back than an hour. A batch is at most 200 changes; a full batch is followed at once by the next, without waiting. Read marks are folded into the `message` event of the message they concern, so a page sees one event for a message and its tick turning blue.
+
+Metrics: `taskiem_chat_streams_open` (gauge), `taskiem_chat_stream_polls_total`, `taskiem_chat_stream_poll_duration_seconds`, `taskiem_chat_stream_events_total{event}` and `taskiem_chat_stream_refused_total{cap}` (`business` or `server`). `/v1/chat/stream` is left out of the availability and latency objectives, as the run stream is: a stream open for half an hour is not a slow request.
+
+The cost is one transaction per stream per second, linear in the streams and independent of the messages; the 95th percentile is the polling interval. At the plan's two seconds for the median this has a wide margin. What to watch on the target hardware: the transactions per second from open streams against the runs' own, and the number of streams (tabs left open on a business's side); if either grows, the interval can lengthen for streams that have been idle, or one poller per business can serve all of its streams (each stream then only filters), neither of which changes the page. A longer-term option is a table of changes written with each message, read by sequence.
 
 ## How to rerun
 

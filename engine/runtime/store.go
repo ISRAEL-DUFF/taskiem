@@ -72,6 +72,7 @@ type Store struct {
 
 	defs     lru.Cache[string, *wd.Definition] // "workflow_id/version"; versions are immutable; bounded (S34)
 	folds    decideCache
+	taints   taintCache
 	limits   sync.Map // tenant -> cachedLimits
 	hits     sync.Map // "tenant/limit" -> time recorded
 	hitCount atomic.Int64
@@ -103,7 +104,8 @@ const settleStatus = `, status = CASE WHEN runs.status NOT IN ('running', 'waiti
 const liveStatuses = `status IN ('running', 'waiting')`
 
 // maxInlineRounds bounds decide -> effects -> decide loops in one transaction
-// (a buffered signal consumed by a new wait triggers another round).
+// (a buffered signal consumed by a new wait triggers another round). A
+// decision that needs more leaves the rest to the sweep (decideInline).
 const maxInlineRounds = 16
 
 // maxForkRounds bounds the rounds of a forked run, whose replayed outcomes
@@ -254,6 +256,9 @@ func (s *Store) startIn(ctx context.Context, tx pgx.Tx, req StartRequest, ref *R
 					req.TenantID, req.TriggerID, req.DedupKey).Scan(&ref.ID)
 			}
 		}
+		if fork != nil && fork.resumedBy != nil {
+			return &NotResumableError{Reason: fmt.Sprintf("run %s was already resumed as run %s; resume that run if it failed", fork.parent, *fork.resumedBy)}
+		}
 		lim, err := s.limitsTx(ctx, tx, req.TenantID)
 		if err != nil {
 			return err
@@ -267,8 +272,15 @@ func (s *Store) startIn(ctx context.Context, tx pgx.Tx, req StartRequest, ref *R
 		if err := checkQuota(ctx, tx, req.TenantID, lim); err != nil {
 			return err
 		}
-		if out.HeldBy, err = tenantHold(ctx, tx, req, lim); err != nil {
-			return err
+		// A child its parent's step waits for runs in the parent's slot:
+		// holding it would leave the parent waiting on a run that cannot
+		// start while the parent counts against the same limit (decision
+		// 0049). Chains are at most wd.MaxSubflowDepth deep, which bounds the
+		// overshoot.
+		if req.Parent == nil || !req.Parent.Waits {
+			if out.HeldBy, err = tenantHold(ctx, tx, req, lim); err != nil {
+				return err
+			}
 		}
 		if out.HeldBy != "" {
 			if err := checkBacklog(ctx, tx, req.TenantID, lim); err != nil {
@@ -467,6 +479,16 @@ func lockRun(ctx context.Context, tx pgx.Tx, id uuid.UUID) (runRow, error) {
 	return r, err
 }
 
+// stepHistory loads what a task needs of its run's history, in order: the
+// run's start, its first scheduled step (for the run-start latency) and
+// the events of one step instance.
+func stepHistory(ctx context.Context, tx pgx.Tx, runID uuid.UUID, step string) ([]history.Event, error) {
+	return queryHistory(ctx, tx, `SELECT seq, type, COALESCE(step_id, ''), COALESCE(attempt, 0), payload, recorded_at, origin
+		FROM run_events WHERE run_id = $1 AND (step_id = $2 OR type = 'RunStarted'
+			OR seq = (SELECT f.seq FROM run_events f WHERE f.run_id = $1 AND f.type = 'StepScheduled' ORDER BY f.seq LIMIT 1))
+		ORDER BY seq`, runID, step)
+}
+
 // History loads a run's events in order.
 func History(ctx context.Context, tx pgx.Tx, runID uuid.UUID) ([]history.Event, error) {
 	return queryHistory(ctx, tx, `SELECT seq, type, COALESCE(step_id, ''), COALESCE(attempt, 0), payload, recorded_at, origin
@@ -597,25 +619,42 @@ func (s *Store) decideInline(ctx context.Context, tx pgx.Tx, ref RunRef) error {
 			}
 		}
 		if len(deferred) == 0 {
-			if scheduled > 0 {
-				return s.countSteps(ctx, tx, run, def, scheduled)
-			}
-			_, err := tx.Exec(ctx, `UPDATE runs SET decided_seq = last_seq, orch_lease_owner = NULL, orch_lease_until = NULL`+settleStatus+` WHERE id = $1`, ref.ID)
-			return err
+			return s.settle(ctx, tx, run, def, scheduled, true)
 		}
 	}
-	return fmt.Errorf("run %s: decision did not settle after %d rounds", ref.ID, rounds)
+	// Not settled within this transaction's rounds (a long chain of steps
+	// that each complete in the next round): keep what is decided, and
+	// leave what the last round appended undecided for the scheduler's
+	// sweep, which carries on in a transaction of its own. Each
+	// transaction stays bounded, and the run is not refused.
+	telemetry.DecisionsContinued.Inc()
+	return s.settle(ctx, tx, run, def, scheduled, false)
 }
+
+// settle ends a decision: it records the steps it scheduled (countSteps)
+// and releases the run. A decision that ran out of rounds (settled false)
+// leaves the run undecided (decided_seq < last_seq), so the sweep claims
+// it; deciding a run with nothing new is a no-op.
+func (s *Store) settle(ctx context.Context, tx pgx.Tx, run runRow, def *wd.Definition, scheduled int, settled bool) error {
+	if scheduled > 0 {
+		return s.countSteps(ctx, tx, run, def, scheduled, settled)
+	}
+	_, err := tx.Exec(ctx, `UPDATE runs SET `+decidedThrough+`, orch_lease_owner = NULL, orch_lease_until = NULL`+settleStatus+` WHERE id = $1`, run.ref.ID, settled)
+	return err
+}
+
+// decidedThrough sets decided_seq for a decision ($2: whether it settled).
+const decidedThrough = `decided_seq = CASE WHEN $2::boolean THEN last_seq ELSE last_seq - 1 END`
 
 // countSteps records a decision's scheduled steps and fails the run when
 // they take it past its tenant's max_steps_per_run (a runaway foreach or
 // retry loop). The failure is appended after decide's batch, as a
 // cancellation is, and ends the run in the same transaction, so no step
 // beyond the cap ever reaches a worker.
-func (s *Store) countSteps(ctx context.Context, tx pgx.Tx, run runRow, def *wd.Definition, scheduled int) error {
+func (s *Store) countSteps(ctx context.Context, tx pgx.Tx, run runRow, def *wd.Definition, scheduled int, settled bool) error {
 	var total int
-	if err := tx.QueryRow(ctx, `UPDATE runs SET decided_seq = last_seq, orch_lease_owner = NULL, orch_lease_until = NULL, steps_scheduled = steps_scheduled + $2`+settleStatus+`
-		WHERE id = $1 RETURNING steps_scheduled`, run.ref.ID, scheduled).Scan(&total); err != nil {
+	if err := tx.QueryRow(ctx, `UPDATE runs SET `+decidedThrough+`, orch_lease_owner = NULL, orch_lease_until = NULL, steps_scheduled = steps_scheduled + $3`+settleStatus+`
+		WHERE id = $1 RETURNING steps_scheduled`, run.ref.ID, settled, scheduled).Scan(&total); err != nil {
 		return err
 	}
 	lim, err := s.limitsTx(ctx, tx, run.ref.TenantID)
@@ -863,29 +902,43 @@ func policySnapshots(ctx context.Context, tx pgx.Tx, def *wd.Definition) (map[st
 // DefaultRetention applies when a workflow sets no settings.retention.
 const DefaultRetention = 90 * 24 * time.Hour
 
+// Retention is how long an ended run of def is kept in tenant (spec 9.4):
+// the workflow's settings.retention, else the tenant's governance default,
+// else DefaultRetention, capped by the plan (spec 16.2). def may be nil
+// (no workflow known): the tenant's default then applies. A form
+// submission that starts no run is kept as long (forms.Service.Retention).
+func (s *Store) Retention(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, def *wd.Definition) (time.Duration, error) {
+	retention := DefaultRetention
+	var tenantDefault string
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(default_retention, '') FROM governance_settings WHERE tenant_id = $1`, tenant).Scan(&tenantDefault); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return 0, err
+	}
+	if d, err := wd.ParseDuration(tenantDefault); err == nil && d > 0 {
+		retention = d
+	}
+	if def != nil {
+		if d, err := wd.ParseDuration(def.Settings.Retention); err == nil && d > 0 {
+			retention = d
+		}
+	}
+	lim, err := s.limitsTx(ctx, tx, tenant)
+	if err != nil {
+		return 0, err
+	}
+	if c := time.Duration(lim.MaxRetentionDays) * 24 * time.Hour; c > 0 && retention > c {
+		retention = c
+	}
+	return retention, nil
+}
+
 // endRun marks a run terminal, starts its retention clock (spec 9.4), clears
 // what it no longer needs, and admits queued runs its slot was holding back.
 // Tasks a worker holds are left alone: its result is still recorded.
 func (s *Store) endRun(ctx context.Context, tx pgx.Tx, r runRow, def *wd.Definition, status string) error {
 	run := r.ref.ID
-	retention := DefaultRetention
-	var tenantDefault string
-	if err := tx.QueryRow(ctx, `SELECT COALESCE(default_retention, '') FROM governance_settings WHERE tenant_id = $1`, r.ref.TenantID).Scan(&tenantDefault); err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return err
-	}
-	if d, err := wd.ParseDuration(tenantDefault); err == nil && d > 0 {
-		retention = d
-	}
-	if d, err := wd.ParseDuration(def.Settings.Retention); err == nil && d > 0 {
-		retention = d
-	}
-	// The plan caps retention (spec 16.2).
-	lim, err := s.limitsTx(ctx, tx, r.ref.TenantID)
+	retention, err := s.Retention(ctx, tx, r.ref.TenantID, def)
 	if err != nil {
 		return err
-	}
-	if c := time.Duration(lim.MaxRetentionDays) * 24 * time.Hour; c > 0 && retention > c {
-		retention = c
 	}
 	if _, err := tx.Exec(ctx, `UPDATE runs SET status = $2, ended_at = now(), retain_until = now() + $3::interval WHERE id = $1`,
 		run, status, fmt.Sprintf("%d seconds", int64(retention.Seconds()))); err != nil {

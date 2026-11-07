@@ -189,6 +189,12 @@ async function request<T>(
   return data as T;
 }
 
+/** A part of Taskiem the business turned off answers 404 with area_off.
+ * For a request that is only an extra on a page, that reads as `fallback`. */
+export function whenOff<T>(p: Promise<T>, fallback: T): Promise<T> {
+  return p.catch((e: unknown) => (e instanceof ApiError && e.status === 404 && e.body.area_off ? fallback : Promise.reject(e)));
+}
+
 /** A unit both an edit and a newer version changed (409 from saving a version). */
 export interface MergeConflict {
   path: string;
@@ -267,13 +273,19 @@ export interface Me {
     name: string;
     email_verified?: boolean;
     email_placeholder?: boolean;
+    /** Whether the person may sign in with a code or link sent to their chat. */
+    chat_signin?: boolean;
+    /** Whether the person signs in only with their passkey. */
+    passkey_only?: boolean;
   };
   /** Whether the member has an authenticator app enrolled for step-up. */
   totp?: boolean;
   /** How this session signed in. */
-  auth_method?: "password" | "passkey" | "sso";
+  auth_method?: "password" | "passkey" | "sso" | "chat";
   /** An administrator who must add a passkey before anything else. */
   enrol_passkey?: boolean;
+  /** Why the person is held to passkeys here: personal, deployment or business. */
+  passkey_reason?: string;
   /** What the member proves themselves with to add or remove a passkey or
    * authenticator: a passkey or authenticator if they have one, else their
    * password. */
@@ -286,6 +298,8 @@ export interface Me {
   tenant_name?: string;
   /** Whether the business has the Schools area on (docs/schools.md). */
   schools?: boolean;
+  /** Which parts of Taskiem the business uses, by area (docs/spec/business-areas.md). */
+  areas?: Partial<Record<"storefront" | "orders" | "stock" | "money" | "links" | "schools", boolean>>;
   /** A gate session: the gate screen only; the server refuses the rest. */
   gate_only?: boolean;
   /** Terms the person has not answered yet: asked once (POST /v1/me/terms). */
@@ -413,8 +427,8 @@ export interface AuthField {
   refuse?: { prefix: string; message: string }[];
   /** The value spans lines (a PEM key): a text area. */
   multiline?: boolean;
-  /** A value Taskiem makes for the person: rsa_key_pair makes a key pair in the browser, keeps the private key and shows the public key to paste at the provider. */
-  generate?: "rsa_key_pair";
+  /** A value Taskiem makes for the person: rsa_key_pair makes a key pair in the browser, keeps the private key and shows the public key to paste at the provider; webhook_token is made by the server when the connection is saved, never typed, and shown once inside the webhook address (ConnectionWebhook). */
+  generate?: "rsa_key_pair" | "webhook_token";
 }
 
 /** A capability (schemas/capabilities-v1.json) and the rails that can do it (GET /v1/capabilities). */

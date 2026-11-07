@@ -7,6 +7,8 @@ import (
 	"context"
 	"errors"
 	"os"
+	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
@@ -47,6 +49,24 @@ var (
 		Name: "taskiem_step_duration_seconds", Help: "Worker step execution time, by queue and connector (or step type).",
 		Buckets: []float64{.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10, 30, 60},
 	}, []string{"queue", "target"})
+	// The Chat page's live stream (api/chat_stream.go): how many are open,
+	// what each look costs, what is sent, and who is turned away.
+	ChatStreamsOpen = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "taskiem_chat_streams_open", Help: "Chat page live streams open now (server-sent events, GET /v1/chat/stream).",
+	})
+	ChatStreamPolls = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "taskiem_chat_stream_polls_total", Help: "Looks the open chat streams made at what changed (about one a second each).",
+	})
+	ChatStreamPollSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name: "taskiem_chat_stream_poll_duration_seconds", Help: "Time one chat stream look took (its database transaction).",
+		Buckets: []float64{.001, .0025, .005, .01, .025, .05, .1, .25, .5, 1},
+	})
+	ChatStreamEvents = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "taskiem_chat_stream_events_total", Help: "Events sent on chat streams, by event (message, gone, conversation, taskiem, typing, ping).",
+	}, []string{"event"})
+	ChatStreamRefused = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "taskiem_chat_stream_refused_total", Help: "Chat streams refused for the cap (business: its twelve are open; server: the server's are), which the page answers by polling.",
+	}, []string{"cap"})
 	TimersFired = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "taskiem_timers_fired_total", Help: "Timers fired by the scheduler.",
 	})
@@ -64,6 +84,12 @@ var (
 	LimitHits = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "taskiem_tenant_limit_hits_total", Help: "Times a tenant reached a plan limit, by limit (ingest_rate and max_running_runs hold runs back; others refuse).",
 	}, []string{"limit"})
+	// ModerationCalls counts the requests public pages' checks make to the
+	// model (engine/moderation): Taskiem's own cost, outside any tenant's
+	// AI budget, so it is watched here.
+	ModerationCalls = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "taskiem_moderation_model_calls_total", Help: "Requests the public page checks made to the model, by outcome (ok, failed).",
+	}, []string{"outcome"})
 	RunsAdmitted = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "taskiem_runs_admitted_total", Help: "Runs held back by their tenant's limits and admitted later by the scheduler.",
 	})
@@ -92,6 +118,11 @@ var (
 	FirstRunSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
 		Name: "taskiem_onboarding_first_run_seconds", Help: "Time from a self-serve signup to the tenant's first successful run, observed once per tenant.",
 		Buckets: []float64{60, 120, 300, 600, 900, 1800, 3600, 4 * 3600, 24 * 3600, 7 * 24 * 3600},
+	})
+	// FormLimitTrips counts submissions a form host refused because the
+	// form was over its own limit (TaskiemFormUnderAttack, forms 7.3).
+	FormLimitTrips = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "taskiem_form_limit_trips_total", Help: "Form submissions refused because their form went over its own hourly limit (every address together): a form under attack.",
 	})
 	Signups = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "taskiem_signups_total", Help: "Self-serve signups by way in (signup: the web form, agent, whatsapp, telegram, slack) and outcome (created, rate_limited, blocked_domain, invalid, exists, honeypot, declined, cancelled, country).",
@@ -143,6 +174,21 @@ var (
 	LeasesReleased = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "taskiem_leases_released_total", Help: "Task, timer and orchestration leases released at shutdown instead of left to expire.",
 	})
+	// SchedulerItemFailures counts timers and swept runs whose decision
+	// failed; the scheduler goes on with the rest and retries each later.
+	SchedulerItemFailures = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "taskiem_scheduler_item_failures_total", Help: "Timers and swept runs the scheduler could not decide, by kind (timer, run); the rest of the batch goes on and each is retried after a minute.",
+	}, []string{"kind"})
+	// DecisionsContinued counts decisions that ran out of one
+	// transaction's rounds and were left for the sweep to carry on.
+	DecisionsContinued = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "taskiem_decisions_continued_total", Help: "Decisions that ran out of one transaction's rounds (a long chain of steps completing inline) and were carried on by the sweep.",
+	})
+	// TaskPanics counts tasks whose execution panicked: the worker logs
+	// the stack and carries on, and the task's lease expires.
+	TaskPanics = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "taskiem_task_panics_total", Help: "Tasks whose execution panicked; the worker logged the stack and kept serving, and the task's lease expires.",
+	})
 	// Canary probes: the synthetic end-to-end check (engine/canary).
 	CanaryProbes = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "taskiem_canary_probes_total", Help: "Synthetic canary probes by result (ok, or the stage that failed: accept, complete, output).",
@@ -159,6 +205,28 @@ var (
 // QueueCollector reports queue depth and the age of the oldest ready task,
 // read when Prometheus scrapes.
 type QueueCollector struct{ Pool *pgxpool.Pool }
+
+// CollectTimeout bounds the database queries of one scrape. They share the
+// pool that serves requests, so a database that cannot answer (a lock, a
+// stall) costs a scrape its numbers, not a connection held until it does.
+const CollectTimeout = 2 * time.Second
+
+// Each collector reads the database for one scrape at a time per process:
+// a scrape that arrives while another is reading reports nothing for that
+// collector, so scrapes arriving together (the metrics port has no
+// sign-in) take one connection between them. Prometheus scrapes far less
+// often than that.
+var queueCollecting, poolCollecting sync.Mutex
+
+// collecting starts one scrape's queries under mu, or reports false when
+// another holds it.
+func collecting(mu *sync.Mutex) (context.Context, func(), bool) {
+	if !mu.TryLock() {
+		return nil, nil, false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), CollectTimeout)
+	return ctx, func() { cancel(); mu.Unlock() }, true
+}
 
 var (
 	queueReady  = prometheus.NewDesc("taskiem_queue_ready", "Tasks ready to run and not leased.", []string{"queue"}, nil)
@@ -182,7 +250,12 @@ func (c QueueCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (c QueueCollector) Collect(ch chan<- prometheus.Metric) {
-	rows, err := c.Pool.Query(context.Background(), `SELECT queue, ready, leased, oldest_ready_seconds FROM taskiem_queue_stats()`)
+	ctx, done, ok := collecting(&queueCollecting)
+	if !ok {
+		return
+	}
+	defer done()
+	rows, err := c.Pool.Query(ctx, `SELECT queue, ready, leased, oldest_ready_seconds FROM taskiem_queue_stats()`)
 	if err != nil {
 		return
 	}
@@ -201,7 +274,7 @@ func (c QueueCollector) Collect(ch chan<- prometheus.Metric) {
 	rows.Close()
 	// One series per tenant would grow with the tenants; the total, how
 	// many tenants have a backlog and the largest one stay bounded.
-	brows, err := c.Pool.Query(context.Background(), `SELECT reason, runs, tenants, max_per_tenant FROM taskiem_backlog_stats()`)
+	brows, err := c.Pool.Query(ctx, `SELECT reason, runs, tenants, max_per_tenant FROM taskiem_backlog_stats()`)
 	if err != nil {
 		return
 	}

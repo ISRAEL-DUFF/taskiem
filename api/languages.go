@@ -249,11 +249,13 @@ func (s *Server) waModelIntent(ctx context.Context, c *chat, text string) lang.M
 	if s.Billing.Require(ctx, c.tenant.ID, billing.FeatureAI) != nil {
 		return lang.Match{}
 	}
-	limit, used, err := s.aiBudget(ctx, c.tenant.ID)
-	if err != nil || limit > 0 && used >= limit {
+	info, _ := lang.Lookup(c.lang.Tag)
+	// The call's tokens are reserved until it is recorded (finding F49).
+	release, err := s.reserveAI(ctx, c.tenant.ID, "intent", intent.Request(text, info, 0).Estimate(), chatAIReservation)
+	if err != nil {
 		return lang.Match{}
 	}
-	info, _ := lang.Lookup(c.lang.Tag)
+	defer release()
 	cl := &intent.Classifier{Provider: s.Languages.Model}
 	res, resp, err := cl.Classify(ctx, text, info)
 	outcome, errText := "valid", ""
@@ -265,7 +267,7 @@ func (s *Server) waModelIntent(ctx context.Context, c *chat, text string) lang.M
 	case res.Intent == lang.IntentNone:
 		outcome = "unknown"
 	}
-	s.recordIntent(ctx, c, text, resp, outcome, errText)
+	s.recordIntent(ctx, c, resp, outcome, errText)
 	if err != nil {
 		if !errors.Is(err, intent.ErrUnusable) {
 			s.Logger.Warn("whatsapp: routing a message through the model", "err", err)
@@ -275,8 +277,8 @@ func (s *Server) waModelIntent(ctx context.Context, c *chat, text string) lang.M
 	return lang.Match{Intent: res.Intent, Arg: res.Arg, Language: c.lang.Tag}
 }
 
-func (s *Server) recordIntent(ctx context.Context, c *chat, text string, resp *ai.Response, outcome, errText string) {
-	s.recordModelCall(ctx, c, "intent", "intent", s.Languages.Model, text, resp, outcome, errText)
+func (s *Server) recordIntent(ctx context.Context, c *chat, resp *ai.Response, outcome, errText string) {
+	s.recordModelCall(ctx, c, "intent", "intent", s.Languages.Model, resp, outcome, errText)
 }
 
 // --- settings API ---

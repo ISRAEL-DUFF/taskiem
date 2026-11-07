@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/ops"
 )
 
 // SharedPool is the worker pool every tenant is in unless an operator
@@ -87,7 +88,9 @@ func (s *Store) PoolStats(ctx context.Context) ([]PoolDepth, error) {
 
 // PoolAssignments lists every plan and tenant routing. Tenants' come from
 // the change log (operators' records: tenant ids and pool names, no tenant
-// data), so listing needs no cross-tenant access to tenant tables.
+// data), read in a transaction scoped to the platform chain: the log's
+// policy shows a tenant's rows only to that tenant, and every tenant's only
+// to the operators' paths (migration 00323).
 func (s *Store) PoolAssignments(ctx context.Context) ([]PoolAssignment, error) {
 	rows, err := s.Pool.Query(ctx, `SELECT plan_id, pool, assigned_by, assigned_at FROM plan_worker_pools ORDER BY plan_id`)
 	if err != nil {
@@ -102,26 +105,29 @@ func (s *Store) PoolAssignments(ctx context.Context) ([]PoolAssignment, error) {
 		return nil, err
 	}
 	// The latest change per tenant is its routing; NULL: removed.
-	rows, err = s.Pool.Query(ctx, `SELECT DISTINCT ON (tenant_id) tenant_id, pool, changed_by, changed_at FROM worker_pool_changes
-		WHERE tenant_id IS NOT NULL ORDER BY tenant_id, id DESC`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var a PoolAssignment
-		var tenant uuid.UUID
-		var pool *string
-		if err := rows.Scan(&tenant, &pool, &a.AssignedBy, &a.AssignedAt); err != nil {
-			return nil, err
+	err = db.InTenantTx(ctx, s.Pool, []uuid.UUID{ops.PlatformChain}, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT DISTINCT ON (tenant_id) tenant_id, pool, changed_by, changed_at FROM worker_pool_changes
+			WHERE tenant_id IS NOT NULL ORDER BY tenant_id, id DESC`)
+		if err != nil {
+			return err
 		}
-		if pool == nil {
-			continue
+		defer rows.Close()
+		for rows.Next() {
+			var a PoolAssignment
+			var tenant uuid.UUID
+			var pool *string
+			if err := rows.Scan(&tenant, &pool, &a.AssignedBy, &a.AssignedAt); err != nil {
+				return err
+			}
+			if pool == nil {
+				continue
+			}
+			a.Tenant, a.Pool = &tenant, *pool
+			out = append(out, a)
 		}
-		a.Tenant, a.Pool = &tenant, *pool
-		out = append(out, a)
-	}
-	return out, rows.Err()
+		return rows.Err()
+	})
+	return out, err
 }
 
 // TenantPool is the pool a tenant's work runs in.

@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/api"
 	billsconn "github.com/israel-duff/taskiem/connectors/bills"
 	"github.com/israel-duff/taskiem/connectors/paystack"
 	"github.com/israel-duff/taskiem/engine/connector"
@@ -224,8 +225,65 @@ func TestBillPay(t *testing.T) {
 	if _, err := payments.FinishBillPayment(ctx, uuid.MustParse(buyerID), uuid.MustParse(pay["id"].(string)), "paid", "DANGOTE/ADA"); err != nil {
 		t.Fatal(err)
 	}
-	if b := buyer.must(200, "GET", "/v1/bills/"+id, nil); b["status"] != "open" || b["paying_kobo"] != float64(0) || b["sent_kobo"] != float64(4250000) {
+	if b := buyer.must(200, "GET", "/v1/bills/"+id, nil); b["status"] != "open" || b["paying_kobo"] != float64(0) || b["sent_kobo"] != float64(4250000) ||
+		b["uncounted_kobo"] != float64(4250000) || b["due_kobo"] != float64(0) {
 		t.Errorf("sent: %v", b)
+	}
+	// Sent and not yet counted by the supplier: not due again, so not paid
+	// twice, with the supplier's bank still listed. Paired by the
+	// supplier's match but not yet mirrored back, still not.
+	if e := buyer.must(409, "POST", "/v1/bills/"+id+"/pay", nil); !strings.Contains(e["error"].(string), "has not counted") {
+		t.Errorf("paid twice before the supplier counted it: %v", e)
+	}
+	// Nor does a workflow's link@1 list_bills offer it to pay.
+	if err := db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{uuid.MustParse(buyerID)}, func(tx pgx.Tx) error {
+		b, err := links.GetBillTx(ctx, tx, id)
+		if out := api.BillOut(b); err == nil && out["payable"] != false {
+			t.Errorf("link@1 payable while sent and uncounted: %v", out)
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE bill_payments SET paired_at = now() WHERE id = $1`, pay["id"]); err != nil {
+		t.Fatal(err)
+	}
+	if e := buyer.must(409, "POST", "/v1/bills/"+id+"/pay", nil); !strings.Contains(e["error"].(string), "has not counted") {
+		t.Errorf("paid twice before the mirror: %v", e)
+	}
+	// The mirror brings the supplier's count: paid.
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE bills SET paid_kobo = amount_kobo WHERE id = $1`, id); err != nil {
+		t.Fatal(err)
+	}
+	if b := buyer.must(200, "GET", "/v1/bills/"+id, nil); b["status"] != "paid" || b["due_kobo"] != float64(0) || b["uncounted_kobo"] != float64(0) {
+		t.Errorf("counted: %v", b)
+	}
+
+	// Part-paid: what was sent and not counted is not due again; the rest
+	// is.
+	y := seller.must(201, "POST", "/v1/invoices", map[string]any{"customer": map[string]any{"name": "Ada's Kitchen", "key": "link:" + buyerID},
+		"amount_kobo": 4250000, "allow_part_payments": true}, "Idempotency-Key", "b-2")
+	seller.must(200, "POST", "/v1/invoices/"+y["id"].(string)+"/send", nil, "Idempotency-Key", "s-2")
+	if _, err := w.srv.LinkMirrorTick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	yid := buyer.must(200, "GET", "/v1/bills/"+y["number"].(string), nil)["id"].(string)
+	part := buyer.must(202, "POST", "/v1/bills/"+yid+"/pay", map[string]any{"amount_kobo": 1000000})["payment"].(map[string]any)
+	if _, err := payments.FinishBillPayment(ctx, uuid.MustParse(buyerID), uuid.MustParse(part["id"].(string)), "paid", "DANGOTE/ADA"); err != nil {
+		t.Fatal(err)
+	}
+	// The supplier counted ₦5,000 paid another way.
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE bills SET paid_kobo = 500000 WHERE id = $1`, yid); err != nil {
+		t.Fatal(err)
+	}
+	if b := buyer.must(200, "GET", "/v1/bills/"+yid, nil); b["status"] != "part_paid" || b["due_kobo"] != float64(2750000) || b["uncounted_kobo"] != float64(1000000) {
+		t.Errorf("part-paid, part sent: %v", b)
+	}
+	if e := buyer.must(400, "POST", "/v1/bills/"+yid+"/pay", map[string]any{"amount_kobo": 3000000}); !strings.Contains(e["error"].(string), "2750000") {
+		t.Errorf("more than is left: %v", e)
+	}
+	if p := buyer.must(202, "POST", "/v1/bills/"+yid+"/pay", nil)["payment"].(map[string]any); p["amount_kobo"] != float64(2750000) {
+		t.Errorf("the rest: %v", p)
 	}
 
 	// A bank the payments account does not list: refused.

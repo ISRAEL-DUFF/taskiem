@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"github.com/israel-duff/taskiem/api"
 	rt "github.com/israel-duff/taskiem/engine/runtime/runtimetest"
 )
@@ -406,15 +408,64 @@ func TestAdminAndErasure(t *testing.T) {
 
 	wf := publishFlow(t, owner, loanFlow)
 	run := owner.must(201, "POST", "/v1/workflows/"+wf+"/runs", map[string]any{"input": map[string]any{"bvn": "22299999999", "amount": 5}})["run_id"].(string)
+	// Erasure is never applied under a running workflow: the run holding
+	// the BVN must finish or be cancelled first (spec 9.4).
+	if st, body := owner.do("POST", "/v1/pii/erase", map[string]any{"category": "bvn", "value": "22299999999"}); st != 409 || body["code"] != "runs_in_flight" ||
+		!strings.Contains(toJSON(body["runs"]), run) {
+		t.Fatalf("erasure under a run in flight: %d %v", st, body)
+	}
 	// Erasure cannot be undone: a person confirms it with a second factor.
-	if st, body := owner.do("POST", "/v1/pii/erase", map[string]any{"category": "bvn", "value": "22299999999"}); st != 403 || body["step_up"] != "required" {
+	if st, body := owner.do("POST", "/v1/pii/erase", map[string]any{"category": "bvn", "value": "22299999999", "cancel_runs": true}); st != 403 || body["step_up"] != "required" {
 		t.Fatalf("erasure without step-up: %d %v", st, body)
 	}
+	if st := owner.must(200, "GET", "/v1/runs/"+run, nil)["run"].(map[string]any)["status"]; st == "cancelled" {
+		t.Fatal("cancelled without the step-up")
+	}
 	secret := enrol(t, owner)
-	owner.must(200, "POST", "/v1/pii/erase", map[string]any{"category": "bvn", "value": "22299999999", "totp": codeAfter(secret, 1)})
-	if s := toJSON(owner.must(200, "GET", "/v1/runs/"+run+"?reveal=true", nil)); strings.Contains(s, "22299999999") {
+	// By value, in another format: the same person (canonical subject ids).
+	if out := owner.must(200, "POST", "/v1/pii/erase", map[string]any{"category": "bvn", "value": "222 9999 9999", "cancel_runs": true, "totp": codeAfter(secret, 1)}); len(out["subjects"].([]any)) != 1 {
+		t.Fatalf("erased: %v", out)
+	}
+	got := owner.must(200, "GET", "/v1/runs/"+run+"?reveal=true", nil)
+	if s := toJSON(got); strings.Contains(s, "22299999999") {
 		t.Error("erased BVN still readable")
 	}
+	if st := got["run"].(map[string]any)["status"]; st != "cancelled" {
+		t.Errorf("the run in flight: %v", st)
+	}
+}
+
+// A run in flight whose history is kept out of line (payload_ref, in
+// object storage) cannot be searched for the subject, so it counts as
+// holding it: the erasure waits for it, or cancels it (F26b).
+func TestErasureWaitsForRunsWithEventsOutOfLine(t *testing.T) {
+	w := newWorld(t)
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	wf := publishFlow(t, owner, loanFlow)
+	run := owner.must(201, "POST", "/v1/workflows/"+wf+"/runs", map[string]any{"input": map[string]any{"bvn": "22288888888", "amount": 5}})["run_id"].(string)
+	// One of its events also has content kept out of line; the person
+	// erased appears nowhere inline.
+	if _, err := w.env.DB.Admin.Exec(context.Background(), `UPDATE run_events SET payload_ref = '\x0123' WHERE run_id = $1 AND seq = (SELECT max(seq) FROM run_events WHERE run_id = $1)`, run); err != nil {
+		t.Fatal(err)
+	}
+	if st, body := owner.do("POST", "/v1/pii/erase", map[string]any{"category": "bvn", "value": "22277777777"}); st != 409 || body["code"] != "runs_in_flight" ||
+		!strings.Contains(toJSON(body["runs"]), run) {
+		t.Fatalf("erasure under a run whose events are out of line: %d %v", st, body)
+	}
+}
+
+// Free text is sealed under one subject for the organisation, not one a
+// text: erasing by "other" and a text, or that subject, would erase every
+// such text, so both are refused (F62b).
+func TestFreeTextSubjectIsNotErased(t *testing.T) {
+	w := newWorld(t)
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	owner.must(400, "POST", "/v1/pii/erase", map[string]any{"category": "other", "value": "Please call me back"})
+	shared, err := w.env.Vault.SubjectFor(context.Background(), uuid.MustParse(tenantOf(t, owner)), "other", "anything")
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner.must(400, "POST", "/v1/pii/erase", map[string]any{"subject": shared})
 }
 
 func toJSON(v any) string {
@@ -431,4 +482,17 @@ func (c *client) raw(t *testing.T, method, path string) string {
 	}
 	s, _ := out["raw"].(string)
 	return s
+}
+
+// TestLogoutEndsTheAuthenticatingSession: sign-out ends the session the
+// request was authenticated with, the bearer token before a cookie, as
+// authentication chooses (finding F70).
+func TestLogoutEndsTheAuthenticatingSession(t *testing.T) {
+	w := newWorld(t)
+	a := w.tenant(t, "Acme", "owner@acme.test")
+	b := w.login(t, "owner@acme.test", "correct horse battery")
+	a.must(204, "POST", "/v1/auth/logout", nil, "Cookie", "taskiem_session="+b.token)
+	if st, _ := a.do("GET", "/v1/me", nil); st != 401 {
+		t.Errorf("the bearer session that signed out still works: %d", st)
+	}
 }

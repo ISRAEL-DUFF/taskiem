@@ -21,7 +21,7 @@ Every objective is over a rolling 30 days. The SLI is good events over all event
 
 | SLO | Target | Good events | All events | Metric |
 | --- | --- | --- | --- | --- |
-| `api_availability` | 99.9% | API requests answered without a 5xx | API requests, except `/healthz`, `/readyz`, the status page and run streams (`/v1/runs/{run}/stream`) | `taskiem_http_requests_total` |
+| `api_availability` | 99.9% | API requests answered without a 5xx | API requests, except `/healthz`, `/readyz`, the status page and run streams (`/v1/runs/{run}/stream`) and the Chat stream (`/v1/chat/stream`) | `taskiem_http_requests_total` |
 | `api_latency` | 99% | Those requests answered within 1 s | The same requests | `taskiem_http_request_duration_seconds` |
 | `webhook_ingest` | 99.9% | Webhook and connector-event deliveries answered without a 5xx | Deliveries to `/hooks` | `taskiem_ingest_deliveries_total` |
 | `run_start` | 99% | Runs whose first worker step is claimed within 5 s of the trigger being accepted | Runs whose first step runs on a worker | `taskiem_run_start_seconds` |
@@ -59,8 +59,8 @@ Recording rules: `taskiem:slo_errors:ratio_rate<window>{slo}` for 5m, 30m, 1h, 2
 G4's availability criterion is `api_availability` and `webhook_ingest`, each at or above 99.9% over 60 consecutive days, plus the canary. Take the SLI over each 30-day half from `1 - taskiem:slo_errors:ratio_rate30d`, or for one 60-day figure, from the counters:
 
 ```promql
-1 - sum(rate(taskiem_http_requests_total{route!~"/healthz|/readyz|/status|/status.json|/status/feed.atom|/v1/runs/\\{run\\}/stream",code=~"5.."}[60d]))
-  / sum(rate(taskiem_http_requests_total{route!~"/healthz|/readyz|/status|/status.json|/status/feed.atom|/v1/runs/\\{run\\}/stream"}[60d]))
+1 - sum(rate(taskiem_http_requests_total{route!~"/healthz|/readyz|/status|/status.json|/status/feed.atom|/v1/runs/\\{run\\}/stream|/v1/chat/stream",code=~"5.."}[60d]))
+  / sum(rate(taskiem_http_requests_total{route!~"/healthz|/readyz|/status|/status.json|/status/feed.atom|/v1/runs/\\{run\\}/stream|/v1/chat/stream"}[60d]))
 ```
 
 Keep Prometheus retention (or a long-term store) above 60 days. Record any period excluded from the window (declared maintenance) in the status page; maintenance does not pause the measurement unless the decision owner says so beforehand. The owner of this measurement is a needs-people item (P4-R4).
@@ -94,6 +94,7 @@ Planned maintenance spends budget like any outage. During the G4 window a spent 
 | `TaskiemQueueBacklog` | page | A task in some worker pool and queue has waited over 10 min | [runbook](#runbook-taskiemqueuebacklog) |
 | `TaskiemLeaseExpiries` | ticket | Over 10 leases expired in 15 min | [runbook](#runbook-taskiemleaseexpiries) |
 | `TaskiemRetentionPurgeBehind` | ticket | A run past retention has waited over 6 h to be purged | [runbook](#runbook-taskiemretentionpurgebehind) |
+| `TaskiemFormUnderAttack` | ticket | A form went over its own submission limit | [runbook](#runbook-taskiemformunderattack) |
 | `TaskiemTargetDown` | ticket | A pod's metrics cannot be scraped for 10 min | [runbook](#runbook-taskiemtargetdown) |
 
 Every alert carries `severity` and a `runbook_url` to its section below. Route `severity="page"` to the paging tool and `severity="ticket"` to the team's tracker or channel in Alertmanager:
@@ -260,7 +261,7 @@ Spec 15.4: rolling upgrades never stop running workflows, and workers finish or 
 
 1. **Flips readiness.** `/readyz` answers 503 `draining` on the API (8080), the edge (8081) and the metrics port (9090); `taskiem_draining` becomes 1. Liveness (`/healthz`) stays 200.
 2. **Keeps serving for `TASKIEM_SHUTDOWN_DELAY`** (default 0; the chart sets 10 s), so the Service and ingress take the pod out before it stops listening. Without this, requests routed in the meantime fail.
-3. **Stops taking work.** HTTP servers stop accepting and finish open requests (up to 20 s). Long-lived run streams end. Workers claim nothing new; schedulers stop ticking.
+3. **Stops taking work.** HTTP servers stop accepting and finish open requests (up to 20 s). Long-lived run and chat streams end. Workers claim nothing new; schedulers stop ticking.
 4. **Drains.** Workers let in-flight steps finish for up to `TASKIEM_WORKER_DRAIN` (30 s). Steps still running then are cancelled.
 5. **Releases leases.** Each worker and scheduler hands back the task, timer and orchestration leases it still holds (`taskiem_release_leases`, migration 00122; `taskiem_leases_released_total`), so another pod takes them at once instead of after the lease expires (60 s for tasks). The lease epoch is kept, so anything the stopping process still tries to write is fenced out. A write step cut off mid-call is reconciled by the next worker before anything is re-sent (decision 0009).
 
@@ -324,6 +325,7 @@ Timers and schedules fire late.
 2. Is a scheduler running and ticking (`taskiem_scheduler_last_tick_timestamp_seconds`)? Its logs for `scheduler tick failed`.
 3. A large backlog of due timers after an outage drains at 100 per tick; it catches up on its own. Several schedulers are safe (claims use `SKIP LOCKED`) if it does not.
 4. The database: slow claims, lock waits.
+5. One run that cannot be decided (a tenant's own key unavailable, a decision that faults) does not hold up the others: its timer or sweep entry is logged (`scheduler: could not handle timer` or `run`, with the run's id), counted in `taskiem_scheduler_item_failures_total`, and retried a minute later while the rest of its batch goes on. Such failures do not stop the tick from counting, so `TaskiemSchedulerStalled` is not raised for them; look at the run instead.
 
 ### Runbook: TaskiemCanaryFailing
 
@@ -378,6 +380,14 @@ The oldest run past its retention date has waited over 6 hours to be archived an
 2. Every run failing (`archive run ...: ...`): the archive refuses writes. Check the bucket's credentials, policy, KMS key and reachability (`TASKIEM_ARCHIVE_S3_*`), or the directory's space and permissions (`TASKIEM_ARCHIVE_DIR`). A pass stops early when a whole batch fails, so an outage does not spin through the backlog. Once it is fixed, failed runs come back on their own as their backoff ends; to retry them at once, `UPDATE runs SET purge_after = NULL WHERE purge_attempts > 0`.
 3. One run failing (`read run ...` or `delete run ...`): its history cannot be read or deleted. Look at the error; the run stays, and nothing else waits on it.
 4. No failures, but `taskiem_retention_purge_backlog_runs` keeps growing and `taskiem_runs_purged_total` is flat: is a scheduler running (`TaskiemSchedulerStalled`)? Rising steadily: purging is too slow for the volume (a slow archive is the usual cause). More schedulers split the work (each claim leases its runs for 10 minutes, `SKIP LOCKED`), but only with the S3 archive.
+
+### Runbook: TaskiemFormUnderAttack
+
+A form host turned away submissions because one form went over its own limit, every address together (`taskiem_form_limit_trips_total`; [forms 7.3](spec/forms.md#73-abuse)). The form is guarded for an hour, so it asks each person for a code sent to their phone first, and its business's owners are alerted (`form.guarded`).
+
+1. Which form: the public host logs `form host: a form's hourly submission limit tripped` with the tenant and the form's endpoint; `SELECT tenant_id, id, public_id, guarded_since, guarded_until FROM form_endpoints WHERE guarded_until > now()` lists every form guarded now.
+2. A campaign the business expected (a launch, a school's admission day): nothing to do; the guard lapses an hour after the last trip.
+3. A flood: the per-address limit and the phone code hold it; if it keeps on, or the form is abusive, suspend the form from the [operator console](operator-console.md).
 
 ### Runbook: TaskiemTargetDown
 

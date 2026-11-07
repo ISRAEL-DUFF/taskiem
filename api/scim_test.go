@@ -149,3 +149,52 @@ func TestSCIMMappingCannotEscalate(t *testing.T) {
 	adm.must(403, "PUT", "/v1/scim", map[string]any{"default_roles": []string{"viewer"}, "group_roles": map[string]any{"dpo": []string{"privacy"}}})
 	adm.must(200, "PUT", "/v1/scim", map[string]any{"default_roles": []string{"viewer"}, "group_roles": map[string]any{"ops": []string{"operator"}}})
 }
+
+// TestSCIMKeyHeldToOwnersStanding: a SCIM key moves people into and out
+// of roles only as far as the person who made it could by hand, so an
+// administrator's key neither takes away nor hands out a role carrying a
+// permission the administrator lacks (finding F31).
+func TestSCIMKeyHeldToOwnersStanding(t *testing.T) {
+	w := newWorld(t)
+	owner := w.tenant(t, "Bank", "owner@bank.test")
+	ct := []string{"Content-Type", "application/scim+json"}
+	owner.must(201, "PUT", "/v1/roles/finance", map[string]any{"permissions": []string{"billing.manage", "invoice.manage"}})
+	owner.must(201, "POST", "/v1/members", map[string]any{"email": "bk@bank.test", "password": "correct horse battery", "roles": []string{"finance"}})
+	owner.must(201, "POST", "/v1/members", map[string]any{"email": "adm@bank.test", "password": "correct horse battery", "roles": []string{"admin"}})
+	owner.must(200, "PUT", "/v1/scim", map[string]any{"default_roles": []string{"viewer"}, "group_roles": map[string]any{"Finance": []string{"finance"}}})
+	adm := w.login(t, "adm@bank.test", "correct horse battery")
+	key := adm.must(201, "POST", "/v1/api-keys", map[string]any{"name": "mine", "permissions": []string{"scim.provision"}})["key"].(string)
+	scim := &client{t: t, base: w.base, token: key}
+
+	// Stripping: deactivating the bookkeeper would take finance away.
+	if out := scim.must(403, "POST", "/scim/v2/Users", map[string]any{"userName": "bk@bank.test", "emails": []any{map[string]any{"value": "bk@bank.test"}}, "active": false}, ct...); out["schemas"] == nil {
+		t.Errorf("not a SCIM error: %v", out)
+	}
+	if got := rolesOf(t, owner, "bk@bank.test"); got != "finance" {
+		t.Fatalf("bookkeeper's roles after the refused deactivation: %q", got)
+	}
+
+	// Granting: the administrator puts themselves in the Finance group.
+	me := scim.must(201, "POST", "/scim/v2/Users", map[string]any{"userName": "adm@bank.test", "emails": []any{map[string]any{"value": "adm@bank.test"}}}, ct...)
+	scim.must(403, "POST", "/scim/v2/Groups", map[string]any{"displayName": "Finance", "members": []any{map[string]any{"value": me["id"]}}}, ct...)
+	grp := scim.must(201, "POST", "/scim/v2/Groups", map[string]any{"displayName": "Staff", "members": []any{map[string]any{"value": me["id"]}}}, ct...)
+	scim.must(403, "PATCH", "/scim/v2/Groups/"+grp["id"].(string), map[string]any{"Operations": []any{map[string]any{"op": "replace", "value": map[string]any{"displayName": "Finance"}}}}, ct...)
+	if got := rolesOf(t, owner, "adm@bank.test"); got != "admin,viewer" {
+		t.Fatalf("administrator's roles: %q", got)
+	}
+	if perms := toStrings(adm.must(200, "GET", "/v1/me", nil)["permissions"]); strings.Contains(strings.Join(perms, ","), "billing.manage") {
+		t.Fatalf("the administrator gained billing.manage through SCIM: %v", perms)
+	}
+
+	// The owner's key does both.
+	okey := owner.must(201, "POST", "/v1/api-keys", map[string]any{"name": "Okta", "permissions": []string{"scim.provision"}})["key"].(string)
+	oscim := &client{t: t, base: w.base, token: okey}
+	oscim.must(200, "PATCH", "/scim/v2/Groups/"+grp["id"].(string), map[string]any{"Operations": []any{map[string]any{"op": "replace", "value": map[string]any{"displayName": "Finance"}}}}, ct...)
+	if got := rolesOf(t, owner, "adm@bank.test"); got != "admin,finance,viewer" {
+		t.Errorf("after the owner's key renamed the group: %q", got)
+	}
+	oscim.must(201, "POST", "/scim/v2/Users", map[string]any{"userName": "bk@bank.test", "emails": []any{map[string]any{"value": "bk@bank.test"}}, "active": false}, ct...)
+	if got := rolesOf(t, owner, "bk@bank.test"); got != "" {
+		t.Errorf("bookkeeper after the owner's key deactivated them: %q", got)
+	}
+}

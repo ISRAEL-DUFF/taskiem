@@ -23,10 +23,11 @@ import (
 	"github.com/israel-duff/taskiem/engine/webauthn"
 )
 
-// Passkeys (spec 13.2): sign-in and step-up with WebAuthn. Admins are held
-// to passkeys when RequireAdminPasskeys is set: a password session of a
-// member with administrative permissions can only enrol a passkey, and
-// once they have one, their password no longer signs them in.
+// Passkeys (spec 13.2): sign-in and step-up with WebAuthn. Who is held to
+// them is passkey_rule.go: no one, unless the deployment's switch, the
+// business's setting or the person's own says so; then a session that did
+// not sign in with a passkey can only enrol one, and once they have one,
+// their password no longer signs them in there.
 
 // adminPerms are the permissions that make a member an administrator for
 // the passkey rule.
@@ -45,6 +46,8 @@ func isAdmin(perms map[string]bool) bool {
 // may make.
 var enrolOnly = map[string]bool{
 	"GET /v1/me": true, "GET /v1/me/passkeys": true, "POST /v1/me/passkeys/options": true, "POST /v1/me/passkeys": true, "POST /v1/me/step-up/options": true, "POST /v1/auth/logout": true,
+	// An unconfirmed email holds enrolment back (proveFactor).
+	"POST /v1/me/email/verify": true, "POST /v1/me/email/verify/resend": true,
 }
 
 const challengeTTL = 5 * time.Minute
@@ -157,7 +160,7 @@ func (s *Server) passkeyLoginOptions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Issuing a challenge is cheap but stores a row: its own, looser limit.
-	if !s.limiter("challenge:"+clientIP(r), time.Second, 30).Allow() {
+	if !s.limiter("challenge:"+limitIP(r), time.Second, 30).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "too many requests")
 		return
 	}
@@ -176,7 +179,7 @@ func (s *Server) passkeyLogin(w http.ResponseWriter, r *http.Request) {
 	if !s.passkeysOn(w) || !jsonOnly(w, r) {
 		return
 	}
-	if !s.loginLimiter("login:" + clientIP(r)).Allow() {
+	if !s.loginLimiter("login:" + limitIP(r)).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "too many login attempts")
 		return
 	}
@@ -438,6 +441,11 @@ func (s *Server) removePasskey(w http.ResponseWriter, r *http.Request) {
 		if tag.RowsAffected() == 0 {
 			return pgx.ErrNoRows
 		}
+		// The last one gone: "Only sign in with my passkey" off, so no one
+		// is locked out (passkey_rule.go).
+		if err := passkeysGone(r.Context(), tx, p.UserID); err != nil {
+			return err
+		}
 		return auditTx(r, tx, "passkey.remove", p.UserID.String(), map[string]any{"credential": chi.URLParam(r, "id")})
 	})
 	if err != nil {
@@ -483,6 +491,9 @@ func (s *Server) resetPasskeys(w http.ResponseWriter, r *http.Request) {
 		}
 		tag, err := tx.Exec(r.Context(), `DELETE FROM webauthn_credentials WHERE user_id = $1`, user)
 		if err != nil {
+			return err
+		}
+		if err := passkeysGone(r.Context(), tx, user); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(r.Context(), `UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`, user); err != nil {
@@ -600,6 +611,9 @@ type factorSet struct {
 	Passkey  bool `json:"passkey"`
 	TOTP     bool `json:"totp"`
 	Password bool `json:"password"`
+	// EmailVerified: the person proved they read their email. Until then
+	// a password may be one someone else chose (POST /v1/members).
+	EmailVerified bool `json:"-"`
 }
 
 // factorsOf is what a member can prove themselves with in a tenant.
@@ -613,7 +627,7 @@ func (s *Server) factorsOf(ctx context.Context, tenant, user uuid.UUID) (factorS
 	}
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		f.TOTP = s.totpEnrolled(ctx, tx, user)
-		return tx.QueryRow(ctx, `SELECT password_hash FROM users WHERE id = $1`, user).Scan(&hash)
+		return tx.QueryRow(ctx, `SELECT password_hash, email_verified_at IS NOT NULL FROM users WHERE id = $1`, user).Scan(&hash, &f.EmailVerified)
 	})
 	if hash == nil {
 		return f, "", err
@@ -624,8 +638,8 @@ func (s *Server) factorsOf(ctx context.Context, tenant, user uuid.UUID) (factorS
 
 // proveFactor checks the proof and answers the request when it falls
 // short. A member with a passkey or authenticator proves themselves with a
-// fresh assertion or code; one with neither, with their password; one with
-// none of these (signed in by SSO only) has nothing more to give. A
+// fresh assertion or code; one with neither, with their password once
+// their email is confirmed (where email can be sent); one with none of these (signed in by SSO only) has nothing more to give. A
 // passkey assertion must be for a challenge asked for "account.reauth"
 // and action (passkey.add, totp.setup, ...).
 func (s *Server) proveFactor(w http.ResponseWriter, r *http.Request, proof factorProof, action string) bool {
@@ -669,6 +683,13 @@ func (s *Server) proveFactor(w http.ResponseWriter, r *http.Request, proof facto
 		}
 		return need("confirm it is you with your passkey or authenticator code first", methods...)
 	case f.Password:
+		// A password on an email no one has confirmed may have been chosen
+		// by whoever added the person (POST /v1/members), so it proves
+		// nothing yet: the person confirms their email first. Deployments
+		// that cannot send email cannot confirm one (needVerified).
+		if !f.EmailVerified && s.mailOn() {
+			return need("confirm your email first, with the link we sent you (or ask for a new one), then try again", "verify_email")
+		}
 		if !s.loginLimiter("reauth:" + p.UserID.String()).Allow() {
 			writeErr(w, http.StatusTooManyRequests, "too many attempts")
 			return false
@@ -861,6 +882,9 @@ func ResetPasskeys(ctx context.Context, pool *pgxpool.Pool, email, operator stri
 			return err
 		}
 		removed = tag.RowsAffected()
+		if err := passkeysGone(ctx, tx, user); err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx, `UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`, user); err != nil {
 			return err
 		}

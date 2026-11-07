@@ -17,12 +17,14 @@ import {
   frontNameProblem,
   frontSub,
   frontURL,
+  orderToTurnOn,
   type Front,
   type FrontsView,
 } from "../lib/fronts";
 import { pageURL, type Storefront } from "../lib/storefront";
 import { StorefrontTabs } from "./Storefront";
 import { FormCard } from "./StorefrontForms";
+import { FrontItems, OrdersBanner } from "./FrontItems";
 
 /** The storefront's fronts (docs/spec/fronts.md F3): the home page and
  * any other pages of things to sell or ask about, each with its own list
@@ -214,6 +216,7 @@ export function StorefrontFront() {
   const published = (sf.data?.published_version ?? 0) > 0;
   const base = sf.data ? pageURL(sf.data) : "";
   const home = f?.slug === "";
+  const toTurnOn = f ? orderToTurnOn(f) : undefined;
   const form = edit ?? (f ? { name: f.name, tagline: f.tagline ?? "", slug: f.slug } : null);
   const dirty =
     !!f && !!edit && (edit.name !== f.name || edit.tagline !== (f.tagline ?? "") || edit.slug !== f.slug);
@@ -304,23 +307,28 @@ export function StorefrontFront() {
               </div>
             </form>
           </section>
-          <section className="card" aria-labelledby="front-items">
-            <h2 id="front-items" style={{ marginTop: 0 }}>
-              Items
-            </h2>
-            {home ? (
+          {!home && toTurnOn && (
+            <OrdersBanner front={f} action={toTurnOn} published={published} onDone={view.reload} />
+          )}
+          {home ? (
+            <section className="card" aria-labelledby="front-items">
+              <h2 id="front-items" style={{ marginTop: 0 }}>
+                Items
+              </h2>
               <p className="hint">
                 Your home page shows your catalogue: change it under <Link to="/storefront">Page</Link>.
               </p>
-            ) : f.table_id ? (
-              <p>
-                {f.items === 0 ? "Nothing on this front yet. " : `${f.items} on this front. `}
-                <Link to={`/tables/${f.table_id}`}>{f.items === 0 ? "Add your first item" : "Change the items"}</Link>
-              </p>
-            ) : (
+            </section>
+          ) : f.table_id ? (
+            <FrontItems front={f} onChanged={view.reload} />
+          ) : (
+            <section className="card" aria-labelledby="front-items">
+              <h2 id="front-items" style={{ marginTop: 0 }}>
+                Items
+              </h2>
               <p className="hint">This front has no list of items: it shows its forms.</p>
-            )}
-          </section>
+            </section>
+          )}
           <section className="card sf-links" aria-labelledby="front-forms">
             <h2 id="front-forms" style={{ marginTop: 0 }}>
               Forms

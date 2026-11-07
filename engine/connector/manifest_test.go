@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -272,5 +273,39 @@ func TestKind(t *testing.T) {
 		if m, probs := Parse(src); len(probs) > 0 || m.KindOf() != "rail" {
 			t.Errorf("%s: %v %q", id, probs, m.KindOf())
 		}
+	}
+}
+
+// A token Taskiem makes (generate: webhook_token) is secret and optional:
+// nobody types it.
+func TestWebhookTokenField(t *testing.T) {
+	src := func(field string) []byte {
+		return []byte(`
+manifest: connector/v1
+id: kyc
+version: 1.0.0
+name: KYC
+description: Lookups.
+category: identity
+auth: { type: api_key, fields: [` + field + `] }
+base_url: https://kyc.test
+egress_hosts: [kyc.test]
+actions:
+  lookup: { title: Look up, class: read, input: { type: object } }
+`)
+	}
+	m, probs := Parse(src(`{ key: tok, label: Token, secret: true, required: false, generate: webhook_token }`))
+	if len(probs) > 0 || !slices.Equal(m.WebhookTokenFields(), []string{"tok"}) {
+		t.Fatalf("refused: %v", probs)
+	}
+	for _, bad := range []string{`{ key: tok, label: Token, required: false, generate: webhook_token }`, `{ key: tok, label: Token, secret: true, generate: webhook_token }`, `{ key: tok, label: Token, secret: true, required: false, generate: nonsense }`} {
+		if _, probs := Parse(src(bad)); len(probs) == 0 {
+			t.Errorf("%s accepted", bad)
+		}
+	}
+	a, err := NewWebhookToken()
+	b, _ := NewWebhookToken()
+	if err != nil || len(a) != 64 || a == b {
+		t.Errorf("tokens %q %q %v", a, b, err)
 	}
 }

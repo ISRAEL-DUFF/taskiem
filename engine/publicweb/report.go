@@ -75,15 +75,16 @@ func reportLimiter() *formguard.Limiter {
 	return reportLimit
 }
 
-// reportIPHash is a stable keyed digest of the visitor's address: the same
-// person reporting twice counts once.
+// reportIPHash is a stable keyed digest of the visitor's address (an
+// IPv6 /64, which one subscriber holds whole): the same person reporting
+// twice counts once.
 func (s *Server) reportIPHash(r *http.Request) []byte {
 	key := s.FormKey
 	if s.FormKeys != nil {
 		key = s.FormKeys.Guard
 	}
 	m := hmac.New(sha256.New, key)
-	m.Write([]byte("report client address\x00" + s.ClientIP(r)))
+	m.Write([]byte("report client address\x00" + s.clientKey(r)))
 	return m.Sum(nil)
 }
 
@@ -144,7 +145,7 @@ var errReportInvalid = errors.New("publicweb: an invalid report")
 // takeReport reads a report form (reason, message, contact) and records
 // it. The honeypot field, filled in, takes nothing.
 func (s *Server) takeReport(r *http.Request, kind, site string) (bool, error) {
-	if !reportLimiter().Allow(s.ClientIP(r)) || r.PostForm.Get("website") != "" {
+	if !reportLimiter().Allow(s.clientKey(r)) || r.PostForm.Get("website") != "" {
 		return false, nil
 	}
 	reason := r.PostForm.Get("reason")

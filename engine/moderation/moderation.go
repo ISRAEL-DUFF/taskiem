@@ -16,6 +16,7 @@ import (
 	"unicode"
 
 	"github.com/israel-duff/taskiem/engine/ai"
+	"github.com/israel-duff/taskiem/engine/telemetry"
 )
 
 // Verdicts, from least to most serious.
@@ -176,23 +177,39 @@ func (c *Checker) Texts(ctx context.Context, cache Cache, texts []Text) (Result,
 		res.ModelSkipped = true
 		return res, nil
 	}
-	found, err := c.ask(ctx, ask)
-	if err != nil {
-		// The model is a safeguard on top: its failure does not stop a page,
-		// and the result says so (a first publish then waits for a person).
-		res.ModelSkipped = true
-		return res, nil //nolint:nilerr // recorded in ModelSkipped
-	}
-	for _, f := range found {
-		if cache != nil {
-			if err := cache.Put(ctx, Hash(f.Text), f); err != nil {
-				return res, err
-			}
+	// The pieces go in requests of at most MaxPiecesPerCall, each kept as
+	// it is answered, so no answer is cut at its token cap (finding F51).
+	for len(ask) > 0 {
+		n := min(len(ask), MaxPiecesPerCall)
+		found, err := c.ask(ctx, ask[:n])
+		if err != nil {
+			// The model is a safeguard on top: its failure does not stop a
+			// page, and the result says so (docs/moderation.md: the words and
+			// prices still apply). The rest is not asked: a model that failed,
+			// or the caller's time that ran out, is not waited on once per
+			// chunk. What was not judged is not kept, so it is asked again
+			// next time.
+			res.ModelSkipped = true
+			return res, nil //nolint:nilerr // recorded in ModelSkipped
 		}
-		res.Add(f)
+		ask = ask[n:]
+		for _, f := range found {
+			if cache != nil {
+				if err := cache.Put(ctx, Hash(f.Text), f); err != nil {
+					return res, err
+				}
+			}
+			res.Add(f)
+		}
 	}
 	return res, nil
 }
+
+// MaxPiecesPerCall is how many pieces one model request judges. Each
+// answer is about 25 to 30 tokens, so 40 stay well inside the request's
+// 4000-token answer: a cut answer cannot be read, and its pieces would go
+// unjudged.
+const MaxPiecesPerCall = 40
 
 // Policy is the written content policy the model judges against.
 const Policy = `You check text that small Nigerian businesses put on their public Taskiem page: a business name, a tagline, a description, product and service names and descriptions. The text may be in English, Nigerian Pidgin, Hausa, Yoruba or Igbo.
@@ -239,8 +256,10 @@ func (c *Checker) ask(ctx context.Context, texts []Text) ([]Finding, error) {
 		Schema:   schema, MaxTokens: 4000, Effort: "low",
 	})
 	if err != nil {
+		telemetry.ModerationCalls.WithLabelValues("failed").Inc()
 		return nil, err
 	}
+	telemetry.ModerationCalls.WithLabelValues("ok").Inc()
 	var out struct {
 		Results []struct {
 			ID       int    `json:"id"`

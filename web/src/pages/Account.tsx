@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { del, get, post, put, type Invitation } from "../api";
+import { ApiError, del, get, post, put, type Invitation } from "../api";
 import { useAuth } from "../auth";
-import { addPasskey, passkeysSupported, proof } from "../passkeys";
+import { addPasskey, passkeysSupported, proof, stepUpAssert } from "../passkeys";
 import {
   ErrorBox,
   Field,
@@ -64,6 +64,48 @@ function ProofField({
   return null;
 }
 
+/** Offers a new confirmation link when a factor change was refused
+ * because the person's email is not confirmed yet: a password on an
+ * unconfirmed email may be one whoever added them chose. */
+export function ConfirmEmailFirst({ error }: { error: unknown }) {
+  const [sent, setSent] = useState("");
+  const act = useAction();
+  const reauth = error instanceof ApiError ? error.body.reauth : undefined;
+  if (!Array.isArray(reauth) || !reauth.includes("verify_email")) return null;
+  return (
+    <div className="notice" role="status" data-testid="confirm-email-first">
+      <p>
+        Confirm your email with the link we sent you, then try again. Until then
+        your password cannot add a passkey or authenticator.
+      </p>
+      <ErrorBox error={act.error} />
+      {sent ? (
+        <p>{sent}</p>
+      ) : (
+        <button
+          className="small"
+          disabled={act.busy}
+          onClick={() =>
+            void act.run(
+              async () =>
+                setSent(
+                  (
+                    await post<{ status?: string }>(
+                      "/v1/me/email/verify/resend",
+                    )
+                  ).status ?? "Your email is confirmed: try again.",
+                ),
+              false,
+            )
+          }
+        >
+          Send me a new link
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** The member's passkeys: sign-in and step-up with the device's lock. */
 export function Passkeys({ onAdded }: { onAdded?: () => void }) {
   const { me, refresh } = useAuth();
@@ -82,6 +124,7 @@ export function Passkeys({ onAdded }: { onAdded?: () => void }) {
         cannot be phished. It also answers step-up on approvals.
       </p>
       <ErrorBox error={list.error ?? act.error} />
+      <ConfirmEmailFirst error={act.error} />
       {list.data && list.data.passkeys.length > 0 && (
         <Items label="Passkeys">
           {list.data.passkeys.map((k) => (
@@ -332,7 +375,13 @@ function Telegram() {
             className="danger"
             disabled={act.busy}
             onClick={() =>
-              confirm("Unlink Telegram?") &&
+              confirm(
+                /^owner\+.*@telegram\.taskiem\.invalid$/.test(
+                  me?.user?.email ?? "",
+                )
+                  ? "Unlink Telegram? Your account was made in a chat: its sign-in name comes from this Telegram account and is released with it. Add your email first, so you can still sign in."
+                  : "Unlink Telegram?",
+              ) &&
               void act.run(
                 async () => (
                   await del("/v1/me/telegram"),
@@ -531,7 +580,13 @@ function WhatsApp() {
             className="danger"
             disabled={act.busy}
             onClick={() =>
-              confirm("Unlink this number?") &&
+              confirm(
+                /^owner\+.*@phone\.taskiem\.invalid$/.test(
+                  me?.user?.email ?? "",
+                )
+                  ? "Unlink this number? Your account was made in a chat: its sign-in name comes from this number and is released with it. Add your email first, so you can still sign in."
+                  : "Unlink this number?",
+              ) &&
               void act.run(
                 async () => (await del("/v1/me/whatsapp"), b.reload()),
                 "WhatsApp unlinked",
@@ -783,7 +838,9 @@ export function Account() {
       <Invitations />
       <AddEmail />
       <ChangePassword />
+      <ChatSignIn />
       <Passkeys />
+      <PasskeyOnly />
       <WhatsApp />
       <Telegram />
       <Slack />
@@ -795,6 +852,7 @@ export function Account() {
           fifteen minutes lock codes out for fifteen minutes.
         </p>
         <ErrorBox error={act.error} />
+        <ConfirmEmailFirst error={act.error} />
         {me?.totp && !pending && (
           <>
             <p>
@@ -906,6 +964,78 @@ export function Account() {
 }
 
 /** Light, dark, or the device's setting; kept in this browser (theme.ts). */
+/** "Only sign in with my passkey" (docs/spec/optional-passkeys.md §4):
+ * off by default; on and off are each confirmed with the passkey, and it
+ * needs one to be on. */
+function PasskeyOnly() {
+  const { me, refresh } = useAuth();
+  const act = useAction();
+  if (!me?.user || !me.factors) return null;
+  const on = !!me.user.passkey_only;
+  const has = !!me.factors.passkey;
+  return (
+    <section className="card">
+      <h2 style={{ marginTop: 0 }}>Only sign in with my passkey</h2>
+      <p className="hint">
+        {on
+          ? "On: your password and your chat no longer sign you in on the web; only your passkey does. Turning it off needs your passkey."
+          : has
+            ? "Off: you can sign in with your password, your chat or your passkey. Turn it on so only your passkey works, even if your password is found out."
+            : "Add a passkey above first. Then you can choose to sign in only with it."}
+      </p>
+      <ErrorBox error={act.error} />
+      {(has || on) && (
+        <button
+          type="button"
+          disabled={act.busy || !passkeysSupported()}
+          onClick={() =>
+            void act.run(async () => {
+              const passkey = await stepUpAssert("account.reauth", on ? "passkey_only.off" : "passkey_only.on");
+              await put("/v1/me/passkey-only", { on: !on, passkey });
+              await refresh();
+            }, false)
+          }
+        >
+          {on ? "Turn off" : "Turn on"}
+        </button>
+      )}
+    </section>
+  );
+}
+
+/** Signing in on the web with a code or link sent to the person's WhatsApp
+ * or Telegram (docs/spec/chat-sign-in.md): on by default; off, no code is
+ * sent and links from chat are refused. */
+function ChatSignIn() {
+  const { me, refresh } = useAuth();
+  const act = useAction();
+  const on = me?.user?.chat_signin;
+  if (on === undefined) return null;
+  return (
+    <section className="card">
+      <h2 style={{ marginTop: 0 }}>Sign in with WhatsApp or Telegram</h2>
+      <p className="hint">
+        {on
+          ? "You can sign in here with a code sent to your WhatsApp or Telegram, or by sending sign in to Taskiem in your chat. Each time, your chat is told."
+          : "Off: no code is sent to your chat, and sign-in links from your chat do not work."}
+      </p>
+      <ErrorBox error={act.error} />
+      <button
+        type="button"
+        disabled={act.busy}
+        onClick={() =>
+          void act.run(async () => {
+            await put("/v1/me/chat-signin", { on: !on });
+            await refresh();
+          }, false)
+        }
+      >
+        {on ? "Turn off" : "Turn on"}
+      </button>
+    </section>
+  );
+}
+
 function Appearance() {
   const [theme, set] = useState<Theme>(savedTheme);
   const choices: [Theme, string][] = [

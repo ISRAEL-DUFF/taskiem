@@ -34,6 +34,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/dispatch"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/embedsites"
+	"github.com/israel-duff/taskiem/engine/formguard"
 	"github.com/israel-duff/taskiem/engine/forms"
 	"github.com/israel-duff/taskiem/engine/httpsec"
 	"github.com/israel-duff/taskiem/engine/inmail"
@@ -60,10 +61,15 @@ import (
 
 // Server serves the API.
 type Server struct {
-	Store    *runtime.Store
-	Vault    *secrets.Vault
-	Registry *connector.Registry
-	Logger   *slog.Logger
+	// chatGate caps the open Chat page streams (chat_stream.go).
+	chatGate chatStreamGate
+	// ChatStreamPing is how often an open chat stream says something when it
+	// has nothing to say (zero: ten seconds).
+	ChatStreamPing time.Duration
+	Store          *runtime.Store
+	Vault          *secrets.Vault
+	Registry       *connector.Registry
+	Logger         *slog.Logger
 	// AllowSignup enables POST /v1/signup (self-serve tenants; off by default
 	// until Phase 4).
 	AllowSignup bool
@@ -176,7 +182,8 @@ type Server struct {
 	// WebAuthn is the relying party for passkeys; empty turns them off.
 	WebAuthn webauthn.Config
 	// RequireAdminPasskeys holds members with administrative permissions to
-	// passkeys (spec 13.2: on by default in production).
+	// passkeys in every business, whatever their settings (passkey_rule.go;
+	// off by default since docs/spec/optional-passkeys.md).
 	RequireAdminPasskeys bool
 	// Done, when closed, ends long-lived streams so shutdown is prompt.
 	Done <-chan struct{}
@@ -312,6 +319,10 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/auth/passkey", s.passkeyLogin)
 		r.Post("/auth/password/forgot", s.forgotPassword)
 		r.Post("/auth/password/reset", s.resetPassword)
+		r.Post("/auth/chat/start", s.chatSigninStart) // signing in with the chat (chat_signin.go)
+		r.Post("/auth/chat/verify", s.chatSigninVerify)
+		r.Post("/auth/chat/link/peek", s.chatSigninLinkPeek)
+		r.Post("/auth/chat/link", s.chatSigninLink)
 		r.Post("/auth/invitation/options", s.invitationLinkOptions) // invitation links (invitationlinks.go)
 		r.Post("/auth/invitation/accept", s.acceptInvitationLink)
 		r.Post("/auth/sso/discover", s.ssoDiscover)
@@ -350,6 +361,8 @@ func (s *Server) Handler() http.Handler {
 			r.Get("/me", s.me)
 			r.Post("/me/terms", s.answerTerms) // agreeing to the terms (onboarding.go)
 			r.Post("/me/password", s.changePassword)
+			r.Put("/me/chat-signin", s.setChatSignin)   // signing in with the chat, on or off (chat_signin.go)
+			r.Put("/me/passkey-only", s.setPasskeyOnly) // only sign in with my passkey (passkey_rule.go)
 			r.Post("/me/email/verify", s.verifyEmail)
 			r.Post("/me/email/verify/resend", s.resendVerification)
 			r.Post("/me/email", s.addEmail)       // Add your email (chat_doors.go)
@@ -402,14 +415,14 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermPIIReveal)).Get("/languages/transcripts", s.getTranscripts)
 			r.With(s.need(PermSecretManage), s.tenantWide).Put("/ussd/channels/{provider}", s.putUSSDChannel)
 			r.With(s.need(PermSecretManage), s.tenantWide).Delete("/ussd/channels/{provider}", s.deleteUSSDChannel)
-			r.With(s.need(PermMemberManage)).Delete("/members/{user}/passkeys", s.resetPasskeys)
+			r.With(s.need(PermMemberManage), s.tenantWide).Delete("/members/{user}/passkeys", s.resetPasskeys)
 			r.With(s.need(PermMemberManage)).Get("/scim", s.getSCIM)
-			r.With(s.need(PermMemberManage), s.feature(billing.FeatureSCIM, false)).Put("/scim", s.putSCIM)
+			r.With(s.need(PermMemberManage), s.tenantWide, s.feature(billing.FeatureSCIM, false)).Put("/scim", s.putSCIM)
 			r.With(s.need(PermMemberManage)).Get("/sso", s.listSSO)
-			r.With(s.need(PermMemberManage), s.feature(billing.FeatureSSO, false)).Post("/sso", s.createSSO)
-			r.With(s.need(PermMemberManage), s.feature(billing.FeatureSSO, false)).Put("/sso/{id}", s.updateSSO)
-			r.With(s.need(PermMemberManage), s.feature(billing.FeatureSSO, false)).Post("/sso/{id}/domains", s.addSSODomain)
-			r.With(s.need(PermMemberManage)).Post("/sso/domains/{domain}/verify", s.verifySSODomain)
+			r.With(s.need(PermMemberManage), s.tenantWide, s.feature(billing.FeatureSSO, false)).Post("/sso", s.createSSO)
+			r.With(s.need(PermMemberManage), s.tenantWide, s.feature(billing.FeatureSSO, false)).Put("/sso/{id}", s.updateSSO)
+			r.With(s.need(PermMemberManage), s.tenantWide, s.feature(billing.FeatureSSO, false)).Post("/sso/{id}/domains", s.addSSODomain)
+			r.With(s.need(PermMemberManage), s.tenantWide).Post("/sso/domains/{domain}/verify", s.verifySSODomain)
 			r.Get("/connectors", s.listConnectors)
 			r.Get("/capabilities", s.listCapabilities)
 			r.With(s.need(PermWorkflowRead)).Get("/connector-drift", s.listDrift)
@@ -460,6 +473,8 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/catalogue/refresh", s.refreshStorefrontCatalogue)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/catalogue/make", s.makeStorefrontTable)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/catalogue/rows/{row}/photo", s.setStorefrontItemPhoto)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Delete("/storefront/catalogue/rows/{row}/photo", s.removeStorefrontItemPhoto)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/storefront/catalogue/rows/{row}/photo/main", s.mainStorefrontItemPhoto)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/media", s.uploadStorefrontMedia)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/trust", s.getStorefrontTrust) // trust and safety (trust.go)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/verification", s.requestBusinessVerification)
@@ -473,11 +488,21 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/fronts", s.addFront)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Patch("/storefront/fronts/{id}", s.patchFront)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Delete("/storefront/fronts/{id}", s.deleteFront)
+			// A front's items, edited in place (storefront_front_items.go).
+			r.With(s.need(PermStorefrontManage)).Get("/storefront/fronts/{id}/items", s.listFrontItems)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/fronts/{id}/items", s.addFrontItem)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Patch("/storefront/fronts/{id}/items/{row}", s.patchFrontItem)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Delete("/storefront/fronts/{id}/items/{row}", s.deleteFrontItem)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/fronts/{id}/items/{row}/photo", s.setFrontItemPhoto)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Delete("/storefront/fronts/{id}/items/{row}/photo", s.removeFrontItemPhoto)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/storefront/fronts/{id}/items/{row}/photo/main", s.mainFrontItemPhoto)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/fronts/{id}/actions", s.addFrontAction)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/storefront/actions/{id}/form", s.putActionForm)
 			r.With(s.need(PermStorefrontManage), s.need(PermWorkflowEdit), s.tenantWide).Post("/storefront/actions/{kind}/setup", s.setupAction)
 			s.invoiceRoutes(r)
 			s.linkRoutes(r)        // business links (links.go)
+			s.profileRoutes(r)     // a business's profile and gallery (business_profile.go)
+			s.exploreRoutes(r)     // finding a business by browsing (explore.go)
 			s.billRoutes(r)        // their bills (bills.go)
 			s.linkOrderRoutes(r)   // their orders (link_orders.go)
 			s.linkChatRoutes(r)    // their conversations (link_chat.go)
@@ -616,8 +641,12 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermConnectionManage)).Post("/connections/{id}/check", s.checkSavedConnection)
 			r.With(s.need(PermWorkflowRead)).Get("/connection-names", s.listConnectionNames)
 			r.With(s.need(PermWorkflowEdit)).Post("/sheets/resolve", s.resolveSpreadsheet)
+			r.With(s.need(PermMemberManage)).Get("/settings/security", s.getSecurity) // who must sign in with a passkey (passkey_rule.go)
+			r.With(s.need(PermMemberManage), s.tenantWide).Put("/settings/security", s.putSecurity)
 			r.Get("/settings/advanced", s.getAdvanced) // the Advanced switch (advanced.go)
-			r.With(s.need(PermMemberManage)).Put("/settings/advanced", s.putAdvanced)
+			r.With(s.need(PermMemberManage), s.tenantWide).Put("/settings/advanced", s.putAdvanced)
+			r.Get("/settings/areas", s.getAreas) // which parts of Taskiem the business uses (areas.go)
+			r.With(s.tenantWide).Put("/settings/areas", s.putAreas)
 			r.Get("/settings/schools", s.getSchoolSettings) // the Schools area's switch (schools.go)
 			r.With(s.tenantWide).Put("/settings/schools", s.putSchoolSettings)
 			r.With(s.tenantWide).Post("/settings/schools/wallet", s.createSchoolWallet) // the school's wallet (schools_wallet.go)
@@ -654,7 +683,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermRoleManage), s.tenantWide).Delete("/roles/{name}", s.deleteRole)
 			r.With(s.need(PermMemberManage)).Get("/api-keys", s.listKeys)
 			r.With(s.need(PermMemberManage)).Post("/api-keys", s.createKey)
-			r.With(s.need(PermMemberManage)).Delete("/api-keys/{id}", s.revokeKey)
+			r.With(s.need(PermMemberManage), s.tenantWide).Delete("/api-keys/{id}", s.revokeKey)
 
 			r.With(s.need(PermAuditRead), s.tenantWide).Get("/audit", s.listAudit)
 			r.With(s.need(PermAuditRead), s.tenantWide).Get("/audit/verify", s.verifyAudit)
@@ -864,6 +893,10 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 		writeErr(w, http.StatusBadRequest, strings.TrimPrefix(err.Error(), "bad request: "))
 	case errors.Is(err, errForbidden):
 		writeErr(w, http.StatusForbidden, strings.TrimPrefix(err.Error(), "forbidden: "))
+	case errors.As(err, new(*links.OtherOffError)):
+		var oo *links.OtherOffError
+		errors.As(err, &oo)
+		writeErr(w, http.StatusConflict, oo.Error())
 	case errors.Is(err, errConflict):
 		writeErr(w, http.StatusConflict, strings.TrimPrefix(err.Error(), "conflict: "))
 	case errors.Is(err, errGone):
@@ -922,6 +955,11 @@ func clientIP(r *http.Request) string {
 	}
 	return host
 }
+
+// limitIP is the client's address as per-address limits key it: an IPv4
+// address as is, an IPv6 address cut to its /64, which one subscriber
+// holds whole (formguard.ClientKey, as the public host's limits).
+func limitIP(r *http.Request) string { return formguard.ClientKey(clientIP(r)) }
 
 // loginLimiter paces sign-in attempts by key: "login:" and an address, or
 // "login-email:" and an email.

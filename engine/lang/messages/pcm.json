@@ -228,6 +228,14 @@
       "text": "{name}: your order {reference} don ready.",
       "reviewed": false
     },
+    "invoice.pay_unavailable_title": {
+      "text": "A customer could not pay online",
+      "reviewed": false
+    },
+    "invoice.pay_unavailable": {
+      "text": "A customer tried to pay {what} by {how}, but no payments service of yours can do that, so they were asked to pay you directly. Connect Paystack, Flutterwave, OPay or another payments service under Connections, and they can pay online.",
+      "reviewed": false
+    },
     "invoice.chat.account": {
       "text": "Pay {amount} for invoice {number} with bank transfer to:\nAccount number: {account}\nBank: {bank}\nAccount name: {name}\nE go work reach {until}. Use am for dis payment only.",
       "reviewed": false
@@ -1680,6 +1688,10 @@
       "text": "• *build* and wetin you wan automate, e.g. *build every Friday text my customers who owe me* (e go save as draft after you confirm)",
       "reviewed": false
     },
+    "wa.help.signin": {
+      "text": "• *sign in* for link to the web app; *password* to enter with email; *sign out everywhere*",
+      "reviewed": false
+    },
     "wa.help.cancel": {
       "text": "• *cancel*: drop wetin dey go on",
       "reviewed": false
@@ -1850,6 +1862,18 @@
     },
     "wa.invoice.confirm": {
       "text": "Make I send {name} ({to}) invoice of {amount}: {for}?",
+      "reviewed": false
+    },
+    "wa.invoice.confirm_linked": {
+      "text": "Send {name}, a business on Taskiem you are linked with, an invoice for {amount}: {for}? It goes into their bills.",
+      "reviewed": false
+    },
+    "wa.invoice.sent_linked": {
+      "text": "Sent {number} to {name}'s bills on Taskiem for {amount}. You can see it under Invoices in the web app.",
+      "reviewed": false
+    },
+    "wa.invoice.pick_linked": {
+      "text": "Which {name} do you mean?\n{list}\nReply with its number, or send a phone number or email to invoice someone else.",
       "reviewed": false
     },
     "wa.invoice.confirm_reminder": {
@@ -3269,7 +3293,15 @@
       "reviewed": false
     },
     "wa.signin.link": {
-      "text": "Open this link make you choose your password and enter Taskiem for web. E go work once, for one hour; no give anybody:\n{link}",
+      "text": "Open this link to choose your password. E go work once, for one hour; no show anybody:\n{link}\nThen enter for web with your email (the one for *{domain}*) and that password.",
+      "reviewed": false
+    },
+    "wa.signin.chat_link": {
+      "text": "Open this link to enter Taskiem for web. E go work once, for 10 minutes; no show anybody:\n{link}",
+      "reviewed": false
+    },
+    "door.signin_email": {
+      "text": "To enter with password, you need email first: send *email you@example.com* and open the link wey we go email you. Then send *password* again.\nOr send *sign in* for link wey go enter you straight.",
       "reviewed": false
     },
     "wa.signin.sso": {
@@ -3278,6 +3310,38 @@
     },
     "wa.signin.unavailable": {
       "text": "Sign in for web never set up for this Taskiem.",
+      "reviewed": false
+    },
+    "wa.signin.off": {
+      "text": "To enter with WhatsApp or Telegram don off for you (Account for web). Send *password* to enter with email and password instead.",
+      "reviewed": false
+    },
+    "wa.signin.passkey": {
+      "text": "Administrators dey enter Taskiem with their passkey: {link}",
+      "reviewed": false
+    },
+    "chat.signin.code": {
+      "text": "{code} na your Taskiem code to enter. E go expire for 10 minutes. No share am; if no be you ask for am, ignore this message.",
+      "reviewed": false
+    },
+    "chat.signin.told": {
+      "text": "You don enter Taskiem for web with your chat ({device}). No be you? Send *sign out everywhere*.",
+      "reviewed": false
+    },
+    "account.passkey_only.on": {
+      "text": "To enter Taskiem with only your passkey don on now: your password and chat no fit enter you for web again. No be you? Send *sign out everywhere*.",
+      "reviewed": false
+    },
+    "account.passkey_only.off": {
+      "text": "To enter Taskiem with only your passkey don off now: your password and chat fit enter you again. No be you? Send *sign out everywhere*.",
+      "reviewed": false
+    },
+    "chat.signout.done": {
+      "text": "You don comot from web everywhere: {count} session don end. Your chat still dey as before.",
+      "reviewed": false
+    },
+    "chat.signout.none": {
+      "text": "You no dey inside web anywhere.",
       "reviewed": false
     },
     "wa.status.denied": {
@@ -3830,6 +3894,10 @@
     },
     "wa.help.debts": {
       "text": "• *Ada owes 5,000*, *Ada paid 2,000 cash*, *who owes me?*, *send Ada her balance*: the debt wey customers dey owe you",
+      "reviewed": false
+    },
+    "wa.help.direct": {
+      "text": "• Message business wey you link with: start am with *...*, like *... @Dangote how much is a bag of cement?*",
       "reviewed": false
     },
     "wa.table.form": {
@@ -5136,6 +5204,34 @@
       "text": "E don reach *{name}*. Their reply go come here, and for Chat for the web.",
       "reviewed": false
     },
+    "chat.direct.wait": {
+      "text": "Now send the message, put *@business* for who e be for, like *@Dangote how much is a bag of cement?*",
+      "reviewed": false
+    },
+    "chat.direct.who": {
+      "text": "Na who e be for? Add *@business*, like *... @Dangote how much is a bag of cement?*",
+      "reviewed": false
+    },
+    "chat.direct.empty": {
+      "text": "Wetin you wan tell *{name}*? Send *... @{name}* and your message.",
+      "reviewed": false
+    },
+    "chat.direct.hint": {
+      "text": "To send am to *{name}* as message, start am with *...*",
+      "reviewed": false
+    },
+    "chat.direct.sent": {
+      "text": "✓ E don reach {names}.",
+      "reviewed": false
+    },
+    "chat.direct.not_sent": {
+      "text": "E no reach *{name}*: {reason}.",
+      "reviewed": false
+    },
+    "chat.direct.failed": {
+      "text": "E no reach *{name}*: something spoil. Send am give them again.",
+      "reviewed": false
+    },
     "chat.link.photo": {
       "text": "Foto",
       "reviewed": false
@@ -5146,6 +5242,14 @@
     },
     "chat.link.file": {
       "text": "File",
+      "reviewed": false
+    },
+    "chat.link.reacted": {
+      "text": "{name} react {emoji} to “{what}”",
+      "reviewed": false
+    },
+    "chat.link.reacted_plain": {
+      "text": "{name} react {emoji} to one message",
       "reviewed": false
     },
     "wa.prices.list": {
@@ -5193,7 +5297,7 @@
       "reviewed": false
     },
     "wa.mention.how": {
-      "text": "Talk how many and wetin from *{name}*, like *20 bags of rice from @{name}*.",
+      "text": "Talk how many and wetin from *{name}*, like *20 bags of rice from @{name}*. To send am to *{name}* as message, start am with *...*",
       "reviewed": false
     },
     "wa.mention.draft": {
@@ -5305,7 +5409,7 @@
       "reviewed": false
     },
     "wa.mention.which": {
-      "text": "More than one of your linked businesses is called *{name}*: {list}. Pick it on the Chat page, where each is its own conversation.",
+      "text": "*@{name}* fit be more than one of the businesses wey you link with: {list}. Use more of the name, or pick am for the Chat page.",
       "reviewed": false
     },
     "order.link.auto_changed_title": {

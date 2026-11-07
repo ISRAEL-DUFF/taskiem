@@ -1,0 +1,198 @@
+{
+  "id": "subscription-renewal-reminder",
+  "title": "Remind subscribers before they renew",
+  "summary": "Every morning, text each active subscriber whose plan renews in the next few days, with the date and how to pay.",
+  "description": "Once a day, reads your active subscribers and texts each one whose renewal date is within the days you choose, with their plan, the date and how to pay. Each subscriber gets one reminder for each renewal date. Keep the 'Renews on' column of your subscribers table up to date (the monthly invoices workflow and the reconnect-on-payment workflow do not change it; set it when you add a subscriber or when they pay). One run covers up to 1,000 subscribers: if you have more, you are told.",
+  "category": "subscriptions",
+  "tags": [
+    "subscriptions",
+    "reminders",
+    "sms",
+    "customers"
+  ],
+  "keywords": [
+    "renew",
+    "renewal",
+    "expires",
+    "expiry",
+    "expire",
+    "subscription",
+    "subscriber",
+    "reminder",
+    "remind",
+    "before",
+    "internet",
+    "isp",
+    "plan",
+    "due"
+  ],
+  "requires": [
+    "subscribers",
+    "renew",
+    "expire"
+  ],
+  "connectors": [
+    "xenibase@1",
+    "notify@1"
+  ],
+  "params": [
+    {
+      "name": "business_name",
+      "type": "string",
+      "title": "Business name",
+      "description": "How your customers know you; it starts every message.",
+      "required": true,
+      "example": "Fibre Link",
+      "max_length": 60
+    },
+    {
+      "name": "days_before",
+      "type": "integer",
+      "title": "Days before",
+      "description": "How many days before the renewal date the reminder goes out.",
+      "required": true,
+      "default": 3,
+      "example": 3,
+      "minimum": 1,
+      "maximum": 30
+    },
+    {
+      "name": "payment_details",
+      "type": "string",
+      "title": "How to pay",
+      "description": "Added to each reminder, for example your account number and bank.",
+      "required": true,
+      "example": "Pay to 0123456789, GTBank. Thank you!",
+      "max_length": 160
+    },
+    {
+      "name": "send_time",
+      "type": "time",
+      "title": "Time",
+      "description": "When the reminders go out, Lagos time.",
+      "required": true,
+      "default": "09:00",
+      "example": "09:00"
+    },
+    {
+      "name": "subscribers_table",
+      "type": "string",
+      "title": "Subscribers table",
+      "description": "Your subscribers: name, phone, plan, price each month, when it renews and whether they are active. Taskiem makes it for you if it does not exist.",
+      "required": false,
+      "default": "subscribers",
+      "example": "subscribers",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$",
+      "picker": "table"
+    }
+  ],
+  "tables": [
+    {
+      "known": "subscribers",
+      "name": "{{subscribers_table}}"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_subscriptionRenewalReminder",
+    "version": 1,
+    "name": "Remind subscribers before they renew",
+    "description": "Texts each active subscriber whose renewal date is close.",
+    "trigger": {
+      "type": "schedule",
+      "config": {
+        "cron": "{{send_time:minute}} {{send_time:hour}} * * *",
+        "timezone": "Africa/Lagos"
+      }
+    },
+    "steps": [
+      {
+        "id": "settings",
+        "type": "transform",
+        "name": "Use your business name and payment details",
+        "config": {
+          "output": {
+            "business_name": "{{business_name}}",
+            "payment_details": "{{payment_details}}"
+          }
+        }
+      },
+      {
+        "id": "read_subscribers",
+        "type": "connector",
+        "name": "Read the active subscribers",
+        "connector": "xenibase@1",
+        "action": "read_rows",
+        "connection": "data_tables",
+        "input": {
+          "table": "{{subscribers_table}}",
+          "filters": [
+            {
+              "column": "status",
+              "op": "ilike",
+              "value": "active"
+            }
+          ],
+          "order": [
+            {
+              "column": "name"
+            }
+          ],
+          "limit": 1000
+        }
+      },
+      {
+        "id": "remind_each",
+        "type": "foreach",
+        "name": "For each subscriber",
+        "needs": [
+          "settings",
+          "read_subscribers"
+        ],
+        "config": {
+          "items": "=has(steps.read_subscribers.output.rows) ? steps.read_subscribers.output.rows : []",
+          "max_concurrency": 5,
+          "max_items": 1000,
+          "steps": [
+            {
+              "id": "send_reminder",
+              "type": "connector",
+              "name": "Text the subscriber a reminder",
+              "connector": "notify@1",
+              "action": "text",
+              "when": "=has(item.phone) && item.phone != null && string(item.phone) != '' && has(item.renews_on) && item.renews_on != null && timestamp(string(item.renews_on).substring(0, 10) + 'T00:00:00Z') > timestamp(has(trigger.scheduled_time) ? trigger.scheduled_time : run.started_at) && timestamp(string(item.renews_on).substring(0, 10) + 'T00:00:00Z') - timestamp(has(trigger.scheduled_time) ? trigger.scheduled_time : run.started_at) <= duration(string({{days_before}} * 24) + 'h')",
+              "input": {
+                "to": "=string(item.phone)",
+                "message": "=steps.settings.output.business_name + ': Hello ' + string(item.name) + ', your ' + (has(item.plan) && item.plan != null ? string(item.plan) + ' plan ' : 'plan ') + 'renews on ' + string(item.renews_on).substring(0, 10) + ' (NGN ' + string(item.monthly_naira) + '). ' + steps.settings.output.payment_details"
+              },
+              "effect": {
+                "idempotency_seed": "='renew-reminder:' + string(item.name) + ':' + string(item.phone) + ':' + string(item.renews_on)"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "warn_more",
+        "type": "connector",
+        "name": "Tell you if there are more subscribers than one run covers",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "read_subscribers"
+        ],
+        "when": "=has(steps.read_subscribers.output.next_cursor) && steps.read_subscribers.output.next_cursor != null && string(steps.read_subscribers.output.next_cursor) != ''",
+        "input": {
+          "title": "More subscribers than one run covers",
+          "message": "This run covered the first 1,000 subscribers in your table. The rest were left out: the others got no reminder."
+        },
+        "effect": {
+          "idempotency_seed": "='more-subscribers:' + string(run.started_at)"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "2h"
+    }
+  }
+}

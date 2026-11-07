@@ -6,7 +6,7 @@ One binary runs every role (spec 2.1, 15.4). A small install runs `taskiem serve
 
 | Command | What it does |
 | --- | --- |
-| `taskiem migrate` | Applies database migrations as the schema owner. Forward-only. Two runs at once take turns (goose's session-level advisory lock; a second run waits up to 5 minutes), and a statement that waits longer than `TASKIEM_MIGRATE_LOCK_TIMEOUT` for a lock fails the run instead of stalling live pods behind it; run it again once the long transaction is gone. |
+| `taskiem migrate` | Applies database migrations as the schema owner. Forward-only. Two runs at once take turns (goose's session-level advisory lock; a second run waits up to 5 minutes), and a statement that waits longer than `TASKIEM_MIGRATE_LOCK_TIMEOUT` for a lock fails the run instead of stalling live pods behind it; run it again once the long transaction is gone. A migration that only builds indexes `CONCURRENTLY` has no lock timeout: it blocks no query, and waits for transactions older than it to end. If one failed anyway (the run was stopped), the next run rebuilds the index it left invalid. |
 | `taskiem bootstrap --tenant NAME --email EMAIL [--name NAME]` | Creates the first tenant, its owner, a Default workspace, and the `dev` and `prod` environments. Password from `TASKIEM_BOOTSTRAP_PASSWORD` (12+ characters). |
 | `taskiem serve [--role ROLE]` | Runs `api`, `edge`, `orchestrator`, `scheduler`, `worker`, `public`, or `all` (default; also `TASKIEM_ROLE`). |
 | `taskiem tenants limits TENANT_ID [--set KEY=VALUE]...` | Shows a tenant's plan limits, usage and recent limit hits; `--set` changes a limit (`default` returns it to the platform default). Audited as `limits.set`. See [plan limits](#plan-limits). |
@@ -43,7 +43,7 @@ Switches take `true` or `false`, `1` or `0`, `yes` or `no`, `on` or `off`, in an
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `TASKIEM_DATABASE_URL` | — | Required. For a highly available Postgres, every host with `target_session_attrs=read-write` ([cloud](cloud.md#connection-strings)). For `taskiem serve`, a login that is a member of `taskiem_app` and owns nothing; for `taskiem migrate`, the schema owner ([database roles](#database-roles)). |
-| `TASKIEM_MIGRATE_LOCK_TIMEOUT` | `10s` | `taskiem migrate` only: how long a statement waits for a lock before the migration fails (`0`: for ever). |
+| `TASKIEM_MIGRATE_LOCK_TIMEOUT` | `10s` | `taskiem migrate` only: how long a statement waits for a lock before the migration fails (`0`: for ever). Concurrent index builds are not limited by it. |
 | `TASKIEM_APP_DATABASE_URL` | — | `taskiem migrate` only: the engine's login, which it creates or updates and grants `taskiem_app` after migrating ([database roles](#database-roles)). |
 | `TASKIEM_DATABASE_READ_URL`, `TASKIEM_DATABASE_READ_MAX_LAG` | —, `10s` | A read replica for the run list and dashboard (`api` role), set aside while it lags beyond the bound or fails ([cloud](cloud.md#read-replica)) |
 | `TASKIEM_PUBLIC_DATABASE_URL`, `TASKIEM_PUBLIC_DATABASE_ROLE`, `TASKIEM_PUBLIC_DATABASE_POOL` | `TASKIEM_DATABASE_URL`, `taskiem_public`, `5` | The [public host](public-host.md)'s own login (a member of `taskiem_public` only), the role it sets, and its pool's size |
@@ -89,7 +89,7 @@ Switches take `true` or `false`, `1` or `0`, `yes` or `no`, `on` or `off`, in an
 | `TASKIEM_XENIBASE_URL`, `TASKIEM_XENIBASE_TOKEN`, `TASKIEM_XENIBASE_ORG` | — | The platform's Xenibase for [data tables](data-tables.md#for-operators): the server (also the default for Xenibase connections that name none, [connection](integrations/xenibase.md#connection); Xenibase has not published its cloud address, so there is no default), an unrestricted token with the `read`, `write` and `admin` scopes (kept in the process, never in a tenant's vault, never logged; rotate it yearly), and the ID of the organisation projects are made in (not its name: `GET /api/v1/me` with the token answers it). Without all three, creating a table answers 503 `tables_unavailable`. Set them on the `api` and `scheduler` roles |
 | `TASKIEM_XENIBASE_REGION` | Xenibase's home region | The region data table projects are made in |
 | `TASKIEM_PASSKEY_RP_ID` | the URL's host | The passkey domain, if passkeys should work across subdomains (a parent of the URL's host) |
-| `TASKIEM_REQUIRE_ADMIN_PASSKEYS` | `true` with a public URL | Hold administrators to passkeys ([governance](governance.md#passkeys)) |
+| `TASKIEM_REQUIRE_ADMIN_PASSKEYS` | `false` | Hold every business's administrators to passkeys, whatever their settings. Off, people and businesses choose ([optional passkeys](spec/optional-passkeys.md), [governance](governance.md#passkeys)) |
 | `TASKIEM_HSTS` | `max-age=31536000` with an https public URL | The `Strict-Transport-Security` header on the platform's own host (never on partners' custom domains): a value starting `max-age=` (add `includeSubDomains` only if every subdomain is HTTPS), or `off` |
 | `TASKIEM_TENANT_CODE_CONCURRENCY` | the CPUs, at least 2 | How much tenant code (flow compile, code checks, catalogue and connector checks) one API process runs at once; more waits up to 5 s, then gets 503 `code_checks_busy` |
 | `TASKIEM_TENANT_CODE_PER_TENANT` | half of the above, at least 1 | How much of it one tenant holds at once, across every API replica; more gets 429 `tenant_code_busy`. Refusals: `taskiem_tenant_code_refused_total{reason}` |
@@ -154,7 +154,7 @@ CREATE ROLE taskiem LOGIN PASSWORD '...';
 GRANT taskiem_app TO taskiem;
 ```
 
-Run `taskiem migrate` as the schema owner, and `taskiem serve` as `taskiem`. Or let `taskiem migrate` do it: with `TASKIEM_APP_DATABASE_URL` set to the engine's URL, it creates that login after migrating (or sets its password), and grants it `taskiem_app`. It refuses the owner's own login, a superuser, a login that owns tables, and Taskiem's own role names. The owner needs `CREATEROLE`. The Helm chart's migration Job always does this ([Kubernetes](kubernetes.md#database-logins)).
+Run `taskiem migrate` as the schema owner, and `taskiem serve` as `taskiem`. Or let `taskiem migrate` do it: with `TASKIEM_APP_DATABASE_URL` set to the engine's URL, it creates that login after migrating (or sets its password, sent as its SCRAM-SHA-256 verifier so that it never appears in a statement Postgres logs), and grants it `taskiem_app`. It refuses the owner's own login, a superuser, a login that owns tables, Taskiem's own role names, and an existing login that is already a member of any role but `taskiem_app` (it could `SET ROLE` to it past row-level security: revoke the membership, or use a new login). The owner needs `CREATEROLE`. The Helm chart's migration Job always does this ([Kubernetes](kubernetes.md#database-logins)).
 
 ## Webhooks
 
@@ -171,7 +171,7 @@ Run `taskiem migrate` as the schema owner, and `taskiem serve` as `taskiem`. Or 
 | `taskiem_http_requests_total`, `taskiem_http_request_duration_seconds` | route pattern, method, status |
 | `taskiem_ingest_deliveries_total` | kind (`webhook`, `connector`, `schedule`), result |
 | `taskiem_steps_total`, `taskiem_step_duration_seconds` | queue, target (connector or step type), outcome |
-| `taskiem_queue_ready`, `taskiem_queue_leased`, `taskiem_queue_oldest_ready_seconds` | queue |
+| `taskiem_queue_ready`, `taskiem_queue_leased`, `taskiem_queue_oldest_ready_seconds` | queue. These, the `taskiem_pool_*` and the `taskiem_queued_*` series are read from the database when scraped (every role reports them, so they hold with any one role down; aggregate with `max`, without the pod label): a scrape whose queries take over 2 seconds, or that overlaps another on the same pod, has none of them, rather than holding a connection the API needs |
 | `taskiem_pool_ready`, `taskiem_pool_leased`, `taskiem_pool_oldest_ready_seconds` | pool, queue ([worker pools](cloud.md#dedicated-worker-pools)) |
 | `taskiem_db_retries_total` | outcome (`retried`, `recovered`, `gave_up`): transactions retried through a failover ([cloud](cloud.md#what-happens-during-a-failover)) |
 | `taskiem_db_replica_lag_seconds`, `taskiem_db_replica_in_use`, `taskiem_db_reads_total` | `taskiem_db_reads_total`: target (`replica`, `fallback`, `no_replica`) ([read replica](cloud.md#read-replica)) |
@@ -180,6 +180,7 @@ Run `taskiem migrate` as the schema owner, and `taskiem serve` as `taskiem`. Or 
 | `taskiem_tenant_limit_hits_total` | limit (no tenant label: which tenant is in `GET /v1/limits`, the CLI and `limit` alerts) |
 | `taskiem_queued_runs`, `taskiem_queued_tenants`, `taskiem_queued_runs_max_tenant` | reason (`tenant`: held by plan limits; `workflow`: concurrency settings). Totals, the number of tenants with a backlog and the largest single backlog, so series stay few however many tenants there are |
 | `taskiem_runs_admitted_total` | — |
+| `taskiem_moderation_model_calls_total` | outcome (`ok`, `failed`): requests the public page checks made to the model, at most 40 pieces each, on Taskiem's account rather than a tenant's AI budget ([moderation](moderation.md#the-checks)) |
 | `taskiem_runs_purged_total`, `taskiem_retention_purge_failures_total`, `taskiem_retention_purge_backlog_runs`, `taskiem_retention_purge_oldest_overdue_seconds`, `taskiem_retention_purge_failing_runs` | — (retention: runs archived and deleted, purges that failed, and, set by the scheduler where an archive is configured, the runs past retention still waiting, the oldest's wait and those that have failed; alert `TaskiemRetentionPurgeBehind`) |
 | `taskiem_signups_total` | source (`signup`, the web form; `agent`, `whatsapp`, `telegram`), outcome (`created`, `rate_limited`, `blocked_domain`, `invalid`, `exists`, `honeypot`, `declined`, `cancelled`, `country`) |
 | `taskiem_onboarding_first_run_seconds` | — (a histogram: signup to a self-serve tenant's first successful run, once per tenant; gate G4 is the share at or under 900 s, [onboarding](onboarding.md#measuring-gate-g4)) |
@@ -187,6 +188,9 @@ Run `taskiem migrate` as the schema owner, and `taskiem serve` as `taskiem`. Or 
 | `taskiem_run_start_seconds` | — (a histogram: trigger accepted to first worker step claimed; SLO `run_start`) |
 | `taskiem_scheduler_lateness_seconds` | kind (`timer`, `schedule`; SLO `scheduler_timeliness`) |
 | `taskiem_scheduler_last_tick_timestamp_seconds` | mode (`scheduler`, `sweep`) |
+| `taskiem_decisions_continued_total` | — (a decision that ran past one transaction's 16 rounds, such as a long chain of subflow steps that do not wait, kept what it decided and was carried on by the sweep) |
+| `taskiem_scheduler_item_failures_total` | kind (`timer`, `run`): a timer or swept run whose decision failed; the rest of its batch went on and it is retried after a minute ([runbook](reliability.md#runbook-taskiemschedulertimelinessbudgetburn)) |
+| `taskiem_task_panics_total` | — (a task whose execution panicked: the worker logs the error with its stack and keeps serving other tasks, and the task's lease expires; alert on any increase, it is a bug) |
 | `taskiem_draining`, `taskiem_leases_released_total` | — (shutdown: 1 while draining; leases handed back instead of left to expire) |
 | `taskiem_canary_probes_total`, `taskiem_canary_duration_seconds`, `taskiem_canary_last_success_timestamp_seconds` | result (`ok`, `accept`, `complete`, `output`); phase (`accept`, `complete`) |
 | `taskiem_tenant_key_checks_failed_total` | wrapped_by (`customer`: a tenant's own key, BYOK; `platform`: Taskiem's KMS). Which tenant is in the logs and the tenant's audit log ([BYOK](byok.md#when-the-key-is-unavailable)) |
@@ -195,19 +199,21 @@ Run `taskiem migrate` as the schema owner, and `taskiem serve` as `taskiem`. Or 
 
 **Retention purge.** With an archive configured, the scheduler archives and deletes ended runs past their retention date. It checks every 10 minutes and, while it finds them, claims them 25 at a time, spending up to a second a tick and carrying on next tick until none are left, so the backlog clears however large it grew. A claim leases its runs for 10 minutes (`runs.purge_after`, taken with `SKIP LOCKED`), so schedulers sharing the S3 archive split the work rather than archive the same run twice. A run that cannot be read, archived or deleted is skipped: its error is kept on the run (`purge_attempts`, `purge_error`), it is retried after 1 minute, doubling each attempt up to a day, and the runs behind it go on. `run_events` is partitioned by the month a run started, and a past month's partition is dropped once it is empty: a run kept longer than the others started that month (a long `settings.retention`) keeps the partition until it too is purged. Its rows cannot move to another partition without rewriting history, so that is left as it is. The rows purged around it leave space that `VACUUM` marks free but that a closed month never reuses: `VACUUM FULL` or `pg_repack` on that partition returns it, if it matters. Runbook: [TaskiemRetentionPurgeBehind](reliability.md#runbook-taskiemretentionpurgebehind).
 
+**Sign-in sessions.** The scheduler also deletes, every hour, sign-in sessions that expired more than 30 days ago (a revoked session keeps its expiry), with their client IP addresses, up to 100,000 a pass ([privacy](privacy.md#sign-in-sessions)).
+
 **Contract drift.** After every successful connector call the worker compares the output with the action's declared output schema (`engine/drift`). A departure (a field of another type, a value outside an enum, a required field missing) is recorded per tenant (`connector_drift`; tenants see it under Connections), counted in `taskiem_connector_drift_total`, and logged at warning level the first time. The step still completes. Alert on any increase for built-in connectors: it means a provider changed its API and the connector needs updating.
 
 Traces span API requests, ingest, and worker steps, with `tenant_id`, `run_id`, and `step_id` attributes.
 
 ## Plan limits
 
-Every tenant has plan limits (spec 8.3, 16): the platform defaults below, changed for all tenants with `TASKIEM_DEFAULT_<LIMIT>` and for one tenant with `taskiem tenants limits`. Zero means no limit. Tenants see theirs, with their usage and the limits they reached lately, at `GET /v1/limits` (any member) and in Settings; nothing in the API changes them, and the application's database role cannot write `tenant_limits` (the CLI goes through an audited function). A change reaches running processes within a minute.
+Every tenant has plan limits (spec 8.3, 16): the platform defaults below, changed for all tenants with `TASKIEM_DEFAULT_<LIMIT>` and for one tenant with `taskiem tenants limits`. Zero means no limit. Tenants see theirs, with their usage and the limits they reached lately, at `GET /v1/limits` (any member) and in Settings; nothing in the API changes them, and the application's database role cannot write `tenant_limits`: the CLI goes through an audited operators' function (`taskiem_ops_set_tenant_limits`), and the partner API's function sets only a sub-tenant's limits, never above its partner's own (migration 00357), so no organisation's transaction can raise its own limits. A change reaches running processes within a minute.
 
 | Limit | Default | What happens at the limit |
 | --- | --- | --- |
 | `ingest_rate`, `ingest_burst` | 20/s, 100 | Soft limit. Deliveries above it are still verified, deduplicated, recorded and answered 202 (`"queued": true`); the runs they start wait as `queued` and the scheduler admits them, oldest first, at this rate. While a tenant has runs waiting, its new runs (also manual and scheduled ones) queue behind them. Signals to waiting runs are delivered at once |
 | `ingest_ceiling`, `ingest_ceiling_burst` | 50/s, 200 | Hard limit: 429 `rate_limited` with `Retry-After` |
-| `max_running_runs` | 0 | Runs in status running at once, including those waiting on a signal, approval or timer. More are accepted and queued, and admitted as runs end |
+| `max_running_runs` | 0 | Runs in status running at once, including those waiting on a signal, approval or timer. More are accepted and queued, and admitted as runs end. A child run its parent's subflow step waits for is not held: it runs in its parent's slot ([decision 0049](decisions/0049-subflows.md)) |
 | `max_queued_runs` | 10,000 | The backlog. A start that would queue beyond it gets 429 `backlog_full` with `Retry-After` |
 | `runs_per_day`, `runs_per_month` | 0 | Run quotas (UTC), counting every accepted run. Beyond them starts get 429 `quota_exceeded` with `Retry-After` until the period ends (webhooks, connector events and `POST /v1/workflows/{id}/runs` alike); a schedule fire is skipped, logged and counted, and the schedule moves on. Off by default: spec 16 prices plans flat |
 | `max_workflows` | 0 | Creating another workflow (API or Git sync) gets 429 `limit_exceeded` |

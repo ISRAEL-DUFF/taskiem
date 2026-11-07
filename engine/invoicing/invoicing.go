@@ -255,6 +255,10 @@ type Invoices struct {
 	// OrderReceived counts a payment the checker found into an order's
 	// account towards the order. Without them, orders' requests are
 	// dropped and their accounts only checked.
+	// PayUnavailable, when set, tells the business that a customer asked to
+	// pay online and no payments connection could do it (once for each
+	// invoice, order or customer page and kind): they have to connect one.
+	PayUnavailable func(ctx context.Context, q Request, cause error)
 	OrderRequested func(ctx context.Context, tenant, order uuid.UUID) error
 	OrderReceived  func(ctx context.Context, tenant, order uuid.UUID, r Received) error
 	// LinkReceived counts a payment the checker found through a
@@ -733,7 +737,9 @@ func (s *Invoices) Update(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, idOr
 }
 
 // Void cancels an invoice that is not paid. Payments recorded against it
-// stay; money that still arrives for it is not counted.
+// stay; money that still arrives for it is not counted (CountPayment
+// refuses it, ErrState), and is left for a person to match. Its accounts
+// stay watched, so that money is heard.
 func (s *Invoices) Void(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, idOrNumber, reason, by string) (Invoice, error) {
 	cur, err := s.Get(ctx, tx, tenant, idOrNumber)
 	if err != nil {
@@ -855,11 +861,14 @@ func (s *Invoices) Send(ctx context.Context, tenant uuid.UUID, idOrNumber, by, k
 				text += " " + line
 			}
 		}
-		out.Queued, out.SMSOverAllowance, err = s.deliver(ctx, tx, tenant, cur, business, text, "Invoice "+cur.Number+" from "+business, "invoice:"+key)
+		// The key is the caller's; the invoice is part of the messages' key,
+		// so one key never stands for another invoice's messages.
+		msgKey := "invoice:" + cur.ID.String() + ":" + key
+		out.Queued, out.SMSOverAllowance, err = s.deliver(ctx, tx, tenant, cur, business, text, "Invoice "+cur.Number+" from "+business, msgKey)
 		if err != nil {
 			return err
 		}
-		ch, err := s.queueChat(ctx, tx, tenant, cur, "invoice:"+key)
+		ch, err := s.queueChat(ctx, tx, tenant, cur, msgKey)
 		if err != nil {
 			return err
 		}
@@ -1225,12 +1234,18 @@ func (s *Invoices) CountPayment(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 				return nil, false, err
 			}
 			var counted bool
-			if add {
-				return moneylog.Cols{"payment_id": p.PaymentID, "connection": nullable(p.Connection)}, true, nil
-			}
-			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM customer_invoice_payments p WHERE p.invoice_id = $1 AND p.payment_id = $2 AND p.undoes IS NULL
+			if !add {
+				if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM customer_invoice_payments p WHERE p.invoice_id = $1 AND p.payment_id = $2 AND p.undoes IS NULL
 				AND NOT EXISTS (SELECT 1 FROM customer_invoice_payments u WHERE u.undoes = p.id))`, cur.ID, p.PaymentID).Scan(&counted); err != nil || counted {
-				return nil, false, err
+					return nil, false, err
+				}
+			}
+			// A void invoice takes no new payment (the one counted before
+			// it was voided is the same again, above): the money is left
+			// for a person, not absorbed (the database refuses it too,
+			// 00350).
+			if cur.Status == "void" {
+				return nil, false, fmt.Errorf("%w: invoice %s is void; it takes no new payment", ErrState, cur.Number)
 			}
 			return moneylog.Cols{"payment_id": p.PaymentID, "connection": nullable(p.Connection)}, true, nil
 		}})

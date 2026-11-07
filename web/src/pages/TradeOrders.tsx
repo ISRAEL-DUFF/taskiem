@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { DocThread } from "./Conversation";
 import { Link, useParams } from "react-router-dom";
-import { get, post, put } from "../api";
+import { get, post, put, whenOff } from "../api";
 import { useAuth } from "../auth";
 import { naira, toKobo } from "../lib/invoices";
 import { daysValue } from "../lib/statements";
@@ -792,7 +792,7 @@ function DraftOrder({
   onClose: () => void;
   onDone: () => void;
 }) {
-  const links = useLoad(() => get<LinksView>("/v1/links"), []);
+  const links = useLoad(() => whenOff(get<LinksView>("/v1/links"), { links: [], sent: [] }), []);
   const items = useOwnItems();
   const act = useAction();
   const buyers = (links.data?.links ?? []).filter(

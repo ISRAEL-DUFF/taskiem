@@ -67,6 +67,7 @@ func newConnector(o Options, now func() time.Time) *connector.Connector {
 	},
 		Verifiers:        map[string]connector.WebhookVerifier{"payment": c.verifyDelivery},
 		Enrichers:        map[string]connector.Enricher{"payment": decryptDelivery},
+		Keyers:           map[string]connector.Keyer{"payment": deliveryKey},
 		CheckCredentials: checkCredentials,
 	}
 }
@@ -655,6 +656,25 @@ func (c *client) verifyDelivery(secret string, _ http.Header, body []byte) error
 		return fmt.Errorf("%w: %w", connector.ErrBadSignature, err)
 	}
 	return nil
+}
+
+// deliveryKey is the payment trigger's dedup key: the payment and its
+// status, from the decrypted notification. Not the envelope's sign: a
+// retry OPay sends after the five minutes carries a new timestamp, so a
+// new signature, and would start the sale's workflows again. The status
+// is in the key so that the same payment's next status (a PENDING then
+// SUCCESS) is news. A notification naming no payment keeps the sign.
+func deliveryKey(ctx context.Context, call connector.EventCall, body any) (string, error) {
+	v, err := decryptDelivery(ctx, call, body)
+	if err != nil {
+		return "", err
+	}
+	m, _ := v.(map[string]any)
+	ref := firstOf(m, "payNo", "orderNo")
+	if ref == "" {
+		return "", nil
+	}
+	return "payment:" + ref + ":" + str(m, "status"), nil
 }
 
 // decryptDelivery is the payment trigger's enricher: it checks the client

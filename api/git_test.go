@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/israel-duff/taskiem/engine/gitprovider/gitfake"
@@ -215,5 +216,46 @@ func TestBitbucketPushDeploysAndPublishOpensRequest(t *testing.T) {
 	}
 	if pr := bb.Repo.Requests[0]; pr.Head != "taskiem/wf_pay-v1" || pr.Files["flows/pay.wd.json"] == "" || pr.Files["flows/double.wd.json"] == "" {
 		t.Errorf("request: %+v", pr)
+	}
+}
+
+// A sync whose claim lapses while it runs (a slow repository read past five
+// minutes) and is taken over by another replica is deployed once: the
+// holder that lost the claim neither deploys nor writes its outcome.
+func TestGitSyncTakenOverDeploysOnce(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	gh := gitfake.GitHub(t, "acme/flows", "ghtok")
+	gh.Repo.Commit("main", map[string]string{"flows/double.wd.json": flowDoc("wf_double", "Double", "=trigger.body.n * 2")})
+	owner.must(200, "PUT", "/v1/git/prod", map[string]any{"provider": "github", "api_url": gh.URL, "repo": "acme/flows", "branch": "main",
+		"mode": "git_led", "auth": map[string]any{"type": "token", "token": "ghtok"}})
+	owner.must(202, "POST", "/v1/git/prod/sync", nil)
+
+	// Replica A's first read of the repository: meanwhile its claim
+	// lapses and replica B takes the sync and deploys it.
+	var hooked atomic.Bool
+	inner := gh.Config.Handler
+	gh.Config.Handler = http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		if hooked.CompareAndSwap(false, true) {
+			if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE git_syncs SET lease_until = now() - interval '1 second' WHERE status = 'running'`); err != nil {
+				t.Error(err)
+			}
+			if n, err := w.srv.GitSyncOnce(ctx); err != nil || n != 1 {
+				t.Errorf("replica B: %d %v", n, err)
+			}
+		}
+		inner.ServeHTTP(rw, req)
+	})
+	if _, err := w.srv.GitSyncOnce(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var audits, versions int
+	var status string
+	_ = w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE action = 'git.sync'`).Scan(&audits)
+	_ = w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM workflow_versions v JOIN workflows f ON f.id = v.workflow_id WHERE f.git_path = 'flows/double.wd.json'`).Scan(&versions)
+	_ = w.env.DB.Admin.QueryRow(ctx, `SELECT status FROM git_syncs`).Scan(&status)
+	if audits != 1 || versions != 1 || status != "deployed" {
+		t.Errorf("after the takeover: %d git.sync audits, %d versions, sync %s", audits, versions, status)
 	}
 }

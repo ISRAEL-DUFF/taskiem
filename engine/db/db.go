@@ -4,6 +4,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"embed"
 	"fmt"
 	"io/fs"
@@ -40,27 +41,100 @@ func MigrateWith(ctx context.Context, dsn string, lockTimeout time.Duration) ([]
 }
 
 func migrate(ctx context.Context, dsn string, lockTimeout time.Duration, fsys fs.FS) ([]*goose.MigrationResult, error) {
-	cfg, err := pgx.ParseConfig(dsn)
+	fsys, builds, err := concurrentMigrations(fsys)
 	if err != nil {
 		return nil, err
+	}
+	p, sqlDB, err := provider(dsn, lockTimeout, fsys)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = sqlDB.Close() }()
+	// Concurrent index migrations (concurrent.go) run without the lock
+	// timeout, on connections of their own: pending migrations are applied
+	// in runs of one kind or the other, in order.
+	var concurrent *goose.Provider
+	var all []*goose.MigrationResult
+	for idle := 0; ; {
+		st, err := p.Status(ctx)
+		if err != nil {
+			return all, err
+		}
+		var pending []*goose.Source
+		for _, s := range st {
+			if s.State == goose.StatePending {
+				pending = append(pending, s.Source)
+			}
+		}
+		if len(pending) == 0 {
+			return all, nil
+		}
+		kind := func(s *goose.Source) bool { _, ok := builds[s.Path]; return ok }
+		run, last := kind(pending[0]), pending[0].Version
+		for _, s := range pending[1:] {
+			if kind(s) != run {
+				break
+			}
+			last = s.Version
+		}
+		by := p
+		if run {
+			for _, s := range pending {
+				if s.Version > last {
+					break
+				}
+				if err := checkIndexNames(ctx, sqlDB, s.Path, builds[s.Path]); err != nil {
+					return all, err
+				}
+			}
+			if concurrent == nil {
+				var cdb *sql.DB
+				if concurrent, cdb, err = provider(dsn, 0, fsys); err != nil {
+					return all, err
+				}
+				defer func() { _ = cdb.Close() }()
+			}
+			by = concurrent
+		}
+		res, err := by.UpTo(ctx, last)
+		all = append(all, res...)
+		if err != nil {
+			return all, err
+		}
+		// Nothing applied: another run did it while this one waited for
+		// the lock. Twice in a row would be a loop.
+		if len(res) > 0 {
+			idle = 0
+		} else if idle++; idle > 1 {
+			return all, fmt.Errorf("migration %d stays pending", pending[0].Version)
+		}
+	}
+}
+
+// provider is a goose provider whose connections have lockTimeout.
+func provider(dsn string, lockTimeout time.Duration, fsys fs.FS) (*goose.Provider, *sql.DB, error) {
+	cfg, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		return nil, nil, err
 	}
 	if cfg.RuntimeParams == nil {
 		cfg.RuntimeParams = map[string]string{}
 	}
 	cfg.RuntimeParams["lock_timeout"] = strconv.FormatInt(lockTimeout.Milliseconds(), 10)
 	sqlDB := stdlib.OpenDB(*cfg)
-	defer func() { _ = sqlDB.Close() }()
 	// Another run holding the lock is waited for, checking every second,
 	// for up to 5 minutes.
 	locker, err := lock.NewPostgresSessionLocker(lock.WithLockTimeout(1, 300))
 	if err != nil {
-		return nil, err
+		_ = sqlDB.Close()
+		return nil, nil, err
 	}
 	p, err := goose.NewProvider(goose.DialectPostgres, sqlDB, fsys, goose.WithSessionLocker(locker))
 	if err != nil {
-		return nil, err
+		_ = sqlDB.Close()
+		return nil, nil, err
 	}
-	return p.Up(ctx)
+	return p, sqlDB, nil
 }
 
 // Scope renders tenant ids as the value of app.tenant_scope.

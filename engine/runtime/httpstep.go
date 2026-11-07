@@ -71,19 +71,26 @@ func (w *Worker) doHTTP(ctx context.Context, p *plan, in any) (any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read response: %w: %w", err, effects.ErrUnknownOutcome)
 	}
-	if len(raw) > maxHTTPBody {
-		return nil, fmt.Errorf("response larger than %d bytes: %w", maxHTTPBody, effects.ErrFatal)
-	}
-	var parsed any = string(raw)
-	if v, err := expr.DecodeJSON(raw); err == nil && len(raw) > 0 {
-		parsed = v
-	}
-	out := map[string]any{"status": int64(resp.StatusCode), "body": parsed}
 	switch {
 	case resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500:
 		return nil, fmt.Errorf("http %d: %w", resp.StatusCode, effects.ErrRetryable)
 	case resp.StatusCode >= 400:
 		return nil, fmt.Errorf("http %d: %w", resp.StatusCode, effects.ErrFatal)
 	}
-	return out, nil
+	if len(raw) > maxHTTPBody {
+		if p.class.IsWrite() {
+			// The partner accepted the write; only its answer is too large
+			// to keep. It may have happened, so it parks for a person
+			// rather than failing as if nothing was sent (capOutput does
+			// the same for a connector write).
+			return nil, fmt.Errorf("http %d response larger than %d KB; the partner accepted the call, so check with it and record the step as completed with the output later steps need: %w",
+				resp.StatusCode, maxHTTPBody>>10, effects.ErrIndeterminate)
+		}
+		return nil, fmt.Errorf("response larger than %d bytes: %w", maxHTTPBody, effects.ErrFatal)
+	}
+	var parsed any = string(raw)
+	if v, err := expr.DecodeJSON(raw); err == nil && len(raw) > 0 {
+		parsed = v
+	}
+	return map[string]any{"status": int64(resp.StatusCode), "body": parsed}, nil
 }

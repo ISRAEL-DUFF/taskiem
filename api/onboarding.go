@@ -17,6 +17,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/areas"
+	"github.com/israel-duff/taskiem/engine/schools"
 	"github.com/israel-duff/taskiem/engine/telemetry"
 )
 
@@ -149,6 +151,11 @@ type signupReq struct {
 	// AcceptTerms is the person agreeing to the terms and privacy notice,
 	// needed when the deployment has them (TASKIEM_TERMS_VERSION).
 	AcceptTerms bool `json:"accept_terms,omitempty"`
+	// Kinds is what the business says it does: shop, service, school, any
+	// number, or none for "just workflows". Each switches on the parts of
+	// Taskiem that go with it (docs/spec/business-areas.md). Left out, the
+	// business has every part, as before the question was asked.
+	Kinds *[]string `json:"kinds,omitempty"`
 }
 
 // signupOptions tells the web app whether to offer signup.
@@ -180,7 +187,7 @@ func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, status, msg)
 	}
 	ip := clientIP(r)
-	if !s.loginLimiter("login:" + ip).Allow() {
+	if !s.loginLimiter("login:" + limitIP(r)).Allow() {
 		refuse("rate_limited", http.StatusTooManyRequests, "too many attempts")
 		return
 	}
@@ -222,6 +229,14 @@ func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
 		refuse("invalid", http.StatusBadRequest, "agree to the terms and privacy notice to sign up (accept_terms)")
 		return
 	}
+	var start areas.State
+	if req.Kinds != nil {
+		var err error
+		if start, err = areas.FromKinds(*req.Kinds); err != nil {
+			refuse("invalid", http.StatusBadRequest, "kinds are shop, service or school (any number, or none for just workflows)")
+			return
+		}
+	}
 	if limit := s.SignupPerAddress; limit >= 0 {
 		if limit == 0 {
 			limit = defaultSignupPerDay
@@ -245,6 +260,17 @@ func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := s.termsAcceptTx(r.Context(), tx, tenant, user, "web", nil); err != nil {
 			return err
+		}
+		// What the business said it does decides which parts it starts with.
+		if start != nil {
+			if err := areas.SaveAll(r.Context(), tx, tenant, start, "signup"); err != nil {
+				return err
+			}
+			if start.On(areas.Schools) {
+				if _, err := schools.SetEnabled(r.Context(), tx, tenant, true, "signup"); err != nil {
+					return err
+				}
+			}
 		}
 		if !mailOn {
 			return nil

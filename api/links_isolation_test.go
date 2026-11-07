@@ -191,6 +191,13 @@ func TestLinkIsolation(t *testing.T) {
 // many statements each ran in its own scope.
 func checkIsolation(t *testing.T, seen []loggedQuery, a, b string) map[string]int {
 	t.Helper()
+	return checkIsolationMin(t, seen, a, b, 20)
+}
+
+// checkIsolationMin is checkIsolation for a flow of fewer statements (a
+// reaction, a star): at least min must have been logged.
+func checkIsolationMin(t *testing.T, seen []loggedQuery, a, b string, min int) map[string]int {
+	t.Helper()
 	names := func(q loggedQuery, id string) bool {
 		if strings.Contains(q.sql, id) {
 			return true
@@ -217,7 +224,7 @@ func checkIsolation(t *testing.T, seen []loggedQuery, a, b string) map[string]in
 		}
 		return false
 	}
-	if len(seen) < 20 {
+	if len(seen) < min {
 		t.Fatalf("only %d statements logged", len(seen))
 	}
 	ofEach := map[string]int{}
@@ -493,5 +500,93 @@ func TestLinkIsolationBills(t *testing.T) {
 	var audited int
 	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE tenant_id = $1 AND action = 'link.payout_token' AND (detail->>'amount_kobo')::bigint = 1000000`, buyerID).Scan(&audited); err != nil || audited != 1 {
 		t.Errorf("audited %d times on the buyer's side: %v", audited, err)
+	}
+}
+
+// TestLinkIsolationReactions is the isolation harness of §14 for a
+// reaction: the reactor's own row is written before the door, the other
+// side's copy after it, in the same transaction, and no transaction holds
+// both businesses; taking it back goes through the door the same way; a
+// star is written in one business's transaction and never crosses.
+func TestLinkIsolationReactions(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	log := &scopeLog{scope: map[*pgx.Conn]string{}}
+	cfg := w.env.Store.Pool.Config()
+	cfg.ConnConfig.Tracer = log
+	traced, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(traced.Close)
+	w.srv.Store = &runtime.Store{Pool: traced, Registry: w.env.Store.Registry, PII: w.env.Store.PII}
+
+	ada := w.tenant(t, "Ada's Kitchen", "ada@isolation-react.test")
+	dangote := w.tenant(t, "Dangote Stores", "d@isolation-react.test")
+	adaID, dangoteID := tenantOf(t, ada), tenantOf(t, dangote)
+	dangote.must(200, "PUT", "/v1/link-settings", map[string]any{"findable": true})
+	ada.must(201, "POST", "/v1/links", map[string]any{"business": dangoteID, "role": "supplier"})
+	link := dangote.must(200, "GET", "/v1/links", nil)["links"].([]any)[0].(map[string]any)["id"].(string)
+	dangote.must(200, "POST", "/v1/links/"+link+"/accept", nil)
+	w.srv.WaitBackground()
+	msg := ada.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Ten bags"})["message"].(map[string]any)["id"].(string)
+	w.srv.WaitBackground()
+
+	// Writes to the reactions table, with how many doors had been entered by
+	// then in that transaction.
+	writes := func(seen []loggedQuery, verb string) (own, other int) {
+		entered := false
+		for _, q := range seen {
+			switch {
+			case strings.Contains(q.sql, "taskiem_link_enter("):
+				entered = true
+			case strings.EqualFold(strings.TrimSpace(q.sql), "begin"):
+				entered = false
+			case strings.Contains(q.sql, verb+" link_message_reactions") || strings.Contains(q.sql, verb+" FROM link_message_reactions"):
+				if entered {
+					other++
+				} else {
+					own++
+				}
+			}
+		}
+		return
+	}
+
+	log.take()
+	dangote.must(200, "PUT", "/v1/link-chats/"+link+"/messages/"+msg+"/reaction", map[string]any{"emoji": "❤️"})
+	w.srv.WaitBackground()
+	seen := log.take()
+	checkIsolationMin(t, seen, dangoteID, adaID, 8)
+	if own, other := writes(seen, "INSERT INTO"); own != 1 || other != 1 {
+		t.Errorf("a reaction: its own row before the door, the other side's after: own %d, other %d", own, other)
+	}
+	// Changed: updated before the door, the copy upserted after.
+	log.take()
+	dangote.must(200, "PUT", "/v1/link-chats/"+link+"/messages/"+msg+"/reaction", map[string]any{"emoji": "🙏"})
+	w.srv.WaitBackground()
+	seen = log.take()
+	checkIsolationMin(t, seen, dangoteID, adaID, 8)
+	if own, other := writes(seen, "UPDATE"); own != 1 || other != 0 {
+		t.Errorf("a change: own %d, other %d", own, other)
+	}
+	// Taken back: deleted before the door, the copy deleted after.
+	log.take()
+	dangote.must(200, "DELETE", "/v1/link-chats/"+link+"/messages/"+msg+"/reaction", nil)
+	w.srv.WaitBackground()
+	seen = log.take()
+	checkIsolationMin(t, seen, dangoteID, adaID, 8)
+	if own, other := writes(seen, "DELETE"); own != 1 || other != 1 {
+		t.Errorf("taking back: own %d, other %d", own, other)
+	}
+	// A star never goes through the door.
+	log.take()
+	ada.must(200, "PUT", "/v1/link-chats/"+link+"/messages/"+msg+"/star", nil)
+	seen = log.take()
+	checkIsolationMin(t, seen, adaID, dangoteID, 4)
+	for _, q := range seen {
+		if strings.Contains(q.sql, "taskiem_link_enter(") {
+			t.Error("a star went through the door")
+		}
 	}
 }

@@ -39,18 +39,26 @@ const PermChatTrade = access.ChatTrade
 func (s *Server) linkChatRoutes(r chi.Router) {
 	write := s.need(PermChatTrade)
 	paced := s.linkWriteLimit
+	r.Get("/chat/stream", s.chatStream)
 	r.Get("/link-chats", s.listLinkChats)
 	r.Get("/link-chats/search", s.searchLinkChats)
 	r.Get("/link-chats/thread", s.linkThread)
+	r.Get("/link-chats/starred", s.starredLinkMessages)
 	r.Get("/link-chats/{link}/messages", s.linkMessages)
-	r.With(write, s.tenantWide, paced).Post("/link-chats/{link}/messages", s.sendLinkMessage)
-	r.With(write, s.tenantWide, paced).Post("/link-chats/{link}/files", s.sendLinkFile)
+	// A send is paced inside its handler, after a repeat of it has been
+	// answered (a retry costs the person nothing).
+	r.With(write, s.tenantWide).Post("/link-chats/{link}/messages", s.sendLinkMessage)
+	r.With(write, s.tenantWide).Post("/link-chats/{link}/files", s.sendLinkFile)
 	r.Get("/link-chats/{link}/files/{id}", s.linkFile)
 	r.Get("/link-chats/{link}/items", s.linkChatItems)
 	r.Post("/link-chats/{link}/read", s.readLinkChat)
 	r.With(write, s.tenantWide).Post("/link-chats/{link}/typing", s.linkTyping)
 	r.With(write, s.tenantWide, paced).Post("/link-chats/{link}/forward", s.forwardLinkMessage)
 	r.With(write, s.tenantWide).Post("/link-chats/{link}/messages/{id}/hide", s.hideLinkMessage)
+	r.With(write, s.tenantWide, paced).Put("/link-chats/{link}/messages/{id}/reaction", s.reactLinkMessage)
+	r.With(write, s.tenantWide).Delete("/link-chats/{link}/messages/{id}/reaction", s.unreactLinkMessage)
+	r.With(s.tenantWide).Put("/link-chats/{link}/messages/{id}/star", s.starLinkMessage)
+	r.With(s.tenantWide).Delete("/link-chats/{link}/messages/{id}/star", s.unstarLinkMessage)
 	r.With(write, s.tenantWide).Put("/link-chats/{link}", s.putLinkChat)
 }
 
@@ -59,12 +67,23 @@ func (s *Server) linkChatRoutes(r chi.Router) {
 // (chat_history.go): a burst, then one every two seconds.
 func (s *Server) linkWriteLimit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if p := principalFrom(r.Context()); !s.limiter("link-chat:"+p.Actor(), 2*time.Second, 20).Allow() {
-			writeErr(w, http.StatusTooManyRequests, "slow down: a moment between messages")
+		if !s.allowLinkWrite(w, r) {
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// allowLinkWrite takes one of the person's writes into conversations, or
+// answers 429 and says false. A message or a file takes it after a repeat of
+// the send has been answered, so a Retry is never refused as too fast.
+func (s *Server) allowLinkWrite(w http.ResponseWriter, r *http.Request) bool {
+	p := principalFrom(r.Context())
+	if !s.limiter("link-chat:"+p.Actor(), 2*time.Second, 20).Allow() {
+		writeErr(w, http.StatusTooManyRequests, "slow down: a moment between messages")
+		return false
+	}
+	return true
 }
 
 func linkParam(r *http.Request) (uuid.UUID, error) {
@@ -102,7 +121,8 @@ type linkMessagesOut struct {
 
 // linkMessages is GET /v1/link-chats/{link}/messages: a page of the
 // conversation, oldest first: ?before= (older), ?after= (newer, for the
-// open conversation to follow), ?q= (the messages saying it).
+// open conversation to follow), ?around= (a message and those either side
+// of it), ?q= (the messages saying it).
 func (s *Server) linkMessages(w http.ResponseWriter, r *http.Request) {
 	link, err := linkParam(r)
 	if err != nil {
@@ -120,6 +140,14 @@ func (s *Server) linkMessages(w http.ResponseWriter, r *http.Request) {
 			*to = &t
 		}
 	}
+	if v := r.URL.Query().Get("around"); v != "" {
+		id, err := uuid.Parse(v)
+		if err != nil {
+			s.fail(w, r, fmt.Errorf("%w: around is a message id", errBadRequest))
+			return
+		}
+		p.Around = &id
+	}
 	p.Q = r.URL.Query().Get("q")
 	if v := r.URL.Query().Get("limit"); v != "" {
 		p.Limit, _ = strconv.Atoi(v)
@@ -131,6 +159,9 @@ func (s *Server) linkMessages(w http.ResponseWriter, r *http.Request) {
 		}
 		var err error
 		if out.Messages, err = links.MessagesTx(r.Context(), tx, principalFrom(r.Context()).TenantID, link, p); err != nil {
+			return err
+		}
+		if err = links.DecorateTx(r.Context(), tx, principalFrom(r.Context()).TenantID, viewerOf(principalFrom(r.Context())), out.Messages); err != nil {
 			return err
 		}
 		out.Typing, err = links.TypingOfTx(r.Context(), tx, link)
@@ -149,7 +180,10 @@ func (s *Server) searchLinkChats(w http.ResponseWriter, r *http.Request) {
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
 		out.Messages, err = links.SearchMessagesTx(r.Context(), tx, principalFrom(r.Context()).TenantID, r.URL.Query().Get("q"), 20)
-		return err
+		if err != nil {
+			return err
+		}
+		return links.DecorateTx(r.Context(), tx, principalFrom(r.Context()).TenantID, viewerOf(principalFrom(r.Context())), out.Messages)
 	}); err != nil {
 		s.fail(w, r, err)
 		return
@@ -171,7 +205,10 @@ func (s *Server) linkThread(w http.ResponseWriter, r *http.Request) {
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
 		out.Messages, err = links.ThreadTx(r.Context(), tx, principalFrom(r.Context()).TenantID, doc, ref)
-		return err
+		if err != nil {
+			return err
+		}
+		return links.DecorateTx(r.Context(), tx, principalFrom(r.Context()).TenantID, viewerOf(principalFrom(r.Context())), out.Messages)
 	}); err != nil {
 		s.fail(w, r, err)
 		return
@@ -196,12 +233,29 @@ func (s *Server) sendLinkMessage(w http.ResponseWriter, r *http.Request) {
 		Text     string       `json:"text"`
 		ReplyTo  *uuid.UUID   `json:"reply_to"`
 		Mentions []mentionRef `json:"mentions"`
+		// ClientID is an id the sender made: the same send repeated (a retry
+		// after a dropped connection) is answered with the first message.
+		ClientID *uuid.UUID `json:"client_id"`
 	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	p := principalFrom(r.Context())
+	if m, err := s.sentWith(r.Context(), p, link, in.ClientID); err != nil {
+		s.fail(w, r, linkMessageErr(err))
+		return
+	} else if m != nil {
+		if !sameSend(m, in.Text) {
+			s.fail(w, r, fmt.Errorf("%w: that client_id was used for a different message", errConflict))
+			return
+		}
+		writeJSON(w, http.StatusOK, linkMessageOut{Message: *m})
+		return
+	}
+	if !s.allowLinkWrite(w, r) {
+		return
+	}
 	var ments []links.Mention
 	if len(in.Mentions) > 0 {
 		if err := s.tx(r, func(tx pgx.Tx) error {
@@ -213,12 +267,44 @@ func (s *Server) sendLinkMessage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	m, err := s.sendLink(r.Context(), p, link, in.Text, links.SendOpts{ReplyTo: in.ReplyTo, Mentions: ments})
+	m, err := s.sendLink(r.Context(), p, link, in.Text, links.SendOpts{ReplyTo: in.ReplyTo, Mentions: ments, ClientID: in.ClientID})
+	if errors.Is(err, links.ErrDuplicate) {
+		// The same send, repeated while the first was being written.
+		if first, ferr := s.sentWith(r.Context(), p, link, in.ClientID); ferr == nil && first != nil {
+			writeJSON(w, http.StatusOK, linkMessageOut{Message: *first})
+			return
+		}
+	}
 	if err != nil {
 		s.fail(w, r, linkMessageErr(err))
 		return
 	}
 	writeJSON(w, http.StatusCreated, linkMessageOut{Message: m})
+}
+
+// sameSend reports whether a repeated send says what the first did: the same
+// words (a file's caption included), so a client id reused for another
+// message is refused rather than answered with the wrong one.
+func sameSend(first *links.Message, text string) bool {
+	return first.Body == strings.TrimSpace(text)
+}
+
+// sentWith is the message already sent with a client id, or nil (none, or
+// no id): a repeated send is the same message, never a second one.
+func (s *Server) sentWith(ctx context.Context, p *Principal, link uuid.UUID, client *uuid.UUID) (*links.Message, error) {
+	if client == nil {
+		return nil, nil
+	}
+	var m *links.Message
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+		if _, err := links.GetTx(ctx, tx, link); err != nil {
+			return err
+		}
+		var err error
+		m, err = links.MessageByClientTx(ctx, tx, p.TenantID, link, *client)
+		return err
+	})
+	return m, err
 }
 
 func linkMessageErr(err error) error {
@@ -229,6 +315,9 @@ func linkMessageErr(err error) error {
 		return fmt.Errorf("%w: %s", errConflict, strings.TrimPrefix(err.Error(), links.ErrState.Error()+": "))
 	case errors.Is(err, links.ErrNotFound):
 		return pgx.ErrNoRows
+	case errors.Is(err, links.ErrDuplicate):
+		// A repeat of a send whose first message was since deleted for this side.
+		return fmt.Errorf("%w: that message was already sent", errConflict)
 	case errors.Is(err, links.ErrLimit):
 		// As every other plan limit is refused (429, limit_exceeded).
 		return &runtime.LimitError{Limit: "link_messages_daily", Code: "limit_exceeded", Message: strings.TrimPrefix(err.Error(), links.ErrLimit.Error()+": ")}
@@ -556,25 +645,19 @@ func (s *Server) waAskLinked(ctx context.Context, c *chat, rest string) (bool, e
 	}); err != nil {
 		return true, err
 	}
-	words := strings.Fields(rest)
-	// The longest run of words that names one linked business.
-	var to links.Link
-	n := 0
-	for i := len(words); i > 0 && n == 0; i-- {
-		name := strings.Join(words[:i], " ")
-		var hit []links.Link
-		for _, l := range list {
-			if l.State == links.Active && strings.HasPrefix(strings.ToLower(l.Name), strings.ToLower(name)) {
-				hit = append(hit, l)
-			}
-		}
-		if len(hit) == 1 {
-			to, n = hit[0], i
-		}
-	}
-	if n == 0 {
+	// The longest run of words that names a linked business, by the start
+	// of its name (links.Mentioned): "ask Dangote …" for Dangote Nigeria Ltd.
+	rest = strings.TrimSpace(rest)
+	hit, used := links.Mentioned(list, rest)
+	if used == 0 {
 		return false, nil
 	}
+	if len(hit) > 1 {
+		return true, c.say(ctx, s, c.t("wa.mention.which", "name", whatsapp.SafeText(string([]rune(rest)[:used])), "list", mentionChoices(c, hit)))
+	}
+	to := hit[0]
+	words := strings.Fields(string([]rune(rest)[used:]))
+	n := 0
 	if !c.p.Can(PermChatTrade) {
 		return true, c.say(ctx, s, c.t("chat.link.denied", "org", c.tenant.Name))
 	}
@@ -660,6 +743,30 @@ func (s *Server) sendLinkFile(w http.ResponseWriter, r *http.Request) {
 	}
 	p := principalFrom(r.Context())
 	ctx := r.Context()
+	var clientID *uuid.UUID
+	if v := r.FormValue("client_id"); v != "" {
+		id, err := uuid.Parse(v)
+		if err != nil {
+			s.fail(w, r, fmt.Errorf("%w: client_id is an id", errBadRequest))
+			return
+		}
+		clientID = &id
+	}
+	// The same send repeated: answered with the first, nothing stored again.
+	if m, err := s.sentWith(ctx, p, link, clientID); err != nil {
+		s.fail(w, r, linkMessageErr(err))
+		return
+	} else if m != nil {
+		if !sameSend(m, r.FormValue("text")) {
+			s.fail(w, r, fmt.Errorf("%w: that client_id was used for a different message", errConflict))
+			return
+		}
+		writeJSON(w, http.StatusOK, linkMessageOut{Message: *m})
+		return
+	}
+	if !s.allowLinkWrite(w, r) {
+		return
+	}
 	// Before anything is stored: only to an active link, and only a file
 	// the scanner passes.
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
@@ -703,11 +810,17 @@ func (s *Server) sendLinkFile(w http.ResponseWriter, r *http.Request) {
 		theirs, other = att(f), business
 		return theirs, nil
 	}
-	m, err := s.sendLink(ctx, p, link, r.FormValue("text"), links.SendOpts{ReplyTo: replyTo, Ours: att(mine), TheirCopy: theirCopy})
+	m, err := s.sendLink(ctx, p, link, r.FormValue("text"), links.SendOpts{ReplyTo: replyTo, Ours: att(mine), TheirCopy: theirCopy, ClientID: clientID})
 	if err != nil {
 		s.dropChatFile(ctx, p.TenantID, mine.Path)
 		if theirs != nil {
 			s.dropChatFile(ctx, other, theirs.Path)
+		}
+		if errors.Is(err, links.ErrDuplicate) {
+			if first, ferr := s.sentWith(ctx, p, link, clientID); ferr == nil && first != nil {
+				writeJSON(w, http.StatusOK, linkMessageOut{Message: *first})
+				return
+			}
 		}
 		s.fail(w, r, linkMessageErr(err))
 		return

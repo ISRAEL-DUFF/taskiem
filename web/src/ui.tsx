@@ -274,9 +274,11 @@ export function Item({ to, icon, tone, title, sub, side, sideSub, extra, testid,
 /** One row of Items with its own buttons instead of a link (a member, a
  * channel, a key): an icon or a letter on a tint, a title with something
  * at its end, lines under it, and the actions under those. */
-export function Row({ icon, letter, tone, title, side, sub, children, testid, className, attrs }: {
+export function Row({ icon, letter, image, tone, title, side, sub, children, testid, className, attrs }: {
   icon?: string;
   letter?: string;
+  /** A photo, in the icon's place (an item's picture). */
+  image?: string;
   tone?: "warn" | "danger" | "ok" | "info" | "muted";
   title: ReactNode;
   side?: ReactNode;
@@ -290,7 +292,7 @@ export function Row({ icon, letter, tone, title, side, sub, children, testid, cl
   return (
     <li className={className ? `act-row ${className}` : "act-row"} data-testid={testid} {...attrs}>
       <span className={tone ? `list-icon ${tone}` : "list-icon"} aria-hidden="true">
-        {letter ? letter.slice(0, 1).toUpperCase() : <Icon name={icon ?? "more"} />}
+        {image ? <RowImage src={image} fallback={icon ?? "more"} /> : letter ? letter.slice(0, 1).toUpperCase() : <Icon name={icon ?? "more"} />}
       </span>
       <div className="grow">
         <div className="item-top">
@@ -302,6 +304,14 @@ export function Row({ icon, letter, tone, title, side, sub, children, testid, cl
       </div>
     </li>
   );
+}
+
+/** A row's photo; the icon when it cannot be shown. */
+function RowImage({ src, fallback }: { src: string; fallback: string }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [src]);
+  if (failed) return <Icon name={fallback} />;
+  return <img src={src} alt="" loading="lazy" onError={() => setFailed(true)} />;
 }
 
 /** What a list shows before it has anything: an icon, one sentence saying

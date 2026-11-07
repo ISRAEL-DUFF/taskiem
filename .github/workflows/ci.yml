@@ -615,6 +615,11 @@ jobs:
           curl -fsk https://localhost/readyz
           out=$(sudo-vps taskiem-vps check || true)
           grep -q 'taskiem:broken failed to upgrade' <<<"$out"
+          # The timer does not try it again: the running container stays.
+          before=$(sudo docker compose --project-directory /opt/taskiem ps -q taskiem)
+          sudo-vps TASKIEM_VPS_IMAGE_OVERRIDE=taskiem:broken taskiem-vps update --auto
+          test "$(sudo docker compose --project-directory /opt/taskiem ps -q taskiem)" = "$before"
+          test "$(sudo cat /var/lib/taskiem-vps/current)" = taskiem:ci
       - name: A good release upgrades; rollback returns to the one before
         run: |
           sudo-vps TASKIEM_VPS_IMAGE_OVERRIDE=taskiem:ci-next taskiem-vps update --now

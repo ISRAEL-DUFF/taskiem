@@ -3,6 +3,7 @@
 // message, a card and the list read, in WhatsApp's words.
 
 import { naira } from "./invoices";
+import { cmpTime } from "./stamp";
 import type { Mention } from "./mentions";
 
 export type DocKind = "order" | "purchase" | "invoice" | "bill";
@@ -15,6 +16,56 @@ export interface DocCard {
   id?: string;
   amount_kobo?: number;
   note?: string;
+}
+
+/** One emoji on a message: how many gave it, whether you did, and who (first names). */
+export interface Reaction {
+  emoji: string;
+  count: number;
+  mine?: boolean;
+  by?: string[];
+}
+
+/** The six emoji a message may be reacted to with. */
+export const REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"] as const;
+
+/** The reactions with `emoji` given or taken back by us, as the server will answer. */
+export function toggleReaction(
+  list: Reaction[] | undefined,
+  emoji: string,
+  mine: boolean,
+  me = "You",
+): Reaction[] {
+  // Our own reaction (one at most) comes off wherever it was.
+  const out: Reaction[] = [];
+  for (const r of list ?? []) {
+    if (!r.mine) out.push(r);
+    else if (r.count > 1)
+      out.push({
+        ...r,
+        count: r.count - 1,
+        mine: false,
+        by: r.by?.filter((n) => n !== me),
+      });
+  }
+  if (!mine) return out;
+  const at = out.findIndex((r) => r.emoji === emoji);
+  if (at >= 0) {
+    const r = out[at] as Reaction;
+    out[at] = {
+      ...r,
+      count: r.count + 1,
+      mine: true,
+      by: [...(r.by ?? []), me],
+    };
+  } else out.push({ emoji, count: 1, mine: true, by: [me] });
+  return out;
+}
+
+/** The words for a reaction chip: "👍 2: Owner, Ada". */
+export function reactionWords(r: Reaction): string {
+  const who = (r.by ?? []).join(", ");
+  return `${r.emoji} ${r.count}${who ? `: ${who}` : ""}`;
 }
 
 export interface Quote {
@@ -58,12 +109,24 @@ export interface LinkMessage {
   reply?: Quote;
   read_at?: string;
   created_at: string;
+  /** The people's emoji on it, from both businesses (see Reaction). */
+  reactions?: Reaction[];
+  /** You starred it (a star is yours alone). */
+  starred?: boolean;
+  /** Only in the browser: a message still being sent, or not sent (Retry). */
+  local?: "sending" | "failed";
+  /** Why a local message was not sent, in words. */
+  localError?: string;
+  /** A local photo's preview (a data URL: the page shows no blob URLs). */
+  localPreview?: string;
 }
 
 export interface Conversation {
   link: string;
   business: string;
   name: string;
+  /** The business has a logo (see `logoSrc`). */
+  logo?: boolean;
   state: "active" | "ended";
   last?: LinkMessage;
   unread: number;
@@ -190,6 +253,20 @@ export function clock(iso: string): string {
 }
 
 /** The list's time: today's clock, else the day. */
+/** The conversations a search narrows the list to, as WhatsApp does from the
+ * first letter: every word typed begins a word in the business's name or in
+ * its last message. Archived ones are searched too. */
+export function matchChats(convs: Conversation[], q: string): Conversation[] {
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [];
+  return convs.filter((c) => {
+    // Each word typed begins a word of the name or of the last message,
+    // so "d" finds Dangote and not Ada.
+    const hay = `${c.name} ${c.last ? previewLine(c.last, c.name) : ""}`.toLowerCase().split(/[^\p{L}\p{N}']+/u).filter(Boolean);
+    return words.every((w) => hay.some((h) => h.startsWith(w)));
+  });
+}
+
 export function listTime(iso: string, now: Date = new Date()): string {
   const label = dayLabel(iso, now);
   return label === "Today" ? clock(iso) : label;
@@ -216,6 +293,9 @@ export function merge(a: LinkMessage[], b: LinkMessage[]): LinkMessage[] {
   for (const m of [...a, ...b]) seen.set(m.id, m);
   return [...seen.values()].sort(
     (x, y) =>
-      x.created_at.localeCompare(y.created_at) || x.id.localeCompare(y.id),
+      cmpTime(x.created_at, y.created_at) || x.id.localeCompare(y.id),
   );
 }
+
+/** A linked business's logo through the API (the app's content policy allows images from its own origin only). */
+export const logoSrc = (business: string) => `/v1/links/${business}/logo`;

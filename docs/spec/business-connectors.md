@@ -198,7 +198,7 @@ The normalised events `books.invoice.created`, `books.invoice.paid` and `books.p
 
 **Connectors:** `messenger@1` (a Facebook Page) and `instagram@1` (an Instagram professional account), on Taskiem's Meta app.
 
-Posting to a Page or an Instagram account, comments and insights are [social posting](social-posting.md) (decision [0062](../decisions/0062-social-posting.md)), on the same connectors and the same review, with seven permissions added.
+Posting to a Page or an Instagram account, comments and insights are [social posting](social-posting.md) (decision [0063](../decisions/0063-social-posting.md)), on the same connectors and the same review, with seven permissions added.
 
 **Connecting** (to decide in K0, from Meta's current documentation):
 - **Proposed: Facebook Login for Business for both.** One login grants a business's Pages and the Instagram accounts linked to them, with `pages_messaging`, `pages_manage_metadata`, `instagram_basic` and `instagram_manage_messages`.

@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"github.com/israel-duff/taskiem/engine/areas"
 	"github.com/israel-duff/taskiem/engine/audit"
 	"github.com/israel-duff/taskiem/engine/catalogue"
 	"github.com/israel-duff/taskiem/engine/db"
@@ -487,8 +488,20 @@ type opsTenantRow struct {
 }
 
 func (s *Server) opsTenants(w http.ResponseWriter, r *http.Request) {
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	rows, err := s.Store.Pool.Query(r.Context(), `SELECT * FROM taskiem_ops_tenants($1, $2)`, strings.TrimSpace(r.URL.Query().Get("q")), limit)
+	// The list pages: limit defaults to 50 (up to 200), offset to 0. One row
+	// more than the limit is read to know whether "load more" has anything.
+	// A limit of 0 must not reach the database: it clamps up to 1, which once
+	// showed only the newest tenant.
+	limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
+	if err != nil || limit < 1 {
+		limit = 50
+	}
+	limit = min(limit, 200)
+	offset, err := strconv.Atoi(r.URL.Query().Get("offset"))
+	if err != nil || offset < 0 {
+		offset = 0
+	}
+	rows, err := s.Store.Pool.Query(r.Context(), `SELECT * FROM taskiem_ops_tenants($1, $2, $3)`, strings.TrimSpace(r.URL.Query().Get("q")), limit+1, offset)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -498,7 +511,11 @@ func (s *Server) opsTenants(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"tenants": nonNil(out)})
+	more := len(out) > limit
+	if more {
+		out = out[:limit]
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tenants": nonNil(out), "has_more": more})
 }
 
 // opsTenantAction suspends or resumes a tenant (decision 0027; Atlas part D
@@ -537,15 +554,18 @@ func (s *Server) opsTenantAction(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		var was string
-		if err := tx.QueryRow(ctx, `SELECT status FROM tenants WHERE id = $1 FOR UPDATE`, tenant).Scan(&was); errors.Is(err, pgx.ErrNoRows) {
+		var by *string
+		if err := tx.QueryRow(ctx, `SELECT status, suspended_by FROM tenants WHERE id = $1 FOR UPDATE`, tenant).Scan(&was, &by); errors.Is(err, pgx.ErrNoRows) {
 			return errNotFoundTenant
 		} else if err != nil {
 			return err
 		}
-		if was == status || was != "active" && was != "suspended" {
+		// A suspension the partner made can be taken over: it then holds
+		// against the partner too (migration 00322).
+		if was == status && (status != "suspended" || by != nil && *by == "operator") || was != "active" && was != "suspended" {
 			return fmt.Errorf("%w: the organisation is %s", errConflict, was)
 		}
-		if _, err := tx.Exec(ctx, `UPDATE tenants SET status = $2 WHERE id = $1`, tenant, status); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE tenants SET status = $2, suspended_by = CASE WHEN $2 = 'suspended' THEN 'operator' END WHERE id = $1`, tenant, status); err != nil {
 			return err
 		}
 		if status == "suspended" {
@@ -583,7 +603,7 @@ func (s *Server) opsTenant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	rows, err := s.Store.Pool.Query(ctx, `SELECT * FROM taskiem_ops_tenants($1, 1)`, id.String())
+	rows, err := s.Store.Pool.Query(ctx, `SELECT * FROM taskiem_ops_tenants($1, 1, 0)`, id.String())
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -610,9 +630,15 @@ func (s *Server) opsTenant(w http.ResponseWriter, r *http.Request) {
 		PendingPlan       *string    `json:"pending_plan"`
 	}
 	var sub *subscription
+	var parts areas.State
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{id}, func(tx pgx.Tx) error {
+		// Which parts of Taskiem the business uses (docs/spec/business-areas.md).
+		var err error
+		if parts, err = areas.Load(ctx, tx, id); err != nil {
+			return err
+		}
 		var x subscription
-		err := tx.QueryRow(ctx, `SELECT plan_id, billing_interval, status, period_start, period_end, trial_end, comp_until, past_due_since,
+		err = tx.QueryRow(ctx, `SELECT plan_id, billing_interval, status, period_start, period_end, trial_end, comp_until, past_due_since,
 			cancel_at_period_end, pending_plan_id FROM subscriptions WHERE tenant_id = $1`, id).
 			Scan(&x.Plan, &x.Interval, &x.Status, &x.PeriodStart, &x.PeriodEnd, &x.TrialEnd, &x.CompUntil, &x.PastDueSince, &x.CancelAtPeriodEnd, &x.PendingPlan)
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -635,7 +661,7 @@ func (s *Server) opsTenant(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"tenant": list[0], "subscription": sub, "limits": limits})
+	writeJSON(w, http.StatusOK, map[string]any{"tenant": list[0], "subscription": sub, "limits": limits, "areas": areaRows(parts)})
 }
 
 // --- the platform audit chain ---

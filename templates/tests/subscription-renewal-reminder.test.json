@@ -1,0 +1,81 @@
+{
+  "schema": "wd-test/v1",
+  "template": "subscription-renewal-reminder",
+  "params": {
+    "business_name": "Fibre Link",
+    "days_before": 3,
+    "payment_details": "Pay to 0123456789, GTBank.",
+    "send_time": "09:00",
+    "subscribers_table": "subscribers"
+  },
+  "cases": [
+    {
+      "name": "only a subscriber whose renewal is within the days is reminded",
+      "trigger": {
+        "scheduled_time": "2026-11-01T08:00:00Z"
+      },
+      "mocks": {
+        "read_subscribers": {
+          "output": {
+            "rows": [
+              {
+                "name": "Ada Obi",
+                "phone": "+2348031234567",
+                "plan": "Home 10Mbps",
+                "monthly_naira": 15000,
+                "renews_on": "2026-11-03T00:00:00Z",
+                "status": "active",
+                "account_ref": "acct-1",
+                "area": "Yaba"
+              },
+              {
+                "name": "Tunde Bello",
+                "phone": "+2348030000002",
+                "plan": "Office 50Mbps",
+                "monthly_naira": 40000,
+                "renews_on": "2026-11-20T00:00:00Z",
+                "status": "active",
+                "account_ref": "acct-1",
+                "area": "Yaba"
+              },
+              {
+                "name": "Chidi Eze",
+                "phone": "+2348030000003",
+                "plan": "Home 5Mbps",
+                "monthly_naira": 8000,
+                "renews_on": "2026-10-30T00:00:00Z",
+                "status": "active",
+                "account_ref": "acct-1",
+                "area": "Yaba"
+              }
+            ]
+          }
+        },
+        "remind_each[0].send_reminder": {
+          "output": {
+            "queued": [
+              "sms"
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "remind_each[0].send_reminder": "completed",
+          "remind_each[1].send_reminder": "skipped",
+          "remind_each[2].send_reminder": "skipped"
+        },
+        "inputs": {
+          "remind_each[0].send_reminder": {
+            "to": "+2348031234567",
+            "message": "Fibre Link: Hello Ada Obi, your Home 10Mbps plan renews on 2026-11-03 (NGN 15000). Pay to 0123456789, GTBank."
+          }
+        },
+        "calls": {
+          "remind_each[0].send_reminder": 1
+        }
+      }
+    }
+  ]
+}

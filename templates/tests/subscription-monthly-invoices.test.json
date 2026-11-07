@@ -1,0 +1,221 @@
+{
+  "schema": "wd-test/v1",
+  "template": "subscription-monthly-invoices",
+  "params": {
+    "day_of_month": 1,
+    "send_time": "08:00",
+    "subscribers_table": "subscribers",
+    "due_in_days": 7
+  },
+  "cases": [
+    {
+      "name": "each active subscriber is invoiced for their price; one with no price is skipped",
+      "trigger": {
+        "scheduled_time": "2026-11-01T07:00:00Z"
+      },
+      "mocks": {
+        "read_subscribers": {
+          "output": {
+            "rows": [
+              {
+                "name": "Ada Obi",
+                "phone": "+2348031234567",
+                "plan": "Home 10Mbps",
+                "monthly_naira": 15000,
+                "renews_on": "2026-11-03T00:00:00Z",
+                "status": "active",
+                "account_ref": "acct-1",
+                "area": "Yaba"
+              },
+              {
+                "name": "Tunde",
+                "phone": "+2348030000002",
+                "status": "active"
+              }
+            ]
+          }
+        },
+        "invoice_each[0].make_invoice": {
+          "output": {
+            "number": "INV-0001",
+            "status": "draft",
+            "total_kobo": 1500000,
+            "total": "₦15,000"
+          }
+        },
+        "invoice_each[0].send_invoice": {
+          "output": {
+            "number": "INV-0001",
+            "status": "sent",
+            "queued": [
+              "sms"
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "invoice_each[0].make_invoice": "completed",
+          "invoice_each[0].send_invoice": "completed",
+          "invoice_each[1].make_invoice": "skipped",
+          "warn_more": "skipped"
+        },
+        "inputs": {
+          "invoice_each[0].make_invoice": {
+            "customer": {
+              "name": "Ada Obi",
+              "phone": "+2348031234567"
+            },
+            "amount_kobo": 1500000,
+            "description": "Monthly subscription: Home 10Mbps, 2026-11",
+            "due_on": "2026-11-08"
+          },
+          "invoice_each[0].send_invoice": {
+            "number": "INV-0001"
+          },
+          "read_subscribers": {
+            "table": "subscribers",
+            "filters": [
+              {
+                "column": "status",
+                "op": "ilike",
+                "value": "active"
+              }
+            ]
+          }
+        },
+        "calls": {
+          "invoice_each[0].make_invoice": 1,
+          "invoice_each[0].send_invoice": 1
+        }
+      }
+    },
+    {
+      "name": "two subscribers who share a phone number each get their own invoice",
+      "trigger": {
+        "scheduled_time": "2026-11-01T07:00:00Z"
+      },
+      "mocks": {
+        "read_subscribers": {
+          "output": {
+            "rows": [
+              {
+                "name": "Ada Obi",
+                "phone": "+2348031234567",
+                "plan": "Home",
+                "monthly_naira": 15000,
+                "renews_on": "2026-11-03T00:00:00Z",
+                "status": "active",
+                "account_ref": "acct-1",
+                "area": "Yaba"
+              },
+              {
+                "name": "Obi Stores",
+                "phone": "+2348031234567",
+                "plan": "Office",
+                "monthly_naira": 40000,
+                "renews_on": "2026-11-03T00:00:00Z",
+                "status": "active",
+                "account_ref": "acct-1",
+                "area": "Yaba"
+              }
+            ]
+          }
+        },
+        "invoice_each[0].make_invoice": {
+          "output": {
+            "number": "INV-0001"
+          }
+        },
+        "invoice_each[0].send_invoice": {
+          "output": {
+            "number": "INV-0001",
+            "queued": [
+              "sms"
+            ]
+          }
+        },
+        "invoice_each[1].make_invoice": {
+          "output": {
+            "number": "INV-0002"
+          }
+        },
+        "invoice_each[1].send_invoice": {
+          "output": {
+            "number": "INV-0002",
+            "queued": [
+              "sms"
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "calls": {
+          "invoice_each[0].make_invoice": 1,
+          "invoice_each[1].make_invoice": 1
+        },
+        "inputs": {
+          "invoice_each[1].make_invoice": {
+            "amount_kobo": 4000000
+          }
+        }
+      }
+    },
+    {
+      "name": "you are told when the table holds more subscribers than one run covers",
+      "trigger": {
+        "scheduled_time": "2026-11-01T07:00:00Z"
+      },
+      "mocks": {
+        "read_subscribers": {
+          "output": {
+            "rows": [
+              {
+                "name": "Ada Obi",
+                "phone": "+2348031234567",
+                "plan": "Home",
+                "monthly_naira": 15000,
+                "renews_on": "2026-11-03T00:00:00Z",
+                "status": "active",
+                "account_ref": "acct-1",
+                "area": "Yaba"
+              }
+            ],
+            "next_cursor": "page-2"
+          }
+        },
+        "invoice_each[0].make_invoice": {
+          "output": {
+            "number": "INV-0001"
+          }
+        },
+        "invoice_each[0].send_invoice": {
+          "output": {
+            "number": "INV-0001",
+            "queued": [
+              "sms"
+            ]
+          }
+        },
+        "warn_more": {
+          "output": {
+            "people": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "warn_more": "completed"
+        },
+        "inputs": {
+          "warn_more": {
+            "title": "More subscribers than one run covers"
+          }
+        }
+      }
+    }
+  ]
+}

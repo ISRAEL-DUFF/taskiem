@@ -284,6 +284,16 @@
       "reviewed": true,
       "context": "SMS to a customer: the owner said the order is ready"
     },
+    "invoice.pay_unavailable_title": {
+      "text": "A customer could not pay online",
+      "reviewed": true,
+      "context": "the bell and chat: a customer tried to pay an invoice online and no payments connection could do it"
+    },
+    "invoice.pay_unavailable": {
+      "text": "A customer tried to pay {what} by {how}, but no payments service of yours can do that, so they were asked to pay you directly. Connect Paystack, Flutterwave, OPay or another payments service under Connections, and they can pay online.",
+      "reviewed": true,
+      "context": "what the business must do about it; {what} is the invoice or order, {how} bank transfer or card"
+    },
     "invoice.chat.account": {
       "text": "Pay {amount} for invoice {number} by bank transfer to:\nAccount number: {account}\nBank: {bank}\nAccount name: {name}\nValid until {until}. Use it for this payment only.",
       "reviewed": true,
@@ -2099,6 +2109,11 @@
       "reviewed": true,
       "context": "Help line"
     },
+    "wa.help.signin": {
+      "text": "• *sign in* for a link into the web app; *password* to sign in with an email; *sign out everywhere*",
+      "reviewed": true,
+      "context": "Help line for getting onto the web from chat"
+    },
     "wa.help.cancel": {
       "text": "• *cancel*: drop what is in progress",
       "reviewed": true,
@@ -2313,6 +2328,21 @@
       "text": "Send {name} ({to}) an invoice for {amount}: {for}?",
       "reviewed": true,
       "context": "the invoice shown before sending; {to} is masked"
+    },
+    "wa.invoice.confirm_linked": {
+      "text": "Send {name}, a business on Taskiem you are linked with, an invoice for {amount}: {for}? It goes into their bills.",
+      "reviewed": true,
+      "context": "the invoice shown before sending to a linked business, no address needed"
+    },
+    "wa.invoice.sent_linked": {
+      "text": "Sent {number} to {name}'s bills on Taskiem for {amount}. You can see it under Invoices in the web app.",
+      "reviewed": true,
+      "context": "the invoice was sent to a linked business"
+    },
+    "wa.invoice.pick_linked": {
+      "text": "Which {name} do you mean?\n{list}\nReply with its number, or send a phone number or email to invoice someone else.",
+      "reviewed": true,
+      "context": "several linked businesses fit the name"
     },
     "wa.invoice.confirm_reminder": {
       "text": "Reply *yes* to send the invoice or *no* to leave it.",
@@ -4085,9 +4115,19 @@
       "context": "Confirming a product sent as a photo; starts with a space"
     },
     "wa.signin.link": {
-      "text": "Open this link to choose your password and sign in to Taskiem on the web. It works once, for an hour; keep it to yourself:\n{link}",
+      "text": "Open this link to choose your password. It works once, for an hour; keep it to yourself:\n{link}\nThen sign in on the web with your email (the one at *{domain}*) and that password.",
       "reviewed": true,
-      "context": "A one-time sign-in link sent in chat"
+      "context": "\"password\" in chat: a one-time link to choose a password, and where the email to sign in with is (chat never shows an address)"
+    },
+    "wa.signin.chat_link": {
+      "text": "Open this link to sign in to Taskiem on the web. It works once, for 10 minutes; keep it to yourself:\n{link}",
+      "reviewed": true,
+      "context": "\"sign in\" in chat: a one-time link that opens the web app signed in"
+    },
+    "door.signin_email": {
+      "text": "To sign in with a password you need an email first: send *email you@example.com* and open the link we email you. Then send *password* again.\nOr send *sign in* for a link that signs you in straight away.",
+      "reviewed": true,
+      "context": "\"password\" from someone with no email yet"
     },
     "wa.signin.sso": {
       "text": "Your organisation signs in with its own company account: {link}",
@@ -4098,6 +4138,46 @@
       "text": "Signing in on the web is not set up on this Taskiem.",
       "reviewed": true,
       "context": "No public URL for links"
+    },
+    "wa.signin.off": {
+      "text": "Signing in with WhatsApp or Telegram is off for you (Account on the web). Send *password* to sign in with an email and password instead.",
+      "reviewed": true,
+      "context": "\"sign in\" from someone who turned chat sign-in off"
+    },
+    "wa.signin.passkey": {
+      "text": "Administrators sign in to Taskiem with their passkey: {link}",
+      "reviewed": true,
+      "context": "\"sign in\" from an administrator who has a passkey, where administrators must use one"
+    },
+    "chat.signin.code": {
+      "text": "{code} is your Taskiem sign-in code. It expires in 10 minutes. Do not share it; if you did not ask for it, ignore this message.",
+      "reviewed": true,
+      "context": "The code sent on Telegram to sign in on the web"
+    },
+    "chat.signin.told": {
+      "text": "You signed in to Taskiem on the web with your chat ({device}). Not you? Send *sign out everywhere*.",
+      "reviewed": true,
+      "context": "Told to the chat after a chat sign-in on the web"
+    },
+    "account.passkey_only.on": {
+      "text": "Signing in to Taskiem only with your passkey is now on: your password and chat no longer sign you in on the web. Not you? Send *sign out everywhere*.",
+      "reviewed": true,
+      "context": "Told to the chat and email when a person turns on Only sign in with my passkey"
+    },
+    "account.passkey_only.off": {
+      "text": "Signing in to Taskiem only with your passkey is now off: your password and chat sign you in again. Not you? Send *sign out everywhere*.",
+      "reviewed": true,
+      "context": "Told to the chat and email when a person turns off Only sign in with my passkey"
+    },
+    "chat.signout.done": {
+      "text": "Signed out of the web everywhere: {count} session(s) ended. Your chat goes on as before.",
+      "reviewed": true,
+      "context": "\"sign out everywhere\": every web session of the person ended"
+    },
+    "chat.signout.none": {
+      "text": "You were not signed in on the web anywhere.",
+      "reviewed": true,
+      "context": "\"sign out everywhere\" with no web session"
     },
     "wa.status.denied": {
       "text": "You cannot see runs in {org} (it takes run.read).",
@@ -4788,6 +4868,11 @@
       "text": "• *Ada owes 5,000*, *Ada paid 2,000 cash*, *who owes me?*, *send Ada her balance*: the debts customers owe you",
       "reviewed": true,
       "context": "help line for the debtor book"
+    },
+    "wa.help.direct": {
+      "text": "• Message a linked business: start with *...*, like *... @Dangote how much is a bag of cement?*",
+      "reviewed": true,
+      "context": "Help line for messages straight to a linked business"
     },
     "wa.table.form": {
       "text": "{table}: tap *{cta}* to enter the row's {count} detail(s); you confirm before it is added. Send *cancel* to stop.",
@@ -6419,6 +6504,41 @@
       "reviewed": true,
       "context": "A message to a linked business was sent from the phone"
     },
+    "chat.direct.wait": {
+      "text": "Now send the message, with *@business* for who it is for, like *@Dangote how much is a bag of cement?*",
+      "reviewed": true,
+      "context": "A message was just \"...\": the next one goes to the linked businesses it mentions"
+    },
+    "chat.direct.who": {
+      "text": "Who is it for? Add *@business*, like *... @Dangote how much is a bag of cement?*",
+      "reviewed": true,
+      "context": "\"...\" with a message that mentions no linked business"
+    },
+    "chat.direct.empty": {
+      "text": "What do you want to say to *{name}*? Send *... @{name}* and your message.",
+      "reviewed": true,
+      "context": "\"... @business\" with nothing else to say"
+    },
+    "chat.direct.hint": {
+      "text": "To send it to *{name}* as a message instead, start it with *...*",
+      "reviewed": true,
+      "context": "After a reply to a mention asking for no quantity: how to send it as a message"
+    },
+    "chat.direct.sent": {
+      "text": "✓ Sent to {names}.",
+      "reviewed": true,
+      "context": "A message after \"...\" went to the businesses it mentions; {names} is their names"
+    },
+    "chat.direct.not_sent": {
+      "text": "Not sent to *{name}*: {reason}.",
+      "reviewed": true,
+      "context": "A message after \"...\" could not go to one business; {reason} says why"
+    },
+    "chat.direct.failed": {
+      "text": "Not sent to *{name}*: something went wrong. Send it to them again.",
+      "reviewed": true,
+      "context": "A message after \"...\" failed for one business (not a refusal); the rest were sent"
+    },
     "chat.link.photo": {
       "text": "Photo",
       "reviewed": true,
@@ -6433,6 +6553,16 @@
       "text": "File",
       "reviewed": true,
       "context": "A file (a PDF) sent in a conversation with a linked business, told on the phone"
+    },
+    "chat.link.reacted": {
+      "text": "{name} reacted {emoji} to “{what}”",
+      "reviewed": true,
+      "context": "Told on the phone: a person on the other business reacted to a message of the conversation; {what} is the start of the message"
+    },
+    "chat.link.reacted_plain": {
+      "text": "{name} reacted {emoji} to a message",
+      "reviewed": true,
+      "context": "Told on the phone: a person on the other business reacted to a message that has no words (a photo, a card)"
     },
     "wa.prices.list": {
       "text": "*{name}*'s prices for you:\n{items}\n\nOrder with *order 20 bags of rice from {name}*.",
@@ -6490,7 +6620,7 @@
       "context": "A mention names a business not linked"
     },
     "wa.mention.how": {
-      "text": "Say how many of what from *{name}*, like *20 bags of rice from @{name}*.",
+      "text": "Say how many of what from *{name}*, like *20 bags of rice from @{name}*. To send it to *{name}* as a message instead, start it with *...*",
       "reviewed": true,
       "context": "A mention with nothing to order"
     },
@@ -6630,7 +6760,7 @@
       "context": "Goods received said of an order with a linked supplier that has not delivered it"
     },
     "wa.mention.which": {
-      "text": "More than one of your linked businesses is called *{name}*: {list}. Pick it on the Chat page, where each is its own conversation.",
+      "text": "*@{name}* could be more than one of your linked businesses: {list}. Use more of the name, or pick it on the Chat page.",
       "reviewed": true,
       "context": "A mention names a business of which the writer has two links of the same name; {list} says each with its role"
     },

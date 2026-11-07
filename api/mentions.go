@@ -37,8 +37,15 @@ type mentionOrder struct {
 }
 
 type mentionPart struct {
-	Business string // as linked
-	Text     string // what was said before the mention: "400 bags of cement"
+	Business string // as linked (the first of Links)
+	// Links are the linked businesses the mention names: more than one is
+	// asked about, never picked in silence (links.Mentioned).
+	Links []links.Link
+	Text  string // what was said before the mention: "400 bags of cement"
+	// Typed is the mention's words as typed, without the "@"; At and End
+	// are where it starts (the "@") and ends, in runes.
+	Typed   string
+	At, End int
 }
 
 var (
@@ -51,17 +58,11 @@ var (
 	phraseSplitRe = regexp.MustCompile(`(?i)\s*(?:,|\band\b)\s*(?:\d)`)
 )
 
-// parseMentions finds the "@" mentions in text against the linked
-// businesses' names (the longest name that fits; case is ignored, folded
-// character by character, so a name whose lower case is longer or shorter
-// in bytes, as with İ or the Kelvin sign, is read as any other), and what
-// each is asked for: the words between it and the mention before.
-func parseMentions(text string, names []string) mentionOrder {
-	sorted := make([][]rune, len(names))
-	for i, n := range names {
-		sorted[i] = []rune(n)
-	}
-	slices.SortFunc(sorted, func(a, b []rune) int { return len(b) - len(a) })
+// parseMentions finds the "@" mentions in text against the active linked
+// businesses, each by the start of its name (links.Mentioned: "@Dangote"
+// names Dangote Nigeria Ltd), and what each is asked for: the words
+// between it and the mention before.
+func parseMentions(text string, active []links.Link) mentionOrder {
 	r := []rune(text)
 	var out mentionOrder
 	prev := 0
@@ -69,23 +70,20 @@ func parseMentions(text string, names []string) mentionOrder {
 		if r[i] != '@' || (i > 0 && !strings.ContainsRune(" \t\n,(", r[i-1])) {
 			continue
 		}
-		rest := r[i+1:]
-		matched, end := "", 0
-		for _, n := range sorted {
-			if len(rest) >= len(n) && strings.EqualFold(string(rest[:len(n)]), string(n)) && (len(rest) == len(n) || !isWordRune(rest[len(n)])) {
-				matched, end = string(n), i+1+len(n)
-				break
-			}
-		}
-		if matched == "" {
-			w := mentionWordRe.FindString(string(rest))
-			if w == "" {
+		rest := string(r[i+1:])
+		var end int
+		if hit, n := links.Mentioned(active, rest); n > 0 {
+			end = i + 1 + n
+			out.Parts = append(out.Parts, mentionPart{Business: hit[0].Name, Links: hit, Text: cleanAsk(string(r[prev:i])),
+				Typed: string(r[i+1 : end]), At: i, End: end})
+		} else {
+			w := mentionWordRe.FindString(rest)
+			// "@4500" is an amount ("cement @4500"), not a business.
+			if w == "" || unicode.IsDigit([]rune(w)[0]) {
 				continue
 			}
 			out.Unknown = append(out.Unknown, w)
 			end = i + 1 + len([]rune(w))
-		} else {
-			out.Parts = append(out.Parts, mentionPart{Business: matched, Text: cleanAsk(string(r[prev:i]))})
 		}
 		prev = end
 		i = end - 1
@@ -93,8 +91,14 @@ func parseMentions(text string, names []string) mentionOrder {
 	return out
 }
 
-func isWordRune(c rune) bool {
-	return unicode.IsLetter(c) || unicode.IsDigit(c) || c == '_'
+// mentionChoices lists the businesses a mention could be, each with its
+// role: "Dangote Cement (supplier), Dangote Sugar (customer)".
+func mentionChoices(c *chat, ls []links.Link) string {
+	list := make([]string, len(ls))
+	for i, l := range ls {
+		list[i] = whatsapp.SafeText(l.Name) + " (" + c.t("link.role."+l.Role) + ")"
+	}
+	return strings.Join(list, ", ")
 }
 
 // cleanAsk is the words of an ask without "buy", "and" or "from".
@@ -227,17 +231,7 @@ func (s *Server) waMentionOrder(ctx context.Context, c *chat, text string) (bool
 	}); err != nil {
 		return true, err
 	}
-	names := []string{}
-	byName := map[string][]links.Link{}
-	for _, l := range linked {
-		if l.State == links.Active {
-			if len(byName[l.Name]) == 0 {
-				names = append(names, l.Name)
-			}
-			byName[l.Name] = append(byName[l.Name], l)
-		}
-	}
-	mo := parseMentions(text, names)
+	mo := parseMentions(text, linked)
 	if len(mo.Parts) == 0 && len(mo.Unknown) == 0 {
 		return false, nil
 	}
@@ -245,13 +239,9 @@ func (s *Server) waMentionOrder(ctx context.Context, c *chat, text string) (bool
 		return true, c.say(ctx, s, c.t("wa.mention.unlinked", "name", whatsapp.SafeText(mo.Unknown[0])))
 	}
 	for _, part := range mo.Parts {
-		// Two links of the same name: never one picked in silence.
-		if same := byName[part.Business]; len(same) > 1 {
-			list := make([]string, len(same))
-			for i, l := range same {
-				list[i] = whatsapp.SafeText(l.Name) + " (" + c.t("link.role."+l.Role) + ")"
-			}
-			return true, c.say(ctx, s, c.t("wa.mention.which", "name", whatsapp.SafeText(part.Business), "list", strings.Join(list, ", ")))
+		// Two businesses the mention names: never one picked in silence.
+		if len(part.Links) > 1 {
+			return true, c.say(ctx, s, c.t("wa.mention.which", "name", whatsapp.SafeText(part.Typed), "list", mentionChoices(c, part.Links)))
 		}
 	}
 	if !c.p.Can(PermStorefrontManage) {
@@ -272,10 +262,15 @@ func (s *Server) waMentionOrder(ctx context.Context, c *chat, text string) (bool
 	}
 	var drafts []draft
 	for _, part := range mo.Parts {
-		l := byName[part.Business][0]
+		l := part.Links[0]
 		i := slices.IndexFunc(prices, func(p links.SupplierPrices) bool { return p.LinkID == l.ID })
 		if i < 0 {
-			return true, c.say(ctx, s, c.t("wa.prices.none", "name", whatsapp.SafeText(l.Name)))
+			text := c.t("wa.prices.none", "name", whatsapp.SafeText(l.Name))
+			if !strings.ContainsAny(part.Text, "0123456789") {
+				// Not an order at all: how to send it as a message.
+				text += "\n" + c.t("chat.direct.hint", "name", whatsapp.SafeText(l.Name))
+			}
+			return true, c.say(ctx, s, text)
 		}
 		if !strings.ContainsAny(part.Text, "0123456789") {
 			return true, c.say(ctx, s, c.t("wa.mention.how", "name", whatsapp.SafeText(l.Name)))

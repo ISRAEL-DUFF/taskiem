@@ -1,16 +1,16 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react";
 import { Link } from "react-router-dom";
-import { get, post, put, upload } from "../api";
+import { del, get, post, put } from "../api";
 import { useAuth } from "../auth";
 import {
   attachmentLabel,
-  byDay,
   cardHref,
   cardLine,
   cardSub,
@@ -19,17 +19,54 @@ import {
   fileURL,
   merge,
   previewLine,
+  REACTIONS,
+  reactionWords,
+  toggleReaction,
   type Attachment,
   type Conversation,
   type DocCard,
   type LinkMessage,
   type LinkPreview,
+  type Reaction,
+  logoSrc,
 } from "../lib/linkchat";
 import { Icon } from "../icons";
-import { MicButton, RecordingBar, useVoiceNote } from "./VoiceNote";
-import { MentionList, MentionText, useMentions } from "./Mentions";
+import { MentionText } from "./Mentions";
+import { ChatAvatar } from "./ChatAvatar";
+import { ContactInfo } from "./ContactInfo";
+import { useConfirm } from "./ConfirmSheet";
+import {
+  BUSINESS_FILES,
+  ComposerView,
+  useComposer,
+  type Sending,
+} from "./ChatComposer";
 import { priceWords, type PriceItem } from "../lib/pricelists";
-import { ErrorBox, fmtTime, Modal, Skeleton, useAction, useLoad } from "../ui";
+import { firstUnread, startsRun } from "../lib/thread";
+import { useThread } from "../lib/useThread";
+import {
+  actionError,
+  asMessage,
+  newClientId,
+  type Outgoing,
+} from "../lib/outbox";
+import {
+  discardOutgoing,
+  onSent,
+  retryOutgoing,
+  sendOutgoing,
+  updateOutgoing,
+  useOutbox,
+} from "../lib/outboxStore";
+import { ThreadJump } from "./ThreadParts";
+import { ChatStream } from "./ChatStream";
+import { ChatHead } from "./ChatHead";
+import { ChatSearchPanel } from "./ChatSearch";
+import { BubbleShell, CopyItem, PopItem, Ticks } from "./BubbleShell";
+import { ReadMore, useFold } from "./ReadMore";
+import { useChatLive } from "./ChatLive";
+import { roleLine, type BusinessLink, type LinkCard } from "../lib/links";
+import { ErrorBox, fmtTime, Modal, useAction, useLoad } from "../ui";
 
 // The conversation with a linked business (business links L3; §5.5): the
 // stream of bubbles, theirs on the left and ours on the right, grouped by
@@ -39,14 +76,19 @@ import { ErrorBox, fmtTime, Modal, Skeleton, useAction, useLoad } from "../ui";
 // the clock, as WhatsApp's does, with the time in words on hover.
 
 const EVERY_MS = 3000;
-/** A swipe this far right replies. */
-const SWIPE_REPLY_PX = 60;
-/** A finger held this long on a bubble opens its menu, as WhatsApp's. */
-const HOLD_MS = 500;
+/** The six reactions, in words (for the screen reader and the tooltip). */
+const REACTION_NAMES: Record<string, string> = {
+  "👍": "thumbs up",
+  "❤️": "heart",
+  "😂": "laughing",
+  "😮": "surprise",
+  "😢": "sad",
+  "🙏": "thanks",
+};
+/** A page of the conversation, as the API gives it. */
+const PAGE = 50;
 
 /** What can be attached: a photo or a PDF (a voice note is recorded). */
-const ATTACH = "image/jpeg,image/png,image/webp,application/pdf";
-const MAX_FILE = 25 * 1024 * 1024;
 
 /** What can be done from a card, while it is its document's newest:
  * accept or decline a new order, accept a change, say all came, settle a
@@ -54,6 +96,7 @@ const MAX_FILE = 25 * 1024 * 1024;
 function CardActions({ card, onDone }: { card: DocCard; onDone: () => void }) {
   const { can } = useAuth();
   const act = useAction();
+  const { confirm, node: confirmNode } = useConfirm();
   const id = encodeURIComponent(card.id ?? card.reference);
   const go = (path: string, done: string) =>
     void act.run(async () => (await post(path), onDone()), done);
@@ -81,8 +124,12 @@ function CardActions({ card, onDone }: { card: DocCard; onDone: () => void }) {
               type="button"
               className="small"
               disabled={act.busy}
-              onClick={() =>
-                confirm(`Decline ${card.reference}?`) &&
+              onClick={async () =>
+                (await confirm({
+                  title: `Decline ${card.reference}?`,
+                  ok: "Decline",
+                  danger: true,
+                })) &&
                 go(
                   `/v1/trade-orders/${id}/decline`,
                   `${card.reference} declined`,
@@ -152,6 +199,7 @@ function CardActions({ card, onDone }: { card: DocCard; onDone: () => void }) {
       data-testid="card-actions"
     >
       {buttons}
+      {confirmNode}
       {!!act.error && <ErrorBox error={act.error} />}
     </span>
   );
@@ -168,6 +216,22 @@ function AttachmentView({
   a: Attachment;
   other: string;
 }) {
+  if (m.local) {
+    // Still being sent: this device's own copy (a preview, or the name).
+    if (a.kind === "photo" && m.localPreview)
+      return (
+        <span className="chat-photo">
+          <img src={m.localPreview} alt="Your photo" />
+        </span>
+      );
+    return (
+      <span className="chat-file">
+        <Icon name="file" />
+        <span className="name">{attachmentLabel(a)}</span>
+        <span className="hint">{fileSize(a.size)}</span>
+      </span>
+    );
+  }
   const src = fileURL(m);
   if (a.kind === "photo")
     return (
@@ -195,6 +259,62 @@ function AttachmentView({
       <span className="name">{attachmentLabel(a)}</span>
       <span className="hint">{fileSize(a.size)}</span>
     </a>
+  );
+}
+
+/** The photos, files and voice notes in the conversation (those loaded),
+ * newest first: WhatsApp's "Media, links and docs". */
+function MediaAndFiles({
+  messages,
+  other,
+}: {
+  messages: LinkMessage[];
+  other: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const kept = messages.filter((m) => m.attachment).reverse();
+  if (kept.length === 0) return null;
+  // Closed: a strip of the latest pictures; open: every picture, voice note and file.
+  const strip = kept.filter((m) => m.attachment?.kind === "photo").slice(0, 4);
+  return (
+    <section className="info-media" aria-label="Media and files">
+      <button
+        type="button"
+        className="info-row"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+        data-testid="info-media"
+      >
+        <Icon name="image" />
+        <span className="info-row-main">
+          <span className="info-row-label">Media and files</span>
+        </span>
+        <span className="info-count">{kept.length}</span>
+        <Icon name="chevron" className={open ? "turned" : undefined} />
+      </button>
+      {!open && strip.length > 0 && (
+        <ul className="info-thumbs">
+          {strip.map((m) => (
+            <li key={m.id}>
+              {m.attachment && (
+                <AttachmentView m={m} a={m.attachment} other={other} />
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {open && (
+        <ul className="info-media-all">
+          {kept.map((m) => (
+            <li key={m.id}>
+              {m.attachment && (
+                <AttachmentView m={m} a={m.attachment} other={other} />
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -270,6 +390,60 @@ function ForwardSheet({
   );
 }
 
+/** When a message was sent and read, and who reacted (WhatsApp's "Message
+ * info"): the times the two businesses' copies carry. */
+function InfoSheet({
+  m,
+  other,
+  onClose,
+}: {
+  m: LinkMessage;
+  other: string;
+  onClose: () => void;
+}) {
+  return (
+    <Modal title="Message info" onClose={onClose}>
+      <p className="hint" data-testid="info-what">
+        “
+        {m.kind === "card" && m.card
+          ? cardLine(m.card, m.mine, other)
+          : previewLine(m, other)}
+        ”
+      </p>
+      <dl className="info-times" data-testid="chat-info-times">
+        <dt>{m.mine ? "Sent" : "Received"}</dt>
+        <dd>{fmtTime(m.created_at)}</dd>
+        {m.mine ? (
+          <>
+            <dt>Read by {other}</dt>
+            <dd>{m.read_at ? fmtTime(m.read_at) : "Not yet"}</dd>
+          </>
+        ) : (
+          <>
+            <dt>Read by you</dt>
+            <dd>{m.read_at ? fmtTime(m.read_at) : "Not yet"}</dd>
+          </>
+        )}
+      </dl>
+      {m.reactions && m.reactions.length > 0 && (
+        <>
+          <h3 style={{ marginBottom: 4 }}>Reactions</h3>
+          <ul className="info-reactions">
+            {m.reactions.map((r) => (
+              <li key={r.emoji}>{reactionWords(r)}</li>
+            ))}
+          </ul>
+        </>
+      )}
+      <div className="row-actions">
+        <button type="button" onClick={onClose}>
+          Close
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 /** A link's preview in its bubble: the page's host, title and words. */
 function PreviewCard({ p }: { p: LinkPreview }) {
   return (
@@ -296,6 +470,14 @@ function Bubble({
   onDone = () => undefined,
   onForward,
   onHide,
+  onJump,
+  flash = false,
+  first = true,
+  onReact,
+  onStar,
+  onInfo,
+  onRetry,
+  onDiscard,
 }: {
   m: LinkMessage;
   other: string;
@@ -305,82 +487,206 @@ function Bubble({
   onDone?: () => void;
   onForward?: (m: LinkMessage) => void;
   onHide?: (m: LinkMessage) => void;
+  /** Goes to the message a quote quotes. */
+  onJump?: (id: string) => void;
+  /** Shown for a moment after a jump lands on it. */
+  flash?: boolean;
+  /** Starts a run of one sender's messages: it has the tail and the name. */
+  first?: boolean;
+  /** React to it with an emoji (the same one again takes the reaction back). */
+  onReact?: (m: LinkMessage, emoji: string) => void;
+  /** Star it, or take the star off. */
+  onStar?: (m: LinkMessage) => void;
+  /** Show when it was sent and read. */
+  onInfo?: (m: LinkMessage) => void;
+  /** Not sent: tries again, or gives up on the message. */
+  onRetry?: (clientId: string) => void;
+  onDiscard?: (clientId: string) => void;
 }) {
   const card = m.kind === "card" ? m.card : undefined;
-  const [more, setMore] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const hasMenu = !card && !!(onForward || onHide || m.body || canReply);
-  // Swipe right to reply, and a finger held to open the menu (reply,
-  // copy, forward, delete for me), on a touch screen, as WhatsApp's; the
-  // hold is let go by a move or a scroll.
-  const drag = useRef<{ x: number; y: number; id: number } | null>(null);
-  const hold = useRef<number>(undefined);
-  const held = useRef(false);
-  const [dx, setDx] = useState(0);
-  const endHold = () => {
-    window.clearTimeout(hold.current);
-    hold.current = undefined;
-  };
-  const touch = {
-    onPointerDown: (e: React.PointerEvent) => {
-      if (e.pointerType === "mouse") return;
-      if (canReply) drag.current = { x: e.clientX, y: e.clientY, id: e.pointerId };
-      if (!hasMenu) return;
-      endHold();
-      hold.current = window.setTimeout(() => {
-        hold.current = undefined;
-        held.current = true;
-        drag.current = null;
-        setDx(0);
-        setCopied(false);
-        setMore(true);
-      }, HOLD_MS);
-    },
-    onPointerMove: (e: React.PointerEvent) => {
-      const d = drag.current;
-      if (d && e.pointerId === d.id) {
-        const x = e.clientX - d.x;
-        if (Math.abs(x) > 10 || Math.abs(e.clientY - d.y) > 10) endHold();
-        if (Math.abs(e.clientY - d.y) > 30 && x < 20) {
-          drag.current = null;
-          setDx(0);
-          return;
-        }
-        setDx(Math.max(0, Math.min(x, 80)));
-      } else if (e.pointerType !== "mouse") endHold();
-    },
-    onPointerUp: () => {
-      endHold();
-      if (drag.current && dx >= SWIPE_REPLY_PX) onReply(m);
-      drag.current = null;
-      setDx(0);
-    },
-    onPointerCancel: () => {
-      endHold();
-      drag.current = null;
-      setDx(0);
-    },
-    // A long press on a touch screen also asks for the browser's own menu.
-    onContextMenu: (e: React.MouseEvent) => {
-      if (held.current) {
-        e.preventDefault();
-        held.current = false;
-      }
-    },
-    onKeyDown: (e: React.KeyboardEvent) => {
-      if (e.key === "Escape" && more) setMore(false);
-    },
-  };
+  const fold = useFold(m.body ?? "");
+  const local = m.local;
+  const hasMenu =
+    !local &&
+    (!!(onReact || onStar || onInfo) ||
+      canReply ||
+      (!card && !!(onForward || onHide || m.body)));
+  const mineEmoji = m.reactions?.find((r) => r.mine)?.emoji;
   const what = card ? cardLine(card, m.mine, other) : previewLine(m, other);
+  // The time and ticks sit in the corner of the last line of text (the text
+  // keeps room for them); with a photo only, a link preview or a card they
+  // have a row of their own.
+  const inline = !card && !!m.body && !m.preview && local !== "failed";
   return (
-    <div
-      className={`bubble${m.mine ? " mine" : ""}${card ? " card-bubble" : ""}`}
-      data-testid={card ? "chat-card" : "chat-message"}
-      data-mine={m.mine}
-      style={dx ? { transform: `translateX(${dx}px)` } : undefined}
-      {...touch}
+    <BubbleShell
+      id={m.id}
+      mine={m.mine}
+      first={first}
+      testid={card ? "chat-card" : "chat-message"}
+      className={`${card ? "card-bubble" : ""}${flash ? " flash" : ""}${m.reactions?.length ? " has-reactions" : ""}${local === "failed" ? " failed" : ""}`.trim()}
+      what={what}
+      onReply={canReply ? () => onReply(m) : undefined}
+      quickReact={!!onReact}
+      menu={
+        hasMenu
+          ? (close, more) => ({
+              onPick: onReact
+                ? (e: string) => (close(), onReact(m, e))
+                : undefined,
+              reactions: onReact ? (
+                <span
+                  className="reaction-picker"
+                  role="group"
+                  aria-label="React"
+                >
+                  {REACTIONS.map((e) => (
+                    <button
+                      key={e}
+                      type="button"
+                      className="react-pick"
+                      aria-pressed={mineEmoji === e}
+                      aria-label={`React with ${REACTION_NAMES[e]}`}
+                      title={REACTION_NAMES[e]}
+                      onClick={() => (close(), onReact(m, e))}
+                    >
+                      {e}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className="react-pick react-more"
+                    aria-label="More reactions"
+                    title="More reactions"
+                    onClick={more.pick}
+                  >
+                    <Icon name="plus" />
+                  </button>
+                </span>
+              ) : undefined,
+              actions: (
+                <>
+                  {onInfo && (
+                    <PopItem icon="info" onClick={() => (close(), onInfo(m))}>
+                      Message info
+                    </PopItem>
+                  )}
+                  {canReply && (
+                    <PopItem icon="reply" onClick={() => (close(), onReply(m))}>
+                      Reply
+                    </PopItem>
+                  )}
+                  {!card && m.body && <CopyItem text={m.body} />}
+                  {!card && onForward && (
+                    <PopItem
+                      icon="forward"
+                      onClick={() => (close(), onForward(m))}
+                    >
+                      Forward
+                    </PopItem>
+                  )}
+                  {onStar && (
+                    <PopItem icon="star" onClick={() => (close(), onStar(m))}>
+                      {m.starred ? "Unstar" : "Star"}
+                    </PopItem>
+                  )}
+                  {!card && onHide && (
+                    <>
+                      <div className="pop-sep" role="separator" />
+                      <PopItem
+                        icon="trash"
+                        danger
+                        onClick={() => (close(), onHide(m))}
+                      >
+                        Delete for me
+                      </PopItem>
+                    </>
+                  )}
+                </>
+              ),
+            })
+          : undefined
+      }
+      after={
+        <>
+          {local === "failed" && (
+            <span
+              className="chat-failed"
+              role="alert"
+              data-testid="chat-failed"
+              title={`Not sent. ${m.localError ?? ""}`}
+            >
+              <span className="sr-only">Not sent. {m.localError}</span>
+              <button
+                type="button"
+                className="fail-act"
+                aria-label="Retry"
+                title="Try again"
+                onClick={() => onRetry?.(m.id.replace("local-", ""))}
+              >
+                <Icon name="retry" />
+              </button>
+              <button
+                type="button"
+                className="fail-act"
+                aria-label="Delete"
+                title="Delete"
+                onClick={() => onDiscard?.(m.id.replace("local-", ""))}
+              >
+                <Icon name="trash" />
+              </button>
+            </span>
+          )}
+          <span className={`stamp${inline ? " inline" : ""}`}>
+            {m.starred && (
+              <span className="starred" role="img" aria-label="Starred">
+                <Icon name="star" />
+              </span>
+            )}
+            <time dateTime={m.created_at} title={fmtTime(m.created_at)}>
+              {clock(m.created_at)}
+            </time>
+            {/* Our message is written in the other business's conversation in
+            the same transaction it is sent, so it is delivered as soon as
+            it is here: two ticks, coloured once they have read it. */}
+            {local === "sending" && (
+              <span className="ticks pending" role="img" aria-label="Sending">
+                <Icon name="clock" />
+              </span>
+            )}
+            {local === "failed" && (
+              <span className="ticks failed" role="img" aria-label="Not sent">
+                <span aria-hidden="true">!</span>
+              </span>
+            )}
+            {m.mine && !card && !local && <Ticks read={!!m.read_at} />}
+          </span>
+          {m.reactions && m.reactions.length > 0 && !local && (
+            <span className="reactions" role="group" aria-label="Reactions">
+              {m.reactions.map((r) => (
+                <button
+                  key={r.emoji}
+                  type="button"
+                  className="reaction-chip"
+                  aria-pressed={!!r.mine}
+                  aria-label={`${reactionWords(r)}. ${r.mine ? "Tap to take yours back." : "Tap to react the same."}`}
+                  title={reactionWords(r)}
+                  disabled={!onReact}
+                  onClick={() => onReact?.(m, r.emoji)}
+                >
+                  <span aria-hidden="true">{r.emoji}</span>
+                  {r.count > 1 && (
+                    <span className="count" aria-hidden="true">
+                      {r.count}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </span>
+          )}{" "}
+        </>
+      }
     >
-      {!m.mine && !card && m.sender_name && (
+      {first && !m.mine && !card && m.sender_name && (
         <span className="who">{m.sender_name}</span>
       )}
       {m.forwarded && (
@@ -388,10 +694,26 @@ function Bubble({
           Forwarded
         </span>
       )}
-      {m.reply && (
+      {m.reply && onJump && (
+        <button
+          type="button"
+          className="quote quote-btn"
+          data-testid="chat-quote"
+          title="Go to the message"
+          onClick={() => onJump(m.reply?.pair_id ?? "")}
+        >
+          <span className="quote-who">{m.reply.mine ? "You" : other}</span>
+          <span className="quote-text">
+            {previewLine({ ...m.reply, mine: m.reply.mine }, other)}
+          </span>
+        </button>
+      )}
+      {m.reply && !onJump && (
         <span className="quote" data-testid="chat-quote">
-          {m.reply.mine ? "You" : other}:{" "}
-          {previewLine({ ...m.reply, mine: m.reply.mine }, other)}
+          <span className="quote-who">{m.reply.mine ? "You" : other}</span>
+          <span className="quote-text">
+            {previewLine({ ...m.reply, mine: m.reply.mine }, other)}
+          </span>
         </span>
       )}
       {card ? (
@@ -412,100 +734,20 @@ function Bubble({
           )}
           {m.body && (
             <span className="text">
-              <MentionText text={m.body} mentions={m.mentions} />
+              <MentionText text={fold.shown} mentions={m.mentions} />
+              {fold.folded && <ReadMore onClick={fold.more} />}
+              {inline && (
+                <span
+                  className={`stamp-gap${m.mine ? " mine" : ""}`}
+                  aria-hidden="true"
+                />
+              )}
             </span>
           )}
           {m.preview && <PreviewCard p={m.preview} />}
         </>
       )}
-      {more && (
-        <span
-          className="row-actions bubble-more"
-          data-testid="chat-more"
-          role="group"
-          aria-label={`Options for ${what}`}
-        >
-          {canReply && (
-            <button
-              type="button"
-              className="small"
-              onClick={() => (setMore(false), onReply(m))}
-            >
-              Reply
-            </button>
-          )}
-          {!card && m.body && (
-            <button
-              type="button"
-              className="small"
-              onClick={() =>
-                void navigator.clipboard?.writeText(m.body ?? "").then(
-                  () => setCopied(true),
-                  () => undefined,
-                )
-              }
-            >
-              {copied ? "Copied" : "Copy"}
-            </button>
-          )}
-          {!card && onForward && (
-            <button
-              type="button"
-              className="small"
-              onClick={() => (setMore(false), onForward(m))}
-            >
-              Forward
-            </button>
-          )}
-          {!card && onHide && (
-            <button
-              type="button"
-              className="small danger"
-              onClick={() => (setMore(false), onHide(m))}
-            >
-              Delete for me
-            </button>
-          )}
-        </span>
-      )}
-      <span className="meta">
-        {canReply && (
-          <button
-            type="button"
-            className="reply-btn"
-            onClick={() => onReply(m)}
-          >
-            Reply
-            <span className="sr-only"> to {what}</span>
-          </button>
-        )}
-        {hasMenu && (
-          <button
-            type="button"
-            className="reply-btn more-btn"
-            aria-expanded={more}
-            onClick={() => (setMore(!more), setCopied(false))}
-          >
-            More<span className="sr-only"> for {what}</span>
-          </button>
-        )}
-        <time dateTime={m.created_at} title={fmtTime(m.created_at)}>
-          {clock(m.created_at)}
-        </time>
-        {/* Our message is written in the other business's conversation in
-            the same transaction it is sent, so it is delivered as soon as
-            it is here: two ticks, coloured once they have read it. */}
-        {m.mine && !card && (
-          <span
-            className={`ticks${m.read_at ? " read" : ""}`}
-            aria-label={m.read_at ? "Read" : "Delivered"}
-            role="img"
-          >
-            ✓✓
-          </span>
-        )}
-      </span>
-    </div>
+    </BubbleShell>
   );
 }
 
@@ -516,10 +758,19 @@ export function ConversationPane({
   onBack,
   onChanged,
   others = [],
+  link,
+  onEndLink,
+  focus,
 }: {
   conv: Conversation;
   onBack: () => void;
   onChanged: () => void;
+  /** The link with this business, for the contact panel. */
+  link?: BusinessLink;
+  /** Ends the link (only for a member who may manage links). */
+  onEndLink?: (l: BusinessLink) => void;
+  /** A message to open the conversation at (a search result). */
+  focus?: string;
   /** The other conversations, to forward to. */
   others?: Conversation[];
 }) {
@@ -527,11 +778,35 @@ export function ConversationPane({
   const write = can("chat.trade") && conv.state === "active";
   const [messages, setMessages] = useState<LinkMessage[]>();
   const [typing, setTyping] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
+  const logo = conv.logo ? logoSrc(conv.business) : undefined;
+  // The business's card (area, what it sells), as its public page shows
+  // it: found by the same search, so only a business that lets others find
+  // it has one.
+  const [card, setCard] = useState<LinkCard>();
+  useEffect(() => {
+    if (!infoOpen || card) return;
+    let live = true;
+    get<{ results: LinkCard[] }>(
+      `/v1/links/search?q=${encodeURIComponent(conv.name)}`,
+    ).then(
+      (r) =>
+        live && setCard(r.results.find((c) => c.business === conv.business)),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [infoOpen, card, conv.name, conv.business]);
+  useEffect(() => {
+    if (!infoOpen) return;
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setInfoOpen(false);
+    document.addEventListener("keydown", esc);
+    return () => document.removeEventListener("keydown", esc);
+  }, [infoOpen]);
   const [forwarding, setForwarding] = useState<LinkMessage>();
   const typedAt = useRef(0);
   const [error, setError] = useState<unknown>();
-  const [text, setText] = useState("");
-  const textBox = useRef<HTMLTextAreaElement>(null);
   const items = useLoad(
     () =>
       get<{ items: PriceItem[] }>(`/v1/link-chats/${conv.link}/items`).then(
@@ -540,39 +815,82 @@ export function ConversationPane({
       ),
     [conv.link],
   );
-  const mentions = useMentions(text, setText, textBox, {
-    "@": others
-      .filter((o) => o.state === "active")
-      .map((o) => ({ kind: "business" as const, id: o.link, name: o.name })),
-    "#": (items.data ?? [])
-      .filter((it) => it.available)
-      .map((it) => ({
-        kind: "item" as const,
-        id: it.item_id,
-        name: it.name,
-        sub: priceWords(it),
-      })),
+  const c = useComposer<LinkMessage>({
+    draftKey: conv.link,
+    rules: BUSINESS_FILES,
+    enabled: write,
+    sources: {
+      "@": others
+        .filter((o) => o.state === "active")
+        .map((o) => ({ kind: "business" as const, id: o.link, name: o.name })),
+      "#": (items.data ?? [])
+        .filter((it) => it.available)
+        .map((it) => ({
+          kind: "item" as const,
+          id: it.item_id,
+          name: it.name,
+          sub: priceWords(it),
+        })),
+    },
+    replyLine: (r) => previewLine(r, conv.name),
+    closes: [infoOpen, !!forwarding],
+    // We are typing: the other side's typing line, told at most every 3 s.
+    onType: (v) => {
+      const now = Date.now();
+      if (v.trim() && now - typedAt.current > 3000) {
+        typedAt.current = now;
+        post(`${path}/typing`).catch(() => undefined);
+      }
+    },
+    onSend: (s) => sendMessage(s),
   });
-  const [reply, setReply] = useState<LinkMessage>();
-  const [pending, setFile] = useState<File>();
-  const file = pending;
-  const [fileError, setFileError] = useState<unknown>();
-  const pick = useRef<HTMLInputElement>(null);
-  const snap = useRef<HTMLInputElement>(null);
-  // A voice note held and released goes at once; one tapped waits for Send.
-  const sendRef = useRef<(f?: File) => void>(() => undefined);
-  const voice = useVoiceNote(
-    (f, now) => (now ? sendRef.current(f) : setFile(f)),
-    setFileError,
-  );
-  const [q, setQ] = useState("");
-  const [found, setFound] = useState<LinkMessage[]>();
+  const { setReply } = c;
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchButton = useRef<HTMLButtonElement>(null);
   const act = useAction();
-  const end = useRef<HTMLDivElement>(null);
   const path = `/v1/link-chats/${conv.link}`;
+  // The thread's scrolling, as WhatsApp Web's: older messages load as the
+  // reader nears the top; the view follows new messages only while the
+  // reader is at the bottom; "N unread messages" marks where they begin;
+  // a quote, or a search result, jumps to its message.
+  const loadingOlder = useRef(false);
+  const loadOlderRef = useRef<() => void>(() => undefined);
+  const olderCb = useCallback(() => loadOlderRef.current(), []);
+  const [hasOlder, setHasOlder] = useState(false);
+  const [detached, setDetached] = useState(false); // not at the newest page
+  const [unread, setUnread] = useState<{ id: string; count: number }>();
+  // Messages being sent, shown at the end of the thread until the server has
+  // them (lib/outbox.ts).
+  const outbox = useOutbox(conv.link);
+  const outgoing = useMemo(
+    () => outbox.map((o) => asMessage(o, conv.link)),
+    [outbox, conv.link],
+  );
+  const threadItems = useMemo(
+    () => (messages ? [...messages, ...(detached ? [] : outgoing)] : undefined),
+    [messages, outgoing, detached],
+  );
+  const thread = useThread({
+    items: threadItems,
+    isMine: (m) => m.mine,
+    hasOlder,
+    loadOlder: olderCb,
+  });
+  const { stream, flashId } = thread;
   const last = messages?.[messages.length - 1]?.created_at;
 
-  // The newest page, then what is newer every few seconds; read while seen.
+  // What is newer, every few seconds (while the newest page is the one
+  // shown); read while seen.
+  const markRead = useCallback(
+    async (list: LinkMessage[]) => {
+      if (
+        list.some((m) => !m.mine && !m.read_at) &&
+        document.visibilityState === "visible"
+      )
+        await post(`${path}/read`).then(onChanged, () => undefined);
+    },
+    [path, onChanged],
+  );
   const pull = useCallback(
     async (after?: string) => {
       const out = await get<{ messages: LinkMessage[]; typing?: boolean }>(
@@ -581,103 +899,268 @@ export function ConversationPane({
       setTyping(!!out.typing);
       if (after && out.messages.length === 0) return;
       setMessages((cur) => merge(cur ?? [], out.messages));
-      if (
-        out.messages.some((m) => !m.mine && !m.read_at) &&
-        document.visibilityState === "visible"
-      ) {
-        await post(`${path}/read`).then(onChanged, () => undefined);
-      }
+      await markRead(out.messages);
+      // A full page: there may be more after it (the reader was away).
+      const newest = out.messages[out.messages.length - 1];
+      if (after && out.messages.length >= PAGE && newest)
+        await pull(newest.created_at);
     },
-    [path, onChanged],
+    [path, markRead],
+  );
+  // Open at the newest page (the first unread is marked), or, from a
+  // search result or a quote, at that message.
+  const openNewest = useCallback(async () => {
+    const out = await get<{ messages: LinkMessage[]; typing?: boolean }>(
+      `${path}/messages`,
+    );
+    setTyping(!!out.typing);
+    thread.reset();
+    setDetached(false);
+    setHasOlder(out.messages.length >= PAGE);
+    setUnread(firstUnread(out.messages));
+    setMessages(out.messages);
+    await markRead(out.messages);
+  }, [path, markRead]);
+  const openAt = useCallback(
+    async (id: string) => {
+      const out = await get<{ messages: LinkMessage[] }>(
+        `${path}/messages?around=${encodeURIComponent(id)}&limit=${PAGE}`,
+      );
+      const at = out.messages.findIndex((m) => m.id === id);
+      thread.reset(id);
+      // Newer messages beyond this window: the view is detached from the
+      // newest page until the reader jumps to the latest.
+      // (A full half of newer ones, or of older ones, means there may be more.)
+      const half = Math.floor(PAGE / 2);
+      setDetached(at >= 0 && out.messages.length - at - 1 >= PAGE - half);
+      setHasOlder(at >= half);
+      setUnread(undefined);
+      setMessages(out.messages);
+    },
+    [path],
   );
   useEffect(() => {
     setMessages(undefined);
     setReply(undefined);
-    pull().catch(setError);
-  }, [pull]);
+    if (focus) openAt(focus).catch(() => openNewest().catch(setError));
+    else openNewest().catch(setError);
+  }, [openNewest, openAt, focus]);
+  const loadOlder = useCallback(async () => {
+    const first = messages?.[0];
+    const el = stream.current;
+    if (!first || !el || loadingOlder.current) return;
+    loadingOlder.current = true;
+    try {
+      const out = await get<{ messages: LinkMessage[] }>(
+        `${path}/messages?before=${encodeURIComponent(first.created_at)}&limit=${PAGE}`,
+      );
+      if (out.messages.length < PAGE) setHasOlder(false);
+      if (out.messages.length > 0) {
+        thread.keepPlace();
+        setMessages((cur) => merge(cur ?? [], out.messages));
+      }
+    } catch (e) {
+      setError(e);
+    } finally {
+      loadingOlder.current = false;
+    }
+  }, [messages, path]);
+  loadOlderRef.current = () => void loadOlder();
+  const toLatest = () => {
+    setError(undefined);
+    openNewest().catch(setError);
+  };
+  const jump = (id: string) => {
+    if (!thread.show(id))
+      openAt(id).catch(() =>
+        setError(new Error("That message is no longer here.")),
+      );
+  };
+  // A search result: the thread goes to the message (on a phone the panel
+  // closes to show it; on a computer it stays beside the thread).
+  const onPhone = () => window.matchMedia?.("(max-width: 899px)").matches;
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    requestAnimationFrame(() => searchButton.current?.focus());
+  }, []);
+  const jumpFound = (id: string) => {
+    jump(id);
+    if (onPhone()) closeSearch();
+  };
+  // A day: the first message of it, or after it.
+  const jumpToDay = async (day: string) => {
+    const start = new Date(`${day}T00:00:00`);
+    if (Number.isNaN(start.getTime())) return false;
+    const before = new Date(start.getTime() - 1).toISOString();
+    const out = await get<{ messages: LinkMessage[] }>(
+      `${path}/messages?after=${encodeURIComponent(before)}&limit=1`,
+    );
+    const first = out.messages[0];
+    if (!first) return false;
+    jumpFound(first.id);
+    return true;
+  };
+  // The live stream brings what changes as it happens; while it is open the
+  // polling only reconciles (and says so by being slow), and without it the
+  // page polls as it did.
+  const live = useChatLive();
+  const connected = live.connected;
+  const readSoon = useRef<number>(undefined);
+  useEffect(() => () => window.clearTimeout(readSoon.current), []);
+  const detachedNow = useRef(detached);
+  detachedNow.current = detached;
+  useEffect(
+    () =>
+      live.subscribe((e) => {
+        if (e.type === "message" && e.message.link === conv.link) {
+          const m = e.message;
+          // Not into a window away from the newest page: it would leave a gap.
+          if (!detachedNow.current)
+            setMessages((cur) => (cur ? merge(cur, [m]) : cur));
+          // Read (once for a burst of them: a conversation of hundreds arriving
+          // together asks once, not hundreds of times).
+          if (
+            !m.mine &&
+            !m.read_at &&
+            document.visibilityState === "visible" &&
+            document.hasFocus()
+          ) {
+            window.clearTimeout(readSoon.current);
+            readSoon.current = window.setTimeout(
+              () => post(`${path}/read`).then(onChanged, () => undefined),
+              400,
+            );
+          }
+        } else if (e.type === "gone" && e.link === conv.link)
+          setMessages((cur) => cur?.filter((x) => x.id !== e.id));
+      }),
+    [live, conv.link, path, onChanged],
+  );
   useEffect(() => {
-    const t = setInterval(() => {
-      if (document.visibilityState === "visible")
-        pull(last).catch(() => undefined);
-    }, EVERY_MS);
+    const t = setInterval(
+      () => {
+        if (document.visibilityState === "visible" && !detached)
+          pull(last).catch(() => undefined);
+      },
+      connected ? EVERY_MS * 5 : EVERY_MS,
+    );
     return () => clearInterval(t);
-  }, [pull, last]);
+  }, [pull, last, detached, connected]);
   // Our own ticks follow theirs reading: the page's read marks change in place.
   useEffect(() => {
-    const t = setInterval(() => {
-      if (
-        document.visibilityState !== "visible" ||
-        !messages?.some((m) => m.mine && !m.read_at)
-      )
-        return;
-      get<{ messages: LinkMessage[] }>(`${path}/messages`).then(
-        (out) => setMessages((cur) => merge(cur ?? [], out.messages)),
-        () => undefined,
-      );
-    }, EVERY_MS * 3);
+    const t = setInterval(
+      () => {
+        // The newest page again: our ticks, and the other side's reactions.
+        if (document.visibilityState !== "visible" || detached) return;
+        get<{ messages: LinkMessage[] }>(`${path}/messages`).then(
+          (out) => setMessages((cur) => merge(cur ?? [], out.messages)),
+          () => undefined,
+        );
+      },
+      connected ? EVERY_MS * 10 : EVERY_MS * 3,
+    );
     return () => clearInterval(t);
-  }, [messages, path]);
-  useEffect(() => {
-    end.current?.scrollIntoView?.({ block: "end" });
-  }, [messages?.length]);
-
-  const choose = (f: File | undefined) => {
-    setFileError(undefined);
-    if (!f) return;
-    if (f.size > MAX_FILE) {
-      setFileError(new Error(`${f.name} is larger than 25 MB.`));
-      return;
-    }
-    setFile(f);
-  };
-  const send = (held?: File) => {
-    const file = held ?? pending;
-    const body = held ? "" : text.trim();
-    if (!body && !file) return;
-    void act
-      .run(async () => {
-        let out: { message: LinkMessage };
-        if (file) {
-          const form = new FormData();
-          form.append("file", file, file.name);
-          if (body) form.append("text", body);
-          if (reply) form.append("reply_to", reply.id);
-          out = await upload<{ message: LinkMessage }>(`${path}/files`, form);
-        } else {
-          const refs = mentions.refs();
-          out = await post<{ message: LinkMessage }>(`${path}/messages`, {
-            text: body,
-            reply_to: reply?.id,
-            mentions: refs.length > 0 ? refs : undefined,
-          });
-        }
-        setMessages((cur) => merge(cur ?? [], [out.message]));
-        if (!held) {
-          setText("");
-          setFile(undefined);
-          mentions.reset();
-        }
-        setReply(undefined);
+  }, [messages, path, detached, connected]);
+  // Sent at once: it shows in the thread with a clock, the box is cleared,
+  // and the server's copy takes its place; if it cannot be sent it stays,
+  // with Retry and Delete. The client id makes a retry the same message.
+  // What the server accepts of ours (from here, or from a conversation we
+  // have since left) joins this thread only if it belongs to it.
+  useEffect(
+    () =>
+      onSent((link, m) => {
+        if (link === conv.link) setMessages((cur) => merge(cur ?? [], [m]));
         onChanged();
-      }, false)
-      .then(() => undefined);
+      }),
+    [conv.link, onChanged],
+  );
+  const sendMessage = (s: Sending<LinkMessage>) => {
+    const { file, reply } = s;
+    const o: Outgoing = {
+      clientId: newClientId(),
+      body: s.text,
+      replyTo: reply?.id,
+      quote: reply
+        ? {
+            pair_id: reply.id,
+            mine: reply.mine,
+            kind: reply.kind,
+            body: reply.body,
+            card: reply.card,
+            attachment: reply.attachment,
+          }
+        : undefined,
+      file,
+      mentions: s.mentions,
+      state: "sending",
+      at: new Date().toISOString(),
+    };
+    sendOutgoing(conv.link, o);
+    if (detached) void openNewest();
+    if (file?.type.startsWith("image/")) {
+      const r = new FileReader();
+      const link = conv.link;
+      r.onload = () =>
+        updateOutgoing(link, o.clientId, { preview: String(r.result) });
+      r.readAsDataURL(file);
+    }
   };
-  sendRef.current = send;
+  const retry = (clientId: string) => retryOutgoing(conv.link, clientId);
+  const discard = (clientId: string) => discardOutgoing(conv.link, clientId);
+  // A reaction: shown at once, then what the server says (both sides see it).
+  const setReactions = (id: string, reactions: Reaction[]) =>
+    setMessages((cur) =>
+      cur?.map((x) => (x.id === id ? { ...x, reactions } : x)),
+    );
+  const react = (m: LinkMessage, emoji: string) => {
+    const was = m.reactions;
+    const taking = m.reactions?.some((r) => r.mine && r.emoji === emoji);
+    setReactions(m.id, toggleReaction(was, emoji, !taking));
+    const url = `${path}/messages/${m.id}/reaction`;
+    (taking
+      ? del<{ reactions: Reaction[] }>(url)
+      : put<{ reactions: Reaction[] }>(url, { emoji })
+    ).then(
+      (out) => setReactions(m.id, out.reactions),
+      (e: unknown) => {
+        setReactions(m.id, was ?? []);
+        setError(actionError(e));
+      },
+    );
+  };
+  const star = (m: LinkMessage) => {
+    const on = !m.starred;
+    const mark = (starred: boolean) =>
+      setMessages((cur) =>
+        cur?.map((x) => (x.id === m.id ? { ...x, starred } : x)),
+      );
+    mark(on);
+    (on
+      ? put(`${path}/messages/${m.id}/star`)
+      : del(`${path}/messages/${m.id}/star`)
+    ).then(
+      () => undefined,
+      (e: unknown) => {
+        mark(!on);
+        setError(actionError(e));
+      },
+    );
+  };
+  const [info, setInfo] = useState<LinkMessage>();
   const settings = (
     body: { muted?: boolean; archived?: boolean; pinned?: boolean },
     done: string,
   ) => void act.run(async () => (await put(path, body), onChanged()), done);
-  // We are typing: the other side's typing line, told at most every 3 s.
-  const typed = (v: string) => {
-    setText(v);
-    const now = Date.now();
-    if (v.trim() && now - typedAt.current > 3000) {
-      typedAt.current = now;
-      post(`${path}/typing`).catch(() => undefined);
-    }
-  };
-  const hide = (m: LinkMessage) => {
-    if (!confirm("Delete this message for your business? They keep theirs."))
+  const { confirm, node: confirmNode } = useConfirm();
+  const hide = async (m: LinkMessage) => {
+    if (
+      !(await confirm({
+        title: "Delete this message?",
+        body: "It goes from your business's side. They keep theirs.",
+        ok: "Delete for me",
+        danger: true,
+      }))
+    )
       return;
     void act.run(async () => {
       await post(`${path}/messages/${m.id}/hide`);
@@ -685,14 +1168,7 @@ export function ConversationPane({
       onChanged();
     }, "Deleted for you");
   };
-  const search = (v: string) => {
-    setQ(v);
-    if (v.trim().length < 2) return setFound(undefined);
-    get<{ messages: LinkMessage[] }>(
-      `${path}/messages?q=${encodeURIComponent(v.trim())}`,
-    ).then((r) => setFound(r.messages), setError);
-  };
-  const shown = found ?? messages;
+  const shown = threadItems;
   // A card's actions are offered on its document's newest card only.
   const newest = new Set<string>();
   const seen = new Set<string>();
@@ -705,250 +1181,171 @@ export function ConversationPane({
   }
   return (
     <section
-      className="chat-pane"
+      className={`chat-pane${searchOpen ? " with-side" : ""}`}
       aria-label={`Conversation with ${conv.name}`}
       data-testid="chat-pane"
+      onKeyDown={c.onPaneKeyDown}
+      {...c.dropProps}
     >
-      <div className="chat-head">
-        <button type="button" className="small chat-back" onClick={onBack}>
-          Back<span className="sr-only"> to the chats</span>
-        </button>
-        <h2>
-          {conv.name}
-          {typing && (
+      <ChatHead
+        onBack={onBack}
+        menuLabel="More about this conversation"
+        avatar={
+          <button
+            type="button"
+            className="chat-avatar-btn"
+            aria-label={`About ${conv.name}`}
+            aria-expanded={infoOpen}
+            onClick={() => {
+              setSearchOpen(false);
+              setInfoOpen(!infoOpen);
+            }}
+          >
+            <ChatAvatar name={conv.name} logo={logo} />
+          </button>
+        }
+        title={conv.name}
+        subtitle={
+          (connected ? live.typing.has(conv.link) : typing) ? (
             <span className="typing" data-testid="chat-typing">
               typing…
             </span>
-          )}
-        </h2>
-        {can("chat.trade") && (
+          ) : link ? (
+            roleLine(link.role)
+          ) : undefined
+        }
+        actions={
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="Search this conversation"
+            aria-expanded={searchOpen}
+            ref={searchButton}
+            data-testid="chat-search-open"
+            onClick={() => {
+              setInfoOpen(false);
+              setSearchOpen(!searchOpen);
+            }}
+          >
+            <Icon name="search" />
+          </button>
+        }
+        items={(close) => (
           <>
-            <button
-              type="button"
-              className="small"
-              disabled={act.busy}
-              onClick={() =>
-                settings(
-                  { pinned: !conv.pinned },
-                  conv.pinned ? "Unpinned" : "Pinned",
-                )
-              }
-            >
-              {conv.pinned ? "Unpin" : "Pin"}
+            <button type="button" onClick={() => (close(), setSearchOpen(false), setInfoOpen(true))}>
+              Contact info
             </button>
-            <button
-              type="button"
-              className="small"
-              disabled={act.busy}
-              onClick={() =>
-                settings(
-                  { muted: !conv.muted },
-                  conv.muted ? "Unmuted" : "Muted",
-                )
-              }
-            >
-              {conv.muted ? "Unmute" : "Mute"}
-            </button>
-            <button
-              type="button"
-              className="small"
-              disabled={act.busy}
-              onClick={() =>
-                settings(
-                  { archived: !conv.archived },
-                  conv.archived ? "Unarchived" : "Archived",
-                )
-              }
-            >
-              {conv.archived ? "Unarchive" : "Archive"}
-            </button>
+            {can("chat.trade") && (
+              <>
+                <button
+                  type="button"
+                  disabled={act.busy}
+                  onClick={() => {
+                    close();
+                    settings(
+                      { pinned: !conv.pinned },
+                      conv.pinned ? "Unpinned" : "Pinned",
+                    );
+                  }}
+                >
+                  {conv.pinned ? "Unpin" : "Pin"}
+                </button>
+                <button
+                  type="button"
+                  disabled={act.busy}
+                  onClick={() => {
+                    close();
+                    settings(
+                      { muted: !conv.muted },
+                      conv.muted ? "Unmuted" : "Muted",
+                    );
+                  }}
+                >
+                  {conv.muted ? "Unmute" : "Mute"}
+                </button>
+                <button
+                  type="button"
+                  disabled={act.busy}
+                  onClick={() => {
+                    close();
+                    settings(
+                      { archived: !conv.archived },
+                      conv.archived ? "Unarchived" : "Archived",
+                    );
+                  }}
+                >
+                  {conv.archived ? "Unarchive" : "Archive"}
+                </button>
+              </>
+            )}
           </>
         )}
-      </div>
-      <div
-        className="filters"
-        role="search"
-        aria-label={`Search the conversation with ${conv.name}`}
-        style={{ padding: "8px 12px 0" }}
-      >
-        <label className="search">
-          <span className="sr-only">Search this conversation</span>
-          <input
-            type="search"
-            placeholder="Search"
-            value={q}
-            onChange={(e) => search(e.target.value)}
-            data-testid="chat-search"
+      />
+      <ErrorBox error={error ?? act.error ?? c.fileError} />
+      <ChatStream
+        items={shown}
+        thread={thread}
+        hasOlder={hasOlder}
+        prefix="chat"
+        keyOf={(m) => m.id}
+        startsRun={startsRun}
+        unread={unread}
+        empty={`No messages yet. Say hello to ${conv.name}.`}
+        render={(m, { first }) => (
+          <Bubble
+            m={m}
+            other={conv.name}
+            canReply={write && !m.local}
+            onRetry={retry}
+            onDiscard={discard}
+            onReply={setReply}
+            onJump={jump}
+            first={first}
+            flash={flashId === m.id}
+            latest={newest.has(m.id)}
+            onDone={() => pull(last).catch(setError)}
+            onForward={
+              write && others.some((o) => o.state === "active")
+                ? setForwarding
+                : undefined
+            }
+            onHide={can("chat.trade") ? hide : undefined}
+            onReact={write && !m.local ? react : undefined}
+            onStar={m.local ? undefined : star}
+            onInfo={m.local ? undefined : setInfo}
           />
-        </label>
-      </div>
-      <ErrorBox error={error ?? act.error ?? fileError} />
-      <div className="chat-stream" aria-live="polite" data-testid="chat-stream">
-        {!shown ? (
-          <Skeleton rows={3} label="Loading the conversation…" />
-        ) : shown.length === 0 ? (
-          <p className="hint" style={{ alignSelf: "center" }}>
-            {found
-              ? "No messages say that."
-              : `No messages yet. Say hello to ${conv.name}.`}
-          </p>
-        ) : (
-          byDay(shown).map((g) => (
-            <div key={g.day} style={{ display: "contents" }}>
-              <span className="chat-day">{g.day}</span>
-              {g.messages.map((m) => (
-                <Bubble
-                  key={m.id}
-                  m={m}
-                  other={conv.name}
-                  canReply={write}
-                  onReply={setReply}
-                  latest={newest.has(m.id)}
-                  onDone={() => pull(last).catch(setError)}
-                  onForward={
-                    write && others.some((o) => o.state === "active")
-                      ? setForwarding
-                      : undefined
-                  }
-                  onHide={can("chat.trade") ? hide : undefined}
-                />
-              ))}
-            </div>
-          ))
         )}
-        <div ref={end} />
-      </div>
+        overlay={
+          thread.away || detached ? (
+            <ThreadJump
+              detached={detached}
+              count={thread.newCount}
+              onClick={() => (detached ? toLatest() : thread.toBottom())}
+            />
+          ) : undefined
+        }
+      />
       {write ? (
-        <>
-          {reply && (
-            <div className="composer-reply" data-testid="chat-replying">
-              <span className="quote">
-                Replying to {previewLine(reply, conv.name)}
-              </span>
-              <button
-                type="button"
-                className="small"
-                onClick={() => setReply(undefined)}
-              >
-                Cancel<span className="sr-only"> the reply</span>
-              </button>
-            </div>
-          )}
-          {file && (
-            <div className="composer-reply" data-testid="chat-attaching">
-              <span className="quote">
-                {file.type.startsWith("audio/")
-                  ? "Voice note"
-                  : file.type.startsWith("image/")
-                    ? `Photo: ${file.name}`
-                    : file.name}{" "}
-                · {fileSize(file.size)}
-              </span>
-              <button
-                type="button"
-                className="small"
-                onClick={() => setFile(undefined)}
-              >
-                Remove<span className="sr-only"> the file</span>
-              </button>
-            </div>
-          )}
-          <input
-            ref={pick}
-            type="file"
-            accept={ATTACH}
-            hidden
-            data-testid="chat-file"
-            onChange={(e) => {
-              choose(e.target.files?.[0]);
-              e.target.value = "";
-            }}
-          />
-          <input
-            ref={snap}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            hidden
-            onChange={(e) => {
-              choose(e.target.files?.[0]);
-              e.target.value = "";
-            }}
-          />
-          <MentionList m={mentions} />
-          {voice.secs !== undefined || voice.holding ? (
-            <RecordingBar voice={voice} />
-          ) : (
-            <form
-              className="composer"
-              onSubmit={(e) => {
-                e.preventDefault();
-                send();
-              }}
-            >
-              <button
-                type="button"
-                className="icon-button"
-                aria-label="Attach a photo or a PDF"
-                title="Attach a photo or a PDF"
-                onClick={() => pick.current?.click()}
-              >
-                <Icon name="attach" />
-              </button>
-              <button
-                type="button"
-                className="icon-button"
-                aria-label="Take a photo"
-                title="Take a photo"
-                onClick={() => snap.current?.click()}
-              >
-                <Icon name="camera" />
-              </button>
-              <label className="sr-only" htmlFor="chat-text">
-                Message
-              </label>
-              <textarea
-                id="chat-text"
-                ref={textBox}
-                rows={1}
-                maxLength={4000}
-                placeholder={file ? "Add a caption" : "Type a message"}
-                value={text}
-                onChange={(e) => {
-                  typed(e.target.value);
-                  mentions.update(e.target.value, e.target.selectionStart);
-                }}
-                onKeyDown={(e) => {
-                  if (mentions.onKeyDown(e)) return;
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    send();
-                  }
-                }}
-              />
-              {!text.trim() && !file && voice.can ? (
-                <MicButton
-                  voice={voice}
-                  onStart={() => setFileError(undefined)}
-                />
-              ) : (
-                <button
-                  type="submit"
-                  className="primary"
-                  disabled={act.busy || (!text.trim() && !file)}
-                >
-                  {act.busy && file ? "Sending…" : "Send"}
-                </button>
-              )}
-            </form>
-          )}
-        </>
+        <ComposerView
+          c={c}
+          busy={act.busy}
+          prefix="chat"
+          textId="chat-text"
+          textLabel="Message"
+        />
       ) : (
         <p className="hint" style={{ padding: "10px 14px" }}>
           {conv.state === "active"
             ? "You can read this conversation. Someone who writes to linked businesses for your business can reply."
             : "This link has ended. The conversation stays."}
         </p>
+      )}
+      {info && (
+        <InfoSheet
+          m={info}
+          other={conv.name}
+          onClose={() => setInfo(undefined)}
+        />
       )}
       {forwarding && (
         <ForwardSheet
@@ -961,6 +1358,48 @@ export function ConversationPane({
           onSent={onChanged}
         />
       )}
+      {searchOpen && (
+        <ChatSearchPanel
+          name={conv.name}
+          path={path}
+          onClose={closeSearch}
+          onJump={jumpFound}
+          onDate={jumpToDay}
+        />
+      )}
+      {infoOpen && (
+        <ContactInfo
+          conv={conv}
+          logo={logo}
+          link={link}
+          card={card}
+          canManage={can("chat.trade")}
+          busy={act.busy}
+          media={<MediaAndFiles messages={messages ?? []} other={conv.name} />}
+          onClose={() => setInfoOpen(false)}
+          onSetting={settings}
+          onEndLink={
+            link && link.state === "active" && onEndLink
+              ? async () => {
+                  if (
+                    await confirm({
+                      title: `End the link with ${link.name}?`,
+                      body: "What passed between you stays on both sides.",
+                      ok: "End link",
+                      danger: true,
+                    })
+                  )
+                    onEndLink(link);
+                }
+              : undefined
+          }
+          onSearch={() => {
+            setInfoOpen(false);
+            setSearchOpen(true);
+          }}
+        />
+      )}
+      {confirmNode}
     </section>
   );
 }

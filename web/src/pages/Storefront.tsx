@@ -12,6 +12,7 @@ import {
   uploadFile,
 } from "../api";
 import { useAuth } from "../auth";
+import { areaOn } from "../lib/areas";
 import {
   EmptyState,
   ErrorBox,
@@ -25,6 +26,7 @@ import {
 } from "../ui";
 import { Icon } from "../icons";
 import { StorefrontForms } from "./StorefrontForms";
+import { MAX_GALLERY, PhotoStrip } from "./PhotoStrip";
 import {
   PageStatusBadge,
   RefusalBox,
@@ -936,6 +938,7 @@ function CatalogueCopy({
   const [data, setData] = useState<Catalogue>();
   const fileInput = useRef<HTMLInputElement>(null);
   const target = useRef<string>("");
+  const addMode = useRef(false);
   useEffect(() => setData(cat.data), [cat.data]);
   const refresh = () =>
     act.run(
@@ -1060,6 +1063,40 @@ function CatalogueCopy({
                         {item.description}
                       </div>
                     )}
+                    <PhotoStrip
+                      name={item.name}
+                      gallery={item.gallery}
+                      ids={item.photo_ids}
+                      busy={act.busy}
+                      onRemove={(id) =>
+                        void act.run(async () => {
+                          await tidy(
+                            del(
+                              `/v1/storefront/catalogue/rows/${encodeURIComponent(item.id)}/photo?media=${encodeURIComponent(id)}`,
+                            ),
+                          );
+                          setData(
+                            await tidy(
+                              post<Catalogue>("/v1/storefront/catalogue/refresh"),
+                            ),
+                          );
+                        }, "Photo removed")
+                      }
+                      onMain={(id) =>
+                        void act.run(async () => {
+                          await tidy(
+                            put(
+                              `/v1/storefront/catalogue/rows/${encodeURIComponent(item.id)}/photo/main?media=${encodeURIComponent(id)}`,
+                            ),
+                          );
+                          setData(
+                            await tidy(
+                              post<Catalogue>("/v1/storefront/catalogue/refresh"),
+                            ),
+                          );
+                        }, "Main photo changed")
+                      }
+                    />
                   </div>
                   <div className="sf-item-side">
                     {item.price_kobo !== undefined &&
@@ -1085,12 +1122,29 @@ function CatalogueCopy({
                         aria-label={`${src ? "Change photo" : "Add photo"} for ${item.name}`}
                         onClick={() => {
                           target.current = item.id;
+                          addMode.current = false;
                           fileInput.current?.click();
                         }}
                       >
                         {src ? "Change photo" : "Add photo"}
                       </button>
                     )}
+                    {photoColumn &&
+                      src &&
+                      (item.gallery?.length ?? 0) < MAX_GALLERY && (
+                        <button
+                          type="button"
+                          disabled={act.busy}
+                          aria-label={`Add another photo for ${item.name}`}
+                          onClick={() => {
+                            target.current = item.id;
+                            addMode.current = true;
+                            fileInput.current?.click();
+                          }}
+                        >
+                          Add another photo
+                        </button>
+                      )}
                     {editable && (
                       <button
                         type="button"
@@ -1122,7 +1176,7 @@ function CatalogueCopy({
                 if (bad) throw new Error(bad);
                 await tidy(
                   uploadFile<Media>(
-                    `/v1/storefront/catalogue/rows/${encodeURIComponent(row)}/photo`,
+                    `/v1/storefront/catalogue/rows/${encodeURIComponent(row)}/photo${addMode.current ? "?add=1" : ""}`,
                     file,
                   ),
                 );
@@ -1373,6 +1427,9 @@ function CloseDialog({
 
 /** The storefront's pages: the page itself, the orders it brings, and its bookings. */
 export function StorefrontTabs() {
+  const { me } = useAuth();
+  const orders = areaOn(me?.areas, "orders");
+  const stock = areaOn(me?.areas, "stock");
   // A field agent never sees customers' orders or bookings (docs/agents.md).
   if (currentAgentSession()) return null;
   return (
@@ -1382,15 +1439,15 @@ export function StorefrontTabs() {
       </NavLink>
       <NavLink to="/storefront/look">Look</NavLink>
       <NavLink to="/storefront/fronts">Fronts</NavLink>
-      <NavLink to="/storefront/orders">Orders</NavLink>
+      {orders && <NavLink to="/storefront/orders">Orders</NavLink>}
       <NavLink to="/storefront/bookings">Bookings</NavLink>
       <NavLink to="/storefront/riders" end>
         Riders
       </NavLink>
       <NavLink to="/storefront/deliveries">Deliveries</NavLink>
-      <NavLink to="/storefront/stock">Stock</NavLink>
-      <NavLink to="/storefront/suppliers">Suppliers</NavLink>
-      <NavLink to="/storefront/price-lists">Price lists</NavLink>
+      {stock && <NavLink to="/storefront/stock">Stock</NavLink>}
+      {stock && <NavLink to="/storefront/suppliers">Suppliers</NavLink>}
+      {stock && <NavLink to="/storefront/price-lists">Price lists</NavLink>}
     </nav>
   );
 }

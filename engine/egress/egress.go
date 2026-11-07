@@ -220,9 +220,12 @@ func (g *Guard) Client(p Policy, timeout time.Duration) *http.Client {
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			return g.DialContext(ctx, p, network, addr)
 		},
-		ForceAttemptHTTP2:     true,
-		MaxIdleConns:          10,
-		IdleConnTimeout:       30 * time.Second,
+		ForceAttemptHTTP2: true,
+		// Callers build a client per call (a step, a host.fetch) and drop
+		// it, so a connection kept for reuse never is: it would only stay
+		// open, with its goroutines, until an idle timeout (F80). Each
+		// connection closes with its response instead.
+		DisableKeepAlives:     true,
 		TLSHandshakeTimeout:   10 * time.Second,
 		ResponseHeaderTimeout: timeout,
 	}

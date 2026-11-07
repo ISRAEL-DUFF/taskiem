@@ -347,3 +347,49 @@ func TestAdmissionFairAcrossTenants(t *testing.T) {
 		t.Errorf("admitted %d, want 6", n)
 	}
 }
+
+// A child its parent's subflow step waits for runs in the parent's slot:
+// holding it at max_running_runs would leave the parent waiting on a run
+// that cannot start while the parent fills the limit, and every later
+// start of the tenant queued behind them (decision 0049).
+func TestSubflowUnderMaxRunningRuns(t *testing.T) {
+	for _, c := range []struct{ max, parents int }{{1, 1}, {2, 2}} {
+		e := rt.New(t)
+		setLimits(t, e, e.Tenant, map[string]any{"max_running_runs": c.max})
+		child := e.Publish(t, `{"schema":"wd/v1","id":"wf_c","version":1,"name":"Child","trigger":{"type":"subflow"},
+		  "steps":[{"id":"w","type":"wait","config":{"duration":"10ms"}}]}`)
+		parent := e.Publish(t, wfDoc(`{"id":"w","type":"wait","config":{"duration":"300ms"}},
+		  {"id":"sub","type":"subflow","needs":["w"],"config":{"workflow":"`+child.String()+`"}}`, ""))
+		other := e.Publish(t, wfDoc(`{"id":"t","type":"transform","config":{"output":1}}`, ""))
+		var ps []runtime.Started
+		for i := 0; i < c.parents; i++ {
+			st := startIn(t, e, e.Tenant, parent, false, "")
+			if st.Queued {
+				t.Fatalf("max %d: parent %d queued (%s)", c.max, i, st.HeldBy)
+			}
+			ps = append(ps, st)
+		}
+		rt.WaitFor(t, 10*time.Second, "parents", func() bool {
+			e.Drain(t)
+			if _, err := e.Store.AdmitQueued(ctx); err != nil {
+				t.Fatal(err)
+			}
+			for _, s := range statuses(t, e, ps) {
+				if s != "completed" {
+					return false
+				}
+			}
+			return true
+		})
+		var queued int
+		if err := e.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM runs WHERE tenant_id = $1 AND status = 'queued'`, e.Tenant).Scan(&queued); err != nil {
+			t.Fatal(err)
+		}
+		if queued != 0 {
+			t.Errorf("max %d: %d runs left queued", c.max, queued)
+		}
+		if st := startIn(t, e, e.Tenant, other, false, ""); st.Queued {
+			t.Errorf("max %d: a later start is held (%s)", c.max, st.HeldBy)
+		}
+	}
+}

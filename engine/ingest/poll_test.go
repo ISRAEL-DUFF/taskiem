@@ -1,7 +1,9 @@
 package ingest_test
 
 import (
+	"context"
 	"crypto/sha512"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -15,6 +17,7 @@ import (
 
 	"github.com/israel-duff/taskiem/connectors/paystack"
 	"github.com/israel-duff/taskiem/connectors/zohobooks"
+	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/ingest"
@@ -222,5 +225,62 @@ func TestPollerRefreshesZohoTokens(t *testing.T) {
 	}
 	if n := w.runCount(t, wf); n != 1 {
 		t.Errorf("runs: %d", n)
+	}
+}
+
+// A poll action that never answers (a tenant's own connector looping, or
+// a provider holding the connection) is cut off after CallTimeout: the
+// tick finishes, the target records the failure, and every other target
+// is still polled.
+func TestPollerCutsOffAStuckTarget(t *testing.T) {
+	w := newWorld(t)
+	w.h.MoneyLog = &moneylog.Log{Pool: w.DB.App, PII: w.Vault}
+	fake := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		rw.Header().Set("Content-Type", "application/json")
+		_, _ = rw.Write([]byte(`{"status":true,"data":[{"reference":"P-9","amount":120000}]}`))
+	}))
+	t.Cleanup(fake.Close)
+	stop := make(chan struct{})
+	t.Cleanup(func() { close(stop) })
+	ps := paystack.New(paystack.Options{BaseURL: fake.URL})
+	ps.Actions["list_transfers"] = connector.ActionFunc(func(ctx context.Context, _ connector.Request) (connector.Response, error) {
+		select {
+		case <-ctx.Done():
+			return connector.Response{}, ctx.Err()
+		case <-stop:
+			return connector.Response{}, errors.New("test over")
+		}
+	})
+	if err := w.Registry.Register(ps); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Vault.CreateConnection(ctx, w.Tenant, "prod", "paystack", "main", "api_key", map[string]string{"secret_key": "sk_test_x"}, "test"); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	p := &ingest.Poller{Store: w.Store, Registry: w.Registry, Connections: w.Vault, Hooks: w.h, MoneyLog: true, CallTimeout: 300 * time.Millisecond,
+		Egress: &egress.Guard{Blocked: func(netip.Addr) bool { return false }}, Now: func() time.Time { return now }}
+	for range 2 {
+		done := make(chan error, 1)
+		go func() { _, err := p.Tick(ctx); done <- err }()
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Fatal(err)
+			}
+		case <-time.After(10 * time.Second):
+			t.Fatal("a stuck poll action held the tick")
+		}
+		now = now.Add(6 * time.Minute)
+	}
+	if got := w.moneyLog(t); len(got) != 1 || got[0].reference != "P-9" {
+		t.Errorf("logged %+v", got)
+	}
+	var errText *string
+	err := db.InTenantTx(ctx, w.DB.App, []uuid.UUID{w.Tenant}, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT last_error FROM trigger_polls WHERE connector = 'paystack@1' AND trigger_name = 'transfer_event'`).Scan(&errText)
+	})
+	if err != nil || errText == nil || !strings.Contains(*errText, "deadline") {
+		t.Errorf("stuck target's state: %v %v", errText, err)
 	}
 }

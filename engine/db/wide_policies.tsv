@@ -1,0 +1,7 @@
+# Application policies (taskiem_app, or PUBLIC) on tables with a tenant_id
+# column that do not scope rows to the caller's tenants (threat model B7).
+# TestEveryTenantTableIsProtected fails when such a policy is not listed
+# here, or a listed one is scoped or gone: a wide policy needs a line in
+# its own change, with an owner who reviewed it and a one-line reason (what
+# a tenant can see or write through it, and why that is intended).
+# Format: table.policy<TAB>owner<TAB>reason

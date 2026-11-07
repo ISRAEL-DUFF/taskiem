@@ -6,6 +6,7 @@ import { Help, useOnboarding } from "../onboarding";
 import { CHECKLIST, firstThings, formatDuration, sampleInput, starterTemplates } from "../lib/onboarding";
 import { initialValues, toParams, type Template } from "../lib/templates";
 import { Icon } from "../icons";
+import { areaOn } from "../lib/areas";
 import { Badge, ErrorBox, Field, JsonInput, Skeleton, useAction, useLoad } from "../ui";
 import { ParamField, usesWords } from "./Templates";
 import { NeedsList } from "./Readiness";
@@ -31,7 +32,7 @@ export function Start() {
   const [sent, setSent] = useState<string | null>(null);
   const nav = useNavigate();
   if (!data) return <Skeleton />;
-  const more = firstThings(can);
+  const more = areaOn(me?.areas, "money") ? firstThings(can) : [];
   const next = data.items.find((it) => !it.done);
   return (
     <>
@@ -113,7 +114,7 @@ export function Start() {
         </section>
       )}
       {can("invoice.read") && <ReceiveMoneyOffer />}
-      {can("table.edit") && can("storefront.manage") && <StockOffer />}
+      {can("table.edit") && can("storefront.manage") && areaOn(me?.areas, "stock") && areaOn(me?.areas, "storefront") && <StockOffer />}
       {(me?.schools || me?.roles.includes("owner")) && can("school.read") && <SchoolStart on={!!me?.schools} owner={!!me?.roles.includes("owner")} />}
       {can("workflow.edit") && (
         <section>

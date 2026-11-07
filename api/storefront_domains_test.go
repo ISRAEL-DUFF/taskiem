@@ -118,3 +118,28 @@ func TestStorefrontDomains(t *testing.T) {
 		}
 	}
 }
+
+// A storefront's preview host cannot be one of the platform's own names:
+// the CNAME target owners point their domains at, whichever label it
+// has, or the form host (F67).
+func TestStorefrontSlugIsNotAPlatformHost(t *testing.T) {
+	w := newWorld(t)
+	w.srv.PublicHosts = []string{"shops.taskiem.test"}
+	owner := w.tenant(t, "Ada's Kitchen", "ada@ada.test")
+	verifyPhone(t, w, owner, "phone", "business") // publishing goes live at once (moderation.md)
+	draft := map[string]any{"name": "Ada's Kitchen", "template": "classic", "accent": "green"}
+
+	// The default target is pages.<preview domain>.
+	owner.must(400, "PUT", "/v1/storefront", map[string]any{"slug": "pages", "draft": draft})
+	owner.must(400, "PUT", "/v1/storefront", map[string]any{"slug": "page", "draft": draft})
+
+	// An operator's own target name, under the preview domain.
+	w.srv.DomainTarget = storefront.DomainTarget{CNAME: "ada-front.shops.taskiem.test."}
+	owner.must(200, "PUT", "/v1/storefront", map[string]any{"slug": "ada-front", "draft": draft})
+	owner.must(400, "POST", "/v1/storefront/publish", nil)
+	w.srv.DomainTarget = storefront.DomainTarget{}
+	pub := owner.must(200, "POST", "/v1/storefront/publish", nil)
+	if pub["url"] != "https://ada-front.shops.taskiem.test" {
+		t.Fatalf("%v", pub)
+	}
+}

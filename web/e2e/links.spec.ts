@@ -76,6 +76,11 @@ test("two businesses find each other and link", async ({ browser }) => {
   // A phone number is never searched: one row that sends a request.
   await ada.getByTestId("link-search").fill("0803 123 4567");
   await expect(ada.getByTestId("link-blind")).toContainText("Send a link request to 0803…4567");
+  // A word that names no business found, though it could be an address, is
+  // not offered as a request: it says nothing was found.
+  await ada.getByTestId("link-search").fill("zzqx");
+  await expect(ada.getByTestId("link-results")).toContainText("No business found for “zzqx”");
+  await expect(ada.getByTestId("link-blind")).toHaveCount(0);
   await ada.getByTestId("link-search").fill("");
 
   // Dangote accepts.
@@ -93,8 +98,8 @@ test("two businesses find each other and link", async ({ browser }) => {
   await ada.goto("/settings/links");
   const row = ada.getByTestId("link-row").filter({ hasText: dangoteName });
   await expect(row).toHaveAttribute("data-state", "active");
-  ada.once("dialog", (d) => void d.accept());
   await row.getByRole("button", { name: `End link ${dangoteName}` }).click();
+  await ada.getByTestId("confirm-ok").click(); // the app's own confirmation
   await expect(row).toHaveAttribute("data-state", "ended");
   await axeBoth(ada, "/settings/links, a link ended");
 });

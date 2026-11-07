@@ -94,6 +94,7 @@ With `slack` in `TASKIEM_CHAT_SIGNUP` and Taskiem's Slack app registered ([Slack
 
 - **The email** Slack holds for them becomes the account's, **unconfirmed** (a workspace's administrators set members' emails), so nothing is emailed for the business until they confirm it. When that email is already someone's account, nothing is merged: they are told so before any question, and may start a new business under a Slack-only account instead.
 - **A workspace already on Taskiem**: its businesses' Slack connections take the new install's token and work again; the installer is told whose workspace it is and offered **Start a separate business**. Nothing is made unless they choose it.
+- **Another business from a Slack DM** (`new business`) gets the workspace's Slack from a business the person is still a member of, and only a connection made through Taskiem's app there; a token a business pasted from its own Slack app is never lent. A Slack link speaks only for a current member: someone removed from a business is no longer linked there, so its Slack is not theirs to use.
 - **An install nobody finishes** waits a day; then its token is given back to Slack. Removing the app forgets it at once.
 - The request works once, for ten minutes, only in the browser that started it.
 
@@ -152,7 +153,7 @@ Gate G4 asks for self-serve signup to first successful run in under 15 minutes.
 | Route | Who | What it does |
 | --- | --- | --- |
 | `GET /v1/signup` | anyone | `{"enabled": bool}` |
-| `POST /v1/signup` | anyone (when on) | `{tenant, email, name?, password, bearer?}`: creates the organisation, signs the owner in (a session cookie; with `bearer: true`, `token` in the answer instead), starts the trial; `201 {tenant_id, user_id, verification_sent}` (and `token` with `bearer`) |
+| `POST /v1/signup` | anyone (when on) | `{tenant, email, name?, password, kinds?, bearer?}`: creates the organisation, starting it with the parts of Taskiem that go with what it does (`kinds`: `shop`, `service`, `school`, any number, or `[]` for just workflows; left out, every part; [what your business uses](guide/what-your-business-uses.md)), signs the owner in (a session cookie; with `bearer: true`, `token` in the answer instead), starts the trial; `201 {tenant_id, user_id, verification_sent}` (and `token` with `bearer`) |
 | `POST /v1/me/email/verify` | the person | `{token}` from the link |
 | `POST /v1/me/email/verify/resend` | the person | A new link (`202`), or `200` when already confirmed |
 | `GET /v1/onboarding` | any member | `items` (`[{id, done}]`), `done`, `total`, `complete`, `dismissed`, `self_serve`, `email_verified`, `can_send_email`, `docs_url`, `signed_up_at`, `first_run_at`, `seconds_to_first_run` |

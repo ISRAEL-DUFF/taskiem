@@ -2,10 +2,13 @@ package api_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/israel-duff/taskiem/engine/oidc/oidctest"
 )
 
 const pw = "correct horse battery"
@@ -108,6 +111,54 @@ func TestEnvironmentLimitedKeysStayInTheirEnvironment(t *testing.T) {
 	bob.must(200, "PUT", "/v1/environments/prod", map[string]any{"promotion_from": "dev"})
 	bob.must(403, "PUT", "/v1/environments/prod", map[string]any{"promotion_from": ""})
 	owner.must(200, "PUT", "/v1/environments/prod", map[string]any{"promotion_from": ""})
+}
+
+// Identity reaches every environment: a key limited to one environment
+// holding member.manage cannot revoke other keys, set up SSO or SCIM,
+// reset someone's passkeys or flip the Advanced switch, and a SCIM key
+// limited to one environment provisions nobody (finding F38).
+func TestEnvironmentLimitedKeysCannotManageIdentity(t *testing.T) {
+	w := ssoWorld(t)
+	idp := oidctest.New()
+	defer idp.Close()
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	addMember(t, w, owner, "bob", "viewer")
+	bob := memberID(t, owner, "bob@acme.test")
+	cfg := map[string]any{"issuer": idp.URL, "client_id": idp.ClientID, "client_secret": idp.ClientSecret}
+	conn := owner.must(201, "POST", "/v1/sso", map[string]any{"protocol": "oidc", "name": "Okta", "oidc": cfg, "default_roles": []string{"viewer"}})["id"].(string)
+	owner.must(201, "POST", "/v1/sso/"+conn+"/domains", map[string]any{"domain": "acme.test"})
+	prod := owner.must(201, "POST", "/v1/api-keys", map[string]any{"name": "prod", "permissions": []string{"workflow.read"}, "environment": "prod"})["id"].(string)
+
+	perms := []string{"member.manage", "workflow.read", "run.read", "table.read", "invoice.read", "school.read"}
+	dev := keyFor(t, owner, "dev", perms...)
+	for _, c := range []struct {
+		method, path string
+		body         any
+	}{
+		{"DELETE", "/v1/api-keys/" + prod, nil},
+		{"PUT", "/v1/scim", map[string]any{"default_roles": []string{"viewer"}}},
+		{"POST", "/v1/sso", map[string]any{"protocol": "oidc", "name": "x", "oidc": cfg, "default_roles": []string{"viewer"}}},
+		{"PUT", "/v1/sso/" + conn, map[string]any{"default_roles": []string{"viewer"}, "enforce": true}},
+		{"POST", "/v1/sso/" + conn + "/domains", map[string]any{"domain": "acme.test"}},
+		{"POST", "/v1/sso/domains/acme.test/verify", nil},
+		{"DELETE", "/v1/members/" + bob + "/passkeys", nil},
+		{"PUT", "/v1/settings/advanced", map[string]any{"advanced": true}},
+	} {
+		if out := dev.must(403, c.method, c.path, c.body); !strings.Contains(fmt.Sprint(out["error"]), "limited to dev") {
+			t.Errorf("%s %s: refused for another reason: %v", c.method, c.path, out)
+		}
+	}
+	scim := keyFor(t, owner, "dev", "scim.provision")
+	if out := scim.must(403, "GET", "/scim/v2/Users", nil); !strings.Contains(fmt.Sprint(out["detail"]), "limited to dev") {
+		t.Errorf("a dev SCIM key: %v", out)
+	}
+
+	// A key reaching every environment still does all of it.
+	all := keyFor(t, owner, "", perms...)
+	all.must(204, "DELETE", "/v1/api-keys/"+prod, nil)
+	all.must(200, "PUT", "/v1/settings/advanced", map[string]any{"advanced": true})
+	all.must(204, "PUT", "/v1/sso/"+conn, map[string]any{"default_roles": []string{"viewer"}})
+	(&client{t: t, base: w.base, token: owner.must(201, "POST", "/v1/api-keys", map[string]any{"name": "scim", "permissions": []string{"scim.provision"}})["key"].(string)}).must(200, "GET", "/scim/v2/Users", nil)
 }
 
 // The secrets API cannot reach the platform's reserved environments.

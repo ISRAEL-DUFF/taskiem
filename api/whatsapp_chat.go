@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/areas"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/links"
@@ -195,6 +196,9 @@ type chat struct {
 	lang langChoice
 	// note goes before the next reply (a voice note's transcript).
 	note string
+	// areaState is which parts of Taskiem the business uses, read once for
+	// a message (chatAreas).
+	areaState areas.State
 	// blocked is the draft waiting for a connection, while this message is
 	// read (connect_links.go).
 	blocked uuid.UUID
@@ -259,6 +263,9 @@ type chatData struct {
 	// Debt is a notebook debt or a customer's payment being recorded
 	// (chat_debtors.go).
 	Debt *chatDebt `json:"debt,omitempty"`
+	// Direct is when a lone "..." was sent: the next message goes to the
+	// linked businesses it mentions (chat_direct.go).
+	Direct *time.Time `json:"direct,omitempty"`
 }
 
 // WhatsAppPublic, when set, answers a message to the shared number from a
@@ -349,7 +356,12 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	}
 	// An invitation's Join or No, and an owner's answer to a request to
 	// join (chat_invites.go).
-	if strings.HasPrefix(in.Reply, invPrefix) || normalizeCommand(text) == "join" {
+	// A tenant's own Meta app signs its deliveries with a secret the tenant
+	// chose, so the sender it names is only as sure as that secret (F2):
+	// nothing said there brings anyone in, makes a business, or changes
+	// who holds which rights.
+	ownApp := c.wa != nil && c.wa.OwnApp
+	if !ownApp && (strings.HasPrefix(in.Reply, invPrefix) || normalizeCommand(text) == "join") {
 		if done, err := s.chatInviteMessage(ctx, &inviteChat{ch: ch, addr: number, user: user, lang: c.lang.Tag}, text, in.Reply); done || err != nil {
 			return err
 		}
@@ -357,7 +369,7 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	// Another business, or one when none is left (chat_signup.go).
 	// Only words and its own buttons: an approval tapped or a form sent
 	// meanwhile goes where it always went.
-	if ch.Name() != "web" && in.Flow == "" && in.Media == nil && in.Image == nil && in.Document == nil && (in.Reply == "" || strings.HasPrefix(in.Reply, "su:")) {
+	if !ownApp && ch.Name() != "web" && in.Flow == "" && in.Media == nil && in.Image == nil && in.Document == nil && (in.Reply == "" || strings.HasPrefix(in.Reply, "su:")) {
 		sc := &signupChat{ch: ch, addr: number, user: user, lang: c.lang.Tag}
 		if dm, ok := ch.(*slackDMChannel); ok {
 			// Another business from Slack has the workspace's Slack too.
@@ -402,6 +414,9 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	if c.p, err = s.principalOf(ctx, c.tenant.ID, user); err != nil {
 		return s.waSay(ctx, ch, number, "", c.t("wa.cannot_act", "org", c.tenant.Name))
 	}
+	if ownApp {
+		capOwnAppPrincipal(c.p)
+	}
 	// From here the conversation is with this business: what is said is
 	// kept in its history (chat_history.go), and so are the replies.
 	ctx = withChatTenant(ctx, c.tenant.ID)
@@ -431,6 +446,25 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	// A template a new business was offered (chat_signup.go).
 	if id, ok := strings.CutPrefix(in.Reply, signupTplPrefix); ok {
 		return s.chatTemplateBuild(ctx, c, id)
+	}
+	// Anything but words ends a lone "..."'s wait (chat_direct.go), so a
+	// voice note or a form is taken as it would be. A photo or a file
+	// captioned "... @business", or sent with "@business" while the wait
+	// lasts, goes straight to the business.
+	waiting := c.data.Direct != nil && time.Since(*c.data.Direct) <= directWait
+	if c.data.Direct != nil && (in.Image != nil || in.Document != nil || in.Media != nil || in.Flow != "") {
+		if err := s.endDirectWait(ctx, c); err != nil {
+			return err
+		}
+	}
+	if in.Image != nil || in.Document != nil {
+		caption, marked := cutDirect(in.Text)
+		if !marked && waiting {
+			caption, marked = strings.TrimSpace(in.Text), true
+		}
+		if marked && strings.Contains(caption, "@") {
+			return s.waDirectFile(ctx, c, caption)
+		}
 	}
 	// A completed WhatsApp form carries its flow token.
 	if in.Flow != "" {
@@ -639,6 +673,11 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if done, err := s.waQuotedReply(ctx, c); done || err != nil {
 		return err
 	}
+	// "..." first: a message straight to the linked businesses it
+	// mentions (chat_direct.go), read by no command and no model.
+	if done, err := s.waDirect(ctx, c); done || err != nil {
+		return err
+	}
 	// Accept or Decline on a linked business's order, All came on its
 	// delivery (link_orders.go).
 	if strings.HasPrefix(text, orderPrefix) {
@@ -719,12 +758,17 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		return c.say(ctx, s, c.t("wa.confirm_reminder", "workflow", c.data.Name), confirmButtons(c)...)
 	}
 	if c.state == stateIdle {
-		if done, err := s.waBookingCommand(ctx, c, cmd); done || err != nil {
+		// What the business turned off is not a command here: its words pass
+		// on as ordinary chat (docs/spec/business-areas.md).
+		on := s.chatAreas(ctx, c)
+		if !on.On(areas.Storefront) {
+			// no booking words
+		} else if done, err := s.waBookingCommand(ctx, c, cmd); done || err != nil {
 			return err
 		}
 		// A message to a linked business (link_chat.go): "ask Dangote …",
 		// before the tables' "ask …": words naming no linked business pass on.
-		if f := strings.Fields(text); len(f) > 1 && strings.EqualFold(f[0], "ask") {
+		if f := strings.Fields(text); len(f) > 1 && strings.EqualFold(f[0], "ask") && on.On(areas.Links) {
 			if done, err := s.waAskLinked(ctx, c, strings.Join(f[1:], " ")); done || err != nil {
 				return err
 			}
@@ -735,26 +779,32 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		if done, err := s.waAskCommand(ctx, c, text, cmd); done || err != nil {
 			return err
 		}
-		if done, err := s.waShopCommand(ctx, c, text, cmd); done || err != nil {
-			return err
+		if on.On(areas.Storefront) || on.On(areas.Stock) {
+			if done, err := s.waShopCommand(ctx, c, text, cmd); done || err != nil {
+				return err
+			}
 		}
-		if done, err := s.waRidersCommand(ctx, c, text, cmd); done || err != nil {
-			return err
+		if on.On(areas.Storefront) {
+			if done, err := s.waRidersCommand(ctx, c, text, cmd); done || err != nil {
+				return err
+			}
 		}
-		// A linked supplier's bills (bills.go): "bill INV-0042" before the
-		// invoice words, which need a name and an amount.
-		if done, err := s.waBillCommand(ctx, c, text, cmd); done || err != nil {
-			return err
-		}
-		if done, err := s.waInvoiceCommand(ctx, c, text, cmd); done || err != nil {
-			return err
-		}
-		// The debtor book: owes, paid, who owes me (chat_debtors.go).
-		if done, err := s.waDebtCommand(ctx, c, text, cmd); done || err != nil {
-			return err
-		}
-		if done, err := s.waMoneyCommand(ctx, c, text); done || err != nil {
-			return err
+		if on.On(areas.Money) {
+			// A linked supplier's bills (bills.go): "bill INV-0042" before the
+			// invoice words, which need a name and an amount.
+			if done, err := s.waBillCommand(ctx, c, text, cmd); done || err != nil {
+				return err
+			}
+			if done, err := s.waInvoiceCommand(ctx, c, text, cmd); done || err != nil {
+				return err
+			}
+			// The debtor book: owes, paid, who owes me (chat_debtors.go).
+			if done, err := s.waDebtCommand(ctx, c, text, cmd); done || err != nil {
+				return err
+			}
+			if done, err := s.waMoneyCommand(ctx, c, text); done || err != nil {
+				return err
+			}
 		}
 		if done, err := s.waReceiveCommand(ctx, c, cmd); done || err != nil {
 			return err
@@ -764,7 +814,7 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 			return err
 		}
 		// The same in the person's language (English's are read above).
-		if matched && m.Language != lang.EN {
+		if matched && m.Language != lang.EN && chatIntentOn(on, m.Intent) {
 			switch m.Intent {
 			case lang.IntentInvoice:
 				if done, err := s.waInvoiceWords(ctx, c, m); done || err != nil {
@@ -820,7 +870,12 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		// A way into the web app for someone with no password (N6).
 		switch cmd {
 		case "sign in", "signin", "log in", "login", "web link", "sign in link", "web app":
+			// A link that opens the web app signed in (chat_signin.go).
 			return s.waSignInLink(ctx, c)
+		case "password", "set password", "set a password", "choose password", "choose a password", "change password", "new password":
+			return s.waPasswordLink(ctx, c)
+		case "sign out everywhere", "log out everywhere", "sign out all", "sign out of the web":
+			return s.waSignOutEverywhere(ctx, c)
 		case "pin", "chat pin", "set pin", "set my pin", "change pin":
 			// The chat PIN, set from the chat by a person with no other
 			// credential (chat_dormant.go).
@@ -838,8 +893,10 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 			return s.waInvite(ctx, c, text)
 		}
 		// Other businesses on Taskiem (chat_links.go).
-		if done, err := s.waLinkCommand(ctx, c, text, cmd); done || err != nil {
-			return err
+		if on.On(areas.Links) {
+			if done, err := s.waLinkCommand(ctx, c, text, cmd); done || err != nil {
+				return err
+			}
 		}
 		// An email of one's own, and paying with one (chat_doors.go).
 		if f := strings.Fields(text); len(f) == 2 && strings.Contains(f[1], "@") {
@@ -894,6 +951,11 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 // waIntent does what a recognised command asks; false when it is not one
 // to act on here (yes or no with nothing to confirm, run without a name).
 func (s *Server) waIntent(ctx context.Context, c *chat, m lang.Match) (bool, error) {
+	// A command of a part of Taskiem the business turned off is not one
+	// (docs/spec/business-areas.md).
+	if !chatIntentOn(s.chatAreas(ctx, c), m.Intent) {
+		return false, nil
+	}
 	arg := strings.TrimSpace(m.Arg)
 	switch m.Intent {
 	case lang.IntentHelp:
@@ -1042,6 +1104,9 @@ func (s *Server) waHelp(c *chat) string {
 	if c.p.Can(PermInvoiceManage) && s.Invoices != nil {
 		lines = append(lines, c.t("wa.help.invoice"), c.t("wa.help.debts"))
 	}
+	if c.p.Can(PermChatTrade) {
+		lines = append(lines, c.t("wa.help.direct"))
+	}
 	if c.p.Can(PermInvoiceManage) {
 		lines = append(lines, c.t("wa.help.money"))
 	}
@@ -1053,6 +1118,9 @@ func (s *Server) waHelp(c *chat) string {
 	}
 	if s.voiceOn(c.lang.Channel) {
 		lines = append(lines, c.t("wa.help.voice"))
+	}
+	if s.PublicURL != "" {
+		lines = append(lines, c.t("wa.help.signin"))
 	}
 	lines = append(lines, c.t("wa.help.cancel"))
 	return strings.Join(lines, "\n")
@@ -1526,4 +1594,23 @@ func shopCommandOf(i lang.Intent, arg string) string {
 		return "order " + ref + " delivered"
 	}
 	return ""
+}
+
+// ownAppWithheld are the rights a person writing to a number on the
+// tenant's own Meta app never exercises there (F2): its secret is the
+// tenant's, so a delivery "from" a member proves no more than that someone
+// holds it.
+var ownAppWithheld = []string{PermMemberManage, PermRoleManage, PermSecretManage, PermConnectionManage, PermKeyManage}
+
+// capOwnAppPrincipal withholds from p what changes who is in the business
+// or what rights anyone holds, the owner role included.
+func capOwnAppPrincipal(p *Principal) {
+	perms := make(map[string]bool, len(p.Permissions))
+	for k, v := range p.Permissions {
+		if !slices.Contains(ownAppWithheld, k) {
+			perms[k] = v
+		}
+	}
+	p.Permissions = perms
+	p.Roles = slices.DeleteFunc(slices.Clone(p.Roles), func(r string) bool { return r == "owner" })
 }

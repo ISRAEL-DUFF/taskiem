@@ -154,6 +154,43 @@ type storefrontData struct {
 	// Services are what can be booked, each with a Book link, when the
 	// booking form is one of Forms.
 	Services []serviceView
+	// Search is what the visitor looked for (?q=), Found how many items
+	// matched: the catalogue is narrowed to them.
+	Search string
+	Found  int
+}
+
+// searchTerm is the visitor's search from ?q=, trimmed and kept short.
+func searchTerm(r *http.Request) string {
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if rs := []rune(q); len(rs) > 40 {
+		q = string(rs[:40])
+	}
+	return q
+}
+
+// search narrows the page's sections to the items whose name, words or
+// category hold q, ignoring case; an empty q leaves them all.
+func (d *storefrontData) search(q string) {
+	if q == "" {
+		return
+	}
+	d.Search = q
+	needle := strings.ToLower(q)
+	var out []section
+	for _, sec := range d.Sections {
+		var keep []item
+		for _, it := range sec.Items {
+			if strings.Contains(strings.ToLower(it.Name+" "+it.Description+" "+it.Category), needle) {
+				keep = append(keep, it)
+			}
+		}
+		if len(keep) > 0 {
+			out = append(out, section{Title: sec.Title, Items: keep})
+			d.Found += len(keep)
+		}
+	}
+	d.Sections = out
 }
 
 // frontCard is another front as the home page lists it.
@@ -172,6 +209,38 @@ type item struct {
 	Small     string
 	Large     string
 	Orderable bool
+	// Pics are the item's photos after the first, each a thumbnail and
+	// the full picture; Few is true when only a handful are left.
+	Pics []pic
+	Few  bool
+	// Max is the most one order may take (the stock left, or the cap), for
+	// a card's own quantity.
+	Max int
+}
+
+// pic is one photo of an item's gallery.
+type pic struct{ Small, Large string }
+
+// fewLeft is the stock at or under which an item says how few are left.
+const fewLeft = 5
+
+// decorate fills what an item shows beyond its photo and price.
+func (x *item) decorate() {
+	for _, g := range x.Gallery {
+		l := g["800"]
+		if l == "" {
+			l = g["2000"]
+		}
+		sm := g["320"]
+		if sm == "" {
+			sm = l
+		}
+		if l != "" {
+			x.Pics = append(x.Pics, pic{Small: sm, Large: l})
+		}
+	}
+	x.Few = x.Available && x.Stock != nil && *x.Stock > 0 && *x.Stock <= fewLeft
+	x.Max = most(x.Item)
 }
 
 type hoursRow struct {
@@ -201,6 +270,8 @@ func (s *Server) serveStorefront(w http.ResponseWriter, r *http.Request, site Si
 		d.Image = d.Look.LogoLarge
 	}
 	d.URL = s.address(r, site, p)
+	q := searchTerm(r)
+	d.search(q)
 	if !s.formsOpen() {
 		d.Forms, d.Ordering = nil, false
 	}
@@ -213,6 +284,10 @@ func (s *Server) serveStorefront(w http.ResponseWriter, r *http.Request, site Si
 				d.Fronts = append(d.Fronts, frontCard{Name: f.Name, Tagline: f.Tagline, Href: "/" + f.Slug})
 			}
 		}
+	}
+	if q != "" {
+		s.renderPrivate(w, r, http.StatusOK, "storefront.html", d)
+		return
 	}
 	s.render(w, r, http.StatusOK, "storefront.html", d)
 }
@@ -259,11 +334,17 @@ func (s *Server) serveFront(w http.ResponseWriter, r *http.Request, site Site, s
 	}
 	d.Look = s.lookFor(r.Context(), site.Tenant, p.Model.Card.Name)
 	d.URL = s.address(r, site, p) + "/" + f.Slug
+	q := searchTerm(r)
+	d.search(q)
 	if f.Tagline != "" {
 		d.Description = f.Tagline
 	}
 	if !s.formsOpen() {
 		d.Forms, d.Ordering = nil, false
+	}
+	if q != "" {
+		s.renderPrivate(w, r, http.StatusOK, "storefront.html", d)
+		return
 	}
 	s.render(w, r, http.StatusOK, "storefront.html", d)
 }
@@ -368,6 +449,7 @@ func storefrontView(p StorefrontPage, now time.Time) storefrontData {
 		if x.Large == "" {
 			x.Large = it.Photo["2000"]
 		}
+		x.decorate()
 		if it.PriceKobo != nil {
 			x.Price = storefront.FormatNaira(*it.PriceKobo)
 		}

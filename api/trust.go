@@ -486,7 +486,8 @@ func (s *Server) opsDecideReview(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusConflict, "this review is decided already")
 		return
 	}
-	if !s.checkOpsStepUp(w, r, req.StepUp, "ops.storefront.review", id.String()) {
+	// Bound to the decision too, so a passkey given to reject cannot approve.
+	if !s.checkOpsStepUp(w, r, req.StepUp, "ops.storefront.review", id.String()+"/"+decision) {
 		return
 	}
 	o := operatorFrom(r.Context())

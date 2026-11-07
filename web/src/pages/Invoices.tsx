@@ -7,7 +7,7 @@ import {
   useParams,
   useSearchParams,
 } from "react-router-dom";
-import { ApiError, del, get, postOnce, put, post } from "../api";
+import { ApiError, del, get, postOnce, put, post, whenOff } from "../api";
 import { useAuth } from "../auth";
 import { DocThread } from "./Conversation";
 import {
@@ -1194,7 +1194,7 @@ function InvoiceEditor({
   const problem = invoiceProblem(form);
   const total = formTotal(form);
   // Linked businesses that buy from us come first as customers (business links).
-  const linked = useLoad(() => get<LinksView>("/v1/links"), []);
+  const linked = useLoad(() => whenOff(get<LinksView>("/v1/links"), { links: [], sent: [] }), []);
   const buyers = (linked.data?.links ?? []).filter(
     (l) => l.state === "active" && (l.role === "customer" || l.role === "both"),
   );

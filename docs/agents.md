@@ -38,7 +38,7 @@ In a session, an agent may use the storefront's and the data tables' API: the pa
 - manage members, connections, secrets, roles or anything else in the organisation;
 - reveal personal data.
 
-Everything the agent does is audited in the business's chain as `agent:<code>`, beside who they are.
+Everything the agent does is audited in the business's chain as `agent:<code>`, beside who they are. A session is opened, listed and ended only by the business's own requests: the database functions behind them refuse any other business than the one the request is scoped to (migration 00324), so no session can be opened in a business that did not ask for it.
 
 ## The owner's side
 

@@ -1,0 +1,203 @@
+{
+  "id": "subscription-monthly-invoices",
+  "title": "Invoice every subscriber each month",
+  "summary": "On the day you choose, make and send each active subscriber their monthly invoice, with the price from your subscribers table.",
+  "description": "Once a month, on the day and time you choose, reads your active subscribers from a table in Taskiem and makes each one an invoice for their monthly price, then sends it by SMS (and email when you have it) with a page they can pay from. Each invoice is due in the days you choose, so your overdue reminders can chase it. An invoice is made once for each subscriber each month, even if the workflow runs twice. Make the subscribers table under Tables first, or let Taskiem make it when you accept the workflow. One run covers up to 1,000 subscribers: if you have more, you are told.",
+  "category": "subscriptions",
+  "tags": [
+    "subscriptions",
+    "invoices",
+    "customers"
+  ],
+  "keywords": [
+    "subscription",
+    "subscriber",
+    "subscribers",
+    "recurring",
+    "internet",
+    "isp",
+    "broadband"
+  ],
+  "requires": [
+    "subscribers",
+    "subscription"
+  ],
+  "connectors": [
+    "xenibase@1",
+    "invoices@1",
+    "notify@1"
+  ],
+  "params": [
+    {
+      "name": "day_of_month",
+      "type": "integer",
+      "title": "Day of the month",
+      "description": "The day each month the invoices go out (1 to 28).",
+      "required": true,
+      "default": 1,
+      "example": 1,
+      "minimum": 1,
+      "maximum": 28
+    },
+    {
+      "name": "send_time",
+      "type": "time",
+      "title": "Time",
+      "description": "When the invoices go out, Lagos time.",
+      "required": true,
+      "default": "08:00",
+      "example": "08:00"
+    },
+    {
+      "name": "due_in_days",
+      "type": "integer",
+      "title": "Days to pay",
+      "description": "How many days a subscriber has to pay each invoice. After that it is overdue, and your overdue reminders chase it.",
+      "required": true,
+      "default": 7,
+      "example": 7,
+      "minimum": 1,
+      "maximum": 60
+    },
+    {
+      "name": "subscribers_table",
+      "type": "string",
+      "title": "Subscribers table",
+      "description": "Your subscribers: name, phone, plan, price each month, when it renews and whether they are active. Taskiem makes it for you if it does not exist.",
+      "required": false,
+      "default": "subscribers",
+      "example": "subscribers",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$",
+      "picker": "table"
+    }
+  ],
+  "tables": [
+    {
+      "known": "subscribers",
+      "name": "{{subscribers_table}}"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_subscriptionMonthlyInvoices",
+    "version": 1,
+    "name": "Invoice every subscriber each month",
+    "description": "Makes and sends each active subscriber's invoice for the month.",
+    "trigger": {
+      "type": "schedule",
+      "config": {
+        "cron": "{{send_time:minute}} {{send_time:hour}} {{day_of_month}} * *",
+        "timezone": "Africa/Lagos"
+      }
+    },
+    "steps": [
+      {
+        "id": "settings",
+        "type": "transform",
+        "name": "Note which month this is",
+        "config": {
+          "output": {
+            "month": "=string(timestamp(has(trigger.scheduled_time) ? trigger.scheduled_time : run.started_at).getFullYear('Africa/Lagos')) + '-' + string(timestamp(has(trigger.scheduled_time) ? trigger.scheduled_time : run.started_at).getMonth('Africa/Lagos') + 1)"
+          }
+        }
+      },
+      {
+        "id": "read_subscribers",
+        "type": "connector",
+        "name": "Read the active subscribers",
+        "connector": "xenibase@1",
+        "action": "read_rows",
+        "connection": "data_tables",
+        "input": {
+          "table": "{{subscribers_table}}",
+          "filters": [
+            {
+              "column": "status",
+              "op": "ilike",
+              "value": "active"
+            }
+          ],
+          "order": [
+            {
+              "column": "name"
+            }
+          ],
+          "limit": 1000
+        }
+      },
+      {
+        "id": "invoice_each",
+        "type": "foreach",
+        "name": "For each active subscriber",
+        "needs": [
+          "settings",
+          "read_subscribers"
+        ],
+        "config": {
+          "items": "=has(steps.read_subscribers.output.rows) ? steps.read_subscribers.output.rows : []",
+          "max_concurrency": 5,
+          "max_items": 1000,
+          "steps": [
+            {
+              "id": "make_invoice",
+              "type": "connector",
+              "name": "Make the month's invoice",
+              "connector": "invoices@1",
+              "action": "create",
+              "when": "=has(item.monthly_naira) && item.monthly_naira != null && double(item.monthly_naira) > 0.0",
+              "input": {
+                "customer": {
+                  "name": "=string(item.name)",
+                  "phone": "=has(item.phone) && item.phone != null ? string(item.phone) : ''"
+                },
+                "amount_kobo": "=int(double(item.monthly_naira) * 100.0)",
+                "description": "='Monthly subscription: ' + (has(item.plan) && item.plan != null ? string(item.plan) : 'service') + ', ' + steps.settings.output.month",
+                "due_on": "=string(timestamp(has(trigger.scheduled_time) ? trigger.scheduled_time : run.started_at) + duration(string({{due_in_days}} * 24) + 'h')).substring(0, 10)"
+              },
+              "effect": {
+                "idempotency_seed": "='subscription-invoice:' + string(item.name) + ':' + string(item.phone) + ':' + steps.settings.output.month"
+              }
+            },
+            {
+              "id": "send_invoice",
+              "type": "connector",
+              "name": "Send it to the subscriber",
+              "connector": "invoices@1",
+              "action": "send",
+              "needs": [
+                "make_invoice"
+              ],
+              "input": {
+                "number": "=steps.make_invoice.output.number"
+              },
+              "effect": {
+                "idempotency_seed": "='subscription-send:' + string(item.name) + ':' + string(item.phone) + ':' + steps.settings.output.month"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "warn_more",
+        "type": "connector",
+        "name": "Tell you if there are more subscribers than one run covers",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "read_subscribers"
+        ],
+        "when": "=has(steps.read_subscribers.output.next_cursor) && steps.read_subscribers.output.next_cursor != null && string(steps.read_subscribers.output.next_cursor) != ''",
+        "input": {
+          "title": "More subscribers than one run covers",
+          "message": "This run covered the first 1,000 subscribers in your table. The rest were left out: send the invoices for them another way, or ask for help splitting the table."
+        },
+        "effect": {
+          "idempotency_seed": "='more-subscribers:' + string(run.started_at)"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "2h"
+    }
+  }
+}

@@ -8,6 +8,7 @@ import { formWorkflow, type AfterAnswer } from "../lib/newform";
 import { get, patch, post } from "../api";
 import { useAuth } from "../auth";
 import { embedSnippet, linksCSV, maskContact, parseRecipients, showAnswer } from "../lib/forms";
+import { saveFile } from "../lib/saveFile";
 import { Badge, EmptyState, ErrorBox, Field, Items, Modal, PageHeader, Row, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 
 export interface FormInfo {
@@ -339,7 +340,10 @@ function MakeLinks({ form: f, onClose }: { form: FormInfo; onClose: () => void }
       const r = await post<{ links: MintedLink[] }>(`/v1/forms/${f.id}/links`, body);
       setMade(r.links);
     }, false);
-  const csv = made ? URL.createObjectURL(new Blob([linksCSV(made)], { type: "text/csv" })) : "";
+  // The CSV is made on the click and let go straight after (lib/saveFile.ts).
+  const download = () => {
+    if (made) saveFile(new Blob([linksCSV(made)], { type: "text/csv" }), `${f.public_id}-links.csv`);
+  };
   return (
     <Modal title={`One-time links: ${f.title}`} onClose={onClose}>
       {made ? (
@@ -349,9 +353,9 @@ function MakeLinks({ form: f, onClose }: { form: FormInfo; onClose: () => void }
           </p>
           <div className="toolbar">
             <Copy text={made.map((l) => l.url).join("\n")} label="Copy every link" />
-            <a className="button" href={csv} download={`${f.public_id}-links.csv`}>
+            <button type="button" onClick={download}>
               Download CSV
-            </a>
+            </button>
           </div>
           <ul className="link-list" aria-label="The links">
             {made.map((l) => (

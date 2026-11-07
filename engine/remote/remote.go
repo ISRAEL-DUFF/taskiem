@@ -308,6 +308,24 @@ const (
 	lease          = 2 * time.Minute
 )
 
+// errLeaseLost: another pass took a row over after this pass's lease on it
+// ran out. This pass records nothing for it; the other pass's record
+// stands (its Find adopts whatever this pass made at the provider).
+var errLeaseLost = errors.New("another pass took this subscription over")
+
+// rowLease is how long a pass holds one row while it calls the provider:
+// the lease, or room for four calls when calls may take longer.
+func (r *Reconciler) rowLease() time.Duration {
+	return max(lease, 4*r.timeout())
+}
+
+func (r *Reconciler) timeout() time.Duration {
+	if r.Timeout == 0 {
+		return 20 * time.Second
+	}
+	return r.Timeout
+}
+
 func (r *Reconciler) check() time.Duration {
 	if r.Check == 0 {
 		return 10 * time.Minute
@@ -369,13 +387,15 @@ type row struct {
 	healthCheck  bool // nothing to apply: check the provider's view
 	remoteStatus string
 	updatedAt    time.Time // the intent this pass works on
+	owner        uuid.UUID // this pass's lease token
 }
 
-// claim leases a tenant's due rows (of one workflow, when wf is set).
-func (r *Reconciler) claim(ctx context.Context, tenant, wf uuid.UUID) ([]row, error) {
+// claim leases a tenant's due rows (of one workflow, when wf is set) to
+// the pass owner.
+func (r *Reconciler) claim(ctx context.Context, tenant, wf, owner uuid.UUID) ([]row, error) {
 	var out []row
 	err := db.InTenantTx(ctx, r.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `UPDATE remote_subscriptions SET lease_until = now() + $3::interval WHERE id IN (
+		rows, err := tx.Query(ctx, `UPDATE remote_subscriptions SET lease_until = now() + $3::interval, lease_owner = $5 WHERE id IN (
 			SELECT id FROM remote_subscriptions
 			 WHERE ((next_attempt_at IS NOT NULL AND next_attempt_at <= now())
 			    OR (desired = 'present' AND remote_id IS NOT NULL AND (checked_at IS NULL OR checked_at < $4)))
@@ -384,12 +404,12 @@ func (r *Reconciler) claim(ctx context.Context, tenant, wf uuid.UUID) ([]row, er
 			 ORDER BY next_attempt_at NULLS LAST LIMIT $2 FOR UPDATE SKIP LOCKED)
 			RETURNING id, COALESCE(workflow_id, '00000000-0000-0000-0000-000000000000'), environment, connector, trigger_name, COALESCE(connection, ''), events, options, desired,
 			  COALESCE(remote_id, ''), COALESCE(applied_hash, ''), attempts, next_attempt_at IS NULL OR next_attempt_at > now(), COALESCE(remote_status, ''), updated_at`,
-			nullUUID(wf), rowsPerTenant, lease.String(), time.Now().Add(-r.check()))
+			nullUUID(wf), rowsPerTenant, lease.String(), time.Now().Add(-r.check()), owner)
 		if err != nil {
 			return err
 		}
 		out, err = pgx.CollectRows(rows, func(cr pgx.CollectableRow) (row, error) {
-			var x row
+			x := row{owner: owner}
 			var opts []byte
 			err := cr.Scan(&x.id, &x.wf, &x.env, &x.ref, &x.trigger, &x.connection, &x.events, &opts, &x.desired,
 				&x.remoteID, &x.appliedHash, &x.attempts, &x.healthCheck, &x.remoteStatus, &x.updatedAt)
@@ -404,16 +424,36 @@ func (r *Reconciler) claim(ctx context.Context, tenant, wf uuid.UUID) ([]row, er
 }
 
 func (r *Reconciler) reconcileTenant(ctx context.Context, tenant, wf uuid.UUID) (int, error) {
-	rows, err := r.claim(ctx, tenant, wf)
+	rows, err := r.claim(ctx, tenant, wf, uuid.New())
 	if err != nil {
 		return 0, err
 	}
 	for _, x := range rows {
+		// The batch was leased at once; a row reached late may have been
+		// taken over meanwhile. Renew its lease for this row's calls.
+		if ok, err := r.renew(ctx, tenant, x); err != nil || !ok {
+			if err != nil {
+				r.logger().Warn("remote subscription not reconciled", "tenant", tenant, "subscription", x.id, "err", err)
+			}
+			continue
+		}
 		if err := r.reconcile(ctx, tenant, x); err != nil {
 			r.logger().Warn("remote subscription not reconciled", "tenant", tenant, "subscription", x.id, "err", err)
 		}
 	}
 	return len(rows), nil
+}
+
+// renew extends this pass's lease on x before it calls the provider. False:
+// another pass holds the row now.
+func (r *Reconciler) renew(ctx context.Context, tenant uuid.UUID, x row) (bool, error) {
+	var n int64
+	err := db.InTenantTx(ctx, r.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `UPDATE remote_subscriptions SET lease_until = now() + $3::interval WHERE id = $1 AND lease_owner = $2`, x.id, x.owner, r.rowLease().String())
+		n = tag.RowsAffected()
+		return err
+	})
+	return n == 1, err
 }
 
 // outcome is what one reconcile learned, written back in one transaction.
@@ -482,10 +522,7 @@ func (r *Reconciler) apply(ctx context.Context, tenant uuid.UUID, x row) (outcom
 	if err != nil {
 		return out, err
 	}
-	timeout := r.Timeout
-	if timeout == 0 {
-		timeout = 20 * time.Second
-	}
+	timeout := r.timeout()
 	call := connector.RemoteCall{Credentials: creds,
 		HTTP: r.Egress.Client(egress.Policy{Tenant: tenant.String(), Hosts: conn.Manifest.HostsFor(creds), Purpose: "connector:" + conn.Manifest.ID + ":registration"}, timeout),
 		Rotate: func(ctx context.Context, fn connector.RotateFunc) (map[string]string, error) {
@@ -582,16 +619,26 @@ func backoff(attempts int, fatal bool) time.Duration {
 	return min(10*time.Second*time.Duration(1<<min(attempts, 10)), time.Hour)
 }
 
-// record writes what a reconcile learned. The secret is stored before the
-// row records the subscription's id: a crash in between leaves a row
-// without an id, and the next pass adopts the subscription by its name.
+// record writes what a reconcile learned, only while this pass still holds
+// the row: one that another pass took over is left to it (errLeaseLost).
+// The secret and the subscription's id are written in one transaction: a
+// crash before it commits leaves a row without an id, and the next pass
+// adopts the subscription by its name.
 func (r *Reconciler) record(ctx context.Context, tenant uuid.UUID, x row, out outcome, callErr error) error {
-	if out.secret != "" {
-		if _, err := r.Vault.Put(ctx, tenant, SecretEnv, SecretName(x.id), []byte(out.secret), "system"); err != nil {
+	return db.InTenantTx(ctx, r.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		var held bool
+		err := tx.QueryRow(ctx, `SELECT lease_owner IS NOT DISTINCT FROM $2 FROM remote_subscriptions WHERE id = $1 FOR UPDATE`, x.id, x.owner).Scan(&held)
+		if errors.Is(err, pgx.ErrNoRows) || err == nil && !held {
+			return errLeaseLost
+		}
+		if err != nil {
 			return err
 		}
-	}
-	return db.InTenantTx(ctx, r.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		if out.secret != "" {
+			if _, err := r.Vault.PutTx(ctx, tx, tenant, SecretEnv, SecretName(x.id), []byte(out.secret), "system"); err != nil {
+				return err
+			}
+		}
 		if callErr != nil {
 			fatal := effects.Classify(callErr) == effects.KindFatal
 			state := "pending"
@@ -648,7 +695,7 @@ func (r *Reconciler) record(ctx context.Context, tenant uuid.UUID, x row, out ou
 			expires = &out.expiresAt
 		}
 		// A check that reads no expiry keeps the one last applied.
-		_, err := tx.Exec(ctx, `UPDATE remote_subscriptions SET remote_id = COALESCE($2, remote_id), state = 'active', remote_status = $3, status_reason = $4,
+		_, err = tx.Exec(ctx, `UPDATE remote_subscriptions SET remote_id = COALESCE($2, remote_id), state = 'active', remote_status = $3, status_reason = $4,
 			last_error = NULL, attempts = 0, checked_at = now(), lease_until = NULL, expires_at = COALESCE($7, expires_at),
 			applied_hash = CASE WHEN updated_at = $6 THEN $5 ELSE applied_hash END,
 			next_attempt_at = CASE WHEN updated_at <> $6 THEN next_attempt_at

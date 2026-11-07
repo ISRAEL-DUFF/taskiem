@@ -245,9 +245,14 @@ triggers:
   # signature with OPay's public key and the five-minute timestamp; its
   # enricher then checks the client auth key and decrypts the notification
   # with the business's private key, so a run sees the plain fields
-  # (status, orderNo, payNo, amount, fee, sn, …). The X-Opay-Tranid header
-  # names the transaction, so retries are dropped; the encrypted body
-  # cannot carry a correlation.
+  # (status, orderNo, payNo, amount, fee, sn, …). Deliveries are
+  # deduplicated on the payment and its status, which the connector's
+  # keyer reads from the decrypted notification, so a retry is dropped
+  # even when OPay signs it again with a new timestamp; the dedup below
+  # (OPay's signature) is kept only for a notification naming no payment.
+  # Not on the X-Opay-Tranid header: a header is not signed, so a replay
+  # could change it and start the sale's workflows again. The encrypted
+  # body cannot carry a correlation.
   payment:
     type: webhook
     title: Sales
@@ -255,7 +260,7 @@ triggers:
     verify: { scheme: connector, secret_field: opay_public_key }
     events: [payment]
     event_type: '="payment"'
-    dedup: '="x-opay-tranid" in headers ? string(headers["x-opay-tranid"]) : ""'
+    dedup: '=has(body.sign) ? string(body.sign) : ""'
 # What a payment is in Taskiem's words (rule 16,
 # schemas/capabilities-v1.json): a pos.sale, which Taskiem's money log
 # records, declined ones included. The fields are read from OPay's plain
