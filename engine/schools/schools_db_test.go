@@ -270,10 +270,14 @@ func TestFamilies(t *testing.T) {
 		_, err := w.s.AddStudent(ctx, tx, tn, schools.StudentIn{Name: "Ebube Eze", AdmissionNumber: "GCA/001", ClassID: jss1.ID, FamilyID: &f.ID, DateOfBirth: "2014-02-03"}, "user:ada")
 		return err
 	})
-	if n := w.count(`SELECT count(*) FROM school_guardians WHERE details::text LIKE '%Ngozi%' OR details::text LIKE '%803%'`); n != 0 {
+	// The details are a sealed envelope ({"$pii", "subject", "ct"}) and
+	// nothing else: no clear name, phone, email or date of birth beside it.
+	// (A text search for the digits of the phone or the year would match
+	// the base64 ciphertext itself now and then; it did on 7 November 2026.)
+	if n := w.count(`SELECT count(*) FROM school_guardians WHERE NOT (details ? 'ct') OR details ?| array['name', 'phone', 'email', 'relationship'] OR details::text LIKE '%Ngozi%'`); n != 0 {
 		t.Error("a guardian's details in the clear")
 	}
-	if n := w.count(`SELECT count(*) FROM school_students WHERE details::text LIKE '%Ebube%' OR details::text LIKE '%2014%'`); n != 0 {
+	if n := w.count(`SELECT count(*) FROM school_students WHERE NOT (details ? 'ct') OR details ?| array['name', 'date_of_birth'] OR details::text LIKE '%Ebube%'`); n != 0 {
 		t.Error("a student's details in the clear")
 	}
 	d := mustStudent(t, w, "gca/001")

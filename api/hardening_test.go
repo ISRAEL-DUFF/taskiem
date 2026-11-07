@@ -8,8 +8,11 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/israel-duff/taskiem/engine/totp"
 )
 
 // Security self-review, 2026-10-07 round: S35 (step-up bound to its
@@ -216,19 +219,24 @@ func TestKeyOperationsNeedStepUp(t *testing.T) {
 		t.Errorf("disable with its assertion and no customer key: %d %v", st, out)
 	}
 
-	// An authenticator code works too.
+	// An authenticator code works too. The codes are made from one time
+	// step fixed here, not from the clock at each call: a 30-second boundary
+	// between the confirm and the rotate would otherwise make the "used"
+	// code a fresh one, which the server rightly accepts (skew of one step).
 	secret := owner.must(200, "POST", "/v1/me/totp", map[string]any{"passkey": stepUp(t, owner, key, "account.reauth", "totp.setup")})["secret"].(string)
-	owner.must(204, "POST", "/v1/me/totp/confirm", map[string]any{"code": codeAfter(secret, 0)})
-	if st, out := owner.do("POST", "/v1/keys/rotate", map[string]any{"totp": codeAfter(secret, 0)}); st != 403 && st != 429 {
+	base := totp.Step(time.Now())
+	code := func(n int64) string { c, _ := totp.Code(secret, base+n); return c }
+	owner.must(204, "POST", "/v1/me/totp/confirm", map[string]any{"code": code(0)})
+	if st, out := owner.do("POST", "/v1/keys/rotate", map[string]any{"totp": code(0)}); st != 403 && st != 429 {
 		t.Errorf("a used code rotated: %d %v", st, out)
 	}
-	owner.must(202, "POST", "/v1/keys/rotate", map[string]any{"totp": codeAfter(secret, 1)})
+	owner.must(202, "POST", "/v1/keys/rotate", map[string]any{"totp": code(1)})
 
 	// An API key is not a person and has no second factor.
 	apiKey := owner.must(201, "POST", "/v1/api-keys", map[string]any{"name": "ops", "permissions": []string{"key.manage"}})["key"].(string)
 	bot := &client{t: t, base: w.base, token: apiKey}
 	bot.must(200, "GET", "/v1/keys", nil)
-	if st, out := bot.do("POST", "/v1/keys/rotate", map[string]any{"totp": codeAfter(secret, 1)}); st != 403 || !strings.Contains(fmt.Sprint(out["error"]), "API key") {
+	if st, out := bot.do("POST", "/v1/keys/rotate", map[string]any{"totp": code(1)}); st != 403 || !strings.Contains(fmt.Sprint(out["error"]), "API key") {
 		t.Errorf("API key rotated: %d %v", st, out)
 	}
 	audit := toJSON(owner.must(200, "GET", "/v1/audit?limit=100", nil))
