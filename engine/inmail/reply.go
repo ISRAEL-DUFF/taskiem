@@ -338,17 +338,16 @@ func (s *Service) threadEndpoint(ctx context.Context, tx pgx.Tx, e ThreadEmail) 
 		return row.Scan(&ep.id, &ep.publicID, &status, &env, &ep.replyKey, &threads)
 	}
 	name := strings.TrimSpace(e.Address)
-	var err error
-	switch {
-	case name == "":
-		err = scan(tx.QueryRow(ctx, cols+`JOIN runs r ON r.workflow_id = e.workflow_id WHERE r.id = $1 AND e.environment = $2`, e.Run, e.Environment))
+	if name == "" {
+		err := scan(tx.QueryRow(ctx, cols+`JOIN runs r ON r.workflow_id = e.workflow_id WHERE r.id = $1 AND e.environment = $2`, e.Run, e.Environment))
 		switch {
 		case errors.Is(err, pgx.ErrNoRows):
 			return ep, fatalf("sending in a thread needs this workflow to start when an email comes in, with threads on, or the address of one that does")
 		case err != nil:
 			return ep, err
 		}
-	default:
+	} else {
+		var err error
 		if wf, perr := uuid.Parse(name); perr == nil {
 			// One address per environment: this environment's first.
 			err = scan(tx.QueryRow(ctx, cols+`WHERE e.workflow_id = $1 AND e.tenant_id = $2 ORDER BY e.environment = $3 DESC LIMIT 1`, wf, e.Tenant, e.Environment))
