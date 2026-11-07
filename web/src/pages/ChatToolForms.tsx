@@ -1,4 +1,5 @@
 import { useRef, useState, type ReactNode } from "react";
+import { tileLetters, toneOf } from "../lib/tone";
 import {
   del,
   get,
@@ -60,7 +61,10 @@ function FormFrame({
   onSaved,
   ready = true,
   canEdit = true,
+  onCancel,
 }: {
+  /** With it, the foot is Cancel | Save changes (the DeskSeller board). */
+  onCancel?: () => void;
   children: ReactNode;
   save: Saver;
   saveWords?: string;
@@ -89,7 +93,16 @@ function FormFrame({
         <ErrorBox error={error} />
       </fieldset>
       <div className="tk-sheet-foot">
-        {canEdit ? (
+        {canEdit && onCancel ? (
+          <div className="tk-form-foot-two">
+            <button type="button" className="tk-btn soft" onClick={onCancel}>
+              Cancel
+            </button>
+            <button type="submit" className="tk-cta" disabled={busy || !ready}>
+              {busy ? "Saving…" : "Save changes"}
+            </button>
+          </div>
+        ) : canEdit ? (
           <button type="submit" className="tk-cta" disabled={busy || !ready}>
             {busy ? "Saving…" : saveWords}
           </button>
@@ -218,8 +231,12 @@ function Photos({ item, canEdit }: { item: StockItem; canEdit: boolean }) {
         />
       ))}
       {shots.length === 0 && (
-        <span className="tk-photo-none" aria-hidden="true">
-          {item.name.slice(0, 2).toUpperCase()}
+        <span
+          className="tk-photo-none"
+          aria-hidden="true"
+          data-tone={toneOf(item.name)}
+        >
+          {tileLetters(item.name)}
         </span>
       )}
       {canEdit && (
@@ -267,12 +284,15 @@ export function ProductForm({
   onSaved,
   prefill,
   canEdit = true,
+  onCancel,
 }: {
   item: StockItem;
   onSaved: (line: string | null) => void;
   prefill?: Prefill;
   canEdit?: boolean;
+  onCancel?: () => void;
 }) {
+  const [name, setName] = useState(item.name);
   const [price, setPrice] = useState(
     prefill?.priceKobo !== undefined
       ? nairaText(prefill.priceKobo)
@@ -289,6 +309,7 @@ export function ProductForm({
     const change: Record<string, unknown> = {};
     if (!Number.isNaN(kobo) && kobo !== item.price_kobo)
       change.price_kobo = kobo;
+    if (name.trim() && name.trim() !== item.name) change.name = name.trim();
     if (shown !== item.available) change.available = shown;
     if (Object.keys(change).length) {
       await patch(`/v1/stock/items/${encodeURIComponent(item.id)}`, change);
@@ -303,16 +324,20 @@ export function ProductForm({
       });
       said.push("Counted");
     }
-    return said.length ? `${item.name}: saved` : null;
+    return said.length ? `${name.trim() || item.name}: saved` : null;
   };
   return (
     <FormFrame
       save={save}
       onSaved={onSaved}
       canEdit={canEdit}
-      ready={price.trim() === "" || !Number.isNaN(kobo)}
+      onCancel={onCancel}
+      ready={name.trim() !== "" && (price.trim() === "" || !Number.isNaN(kobo))}
     >
       <Photos item={item} canEdit={canEdit} />
+      <KitField label="Name">
+        <input value={name} maxLength={120} onChange={(e) => setName(e.target.value)} />
+      </KitField>
       <Money label="Price" value={price} onChange={setPrice} />
       <div className="tk-form-row">
         <span>

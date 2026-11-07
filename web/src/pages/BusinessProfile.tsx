@@ -70,7 +70,9 @@ function ProfileCard({
         <div className="tk-p-tile big">
           {first && <img src={first.src} alt="" loading="lazy" />}
           <span className="tk-x-cap">
-            {first ? first.caption || "Your first photo" : "Add your first photo"}
+            {first
+              ? first.caption || "Your first photo"
+              : "Add your first photo"}
           </span>
         </div>
         <div className="tk-p-stack">
@@ -99,7 +101,7 @@ function foundLine(s: LinkSettings): string {
 }
 
 export function BusinessProfilePage() {
-  const { can } = useAuth();
+  const { can, me } = useAuth();
   const manage = can("link.manage");
   const [data, setData] = useState<BusinessProfile>();
   const [loadError, setLoadError] = useState<unknown>();
@@ -291,12 +293,16 @@ export function BusinessProfilePage() {
           </section>
 
           <ProfileCard
-            name={form.name}
+            // Empty, the name others see is the storefront's or the business's.
+            name={form.name || me?.tenant_name || ""}
             tagline={form.tagline}
             area={form.area}
             logo={photoSrc(data.logo)}
             photos={gallery
-              .map((g) => ({ src: photoSrc(g.photo) ?? "", caption: g.caption }))
+              .map((g) => ({
+                src: photoSrc(g.photo) ?? "",
+                caption: g.caption,
+              }))
               .filter((g) => g.src)}
           />
 
@@ -318,7 +324,12 @@ export function BusinessProfilePage() {
                   aria-label={data.logo ? "Change logo" : "Add a logo"}
                 >
                   {data.logo ? (
-                    <img src={photoSrc(data.logo)} alt="" width={64} height={64} />
+                    <img
+                      src={photoSrc(data.logo)}
+                      alt=""
+                      width={64}
+                      height={64}
+                    />
                   ) : (
                     <span aria-hidden="true">{profileLetter(form.name)}</span>
                   )}
@@ -449,22 +460,25 @@ export function BusinessProfilePage() {
               <h2 id="profile-photos">Photos</h2>
               <span aria-live="polite" data-testid="profile-count">
                 {gallery.length} of {max}
-                <span className="sr-only">
-                  {" "}
-                  photo{max === 1 ? "" : "s"}
-                </span>
+                <span className="sr-only"> photo{max === 1 ? "" : "s"}</span>
               </span>
             </div>
             <ul className="tk-p-grid" aria-label="Your photos">
               {gallery.map((g, i) => (
-                <li key={g.id} className="tk-p-photo" data-testid="profile-photo">
+                <li
+                  key={g.id}
+                  className="tk-p-photo"
+                  data-testid="profile-photo"
+                >
                   <div className="tk-p-pic">
                     <img
                       src={photoSrc(g.photo)}
                       alt={g.caption || `Photo ${i + 1}`}
                       loading="lazy"
                     />
-                    {i === 0 && <span className="tk-pill lime tk-p-first">First</span>}
+                    {i === 0 && (
+                      <span className="tk-pill lime tk-p-first">First</span>
+                    )}
                     {g.photo.moderation === "rejected" && (
                       <span className="tk-p-refused" role="status">
                         Not accepted for a public page. Remove it.
@@ -485,7 +499,9 @@ export function BusinessProfilePage() {
                           <button
                             type="button"
                             aria-label={`Move photo ${i + 1} earlier`}
-                            disabled={act.busy || stepTo(i, -1, gallery.length) < 0}
+                            disabled={
+                              act.busy || stepTo(i, -1, gallery.length) < 0
+                            }
                             onClick={() => reorder(g, -1)}
                           >
                             <Icon name="back" />
@@ -493,7 +509,9 @@ export function BusinessProfilePage() {
                           <button
                             type="button"
                             aria-label={`Move photo ${i + 1} later`}
-                            disabled={act.busy || stepTo(i, 1, gallery.length) < 0}
+                            disabled={
+                              act.busy || stepTo(i, 1, gallery.length) < 0
+                            }
                             onClick={() => reorder(g, 1)}
                           >
                             <Icon name="chevron" />
@@ -513,7 +531,9 @@ export function BusinessProfilePage() {
                       onBlur={(e) => caption(g, e.target.value.trim())}
                     />
                   ) : (
-                    g.caption && <span className="tk-p-caption">{g.caption}</span>
+                    g.caption && (
+                      <span className="tk-p-caption">{g.caption}</span>
+                    )
                   )}
                 </li>
               ))}
@@ -529,7 +549,9 @@ export function BusinessProfilePage() {
                   <button
                     type="button"
                     className="tk-p-add"
-                    disabled={act.busy || uploading > 0 || gallery.length >= max}
+                    disabled={
+                      act.busy || uploading > 0 || gallery.length >= max
+                    }
                     onClick={() => photoInput.current?.click()}
                   >
                     <Icon name="plus" />

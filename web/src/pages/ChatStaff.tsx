@@ -32,8 +32,22 @@ const HOWS: { how: PaidHow; words: string }[] = [
 ];
 
 /** Sell: what was sold, and how it was paid. */
-export function SellSheet({ from, onClose, onSold }: { from?: DOMRect | null; onClose: () => void; onSold?: () => void }) {
-  const items = useLoad(() => get<StockView>("/v1/stock").then((r) => r.items.filter((x) => x.price_kobo !== undefined && x.available)), []);
+export function SellSheet({
+  from,
+  onClose,
+  onSold,
+}: {
+  from?: DOMRect | null;
+  onClose: () => void;
+  onSold?: () => void;
+}) {
+  const items = useLoad(
+    () =>
+      get<StockView>("/v1/stock").then((r) =>
+        r.items.filter((x) => x.price_kobo !== undefined && x.available),
+      ),
+    [],
+  );
   const [qty, setQty] = useState<Record<string, number>>({});
   const [search, setSearch] = useState("");
   const [step, setStep] = useState<"pick" | "pay">("pick");
@@ -47,27 +61,36 @@ export function SellSheet({ from, onClose, onSold }: { from?: DOMRect | null; on
   const keys = useRef(new Map<string, string>());
   const sale = saleOf(items.data ?? [], qty);
   const keyOf = () => {
-    const sig = JSON.stringify([sale.lines.map((l) => [l.item.id, l.quantity]), how]);
+    const sig = JSON.stringify([
+      sale.lines.map((l) => [l.item.id, l.quantity]),
+      how,
+    ]);
     let k = keys.current.get(sig);
     if (!k) keys.current.set(sig, (k = `sell-${crypto.randomUUID()}`));
     return k;
   };
   const hows = useRef<(HTMLButtonElement | null)[]>([]);
   const moveHow = (by: number) => {
-    const i = (HOWS.findIndex((h) => h.how === how) + by + HOWS.length) % HOWS.length;
+    const i =
+      (HOWS.findIndex((h) => h.how === how) + by + HOWS.length) % HOWS.length;
     const next = HOWS[i];
     if (!next) return;
     setHow(next.how);
     hows.current[i]?.focus();
   };
   const q = search.trim().toLowerCase();
-  const shown = (items.data ?? []).filter((it) => !q || it.name.toLowerCase().includes(q));
+  const shown = (items.data ?? []).filter(
+    (it) => !q || it.name.toLowerCase().includes(q),
+  );
   const record = async () => {
     setBusy(true);
     setError(undefined);
     try {
       await postOnce("/v1/stock/sales", keyOf(), {
-        lines: sale.lines.map((l) => ({ item_id: l.item.id, quantity: l.quantity })),
+        lines: sale.lines.map((l) => ({
+          item_id: l.item.id,
+          quantity: l.quantity,
+        })),
         paid_how: how,
       });
       setDone(`Sold: ${formatPrice(sale.total)}`);
@@ -78,7 +101,8 @@ export function SellSheet({ from, onClose, onSold }: { from?: DOMRect | null; on
       setBusy(false);
     }
   };
-  const set = (it: StockItem, n: number) => setQty({ ...qty, [it.id]: Math.max(0, n) });
+  const set = (it: StockItem, n: number) =>
+    setQty({ ...qty, [it.id]: Math.max(0, n) });
   return (
     <Sheet
       title={step === "pay" ? "How was it paid?" : "Sell"}
@@ -94,7 +118,12 @@ export function SellSheet({ from, onClose, onSold }: { from?: DOMRect | null; on
               <span className="tk-bag-count">{sale.count}</span>
               <span className="tk-bag-total">{formatPrice(sale.total)}</span>
             </span>
-            <button type="button" className="tk-bag-go" disabled={sale.lines.length === 0} onClick={() => setStep("pay")}>
+            <button
+              type="button"
+              className="tk-bag-go"
+              disabled={sale.lines.length === 0}
+              onClick={() => setStep("pay")}
+            >
               Next <Icon name="chevron" />
             </button>
           </div>
@@ -104,7 +133,12 @@ export function SellSheet({ from, onClose, onSold }: { from?: DOMRect | null; on
               <span>Total</span>
               <b>{formatPrice(sale.total)}</b>
             </div>
-            <button type="button" className="tk-cta" disabled={busy} onClick={() => void record()}>
+            <button
+              type="button"
+              className="tk-cta"
+              disabled={busy}
+              onClick={() => void record()}
+            >
               {busy ? "Recording…" : `Record the sale`}
             </button>
           </div>
@@ -127,7 +161,12 @@ export function SellSheet({ from, onClose, onSold }: { from?: DOMRect | null; on
           <label className="tk-search">
             <Icon name="search" />
             <span className="sr-only">Search what you sell</span>
-            <input type="search" placeholder="Search what you sell" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input
+              type="search"
+              placeholder="Search what you sell"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </label>
           <ul className="tk-sheet-list tk-order-list tk-stagger">
             {shown.map((it) => {
@@ -135,7 +174,11 @@ export function SellSheet({ from, onClose, onSold }: { from?: DOMRect | null; on
               const out = it.stock !== null && it.stock <= 0;
               const over = it.stock !== null && n > Math.max(0, it.stock);
               return (
-                <li key={it.id} className={`tk-order-row${n > 0 ? " on" : ""}`} data-testid="sell-row">
+                <li
+                  key={it.id}
+                  className={`tk-order-row${n > 0 ? " on" : ""}`}
+                  data-testid="sell-row"
+                >
                   <span className="tk-row-tile" aria-hidden="true">
                     <Icon name="box" />
                   </span>
@@ -144,20 +187,37 @@ export function SellSheet({ from, onClose, onSold }: { from?: DOMRect | null; on
                     <span className="tk-row-sub">
                       {formatPrice(it.price_kobo ?? 0)}
                       {it.unit ? ` a ${it.unit}` : ""}
-                      {it.stock !== null ? ` · ${out ? "none left" : `${it.stock} left`}` : ""}
+                      {it.stock !== null
+                        ? ` · ${out ? "none left" : `${it.stock} left`}`
+                        : ""}
                     </span>
                     {over && (
                       <span className="tk-row-warn" role="status">
-                        {out ? "None left in your stock" : `Only ${it.stock} left in your stock`}
+                        {out
+                          ? "None left in your stock"
+                          : `Only ${it.stock} left in your stock`}
                       </span>
                     )}
                   </span>
-                  <span className="tk-qty" role="group" aria-label={`How many ${it.name}`}>
-                    <button type="button" aria-label={`One fewer ${it.name}`} disabled={n === 0} onClick={() => set(it, n - 1)}>
+                  <span
+                    className="tk-qty"
+                    role="group"
+                    aria-label={`How many ${it.name}`}
+                  >
+                    <button
+                      type="button"
+                      aria-label={`One fewer ${it.name}`}
+                      disabled={n === 0}
+                      onClick={() => set(it, n - 1)}
+                    >
                       −
                     </button>
                     <span aria-live="polite">{n}</span>
-                    <button type="button" aria-label={`One more ${it.name}`} onClick={() => set(it, n + 1)}>
+                    <button
+                      type="button"
+                      aria-label={`One more ${it.name}`}
+                      onClick={() => set(it, n + 1)}
+                    >
                       +
                     </button>
                   </span>
@@ -178,7 +238,11 @@ export function SellSheet({ from, onClose, onSold }: { from?: DOMRect | null; on
               </li>
             ))}
           </ul>
-          <div className="tk-hows" role="radiogroup" aria-label="How it was paid">
+          <div
+            className="tk-hows"
+            role="radiogroup"
+            aria-label="How it was paid"
+          >
             {HOWS.map((h, i) => (
               <button
                 key={h.how}
@@ -205,7 +269,9 @@ export function SellSheet({ from, onClose, onSold }: { from?: DOMRect | null; on
               </button>
             ))}
           </div>
-          <p className="tk-form-now">The stock goes down, and the money is written in your money log.</p>
+          <p className="tk-form-now">
+            The stock goes down, and the money is written in your money log.
+          </p>
           <ErrorBox error={error} />
         </div>
       )}
@@ -213,11 +279,24 @@ export function SellSheet({ from, onClose, onSold }: { from?: DOMRect | null; on
   );
 }
 
-const HOW_WORDS: Record<string, string> = { cash: "Cash", transfer: "Transfer", pos: "POS", credit: "On credit" };
+const HOW_WORDS: Record<string, string> = {
+  cash: "Cash",
+  transfer: "Transfer",
+  pos: "POS",
+  credit: "On credit",
+};
 
 /** Handover: the shift so far, the cash counted against the cash sold, a
  * note; told to those who run the business. */
-export function HandoverSheet({ from, onClose, onSent }: { from?: DOMRect | null; onClose: () => void; onSent?: () => void }) {
+export function HandoverSheet({
+  from,
+  onClose,
+  onSent,
+}: {
+  from?: DOMRect | null;
+  onClose: () => void;
+  onSent?: () => void;
+}) {
   const shift = useLoad(() => get<Handover>("/v1/chat-handover"), []);
   const [cash, setCash] = useState("");
   const [note, setNote] = useState("");
@@ -226,13 +305,20 @@ export function HandoverSheet({ from, onClose, onSent }: { from?: DOMRect | null
   const [done, setDone] = useState(false);
   const [shut, setShut] = useState(false);
   const h = shift.data;
-  const counted = cash.trim() === "" ? undefined : Math.round(Number(cash.replace(/[,\s₦]/g, "")) * 100);
+  const counted =
+    cash.trim() === ""
+      ? undefined
+      : Math.round(Number(cash.replace(/[,\s₦]/g, "")) * 100);
   const sold = h?.sales?.by_how.cash ?? 0;
   const send = async () => {
     setBusy(true);
     setError(undefined);
     try {
-      await post("/v1/chat-handover", { ...(counted !== undefined && !Number.isNaN(counted) && { cash_counted_kobo: counted }), note: note.trim() });
+      await post("/v1/chat-handover", {
+        ...(counted !== undefined &&
+          !Number.isNaN(counted) && { cash_counted_kobo: counted }),
+        note: note.trim(),
+      });
       setDone(true);
       onSent?.();
       window.setTimeout(() => setShut(true), 1300);
@@ -249,7 +335,14 @@ export function HandoverSheet({ from, onClose, onSent }: { from?: DOMRect | null
       shut={shut}
       testid="handover-sheet"
       footer={
-        <button type="button" className="tk-cta" disabled={busy || !h || (counted !== undefined && Number.isNaN(counted))} onClick={() => void send()}>
+        <button
+          type="button"
+          className="tk-cta"
+          disabled={
+            busy || !h || (counted !== undefined && Number.isNaN(counted))
+          }
+          onClick={() => void send()}
+        >
           {busy ? "Sending…" : "Hand over"}
         </button>
       }
@@ -269,7 +362,9 @@ export function HandoverSheet({ from, onClose, onSent }: { from?: DOMRect | null
               <b>{formatPrice(h.sales.total_kobo)}</b>
               <span className="tk-row-sub">
                 {h.sales.count === 1 ? "1 sale" : `${h.sales.count} sales`}
-                {h.sales.waiting > 0 ? ` · ${h.sales.waiting} waiting for their money` : ""}
+                {h.sales.waiting > 0
+                  ? ` · ${h.sales.waiting} waiting for their money`
+                  : ""}
               </span>
             </div>
           )}
@@ -305,12 +400,27 @@ export function HandoverSheet({ from, onClose, onSent }: { from?: DOMRect | null
           </ul>
           <KitField
             label="Cash counted (₦)"
-            hint={counted !== undefined && !Number.isNaN(counted) ? `${cashWords(counted, sold, formatPrice)} · ${formatPrice(sold)} sold in cash` : `${formatPrice(sold)} sold in cash`}
+            hint={
+              counted !== undefined && !Number.isNaN(counted)
+                ? `${cashWords(counted, sold, formatPrice)} · ${formatPrice(sold)} sold in cash`
+                : `${formatPrice(sold)} sold in cash`
+            }
           >
-            <input inputMode="decimal" value={cash} onChange={(e) => setCash(e.target.value)} placeholder="0" />
+            <input
+              inputMode="decimal"
+              value={cash}
+              onChange={(e) => setCash(e.target.value)}
+              placeholder="0"
+            />
           </KitField>
           <KitField label="A note for the next shift (optional)">
-            <textarea rows={2} value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} placeholder="The freezer is making a noise" />
+            <textarea
+              rows={2}
+              value={note}
+              maxLength={500}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="The freezer is making a noise"
+            />
           </KitField>
           <ErrorBox error={error} />
         </div>
@@ -326,15 +436,38 @@ export function ChartCard({ chart }: { chart: SalesChart }) {
   const change = changeWords(chart.change_pct, chart.than);
   const step = chart.bars.length > 10 ? 5 : 1;
   return (
-    <article className="tk-chart" aria-label={`${chart.title}: ${formatPrice(chart.total_kobo)}`} data-testid="chart-card">
+    <article
+      className="tk-chart"
+      aria-label={`${chart.title}: ${formatPrice(chart.total_kobo)}`}
+      data-testid="chart-card"
+    >
       <span className="tk-kicker">{chart.title}</span>
       <b className="tk-chart-total">{formatPrice(chart.total_kobo)}</b>
-      {change && <span className={`tk-chart-change ${chart.change_pct !== null && chart.change_pct < 0 ? "down" : "up"}`}>{change}</span>}
-      <span className="tk-bars" role="img" aria-label={chart.bars.map((b) => `${b.label} ${formatPrice(b.kobo)}`).join(", ")}>
+      {change && (
+        <span
+          className={`tk-chart-change ${chart.change_pct !== null && chart.change_pct < 0 ? "down" : "up"}`}
+        >
+          {change}
+        </span>
+      )}
+      <span
+        className="tk-bars"
+        role="img"
+        aria-label={chart.bars
+          .map((b) => `${b.label} ${formatPrice(b.kobo)}`)
+          .join(", ")}
+      >
         {chart.bars.map((b, i) => (
-          <span key={b.day} className={`tk-bar${i === chart.highlight || chart.highlight < 0 ? " on" : ""}`}>
-            <span style={{ height: `${Math.round((heights[i] ?? 0) * 100)}%` }} />
-            <small aria-hidden="true">{i % step === 0 || i === chart.bars.length - 1 ? b.label : ""}</small>
+          <span
+            key={b.day}
+            className={`tk-bar${i === chart.highlight || chart.highlight < 0 ? " on" : ""}`}
+          >
+            <span
+              style={{ height: `${Math.round((heights[i] ?? 0) * 100)}%` }}
+            />
+            <small aria-hidden="true">
+              {i % step === 0 || i === chart.bars.length - 1 ? b.label : ""}
+            </small>
           </span>
         ))}
       </span>
@@ -345,7 +478,13 @@ export function ChartCard({ chart }: { chart: SalesChart }) {
 /** The morning briefing (the Alerts design): a pine card from 8am with
  * yesterday's sales and the week's bars, and what is owed, low and due
  * today, each opening its tool or page; Got it puts it away for the day. */
-export function BriefingCard({ openTool, onAsk }: { openTool: (k: ToolKey, from?: DOMRect) => void; onAsk: (words: string) => void }) {
+export function BriefingCard({
+  openTool,
+  onAsk,
+}: {
+  openTool: (k: ToolKey, from?: DOMRect) => void;
+  onAsk: (words: string) => void;
+}) {
   const { me } = useAuth();
   const [b, setB] = useState<Briefing>();
   const [gone, setGone] = useState<string>();
@@ -376,28 +515,42 @@ export function BriefingCard({ openTool, onAsk }: { openTool: (k: ToolKey, from?
   const gotIt = () => {
     setGone(b.key);
     setError(undefined);
-    post("/v1/chat-alerts/later", { key: b.key, hours: 24 }).catch((e: unknown) => {
-      // Not put away: the card comes back, saying so.
-      setGone(undefined);
-      setError(e);
-    });
+    post("/v1/chat-alerts/later", { key: b.key, hours: 24 }).catch(
+      (e: unknown) => {
+        // Not put away: the card comes back, saying so.
+        setGone(undefined);
+        setError(e);
+      },
+    );
   };
   const day = new Date(`${b.day}T08:00:00`);
-  const change = b.sales && changeWords(b.sales.change_pct, `last ${b.sales.weekday}`);
+  const change =
+    b.sales && changeWords(b.sales.change_pct, `last ${b.sales.weekday}`);
   const heights = b.sales ? barHeights(b.sales.week) : [];
   return (
-    <article className="tk-brief" aria-label="Morning briefing" data-testid="briefing-card">
+    <article
+      className="tk-brief"
+      aria-label="Morning briefing"
+      data-testid="briefing-card"
+    >
       <span className="tk-brief-head">
         <span>
-          <span className="tk-kicker">Good morning, {firstName(me?.user?.name, me?.user?.email)}</span>
-          <span className="tk-brief-day">{day.toLocaleDateString("en-GB", { weekday: "long" })} · 8:00</span>
+          <span className="tk-kicker">
+            Good morning, {firstName(me?.user?.name, me?.user?.email)}
+          </span>
+          <span className="tk-brief-day">
+            {day.toLocaleDateString("en-GB", { weekday: "long" })} · 8:00
+          </span>
         </span>
-        <button type="button" className="tk-brief-ok" onClick={gotIt}>
-          Got it<span className="sr-only">: put the briefing away for today</span>
-        </button>
+        {/* Live: today's numbers (the Alerts board's dot). */}
+        <span className="tk-brief-live" aria-hidden="true" />
       </span>
       {b.sales && (
-        <button type="button" className="tk-brief-sales" onClick={() => onAsk("how did we do yesterday")}>
+        <button
+          type="button"
+          className="tk-brief-sales"
+          onClick={() => onAsk("how did we do yesterday")}
+        >
           <span>
             <span className="tk-brief-label">Sales yesterday</span>
             <b>{formatPrice(b.sales.yesterday_kobo)}</b>
@@ -405,7 +558,11 @@ export function BriefingCard({ openTool, onAsk }: { openTool: (k: ToolKey, from?
           </span>
           <span className="tk-brief-bars" aria-hidden="true">
             {b.sales.week.map((d, i, week) => (
-              <span key={d.day} className={i === week.length - 1 ? "on" : undefined} style={{ height: `${Math.round((heights[i] ?? 0) * 100)}%` }} />
+              <span
+                key={d.day}
+                className={i === week.length - 1 ? "on" : undefined}
+                style={{ height: `${Math.round((heights[i] ?? 0) * 100)}%` }}
+              />
             ))}
           </span>
           <span className="sr-only">: ask how we did yesterday</span>
@@ -419,7 +576,13 @@ export function BriefingCard({ openTool, onAsk }: { openTool: (k: ToolKey, from?
           </Link>
         )}
         {b.low !== undefined && (
-          <button type="button" className="tk-brief-tile" onClick={(e) => openTool("stock", e.currentTarget.getBoundingClientRect())}>
+          <button
+            type="button"
+            className="tk-brief-tile"
+            onClick={(e) =>
+              openTool("stock", e.currentTarget.getBoundingClientRect())
+            }
+          >
             <span>Low stock</span>
             <b>{b.low === 1 ? "1 item" : `${b.low} items`}</b>
           </button>
@@ -437,6 +600,9 @@ export function BriefingCard({ openTool, onAsk }: { openTool: (k: ToolKey, from?
           </Link>
         )}
       </span>
+      <button type="button" className="tk-brief-ok" onClick={gotIt}>
+        Got it<span className="sr-only">: put the briefing away for today</span>
+      </button>
       {error !== undefined && (
         <p className="tk-brief-err" role="alert">
           That didn't go through. Try Got it again.

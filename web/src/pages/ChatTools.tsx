@@ -13,7 +13,7 @@ import { Link } from "react-router-dom";
 import { get } from "../api";
 import { useAuth } from "../auth";
 import { Icon } from "../icons";
-import { toneOf } from "../lib/tone";
+import { tileLetters, toneOf } from "../lib/tone";
 import { KitEmpty, KitLoading, Pill, SavedTick, Sheet } from "../kit";
 import type { Service } from "../lib/bookings";
 import type { PriceList } from "../lib/pricelists";
@@ -36,7 +36,6 @@ import {
   type ToolKey,
   type ToolRow,
 } from "../lib/tools";
-import { initialsOf } from "./ChatAvatar";
 
 // Chat tools (docs/spec/chat-tools.md §3): the tools panel over the
 // composer (the grid button, or "/"), and the sheet (kit.tsx) a tool opens
@@ -267,18 +266,7 @@ export function ToolsPanel({
   );
 }
 
-/** A row's tile: the first letters of the name's first two words ("Jollof
- * rice" JR); one word gives its first letter and the next consonant ("Zobo"
- * ZB, "Chapman" CH), as the boards draw them. */
-export const tileLetters = (name: string) => {
-  const words = name.split(/\s+/).filter((w) => /^\p{L}/u.test(w));
-  if (words.length === 1) {
-    const w = words[0] ?? "";
-    const next = w.slice(1).match(/[b-df-hj-np-tv-z]/i)?.[0] ?? w.charAt(1);
-    return (w.charAt(0) + next).toUpperCase();
-  }
-  return initialsOf(words.join(" ") || name);
-};
+
 
 /** What a tool's row opens: its form, or a look at it. */
 /** Whether the person may change what a tool shows (else they see it). */
@@ -313,6 +301,7 @@ function Detail({
   prefill,
   canEdit,
   onReorder,
+  onCancel,
 }: {
   tool: ToolKey;
   row: ToolRow | "add";
@@ -320,6 +309,8 @@ function Detail({
   prefill?: Prefill;
   canEdit: boolean;
   onReorder?: (p: Purchase) => void;
+  /** Back to the list without saving (a form's Cancel). */
+  onCancel?: () => void;
 }) {
   if (row === "add")
     return tool === "services" ? (
@@ -333,6 +324,7 @@ function Detail({
         <ProductForm
           item={row.data as StockItem}
           onSaved={onSaved}
+          onCancel={onCancel}
           prefill={prefill}
           canEdit={canEdit}
         />
@@ -474,6 +466,7 @@ export function ToolSheet({
         open === "add" ? (add ?? tool.title) : open ? open.name : tool.title
       }
       count={open ? undefined : list?.length}
+      crumb={open && open !== "add" ? tool.title : undefined}
       from={from}
       onClose={onClose}
       onBack={open ? () => setOpen(undefined) : undefined}
@@ -509,6 +502,7 @@ export function ToolSheet({
           prefill={start?.prefill}
           canEdit={mayEdit(key, can)}
           onReorder={onReorder}
+          onCancel={() => setOpen(undefined)}
         />
       ) : (
         <>

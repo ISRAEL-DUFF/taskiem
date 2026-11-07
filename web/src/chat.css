@@ -363,3 +363,31 @@ img.tk-live-tile { object-fit: cover; }
 .chat-avatar.accent { background: var(--brand); color: var(--brand-dark); }
 .chat-avatar.accent svg { width: 20px; height: 20px; }
 .composer > .send-button:focus-visible, .composer > .icon-button.primary:focus-visible, .composer-tools:focus-visible { box-shadow: var(--ring); }
+/* The briefing: the live dot in its corner; Got it a quiet line under the
+   tiles (the Alerts board, with the person's answer). */
+.tk-brief-live { flex: none; width: 10px; height: 10px; margin: 6px 4px 0 0; border-radius: 50%; background: var(--brand-dark); }
+.tk-brief .tk-brief-ok, .tk-brief .tk-brief-ok:hover:not(:disabled) { display: block; width: 100%; min-height: 40px; margin-top: 10px; padding: 0; border: 0; border-radius: 12px; background: none; box-shadow: none; font-size: 13px; font-weight: 600; color: color-mix(in srgb, var(--tk-on-pine) 78%, transparent); text-align: center; }
+.tk-brief .tk-brief-ok:hover:not(:disabled) { color: var(--tk-on-pine); }
+.tk-brief .tk-brief-ok:focus-visible { box-shadow: 0 0 0 3px var(--brand-dark); }
+/* A form's head: "Products / Jollof rice" (DeskSeller), small. */
+.tk-sheet-head.crumbed { align-items: center; gap: 6px; }
+.tk-crumb-back, .tk-crumb-back:hover:not(:disabled) { flex: none; min-height: 32px; padding: 0; border: 0; background: none; box-shadow: none; font-size: 14px; font-weight: 500; color: var(--muted); }
+.tk-crumb-back:hover:not(:disabled) { color: var(--text); }
+.tk-crumb-back::after { content: "/"; margin: 0 2px 0 8px; color: var(--muted); }
+.tk-sheet-head.crumbed h2 { font-size: 14px; font-weight: 700; letter-spacing: 0; }
+.tk-sheet-head.crumbed .tk-sheet-titles { flex: 1; min-width: 0; }
+/* A form's foot: Cancel beside Save changes. */
+.tk-form-foot-two { display: flex; gap: 12px; }
+.tk-form-foot-two .tk-btn { flex: none; min-height: 56px; padding: 0 22px; font-size: 16px; }
+.tk-form-foot-two .tk-cta { flex: 1; }
+/* A product with no photo: its letters in its tone, large (DeskSeller). */
+.tk-photo-none[data-tone="pine"] { background: var(--tone-pine-bg); color: var(--tone-pine-ink); }
+.tk-photo-none[data-tone="lime"] { background: var(--tone-lime-bg); color: var(--tone-lime-ink); }
+.tk-photo-none[data-tone="peach"] { background: var(--tone-peach-bg); color: var(--tone-peach-ink); }
+.tk-photo-none[data-tone="yellow"] { background: var(--tone-yellow-bg); color: var(--tone-yellow-ink); }
+.tk-photo-none[data-tone="green"] { background: var(--tone-green-bg); color: var(--tone-green-ink); }
+.tk-photo-none[data-tone="lavender"] { background: var(--tone-lavender-bg); color: var(--tone-lavender-ink); }
+.tk-photo-none[data-tone="blue"] { background: var(--tone-blue-bg); color: var(--tone-blue-ink); }
+.tk-photo-none[data-tone="sand"] { background: var(--tone-sand-bg); color: var(--tone-sand-ink); }
+/* Alert cards' buttons as the Alerts board sizes them. */
+.tk-alerts .tk-btn, .tk-alerts button.tk-btn { min-height: 46px; }

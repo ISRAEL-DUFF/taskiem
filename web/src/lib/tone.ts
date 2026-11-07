@@ -11,3 +11,15 @@ export function toneOf(name: string): Tone {
   for (const ch of name.trim().toLowerCase()) h = (h * 31 + (ch.codePointAt(0) ?? 0)) >>> 0;
   return TONES[h % TONES.length] ?? "pine";
 }
+
+/** A tile's letters: the first letters of the name's first two words
+ * ("Jollof rice" JR); one word gives its first letter and the next
+ * consonant ("Zobo" ZB, "Chapman" CH), as the boards draw them. */
+export function tileLetters(name: string): string {
+  const words = name.split(/\s+/).filter((w) => /^\p{L}/u.test(w));
+  if (words.length === 0) return name.slice(0, 1).toUpperCase();
+  const [a = "", b] = words;
+  if (b) return (a.charAt(0) + b.charAt(0)).toUpperCase();
+  const next = a.slice(1).match(/[b-df-hj-np-tv-z]/i)?.[0] ?? a.charAt(1);
+  return (a.charAt(0) + next).toUpperCase();
+}

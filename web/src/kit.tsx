@@ -237,6 +237,7 @@ export function Sheet({
   headExtra,
   lead,
   sub,
+  crumb,
   children,
 }: {
   title: string;
@@ -256,6 +257,8 @@ export function Sheet({
   lead?: ReactNode;
   /** Under the title: "Your prices · updated today". */
   sub?: ReactNode;
+  /** With onBack: the list's name, for a "Products / Jollof rice" head. */
+  crumb?: string;
   children: ReactNode;
 }) {
   const ref = useRef<HTMLElement>(null);
@@ -349,8 +352,8 @@ export function Sheet({
       >
         <div className="tk-sheet-grab" aria-hidden="true" {...drag} />
         <div ref={body} className="tk-sheet-body">
-          <div className="tk-sheet-head">
-            {onBack && (
+          <div className={`tk-sheet-head${onBack && crumb ? " crumbed" : ""}`}>
+            {onBack && !crumb && (
               <button
                 type="button"
                 className="tk-round tk-back"
@@ -358,6 +361,14 @@ export function Sheet({
                 onClick={onBack}
               >
                 <Icon name="back" />
+              </button>
+            )}
+            {onBack && crumb && (
+              // Where you are, as the boards draw it: "Products / Jollof
+              // rice", the first word the way back.
+              <button type="button" className="tk-crumb-back" onClick={onBack}>
+                {crumb}
+                <span className="sr-only">: back to the list</span>
               </button>
             )}
             {lead}
