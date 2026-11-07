@@ -143,6 +143,12 @@ func TestCheck(t *testing.T) {
 		"foreign number": func(m *Message) { m.To = "+447700900123" },
 		"email no subj":  func(m *Message) { m.Channel, m.To = Email, "a@b.co" },
 		"email reply-to": func(m *Message) { m.Channel, m.To, m.Subject, m.ReplyTo = Email, "a@b.co", "Hi", "nope" },
+		"sms threading":  func(m *Message) { m.InReplyTo = "a@b.co" },
+		"bad message id": func(m *Message) { m.Channel, m.To, m.Subject, m.MessageID = Email, "a@b.co", "Hi", "x>\r\nBcc: e@x.co" },
+		"bad reference": func(m *Message) {
+			m.Channel, m.To, m.Subject, m.References = Email, "a@b.co", "Hi", []string{"no-at-sign"}
+		},
+		"references": func(m *Message) { m.Channel, m.To, m.Subject, m.References = Email, "a@b.co", "Hi", make([]string, 21) },
 	} {
 		m := base()
 		mut(&m)
@@ -267,5 +273,28 @@ func TestTransportFailures(t *testing.T) {
 	p.HTTP = later
 	if _, err := p.Send(context.Background(), "+2348031234567", "Hi"); err == nil || errors.Is(err, ErrNotSent) || errors.Is(err, ErrProvider) {
 		t.Fatalf("a failure after sending must be ambiguous: %v", err)
+	}
+}
+
+func TestBuildThreadEmail(t *testing.T) {
+	th := threading{messageID: "tk-abc@in.taskiem.test", inReplyTo: "c1@mail.example", references: []string{"c0@mail.example", "c1@mail.example"}}
+	raw := string(buildThreadEmail("no-reply@taskiem.test", "Ada", "c@example.com", "k3x9q2m7a1bz+t-1-abcdefghijkl@in.taskiem.test",
+		"[#T-1] Your order", "Hi", th, time.Unix(0, 0)))
+	head, _, _ := strings.Cut(raw, "\r\n\r\n")
+	for _, want := range []string{
+		"Message-ID: <tk-abc@in.taskiem.test>\r\n",
+		"In-Reply-To: <c1@mail.example>\r\n",
+		"References: <c0@mail.example>\r\n <c1@mail.example>\r\n",
+		"Reply-To: k3x9q2m7a1bz+t-1-abcdefghijkl@in.taskiem.test\r\n",
+		"Subject: [#T-1] Your order\r\n",
+	} {
+		if !strings.Contains(head+"\r\n", want) {
+			t.Errorf("missing %q in %q", want, head)
+		}
+	}
+	// Without a thread: a Message-ID of its own and no threading headers.
+	raw = string(buildEmail("no-reply@taskiem.test", "Ada", "c@example.com", "", "Order", "Hi", "id9", time.Unix(0, 0)))
+	if !strings.Contains(raw, "Message-ID: <id9@taskiem>\r\n") || strings.Contains(raw, "In-Reply-To") || strings.Contains(raw, "References") {
+		t.Fatalf("%q", raw)
 	}
 }

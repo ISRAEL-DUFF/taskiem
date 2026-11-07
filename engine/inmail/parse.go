@@ -60,6 +60,11 @@ type Message struct {
 	Date        time.Time
 	Text, HTML  string
 	Attachments []Attachment
+	// InReplyTo is the message this one answers (In-Reply-To), and
+	// References the thread's earlier messages, oldest first (at most
+	// maxReferences, the newest kept): Message-IDs without brackets.
+	InReplyTo  string
+	References []string
 	// Header is the top-level header, decoded as sent.
 	Header textproto.MIMEHeader
 }
@@ -100,6 +105,13 @@ func Parse(raw []byte) (*Message, error) {
 	out.To = addresses(h.Get("To"))
 	out.Cc = addresses(h.Get("Cc"))
 	out.ReplyTo = addresses(h.Get("Reply-To"))
+	if ids := MessageIDs(h.Get("In-Reply-To")); len(ids) > 0 {
+		out.InReplyTo = ids[0]
+	}
+	out.References = MessageIDs(h.Get("References"))
+	if len(out.References) > maxReferences {
+		out.References = out.References[len(out.References)-maxReferences:]
+	}
 	w := &walker{msg: out}
 	if err := w.part(h, m.Body, 0); err != nil {
 		return nil, err
@@ -249,6 +261,68 @@ func validUTF8(s string) string {
 		return s
 	}
 	return strings.ToValidUTF8(s, "�")
+}
+
+// Bounds on threading headers: a crafted References cannot grow a run's
+// trigger without end.
+const (
+	maxReferences = 20
+	maxMessageID  = 250
+	maxIDHeader   = 16 << 10
+)
+
+// MessageIDs reads the Message-IDs in an In-Reply-To or References
+// header, in order and without brackets: each <…> of printable characters
+// at most maxMessageID long, or, in a header with no brackets at all,
+// each word with an @. Anything else (comments, a phrase some old mailers
+// put in In-Reply-To) is skipped. Repeats are kept once.
+func MessageIDs(v string) []string {
+	if len(v) > maxIDHeader {
+		v = v[:maxIDHeader]
+	}
+	var raw []string
+	if strings.Contains(v, "<") {
+		for {
+			i := strings.IndexByte(v, '<')
+			if i < 0 {
+				break
+			}
+			j := strings.IndexByte(v[i+1:], '>')
+			if j < 0 {
+				break
+			}
+			raw = append(raw, v[i+1:i+1+j])
+			v = v[i+1+j+1:]
+		}
+	} else {
+		raw = strings.Fields(v)
+	}
+	out := []string{}
+	seen := map[string]bool{}
+	for _, id := range raw {
+		if !ValidMessageID(id) || seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	return out
+}
+
+// ValidMessageID reports whether id is a Message-ID Taskiem keeps and
+// writes in a header: printable ASCII without brackets or spaces, an @,
+// at most maxMessageID characters.
+func ValidMessageID(id string) bool {
+	if id == "" || len(id) > maxMessageID || !strings.Contains(id, "@") {
+		return false
+	}
+	for i := 0; i < len(id); i++ {
+		c := id[i]
+		if c <= ' ' || c > '~' || c == '<' || c == '>' || c == '"' || c == '\\' || c == ',' {
+			return false
+		}
+	}
+	return true
 }
 
 // Domain is an address's domain, lower-cased.

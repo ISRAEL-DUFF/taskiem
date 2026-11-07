@@ -315,7 +315,25 @@ func TestEmail(t *testing.T) {
 	if r := e.row(t, e.t1, "mail2"); r.status != "dead" {
 		t.Fatalf("%+v", r)
 	}
-	if _, mails, err := Usage(context.Background(), e.d.App, e.t1, time.Now().Add(-time.Hour)); err != nil || mails != 1 {
+	// An email in a thread is sent with the Message-ID it was queued with,
+	// on every attempt, and answers the thread.
+	e.mail.err = nil
+	th := Message{Channel: Email, Purpose: PurposeNotice, To: "customer@example.com", SenderName: "Ada's Kitchen", ReplyTo: "k3x9q2m7a1bz+t-1-abcdefghijkl@in.taskiem.test",
+		Subject: "[#T-1] Your order", Text: "On its way.", Key: "thread", MessageID: "tk-1@in.taskiem.test", InReplyTo: "c1@mail.example",
+		References: []string{"c1@mail.example"}}
+	if _, err := e.enqueue(t, e.t1, th); err != nil {
+		t.Fatal(err)
+	}
+	e.tick(t)
+	raw = string(e.mail.msgs[len(e.mail.msgs)-1])
+	if !strings.Contains(raw, "Message-ID: <tk-1@in.taskiem.test>") || !strings.Contains(raw, "In-Reply-To: <c1@mail.example>") ||
+		!strings.Contains(raw, "References: <c1@mail.example>") || !strings.Contains(raw, "Reply-To: k3x9q2m7a1bz+t-1-abcdefghijkl@in.taskiem.test") {
+		t.Fatalf("%s", raw)
+	}
+	if r := e.row(t, e.t1, "thread"); r.status != "sent" || r.sealed {
+		t.Fatalf("%+v", r)
+	}
+	if _, mails, err := Usage(context.Background(), e.d.App, e.t1, time.Now().Add(-time.Hour)); err != nil || mails != 2 {
 		t.Fatalf("usage %d %v", mails, err)
 	}
 }

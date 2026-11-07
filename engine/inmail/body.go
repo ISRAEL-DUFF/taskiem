@@ -24,8 +24,11 @@ type Auth struct {
 // Meta is what the mail role knew of a message besides its content,
 // sealed in the inbox with it.
 type Meta struct {
-	Reference  string    `json:"reference"`
-	Address    string    `json:"address"`
+	Reference string `json:"reference"`
+	Address   string `json:"address"`
+	// Tag is the subaddress the message came to (<id>+<tag>@), checked
+	// for its syntax only: a reply tag is verified by the api role.
+	Tag        string    `json:"tag,omitempty"`
 	MailFrom   string    `json:"mail_from"`
 	RemoteIP   string    `json:"remote_ip"`
 	Helo       string    `json:"helo"`

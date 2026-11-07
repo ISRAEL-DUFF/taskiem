@@ -28,6 +28,7 @@ describe("messageWords", () => {
     expect(messageWords({ ...msg, status: "started", note: null })).toBe("Started a run");
     expect(messageWords({ ...msg, status: "started", note: null, attachments: 2 })).toBe("Started a run, with 2 attachments");
     expect(messageWords({ ...msg, status: "confirmation", note: null })).toBe("A request to confirm forwarding");
+    expect(messageWords({ ...msg, status: "replied", note: null, run_id: "r" })).toBe("A reply, given to the conversation's run waiting for it");
     expect(
       messageWords({
         ...msg,
