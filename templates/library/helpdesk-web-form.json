@@ -1,6 +1,6 @@
 {
   "id": "helpdesk-web-form",
-  "title": "A contact form on your website that opens tickets",
+  "title": "A contact form that opens tickets",
   "summary": "Customers write to you with a form on your website or at its link; each message becomes a numbered ticket for the right department.",
   "description": "A form customers fill in at its link or on your own website: their name, an optional phone number, a subject and their message, and, if you let customers choose, the department. Their email address is checked with a code first, so answers reach the real person. Each message becomes a ticket with a number (T-1042), saved in your tickets table, and the page tells the customer their number at once. Your departments work as in the other helpdesk templates: Taskiem's AI, your words or the customer's choice sends each ticket to the right one, and its members are told on WhatsApp, Telegram or by email. Give the address of your A helpdesk on your Taskiem email address workflow, and answers go by email from it, with the customer's replies joining their ticket; otherwise they go on WhatsApp, Telegram, by text or by a plain email. Your team answers with the Answer customers' tickets form, and the Follow up tickets workflow reminds them and closes old tickets.",
   "category": "customers",
@@ -8,8 +8,7 @@
     "support",
     "tickets",
     "helpdesk",
-    "form",
-    "website"
+    "form"
   ],
   "keywords": [
     "ticket",
@@ -19,7 +18,6 @@
     "help desk",
     "contact form",
     "contact us",
-    "website",
     "form",
     "complaint",
     "complaints",

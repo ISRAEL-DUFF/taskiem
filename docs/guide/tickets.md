@@ -13,9 +13,9 @@ Pick one of these in **Templates**:
 | **A helpdesk on your Taskiem email address** | The email address Taskiem gives the workflow. Give it to customers, or forward your support mailbox to it. |
 | **A helpdesk on your Zoho Mail mailbox** | Your own Zoho Mail address. Also add **Send ticket answers from your Zoho Mail mailbox**, so answers go out from your mailbox. |
 | **A helpdesk on your Gmail mailbox** | Your own Gmail address. Also add **Send ticket answers from your Gmail mailbox**. |
-| **A contact form on your website that opens tickets** | A form at a link, or on your own website ([below](#a-contact-form)). |
+| **A contact form that opens tickets** | A form at a link, or on your own website ([below](#a-contact-form)). |
 | **A helpdesk on your WhatsApp number** | Your business's own WhatsApp number. Also add **Send ticket answers from your WhatsApp number** ([below](#whatsapp)). |
-| **Tickets from your app or website** | Your app, or your website's server, sends each message to Taskiem ([below](#your-app-or-website)). |
+| **Tickets from your own app** | Your app, or your website's server, sends each message to Taskiem ([below](#your-app-or-website)). |
 
 Then add the two that work for every kind:
 
@@ -77,7 +77,7 @@ The first person to answer a ticket is the one it is assigned to; from then on, 
 
 ## A contact form
 
-**A contact form on your website that opens tickets** gives you a form with its own link: put the link on your website, or show the form on a website of yours that you have verified with Taskiem. Customers give their name, a phone number if they like, a subject and their message. They type their email address first and get a code to confirm it, so your answers reach the real person and nobody can use your form to send mail to someone else. When they send it, the page shows their ticket number.
+**A contact form that opens tickets** gives you a form with its own link: put the link on your website, or show the form on a website of yours that you have verified with Taskiem. Customers give their name, a phone number if they like, a subject and their message. They type their email address first and get a code to confirm it, so your answers reach the real person and nobody can use your form to send mail to someone else. When they send it, the page shows their ticket number.
 
 - If you chose **chosen** for how a ticket finds its department, the form asks which department too. Customers type it; anything that is not one of your departments goes to your department when none fits.
 - **Your helpdesk's Taskiem email address** (optional): if you also use **A helpdesk on your Taskiem email address**, give its address here. Customers then get your answers by email from it, and their replies join their ticket. Without it, they get your answers on WhatsApp, Telegram or by text when they gave a phone number, else by email.
@@ -93,7 +93,7 @@ The first person to answer a ticket is the one it is assigned to; from then on, 
 
 ## Your app or website
 
-**Tickets from your app or website** gives you a web address your app, or your website's server, calls with each customer's message. It is for your developers:
+**Tickets from your own app** gives you a web address your app, or your website's server, calls with each customer's message. It is for your developers:
 
 - Under **Endpoints**, make the workflow's key. Each call is a `POST` of JSON, signed with it: the header `X-Taskiem-Signature: sha256=` and the HMAC-SHA256 of the body. Keep the key on your server; never put it in a web page or an app people download.
 - The body: `subject` and `message` (both needed), and `name`, `email`, `phone`, `department` (used when you chose **chosen**) and `external_id` (your own id for the message), as far as you have them.
