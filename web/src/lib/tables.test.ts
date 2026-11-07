@@ -9,12 +9,16 @@ import {
   exampleStep,
   importError,
   isKept,
+  isRestricted,
   keptNotice,
   matchHeaders,
   nameError,
   newColumn,
   parseCSV,
+  parseReaders,
   personalByDefault,
+  readersText,
+  rolesText,
   tableActions,
   tableControls,
   tableFromCSV,
@@ -146,5 +150,24 @@ describe("data tables", () => {
     // Workflows only read it.
     expect(tableActions(kept).map((a) => a.action)).toEqual(["read_rows", "row_changed (trigger)"]);
     expect(tableActions(ordinary).map((a) => a.action)).toContain("insert_rows");
+  });
+
+  it("keeps a restricted table's rows to its readers (decision 0065)", () => {
+    const hr = { kept_by: null, readers: ["hr", "hr_lead"], can_read: false };
+    expect(isRestricted(hr)).toBe(true);
+    expect(isRestricted({ readers: null })).toBe(false);
+    expect(isRestricted({ readers: [] })).toBe(false);
+    // Someone without the role sees no rows and has nothing to do with them.
+    expect(tableControls(hr, true)).toEqual({ addRow: false, editRows: false, importCSV: false, columns: false, deleteTable: false, export: false, search: false });
+    // A reader works with it as with any table.
+    expect(tableControls({ ...hr, can_read: true }, true)).toEqual({ addRow: true, editRows: true, importCSV: true, columns: true, deleteTable: true, export: true, search: true });
+    expect(rolesText(["hr"])).toBe("hr");
+    expect(rolesText(["hr", "hr_lead"])).toBe("hr or hr_lead");
+    expect(rolesText(["a", "b", "c"])).toBe("a, b or c");
+    expect(readersText(hr)).toBe("Only members with the hr or hr_lead role, and the owner, can see and change its rows.");
+    expect(readersText({ readers: null })).toContain("Everyone with access");
+    expect(parseReaders("hr_lead, hr  hr")).toEqual({ roles: ["hr", "hr_lead"] });
+    expect("error" in parseReaders(" , ")).toBe(true);
+    expect("error" in parseReaders("HR people!")).toBe(true);
   });
 });

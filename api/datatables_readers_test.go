@@ -168,3 +168,42 @@ func TestTableReaders(t *testing.T) {
 		t.Errorf("audit %v", a)
 	}
 }
+
+// The HR help desk's tables are made with their readers: hr and hr_lead,
+// and hr_lead alone for the confidential ones; a table of that name the
+// business made before is left as it is, with the readers the template
+// wants reported.
+func TestHRDeskTablesHaveReaders(t *testing.T) {
+	w := newTablesWorld(t)
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	viewer := addMember(t, w.world, owner, "vic", "viewer")
+	owner.must(201, "POST", "/v1/tables", map[string]any{"name": "hr_ticket_messages", "columns": []map[string]any{{"name": "reference", "type": "text"}}})
+	out := owner.must(201, "POST", "/v1/templates/staff-hr-desk/instantiate", map[string]any{"params": map[string]any{}})
+	results := map[string]map[string]any{}
+	for _, x := range out["tables"].([]any) {
+		m := x.(map[string]any)
+		results[m["name"].(string)] = m
+	}
+	if r := results["hr_ticket_messages"]; r["status"] != "exists" || toJSON(r["readers"]) != `["hr","hr_lead"]` {
+		t.Errorf("an existing table: %v", r)
+	}
+	for _, name := range []string{"hr_tickets", "hr_confidential_tickets", "hr_confidential_messages"} {
+		if r := results[name]; r["status"] != "created" || r["readers"] != nil {
+			t.Errorf("%s: %v", name, r)
+		}
+	}
+	want := map[string]string{"hr_tickets": `["hr","hr_lead"]`, "hr_confidential_tickets": `["hr_lead"]`, "hr_confidential_messages": `["hr_lead"]`, "hr_ticket_messages": `null`}
+	for _, x := range viewer.must(200, "GET", "/v1/tables", nil)["tables"].([]any) {
+		m := x.(map[string]any)
+		if r, ok := want[m["name"].(string)]; ok {
+			if toJSON(m["readers"]) != r {
+				t.Errorf("%s: readers %v, want %s", m["name"], m["readers"], r)
+			}
+			if r != "null" {
+				if s, _ := viewer.do("GET", "/v1/tables/"+m["id"].(string)+"/rows", nil); s != 403 {
+					t.Errorf("%s: a viewer read its rows: %d", m["name"], s)
+				}
+			}
+		}
+	}
+}
