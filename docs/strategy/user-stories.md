@@ -286,3 +286,18 @@ Stories are grouped by who benefits. Numbers are for reference in planning, not 
 207. As a shop owner who is not in the shop, I can be told the moment a big sale happens, and the moment a payment is declined or reversed, so goods are not released for money that never came.
 208. As a cashier at closing, I can give the terminal's name and what my sales book says, from the web or by chat, and hear the difference and what to look for, with the check kept for the owner and the accountant.
 209. As an accountant, I can export a month of a client's terminal transactions and cash-ups from their tables, by terminal and by day, without screenshots.
+
+## Y. Posting to social media
+
+210. As anyone, a business or a person on my own, I can connect my Facebook Page and my Instagram account once, from WhatsApp, and have Taskiem tell me in plain words when an account is personal and how to make it one an app may post to.
+211. As anyone, I can send Taskiem a photo and a caption on WhatsApp and say where and when it goes, read back exactly what will be posted, and say yes.
+212. As anyone, I can ask for a caption and get three to choose from, in my own voice, and nothing is posted until I choose and say yes.
+213. As a shop owner, I can have a new product announced on my accounts the moment I add it to my catalogue, after I approve the words.
+214. As a church or a school, I can post what happens every week from a table I fill in once a month.
+215. As anyone, I can see what is going out this week, move a post, or cancel it, in chat or on the web, until the minute it goes.
+216. As anyone, I can have someone who comments PRICE on my post get the price and the order link in a DM, within the rules Meta sets.
+217. As anyone, I can hear every Monday which posts did best, in the network's own numbers.
+218. As anyone, I can trust that Taskiem never posts twice, never posts without my yes, and never follows, likes or messages strangers on my behalf.
+219. As anyone, I can send a phone photo or a long video and have it fitted to each network's shape and limits before it goes, shown to me as it will appear, with the price or my logo on it if I ask.
+220. As a business owner, I can decide that a member's post goes out only after my yes, and I am told at once, with the network's reason, when a post fails.
+221. As a business owner, when adverts come, I can set a monthly cap and approve every spend, from my own ad account, and Taskiem never holds my ad money.
