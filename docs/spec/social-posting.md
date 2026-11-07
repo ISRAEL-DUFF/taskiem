@@ -177,7 +177,7 @@ Each milestone ships with its templates, its chat commands, its docs page, and w
 
 1. **Add the posting permissions to Meta's App Review** with the messaging ones, with screencasts recorded from staging (G1 on staging behind the app's test users). Meta's Business Verification, if still open, first.
 2. **Confirm every G0 line in §5** from the networks' current documentation and record it in the integration pages.
-3. **Register the LinkedIn and TikTok apps and start their reviews**, so G5 is not waiting on them later. YouTube's and X's when their milestone is chosen.
+3. **Register the LinkedIn, YouTube and TikTok apps and start their reviews**, so G5 is not waiting on them later: LinkedIn's Community Management API access, Google's OAuth verification of the YouTube app (its branding, privacy policy, scope justification and a demo video) with a quota increase asked for at the same time, TikTok's Content Posting audit. X's when its milestone is chosen.
 4. **Test accounts:** a Page and an Instagram Creator account for CI's recorded fixtures, beside K0's.
 
 **Done when:** the Meta review is submitted with posting in it; every G0 line has an answer.
@@ -208,7 +208,7 @@ The week calendar, the draft editor with media and the AI caption, per-post insi
 
 ### G5: more networks (L; one at a time, each needs its review)
 
-`linkedin@1` first (business owners and professionals already post there; personal profiles allowed), then `tiktok@1` (where the creators are), `youtube@1` when a business asks, `x@1` only if asked and its cost accepted. Each: the app, the connection, the actions, the tables' `network` value, the chat's account names, fixtures, a template.
+`linkedin@1` first (business owners and professionals already post there; personal profiles allowed), then `youtube@1` (channels for churches, schools, trainers and creators; Shorts from the same video a Reel came from, so one upload serves three networks), then `tiktok@1` (where the creators are, once its audit passes), `x@1` only if asked and its cost accepted. Each: the app, the connection, the actions, the tables' `network` value, the chat's account names, fixtures, a template.
 
 **Done when, per network:** the G1 and G2 acceptance on that network's test account.
 
@@ -256,7 +256,7 @@ An advert spends money from the person's ad account. So G6, when decided: every 
 | Meta Business Verification (if still open) | Founders | Days to weeks |
 | LinkedIn Community Management API access | Founders, with engineering | Weeks |
 | TikTok app audit for the Content Posting API | Founders, with engineering | Weeks |
-| YouTube OAuth verification and quota | Engineering | Weeks |
+| Google OAuth verification of the YouTube app (sensitive scopes; branding, privacy policy, scope justification, demo video) and a quota increase | Founders, with engineering | Weeks; started in G0 |
 | X API tier (a monthly cost) | Founders decide | A day once paid |
 | Privacy policy and terms naming each network's data use, and what Taskiem does with insights and comments | Founders, legal | Before the reviews |
 | Test accounts: a Page, an Instagram Creator account, LinkedIn and TikTok test accounts | Engineering | A day |

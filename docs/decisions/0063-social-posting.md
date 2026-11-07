@@ -19,7 +19,7 @@ The founder, on 6 November 2026: social media posting and adverts should be "a g
 7. **Only the person's own accounts, with a yes, within the network's rules.** No following, liking, mass commenting or DMs to people who did not write first. Moderation's checks run on every draft; a suspended organisation posts nothing. Commenters' words are sealed and never reposted.
 8. **A monthly posting limit per plan**, held not lost, beside the networks' own rates.
 9. **Adverts are decided separately.** The shape is known (an ad connector on the person's own ad account, every spend an approval, a monthly cap, first-spend warnings, Taskiem never holding ad money), and it is built only after posting has users and the Marketing API reviews are in hand.
-10. **Order:** G0 the reviews with posting in them; G1 Facebook and Instagram posting; G2 chat; G3 comments; G4 the Posts page and insights; G5 LinkedIn, then TikTok, YouTube when asked, X only if asked and paid for; G6 adverts on its own decision.
+10. **Order:** G0 the reviews with posting in them; G1 Facebook and Instagram posting; G2 chat; G3 comments; G4 the Posts page and insights; G5 LinkedIn, then YouTube, then TikTok, X only if asked and paid for, with the LinkedIn, YouTube and TikTok reviews started in G0; G6 adverts on its own decision.
 
 ## Alternatives considered
 
