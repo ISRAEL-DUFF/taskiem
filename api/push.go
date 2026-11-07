@@ -75,6 +75,9 @@ type pushOut struct {
 	Devices []push.Device `json:"devices"`
 	// Max is how many browsers a person may allow in a business.
 	Max int `json:"max"`
+	// Added is the browser a PUT just added or updated (so the browser knows
+	// which of the list it is).
+	Added *uuid.UUID `json:"added,omitempty"`
 }
 
 func (s *Server) pushView(r *http.Request, p *Principal) (pushOut, error) {
@@ -114,11 +117,13 @@ func (s *Server) putPush(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, pushErr(err))
 		return
 	}
+	var added uuid.UUID
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		d, err := push.AddTx(r.Context(), tx, p.TenantID, p.UserID, in)
 		if err != nil {
 			return err
 		}
+		added = d.ID
 		return auditTx(r, tx, "push.add", d.ID.String(), map[string]any{"label": d.Label})
 	}); err != nil {
 		s.fail(w, r, pushErr(err))
@@ -129,6 +134,7 @@ func (s *Server) putPush(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	out.Added = &added
 	writeJSON(w, http.StatusOK, out)
 }
 

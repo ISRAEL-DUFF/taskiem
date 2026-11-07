@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { enablePush } from "../lib/push";
 import { get } from "../api";
 import { isAfter } from "../lib/stamp";
 import { useAuth } from "../auth";
@@ -348,13 +349,27 @@ export function ChatLiveProvider({ children }: { children: ReactNode }) {
     };
   }, []);
   useEffect(() => unlockAudio(), []);
+  // A tap on a notification of the service worker (the app was open behind
+  // it) says which conversation to go to.
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    const go = (e: MessageEvent) => {
+      const d = e.data as { type?: string; link?: string } | null;
+      if (d?.type === "taskiem-go" && typeof d.link === "string" && d.link.startsWith("/chat")) navigate(d.link);
+    };
+    navigator.serviceWorker.addEventListener("message", go);
+    return () => navigator.serviceWorker.removeEventListener("message", go);
+  }, [navigate]);
   const answer = useCallback((yes: boolean) => {
     setAsking(false);
     const prefs = readPrefs();
     if (!yes) return writePrefs({ ...prefs, asked: true });
-    void Notification.requestPermission().then((p) =>
-      writePrefs({ ...readPrefs(), browser: p === "granted", asked: true }),
-    );
+    void Notification.requestPermission().then((p) => {
+      writePrefs({ ...readPrefs(), browser: p === "granted", asked: true });
+      // Where the server has the keys, the same yes also turns on a
+      // notification for when Taskiem is closed (it says nothing if it cannot).
+      if (p === "granted") void enablePush(true);
+    });
   }, []);
   // The prefs changing elsewhere (the settings page) closes the question.
   useEffect(() => onPrefs(() => readPrefs().asked && setAsking(false)), []);

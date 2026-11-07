@@ -1,6 +1,6 @@
 # Chat push: a notification when the app is closed
 
-Status: **spec; step 1 (the server) built, steps 2 and 3 not.** Written 2026-11-07, after the profile, logo,
+Status: **spec; steps 1 (the server) and 2 (the device) built, step 3 not.** Written 2026-11-07, after the profile, logo,
 Explore and Contact info work of [business links](business-links.md) (§16.9 and §16.10 there, and §5.5 for
 the conversation).
 
@@ -202,8 +202,9 @@ endpoint.
 
 One file, `/sw.js`, served from the root with `Service-Worker-Allowed: /`,
 `Cache-Control: no-cache` and `Content-Type: text/javascript`; the app's
-content policy already covers a worker through `script-src 'self'`, and
-gains an explicit `worker-src 'self'` so that stays true if the script rule changes. It is registered only when the
+content policy (`default-src 'self'`, with no `script-src`) already covers a
+worker, so it is not changed; `api/static_test.go` pins how `/sw.js` is
+served. It is registered only when the
 person turns push on (a person who never does runs no worker). It has no
 fetch handler (no offline mode is promised or built here).
 
@@ -212,8 +213,8 @@ fetch handler (no offline mode is promised or built here).
 1. Parse the payload; an unknown `v` or a bad one shows a generic "New
    message".
 2. **If a window of the app is visible and focused**, and the browser lets a
-   push be silent when one is (Chrome on a computer does; Firefox only within
-   a quota, so it is shown), show nothing: the page has the message. **Otherwise show it, always:** Safari and
+   push be silent when one is (Chromium does; Firefox only within a quota, so it is
+   shown), show nothing: the page has the message. **Otherwise show it, always:** Safari and
    iOS end a subscription that shows nothing.
 3. `showNotification(title, {body, tag, renotify: false, icon, badge,
    data: {link}})`. The `tag` is the link id: the page's own notification
@@ -412,3 +413,61 @@ subscribes until step 2. Migration 00402.
   the badge (step 3). No real push service was reached: a real delivery needs
   the keys on a deployment and a real browser, and is on the owner's checklist
   at the end of step 3.
+
+## 13. As built (step 2, the device)
+
+Nothing was changed on the server for this beyond `PUT /v1/me/push` telling the
+browser which device it is (`added`) and `/sw.js` being served with
+`Cache-Control: no-cache` and `Service-Worker-Allowed: /`
+(`api/static.go`, `api/static_test.go`). Everything else is in the web app.
+
+- **The worker** `web/public/sw.js` is a plain script, copied to `/sw.js` by
+  the build, registered only when a person turns notifications on. Its logic is
+  four functions run by a test without a browser: `safeLink` (a notification
+  opens only `/chat` or `/chat?with=<link>`), `parsePayload` (anything
+  unreadable is "New message"), `notificationOf` (one notification per
+  conversation, the page's own tag, not stacked) and `staysSilent` (a visible,
+  focused window of the app, **in Chromium**: told by `navigator.userAgentData`'s
+  brands, the user agent being the fallback; Apple's browsers and Firefox always
+  show). The events: `push`, `notificationclick` (focus a window of the app and
+  tell it where to go, else open one) and `pushsubscriptionchange` (subscribe
+  again with the same key and tell the server). The page listens for the
+  worker's message (`ChatLiveProvider`).
+- **`lib/push.ts`**: what this browser can do (`pushSupport`: yes, no, or
+  install first on an iPhone or iPad, an iPad that calls itself a Mac
+  included), `deviceLabel` ("Chrome on Android"), `enablePush` (the permission,
+  the worker, the browser's subscription with the server's key, `PUT`), and
+  `disablePush` (`DELETE` by address, then the browser forgets it). The device
+  id the server gave is kept in this browser (`taskiem-push-device`) so the list
+  says "This device".
+- **The screen** (`pages/ChatPush.tsx`, on Notifications settings under "Chat on
+  this computer"): shown only where the server has the keys and only to a member
+  who writes in conversations. The switch **Notify me on this device when a
+  business writes**; with it on, **Show what the message says** (its own switch
+  and what off means); the line about the message being scrambled; **Your other
+  devices** with Remove; the iPhone note in place of the switch until the app is
+  on the Home Screen; the blocked words with the switch waiting. The "ask once"
+  banner's yes also turns it on where it can. **Signing out takes this browser
+  off first** (`auth.logout`, while the session still lets it).
+- **Tests:** `lib/push.test.ts` (labels, support, the key bytes, and the
+  worker's four functions, run from the file), `e2e/chat-push.spec.ts` (the
+  switch on and off, the words, kept after a reload, another device listed and
+  removed, signing out, the iPhone note and the Home Screen case, the blocked
+  words on a phone, accessibility in both themes, and **the real worker** given
+  pushes by the browser's own tools: nothing while the app is in front, one
+  notification a conversation, a link outside the app opening the chat page).
+  The e2e server now has a key pair (`web/e2e/serve.sh`), and `PushManager` is a
+  stand-in that hands out an address on a push service's host, so the server's
+  rules are the real ones; no push service is reached.
+- **Found in the build:** the test browser's user agent says "HeadlessChrome"
+  and a worker does not see a test's user-agent override, which is why
+  Chromium is told by its brands. A browser that replaces its subscription
+  (`pushsubscriptionchange`) comes back as a new device with the default words
+  and label ("A browser"): the person's choice for the old one is lost.
+- **A person in two businesses:** the app has **no switcher**; a session is
+  signed in to one business. A notification for a conversation of the other one
+  opens the chat page, where that conversation is not found. Closing this
+  properly needs the push to say which of their businesses it is for; it is
+  left out of the first version (§10).
+- **Not yet:** the badge on the icon and the business's logo as the icon
+  (step 3); the owner's checklist for a real Android phone and iPhone.

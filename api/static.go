@@ -32,6 +32,12 @@ func SPA(dir string) http.Handler {
 		if strings.HasPrefix(clean, "/assets/") {
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		}
+		if clean == "/sw.js" {
+			// The service worker (chat push): a browser checks it afresh each
+			// time, and it may control the whole app.
+			w.Header().Set("Cache-Control", "no-cache")
+			w.Header().Set("Service-Worker-Allowed", "/")
+		}
 		files.ServeHTTP(w, r)
 	})
 }

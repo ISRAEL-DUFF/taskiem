@@ -196,6 +196,9 @@ func TestChatPush(t *testing.T) {
 		t.Fatalf("the same browser again: %v", out)
 	}
 	id := out["devices"].([]any)[0].(map[string]any)["id"].(string)
+	if out["added"] != id {
+		t.Errorf("the browser is told which it is: %v vs %v", out["added"], id)
+	}
 
 	// Allowing the same browser again keeps what was chosen for it (the preview).
 	buyer.must(200, "PATCH", "/v1/me/push/"+id, map[string]any{"preview": false})

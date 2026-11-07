@@ -33226,6 +33226,10 @@ components:
             $ref: '#/components/schemas/PushDevice'
         max:
           type: integer
+        added:
+          type: string
+          format: uuid
+          description: The browser a PUT just added or updated
     LinkSettings:
       type: object
       additionalProperties: false
