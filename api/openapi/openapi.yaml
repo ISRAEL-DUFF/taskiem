@@ -6593,7 +6593,7 @@ paths:
         csrfHeader: []
       - sessionToken: []
       - apiKey: []
-      x-taskiem-permission: 'storefront.manage|order.handle'
+      x-taskiem-permission: storefront.manage
       x-taskiem-all-environments: true
       parameters:
       - name: id
