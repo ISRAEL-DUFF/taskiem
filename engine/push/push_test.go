@@ -190,9 +190,12 @@ func TestSend(t *testing.T) {
 	}
 	tok := strings.TrimPrefix(strings.SplitN(auth1, ", k=", 2)[0], "vapid t=")
 	raw, _ := base64.RawURLEncoding.DecodeString(s.Config.PublicKey)
-	px, py := elliptic.Unmarshal(elliptic.P256(), raw)
+	pub, err := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), raw)
+	if err != nil {
+		t.Fatalf("the VAPID public key: %v", err)
+	}
 	claims := jwt.MapClaims{}
-	if _, err := jwt.ParseWithClaims(tok, claims, func(*jwt.Token) (any, error) { return &ecdsa.PublicKey{Curve: elliptic.P256(), X: px, Y: py}, nil }, jwt.WithValidMethods([]string{"ES256"})); err != nil {
+	if _, err := jwt.ParseWithClaims(tok, claims, func(*jwt.Token) (any, error) { return pub, nil }, jwt.WithValidMethods([]string{"ES256"})); err != nil {
 		t.Fatalf("the VAPID token does not verify: %v", err)
 	}
 	if claims["sub"] != "mailto:ops@taskiem.test" || claims["aud"] != svc.srv.URL {

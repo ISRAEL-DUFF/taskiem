@@ -36,8 +36,6 @@ func (s *Server) pushRoutes(r chi.Router) {
 	r.Delete("/me/push/{id}", s.deletePush)
 }
 
-var errPushOff = errors.New("push is not set up on this server")
-
 func pushErr(err error) error {
 	switch {
 	case errors.Is(err, push.ErrInvalid):
