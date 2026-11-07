@@ -49,8 +49,16 @@ const INVOICE: Record<string, CardStatus> = {
 };
 
 /** The card's pill and progress. */
-export function cardStatus(card: DocCard): CardStatus {
+export function cardStatus(card: DocCard, now = Date.now()): CardStatus {
   const order = card.doc === "order" || card.doc === "purchase";
+  // A deal no one answered in time (phase 7): nothing more happens to it.
+  if (
+    order &&
+    card.deal?.until &&
+    ["offered", "countered", "change"].includes(card.event) &&
+    new Date(card.deal.until).getTime() <= now
+  )
+    return { word: "Lapsed", tone: "plain" };
   // A change that answers an offer is the seller's counter.
   if (order && card.event === "change" && card.was_kobo !== undefined)
     return { word: "Counter", tone: "warn", step: 0 };

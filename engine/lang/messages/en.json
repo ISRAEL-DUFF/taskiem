@@ -6285,7 +6285,7 @@
       "context": "A linked business offered its own price on an order (a deal)"
     },
     "order.link.offered": {
-      "text": "*{from}* offers {note} for order {reference}. Accept or decline it, or send your price: counter {reference} 785k",
+      "text": "*{from}* offers a price on order {reference}: {note}. Accept or decline it, or send your price: counter {reference} 785k",
       "reviewed": true,
       "context": "The seller told of a buyer's offer; counter is a command word, kept as is"
     },
@@ -6295,9 +6295,19 @@
       "context": "A buyer answered the seller's price with its own"
     },
     "order.link.countered": {
-      "text": "*{from}* answers with {note} for order {reference}. Accept or decline it, or send your price: counter {reference} 790k",
+      "text": "*{from}* answers your price on order {reference}: {note}. Accept or decline it, or send your price: counter {reference} 790k",
       "reviewed": true,
       "context": "The seller told of a buyer's counter; counter is a command word"
+    },
+    "order.link.seller_countered_title": {
+      "text": "{from} answers your offer on {reference}",
+      "reviewed": true,
+      "context": "The seller answered the buyer's offer with its own price (a deal)"
+    },
+    "order.link.seller_countered": {
+      "text": "*{from}* answers your offer on order {reference}: {note}. Accept it, cancel the order, or send your price: counter {reference} 760k",
+      "reviewed": true,
+      "context": "The buyer told of the seller's counter to its offer; {note} is the amount, what it was and the seller's word; counter is a command word, kept as is"
     },
     "order.link.button_accept_change": {
       "text": "Accept",

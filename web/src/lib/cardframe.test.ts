@@ -20,4 +20,20 @@ describe("the card frame", () => {
     expect(isDiary({ doc: "order", event: "ordered", reference: "P-1" }, true)).toBe(false);
     expect(isDiary({ doc: "invoice", event: "bill", reference: "INV-1" }, true)).toBe(false);
   });
+  it("a deal no one answered in time has lapsed", () => {
+    const now = Date.parse("2026-11-07T10:00:00Z");
+    const deal = (until: string) => ({ steps: [], until });
+    expect(
+      cardStatus({ doc: "order", event: "offered", reference: "P-1", deal: deal("2026-11-07T09:00:00Z") }, now),
+    ).toEqual({ word: "Lapsed", tone: "plain" });
+    expect(
+      cardStatus({ doc: "order", event: "offered", reference: "P-1", deal: deal("2026-11-08T09:00:00Z") }, now).word,
+    ).toBe("Offer");
+    expect(
+      cardStatus({ doc: "purchase", event: "change", reference: "P-1", was_kobo: 9, deal: deal("2026-11-07T09:00:00Z") }, now).word,
+    ).toBe("Lapsed");
+    expect(
+      cardStatus({ doc: "order", event: "accept", reference: "P-1", deal: deal("2026-11-07T09:00:00Z") }, now).word,
+    ).toBe("Accepted");
+  });
 });

@@ -711,8 +711,10 @@ func (s *Server) orderCards(ctx context.Context, t links.Told) uuid.UUID {
 		}
 		return nil
 	})
-	// A deal (phase 7): what it is against, at the seller's own prices.
+	// A deal (phase 7): what it is against, at the seller's own prices,
+	// and its history as it stands.
 	var was *int64
+	var sellerDeal, buyerDeal *links.DealCard
 	if amount != nil && (t.Event == "offered" || t.Event == "countered" || t.Event == "change") {
 		_ = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{seller}, func(tx pgx.Tx) error {
 			o, err := links.GetOrderTx(ctx, tx, t.Order.String(), false)
@@ -726,12 +728,14 @@ func (s *Server) orderCards(ctx context.Context, t links.Told) uuid.UUID {
 			if w := dealWas(lines); w > *amount {
 				was = &w
 			}
+			sellerDeal = links.DealCardFor(o.DealHistory, o.DealUntil, "seller")
+			buyerDeal = links.DealCardFor(o.DealHistory, o.DealUntil, "buyer")
 			return nil
 		})
 	}
 	return s.postCards(ctx, t.Link,
-		cardSide{tenant: seller, mine: seller == t.FromTenant, card: links.DocCard{Doc: links.DocOrder, Event: t.Event, Reference: t.Reference, ID: t.Order.String(), AmountKobo: amount, WasKobo: was}},
-		cardSide{tenant: buyer, mine: buyer == t.FromTenant, card: links.DocCard{Doc: links.DocPurchase, Event: t.Event, Reference: t.Reference, ID: t.Purchase.String(), AmountKobo: amount, WasKobo: was}})
+		cardSide{tenant: seller, mine: seller == t.FromTenant, card: links.DocCard{Doc: links.DocOrder, Event: t.Event, Reference: t.Reference, ID: t.Order.String(), AmountKobo: amount, WasKobo: was, Deal: sellerDeal}},
+		cardSide{tenant: buyer, mine: buyer == t.FromTenant, card: links.DocCard{Doc: links.DocPurchase, Event: t.Event, Reference: t.Reference, ID: t.Purchase.String(), AmountKobo: amount, WasKobo: was, Deal: buyerDeal}})
 }
 
 // billCards writes a bill's event into both sides' conversations: the

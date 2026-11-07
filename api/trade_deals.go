@@ -374,13 +374,19 @@ func isOwnerAsked(err error) ([]string, bool) {
 // dealNote is an offer in a line: "₦780,000 (was ₦820,000) for 20 Rice,
 // 25kg bag", its word after.
 func dealNote(o links.Order) string {
-	total := orderTotal(o.Lines)
+	return dealNoteOf(o.Lines, o.DealHistory)
+}
+
+// dealNoteOf is dealNote for given lines: their total, what it was, the
+// items and the last step's word.
+func dealNoteOf(lines []links.OrderLine, hist []links.DealStep) string {
+	total := orderTotal(lines)
 	out := invoicing.Naira(total)
-	if was := dealWas(o.Lines); was > total {
+	if was := dealWas(lines); was > total {
 		out += " (was " + invoicing.Naira(was) + ")"
 	}
 	var items []string
-	for _, l := range o.Lines {
+	for _, l := range lines {
 		if l.Quantity > 0 {
 			items = append(items, fmt.Sprintf("%d %s", l.Quantity, l.Item))
 		}
@@ -388,12 +394,31 @@ func dealNote(o links.Order) string {
 	if len(items) > 0 {
 		out += " for " + strings.Join(items, ", ")
 	}
-	if len(o.DealHistory) > 0 {
-		if n := o.DealHistory[len(o.DealHistory)-1].Note; n != "" {
+	if len(hist) > 0 {
+		if n := hist[len(hist)-1].Note; n != "" {
 			out += ". " + n
 		}
 	}
 	return out
+}
+
+// sellerCounterNote is the seller's counter to a buyer's offer, told to
+// the buyer in deal words (ok false: the change answers no offer).
+func (s *Server) sellerCounterNote(ctx context.Context, t links.Told) (string, bool) {
+	var note string
+	_ = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{t.FromTenant}, func(tx pgx.Tx) error {
+		o, err := links.GetOrderTx(ctx, tx, t.Order.String(), false)
+		if err != nil || len(o.DealHistory) == 0 || o.DealHistory[len(o.DealHistory)-1].By != "seller" {
+			return err
+		}
+		lines := o.Change
+		if len(lines) == 0 {
+			lines = o.Lines
+		}
+		note = dealNoteOf(lines, o.DealHistory)
+		return nil
+	})
+	return note, note != ""
 }
 
 // dealCounterCmd is "counter 750k", "counter AD-7Q4K2P 750k", "my price

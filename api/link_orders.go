@@ -976,9 +976,16 @@ func (s *Server) tellOrder(ctx context.Context, t *links.Told, in links.StepIn) 
 		if told.Event == "delivered" {
 			perms = []string{PermTableEdit} // who records what came
 		}
+		// The seller's counter to an offer (phase 7) is told as a deal.
+		words := "order.link." + told.Event
+		if told.Event == "change" {
+			if deal, ok := s.sellerCounterNote(ctx, told); ok {
+				words, note = "order.link.seller_countered", deal
+			}
+		}
 		s.tellHoldersSent(ctx, told.Tenant, perms, "order:"+told.Reference+":"+told.Event, link, func(l lang.Tag) (string, string) {
-			return tr(l, "order.link."+told.Event+"_title", "from", told.From, "reference", told.Reference),
-				strings.TrimSpace(tr(l, "order.link."+told.Event, "from", whatsapp.SafeText(told.From), "reference", told.Reference, "note", whatsapp.SafeText(note)))
+			return tr(l, words+"_title", "from", told.From, "reference", told.Reference),
+				strings.TrimSpace(tr(l, words, "from", whatsapp.SafeText(told.From), "reference", told.Reference, "note", whatsapp.SafeText(note)))
 		}, func(l lang.Tag) []whatsapp.Button { return orderButtons(l, told) }, sent)
 	})
 }

@@ -36,7 +36,7 @@ import { MentionText } from "./Mentions";
 import { ChatAvatar } from "./ChatAvatar";
 import { ContactInfo } from "./ContactInfo";
 import { useConfirm } from "./ConfirmSheet";
-import { DealActions } from "./ChatDeal";
+import { DealActions, DealHistory } from "./ChatDeal";
 import { useChatTools } from "../lib/useChatTools";
 import { ORDER_STEPS, cardKicker, cardStatus, isDiary } from "../lib/cardframe";
 import { DiaryLine } from "../kit";
@@ -874,6 +874,7 @@ function CardFrame({
       {cardSub(card) && (
         <span className="tk-chatcard-sub">{cardSub(card)}</span>
       )}
+      {card.deal && <DealHistory card={card} />}
       {st.step !== undefined && (
         <span className="tk-progress">
           <span

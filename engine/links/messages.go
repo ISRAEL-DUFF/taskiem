@@ -45,6 +45,40 @@ type DocCard struct {
 	// WasKobo is what a deal's prices are against: the lines at the
 	// seller's own prices (chat tools phase 7), when more than Amount.
 	WasKobo *int64 `json:"was_kobo,omitempty"`
+	// Deal is the deal as it stood when the card was posted (phase 7):
+	// its steps, newest last, and when it lapses.
+	Deal *DealCard `json:"deal,omitempty"`
+}
+
+// DealCard is a deal's history on a card: each step's side, total and
+// time, the person named only on the side that took it.
+type DealCard struct {
+	Steps []DealCardStep `json:"steps"`
+	Until *time.Time     `json:"until,omitempty"`
+}
+
+// DealCardStep is one step of a DealCard.
+type DealCardStep struct {
+	By        string    `json:"by"`
+	Who       string    `json:"who,omitempty"`
+	TotalKobo int64     `json:"total_kobo"`
+	At        time.Time `json:"at"`
+}
+
+// DealCardFor is the deal on the card of one side ("buyer" or "seller"):
+// nil when the order holds no deal.
+func DealCardFor(steps []DealStep, until *time.Time, side string) *DealCard {
+	if len(steps) == 0 {
+		return nil
+	}
+	c := &DealCard{Until: until, Steps: make([]DealCardStep, len(steps))}
+	for i, st := range steps {
+		c.Steps[i] = DealCardStep{By: st.By, TotalKobo: st.TotalKobo, At: st.At}
+		if st.By == side {
+			c.Steps[i].Who = st.Who
+		}
+	}
+	return c
 }
 
 // Card documents.

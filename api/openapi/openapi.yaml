@@ -31916,6 +31916,34 @@ components:
           description: A deal's prices are against this (the seller's own), when more than amount_kobo
         note:
           type: string
+        deal:
+          type: object
+          additionalProperties: false
+          required: [steps]
+          description: A deal as it stood when the card was posted (chat tools phase 7)
+          properties:
+            steps:
+              type: array
+              description: Offer first, then counters, newest last; a person is named only on our own side's steps
+              items:
+                type: object
+                additionalProperties: false
+                required: [by, total_kobo, at]
+                properties:
+                  by:
+                    type: string
+                    enum: [buyer, seller]
+                  who:
+                    type: string
+                  total_kobo:
+                    type: integer
+                  at:
+                    type: string
+                    format: date-time
+            until:
+              type: string
+              format: date-time
+              description: When the offer lapses unless answered
     PriceItem:
       type: object
       additionalProperties: false

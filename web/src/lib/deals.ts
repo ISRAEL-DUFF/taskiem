@@ -25,6 +25,21 @@ export interface DealStep {
   at: string;
 }
 
+/** A deal on a card: its steps (a person named on our own side only)
+ * and when it lapses. */
+export interface DealCard {
+  steps: { by: "buyer" | "seller"; who?: string; total_kobo: number; at: string }[];
+  until?: string;
+}
+
+/** Whose card it is: the seller's order, the buyer's purchase. */
+export const cardSide = (doc: string): "buyer" | "seller" =>
+  doc === "purchase" ? "buyer" : "seller";
+
+/** Whether a deal card can still be answered: not lapsed. */
+export const dealOpen = (d: DealCard | undefined, now = Date.now()) =>
+  !d?.until || new Date(d.until).getTime() > now;
+
 /** How long a price is kept for a buyer once agreed: this order only, or
  * that many days. */
 export const KEEP_CHOICES: { days: number; label: string }[] = [
@@ -111,7 +126,7 @@ export function dealLine(amount: number, was?: number): string {
 /** A step of the history in words: "They offered ₦740,000", "Tunde
  * countered ₦770,000" (the first step is the offer, the rest counters). */
 export function stepWords(
-  s: DealStep,
+  s: Pick<DealStep, "by" | "who" | "total_kobo">,
   index: number,
   mine: "buyer" | "seller",
 ): string {

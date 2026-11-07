@@ -166,13 +166,15 @@ function Money({
   label,
   value,
   onChange,
+  hint,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
+  hint?: string;
 }) {
   return (
-    <KitField label={label}>
+    <KitField label={label} hint={hint}>
       <span className="tk-money">
         <span aria-hidden="true">₦</span>
         <input
@@ -507,18 +509,16 @@ export function ProductForm({
             </fieldset>
           )}
           {floors.data && (
-            <>
-              <Money
-                label="Lowest price"
-                value={floorShown}
-                onChange={setFloorText}
-              />
-              <p className="tk-form-row-sub tk-floor-hint">
-                {floorKobo > 0 && tradeKobo > 0 && floorKobo > tradeKobo
+            <Money
+              label="Lowest price"
+              value={floorShown}
+              onChange={setFloorText}
+              hint={
+                floorKobo > 0 && tradeKobo > 0 && floorKobo > tradeKobo
                   ? "Higher than the trade price: every offer will wait for you."
-                  : "Staff can agree offers down to this. Under it, the offer waits for your OK. Buyers never see it."}
-              </p>
-            </>
+                  : "Staff can agree offers down to this. Under it, an offer waits for your OK. Buyers never see it."
+              }
+            />
           )}
         </>
       ) : (

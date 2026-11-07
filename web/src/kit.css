@@ -4,6 +4,7 @@
 
 :root {
   --tk-on-pine: #ffffff;       /* words on pine, in every theme */
+  --tk-pine-ink: var(--brand); /* pine words on a light card; plain words in dark */
   --tk-soft: #f1f4ef;          /* footer, search, chips */
   --tk-tile: #f6f8f4;          /* tiles, the order card */
   --tk-lime-soft: #e9f7d0;     /* a product's tile */
@@ -32,12 +33,14 @@
   --tone-sand-bg: #f3ead2; --tone-sand-ink: #6f5420;
 }
 :root[data-theme="dark"] {
+  --tk-pine-ink: var(--text);
   --tk-soft: #1f2a26; --tk-tile: #1a2420; --tk-lime-soft: rgba(200, 241, 105, 0.14);
   --tk-warn-bg: rgba(253, 176, 34, 0.16); --tk-warn-ink: #fdc565; --tk-blue-bg: rgba(132, 173, 255, 0.16); --tk-blue-ink: #a8c5ff;
   --tk-lift: 0 30px 60px -20px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--border); --tk-veil: rgba(0, 0, 0, 0.55);
 }
 @media (prefers-color-scheme: dark) {
   :root[data-theme="system"] {
+    --tk-pine-ink: var(--text);
     --tk-soft: #1f2a26; --tk-tile: #1a2420; --tk-lime-soft: rgba(200, 241, 105, 0.14);
     --tk-warn-bg: rgba(253, 176, 34, 0.16); --tk-warn-ink: #fdc565; --tk-blue-bg: rgba(132, 173, 255, 0.16); --tk-blue-ink: #a8c5ff;
     --tk-lift: 0 30px 60px -20px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--border); --tk-veil: rgba(0, 0, 0, 0.55);
@@ -121,16 +124,18 @@
 
 /* What it was, struck through beside an offer: "₦740,000 ₦790,000". */
 .tk-was { font-weight: 500; color: var(--muted); margin-left: 4px; }
-.tk-breaks { color: var(--brand); }
-:root[data-theme="dark"] .tk-breaks { color: var(--text); }
+.tk-breaks { color: var(--tk-pine-ink); }
 .tk-offer { display: flex; flex-direction: column; gap: 10px; }
 .tk-offer > .tk-chip-btn { margin-left: 0; align-self: flex-start; }
-.tk-offer > .tk-chip-btn[aria-pressed="true"] { background: var(--tk-lime-soft); color: var(--brand); }
-:root[data-theme="dark"] .tk-offer > .tk-chip-btn[aria-pressed="true"] { color: var(--brand-dark); }
-/* A deal card's history: who offered and countered what, newest last. */
-.tk-deal-history { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: var(--muted); }
-.tk-deal-history li:last-child { color: var(--text); font-weight: 600; }
+.tk-offer > .tk-chip-btn[aria-pressed="true"], .tk-offer > .tk-chip-btn[aria-pressed="true"]:hover:not(:disabled) { background: var(--tk-lime-soft); color: var(--tk-pine-ink); }
+/* A deal card's history: who offered and countered what, newest last,
+   on a thread down the left (ours in pine, theirs muted), and the lapse. */
+.tk-deal { display: flex; flex-direction: column; gap: 6px; }
+.tk-deal-history { list-style: none; margin: 0; padding: 0 0 0 12px; border-left: 2px solid var(--border); display: flex; flex-direction: column; gap: 3px; font-size: 13px; color: var(--muted); }
+.tk-deal-history li[data-by="us"] { color: var(--tk-pine-ink); }
+.tk-deal-history li:last-child { font-weight: 700; color: var(--text); }
 .tk-deal-lapse { font-size: 12px; color: var(--muted); }
+.tk-deal-lapse.lapsed { color: var(--danger); font-weight: 600; }
 .tk-deal-form { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; width: 100%; }
 .tk-deal-form .tk-field input, .tk-deal-form .tk-field select { min-height: 44px; font-size: 16px; }
 .tk-deal-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -405,7 +410,7 @@ button.tk-table-row { display: grid; gap: 2px; width: 100%; padding: 0; border: 
 .tk-who-state { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 /* "Same as last time": a small soft chip after the prices line. */
 .tk-chip-btn { margin-left: auto; min-height: 36px; padding: 0 14px; border-radius: 999px; border: 0; box-shadow: none; background: var(--tk-soft); color: var(--text); font-weight: 600; font-size: 14px; cursor: pointer; }
-.tk-chip-btn:hover:not(:disabled) { background: var(--tk-soft); color: var(--brand); }
+.tk-chip-btn:hover:not(:disabled) { background: var(--tk-soft); color: var(--tk-pine-ink); }
 .tk-chip-btn:focus-visible { box-shadow: var(--ring); }
 /* What still stops an order being placed, above its buttons. */
 .tk-review-stops { margin: 0; font-size: 14px; color: var(--muted); }
@@ -715,4 +720,3 @@ input.tk-switch:disabled { cursor: default; opacity: 0.7; }
 .tk-x-sheet { display: flex; flex-direction: column; gap: 12px; padding: 4px 16px 16px; }
 .tk-x-sheet .tk-x-card.explore-card { box-shadow: 0 0 0 1px var(--border); }
 .tk-x-note { margin: 0 4px; font-size: 13px; color: var(--muted); }
-.tk-floor-hint { margin: -6px 0 0; }

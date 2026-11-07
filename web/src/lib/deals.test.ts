@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  cardSide,
+  dealOpen,
   breakWords,
   breaksProblem,
   dealKobo,
@@ -64,13 +66,13 @@ describe("deals", () => {
 
   it("tells the history and when it lapses", () => {
     const at = "2026-11-07T10:00:00Z";
-    expect(stepWords({ by: "buyer", total_kobo: 74_000_000, at }, 0, "seller")).toBe(
+    expect(stepWords({ by: "buyer", total_kobo: 74_000_000 }, 0, "seller")).toBe(
       "They offered ₦740,000",
     );
     expect(
-      stepWords({ by: "seller", who: "Tunde", total_kobo: 77_000_000, at }, 1, "seller"),
+      stepWords({ by: "seller", who: "Tunde", total_kobo: 77_000_000 }, 1, "seller"),
     ).toBe("Tunde countered ₦770,000");
-    expect(stepWords({ by: "buyer", total_kobo: 76_000_000, at }, 2, "buyer")).toBe(
+    expect(stepWords({ by: "buyer", total_kobo: 76_000_000 }, 2, "buyer")).toBe(
       "You countered ₦760,000",
     );
     const now = Date.parse(at);
@@ -78,5 +80,15 @@ describe("deals", () => {
     expect(lapseWords("2026-11-07T10:20:00Z", now)).toBe("Lapses in 20 minutes");
     expect(lapseWords("2026-11-07T09:00:00Z", now)).toBe("Lapsed");
     expect(lapseWords(undefined, now)).toBe("");
+  });
+
+  it("knows a card's side and whether its deal is still open", () => {
+    expect(cardSide("order")).toBe("seller");
+    expect(cardSide("purchase")).toBe("buyer");
+    const now = Date.parse("2026-11-07T10:00:00Z");
+    expect(dealOpen(undefined, now)).toBe(true);
+    expect(dealOpen({ steps: [] }, now)).toBe(true);
+    expect(dealOpen({ steps: [], until: "2026-11-08T10:00:00Z" }, now)).toBe(true);
+    expect(dealOpen({ steps: [], until: "2026-11-07T09:00:00Z" }, now)).toBe(false);
   });
 });

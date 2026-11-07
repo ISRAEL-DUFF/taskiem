@@ -469,7 +469,12 @@ counter has **Accept ₦770,000**, **Counter** and **Cancel**. A counter is one
 total: the seller's over its own prices (`total_kobo` on
 `POST /v1/trade-orders/{id}/change`), the buyer's back
 (`POST /v1/stock/purchases/{id}/counter`). Each step is kept, newest last, in
-the order's `deal_history` on both sides (up to 20), with who and when.
+the order's `deal_history` on both sides (up to 20), with who and when. Each
+card carries the deal as it stood (`deal` on the card: its steps and when it
+lapses) and shows the last four steps on a thread ("They offered ₦740,000",
+"Tunde countered ₦770,000"; our own people by name, theirs as "They") and
+"Lapses in 46 hours". A lapsed card says "Lapsed", "This offer lapsed: nothing
+to answer", and has no buttons.
 
 **Staff and the floor.** Each product may have a **Lowest price**, set on its
 form by those who set prices (`PUT /v1/trade-floors`), and the business a
@@ -487,7 +492,10 @@ or 30 days (`keep_days`). They become the buyer's own prices on its list
 (`price_list_overrides.until`) and end by themselves.
 
 **WhatsApp and Telegram.** An offer reaches the seller with Accept and
-Decline; a counter reaches the buyer with **Accept** (the change). Either side
+Decline ("Ada's Kitchen offers a price on order P-7QX4KD: ₦740,000 (was
+₦790,000) for 20 Rice, 25kg bag. Regular buyer."); the seller's counter
+reaches the buyer as an answer to its offer, with **Accept** ("Dangote Stores
+answers your offer on order P-7QX4KD: ₦770,000 (was ₦790,000) …"). Either side
 answers in words: "counter 760k", or "counter P-7QX4KD 760k" when several are
 open. Agreeing is a diary line on the seller's side: "Agreed ₦760,000 with
 Ada's Kitchen on P-7QX4KD".
@@ -576,11 +584,15 @@ Ada's Kitchen on P-7QX4KD".
   `deal` card, Keep refused to a cashier, a counter under the floor refused and
   one above it sent as a total; the buyer's counter from WhatsApp; the owner
   accepting and keeping the price 7 days, the diary line, the order at the
-  agreed price and the kept price on the buyer's list; a lapsed offer refused.
+  agreed price and the kept price on the buyer's list; a lapsed offer refused;
+  the buyer's card carrying the deal without the seller's people; the
+  seller's counter told on WhatsApp as an answer to the offer.
 - `engine/links/deals_test.go`: spreading a total, breaks, below the floor.
 - Unit tests: `lib/deals` (break prices and words, their checks, "760k",
   "6% off", the history, when it lapses).
 - `web/e2e/chat-deals.spec.ts`: quantity prices and an offer on the Order
   sheet (phone and computer); the seller countering and accepting with Keep,
   the buyer countering back; staff waiting for the owner; quantity prices on
-  a list and the largest discount; axe in both themes.
+  a list and the largest discount; the lowest price on a product from chat;
+  a card's history and lapse, and a lapsed card with nothing to answer; axe
+  in both themes.

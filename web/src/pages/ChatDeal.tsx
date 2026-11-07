@@ -2,7 +2,15 @@ import { useState } from "react";
 import { post } from "../api";
 import { useAuth } from "../auth";
 import { KitField } from "../kit";
-import { KEEP_CHOICES, dealKobo, offWords } from "../lib/deals";
+import {
+  KEEP_CHOICES,
+  cardSide,
+  dealKobo,
+  dealOpen,
+  lapseWords,
+  offWords,
+  stepWords,
+} from "../lib/deals";
 import type { DocCard } from "../lib/linkchat";
 import { formatPrice } from "../lib/storefront";
 import { toast } from "../toast";
@@ -124,6 +132,8 @@ export function DealActions({
   };
 
   if (!mayAct && !mayCounter) return null;
+  // Lapsed: nothing to answer (the server refuses it too).
+  if (!dealOpen(card.deal)) return null;
   return (
     <span className="tk-deal-form" data-testid="deal-actions">
       {!countering && setsPrices && (
@@ -227,6 +237,41 @@ export function DealActions({
       </span>
       {confirmNode}
       {!!act.error && <ErrorBox error={act.error} />}
+    </span>
+  );
+}
+
+/** A deal's back and forth on its card, newest last, and when it lapses
+ * ("They offered ₦740,000 · Tunde countered ₦770,000"). One step is the
+ * card's own amount: only the lapse is said. */
+export function DealHistory({ card }: { card: DocCard }) {
+  const deal = card.deal;
+  if (!deal) return null;
+  const side = cardSide(card.doc);
+  const lapse = lapseWords(deal.until);
+  const steps = deal.steps.slice(-4);
+  return (
+    <span className="tk-deal" data-testid="deal-history">
+      {deal.steps.length > 1 && (
+        <ol
+          className="tk-deal-history"
+          aria-label={`How ${card.reference} was agreed so far`}
+          start={deal.steps.length - steps.length + 1}
+        >
+          {steps.map((st, i) => (
+            <li key={st.at + i} data-by={st.by === side ? "us" : "them"}>
+              {stepWords(st, deal.steps.length - steps.length + i, side)}
+            </li>
+          ))}
+        </ol>
+      )}
+      {lapse && (
+        <span
+          className={`tk-deal-lapse${lapse === "Lapsed" ? " lapsed" : ""}`}
+        >
+          {lapse === "Lapsed" ? "This offer lapsed: nothing to answer" : lapse}
+        </span>
+      )}
     </span>
   );
 }

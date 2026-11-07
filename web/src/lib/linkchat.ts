@@ -4,6 +4,7 @@
 
 import { naira } from "./invoices";
 import { cmpTime } from "./stamp";
+import type { DealCard } from "./deals";
 import type { Mention } from "./mentions";
 
 export type DocKind = "order" | "purchase" | "invoice" | "bill";
@@ -17,6 +18,8 @@ export interface DocCard {
   amount_kobo?: number;
   /** A deal: what it comes to at the seller's own prices. */
   was_kobo?: number;
+  /** A deal as it stood when the card was posted: steps, newest last. */
+  deal?: DealCard;
   note?: string;
 }
 

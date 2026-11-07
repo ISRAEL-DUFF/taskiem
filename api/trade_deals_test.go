@@ -122,9 +122,30 @@ func TestTradeDeal(t *testing.T) {
 	}
 
 	// The buyer answers from WhatsApp: ₦760,000.
-	// (The seller's counter reaches the phone first, inside the window.)
-	if got := w.send(t, buyerOn, whatsapptest.Text("counter 760k")); !strings.Contains(got[len(got)-1].Text, "Sent: ₦760,000 for "+ref) {
-		t.Fatalf("counter from WhatsApp: %+v", got)
+	// The buyer's card carries the deal so far, its people unnamed.
+	var dealCard map[string]any
+	for _, x := range buyer.must(200, "GET", "/v1/link-chats/"+link+"/messages", nil)["messages"].([]any) {
+		if c, _ := x.(map[string]any)["card"].(map[string]any); c != nil && c["event"] == "change" {
+			dealCard = c
+		}
+	}
+	if d, _ := dealCard["deal"].(map[string]any); d == nil || len(d["steps"].([]any)) != 2 || d["until"] == nil ||
+		d["steps"].([]any)[1].(map[string]any)["by"] != "seller" || d["steps"].([]any)[1].(map[string]any)["who"] != nil ||
+		dealCard["was_kobo"] != float64(79000000) {
+		t.Fatalf("the seller's counter, as the buyer's card has it: %v", dealCard)
+	}
+	// The seller's counter reaches the phone first (inside the window),
+	// told as an answer to the offer.
+	sent := w.send(t, buyerOn, whatsapptest.Text("counter 760k"))
+	if !strings.Contains(sent[len(sent)-1].Text, "Sent: ₦760,000 for "+ref) {
+		t.Fatalf("counter from WhatsApp: %+v", sent)
+	}
+	var told bool
+	for _, m := range w.graph.Sent(buyerOn) {
+		told = told || strings.Contains(m.Text, "answers your offer on order "+ref+": ₦770,000 (was ₦790,000) for 20 Rice 25kg. Best I can do.")
+	}
+	if !told {
+		t.Fatalf("the seller's counter on WhatsApp, as a deal: %+v", w.graph.Sent(buyerOn))
 	}
 	o = order()
 	h := o["deal_history"].([]any)

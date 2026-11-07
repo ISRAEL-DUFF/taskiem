@@ -241,7 +241,7 @@ test("quantity prices on a list, and the largest discount staff can agree", asyn
   await brk.getByLabel("Price (₦)").fill("39,500");
   await axeBoth(page, "quantity prices");
   await modal.getByRole("button", { name: "Save" }).click();
-  await expect.poll(() => (sent.find((x) => x.path.endsWith("/l1/items"))?.body as { items: { breaks: unknown }[] } | undefined)?.items[0].breaks).toEqual([
+  await expect.poll(() => (sent.find((x) => x.path.endsWith("/l1/items"))?.body as { items: { breaks: unknown }[] } | undefined)?.items[0]?.breaks).toEqual([
     { min_quantity: 10, price_kobo: 3_950_000 },
   ]);
 
@@ -253,4 +253,76 @@ test("quantity prices on a list, and the largest discount staff can agree", asyn
   await offers.getByRole("button", { name: "Save" }).click();
   await expect.poll(() => sent.find((x) => x.path === "/v1/trade-floors")?.body).toEqual({ set_discount: true, max_discount_pct: 8 });
   await axeBoth(page, "offers from buyers");
+});
+
+test("the lowest price on a product, from chat: set, warned when over the trade price, never for staff", async ({ browser }) => {
+  test.setTimeout(120_000);
+  const { page, link } = await linked(browser, { width: 390, height: 844 });
+  const sent: Sent[] = [];
+  const remember = remembering(sent);
+  const items = [{ id: "s1", name: "Rice, 50kg bag", available: true, stock: 42, unit: "bag", price_kobo: 7_600_000 }];
+  await page.route("**/v1/stock", (r) => r.fulfill(json({ keeps_stock: true, catalogue: "products", items })));
+  await page.route("**/v1/price-lists", (r) =>
+    r.fulfill(json({ lists: [{ id: "pl1", name: "Trade", updated_at: "2026-11-07T08:00:00Z", links: [link],
+      items: [{ item_id: "s1", name: "Rice, 50kg bag", unit: "bag", price_kobo: 7_200_000, min_quantity: 2, available: true }] }] })),
+  );
+  await page.route("**/v1/trade-floors", async (r) => {
+    if (r.request().method() === "PUT") await remember(r);
+    return r.fulfill(json({ floors: { s1: 6_900_000 } }));
+  });
+  await page.goto(`/chat?with=${link}`);
+  const sheet = page.getByTestId("tool-sheet");
+  await page.getByTestId("chat-pane").getByRole("button", { name: "Open tools" }).click();
+  await page.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Products/ }).click();
+  await sheet.getByRole("button", { name: /Rice, 50kg bag/ }).click();
+  const floor = sheet.getByLabel("Lowest price in naira");
+  await expect(floor).toHaveValue("69,000");
+  await expect(sheet).toContainText("Under it, an offer waits for your OK. Buyers never see it.");
+  await floor.fill("73,000");
+  await expect(sheet).toContainText("Higher than the trade price: every offer will wait for you.");
+  await floor.fill("70,000");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await axeBoth(page, "the lowest price on a product");
+  await sheet.getByRole("button", { name: "Save changes" }).click();
+  await expect.poll(() => sent.find((x) => x.path === "/v1/trade-floors")?.body).toEqual({ item_id: "s1", floor_kobo: 7_000_000 });
+});
+
+test("a deal card tells the back and forth and when it lapses; a lapsed one has nothing to answer", async ({ browser }) => {
+  test.setTimeout(120_000);
+  const { page, link } = await linked(browser, { width: 390, height: 844 });
+  const at = (h: number) => new Date(Date.now() + h * 3_600_000).toISOString();
+  const deal = (until: string) => ({
+    steps: [
+      { by: "buyer", total_kobo: 74_000_000, at: at(-5) },
+      { by: "seller", who: "Tunde", total_kobo: 77_000_000, at: at(-3) },
+      { by: "buyer", total_kobo: 76_000_000, at: at(-1) },
+    ],
+    until,
+  });
+  await page.route(`**/v1/link-chats/${link}/messages**`, (r) =>
+    r.request().method() === "GET"
+      ? r.fulfill(json({ messages: [
+          { id: "c1", link, mine: false, kind: "card", card: { doc: "order", event: "countered", reference: "P-OLD111", id: "o0", amount_kobo: 50_000_000, was_kobo: 55_000_000, deal: { steps: [{ by: "buyer", total_kobo: 50_000_000, at: at(-60) }], until: at(-12) } }, created_at: at(-60) },
+          { id: "c2", link, mine: false, kind: "card", card: { doc: "order", event: "countered", reference: "P-7QX4KD", id: "o1", amount_kobo: 76_000_000, was_kobo: 79_000_000, deal: deal(at(46.5)) }, created_at: at(-1) },
+        ] }))
+      : r.fallback(),
+  );
+  await page.goto(`/chat?with=${link}`);
+  const pane = page.getByTestId("chat-pane");
+  const card = pane.getByRole("article", { name: "Order · P-7QX4KD" });
+  const history = card.getByRole("list", { name: "How P-7QX4KD was agreed so far" });
+  await expect(history.getByRole("listitem")).toHaveText(["They offered ₦740,000", "Tunde countered ₦770,000", "They countered ₦760,000"]);
+  await expect(card).toContainText("Lapses in 46 hours");
+  await expect(card.getByRole("button", { name: "Accept ₦760,000 P-7QX4KD" })).toBeVisible();
+  const old = pane.getByRole("article", { name: "Order · P-OLD111" });
+  await expect(old).toContainText("This offer lapsed: nothing to answer");
+  await expect(old.getByTestId("deal-actions")).toHaveCount(0);
+  await expect(old.getByText("Lapsed", { exact: true })).toBeVisible();
+  await expect(old.getByRole("img", { name: /step/ })).toHaveCount(0);
+  await axeBoth(page, "a deal card's history");
+  for (const theme of ["light", "dark"]) {
+    await page.evaluate((t) => (t === "dark" ? (document.documentElement.dataset.theme = "dark") : delete document.documentElement.dataset.theme), theme);
+    await page.waitForTimeout(700);
+    await card.screenshot({ path: `test-results/deal-history-${theme}.png` });
+  }
 });
