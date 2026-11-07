@@ -10,6 +10,19 @@ import { ChatHead } from "./ChatHead";
 import { ReadMore, useFold } from "./ReadMore";
 import { ComposerView, TASKIEM_FILES, useComposer } from "./ChatComposer";
 import { AlertCards, useChatAlerts } from "./ChatAlerts";
+import { BriefingCard, ChartCard } from "./ChatStaff";
+import { useAuth } from "../auth";
+import type { SalesChart } from "../lib/staff";
+
+/** A chart message's numbers, or undefined when they cannot be read. */
+function parseChart(text: string): SalesChart | undefined {
+  try {
+    const v = JSON.parse(text) as SalesChart;
+    return Array.isArray(v.bars) ? v : undefined;
+  } catch {
+    return undefined;
+  }
+}
 import { BubbleShell, CopyItem, Ticks } from "./BubbleShell";
 import { useChatLive } from "./ChatLive";
 import { get, post, upload } from "../api";
@@ -98,6 +111,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
   );
   const act = useAction();
   const chatTools = useChatTools();
+  const { can } = useAuth();
   // Alerts you can act on, as cards at the end (chat-tools.md §6).
   const alerts = useChatAlerts(!!chatTools);
   const afterDiary = useRef<() => void>(() => undefined);
@@ -398,6 +412,16 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
           </>
         }
         render={(m, { first }) => {
+          // "How did we do?" answered: its chart, as a card.
+          if (m.kind === "chart") {
+            const chart = parseChart(m.text);
+            if (chart)
+              return (
+                <div className="tk-chart-row" data-msg={m.id}>
+                  <ChartCard chart={chart} />
+                </div>
+              );
+          }
           // A change made with a chat tool: a line, not a bubble.
           if (m.kind === "diary")
             return (
@@ -507,12 +531,17 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
         }
         tail={
           chatTools ? (
-            <AlertCards
+            <>
+              {(can("storefront.manage") || can("invoice.manage")) && (
+                <BriefingCard openTool={c.openTool} onAsk={(text) => say({ text })} />
+              )}
+              <AlertCards
               alerts={alerts.list}
               onReload={alerts.reload}
               onDiary={() => afterDiary.current()}
               openTool={c.openTool}
-            />
+              />
+            </>
           ) : undefined
         }
       />

@@ -709,6 +709,36 @@
       "reviewed": true,
       "context": "A rider's location kept on their delivery"
     },
+    "rider.jobs": {
+      "text": "Your deliveries now:",
+      "reviewed": true,
+      "context": "A rider asking for their open deliveries"
+    },
+    "rider.job": {
+      "text": "*{reference}* from {business}, to {drop}: {step}",
+      "reviewed": true,
+      "context": "A rider asking for their open deliveries"
+    },
+    "rider.job_offered": {
+      "text": "offered to you. Send ACCEPT or CAN'T.",
+      "reviewed": true,
+      "context": "A rider asking for their open deliveries"
+    },
+    "rider.job_accepted": {
+      "text": "yours. Send PICKED UP once you have it.",
+      "reviewed": true,
+      "context": "A rider asking for their open deliveries"
+    },
+    "rider.job_picked_up": {
+      "text": "on the way. Send ARRIVED at the door, or DELIVERED.",
+      "reviewed": true,
+      "context": "A rider asking for their open deliveries"
+    },
+    "rider.job_arrived": {
+      "text": "at the door. Send DELIVERED when it is handed over.",
+      "reviewed": true,
+      "context": "A rider asking for their open deliveries"
+    },
     "rider.no_delivery": {
       "text": "You have no delivery that fits that now.",
       "reviewed": true,

@@ -68,6 +68,10 @@ func routeSource(t *testing.T) map[string]routeMeta {
 									consts[pkg+n.Name] = v
 								}
 							}
+						case *ast.BinaryExpr: // PermOrders = access.A + "|" + access.B
+							if v, ok := joined(x, consts); ok {
+								consts[pkg+n.Name] = v
+							}
 						}
 					}
 				}
@@ -303,4 +307,33 @@ func routeSource(t *testing.T) map[string]routeMeta {
 	}
 	walk(scope{}, funcs["Handler"].Body.List)
 	return out
+}
+
+// joined is a constant made of strings and other constants added
+// together ("a" + "|" + access.B).
+func joined(e ast.Expr, consts map[string]string) (string, bool) {
+	switch x := e.(type) {
+	case *ast.BasicLit:
+		if x.Kind != token.STRING {
+			return "", false
+		}
+		v, err := strconv.Unquote(x.Value)
+		return v, err == nil
+	case *ast.SelectorExpr:
+		if id, ok := x.X.(*ast.Ident); ok {
+			v, ok := consts[id.Name+"."+x.Sel.Name]
+			return v, ok
+		}
+	case *ast.BinaryExpr:
+		if x.Op != token.ADD {
+			return "", false
+		}
+		a, ok := joined(x.X, consts)
+		if !ok {
+			return "", false
+		}
+		b, ok := joined(x.Y, consts)
+		return a + b, ok
+	}
+	return "", false
 }

@@ -304,7 +304,66 @@ reminder for invoice INV-0042", "Matched a payment to invoice INV-0009",
 Cards are white with a pine next step and a soft Later; the approval's Approve
 is lime with the fingerprint, as drawn. On a computer they stay message-width.
 
-## 7. Tests
+## 7. Phase 5: staff and the briefing
+
+**Staff use chat as their app.** Two built-in roles for those who work the
+counter and the shift, and a permission for working orders without the
+storefront's settings:
+
+| Role | Permissions | Their tools |
+|---|---|---|
+| `cashier` | `table.read`, `table.edit`, `order.handle`, `invoice.read` | Sell, Stock, Orders |
+| `shift_manager` | the cashier's, and `run.read`, `invoice.manage`, `chat.trade` | Handover, Sell, Stock, Orders, Bills |
+
+`order.handle` is working the orders: seeing them (`GET /v1/trade-orders`,
+`/v1/storefront/orders`), accepting, declining, readying and sending them out
+(`POST /v1/trade-orders/{id}/{step}`), the day's deliveries, and offering an
+order to a rider (`/offer`, `/release`, `GET /v1/riders`). It is not the
+storefront's settings, prices, refunds, riders' pay or purchasing, which stay
+`storefront.manage`. Routes and chat take either (`storefront.manage|order.handle`
+in the OpenAPI document), and those holding either are told of a new order.
+
+A person whose roles are all staff roles sees their role's tools only, in the
+panel and in "tools" on WhatsApp; anyone else sees every tool their
+permissions allow. **Sell** is a counter sale as the Order sheet looks: what
+has a price, with steppers, the pine bag, then how it was paid (cash,
+transfer, POS); recorded as the Stock page's sales are (`POST /v1/stock/sales`,
+one key per sale), with a diary line ("Sold 2 Rice, 1 Garri: ₦188,000 (POS)").
+On WhatsApp a cashier sells as before ("sold 2 bags of rice 156,000 cash"),
+works the orders ("orders", "order ADA-1234 ready") and their buttons, and is
+told of new orders.
+
+**Handover** (a shift manager's): the shift so far (`GET /v1/chat-handover`,
+today in Lagos): sold and how it was paid, the orders still open, deliveries
+on the way and done, what is low; the cash counted against the cash sold
+("₦6,000 short"), and a note. Handing over (`POST /v1/chat-handover`) tells
+those who run the business in the bell and on their chat ("Sam handed the
+shift over. Sold ₦234,000 in 3 sales…"), with a diary line for the manager.
+
+**A rider** works the shift on WhatsApp or Telegram as before (Accept, Can't,
+Picked up, Arrived, Delivered, Cash, the proof photo and location, the drop's
+map pin), and now asks "my deliveries" (or "jobs", "today"): each open
+delivery, where it goes and its pin once it is theirs, and the word to send
+next.
+
+**The morning briefing** (the Alerts design): from 8am Lagos, for those who run
+the business (`storefront.manage` or `invoice.manage`), a pine card leads the
+end of the Taskiem conversation (`GET /v1/chat-briefing`): "Good morning, Ada",
+yesterday's sales against the same day a week before ("Up 12% on last
+Wednesday") with the week's bars, and tiles for what is owed (the invoices
+page), low stock (the Stock tool), today's deliveries and bookings, each only
+for those who may see it. Tapping the sales asks "how did we do yesterday";
+**Got it** puts the card away for the day. On the phone the owner keeps the
+8am money summary as before.
+
+**"How did we do?"** ("how did we do this week?", "today", "yesterday", "last
+week", "this month", "sales", and "@Taskiem how did we do?" from any
+conversation): the numbers in words on every channel ("Sales, the last 7 days:
+₦2,966,500, up 8% on the week before", each day's figure), and in the Taskiem
+conversation a chart card (a message of kind `chart`, migration 00406): the
+total, the change, and the period's bars, the day asked about lit.
+
+## 8. Tests
 
 - `api/chat_tools_test.go`: the switch (off by default, a viewer refused, on for
   everyone, off again); on, names straight to businesses with and without `...`,
@@ -361,3 +420,13 @@ is lime with the fingerprint, as drawn. On a computer they stay message-width.
   nothing sideways at 360 px; none with chat tools off; axe in both themes.
 - `api/chat_alerts_internal_test.go`: the caps per kind, who asked.
 - Unit tests: `lib/alerts`.
+- `api/chat_staff_test.go`: a cashier's shift from chat (a sale on WhatsApp and
+  from Sell, their tools, refused the storefront's work, told of a new order,
+  its card, accepting it); a shift manager's handover and the owner told; the
+  briefing before and after 8am, not for a cashier, Got it; "how did we do"
+  in words and as a chart; a rider's shift through "my deliveries".
+- `web/e2e/chat-staff.spec.ts`: a cashier's tools and Sell; the handover with
+  the cash counted; the briefing and a chart card on a phone and a computer,
+  Low stock opening Stock, Got it; none for a cashier; axe in both themes.
+- Unit tests: `lib/staff` (the sale, the change and the bars, the greeting,
+  the cash), `lib/tools` (role-shaped tools), `ChatTools` (`order.handle`).

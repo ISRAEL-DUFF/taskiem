@@ -21,7 +21,9 @@ export type ToolKey =
   | "tables"
   | "purchases"
   | "bills"
-  | "order";
+  | "order"
+  | "sell"
+  | "handover";
 
 export type PillTone = "warn" | "lime" | "plain";
 
@@ -62,6 +64,8 @@ export interface Tool {
   /** Rows with no name of their own to show (an order, a bill): an icon
    * on each row's tile, not letters of a reference. */
   rowIcon?: string;
+  /** Only for the staff whose role gives it (Handover). */
+  staffOnly?: boolean;
 }
 
 const count = (n: number, one: string, many = `${one}s`) =>
@@ -110,6 +114,30 @@ const ORDER_WORD: Record<string, string> = {
 };
 
 export const TOOLS: Tool[] = [
+  {
+    key: "sell",
+    title: "Sell",
+    icon: "money",
+    perm: "table.edit",
+    url: "/v1/stock",
+    page: "/storefront/stock",
+    // Things that can be sold: those with a price.
+    rows: (data) => stockRows(data).filter((r) => (r.data as StockItem).price_kobo !== undefined),
+    line: () => "Record a sale",
+    more: "Open stock",
+  },
+  {
+    key: "handover",
+    title: "Handover",
+    icon: "clock",
+    perm: "table.read",
+    url: "/v1/chat-handover",
+    page: "/storefront/stock",
+    rows: () => [],
+    line: () => "Hand the shift over",
+    staffOnly: true,
+    more: "Open stock",
+  },
   {
     key: "products",
     title: "Products",
@@ -199,7 +227,8 @@ export const TOOLS: Tool[] = [
     key: "orders",
     title: "Orders",
     icon: "invoices",
-    perm: "storefront.manage",
+    // Working orders is a cashier's too (order.handle).
+    perm: "storefront.manage|order.handle",
     url: "/v1/trade-orders",
     page: "/trade-orders",
     rows: (data) =>
@@ -340,12 +369,30 @@ TOOLS.push(
   },
 );
 
-/** The tools a person may open, matching what follows "/" (a word's start). */
-export function toolsFor(can: (perm: string) => boolean, query = ""): Tool[] {
+/** Staff who work from chat see their role's tools only (chat-tools.md §7):
+ * a cashier sells, keeps the stock and works the orders; a shift manager
+ * also hands the shift over. Anyone with another role sees every tool
+ * their permissions allow. */
+export const ROLE_TOOLS: Record<string, ToolKey[]> = {
+  cashier: ["sell", "orders", "stock"],
+  shift_manager: ["handover", "sell", "orders", "stock", "bills"],
+};
+
+/** The tools a person's roles shape them to, or undefined for all. */
+export function roleTools(roles: string[] | undefined): Set<ToolKey> | undefined {
+  if (!roles || roles.length === 0 || roles.some((r) => !(r in ROLE_TOOLS))) return undefined;
+  return new Set(roles.flatMap((r) => ROLE_TOOLS[r] ?? []));
+}
+
+/** The tools a person may open, matching what follows "/" (a word's start),
+ * shaped to their role when they are staff. */
+export function toolsFor(can: (perm: string) => boolean, query = "", roles?: string[]): Tool[] {
   const q = query.trim().toLowerCase();
+  const only = roleTools(roles);
   return TOOLS.filter(
     (t) =>
       can(t.perm) &&
+      (only ? only.has(t.key) : !t.staffOnly) &&
       (q === "" ||
         t.title
           .toLowerCase()

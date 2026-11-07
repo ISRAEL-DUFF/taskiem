@@ -35,11 +35,14 @@ import (
 
 func (s *Server) linkOrderRoutes(r chi.Router) {
 	manage := s.need(PermStorefrontManage)
-	r.With(manage).Get("/trade-orders", s.listTradeOrders)
-	r.With(manage).Get("/trade-orders/{id}", s.getTradeOrder)
+	// Working an order that came in is a cashier's too (order.handle);
+	// placing one for a buyer is the storefront's.
+	orders := s.need(PermOrders)
+	r.With(orders).Get("/trade-orders", s.listTradeOrders)
+	r.With(orders).Get("/trade-orders/{id}", s.getTradeOrder)
 	r.With(manage, s.tenantWide).Post("/trade-orders", s.placeTradeOrder)
-	r.With(manage, s.tenantWide).Post("/trade-orders/{id}/{step}", s.tradeOrderStep)
-	r.With(manage, s.tenantWide).Put("/trade-orders/{id}/lines/{line}/item", s.setTradeLineItem)
+	r.With(orders, s.tenantWide).Post("/trade-orders/{id}/{step}", s.tradeOrderStep)
+	r.With(orders, s.tenantWide).Put("/trade-orders/{id}/lines/{line}/item", s.setTradeLineItem)
 	r.With(s.need(PermLinkManage)).Get("/links/{id}/trade", s.getLinkTrade)
 	r.With(s.need(PermLinkManage), s.tenantWide).Put("/links/{id}/trade", s.putLinkTrade)
 	r.With(s.need(PermInvoiceRead)).Get("/links/{id}/statement", s.linkStatement)
@@ -891,7 +894,7 @@ func (s *Server) tellOrder(ctx context.Context, t *links.Told, in links.StepIn) 
 		if note == "" || told.Event == "change" || told.Event == "delivered" || told.Event == "short" {
 			note = s.orderNote(ctx, told, in)
 		}
-		perms := []string{PermStorefrontManage}
+		perms := []string{PermOrders}
 		if told.Event == "delivered" {
 			perms = []string{PermTableEdit} // who records what came
 		}
@@ -948,7 +951,7 @@ func (s *Server) waOrderPress(ctx context.Context, c *chat, reply string) error 
 		} else if err != nil {
 			return err
 		}
-		perm := PermStorefrontManage
+		perm := PermOrders
 		if step == "all_came" {
 			perm = PermTableEdit
 		}

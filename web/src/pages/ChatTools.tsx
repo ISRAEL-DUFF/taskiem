@@ -143,8 +143,8 @@ export function ToolsPanel({
   /** In a supplier's conversation (they share prices): ordering comes first. */
   supplier?: string;
 }) {
-  const { can } = useAuth();
-  const listed = toolsFor(can, query);
+  const { can, me } = useAuth();
+  const listed = toolsFor(can, query, me?.roles);
   const { rows: loaded } = useToolRows(listed);
   const rows: typeof loaded = Object.fromEntries(
     Object.entries(loaded).map(([k, r]) => [
@@ -287,6 +287,10 @@ export function mayEdit(tool: ToolKey, can: (p: string) => boolean): boolean {
       return can("table.edit") && can("storefront.manage");
     case "purchases":
       return can("storefront.manage");
+    case "orders":
+      return can("storefront.manage|order.handle");
+    case "sell":
+      return can("table.edit");
     case "order":
       // Drafting needs table.edit; sending and the supplier, storefront.manage.
       return can("table.edit") && can("storefront.manage");
@@ -421,8 +425,8 @@ export function ToolSheet({
   /** Tells a change (its diary line). */
   onSaved?: (line: string) => Promise<void> | void;
 }) {
-  const { can } = useAuth();
-  const tool = toolsFor(can).find((t) => t.key === key);
+  const { can, me } = useAuth();
+  const tool = toolsFor(can, "", me?.roles).find((t) => t.key === key);
   const [search, setSearch] = useState("");
   const [chip, setChip] = useState<string>();
   const [open, setOpen] = useState<ToolRow | "add" | undefined>(

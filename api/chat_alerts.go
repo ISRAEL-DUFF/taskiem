@@ -348,7 +348,7 @@ func (s *Server) overdueAlerts(ctx context.Context, p *Principal) ([]chatAlert, 
 // newOrderAlerts are the orders from linked businesses waiting for an
 // answer.
 func (s *Server) newOrderAlerts(ctx context.Context, p *Principal) ([]chatAlert, error) {
-	if !p.Can(PermStorefrontManage) {
+	if !p.Can(PermOrders) {
 		return nil, nil
 	}
 	var list []links.Order
@@ -374,7 +374,7 @@ func (s *Server) newOrderAlerts(ctx context.Context, p *Principal) ([]chatAlert,
 // riderAlerts are the storefront's paid orders for delivery that no rider
 // has been asked to take, when the business has riders.
 func (s *Server) riderAlerts(ctx context.Context, p *Principal) ([]chatAlert, error) {
-	if !p.Can(PermStorefrontManage) || s.Dispatch == nil {
+	if !p.Can(PermOrders) || s.Dispatch == nil {
 		return nil, nil
 	}
 	var out []chatAlert

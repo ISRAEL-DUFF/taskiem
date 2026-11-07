@@ -55,6 +55,10 @@ const (
 	// Storefronts and hosted forms (decisions 0036, 0037): the public
 	// pages and the websites allowed to embed them.
 	PermStorefrontManage = access.StorefrontManage
+	// PermOrderHandle is working the orders without the storefront's
+	// settings; PermOrders is either (Can reads "a|b" as either).
+	PermOrderHandle = access.OrderHandle
+	PermOrders      = access.StorefrontManage + "|" + access.OrderHandle
 	// PermFormLinks mints one-time links to a link form (forms 8.4).
 	PermFormLinks = access.FormLinks
 )
@@ -110,7 +114,13 @@ type Principal struct {
 	Agent *AgentAccess
 }
 
-func (p *Principal) Can(perm string) bool { return p.Permissions[perm] }
+// Can reports whether the principal holds perm; "a|b" is either of them.
+func (p *Principal) Can(perm string) bool {
+	if a, b, either := strings.Cut(perm, "|"); either {
+		return p.Permissions[a] || p.Can(b)
+	}
+	return p.Permissions[perm]
+}
 
 // businessRoles are the principal's roles that are not built in (a
 // "credit_officer"): each lets its holder decide approvals naming it.

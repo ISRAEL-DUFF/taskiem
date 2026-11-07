@@ -26,6 +26,7 @@ import { AttachMenu } from "./AttachMenu";
 import { CameraSheet } from "./CameraSheet";
 import { ToolSheet, ToolsPanel } from "./ChatTools";
 import { OrderSheet, type OrderStart } from "./ChatBuyer";
+import { HandoverSheet, SellSheet } from "./ChatStaff";
 import { toolsFor, type ToolKey } from "../lib/tools";
 import type { Prefill, Request } from "../lib/intents";
 import { RequestChip } from "./RequestChip";
@@ -154,11 +155,11 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     from?: DOMRect;
     start?: ToolStart;
   }>();
-  const { can } = useAuth();
+  const { can, me } = useAuth();
   const slash = o.tools ? /^\/(\S*)$/.exec(text) : null;
   const toolsShown = !!o.tools && (toolsOpen || !!slash);
   // How many tools what follows "/" names: none, and Enter sends it.
-  const toolMatches = toolsShown ? toolsFor(can, slash?.[1] ?? "").length : 0;
+  const toolMatches = toolsShown ? toolsFor(can, slash?.[1] ?? "", me?.roles).length : 0;
   const closeTools = () => {
     setToolsOpen(false);
     if (slash) setText("");
@@ -443,7 +444,21 @@ export function ComposerView<R>({
           onPlaced={() => c.o.onDiary?.(undefined)}
         />
       )}
-      {c.tool && c.tool.key !== "order" && (
+      {c.tool?.key === "sell" && (
+        <SellSheet
+          from={c.tool.from}
+          onClose={() => c.setTool(undefined)}
+          onSold={() => c.o.onDiary?.(undefined)}
+        />
+      )}
+      {c.tool?.key === "handover" && (
+        <HandoverSheet
+          from={c.tool.from}
+          onClose={() => c.setTool(undefined)}
+          onSent={() => c.o.onDiary?.(undefined)}
+        />
+      )}
+      {c.tool && !["order", "sell", "handover"].includes(c.tool.key) && (
         <ToolSheet
           tool={c.tool.key}
           from={c.tool.from}

@@ -39,7 +39,7 @@ var chatTools = []chatTool{
 	{"services", "Services", PermStorefrontManage},
 	{"stock", "Stock", PermTableRead},
 	{"prices", "Price lists", PermStorefrontManage},
-	{"orders", "Orders", PermStorefrontManage},
+	{"orders", "Orders", PermOrders},
 	{"tables", "Tables", PermTableRead},
 	// A buyer's (phase 3): the orders sent to suppliers, and their bills.
 	{"purchases", "Your orders", PermTableRead},

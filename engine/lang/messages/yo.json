@@ -568,6 +568,30 @@
       "text": "Mo ti gba ibi tí o wà: ó wà pẹ̀lú ìfijíṣẹ́ náà.",
       "reviewed": false
     },
+    "rider.jobs": {
+      "text": "Àwọn ẹrù tí o ní láti fi jíṣẹ́ báyìí:",
+      "reviewed": false
+    },
+    "rider.job": {
+      "text": "*{reference}* láti {business}, sí {drop}: {step}",
+      "reviewed": false
+    },
+    "rider.job_offered": {
+      "text": "wọ́n fi lọ̀ ọ́. Fi ACCEPT tàbí CAN'T ránṣẹ́.",
+      "reviewed": false
+    },
+    "rider.job_accepted": {
+      "text": "tìrẹ ni. Fi PICKED UP ránṣẹ́ nígbà tí o bá gbà á.",
+      "reviewed": false
+    },
+    "rider.job_picked_up": {
+      "text": "ó wà lọ́nà. Fi ARRIVED ránṣẹ́ ní ẹnu ọ̀nà, tàbí DELIVERED.",
+      "reviewed": false
+    },
+    "rider.job_arrived": {
+      "text": "ó ti dé ẹnu ọ̀nà. Fi DELIVERED ránṣẹ́ nígbà tí o bá fi lé wọn lọ́wọ́.",
+      "reviewed": false
+    },
     "rider.no_delivery": {
       "text": "O kò ní ìfijíṣẹ́ tó bá ìyẹn mu báyìí.",
       "reviewed": false

@@ -518,17 +518,28 @@ func (s *Server) tellNotice(ctx context.Context, tenant, from uuid.UUID, n links
 }
 
 // holdingAll are the built-in roles holding every one of perms.
+// holdingAll are the built-in roles holding every one of perms ("a|b":
+// either of them).
 func holdingAll(perms ...string) []string {
+	has := func(r, perm string) bool {
+		for _, p := range strings.Split(perm, "|") {
+			if slices.Contains(access.Roles[r], p) {
+				return true
+			}
+		}
+		return false
+	}
 	var out []string
-	for _, r := range access.Holding(perms[0]) {
+	for _, r := range access.BuiltinNames() {
 		ok := true
-		for _, p := range perms[1:] {
-			ok = ok && slices.Contains(access.Roles[r], p)
+		for _, p := range perms {
+			ok = ok && has(r, p)
 		}
 		if ok {
 			out = append(out, r)
 		}
 	}
+	slices.Sort(out)
 	return out
 }
 

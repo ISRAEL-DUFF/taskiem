@@ -36,6 +36,11 @@ describe("the chat's tools", () => {
     const can = (p: string) => p === "table.read";
     expect(toolsFor(can).map((t) => t.key)).toEqual(["products", "stock", "tables", "purchases"]);
     expect(toolsFor(() => true, "pri").map((t) => t.key)).toEqual(["prices"]);
+    // Staff see their role's tools; the handover is a shift manager's.
+    expect(toolsFor(() => true, "", ["cashier"]).map((t) => t.key)).toEqual(["sell", "stock", "orders"]);
+    expect(toolsFor(() => true, "", ["shift_manager"]).map((t) => t.key)).toEqual(["sell", "handover", "stock", "orders", "bills"]);
+    expect(toolsFor(() => true, "", ["owner"]).map((t) => t.key)).not.toContain("handover");
+    expect(toolsFor(() => true, "", ["cashier", "admin"]).length).toBeGreaterThan(5);
     expect(toolsFor(() => true, "lists").map((t) => t.key)).toEqual(["prices"]);
   });
   it("words orders, new ones first in the badge", () => {

@@ -307,6 +307,9 @@ func (s *Server) tgHandle(ctx context.Context, u telegram.Update) error {
 		if done, err := s.riderWord(ctx, tg, reach.Telegram, addr, in.Text); done || err != nil {
 			return err
 		}
+		if done, err := s.riderJobsWord(ctx, tg, reach.Telegram, addr, in.Text); done || err != nil {
+			return err
+		}
 		if done, err := s.riderDeliveryWord(ctx, tg, reach.Telegram, addr, in.Text); done || err != nil {
 			return err
 		}

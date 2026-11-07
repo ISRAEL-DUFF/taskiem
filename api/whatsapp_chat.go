@@ -535,6 +535,9 @@ func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number st
 	if done, err := s.riderWord(ctx, wa, reach.WhatsApp, number, text); done || err != nil {
 		return err
 	}
+	if done, err := s.riderJobsWord(ctx, wa, reach.WhatsApp, number, text); done || err != nil {
+		return err
+	}
 	if done, err := s.riderDeliveryWord(ctx, wa, reach.WhatsApp, number, text); done || err != nil {
 		return err
 	}
@@ -701,6 +704,11 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	}
 	// "tools", "/products": links to the tools on the web (chat_tool_requests.go).
 	if done, err := s.waToolsCommand(ctx, c, cmd); done || err != nil {
+		return err
+	}
+	// "how did we do this week?": the numbers, and a chart card in the
+	// Taskiem conversation (chat_briefing.go).
+	if done, err := s.waHowDidWeDo(ctx, c, cmd); done || err != nil {
 		return err
 	}
 	// Accept or Decline on a linked business's order, All came on its
@@ -1114,6 +1122,8 @@ func (s *Server) waHelp(c *chat) string {
 	}
 	if c.p.Can(PermStorefrontManage) {
 		lines = append(lines, c.t("wa.help.shop"), c.t("wa.help.shop_catalogue"), c.t("wa.help.fronts"))
+	}
+	if c.p.Can(PermOrders) {
 		if s.Orders != nil {
 			lines = append(lines, c.t("wa.help.shop_orders"))
 		}

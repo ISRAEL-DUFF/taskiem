@@ -384,6 +384,60 @@ var actionFits = map[string][]string{
 	dispatch.Delivered: {"arrived", "picked_up"}, dispatch.Cash: {"arrived", "picked_up"}, dispatch.NewNumber: {"arrived"},
 }
 
+// riderJobWords ask a rider's open deliveries.
+var riderJobWords = map[string]bool{"my deliveries": true, "deliveries": true, "jobs": true, "my jobs": true, "today": true, "what do i have": true}
+
+// riderJobsWord answers a rider's "my deliveries" (chat tools phase 5: a
+// rider works a shift from chat alone): each open delivery, where it goes,
+// its map pin, and the word to send next. false when the words are not
+// those or the sender has no delivery.
+func (s *Server) riderJobsWord(ctx context.Context, ch chatChannel, channel, addr, text string) (bool, error) {
+	if !s.Dispatch.Ready() {
+		return false, nil
+	}
+	w := strings.Join(strings.Fields(strings.ToLower(strings.Trim(strings.TrimSpace(text), "/ .!?"))), " ")
+	if !riderJobWords[w] {
+		return false, nil
+	}
+	phone := ""
+	if channel == reach.WhatsApp {
+		phone = addr
+	}
+	list, err := s.Dispatch.RiderDeliveries(ctx, phone, channel, addr)
+	if err != nil || len(list) == 0 {
+		return false, err
+	}
+	l := s.chooseLang(ctx, ch.OwnTenant(), addr, "").Tag
+	lines := []string{tr(l, "rider.jobs")}
+	for _, o := range list {
+		if ch.OwnTenant() != uuid.Nil && ch.OwnTenant() != o.Tenant {
+			continue
+		}
+		var v dispatch.View
+		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{o.Tenant}, func(tx pgx.Tx) error {
+			var err error
+			v, err = s.Dispatch.ViewTx(ctx, tx, o.Tenant, o.Delivery)
+			return err
+		}); err != nil {
+			continue
+		}
+		drop := v.Area
+		if v.Held() && v.Address != "" {
+			drop = strings.TrimSpace(v.Address + ", " + v.Area)
+		}
+		line := tr(l, "rider.job", "reference", v.Reference, "business", whatsapp.SafeText(v.Business), "drop", whatsapp.SafeText(drop),
+			"step", tr(l, "rider.job_"+o.Status))
+		if v.Held() && v.Pin != "" {
+			line += "\n" + tr(l, "rider.pin", "pin", v.Pin)
+		}
+		lines = append(lines, line)
+	}
+	if len(lines) == 1 {
+		return false, nil
+	}
+	return true, s.waSay(ctx, ch, addr, "", strings.Join(lines, "\n\n"))
+}
+
 // riderDeliveryWord takes a rider's word for a tap ("picked up") on the
 // delivery it fits, from an address linked to no member; false when the
 // words are none of those, or the sender has no delivery they fit.

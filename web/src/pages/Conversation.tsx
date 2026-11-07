@@ -133,7 +133,7 @@ function CardActions({
   let buttons: ReactNode = null;
   switch (`${card.doc}:${card.event}`) {
     case "order:ordered":
-      if (can("storefront.manage"))
+      if (can("storefront.manage|order.handle"))
         buttons = (
           <>
             <button

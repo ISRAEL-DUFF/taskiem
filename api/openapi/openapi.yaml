@@ -6461,7 +6461,7 @@ paths:
       - sessionCookie: []
       - sessionToken: []
       - apiKey: []
-      x-taskiem-permission: storefront.manage
+      x-taskiem-permission: 'storefront.manage|order.handle'
       parameters:
       - name: open
         in: query
@@ -6559,7 +6559,7 @@ paths:
       - sessionCookie: []
       - sessionToken: []
       - apiKey: []
-      x-taskiem-permission: storefront.manage
+      x-taskiem-permission: 'storefront.manage|order.handle'
       parameters:
       - name: id
         in: path
@@ -6593,7 +6593,7 @@ paths:
         csrfHeader: []
       - sessionToken: []
       - apiKey: []
-      x-taskiem-permission: storefront.manage
+      x-taskiem-permission: 'storefront.manage|order.handle'
       x-taskiem-all-environments: true
       parameters:
       - name: id
@@ -6644,7 +6644,7 @@ paths:
         csrfHeader: []
       - sessionToken: []
       - apiKey: []
-      x-taskiem-permission: storefront.manage
+      x-taskiem-permission: 'storefront.manage|order.handle'
       x-taskiem-all-environments: true
       parameters:
       - name: id
@@ -9243,7 +9243,7 @@ paths:
       - sessionCookie: []
       - sessionToken: []
       - apiKey: []
-      x-taskiem-permission: storefront.manage
+      x-taskiem-permission: 'storefront.manage|order.handle'
       parameters:
       - name: status
         in: query
@@ -9294,7 +9294,7 @@ paths:
       - sessionCookie: []
       - sessionToken: []
       - apiKey: []
-      x-taskiem-permission: storefront.manage
+      x-taskiem-permission: 'storefront.manage|order.handle'
       parameters:
       - name: reference
         in: path
@@ -9459,7 +9459,7 @@ paths:
       - sessionCookie: []
       - sessionToken: []
       - apiKey: []
-      x-taskiem-permission: storefront.manage
+      x-taskiem-permission: 'storefront.manage|order.handle'
       parameters:
       - name: retired
         in: query
@@ -11411,7 +11411,7 @@ paths:
       - sessionCookie: []
       - sessionToken: []
       - apiKey: []
-      x-taskiem-permission: storefront.manage
+      x-taskiem-permission: 'storefront.manage|order.handle'
       parameters:
       - name: day
         in: query
@@ -11554,7 +11554,7 @@ paths:
       - sessionCookie: []
       - sessionToken: []
       - apiKey: []
-      x-taskiem-permission: storefront.manage
+      x-taskiem-permission: 'storefront.manage|order.handle'
       parameters:
       - name: reference
         in: path
@@ -11590,7 +11590,7 @@ paths:
         csrfHeader: []
       - sessionToken: []
       - apiKey: []
-      x-taskiem-permission: storefront.manage
+      x-taskiem-permission: 'storefront.manage|order.handle'
       x-taskiem-all-environments: true
       parameters:
       - name: reference
@@ -11642,7 +11642,7 @@ paths:
         csrfHeader: []
       - sessionToken: []
       - apiKey: []
-      x-taskiem-permission: storefront.manage
+      x-taskiem-permission: 'storefront.manage|order.handle'
       x-taskiem-all-environments: true
       parameters:
       - name: reference
@@ -21741,6 +21741,119 @@ paths:
                           type: integer
         default:
           $ref: '#/components/responses/Error'
+  /v1/chat-briefing:
+    get:
+      operationId: getChatBriefing
+      tags:
+      - Account
+      summary: The morning briefing card
+      description: For those who run the business (storefront.manage or invoice.manage), with chat tools on, from 8am Lagos time (ready); yesterday's sales against the same day a week before with the week's bars, what customers owe, how many items are low, and today's deliveries and bookings, each only for those who may see it. put_off once the person has said Got it (Later with key).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The briefing
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ready, day, key, put_off]
+                properties:
+                  ready:
+                    type: boolean
+                  day:
+                    type: string
+                    format: date
+                  key:
+                    type: string
+                  put_off:
+                    type: boolean
+                  sales:
+                    type: object
+                    properties:
+                      yesterday_kobo:
+                        type: integer
+                      change_pct:
+                        type: [integer, 'null']
+                      weekday:
+                        type: string
+                      week:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/DaySales'
+                  owed_kobo:
+                    type: integer
+                  low:
+                    type: integer
+                  deliveries:
+                    type: integer
+                  bookings:
+                    type: integer
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/chat-handover:
+    get:
+      operationId: getChatHandover
+      tags:
+      - Account
+      summary: The shift so far, for its handover
+      description: Today (Lagos) so far, for a shift manager's handover in chat; what was sold and how it was paid, the orders still open and the deliveries out and done (for those who work the orders), and the items that are low.
+      x-taskiem-permission: table.read
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The shift so far
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Handover'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: postChatHandover
+      tags:
+      - Account
+      summary: Hand the shift over
+      description: The shift so far, with the cash counted against the cash sold and a note, told to those who run the business (in the app's bell and on their chat), and a diary line for the person.
+      x-taskiem-permission: table.read
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cash_counted_kobo:
+                  type: integer
+                  minimum: 0
+                note:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: Handed over
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [handover, words]
+                properties:
+                  handover:
+                    $ref: '#/components/schemas/Handover'
+                  words:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
   /v1/chat-alerts/later:
     post:
       operationId: postChatAlertLater
@@ -25975,6 +26088,50 @@ components:
               request:
                 $ref: '#/components/schemas/SchoolPosting'
   schemas:
+    DaySales:
+      type: object
+      required: [day, label, kobo]
+      properties:
+        day:
+          type: string
+          format: date
+        label:
+          type: string
+        kobo:
+          type: integer
+    Handover:
+      type: object
+      required: [day, low]
+      properties:
+        day:
+          type: string
+          format: date
+        sales:
+          type: object
+          properties:
+            total_kobo:
+              type: integer
+            count:
+              type: integer
+            by_how:
+              type: object
+              additionalProperties:
+                type: integer
+            waiting:
+              type: integer
+        orders_open:
+          type: integer
+        deliveries:
+          type: object
+          properties:
+            out:
+              type: integer
+            done:
+              type: integer
+        low:
+          type: array
+          items:
+            type: string
     ChatAlert:
       type: object
       description: An alert as a chat card, with what its next step needs.
@@ -31634,7 +31791,7 @@ components:
                 description: The person said it (else Taskiem did)
               kind:
                 type: string
-                enum: [text, button, voice, photo, form, location, diary]
+                enum: [text, button, voice, photo, form, location, diary, chart]
               text:
                 type: string
               buttons:

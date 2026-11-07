@@ -398,3 +398,62 @@ button.tk-cta.tk-cta-danger, button.tk-cta.tk-cta-danger:hover:not(:disabled), b
 .tk-waiting { font-weight: 700; color: var(--brand); }
 :root[data-theme="dark"] .tk-waiting { color: var(--brand-dark); }
 @media (prefers-color-scheme: dark) { :root[data-theme="system"] .tk-waiting { color: var(--brand-dark); } }
+
+/* Sell: how it was paid, as soft segments (chat-tools.md §7). */
+.tk-hows { display: flex; gap: 8px; }
+.tk-hows button { flex: 1; min-height: 52px; border: 0; box-shadow: none; border-radius: 16px; background: var(--tk-soft); color: var(--text); font-weight: 700; font-size: 15px; cursor: pointer; }
+.tk-hows button.on { background: var(--brand); color: var(--tk-on-pine); }
+:root[data-theme="dark"] .tk-hows button.on { background: var(--brand-dark); color: var(--brand-dark-text); }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .tk-hows button.on { background: var(--brand-dark); color: var(--brand-dark-text); } }
+.tk-hows button:focus-visible { box-shadow: var(--ring); }
+
+/* The morning briefing (chat-tools.md §7, the Alerts design): pine, lime
+   on pine, at the end of the Taskiem conversation from 8am. */
+.tk-brief { display: grid; gap: 14px; padding: 18px; border-radius: 22px; background: var(--brand); color: var(--tk-on-pine); width: 100%; max-width: 480px;
+  box-shadow: 0 20px 40px -18px color-mix(in srgb, var(--brand) 60%, transparent); animation: tk-rise 0.36s var(--ease) both; }
+.tk-brief .tk-kicker { color: var(--brand-dark); }
+.tk-brief-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.tk-brief-head > span { display: grid; gap: 2px; }
+.tk-brief-day { font-size: 14px; color: color-mix(in srgb, var(--tk-on-pine) 72%, transparent); }
+.tk-brief-ok { min-height: 36px; padding: 0 14px; border: 0; box-shadow: none; border-radius: 999px; background: color-mix(in srgb, var(--tk-on-pine) 12%, transparent); color: var(--tk-on-pine); font-weight: 700; font-size: 13px; cursor: pointer; }
+.tk-brief-ok:hover:not(:disabled) { background: color-mix(in srgb, var(--tk-on-pine) 18%, transparent); color: var(--tk-on-pine); }
+.tk-brief-sales { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; padding: 0; border: 0; box-shadow: none; background: none; color: inherit; text-align: left; cursor: pointer; font: inherit; }
+.tk-brief-sales:hover:not(:disabled) { background: none; color: inherit; }
+.tk-brief-sales > span:first-child { display: grid; gap: 2px; }
+.tk-brief-label { font-size: 14px; color: color-mix(in srgb, var(--tk-on-pine) 80%, transparent); }
+.tk-brief-sales b { font-size: 34px; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.tk-brief-change { font-size: 14px; font-weight: 700; color: var(--brand-dark); }
+.tk-brief-bars { flex: none; display: flex; align-items: flex-end; gap: 5px; height: 58px; }
+.tk-brief-bars span { width: 9px; border-radius: 3px; background: color-mix(in srgb, var(--brand-dark) 45%, transparent); }
+.tk-brief-bars span.on { background: var(--brand-dark); }
+.tk-brief-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; }
+.tk-brief-tile { display: grid; gap: 2px; padding: 10px 12px; border: 0; box-shadow: none; border-radius: 14px; background: color-mix(in srgb, var(--tk-on-pine) 9%, transparent);
+  color: var(--tk-on-pine); text-align: left; font: inherit; cursor: pointer; text-decoration: none; }
+.tk-brief-tile:hover, .tk-brief-tile:hover:not(:disabled) { background: color-mix(in srgb, var(--tk-on-pine) 15%, transparent); color: var(--tk-on-pine); text-decoration: none; }
+.tk-brief-tile span { font-size: 12px; color: color-mix(in srgb, var(--tk-on-pine) 72%, transparent); }
+.tk-brief-tile b { font-size: 15px; }
+.tk-brief button:focus-visible, .tk-brief a:focus-visible { box-shadow: 0 0 0 3px var(--brand-dark); outline: none; }
+
+/* "How did we do?": a chart card in the conversation. */
+.tk-chart-row { display: flex; }
+.tk-chart { display: grid; gap: 4px; padding: 16px; border-radius: 22px; background: var(--panel); width: 100%; max-width: 420px;
+  box-shadow: 0 10px 30px -18px color-mix(in srgb, var(--brand) 45%, transparent); animation: tk-rise 0.36s var(--ease) both; }
+.tk-chart-total { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; color: var(--text); font-variant-numeric: tabular-nums; }
+.tk-chart-change { font-size: 14px; font-weight: 700; }
+.tk-chart-change.up { color: var(--ok); }
+.tk-chart-change.down { color: var(--danger); }
+.tk-bars { display: flex; align-items: stretch; gap: 4px; height: 120px; margin-top: 10px; }
+.tk-bar { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; }
+.tk-bar > span { width: 100%; max-width: 28px; border-radius: 6px 6px 3px 3px; background: color-mix(in srgb, var(--brand) 25%, transparent); transform-origin: bottom; animation: tk-grow 0.5s var(--ease) both; }
+.tk-bar.on > span { background: var(--brand); }
+.tk-bar small { font-size: 11px; color: var(--muted); height: 14px; }
+:root[data-theme="dark"] .tk-bar.on > span { background: var(--text); }
+:root[data-theme="dark"] .tk-bar > span { background: color-mix(in srgb, var(--text) 25%, transparent); }
+:root[data-theme="dark"] .tk-chart { box-shadow: none; border: 1px solid var(--border); }
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] .tk-bar.on > span { background: var(--text); }
+  :root[data-theme="system"] .tk-bar > span { background: color-mix(in srgb, var(--text) 25%, transparent); }
+  :root[data-theme="system"] .tk-chart { box-shadow: none; border: 1px solid var(--border); }
+}
+@keyframes tk-grow { from { transform: scaleY(0); } }
+@media (prefers-reduced-motion: reduce) { .tk-brief, .tk-chart, .tk-bar > span { animation: none; } }

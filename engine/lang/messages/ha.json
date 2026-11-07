@@ -568,6 +568,30 @@
       "text": "Na samu wurinka: an ajiye shi tare da kayan.",
       "reviewed": false
     },
+    "rider.jobs": {
+      "text": "Kayan da za ka kai yanzu:",
+      "reviewed": false
+    },
+    "rider.job": {
+      "text": "*{reference}* daga {business}, zuwa {drop}: {step}",
+      "reviewed": false
+    },
+    "rider.job_offered": {
+      "text": "an ba ka shi. Aika ACCEPT ko CAN'T.",
+      "reviewed": false
+    },
+    "rider.job_accepted": {
+      "text": "naka ne. Aika PICKED UP idan ka karɓa.",
+      "reviewed": false
+    },
+    "rider.job_picked_up": {
+      "text": "yana kan hanya. Aika ARRIVED a ƙofa, ko DELIVERED.",
+      "reviewed": false
+    },
+    "rider.job_arrived": {
+      "text": "a ƙofa. Aika DELIVERED idan ka miƙa.",
+      "reviewed": false
+    },
     "rider.no_delivery": {
       "text": "Ba ka da kayan da ya dace da wannan yanzu.",
       "reviewed": false
