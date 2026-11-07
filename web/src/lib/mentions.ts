@@ -1,3 +1,4 @@
+import type { ExploreCard } from "./explore";
 // Mentions in the composer (business links L4, §5.5): "@" suggests linked
 // businesses, "#" items with their unit and price; a pick puts the name
 // in the text and, in a conversation, a structured reference beside it.
@@ -12,6 +13,9 @@ export interface Suggestion {
   sub?: string;
   /** A short word on the right: "4 left". */
   badge?: string;
+  /** A business we are not linked with, found in Explore: picking it
+   * shows its card (with Connect) rather than tagging it. */
+  explore?: ExploreCard;
 }
 
 /** A mention as a message stores it. */
@@ -156,19 +160,46 @@ export const TASKIEM: Suggestion = {
  * each, the ones a word of the name starts with first. */
 export function groupSuggestions(
   query: string,
-  src: { items: Suggestion[]; services?: Suggestion[]; businesses: Suggestion[] },
+  src: {
+    items: Suggestion[];
+    services?: Suggestion[];
+    businesses: Suggestion[];
+    /** Found in Explore for these words: not linked, after the linked. */
+    unlinked?: Suggestion[];
+  },
   taskiem: boolean,
 ): SuggestionGroup[] {
   const out: SuggestionGroup[] = [];
-  const add = (label: string, list: Suggestion[] | undefined, n: number) => {
+  const add = (label: string, list: Suggestion[] | undefined, n: number, more: Suggestion[] = []) => {
     const got = suggest(list ?? [], query).slice(0, n);
-    if (got.length > 0) out.push({ label, items: got });
+    const names = new Set(got.map((s) => s.name.toLowerCase()));
+    const all = [...got, ...more.filter((s) => !names.has(s.name.toLowerCase())).slice(0, 3)];
+    if (all.length > 0) out.push({ label, items: all });
   };
   add("Products", src.items, 4);
   add("Services", src.services, 3);
-  add("Businesses", src.businesses, 4);
+  add("Businesses", src.businesses, 4, src.unlinked);
   // Taskiem is always offered last, as the designs show: it can do what
   // the words ask, whatever they name.
   if (taskiem) out.push({ label: "", items: [TASKIEM] });
   return out;
+}
+
+/** A business found in Explore, as the picker lists it: "Not linked ·
+ * Yaba" (or where the asking stands). Linked ones and those we blocked
+ * are not offered here. */
+export function unlinkedSuggestion(c: ExploreCard): Suggestion | null {
+  const where = c.area ? ` · ${c.area}` : "";
+  switch (c.state) {
+    case "none":
+    case "ended":
+    case "not_accepted":
+      return { kind: "business", id: c.business, name: c.name, sub: `Not linked${where}`, explore: c };
+    case "requested":
+      return { kind: "business", id: c.business, name: c.name, sub: "Not linked · you asked to link", explore: c };
+    case "asked_us":
+      return { kind: "business", id: c.business, name: c.name, sub: "Not linked · asked you to link", explore: c };
+    default:
+      return null;
+  }
 }

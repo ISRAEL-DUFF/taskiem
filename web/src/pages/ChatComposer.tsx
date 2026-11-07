@@ -545,6 +545,7 @@ export function ComposerView<R>({
             <textarea
               id={textId}
               ref={c.textBox}
+              data-chat-box=""
               rows={1}
               maxLength={4000}
               placeholder={

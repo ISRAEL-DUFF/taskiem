@@ -120,6 +120,10 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
     draftKey: "taskiem",
     rules: TASKIEM_FILES,
     tools: chatTools,
+    // With chat tools, "@" tags things and businesses in groups, and finds
+    // businesses not yet linked (their card, with Connect); Taskiem is
+    // who is being talked to, so it is not offered.
+    grouped: chatTools ? { taskiem: false } : undefined,
     diaryWhere: "taskiem",
     // A tool saved: the server's diary line is pulled in.
     // A tool saved a change: its diary line, and the cards it settles.

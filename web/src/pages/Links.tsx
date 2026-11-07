@@ -436,14 +436,16 @@ export function ChatPage() {
         );
         return;
       }
-      // Not under an open menu, sheet or panel: the letters are theirs.
+      // Not under an open menu, sheet, picker, tools or Explore: the
+      // letters are theirs.
       const covered = !!document.querySelector(
-        '[data-testid="chat-more"], [data-testid="chat-recording"], .chat-menu, .attach-menu, .chat-info, .modal, .mention-list, .emoji-panel, .explore',
+        '[data-testid="chat-more"], [data-testid="chat-recording"], .chat-menu, .attach-menu, .chat-info, .modal, .mention-list, .emoji-panel, .explore, .tk-sheet, .tk-tools, .tk-picker',
       );
       const what = shortcutOf(e, covered || isTyping(document.activeElement));
       if (!what || e.defaultPrevented) return;
       e.preventDefault();
       if (what === "help") setKeysOpen(true);
+      else if (what === "tag") startTag();
       else if (what === "search" || what === "new") {
         if (what === "new") return startNew.current();
         k.setParams({});
@@ -1512,6 +1514,21 @@ function FindableQuestion({
       </div>
     </section>
   );
+}
+
+/** "@" away from the box: the open chat's box takes the focus and an "@",
+ * and the picker opens as if it were typed. */
+function startTag() {
+  const el = document.querySelector<HTMLTextAreaElement>(
+    "textarea[data-chat-box]",
+  );
+  if (!el) return;
+  const add = el.value && !/\s$/.test(el.value) ? " @" : "@";
+  const next = el.value + add;
+  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(el, next);
+  el.focus();
+  el.setSelectionRange(next.length, next.length);
+  el.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
 /** The keys of the Chat page, for a reader who has a keyboard. */

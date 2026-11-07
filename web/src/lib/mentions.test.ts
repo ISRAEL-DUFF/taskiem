@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   groupSuggestions,
+  unlinkedSuggestion,
   insertMention,
   mentionParts,
   mentionQuery,
@@ -97,5 +98,35 @@ describe("the grouped picker (chat tools)", () => {
     expect(stillNamed("#Rice, 25kg bag is out", picked)).toHaveLength(1);
     const parts = mentionParts("@Rice, 25kg bag is out", [{ kind: "item", name: "Rice, 25kg bag" }]);
     expect(parts[0]).toEqual({ text: "@Rice, 25kg bag", mention: { kind: "item", name: "Rice, 25kg bag" } });
+  });
+});
+
+describe("businesses found in Explore (chat tools phase 6)", () => {
+  const card = (name: string, state: string, area = "Yaba") => ({
+    business: name.toLowerCase(),
+    name,
+    area,
+    logo: false,
+    photos: 0,
+    captions: [],
+    state: state as "none",
+  });
+  it("offers those not linked, saying so, and not the linked or blocked", () => {
+    expect(unlinkedSuggestion(card("Kola's Bakery", "none"))?.sub).toBe("Not linked · Yaba");
+    expect(unlinkedSuggestion(card("Kola's Bakery", "requested"))?.sub).toBe("Not linked · you asked to link");
+    expect(unlinkedSuggestion(card("Kola's Bakery", "asked_us"))?.sub).toBe("Not linked · asked you to link");
+    expect(unlinkedSuggestion(card("Kola's Bakery", "active"))).toBeNull();
+    expect(unlinkedSuggestion(card("Kola's Bakery", "blocked_by_us"))).toBeNull();
+    expect(unlinkedSuggestion(card("Kola's Bakery", "none"))?.explore?.name).toBe("Kola's Bakery");
+  });
+  it("lists them after the linked ones, once each, three at most", () => {
+    const linked = [{ kind: "business" as const, id: "l1", name: "Kola Foods" }];
+    const found = ["Kola Foods", "Kola's Bakery", "Kolawole Mills", "Kola Stores", "Kola Market"]
+      .map((n) => unlinkedSuggestion(card(n, "none")))
+      .filter((x) => x !== null);
+    const g = groupSuggestions("kola", { items: [], businesses: linked, unlinked: found }, false);
+    expect(g).toHaveLength(1);
+    expect(g[0]?.items.map((s) => s.name)).toEqual(["Kola Foods", "Kola's Bakery", "Kolawole Mills", "Kola Stores"]);
+    expect(g[0]?.items[0]?.explore).toBeUndefined();
   });
 });

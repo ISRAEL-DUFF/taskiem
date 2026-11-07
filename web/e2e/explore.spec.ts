@@ -340,3 +340,82 @@ test("a request to a phone number from Explore says it was sent, and does not of
     0,
   );
 });
+
+// Chat tools phase 6 (docs/spec/chat-tools.md §8): tagging a business we are
+// not linked with, in the Taskiem conversation, shows its Explore card in a
+// sheet, and a link request is sent from it.
+test("tagging a business you are not linked with shows its card, and Connect asks it to link", async ({
+  browser,
+}) => {
+  test.setTimeout(120_000);
+  const { seller, buyer, name, stamp } = await twoBusinesses(browser, {
+    viewport: { width: 390, height: 844 },
+  });
+  expect(
+    (
+      await buyer.request.put("/v1/settings/chat-tools", {
+        headers: H,
+        data: { chat_tools: true },
+      })
+    ).ok(),
+  ).toBe(true);
+  await buyer.goto("/chat?with=taskiem");
+  const box = buyer.getByTestId("taskiem-pane").locator("textarea[data-chat-box]");
+  await box.fill(`@Dangote Cement ${stamp}`);
+  const picker = buyer.getByTestId("mention-list");
+  const row = picker.getByRole("button", { name: new RegExp(`^${name}.*Not linked · Ikeja.*see their card`) });
+  await expect(row).toBeVisible();
+  await axeBoth(buyer, "the picker with a business not linked");
+  await row.click();
+  const sheet = buyer.getByTestId("business-card-sheet");
+  await expect(sheet).toBeVisible();
+  // Nothing was tagged: the words stay as typed.
+  await expect(box).toHaveValue(`@Dangote Cement ${stamp}`);
+  const card = sheet.getByTestId("explore-card");
+  await expect(card).toContainText("Cement and sand, delivered · Ikeja");
+  await expect(card).toContainText("Family-run since 1998.");
+  await expect(card.locator(".carousel-slide")).toHaveCount(4);
+  await axeBoth(buyer, "a business's card from the picker");
+  await card.getByRole("button", { name: `Connect with ${name}` }).click();
+  await expect(card.getByText("Requested")).toBeVisible();
+  await expect(sheet).toContainText(`Asked ${name} to link`);
+  await expect(sheet.locator(".tk-saved")).toHaveCount(0, { timeout: 5000 });
+  // The seller has the ask.
+  const asks = (await (await seller.request.get("/v1/links")).json()) as {
+    links: { state: string; asked_by_us: boolean }[];
+  };
+  expect(asks.links.some((l) => l.state === "asked_us" || (l.state === "requested" && !l.asked_by_us))).toBe(true);
+  // Withdraw takes it back; Connect is offered again.
+  await card.getByRole("button", { name: /^Withdraw/ }).click();
+  await expect(card.getByRole("button", { name: /^Connect/ })).toBeVisible();
+});
+
+test("the @ key starts a tag in the open chat; the keys stay out of Explore", async ({
+  browser,
+}) => {
+  const { buyer } = await twoBusinesses(browser);
+  expect(
+    (
+      await buyer.request.put("/v1/settings/chat-tools", {
+        headers: H,
+        data: { chat_tools: true },
+      })
+    ).ok(),
+  ).toBe(true);
+  await buyer.goto("/chat?with=taskiem");
+  const box = buyer.getByTestId("taskiem-pane").locator("textarea[data-chat-box]");
+  await expect(box).toBeVisible();
+  await buyer.locator("body").click({ position: { x: 5, y: 400 } });
+  await buyer.keyboard.press("@");
+  await expect(box).toBeFocused();
+  await expect(box).toHaveValue("@");
+  // n opens Explore; in it, "@" and "j" are typed, not taken.
+  await box.fill("");
+  await buyer.locator("body").click({ position: { x: 5, y: 400 } });
+  await buyer.keyboard.press("n");
+  const ex = buyer.getByTestId("explore");
+  await expect(ex).toBeVisible();
+  await buyer.keyboard.press("@");
+  await expect(ex.getByTestId("explore-search")).toHaveValue("@");
+  await expect(box).toHaveValue("");
+});

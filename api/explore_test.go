@@ -79,6 +79,11 @@ func TestExploreBrowse(t *testing.T) {
 	if d["logo"] != true || d["photos"] != float64(3) || d["tagline"] != "Cement and sand, delivered" || d["about"] != "Family-run since 1998." || d["state"] != "none" || d["business"] != dangoteID {
 		t.Errorf("a card: %v", d)
 	}
+	// Each photo's words, in order, for the card (chat tools phase 6), and
+	// our own area for "Near you · Ikeja".
+	if caps, _ := d["captions"].([]any); len(caps) != 3 || caps[0] != "Photo A" || caps[2] != "Photo C" || page["area"] != "Ikeja" {
+		t.Errorf("captions and our area: %v %v", d["captions"], page["area"])
+	}
 	if d["v"] == nil || d["v"] == "" || page["near_more"] != false {
 		t.Errorf("a card's version and paging: %v %v", d["v"], page["near_more"])
 	}

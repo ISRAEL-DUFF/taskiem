@@ -10,28 +10,21 @@ import {
   MAX_NAME,
   MAX_TAGLINE,
   moved,
-  photoCount,
   photoSrc,
   profileLetter,
   stepTo,
   type BusinessProfile,
   type GalleryPhoto,
 } from "../lib/businessProfile";
-import { findableLine, type LinkSettings } from "../lib/links";
-import {
-  ErrorBox,
-  Field,
-  PageHeader,
-  Skeleton,
-  useAction,
-  useLoad,
-} from "../ui";
+import type { LinkSettings } from "../lib/links";
+import { ErrorBox, Skeleton, useAction, useLoad } from "../ui";
 
 // Your business in Explore (docs/spec/business-links.md, "Business profile and
 // gallery"): the words, the logo and the photos other businesses see when they
 // find you, with or without a storefront. A live card shows how it will look.
 
-/** The card as another business sees it. */
+/** The card as another business sees it (design 11): the logo, the name
+ * and line, Connect as they would see it, and the photos as a mosaic. */
 function ProfileCard({
   name,
   tagline,
@@ -43,45 +36,66 @@ function ProfileCard({
   tagline: string;
   area: string;
   logo?: string;
-  photos: string[];
+  photos: { src: string; caption: string }[];
 }) {
+  const [first, second, third] = photos;
+  const more = Math.max(0, photos.length - 2);
   return (
-    <div
-      className="explore-card profile-preview"
+    <section
+      className="tk-p-card tk-p-u2"
       aria-label="How your card looks"
       role="group"
     >
-      {photos.length > 0 && (
-        <div className="explore-strip" aria-hidden="true">
-          {photos.slice(0, 3).map((src) => (
-            <img key={src} src={src} alt="" loading="lazy" />
-          ))}
-        </div>
-      )}
-      <div className="explore-head">
+      <div className="tk-kicker">How other businesses see you</div>
+      <div className="tk-p-who">
         {logo ? (
-          <img
-            className="explore-logo"
-            src={logo}
-            alt=""
-            width={48}
-            height={48}
-          />
+          <img className="tk-p-logo" src={logo} alt="" width={48} height={48} />
         ) : (
-          <span className="chat-avatar" aria-hidden="true">
+          <span className="tk-p-logo tk-p-letter" aria-hidden="true">
             {profileLetter(name)}
           </span>
         )}
-        <div className="explore-who">
+        <div className="tk-p-words">
           <strong>{name || "Your business"}</strong>
-          <span className="hint">
+          <span>
             {[tagline, area].filter(Boolean).join(" · ") ||
               "A line about what you do"}
           </span>
         </div>
+        <span className="tk-p-connect" aria-hidden="true">
+          Connect
+        </span>
       </div>
-    </div>
+      <div className="tk-p-mosaic" aria-hidden="true">
+        <div className="tk-p-tile big">
+          {first && <img src={first.src} alt="" loading="lazy" />}
+          <span className="tk-x-cap">
+            {first ? first.caption || "Your first photo" : "Add your first photo"}
+          </span>
+        </div>
+        <div className="tk-p-stack">
+          <div className="tk-p-tile">
+            {second && <img src={second.src} alt="" loading="lazy" />}
+          </div>
+          <div className="tk-p-tile">
+            {third && <img src={third.src} alt="" loading="lazy" />}
+            {more > 0 && <span className="tk-p-more">+{more}</span>}
+          </div>
+        </div>
+      </div>
+    </section>
   );
+}
+
+/** What being found means, in a line, for the switch (design 11). */
+function foundLine(s: LinkSettings): string {
+  if (s.findable === null)
+    return s.findable_now
+      ? "On while your storefront is published. Businesses near you can find you and connect."
+      : "Hidden until you publish your storefront or turn this on.";
+  return s.findable
+    ? "Businesses near you can find you and connect."
+    : "Hidden. Only businesses you are linked with see this.";
 }
 
 export function BusinessProfilePage() {
@@ -223,17 +237,19 @@ export function BusinessProfilePage() {
     }, false);
   };
 
+  const on = settings.data?.findable_now ?? false;
   return (
-    <>
-      <p className="crumbs">
-        <Link to="/settings/links" aria-label="Back to Linked businesses">
-          Linked businesses
+    <div className="tk-p">
+      <header className="tk-p-head">
+        <Link
+          to="/settings/links"
+          className="tk-x-back"
+          aria-label="Back to Linked businesses"
+        >
+          <Icon name="back" />
         </Link>
-      </p>
-      <PageHeader
-        title="Your business in Explore"
-        description="What other businesses see when they look for a business to trade with: your name, a line about what you do, your area, a logo and photos."
-      />
+        <h1>Your business in Explore</h1>
+      </header>
       <ErrorBox
         error={loadError ?? settings.error ?? act.error ?? capAct.error}
       />
@@ -242,119 +258,139 @@ export function BusinessProfilePage() {
       ) : (
         <>
           <section
-            className="card"
+            className={`tk-p-found tk-p-u1${on ? " on" : ""}`}
             aria-label="Being found"
             data-testid="profile-found"
           >
-            {settings.data ? (
-              <label className="switch-line">
-                <input
-                  type="checkbox"
-                  aria-label="Let other businesses find us"
-                  checked={settings.data.findable_now}
-                  disabled={!manage || act.busy}
-                  onChange={(e) =>
-                    void act.run(
-                      async () => (
-                        await put("/v1/link-settings", {
-                          findable: e.target.checked,
-                        }),
-                        settings.reload()
-                      ),
-                      "Saved",
-                    )
-                  }
-                  data-testid="profile-findable"
-                />
-                <span>{findableLine(settings.data)}</span>
-              </label>
-            ) : (
-              <p className="hint">Checking…</p>
-            )}
-            <p className="hint">
-              A business is listed only while this is on. What is on this page
-              is shown to every business that finds you.
-            </p>
-            <ProfileCard
-              name={form.name}
-              tagline={form.tagline}
-              area={form.area}
-              logo={photoSrc(data.logo)}
-              photos={gallery
-                .map((g) => photoSrc(g.photo) ?? "")
-                .filter(Boolean)}
+            <label className="tk-p-found-words" htmlFor="profile-findable">
+              <span className="tk-p-found-title">Be found in Explore</span>
+              <span className="tk-p-found-line">
+                {settings.data ? foundLine(settings.data) : "Checking…"}
+              </span>
+            </label>
+            <input
+              id="profile-findable"
+              type="checkbox"
+              role="switch"
+              className="tk-switch"
+              checked={on}
+              disabled={!manage || act.busy || !settings.data}
+              onChange={(e) =>
+                void act.run(
+                  async () => (
+                    await put("/v1/link-settings", {
+                      findable: e.target.checked,
+                    }),
+                    settings.reload()
+                  ),
+                  "Saved",
+                )
+              }
+              data-testid="profile-findable"
             />
           </section>
 
+          <ProfileCard
+            name={form.name}
+            tagline={form.tagline}
+            area={form.area}
+            logo={photoSrc(data.logo)}
+            photos={gallery
+              .map((g) => ({ src: photoSrc(g.photo) ?? "", caption: g.caption }))
+              .filter((g) => g.src)}
+          />
+
           <section
-            className="card"
+            className="tk-p-card tk-p-form tk-p-u3"
             aria-labelledby="profile-words"
             data-testid="profile-words"
           >
-            <h2 id="profile-words">About your business</h2>
-            <div className="profile-logo">
-              {data.logo ? (
+            <h2 id="profile-words" className="sr-only">
+              Your details
+            </h2>
+            <div className="tk-p-logo-row">
+              {manage ? (
+                <button
+                  type="button"
+                  className="tk-p-logo-pick"
+                  disabled={act.busy}
+                  onClick={() => logoInput.current?.click()}
+                  aria-label={data.logo ? "Change logo" : "Add a logo"}
+                >
+                  {data.logo ? (
+                    <img src={photoSrc(data.logo)} alt="" width={64} height={64} />
+                  ) : (
+                    <span aria-hidden="true">{profileLetter(form.name)}</span>
+                  )}
+                  <span className="tk-p-plus" aria-hidden="true">
+                    <Icon name={data.logo ? "pencil" : "plus"} />
+                  </span>
+                </button>
+              ) : data.logo ? (
                 <img
-                  className="explore-logo"
+                  className="tk-p-logo-pick"
                   src={photoSrc(data.logo)}
                   alt="Your logo"
                   width={64}
                   height={64}
                 />
               ) : (
-                <span className="chat-avatar big" aria-hidden="true">
+                <span className="tk-p-logo-pick" aria-hidden="true">
                   {profileLetter(form.name)}
                 </span>
               )}
-              {manage && (
-                <span className="row-actions">
-                  <input
-                    ref={logoInput}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    className="sr-only"
-                    aria-label="Choose a logo"
-                    data-testid="profile-logo-input"
-                    onChange={(e) => {
-                      setLogo(e.target.files?.[0]);
-                      e.target.value = "";
-                    }}
-                  />
+              <div>
+                <div className="tk-p-logo-title">Logo</div>
+                <div className="tk-p-logo-line">
+                  {data.logo
+                    ? "Shown on your card and in chats"
+                    : "A letter shows until you add one"}
+                </div>
+                {manage && data.logo && (
                   <button
                     type="button"
+                    className="tk-x-withdraw"
                     disabled={act.busy}
-                    onClick={() => logoInput.current?.click()}
+                    onClick={dropLogo}
                   >
-                    {data.logo ? "Change logo" : "Add a logo"}
+                    Remove logo
                   </button>
-                  {data.logo && (
-                    <button
-                      type="button"
-                      disabled={act.busy}
-                      onClick={dropLogo}
-                    >
-                      Remove logo
-                    </button>
-                  )}
-                </span>
+                )}
+              </div>
+              {manage && (
+                <input
+                  ref={logoInput}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="sr-only"
+                  aria-label="Choose a logo"
+                  data-testid="profile-logo-input"
+                  tabIndex={-1}
+                  onChange={(e) => {
+                    setLogo(e.target.files?.[0]);
+                    e.target.value = "";
+                  }}
+                />
               )}
             </div>
-            <Field
-              label="Business name"
-              hint="Leave it empty to use the name on your storefront, or your business's name."
-            >
+            <label className="tk-p-field">
+              Name
               <input
                 value={form.name}
                 maxLength={MAX_NAME}
                 disabled={!manage}
+                placeholder="Your storefront's name, or your business's"
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 data-testid="profile-name"
               />
-            </Field>
-            <Field
-              label="What you do, in one line"
-              hint={`${form.tagline.length} of ${MAX_TAGLINE}`}
-            >
+            </label>
+            <label className="tk-p-field">
+              <span className="tk-p-field-top">
+                One line about you
+                <span>
+                  {form.tagline.length} / {MAX_TAGLINE}
+                </span>
+              </span>
               <input
                 value={form.tagline}
                 maxLength={MAX_TAGLINE}
@@ -363,36 +399,38 @@ export function BusinessProfilePage() {
                 onChange={(e) => setForm({ ...form, tagline: e.target.value })}
                 data-testid="profile-tagline"
               />
-            </Field>
-            <Field
-              label="Area"
-              hint="Where you are, as people say it, such as Ikeja or Wuse 2."
-            >
+            </label>
+            <label className="tk-p-field">
+              Area
               <input
                 value={form.area}
                 maxLength={MAX_AREA}
                 disabled={!manage}
+                placeholder="Where you are, such as Ikeja or Wuse 2"
                 onChange={(e) => setForm({ ...form, area: e.target.value })}
                 data-testid="profile-area"
               />
-            </Field>
-            <Field
-              label="About us"
-              hint={`${form.about.length} of ${MAX_ABOUT}`}
-            >
+            </label>
+            <label className="tk-p-field">
+              <span className="tk-p-field-top">
+                About
+                <span>
+                  {form.about.length} / {MAX_ABOUT}
+                </span>
+              </span>
               <textarea
                 value={form.about}
                 maxLength={MAX_ABOUT}
                 disabled={!manage}
-                rows={4}
+                rows={3}
                 onChange={(e) => setForm({ ...form, about: e.target.value })}
                 data-testid="profile-about"
               />
-            </Field>
+            </label>
             {manage && (
               <button
                 type="button"
-                className="primary"
+                className="tk-btn primary tk-p-save"
                 disabled={act.busy || !dirty}
                 onClick={save}
                 data-testid="profile-save"
@@ -403,121 +441,128 @@ export function BusinessProfilePage() {
           </section>
 
           <section
-            className="card"
+            className="tk-p-card tk-p-u4"
             aria-labelledby="profile-photos"
             data-testid="profile-gallery"
           >
-            <h2 id="profile-photos">Photos</h2>
-            <p className="hint" aria-live="polite" data-testid="profile-count">
-              {photoCount(gallery.length, max)}. Show your shop, your products
-              and your team.
-            </p>
-            {gallery.length === 0 && (
-              <p className="hint">
-                No photos yet. Other businesses will see a letter instead.
-              </p>
-            )}
-            <ul className="gallery-grid" aria-label="Your photos">
+            <div className="tk-p-photos-top">
+              <h2 id="profile-photos">Photos</h2>
+              <span aria-live="polite" data-testid="profile-count">
+                {gallery.length} of {max}
+                <span className="sr-only">
+                  {" "}
+                  photo{max === 1 ? "" : "s"}
+                </span>
+              </span>
+            </div>
+            <ul className="tk-p-grid" aria-label="Your photos">
               {gallery.map((g, i) => (
-                <li
-                  key={g.id}
-                  className="gallery-tile"
-                  data-testid="profile-photo"
-                >
-                  {g.photo.moderation === "rejected" && (
-                    <span className="hint gallery-rejected" role="status">
-                      Not accepted for a public page. Remove it.
-                    </span>
-                  )}
-                  <img
-                    src={photoSrc(g.photo)}
-                    alt={g.caption || `Photo ${i + 1}`}
-                    loading="lazy"
-                  />
-                  {manage && (
-                    <>
-                      <input
-                        className="gallery-caption"
-                        defaultValue={g.caption}
-                        key={g.id + g.caption}
-                        maxLength={MAX_CAPTION}
-                        placeholder="Add a caption"
-                        aria-label={`Caption for photo ${i + 1}`}
-                        onBlur={(e) => caption(g, e.target.value.trim())}
-                      />
-                      <span className="gallery-tools">
+                <li key={g.id} className="tk-p-photo" data-testid="profile-photo">
+                  <div className="tk-p-pic">
+                    <img
+                      src={photoSrc(g.photo)}
+                      alt={g.caption || `Photo ${i + 1}`}
+                      loading="lazy"
+                    />
+                    {i === 0 && <span className="tk-pill lime tk-p-first">First</span>}
+                    {g.photo.moderation === "rejected" && (
+                      <span className="tk-p-refused" role="status">
+                        Not accepted for a public page. Remove it.
+                      </span>
+                    )}
+                    {manage && (
+                      <>
                         <button
                           type="button"
-                          className="icon-button"
-                          aria-label={`Move photo ${i + 1} earlier`}
-                          title="Earlier"
-                          disabled={
-                            act.busy || stepTo(i, -1, gallery.length) < 0
-                          }
-                          onClick={() => reorder(g, -1)}
-                        >
-                          <Icon name="back" />
-                        </button>
-                        <button
-                          type="button"
-                          className="icon-button"
-                          aria-label={`Move photo ${i + 1} later`}
-                          title="Later"
-                          disabled={
-                            act.busy || stepTo(i, 1, gallery.length) < 0
-                          }
-                          onClick={() => reorder(g, 1)}
-                        >
-                          <Icon name="chevron" />
-                        </button>
-                        <button
-                          type="button"
-                          className="icon-button danger"
+                          className="tk-p-x"
                           aria-label={`Remove photo ${i + 1}`}
-                          title="Remove"
                           disabled={act.busy}
                           onClick={() => remove(g)}
                         >
-                          <Icon name="trash" />
+                          <Icon name="close" />
                         </button>
-                      </span>
-                    </>
+                        <span className="tk-p-move">
+                          <button
+                            type="button"
+                            aria-label={`Move photo ${i + 1} earlier`}
+                            disabled={act.busy || stepTo(i, -1, gallery.length) < 0}
+                            onClick={() => reorder(g, -1)}
+                          >
+                            <Icon name="back" />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`Move photo ${i + 1} later`}
+                            disabled={act.busy || stepTo(i, 1, gallery.length) < 0}
+                            onClick={() => reorder(g, 1)}
+                          >
+                            <Icon name="chevron" />
+                          </button>
+                        </span>
+                      </>
+                    )}
+                  </div>
+                  {manage ? (
+                    <input
+                      className="tk-p-caption"
+                      defaultValue={g.caption}
+                      key={g.id + g.caption}
+                      maxLength={MAX_CAPTION}
+                      placeholder="Add a caption"
+                      aria-label={`Caption for photo ${i + 1}`}
+                      onBlur={(e) => caption(g, e.target.value.trim())}
+                    />
+                  ) : (
+                    g.caption && <span className="tk-p-caption">{g.caption}</span>
                   )}
                 </li>
               ))}
               {uploading > 0 && (
-                <li className="gallery-tile gallery-wait" role="status">
-                  Adding {uploading} photo{uploading === 1 ? "" : "s"}…
+                <li className="tk-p-photo" role="status">
+                  <div className="tk-p-pic tk-p-wait">
+                    Adding {uploading} photo{uploading === 1 ? "" : "s"}…
+                  </div>
+                </li>
+              )}
+              {manage && (
+                <li className="tk-p-photo">
+                  <button
+                    type="button"
+                    className="tk-p-add"
+                    disabled={act.busy || uploading > 0 || gallery.length >= max}
+                    onClick={() => photoInput.current?.click()}
+                  >
+                    <Icon name="plus" />
+                    Add a photo
+                  </button>
                 </li>
               )}
             </ul>
+            {gallery.length === 0 && uploading === 0 && (
+              <p className="tk-p-note">
+                Show your shop, your products and your team. Other businesses
+                see a letter until you add one.
+              </p>
+            )}
+            {manage && gallery.length >= max && (
+              <p className="tk-p-note">That is the most photos.</p>
+            )}
             {manage && (
-              <>
-                <input
-                  ref={photoInput}
-                  type="file"
-                  multiple
-                  accept="image/jpeg,image/png,image/webp"
-                  className="sr-only"
-                  aria-label="Choose photos"
-                  data-testid="profile-photo-input"
-                  onChange={(e) => void addPhotos(e.target.files)}
-                />
-                <button
-                  type="button"
-                  disabled={act.busy || uploading > 0 || gallery.length >= max}
-                  onClick={() => photoInput.current?.click()}
-                >
-                  <Icon name="plus" /> Add photos
-                </button>
-                {gallery.length >= max && (
-                  <span className="hint"> That is the most photos.</span>
-                )}
-              </>
+              <input
+                ref={photoInput}
+                type="file"
+                multiple
+                accept="image/jpeg,image/png,image/webp"
+                className="sr-only"
+                aria-label="Choose photos"
+                tabIndex={-1}
+                data-testid="profile-photo-input"
+                onChange={(e) => void addPhotos(e.target.files)}
+              />
             )}
           </section>
         </>
       )}
-    </>
+    </div>
   );
 }

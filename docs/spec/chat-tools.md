@@ -387,7 +387,42 @@ conversation): the numbers in words on every channel ("Sales, the last 7 days:
 conversation a chart card (a message of kind `chart`, migration 00406): the
 total, the change, and the period's bars, the day asked about lit.
 
-## 8. Tests
+## 8. Phase 6: Explore and links
+
+**Tagging a business you are not linked with.** In a conversation with chat
+tools (a business's or the Taskiem one), "@" with two letters or more also
+asks Explore (`GET /v1/explore?q=`): businesses that chose to be found and
+match the words join the picker's Businesses group after the linked ones,
+three at most, each "Not linked · Yaba" (or "you asked to link", "asked you
+to link"; linked and blocked ones are not offered there). Picking one tags
+nothing: the words stay as typed and its Explore card opens in a sheet over
+the chat, its logo, name, line and area, its photos with their captions and
+dots, and what it says about itself, with **Connect** (`POST /v1/links`, both
+ways, as Explore). Connect says "Asked Kola's Bakery to link" and the card
+says Requested, with **Withdraw**; nothing is shared until they accept. The
+Taskiem conversation gets the grouped picker with chat tools (without the
+Taskiem row: it is who is being talked to).
+
+**Explore and Your business in Explore** take the new look (designs 10 to
+12): on a phone, the back arrow and "Find a business", the search ("A name,
+what they sell, or an area"), "Near you · Yaba, Lagos" (our own area, `area`
+on the first page) and "New on Taskiem" with Show more beside each; each card
+is the name and line with Connect first, then the photos (captions on them,
+`captions` on each card) and their dots, then the words. On a computer the
+search sits beside the title with "Your business in Explore" (our logo) at
+the end, and the cards are a grid that lifts under the pointer. The profile
+page is the switch "Be found in Explore" (pine when on), the card as others
+see it (Connect, and the photos as a mosaic with "+3"), the logo with its
+"+", the fields as the designs draw them with their counts, and the photos
+two by two, the first marked, each with remove, earlier and later, its
+caption under it, and "Add a photo".
+
+**Keys.** On the Chat page: "/" finds a business or a message, "n" opens
+Explore, "@" starts a tag in the open chat's box (the picker opens as if it
+were typed). The letters stay out of a sheet, the tools, the picker and
+Explore while one is open; in Explore they are typed into its search.
+
+## 9. Tests
 
 - `api/chat_tools_test.go`: the switch (off by default, a viewer refused, on for
   everyone, off again); on, names straight to businesses with and without `...`,
@@ -416,6 +451,12 @@ total, the change, and the period's bars, the day asked about lit.
   conversation's diary line kept; a typed request; a live card; tagging a
   service; the sound switch.
 - Unit tests: `lib/toolforms`, `lib/intents`, `lib/moments`.
+- `api/explore_test.go`: captions on each card and our own area (phase 6).
+- `web/e2e/explore.spec.ts`: tagging a business not linked shows its card and
+  Connect asks it to link, Withdraw takes it back (axe in both themes); the
+  "@" key; the keys stay out of Explore. `web/e2e/business-profile.spec.ts`:
+  the redrawn profile.
+- Unit tests: `lib/mentions` (businesses found in Explore), `lib/chatKeys` ("@").
 - Unit tests: `lib/tools`, `lib/cardframe`, `lib/mentions` (the groups),
   `lib/sheetDrag`, `lib/chattools`.
 - `api/chat_trade_test.go`: the five-step trade between two businesses (§5).

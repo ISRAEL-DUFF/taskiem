@@ -33445,7 +33445,7 @@ components:
     ExploreCard:
       type: object
       additionalProperties: false
-      required: [business, name, logo, photos, state, v]
+      required: [business, name, logo, photos, captions, state, v]
       properties:
         business:
           type: string
@@ -33466,6 +33466,11 @@ components:
         photos:
           type: integer
           description: How many photos it shows, at GET /v1/explore/{business}/photos/{photo}
+        captions:
+          type: array
+          items:
+            type: string
+          description: Its photos' captions, in order ("" for a photo with none)
         state:
           type: string
           description: Our link with it, as in a search (none when there is none)
@@ -33493,6 +33498,9 @@ components:
           type: boolean
         more:
           type: boolean
+        area:
+          type: string
+          description: Our own area, as near you reads it (the first page only)
         blind:
           type: object
           additionalProperties: false

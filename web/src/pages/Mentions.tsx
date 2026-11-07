@@ -1,4 +1,11 @@
-import { useRef, useState, type KeyboardEvent, type RefObject } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type RefObject,
+} from "react";
+import { get } from "../api";
 import { Link } from "react-router-dom";
 import { Icon } from "../icons";
 import { usePresence } from "../kit";
@@ -10,12 +17,15 @@ import {
   mentionQuery,
   stillNamed,
   suggest,
+  unlinkedSuggestion,
   type Mention,
   type MentionQuery,
   type Suggestion,
   type SuggestionGroup,
 } from "../lib/mentions";
 import { formatPrice } from "../lib/storefront";
+import { exploreLogo, type ExploreCard, type ExploreResult } from "../lib/explore";
+import { BusinessCardSheet } from "./BusinessCardSheet";
 
 // Mentions in the composer (business links L4, §5.5): typing "@" offers
 // linked businesses, "#" items with their unit and price. Enter or Tab
@@ -36,6 +46,34 @@ export function useMentions(
   const [q, setQ] = useState<MentionQuery | null>(null);
   const [picked, setPicked] = useState<Suggestion[]>([]);
   const list = useRef<HTMLElement>(null);
+  // Chat tools phase 6: "@" with a few letters also asks Explore, so a
+  // business we are not linked with can be found; picking one shows its
+  // card, with Connect.
+  const words = q && grouped && q.mark === "@" ? q.query.trim() : "";
+  const [found, setFound] = useState<{ q: string; list: Suggestion[] }>();
+  const [card, setCard] = useState<{ card: ExploreCard; from?: DOMRect }>();
+  useEffect(() => {
+    if (words.length < 2) return;
+    let live = true;
+    const t = window.setTimeout(() => {
+      get<ExploreResult>(`/v1/explore?q=${encodeURIComponent(words)}`).then(
+        (r) =>
+          live &&
+          setFound({
+            q: words,
+            list: r.results
+              .map(unlinkedSuggestion)
+              .filter((x): x is Suggestion => x !== null),
+          }),
+        () => live && setFound({ q: words, list: [] }),
+      );
+    }, 250);
+    return () => {
+      live = false;
+      window.clearTimeout(t);
+    };
+  }, [words]);
+  const unlinked = found && words.length >= 2 && found.q === words ? found.list : [];
   const groups: SuggestionGroup[] =
     q && grouped && q.mark === "@"
       ? groupSuggestions(
@@ -44,6 +82,7 @@ export function useMentions(
             items: sources["#"],
             services: sources.services,
             businesses: sources["@"],
+            unlinked,
           },
           grouped.taskiem,
         )
@@ -60,9 +99,15 @@ export function useMentions(
   );
   const update = (value: string, caret: number | null) =>
     setQ(mentionQuery(value, caret ?? value.length));
-  const pick = (s: Suggestion) => {
+  const pick = (s: Suggestion, from?: DOMRect) => {
     if (!q) return;
     const el = box.current;
+    if (s.explore) {
+      // Not linked: its card, with Connect; the words stay as typed.
+      setCard({ card: s.explore, from });
+      setQ(null);
+      return;
+    }
     const caret = el?.selectionStart ?? text.length;
     const next = insertMention(
       text,
@@ -127,6 +172,11 @@ export function useMentions(
     reset,
     close: () => setQ(null),
     box,
+    card,
+    closeCard: () => {
+      setCard(undefined);
+      requestAnimationFrame(() => box.current?.focus());
+    },
   };
 }
 
@@ -149,14 +199,25 @@ export function GroupedPicker({ m }: { m: Mentions }) {
     groups: [],
   });
   if (open) last.current = { query: m.q?.query ?? "", groups: m.groups };
-  if (!p.mounted) return null;
   return (
-    <Picker
-      m={m}
-      query={last.current.query}
-      groups={last.current.groups}
-      leaving={p.leaving}
-    />
+    <>
+      {p.mounted && (
+        <Picker
+          m={m}
+          query={last.current.query}
+          groups={last.current.groups}
+          leaving={p.leaving}
+        />
+      )}
+      {m.card && (
+        <BusinessCardSheet
+          key={m.card.card.business}
+          card={m.card.card}
+          from={m.card.from}
+          onClose={m.closeCard}
+        />
+      )}
+    </>
   );
 }
 
@@ -181,9 +242,20 @@ function moveIn(m: Mentions, e: KeyboardEvent<HTMLButtonElement>) {
 /** A suggestion's picture: a product's box, a service's clock, a
  * business's initials, Taskiem's spark. */
 function PickIcon({ s }: { s: Suggestion }) {
+  if (s.kind === "business" && s.explore?.logo)
+    return (
+      <img
+        className="pick-icon round"
+        src={exploreLogo(s.explore.business, s.explore.v)}
+        alt=""
+      />
+    );
   if (s.kind === "business")
     return (
-      <span className="pick-icon round lime" aria-hidden="true">
+      <span
+        className={`pick-icon round ${s.explore ? "soft" : "lime"}`}
+        aria-hidden="true"
+      >
         {initialsOf(s.name)}
       </span>
     );
@@ -255,7 +327,9 @@ function Picker({
                 style={{
                   animationDelay: `calc(var(--t-stagger) * ${Math.min(n, 6)})`,
                 }}
-                onClick={() => m.pick(s)}
+                onClick={(e) =>
+                  m.pick(s, e.currentTarget.getBoundingClientRect())
+                }
                 onKeyDown={(e) => moveIn(m, e)}
               >
                 <PickIcon s={s} />
@@ -263,6 +337,7 @@ function Picker({
                   <span className="pick-name">{s.name}</span>
                   {s.sub && <span className="pick-sub">{s.sub}</span>}
                 </span>
+                {s.explore && <span className="sr-only">: see their card</span>}
                 {s.badge && <span className="pick-badge">{s.badge}</span>}
                 {first && (
                   <span className="pick-enter" aria-hidden="true">
