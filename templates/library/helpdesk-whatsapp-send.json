@@ -2,7 +2,7 @@
   "id": "helpdesk-whatsapp-send",
   "title": "Send ticket answers from your WhatsApp number",
   "summary": "Answers to tickets that came to your WhatsApp number go to the customer from that number.",
-  "description": "The partner of A helpdesk on your WhatsApp number: whenever an answer to a ticket that came to your WhatsApp number is saved (the first answer with the ticket's number, your team's answers from the ticket reply form, and the closing message when a customer stops answering), it is sent to the customer from your own WhatsApp number, and marked as sent. WhatsApp lets a business write freely only within 24 hours of the customer's last message; after that, the answer goes by Taskiem's messages instead (WhatsApp or Telegram where the customer asked for updates, else a text message). Answers to tickets that came another way are left alone.",
+  "description": "The partner of A helpdesk on your WhatsApp number: whenever an answer to a ticket that came to your WhatsApp number is saved (the first answer with the ticket's number, your team's answers from the ticket reply form, and the closing message when a customer stops answering), it is sent to the customer from your own WhatsApp number, and marked as sent. WhatsApp lets a business write freely only within 24 hours of the customer's last message; after that, the answer goes the way you choose: by Taskiem's messages (WhatsApp or Telegram where the customer asked for updates, else a text message), by email when the ticket has the customer's email, or both. With your helpdesk's Taskiem email address, that email comes from it and the customer's reply joins their ticket. Answers to tickets that came another way are left alone.",
   "category": "customers",
   "tags": [
     "support",
@@ -18,7 +18,8 @@
     "whatsapp",
     "answer",
     "reply",
-    "chat"
+    "chat",
+    "email"
   ],
   "requires": [
     "ticket",
@@ -30,7 +31,8 @@
   "connectors": [
     "xenibase@1",
     "whatsapp@1",
-    "notify@1"
+    "notify@1",
+    "email@1"
   ],
   "params": [
     {
@@ -42,6 +44,30 @@
       "required": false,
       "default": "main",
       "example": "main"
+    },
+    {
+      "name": "late_answers",
+      "type": "string",
+      "title": "Answers after WhatsApp's 24 hours",
+      "description": "sms: by Taskiem's messages (WhatsApp or Telegram where the customer asked for updates, else a text message). email: by email when the ticket has the customer's email, else by Taskiem's messages. sms_and_email: both, the email only when the ticket has one.",
+      "required": false,
+      "default": "sms",
+      "example": "sms",
+      "enum": [
+        "sms",
+        "email",
+        "sms_and_email"
+      ]
+    },
+    {
+      "name": "helpdesk_address",
+      "type": "string",
+      "title": "Your helpdesk's Taskiem email address (optional)",
+      "description": "The email address of your A helpdesk on your Taskiem email address workflow. With it, late answers by email come from that address and the customer's reply joins their ticket. Without it, they go as a plain email from Taskiem's messages.",
+      "required": false,
+      "default": "",
+      "example": "k3x9q2m7a1bz@in.taskiem.app",
+      "max_length": 200
     }
   ],
   "tables": [
@@ -142,13 +168,16 @@
       {
         "id": "how",
         "type": "transform",
-        "name": "Within WhatsApp's 24 hours?",
+        "name": "Within WhatsApp's 24 hours, and how late answers go",
         "needs": [
           "ticket"
         ],
         "config": {
           "output": {
-            "how": "=steps.ticket.output.rows.size() == 0 || steps.ticket.output.rows[0].?customer_phone.orValue('') == '' ? 'none' : steps.ticket.output.rows[0].?last_customer_at.orValue(null) != null && timestamp(run.started_at) - timestamp(steps.ticket.output.rows[0].last_customer_at) < duration('23h30m') ? 'whatsapp' : 'message'"
+            "how": "=steps.ticket.output.rows.size() == 0 || steps.ticket.output.rows[0].?customer_phone.orValue('') == '' ? 'none' : steps.ticket.output.rows[0].?last_customer_at.orValue(null) != null && timestamp(run.started_at) - timestamp(steps.ticket.output.rows[0].last_customer_at) < duration('23h30m') ? 'whatsapp' : 'message'",
+            "email": "=steps.ticket.output.rows.size() > 0 && steps.ticket.output.rows[0].?customer_email.orValue('') != '' && {{late_answers}} in ['email', 'sms_and_email']",
+            "mode": "{{late_answers}}",
+            "address": "{{helpdesk_address}}"
           }
         }
       },
@@ -181,7 +210,7 @@
             },
             {
               "name": "message",
-              "when": "=steps.how.output.how == 'message'",
+              "when": "=steps.how.output.how == 'message' && (!steps.how.output.email || steps.how.output.mode == 'sms_and_email')",
               "steps": [
                 {
                   "id": "message",
@@ -202,6 +231,57 @@
         }
       },
       {
+        "id": "late_email",
+        "type": "branch",
+        "name": "Email the customer (past WhatsApp's 24 hours)",
+        "needs": [
+          "how"
+        ],
+        "config": {
+          "paths": [
+            {
+              "name": "thread",
+              "when": "=steps.how.output.how == 'message' && steps.how.output.email && steps.how.output.address != ''",
+              "steps": [
+                {
+                  "id": "thread_email",
+                  "type": "connector",
+                  "name": "Email the customer from your helpdesk's address",
+                  "connector": "email@1",
+                  "action": "send_in_thread",
+                  "input": {
+                    "to": "=steps.ticket.output.rows[0].customer_email",
+                    "subject": "='Your ticket ' + steps.ticket.output.rows[0].reference",
+                    "message": "=trigger.body.record.body",
+                    "thread": "=steps.ticket.output.rows[0].?thread.orValue('') != '' ? steps.ticket.output.rows[0].thread : steps.ticket.output.rows[0].reference",
+                    "address": "=steps.how.output.address"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "plain",
+              "when": "=steps.how.output.how == 'message' && steps.how.output.email",
+              "steps": [
+                {
+                  "id": "plain_email",
+                  "type": "connector",
+                  "name": "Email the customer",
+                  "connector": "notify@1",
+                  "action": "message",
+                  "input": {
+                    "email": "=steps.ticket.output.rows[0].customer_email",
+                    "about": "='your ticket ' + steps.ticket.output.rows[0].reference",
+                    "title": "='Your ticket ' + steps.ticket.output.rows[0].reference",
+                    "message": "=(trigger.body.record.body.size() > 1500 ? trigger.body.record.body.substring(0, 1500) : trigger.body.record.body)"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
         "id": "mark",
         "type": "connector",
         "name": "Mark the answer sent",
@@ -209,7 +289,8 @@
         "action": "update_rows",
         "connection": "data_tables",
         "needs": [
-          "send"
+          "send",
+          "late_email"
         ],
         "when": "=steps.how.output.how != 'none'",
         "input": {

@@ -88,7 +88,12 @@ The first person to answer a ticket is the one it is assigned to; from then on, 
 
 - A customer who writes for the first time gets a ticket and its number on WhatsApp.
 - Their next messages join that ticket until it is resolved, and for the **Days a resolved ticket can be reopened** after; the department (or the person who has the ticket) is told each time. After that, a new message opens a new ticket that says which one it follows.
-- Add **Send ticket answers from your WhatsApp number** too: it sends your team's answers from your number. WhatsApp lets a business write freely for 24 hours after the customer's last message; an answer later than that goes as a Taskiem message instead (WhatsApp or Telegram where the customer asked you for updates, otherwise a text message from your business's name).
+- Add **Send ticket answers from your WhatsApp number** too: it sends your team's answers from your number. WhatsApp lets a business write freely for 24 hours after the customer's last message; an answer later than that goes the way you choose under **Answers after WhatsApp's 24 hours**:
+  - **sms** (the default): as a Taskiem message (WhatsApp or Telegram where the customer asked you for updates, otherwise a text message from your business's name);
+  - **email**: by email when the ticket has the customer's email, otherwise as a Taskiem message;
+  - **sms_and_email**: both, the email only when the ticket has one.
+
+  A customer who writes on WhatsApp doesn't give an email, so add it to their ticket in the **tickets** table when they tell you it. Fill in **Your helpdesk's Taskiem email address** to send that email from your *A helpdesk on your Taskiem email address* workflow: the customer's reply then joins their ticket. Without it, the email goes from Taskiem's messages.
 - Reactions and WhatsApp's own notices do not open tickets. Taskiem does not see the customer's WhatsApp name, so their tickets show their number.
 
 ## Your app or website
