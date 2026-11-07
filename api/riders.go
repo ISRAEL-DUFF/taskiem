@@ -75,7 +75,26 @@ func (s *Server) listRiders(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	// Someone who works the orders without the storefront's say (a
+	// cashier) picks a rider by name and area: not their phone, pay or
+	// bank, nor the link that adds riders.
+	if !p.Can(PermStorefrontManage) {
+		for i := range out.Riders {
+			out.Riders[i].Phone = maskPhone(out.Riders[i].Phone)
+			out.Riders[i].FeeKobo = 0
+			out.Riders[i].Bank = ""
+		}
+		out.TapIn = ""
+	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// maskPhone keeps a phone number's last four digits.
+func maskPhone(v string) string {
+	if len(v) <= 4 {
+		return v
+	}
+	return "•••" + v[len(v)-4:]
 }
 
 // addRider is POST /v1/riders: a name and phone, their areas and fee.

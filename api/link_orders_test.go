@@ -152,6 +152,16 @@ func TestLinkedOrders(t *testing.T) {
 	if told := w.lastTo(t, buyerOn, before); len(told) != 1 || !strings.Contains(told[0].Text, "*Dangote Stores* can supply order "+ref+" like this: 8 Rice at ₦42,000. Only 8 bags left") {
 		t.Errorf("the buyer told: %+v", told)
 	}
+	// The change's card says what it would come to, not the order's old total.
+	var changed map[string]any
+	for _, x := range buyer.must(200, "GET", "/v1/link-chats/"+link+"/messages", nil)["messages"].([]any) {
+		if c, _ := x.(map[string]any)["card"].(map[string]any); c != nil && c["event"] == "change" {
+			changed = c
+		}
+	}
+	if changed == nil || changed["amount_kobo"] != float64(37850000) {
+		t.Errorf("the change's card: %v", changed)
+	}
 	p := buyer.must(200, "POST", "/v1/stock/purchases/"+po+"/accept-change", nil)["purchase"].(map[string]any)
 	if p["status"] != "confirmed" || p["seller_status"] != "accepted" || p["total_kobo"] != float64(37850000) || p["change"] != nil {
 		t.Fatalf("the change accepted: %v", p)

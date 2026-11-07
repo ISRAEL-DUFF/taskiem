@@ -139,19 +139,14 @@ describe("the outbox store", () => {
       .mockRejectedValueOnce(error(429))
       .mockResolvedValue(sent("m1"));
     sendOutgoing("A", out("c1"));
-    await settle();
-    await new Promise((r) => setTimeout(r, 5));
-    await settle();
+    await vi.waitFor(() => expect(outboxOf("A")).toHaveLength(0));
     expect(api.post).toHaveBeenCalledTimes(3);
-    expect(outboxOf("A")).toHaveLength(0);
     // Too fast every time: it gives up and says so.
     api.post.mockReset();
     api.post.mockRejectedValue(error(429));
     sendOutgoing("A", out("c2"));
-    await new Promise((r) => setTimeout(r, 10));
-    await settle();
+    await vi.waitFor(() => expect(outboxOf("A")[0]?.error).toMatch(/too fast/i));
     expect(api.post).toHaveBeenCalledTimes(3);
-    expect(outboxOf("A")[0]?.error).toMatch(/too fast/i);
   });
 
   it("skips a message deleted before its turn, and forgets all on sign-out", async () => {

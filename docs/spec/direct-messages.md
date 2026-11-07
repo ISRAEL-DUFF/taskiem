@@ -1,6 +1,8 @@
 # Messages straight to linked businesses, and names found by their start
 
-Status: **built** (agreed with the founder). This amends business links L4
+Status: **built** (agreed with the founder). With chat tools on, a business
+named in a message is sent it without the marker, and `@Taskiem` calls Taskiem;
+the marker still works but is retired quietly ([chat-tools.md](chat-tools.md) §1). This amends business links L4
 ([business-links.md](business-links.md) §5.5, §16.4). Two problems prompted it,
 both in the Taskiem conversation on WhatsApp, Telegram, Slack and the web:
 

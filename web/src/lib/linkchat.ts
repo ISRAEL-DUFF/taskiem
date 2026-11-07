@@ -15,6 +15,8 @@ export interface DocCard {
   reference: string;
   id?: string;
   amount_kobo?: number;
+  /** A deal: what it comes to at the seller's own prices. */
+  was_kobo?: number;
   note?: string;
 }
 
@@ -71,7 +73,7 @@ export function reactionWords(r: Reaction): string {
 export interface Quote {
   pair_id: string;
   mine: boolean;
-  kind: "text" | "card";
+  kind: "text" | "card" | "diary";
   body?: string;
   card?: DocCard;
   attachment?: Attachment;
@@ -98,7 +100,8 @@ export interface LinkMessage {
   id: string;
   link: string;
   mine: boolean;
-  kind: "text" | "card";
+  /** diary: a change we made with a chat tool, on our side only. */
+  kind: "text" | "card" | "diary";
   body?: string;
   sender_name?: string;
   card?: DocCard;
@@ -138,6 +141,8 @@ export interface Conversation {
 
 const VERB: Record<string, string> = {
   ordered: "sent order",
+  offered: "made an offer on order",
+  countered: "countered on order",
   auto_accepted: "sent order (accepted by itself)",
   auto_changed: "sent order (changed to our prices by itself)",
   proposed: "drafted order",
@@ -192,6 +197,9 @@ export function cardHref(card: DocCard): string {
 export function cardSub(card: DocCard): string {
   return [
     card.amount_kobo !== undefined ? naira(card.amount_kobo) : "",
+    card.was_kobo !== undefined && card.was_kobo > (card.amount_kobo ?? 0)
+      ? `was ${naira(card.was_kobo)}`
+      : "",
     card.note ? `“${card.note}”` : "",
   ]
     .filter(Boolean)
@@ -222,6 +230,7 @@ export function previewLine(
   other: string,
 ): string {
   if (m.kind === "card" && m.card) return cardLine(m.card, m.mine, other);
+  if (m.kind === "diary") return `✓ ${m.body ?? ""}`;
   const words = m.attachment
     ? [attachmentLabel(m.attachment), m.body].filter(Boolean).join(": ")
     : (m.body ?? "");

@@ -24,6 +24,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/runtime"
+	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
@@ -218,6 +219,17 @@ func (s *Server) linkThread(w http.ResponseWriter, r *http.Request) {
 
 type linkMessageOut struct {
 	Message links.Message `json:"message"`
+	// Also are the other businesses the message named, with chat tools on:
+	// each got it as its own message in our conversation with it.
+	Also []alsoSent `json:"also,omitempty"`
+}
+
+// alsoSent is how a copy to another business named in a message went.
+type alsoSent struct {
+	Link   uuid.UUID `json:"link"`
+	Name   string    `json:"name"`
+	Sent   bool      `json:"sent"`
+	Reason string    `json:"reason,omitempty"`
 }
 
 // sendLinkMessage is POST /v1/link-chats/{link}/messages: a message to a
@@ -256,6 +268,37 @@ func (s *Server) sendLinkMessage(w http.ResponseWriter, r *http.Request) {
 	if !s.allowLinkWrite(w, r) {
 		return
 	}
+	// Chat tools: "@Taskiem" is for the person's own Taskiem conversation,
+	// never the business (chat_tools.go).
+	var tools bool
+	if err := s.tx(r, func(tx pgx.Tx) (err error) {
+		tools, err = chatToolsOn(r.Context(), tx, p.TenantID)
+		return err
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if tools {
+		if text, tagged := cutTaskiem(in.Text); tagged {
+			if p.UserID == uuid.Nil {
+				s.fail(w, r, errForbidden)
+				return
+			}
+			if !s.limiter("web-chat:"+p.UserID.String(), 3*time.Second, 20).Allow() {
+				writeErr(w, http.StatusTooManyRequests, "slow down: a moment between messages")
+				return
+			}
+			msgs, err := s.taskiemRun(r.Context(), p, whatsapp.Inbound{Type: "text", Text: text}, nil)
+			if err != nil {
+				s.fail(w, r, err)
+				return
+			}
+			// Nothing went to the business: Taskiem answered in the
+			// person's own conversation with it.
+			writeJSON(w, http.StatusAccepted, taskiemChatOut{Messages: msgs})
+			return
+		}
+	}
 	var ments []links.Mention
 	if len(in.Mentions) > 0 {
 		if err := s.tx(r, func(tx pgx.Tx) error {
@@ -279,7 +322,37 @@ func (s *Server) sendLinkMessage(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, linkMessageErr(err))
 		return
 	}
-	writeJSON(w, http.StatusCreated, linkMessageOut{Message: m})
+	out := linkMessageOut{Message: m}
+	if tools {
+		out.Also = s.sendAlso(r.Context(), p, link, in.Text, ments)
+	}
+	writeJSON(w, http.StatusCreated, out)
+}
+
+// sendAlso sends a message to the other linked businesses it names, with
+// chat tools on: each its own message, in our conversation with it, the
+// same words. One failing does not stop the rest; each is answered.
+func (s *Server) sendAlso(ctx context.Context, p *Principal, link uuid.UUID, text string, ments []links.Mention) []alsoSent {
+	var out []alsoSent
+	seen := map[uuid.UUID]bool{link: true}
+	for _, m := range ments {
+		if m.Kind != "business" || seen[m.Link] {
+			continue
+		}
+		seen[m.Link] = true
+		a := alsoSent{Link: m.Link, Name: m.Name, Sent: true}
+		if _, err := s.sendLink(ctx, p, m.Link, text, links.SendOpts{}); err != nil {
+			a.Sent = false
+			if errIsAny(err, directRefusals...) {
+				a.Reason = directReason(err)
+			} else {
+				s.Logger.Error("link chat: a copy to a named business not sent", "tenant", p.TenantID, "link", m.Link, "err", err)
+				a.Reason = "it could not be sent; send it again"
+			}
+		}
+		out = append(out, a)
+	}
+	return out
 }
 
 // sameSend reports whether a repeated send says what the first did: the same
@@ -618,9 +691,47 @@ func (s *Server) orderCards(ctx context.Context, t links.Told) uuid.UUID {
 	if !sellerTold(t.Event) {
 		seller, buyer = t.FromTenant, t.Tenant
 	}
+	// What the order comes to now (the buyer's record of it), on both cards.
+	var amount *int64
+	_ = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{buyer}, func(tx pgx.Tx) error {
+		x, err := stock.PurchaseTx(ctx, tx, buyer, t.Purchase, false)
+		if err != nil {
+			return err // no total: the cards go without it
+		}
+		total := x.TotalKobo
+		// A change waiting on the buyer: what it would come to.
+		if len(x.Change) > 0 {
+			total = 0
+			for _, l := range x.Change {
+				total += l.Quantity * l.CostKobo
+			}
+		}
+		if total > 0 {
+			amount = &total
+		}
+		return nil
+	})
+	// A deal (phase 7): what it is against, at the seller's own prices.
+	var was *int64
+	if amount != nil && (t.Event == "offered" || t.Event == "countered" || t.Event == "change") {
+		_ = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{seller}, func(tx pgx.Tx) error {
+			o, err := links.GetOrderTx(ctx, tx, t.Order.String(), false)
+			if err != nil {
+				return err
+			}
+			lines := o.Lines
+			if t.Event == "change" && len(o.Change) > 0 {
+				lines = o.Change
+			}
+			if w := dealWas(lines); w > *amount {
+				was = &w
+			}
+			return nil
+		})
+	}
 	return s.postCards(ctx, t.Link,
-		cardSide{tenant: seller, mine: seller == t.FromTenant, card: links.DocCard{Doc: links.DocOrder, Event: t.Event, Reference: t.Reference, ID: t.Order.String()}},
-		cardSide{tenant: buyer, mine: buyer == t.FromTenant, card: links.DocCard{Doc: links.DocPurchase, Event: t.Event, Reference: t.Reference, ID: t.Purchase.String()}})
+		cardSide{tenant: seller, mine: seller == t.FromTenant, card: links.DocCard{Doc: links.DocOrder, Event: t.Event, Reference: t.Reference, ID: t.Order.String(), AmountKobo: amount, WasKobo: was}},
+		cardSide{tenant: buyer, mine: buyer == t.FromTenant, card: links.DocCard{Doc: links.DocPurchase, Event: t.Event, Reference: t.Reference, ID: t.Purchase.String(), AmountKobo: amount, WasKobo: was}})
 }
 
 // billCards writes a bill's event into both sides' conversations: the

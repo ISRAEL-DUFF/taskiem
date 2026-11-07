@@ -1,24 +1,34 @@
+import type { ExploreCard } from "./explore";
 // Mentions in the composer (business links L4, §5.5): "@" suggests linked
 // businesses, "#" items with their unit and price; a pick puts the name
 // in the text and, in a conversation, a structured reference beside it.
 
 export interface Suggestion {
-  kind: "business" | "item";
+  /** A linked business, an item of a price list, a service, or Taskiem. */
+  kind: "business" | "item" | "service" | "taskiem";
   /** The link (a business) or the seller's item id. */
   id: string;
   name: string;
   /** A second line: "₦9,500 a bag", or the business. */
   sub?: string;
+  /** A short word on the right: "4 left". */
+  badge?: string;
+  /** A business we are not linked with, found in Explore: picking it
+   * shows its card (with Connect) rather than tagging it. */
+  explore?: ExploreCard;
 }
 
 /** A mention as a message stores it. */
 export interface Mention {
-  kind: "business" | "item";
+  kind: "business" | "item" | "service";
   name: string;
   link?: string;
   item_id?: string;
   unit?: string;
   price_kobo?: number;
+  /** One of the sender's own services, and how long it takes. */
+  service_id?: string;
+  minutes?: number;
 }
 
 export interface MentionQuery {
@@ -84,9 +94,13 @@ export function stillNamed<T extends { kind: string; name: string }>(
   const lower = text.toLowerCase();
   const out: T[] = [];
   for (const p of picked) {
-    const token = (p.kind === "item" ? "#" : "@") + p.name.toLowerCase();
+    const name = p.name.toLowerCase();
+    // An item may be written "#Rice" or, from the picker, "@Rice".
+    const named =
+      lower.includes("@" + name) ||
+      (p.kind !== "business" && lower.includes("#" + name));
     if (
-      lower.includes(token) &&
+      named &&
       !out.some((o) => o.kind === p.kind && o.name === p.name)
     )
       out.push(p);
@@ -103,14 +117,16 @@ export function mentionParts(
   const lower = text.toLowerCase();
   const found: { at: number; len: number; m: Mention }[] = [];
   for (const m of mentions) {
-    const token = (m.kind === "item" ? "#" : "@") + m.name;
-    let from = 0;
-    for (;;) {
-      const at = lower.indexOf(token.toLowerCase(), from);
-      if (at < 0) break;
-      if (!found.some((f) => at < f.at + f.len && f.at < at + token.length))
-        found.push({ at, len: token.length, m });
-      from = at + token.length;
+    const tokens = m.kind === "business" ? ["@" + m.name] : ["#" + m.name, "@" + m.name];
+    for (const token of tokens) {
+      let from = 0;
+      for (;;) {
+        const at = lower.indexOf(token.toLowerCase(), from);
+        if (at < 0) break;
+        if (!found.some((f) => at < f.at + f.len && f.at < at + token.length))
+          found.push({ at, len: token.length, m });
+        from = at + token.length;
+      }
     }
   }
   found.sort((a, b) => a.at - b.at);
@@ -123,4 +139,67 @@ export function mentionParts(
   }
   if (pos < text.length) out.push({ text: text.slice(pos) });
   return out;
+}
+
+/** A group of the picker: "Products", "Services", "Businesses", or the
+ * Taskiem row (no heading). */
+export interface SuggestionGroup {
+  label: string;
+  items: Suggestion[];
+}
+
+export const TASKIEM: Suggestion = {
+  kind: "taskiem",
+  id: "taskiem",
+  name: "Taskiem",
+  sub: "Ask Taskiem to do it for you",
+};
+
+/** The picker's groups for "@" with chat tools (chat-tools.md §3): things
+ * first (products, services), then businesses, then Taskiem; a few of
+ * each, the ones a word of the name starts with first. */
+export function groupSuggestions(
+  query: string,
+  src: {
+    items: Suggestion[];
+    services?: Suggestion[];
+    businesses: Suggestion[];
+    /** Found in Explore for these words: not linked, after the linked. */
+    unlinked?: Suggestion[];
+  },
+  taskiem: boolean,
+): SuggestionGroup[] {
+  const out: SuggestionGroup[] = [];
+  const add = (label: string, list: Suggestion[] | undefined, n: number, more: Suggestion[] = []) => {
+    const got = suggest(list ?? [], query).slice(0, n);
+    const names = new Set(got.map((s) => s.name.toLowerCase()));
+    const all = [...got, ...more.filter((s) => !names.has(s.name.toLowerCase())).slice(0, 3)];
+    if (all.length > 0) out.push({ label, items: all });
+  };
+  add("Products", src.items, 4);
+  add("Services", src.services, 3);
+  add("Businesses", src.businesses, 4, src.unlinked);
+  // Taskiem is always offered last, as the designs show: it can do what
+  // the words ask, whatever they name.
+  if (taskiem) out.push({ label: "", items: [TASKIEM] });
+  return out;
+}
+
+/** A business found in Explore, as the picker lists it: "Not linked ·
+ * Yaba" (or where the asking stands). Linked ones and those we blocked
+ * are not offered here. */
+export function unlinkedSuggestion(c: ExploreCard): Suggestion | null {
+  const where = c.area ? ` · ${c.area}` : "";
+  switch (c.state) {
+    case "none":
+    case "ended":
+    case "not_accepted":
+      return { kind: "business", id: c.business, name: c.name, sub: `Not linked${where}`, explore: c };
+    case "requested":
+      return { kind: "business", id: c.business, name: c.name, sub: "Not linked · you asked to link", explore: c };
+    case "asked_us":
+      return { kind: "business", id: c.business, name: c.name, sub: "Not linked · asked you to link", explore: c };
+    default:
+      return null;
+  }
 }

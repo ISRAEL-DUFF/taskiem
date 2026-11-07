@@ -568,6 +568,38 @@
       "text": "Anatara m ebe ị nọ: o so ihe ibuga ahụ.",
       "reviewed": false
     },
+    "rider.jobs": {
+      "text": "Ihe ị ga-ebuga ugbu a:",
+      "reviewed": false
+    },
+    "rider.job": {
+      "text": "*{reference}* site na {business}, gaa {drop}: {step}",
+      "reviewed": false
+    },
+    "rider.job_offered": {
+      "text": "e nyere gị ya. Zipu ACCEPT ma ọ bụ CAN'T.",
+      "reviewed": false
+    },
+    "rider.job_accepted": {
+      "text": "ọ bụ nke gị. Zipu PICKED UP mgbe ị natara ya.",
+      "reviewed": false
+    },
+    "rider.job_picked_up": {
+      "text": "ọ nọ n'ụzọ. Zipu ARRIVED n'ọnụ ụzọ, ma ọ bụ DELIVERED.",
+      "reviewed": false
+    },
+    "rider.job_arrived": {
+      "text": "ọ nọ n'ọnụ ụzọ. Zipu DELIVERED mgbe ị nyefere ya.",
+      "reviewed": false
+    },
+    "money.daily.today": {
+      "text": "Taa: ibuga {deliveries}, nhọpụta oge {bookings}.",
+      "reviewed": false
+    },
+    "money.daily.card": {
+      "text": "Kaadị ụtụtụ gị, ahịrị ọ bụla na-emeghe ngwá ọrụ ya: {link}",
+      "reviewed": false
+    },
     "rider.no_delivery": {
       "text": "Ị nweghị ihe ibuga dabara na nke ahụ ugbu a.",
       "reviewed": false
@@ -4990,6 +5022,58 @@
     },
     "bill.notice.paired": {
       "text": "*{from}* kwuru na nnyefe ego ya nke {amount} ({note}) bụ maka akwụkwọ ụgwọ {reference}. Ọ bụrụ na agụrụ ya maka akwụkwọ ụgwọ ọzọ, bugharịa ya na peeji akwụkwọ ụgwọ ahụ.",
+      "reviewed": false
+    },
+    "order.link.offered_title": {
+      "text": "{from} nyere ọnụahịa maka {reference}",
+      "reviewed": false
+    },
+    "order.link.offered": {
+      "text": "*{from}* na-enye {note} maka order {reference}. Nabata ma ọ bụ jụ ya, ma ọ bụ zitere ọnụahịa gị: counter {reference} 785k",
+      "reviewed": false
+    },
+    "order.link.countered_title": {
+      "text": "{from} zara ọnụahịa gị maka {reference}",
+      "reviewed": false
+    },
+    "order.link.countered": {
+      "text": "*{from}* zara {note} maka order {reference}. Nabata ma ọ bụ jụ ya, ma ọ bụ zitere ọnụahịa gị: counter {reference} 790k",
+      "reviewed": false
+    },
+    "order.link.button_accept_change": {
+      "text": "Nabata",
+      "reviewed": false
+    },
+    "order.link.done_accept_change": {
+      "text": "Ị nabatala ọnụahịa ha maka {reference}. A gwala ha.",
+      "reviewed": false
+    },
+    "deal.owner_title": {
+      "text": "{who} chọrọ ikwenye {amount} na {business}",
+      "reviewed": false
+    },
+    "deal.owner_body": {
+      "text": "Order {reference}: {why}. Nabata ma ọ bụ jụ ya na nkata Taskiem.",
+      "reviewed": false
+    },
+    "deal.owner_asked": {
+      "text": "Ọnụahịa ahụ dị ala karịa nke azụmahịa gị na-anabata, ya mere onye nwe ya ga-ekpebi {reference}. A gwala ya.",
+      "reviewed": false
+    },
+    "deal.counter_sent": {
+      "text": "Ezitela: {amount} maka {reference}. Ha nwere ike ịnabata ya ma ọ bụ zaa.",
+      "reviewed": false
+    },
+    "deal.counter_none": {
+      "text": "Enweghị order na-eche ọnụahịa gị. Mepee order ahụ na Taskiem iji nye ọnụahịa.",
+      "reviewed": false
+    },
+    "deal.counter_which": {
+      "text": "Ihe karịrị otu order na-eche ({references}). Kwuo nke ọ bụ, dịka: counter {reference} 750k",
+      "reviewed": false
+    },
+    "deal.counter_how": {
+      "text": "Zitere ọnụahịa gị dị otú a: counter 750k (ma ọ bụ counter {reference} 750k).",
       "reviewed": false
     },
     "order.link.ordered_title": {

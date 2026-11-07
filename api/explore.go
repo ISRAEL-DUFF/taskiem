@@ -39,6 +39,8 @@ type exploreOut struct {
 	Fresh    []links.ExploreCard `json:"fresh"`
 	More     bool                `json:"more"`
 	Blind    *blindOffer         `json:"blind,omitempty"`
+	// Area is our own, as "near you" reads it ("Near you · Yaba").
+	Area string `json:"area,omitempty"`
 }
 
 // section lists one page of a browse section: one more than a page, to tell
@@ -80,6 +82,9 @@ func (s *Server) explore(w http.ResponseWriter, r *http.Request) {
 		case section == links.SectionNear:
 			out.Near, out.NearMore, err = s.exploreSection(r, tx, links.SectionNear, offset)
 		default:
+			if out.Area, err = links.OwnAreaTx(r.Context(), tx, principalFrom(r.Context()).TenantID); err != nil {
+				return err
+			}
 			if out.Near, out.NearMore, err = s.exploreSection(r, tx, links.SectionNear, 0); err != nil {
 				return err
 			}

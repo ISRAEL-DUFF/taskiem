@@ -420,9 +420,10 @@ func errIsAny(err error, targets ...error) bool {
 // mentionRef is a mention as the composer sends it: a business by its
 // link, or an item of the conversation's price list by its id.
 type mentionRef struct {
-	Kind   string    `json:"kind"`
-	Link   uuid.UUID `json:"link"`
-	ItemID string    `json:"item_id"`
+	Kind      string    `json:"kind"`
+	Link      uuid.UUID `json:"link"`
+	ItemID    string    `json:"item_id"`
+	ServiceID string    `json:"service_id"`
 }
 
 // conversationItems is what "#" names in a conversation with a link: the
@@ -451,6 +452,7 @@ func checkMentions(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, text 
 		return nil, fmt.Errorf("%w: up to 10 mentions in a message", links.ErrInvalid)
 	}
 	var items []links.PriceItem
+	var services []storefront.Item
 	lower := strings.ToLower(text)
 	out := []links.Mention{}
 	for _, r := range refs {
@@ -475,14 +477,33 @@ func checkMentions(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, text 
 			}
 			it := items[i]
 			m = links.Mention{Kind: "item", Name: it.Name, ItemID: it.ItemID, Unit: it.Unit, PriceKobo: it.PriceKobo}
+		case "service":
+			// One of our own services (chat tools), as our storefront offers it.
+			if services == nil {
+				var err error
+				if services, err = storefront.Services(ctx, tx, tenant); err != nil {
+					return nil, err
+				}
+				if services == nil {
+					services = []storefront.Item{}
+				}
+			}
+			i := slices.IndexFunc(services, func(it storefront.Item) bool { return it.ID == r.ServiceID })
+			if i < 0 {
+				return nil, fmt.Errorf("%w: that is not one of your services", links.ErrInvalid)
+			}
+			sv := services[i]
+			m = links.Mention{Kind: "service", Name: sv.Name, ServiceID: sv.ID, Minutes: sv.DurationMinutes}
+			if sv.PriceKobo != nil {
+				m.PriceKobo = *sv.PriceKobo
+			}
 		default:
-			return nil, fmt.Errorf("%w: a mention is a business or an item", links.ErrInvalid)
+			return nil, fmt.Errorf("%w: a mention is a business, an item or a service", links.ErrInvalid)
 		}
-		mark := "@"
-		if m.Kind == "item" {
-			mark = "#"
-		}
-		if strings.Contains(lower, strings.ToLower(mark+m.Name)) {
+		// A business is "@Name"; an item "#Name", or "@Name" as the chat
+		// tools picker writes it (docs/spec/chat-tools.md §3).
+		name := strings.ToLower(m.Name)
+		if strings.Contains(lower, "@"+name) || (m.Kind != "business" && strings.Contains(lower, "#"+name)) {
 			out = append(out, m)
 		}
 	}
