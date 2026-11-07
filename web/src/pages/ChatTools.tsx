@@ -302,6 +302,7 @@ function Detail({
   canEdit,
   onReorder,
   onCancel,
+  scope,
 }: {
   tool: ToolKey;
   row: ToolRow | "add";
@@ -311,6 +312,8 @@ function Detail({
   onReorder?: (p: Purchase) => void;
   /** Back to the list without saving (a form's Cancel). */
   onCancel?: () => void;
+  /** The business whose conversation the sheet was opened from. */
+  scope?: string;
 }) {
   if (row === "add")
     return tool === "services" ? (
@@ -327,6 +330,7 @@ function Detail({
           onCancel={onCancel}
           prefill={prefill}
           canEdit={canEdit}
+          link={scope}
         />
       );
     case "stock":
@@ -503,6 +507,7 @@ export function ToolSheet({
           canEdit={mayEdit(key, can)}
           onReorder={onReorder}
           onCancel={() => setOpen(undefined)}
+          scope={scope}
         />
       ) : (
         <>

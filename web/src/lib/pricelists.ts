@@ -61,3 +61,52 @@ export function lineProblem(it: PriceItem, quantity: string): string {
   if (Number(q) < it.min_quantity) return `at least ${it.min_quantity}`;
   return "";
 }
+
+/** The price list a product's form shows (the DeskSeller board): the one
+ * shared with the business whose conversation it was opened from, the one
+ * that holds the product, else the first. */
+export function listFor(
+  lists: PriceList[],
+  itemId: string,
+  link?: string,
+): PriceList | undefined {
+  const holds = (l: PriceList) => l.items.some((x) => x.item_id === itemId);
+  const shared = (l: PriceList) => !!link && l.links.includes(link);
+  return (
+    lists.find((l) => shared(l) && holds(l)) ??
+    lists.find(shared) ??
+    lists.find(holds) ??
+    lists[0]
+  );
+}
+
+/** A list's items as PUT /v1/price-lists/{id}/items takes them, with one
+ * product at a new price (added, at least 1 and on sale, if it was not
+ * there). */
+export function itemsWithPrice(
+  list: PriceList,
+  itemId: string,
+  kobo: number,
+): { item_id: string; price_kobo: number; min_quantity: number; available: boolean }[] {
+  const out = list.items.map((x) => ({
+    item_id: x.item_id,
+    price_kobo: x.item_id === itemId ? kobo : x.price_kobo,
+    min_quantity: x.min_quantity,
+    available: x.available,
+  }));
+  if (!list.items.some((x) => x.item_id === itemId))
+    out.push({ item_id: itemId, price_kobo: kobo, min_quantity: 1, available: true });
+  return out;
+}
+
+/** "Rivers Foods Ltd, Mama Ngozi Stores", or that it is shared with no one. */
+export function sharedWords(ids: string[], names: Map<string, string>): string {
+  const shown = ids.map((id) => names.get(id)).filter((n): n is string => !!n);
+  return shown.length ? shown.join(", ") : "No one yet";
+}
+
+/** A list as a label: "Trade price list", but "Trade prices" and "VIP
+ * price list" as they are (the word is not said twice). */
+export function listLabel(name: string): string {
+  return /\bprices?\b|\bprice list\b/i.test(name) ? name : `${name} price list`;
+}

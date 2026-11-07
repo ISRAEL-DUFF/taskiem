@@ -307,3 +307,46 @@ test("a link from WhatsApp opens the tool at its form, filled in; the model read
   await chip.getByRole("button").click();
   await expect(sheet.getByLabel("Price in naira")).toHaveValue("80,000");
 });
+
+// The DeskSeller board: a product's form shows its price on the price list
+// shared with the business the chat is with, and who sees that list; both
+// are saved with the product.
+test("a product's trade price list price and who it is shared with, saved from chat", async ({ browser }) => {
+  test.setTimeout(120_000);
+  const { owner, link } = await linked(browser, { width: 1440, height: 900 });
+  const sent = await shop(owner);
+  await owner.route("**/v1/price-lists", (r) =>
+    r.fulfill(json({ lists: [{ id: "pl1", name: "Trade", updated_at: "2026-11-07T08:00:00Z", links: [],
+      items: [{ item_id: "s1", name: "Rice, 50kg bag", unit: "bag", price_kobo: 7_200_000, min_quantity: 2, available: true }] }] })),
+  );
+  const puts: { path: string; body: unknown }[] = [];
+  await owner.route("**/v1/price-lists/pl1/**", async (r) => {
+    puts.push({ path: new URL(r.request().url()).pathname, body: r.request().postDataJSON() });
+    await r.fulfill(json({ lists: [] }));
+  });
+  await owner.goto(`/chat?with=${link}`);
+  const pane = owner.getByTestId("chat-pane");
+  const sheet = owner.getByTestId("tool-sheet");
+  await pane.getByRole("button", { name: "Open tools" }).click();
+  await owner.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Products/ }).click();
+  await sheet.getByRole("button", { name: /Rice, 50kg bag/ }).click();
+  // Products / Rice, 50kg bag; the two prices side by side; shared with no one yet.
+  await expect(sheet.getByRole("button", { name: /^Products/ })).toBeVisible();
+  await expect(sheet.getByLabel("Storefront price in naira")).toHaveValue("76,000");
+  await expect(sheet.getByLabel("Trade price list in naira")).toHaveValue("72,000");
+  await expect(sheet.getByTestId("shared-with")).toHaveText("No one yet");
+  await expect(sheet).toContainText("updates the price for every business on the Trade price list");
+  await sheet.getByLabel("Trade price list in naira").fill("74,000");
+  await sheet.getByRole("button", { name: /^Change/ }).click();
+  await sheet.getByRole("checkbox", { name: /Rivers Foods/ }).check();
+  await expect(sheet.getByTestId("shared-with")).toContainText("Rivers Foods");
+  await axeBoth(owner, "a product's price list and sharing");
+  await sheet.getByRole("button", { name: "Save changes" }).click();
+  await expect(sheet).toHaveCount(0, { timeout: 5000 });
+  expect(puts).toEqual([
+    { path: "/v1/price-lists/pl1/items", body: { items: [{ item_id: "s1", price_kobo: 7_400_000, min_quantity: 2, available: true }] } },
+    { path: "/v1/price-lists/pl1/links", body: { links: [link] } },
+  ]);
+  // The product itself was not changed.
+  expect(sent.filter((x) => x.path.includes("/v1/stock/items/"))).toEqual([]);
+});

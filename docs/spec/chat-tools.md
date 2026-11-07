@@ -186,6 +186,18 @@ and price, and each change shows as a diary line (`web/e2e/chat-tools-work.spec.
   shares carries none yet); requests the model reads offer prices, stock in and
   new services, and "accept order" only from the browser's patterns.
 
+**A product's price list** (the DeskSeller board): for those who keep the
+storefront's prices (`storefront.manage`), a product's form shows its
+**Storefront price** beside its price on a price list ("Trade price list"):
+the list shared with the business whose conversation the sheet was opened
+from, else the one holding the product, else the first (a choice of list
+when there are more). Under them **Shared with** names the linked businesses
+that see the list, and **Change** picks them. Saving writes the product, the
+list's price (`PUT /v1/price-lists/{id}/items`, the product added to the list
+if it was not on it) and who sees it (`PUT /v1/price-lists/{id}/links`), each
+a diary line, as the note under the form says ("Saving posts a line in this
+chat and updates the price for every business on the Trade price list").
+
 ## 5. Phase 3: the buyer's tools
 
 The same conversation, from the other side: a business buying from a linked

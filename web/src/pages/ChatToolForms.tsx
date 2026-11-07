@@ -15,7 +15,15 @@ import { KitEmpty, KitField, KitLoading, Pill } from "../kit";
 import { serviceRow } from "../lib/bookings";
 import type { Service, ServiceColumns } from "../lib/bookings";
 import { ORDER_STEPS } from "../lib/cardframe";
-import type { PriceList } from "../lib/pricelists";
+import {
+  itemsWithPrice,
+  listFor,
+  listLabel,
+  sharedWords,
+  type PriceList,
+} from "../lib/pricelists";
+import type { BusinessLink } from "../lib/links";
+import { useAuth } from "../auth";
 import { quantity, type StockItem } from "../lib/stock";
 import {
   formatPrice,
@@ -285,14 +293,51 @@ export function ProductForm({
   prefill,
   canEdit = true,
   onCancel,
+  link,
 }: {
   item: StockItem;
   onSaved: (line: string | null) => void;
   prefill?: Prefill;
   canEdit?: boolean;
   onCancel?: () => void;
+  /** The business whose conversation it was opened from (its list first). */
+  link?: string;
 }) {
   const [name, setName] = useState(item.name);
+  // Its price on a price list, and who the list is shared with (the
+  // DeskSeller board): for those who keep the storefront's prices.
+  const { can } = useAuth();
+  const trade = can("storefront.manage");
+  const lists = useLoad(
+    () =>
+      trade
+        ? get<{ lists: PriceList[] }>("/v1/price-lists").then((r) => r.lists)
+        : Promise.resolve([] as PriceList[]),
+    [],
+  );
+  const linked = useLoad(
+    () =>
+      trade
+        ? get<{ links: BusinessLink[] }>("/v1/links").then((r) =>
+            r.links.filter((l) => l.state === "active"),
+          )
+        : Promise.resolve([] as BusinessLink[]),
+    [],
+  );
+  const [listId, setListId] = useState<string>();
+  const chosen =
+    lists.data &&
+    (lists.data.find((l) => l.id === listId) ??
+      listFor(lists.data, item.id, link));
+  const onList = chosen?.items.find((x) => x.item_id === item.id);
+  const [tradePrice, setTradePrice] = useState<string | null>(null);
+  const tradeShown =
+    tradePrice ?? (onList ? nairaText(onList.price_kobo) : "");
+  const tradeKobo = nairaKobo(tradeShown);
+  const [share, setShare] = useState<string[] | null>(null);
+  const sharing = share ?? chosen?.links ?? [];
+  const [picking, setPicking] = useState(false);
+  const names = new Map((linked.data ?? []).map((l) => [l.id, l.name]));
   const [price, setPrice] = useState(
     prefill?.priceKobo !== undefined
       ? nairaText(prefill.priceKobo)
@@ -315,6 +360,26 @@ export function ProductForm({
       await patch(`/v1/stock/items/${encodeURIComponent(item.id)}`, change);
       said.push("Saved");
     }
+    if (
+      chosen &&
+      tradePrice !== null &&
+      tradeShown.trim() !== "" &&
+      !Number.isNaN(tradeKobo) &&
+      tradeKobo !== onList?.price_kobo
+    ) {
+      await put(`/v1/price-lists/${chosen.id}/items`, {
+        items: itemsWithPrice(chosen, item.id, tradeKobo),
+      });
+      said.push("Priced");
+    }
+    if (
+      chosen &&
+      share !== null &&
+      [...share].sort().join() !== [...chosen.links].sort().join()
+    ) {
+      await put(`/v1/price-lists/${chosen.id}/links`, { links: share });
+      said.push("Shared");
+    }
     if (count !== null && count !== item.stock) {
       await postOnce("/v1/stock/movements", key(), {
         item_id: item.id,
@@ -332,13 +397,94 @@ export function ProductForm({
       onSaved={onSaved}
       canEdit={canEdit}
       onCancel={onCancel}
-      ready={name.trim() !== "" && (price.trim() === "" || !Number.isNaN(kobo))}
+      ready={
+        name.trim() !== "" &&
+        (price.trim() === "" || !Number.isNaN(kobo)) &&
+        (tradeShown.trim() === "" || !Number.isNaN(tradeKobo))
+      }
     >
       <Photos item={item} canEdit={canEdit} />
       <KitField label="Name">
         <input value={name} maxLength={120} onChange={(e) => setName(e.target.value)} />
       </KitField>
-      <Money label="Price" value={price} onChange={setPrice} />
+      {chosen ? (
+        <>
+          <div className="tk-form-two">
+            <Money label="Storefront price" value={price} onChange={setPrice} />
+            <Money
+              label={listLabel(chosen.name)}
+              value={tradeShown}
+              onChange={setTradePrice}
+            />
+          </div>
+          {(lists.data?.length ?? 0) > 1 && (
+            <label className="tk-list-pick">
+              Price list
+              <select
+                value={chosen.id}
+                onChange={(e) => {
+                  setListId(e.target.value);
+                  setTradePrice(null);
+                  setShare(null);
+                  setPicking(false);
+                }}
+              >
+                {lists.data?.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <div className="tk-share-box">
+            <span>
+              <span className="tk-form-row-title">Shared with</span>
+              <span className="tk-form-row-sub" data-testid="shared-with">
+                {sharedWords(sharing, names)}
+              </span>
+            </span>
+            <button
+              type="button"
+              className="tk-share-change"
+              aria-expanded={picking}
+              onClick={() => setPicking(!picking)}
+            >
+              {picking ? "Done" : "Change"}
+              <span className="sr-only"> who sees the {chosen.name} list</span>
+            </button>
+          </div>
+          {picking && (
+            <fieldset className="tk-share-pick">
+              <legend className="sr-only">Who sees the {chosen.name} list</legend>
+              {(linked.data ?? []).length === 0 ? (
+                <p className="tk-form-row-sub">
+                  No linked businesses yet. Link with a business to share a list.
+                </p>
+              ) : (
+                (linked.data ?? []).map((l) => (
+                  <label key={l.id} className="tk-share-row">
+                    <input
+                      type="checkbox"
+                      checked={sharing.includes(l.id)}
+                      onChange={(e) =>
+                        setShare(
+                          e.target.checked
+                            ? [...sharing, l.id]
+                            : sharing.filter((x) => x !== l.id),
+                        )
+                      }
+                    />
+                    {l.name}
+                  </label>
+                ))
+              )}
+            </fieldset>
+          )}
+        </>
+      ) : (
+        <Money label="Price" value={price} onChange={setPrice} />
+      )}
       <div className="tk-form-row">
         <span>
           <span className="tk-form-row-title">In stock</span>
@@ -356,6 +502,12 @@ export function ProductForm({
         on={shown}
         onChange={setShown}
       />
+      {chosen && (
+        <p className="tk-share-note">
+          <b>Saving posts a line in this chat</b> and updates the price for
+          every business on the {listLabel(chosen.name)}.
+        </p>
+      )}
     </FormFrame>
   );
 }

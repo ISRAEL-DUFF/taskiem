@@ -391,3 +391,16 @@ img.tk-live-tile { object-fit: cover; }
 .tk-photo-none[data-tone="sand"] { background: var(--tone-sand-bg); color: var(--tone-sand-ink); }
 /* Alert cards' buttons as the Alerts board sizes them. */
 .tk-alerts .tk-btn, .tk-alerts button.tk-btn { min-height: 46px; }
+
+/* A product's price list and who sees it (the DeskSeller board). */
+.tk-form-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.tk-list-pick { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.tk-list-pick select { min-height: 40px; max-width: 60%; }
+.tk-share-box { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-radius: 14px; background: var(--tk-soft); }
+.tk-share-box > span { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tk-share-change, .tk-share-change:hover:not(:disabled) { flex: none; min-height: 36px; padding: 0 4px; border: 0; background: none; box-shadow: none; font-size: 14px; font-weight: 700; color: var(--brand); }
+:root[data-theme="dark"] .tk-share-change { color: var(--brand-dark); }
+.tk-share-pick { display: flex; flex-direction: column; gap: 2px; margin: -4px 0 0; padding: 6px 14px; border: 1px solid var(--border); border-radius: 14px; }
+.tk-share-row { display: flex; align-items: center; gap: 10px; min-height: 40px; font-size: 14px; font-weight: 500; color: var(--text); cursor: pointer; }
+.tk-share-note { margin: 0; padding: 12px 14px; border-radius: 14px; border: 1px dashed color-mix(in srgb, var(--brand-dark) 70%, var(--border-strong)); background: var(--tone-green-bg); color: var(--tone-green-ink); font-size: 13px; line-height: 1.45; }
+@media (prefers-reduced-motion: no-preference) { .tk-share-pick { animation: tkd-up8 0.25s ease both; } }
