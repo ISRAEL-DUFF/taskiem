@@ -399,7 +399,14 @@ nothing: the words stay as typed and its Explore card opens in a sheet over
 the chat, its logo, name, line and area, its photos with their captions and
 dots, and what it says about itself, with **Connect** (`POST /v1/links`, both
 ways, as Explore). Connect says "Asked Kola's Bakery to link" and the card
-says Requested, with **Withdraw**; nothing is shared until they accept. The
+says Requested, with **Withdraw**; nothing is shared until they accept. A
+business that asked us is answered on its card (**Accept**, **Not now**), in
+the sheet and in Explore; once linked, **Message** opens its conversation.
+The picker's row follows what was done in the sheet. Someone who may not link
+sees the card with "Not linked" and "An owner or admin can connect." Asking,
+taking an ask back and each answer are diary lines ("Asked Kola's Bakery to
+link", "Linked with Kola's Bakery"), named as the link list names the
+business. The
 Taskiem conversation gets the grouped picker with chat tools (without the
 Taskiem row: it is who is being talked to).
 
@@ -451,10 +458,15 @@ Explore while one is open; in Explore they are typed into its search.
   conversation's diary line kept; a typed request; a live card; tagging a
   service; the sound switch.
 - Unit tests: `lib/toolforms`, `lib/intents`, `lib/moments`.
-- `api/explore_test.go`: captions on each card and our own area (phase 6).
+- `api/explore_test.go`: captions on each card and on search results; our own
+  area, from the profile or else the published storefront; link diary lines
+  on each side (`TestLinkDiaryLines`).
 - `web/e2e/explore.spec.ts`: tagging a business not linked shows its card and
-  Connect asks it to link, Withdraw takes it back (axe in both themes); the
-  "@" key; the keys stay out of Explore. `web/e2e/business-profile.spec.ts`:
+  Connect asks it to link, Withdraw takes it back (axe in both themes); one
+  that asked us accepted from its card, the keys staying out of the sheet,
+  Message opening the conversation and the diary line; the "@" key; the keys
+  stay out of Explore. `web/e2e/chat-staff.spec.ts`: a cashier's card has no
+  Connect. `web/e2e/business-profile.spec.ts`:
   the redrawn profile.
 - Unit tests: `lib/mentions` (businesses found in Explore), `lib/chatKeys` ("@").
 - Unit tests: `lib/tools`, `lib/cardframe`, `lib/mentions` (the groups),

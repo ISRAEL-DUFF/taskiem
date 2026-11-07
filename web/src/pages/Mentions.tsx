@@ -173,6 +173,19 @@ export function useMentions(
     close: () => setQ(null),
     box,
     card,
+    // The sheet asked, withdrew or answered: the row says so at once.
+    cardChanged: (business: string, state: ExploreCard["state"]) =>
+      setFound(
+        (f) =>
+          f && {
+            ...f,
+            list: f.list.flatMap((x) => {
+              if (x.explore?.business !== business) return [x];
+              const next = unlinkedSuggestion({ ...x.explore, state });
+              return next ? [next] : [];
+            }),
+          },
+      ),
     closeCard: () => {
       setCard(undefined);
       requestAnimationFrame(() => box.current?.focus());
@@ -215,6 +228,7 @@ export function GroupedPicker({ m }: { m: Mentions }) {
           card={m.card.card}
           from={m.card.from}
           onClose={m.closeCard}
+          onChanged={m.cardChanged}
         />
       )}
     </>

@@ -13,6 +13,14 @@
   --tk-blue-ink: #2f5bd3;
   --tk-lift: 0 30px 60px -20px rgba(14, 15, 12, 0.35), 0 2px 8px rgba(14, 15, 12, 0.06);
   --tk-veil: rgba(14, 26, 20, 0.38);
+  /* On photos, the same in every theme: a caption's chip, a light round
+     button, a dark one, and a notice laid over a picture. */
+  --tk-photo-chip: rgba(255, 255, 255, 0.88);
+  --tk-photo-ink: #0e1a14;
+  --tk-photo-btn: rgba(255, 255, 255, 0.9);
+  --tk-photo-dark: rgba(14, 26, 20, 0.55);
+  --tk-photo-notice: rgba(14, 26, 20, 0.75);
+  --tk-photo-on-dark: #ffffff;
 }
 :root[data-theme="dark"] {
   --tk-soft: #1f2a26; --tk-tile: #1a2420; --tk-lime-soft: rgba(200, 241, 105, 0.14);
@@ -488,8 +496,8 @@ button.tk-cta.tk-cta-danger, button.tk-cta.tk-cta-danger:hover:not(:disabled), b
 .tk-x-card .explore-head .chat-avatar, .tk-x-card .tk-x-logo { flex: none; width: 48px; height: 48px; font-size: 16px; font-weight: 800; }
 .tk-x-card .explore-who strong { font-size: 16px; font-weight: 700; }
 .tk-x-card .explore-who .hint { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
-.tk-x-connect { flex: none; display: inline-flex; align-items: center; min-height: 40px; padding: 0 16px; border: 0; border-radius: 999px; background: var(--brand); color: #ffffff; font-weight: 700; font-size: 14px; box-shadow: none; transition: transform 0.15s; }
-.tk-x-connect:hover:not(:disabled) { background: var(--brand-hover); color: #ffffff; border: 0; }
+.tk-x-connect { flex: none; display: inline-flex; align-items: center; min-height: 40px; padding: 0 16px; border: 0; border-radius: 999px; background: var(--brand); color: var(--tk-on-pine); font-weight: 700; font-size: 14px; box-shadow: none; transition: transform 0.15s; }
+.tk-x-connect:hover:not(:disabled) { background: var(--brand-hover); color: var(--tk-on-pine); border: 0; }
 .tk-x-connect:active:not(:disabled) { transform: scale(0.96); }
 .tk-x-connect.soft, .tk-x-connect.soft:hover:not(:disabled) { background: var(--tk-soft); color: var(--brand); }
 :root[data-theme="dark"] .tk-x-connect:not(.soft) { background: var(--brand-dark); color: var(--brand-dark-text); }
@@ -501,12 +509,15 @@ button.tk-cta.tk-cta-danger, button.tk-cta.tk-cta-danger:hover:not(:disabled), b
 .tk-x-card .carousel-slide { position: relative; aspect-ratio: auto; height: 210px; max-height: none; display: grid; place-items: center; background: var(--tk-tile); }
 .tk-x-card .carousel-slide > svg { width: 56px; height: 56px; color: var(--muted); opacity: 0.55; }
 .tk-x-card .carousel-slide img { position: absolute; inset: 0; }
-.tk-x-cap { position: absolute; left: 12px; bottom: 12px; max-width: 80%; padding: 6px 10px; border-radius: 10px; font-size: 13px; font-weight: 600; color: #0e1a14; background: rgba(255, 255, 255, 0.88); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tk-x-cap { position: absolute; left: 12px; bottom: 12px; max-width: 80%; padding: 6px 10px; border-radius: 10px; font-size: 13px; font-weight: 600; color: var(--tk-photo-ink); background: var(--tk-photo-chip); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tk-x-card .carousel-dots { position: static; padding-top: 6px; gap: 2px; pointer-events: auto; }
 .tk-x-card .carousel-dot::after { background: var(--border-strong); box-shadow: none; transition: width 0.3s var(--ease-spring, cubic-bezier(0.2, 0.9, 0.25, 1.2)), background-color 0.3s; }
 .tk-x-card .carousel-dot[aria-current="true"]::after { width: 22px; background: var(--brand); }
 :root[data-theme="dark"] .tk-x-card .carousel-dot[aria-current="true"]::after { background: var(--brand-dark); }
-.tk-x-card .explore-about { margin: 6px 4px 4px; padding: 0; font-size: 14px; line-height: 1.5; color: color-mix(in srgb, var(--text) 82%, var(--muted)); }
+.tk-x-card .explore-about { margin: 6px 4px 4px; padding: 0; font-size: 14px; line-height: 1.5; color: color-mix(in srgb, var(--text) 82%, var(--muted)); -webkit-line-clamp: 4; }
+.tk-x-sheet .tk-x-card .explore-about { display: block; -webkit-line-clamp: unset; overflow: visible; white-space: pre-line; }
+.tk-x-card .tk-x-note { margin: 8px 4px 2px; }
+.tk-x-asked .tk-x-connect { min-height: 36px; padding: 0 14px; }
 
 @media (min-width: 900px) {
   .tk-x-head { flex-wrap: nowrap; gap: 24px; padding-top: 28px; padding-left: 24px; padding-right: 24px; }
@@ -547,7 +558,7 @@ button.tk-cta.tk-cta-danger, button.tk-cta.tk-cta-danger:hover:not(:disabled), b
 
 /* A checkbox drawn as the designs' switch. */
 input[type="checkbox"].tk-switch { appearance: none; -webkit-appearance: none; width: 52px; height: 32px; min-height: 32px; margin: 0; padding: 0; border: 0; border-radius: 999px; background: var(--border-strong); cursor: pointer; }
-input.tk-switch::before { content: ""; position: absolute; top: 3px; left: 3px; width: 26px; height: 26px; border-radius: 50%; background: #ffffff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); transition: left 0.25s var(--spring); }
+input.tk-switch::before { content: ""; position: absolute; top: 3px; left: 3px; width: 26px; height: 26px; border-radius: 50%; background: var(--tk-on-pine); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); transition: left 0.25s var(--spring); }
 input.tk-switch:checked { background: var(--brand); }
 input.tk-switch:checked::before { left: 23px; }
 :root[data-theme="dark"] input.tk-switch:checked { background: var(--brand-dark); }
@@ -565,7 +576,7 @@ input.tk-switch:disabled { cursor: default; opacity: 0.7; }
 .tk-p-found-title { font-weight: 700; font-size: 15px; }
 .tk-p-found-line { font-size: 13px; opacity: 0.85; }
 .tk-p-found.on input.tk-switch:checked { background: var(--brand-dark); }
-.tk-p-found.on input.tk-switch:checked::before { background: #ffffff; }
+.tk-p-found.on input.tk-switch:checked::before { background: var(--tk-on-pine); }
 .tk-p-found.on input.tk-switch:focus-visible { box-shadow: 0 0 0 3px var(--brand-dark); }
 .tk-p-card { background: var(--panel); border-radius: 24px; padding: 12px; box-shadow: 0 1px 2px rgba(14, 26, 20, 0.06), 0 12px 28px -18px rgba(14, 26, 20, 0.25); }
 :root[data-theme="dark"] .tk-p-card { box-shadow: 0 0 0 1px var(--border); }
@@ -577,7 +588,7 @@ input.tk-switch:disabled { cursor: default; opacity: 0.7; }
 .tk-p-words { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .tk-p-words strong { font-size: 16px; font-weight: 700; overflow-wrap: anywhere; }
 .tk-p-words span { font-size: 13px; color: var(--muted); }
-.tk-p-connect { flex: none; display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border-radius: 999px; background: var(--brand); color: #ffffff; font-weight: 700; font-size: 13px; }
+.tk-p-connect { flex: none; display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border-radius: 999px; background: var(--brand); color: var(--tk-on-pine); font-weight: 700; font-size: 13px; }
 :root[data-theme="dark"] .tk-p-connect { background: var(--brand-dark); color: var(--brand-dark-text); }
 .tk-p-mosaic { display: grid; grid-template-columns: 2fr 1fr; gap: 6px; height: 150px; }
 .tk-p-stack { display: grid; grid-template-rows: 1fr 1fr; gap: 6px; min-height: 0; }
@@ -612,11 +623,11 @@ input.tk-switch:disabled { cursor: default; opacity: 0.7; }
 .tk-p-pic { position: relative; height: 120px; border-radius: 16px; overflow: hidden; background: var(--tk-soft); }
 .tk-p-pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .tk-p-first { position: absolute; left: 8px; top: 8px; font-size: 11px; padding: 3px 8px; }
-.tk-p-refused { position: absolute; left: 6px; right: 6px; top: 40px; padding: 4px 8px; border-radius: 8px; font-size: 12px; font-weight: 600; background: rgba(14, 26, 20, 0.75); color: #ffffff; }
-.tk-p-x, .tk-p-x:hover:not(:disabled) { position: absolute; right: 6px; top: 6px; width: 32px; height: 32px; min-height: 32px; padding: 0; border: 0; border-radius: 50%; background: rgba(14, 26, 20, 0.55); box-shadow: none; display: grid; place-items: center; color: #ffffff; }
+.tk-p-refused { position: absolute; left: 6px; right: 6px; top: 40px; padding: 4px 8px; border-radius: 8px; font-size: 12px; font-weight: 600; background: var(--tk-photo-notice); color: var(--tk-photo-on-dark); }
+.tk-p-x, .tk-p-x:hover:not(:disabled) { position: absolute; right: 6px; top: 6px; width: 32px; height: 32px; min-height: 32px; padding: 0; border: 0; border-radius: 50%; background: var(--tk-photo-dark); box-shadow: none; display: grid; place-items: center; color: var(--tk-photo-on-dark); }
 .tk-p-x svg { width: 14px; height: 14px; }
 .tk-p-move { position: absolute; right: 6px; bottom: 6px; display: flex; gap: 4px; }
-.tk-p-move button, .tk-p-move button:hover:not(:disabled) { width: 32px; height: 32px; min-height: 32px; padding: 0; border: 0; border-radius: 50%; background: rgba(255, 255, 255, 0.9); box-shadow: none; display: grid; place-items: center; color: #0e1a14; }
+.tk-p-move button, .tk-p-move button:hover:not(:disabled) { width: 32px; height: 32px; min-height: 32px; padding: 0; border: 0; border-radius: 50%; background: var(--tk-photo-btn); box-shadow: none; display: grid; place-items: center; color: var(--tk-photo-ink); }
 .tk-p-move button:disabled { opacity: 0.45; }
 .tk-p-move svg { width: 14px; height: 14px; }
 .tk-p-x:focus-visible, .tk-p-move button:focus-visible { box-shadow: 0 0 0 3px var(--brand-dark); }

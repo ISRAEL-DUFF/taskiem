@@ -138,6 +138,8 @@ export function Card({
   onConnect,
   onWithdraw,
   onMessage,
+  incoming,
+  onAnswer,
   as = "li",
 }: {
   card: ExploreCard;
@@ -149,6 +151,9 @@ export function Card({
   onConnect: () => void;
   onWithdraw: () => void;
   onMessage: () => void;
+  /** Their ask to us (state asked_us), and how it is answered. */
+  incoming?: BusinessLink;
+  onAnswer?: (l: BusinessLink, answer: "accept" | "decline") => void;
   /** A list item in Explore; a block of its own in a sheet. */
   as?: "li" | "div";
 }) {
@@ -183,7 +188,7 @@ export function Card({
                 Connect<span className="sr-only"> with {card.name}</span>
               </button>
             ) : (
-              <span className="hint">An owner or admin can connect.</span>
+              <span className="tk-pill">Not linked</span>
             ))}
           {offer === "requested" && (
             <span className="tk-x-asked">
@@ -206,9 +211,29 @@ export function Card({
               Message<span className="sr-only"> {card.name}</span>
             </button>
           )}
-          {offer === "asked" && (
-            <span className="hint">Asked you to link.</span>
-          )}
+          {offer === "asked" &&
+            (manage && incoming && onAnswer ? (
+              <span className="tk-x-asked">
+                <button
+                  type="button"
+                  className="tk-x-connect"
+                  disabled={busy}
+                  onClick={() => onAnswer(incoming, "accept")}
+                >
+                  Accept<span className="sr-only"> {card.name}'s request to link</span>
+                </button>
+                <button
+                  type="button"
+                  className="tk-x-withdraw"
+                  disabled={busy}
+                  onClick={() => onAnswer(incoming, "decline")}
+                >
+                  Not now<span className="sr-only">: say no to {card.name}</span>
+                </button>
+              </span>
+            ) : (
+              <span className="tk-pill lime">Asked you</span>
+            ))}
         </div>
       </div>
       {card.photos > 0 && (
@@ -221,6 +246,15 @@ export function Card({
         />
       )}
       {card.about && <p className="explore-about">{card.about}</p>}
+      {!manage && (offer === "connect" || offer === "asked") && (
+        <p className="tk-x-note">An owner or admin can connect.</p>
+      )}
+      {offer === "asked" && manage && (
+        <p className="tk-x-note">
+          {card.name} asked to link with you. Accept to message, share price
+          lists and order.
+        </p>
+      )}
     </Tag>
   );
 }
@@ -333,6 +367,24 @@ export function Explore({
           },
       );
     }, "Request withdrawn");
+  // Their ask, answered here: linked (Message), or put back to Connect.
+  const answerAsk = (
+    card: ExploreCard,
+    link: BusinessLink,
+    answer: "accept" | "decline",
+  ) =>
+    void act.run(
+      async () => {
+        await post(`/v1/links/${link.id}/${answer}`);
+        const state: ExploreCard["state"] = answer === "accept" ? "active" : "none";
+        const put = (cards: ExploreCard[]) =>
+          cards.map((x) => (x.business === card.business ? { ...x, state } : x));
+        setStart((s) => s && { ...s, near: put(s.near), fresh: put(s.fresh) });
+        setFound((f) => f && { ...f, r: { ...f.r, results: put(f.r.results) } });
+        onChanged();
+      },
+      answer === "accept" ? `Linked with ${card.name}` : "Request declined",
+    );
   const blindSend = (shown: string) =>
     void act.run(async () => {
       await post("/v1/links", { phone: typed, role: "both" });
@@ -378,6 +430,10 @@ export function Explore({
             (a && a !== true ? a : undefined) ?? pendingTo(links, c.business);
           if (l) withdraw(c, l);
         }}
+        incoming={links.find(
+          (l) => l.business === c.business && l.state === "asked_us",
+        )}
+        onAnswer={(l, answer) => answerAsk(c, l, answer)}
         onMessage={() =>
           void (async () => {
             // The chat list may not have heard yet that they accepted.
@@ -424,9 +480,10 @@ export function Explore({
           <label>
             <span className="sr-only">Search businesses</span>
             <Icon name="search" />
+            {/* The focus trap gives it the focus as it starts listening
+                for Esc, so an Esc at once is never missed. */}
             <input
               type="search"
-              autoFocus
               value={q}
               placeholder="A name, what they sell, or an area"
               onChange={(e) => setQ(e.target.value)}

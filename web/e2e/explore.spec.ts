@@ -419,3 +419,57 @@ test("the @ key starts a tag in the open chat; the keys stay out of Explore", as
   await expect(ex.getByTestId("explore-search")).toHaveValue("@");
   await expect(box).toHaveValue("");
 });
+
+test("a business that asked you to link is answered from its card; the keys stay out of the sheet", async ({
+  browser,
+}) => {
+  test.setTimeout(120_000);
+  const { seller, buyer, name, stamp } = await twoBusinesses(browser, {
+    viewport: { width: 390, height: 844 },
+  });
+  const me = (await (await buyer.request.get("/v1/me")).json()) as { tenant_id: string };
+  // The seller asks the buyer (who can be found, so may be asked).
+  await buyer.request.put("/v1/link-settings", { headers: H, data: { findable: true } });
+  expect(
+    (
+      await seller.request.post("/v1/links", {
+        headers: H,
+        data: { business: me.tenant_id, role: "both" },
+      })
+    ).status(),
+  ).toBeLessThan(300);
+  expect(
+    (
+      await buyer.request.put("/v1/settings/chat-tools", {
+        headers: H,
+        data: { chat_tools: true },
+      })
+    ).ok(),
+  ).toBe(true);
+  await buyer.goto("/chat?with=taskiem");
+  const box = buyer.getByTestId("taskiem-pane").locator("textarea[data-chat-box]");
+  await box.fill(`@Dangote Cement ${stamp}`);
+  const row = buyer
+    .getByTestId("mention-list")
+    .getByRole("button", { name: new RegExp(`^${name}.*asked you to link`) });
+  await row.click();
+  const sheet = buyer.getByTestId("business-card-sheet");
+  const card = sheet.getByTestId("explore-card");
+  await expect(card).toContainText(`${name} asked to link with you`);
+  await axeBoth(buyer, "a card that asked you to link");
+  // The chat's letters do nothing under the sheet.
+  await buyer.keyboard.press("n");
+  await expect(buyer.getByTestId("explore")).toHaveCount(0);
+  await card.getByRole("button", { name: /^Accept/ }).click();
+  await expect(card.getByRole("button", { name: /^Message/ })).toBeVisible();
+  // Linked: a diary line in the Taskiem conversation, and Message opens theirs.
+  await card.getByRole("button", { name: /^Message/ }).click();
+  await expect(buyer).toHaveURL(/\/chat\?with=(?!taskiem)/);
+  const said = (await (await buyer.request.get("/v1/taskiem-chat")).json()) as {
+    messages: { kind: string; text: string }[];
+  };
+  expect(said.messages.filter((m) => m.kind === "diary").map((m) => m.text)).toContain(
+    // The link's own name (the business's), as the chat list shows it.
+    `Linked with Dangote Depot ${stamp}`,
+  );
+});

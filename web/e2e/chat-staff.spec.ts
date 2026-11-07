@@ -201,3 +201,22 @@ test("a cashier gets no briefing card", async ({ browser }) => {
   await expect(member.getByTestId("taskiem-pane")).toBeVisible();
   await expect(member.getByTestId("briefing-card")).toHaveCount(0);
 });
+
+// Chat tools phase 6: someone who may not link (a cashier) finds a business
+// in the picker and sees its card, but not Connect.
+test("a cashier sees a business's card from the picker, without Connect", async ({ browser }) => {
+  const { member } = await people(browser, "cashier");
+  await member.route(/\/v1\/explore\?q=/, (r) =>
+    r.fulfill(json({ near: [], fresh: [], near_more: false, more: false, results: [
+      { business: "00000000-0000-4000-8000-000000000001", name: "Kola's Bakery", tagline: "Bread and cakes", area: "Yaba", about: "A family bakery.", logo: false, photos: 0, captions: [], state: "none", v: "1" },
+    ] })),
+  );
+  await member.goto("/chat?with=taskiem");
+  await member.getByTestId("taskiem-pane").locator("textarea[data-chat-box]").fill("@kola");
+  await member.getByTestId("mention-list").getByRole("button", { name: /^Kola's Bakery/ }).click();
+  const card = member.getByTestId("business-card-sheet").getByTestId("explore-card");
+  await expect(card).toContainText("Not linked");
+  await expect(card).toContainText("An owner or admin can connect.");
+  await expect(card.getByRole("button", { name: /^Connect/ })).toHaveCount(0);
+  await axeBoth(member, "a card for someone who may not link");
+});
