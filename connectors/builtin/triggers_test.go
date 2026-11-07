@@ -95,6 +95,12 @@ func TestTriggerExpressions(t *testing.T) {
 		{"mtnmomo@1", "transfer_callback", `{"amount":100,"currency":"UGX","externalId":83453,"payee":{"partyIdType":"MSISDN","partyId":4609274685},"status":"FAILED","reason":{"code":"NOT_ENOUGH_FUNDS","message":"The payer does not have enough funds."}}`,
 			"transfer.FAILED", "83453:FAILED", "83453"},
 		{"youverify@1", "event", `{"event":"identity.verification.completed","apiVersion":"v2","data":{"id":"646b","status":"found","createdAt":"2024-03-27T08:30:03.367Z"}}`, "identity.verification.completed", "identity.verification.completed:646b:found::2024-03-27T08:30:03.367Z", "646b"},
+		// Polled: each message once, by its Gmail id; a reply wakes the run
+		// waiting on its thread.
+		{"gmail@1", "new_mail", `{"event":"message.received","data":{"id":"18c2f1a9","thread_id":"18c2f0e1","message_id":"<a@mail.gmail.com>","from":"Ada <ada@example.com>","label_ids":["INBOX"]}}`,
+			"message.received", "18c2f1a9", "18c2f0e1"},
+		{"gmail@1", "new_mail", `{"event":"message.received","data":{"id":"18c2f1aa","thread_id":""}}`,
+			"message.received", "18c2f1aa", "18c2f1aa"},
 	} {
 		conn, ok := reg.Get(c.ref)
 		if !ok {
