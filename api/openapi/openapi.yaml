@@ -35749,6 +35749,7 @@ components:
       - messages
       - senders
       - attachments
+      - threads
       properties:
         id:
           type: string
@@ -35775,6 +35776,9 @@ components:
           enum:
           - keep
           - ignore
+        threads:
+          type: boolean
+          description: Replies in a thread wake the run waiting for them instead of starting one (decision 0063).
         confirmation:
           description: The latest forwarding confirmation a mail provider sent to the address.
           oneOf:
@@ -35818,10 +35822,12 @@ components:
                 type: integer
               status:
                 type: string
+                description: What came of it; replied is a reply delivered to the run of its thread that waited for it (decision 0063).
                 enum:
                 - started
                 - refused
                 - confirmation
+                - replied
               note:
                 type:
                 - string
