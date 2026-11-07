@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>00 · A short's title card</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script src="../kit/kit.js"></script>
+<script>window.scene = { duration: 2600 };</script>
+<style>
+/* A short's opening line (video/script.md, the shorts): the mark, then the
+   line, given as ?title=…, its words in *stars* in pine. Not
+   part of the film: assemble.mjs puts it in front of a short's scenes. */
+@keyframes pop { from { opacity: 0; transform: scale(.7); } to { opacity: 1; transform: none; } }
+@keyframes in-up { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: none; } }
+.stage { background: radial-gradient(50% 55% at 50% 52%, rgba(200,241,105,.26), transparent 70%), radial-gradient(rgba(14,26,20,.05) 1.6px, transparent 2.2px) 0 0 / 36px 36px, radial-gradient(rgba(14,26,20,.05) 1.6px, transparent 2.2px) 18px 18px / 36px 36px, var(--paper) !important; }
+.t { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 0 140px; }
+.mark { width: 120px; height: 120px; animation: pop .6s var(--spring) both; animation-delay: .1s; filter: drop-shadow(0 20px 30px rgba(13,59,46,.3)); }
+.line { margin: 50px 0 0; font-size: 104px; line-height: 1.04; font-weight: 800; letter-spacing: -.035em; animation: in-up .6s var(--ease) both; animation-delay: .35s; }
+.line em { font-style: normal; color: var(--pine); box-shadow: inset 0 -0.16em 0 rgba(13,59,46,.14); }
+.portrait .t, .square .t { padding: 0 80px; }
+.portrait .line { font-size: 96px; }
+.square .line { font-size: 80px; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="t">
+    <svg class="mark" viewBox="0 0 100 100" role="img" aria-label="Taskiem"><rect width="100" height="100" rx="26" fill="#0d3b2e"/><path d="M27 40H61" stroke="#c8f169" stroke-width="11" stroke-linecap="round"/><path d="M42 22V58Q42 74 58 74H64" stroke="#c8f169" stroke-width="11" stroke-linecap="round" fill="none"/><circle cx="78" cy="74" r="7" fill="#ffffff"/></svg>
+    <p class="line"></p>
+  </div>
+</div>
+<script>
+  // "Your business, *before you open the shop.*": the starred words in pine.
+  const words = new URLSearchParams(location.search).get("title") || "Your business, *before you open the shop.*";
+  const line = document.querySelector(".line");
+  words.split("*").forEach((part, i) => {
+    if (i % 2 === 0) line.append(part);
+    else { const em = document.createElement("em"); em.textContent = part; line.append(em); }
+  });
+</script>
+</body>
+</html>

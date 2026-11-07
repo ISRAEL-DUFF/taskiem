@@ -12,7 +12,9 @@
 (function () {
   const params = new URLSearchParams(location.search);
   const rendering = params.has("render");
-  if (params.get("size") === "9x16") document.documentElement.classList.add("portrait");
+  const size = params.get("size");
+  if (size === "9x16") document.documentElement.classList.add("portrait");
+  if (size === "1x1") document.documentElement.classList.add("square");
 
   const ease = (t) => 1 - Math.pow(1 - t, 3);
   const naira = (n) => "₦" + Math.round(n).toLocaleString("en-NG");

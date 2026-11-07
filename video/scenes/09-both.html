@@ -16,6 +16,12 @@
 .portrait .phone.a { --s: .82; left: 120px; right: auto; }
 .portrait .phone.b { --s: .82; left: auto; right: 120px; }
 .portrait .caption { top: 140px; }
+.square .caption { left: 90px; right: 90px; top: 50px; width: auto; transform: none; text-align: center; }
+.square .sub { margin-left: auto; margin-right: auto; }
+.square .phone.a, .square .phone.b { --s: .66; top: auto; bottom: 40px; }
+.square .phone.a { right: auto; left: 170px; }
+.square .phone.b { right: 170px; }
+.square .fly { right: 560px; top: 760px; animation-name: fly-p; }
 @keyframes fly { 0% { opacity: 0; transform: translate(0, 0) scale(.6); } 15% { opacity: 1; } 100% { opacity: 0; transform: translate(470px, -120px) scale(1); } }
 .fly { position: absolute; right: 900px; top: 640px; width: 26px; height: 26px; border-radius: 50%; background: var(--lime); box-shadow: 0 0 0 6px rgba(200,241,105,.35); animation: fly .7s var(--ease) both; animation-delay: 3.8s; z-index: 6; }
 .portrait .fly { right: 640px; top: 1300px; }

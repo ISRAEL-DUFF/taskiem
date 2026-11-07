@@ -15,9 +15,13 @@ and the scene rendered again.
 | `script.md` | The final script: scenes, captions, the deal's numbers, the shorts |
 | `kit/kit.css` | The stage (16:9 or 9:16), the phone, captions, a tap, the app's screen parts |
 | `kit/kit.js` | The timeline: a scene plays in a browser; the renderer steps it frame by frame |
-| `scenes/<nn>-<name>.html` | One scene each, numbered as in the script |
+| `kit/kit.css` sizes | 16:9 (the film), 9:16 (the phone cut and shorts), 1:1 (shorts for feeds) |
+| `scenes/<nn>-<name>.html` | One scene each, numbered as in the script; `00-title` is a short's opening line |
+| `music/compose.py` | The music, written for the film: an original Afro-pop instrumental, made note by note |
 | `render.mjs` | Renders a still or a scene to video |
-| `assemble.mjs` | Renders every scene and joins them into the film, with its captions (.srt) from the script |
+| `assemble.mjs` | Renders the scenes and joins them into a film, with its captions (.srt) and its music |
+| `shorts.mjs` | The six shorts from the script's table, in 9:16 and 1:1 |
+| `clips.mjs` | The app's own looping clips (the phone alone) and the stills |
 | `out/` | What it renders (not in git) |
 
 ## Rendering
@@ -30,13 +34,33 @@ Inter font (so no network), and ffmpeg.
 node video/render.mjs still 03-briefing 7000              # one frame, 16:9, at 7 s
 node video/render.mjs still 03-briefing 7000 --size 9x16  # the phone cut
 node video/render.mjs scene 03-briefing                   # the scene as MP4, 30 fps
-node video/assemble.mjs                                   # every scene, joined: out/animatic-16x9.mp4 and .srt
-node video/assemble.mjs --size 9x16 --keep                # the phone cut, reusing scenes already rendered
+node video/assemble.mjs --name explainer                  # the film: out/explainer-16x9.mp4, .srt and .wav
+node video/assemble.mjs --name explainer --size 9x16 --keep  # the phone cut, reusing scenes already rendered
+node video/shorts.mjs                                     # out/short-<act>-9x16.mp4 and -1x1.mp4
+node video/clips.mjs                                      # out/clips/ and out/stills/
 ```
 
 The whole film renders in about 7 minutes with four scenes at a time
 (`--jobs 4`); scenes are joined with a 0.4 s dissolve (`--cut` for straight
 cuts), so the film runs about 2:16.
+
+## The music and sound
+
+`music/compose.py` writes the music for each film from its timeline
+(`out/<name>-<size>.timeline.json`, which `assemble.mjs` writes), so a short
+gets a track that fits it too. It is an original Afro-pop instrumental at
+112 BPM in F major: a log-drum bass, kick, clap, rim, shaker, keys on the
+off-beats, a pad and a kalimba tune over F, Am, Dm and B♭. It rises and falls
+with the acts (`ACTS` in the file): sparse for the opening, the groove from
+the morning, full for tools, trade and deals, low and dark for the dark
+scene, and a held chord with a chime on the end card. Every tap in a scene
+gets a soft tock and every burst (a good moment) a short chime, read from
+the scene's page, so moving a tap moves its sound.
+
+The film is mixed to −16 LUFS (two passes of ffmpeg's `loudnorm`). Every
+piece works muted too: the shorts carry their words on screen. To lay other
+music under it, `--music track.wav` (it is cut to the film and faded out);
+`--silent` for none.
 
 To watch a scene while working on it, open its page in a browser: it plays
 and loops.

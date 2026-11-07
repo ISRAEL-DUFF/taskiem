@@ -47,11 +47,13 @@ style frames show); the caption above is the one the social cuts burn in.
 
 | Short | Scenes | Opening line |
 | --- | --- | --- |
-| Morning | 3–4 | Your business, before you open the shop. |
-| Tools | 5–7 | Every tool, inside the chat. |
-| Trade | 8–9 | Orders between businesses, without the back and forth. |
-| Staff | 10–11 | Your team, within your limits. |
-| Explore | 12 | Find the businesses you will trade with. |
-| Deals | 13–15 | Haggle in the chat. |
+| Morning | 3–4 | Your business, *before you open the shop.* |
+| Tools | 5–7 | Every tool, *inside the chat.* |
+| Trade | 8–9 | Orders between businesses, *without the back and forth.* |
+| Staff | 10–11 | Your team, *within your limits.* |
+| Explore | 12 | Find the businesses *you will trade with.* |
+| Deals | 13–15 | Haggle *in the chat.* |
 
-Each ends on the end card (scene 16).
+Each opens on its line (scenes/00-title.html; the words in *stars* in pine)
+and ends on the end card (scene 16). `node video/shorts.mjs` makes them all,
+in 9:16 and 1:1.
