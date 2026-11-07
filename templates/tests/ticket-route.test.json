@@ -5,6 +5,9 @@
   "cases": [
     {
       "name": "Taskiem's AI picks the department, priority and summary",
+      "params": {
+        "routing": "ai"
+      },
       "trigger": {
         "body": {
           "subject": "My order has not arrived",
@@ -41,6 +44,9 @@
     },
     {
       "name": "a department the AI makes up goes to the fallback",
+      "params": {
+        "routing": "ai"
+      },
       "trigger": {
         "body": {
           "subject": "My order has not arrived",

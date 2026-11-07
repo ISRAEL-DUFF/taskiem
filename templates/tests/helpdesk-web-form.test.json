@@ -6,7 +6,8 @@
     {
       "name": "a message opens a ticket, the customer is emailed from the helpdesk address and sees their number",
       "params": {
-        "helpdesk_address": "k3x9q2m7a1bz@in.taskiem.app"
+        "helpdesk_address": "k3x9q2m7a1bz@in.taskiem.app",
+        "routing": "ai"
       },
       "trigger": {
         "body": {

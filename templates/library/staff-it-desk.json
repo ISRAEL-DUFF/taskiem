@@ -69,10 +69,10 @@
       "name": "routing",
       "type": "string",
       "title": "How a ticket finds its department",
-      "description": "ai: Taskiem's AI reads the request and picks its kind, how urgent it is and a one-line summary. rules: the first kind with one of its words in the request. chosen: the kind the member picked.",
+      "description": "ai: Taskiem's AI reads the request and picks its kind, how urgent it is and a one-line summary. rules (the default): the first kind with one of its words in the request. chosen: the kind the member picked.",
       "required": false,
-      "default": "ai",
-      "example": "ai",
+      "default": "rules",
+      "example": "rules",
       "enum": [
         "ai",
         "rules",

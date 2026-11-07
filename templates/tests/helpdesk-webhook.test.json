@@ -6,7 +6,8 @@
     {
       "name": "a message opens a ticket and the app gets its number back",
       "params": {
-        "helpdesk_address": "k3x9q2m7a1bz@in.taskiem.app"
+        "helpdesk_address": "k3x9q2m7a1bz@in.taskiem.app",
+        "routing": "ai"
       },
       "trigger": {
         "type": "webhook",

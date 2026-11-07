@@ -5,6 +5,9 @@
   "cases": [
     {
       "name": "a member's request opens a ticket for IT, and they are told its number as a member",
+      "params": {
+        "routing": "ai"
+      },
       "trigger": {
         "body": {
           "subject": "Locked out of my email",

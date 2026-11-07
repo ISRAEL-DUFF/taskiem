@@ -319,6 +319,9 @@
     },
     {
       "name": "a reply long after the ticket was resolved opens a new ticket that follows it",
+      "params": {
+        "routing": "ai"
+      },
       "trigger": {
         "body": {
           "from": {

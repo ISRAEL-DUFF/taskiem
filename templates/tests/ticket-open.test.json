@@ -5,6 +5,9 @@
   "cases": [
     {
       "name": "an email opens T-1042, the department is told and the customer answered in the conversation",
+      "params": {
+        "routing": "ai"
+      },
       "env": {
         "ticket_reply_form": "https://app.taskiem.app/f/replyform"
       },

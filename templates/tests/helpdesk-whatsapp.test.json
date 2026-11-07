@@ -5,6 +5,9 @@
   "cases": [
     {
       "name": "a first message opens a ticket answered from the WhatsApp number",
+      "params": {
+        "routing": "ai"
+      },
       "trigger": {
         "event": "message",
         "item": {

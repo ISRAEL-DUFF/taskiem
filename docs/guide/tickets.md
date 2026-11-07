@@ -40,8 +40,8 @@ Give each role to the right people under **Members**. Then choose:
 
 - **Department when none fits**: where a ticket goes when nothing else fits (General, above).
 - **How a ticket finds its department**:
+  - **rules** (the default): the first department with one of its words in the message. Nothing is sent to an AI model.
   - **ai**: Taskiem's AI reads the message and picks the department, says how urgent it is (low, normal, high or urgent) and writes a one-line summary. The customer's name, email address and phone number are hidden from it; the words of their message are not, since it has to read them.
-  - **rules**: the first department with one of its words in the message.
   - **chosen**: the department the customer picked, where they could pick one.
 - **What the customer is told first**: their ticket's number is added after it.
 - **Days a resolved ticket can be reopened**: a customer who writes back within these days reopens their ticket; later, they get a new ticket that says which one it follows.
@@ -111,7 +111,7 @@ The first person to answer a ticket is the one it is assigned to; from then on, 
 **An IT help desk for your staff** and **An HR help desk for your staff** are forms your own people fill in, signed in to Taskiem: what they need and the details. Their name and email come from their sign-in. Each request gets a ticket number, shown when they send it, and goes to the people who look after that kind of request; the member who asked hears every answer on WhatsApp, Telegram or by email, like a message to your team.
 
 - **Kinds of request** work like departments. IT's are Accounts and access, Hardware, Software, Network and Other, answered by the **it** role; HR's are Leave, Payroll, Benefits and Policy, answered by **hr**, and Confidential, answered by **hr_lead**, so a complaint or personal matter reaches only the people you give that role. Change them as you like, and give the roles to the right people under **Members**.
-- HR requests are sorted by your words (**rules**) unless you choose **ai**, since they can be personal: with rules, nothing your staff write goes to an AI model.
+- HR requests are sorted by your words (**rules**), as every ticket template is unless you choose **ai**. Think twice before choosing **ai** here: HR requests can be personal, and with rules nothing your staff write goes to an AI model.
 - **Kinds of request a manager approves** (HR only; Leave unless you change it, or **none**): those requests first go to the people with the **Who approves** role (manager unless you change it) to approve or decline in Taskiem, WhatsApp or Telegram. Nobody approves their own request. The member hears the decision; HR is told, and finishes an approved request; a declined one, or one no manager decided within three days, is resolved.
 - They answer with **Answer customers' tickets**, and **Follow up tickets nobody has answered** reminds them, as for customers.
 - Staff requests are kept in the same **Tickets** table as your customers' tickets. Anyone who may open your tables can read them, HR's included: give table access only to people who may see them.
