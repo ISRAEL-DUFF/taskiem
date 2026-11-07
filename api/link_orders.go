@@ -531,7 +531,12 @@ func (s *Server) receiptStep(w http.ResponseWriter, r *http.Request, short bool)
 		}
 	}
 	p := principalFrom(r.Context())
+	var reference, supplier string
 	told, err := s.settleReceipt(r.Context(), p.TenantID, id, in.Counts, actorOf(p), p.Actor(), func(tx pgx.Tx, ref string) error {
+		reference = ref
+		if x, err := stock.PurchaseTx(r.Context(), tx, p.TenantID, id, false); err == nil {
+			supplier = x.Supplier
+		}
 		return auditTx(r, tx, map[bool]string{false: "purchase.all_came", true: "purchase.not_all_came"}[short], ref, map[string]any{"purchase_id": id})
 	})
 	if err != nil {
@@ -539,6 +544,7 @@ func (s *Server) receiptStep(w http.ResponseWriter, r *http.Request, short bool)
 		return
 	}
 	s.tellOrder(r.Context(), told, links.StepIn{Delivered: in.Counts})
+	s.diaryChange(r.Context(), p, buyerStepWords(map[bool]string{false: "all_came", true: "not_all_came"}[short], reference, supplier, 0))
 	s.purchaseAfter(w, r, id, nil)
 }
 
@@ -1268,8 +1274,10 @@ func (s *Server) confirmProposed(w http.ResponseWriter, r *http.Request) {
 		items[i] = links.BuyerItem{ID: it.ID, Name: it.Name, Unit: it.Unit}
 	}
 	var told *links.Told
+	var x stock.Purchase
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		x, err := stock.PurchaseTx(r.Context(), tx, p.TenantID, id, true)
+		var err error
+		x, err = stock.PurchaseTx(r.Context(), tx, p.TenantID, id, true)
 		if err != nil {
 			return err
 		}
@@ -1284,5 +1292,6 @@ func (s *Server) confirmProposed(w http.ResponseWriter, r *http.Request) {
 	}
 	s.acceptedByBuyer(r.Context(), told)
 	s.tellOrder(r.Context(), told, links.StepIn{})
+	s.diaryChange(r.Context(), p, buyerStepWords("confirm", x.Reference, x.Supplier, x.TotalKobo))
 	s.purchaseAfter(w, r, id, nil)
 }

@@ -8,6 +8,9 @@ import type { Service } from "./bookings";
 import type { PriceList } from "./pricelists";
 import type { TradeOrder } from "./tradeorders";
 import type { Table } from "./tables";
+import type { Purchase } from "./purchases";
+import type { Bill } from "./bills";
+import { purchaseState } from "./buyer";
 
 export type ToolKey =
   | "products"
@@ -15,7 +18,10 @@ export type ToolKey =
   | "stock"
   | "prices"
   | "orders"
-  | "tables";
+  | "tables"
+  | "purchases"
+  | "bills"
+  | "order";
 
 export type PillTone = "warn" | "lime" | "plain";
 
@@ -30,6 +36,8 @@ export interface ToolRow {
   tags: string[];
   /** What it is, for its form (a stock item, an order, a table…). */
   data?: unknown;
+  /** The linked business it is with (a buyer's orders and bills). */
+  link?: string;
 }
 
 export interface Tool {
@@ -150,7 +158,11 @@ export const TOOLS: Tool[] = [
     rows: (data) =>
       stockRows(data)
         // Every item, those with no count yet too (their first goods in).
-        .map((r) => (r.pill ? r : { ...r, pill: { text: "No count", tone: "plain" as const } }))
+        .map((r) =>
+          r.pill
+            ? r
+            : { ...r, pill: { text: "No count", tone: "plain" as const } },
+        )
         .sort(
           (a, b) =>
             Number(b.tags.includes("low")) - Number(a.tags.includes("low")),
@@ -235,6 +247,90 @@ export const TOOLS: Tool[] = [
     more: "Open tables",
   },
 ];
+
+const day = (iso: string) =>
+  new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+
+/** The buyer's tools (phase 3): the orders sent to suppliers, and their bills. */
+TOOLS.push(
+  {
+    key: "purchases",
+    title: "Your orders",
+    icon: "orders",
+    perm: "table.read",
+    url: "/v1/stock/purchases",
+    page: "/storefront/suppliers",
+    rows: (data) =>
+      ((data as { purchases?: Purchase[] } | undefined)?.purchases ?? []).map(
+        (p) => {
+          const st = purchaseState(p);
+          return {
+            id: p.id,
+            name: `${p.reference} · ${p.supplier}`,
+            sub: `${formatPrice(p.total_kobo)} · ${day(p.created_at)}`,
+            pill: {
+              text: st.word,
+              tone: st.tone === "danger" ? "warn" : st.tone,
+            },
+            href: `/purchases/${encodeURIComponent(p.id)}`,
+            tags: st.quote
+              ? ["quote"]
+              : p.status === "received" || p.status === "cancelled"
+                ? []
+                : ["open"],
+            data: p,
+            link: p.link_id,
+          };
+        },
+      ),
+    line: (r) => count(r.length, "order"),
+    badge: (r) => {
+      const n = tagged(r, "quote");
+      return n > 0 ? { text: `${n} to confirm`, tone: "warn" } : undefined;
+    },
+    chips: [
+      { label: "Open", tag: "open" },
+      { label: "Quotes", tag: "quote" },
+    ],
+    more: "Open suppliers",
+  },
+  {
+    key: "bills",
+    title: "Bills",
+    icon: "invoices",
+    perm: "invoice.read",
+    url: "/v1/bills?status=all",
+    page: "/bills",
+    rows: (data) =>
+      ((data as { bills?: Bill[] } | undefined)?.bills ?? []).map((b) => ({
+        id: b.id,
+        name: `${b.reference} · ${b.supplier_name}`,
+        sub:
+          b.due_kobo > 0
+            ? `${formatPrice(b.due_kobo)} to pay${b.due_on ? ` · due ${day(b.due_on)}` : ""}`
+            : `${formatPrice(b.amount_kobo)} · paid`,
+        pill:
+          b.status === "paid"
+            ? { text: "Paid", tone: "lime" }
+            : b.disputed
+              ? { text: "Questioned", tone: "warn" }
+              : b.status === "void"
+                ? { text: "Cancelled", tone: "plain" }
+                : { text: "To pay", tone: "warn" },
+        href: `/bills/${encodeURIComponent(b.id)}`,
+        tags: b.due_kobo > 0 && b.status !== "void" ? ["due"] : [],
+        data: b,
+        link: b.link,
+      })),
+    line: (r) => `${tagged(r, "due")} to pay`,
+    badge: (r) => {
+      const n = tagged(r, "due");
+      return n > 0 ? { text: `${n} to pay`, tone: "warn" } : undefined;
+    },
+    chips: [{ label: "To pay", tag: "due" }],
+    more: "Open bills",
+  },
+);
 
 /** The tools a person may open, matching what follows "/" (a word's start). */
 export function toolsFor(can: (perm: string) => boolean, query = ""): Tool[] {

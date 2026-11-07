@@ -459,6 +459,7 @@ func (s *Server) purchaseStep(w http.ResponseWriter, r *http.Request, action str
 		if err := s.waDrainOutbox(r.Context(), p.TenantID); err != nil {
 			s.Logger.Warn("stock: sending an order", "err", err)
 		}
+		s.diaryChange(r.Context(), p, buyerStepWords("send", x.Reference, x.Supplier, x.TotalKobo))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"purchase": x})
 }

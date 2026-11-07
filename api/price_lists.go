@@ -337,7 +337,13 @@ func (s *Server) putLinkPrices(w http.ResponseWriter, r *http.Request) {
 	}
 	p := principalFrom(r.Context())
 	out := linkPricesOut{Link: link, Items: []links.PriceItem{}}
+	var before []links.PriceItem
+	var buyer string
 	if err := s.tx(r, func(tx pgx.Tx) error {
+		_, before, _, _ = links.LinkPricesTx(r.Context(), tx, p.TenantID, link)
+		if l, err := links.GetTx(r.Context(), tx, link); err == nil {
+			buyer = l.Name
+		}
 		if err := links.SetOverridesTx(r.Context(), tx, p.TenantID, link, in.Prices, p.Actor()); err != nil {
 			return err
 		}
@@ -354,7 +360,24 @@ func (s *Server) putLinkPrices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.mirrorPrices(r.Context(), p.TenantID, []uuid.UUID{link})
+	s.diaryChange(r.Context(), p, linkPriceWords(before, out.Items, buyer)...)
 	writeJSON(w, http.StatusOK, out)
+}
+
+// linkPriceWords are the diary lines for a buyer's own prices changed:
+// "Price of Rice for Ada's Kitchen: ₦76,000 → ₦78,000".
+func linkPriceWords(before, after []links.PriceItem, buyer string) []string {
+	was := map[string]int64{}
+	for _, it := range before {
+		was[it.ItemID] = it.PriceKobo
+	}
+	var out []string
+	for _, it := range after {
+		if old, ok := was[it.ItemID]; ok && old != it.PriceKobo {
+			out = append(out, fmt.Sprintf("Price of %s for %s: %s → %s", it.Name, buyer, naira(old), naira(it.PriceKobo)))
+		}
+	}
+	return out
 }
 
 type supplierPricesOut struct {

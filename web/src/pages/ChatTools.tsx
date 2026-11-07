@@ -6,6 +6,9 @@ import {
   type KeyboardEvent,
 } from "react";
 import type { Prefill } from "../lib/intents";
+import type { Purchase } from "../lib/purchases";
+import type { Bill } from "../lib/bills";
+import { BillView, PurchaseView } from "./ChatBuyer";
 import { Link } from "react-router-dom";
 import { get } from "../api";
 import { useAuth } from "../auth";
@@ -58,6 +61,10 @@ function remember(k: ToolKey) {
     // Storage blocked: no recent tools.
   }
 }
+
+/** The rows with one business (rows with no business stay). */
+const inScope = (rows: ToolRow[], scope?: string) =>
+  scope ? rows.filter((r) => r.link === undefined || r.link === scope) : rows;
 
 /** A tool's rows, "failed" when they could not be loaded. */
 type Loaded = ToolRow[] | "failed";
@@ -123,16 +130,48 @@ export function ToolsPanel({
   onOpen,
   onClose,
   leaving = false,
+  scope,
+  supplier,
 }: {
   /** What follows "/" in the box, when it was typed. */
   query: string;
   onOpen: (k: ToolKey, from: DOMRect) => void;
   onClose: () => void;
   leaving?: boolean;
+  /** The business's conversation it is open in: its orders and bills. */
+  scope?: string;
+  /** In a supplier's conversation (they share prices): ordering comes first. */
+  supplier?: string;
 }) {
   const { can } = useAuth();
-  const tools = toolsFor(can, query);
-  const { rows } = useToolRows(tools);
+  const listed = toolsFor(can, query);
+  const { rows: loaded } = useToolRows(listed);
+  const rows: typeof loaded = Object.fromEntries(
+    Object.entries(loaded).map(([k, r]) => [
+      k,
+      Array.isArray(r) ? inScope(r, scope) : r,
+    ]),
+  );
+  const q = query.trim().toLowerCase();
+  const ordering =
+    supplier && mayEdit("order", can) && (!q || "order".startsWith(q));
+  const tools: Tool[] = ordering
+    ? [
+        {
+          key: "order",
+          title: "Order",
+          icon: "orders",
+          perm: "table.edit",
+          url: "",
+          page: "/storefront/suppliers",
+          rows: () => [],
+          line: () => `From ${supplier}`,
+          more: "",
+        },
+        ...listed,
+      ]
+    : listed;
+  if (ordering) rows.order = [];
   const recent = recentTools()
     .map((k) => tools.find((t) => t.key === k))
     .filter((t): t is Tool => !!t);
@@ -246,6 +285,11 @@ export function mayEdit(tool: ToolKey, can: (p: string) => boolean): boolean {
       return can("table.edit");
     case "services":
       return can("table.edit") && can("storefront.manage");
+    case "purchases":
+    case "order":
+      return can("table.edit");
+    case "bills":
+      return can("invoice.manage");
     default:
       return can("storefront.manage");
   }
@@ -257,12 +301,14 @@ function Detail({
   onSaved,
   prefill,
   canEdit,
+  onReorder,
 }: {
   tool: ToolKey;
   row: ToolRow | "add";
   onSaved: (line: string | null) => void;
   prefill?: Prefill;
   canEdit: boolean;
+  onReorder?: (p: Purchase) => void;
 }) {
   if (row === "add")
     return tool === "services" ? (
@@ -321,6 +367,23 @@ function Detail({
           canEdit={canEdit}
         />
       );
+    case "purchases":
+      return (
+        <PurchaseView
+          purchase={row.data as Purchase}
+          onSaved={onSaved}
+          canEdit={canEdit}
+          onReorder={
+            onReorder && (row.data as Purchase).link_id ? onReorder : undefined
+          }
+        />
+      );
+    case "bills":
+      return (
+        <BillView bill={row.data as Bill} onSaved={onSaved} canEdit={canEdit} />
+      );
+    case "order":
+      return null;
   }
 }
 
@@ -339,10 +402,16 @@ export function ToolSheet({
   onClose,
   onSaved,
   start,
+  scope,
+  onReorder,
 }: {
   tool: ToolKey;
   from?: DOMRect | null;
   onClose: () => void;
+  /** The business's conversation it is open in: its orders and bills only. */
+  scope?: string;
+  /** Your orders: an order again, in the Order sheet. */
+  onReorder?: (p: Purchase) => void;
   /** Where a typed request points: a row, or a new one, filled in. */
   start?: { rowId?: string; add?: boolean; prefill?: Prefill };
   /** Tells a change (its diary line). */
@@ -365,11 +434,18 @@ export function ToolSheet({
   useEffect(() => {
     if (started.current || !start?.rowId || !Array.isArray(rows)) return;
     started.current = true;
-    const r = rows.find((x) => x.id === start.rowId);
+    // By its id, or by its number (a bill's card names it by its number).
+    const r = rows.find(
+      (x) =>
+        x.id === start.rowId ||
+        (x.data as { reference?: string } | undefined)?.reference ===
+          start.rowId,
+    );
     if (r) setOpen(r);
   }, [rows, start?.rowId]);
   if (!tool) return null;
-  const list = Array.isArray(rows) ? rows : undefined;
+  // In a business's conversation, the orders and bills with that business.
+  const list = Array.isArray(rows) ? inScope(rows, scope) : undefined;
   const shown = list ? filterRows(list, chip, search) : [];
   const name = tool.title.toLowerCase();
   const done = (line: string | null) => {
@@ -420,6 +496,7 @@ export function ToolSheet({
           onSaved={done}
           prefill={start?.prefill}
           canEdit={mayEdit(key, can)}
+          onReorder={onReorder}
         />
       ) : (
         <>

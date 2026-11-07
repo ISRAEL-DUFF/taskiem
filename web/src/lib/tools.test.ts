@@ -34,7 +34,7 @@ describe("the chat's tools", () => {
   });
   it("offers only the tools a person may open, matching what follows /", () => {
     const can = (p: string) => p === "table.read";
-    expect(toolsFor(can).map((t) => t.key)).toEqual(["products", "stock", "tables"]);
+    expect(toolsFor(can).map((t) => t.key)).toEqual(["products", "stock", "tables", "purchases"]);
     expect(toolsFor(() => true, "pri").map((t) => t.key)).toEqual(["prices"]);
     expect(toolsFor(() => true, "lists").map((t) => t.key)).toEqual(["prices"]);
   });

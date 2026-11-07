@@ -186,7 +186,72 @@ and price, and each change shows as a diary line (`web/e2e/chat-tools-work.spec.
   shares carries none yet); requests the model reads offer prices, stock in and
   new services, and "accept order" only from the browser's patterns.
 
-## 5. Tests
+## 5. Phase 3: the buyer's tools
+
+The same conversation, from the other side: a business buying from a linked
+supplier orders, follows its orders and pays its bills where it talks to them.
+Everything goes through the APIs the buyer's pages already use (price lists and
+item links, purchase orders, bills); the chat adds no new kind of record.
+
+**Where they show.** In a conversation with a business that shares a price list
+with us (`/v1/link-chats/{link}/items` answers `whose: theirs`), to someone who
+may change stock (`table.edit`):
+
+- an **Order** button in the conversation's head, and **Order** first in the
+  tools panel ("From Bayo Rice");
+- **Order** on a live card of their item (it opens the sheet with that item in
+  the bag; from the phone, or with chat tools off, the prices page as before);
+- **View order** on a card of our order with them, **View invoice** and **Pay
+  ₦X** on a card of their invoice: each opens it in a sheet beside the chat.
+
+Two more tools in every panel: **Your orders** (`table.read`, the orders sent to
+suppliers, "3 to confirm" when they wait on us) and **Bills** (`invoice.read`,
+"2 to pay"). In a business's conversation both list only what is with that
+business.
+
+**Order** (the Buyer design). Their price list as rows, each with a stepper:
+the first tap takes their least ("min 2"), then one at a time, down to none; an
+item not available now cannot be added. A pine bar floats over the list with
+how many items and the total, and **Review order**. Reviewing shows the lines
+and the total; says once which of our items each of theirs is (the same name is
+found first, or a new item of ours), which is remembered as the item link; a
+note for them. When they are not yet one of our suppliers, it asks which of
+ours they are, or makes them one with a phone number, and links it, so the
+order goes to them on Taskiem. **Place order** drafts the order at their price
+for us and sends it; **Ask for a quote** sends the lines to them as a message
+instead. The tick, then the sheet goes.
+
+**Your orders.** An order's steps (Placed, Accepted, On the way, Delivered), its
+lines and what they said; what we can do now: confirm their quote, accept their
+change, say all came, cancel; and **Reorder**, which opens Order with the last
+order's lines at today's prices (their least where it went up, and nothing
+they no longer offer).
+
+**Bills.** A pine hero with what is left to pay and how much is paid, the lines,
+the account to transfer to with the bill's number; **Pay ₦X** opens the
+supplier's own checkout (their invoice page, a card or a transfer) in a new
+tab, and **Pay from Taskiem** where the business pays bills by a workflow;
+**Question it** and **I paid outside Taskiem**, each telling the supplier.
+
+**Diary lines** for the buyer's steps, kept and told like the seller's (§4):
+"Sent order PO-0042 to Bayo Rice: ₦234,000", "Confirmed Bayo Rice's quote for
+order PO-0042", "All of order PO-0042 came from Bayo Rice", "Paying INV-0107
+from Taskiem: ₦304,000 to Bayo Rice", "Told Bayo Rice you paid ₦50,000 of
+INV-0107 outside Taskiem", "Questioned INV-0107 from Bayo Rice". The seller's
+price for one buyer is a line too: "Price of Rice 50kg for Ada's Kitchen:
+₦76,000 → ₦78,000". Order cards now carry the order's total on both sides.
+
+**From the phone.** "tools" lists Your orders and Bills with the rest, and
+"/bills" opens Bills on the web.
+
+**Done when** the first slice's trade runs end to end between two businesses:
+the seller changes the buyer's price from chat (a diary line); the buyer tags
+the item, sees its card, and orders from the price list; the seller sees the
+order's card and accepts it; the invoice arrives as the buyer's bill and is paid
+on the seller's checkout; both see the order and the invoice in their history.
+`api/chat_trade_test.go` runs exactly that.
+
+## 6. Tests
 
 - `api/chat_tools_test.go`: the switch (off by default, a viewer refused, on for
   everyone, off again); on, names straight to businesses with and without `...`,
@@ -217,3 +282,11 @@ and price, and each change shows as a diary line (`web/e2e/chat-tools-work.spec.
 - Unit tests: `lib/toolforms`, `lib/intents`, `lib/moments`.
 - Unit tests: `lib/tools`, `lib/cardframe`, `lib/mentions` (the groups),
   `lib/sheetDrag`, `lib/chattools`.
+- `api/chat_trade_test.go`: the five-step trade between two businesses (§5).
+- `api/chat_tool_requests_test.go`: Your orders and Bills in "tools", and "/bills".
+- `api/chat_tools_internal_test.go`: the buyer's diary words.
+- `web/e2e/chat-buyer.spec.ts`: on a phone and a computer, Order from the
+  conversation's head (steppers, their least, the bag, review, our item found by
+  its name, the note, placed and sent), Ask for a quote, a bill paid on their
+  checkout and questioned, and Reorder from Your orders; axe in both themes.
+- Unit tests: `lib/buyer` (steppers, the bag, the quote, an order's state, reorder).

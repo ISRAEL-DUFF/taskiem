@@ -41,6 +41,9 @@ var chatTools = []chatTool{
 	{"prices", "Price lists", PermStorefrontManage},
 	{"orders", "Orders", PermStorefrontManage},
 	{"tables", "Tables", PermTableRead},
+	// A buyer's (phase 3): the orders sent to suppliers, and their bills.
+	{"purchases", "Your orders", PermTableRead},
+	{"bills", "Bills", PermInvoiceRead},
 }
 
 // toolRequest is a typed request: the tool, the row it is about (or a new

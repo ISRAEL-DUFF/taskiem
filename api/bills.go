@@ -776,14 +776,17 @@ func (s *Server) payBill(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	p := principalFrom(r.Context())
+	var bill links.Bill
 	pay, err := s.startBillPay(r.Context(), p.TenantID, chi.URLParam(r, "id"), in.AmountKobo, p.ActorType()+":"+p.Actor(), p.Actor(),
 		func(tx pgx.Tx, b links.Bill, pay links.BillPayment) error {
+			bill = b
 			return auditTx(r, tx, "bill.pay", b.Reference, map[string]any{"amount_kobo": pay.AmountKobo, "payment": pay.ID})
 		})
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
+	s.diaryChange(r.Context(), p, buyerStepWords("pay", bill.Reference, bill.SupplierName, pay.AmountKobo))
 	writeJSON(w, http.StatusAccepted, billPayOut{Payment: pay, RunID: *pay.RunID})
 }
 
@@ -965,6 +968,7 @@ func (s *Server) declareBillPaid(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.tellNotice(r.Context(), seller, p.TenantID, n, "/invoices/"+b.Reference)
+	s.diaryChange(r.Context(), p, buyerStepWords("declare", b.Reference, b.SupplierName, in.AmountKobo))
 	writeJSON(w, http.StatusOK, b)
 }
 
@@ -997,6 +1001,7 @@ func (s *Server) queryBill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.tellNotice(r.Context(), seller, p.TenantID, n, "/invoices/"+b.Reference)
+	s.diaryChange(r.Context(), p, buyerStepWords("query", b.Reference, b.SupplierName, 0))
 	writeJSON(w, http.StatusOK, b)
 }
 

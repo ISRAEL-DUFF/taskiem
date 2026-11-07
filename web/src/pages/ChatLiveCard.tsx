@@ -22,12 +22,17 @@ export interface Live {
   link: string;
   /** Our own catalogue's photos, by item (a card of our own product). */
   photos?: Record<string, string>;
+  /** Order opens the Order sheet with this item in the bag (else the page). */
+  onOrder?: (itemId: string, from: DOMRect) => void;
 }
 
-const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+const same = (a: string, b: string) =>
+  a.trim().toLowerCase() === b.trim().toLowerCase();
 
 /** The things a message tags that have a card: its first product or service. */
-export function liveMention(mentions: Mention[] | undefined): Mention | undefined {
+export function liveMention(
+  mentions: Mention[] | undefined,
+): Mention | undefined {
   return mentions?.find((m) => m.kind === "item" || m.kind === "service");
 }
 
@@ -52,7 +57,8 @@ export function LiveCard({ m, live }: { m: Mention; live: Live }) {
     );
   const now = live.items.find((it) => it.item_id === m.item_id);
   const price = now?.price_kobo ?? m.price_kobo;
-  const changed = now && m.price_kobo !== undefined && now.price_kobo !== m.price_kobo;
+  const changed =
+    now && m.price_kobo !== undefined && now.price_kobo !== m.price_kobo;
   const unit = now?.unit ?? m.unit;
   const mine = live.stock.find((it) => same(it.name, m.name));
   return (
@@ -69,9 +75,13 @@ export function LiveCard({ m, live }: { m: Mention; live: Live }) {
           <span className="tk-kicker">Product</span>
           <span className="tk-live-name">{m.name}</span>
           <span className="tk-live-sub">
-            {price !== undefined ? `${formatPrice(price)}${unit ? ` a ${unit}` : ""}` : "No price"}
+            {price !== undefined
+              ? `${formatPrice(price)}${unit ? ` a ${unit}` : ""}`
+              : "No price"}
             {now && now.min_quantity > 1 ? ` · min ${now.min_quantity}` : ""}
-            {changed && m.price_kobo !== undefined ? ` (was ${formatPrice(m.price_kobo)})` : ""}
+            {changed && m.price_kobo !== undefined
+              ? ` (was ${formatPrice(m.price_kobo)})`
+              : ""}
             {now && !now.available ? " · not available now" : ""}
           </span>
         </span>
@@ -80,16 +90,40 @@ export function LiveCard({ m, live }: { m: Mention; live: Live }) {
         <span className="tk-live-foot">
           {mine && mine.stock !== null ? (
             <Pill tone={mine.low || mine.stock <= 0 ? "warn" : "plain"}>
-              Your stock: {mine.stock <= 0 ? "none" : `${quantity(mine.stock, mine.unit)}${mine.low ? " left" : ""}`}
+              Your stock:{" "}
+              {mine.stock <= 0
+                ? "none"
+                : `${quantity(mine.stock, mine.unit)}${mine.low ? " left" : ""}`}
             </Pill>
           ) : (
             <span />
           )}
-          {live.whose === "theirs" && now?.available !== false && (
-            <Link className="tk-btn primary" to={`/storefront/suppliers/${encodeURIComponent(live.link)}/prices`}>
-              Order<span className="sr-only"> {m.name}</span>
-            </Link>
-          )}
+          {live.whose === "theirs" &&
+            now?.available !== false &&
+            (live.onOrder && m.item_id ? (
+              <button
+                type="button"
+                className="tk-btn primary"
+                onClick={(e) =>
+                  live.onOrder?.(
+                    m.item_id as string,
+                    e.currentTarget
+                      .closest(".tk-live")
+                      ?.getBoundingClientRect() ??
+                      e.currentTarget.getBoundingClientRect(),
+                  )
+                }
+              >
+                Order<span className="sr-only"> {m.name}</span>
+              </button>
+            ) : (
+              <Link
+                className="tk-btn primary"
+                to={`/storefront/suppliers/${encodeURIComponent(live.link)}/prices`}
+              >
+                Order<span className="sr-only"> {m.name}</span>
+              </Link>
+            ))}
         </span>
       )}
     </article>

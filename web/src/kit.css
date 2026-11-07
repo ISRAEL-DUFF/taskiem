@@ -268,3 +268,60 @@ button.tk-table-row { display: grid; gap: 2px; width: 100%; padding: 0; border: 
   :root[data-theme="system"] .tk-head-link, :root[data-theme="system"] .tk-photo-none { color: var(--brand-dark); }
   :root[data-theme="system"] .tk-switch[aria-checked="true"] { background: var(--brand-dark); }
 }
+
+/* The buyer's tools (chat-tools.md §6): ordering from a price list (the
+   Buyer design), and a bill opened in place. */
+.tk-order-who { display: flex; align-items: center; gap: 12px; margin: 0 20px 12px; }
+.tk-order-who .chat-avatar { width: 40px; height: 40px; }
+.tk-order-list { list-style: none; margin: 0; padding: 0 20px 96px; }
+.tk-order-row { display: flex; align-items: center; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--border); }
+.tk-order-row .tk-row-words { flex: 1; min-width: 0; }
+.tk-qty { flex: none; display: inline-flex; align-items: center; border-radius: 999px; background: var(--tk-soft); color: var(--text); transition: background var(--tk-quick, 0.2s) var(--ease), color var(--tk-quick, 0.2s) var(--ease); }
+.tk-order-row.on .tk-qty { background: var(--brand); color: #ffffff; }
+:root[data-theme="dark"] .tk-order-row.on .tk-qty { background: var(--brand-dark); color: var(--brand-dark-text); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .tk-order-row.on .tk-qty { background: var(--brand-dark); color: var(--brand-dark-text); } }
+.tk-qty button { width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: none; box-shadow: none; color: inherit; font-size: 20px; font-weight: 600; cursor: pointer; }
+.tk-qty button:hover:not(:disabled) { background: none; color: inherit; }
+.tk-qty button:disabled { opacity: 0.35; cursor: default; }
+.tk-qty button:focus-visible { box-shadow: var(--ring); }
+.tk-qty span { min-width: 28px; text-align: center; font-weight: 800; font-size: 15px; font-variant-numeric: tabular-nums; }
+.tk-qty button:active:not(:disabled) { transform: scale(0.9); }
+
+/* The bag bar floats over the list: pine, its button lime. */
+.tk-sheet-foot:has(.tk-bag) { border-top: 0; padding-top: 0; background: transparent; }
+.tk-bag { display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 20px; border-radius: 22px; background: var(--brand); color: #ffffff; box-shadow: 0 20px 40px -14px rgba(13, 59, 46, 0.6); animation: tk-rise 0.32s var(--ease) both; }
+.tk-bag > span { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.tk-bag-count { font-size: 13px; opacity: 0.8; }
+.tk-bag-total { font-size: 20px; font-weight: 800; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.tk-bag-go { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 52px; padding: 0 20px; border: 0; box-shadow: none; border-radius: 999px; background: var(--brand-dark); color: var(--brand); font-weight: 800; font-size: 15px; cursor: pointer; }
+.tk-bag-go:hover:not(:disabled) { background: var(--brand-dark-hover); color: var(--brand); }
+.tk-bag-go:disabled { opacity: 0.55; cursor: default; }
+.tk-bag-go svg { width: 18px; height: 18px; }
+.tk-bag-go:focus-visible { box-shadow: 0 0 0 3px var(--brand), 0 0 0 5px var(--brand-dark); }
+@keyframes tk-rise { from { transform: translateY(24px); opacity: 0; } }
+
+.tk-review-foot { display: grid; gap: 12px; }
+.tk-review-total { display: flex; justify-content: space-between; align-items: baseline; font-size: 15px; }
+.tk-review-total b { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+/* A bill: a pine hero with the money, lime on pine. */
+.tk-bill-hero { display: grid; gap: 4px; padding: 20px; border-radius: 22px; background: var(--brand); color: #ffffff; position: relative; }
+.tk-bill-hero .tk-kicker { color: var(--brand-dark); }
+.tk-bill-hero b { font-size: 32px; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.tk-bill-hero .tk-row-sub { color: rgba(255, 255, 255, 0.82); }
+.tk-bill-hero .tk-pill { position: absolute; top: 18px; right: 18px; }
+.tk-bill-hero .tk-pill.lime { background: var(--brand-dark); color: var(--brand); }
+.tk-bill-more { display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* In a supplier's conversation: Order beside the search. */
+.tk-head-order { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border: 0; box-shadow: none; border-radius: 999px; background: var(--brand); color: #ffffff; font-weight: 700; font-size: 14px; cursor: pointer; }
+.tk-head-order:hover { background: var(--brand-hover); color: #ffffff; }
+.tk-head-order svg { width: 18px; height: 18px; }
+:root[data-theme="dark"] .tk-head-order { background: var(--brand-dark); color: var(--brand-dark-text); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .tk-head-order { background: var(--brand-dark); color: var(--brand-dark-text); } }
+/* A narrow phone keeps the name: Order is a round button, like search. */
+@media (max-width: 420px) {
+  .tk-head-order { width: 40px; padding: 0; justify-content: center; }
+  .tk-head-order-word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
+@media (prefers-reduced-motion: reduce) { .tk-bag { animation: none; } }

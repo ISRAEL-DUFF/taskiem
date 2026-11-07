@@ -146,6 +146,29 @@ func orderStepWords(step, reference, buyer string) string {
 	return fmt.Sprintf("Order %s from %s: %s", reference, buyer, strings.ReplaceAll(step, "_", " "))
 }
 
+// buyerStepWords is a diary line for a buyer's own step with a supplier:
+// an order sent, a quote confirmed, all of it come, a bill paid from
+// Taskiem, paid outside it, or questioned.
+func buyerStepWords(step, reference, supplier string, kobo int64) string {
+	switch step {
+	case "send":
+		return fmt.Sprintf("Sent order %s to %s: %s", reference, supplier, naira(kobo))
+	case "confirm":
+		return fmt.Sprintf("Confirmed %s's quote for order %s", supplier, reference)
+	case "all_came":
+		return fmt.Sprintf("All of order %s came from %s", reference, supplier)
+	case "not_all_came":
+		return fmt.Sprintf("Not all of order %s came from %s", reference, supplier)
+	case "pay":
+		return fmt.Sprintf("Paying %s from Taskiem: %s to %s", reference, naira(kobo), supplier)
+	case "declare":
+		return fmt.Sprintf("Told %s you paid %s of %s outside Taskiem", supplier, naira(kobo), reference)
+	case "query":
+		return fmt.Sprintf("Questioned %s from %s", reference, supplier)
+	}
+	return fmt.Sprintf("%s with %s: %s", reference, supplier, strings.ReplaceAll(step, "_", " "))
+}
+
 // tellDiary tells the person on their own chat apps, unless their changes
 // setting says not to (outside WhatsApp's window as the alert template):
 // one change as it is, several as one message.

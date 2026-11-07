@@ -71,8 +71,12 @@ func TestChatToolRequests(t *testing.T) {
 	// On WhatsApp: the tools as links, one by its start, and a request
 	// answered with its form's link, filled in.
 	got := w.say(t, on, "tools")
-	if !strings.Contains(got, "• Products: ") || !strings.Contains(got, "/chat?tool=products&with=taskiem") || !strings.Contains(got, "• Orders: ") {
+	if !strings.Contains(got, "• Products: ") || !strings.Contains(got, "/chat?tool=products&with=taskiem") || !strings.Contains(got, "• Orders: ") ||
+		!strings.Contains(got, "• Your orders: ") || !strings.Contains(got, "/chat?tool=bills&with=taskiem") {
 		t.Fatalf("tools: %q", got)
+	}
+	if got := w.say(t, on, "/bills"); !strings.Contains(got, "tool=bills") || strings.Contains(got, "Products") {
+		t.Fatalf("/bills: %q", got)
 	}
 	if got := w.say(t, on, "/pro"); strings.Contains(got, "Orders") || !strings.Contains(got, "tool=products") {
 		t.Fatalf("/pro: %q", got)

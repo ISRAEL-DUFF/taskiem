@@ -114,7 +114,15 @@ const PAGE = 50;
 /** What can be done from a card, while it is its document's newest:
  * accept or decline a new order, accept a change, say all came, settle a
  * query, pay a bill (§5.5). */
-function CardActions({ card, onDone }: { card: DocCard; onDone: () => void }) {
+function CardActions({
+  card,
+  onDone,
+  onOpenDoc,
+}: {
+  card: DocCard;
+  onDone: () => void;
+  onOpenDoc?: (card: DocCard, from: DOMRect) => void;
+}) {
   const { can } = useAuth();
   const act = useAction();
   const { confirm, node: confirmNode } = useConfirm();
@@ -205,7 +213,22 @@ function CardActions({ card, onDone }: { card: DocCard; onDone: () => void }) {
       break;
     case "bill:bill":
       if (can("invoice.manage"))
-        buttons = (
+        buttons = onOpenDoc ? (
+          // Chat tools: the bill opens in place, Pay leads to their checkout.
+          <button
+            type="button"
+            className="small primary"
+            onClick={(e) =>
+              onOpenDoc(card, e.currentTarget.getBoundingClientRect())
+            }
+          >
+            Pay
+            {card.amount_kobo !== undefined
+              ? ` ${formatPrice(card.amount_kobo)}`
+              : ""}
+            {who}
+          </button>
+        ) : (
           <Link className="button small primary" to={cardHref(card)}>
             Pay{who}
           </Link>
@@ -502,6 +525,7 @@ function Bubble({
   arrive = false,
   cheer = false,
   live,
+  onOpenDoc,
 }: {
   m: LinkMessage;
   other: string;
@@ -532,6 +556,8 @@ function Bubble({
   cheer?: boolean;
   /** Chat tools: a tagged product or service shows as a live card. */
   live?: Live;
+  /** Chat tools: a card of our order or bill opens it in a sheet. */
+  onOpenDoc?: (card: DocCard, from: DOMRect) => void;
 }) {
   const card = m.kind === "card" ? m.card : undefined;
   const fold = useFold(m.body ?? "");
@@ -749,13 +775,34 @@ function Bubble({
       {cheer && <span className="tk-cheer" aria-hidden="true" />}
       {card ? (
         <CardFrame card={card} title={cardLine(card, m.mine, other)}>
-          <Link to={cardHref(card)} className="button small">
-            {card.doc === "order" || card.doc === "purchase"
-              ? "View order"
-              : "View invoice"}
-            <span className="sr-only"> {card.reference}</span>
-          </Link>
-          {latest && !m.mine && <CardActions card={card} onDone={onDone} />}
+          {onOpenDoc && (card.doc === "purchase" || card.doc === "bill") ? (
+            <button
+              type="button"
+              className="button small"
+              onClick={(e) =>
+                onOpenDoc(
+                  card,
+                  e.currentTarget
+                    .closest(".tk-chatcard")
+                    ?.getBoundingClientRect() ??
+                    e.currentTarget.getBoundingClientRect(),
+                )
+              }
+            >
+              {card.doc === "purchase" ? "View order" : "View invoice"}
+              <span className="sr-only"> {card.reference}</span>
+            </button>
+          ) : (
+            <Link to={cardHref(card)} className="button small">
+              {card.doc === "order" || card.doc === "purchase"
+                ? "View order"
+                : "View invoice"}
+              <span className="sr-only"> {card.reference}</span>
+            </Link>
+          )}
+          {latest && !m.mine && (
+            <CardActions card={card} onDone={onDone} onOpenDoc={onOpenDoc} />
+          )}
         </CardFrame>
       ) : (
         <>
@@ -1006,7 +1053,9 @@ export function ConversationPane({
         ? get<Catalogue>("/v1/storefront/catalogue").then(
             (r) =>
               Object.fromEntries(
-                r.items.map((it) => [it.id, thumb(it.photo)]).filter((x): x is [string, string] => !!x[1]),
+                r.items
+                  .map((it) => [it.id, thumb(it.photo)])
+                  .filter((x): x is [string, string] => !!x[1]),
               ),
             () => ({}) as Record<string, string>,
           )
@@ -1019,7 +1068,15 @@ export function ConversationPane({
     whose: priced.data?.whose ?? "",
     stock: ownStock.data ?? [],
     link: conv.link,
+    onOrder: (itemId, from) => c.openTool("order", from, { order: { itemId } }),
   };
+  // We buy from them: the Order sheet, and our orders and bills with them.
+  const supplies =
+    chatTools && priced.data?.whose === "theirs" && can("table.edit");
+  const openDoc = (card: DocCard, from: DOMRect) =>
+    c.openTool(card.doc === "purchase" ? "purchases" : "bills", from, {
+      rowId: card.id,
+    });
   const c = useComposer<LinkMessage>({
     draftKey: conv.link,
     rules: BUSINESS_FILES,
@@ -1065,6 +1122,9 @@ export function ConversationPane({
     tools: chatTools,
     diaryWhere: conv.link,
     onDiary: () => afterDiary.current(),
+    scope: chatTools
+      ? { link: conv.link, name: conv.name, supplies: !!supplies }
+      : undefined,
     // We are typing: the other side's typing line, told at most every 3 s.
     onType: (v) => {
       // "/pro" opens the tools and "@Taskiem" asks Taskiem: neither reaches
@@ -1515,20 +1575,35 @@ export function ConversationPane({
           ) : undefined
         }
         actions={
-          <button
-            type="button"
-            className="icon-button"
-            aria-label="Search this conversation"
-            aria-expanded={searchOpen}
-            ref={searchButton}
-            data-testid="chat-search-open"
-            onClick={() => {
-              setInfoOpen(false);
-              setSearchOpen(!searchOpen);
-            }}
-          >
-            <Icon name="search" />
-          </button>
+          <>
+            {supplies && write && (
+              <button
+                type="button"
+                className="tk-head-order"
+                data-testid="chat-order"
+                onClick={(e) =>
+                  c.openTool("order", e.currentTarget.getBoundingClientRect())
+                }
+              >
+                <Icon name="orders" />
+                <span className="tk-head-order-word">Order</span>
+              </button>
+            )}
+            <button
+              type="button"
+              className="icon-button"
+              aria-label="Search this conversation"
+              aria-expanded={searchOpen}
+              ref={searchButton}
+              data-testid="chat-search-open"
+              onClick={() => {
+                setInfoOpen(false);
+                setSearchOpen(!searchOpen);
+              }}
+            >
+              <Icon name="search" />
+            </button>
+          </>
         }
         items={(close) => (
           <>
@@ -1626,6 +1701,7 @@ export function ConversationPane({
               arrive={!!m.card && fresh(m)}
               cheer={cheer === m.id}
               live={chatTools ? liveNow : undefined}
+              onOpenDoc={chatTools ? openDoc : undefined}
             />
           )
         }

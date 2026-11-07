@@ -25,11 +25,18 @@ import { PendingFile } from "./PendingFile";
 import { AttachMenu } from "./AttachMenu";
 import { CameraSheet } from "./CameraSheet";
 import { ToolSheet, ToolsPanel } from "./ChatTools";
+import { OrderSheet, type OrderStart } from "./ChatBuyer";
 import { toolsFor, type ToolKey } from "../lib/tools";
 import type { Prefill, Request } from "../lib/intents";
 import { RequestChip } from "./RequestChip";
 
-type ToolStart = { rowId?: string; add?: boolean; prefill?: Prefill };
+type ToolStart = {
+  rowId?: string;
+  add?: boolean;
+  prefill?: Prefill;
+  /** The Order sheet: an item in the bag, or a past order again. */
+  order?: OrderStart;
+};
 import { useAuth } from "../auth";
 import { usePresence } from "../kit";
 
@@ -115,6 +122,9 @@ export type ComposerOptions<R> = {
   diaryWhere?: string;
   /** A tool saved a change: what is newer is shown. */
   onDiary?: (line: unknown) => void;
+  /** A business's conversation: its orders and bills only, and, when they
+   * share prices with us, ordering from them. */
+  scope?: { link: string; name: string; supplies: boolean };
 };
 
 export function useComposer<R>(o: ComposerOptions<R>) {
@@ -139,7 +149,11 @@ export function useComposer<R>(o: ComposerOptions<R>) {
   const mentions = useMentions(text, setText, textBox, o.sources, o.grouped);
   // The tools panel: the grid button, or "/" and a word as the whole message.
   const [toolsOpen, setToolsOpen] = useState(false);
-  const [tool, setTool] = useState<{ key: ToolKey; from?: DOMRect; start?: ToolStart }>();
+  const [tool, setTool] = useState<{
+    key: ToolKey;
+    from?: DOMRect;
+    start?: ToolStart;
+  }>();
   const { can } = useAuth();
   const slash = o.tools ? /^\/(\S*)$/.exec(text) : null;
   const toolsShown = !!o.tools && (toolsOpen || !!slash);
@@ -156,7 +170,11 @@ export function useComposer<R>(o: ComposerOptions<R>) {
   // A typed request: its tool opens at the form, filled in; the words go.
   const openRequest = (r: Request) => {
     setText("");
-    openTool(r.tool, undefined, { rowId: r.rowId, add: r.add, prefill: r.prefill });
+    openTool(r.tool, undefined, {
+      rowId: r.rowId,
+      add: r.add,
+      prefill: r.prefill,
+    });
   };
   // A voice note held and released goes at once; one tapped waits for Send.
   const sendRef = useRef<(f?: File) => void>(() => undefined);
@@ -415,11 +433,27 @@ export function ComposerView<R>({
         </Suspense>
       )}
       <MentionList m={c.mentions} />
-      {c.tool && (
+      {c.tool?.key === "order" && c.o.scope && (
+        <OrderSheet
+          link={c.o.scope.link}
+          business={c.o.scope.name}
+          from={c.tool.from}
+          start={c.tool.start?.order}
+          onClose={() => c.setTool(undefined)}
+          onPlaced={() => c.o.onDiary?.(undefined)}
+        />
+      )}
+      {c.tool && c.tool.key !== "order" && (
         <ToolSheet
           tool={c.tool.key}
           from={c.tool.from}
           start={c.tool.start}
+          scope={c.o.scope?.link}
+          onReorder={
+            c.o.scope?.supplies
+              ? (p) => c.openTool("order", undefined, { order: { last: p } })
+              : undefined
+          }
           onClose={() => c.setTool(undefined)}
           onSaved={() => {
             // The server tells the change as a diary line in the person's
@@ -427,7 +461,10 @@ export function ComposerView<R>({
             // from a business's conversation, said where it went.
             c.o.onDiary?.(undefined);
             if (c.o.diaryWhere && c.o.diaryWhere !== "taskiem")
-              toast("Saved. The change is in your Taskiem chat.", "success", { href: "/chat?with=taskiem", linkText: "Open" });
+              toast("Saved. The change is in your Taskiem chat.", "success", {
+                href: "/chat?with=taskiem",
+                linkText: "Open",
+              });
           }}
         />
       )}
@@ -451,6 +488,8 @@ export function ComposerView<R>({
               onOpen={c.openTool}
               onClose={c.closeTools}
               leaving={toolsP.leaving}
+              scope={c.o.scope?.link}
+              supplier={c.o.scope?.supplies ? c.o.scope.name : undefined}
             />
           )}
           {c.o.tools && (

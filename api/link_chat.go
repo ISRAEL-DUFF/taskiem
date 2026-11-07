@@ -24,6 +24,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/runtime"
+	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
@@ -690,9 +691,18 @@ func (s *Server) orderCards(ctx context.Context, t links.Told) uuid.UUID {
 	if !sellerTold(t.Event) {
 		seller, buyer = t.FromTenant, t.Tenant
 	}
+	// What the order comes to now (the buyer's record of it), on both cards.
+	var amount *int64
+	_ = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{buyer}, func(tx pgx.Tx) error {
+		x, err := stock.PurchaseTx(ctx, tx, buyer, t.Purchase, false)
+		if err == nil && x.TotalKobo > 0 {
+			amount = &x.TotalKobo
+		}
+		return nil
+	})
 	return s.postCards(ctx, t.Link,
-		cardSide{tenant: seller, mine: seller == t.FromTenant, card: links.DocCard{Doc: links.DocOrder, Event: t.Event, Reference: t.Reference, ID: t.Order.String()}},
-		cardSide{tenant: buyer, mine: buyer == t.FromTenant, card: links.DocCard{Doc: links.DocPurchase, Event: t.Event, Reference: t.Reference, ID: t.Purchase.String()}})
+		cardSide{tenant: seller, mine: seller == t.FromTenant, card: links.DocCard{Doc: links.DocOrder, Event: t.Event, Reference: t.Reference, ID: t.Order.String(), AmountKobo: amount}},
+		cardSide{tenant: buyer, mine: buyer == t.FromTenant, card: links.DocCard{Doc: links.DocPurchase, Event: t.Event, Reference: t.Reference, ID: t.Purchase.String(), AmountKobo: amount}})
 }
 
 // billCards writes a bill's event into both sides' conversations: the
