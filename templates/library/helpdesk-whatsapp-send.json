@@ -1,0 +1,225 @@
+{
+  "id": "helpdesk-whatsapp-send",
+  "title": "Send ticket answers from your WhatsApp number",
+  "summary": "Answers to tickets that came to your WhatsApp number go to the customer from that number.",
+  "description": "The partner of A helpdesk on your WhatsApp number: whenever an answer to a ticket that came to your WhatsApp number is saved (the first answer with the ticket's number, your team's answers from the ticket reply form, and the closing message when a customer stops answering), it is sent to the customer from your own WhatsApp number, and marked as sent. WhatsApp lets a business write freely only within 24 hours of the customer's last message; after that, the answer goes by Taskiem's messages instead (WhatsApp or Telegram where the customer asked for updates, else a text message). Answers to tickets that came another way are left alone.",
+  "category": "customers",
+  "tags": [
+    "support",
+    "tickets",
+    "helpdesk",
+    "whatsapp"
+  ],
+  "keywords": [
+    "ticket",
+    "tickets",
+    "support",
+    "helpdesk",
+    "whatsapp",
+    "answer",
+    "reply",
+    "chat"
+  ],
+  "requires": [
+    "whatsapp"
+  ],
+  "connectors": [
+    "xenibase@1",
+    "whatsapp@1",
+    "notify@1"
+  ],
+  "params": [
+    {
+      "name": "whatsapp_connection",
+      "type": "connection",
+      "connector": "whatsapp",
+      "title": "WhatsApp connection",
+      "description": "Your business's WhatsApp number your customers write to: the same as your helpdesk's.",
+      "required": false,
+      "default": "main",
+      "example": "main"
+    }
+  ],
+  "tables": [
+    {
+      "known": "tickets"
+    },
+    {
+      "known": "ticket_messages"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_helpdeskWhatsappSend",
+    "version": 1,
+    "name": "Send ticket answers from WhatsApp",
+    "description": "Sends each ticket answer left for the WhatsApp number, and marks it sent.",
+    "trigger": {
+      "type": "connector_event",
+      "config": {
+        "connector": "xenibase@1",
+        "trigger": "row_changed",
+        "connection": "data_tables",
+        "events": [
+          "INSERT"
+        ],
+        "options": {
+          "tables": [
+            "ticket_messages"
+          ]
+        }
+      }
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "record": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "reference": {
+                "type": "string"
+              },
+              "direction": {
+                "type": "string"
+              },
+              "mail": {
+                "type": "string"
+              },
+              "author": {
+                "type": "string",
+                "x-pii": "name"
+              },
+              "body": {
+                "type": "string",
+                "x-pii": "other"
+              },
+              "sent_at": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "channel": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "ticket",
+        "type": "connector",
+        "name": "Find the answer's ticket",
+        "connector": "xenibase@1",
+        "action": "read_rows",
+        "connection": "data_tables",
+        "when": "=has(trigger.body.record.direction) && trigger.body.record.direction == 'out' && trigger.body.record.?mail.orValue('') == 'whatsapp' && trigger.body.record.?sent_at.orValue(null) == null && trigger.body.record.?body.orValue('') != ''",
+        "input": {
+          "table": "tickets",
+          "filters": [
+            {
+              "column": "reference",
+              "op": "eq",
+              "value": "=trigger.body.record.reference"
+            }
+          ],
+          "limit": 1
+        }
+      },
+      {
+        "id": "how",
+        "type": "transform",
+        "name": "Within WhatsApp's 24 hours?",
+        "needs": [
+          "ticket"
+        ],
+        "config": {
+          "output": {
+            "how": "=steps.ticket.output.rows.size() == 0 || steps.ticket.output.rows[0].?customer_phone.orValue('') == '' ? 'none' : steps.ticket.output.rows[0].?last_customer_at.orValue(null) != null && timestamp(run.started_at) - timestamp(steps.ticket.output.rows[0].last_customer_at) < duration('23h30m') ? 'whatsapp' : 'message'"
+          }
+        }
+      },
+      {
+        "id": "send",
+        "type": "branch",
+        "name": "Send the answer",
+        "needs": [
+          "how"
+        ],
+        "config": {
+          "paths": [
+            {
+              "name": "whatsapp",
+              "when": "=steps.how.output.how == 'whatsapp'",
+              "steps": [
+                {
+                  "id": "chat",
+                  "type": "connector",
+                  "name": "Answer the customer from your WhatsApp number",
+                  "connector": "whatsapp@1",
+                  "action": "send_text",
+                  "connection": "{{whatsapp_connection}}",
+                  "input": {
+                    "to": "=steps.ticket.output.rows[0].customer_phone",
+                    "body": "=(trigger.body.record.body.size() > 4096 ? trigger.body.record.body.substring(0, 4096) : trigger.body.record.body)"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "message",
+              "when": "=steps.how.output.how == 'message'",
+              "steps": [
+                {
+                  "id": "message",
+                  "type": "connector",
+                  "name": "Message the customer (past WhatsApp's 24 hours)",
+                  "connector": "notify@1",
+                  "action": "message",
+                  "input": {
+                    "phone": "=steps.ticket.output.rows[0].customer_phone",
+                    "about": "='your ticket ' + steps.ticket.output.rows[0].reference",
+                    "title": "='Your ticket ' + steps.ticket.output.rows[0].reference",
+                    "message": "=(trigger.body.record.body.size() > 1500 ? trigger.body.record.body.substring(0, 1500) : trigger.body.record.body)"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "mark",
+        "type": "connector",
+        "name": "Mark the answer sent",
+        "connector": "xenibase@1",
+        "action": "update_rows",
+        "connection": "data_tables",
+        "needs": [
+          "send"
+        ],
+        "when": "=steps.how.output.how != 'none'",
+        "input": {
+          "table": "ticket_messages",
+          "key": "=trigger.body.record.id",
+          "set": {
+            "sent_at": "=run.started_at",
+            "message_id": "=steps.how.output.how == 'whatsapp' ? steps.send.output.steps.chat.?message_id.orValue('') : ''"
+          }
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "15m"
+    }
+  }
+}

@@ -1,0 +1,334 @@
+{
+  "schema": "wd-test/v1",
+  "template": "helpdesk-whatsapp-send",
+  "params": {},
+  "cases": [
+    {
+      "name": "an answer within 24 hours of the customer's message goes from the WhatsApp number and is marked sent",
+      "mocks": {
+        "chat": {
+          "output": {
+            "message_id": "wamid.R1",
+            "wa_id": "2348030000001"
+          }
+        },
+        "message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "mark": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ticket": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "T-1042",
+                "customer_phone": "+2348030000001",
+                "channel": "whatsapp",
+                "mail": "whatsapp",
+                "last_customer_at": "2099-01-01T00:00:00Z"
+              }
+            ]
+          }
+        }
+      },
+      "trigger": {
+        "event": "INSERT",
+        "body": {
+          "type": "INSERT",
+          "record": {
+            "id": 501,
+            "reference": "T-1042",
+            "direction": "out",
+            "author": "Bola",
+            "body": "Your rider is 10 minutes away.",
+            "channel": "whatsapp",
+            "mail": "whatsapp",
+            "sent_at": null
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "ticket": {
+            "filters": [
+              {
+                "column": "reference",
+                "op": "eq",
+                "value": "T-1042"
+              }
+            ]
+          },
+          "chat": {
+            "to": "+2348030000001",
+            "body": "Your rider is 10 minutes away."
+          },
+          "mark": {
+            "table": "ticket_messages",
+            "key": 501,
+            "set": {
+              "message_id": "wamid.R1"
+            }
+          }
+        },
+        "steps": {
+          "message": "not_run"
+        }
+      }
+    },
+    {
+      "name": "past WhatsApp's 24 hours the answer goes by Taskiem's messages",
+      "mocks": {
+        "chat": {
+          "output": {
+            "message_id": "wamid.R1",
+            "wa_id": "2348030000001"
+          }
+        },
+        "message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "mark": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ticket": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "T-1042",
+                "customer_phone": "+2348030000001",
+                "channel": "whatsapp",
+                "mail": "whatsapp",
+                "last_customer_at": "2020-01-01T00:00:00Z"
+              }
+            ]
+          }
+        }
+      },
+      "trigger": {
+        "event": "INSERT",
+        "body": {
+          "type": "INSERT",
+          "record": {
+            "id": 501,
+            "reference": "T-1042",
+            "direction": "out",
+            "author": "Bola",
+            "body": "Your rider is 10 minutes away.",
+            "channel": "whatsapp",
+            "mail": "whatsapp",
+            "sent_at": null
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "message": {
+            "phone": "+2348030000001",
+            "about": "your ticket T-1042",
+            "message": "Your rider is 10 minutes away."
+          },
+          "mark": {
+            "key": 501,
+            "set": {
+              "message_id": ""
+            }
+          }
+        },
+        "steps": {
+          "chat": "not_run"
+        }
+      }
+    },
+    {
+      "name": "an answer to an emailed ticket is left alone",
+      "mocks": {
+        "chat": {
+          "output": {
+            "message_id": "wamid.R1",
+            "wa_id": "2348030000001"
+          }
+        },
+        "message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "mark": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ticket": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "T-1042",
+                "customer_phone": "+2348030000001",
+                "channel": "whatsapp",
+                "mail": "whatsapp",
+                "last_customer_at": "2099-01-01T00:00:00Z"
+              }
+            ]
+          }
+        }
+      },
+      "trigger": {
+        "event": "INSERT",
+        "body": {
+          "type": "INSERT",
+          "record": {
+            "id": 501,
+            "reference": "T-1042",
+            "direction": "out",
+            "author": "Bola",
+            "body": "Your rider is 10 minutes away.",
+            "channel": "email",
+            "mail": "taskiem",
+            "sent_at": null
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "ticket": "skipped",
+          "chat": "not_run",
+          "message": "not_run",
+          "mark": "skipped"
+        }
+      }
+    },
+    {
+      "name": "an answer already sent, or a customer's own message, is left alone",
+      "mocks": {
+        "chat": {
+          "output": {
+            "message_id": "wamid.R1",
+            "wa_id": "2348030000001"
+          }
+        },
+        "message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "mark": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ticket": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "T-1042",
+                "customer_phone": "+2348030000001",
+                "channel": "whatsapp",
+                "mail": "whatsapp",
+                "last_customer_at": "2099-01-01T00:00:00Z"
+              }
+            ]
+          }
+        }
+      },
+      "trigger": {
+        "event": "INSERT",
+        "body": {
+          "type": "INSERT",
+          "record": {
+            "id": 501,
+            "reference": "T-1042",
+            "direction": "in",
+            "author": "Bola",
+            "body": "Your rider is 10 minutes away.",
+            "channel": "whatsapp",
+            "mail": "whatsapp",
+            "sent_at": null
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "ticket": "skipped",
+          "chat": "not_run",
+          "mark": "skipped"
+        }
+      }
+    },
+    {
+      "name": "a ticket with no phone: nothing is sent and the answer stays unsent",
+      "mocks": {
+        "chat": {
+          "output": {
+            "message_id": "wamid.R1",
+            "wa_id": "2348030000001"
+          }
+        },
+        "message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "mark": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ticket": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "T-1042",
+                "customer_phone": "",
+                "channel": "whatsapp",
+                "mail": "whatsapp",
+                "last_customer_at": "2099-01-01T00:00:00Z"
+              }
+            ]
+          }
+        }
+      },
+      "trigger": {
+        "event": "INSERT",
+        "body": {
+          "type": "INSERT",
+          "record": {
+            "id": 501,
+            "reference": "T-1042",
+            "direction": "out",
+            "author": "Bola",
+            "body": "Your rider is 10 minutes away.",
+            "channel": "whatsapp",
+            "mail": "whatsapp",
+            "sent_at": null
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "chat": "not_run",
+          "message": "not_run",
+          "mark": "skipped"
+        }
+      }
+    }
+  ]
+}
