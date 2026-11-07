@@ -1,6 +1,6 @@
 # Support tickets: email threads
 
-Status: **Phase 1 built** 7 November 2026 (email threading, §3 to §6); phase 2, the ticket templates, planned · Decision: [0063](../decisions/0063-email-threads.md) · Builds on: [email triggers](../email.md) ([0038](../decisions/0038-inbound-email.md)), signal steps ([wd/v1](../contracts/wd-v1.md#steps)), [messages to people outside](../messages.md)
+Status: **Phase 1 built** 7 November 2026 (email threading, §3 to §6); phase 2, the ticket templates, planned · Decision: [0063](../decisions/0063-email-threads.md) · Builds on: [email triggers](../email.md) ([0038](../decisions/0038-inbound-email.md)), signal steps ([wd/v1](../contracts/wd-v1.md#runtime-semantics-enginedecide)), [messages to people outside](../messages.md)
 
 ## 1. Summary
 
@@ -54,7 +54,7 @@ For a threaded workflow, in this order:
 
 Then:
 
-- **A run of the workflow waits** on `email.reply` for that key in the same environment: the reply is delivered to it, and no run starts. The message is listed as **Replied**.
+- **A run of the workflow waits** on `email.reply` for that key in the same environment: the reply is delivered to it, and no run starts. The trigger's tab lists the message as a reply given to the run (status `replied`).
 - **A run of the workflow that sent in the thread is still going but not waiting** (it is between steps, or waiting on something else): the message stays in the inbox and is looked at again every 5 minutes, for up to 7 days. If the run waits by then, it gets the reply; if it ends, the reply starts a new run.
 - **Otherwise** (the ticket's run ended, or there never was one): a new run starts, with `trigger.email.thread` set, so the workflow can reopen the ticket.
 
