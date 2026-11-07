@@ -10,6 +10,7 @@ import {
 } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { enablePush } from "../lib/push";
+import { setAppBadge } from "../lib/badge";
 import { get } from "../api";
 import { isAfter } from "../lib/stamp";
 import { useAuth } from "../auth";
@@ -428,6 +429,8 @@ export function ChatLiveProvider({ children }: { children: ReactNode }) {
 
 /** "(3) Taskiem" in the tab's title, and a dot on its icon, while there is something unread. */
 function useTabBadge(n: number) {
+  // The same count on the app's icon, where the device has one.
+  useEffect(() => setAppBadge(n), [n]);
   useEffect(() => {
     const apply = () => {
       const next = withBadge(document.title, n);

@@ -21,7 +21,10 @@ export default tseslint.config(
     files: ["web/public/sw.js"],
     languageOptions: {
       sourceType: "script",
-      globals: { self: "readonly", module: "writable", fetch: "readonly", URL: "readonly", JSON: "readonly", ServiceWorkerGlobalScope: "readonly" },
+      globals: {
+        self: "readonly", module: "writable", fetch: "readonly", URL: "readonly", JSON: "readonly", ServiceWorkerGlobalScope: "readonly",
+        btoa: "readonly", AbortController: "readonly", setTimeout: "readonly", clearTimeout: "readonly",
+      },
     },
   },
   // The card maker's Node script, whose callbacks also run in the browser (docs/strategy/marketing/cards).

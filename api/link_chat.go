@@ -392,7 +392,7 @@ func (s *Server) sendLinkAs(ctx context.Context, p *Principal, link uuid.UUID, t
 	if err != nil {
 		return m, err
 	}
-	s.tellLinkMessage(ctx, other, link, from, m)
+	s.tellLinkMessage(ctx, other, link, p.TenantID, from, m)
 	return m, nil
 }
 
@@ -427,7 +427,7 @@ func linkMessageLine(l lang.Tag, m links.Message, withRef bool) string {
 // tellLinkMessage tells the people of the business a message went to who
 // write in its conversations, on their phones, unless it muted the
 // conversation: "[Dangote Stores] Musa: …".
-func (s *Server) tellLinkMessage(ctx context.Context, to, link uuid.UUID, from string, m links.Message) {
+func (s *Server) tellLinkMessage(ctx context.Context, to, link, fromTenant uuid.UUID, from string, m links.Message) {
 	s.background(ctx, "link message", func(ctx context.Context) {
 		var muted bool
 		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{to}, func(tx pgx.Tx) error {
@@ -441,7 +441,7 @@ func (s *Server) tellLinkMessage(ctx context.Context, to, link uuid.UUID, from s
 			return "[" + whatsapp.SafeText(from) + "]", whatsapp.SafeText(linkMessageLine(l, m, true))
 		}
 		// A push first (it is quick and goes to each browser at once), then the phones.
-		s.pushMessage(ctx, to, link, from, m)
+		s.pushMessage(ctx, to, link, fromTenant, from, m)
 		s.tellHoldersSent(ctx, to, []string{PermChatTrade}, "msg:"+m.PairID.String(), "/chat?with="+link.String(), words, nil, s.keepSent(ctx, to, link, m.PairID))
 	})
 }

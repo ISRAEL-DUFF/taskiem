@@ -217,13 +217,13 @@ func (s *Server) deletePushEndpoint(w http.ResponseWriter, r *http.Request) {
 // pushMaxParallel bounds the requests to push services for one message.
 const pushMaxParallel = 8
 
-// pushMessage pushes a message that came from a linked business to the
+// pushMessage pushes a message that came from a linked business (fromTenant, named from) to the
 // browsers of the receiving business's members who write in its
 // conversations: the title is the sender's business, the body the same line
 // the phone messages carry (a browser that switched the preview off is sent
 // "New message"), the link the conversation. It does what the sender's
 // tellLinkMessage has decided is to be told (the mute is checked there).
-func (s *Server) pushMessage(ctx context.Context, to, link uuid.UUID, from string, m links.Message) {
+func (s *Server) pushMessage(ctx context.Context, to, link, fromTenant uuid.UUID, from string, m links.Message) {
 	if !s.Push.Enabled() {
 		return
 	}
@@ -233,6 +233,7 @@ func (s *Server) pushMessage(ctx context.Context, to, link uuid.UUID, from strin
 	}
 	var targets []push.Target
 	var unread int
+	var icon string
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{to}, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT DISTINCT user_id FROM memberships WHERE role = ANY ($1)`, holdingAll(PermChatTrade))
 		if err != nil {
@@ -245,6 +246,17 @@ func (s *Server) pushMessage(ctx context.Context, to, link uuid.UUID, from strin
 		if targets, err = push.TargetsTx(ctx, tx, to, users); err != nil || len(targets) == 0 {
 			return err
 		}
+		// The business as the chat list shows it: the name and logo it chose.
+		if shown, err := links.ShownTx(ctx, tx); err == nil {
+			if sh, ok := shown[fromTenant]; ok {
+				if sh.Name != "" {
+					from = sh.Name
+				}
+				if sh.HasLogo {
+					icon = "/v1/links/" + fromTenant.String() + "/logo?size=320"
+				}
+			}
+		}
 		return tx.QueryRow(ctx, `SELECT count(DISTINCT link_id)::int FROM link_messages WHERE tenant_id = $1 AND NOT mine AND read_at IS NULL AND hidden_at IS NULL`, to).Scan(&unread)
 	}); err != nil {
 		s.Logger.Warn("push: finding the browsers", "tenant", to, "err", err)
@@ -253,7 +265,7 @@ func (s *Server) pushMessage(ctx context.Context, to, link uuid.UUID, from strin
 	if len(targets) == 0 {
 		return
 	}
-	payload := push.Payload{Title: from, Body: body, Link: "/chat?with=" + link.String(), Tag: link.String(), Unread: unread}
+	payload := push.Payload{Title: from, Body: body, Link: "/chat?with=" + link.String(), Tag: link.String(), Unread: unread, Icon: icon}
 	type result struct {
 		id  uuid.UUID
 		out push.Outcome

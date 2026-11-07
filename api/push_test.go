@@ -144,8 +144,8 @@ func TestChatPush(t *testing.T) {
 	ctx := context.Background()
 	w := newWAWorld(t)
 	w.srv.LoginBurst = 1000
+	w.srv.Media = newProjectStorage(t).service() // for the seller's logo
 	seller, buyer, sellerID, _ := linkedPair(t, w)
-	_ = sellerID
 	link := buyer.must(200, "GET", "/v1/link-chats", nil)["conversations"].([]any)[0].(map[string]any)["link"].(string)
 	viewer := addMember(t, w.world, buyer, "vic", "viewer")
 	svc := newPushService(t)
@@ -240,7 +240,7 @@ func TestChatPush(t *testing.T) {
 		t.Error("the words travel in the clear")
 	}
 	p := br.decrypt(t, svc.bodies["/owner"][0])
-	if p.Title != "Dangote Stores" || !strings.Contains(p.Body, "Rice is 45k a bag") || p.Link != "/chat?with="+link || p.Tag != link || p.Unread != 1 || p.Version != push.Version {
+	if p.Title != "Dangote Stores" || !strings.Contains(p.Body, "Rice is 45k a bag") || p.Link != "/chat?with="+link || p.Tag != link || p.Unread != 1 || p.Version != push.Version || p.Icon != "" {
 		t.Errorf("the payload: %+v", p)
 	}
 	// Another browser's keys cannot read it.
@@ -248,15 +248,20 @@ func TestChatPush(t *testing.T) {
 		t.Error("another browser read a push that was not for it")
 	}
 
-	// A browser with the preview off is told only that a business wrote.
+	// A browser with the preview off is told only that a business wrote; the
+	// business is shown as the chat shows it, by the name and logo it chose.
+	seller.must(200, "PUT", "/v1/business-profile", map[string]any{"name": "Dangote Cement & Sons", "tagline": "", "area": "", "about": ""})
+	if st, _ := seller.rawPost(t, "/v1/business-profile/logo", "image/jpeg", photo(t)); st != 200 {
+		t.Fatalf("the seller's logo: %d", st)
+	}
 	buyer.must(200, "PATCH", "/v1/me/push/"+id, map[string]any{"preview": false})
 	seller.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Second message"})
 	w.srv.WaitBackground()
 	if svc.count("/owner") != 2 {
 		t.Fatalf("pushes: %d", svc.count("/owner"))
 	}
-	if p := br.decrypt(t, svc.bodies["/owner"][1]); p.Body != "New message" || p.Title != "Dangote Stores" || strings.Contains(p.Body, "Second") {
-		t.Errorf("preview off: %+v", p)
+	if p := br.decrypt(t, svc.bodies["/owner"][1]); p.Body != "New message" || p.Title != "Dangote Cement & Sons" || strings.Contains(p.Body, "Second") || p.Icon != "/v1/links/"+sellerID+"/logo?size=320" {
+		t.Errorf("preview off, the business by its profile: %+v", p)
 	}
 
 	// A muted conversation is not pushed.

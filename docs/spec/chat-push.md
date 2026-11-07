@@ -1,6 +1,6 @@
 # Chat push: a notification when the app is closed
 
-Status: **spec; steps 1 (the server) and 2 (the device) built, step 3 not.** Written 2026-11-07, after the profile, logo,
+Status: **spec; all three steps built. Not yet tried on a real phone or with a real push service: §15 is the checklist for that.** Written 2026-11-07, after the profile, logo,
 Explore and Contact info work of [business links](business-links.md) (§16.9 and §16.10 there, and §5.5 for
 the conversation).
 
@@ -469,5 +469,82 @@ browser which device it is (`added`) and `/sw.js` being served with
   opens the chat page, where that conversation is not found. Closing this
   properly needs the push to say which of their businesses it is for; it is
   left out of the first version (§10).
-- **Not yet:** the badge on the icon and the business's logo as the icon
-  (step 3); the owner's checklist for a real Android phone and iPhone.
+- **Not yet:** the badge and the logo (step 3, §14).
+
+## 14. As built (step 3, the badge and the logo)
+
+- **The business as the chat shows it.** The push's title is the sender's
+  **profile name** when it has one (as the chat list shows it), else its
+  registered name, and `icon` is the address of its logo
+  (`/v1/links/<business>/logo?size=320`) when it has one: both come from
+  `links.ShownTx`, the same read the chat list uses, so an ended link or a
+  refused logo gives neither (`api/push.go`, `engine/push` `Payload.Icon`).
+- **The icon in the notification.** The worker fetches that logo **itself, with
+  the person's own session**, and gives the notification a data address: a
+  browser's own fetch of a notification's icon does not always send cookies. At
+  most 3 seconds and 200 KB; a picture (png, jpeg, webp) and nothing else; any
+  failure (a 404, a signed-out session, a slow server) is **the app's own icon**,
+  so a notification is never held for a logo. It fetches only a path of the
+  form `/v1/links/<id>/logo[?size=320|800|2000]` (`safeIcon`): a push that names
+  anything else has no icon of its own.
+- **The badge.** The page sets the app icon's count from the number it already
+  shows in the tab's title (conversations with something unread, plus Taskiem's
+  own), through `lib/badge.ts` (`navigator.setAppBadge`, where the device has it:
+  installed apps on Chrome, Edge and Safari); it clears at none and on sign-out.
+  A push sets it too while no page is open, from `unread` in the payload (the
+  receiving business's conversations with something unread, this message
+  included); a push that does not say leaves it alone, and the page corrects it
+  the next time it opens. Nothing is set when a window of the app was in front
+  (the page has it).
+- **Tests:** `lib/push.test.ts` (`safeIcon`, `iconFor` with a fake fetch: the
+  data address, the session, a 404, a page that is not a picture, nothing, too
+  big, offline, and a big logo that is not too big), `lib/badge.test.ts`,
+  `TestChatPush` (the profile name and the logo's address in the decrypted
+  payload, none before a profile), `e2e/chat-push.spec.ts` (the real worker's
+  icon is the app's own for a logo the server does not have and for an address
+  outside the app; the page's badge goes to 1 when a message comes and clears
+  when it is read).
+- **Not tried:** the logo as the icon with a real logo on a real device (the
+  tests give the worker a stand-in `fetch`), and the badge on a real home
+  screen. §15 lists both.
+
+## 15. Trying it on real devices (the owner's checklist)
+
+Nothing here can be done from a build machine: it needs the keys on a
+deployment, a real browser and a real push service.
+
+**Set up once.**
+
+1. `taskiem push keys --subject mailto:you@your-domain` and put the three lines
+   in the deployment's settings (`TASKIEM_VAPID_PUBLIC_KEY`,
+   `TASKIEM_VAPID_PRIVATE_KEY`, `TASKIEM_VAPID_SUBJECT`), then restart. Make
+   **one** pair: changing it later ends everyone's notifications.
+2. Two businesses that are linked and can chat (one of them yours), the sender
+   with a **profile name and a logo** (Chat, ⋮, Your business in Explore), and
+   you signed in as someone who writes in chats on the other.
+3. Settings, Notifications, **Chat when Taskiem is closed** should show. If it
+   does not, the server has no keys (the section is hidden then).
+
+**Try, on each of: Android Chrome, iPhone Safari (added to the Home Screen and
+opened from it), desktop Chrome or Edge, desktop Firefox, desktop Safari.**
+
+| Do | Expect |
+| --- | --- |
+| Turn the switch on, say yes to the browser | the switch stays on after a reload, and the device is in the list |
+| Close the app or the tab (lock the phone), and have the other business send a message | a notification with the business's name (its **profile** name) and, on Chrome and Edge, its logo; the line of the message |
+| Send two more in the same chat | still one notification for the chat, the latest words |
+| A message in another chat | its own notification |
+| Tap the notification | Taskiem opens on that chat (an open window comes to the front) |
+| With the app **in front** (Chrome, Edge) | no notification (the page has the message); in Firefox and Safari one is shown, by design |
+| Mute the chat in Contact info, send | nothing |
+| Turn off **Show what the message says**, send | "New message" under the business's name |
+| On an installed app: leave one chat unread | the number on the app's icon; it goes when you read it |
+| Sign out of that browser, send | nothing; sign in again and the switch is off |
+| Turn off the switch, send | nothing |
+
+**What to tell me if it is wrong:** a notification that does not come (and on
+which device and browser), one that comes twice, one that opens the wrong
+place, a logo that does not show on Chrome (the app's icon shows instead: this
+is the case to look at), a badge that stays after reading, and anything in the
+server's logs that says `push: not sent` (its status, never the address or the
+words) or in the metrics: `taskiem_push_total{result="failed"}` rising.

@@ -82,9 +82,9 @@ func TestConfig(t *testing.T) {
 }
 
 func TestPayload(t *testing.T) {
-	p := Payload{Title: "Dangote Stores", Body: "Musa: Rice is 45k a bag", Link: "/chat?with=abc", Tag: "abc", Unread: 3}
+	p := Payload{Title: "Dangote Stores", Body: "Musa: Rice is 45k a bag", Link: "/chat?with=abc", Tag: "abc", Unread: 3, Icon: "/v1/links/b/logo?size=320"}
 	var got Payload
-	if err := json.Unmarshal(p.Encode(), &got); err != nil || got.Version != Version || got.Title != "Dangote Stores" || got.Unread != 3 {
+	if err := json.Unmarshal(p.Encode(), &got); err != nil || got.Version != Version || got.Title != "Dangote Stores" || got.Unread != 3 || got.Icon != p.Icon {
 		t.Fatalf("the payload: %+v %v", got, err)
 	}
 	// A browser with the preview off hears only that a business wrote.

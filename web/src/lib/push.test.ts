@@ -16,14 +16,23 @@ new Function(
 )(mod);
 const sw = mod.exports as {
   safeLink: (l: unknown) => string;
+  safeIcon: (i: unknown) => string;
+  iconFor: (
+    path: string,
+    doFetch: (url: string, init: unknown) => Promise<unknown>,
+  ) => Promise<string>;
   parsePayload: (read: () => unknown) => {
     title: string;
     body: string;
     link: string;
     tag: string;
     unread: number;
+    icon: string;
   };
-  notificationOf: (p: ReturnType<typeof sw.parsePayload>) => {
+  notificationOf: (
+    p: ReturnType<typeof sw.parsePayload>,
+    icon?: string,
+  ) => {
     title: string;
     options: Record<string, unknown>;
   };
@@ -141,6 +150,7 @@ describe("the service worker's words", () => {
       link: "/chat?with=abc",
       tag: "abc",
       unread: 3,
+      icon: "",
     });
     for (const read of [
       () => {
@@ -167,7 +177,7 @@ describe("the service worker's words", () => {
     expect(r.body).toHaveLength(400);
     expect(r.link).toBe("/chat");
     expect(r.tag).toHaveLength(64);
-    expect(r.unread).toBe(0);
+    expect(r.unread).toBe(-1); // not said: the badge is left as it is
   });
   it("shows one notification per conversation, with the page's own tag", () => {
     const n = sw.notificationOf(
@@ -212,5 +222,97 @@ describe("the service worker's words", () => {
     expect(sw.staysSilent(behind, SAFARI_MAC, brands)).toBe(false);
     expect(sw.staysSilent(front, SAFARI_MAC, [])).toBe(false);
     expect(sw.staysSilent(front, SAFARI_MAC, undefined)).toBe(false);
+  });
+});
+
+describe("the sender's logo as the icon", () => {
+  const UUID = "0192e2e0-0000-7000-8000-000000000001";
+  it("fetches only the logo of a linked business, by its path", () => {
+    expect(sw.safeIcon(`/v1/links/${UUID}/logo?size=320`)).toBe(
+      `/v1/links/${UUID}/logo?size=320`,
+    );
+    expect(sw.safeIcon(`/v1/links/${UUID}/logo`)).toBe(
+      `/v1/links/${UUID}/logo`,
+    );
+    for (const bad of [
+      "https://evil.example/logo.png",
+      "//evil.example/x",
+      `/v1/links/${UUID}/logo?size=1`,
+      `/v1/links/${UUID}/logo?size=320&x=1`,
+      "/v1/links/../me/logo",
+      "/v1/me",
+      `/v1/explore/${UUID}/logo`,
+      "data:image/png;base64,AAAA",
+      "",
+      null,
+      5,
+    ]) {
+      expect(sw.safeIcon(bad)).toBe("");
+    }
+    // A push that names another address has no icon of its own.
+    expect(
+      sw.parsePayload(() => ({ icon: "https://evil.example/x.png" })).icon,
+    ).toBe("");
+    expect(
+      sw.parsePayload(() => ({ icon: `/v1/links/${UUID}/logo?size=320` })).icon,
+    ).toBe(`/v1/links/${UUID}/logo?size=320`);
+  });
+
+  const png =
+    (bytes: number, type = "image/png", ok = true) =>
+    async () => ({
+      ok,
+      headers: {
+        get: (h: string) => (h.toLowerCase() === "content-type" ? type : null),
+      },
+      arrayBuffer: async () => new Uint8Array(bytes).fill(7).buffer,
+    });
+
+  it("is the logo as a data address, fetched with the person's own session", async () => {
+    let seen: { url: string; init: { credentials?: string } } | undefined;
+    const got = await sw.iconFor(
+      "/v1/links/x/logo?size=320",
+      async (url, init) => {
+        seen = { url, init: init as { credentials?: string } };
+        return png(3)();
+      },
+    );
+    expect(got).toBe(
+      "data:image/png;base64," + btoa(String.fromCharCode(7, 7, 7)),
+    );
+    expect(seen?.url).toBe("/v1/links/x/logo?size=320");
+    expect(seen?.init.credentials).toBe("same-origin");
+  });
+
+  it("is the app's own icon without a logo, or when the logo cannot be had", async () => {
+    const own = "/brand/relay/icon-192.png";
+    expect(await sw.iconFor("", png(3))).toBe(own);
+    expect(
+      await sw.iconFor("/v1/links/x/logo", png(3, "image/png", false)),
+    ).toBe(own); // 404, signed out
+    expect(await sw.iconFor("/v1/links/x/logo", png(3, "text/html"))).toBe(own); // not a picture
+    expect(await sw.iconFor("/v1/links/x/logo", png(0))).toBe(own); // nothing
+    expect(await sw.iconFor("/v1/links/x/logo", png(200001))).toBe(own); // too big
+    expect(
+      await sw.iconFor("/v1/links/x/logo", async () => {
+        throw new Error("offline");
+      }),
+    ).toBe(own);
+    expect(await sw.iconFor("/v1/links/x/logo", png(150000))).toMatch(
+      /^data:image\/png;base64,/,
+    ); // a big logo that is not too big
+  });
+
+  it("goes into the notification, else the app's own icon", () => {
+    const p = sw.parsePayload(() => ({
+      title: "A",
+      body: "B",
+      link: "/chat",
+      tag: "t",
+    }));
+    expect(
+      sw.notificationOf(p, "data:image/png;base64,AAAA").options.icon,
+    ).toBe("data:image/png;base64,AAAA");
+    expect(sw.notificationOf(p).options.icon).toBe("/brand/relay/icon-192.png");
   });
 });

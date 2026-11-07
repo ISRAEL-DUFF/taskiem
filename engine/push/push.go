@@ -325,6 +325,9 @@ type Payload struct {
 	Tag string `json:"tag"`
 	// Unread is how many conversations have something unread (the icon's badge).
 	Unread int `json:"unread"`
+	// Icon is the sender's logo, a path inside the app the worker fetches with
+	// the person's own session (/v1/links/<business>/logo); empty without one.
+	Icon string `json:"icon,omitempty"`
 }
 
 // cut shortens s to at most n bytes at a letter's edge, with an ellipsis.

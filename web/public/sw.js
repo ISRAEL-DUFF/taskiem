@@ -15,6 +15,12 @@ function safeLink(link) {
   return "/chat";
 }
 
+/** The sender's logo, a path inside the app the worker may fetch with the person's own session (nothing else is fetched). */
+var ICON_PATH = /^\/v1\/links\/[0-9a-f-]{36}\/logo(\?size=(320|800|2000))?$/;
+function safeIcon(icon) {
+  return typeof icon === "string" && ICON_PATH.test(icon) ? icon : "";
+}
+
 /** What a push says, read from its data (a function that gives the parsed JSON, or throws). Anything unreadable is a plain "New message". */
 function parsePayload(read) {
   var p;
@@ -29,23 +35,56 @@ function parsePayload(read) {
     body: typeof p.body === "string" && p.body ? p.body.slice(0, 400) : "New message",
     link: safeLink(p.link),
     tag: typeof p.tag === "string" && p.tag ? p.tag.slice(0, 64) : "taskiem-chat",
-    unread: typeof p.unread === "number" && p.unread >= 0 ? Math.floor(p.unread) : 0,
+    // How many conversations have something unread, for the icon's badge; -1 when the push does not say.
+    unread: typeof p.unread === "number" && p.unread >= 0 ? Math.floor(p.unread) : -1,
+    icon: safeIcon(p.icon),
   };
 }
 
-/** The notification for a payload: one per conversation (the tag replaces the last), not stacked, and the same tag the page's own notification uses. */
-function notificationOf(p) {
+/** The notification for a payload: one per conversation (the tag replaces the last), not stacked, and the same tag the page's own notification uses. `icon` is the sender's logo as the worker fetched it (a data address), else the app's own. */
+function notificationOf(p, icon) {
   return {
     title: p.title,
     options: {
       body: p.body,
       tag: p.tag,
       renotify: false,
-      icon: ICON,
+      icon: icon || ICON,
       badge: ICON,
       data: { link: p.link },
     },
   };
+}
+
+function toBase64(bytes) {
+  var out = "";
+  for (var i = 0; i < bytes.length; i += 8192) out += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+  return btoa(out);
+}
+
+/**
+ * The sender's logo as a data address a notification can show: fetched with the
+ * person's own session (a browser's own fetch of a notification's icon does
+ * not always send it), at most 3 seconds and 200 KB, a picture and nothing else.
+ * Any failure is the app's own icon: a notification is never held for a logo.
+ */
+async function iconFor(path, doFetch) {
+  if (!path) return ICON;
+  var timer;
+  try {
+    var control = typeof AbortController !== "undefined" ? new AbortController() : null;
+    if (control) timer = setTimeout(function () { control.abort(); }, 3000);
+    var res = await doFetch(path, { credentials: "same-origin", signal: control ? control.signal : undefined });
+    var type = ((res.headers && res.headers.get("Content-Type")) || "").split(";")[0];
+    if (!res.ok || !/^image\/(png|jpeg|webp)$/.test(type)) return ICON;
+    var buf = new Uint8Array(await res.arrayBuffer());
+    if (buf.length === 0 || buf.length > 200000) return ICON;
+    return "data:" + type + ";base64," + toBase64(buf);
+  } catch {
+    return ICON;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 /**
@@ -69,7 +108,7 @@ function staysSilent(windows, userAgent, brands) {
 }
 
 if (typeof module !== "undefined") {
-  module.exports = { safeLink: safeLink, parsePayload: parsePayload, notificationOf: notificationOf, staysSilent: staysSilent };
+  module.exports = { safeLink: safeLink, safeIcon: safeIcon, parsePayload: parsePayload, notificationOf: notificationOf, iconFor: iconFor, staysSilent: staysSilent };
 }
 
 // --- the events: only in a service worker ---
@@ -91,8 +130,17 @@ if (typeof self !== "undefined" && typeof self.addEventListener === "function" &
         var windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
         var data = self.navigator.userAgentData;
         if (staysSilent(windows, self.navigator.userAgent, data && data.brands)) return;
-        var n = notificationOf(p);
+        var icon = await iconFor(p.icon, function (url, init) {
+          return self.fetch(url, init);
+        });
+        var n = notificationOf(p, icon);
         await self.registration.showNotification(n.title, n.options);
+        // The count on the app's icon, where the device has one (the page
+        // corrects it when it opens).
+        var nav = self.navigator;
+        if (p.unread >= 0 && nav && typeof nav.setAppBadge === "function") {
+          await (p.unread > 0 ? nav.setAppBadge(p.unread) : nav.clearAppBadge()).catch(function () {});
+        }
       })(),
     );
   });

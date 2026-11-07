@@ -267,10 +267,12 @@ test("the worker shows what is pushed: one notification a conversation, only a p
   await page.getByTestId("chat-push-switch").click();
   await expect(page.getByTestId("chat-push-switch")).toBeChecked();
   await page.evaluate(() => navigator.serviceWorker.ready);
-  const worker =
-    ctx.serviceWorkers().find((w) => w.url().endsWith("/sw.js")) ??
-    (await ctx.waitForEvent("serviceworker"));
-  expect(worker.url()).toMatch(/\/sw\.js$/);
+  // The worker may register before or after this line: wait for it to be there,
+  // not for an event that may already have happened.
+  const isWorker = (w: { url(): string }) => w.url().endsWith("/sw.js");
+  await expect.poll(() => ctx.serviceWorkers().some(isWorker)).toBe(true);
+  const worker = ctx.serviceWorkers().find(isWorker);
+  if (!worker) throw new Error("the worker is not there");
 
   const cdp = await ctx.newCDPSession(page);
   const regs: { registrationId: string; scopeURL: string }[] = [];
@@ -287,7 +289,13 @@ test("the worker shows what is pushed: one notification a conversation, only a p
       registrationId,
       data: JSON.stringify(data),
     });
-  type Shown = { title: string; body: string; tag: string; link: string };
+  type Shown = {
+    title: string;
+    body: string;
+    tag: string;
+    link: string;
+    icon: string;
+  };
   const shown = (): Promise<Shown[]> =>
     worker.evaluate(() => {
       const reg = (
@@ -299,6 +307,7 @@ test("the worker shows what is pushed: one notification a conversation, only a p
           body: n.body,
           tag: n.tag,
           link: (n.data as { link: string }).link,
+          icon: n.icon,
         })),
       );
     });
@@ -317,7 +326,7 @@ test("the worker shows what is pushed: one notification a conversation, only a p
     tag: "abc",
     unread: 1,
   });
-  await page.waitForTimeout(600);
+  await page.waitForTimeout(1500); // long enough for a loaded machine to have handled it
   expect(await shown()).toEqual([]);
 
   // With nothing of the app in front it is shown.
@@ -340,6 +349,7 @@ test("the worker shows what is pushed: one notification a conversation, only a p
       body: "Musa: Rice is 45k",
       tag: "abc",
       link: "/chat?with=abc",
+      icon: expect.stringMatching(/\/brand\/relay\/icon-192\.png$/), // no logo: the app's own
     },
   ]);
   // The next for the same conversation replaces it; another conversation is its own.
@@ -371,11 +381,114 @@ test("the worker shows what is pushed: one notification a conversation, only a p
     body: "Click",
     link: "https://evil.example/",
     tag: "evil",
+    icon: "https://evil.example/logo.png",
   });
   await expect
     .poll(
       async () => (await shown()).find((n: Shown) => n.tag === "evil")?.link,
     )
     .toBe("/chat");
+  // The icon is the app's own: an address outside the app is never fetched,
+  // and a sender's logo that the server does not have (a 404) is the same.
+  const evil = (await shown()).find((n: Shown) => n.tag === "evil");
+  expect(evil?.icon).toMatch(/\/brand\/relay\/icon-192\.png$/);
+  await push({
+    v: 1,
+    title: "Dangote Stores",
+    body: "Hello",
+    link: "/chat?with=abc",
+    tag: "logo",
+    icon: "/v1/links/0192e2e0-0000-7000-8000-000000000001/logo?size=320",
+  });
+  await expect
+    .poll(
+      async () => (await shown()).find((n: Shown) => n.tag === "logo")?.icon,
+    )
+    .toMatch(/\/brand\/relay\/icon-192\.png$/);
   await ctx.close();
+});
+
+test("the app's icon shows how many conversations have something unread, and none once they are read", async ({
+  browser,
+}) => {
+  const stamp = letters();
+  const seller = await (await browser.newContext()).newPage();
+  const ownerCtx = await browser.newContext();
+  const buyer = await ownerCtx.newPage();
+  // A device with a badge: what the page asks of it is kept to be seen.
+  await ownerCtx.addInitScript(() => {
+    const calls: string[] = [];
+    (window as unknown as { __badge: string[] }).__badge = calls;
+    Object.defineProperty(navigator, "setAppBadge", {
+      value: async (n?: number) => void calls.push(`set ${n}`),
+    });
+    Object.defineProperty(navigator, "clearAppBadge", {
+      value: async () => void calls.push("clear"),
+    });
+  });
+  const mk = async (page: Page, tenant: string) => {
+    const r = await page.request.post("/v1/signup", {
+      headers: H,
+      data: {
+        tenant,
+        email: `${letters()}-${Math.random().toString(36).slice(2, 8)}@push.test`,
+        name: "Owner",
+        password: PASSWORD,
+      },
+    });
+    expect(r.status(), await r.text()).toBe(201);
+  };
+  await mk(seller, `Dangote Depot ${stamp}`);
+  await mk(buyer, `Ada Kitchen ${stamp}`);
+  await seller.request.put("/v1/link-settings", {
+    headers: H,
+    data: { findable: true },
+  });
+  const sellerId = (
+    (await (await seller.request.get("/v1/me")).json()) as { tenant_id: string }
+  ).tenant_id;
+  expect(
+    (
+      await buyer.request.post("/v1/links", {
+        headers: H,
+        data: { business: sellerId, role: "both" },
+      })
+    ).ok(),
+  ).toBe(true);
+  const asked = (await (
+    await seller.request.get("/v1/links", { headers: H })
+  ).json()) as { links: { id: string }[] };
+  expect(
+    (
+      await seller.request.post(`/v1/links/${asked.links[0]?.id}/accept`, {
+        headers: H,
+      })
+    ).ok(),
+  ).toBe(true);
+  const link = (
+    (await (
+      await buyer.request.get("/v1/link-chats", { headers: H })
+    ).json()) as { conversations: { link: string }[] }
+  ).conversations[0]?.link;
+
+  await buyer.goto("/chat");
+  const badge = () =>
+    buyer.evaluate(() =>
+      (window as unknown as { __badge: string[] }).__badge.at(-1),
+    );
+  await expect.poll(badge).toBe("clear"); // nothing unread yet
+  expect(
+    (
+      await seller.request.post(`/v1/link-chats/${link}/messages`, {
+        headers: H,
+        data: { text: "Rice is 45k" },
+      })
+    ).status(),
+  ).toBe(201);
+  await expect.poll(badge, { timeout: 15000 }).toBe("set 1");
+  // Opening the conversation reads it: the count comes off.
+  await buyer.goto(`/chat?with=${link}`);
+  await expect(buyer.getByTestId("chat-message")).toHaveCount(1);
+  await expect.poll(badge, { timeout: 15000 }).toBe("clear");
+  await ownerCtx.close();
 });
