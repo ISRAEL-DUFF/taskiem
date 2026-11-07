@@ -15,6 +15,20 @@ export interface Violation {
 /** Runs axe (WCAG 2.1 A and AA, and its best practices) on the page and
  * returns the violations, each with up to five offending elements. */
 export async function axe(page: Page): Promise<Violation[]> {
+  // A theme just switched fades its colours (0.12 s on a button): on a slow
+  // runner axe could read one half way, light words on a white button. Wait
+  // for the transitions running now (not the looping animations), 2 s at most.
+  await page.evaluate(() =>
+    Promise.race([
+      Promise.all(
+        document
+          .getAnimations()
+          .filter((a) => a instanceof CSSTransition)
+          .map((a) => a.finished.catch(() => undefined)),
+      ),
+      new Promise((r) => setTimeout(r, 2000)),
+    ]),
+  );
   if (!(await page.evaluate(() => "axe" in window))) await page.addScriptTag({ path: axeSource });
   return page.evaluate(async () => {
     const w = window as unknown as {
