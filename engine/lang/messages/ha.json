@@ -3936,6 +3936,10 @@
       "text": "Taskiem ne ke kula da {table}: Taskiem ne kawai ke ƙara layuka, ba za a iya canza su ko share su a nan ba. Gyara sabon layi ne.",
       "reviewed": false
     },
+    "wa.table.restricted": {
+      "text": "{table} na {readers} ne kawai da mai shi: matsayinka ba zai iya karanta ko canza layukansa ba. Tambayi mai shi idan kana bukata.",
+      "reviewed": false
+    },
     "wa.table.list_head": {
       "text": "Teburorin bayanai a {org}:",
       "reviewed": false

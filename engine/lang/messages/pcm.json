@@ -3936,6 +3936,10 @@
       "text": "Na Taskiem dey keep {table}: na only Taskiem dey add rows, you no fit change or delete dem for here. Correction na new row.",
       "reviewed": false
     },
+    "wa.table.restricted": {
+      "text": "{table} na only for {readers} and the owner: your role no fit read or change im rows. Ask the owner if you need am.",
+      "reviewed": false
+    },
     "wa.table.list_head": {
       "text": "Data tables for {org}:",
       "reviewed": false

@@ -3936,6 +3936,10 @@
       "text": "Taskiem na-edebe {table}: ọ bụ naanị Taskiem na-agbakwunye ahịrị, enweghị ike ịgbanwe ma ọ bụ ihichapụ ha ebe a. Mmezi bụ ahịrị ọhụrụ.",
       "reviewed": false
     },
+    "wa.table.restricted": {
+      "text": "{table} bụ naanị maka {readers} na onye nwe ya: ọrụ gị enweghị ike ịgụ ma ọ bụ gbanwee ahịrị ya. Jụọ onye nwe ya ma ọ bụrụ na ịchọrọ ya.",
+      "reviewed": false
+    },
     "wa.table.list_head": {
       "text": "Tebụl data na {org}:",
       "reviewed": false

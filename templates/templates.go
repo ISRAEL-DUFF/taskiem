@@ -119,6 +119,12 @@ type Table struct {
 	Title       string   `json:"title,omitempty"`
 	Description string   `json:"description,omitempty"`
 	Columns     []Column `json:"columns"`
+	// Readers are the membership roles whose holders, and the owner, may
+	// read and change the table's rows (decision 0065), set when Taskiem
+	// makes the table; left out, every table.read holder reads it. A
+	// known table may name them (hr_tickets: hr and hr_lead); they are
+	// fixed role names, not parameters.
+	Readers []string `json:"readers,omitempty"`
 }
 
 // Column is a column of a template's table, as the Tables page takes one.
@@ -414,10 +420,18 @@ func (t *Template) check() error {
 	return t.checkCallable()
 }
 
-// checkTable checks a table's columns.
+// checkTable checks a table's columns and readers.
 func checkTable(tb Table) error {
 	if len(tb.Columns) == 0 {
 		return fmt.Errorf("table %q has no columns", tb.Name)
+	}
+	if tb.Readers != nil && len(tb.Readers) == 0 {
+		return fmt.Errorf("table %q: readers names at least one role, or is left out", tb.Name)
+	}
+	for _, r := range tb.Readers {
+		if !tableName.MatchString(r) {
+			return fmt.Errorf("table %q: the reader %q is not a role name", tb.Name, r)
+		}
 	}
 	cols := map[string]bool{}
 	for _, c := range tb.Columns {
@@ -1104,6 +1118,9 @@ func (t *Template) resolveKnown() error {
 		}
 		if len(tb.Columns) == 0 {
 			tb.Columns = append([]Column(nil), kt.Columns...)
+		}
+		if tb.Readers == nil {
+			tb.Readers = slices.Clone(kt.Readers)
 		}
 		tb.Known = ""
 	}

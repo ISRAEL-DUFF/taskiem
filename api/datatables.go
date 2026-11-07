@@ -26,7 +26,8 @@ import (
 // lives here, its rows in the organisation's Xenibase project, reached
 // through the xenibase@1 connection named data_tables like any workflow
 // step would. Reading rows needs table.read, changing anything
-// table.edit. Personal columns come back to table.read holders as they
+// table.edit, and a table naming readers is for their holders and the
+// owner (datatables_readers.go). Personal columns come back to table.read holders as they
 // are (the page is the record) and never reach audit details or logs.
 
 // tablesPurpose is the recorded purpose of the connection reads the
@@ -44,6 +45,8 @@ func (s *Server) tablesRoutes(r chi.Router) {
 	r.With(s.need(PermTableEdit)).Delete("/tables/{id}", s.deleteTable)
 	r.With(s.need(PermTableEdit)).Post("/tables/{id}/columns", s.addTableColumn)
 	r.With(s.need(PermTableEdit)).Delete("/tables/{id}/columns/{name}", s.dropTableColumn)
+	r.With(s.need(PermTableRead), s.need(PermRoleManage)).Put("/tables/{id}/readers", s.putTableReaders)
+	r.With(s.need(PermTableRead), s.need(PermRoleManage)).Delete("/tables/{id}/readers", s.deleteTableReaders)
 	r.With(s.need(PermTableRead)).Get("/tables/{id}/rows", s.listTableRows)
 	r.With(s.need(PermTableRead)).Post("/tables/{id}/rows/query", s.queryTableRows)
 	r.With(s.need(PermTableEdit)).Post("/tables/{id}/rows", s.insertTableRows)
@@ -71,6 +74,8 @@ func (s *Server) failTables(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, datatables.ErrKept):
 		code(http.StatusConflict, "table_kept", strings.TrimPrefix(err.Error(), datatables.ErrKept.Error()+": "))
+	case errors.Is(err, datatables.ErrRestricted):
+		code(http.StatusForbidden, "table_restricted", strings.TrimPrefix(err.Error(), datatables.ErrRestricted.Error()+": "))
 	case errors.Is(err, datatables.ErrUnavailable):
 		code(http.StatusServiceUnavailable, "tables_unavailable", "data tables are not available on this platform: no Xenibase is configured and the organisation brought no project")
 	case errors.Is(err, datatables.ErrProvisioning):
@@ -291,8 +296,9 @@ func (s *Server) xenibaseConnection(ctx context.Context, tenant uuid.UUID, name,
 
 // --- tables ---
 
-// tableView is a table as the API answers it.
-func tableView(t datatables.Table) map[string]any {
+// tableView is a table as the API answers it to p: its readers (null for
+// every table.read holder) and whether p may read its rows.
+func tableView(t datatables.Table, p *Principal) map[string]any {
 	cols := make([]map[string]any, 0, len(t.Columns))
 	for _, c := range t.Columns {
 		cols = append(cols, map[string]any{"name": c.Name, "title": c.Title, "type": c.Type, "required": c.Required, "personal": c.Personal})
@@ -303,6 +309,7 @@ func tableView(t datatables.Table) map[string]any {
 	}
 	return map[string]any{"id": t.ID, "name": t.Name, "title": t.Title, "description": t.Description, "columns": cols,
 		"postgres_table": "public." + t.Name, "connection": datatables.ConnectionName, "created_by": t.CreatedBy, "kept_by": kept,
+		"readers": readersOf(t), "can_read": p.readsTable(t),
 		"created_at": t.CreatedAt.UTC().Format(time.RFC3339), "updated_at": t.UpdatedAt.UTC().Format(time.RFC3339)}
 }
 
@@ -318,7 +325,7 @@ func (s *Server) listTables(w http.ResponseWriter, r *http.Request) {
 	}
 	views := make([]map[string]any, len(tables))
 	for i, t := range tables {
-		views[i] = tableView(t)
+		views[i] = tableView(t, principalFrom(r.Context()))
 	}
 	if r.URL.Query().Get("counts") != "no" {
 		for i, n := range s.rowCounts(r.Context(), principalFrom(r.Context()).TenantID, tablesPurpose, tables) {
@@ -345,7 +352,12 @@ func (s *Server) rowCounts(ctx context.Context, tenant uuid.UUID, purpose string
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	var wg sync.WaitGroup
+	p := principalFrom(ctx)
 	for i, t := range tables {
+		// A restricted table's row count is its readers' alone.
+		if p != nil && !p.readsTable(t) {
+			continue
+		}
 		wg.Add(1)
 		go func(i int, name string) {
 			defer wg.Done()
@@ -382,6 +394,11 @@ type tableReq struct {
 	Title       string      `json:"title"`
 	Description string      `json:"description"`
 	Columns     []columnReq `json:"columns"`
+	// Readers restrict the new table's rows to the holders of these roles
+	// and the owner (decision 0065). Naming them on a new table needs only
+	// table.edit, since an empty table has nothing to hide; changing them
+	// later needs role.manage (putTableReaders).
+	Readers []string `json:"readers"`
 }
 
 // columnReq is a column as the API takes it: personal left out means
@@ -425,7 +442,7 @@ func (s *Server) createTable(w http.ResponseWriter, r *http.Request) {
 		s.failTables(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, tableView(t))
+	writeJSON(w, http.StatusCreated, tableView(t, principalFrom(r.Context())))
 }
 
 // newDataTable makes a table for p: the Tables page, and an AI draft's
@@ -448,6 +465,12 @@ func (s *Server) newDataTable(r *http.Request, p *Principal, req tableReq) (data
 	}
 	if len(req.Title) > 120 || len(req.Description) > 2000 {
 		return datatables.Table{}, fmt.Errorf("%w: the title is at most 120 characters and the description 2,000", errBadRequest)
+	}
+	var readers []string
+	if req.Readers != nil {
+		if readers, err = datatables.CheckReaders(req.Readers); err != nil {
+			return datatables.Table{}, err
+		}
 	}
 	// The limit and the name are checked before anything is made.
 	if err := s.tx(r, func(tx pgx.Tx) error {
@@ -474,7 +497,7 @@ func (s *Server) newDataTable(r *http.Request, p *Principal, req tableReq) (data
 	if !proj.Ready() {
 		return datatables.Table{}, datatables.ErrProvisioning
 	}
-	t := datatables.Table{Name: req.Name, Title: req.Title, Description: req.Description, Columns: cols, CreatedBy: p.Actor()}
+	t := datatables.Table{Name: req.Name, Title: req.Title, Description: req.Description, Columns: cols, CreatedBy: p.Actor(), Readers: readers}
 	err = s.tx(r, func(tx pgx.Tx) error {
 		if err := s.checkCount(r.Context(), tx, p.TenantID, "max_data_tables"); err != nil {
 			return err
@@ -482,7 +505,11 @@ func (s *Server) newDataTable(r *http.Request, p *Principal, req tableReq) (data
 		if err := datatables.InsertTable(r.Context(), tx, p.TenantID, &t); err != nil {
 			return err
 		}
-		return auditTx(r, tx, "table.create", t.Name, map[string]any{"table_id": t.ID, "columns": columnNames(t.Columns)})
+		detail := map[string]any{"table_id": t.ID, "columns": columnNames(t.Columns)}
+		if len(readers) > 0 {
+			detail["readers"] = readers
+		}
+		return auditTx(r, tx, "table.create", t.Name, detail)
 	})
 	if err != nil {
 		var pgErr interface{ SQLState() string }
@@ -528,8 +555,13 @@ func (s *Server) getTable(w http.ResponseWriter, r *http.Request) {
 		s.failTables(w, r, err)
 		return
 	}
-	view := tableView(t)
 	p := principalFrom(r.Context())
+	view := tableView(t, p)
+	// A restricted table's row count is its readers'.
+	if !p.readsTable(t) {
+		writeJSON(w, http.StatusOK, view)
+		return
+	}
 	if conn, creds, hc, err := s.xenibaseConnection(r.Context(), p.TenantID, datatables.ConnectionName, tablesPurpose); err == nil {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		if n, ok := s.rowCount(ctx, conn, creds, hc, t.Name); ok {
@@ -557,6 +589,9 @@ func (s *Server) patchTable(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		err = datatables.Writable(t)
 	}
+	if err == nil {
+		err = checkTableReaders(r.Context(), t)
+	}
 	if err != nil {
 		s.failTables(w, r, err)
 		return
@@ -572,7 +607,7 @@ func (s *Server) patchTable(w http.ResponseWriter, r *http.Request) {
 		s.failTables(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, tableView(t))
+	writeJSON(w, http.StatusOK, tableView(t, principalFrom(r.Context())))
 }
 
 type confirmReq struct {
@@ -595,6 +630,9 @@ func (s *Server) deleteTable(w http.ResponseWriter, r *http.Request) {
 	t, err := s.loadTable(r)
 	if err == nil {
 		err = datatables.Writable(t)
+	}
+	if err == nil {
+		err = checkTableReaders(r.Context(), t)
 	}
 	if err != nil {
 		s.failTables(w, r, err)
@@ -647,6 +685,9 @@ func (s *Server) addTableColumn(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		err = datatables.Writable(t)
 	}
+	if err == nil {
+		err = checkTableReaders(r.Context(), t)
+	}
 	if err != nil {
 		s.failTables(w, r, err)
 		return
@@ -689,7 +730,7 @@ func (s *Server) addTableColumn(w http.ResponseWriter, r *http.Request) {
 		s.failTables(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, tableView(t))
+	writeJSON(w, http.StatusCreated, tableView(t, principalFrom(r.Context())))
 }
 
 func (s *Server) dropTableColumn(w http.ResponseWriter, r *http.Request) {
@@ -706,6 +747,9 @@ func (s *Server) dropTableColumn(w http.ResponseWriter, r *http.Request) {
 	t, err := s.loadTable(r)
 	if err == nil {
 		err = datatables.Writable(t)
+	}
+	if err == nil {
+		err = checkTableReaders(r.Context(), t)
 	}
 	if err != nil {
 		s.failTables(w, r, err)
@@ -743,5 +787,5 @@ func (s *Server) dropTableColumn(w http.ResponseWriter, r *http.Request) {
 		s.failTables(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, tableView(t))
+	writeJSON(w, http.StatusOK, tableView(t, principalFrom(r.Context())))
 }

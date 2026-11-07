@@ -71,6 +71,9 @@ var (
 // time (those below before when going on), numbered; the page stays in
 // the session so the numbers mean something.
 func (s *Server) waFindPage(ctx context.Context, c *chat, t datatables.Table, text string, before int64) error {
+	if !c.p.readsTable(t) {
+		return s.waTableRestricted(ctx, c, t)
+	}
 	title := whatsapp.SafeText(tableTitle(t))
 	filter, ok := searchFilter(t.Columns, text)
 	if !ok {
@@ -177,6 +180,9 @@ func (s *Server) waRowStart(ctx context.Context, c *chat, f *chatFound, op strin
 	t, err := s.waGetTable(ctx, c.tenant.ID, f.Table)
 	if err != nil {
 		return s.waRowTableGone(ctx, c, f, err)
+	}
+	if !c.p.readsTable(t) {
+		return s.waTableRestricted(ctx, c, t)
 	}
 	if t.Kept() {
 		return s.waTableKept(ctx, c, t)
@@ -305,6 +311,9 @@ func (s *Server) waRowReply(ctx context.Context, c *chat, f *chatFound, text, cm
 	t, err := s.waGetTable(ctx, c.tenant.ID, f.Table)
 	if err != nil {
 		return s.waRowTableGone(ctx, c, f, err)
+	}
+	if !c.p.readsTable(t) {
+		return s.waTableRestricted(ctx, c, t)
 	}
 	if t.Kept() {
 		return s.waTableKept(ctx, c, t)

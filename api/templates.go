@@ -239,7 +239,7 @@ func (s *Server) templateTables(r *http.Request, p *Principal, t *templates.Temp
 	out := make([]aiTableResult, 0, len(tables))
 	for _, tb := range tables {
 		res := aiTableResult{Name: tb.Name, Status: "created"}
-		req := tableReq{Name: tb.Name, Title: tb.Title, Description: tb.Description}
+		req := tableReq{Name: tb.Name, Title: tb.Title, Description: tb.Description, Readers: tb.Readers}
 		for _, c := range tb.Columns {
 			req.Columns = append(req.Columns, columnReq{Name: c.Name, Title: c.Title, Type: c.Type, Required: c.Required, Personal: c.Personal})
 		}
@@ -248,6 +248,12 @@ func (s *Server) templateTables(r *http.Request, p *Principal, t *templates.Temp
 		case errors.Is(err, errConflict) && strings.Contains(err.Error(), "already exists"):
 			res.Status = "exists"
 			res.Missing = s.tableMissing(r.Context(), p.TenantID, tb.Name, req.Columns)
+			// A table the business made before names its own readers: the
+			// template's are reported, to be set on the Tables page by
+			// someone with role.manage, never taken over here.
+			if len(tb.Readers) > 0 && !s.tableReadersAre(r.Context(), p.TenantID, tb.Name, tb.Readers) {
+				res.Readers = tb.Readers
+			}
 		case !p.Can(PermTableEdit):
 			res.Status, res.Error = "skipped", "making tables needs table.edit: ask an owner or admin to create it on the Tables page"
 		default:
@@ -493,4 +499,18 @@ func (s *Server) tableMissing(ctx context.Context, tenant uuid.UUID, name string
 		return nil
 	}
 	return missing
+}
+
+// tableReadersAre reports whether the tenant's table of that name names
+// exactly these readers (in any order).
+func (s *Server) tableReadersAre(ctx context.Context, tenant uuid.UUID, name string, want []string) bool {
+	var have []string
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT COALESCE(readers, '{}') FROM data_tables WHERE name = $1`, name).Scan(&have)
+	})
+	if err != nil {
+		return false
+	}
+	want, err = datatables.CheckReaders(want)
+	return err == nil && slices.Equal(have, want)
 }
