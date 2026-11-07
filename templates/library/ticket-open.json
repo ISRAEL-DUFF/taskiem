@@ -2,7 +2,7 @@
   "id": "ticket-open",
   "title": "Open a ticket for a customer",
   "summary": "Give a customer's message a ticket number, send it to the right department, and tell the customer their number.",
-  "description": "Opens a ticket for a customer's message, however it came (email, your website's form, WhatsApp or a person at the business): it gets the next number (T-1042), is saved in your tickets table with the first message, goes to the right department (by Taskiem's AI, by your words, or as the customer chose), and the department is told on WhatsApp, Telegram or by email with the number, the subject, how urgent it is, a one-line summary and the link to your ticket reply form. The customer is told their ticket number: by email in the same conversation when they wrote by email, from your own WhatsApp number when they wrote to it, as a member when they are one of your people, else on WhatsApp, Telegram or by text. The ticket templates use it; Taskiem makes the tickets tables when it is used.",
+  "description": "Opens a ticket for a customer's message, however it came (email, your website's form, WhatsApp or a person at the business): it gets the next number (T-1042), is saved in your tickets table with the first message, goes to the right department (by Taskiem's AI, by your words, or as the customer chose), and the department is told on WhatsApp, Telegram or by email with the number, the subject, how urgent it is, a one-line summary and the link to your ticket reply form. The customer is told their ticket number: by email in the same conversation when they wrote by email, from your own WhatsApp number when they wrote to it, as a member when they are one of your people, else on WhatsApp, Telegram or by text. The ticket templates use it; Taskiem makes the tickets tables when it is used. A request from a member to HR (desk hr) is kept in the HR tables instead, which only HR roles and the owner can read, and a confidential one in tables only hr_lead and the owner can read.",
   "category": "customers",
   "tags": [
     "support",
@@ -37,6 +37,14 @@
     {
       "name": "ticket_reply_form",
       "why": "The link of your ticket reply form (the Answer customers' tickets workflow), put in each message to a department so they can answer at once."
+    },
+    {
+      "name": "hr_ticket_reply_form",
+      "why": "The link of your HR reply form (the Answer HR requests workflow), put in each message to HR about a new request."
+    },
+    {
+      "name": "hr_confidential_reply_form",
+      "why": "The link of your HR confidential reply form (the Answer confidential HR requests workflow), put in each message to hr_lead about a new confidential request."
     }
   ],
   "params": [
@@ -241,6 +249,15 @@
             "type": "string",
             "format": "date-time",
             "title": "When the customer wrote"
+          },
+          "desk": {
+            "type": "string",
+            "enum": [
+              "customers",
+              "hr"
+            ],
+            "title": "Which desk keeps it",
+            "description": "customers (the default): the tickets tables, references T-1042. hr: a request from a member to HR, kept in the HR tables only HR roles and the owner can read (hr_tickets and hr_ticket_messages, references HR-1042), or, when its department's role is hr_lead, in the confidential ones only hr_lead and the owner can read (hr_confidential_tickets and hr_confidential_messages, references HC-1042)"
           }
         }
       }
@@ -273,6 +290,22 @@
         }
       },
       {
+        "id": "desk",
+        "type": "transform",
+        "name": "Choose the tables that keep it",
+        "needs": [
+          "route"
+        ],
+        "config": {
+          "output": {
+            "kind": "=trigger.body.?desk.orValue('customers') != 'hr' ? 'customers' : steps.route.output.role == 'hr_lead' ? 'hr_confidential' : 'hr'",
+            "tickets": "=(trigger.body.?desk.orValue('customers') != 'hr' ? 'customers' : steps.route.output.role == 'hr_lead' ? 'hr_confidential' : 'hr') == 'hr' ? 'hr_tickets' : (trigger.body.?desk.orValue('customers') != 'hr' ? 'customers' : steps.route.output.role == 'hr_lead' ? 'hr_confidential' : 'hr') == 'hr_confidential' ? 'hr_confidential_tickets' : 'tickets'",
+            "messages": "=(trigger.body.?desk.orValue('customers') != 'hr' ? 'customers' : steps.route.output.role == 'hr_lead' ? 'hr_confidential' : 'hr') == 'hr' ? 'hr_ticket_messages' : (trigger.body.?desk.orValue('customers') != 'hr' ? 'customers' : steps.route.output.role == 'hr_lead' ? 'hr_confidential' : 'hr') == 'hr_confidential' ? 'hr_confidential_messages' : 'ticket_messages'",
+            "prefix": "=(trigger.body.?desk.orValue('customers') != 'hr' ? 'customers' : steps.route.output.role == 'hr_lead' ? 'hr_confidential' : 'hr') == 'hr' ? 'HR-' : (trigger.body.?desk.orValue('customers') != 'hr' ? 'customers' : steps.route.output.role == 'hr_lead' ? 'hr_confidential' : 'hr') == 'hr_confidential' ? 'HC-' : 'T-'"
+          }
+        }
+      },
+      {
         "id": "ticket",
         "type": "connector",
         "name": "Save the ticket",
@@ -280,10 +313,10 @@
         "action": "insert_rows",
         "connection": "data_tables",
         "needs": [
-          "route"
+          "desk"
         ],
         "input": {
-          "table": "tickets",
+          "table": "=steps.desk.output.tickets",
           "row": {
             "subject": "=trigger.body.subject",
             "customer_name": "=trigger.body.?customer_name.orValue('')",
@@ -315,7 +348,7 @@
         "config": {
           "output": {
             "id": "=steps.ticket.output.rows[0].?id.orValue(0)",
-            "reference": "='T-' + string(1000 + int(steps.ticket.output.rows[0].?id.orValue(0)))",
+            "reference": "=steps.desk.output.prefix + string(1000 + int(steps.ticket.output.rows[0].?id.orValue(0)))",
             "how": "=trigger.body.?mail.orValue('') in ['zoho', 'gmail'] && trigger.body.?customer_email.orValue('') != '' ? 'mailbox' : trigger.body.?mail.orValue('') == 'whatsapp' && trigger.body.?customer_phone.orValue('') != '' ? 'mailbox' : trigger.body.?mail.orValue('') == 'member' && trigger.body.?customer_email.orValue('') != '' ? 'member' : trigger.body.?mail.orValue('') == 'taskiem' && trigger.body.?customer_email.orValue('') != '' && trigger.body.?mailbox.orValue('') != '' ? 'email' : trigger.body.?customer_phone.orValue('') != '' || trigger.body.?customer_email.orValue('') != '' ? 'message' : 'none'"
           }
         }
@@ -331,7 +364,7 @@
           "ref"
         ],
         "input": {
-          "table": "tickets",
+          "table": "=steps.desk.output.tickets",
           "key": "=steps.ref.output.id",
           "set": {
             "reference": "=steps.ref.output.reference",
@@ -350,7 +383,7 @@
           "ref"
         ],
         "input": {
-          "table": "ticket_messages",
+          "table": "=steps.desk.output.messages",
           "row": {
             "reference": "=steps.ref.output.reference",
             "direction": "in",
@@ -376,7 +409,7 @@
           "to": "role",
           "role": "=steps.route.output.role",
           "title": "='New ticket ' + steps.ref.output.reference + ' (' + steps.route.output.priority + ')'",
-          "message": "=steps.ref.output.reference + ' for ' + steps.route.output.department + ', ' + steps.route.output.priority + ' priority: ' + trigger.body.subject + '\\n' + steps.route.output.summary + (trigger.body.?previous.orValue('') != '' ? '\\nIt follows ticket ' + trigger.body.?previous.orValue('') + '.' : '') + (has(env.ticket_reply_form) ? '\\nAnswer it: ' + env.ticket_reply_form + '?ticket=' + steps.ref.output.reference : '\\nAnswer it with the ticket reply form.')"
+          "message": "=steps.ref.output.reference + ' for ' + steps.route.output.department + ', ' + steps.route.output.priority + ' priority: ' + trigger.body.subject + '\\n' + steps.route.output.summary + (trigger.body.?previous.orValue('') != '' ? '\\nIt follows ticket ' + trigger.body.?previous.orValue('') + '.' : '') + (steps.desk.output.kind == 'hr' ? (has(env.hr_ticket_reply_form) ? '\\nAnswer it: ' + env.hr_ticket_reply_form + '?ticket=' + steps.ref.output.reference : '\\nAnswer it with the HR reply form.') : steps.desk.output.kind == 'hr_confidential' ? (has(env.hr_confidential_reply_form) ? '\\nAnswer it: ' + env.hr_confidential_reply_form + '?ticket=' + steps.ref.output.reference : '\\nAnswer it with the HR confidential reply form.') : (has(env.ticket_reply_form) ? '\\nAnswer it: ' + env.ticket_reply_form + '?ticket=' + steps.ref.output.reference : '\\nAnswer it with the ticket reply form.'))"
         }
       },
       {
@@ -418,7 +451,7 @@
                     "ack_email"
                   ],
                   "input": {
-                    "table": "ticket_messages",
+                    "table": "=steps.desk.output.messages",
                     "row": {
                       "reference": "=steps.ref.output.reference",
                       "direction": "out",
@@ -463,7 +496,7 @@
                     "ack_message"
                   ],
                   "input": {
-                    "table": "ticket_messages",
+                    "table": "=steps.desk.output.messages",
                     "row": {
                       "reference": "=steps.ref.output.reference",
                       "direction": "out",
@@ -489,7 +522,7 @@
                   "action": "insert_rows",
                   "connection": "data_tables",
                   "input": {
-                    "table": "ticket_messages",
+                    "table": "=steps.desk.output.messages",
                     "row": {
                       "reference": "=steps.ref.output.reference",
                       "direction": "out",
@@ -531,7 +564,7 @@
                     "ack_member"
                   ],
                   "input": {
-                    "table": "ticket_messages",
+                    "table": "=steps.desk.output.messages",
                     "row": {
                       "reference": "=steps.ref.output.reference",
                       "direction": "out",

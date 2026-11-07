@@ -1,0 +1,18 @@
+{
+  "name": "hr_ticket_messages",
+  "kit": true,
+  "title": "HR request messages",
+  "description": "Every message of every HR request, oldest first: the request's reference, whether the member wrote it (in), HR answered (out) or HR noted it for the team (note), who wrote it, what it says and when. Only members with the hr or hr_lead role, and the owner, can read it.",
+  "readers": ["hr", "hr_lead"],
+  "columns": [
+    {"name": "reference", "title": "Ticket", "type": "text", "required": true},
+    {"name": "direction", "title": "Direction", "type": "text", "required": true},
+    {"name": "author", "title": "From", "type": "text", "personal": true},
+    {"name": "body", "title": "Message", "type": "text", "personal": true},
+    {"name": "at", "title": "When", "type": "datetime"},
+    {"name": "message_id", "title": "Email reference", "type": "text"},
+    {"name": "channel", "title": "Channel", "type": "text"},
+    {"name": "mail", "title": "Email goes by", "type": "text"},
+    {"name": "sent_at", "title": "Sent", "type": "datetime"}
+  ]
+}

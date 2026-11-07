@@ -2,7 +2,7 @@
   "id": "ticket-follow-up",
   "title": "Follow up tickets nobody has answered",
   "summary": "Remind a department of tickets waiting too long for an answer, then tell the person you choose; close tickets the customer left.",
-  "description": "Every 15 minutes, Taskiem looks at your tickets. A ticket the department has not answered within your first-answer time is sent to its department again, and if it is still waiting after twice that time, to the person or role you choose. A ticket waiting on the customer for more days than you allow is resolved with a polite closing message to the customer, the way they wrote to you. Resolved tickets are closed after the days you choose; a customer who writes back to a closed ticket gets a new one.",
+  "description": "Every 15 minutes, Taskiem looks at your tickets. A ticket the department has not answered within your first-answer time is sent to its department again, and if it is still waiting after twice that time, to the person or role you choose. A ticket waiting on the customer for more days than you allow is resolved with a polite closing message to the customer, the way they wrote to you. Resolved tickets are closed after the days you choose; a customer who writes back to a closed ticket gets a new one. Choose which tickets: your customers', or the HR help desk's (its requests, and its confidential ones, each followed up by a workflow of its own, telling HR roles only).",
   "category": "customers",
   "tags": [
     "support",
@@ -36,6 +36,20 @@
   ],
   "params": [
     {
+      "name": "desk",
+      "type": "string",
+      "title": "Which tickets",
+      "description": "customers (the default): your customers' tickets. hr: the HR help desk's requests, in the HR tables; hr_confidential: its confidential requests. Each desk is followed up by a workflow of its own. HR requests are reminded to their role (hr or hr_lead) and escalated to hr_lead alone, whatever the role below, so no HR request reaches anyone else.",
+      "required": false,
+      "default": "customers",
+      "example": "customers",
+      "enum": [
+        "customers",
+        "hr",
+        "hr_confidential"
+      ]
+    },
+    {
       "name": "first_answer_hours",
       "type": "integer",
       "title": "Hours to give the first answer",
@@ -50,7 +64,7 @@
       "name": "escalation_role",
       "type": "string",
       "title": "Who hears about tickets still waiting",
-      "description": "The role told when a ticket is still not answered after twice the first-answer time, such as a manager.",
+      "description": "The role told when a ticket is still not answered after twice the first-answer time, such as a manager. For the HR desks it is always hr_lead.",
       "required": false,
       "default": "owner",
       "example": "manager",
@@ -118,10 +132,11 @@
         "config": {
           "output": {
             "hours": "{{first_answer_hours}}",
-            "escalate_to": "{{escalation_role}}",
+            "escalate_to": "={{desk}} == 'customers' ? {{escalation_role}} : 'hr_lead'",
             "waiting_days": "{{waiting_days}}",
             "close_days": "{{close_days}}",
-            "closing": "{{closing_message}}"
+            "closing": "{{closing_message}}",
+            "tickets": "={{desk}} == 'hr' ? 'hr_tickets' : {{desk}} == 'hr_confidential' ? 'hr_confidential_tickets' : 'tickets'"
           }
         }
       },
@@ -152,7 +167,7 @@
           "times"
         ],
         "input": {
-          "table": "tickets",
+          "table": "=steps.settings.output.tickets",
           "filters": [
             {
               "column": "status",
@@ -216,7 +231,7 @@
                 "tell_department"
               ],
               "input": {
-                "table": "tickets",
+                "table": "=steps.settings.output.tickets",
                 "key": "=item.id",
                 "set": {
                   "reminded_at": "=(has(trigger.scheduled_time) ? trigger.scheduled_time : run.started_at)"
@@ -265,7 +280,7 @@
                 "tell_escalation"
               ],
               "input": {
-                "table": "tickets",
+                "table": "=steps.settings.output.tickets",
                 "key": "=item.id",
                 "set": {
                   "escalated_at": "=(has(trigger.scheduled_time) ? trigger.scheduled_time : run.started_at)"
@@ -286,7 +301,7 @@
           "times"
         ],
         "input": {
-          "table": "tickets",
+          "table": "=steps.settings.output.tickets",
           "filters": [
             {
               "column": "status",
@@ -346,7 +361,7 @@
           "times"
         ],
         "input": {
-          "table": "tickets",
+          "table": "=steps.settings.output.tickets",
           "filters": [
             {
               "column": "status",

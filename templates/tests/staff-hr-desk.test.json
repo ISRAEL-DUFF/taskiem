@@ -96,7 +96,7 @@
             "rows": [
               {
                 "id": 45,
-                "reference": "T-1045",
+                "reference": "HR-1045",
                 "subject": "Annual leave in December",
                 "customer_name": "Bola Ade",
                 "customer_email": "bola@adacakes.ng",
@@ -104,7 +104,7 @@
                 "channel": "staff",
                 "status": "new",
                 "assigned_to": "",
-                "thread": "T-1045",
+                "thread": "HR-1045",
                 "mail": "member",
                 "mailbox": ""
               }
@@ -160,25 +160,39 @@
             }
           },
           "thanks": {
-            "message": "Thank you. Your request is T-1045, with Leave. A manager will approve it first, and you will hear the decision."
+            "message": "Thank you. Your request is HR-1045, with Leave. A manager will approve it first, and you will hear the decision."
           },
           "answer__member": {
             "to": "members",
             "members": [
               "bola@adacakes.ng"
             ],
-            "message": "T-1045 (Annual leave in December):\nYour request T-1045 was approved. HR will finish it and tell you when it is done."
+            "message": "HR-1045 (Annual leave in December):\nYour request HR-1045 was approved. HR will finish it and tell you when it is done."
           },
           "answer__update": {
             "set": {
               "status": "open"
-            }
+            },
+            "table": "hr_tickets"
           },
           "tell_hr": {
             "to": "role",
             "role": "hr",
-            "title": "Request T-1045 approved",
-            "message": "T-1045 (Leave): a manager approved it; it is yours to finish."
+            "title": "Request HR-1045 approved",
+            "message": "HR-1045 (Leave): a manager approved it; it is yours to finish."
+          },
+          "answer__find": {
+            "table": "hr_tickets",
+            "filters": [
+              {
+                "column": "reference",
+                "op": "eq",
+                "value": "HR-1045"
+              }
+            ]
+          },
+          "answer__record": {
+            "table": "hr_ticket_messages"
           }
         },
         "steps": {
@@ -280,7 +294,7 @@
             "rows": [
               {
                 "id": 45,
-                "reference": "T-1045",
+                "reference": "HR-1045",
                 "subject": "Annual leave in December",
                 "customer_name": "Bola Ade",
                 "customer_email": "bola@adacakes.ng",
@@ -288,7 +302,7 @@
                 "channel": "staff",
                 "status": "new",
                 "assigned_to": "",
-                "thread": "T-1045",
+                "thread": "HR-1045",
                 "mail": "member",
                 "mailbox": ""
               }
@@ -336,7 +350,7 @@
         "status": "completed",
         "inputs": {
           "answer__member": {
-            "message": "T-1045 (Annual leave in December):\nYour request T-1045 was not approved. Please speak to your manager."
+            "message": "HR-1045 (Annual leave in December):\nYour request HR-1045 was not approved. Please speak to your manager."
           },
           "answer__update": {
             "set": {
@@ -344,7 +358,7 @@
             }
           },
           "tell_hr": {
-            "title": "Request T-1045 not approved"
+            "title": "Request HR-1045 not approved"
           }
         }
       }
@@ -442,7 +456,7 @@
             "rows": [
               {
                 "id": 45,
-                "reference": "T-1045",
+                "reference": "HR-1045",
                 "subject": "Annual leave in December",
                 "customer_name": "Bola Ade",
                 "customer_email": "bola@adacakes.ng",
@@ -450,7 +464,7 @@
                 "channel": "staff",
                 "status": "new",
                 "assigned_to": "",
-                "thread": "T-1045",
+                "thread": "HR-1045",
                 "mail": "member",
                 "mailbox": ""
               }
@@ -497,7 +511,7 @@
         "status": "completed",
         "inputs": {
           "answer__member": {
-            "message": "T-1045 (Annual leave in December):\nYour request T-1045 was not approved, since no manager decided within three days. Please speak to your manager."
+            "message": "HR-1045 (Annual leave in December):\nYour request HR-1045 was not approved, since no manager decided within three days. Please speak to your manager."
           },
           "answer__update": {
             "set": {
@@ -600,7 +614,7 @@
             "rows": [
               {
                 "id": 45,
-                "reference": "T-1045",
+                "reference": "HR-1045",
                 "subject": "Annual leave in December",
                 "customer_name": "Bola Ade",
                 "customer_email": "bola@adacakes.ng",
@@ -608,7 +622,7 @@
                 "channel": "staff",
                 "status": "new",
                 "assigned_to": "",
-                "thread": "T-1045",
+                "thread": "HR-1045",
                 "mail": "member",
                 "mailbox": ""
               }
@@ -653,10 +667,24 @@
             "row": {
               "department": "Payroll",
               "role": "hr"
-            }
+            },
+            "table": "hr_tickets"
           },
           "thanks": {
-            "message": "Thank you. Your request is T-1046, with Payroll."
+            "message": "Thank you. Your request is HR-1046, with Payroll."
+          },
+          "open__number": {
+            "table": "hr_tickets",
+            "set": {
+              "reference": "HR-1046"
+            }
+          },
+          "open__first": {
+            "table": "hr_ticket_messages",
+            "row": {
+              "reference": "HR-1046",
+              "direction": "in"
+            }
           }
         },
         "steps": {
@@ -759,7 +787,7 @@
             "rows": [
               {
                 "id": 45,
-                "reference": "T-1045",
+                "reference": "HR-1045",
                 "subject": "Annual leave in December",
                 "customer_name": "Bola Ade",
                 "customer_email": "bola@adacakes.ng",
@@ -767,7 +795,7 @@
                 "channel": "staff",
                 "status": "new",
                 "assigned_to": "",
-                "thread": "T-1045",
+                "thread": "HR-1045",
                 "mail": "member",
                 "mailbox": ""
               }
@@ -812,10 +840,38 @@
             "row": {
               "department": "Confidential",
               "role": "hr_lead"
-            }
+            },
+            "table": "hr_confidential_tickets"
           },
           "open__tell": {
-            "role": "hr_lead"
+            "to": "role",
+            "role": "hr_lead",
+            "title": "New ticket HC-1047 (normal)",
+            "message": "HC-1047 for Confidential, normal priority: A concern\nA concern\nAnswer it with the HR confidential reply form."
+          },
+          "open__number": {
+            "table": "hr_confidential_tickets",
+            "set": {
+              "reference": "HC-1047"
+            }
+          },
+          "open__first": {
+            "table": "hr_confidential_messages",
+            "row": {
+              "reference": "HC-1047",
+              "direction": "in",
+              "body": "I want to raise a harassment concern in confidence."
+            }
+          },
+          "open__ack_told": {
+            "table": "hr_confidential_messages",
+            "row": {
+              "reference": "HC-1047",
+              "direction": "out"
+            }
+          },
+          "thanks": {
+            "message": "Thank you. Your request is HC-1047, with Confidential."
           }
         },
         "steps": {
@@ -919,7 +975,7 @@
             "rows": [
               {
                 "id": 45,
-                "reference": "T-1045",
+                "reference": "HR-1045",
                 "subject": "Annual leave in December",
                 "customer_name": "Bola Ade",
                 "customer_email": "bola@adacakes.ng",
@@ -927,7 +983,7 @@
                 "channel": "staff",
                 "status": "new",
                 "assigned_to": "",
-                "thread": "T-1045",
+                "thread": "HR-1045",
                 "mail": "member",
                 "mailbox": ""
               }
@@ -969,7 +1025,7 @@
         "status": "completed",
         "inputs": {
           "thanks": {
-            "message": "Thank you. Your request is T-1048, with Leave."
+            "message": "Thank you. Your request is HR-1048, with Leave."
           }
         },
         "steps": {
@@ -1073,7 +1129,7 @@
             "rows": [
               {
                 "id": 45,
-                "reference": "T-1045",
+                "reference": "HR-1045",
                 "subject": "Annual leave in December",
                 "customer_name": "Bola Ade",
                 "customer_email": "bola@adacakes.ng",
@@ -1081,7 +1137,7 @@
                 "channel": "staff",
                 "status": "new",
                 "assigned_to": "",
-                "thread": "T-1045",
+                "thread": "HR-1045",
                 "mail": "member",
                 "mailbox": ""
               }
