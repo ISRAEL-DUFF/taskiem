@@ -298,4 +298,5 @@ Stories are grouped by who benefits. Numbers are for reference in planning, not 
 216. As anyone, I can have someone who comments PRICE on my post get the price and the order link in a DM, within the rules Meta sets.
 217. As anyone, I can hear every Monday which posts did best, in the network's own numbers.
 218. As anyone, I can trust that Taskiem never posts twice, never posts without my yes, and never follows, likes or messages strangers on my behalf.
-219. As a business owner, when adverts come, I can set a monthly cap and approve every spend, from my own ad account, and Taskiem never holds my ad money.
+219. As anyone, I can send a phone photo or a long video and have it fitted to each network's shape and limits before it goes, shown to me as it will appear, with the price or my logo on it if I ask.
+220. As a business owner, when adverts come, I can set a monthly cap and approve every spend, from my own ad account, and Taskiem never holds my ad money.

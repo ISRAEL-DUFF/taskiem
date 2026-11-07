@@ -118,6 +118,32 @@ The Tables page shows `posts` as any table. G4 adds a **Posts** page: a week cal
 
 A `get_insights` read on each connector (Instagram: `/{media-id}/insights`; Facebook: `/{post-id}/insights`; LinkedIn and TikTok where their APIs give them) fills the row's insight columns on a schedule (a day after publishing, then weekly for a month). A template (§9) tells the owner every Monday which posts did best. Insights are the network's numbers as it gives them, with the network's names; Taskiem adds no scores of its own.
 
+### 6.7 Media processing
+
+A phone photo is rarely the shape a network wants, and a video is rarely within its limits, so publishing needs processing before it needs an API call. n8n's answer is an Edit Image node (GraphicsMagick) and, for video, shelling out to ffmpeg or calling a rendering service; Taskiem has the pieces to do both inside the product. `engine/media` already decodes, bounds and re-encodes images (JPEG, PNG, WebP; a 25-megapixel cap against decompression bombs; three stored widths for storefronts), and container steps run a pinned image in a sandbox with the file in and the file out, counted in minutes against the plan.
+
+**Necessary, in G1, so a post goes out at all:**
+
+| Need | How |
+| --- | --- |
+| **Fit to the network** | Instagram takes images between 4:5 and 1.91:1 (Reels and stories 9:16, TikTok 9:16, Facebook anything); each has pixel and byte limits. At the draft, `media.fit` pads (a colour from the photo's edge, or the organisation's brand colour) or crops to the nearest allowed shape per account, and re-encodes within the limit. In Go, on `engine/media`, no container. The person is shown the result in the read-back, cropped as the network will show it, so the yes is to the real thing |
+| **Transcode video** | Length, size, codec, bitrate and frame-size limits per network and kind (a Reel, a story, a TikTok, a YouTube Short). A video outside them is transcoded by an `ffmpeg` container step on the existing container worker: Taskiem's own pinned image (`ffmpeg` on a distroless base, in the platform's registry), the file from storage in, the file to storage out, no network. Minutes count against `container_minutes_monthly`; a plan with none gets the network's words at the draft and the chance to send a shorter video. A video already within the limits is not touched |
+| **Still frames** | A video's cover frame (the first second, or a chosen second) for the read-back and for Instagram's cover; from the same step |
+
+**Useful, in G4 with the Posts page**, each an action on a builtin `media@1` connector that any workflow may use, not only posting:
+
+| Action | What it does |
+| --- | --- |
+| `media.text` | Writes text on an image: the price, the name, a date, in the organisation's look (its colour, one of the three storefront themes' faces), at a corner or a band. The catalogue templates use it for the price on the product photo |
+| `media.watermark` | The organisation's logo at a corner, at a chosen opacity |
+| `media.tile` | A square or 4:5 product tile from a catalogue photo: padded, with an optional band for the name and price |
+| `media.caption_video` | Burns a caption line into a video (the ffmpeg step) |
+| `media.info` | Width, height, length, type, size, for an If step |
+
+**AI images, under the existing AI budget**, after G4 and only where a model Taskiem's AI provider offers makes them: a product on a clean background (background removal), a background for a product shot, an image from a caption. Each is an `ai` step with `kind: image`, spending `ai_monthly_tokens` as the provider counts it, shown as a draft for a yes like any other media, never posted on its own. Nothing generated carries a person's face without that person's photo having been given for it; the model's own rules apply on top.
+
+**Rules.** Processing never changes what the person said: the caption is theirs, the crop is shown before the yes, and the original file is kept beside the processed one until the post is published. A processed file is stored under the post's `social/` prefix and deleted with the row. No processing sends a file outside Taskiem: images are done in the process, video in the sandbox with no egress, AI images through the organisation's AI provider as every AI step is.
+
 ## 7. The connectors
 
 ### 7.1 Meta: `messenger@1` (Facebook) and `instagram@1`
@@ -158,9 +184,9 @@ Each milestone ships with its templates, its chat commands, its docs page, and w
 
 ### G1: Facebook and Instagram posting (M; needs the Meta app, not its review, on staging)
 
-The two known tables; media in storage with signed public links; `publish`, `delete_post`, `get_post` on both Meta connectors; the `social-publish` platform workflow and the never-twice rule; the limit (§10); the video checks; the first three templates (§9); the web's Tables view showing posts.
+The two known tables; media in storage with signed public links; `media.fit` and the ffmpeg transcode step with its cover frame (§6.7); `publish`, `delete_post`, `get_post` on both Meta connectors; the `social-publish` platform workflow and the never-twice rule; the limit (§10); the first three templates (§9); the web's Tables view showing posts.
 
-**Done when:** a test Page and Instagram account take a photo post, a carousel, a Reel and a text post (Facebook) from a template on a schedule, each exactly once across a lost answer; a 26th Instagram post in a day waits for tomorrow with a message; the limit holds.
+**Done when:** a test Page and Instagram account take a photo post, a carousel, a Reel and a text post (Facebook) from a template on a schedule, each exactly once across a lost answer; a 3:2 phone photo is padded to 4:5 for Instagram and left as it is for Facebook, and the read-back shows both; a 3-minute 4K video becomes a Reel within Instagram's limits through the container step, and is refused with Instagram's words on a plan with no container minutes; a 26th Instagram post in a day waits for tomorrow with a message; the limit holds.
 
 ### G2: posting from chat (M; needs G1, chat as the way in C2)
 
@@ -176,7 +202,7 @@ The `comments` trigger, `list_comments`, `reply_comment`, `hide_comment`; the "r
 
 ### G4: the Posts page and insights (M; needs G1)
 
-The week calendar, the draft editor with media and the AI caption, per-post insights; `get_insights` on both connectors; the insights schedule and the Monday template.
+The week calendar, the draft editor with media and the AI caption, per-post insights; `get_insights` on both connectors; the insights schedule and the Monday template; the `media@1` actions (§6.7: text, watermark, tile, caption_video, info) in the editor and in the catalogue templates.
 
 **Done when:** the page makes, changes and cancels the same rows the chat does, and a post's reach appears a day after it went out.
 
@@ -199,7 +225,7 @@ In the library, offered by the chat and the Start page as the others are, each w
 | Template | Trigger | What it does |
 | --- | --- | --- |
 | `social-post-from-table` | schedule | Every day (or the days chosen) at a time, takes the next row of `posts` marked `draft` with the day's date, or the oldest draft, and publishes it to its accounts |
-| `social-catalogue-item-weekly` | schedule | Every Monday at 9, picks a catalogue item (round-robin, available ones only), drafts a caption with its name and price, asks the owner on WhatsApp, posts on yes |
+| `social-catalogue-item-weekly` | schedule | Every Monday at 9, picks a catalogue item (round-robin, available ones only), makes a tile with the price on the photo (`media.tile`, G4), drafts a caption with its name and price, asks the owner on WhatsApp, posts on yes |
 | `social-announce-new-product` | table row added (the catalogue) | A new item with a photo becomes a draft announcing it, sent to the owner for a yes, then posted everywhere |
 | `social-post-everywhere` | chat, or a form | One caption and media to every connected account at once, or at a time |
 | `social-comment-price-dm` | `comments` | Someone comments PRICE (or the words chosen) on a post: a DM with the price and the order link, within the messaging rules; the comment replied to with "sent you a DM" |
@@ -207,7 +233,7 @@ In the library, offered by the chat and the Start page as the others are, each w
 
 ## 10. Limits and plans
 
-A new monthly limit, `social_posts_monthly`, counted at publish, per organisation across accounts: beyond it posts are held (status `scheduled`, with a message saying why) until the month turns or the plan changes; nothing is lost. Proposed in `deploy/plans.yaml`: Shop 60, Shop Plus 300, Starter Trader 100, Growing Business 500, Business 2,000, Enterprise 0 (no limit). AI captions spend `ai_monthly_tokens` as every AI step does. Media counts against storage. The numbers are settled in G1 with the founders.
+A new monthly limit, `social_posts_monthly`, counted at publish, per organisation across accounts: beyond it posts are held (status `scheduled`, with a message saying why) until the month turns or the plan changes; nothing is lost. Proposed in `deploy/plans.yaml`: Shop 60, Shop Plus 300, Starter Trader 100, Growing Business 500, Business 2,000, Enterprise 0 (no limit). AI captions and AI images spend `ai_monthly_tokens` as every AI step does. Video transcoding spends `container_minutes_monthly`; a plan with none is told so at the draft. Media counts against storage. The numbers are settled in G1 with the founders.
 
 ## 11. Rules
 
@@ -243,6 +269,7 @@ An advert spends money from the person's ad account. So G6, when decided: every 
 | Never twice | A publish whose answer is lost on Instagram (container written) and on Facebook (recent posts read) is published once; a parked step resumes right |
 | Limits | The 26th Instagram post of a day waits; the plan's monthly limit holds posts and releases them |
 | Media | A link expires after an hour; metadata is stripped; a too-long video is refused at the draft with the network's words |
+| Processing | A 3:2 photo fits 4:5 and 1.91:1 by padding and by cropping with the right pixels; a video is transcoded within each network's limits and its cover frame taken, on the container worker with no egress; a video within the limits is byte-identical after; `media.text` places text where asked in the organisation's colour; the original is kept until publish |
 | Chat | Every command of §6.4 in the chat evaluation suite in five languages; nothing posts without the yes; a personal Instagram account gets the walk-through, not an error |
 | Moderation | A prohibited draft is refused; a suspended organisation posts nothing |
 | Templates | Workflow tests per template on fake Meta services |
@@ -257,6 +284,7 @@ An advert spends money from the person's ad account. So G6, when decided: every 
 | People expect WhatsApp Status posting | The chat says plainly that no app can post a Status, and offers the networks that can |
 | A post the person regrets | The yes reads back everything; a scheduled post can be cancelled until the minute it goes; `delete_post` after |
 | TikTok's unaudited mode posts private videos | Not offered until the audit passes; the chat does not list TikTok before then |
+| Video transcoding is slow and spends container minutes | Only videos outside the limits are transcoded; the step runs when the draft is made, not at publish time, so a six o'clock post is ready by six; plans without minutes are told at the draft |
 | Cost of X's API | Decided by the founders with the number in front of them; off by default |
 
 Open: whether a `posts` row for one draft on three accounts is three rows (proposed: yes, one per account, joined by `draft_id`, so each has its own status and insights) or one with three statuses; whether stories, which vanish in a day, belong in the same table (proposed: yes, `kind = story`, no insights); the plan numbers of §10.
