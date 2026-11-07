@@ -441,7 +441,58 @@ Explore, "@" starts a tag in the open chat's box (the picker opens as if it
 were typed). The letters stay out of a sheet, the tools, the picker and
 Explore while one is open; in Explore they are typed into its search.
 
-## 9. Tests
+## 9. Phase 7: wholesale prices and deals
+
+Buying in bulk in Nigeria is a conversation about price. Both sides may
+offer; staff agree within limits the owner sets; every step is a card in the
+conversation between the two businesses, and the deal is a diary line.
+
+**Quantity breaks.** A price list item may have up to five lower prices from
+a quantity up ("from 10 bags ₦39,500 · from 50 ₦38,800"), each a larger
+quantity and a lower price than the one before (`breaks` on
+`PUT /v1/price-lists/{id}/items`, mirrored to the buyer with the list). The
+buyer's Order sheet shows them under each row, and an order is drafted at
+the price for its quantity; a price kept for one buyer has no breaks.
+
+**An offer.** On review, the buyer may tap **Make an offer** and say a price
+for the whole order ("740k" reads as ₦740,000): it is sent as an offer
+(`offer` and `total_kobo` on `POST /v1/supplier-prices/{link}/order`, spread
+over the lines in proportion to the list's prices, or `price_kobo` on each
+line). It reaches the seller as an order whose lines are priced by the
+offer, with the list price beside it ("was ₦790,000"), never auto-accepted.
+An offer lapses 48 hours after its last step; a lapsed one cannot be
+accepted.
+
+**The cards.** The seller's card ("Offer", then "Counter") has **Accept
+₦740,000**, **Counter** and **Decline**; the buyer's card on the seller's
+counter has **Accept ₦770,000**, **Counter** and **Cancel**. A counter is one
+total: the seller's over its own prices (`total_kobo` on
+`POST /v1/trade-orders/{id}/change`), the buyer's back
+(`POST /v1/stock/purchases/{id}/counter`). Each step is kept, newest last, in
+the order's `deal_history` on both sides (up to 20), with who and when.
+
+**Staff and the floor.** Each product may have a **Lowest price**, set on its
+form by those who set prices (`PUT /v1/trade-floors`), and the business a
+**largest discount** on a whole order (Price lists, "Offers from buyers").
+Buyers never see either. Staff with order.handle may accept or counter an
+offer: a counter under the floor is refused ("…; the owner can go lower"); an
+accept under it is not taken but waits for the owner (`202 {waiting:
+"owner", why}`), as a **Needs your OK** card (kind `deal`: "Tunde would agree
+₦740,000 with Ada's Kitchen", "was ₦790,000 · under your lowest price") with
+**Agree**. The owner is not limited.
+
+**Keep this price for them.** Accepting, those who set prices choose how long
+the agreed prices stay the buyer's own: this order only (the default), 7, 14
+or 30 days (`keep_days`). They become the buyer's own prices on its list
+(`price_list_overrides.until`) and end by themselves.
+
+**WhatsApp and Telegram.** An offer reaches the seller with Accept and
+Decline; a counter reaches the buyer with **Accept** (the change). Either side
+answers in words: "counter 760k", or "counter P-7QX4KD 760k" when several are
+open. Agreeing is a diary line on the seller's side: "Agreed ₦760,000 with
+Ada's Kitchen on P-7QX4KD".
+
+## 10. Tests
 
 - `api/chat_tools_test.go`: the switch (off by default, a viewer refused, on for
   everyone, off again); on, names straight to businesses with and without `...`,
@@ -519,3 +570,17 @@ Explore while one is open; in Explore they are typed into its search.
   Low stock opening Stock, Got it; none for a cashier; axe in both themes.
 - Unit tests: `lib/staff` (the sale, the change and the bars, the greeting,
   the cash), `lib/tools` (role-shaped tools), `ChatTools` (`order.handle`).
+- `api/trade_deals_test.go`: a break that goes up refused; the break's price
+  on an order of 20; an offer by total at the seller with its list price and
+  its card; a floor; a cashier's accept under it waiting for the owner with a
+  `deal` card, Keep refused to a cashier, a counter under the floor refused and
+  one above it sent as a total; the buyer's counter from WhatsApp; the owner
+  accepting and keeping the price 7 days, the diary line, the order at the
+  agreed price and the kept price on the buyer's list; a lapsed offer refused.
+- `engine/links/deals_test.go`: spreading a total, breaks, below the floor.
+- Unit tests: `lib/deals` (break prices and words, their checks, "760k",
+  "6% off", the history, when it lapses).
+- `web/e2e/chat-deals.spec.ts`: quantity prices and an offer on the Order
+  sheet (phone and computer); the seller countering and accepting with Keep,
+  the buyer countering back; staff waiting for the owner; quantity prices on
+  a list and the largest discount; axe in both themes.

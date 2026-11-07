@@ -153,6 +153,8 @@ func (s *Server) putPriceListItems(w http.ResponseWriter, r *http.Request) {
 			PriceKobo   int64  `json:"price_kobo"`
 			MinQuantity int    `json:"min_quantity"`
 			Available   *bool  `json:"available"`
+			// Quantity breaks: lower prices from larger quantities.
+			Breaks []links.Break `json:"breaks"`
 		} `json:"items"`
 	}
 	if err := decodeBody(r, &in); err != nil {
@@ -183,7 +185,7 @@ func (s *Server) putPriceListItems(w http.ResponseWriter, r *http.Request) {
 			s.fail(w, r, fmt.Errorf("%w: %q is not one of your items", errBadRequest, x.ItemID))
 			return
 		}
-		pi := links.PriceItem{ItemID: it.ID, Name: it.Name, Unit: it.Unit, PriceKobo: x.PriceKobo, MinQuantity: max(1, x.MinQuantity), Available: true}
+		pi := links.PriceItem{ItemID: it.ID, Name: it.Name, Unit: it.Unit, PriceKobo: x.PriceKobo, MinQuantity: max(1, x.MinQuantity), Available: true, Breaks: x.Breaks}
 		if x.Available != nil {
 			pi.Available = *x.Available
 		}
@@ -540,6 +542,16 @@ type orderLineIn struct {
 	SellerItemID string `json:"seller_item_id"`
 	Quantity     int64  `json:"quantity"`
 	ItemID       string `json:"item_id"`
+	// PriceKobo is the buyer's offered price for the line (an offer,
+	// chat tools phase 7); none: the supplier's.
+	PriceKobo int64 `json:"price_kobo"`
+}
+
+// dealIn is an offer on an order from a price list (chat tools phase 7):
+// the lines' own prices, or a total spread over them.
+type dealIn struct {
+	Offer     bool  `json:"offer"`
+	TotalKobo int64 `json:"total_kobo"`
 }
 
 // errUnlinkedItem names a price-list item no own item is linked to yet.
@@ -553,7 +565,7 @@ func (e errUnlinkedItem) Error() string {
 // price list, in the business in scope: each line at the list's price, at
 // least its minimum, while available; each line's own item from the item
 // link, or the one named (then linked). It answers the order, drafted.
-func (s *Server) draftFromPricesTx(ctx context.Context, tx pgx.Tx, p *Principal, link uuid.UUID, in []orderLineIn, own map[string]stock.Item, note, key string) (stock.Purchase, error) {
+func (s *Server) draftFromPricesTx(ctx context.Context, tx pgx.Tx, p *Principal, link uuid.UUID, in []orderLineIn, own map[string]stock.Item, note, key string, deal ...dealIn) (stock.Purchase, error) {
 	got, err := links.SupplierPricesTx(ctx, tx, p.TenantID, link)
 	if err != nil {
 		return stock.Purchase{}, err
@@ -612,9 +624,46 @@ func (s *Server) draftFromPricesTx(ctx context.Context, tx pgx.Tx, p *Principal,
 		if !ok {
 			return stock.Purchase{}, errUnlinkedItem{Item: it}
 		}
-		lines = append(lines, stock.PurchaseLine{ItemID: o.ID, Item: o.Name, Unit: o.Unit, Quantity: l.Quantity, CostKobo: it.PriceKobo})
+		// The quantity's price: a quantity break once reached (phase 7).
+		lines = append(lines, stock.PurchaseLine{ItemID: o.ID, Item: o.Name, Unit: o.Unit, Quantity: l.Quantity, CostKobo: links.PriceAt(it, l.Quantity)})
 	}
-	return stock.DraftTx(ctx, tx, p.TenantID, stock.DraftIn{Supplier: supplier, Lines: lines, Note: note, Actor: p.Actor(), Key: key})
+	offer := len(deal) > 0 && deal[0].Offer
+	if offer {
+		// An offer: the buyer's own prices for the lines, or its total
+		// spread over them; the supplier's prices are what it is against.
+		if deal[0].TotalKobo > 0 {
+			prices, qs := make([]int64, len(lines)), make([]int64, len(lines))
+			for i, l := range lines {
+				prices[i], qs[i] = l.CostKobo, l.Quantity
+			}
+			spread, err := links.SpreadTotal(prices, qs, deal[0].TotalKobo)
+			if err != nil {
+				return stock.Purchase{}, err
+			}
+			for i := range lines {
+				lines[i].CostKobo = spread[i]
+			}
+		} else {
+			for i, l := range in {
+				if l.PriceKobo > 0 {
+					lines[i].CostKobo = l.PriceKobo
+				}
+			}
+		}
+		for _, l := range lines {
+			if l.CostKobo < 1 || l.CostKobo > 100000000000 {
+				return stock.Purchase{}, fmt.Errorf("%w: %s needs a price", links.ErrInvalid, l.Item)
+			}
+		}
+	}
+	x, err := stock.DraftTx(ctx, tx, p.TenantID, stock.DraftIn{Supplier: supplier, Lines: lines, Note: note, Actor: p.Actor(), Key: key})
+	if err != nil || !offer {
+		return x, err
+	}
+	// Sent, it reaches the supplier at these prices (links.WriteOrderTx).
+	_, err = tx.Exec(ctx, `UPDATE purchase_orders SET offer = true WHERE id = $1`, x.ID)
+	x.Offer = true
+	return x, err
 }
 
 // orderFromPrices is POST /v1/supplier-prices/{link}/order, with an
@@ -641,6 +690,7 @@ func (s *Server) orderFromPrices(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Lines []orderLineIn `json:"lines"`
 		Note  string        `json:"note"`
+		dealIn
 	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
@@ -659,7 +709,7 @@ func (s *Server) orderFromPrices(w http.ResponseWriter, r *http.Request) {
 	var x stock.Purchase
 	err = s.tx(r, func(tx pgx.Tx) error {
 		var err error
-		x, err = s.draftFromPricesTx(r.Context(), tx, p, link, in.Lines, own, strings.TrimSpace(in.Note), "prices-"+key)
+		x, err = s.draftFromPricesTx(r.Context(), tx, p, link, in.Lines, own, strings.TrimSpace(in.Note), "prices-"+key, in.dealIn)
 		return err
 	})
 	var unlinked errUnlinkedItem

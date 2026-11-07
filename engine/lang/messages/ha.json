@@ -5024,6 +5024,58 @@
       "text": "*{from}* ya ce tura kuɗinsa na {amount} ({note}) na takardar {reference} ne. Idan an ƙirga shi zuwa wata takarda, matsar da shi a shafin takardar.",
       "reviewed": false
     },
+    "order.link.offered_title": {
+      "text": "{from} ya bayar da farashi kan {reference}",
+      "reviewed": false
+    },
+    "order.link.offered": {
+      "text": "*{from}* na bayar da {note} don oda {reference}. Karɓa ko ƙi, ko aika farashinka: counter {reference} 785k",
+      "reviewed": false
+    },
+    "order.link.countered_title": {
+      "text": "{from} ya amsa farashinka kan {reference}",
+      "reviewed": false
+    },
+    "order.link.countered": {
+      "text": "*{from}* ya amsa da {note} don oda {reference}. Karɓa ko ƙi, ko aika farashinka: counter {reference} 790k",
+      "reviewed": false
+    },
+    "order.link.button_accept_change": {
+      "text": "Karɓa",
+      "reviewed": false
+    },
+    "order.link.done_accept_change": {
+      "text": "An karɓi farashinsu kan {reference}. An faɗa musu.",
+      "reviewed": false
+    },
+    "deal.owner_title": {
+      "text": "{who} na son amincewa da {amount} tare da {business}",
+      "reviewed": false
+    },
+    "deal.owner_body": {
+      "text": "Oda {reference}: {why}. Karɓa ko ƙi a cikin hirar Taskiem.",
+      "reviewed": false
+    },
+    "deal.owner_asked": {
+      "text": "Wannan farashin ya yi ƙasa da mafi ƙanƙanta da kasuwancinku ke karɓa, don haka mai shi zai yanke hukunci kan {reference}. An faɗa masa.",
+      "reviewed": false
+    },
+    "deal.counter_sent": {
+      "text": "An aika: {amount} don {reference}. Za su iya karɓa ko amsa.",
+      "reviewed": false
+    },
+    "deal.counter_none": {
+      "text": "Babu odar da ke jiran farashinka. Buɗe odar a Taskiem don bayar da farashi.",
+      "reviewed": false
+    },
+    "deal.counter_which": {
+      "text": "Akwai oda fiye da ɗaya da ke jira ({references}). Faɗi wacce, kamar: counter {reference} 750k",
+      "reviewed": false
+    },
+    "deal.counter_how": {
+      "text": "Aika farashinka kamar haka: counter 750k (ko counter {reference} 750k).",
+      "reviewed": false
+    },
     "order.link.ordered_title": {
       "text": "{from} ya aika oda {reference}",
       "reviewed": false

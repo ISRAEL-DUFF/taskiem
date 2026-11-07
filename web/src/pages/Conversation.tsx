@@ -36,6 +36,7 @@ import { MentionText } from "./Mentions";
 import { ChatAvatar } from "./ChatAvatar";
 import { ContactInfo } from "./ContactInfo";
 import { useConfirm } from "./ConfirmSheet";
+import { DealActions } from "./ChatDeal";
 import { useChatTools } from "../lib/useChatTools";
 import { ORDER_STEPS, cardKicker, cardStatus, isDiary } from "../lib/cardframe";
 import { DiaryLine } from "../kit";
@@ -131,6 +132,17 @@ function CardActions({
     void act.run(async () => (await post(path), onDone()), done);
   const who = <span className="sr-only"> {card.reference}</span>;
   let buttons: ReactNode = null;
+  switch (`${card.doc}:${card.event}`) {
+    // A deal (phase 7): the buyer's offer or counter at the seller, the
+    // seller's counter at the buyer.
+    case "order:offered":
+    case "order:countered":
+      return <DealActions card={card} side="seller" onDone={onDone} />;
+    case "purchase:change":
+      if (card.was_kobo !== undefined)
+        return <DealActions card={card} side="buyer" onDone={onDone} />;
+      break;
+  }
   switch (`${card.doc}:${card.event}`) {
     case "order:ordered":
       if (can("storefront.manage|order.handle"))

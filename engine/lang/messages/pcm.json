@@ -5024,6 +5024,58 @@
       "text": "*{from}* talk say their transfer of {amount} ({note}) na for invoice {reference}. If e don count for another invoice, move am for the invoice page.",
       "reviewed": false
     },
+    "order.link.offered_title": {
+      "text": "{from} don give price for {reference}",
+      "reviewed": false
+    },
+    "order.link.offered": {
+      "text": "*{from}* wan pay {note} for order {reference}. Accept or decline am, or send your own price: counter {reference} 785k",
+      "reviewed": false
+    },
+    "order.link.countered_title": {
+      "text": "{from} don answer your price for {reference}",
+      "reviewed": false
+    },
+    "order.link.countered": {
+      "text": "*{from}* talk {note} for order {reference}. Accept or decline am, or send your own price: counter {reference} 790k",
+      "reviewed": false
+    },
+    "order.link.button_accept_change": {
+      "text": "Accept",
+      "reviewed": false
+    },
+    "order.link.done_accept_change": {
+      "text": "You don accept their price for {reference}. We don tell them.",
+      "reviewed": false
+    },
+    "deal.owner_title": {
+      "text": "{who} wan agree {amount} with {business}",
+      "reviewed": false
+    },
+    "deal.owner_body": {
+      "text": "Order {reference}: {why}. Accept or decline am for Taskiem chat.",
+      "reviewed": false
+    },
+    "deal.owner_asked": {
+      "text": "That price low pass wetin una business dey collect, so na oga go decide {reference}. We don tell am.",
+      "reviewed": false
+    },
+    "deal.counter_sent": {
+      "text": "We don send am: {amount} for {reference}. Dem fit accept or answer.",
+      "reviewed": false
+    },
+    "deal.counter_none": {
+      "text": "No order dey wait for your price. Open the order for Taskiem to give your price.",
+      "reviewed": false
+    },
+    "deal.counter_which": {
+      "text": "Pass one order dey wait ({references}). Talk which one, like: counter {reference} 750k",
+      "reviewed": false
+    },
+    "deal.counter_how": {
+      "text": "Send your price like this: counter 750k (or counter {reference} 750k).",
+      "reviewed": false
+    },
     "order.link.ordered_title": {
       "text": "{from} send order {reference}",
       "reviewed": false

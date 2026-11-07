@@ -15,6 +15,8 @@ export interface DocCard {
   reference: string;
   id?: string;
   amount_kobo?: number;
+  /** A deal: what it comes to at the seller's own prices. */
+  was_kobo?: number;
   note?: string;
 }
 
@@ -139,6 +141,8 @@ export interface Conversation {
 
 const VERB: Record<string, string> = {
   ordered: "sent order",
+  offered: "made an offer on order",
+  countered: "countered on order",
   auto_accepted: "sent order (accepted by itself)",
   auto_changed: "sent order (changed to our prices by itself)",
   proposed: "drafted order",
@@ -193,6 +197,9 @@ export function cardHref(card: DocCard): string {
 export function cardSub(card: DocCard): string {
   return [
     card.amount_kobo !== undefined ? naira(card.amount_kobo) : "",
+    card.was_kobo !== undefined && card.was_kobo > (card.amount_kobo ?? 0)
+      ? `was ${naira(card.was_kobo)}`
+      : "",
     card.note ? `“${card.note}”` : "",
   ]
     .filter(Boolean)

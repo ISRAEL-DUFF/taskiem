@@ -2,6 +2,7 @@
 // §5, phase 3): ordering from their price list, the orders sent them, their
 // bills. Pure, so each is tested.
 
+import { priceAt } from "./deals";
 import type { ItemLink, PriceItem } from "./pricelists";
 import type { Purchase } from "./purchases";
 import { formatPrice } from "./storefront";
@@ -19,7 +20,8 @@ export function bagOf(items: PriceItem[], qty: Record<string, number>) {
   const lines = items
     .filter((it) => (qty[it.item_id] ?? 0) > 0)
     .map((it) => ({ item: it, quantity: qty[it.item_id] ?? 0 }));
-  const total = lines.reduce((n, l) => n + l.quantity * l.item.price_kobo, 0);
+  // Each at its price for that quantity (a quantity break).
+  const total = lines.reduce((n, l) => n + l.quantity * priceAt(l.item, l.quantity), 0);
   const count =
     lines.length === 0
       ? "Nothing yet"

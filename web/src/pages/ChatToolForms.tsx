@@ -324,6 +324,21 @@ export function ProductForm({
         : Promise.resolve([] as BusinessLink[]),
     [],
   );
+  // The lowest price staff may agree to (phase 7); under it, the owner's OK.
+  const floors = useLoad(
+    () =>
+      trade
+        ? get<{ floors: Record<string, number> }>("/v1/trade-floors").then(
+            (r) => r.floors,
+          )
+        : Promise.resolve({} as Record<string, number>),
+    [],
+  );
+  const floorWas = floors.data?.[item.id];
+  const [floorText, setFloorText] = useState<string | null>(null);
+  const floorShown =
+    floorText ?? (floorWas !== undefined ? nairaText(floorWas) : "");
+  const floorKobo = floorShown.trim() === "" ? 0 : nairaKobo(floorShown);
   const [listId, setListId] = useState<string>();
   const chosen =
     lists.data &&
@@ -380,6 +395,15 @@ export function ProductForm({
       await put(`/v1/price-lists/${chosen.id}/links`, { links: share });
       said.push("Shared");
     }
+    if (
+      floors.data &&
+      floorText !== null &&
+      !Number.isNaN(floorKobo) &&
+      floorKobo !== (floorWas ?? 0)
+    ) {
+      await put("/v1/trade-floors", { item_id: item.id, floor_kobo: floorKobo });
+      said.push("Lowest price set");
+    }
     if (count !== null && count !== item.stock) {
       await postOnce("/v1/stock/movements", key(), {
         item_id: item.id,
@@ -400,7 +424,8 @@ export function ProductForm({
       ready={
         name.trim() !== "" &&
         (price.trim() === "" || !Number.isNaN(kobo)) &&
-        (tradeShown.trim() === "" || !Number.isNaN(tradeKobo))
+        (tradeShown.trim() === "" || !Number.isNaN(tradeKobo)) &&
+        !Number.isNaN(floorKobo)
       }
     >
       <Photos item={item} canEdit={canEdit} />
@@ -480,6 +505,20 @@ export function ProductForm({
                 ))
               )}
             </fieldset>
+          )}
+          {floors.data && (
+            <>
+              <Money
+                label="Lowest price"
+                value={floorShown}
+                onChange={setFloorText}
+              />
+              <p className="tk-form-row-sub tk-floor-hint">
+                {floorKobo > 0 && tradeKobo > 0 && floorKobo > tradeKobo
+                  ? "Higher than the trade price: every offer will wait for you."
+                  : "Staff can agree offers down to this. Under it, the offer waits for your OK. Buyers never see it."}
+              </p>
+            </>
           )}
         </>
       ) : (

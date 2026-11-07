@@ -105,7 +105,7 @@ func (s *Server) getChatAlerts(w http.ResponseWriter, r *http.Request) {
 	}
 	// Each kind on its own: one that cannot be read leaves the others.
 	for _, kind := range []func(context.Context, *Principal) ([]chatAlert, error){
-		s.lowStockAlerts, s.overdueAlerts, s.newOrderAlerts, s.riderAlerts, s.unmatchedAlerts, s.approvalAlerts,
+		s.lowStockAlerts, s.overdueAlerts, s.newOrderAlerts, s.riderAlerts, s.unmatchedAlerts, s.approvalAlerts, s.dealAlerts,
 	} {
 		got, err := kind(ctx, p)
 		if err != nil {
@@ -361,12 +361,21 @@ func (s *Server) newOrderAlerts(ctx context.Context, p *Principal) ([]chatAlert,
 	}
 	var out []chatAlert
 	for _, o := range list {
-		if o.Status != "received" {
+		// One waiting for the owner's OK is a deal card (dealAlerts).
+		if o.Status != "received" || o.DealOwnerAt != nil {
 			continue
 		}
 		total := o.TotalKobo
+		title, line := "New order "+o.OrderReference+" from "+o.BuyerName, invoicing.Naira(total)
+		if links.IsOffer(o.Lines) {
+			// An offer (phase 7): what they offer against the seller's prices.
+			title = o.BuyerName + " offers " + invoicing.Naira(total) + " for " + o.OrderReference
+			if was := dealWas(o.Lines); was > total {
+				line = "was " + invoicing.Naira(was)
+			}
+		}
 		out = append(out, chatAlert{Key: "new_order:" + o.ID.String(), Kind: "new_order", At: o.CreatedAt, ID: o.ID.String(), Reference: o.OrderReference,
-			Title: "New order " + o.OrderReference + " from " + o.BuyerName, Line: invoicing.Naira(total), AmountKobo: &total})
+			Title: title, Line: line, AmountKobo: &total})
 	}
 	return out, nil
 }

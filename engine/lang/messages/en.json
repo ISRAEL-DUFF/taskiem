@@ -6279,6 +6279,71 @@
       "reviewed": true,
       "context": "A linked buyer confirmed which invoice its payout was for; {note} is the payout's token"
     },
+    "order.link.offered_title": {
+      "text": "{from} offers a price on {reference}",
+      "reviewed": true,
+      "context": "A linked business offered its own price on an order (a deal)"
+    },
+    "order.link.offered": {
+      "text": "*{from}* offers {note} for order {reference}. Accept or decline it, or send your price: counter {reference} 785k",
+      "reviewed": true,
+      "context": "The seller told of a buyer's offer; counter is a command word, kept as is"
+    },
+    "order.link.countered_title": {
+      "text": "{from} answers your price on {reference}",
+      "reviewed": true,
+      "context": "A buyer answered the seller's price with its own"
+    },
+    "order.link.countered": {
+      "text": "*{from}* answers with {note} for order {reference}. Accept or decline it, or send your price: counter {reference} 790k",
+      "reviewed": true,
+      "context": "The seller told of a buyer's counter; counter is a command word"
+    },
+    "order.link.button_accept_change": {
+      "text": "Accept",
+      "reviewed": true,
+      "context": "A button: accept the supplier's price"
+    },
+    "order.link.done_accept_change": {
+      "text": "Accepted their price on {reference}. They are told.",
+      "reviewed": true,
+      "context": "The buyer accepted the supplier's change from chat"
+    },
+    "deal.owner_title": {
+      "text": "{who} would agree {amount} with {business}",
+      "reviewed": true,
+      "context": "Staff would accept an offer under the lowest price: the owner decides"
+    },
+    "deal.owner_body": {
+      "text": "Order {reference}: {why}. Accept or decline it in the Taskiem chat.",
+      "reviewed": true,
+      "context": "Why the owner is asked about an offer"
+    },
+    "deal.owner_asked": {
+      "text": "That price is under the lowest your business takes, so the owner decides on {reference}. They are told.",
+      "reviewed": true,
+      "context": "Staff accepted below the floor in chat: it waits for the owner"
+    },
+    "deal.counter_sent": {
+      "text": "Sent: {amount} for {reference}. They can accept it or answer.",
+      "reviewed": true,
+      "context": "A counter sent from chat"
+    },
+    "deal.counter_none": {
+      "text": "No order is waiting for your price. Open the order in Taskiem to make an offer.",
+      "reviewed": true,
+      "context": "counter with nothing to counter"
+    },
+    "deal.counter_which": {
+      "text": "More than one order is waiting ({references}). Say which, like: counter {reference} 750k",
+      "reviewed": true,
+      "context": "counter without a reference, several waiting"
+    },
+    "deal.counter_how": {
+      "text": "Send your price like this: counter 750k (or counter {reference} 750k).",
+      "reviewed": true,
+      "context": "counter with an amount that cannot be read"
+    },
     "order.link.ordered_title": {
       "text": "{from} sent order {reference}",
       "reviewed": true,

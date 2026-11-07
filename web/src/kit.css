@@ -115,6 +115,28 @@
 .tk-field select { padding-right: 40px; background-position: right 16px center; }
 .tk-field textarea { padding: 14px 16px; }
 .tk-field-hint { font-weight: 400; font-size: 13px; }
+.tk-field-error { font-weight: 600; font-size: 13px; color: var(--danger); }
+
+/* ---------- Deals (phase 7) ---------- */
+
+/* What it was, struck through beside an offer: "₦740,000 ₦790,000". */
+.tk-was { font-weight: 500; color: var(--muted); margin-left: 4px; }
+.tk-breaks { color: var(--brand); }
+:root[data-theme="dark"] .tk-breaks { color: var(--text); }
+.tk-offer { display: flex; flex-direction: column; gap: 10px; }
+.tk-offer > .tk-chip-btn { margin-left: 0; align-self: flex-start; }
+.tk-offer > .tk-chip-btn[aria-pressed="true"] { background: var(--tk-lime-soft); color: var(--brand); }
+:root[data-theme="dark"] .tk-offer > .tk-chip-btn[aria-pressed="true"] { color: var(--brand-dark); }
+/* A deal card's history: who offered and countered what, newest last. */
+.tk-deal-history { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: var(--muted); }
+.tk-deal-history li:last-child { color: var(--text); font-weight: 600; }
+.tk-deal-lapse { font-size: 12px; color: var(--muted); }
+.tk-deal-form { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; width: 100%; }
+.tk-deal-form .tk-field input, .tk-deal-form .tk-field select { min-height: 44px; font-size: 16px; }
+.tk-deal-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+/* Accept (or Send counter) a whole row; the others share the next. */
+.tk-deal-row > button { flex: 1 1 0; white-space: nowrap; }
+.tk-deal-row > button.primary { flex: 1 0 100%; }
 
 /* ---------- Empty and loading ---------- */
 
@@ -693,3 +715,4 @@ input.tk-switch:disabled { cursor: default; opacity: 0.7; }
 .tk-x-sheet { display: flex; flex-direction: column; gap: 12px; padding: 4px 16px 16px; }
 .tk-x-sheet .tk-x-card.explore-card { box-shadow: 0 0 0 1px var(--border); }
 .tk-x-note { margin: 0 4px; font-size: 13px; color: var(--muted); }
+.tk-floor-hint { margin: -6px 0 0; }

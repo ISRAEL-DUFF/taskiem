@@ -42,6 +42,9 @@ type DocCard struct {
 	ID         string `json:"id,omitempty"`
 	AmountKobo *int64 `json:"amount_kobo,omitempty"`
 	Note       string `json:"note,omitempty"`
+	// WasKobo is what a deal's prices are against: the lines at the
+	// seller's own prices (chat tools phase 7), when more than Amount.
+	WasKobo *int64 `json:"was_kobo,omitempty"`
 }
 
 // Card documents.

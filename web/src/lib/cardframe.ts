@@ -17,6 +17,8 @@ export const ORDER_STEPS = ["Placed", "Accepted", "On the way", "Delivered"];
 
 const ORDER: Record<string, CardStatus> = {
   ordered: { word: "New", tone: "lime", step: 0 },
+  offered: { word: "Offer", tone: "warn", step: 0 },
+  countered: { word: "Counter", tone: "warn", step: 0 },
   proposed: { word: "Draft", tone: "plain", step: 0 },
   confirmed: { word: "Placed", tone: "plain", step: 0 },
   auto_changed: { word: "Changed", tone: "warn", step: 0 },
@@ -49,6 +51,9 @@ const INVOICE: Record<string, CardStatus> = {
 /** The card's pill and progress. */
 export function cardStatus(card: DocCard): CardStatus {
   const order = card.doc === "order" || card.doc === "purchase";
+  // A change that answers an offer is the seller's counter.
+  if (order && card.event === "change" && card.was_kobo !== undefined)
+    return { word: "Counter", tone: "warn", step: 0 };
   const s = (order ? ORDER : INVOICE)[card.event];
   return s ?? { word: card.event.replaceAll("_", " "), tone: "plain" };
 }
@@ -66,6 +71,7 @@ export function isDiary(card: DocCard, mine: boolean): boolean {
   return (
     mine &&
     card.event !== "ordered" &&
+    card.event !== "offered" &&
     card.event !== "bill" &&
     card.event !== "proposed"
   );

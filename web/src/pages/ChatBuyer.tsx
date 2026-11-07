@@ -21,6 +21,7 @@ import {
   stepQty,
 } from "../lib/buyer";
 import { ORDER_STEPS } from "../lib/cardframe";
+import { breakWords, dealKobo, offWords, priceAt } from "../lib/deals";
 import { answersDelivery } from "../lib/purchases";
 import { buyerSteps, sameName } from "../lib/tradeorders";
 import type { ItemLink, PriceItem, SupplierPrices } from "../lib/pricelists";
@@ -131,12 +132,25 @@ export function OrderSheet({
   const [step, setStep] = useState<"pick" | "review">("pick");
   const [search, setSearch] = useState("");
   const [note, setNote] = useState("");
+  // Make an offer (phase 7): our own price for the whole order.
+  const [offering, setOffering] = useState(false);
+  const [offerText, setOfferText] = useState("");
   const [mine, setMine] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
   const [done, setDone] = useState<string>();
   const [shut, setShut] = useState(false);
   const bag = bagOf(list?.items ?? [], qty);
+  const offerKobo = offering ? dealKobo(offerText) : NaN;
+  const offerProblem = !offering
+    ? ""
+    : offerText.trim() === ""
+      ? "Say your price for the whole order."
+      : !(offerKobo > 0)
+        ? "A price in naira, like 740,000 or 740k."
+        : offerKobo >= bag.total
+          ? `An offer is under their price, ${formatPrice(bag.total)}.`
+          : "";
   const linkedTo = (sellerItem: string) =>
     links.data?.item_links.find((l) => l.seller_item_id === sellerItem)
       ?.item_id;
@@ -212,14 +226,15 @@ export function OrderSheet({
           item_id: linkedTo(seller) ? undefined : itemId,
         });
       }
-      // The same bag and note is the same order: drafted once.
-      const what = JSON.stringify([lines, note.trim()]);
+      // The same bag, note and offer is the same order: drafted once.
+      const deal = offering ? { offer: true, total_kobo: offerKobo } : {};
+      const what = JSON.stringify([lines, note.trim(), deal]);
       let order = m.orders[what];
       if (!order) {
         const out = await postOnce<{ purchase: Purchase }>(
           `/v1/supplier-prices/${encodeURIComponent(link)}/order`,
           keyOf(`order-${what}`),
-          { lines, note: note.trim() },
+          { lines, note: note.trim(), ...deal },
         );
         order = m.orders[what] = out.purchase;
       }
@@ -235,7 +250,11 @@ export function OrderSheet({
         }
         throw e;
       }
-      finish(`Order sent to ${business}: ${formatPrice(bag.total)}`);
+      finish(
+        offering
+          ? `Offer sent to ${business}: ${formatPrice(offerKobo)}`
+          : `Order sent to ${business}: ${formatPrice(bag.total)}`,
+      );
     } catch (e) {
       setError(e);
       setBusy(false);
@@ -306,8 +325,17 @@ export function OrderSheet({
         ) : (
           <div className="tk-review-foot">
             <div className="tk-review-total">
-              <span>Total</span>
-              <b>{formatPrice(bag.total)}</b>
+              <span>{offering ? "Your offer" : "Total"}</span>
+              <b>
+                {offering && offerKobo > 0 && !offerProblem ? (
+                  <>
+                    {formatPrice(offerKobo)}{" "}
+                    <s className="tk-was">{formatPrice(bag.total)}</s>
+                  </>
+                ) : (
+                  formatPrice(bag.total)
+                )}
+              </b>
             </div>
             {stops && <p className="tk-review-stops">{stops}</p>}
             <div className="tk-foot-two">
@@ -324,10 +352,10 @@ export function OrderSheet({
               <button
                 type="button"
                 className="tk-cta"
-                disabled={busy || !loaded || needPhone}
+                disabled={busy || !loaded || needPhone || !!offerProblem}
                 onClick={() => void place()}
               >
-                {busy ? "Sending…" : "Place order"}
+                {busy ? "Sending…" : offering ? "Send offer" : "Place order"}
               </button>
             </div>
           </div>
@@ -401,6 +429,11 @@ export function OrderSheet({
                     <span className="tk-row-sub">
                       {it.available ? orderLine(it) : "Not available now"}
                     </span>
+                    {it.available && !!it.breaks?.length && (
+                      <span className="tk-row-sub tk-breaks">
+                        {breakWords(it)}
+                      </span>
+                    )}
                   </span>
                   <span
                     className="tk-qty"
@@ -485,8 +518,15 @@ export function OrderSheet({
               <li key={l.item.item_id}>
                 <span>
                   {l.quantity} × {l.item.name}
+                  {priceAt(l.item, l.quantity) < l.item.price_kobo && (
+                    <span className="tk-row-sub">
+                      {" "}
+                      at {formatPrice(priceAt(l.item, l.quantity))} for{" "}
+                      {l.quantity}
+                    </span>
+                  )}
                 </span>
-                <b>{formatPrice(l.quantity * l.item.price_kobo)}</b>
+                <b>{formatPrice(l.quantity * priceAt(l.item, l.quantity))}</b>
               </li>
             ))}
           </ul>
@@ -518,6 +558,36 @@ export function OrderSheet({
                 ))}
             </>
           )}
+          <div className="tk-offer" data-testid="make-offer">
+            <button
+              type="button"
+              className="tk-chip-btn"
+              aria-pressed={offering}
+              onClick={() => setOffering(!offering)}
+            >
+              {offering ? "Pay their price instead" : "Make an offer"}
+            </button>
+            {offering && (
+              <KitField
+                label="Your price for the whole order"
+                hint={`Their price is ${formatPrice(bag.total)}. They can accept, counter or decline; it lapses in 48 hours.`}
+                error={offerText.trim() ? offerProblem : undefined}
+              >
+                <input
+                  inputMode="decimal"
+                  autoComplete="off"
+                  value={offerText}
+                  onChange={(e) => setOfferText(e.target.value)}
+                  placeholder="740,000"
+                />
+              </KitField>
+            )}
+            {offering && offerKobo > 0 && !offerProblem && (
+              <p className="tk-form-now" aria-live="polite">
+                {offWords(offerKobo, bag.total)} their price
+              </p>
+            )}
+          </div>
           <KitField label="A note for them (optional)">
             <input
               value={note}

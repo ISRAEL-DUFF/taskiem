@@ -47,7 +47,7 @@ const store = {
 };
 const tell = () => store.listeners.forEach((f) => f());
 // News worth a sound: a new order, money that came in, an approval.
-const NEWS = new Set(["new_order", "unmatched", "approval"]);
+const NEWS = new Set(["new_order", "unmatched", "approval", "deal"]);
 
 function loadAlerts() {
   if (typeof document !== "undefined" && document.visibilityState === "hidden")
@@ -283,6 +283,22 @@ function AlertCard({
         return {
           words: "Review order",
           go: () => openTool("orders", from(), { rowId: a.id }),
+        };
+      case "deal":
+        // Staff would agree under the lowest price: the owner's OK.
+        if (!can("storefront.manage")) return undefined;
+        return {
+          words: `Agree${a.amount_kobo !== undefined ? ` ${formatPrice(a.amount_kobo)}` : ""}`,
+          go: () =>
+            void act
+              .run(
+                () =>
+                  post(
+                    `/v1/trade-orders/${encodeURIComponent(a.id ?? "")}/accept`,
+                  ),
+                `Agreed on ${a.reference}`,
+              )
+              .then((ok) => ok && onDone()),
         };
       case "rider":
         return { words: "Assign rider", go: () => onSheet("rider", from()) };

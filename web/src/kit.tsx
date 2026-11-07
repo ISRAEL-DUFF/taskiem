@@ -145,16 +145,24 @@ export function KitLoading({
 export function KitField({
   label,
   hint,
+  error,
   children,
 }: {
   label: string;
   hint?: ReactNode;
+  /** What is wrong with what was typed, said under it. */
+  error?: string;
   children: ReactNode;
 }) {
   return (
     <label className="tk-field">
       <span className="tk-field-label">{label}</span>
       {children}
+      {error && (
+        <span className="tk-field-error" role="alert">
+          {error}
+        </span>
+      )}
       {hint && <span className="tk-field-hint">{hint}</span>}
     </label>
   );

@@ -3,6 +3,7 @@
 // /v1/supplier-prices, /v1/item-links): the API's shapes and how a price
 // reads.
 
+import { breakWords, type Break } from "./deals";
 import { formatPrice } from "./storefront";
 
 export interface PriceItem {
@@ -15,6 +16,8 @@ export interface PriceItem {
   available: boolean;
   /** This buyer's own price, not the list's (the seller's view). */
   overridden?: boolean;
+  /** Lower prices from a quantity up (none on a buyer's own price). */
+  breaks?: Break[];
 }
 
 export interface PriceList {
@@ -43,10 +46,13 @@ export interface ItemLink {
 
 /** A price as a buyer reads it: "₦45,000 a bag · at least 5". */
 export function priceWords(
-  it: Pick<PriceItem, "price_kobo" | "unit" | "min_quantity" | "available">,
+  it: Pick<PriceItem, "price_kobo" | "unit" | "min_quantity" | "available"> & {
+    breaks?: Break[];
+  },
 ): string {
   const parts = [formatPrice(it.price_kobo) + (it.unit ? ` a ${it.unit}` : "")];
   if (it.min_quantity > 1) parts.push(`at least ${it.min_quantity}`);
+  if (it.breaks?.length) parts.push(breakWords(it));
   if (!it.available) parts.push("not available now");
   return parts.join(" · ");
 }
@@ -87,12 +93,23 @@ export function itemsWithPrice(
   list: PriceList,
   itemId: string,
   kobo: number,
-): { item_id: string; price_kobo: number; min_quantity: number; available: boolean }[] {
-  const out = list.items.map((x) => ({
+): {
+  item_id: string;
+  price_kobo: number;
+  min_quantity: number;
+  available: boolean;
+  breaks?: Break[];
+}[] {
+  const out: ReturnType<typeof itemsWithPrice> = list.items.map((x) => ({
     item_id: x.item_id,
     price_kobo: x.item_id === itemId ? kobo : x.price_kobo,
     min_quantity: x.min_quantity,
     available: x.available,
+    // Breaks stay while still under the new price.
+    breaks:
+      x.item_id === itemId
+        ? x.breaks?.filter((b) => b.price_kobo < kobo)
+        : x.breaks,
   }));
   if (!list.items.some((x) => x.item_id === itemId))
     out.push({ item_id: itemId, price_kobo: kobo, min_quantity: 1, available: true });

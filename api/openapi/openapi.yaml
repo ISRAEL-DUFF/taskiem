@@ -6632,6 +6632,69 @@ paths:
                     $ref: '#/components/schemas/TradeOrder'
         default:
           $ref: '#/components/responses/Error'
+  /v1/trade-floors:
+    get:
+      operationId: getTradeFloors
+      tags:
+      - Stock
+      summary: The lowest prices staff may agree
+      description: A deal (chat tools phase 7). Each item's lowest price, by our item id, and the largest discount on a whole order. Staff who work the orders without setting prices may accept or counter an offer at or above them; below, an accept waits for the owner and a counter is refused.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      responses:
+        '200':
+          description: The floors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TradeFloors'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putTradeFloor
+      tags:
+      - Stock
+      summary: Set an item's lowest price, or the largest discount
+      description: '{item_id, floor_kobo} sets an item''s lowest price (0, none); with set_discount, max_discount_pct sets the largest discount on a whole order (null, none). Answers all of them.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                item_id:
+                  type: string
+                  maxLength: 100
+                floor_kobo:
+                  type: integer
+                  minimum: 0
+                set_discount:
+                  type: boolean
+                max_discount_pct:
+                  type: [integer, 'null']
+                  minimum: 1
+                  maximum: 90
+      responses:
+        '200':
+          description: The floors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TradeFloors'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/trade-orders/{id}/{step}:
     post:
       operationId: tradeOrderStep
@@ -6680,7 +6743,34 @@ paths:
                 note:
                   type: string
                   maxLength: 500
+                as_total:
+                  type: boolean
+                  description: change only, a counter that is a total spread over the lines (a deal)
+                total_kobo:
+                  type: integer
+                  minimum: 1
+                  description: change only, without lines; a counter as one total, spread over the order's lines in proportion to your own prices
+                keep_days:
+                  type: integer
+                  enum: [7, 14, 30]
+                  description: accept only, by those who set prices; keep the offer's prices as the buyer's own for that many days
       responses:
+        '202':
+          description: Accept only, by staff, on an offer below the floor (the lowest price, or the largest discount on the order) — not accepted; it waits for the owner, who is told
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [waiting, why]
+                properties:
+                  waiting:
+                    type: string
+                    enum: [owner]
+                  why:
+                    type: array
+                    items:
+                      type: string
         '200':
           description: The order
           content:
@@ -7557,6 +7647,21 @@ paths:
                         minimum: 1
                       available:
                         type: boolean
+                      breaks:
+                        type: array
+                        maxItems: 5
+                        description: Lower prices from a quantity up, quantity going up and price going down
+                        items:
+                          type: object
+                          additionalProperties: false
+                          required: [min_quantity, price_kobo]
+                          properties:
+                            min_quantity:
+                              type: integer
+                              minimum: 2
+                            price_kobo:
+                              type: integer
+                              minimum: 1
       responses:
         '200':
           description: Done
@@ -7797,8 +7902,19 @@ paths:
                         minimum: 1
                       item_id:
                         type: string
+                      price_kobo:
+                        type: integer
+                        minimum: 1
+                        description: With offer, our own price for the line
                 note:
                   type: string
+                offer:
+                  type: boolean
+                  description: An offer (a deal, chat tools phase 7) at our own prices, the lines' price_kobo, or total_kobo spread over them; else the supplier's prices, with its quantity breaks
+                total_kobo:
+                  type: integer
+                  minimum: 1
+                  description: With offer, a total for the whole order
       responses:
         '201':
           description: Done
@@ -11141,6 +11257,61 @@ paths:
         schema:
           type: string
           format: uuid
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [purchase]
+                properties:
+                  purchase:
+                    $ref: '#/components/schemas/PurchaseOrder'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/stock/purchases/{id}/counter:
+    post:
+      operationId: counterPurchase
+      tags:
+      - Stock
+      summary: Answer a linked supplier's price with our own
+      description: A deal (chat tools phase 7). The supplier's change (its quantities and prices) is answered with our prices, one per line in order, or a total spread over the lines in proportion; it goes back to the supplier as an offer, which lapses in 48 hours. 409 when there is no change of theirs to answer.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                prices:
+                  type: array
+                  description: Our price for each line of their change, in order
+                  items:
+                    type: integer
+                    minimum: 1
+                total_kobo:
+                  type: integer
+                  minimum: 1
+                  description: A total for the whole order instead, spread over the lines
+                note:
+                  type: string
+                  maxLength: 500
       responses:
         '200':
           description: The order
@@ -26142,7 +26313,7 @@ components:
           description: The alert's key, for Later (its kind and what it is about)
         kind:
           type: string
-          enum: [low_stock, overdue, new_order, rider, unmatched, approval]
+          enum: [low_stock, overdue, new_order, rider, unmatched, approval, deal]
         at:
           type: string
           format: date-time
@@ -31661,6 +31832,56 @@ components:
           type: string
           format: date-time
           description: The linked supplier raised the order's invoice (mirrored)
+        offer:
+          type: boolean
+          description: Sent at our own prices (a deal, chat tools phase 7), not the supplier's
+        deal_history:
+          type: array
+          description: The deal's offers and counters, newest last (mirrored from the supplier)
+          items:
+            $ref: '#/components/schemas/DealStep'
+        deal_until:
+          type: string
+          format: date-time
+          description: When the latest offer or counter lapses
+    DealStep:
+      type: object
+      additionalProperties: false
+      description: An offer or a counter in a deal (chat tools phase 7)
+      required: [by, lines, total_kobo, at]
+      properties:
+        by:
+          type: string
+          enum: [buyer, seller]
+        who:
+          type: string
+          description: The person who made it
+        lines:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [item, quantity, price_kobo]
+            properties:
+              item:
+                type: string
+              quantity:
+                type: integer
+              price_kobo:
+                type: integer
+        total_kobo:
+          type: integer
+        list_kobo:
+          type: integer
+          description: What the lines come to at the seller's own prices (the was)
+        as_total:
+          type: boolean
+          description: A total was offered, spread over the lines
+        note:
+          type: string
+        at:
+          type: string
+          format: date-time
     DeliverTo:
       type: object
       additionalProperties: false
@@ -31690,6 +31911,9 @@ components:
           description: Our document's id or number, to open it
         amount_kobo:
           type: integer
+        was_kobo:
+          type: integer
+          description: A deal's prices are against this (the seller's own), when more than amount_kobo
         note:
           type: string
     PriceItem:
@@ -31713,6 +31937,21 @@ components:
         overridden:
           type: boolean
           description: This link's own price, not the list's
+        breaks:
+          type: array
+          maxItems: 5
+          description: Lower prices from a quantity up (from 10 bags ₦39,500), quantity going up and price going down; none on a link's own price
+          items:
+            type: object
+            additionalProperties: false
+            required: [min_quantity, price_kobo]
+            properties:
+              min_quantity:
+                type: integer
+                minimum: 2
+              price_kobo:
+                type: integer
+                minimum: 1
     PriceList:
       type: object
       additionalProperties: false
@@ -31997,6 +32236,19 @@ components:
         typing:
           type: boolean
           description: Someone on the other side is typing now
+    TradeFloors:
+      type: object
+      additionalProperties: false
+      required: [floors, max_discount_pct]
+      properties:
+        floors:
+          type: object
+          description: Each item's lowest price in kobo, by our item id
+          additionalProperties:
+            type: integer
+        max_discount_pct:
+          type: [integer, 'null']
+          description: The largest discount on a whole order staff may agree, in percent
     TradeOrderLine:
       type: object
       additionalProperties: false
@@ -32028,8 +32280,12 @@ components:
           description: The price the buyer proposed; never the order's price
         priced_by:
           type: string
-          enum: [list, catalogue, seller]
-          description: Whose price price_kobo is (the list shared with the buyer, our catalogue, ourselves); absent, the buyer's proposal, never accepted by itself
+          enum: [list, catalogue, seller, offer]
+          description: Whose price price_kobo is (the list shared with the buyer, our catalogue, ourselves, or the buyer's offer in a deal); absent, the buyer's proposal, never accepted by itself
+        list_kobo:
+          type: integer
+          minimum: 0
+          description: Our own price for the line when the buyer offered its own (what the offer is against)
     TradeOrder:
       type: object
       additionalProperties: false
@@ -32112,6 +32368,21 @@ components:
           type: string
           format: date-time
           description: The order takes the buyer past the credit limit; it is not accepted by itself, and may still be accepted
+        deal_history:
+          type: array
+          description: A deal's offers and counters, newest last (chat tools phase 7)
+          items:
+            $ref: '#/components/schemas/DealStep'
+        deal_until:
+          type: string
+          format: date-time
+          description: When the latest offer or counter lapses; a lapsed offer is not accepted
+        deal_owner_at:
+          type: string
+          format: date-time
+          description: Staff accepted the offer below the floor; it waits for the owner since
+        deal_owner_by:
+          type: string
         placed_by_seller:
           type: boolean
         decided_by:

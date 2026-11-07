@@ -5024,6 +5024,58 @@
       "text": "*{from}* sọ pé ìfiránṣẹ́ owó rẹ̀ {amount} ({note}) jẹ́ fún owó-ìpè {reference}. Bí a bá ti kà á sí owó-ìpè mìíràn, ẹ gbé e lọ ní ojú-ìwé owó-ìpè náà.",
       "reviewed": false
     },
+    "order.link.offered_title": {
+      "text": "{from} fi iye kan lélẹ̀ fún {reference}",
+      "reviewed": false
+    },
+    "order.link.offered": {
+      "text": "*{from}* fi {note} lélẹ̀ fún order {reference}. Gbà á tàbí kọ̀ ọ́, tàbí fi iye tìrẹ ránṣẹ́: counter {reference} 785k",
+      "reviewed": false
+    },
+    "order.link.countered_title": {
+      "text": "{from} dáhùn iye rẹ lórí {reference}",
+      "reviewed": false
+    },
+    "order.link.countered": {
+      "text": "*{from}* dáhùn pẹ̀lú {note} fún order {reference}. Gbà á tàbí kọ̀ ọ́, tàbí fi iye tìrẹ ránṣẹ́: counter {reference} 790k",
+      "reviewed": false
+    },
+    "order.link.button_accept_change": {
+      "text": "Gbà á",
+      "reviewed": false
+    },
+    "order.link.done_accept_change": {
+      "text": "O ti gba iye wọn lórí {reference}. A ti sọ fún wọn.",
+      "reviewed": false
+    },
+    "deal.owner_title": {
+      "text": "{who} fẹ́ gbà {amount} pẹ̀lú {business}",
+      "reviewed": false
+    },
+    "deal.owner_body": {
+      "text": "Order {reference}: {why}. Gbà á tàbí kọ̀ ọ́ nínú ìjíròrò Taskiem.",
+      "reviewed": false
+    },
+    "deal.owner_asked": {
+      "text": "Iye yẹn kéré ju èyí tó kéré jù tí iṣẹ́ yín ń gbà, nítorí náà olówó ni yóò pinnu {reference}. A ti sọ fún un.",
+      "reviewed": false
+    },
+    "deal.counter_sent": {
+      "text": "A ti fi ránṣẹ́: {amount} fún {reference}. Wọ́n lè gbà á tàbí dáhùn.",
+      "reviewed": false
+    },
+    "deal.counter_none": {
+      "text": "Kò sí order tó ń dúró de iye rẹ. Ṣí order náà nínú Taskiem láti fi iye lélẹ̀.",
+      "reviewed": false
+    },
+    "deal.counter_which": {
+      "text": "Ju order kan lọ ló ń dúró ({references}). Sọ èwo, bíi: counter {reference} 750k",
+      "reviewed": false
+    },
+    "deal.counter_how": {
+      "text": "Fi iye rẹ ránṣẹ́ báyìí: counter 750k (tàbí counter {reference} 750k).",
+      "reviewed": false
+    },
     "order.link.ordered_title": {
       "text": "{from} fi ọja-ibere {reference} ranṣẹ",
       "reviewed": false

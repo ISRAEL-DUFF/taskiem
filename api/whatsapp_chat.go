@@ -711,6 +711,10 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if done, err := s.waHowDidWeDo(ctx, c, cmd); done || err != nil {
 		return err
 	}
+	// "counter 750k": a price on the order waiting on them (trade_deals.go).
+	if done, err := s.waDealCounter(ctx, c, cmd); done || err != nil {
+		return err
+	}
 	// Accept or Decline on a linked business's order, All came on its
 	// delivery (link_orders.go).
 	if strings.HasPrefix(text, orderPrefix) {

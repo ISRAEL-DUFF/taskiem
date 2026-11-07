@@ -568,6 +568,12 @@ type Purchase struct {
 	// InvoicedAt when the supplier raised the order's invoice (mirrored).
 	Short      []int64    `json:"short,omitempty"`
 	InvoicedAt *time.Time `json:"invoiced_at,omitempty"`
+	// A deal (chat tools phase 7): sent at our own prices; its offers and
+	// counters as the supplier keeps them (mirrored), newest last; when
+	// the latest lapses.
+	Offer       bool            `json:"offer"`
+	DealHistory json.RawMessage `json:"deal_history,omitempty"`
+	DealUntil   *time.Time      `json:"deal_until,omitempty"`
 }
 
 // Proposed reports whether a linked supplier drafted the order for us,
@@ -592,14 +598,16 @@ func (x Purchase) Words() string {
 
 const purchaseCols = `o.id, o.reference, o.supplier_id, s.name, o.lines, o.total_kobo, o.status, o.note, o.drafted_by, o.approved_by, o.sent_at,
 	o.confirmed_at, o.confirmed_how, o.counter, o.counter_at, o.received_at, o.cancelled_at, o.received_kobo, o.paid_kobo, o.created_at,
-	o.link_id, o.seller_status, o.seller_note, o.change, o.delivered_at, o.cancel_asked_at, o.short_at, o.short, o.invoiced_at`
+	o.link_id, o.seller_status, o.seller_note, o.change, o.delivered_at, o.cancel_asked_at, o.short_at, o.short, o.invoiced_at,
+	o.offer, o.deal_history, o.deal_until`
 
 func scanPurchase(r pgx.Row) (Purchase, error) {
 	var x Purchase
 	var lines, change, short []byte
 	err := r.Scan(&x.ID, &x.Reference, &x.SupplierID, &x.Supplier, &lines, &x.TotalKobo, &x.Status, &x.Note, &x.DraftedBy, &x.ApprovedBy, &x.SentAt,
 		&x.ConfirmedAt, &x.ConfirmedHow, &x.Counter, &x.CounterAt, &x.ReceivedAt, &x.CancelledAt, &x.ReceivedKobo, &x.PaidKobo, &x.CreatedAt,
-		&x.LinkID, &x.SellerStatus, &x.SellerNote, &change, &x.DeliveredAt, &x.CancelAskedAt, &x.ShortAt, &short, &x.InvoicedAt)
+		&x.LinkID, &x.SellerStatus, &x.SellerNote, &change, &x.DeliveredAt, &x.CancelAskedAt, &x.ShortAt, &short, &x.InvoicedAt,
+		&x.Offer, &x.DealHistory, &x.DealUntil)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return x, ErrNoPurchase
 	}
