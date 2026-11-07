@@ -68,7 +68,7 @@ type DealCardStep struct {
 // DealCardFor is the deal on the card of one side ("buyer" or "seller"):
 // nil when the order holds no deal.
 func DealCardFor(steps []DealStep, until *time.Time, side string) *DealCard {
-	if len(steps) == 0 {
+	if !IsDeal(steps) {
 		return nil
 	}
 	c := &DealCard{Until: until, Steps: make([]DealCardStep, len(steps))}

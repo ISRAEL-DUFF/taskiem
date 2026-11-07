@@ -408,7 +408,7 @@ func (s *Server) sellerCounterNote(ctx context.Context, t links.Told) (string, b
 	var note string
 	_ = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{t.FromTenant}, func(tx pgx.Tx) error {
 		o, err := links.GetOrderTx(ctx, tx, t.Order.String(), false)
-		if err != nil || len(o.DealHistory) == 0 || o.DealHistory[len(o.DealHistory)-1].By != "seller" {
+		if err != nil || !links.IsDeal(o.DealHistory) || o.DealHistory[len(o.DealHistory)-1].By != "seller" {
 			return err
 		}
 		lines := o.Change

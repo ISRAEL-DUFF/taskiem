@@ -159,7 +159,8 @@ func TestLinkedOrders(t *testing.T) {
 			changed = c
 		}
 	}
-	if changed == nil || changed["amount_kobo"] != float64(37850000) {
+	// An order at the seller's prices is no deal: no history, nothing "was".
+	if changed == nil || changed["amount_kobo"] != float64(37850000) || changed["deal"] != nil || changed["was_kobo"] != nil {
 		t.Errorf("the change's card: %v", changed)
 	}
 	p := buyer.must(200, "POST", "/v1/stock/purchases/"+po+"/accept-change", nil)["purchase"].(map[string]any)

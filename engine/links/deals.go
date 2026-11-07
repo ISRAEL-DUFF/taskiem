@@ -361,3 +361,7 @@ func CounterIn(o Order, total int64, note string) (StepIn, error) {
 	}
 	return in, nil
 }
+
+// IsDeal is whether a history is a deal: it starts with the buyer's offer
+// (a seller's change to an order at its prices also leaves a step).
+func IsDeal(hist []DealStep) bool { return len(hist) > 0 && hist[0].By == "buyer" }

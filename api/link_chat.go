@@ -718,8 +718,8 @@ func (s *Server) orderCards(ctx context.Context, t links.Told) uuid.UUID {
 	if amount != nil && (t.Event == "offered" || t.Event == "countered" || t.Event == "change") {
 		_ = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{seller}, func(tx pgx.Tx) error {
 			o, err := links.GetOrderTx(ctx, tx, t.Order.String(), false)
-			if err != nil {
-				return err
+			if err != nil || !links.IsDeal(o.DealHistory) {
+				return err // a change to an order at the seller's prices is no deal
 			}
 			lines := o.Lines
 			if t.Event == "change" && len(o.Change) > 0 {
