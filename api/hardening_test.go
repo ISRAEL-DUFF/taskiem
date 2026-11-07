@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/israel-duff/taskiem/engine/totp"
 	"io"
 	"net/http"
 	"strings"
@@ -12,6 +11,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/israel-duff/taskiem/engine/totp"
 )
 
 // Security self-review, 2026-10-07 round: S35 (step-up bound to its
