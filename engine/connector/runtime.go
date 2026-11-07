@@ -126,6 +126,9 @@ type Connector struct {
 	// Keyed by trigger; optional. Deliveries to a tenant's own address
 	// only.
 	Keyers map[string]Keyer
+	// Filters say whether an event starts a subscribing workflow's run,
+	// from its trigger options. Keyed by trigger; optional.
+	Filters map[string]Filter
 	// CheckCredentials, when set, refuses a connection's credentials
 	// before they are saved (a combination of fields the connector cannot
 	// use safely). Its error is shown to whoever saves them.
@@ -355,6 +358,11 @@ func (c *Connector) Check() error {
 	for name := range c.Enrichers {
 		if _, ok := c.Manifest.Triggers[name]; !ok {
 			return fmt.Errorf("connector %s: enricher %q is not a trigger in the manifest", c.Manifest.ID, name)
+		}
+	}
+	for name := range c.Filters {
+		if _, ok := c.Manifest.Triggers[name]; !ok {
+			return fmt.Errorf("connector %s: filter %q is not a trigger in the manifest", c.Manifest.ID, name)
 		}
 	}
 	for name := range c.Keyers {

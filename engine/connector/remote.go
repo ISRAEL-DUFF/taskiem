@@ -116,6 +116,17 @@ type EventCall struct {
 // connector's to describe in the body it returns instead.
 type Enricher func(ctx context.Context, c EventCall, body any) (any, error)
 
+// Filter says whether a verified event starts the run of a workflow that
+// subscribes to its trigger, from that workflow's trigger options (a
+// label, a sender): what one workflow asks of a delivery every subscriber
+// shares, a polled one most of all, since a poll is made once per
+// connection, not per workflow. body is the delivery; item the event's
+// element of a split one (nil otherwise). It decides from the event alone,
+// calling nothing. Signals to runs waiting on the event's correlation are
+// not filtered: a run waiting on a reply hears it whatever other workflows
+// ask.
+type Filter func(options map[string]any, body, item any) bool
+
 // Keyer gives a verified delivery's dedup key from what only the
 // connector can read (a notification encrypted to the business), in place
 // of the manifest's dedup expression: a provider that re-signs a retry

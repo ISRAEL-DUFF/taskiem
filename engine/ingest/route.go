@@ -125,6 +125,9 @@ func (h *Handler) deliverInto(ctx context.Context, w http.ResponseWriter, r *htt
 		if s.connection != nil && *s.connection != t.connection {
 			continue
 		}
+		if filter := ev.conn.Filters[ev.name]; filter != nil && !filter(s.options, ev.body, ev.item) {
+			continue
+		}
 		runTrig := trig
 		if enrich := ev.conn.Enrichers[ev.name]; enrich != nil {
 			body, err := h.enrich(ctx, enrich, t.tenant, ev.env, ev.conn, t.connection, s.options, ev.body)
