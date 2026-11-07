@@ -31,7 +31,8 @@
     <div class="chats">
       <h2>Chats <small>Ada's Kitchen</small></h2>
       <div class="search">Search chats, messages, businesses</div>
-      <div class="list-row in" style="--at:.6s"><div class="avatar pine" data-spark></div><div class="nm"><b>Taskiem</b><span class="need">8 things need you</span></div><time>8:00</time></div>
+      <div class="list-row in" style="--at:.6s"><div class="avatar pine" data-icon="spark"></div><div class="nm"><b>Taskiem</b><span class="need">8 things need you</span></div><time>8:00</time></div>
+      <i class="tap" data-at="4300" style="left:150px;top:205px"></i>
       <div class="list-row in" style="--at:.64s"><div class="avatar lime">RF</div><div class="nm"><b>Rivers Foods Ltd</b><span>Can we get the party pack on Saturday?</span></div><time>8:21</time></div>
       <div class="list-row in" style="--at:.68s"><div class="avatar pine">BR</div><div class="nm"><b>Bayo Rice Mills</b><span>Order AD‑7Q4K2P accepted</span></div><span class="badge">2</span></div>
       <div class="list-row in" style="--at:.72s"><div class="avatar peach">EE</div><div class="nm"><b>Eko Events Co.</b><span>Yes we can. I'll send you a quote</span></div><span class="badge">1</span></div>
@@ -41,10 +42,5 @@
     </div>
   </div></div></div>
 </div>
-<script>
-  document.addEventListener("DOMContentLoaded", () => {
-    for (const a of document.querySelectorAll("[data-spark]")) a.innerHTML = window.kitIcon.spark;
-  });
-</script>
 </body>
 </html>

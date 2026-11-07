@@ -35,7 +35,7 @@
     <header data-name="Taskiem" data-sub="Ada's Kitchen · Tunde, cashier" data-av="spark"></header>
     <main class="chat">
       <div class="dl">✓ Shift opened by Tunde · 8:00</div>
-      <div class="dl lands" style="--at:6.4s">✓ Sale recorded: ₦9,200, cash</div>
+      <div class="dl lands-room" style="--at:6.4s">✓ First sale of the day: ₦9,200, cash</div>
       <article class="hand pop" style="--at:8.4s">
         <div class="k">SHIFT HANDOVER · 6:00 PM</div>
         <div style="font-size:18px;font-weight:800;margin-top:6px">Tunde hands over to Ngozi</div>
@@ -49,17 +49,17 @@
     <section class="sheet sheet-io" style="--at:.9s;--out:2.5s">
       <div class="grab"></div>
       <h4>Tools</h4>
-      <div class="tiles3"><div><span class="ico">₦</span>Sell</div><div><span class="ico">▦</span>Stock</div><div><span class="ico">⇄</span>Orders</div></div>
+      <div class="tiles3"><div class="press" style="--press:2.3s"><span class="ico">₦</span>Sell</div><div><span class="ico">▦</span>Stock</div><div><span class="ico">⇄</span>Orders</div></div>
       <p style="margin:14px 2px 0;font-size:13px;color:#55615a">Your role: cashier. Prices and payments are the owner's.</p>
     </section>
-    <section class="sheet sheet-io" style="--at:2.6s;--out:6.0s">
-      <div class="grab"></div>
+    <section class="sheet morph-io" style="--at:2.5s;--out:6.0s;--t1:430px;--t0:688px;--l0:16px;--r0:261px;--b0:60px;--rad0:16px">
+      <div class="after"><div class="grab"></div>
       <h4>Sell</h4>
       <div class="prow"><span class="tile" style="background:#fde3d8;color:#a3401c">JR</span><div class="nm"><b>Jollof rice</b><span>₦4,000</span></div><span class="n" data-count="2" data-at="3400" data-dur="500">2</span><span class="plus">+</span></div>
       <div class="prow"><span class="tile" style="background:#dce8fb;color:#2f5bd3">CH</span><div class="nm"><b>Chapman</b><span>₦1,200</span></div><span class="n" data-count="1" data-at="4100" data-dur="200">1</span><span class="plus">+</span></div>
       <div class="prow"><span class="tile" style="background:#fbf0c4;color:#7a5a00">FR</span><div class="nm"><b>Fried rice and turkey</b><span>₦5,200</span></div><span class="n">0</span><span class="plus">+</span></div>
       <div class="pay"><span class="on">Cash</span><span>Transfer</span><span>Card</span></div>
-      <span class="btn pine" style="width:100%;min-height:52px;margin-top:14px;font-size:16px">Record sale · <span data-count="9200" data-at="3400" data-dur="900" data-naira>₦9,200</span></span>
+      <span class="btn pine press" style="width:100%;min-height:52px;margin-top:14px;font-size:16px;--press:5.6s">Record sale · <span data-count="9200" data-at="3400" data-dur="900" data-naira>₦9,200</span></span></div>
     </section>
     <i class="tap" data-at="600" style="left:33px;top:791px"></i>
     <i class="tap" data-at="2300" style="left:70px;top:690px"></i>
@@ -67,6 +67,7 @@
     <i class="tap" data-at="3800" style="left:358px;top:560px"></i>
     <i class="tap" data-at="4100" style="left:358px;top:622px"></i>
     <i class="tap" data-at="5600" style="left:195px;top:790px"></i>
+    <i class="burst" data-at="6500" style="left:195px;top:150px"></i>
   </div></div></div>
 </div>
 </body>

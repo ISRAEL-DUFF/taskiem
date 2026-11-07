@@ -34,8 +34,9 @@ node video/assemble.mjs                                   # every scene, joined:
 node video/assemble.mjs --size 9x16 --keep                # the phone cut, reusing scenes already rendered
 ```
 
-The whole film renders in about 10 minutes with four scenes at a time
-(`--jobs 4`); one scene takes about 8 seconds a second of film.
+The whole film renders in about 7 minutes with four scenes at a time
+(`--jobs 4`); scenes are joined with a 0.4 s dissolve (`--cut` for straight
+cuts), so the film runs about 2:16.
 
 To watch a scene while working on it, open its page in a browser: it plays
 and loops.
@@ -51,6 +52,19 @@ and loops.
   (also `in`, `up`, `show`, `leave`, `lands`, `fills`, `grows`, `toasts`), or
   one that comes and goes: `class="sheet-io" style="--at:1s;--out:3s"` (also
   `show-io`, `pop-io`). Two states in one place go in a `.swap`.
+- Follow the Motion board (the design project's sixth board):
+  - a sheet grows out of what was tapped: `class="morph-io"` with the tapped
+    thing's box (`--t0 --l0 --r0 --b0 --rad0`, screen pixels) and the sheet's
+    top (`--t1`), its content in `.after`;
+  - the chat behind a sheet dims and blurs (`.veil`);
+  - a tapped button or card presses in: `class="press" style="--press:2.8s"`;
+  - Save draws its tick: `<span class="tick pop-io">`;
+  - a number that changes rolls up: `<span class="roll" style="--at:7s"><span>old</span><span>new</span></span>`;
+  - a line lands and makes its own room: `.lands-room`;
+  - only good moments (the first sale of the day, an invoice paid) get a
+    burst: `<i class="burst" data-at="ms">`.
+  An element takes one moving part: a second class with an animation
+  replaces the first, so put the second on a wrapper.
 - Count a figure up with `data-count`; show a tap with `<i class="tap">` placed
   in the screen's own coordinates (390 × 844), inside `.app`; write a chat's
   head as `<header data-name data-sub data-av data-tone>` and its composer as

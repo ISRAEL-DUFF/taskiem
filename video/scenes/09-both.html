@@ -24,9 +24,19 @@
 .qty { display: inline-flex; align-items: center; gap: 10px; border-radius: 999px; background: var(--soft); padding: 4px; }
 .qty i { width: 30px; height: 30px; border-radius: 50%; background: #fff; display: grid; place-items: center; font-style: normal; font-weight: 700; }
 .qty b { min-width: 22px; text-align: center; }
-.bag { position: absolute; left: 12px; right: 12px; bottom: 30px; border-radius: 999px; background: var(--pine); color: #fff; display: flex; align-items: center; justify-content: space-between; padding: 8px 8px 8px 20px; z-index: 3; }
-.bag b { color: var(--lime); font-size: 18px; }
+.bag { position: absolute; left: 12px; right: 12px; bottom: 30px; border-radius: 22px; background: var(--pine); color: #fff; padding: 10px 10px 10px 18px; z-index: 3; }
+.bag b { display: block; color: #fff; font-size: 20px; }
+.bag small { display: block; font-size: 12px; color: #b9d1c6; }
 .bag span.go { background: var(--lime); color: var(--pine); border-radius: 999px; padding: 12px 18px; font-weight: 800; }
+.buyer .bh { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.buyer .bh b { display: block; font-size: 19px; font-weight: 800; letter-spacing: -.01em; }
+.buyer .bh span { font-size: 13px; color: #55615a; }
+.buyer .srch { height: 44px; border-radius: 14px; background: var(--soft); display: flex; align-items: center; gap: 10px; padding: 0 14px; color: #55615a; font-size: 14px; margin-bottom: 4px; }
+.buyer .prow { border-bottom: 1px solid #eef1ec; }
+.bt { width: 44px; height: 44px; border-radius: 12px; background: #f3ead2; display: grid; place-items: center; flex: none; }
+.bt svg { stroke: #6f5420; }
+.qty.on { background: var(--pine); color: #fff; }
+.qty.on i { background: transparent; color: #fff; }
 .sheet h4 small { display: block; font-size: 13px; font-weight: 500; color: var(--muted); letter-spacing: 0; margin-top: 2px; }
 </style>
 </head>
@@ -40,17 +50,35 @@
 
   <div class="phone a show"><div class="island"></div><div class="screen"><div class="app">
     <header data-name="Bayo Rice Mills" data-sub="Your supplier · linked" data-av="BR"></header>
-    <main class="chat"></main>
-    <section class="sheet" style="top:96px">
+    <main class="chat"><div class="day">Today</div><div class="bubble">Morning Ada! New harvest just landed, prices are up a little.<time>8:12</time></div></main>
+    <div class="veil"></div>
+    <section class="sheet buyer" style="top:96px">
       <div class="grab"></div>
-      <h4>Order from Bayo Rice Mills<small>Your prices · updated today</small></h4>
-      <div class="prow"><span class="tile" style="background:#e9f7d0;color:#0d3b2e">RB</span><div class="nm"><b>Rice, 50kg bag</b><span>₦78,000 · min 2</span></div><span class="qty"><i>−</i><b>0</b><i>+</i></span></div>
-      <div class="prow"><span class="tile" style="background:#e9f7d0;color:#0d3b2e">RB</span><div class="nm"><b>Rice, 25kg bag</b><span>₦41,000 · min 5</span></div><span class="qty"><i>−</i><b data-count="20" data-at="900" data-dur="1400">20</b><i>+</i></span></div>
-      <div class="prow"><span class="tile" style="background:#fbf0c4;color:#7a5a00">BO</span><div class="nm"><b>Beans, Oloyin</b><span>Not available now</span></div><span class="qty" style="opacity:.4"><i>−</i><b>0</b><i>+</i></span></div>
+      <div class="swap">
+        <div class="show-io" style="--out:2.7s">
+          <div class="bh"><span class="avatar pine" style="width:46px;height:46px">BR</span><div><b>Order from Bayo Rice Mills</b><span>Your prices · updated today</span></div></div>
+          <div class="srch"><span data-icon="search"></span>Search their price list</div>
+          <div class="prow"><span class="bt" data-icon="box"></span><div class="nm"><b>Rice, 50kg bag</b><span>₦78,000 · min 2</span></div><span class="qty"><i>−</i><b>0</b><i>+</i></span></div>
+          <div class="prow"><span class="bt" data-icon="box"></span><div class="nm"><b>Rice, 25kg bag</b><span>₦41,000 · min 5</span></div><span class="qty on"><i>−</i><b data-count="20" data-at="900" data-dur="1200">20</b><i>+</i></span></div>
+          <div class="prow"><span class="bt" data-icon="box"></span><div class="nm"><b>Ofada rice, 25kg</b><span>₦52,000 · min 5</span></div><span class="qty"><i>−</i><b>0</b><i>+</i></span></div>
+          <div class="prow"><span class="bt" data-icon="box"></span><div class="nm"><b>Basmati rice, 5kg</b><span>₦14,500 · min 10</span></div><span class="qty"><i>−</i><b>0</b><i>+</i></span></div>
+        </div>
+        <div class="show" style="--at:2.7s">
+          <h4>Review your order</h4>
+          <div style="display:flex;justify-content:space-between;font-size:16px;padding:6px 0"><span>20 × Rice, 25kg bag</span><b>₦820,000</b></div>
+          <div class="field">Deliver to<span class="in-box" style="font-size:15px">Ada's Kitchen, 14 Herbert Macaulay Way, Yaba</span></div>
+          <div class="field">A note for them<span class="in-box" style="font-size:15px">Deliver before Friday, please</span></div>
+          <p style="font-size:13px;color:#55615a;margin:12px 0 0">Delivery and payment as you agree in the chat. The invoice arrives here.</p>
+        </div>
+      </div>
     </section>
-    <div class="bag"><span>1 item · <b data-count="820000" data-at="900" data-dur="1400" data-naira>₦820,000</b></span><span class="go">Place order</span></div>
+    <div class="bag swap">
+      <span class="show-io" style="--out:2.7s;display:flex;align-items:center;justify-content:space-between;width:100%"><span><small>1 item in your order</small><b data-count="820000" data-at="900" data-dur="1200" data-naira>₦820,000</b></span><span class="go press" style="--press:2.4s">Review order →</span></span>
+      <span class="show" style="--at:2.7s;display:flex;align-items:center;justify-content:space-between;width:100%"><span><small>Total</small><b>₦820,000</b></span><span class="go press" style="--press:3.3s">Place order</span></span>
+    </div>
     <div class="toast toasts" style="--at:3.7s;bottom:110px">Order sent to Bayo Rice Mills: ₦820,000</div>
-    <i class="tap" data-at="3300" style="left:330px;top:790px"></i>
+    <i class="tap" data-at="2400" style="left:320px;top:790px"></i>
+    <i class="tap" data-at="3300" style="left:320px;top:790px"></i>
   </div></div></div>
 
   <div class="phone b show" style="--at:.2s"><div class="island"></div><div class="screen"><div class="app">

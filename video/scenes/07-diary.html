@@ -13,6 +13,9 @@
 .float { right: 650px; top: 650px; }
 .portrait .float { right: auto; left: 70px; top: 1460px; width: 600px; }
 .float .from { font-size: 15px; color: var(--muted); }
+.chans { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.chans span { font-size: 14px; font-weight: 700; padding: 6px 12px; border-radius: 999px; background: var(--soft); color: var(--muted); }
+.chans span.on { background: var(--pine); color: #fff; }
 .float .msg { margin-top: 12px; padding: 14px 16px; border-radius: 16px; background: #f3f5f1; font-size: 18px; line-height: 1.4; }
 </style>
 </head>
@@ -28,14 +31,15 @@
     <main class="chat">
       <div class="day">Today</div>
       <div class="bubble">Can we get the party pack on Saturday? 40 plates.<time>8:21</time></div>
-      <div class="dl lands" style="--at:.5s">✓ You changed Party pack, 10 plates: ₦42,000 → ₦45,000</div>
+      <div class="dl">✓ You changed Party pack, 10 plates: ₦42,000 → ₦45,000</div>
       <div class="bubble mine in" style="--at:3.6s">Yes! New trade price is on your list.<time>8:24</time></div>
     </main>
     <footer data-composer="Message, @ to tag"></footer>
   </div></div></div>
-  <aside class="float pop" style="--at:2.0s" aria-label="The same line on WhatsApp">
+  <aside class="float pop" style="--at:.8s" aria-label="The same line on WhatsApp">
     <div class="from">On WhatsApp · Taskiem</div>
     <div class="msg">✓ You changed <b>Party pack, 10 plates</b>: ₦42,000 → ₦45,000 on the Trade price list.</div>
+    <div class="chans"><span class="on in" style="--at:1.6s">WhatsApp</span><span class="in" style="--at:1.7s">Telegram</span><span class="in" style="--at:1.8s">Slack</span><span class="in" style="--at:1.9s">Taskiem chat</span></div>
   </aside>
 </div>
 </body>

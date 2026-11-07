@@ -194,8 +194,8 @@ button {
   height: 44px;
   margin: -22px 0 0 -22px;
   border-radius: 50%;
-  background: rgba(200, 241, 105, 0.55);
-  box-shadow: 0 0 0 2px rgba(13, 59, 46, 0.35);
+  background: rgba(200, 241, 105, 0.32);
+  box-shadow: 0 0 0 2px rgba(13, 59, 46, 0.3);
   pointer-events: none;
   opacity: 0;
   z-index: 5;
@@ -424,3 +424,53 @@ button {
 .sheet-io { animation: k-sheet .36s var(--ease) both, k-sink .32s var(--ease) both; animation-delay: var(--at, 0s), var(--out, 999s); }
 .show-io { animation: k-show .3s var(--ease) both, k-gone .3s var(--ease) both; animation-delay: var(--at, 0s), var(--out, 999s); }
 .pop-io { animation: k-pop .6s var(--spring) both, k-gone .3s var(--ease) both; animation-delay: var(--at, 0s), var(--out, 999s); }
+
+/* ---------- Step 4: the Motion board's moments (chatdesign Motion) ---------- */
+
+/* The chat dims and blurs in step with a sheet. */
+.veil { backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+
+/* A card grows into its sheet in 360 ms (Motion board): the sheet's edges
+   travel from the tapped thing's box (--t0 --l0 --r0 --b0, in the screen's
+   own pixels, and its corner --rad0) to the sheet's (top at --t1); springs
+   with no bounce; it closes by sinking. Its content fades in once there is
+   room (put .after on it). */
+@keyframes k-morph {
+  from { top: var(--t0); left: var(--l0); right: var(--r0); bottom: var(--b0); border-radius: var(--rad0, 16px); }
+  to { top: var(--t1); left: 0px; right: 0px; bottom: 0px; border-radius: 24px 24px 0 0; }
+}
+/* Hidden until its moment: before it, its starting shape would sit on the
+   tapped thing. */
+@keyframes k-on { from { visibility: visible; } to { visibility: visible; } }
+.morph-io { position: absolute; overflow: hidden; top: var(--t1); left: 0; right: 0; bottom: 0; z-index: 3; visibility: hidden; animation: k-morph .36s cubic-bezier(.2,.85,.25,1) both, k-sink .28s cubic-bezier(.4,0,.6,1) both, k-on .01s linear forwards; animation-delay: var(--at, 0s), var(--out, 999s), var(--at, 0s); }
+.after { animation: k-show .25s var(--ease) both; animation-delay: calc(var(--at, 0s) + .24s); }
+
+/* A line that lands and makes its own room (no gap before it lands). */
+@keyframes k-landroom { 0% { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; margin-top: -12px; background: #c8f169; } 22% { opacity: 1; max-height: 60px; padding-top: 6px; padding-bottom: 6px; margin-top: 0; background: #c8f169; } 100% { max-height: 60px; background: rgba(255,255,255,.9); } }
+.lands-room { overflow: hidden; animation: k-landroom 1.8s var(--ease) both; animation-delay: var(--at, 0s); }
+
+/* A tap presses its target in to 97% (put .press with --press). */
+@keyframes k-press { 0% { transform: none; } 35% { transform: scale(.97); } 100% { transform: none; } }
+.press { animation: k-press .26s var(--ease) both; animation-delay: var(--press, 999s); }
+
+/* Save: a tick that draws itself in 260 ms, in a pill. */
+@keyframes k-draw { from { stroke-dashoffset: 30; } to { stroke-dashoffset: 0; } }
+.tick { display: inline-flex; align-items: center; gap: 10px; padding: 10px 16px 10px 12px; border-radius: 999px; background: var(--pine); color: #fff; font-weight: 700; font-size: 15px; box-shadow: 0 14px 30px -12px rgba(13,59,46,.6); }
+.tick svg { width: 22px; height: 22px; border-radius: 50%; background: var(--lime); padding: 4px; }
+.tick path { stroke-dasharray: 30; animation: k-draw .26s var(--ease) both; animation-delay: calc(var(--at, 0s) + .12s); }
+
+/* A live number changes: the new value rolls up into place in 450 ms. */
+@keyframes k-rollout { to { transform: translateY(-110%); opacity: 0; } }
+@keyframes k-rollin { from { transform: translateY(110%); opacity: 0; } to { transform: none; opacity: 1; } }
+.roll { display: inline-grid; overflow: hidden; vertical-align: bottom; }
+.roll > * { grid-area: 1 / 1; }
+.roll > :first-child { animation: k-rollout .45s var(--ease) both; animation-delay: var(--at, 999s); }
+.roll > :last-child { animation: k-rollin .45s var(--ease) both; animation-delay: var(--at, 999s); }
+
+/* A good moment: a short burst, 900 ms, never in the way
+   (<i class="burst" data-at="ms" style="left;top">). */
+@keyframes k-burst { 0% { opacity: 0; transform: rotate(var(--a)) translateY(0) scale(.4); } 15% { opacity: 1; } 100% { opacity: 0; transform: rotate(var(--a)) translateY(-70px) scale(1); } }
+.burst { position: absolute; width: 0; height: 0; z-index: 6; pointer-events: none; }
+.burst b { position: absolute; left: -5px; top: -5px; width: 10px; height: 10px; border-radius: 50%; animation: k-burst .9s cubic-bezier(.2,.8,.2,1) both; }
+.burst b:nth-child(odd) { background: var(--lime); }
+.burst b:nth-child(even) { background: var(--pine); width: 7px; height: 7px; }

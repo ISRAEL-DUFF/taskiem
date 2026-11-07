@@ -7,10 +7,14 @@
 <script src="../kit/kit.js"></script>
 <script>window.scene = { duration: 12000 };</script>
 <style>
-/* Scene 8 (video/script.md): Rivers Foods' order arrives as a card with a
+/* Scene 8 (video/script.md): Rivers Foods' order slides in with a little
    bounce (600 ms); Accept; its four steps fill one after another; the
-   invoice follows. The card frame of chat-tools.md §3. */
-.pill.plain { background: var(--soft); color: var(--muted); }
+   invoice follows, and is paid: a good moment, with its burst (Motion
+   board). The order card as the Card board draws it. */
+.line { display: flex; justify-content: space-between; align-items: baseline; margin-top: 10px; font-size: 16px; }
+.line b { font-size: 17px; }
+.stepwords span { transition: none; }
+.now { font-weight: 700; color: var(--ink); }
 </style>
 </head>
 <body>
@@ -18,7 +22,7 @@
   <div class="caption">
     <span class="kicker up" style="--at:.1s">3 · Trade</span>
     <h1 class="headline up" style="--at:.25s">Orders and invoices, <em>as cards</em>.</h1>
-    <p class="sub up" style="--at:.45s">Accept with a tap, follow it from placed to delivered, and the invoice goes by itself.</p>
+    <p class="sub up" style="--at:.45s">Accept with a tap, follow it from placed to delivered, and see it paid.</p>
   </div>
   <div class="phone show"><div class="island"></div><div class="screen"><div class="app">
     <header data-name="Rivers Foods Ltd" data-sub="Buys from you · linked" data-av="RF" data-tone="lime"></header>
@@ -27,21 +31,29 @@
       <article class="card pop" style="--at:1.0s">
         <div class="top"><span class="kick">ORDER · P‑KV3JQG</span>
           <span class="swap"><span class="pill lime show-io" style="--out:3.3s">New</span><span class="pill lime show-io" style="--at:3.3s;--out:5.6s">Accepted</span><span class="pill lime show-io" style="--at:5.6s;--out:7.6s">On the way</span><span class="pill lime show" style="--at:7.6s">Delivered</span></span></div>
-        <div class="ttl">Rivers Foods Ltd sent order P‑KV3JQG</div>
-        <div class="csub">₦260,000 · 40 × Party pack, 10 plates… </div>
+        <div class="line"><span>40 × Staff lunch pack</span><b>₦260,000</b></div>
         <div class="steps"><span><i></i></span><span><i class="fills" style="--at:3.4s"></i></span><span><i class="fills" style="--at:5.7s"></i></span><span><i class="fills" style="--at:7.7s"></i></span></div>
-        <div class="stepwords"><span>Placed</span><span>Accepted</span><span>On the way</span><span>Delivered</span></div>
-        <div class="acts leave" style="--at:3.3s"><span class="btn ghost">View order</span><span class="btn pine">Accept</span><span class="btn ghost">Decline</span></div>
+        <div class="stepwords">
+          <span class="swap"><span class="now show-io" style="--out:3.4s">Placed</span><span class="show" style="--at:3.4s">Placed</span></span>
+          <span class="swap"><span class="show-io" style="--out:3.4s">Accepted</span><span class="now show-io" style="--at:3.4s;--out:5.7s">Accepted</span><span class="show" style="--at:5.7s">Accepted</span></span>
+          <span class="swap"><span class="show-io" style="--out:5.7s">On the way</span><span class="now show-io" style="--at:5.7s;--out:7.7s">On the way</span><span class="show" style="--at:7.7s">On the way</span></span>
+          <span class="swap"><span class="show-io" style="--out:7.7s">Delivered</span><span class="now show" style="--at:7.7s">Delivered</span></span>
+        </div>
+        <div class="swap" style="margin-top:12px">
+          <div class="acts show-io" style="--out:3.3s;margin-top:0"><span class="btn ghost">View order</span><span class="btn pine press" style="--press:2.8s">Accept</span><span class="btn ghost">Decline</span></div>
+          <div class="acts show" style="--at:3.3s;margin-top:0"><span class="btn ghost">View order</span><span class="btn pine">Assign rider</span></div>
+        </div>
       </article>
-      <article class="card pop" style="--at:9.0s">
-        <div class="top"><span class="kick">INVOICE · INV‑0001</span><span class="pill lime">To pay</span></div>
-        <div class="ttl">You sent invoice INV‑0001</div>
-        <div class="csub">₦260,000 · due in 7 days</div>
-        <div class="acts"><span class="btn ghost">View invoice</span></div>
+      <article class="card pop" style="--at:8.8s">
+        <div class="top"><span class="kick">INVOICE · INV‑0001</span><span class="swap"><span class="pill lime show-io" style="--out:10.6s">To pay</span><span class="pill lime show" style="--at:10.6s">Paid</span></span></div>
+        <div class="line"><span>You sent invoice INV‑0001</span><b>₦260,000</b></div>
+        <div class="csub">Due in 7 days · Rivers Foods Ltd</div>
       </article>
+      <div class="dl lands-room" style="--at:10.6s">✓ ₦260,000 paid by Rivers Foods: INV‑0001</div>
     </main>
     <footer data-composer="Message, @ to tag"></footer>
-    <i class="tap" data-at="2800" style="left:195px;top:380px"></i>
+    <i class="tap" data-at="2800" style="left:195px;top:350px"></i>
+    <i class="burst" data-at="10700" style="left:195px;top:590px"></i>
   </div></div></div>
 </div>
 </body>

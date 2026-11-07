@@ -16,6 +16,17 @@
 .picker .prow { padding: 7px 10px; border-radius: 14px; }
 .picker .prow.on { background: var(--soft); }
 .avatar.sand { background: #f3ead2; color: #6f5420; }
+.ex-hd { display: flex; align-items: center; gap: 12px; }
+.ex-hd .nm { flex: 1; min-width: 0; }
+.ex-hd b { display: block; font-size: 18px; }
+.ex-hd .nm span { display: block; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.logo { width: 52px; height: 52px; border-radius: 50%; background: #7a4a2a; color: #f2d9b0; display: grid; place-items: center; font-weight: 800; font-size: 17px; flex: none; }
+.photo { position: relative; margin-top: 14px; height: 220px; border-radius: 18px; background: #f3dcb4; display: grid; place-items: center; }
+.photo em { position: absolute; left: 12px; bottom: 12px; font-style: normal; font-size: 13px; font-weight: 700; background: rgba(255,255,255,.92); color: #0e1a14; padding: 6px 10px; border-radius: 10px; }
+.dots { display: flex; justify-content: center; gap: 6px; margin-top: 10px; }
+.dots i { width: 7px; height: 7px; border-radius: 4px; background: #d3dbd0; }
+.dots i.on { width: 22px; background: var(--pine); }
+.hint { font-size: 13px; color: var(--muted); margin: 8px 0 0; }
 .photos { display: grid; grid-template-columns: 2fr 1fr; gap: 6px; height: 170px; border-radius: 16px; overflow: hidden; }
 .photos div { position: relative; }
 .photos .a { background: linear-gradient(140deg, #e9b874, #b26d2e); grid-row: span 2; }
@@ -46,26 +57,30 @@
     </footer>
     <section class="picker">
       <div class="grp">BUSINESSES</div>
-      <div class="prow on"><span class="avatar sand">KB</span><div class="nm"><b>Kola's Bakery</b><span>Not linked · Yaba</span></div></div>
+      <div class="prow on"><span class="avatar" style="background:#7a4a2a;color:#f2d9b0">KB</span><div class="nm"><b>Kola's Bakery</b><span>Not linked · Yaba</span></div></div>
       <div class="prow"><span class="avatar pine" data-icon="spark"></span><div class="nm"><b>Taskiem</b><span>Ask Taskiem to do it for you</span></div></div>
     </section>
     <div class="veil show-io" style="--at:3.1s;--out:8.0s"></div>
-    <section class="sheet sheet-io" style="--at:3.1s;--out:8.0s;top:150px">
-      <div class="grab"></div>
-      <div class="photos"><div class="a"><em>Fresh agege bread, 6am</em></div><div class="b"></div><div class="c"></div></div>
-      <div style="display:flex;align-items:center;gap:12px;margin-top:14px">
-        <span class="avatar sand" style="width:48px;height:48px">KB</span>
-        <div style="flex:1"><b style="font-size:18px">Kola's Bakery</b><div class="place">Bread and pastries · Yaba, Lagos</div></div>
-      </div>
-      <p class="about">Agege bread, buns and meat pies, baked every morning. We deliver to shops and kitchens in Yaba and Surulere.</p>
-      <div class="swap" style="margin-top:16px">
-        <span class="btn pine show-io" style="--out:5.8s;min-height:52px;font-size:16px">Connect</span>
-        <span class="show-io" style="--at:5.8s;--out:7.4s;display:flex;gap:8px"><span class="btn ghost" style="flex:1;min-height:52px">Requested</span><span class="btn soft" style="min-height:52px">Withdraw</span></span>
-        <span class="show" style="--at:7.4s;display:flex;gap:8px"><span class="btn ghost" style="flex:1;min-height:52px">✓ Linked</span><span class="btn pine" style="flex:1;min-height:52px">Message</span></span>
+    <section class="sheet morph-io" style="--at:3.0s;--out:8.0s;--t1:250px;--t0:616px;--l0:18px;--r0:18px;--b0:180px;--rad0:14px">
+      <div class="after">
+        <div class="grab"></div>
+        <div class="ex-hd">
+          <span class="logo">KB</span>
+          <div class="nm"><b>Kola's Bakery</b><span>Bread and cakes, baked fresh · Yaba</span></div>
+          <span class="swap">
+            <span class="btn pine show-io press" style="--out:5.8s;--press:5.4s">Connect</span>
+            <span class="btn ghost show-io" style="--at:5.8s;--out:7.4s">Requested</span>
+            <span class="btn ghost show" style="--at:7.4s">✓ Linked</span>
+          </span>
+        </div>
+        <div class="photo"><svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#a6845a" stroke-width="1.6" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="15.5" cy="9" r="1.8"/><path d="M4 18l5.5-6 4.5 5 2.5-2.5L20 18"/></svg><em>Agege bread, out of the oven at 5</em></div>
+        <div class="dots"><i class="on"></i><i></i><i></i></div>
+        <p class="about">A family bakery since 2009. We supply hotels, cafés and shops around Yaba and Surulere every morning.</p>
+        <p class="hint show" style="--at:5.9s">Nothing is shared until they accept.</p>
       </div>
     </section>
     <i class="tap" data-at="2600" style="left:180px;top:640px"></i>
-    <i class="tap" data-at="5400" style="left:195px;top:523px"></i>
+    <i class="tap" data-at="5400" style="left:322px;top:212px"></i>
   </div></div></div>
 </div>
 </body>

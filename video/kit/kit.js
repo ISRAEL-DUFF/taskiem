@@ -48,12 +48,21 @@
     tools: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0d3b2e" stroke-width="2" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg>',
     mic: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#c8f169" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
     send: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#c8f169" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>',
+    box: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0d3b2e" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/></svg>',
+    clock: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2f5bd3" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
+    close: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0e1a14" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    search: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#55615a" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
+    check: '<svg viewBox="0 0 24 24" fill="none" stroke="#0d3b2e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
     spark: '<svg width="20" height="20" viewBox="0 0 24 24" fill="#c8f169" aria-hidden="true"><path d="M12 2l1.8 5.6L19.5 9l-5.7 1.5L12 16l-1.8-5.5L4.5 9l5.7-1.4z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>',
   };
   function expand() {
     for (const h of document.querySelectorAll("header[data-name]")) {
       const av = h.dataset.av === "spark" ? icon.spark : h.dataset.av;
       h.innerHTML = `<div class="avatar ${h.dataset.tone || "pine"}">${av}</div><div class="who"><b>${h.dataset.name}</b><span>${h.dataset.sub || ""}</span></div>`;
+    }
+    // A burst: twelve dots around its point, starting at its moment.
+    for (const b of document.querySelectorAll(".burst[data-at]")) {
+      b.innerHTML = Array.from({ length: 12 }, (_, i) => `<b style="--a:${i * 30}deg;animation-delay:${Number(b.dataset.at) / 1000}s"></b>`).join("");
     }
     for (const el of document.querySelectorAll("[data-icon]")) el.innerHTML = icon[el.dataset.icon] || "";
     for (const f of document.querySelectorAll("footer[data-composer]")) {
