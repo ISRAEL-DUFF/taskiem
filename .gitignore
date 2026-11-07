@@ -8,6 +8,7 @@ bao
 bao.tgz
 bao.log
 web/dist/
+*.tsbuildinfo
 web/test-results/
 web/playwright-report/
 .taskiem/
