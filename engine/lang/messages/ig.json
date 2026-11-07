@@ -592,6 +592,14 @@
       "text": "ọ nọ n'ọnụ ụzọ. Zipu DELIVERED mgbe ị nyefere ya.",
       "reviewed": false
     },
+    "money.daily.today": {
+      "text": "Taa: ibuga {deliveries}, nhọpụta oge {bookings}.",
+      "reviewed": false
+    },
+    "money.daily.card": {
+      "text": "Kaadị ụtụtụ gị, ahịrị ọ bụla na-emeghe ngwá ọrụ ya: {link}",
+      "reviewed": false
+    },
     "rider.no_delivery": {
       "text": "Ị nweghị ihe ibuga dabara na nke ahụ ugbu a.",
       "reviewed": false

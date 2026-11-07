@@ -59,7 +59,7 @@ async function axeBoth(page: Page, where: string) {
 }
 
 const day = (back: number) => new Date(Date.now() - back * 86_400_000).toISOString().slice(0, 10);
-const WEEK = [6, 5, 4, 3, 2, 1, 0].map((n, i) => ({ day: day(n + 1), label: ["Fri", "Sat", "Sun", "Mon", "Tue", "Wed", "Thu"][i], kobo: [30, 42, 38, 51, 47, 40, 48.65][i] * 1_000_000 }));
+const WEEK = [6, 5, 4, 3, 2, 1, 0].map((n, i) => ({ day: day(n + 1), label: ["Fri", "Sat", "Sun", "Mon", "Tue", "Wed", "Thu"][i], kobo: ([30, 42, 38, 51, 47, 40, 48.65][i] ?? 0) * 1_000_000 }));
 
 async function answer(page: Page) {
   const sent: { path: string; body: unknown; key?: string }[] = [];
@@ -106,12 +106,18 @@ test("a cashier's tools are Sell, Stock and Orders, and Sell records a sale", as
   await sheet.getByRole("button", { name: "One more Rice, 50kg bag" }).click();
   await sheet.getByRole("button", { name: "One more Rice, 50kg bag" }).click();
   await sheet.getByRole("button", { name: "One more Garri, Ijebu" }).click();
+  // More than the stock holds is said, not refused.
+  await expect(sheet.getByTestId("sell-row").filter({ hasText: "Garri" })).toContainText("None left in your stock");
   await expect(sheet.getByTestId("sell-bag")).toContainText("₦188,000");
   await expect(sheet.getByTestId("sell-bag")).toContainText("3 things");
   await axeBoth(member, "selling");
   await sheet.getByRole("button", { name: /^Next/ }).click();
   await expect(sheet.getByRole("heading", { name: "How was it paid?" })).toBeVisible();
-  await sheet.getByRole("radio", { name: "POS" }).click();
+  // The ways to pay move with the arrow keys, as radios do.
+  await sheet.getByRole("radio", { name: "Cash" }).focus();
+  await member.keyboard.press("ArrowRight");
+  await expect(sheet.getByRole("radio", { name: "Transfer" })).toBeFocused();
+  await member.keyboard.press("ArrowRight");
   await expect(sheet.getByRole("radio", { name: "POS" })).toHaveAttribute("aria-checked", "true");
   await axeBoth(member, "how a sale was paid");
   await sheet.getByRole("button", { name: "Record the sale" }).click();

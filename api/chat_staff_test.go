@@ -1,11 +1,19 @@
 package api_test
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"net/url"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
+
+	sfconn "github.com/israel-duff/taskiem/connectors/storefront"
+	"github.com/israel-duff/taskiem/engine/sender"
+	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
 // Staff use chat as their app (docs/spec/chat-tools.md §7), and the owner
@@ -42,13 +50,28 @@ func TestCashierShift(t *testing.T) {
 	if d := diaryOf(t, cashier); !hasLine(d, "Sold 1 Rice: ₦78,000 (POS)") {
 		t.Fatalf("the sale's diary: %q", d)
 	}
+	// The same sale again (a retry): recorded once, one diary line.
+	cashier.must(201, "POST", "/v1/stock/sales", map[string]any{"lines": []any{map[string]any{"item_id": rice, "quantity": 1}}, "paid_how": "pos"},
+		"Idempotency-Key", "sell-1")
+	var sold int
+	for _, l := range diaryOf(t, cashier) {
+		if strings.Contains(l, "Sold 1 Rice: ₦78,000 (POS)") {
+			sold++
+		}
+	}
+	if sold != 1 {
+		t.Fatalf("a retried sale wrote %d diary lines", sold)
+	}
 	// Their tools, and not the storefront's.
-	if r := w.say(t, cashOn, "tools"); !strings.Contains(r, "Orders") || !strings.Contains(r, "Stock") || strings.Contains(r, "Price lists") {
+	if r := w.say(t, cashOn, "tools"); !strings.Contains(r, "Sell") || !strings.Contains(r, "Orders") || !strings.Contains(r, "Stock") ||
+		strings.Contains(r, "Price lists") || strings.Contains(r, "Handover") {
 		t.Fatalf("a cashier's tools: %q", r)
 	}
 	cashier.must(403, "GET", "/v1/stock/suppliers", nil)
 	cashier.must(403, "GET", "/v1/price-lists", nil)
 	cashier.must(403, "POST", "/v1/storefront/orders/X-1/refunded", nil)
+	cashier.must(403, "POST", "/v1/chat-handover", map[string]any{"cash_counted_kobo": 0})
+	cashier.must(403, "GET", "/v1/chat-briefing", nil)
 
 	// A linked business orders: the cashier is told, sees the card, and
 	// accepts it.
@@ -75,6 +98,8 @@ func TestCashierShift(t *testing.T) {
 	if r := w.say(t, cashOn, "orders"); strings.Contains(r, "not allowed") || strings.Contains(r, "can't") {
 		t.Fatalf("the cashier's orders: %q", r)
 	}
+	// A cashier works the order's steps but does not change it.
+	cashier.must(403, "POST", "/v1/trade-orders/"+ref+"/change", map[string]any{"lines": []any{}})
 	cashier.must(200, "POST", "/v1/trade-orders/"+ref+"/accept", nil)
 	if d := diaryOf(t, cashier); !hasLine(d, "Accepted order "+ref+" from Ada's Kitchen") {
 		t.Fatalf("the accept's diary: %q", d)
@@ -82,12 +107,15 @@ func TestCashierShift(t *testing.T) {
 
 	// The shift handed over: the owner told, with the cash counted.
 	manager := addMember(t, w.world, seller, "sam", "shift_manager")
+	const samOn = "+2348010000913"
+	w.bind(t, manager, samOn)
 	h := manager.must(200, "GET", "/v1/chat-handover", nil)
 	sales := h["sales"].(map[string]any)
 	if sales["total_kobo"] != float64(23400000) || sales["by_how"].(map[string]any)["cash"] != float64(15600000) || h["orders_open"] != float64(1) {
 		t.Fatalf("the shift so far: %v", h)
 	}
 	before = len(w.graph.Sent(ownerOn))
+	samBefore := len(w.graph.Sent(samOn))
 	out := manager.must(200, "POST", "/v1/chat-handover", map[string]any{"cash_counted_kobo": 15000000, "note": "Till drawer sticks"})
 	words := out["words"].(string)
 	if !strings.Contains(words, "Sold ₦234,000 in 2 sales") || !strings.Contains(words, "Cash counted: ₦150,000, ₦6,000 short of the ₦156,000 sold") ||
@@ -97,6 +125,9 @@ func TestCashierShift(t *testing.T) {
 	w.srv.WaitBackground()
 	if told := w.lastTo(t, ownerOn, before); len(told) == 0 || !strings.Contains(told[0].Text, "sam handed the shift over") {
 		t.Fatalf("the owner told: %+v", told)
+	}
+	if told := w.lastTo(t, samOn, samBefore); len(told) != 0 {
+		t.Fatalf("the one handing over was told of their own handover: %+v", told)
 	}
 	manager.must(400, "POST", "/v1/chat-handover", map[string]any{"cash_counted_kobo": -1})
 
@@ -177,9 +208,113 @@ func TestRiderShift(t *testing.T) {
 	jobs("Send ARRIVED at the door, or DELIVERED")
 	w.whatsapp(t, musa, "delivered")
 	w.tick(t)
+	// Done is not open: no longer among their deliveries.
+	w.whatsapp(t, musa, "my deliveries")
+	if m := w.graph.Last(t, musa); strings.Contains(m.Text, "Your deliveries now:") {
+		t.Fatalf("a delivered one still listed: %q", m.Text)
+	}
 	for _, x := range ada.must(200, "GET", "/v1/deliveries", nil)["deliveries"].([]any) {
 		if d := x.(map[string]any); d["reference"] == ref && d["status"] != "delivered" {
 			t.Fatalf("delivered from chat: %v", d)
 		}
+	}
+}
+
+// A cashier sees the riders without their numbers, fees or banks, and
+// offers a delivery without setting a fee.
+func TestCashierSeesRidersMasked(t *testing.T) {
+	w, ada := newDispatchWorld(t, "Ada Stores")
+	ada.must(201, "POST", "/v1/riders", map[string]any{"name": "Musa Bello", "phone": "+2348031110082", "zones": []string{"Lekki"}, "fee_kobo": 100000})
+	cashier := addMember(t, w.world, ada, "cash", "cashier")
+	list := cashier.must(200, "GET", "/v1/riders", nil)
+	r := list["riders"].([]any)[0].(map[string]any)
+	if strings.Contains(toJSON(r), "31110082") || !strings.Contains(toJSON(r), "0082") || (r["fee_kobo"] != nil && r["fee_kobo"] != float64(0)) || list["tap_in_url"] != nil && list["tap_in_url"] != "" {
+		t.Fatalf("a cashier's riders: %v", list)
+	}
+	ref := w.order(t, "none")
+	cashier.must(403, "POST", "/v1/storefront/orders/"+ref+"/offer", map[string]any{"fee_kobo": 1})
+	cashier.must(200, "POST", "/v1/storefront/orders/"+ref+"/offer", map[string]any{})
+}
+
+// A business's own role named like a new built-in keeps its own
+// permissions.
+func TestOwnRoleNamedCashierWins(t *testing.T) {
+	w := newWorld(t)
+	owner := w.tenant(t, "Ada Stores", "ada@ada.test")
+	// Made before cashier was built in (a new one of that name is refused).
+	if _, err := w.env.DB.Admin.Exec(context.Background(), `INSERT INTO roles (tenant_id, name, description, permissions, created_by) SELECT $1, 'cashier', 'Ours', ARRAY['table.read'], user_id FROM memberships WHERE tenant_id = $1 LIMIT 1`,
+		tenantOf(t, owner)); err != nil {
+		t.Fatal(err)
+	}
+	c := addMember(t, w, owner, "cash", "cashier")
+	c.must(403, "GET", "/v1/trade-orders", nil)
+	c.must(403, "GET", "/v1/storefront/orders", nil)
+	var n int
+	for _, x := range owner.must(200, "GET", "/v1/roles", nil)["roles"].([]any) {
+		if x.(map[string]any)["name"] == "cashier" {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Fatalf("cashier listed %d times", n)
+	}
+}
+
+// Anyone with order.handle decides a customer order's own steps (accept or
+// decline, done), as the owner would; not another workflow's approvals.
+func TestCashierDecidesCustomerOrders(t *testing.T) {
+	w := newWAWorld(t)
+	ctx := context.Background()
+	key, _ := storefront.InboxKey(bytes.Repeat([]byte{3}, 32))
+	w.srv.PublicHosts = []string{shopDomain}
+	w.srv.Orders = &storefront.Orders{Pool: w.env.DB.App, Vault: w.env.Vault, InboxKey: key, PreviewDomain: shopDomain,
+		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)},
+		Start:    w.env.Store.Start, Signal: w.env.Store.DeliverSignalOnce, Cancel: w.env.Store.CancelRun}
+	if err := w.env.Registry.Register(sfconn.New(w.srv.Orders)); err != nil {
+		t.Fatal(err)
+	}
+	owner := w.tenant(t, "Ada's Kitchen", "ada@ada.test")
+	verifyPhone(t, w.world, owner, "phone", "business")
+	owner.must(200, "PUT", "/v1/storefront", map[string]any{"slug": "ada-kitchen", "draft": map[string]any{"name": "Ada's Kitchen"}})
+	wf := owner.must(201, "POST", "/v1/templates/storefront-order/instantiate", map[string]any{"params": map[string]any{}, "name": "Orders"})["id"].(string)
+	owner.must(200, "POST", "/v1/workflows/"+wf+"/versions/1/publish", nil)
+	owner.must(200, "PUT", "/v1/storefront/actions/order", map[string]any{"enabled": true, "payment": "none"})
+	sfID := uuid.MustParse(owner.must(200, "POST", "/v1/storefront/publish", nil)["id"].(string))
+	cashier := addMember(t, w.world, owner, "cash", "cashier")
+	viewer := addMember(t, w.world, owner, "vic", "viewer")
+
+	ref := storefront.NewReference("ada-kitchen")
+	_, hash := storefront.NewStatusKey()
+	ct, _ := storefront.SealSubmission(key, sfID, ref, storefront.Submission{Kind: "order", Payment: "none", Channel: "direct", Submitted: time.Now(),
+		Basket: []storefront.Line{{ID: "1", Name: "Jollof rice", Quantity: 1, PriceKobo: 150000, LineKobo: 150000}}, TotalKobo: 150000, Fulfilment: "pickup",
+		Customer: storefront.Customer{Name: "Bola Ade", Phone: "+2348031234567"}})
+	var got *string
+	if err := w.env.DB.PublicPool(t, 1).QueryRow(ctx, `SELECT taskiem_public_submit($1, 'order', $2, $3, $4, $5)`,
+		sfID, ref, bytes.Repeat([]byte{7}, 32), hash, ct).Scan(&got); err != nil || got == nil {
+		t.Fatalf("submit: %v %v", got, err)
+	}
+	if err := w.srv.Orders.Drain(ctx); err != nil {
+		t.Fatal(err)
+	}
+	w.env.Drain(t)
+	var run string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT run_id::text FROM storefront_orders WHERE reference = $1`, ref).Scan(&run); err != nil {
+		t.Fatal(err)
+	}
+	var seen bool
+	for _, a := range cashier.must(200, "GET", "/v1/approvals", nil)["approvals"].([]any) {
+		seen = seen || a.(map[string]any)["run_id"] == run
+	}
+	if !seen {
+		t.Fatal("the order's approval is not in the cashier's inbox")
+	}
+	viewer.must(403, "POST", "/v1/approvals/"+run+"/decide", map[string]any{"decision": "approved"})
+	if res := cashier.must(200, "POST", "/v1/approvals/"+run+"/decide", map[string]any{"decision": "approved"}); res["status"] != "approved" {
+		t.Fatalf("the cashier accepts: %v", res)
+	}
+	w.env.Drain(t)
+	var status string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT status FROM storefront_orders WHERE reference = $1`, ref).Scan(&status); err != nil || (status != "accepted" && status != "paid") {
+		t.Fatalf("after the cashier accepts: %s %v", status, err)
 	}
 }

@@ -592,6 +592,14 @@
       "text": "ó ti dé ẹnu ọ̀nà. Fi DELIVERED ránṣẹ́ nígbà tí o bá fi lé wọn lọ́wọ́.",
       "reviewed": false
     },
+    "money.daily.today": {
+      "text": "Lónìí: ẹrù {deliveries} láti fi jíṣẹ́, ìpàdé {bookings}.",
+      "reviewed": false
+    },
+    "money.daily.card": {
+      "text": "Káàdì òwúrọ̀ rẹ, ìlà kọ̀ọ̀kan ń ṣí irinṣẹ́ rẹ̀: {link}",
+      "reviewed": false
+    },
     "rider.no_delivery": {
       "text": "O kò ní ìfijíṣẹ́ tó bá ìyẹn mu báyìí.",
       "reviewed": false

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
+	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
 // Chat tools phase 5 (docs/spec/chat-tools.md §7): the morning briefing,
@@ -35,16 +37,23 @@ type daySales struct {
 	Kobo  int64  `json:"kobo"`
 }
 
-// salesDays are the sales of the n days up to and including last.
+// salesDays are the sales of the n days up to and including last, read
+// in one go (a day's total is its sales' amounts, as stock.DayTx).
 func salesDays(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, last time.Time, n int) ([]daySales, error) {
+	end := time.Date(last.Year(), last.Month(), last.Day(), 0, 0, 0, 0, storefront.Lagos).AddDate(0, 0, 1)
+	from := end.AddDate(0, 0, -n)
+	sales, err := stock.SalesTx(ctx, tx, tenant, from, end)
+	if err != nil {
+		return nil, err
+	}
+	by := map[string]int64{}
+	for _, x := range sales {
+		by[x.SoldAt.In(storefront.Lagos).Format("2006-01-02")] += x.AmountKobo
+	}
 	out := make([]daySales, 0, n)
-	for i := n - 1; i >= 0; i-- {
-		d := last.AddDate(0, 0, -i)
-		day, err := stock.DayTx(ctx, tx, tenant, d)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, daySales{Day: d.Format("2006-01-02"), Label: d.Format("Mon"), Kobo: day.TotalKobo})
+	for d := from; d.Before(end); d = d.AddDate(0, 0, 1) {
+		k := d.Format("2006-01-02")
+		out = append(out, daySales{Day: k, Label: d.Format("Mon"), Kobo: by[k]})
 	}
 	return out, nil
 }
@@ -235,6 +244,13 @@ func (s *Server) handoverOf(ctx context.Context, p *Principal) (handover, error)
 					n++
 				}
 			}
+			// And the storefront's own customers' orders not done yet.
+			var shop int
+			if err := tx.QueryRow(ctx, `SELECT count(*) FROM storefront_orders WHERE tenant_id = $1 AND kind = 'order'
+				AND status IN ('received', 'awaiting_payment', 'paid', 'accepted')`, p.TenantID).Scan(&shop); err != nil {
+				return err
+			}
+			n += shop
 			out.Open = &n
 			if s.Dispatch.Ready() {
 				ds, err := s.Dispatch.ListTx(ctx, tx, p.TenantID, dispatch.ListFilter{Day: out.Day})
@@ -283,7 +299,7 @@ func (s *Server) getChatHandover(w http.ResponseWriter, r *http.Request) {
 // handoverWords is a handover told: the sales and how paid, the cash
 // counted against the cash sold, what is open and low, and the note.
 func handoverWords(who string, h handover, cash *int64, note string) string {
-	lines := []string{fmt.Sprintf("%s handed the shift over.", who)}
+	lines := []string{fmt.Sprintf("%s handed the shift over.", whatsapp.SafeText(who))}
 	if h.Sales != nil {
 		lines = append(lines, fmt.Sprintf("Sold %s in %d sales", naira(h.Sales.TotalKobo), h.Sales.Count))
 		var hows []string
@@ -315,10 +331,14 @@ func handoverWords(who string, h handover, cash *int64, note string) string {
 		lines = append(lines, fmt.Sprintf("%d deliveries on the way", h.Out.Out))
 	}
 	if len(h.Low) > 0 {
-		lines = append(lines, "Low: "+strings.Join(h.Low, ", "))
+		low := h.Low
+		if len(low) > 5 {
+			low = append(slices.Clone(low[:5]), fmt.Sprintf("%d more", len(h.Low)-5))
+		}
+		lines = append(lines, "Low: "+whatsapp.SafeText(strings.Join(low, ", ")))
 	}
 	if note = strings.TrimSpace(note); note != "" {
-		lines = append(lines, "Note: "+note)
+		lines = append(lines, "Note: "+whatsapp.SafeText(note))
 	}
 	return strings.Join(lines, "\n")
 }
@@ -340,8 +360,31 @@ func (s *Server) postChatHandover(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if in.Cash != nil && *in.Cash < 0 || len(in.Note) > 500 {
-		s.fail(w, r, fmt.Errorf("%w: the cash counted is 0 or more, the note 500 characters at most", errBadRequest))
+	if in.Cash != nil && *in.Cash < 0 || len([]rune(in.Note)) > 300 {
+		s.fail(w, r, fmt.Errorf("%w: the cash counted is 0 or more, the note 300 characters at most", errBadRequest))
+		return
+	}
+	// A handover is a shift manager's (or the owner's): those who run the
+	// shift's money or the storefront, not every member who reads stock.
+	if !p.Can(PermInvoiceManage) && !p.Can(PermStorefrontManage) {
+		s.fail(w, r, fmt.Errorf("%w: handing a shift over is a shift manager's", errForbidden))
+		return
+	}
+	var on bool
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		var err error
+		on, err = chatToolsOn(r.Context(), tx, p.TenantID)
+		return err
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !on {
+		s.fail(w, r, fmt.Errorf("%w: chat tools are off", errConflict))
+		return
+	}
+	if !s.limiter("handover:"+p.UserID.String(), 10*time.Minute, 3).Allow() {
+		s.fail(w, r, fmt.Errorf("%w: the shift was handed over a moment ago", errConflict))
 		return
 	}
 	h, err := s.handoverOf(r.Context(), p)
@@ -358,14 +401,18 @@ func (s *Server) postChatHandover(w http.ResponseWriter, r *http.Request) {
 		if who = strings.TrimSpace(name); who == "" {
 			who, _, _ = strings.Cut(email, "@")
 		}
-		return auditTx(r, tx, "chat.handover", h.Day, map[string]any{"cash_counted_kobo": in.Cash, "sales_kobo": h.Sales})
+		var sold int64
+		if h.Sales != nil {
+			sold = h.Sales.TotalKobo
+		}
+		return auditTx(r, tx, "chat.handover", h.Day, map[string]any{"cash_counted_kobo": in.Cash, "sales_kobo": sold})
 	}); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	words := handoverWords(who, h, in.Cash, in.Note)
 	title, body, _ := strings.Cut(words, "\n")
-	s.background(r.Context(), "handover", func(ctx context.Context) {
+	s.background(withoutUser(r.Context(), p.UserID), "handover", func(ctx context.Context) {
 		s.tellHolders(ctx, p.TenantID, []string{PermStorefrontManage + "|" + PermInvoiceManage}, "handover:"+uuid.NewString(), "/chat?with=taskiem",
 			func(_ lang.Tag) (string, string) { return title, body })
 	})
@@ -425,7 +472,9 @@ func chartFor(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, period string, t
 		for _, b := range bars {
 			total += b.Kobo
 		}
-		before, err := salesDays(ctx, tx, tenant, today.AddDate(0, -1, 0), n)
+		// The same days of last month, to its last day at most.
+		lastMonth := time.Date(today.Year(), today.Month(), 0, 0, 0, 0, 0, today.Location())
+		before, err := salesDays(ctx, tx, tenant, lastMonth.AddDate(0, 0, min(n, lastMonth.Day())-lastMonth.Day()), min(n, lastMonth.Day()))
 		if err != nil {
 			return salesChart{}, err
 		}
@@ -488,7 +537,7 @@ func chartWords(c salesChart) string {
 // channel, and a chart card in the Taskiem conversation.
 func (s *Server) waHowDidWeDo(ctx context.Context, c *chat, cmd string) (bool, error) {
 	m := howDidWeDo.FindStringSubmatch(cmd)
-	if m == nil || c.p == nil || !c.p.Can(PermTableRead) || !s.Stock.Ready() {
+	if m == nil || c.p == nil || c.state != stateIdle || !c.p.Can(PermTableRead) || !s.Stock.Ready() {
 		return false, nil
 	}
 	period := m[1]

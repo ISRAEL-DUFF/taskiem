@@ -121,8 +121,12 @@ export const TOOLS: Tool[] = [
     perm: "table.edit",
     url: "/v1/stock",
     page: "/storefront/stock",
-    // Things that can be sold: those with a price.
-    rows: (data) => stockRows(data).filter((r) => (r.data as StockItem).price_kobo !== undefined),
+    // Things that can be sold: those with a price, on sale (as the sheet).
+    rows: (data) =>
+      stockRows(data).filter((r) => {
+        const it = r.data as StockItem;
+        return it.price_kobo !== undefined && it.available;
+      }),
     line: () => "Record a sale",
     more: "Open stock",
   },

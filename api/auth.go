@@ -146,7 +146,8 @@ func (p *Principal) mayDecide(role *string) bool {
 
 // mayDecideAny reports whether the principal may decide some approvals.
 func (p *Principal) mayDecideAny() bool {
-	return p.Can(PermApprovalDecide) || len(p.businessRoles()) > 0
+	// Working the orders decides the shop's own order steps (orderVoteRoles).
+	return p.Can(PermApprovalDecide) || len(p.businessRoles()) > 0 || p.Can(PermOrders)
 }
 
 // currentApprovalRole is an approval's current role.
@@ -429,7 +430,10 @@ func (s *Server) loadRoles(ctx context.Context, p *Principal) error {
 			}
 			p.Roles = append(p.Roles, role)
 			perms, builtin := rolePermissions[role]
-			if !builtin {
+			// A business's own role wins over a built-in one of the same
+			// name made after it (cashier, shift_manager came in chat tools
+			// phase 5): nobody's permissions change underneath them.
+			if !builtin || custom != nil {
 				perms = custom // a custom role, or none for a business role
 			}
 			for _, perm := range perms {

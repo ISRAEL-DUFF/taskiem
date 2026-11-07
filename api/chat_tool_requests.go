@@ -35,6 +35,10 @@ type chatTool struct {
 }
 
 var chatTools = []chatTool{
+	// Staff's (phase 5): a counter sale, and a shift's handover (a shift
+	// manager's only, staffTools).
+	{"sell", "Sell", PermTableEdit},
+	{"handover", "Handover", PermTableRead},
 	{"products", "Products", PermTableRead},
 	{"services", "Services", PermStorefrontManage},
 	{"stock", "Stock", PermTableRead},
@@ -105,8 +109,9 @@ func (s *Server) waToolsCommand(ctx context.Context, c *chat, cmd string) (bool,
 		return false, nil
 	}
 	var lines []string
+	only := staffTools(c.p.Roles)
 	for _, t := range chatTools {
-		if !c.p.Can(t.perm) {
+		if !c.p.Can(t.perm) || (only != nil && !only[t.key]) || (only == nil && t.key == "handover") {
 			continue
 		}
 		if want != "" && !strings.HasPrefix(t.key, want) && !strings.HasPrefix(strings.ToLower(t.title), want) {
@@ -123,6 +128,33 @@ func (s *Server) waToolsCommand(ctx context.Context, c *chat, cmd string) (bool,
 		head = "Open it on the web:"
 	}
 	return true, c.say(ctx, s, head+"\n"+strings.Join(lines, "\n"))
+}
+
+// roleTools are the tools of staff who work from chat (as the web's
+// lib/tools.ts ROLE_TOOLS): a cashier sells, keeps the stock and works the
+// orders; a shift manager also hands the shift over.
+var roleTools = map[string][]string{
+	"cashier":       {"sell", "orders", "stock"},
+	"shift_manager": {"handover", "sell", "orders", "stock", "bills"},
+}
+
+// staffTools are the tools a person's roles shape them to, or nil when one
+// of their roles is not a staff role (they see every tool they may).
+func staffTools(roles []string) map[string]bool {
+	if len(roles) == 0 {
+		return nil
+	}
+	out := map[string]bool{}
+	for _, r := range roles {
+		keys, ok := roleTools[r]
+		if !ok {
+			return nil
+		}
+		for _, k := range keys {
+			out[k] = true
+		}
+	}
+	return out
 }
 
 // mightBeToolRequest is whether words may ask for something a tool does,

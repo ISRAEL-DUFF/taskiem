@@ -118,6 +118,7 @@
 .tk-row-words { flex: 1; min-width: 0; }
 .tk-row-name { display: block; font-weight: 600; font-size: 16px; overflow-wrap: anywhere; }
 .tk-row-sub { display: block; font-size: 14px; color: var(--muted); }
+.tk-row-warn { display: block; margin-top: 2px; font-size: 13px; font-weight: 600; color: var(--danger); }
 .tk-sheet-foot { padding: 12px 20px calc(18px + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); }
 .tk-cta { width: 100%; min-height: 56px; border-radius: 999px; background: var(--brand); color: #ffffff; font-weight: 700; font-size: 16px; display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; }
 .tk-cta:hover { background: var(--brand-hover); text-decoration: none; }
@@ -417,6 +418,7 @@ button.tk-cta.tk-cta-danger, button.tk-cta.tk-cta-danger:hover:not(:disabled), b
 .tk-brief-day { font-size: 14px; color: color-mix(in srgb, var(--tk-on-pine) 72%, transparent); }
 .tk-brief-ok { min-height: 36px; padding: 0 14px; border: 0; box-shadow: none; border-radius: 999px; background: color-mix(in srgb, var(--tk-on-pine) 12%, transparent); color: var(--tk-on-pine); font-weight: 700; font-size: 13px; cursor: pointer; }
 .tk-brief-ok:hover:not(:disabled) { background: color-mix(in srgb, var(--tk-on-pine) 18%, transparent); color: var(--tk-on-pine); }
+.tk-brief-err { margin: 12px 0 0; font-size: 13px; font-weight: 600; color: var(--tk-on-pine); }
 .tk-brief-sales { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; padding: 0; border: 0; box-shadow: none; background: none; color: inherit; text-align: left; cursor: pointer; font: inherit; }
 .tk-brief-sales:hover:not(:disabled) { background: none; color: inherit; }
 .tk-brief-sales > span:first-child { display: grid; gap: 2px; }

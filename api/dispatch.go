@@ -410,7 +410,8 @@ func (s *Server) riderJobsWord(ctx context.Context, ch chatChannel, channel, add
 	l := s.chooseLang(ctx, ch.OwnTenant(), addr, "").Tag
 	lines := []string{tr(l, "rider.jobs")}
 	for _, o := range list {
-		if ch.OwnTenant() != uuid.Nil && ch.OwnTenant() != o.Tenant {
+		// Done ones (kept two hours for their photo) are not open.
+		if (ch.OwnTenant() != uuid.Nil && ch.OwnTenant() != o.Tenant) || o.Status == "delivered" {
 			continue
 		}
 		var v dispatch.View
@@ -613,7 +614,7 @@ func (s *Server) listDeliveries(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"deliveries": s.proofURLs(r.Context(), p.TenantID, list)})
+	writeJSON(w, http.StatusOK, map[string]any{"deliveries": s.proofURLs(r.Context(), p.TenantID, cashierView(p, list))})
 }
 
 // orderDeliveries is GET /v1/storefront/orders/{reference}/deliveries: who
@@ -639,7 +640,7 @@ func (s *Server) orderDeliveries(w http.ResponseWriter, r *http.Request) {
 		s.dispatchFail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"deliveries": s.proofURLs(r.Context(), p.TenantID, list), "not_ready": why})
+	writeJSON(w, http.StatusOK, map[string]any{"deliveries": s.proofURLs(r.Context(), p.TenantID, cashierView(p, list)), "not_ready": why})
 }
 
 // offerOrder is POST /v1/storefront/orders/{reference}/offer: to a named
@@ -657,6 +658,11 @@ func (s *Server) offerOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := principalFrom(r.Context())
+	// A rider's pay is the storefront's to set, not a cashier's.
+	if req.FeeKobo != nil && !p.Can(PermStorefrontManage) {
+		s.fail(w, r, fmt.Errorf("%w: setting a rider's fee needs %s", errForbidden, PermStorefrontManage))
+		return
+	}
 	by := p.Actor()
 	if req.RiderID == nil {
 		by = "rotation"
@@ -779,4 +785,18 @@ func (s *Server) riderRemit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"owed_kobo": left})
+}
+
+// cashierView is deliveries as someone who works the orders without the
+// storefront's say sees them (a cashier): the rider by name, not their
+// phone or pay.
+func cashierView(p *Principal, list []dispatch.Delivery) []dispatch.Delivery {
+	if p.Can(PermStorefrontManage) {
+		return list
+	}
+	for i := range list {
+		list[i].RiderPhone = maskPhone(list[i].RiderPhone)
+		list[i].FeeKobo = 0
+	}
+	return list
 }

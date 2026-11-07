@@ -42,16 +42,31 @@ export function SellSheet({ from, onClose, onSold }: { from?: DOMRect | null; on
   const [error, setError] = useState<unknown>();
   const [done, setDone] = useState<string>();
   const [shut, setShut] = useState(false);
-  // One sale, one key: a retry after a failure records it once.
-  const key = useRef(`sell-${crypto.randomUUID()}`);
+  // One sale, one key: a retry of the same sale after a failure records it
+  // once, and a changed sale (other things, or paid another way) is new.
+  const keys = useRef(new Map<string, string>());
   const sale = saleOf(items.data ?? [], qty);
+  const keyOf = () => {
+    const sig = JSON.stringify([sale.lines.map((l) => [l.item.id, l.quantity]), how]);
+    let k = keys.current.get(sig);
+    if (!k) keys.current.set(sig, (k = `sell-${crypto.randomUUID()}`));
+    return k;
+  };
+  const hows = useRef<(HTMLButtonElement | null)[]>([]);
+  const moveHow = (by: number) => {
+    const i = (HOWS.findIndex((h) => h.how === how) + by + HOWS.length) % HOWS.length;
+    const next = HOWS[i];
+    if (!next) return;
+    setHow(next.how);
+    hows.current[i]?.focus();
+  };
   const q = search.trim().toLowerCase();
   const shown = (items.data ?? []).filter((it) => !q || it.name.toLowerCase().includes(q));
   const record = async () => {
     setBusy(true);
     setError(undefined);
     try {
-      await postOnce("/v1/stock/sales", key.current, {
+      await postOnce("/v1/stock/sales", keyOf(), {
         lines: sale.lines.map((l) => ({ item_id: l.item.id, quantity: l.quantity })),
         paid_how: how,
       });
@@ -118,6 +133,7 @@ export function SellSheet({ from, onClose, onSold }: { from?: DOMRect | null; on
             {shown.map((it) => {
               const n = qty[it.id] ?? 0;
               const out = it.stock !== null && it.stock <= 0;
+              const over = it.stock !== null && n > Math.max(0, it.stock);
               return (
                 <li key={it.id} className={`tk-order-row${n > 0 ? " on" : ""}`} data-testid="sell-row">
                   <span className="tk-row-tile" aria-hidden="true">
@@ -130,6 +146,11 @@ export function SellSheet({ from, onClose, onSold }: { from?: DOMRect | null; on
                       {it.unit ? ` a ${it.unit}` : ""}
                       {it.stock !== null ? ` · ${out ? "none left" : `${it.stock} left`}` : ""}
                     </span>
+                    {over && (
+                      <span className="tk-row-warn" role="status">
+                        {out ? "None left in your stock" : `Only ${it.stock} left in your stock`}
+                      </span>
+                    )}
                   </span>
                   <span className="tk-qty" role="group" aria-label={`How many ${it.name}`}>
                     <button type="button" aria-label={`One fewer ${it.name}`} disabled={n === 0} onClick={() => set(it, n - 1)}>
@@ -158,8 +179,28 @@ export function SellSheet({ from, onClose, onSold }: { from?: DOMRect | null; on
             ))}
           </ul>
           <div className="tk-hows" role="radiogroup" aria-label="How it was paid">
-            {HOWS.map((h) => (
-              <button key={h.how} type="button" role="radio" aria-checked={how === h.how} className={how === h.how ? "on" : undefined} onClick={() => setHow(h.how)}>
+            {HOWS.map((h, i) => (
+              <button
+                key={h.how}
+                ref={(el) => {
+                  hows.current[i] = el;
+                }}
+                type="button"
+                role="radio"
+                aria-checked={how === h.how}
+                tabIndex={how === h.how ? 0 : -1}
+                className={how === h.how ? "on" : undefined}
+                onClick={() => setHow(h.how)}
+                onKeyDown={(e) => {
+                  if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+                    e.preventDefault();
+                    moveHow(1);
+                  } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+                    e.preventDefault();
+                    moveHow(-1);
+                  }
+                }}
+              >
                 {h.words}
               </button>
             ))}
@@ -307,14 +348,39 @@ export function ChartCard({ chart }: { chart: SalesChart }) {
 export function BriefingCard({ openTool, onAsk }: { openTool: (k: ToolKey, from?: DOMRect) => void; onAsk: (words: string) => void }) {
   const { me } = useAuth();
   const [b, setB] = useState<Briefing>();
-  const [gone, setGone] = useState(false);
+  const [gone, setGone] = useState<string>();
+  const [error, setError] = useState<unknown>();
+  // Read again when the page comes back, and every ten minutes: the card
+  // appears at 8am and a new day's card replaces yesterday's.
   useEffect(() => {
-    get<Briefing>("/v1/chat-briefing").then(setB, () => undefined);
+    let live = true;
+    const load = () => {
+      if (document.visibilityState === "hidden") return;
+      get<Briefing>("/v1/chat-briefing").then(
+        (x) => live && setB(x),
+        (e: unknown) => console.warn("the morning briefing", e),
+      );
+    };
+    load();
+    const every = window.setInterval(load, 10 * 60_000);
+    document.addEventListener("visibilitychange", load);
+    window.addEventListener("focus", load);
+    return () => {
+      live = false;
+      window.clearInterval(every);
+      document.removeEventListener("visibilitychange", load);
+      window.removeEventListener("focus", load);
+    };
   }, []);
-  if (!b || !b.ready || b.put_off || gone) return null;
+  if (!b || !b.ready || b.put_off || gone === b.key) return null;
   const gotIt = () => {
-    setGone(true);
-    void post("/v1/chat-alerts/later", { key: b.key, hours: 24 }).catch(() => undefined);
+    setGone(b.key);
+    setError(undefined);
+    post("/v1/chat-alerts/later", { key: b.key, hours: 24 }).catch((e: unknown) => {
+      // Not put away: the card comes back, saying so.
+      setGone(undefined);
+      setError(e);
+    });
   };
   const day = new Date(`${b.day}T08:00:00`);
   const change = b.sales && changeWords(b.sales.change_pct, `last ${b.sales.weekday}`);
@@ -371,6 +437,11 @@ export function BriefingCard({ openTool, onAsk }: { openTool: (k: ToolKey, from?
           </Link>
         )}
       </span>
+      {error !== undefined && (
+        <p className="tk-brief-err" role="alert">
+          That didn't go through. Try Got it again.
+        </p>
+      )}
     </article>
   );
 }

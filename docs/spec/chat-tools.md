@@ -323,12 +323,29 @@ storefront's settings, prices, refunds, riders' pay or purchasing, which stay
 `storefront.manage`. Routes and chat take either (`storefront.manage|order.handle`
 in the OpenAPI document), and those holding either are told of a new order.
 
+Its limits, on the server (`orderStepAllowed`, `cashierView`):
+
+- Of a linked business's order, only accept, decline, ready, dispatched and
+  delivered; not changing it (`change`), and accepting only an order priced
+  from the seller's own prices (a buyer-priced one waits for the owner).
+- A customer order's own approval steps (accept or decline, done, done and
+  paid, in the storefront-order workflow) are decided by anyone with
+  `order.handle`, as the owner would, on the web, in the bell and on
+  WhatsApp; its refund step and every other workflow's approvals are not.
+- Riders and deliveries are seen with the rider's number to its last four
+  digits and no fee or bank; an offer sets no fee (`fee_kobo` is refused).
+- A business's own role made before these were built in, named `cashier` or
+  `shift_manager`, keeps its own permissions and is listed once.
+
 A person whose roles are all staff roles sees their role's tools only, in the
-panel and in "tools" on WhatsApp; anyone else sees every tool their
+panel and in "tools" on WhatsApp and Telegram; anyone else sees every tool their
 permissions allow. **Sell** is a counter sale as the Order sheet looks: what
 has a price, with steppers, the pine bag, then how it was paid (cash,
-transfer, POS); recorded as the Stock page's sales are (`POST /v1/stock/sales`,
-one key per sale), with a diary line ("Sold 2 Rice, 1 Garri: ₦188,000 (POS)").
+transfer, POS, arrow keys moving between them); recorded as the Stock page's
+sales are (`POST /v1/stock/sales`, one key per sale: a retry of the same sale
+records it once, a changed one is new), with one diary line ("Sold 2 Rice, 1
+Garri: ₦188,000 (POS)"), none for a replay. More than the stock holds is said
+on the row ("Only 3 left in your stock"), not refused.
 On WhatsApp a cashier sells as before ("sold 2 bags of rice 156,000 cash"),
 works the orders ("orders", "order ADA-1234 ready") and their buttons, and is
 told of new orders.
@@ -336,15 +353,18 @@ told of new orders.
 **Handover** (a shift manager's): the shift so far (`GET /v1/chat-handover`,
 today in Lagos): sold and how it was paid, the orders still open, deliveries
 on the way and done, what is low; the cash counted against the cash sold
-("₦6,000 short"), and a note. Handing over (`POST /v1/chat-handover`) tells
-those who run the business in the bell and on their chat ("Sam handed the
-shift over. Sold ₦234,000 in 3 sales…"), with a diary line for the manager.
+("₦6,000 short"), and a note (300 characters at most). Handing over (`POST
+/v1/chat-handover`, `invoice.manage` or `storefront.manage`, chat tools on,
+three in ten minutes at most) tells those who run the business, not the one
+handing over, in the bell and on their chat ("Sam handed the shift over. Sold
+₦234,000 in 3 sales…", at most five low items then "and N more"), with a
+diary line for the manager. The open orders count the storefront's too.
 
 **A rider** works the shift on WhatsApp or Telegram as before (Accept, Can't,
 Picked up, Arrived, Delivered, Cash, the proof photo and location, the drop's
 map pin), and now asks "my deliveries" (or "jobs", "today"): each open
 delivery, where it goes and its pin once it is theirs, and the word to send
-next.
+next. Delivered ones are left out.
 
 **The morning briefing** (the Alerts design): from 8am Lagos, for those who run
 the business (`storefront.manage` or `invoice.manage`), a pine card leads the
@@ -353,8 +373,12 @@ yesterday's sales against the same day a week before ("Up 12% on last
 Wednesday") with the week's bars, and tiles for what is owed (the invoices
 page), low stock (the Stock tool), today's deliveries and bookings, each only
 for those who may see it. Tapping the sales asks "how did we do yesterday";
-**Got it** puts the card away for the day. On the phone the owner keeps the
-8am money summary as before.
+**Got it** puts the card away for the day (if that fails the card stays and
+says so). The card is read again when the page comes back and every ten
+minutes, so it appears at 8am and a new day's replaces yesterday's. On the
+phone the owner keeps the 8am money summary, now with today's deliveries
+and bookings ("Today: 4 deliveries, 1 bookings.") and, with chat tools on,
+the link to the morning card in the Taskiem conversation.
 
 **"How did we do?"** ("how did we do this week?", "today", "yesterday", "last
 week", "this month", "sales", and "@Taskiem how did we do?" from any

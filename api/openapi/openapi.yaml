@@ -9454,7 +9454,7 @@ paths:
       tags:
       - Riders
       summary: The business's riders
-      description: Its current riders by name (retired=true for those retired), with where each is reached and their state; the order form's delivery areas; and the tap-in page riders open to get deliveries on WhatsApp or Telegram.
+      description: Its current riders by name (retired=true for those retired), with where each is reached and their state; the order form's delivery areas; and the tap-in page riders open to get deliveries on WhatsApp or Telegram. Those who work the orders without storefront.manage (a cashier) see each rider's number to its last four digits, and no fee, bank or tap-in page.
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -21819,7 +21819,7 @@ paths:
       tags:
       - Account
       summary: Hand the shift over
-      description: The shift so far, with the cash counted against the cash sold and a note, told to those who run the business (in the app's bell and on their chat), and a diary line for the person.
+      description: The shift so far, with the cash counted against the cash sold and a note (300 characters at most), told to those who run the business but not the one handing over (in the app's bell and on their chat), and a diary line for the person. Needs invoice.manage or storefront.manage (a shift manager or those who run the business) and chat tools on; three handovers in ten minutes at most.
       x-taskiem-permission: table.read
       security:
       - sessionCookie: []

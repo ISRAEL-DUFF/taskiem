@@ -592,6 +592,14 @@
       "text": "a ƙofa. Aika DELIVERED idan ka miƙa.",
       "reviewed": false
     },
+    "money.daily.today": {
+      "text": "Yau: kai kaya {deliveries}, alƙawura {bookings}.",
+      "reviewed": false
+    },
+    "money.daily.card": {
+      "text": "Katin safiya naka, kowane layi yana buɗe kayan aikinsa: {link}",
+      "reviewed": false
+    },
     "rider.no_delivery": {
       "text": "Ba ka da kayan da ya dace da wannan yanzu.",
       "reviewed": false

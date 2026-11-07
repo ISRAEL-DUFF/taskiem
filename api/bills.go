@@ -444,11 +444,7 @@ func (s *Server) tellHoldersSent(ctx context.Context, tenant uuid.UUID, perms []
 	buttons func(lang.Tag) []whatsapp.Button, sent func(channel, addr, id string)) {
 	var to []linkTold
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT DISTINCT user_id FROM memberships WHERE role = ANY ($1)`, holdingAll(perms...))
-		if err != nil {
-			return err
-		}
-		users, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+		users, err := holdersTx(ctx, tx, perms...)
 		if err != nil {
 			return err
 		}
@@ -517,7 +513,41 @@ func (s *Server) tellNotice(ctx context.Context, tenant, from uuid.UUID, n links
 	})
 }
 
-// holdingAll are the built-in roles holding every one of perms.
+// holdersTx are the people of the business in scope whose role holds every
+// one of perms ("a|b": either): a built-in role, or the business's own
+// role (which wins over a built-in one of the same name, as loadRoles).
+func holdersTx(ctx context.Context, tx pgx.Tx, perms ...string) ([]uuid.UUID, error) {
+	args := []any{holdingAll(perms...)}
+	custom := []string{"true"}
+	for _, p := range perms {
+		args = append(args, strings.Split(p, "|"))
+		custom = append(custom, fmt.Sprintf("r.permissions && $%d::text[]", len(args)))
+	}
+	rows, err := tx.Query(ctx, `SELECT DISTINCT m.user_id FROM memberships m
+		LEFT JOIN roles r ON r.tenant_id = m.tenant_id AND r.name = m.role
+		WHERE (r.name IS NULL AND m.role = ANY ($1)) OR (r.name IS NOT NULL AND `+strings.Join(custom, " AND ")+`)`, args...)
+	if err != nil {
+		return nil, err
+	}
+	users, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return nil, err
+	}
+	// Someone told of their own doing is told nothing (a handover).
+	if except, ok := ctx.Value(exceptUserKey{}).(uuid.UUID); ok {
+		users = slices.DeleteFunc(users, func(u uuid.UUID) bool { return u == except })
+	}
+	return users, nil
+}
+
+// exceptUserKey leaves a person out of those told (withoutUser).
+type exceptUserKey struct{}
+
+// withoutUser is ctx telling everyone but user.
+func withoutUser(ctx context.Context, user uuid.UUID) context.Context {
+	return context.WithValue(ctx, exceptUserKey{}, user)
+}
+
 // holdingAll are the built-in roles holding every one of perms ("a|b":
 // either of them).
 func holdingAll(perms ...string) []string {

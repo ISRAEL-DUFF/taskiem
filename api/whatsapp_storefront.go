@@ -1423,7 +1423,13 @@ func (s *Server) waShopOrderMove(ctx context.Context, c *chat, ref, move string)
 // waShopApply does the confirmed change.
 func (s *Server) waShopApply(ctx context.Context, c *chat) error {
 	sh := c.data.Shop
-	if !c.p.Can(PermStorefrontManage) {
+	// Readying and completing an order are working the orders (a
+	// cashier's too); the rest is the storefront's.
+	need := PermStorefrontManage
+	if sh != nil && (sh.Action == "ready" || sh.Action == "delivered") {
+		need = PermOrders
+	}
+	if !c.p.Can(need) {
 		if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
 			return err
 		}

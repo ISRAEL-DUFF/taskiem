@@ -42,7 +42,7 @@ func (s *Server) linkOrderRoutes(r chi.Router) {
 	r.With(orders).Get("/trade-orders/{id}", s.getTradeOrder)
 	r.With(manage, s.tenantWide).Post("/trade-orders", s.placeTradeOrder)
 	r.With(orders, s.tenantWide).Post("/trade-orders/{id}/{step}", s.tradeOrderStep)
-	r.With(orders, s.tenantWide).Put("/trade-orders/{id}/lines/{line}/item", s.setTradeLineItem)
+	r.With(manage, s.tenantWide).Put("/trade-orders/{id}/lines/{line}/item", s.setTradeLineItem)
 	r.With(s.need(PermLinkManage)).Get("/links/{id}/trade", s.getLinkTrade)
 	r.With(s.need(PermLinkManage), s.tenantWide).Put("/links/{id}/trade", s.putLinkTrade)
 	r.With(s.need(PermInvoiceRead)).Get("/links/{id}/statement", s.linkStatement)
@@ -99,6 +99,27 @@ func (s *Server) getTradeOrder(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
+// cashierSteps are the steps working an order takes (order.handle): no
+// price is set or agreed in them.
+var cashierSteps = map[string]bool{links.StepAccept: true, links.StepDecline: true, links.StepReady: true, links.StepDispatched: true, links.StepDelivered: true}
+
+// orderStepAllowed refuses, to those who work the orders without the
+// storefront's say over prices (a cashier), a step that sets or agrees a
+// price: a change, a cancel or keep, a short count agreed, or accepting
+// lines the buyer priced.
+func orderStepAllowed(p *Principal, step string, o links.Order) error {
+	if p.Can(PermStorefrontManage) {
+		return nil
+	}
+	if !cashierSteps[step] {
+		return fmt.Errorf("%w: %s needs %s", errForbidden, strings.ReplaceAll(step, "_", " "), PermStorefrontManage)
+	}
+	if step == links.StepAccept && !links.SellerPriced(o.Lines) {
+		return fmt.Errorf("%w: the buyer priced some lines; someone who sets prices accepts it", errForbidden)
+	}
+	return nil
+}
+
 // tradeOrderStep is POST /v1/trade-orders/{id}/{step}: the seller accepts,
 // declines, changes, readies, dispatches, delivers or cancels an order,
 // keeps it when asked to cancel, or agrees the buyer's count of a short
@@ -118,6 +139,9 @@ func (s *Server) tradeOrderStep(w http.ResponseWriter, r *http.Request) {
 	}
 	p := principalFrom(r.Context())
 	o, short, err := s.sellerStep(r.Context(), p.TenantID, chi.URLParam(r, "id"), step, in, actorOf(p), p.Actor(), func(tx pgx.Tx, o links.Order) error {
+		if err := orderStepAllowed(p, step, o); err != nil {
+			return err
+		}
 		return auditTx(r, tx, "trade_order."+step, o.Reference, map[string]any{"order_id": o.ID, "buyer": o.Buyer})
 	})
 	if err != nil {
@@ -894,7 +918,12 @@ func (s *Server) tellOrder(ctx context.Context, t *links.Told, in links.StepIn) 
 		if note == "" || told.Event == "change" || told.Event == "delivered" || told.Event == "short" {
 			note = s.orderNote(ctx, told, in)
 		}
-		perms := []string{PermOrders}
+		// The seller's side is told whoever works the orders (a cashier
+		// too); the buyer's purchasing stays the storefront's.
+		perms := []string{PermStorefrontManage}
+		if sellerTold(told.Event) {
+			perms = []string{PermOrders}
+		}
 		if told.Event == "delivered" {
 			perms = []string{PermTableEdit} // who records what came
 		}
@@ -966,10 +995,15 @@ func (s *Server) waOrderPress(ctx context.Context, c *chat, reply string) error 
 			})
 		} else {
 			_, _, err = s.sellerStep(ctx, t.ID, id.String(), step, links.StepIn{}, actorOf(p), p.Actor(), func(tx pgx.Tx, o links.Order) error {
+				if err := orderStepAllowed(p, step, o); err != nil {
+					return err
+				}
 				return waAudit(ctx, tx, c.ch.Name(), p, "trade_order."+step, o.Reference, map[string]any{"order_id": id})
 			})
 		}
 		switch {
+		case errors.Is(err, errForbidden):
+			return c.say(ctx, s, c.t("order.link.denied", "org", t.Name))
 		case errors.Is(err, links.ErrState):
 			return c.say(ctx, s, c.t("order.link.gone"))
 		case errors.Is(err, links.ErrInvalid):

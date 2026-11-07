@@ -592,6 +592,14 @@
       "text": "you don reach door. Send DELIVERED when you hand am over.",
       "reviewed": false
     },
+    "money.daily.today": {
+      "text": "Today: {deliveries} deliveries, {bookings} bookings.",
+      "reviewed": false
+    },
+    "money.daily.card": {
+      "text": "Your morning card, each line go open im tool: {link}",
+      "reviewed": false
+    },
     "rider.no_delivery": {
       "text": "You no get delivery wey fit that one now.",
       "reviewed": false

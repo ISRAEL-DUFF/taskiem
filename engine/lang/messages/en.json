@@ -739,6 +739,16 @@
       "reviewed": true,
       "context": "A rider asking for their open deliveries"
     },
+    "money.daily.today": {
+      "text": "Today: {deliveries} deliveries, {bookings} bookings.",
+      "reviewed": true,
+      "context": "The morning summary on the chat apps"
+    },
+    "money.daily.card": {
+      "text": "Your morning card, each line opening its tool: {link}",
+      "reviewed": true,
+      "context": "The morning summary on the chat apps"
+    },
     "rider.no_delivery": {
       "text": "You have no delivery that fits that now.",
       "reviewed": true,

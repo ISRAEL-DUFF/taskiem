@@ -565,7 +565,7 @@ func (s *Server) waFlowPin(ctx context.Context, row flowRow, req whatsapp.FlowRe
 		return finish("refused", m, m)
 	}
 	res, err := s.Store.VoteApproval(ctx, runtime.RunRef{ID: *row.run, TenantID: row.tenant}, *row.step,
-		runtime.Vote{UserID: user, Roles: p.Roles, Decision: *row.decision, Channel: "whatsapp", StepUp: runtime.StepUpWhatsAppPIN,
+		runtime.Vote{UserID: user, Roles: s.orderVoteRoles(ctx, p, *row.run, *row.step), Decision: *row.decision, Channel: "whatsapp", StepUp: runtime.StepUpWhatsAppPIN,
 			Audit: func(tx pgx.Tx, res runtime.VoteResult) error {
 				return waAudit(ctx, tx, "whatsapp", p, "approval.decide", row.run.String()+"/"+*row.step, voteDetail(map[string]any{"decision": *row.decision,
 					"result": res.Status, "level": res.Level + 1, "levels": res.Levels, "step_up": runtime.StepUpWhatsAppPIN, "via": "flow_pin"}, res))

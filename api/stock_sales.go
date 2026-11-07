@@ -116,7 +116,9 @@ func (s *Server) recordSale(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	s.diaryChange(r.Context(), p, saleWords(x.Lines, x.AmountKobo, x.PaidHow))
+	if !x.Replayed {
+		s.diaryChange(r.Context(), p, saleWords(x.Lines, x.AmountKobo, x.PaidHow))
+	}
 	writeJSON(w, http.StatusCreated, map[string]any{"sale": x})
 }
 

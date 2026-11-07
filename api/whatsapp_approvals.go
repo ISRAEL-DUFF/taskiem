@@ -153,6 +153,14 @@ func (s *Server) notifyApprovalsOn(ctx context.Context, tenant uuid.UUID, channe
 			  SELECT o.run_id, o.step_id, o.level, o.role, o.forbid_self, o.distinct_ap, o.forbid_sole, m.user_id FROM open o
 			    JOIN memberships m ON o.role IS NULL OR m.role IN (o.role, 'owner')
 			  UNION
+			  -- The shop's own order steps go to those who work the orders
+			  -- too (order.handle: a cashier), by a built-in or own role.
+			  SELECT o.run_id, o.step_id, o.level, o.role, o.forbid_self, o.distinct_ap, o.forbid_sole, m.user_id FROM open o
+			    JOIN runs ro ON ro.id = o.run_id
+			    JOIN memberships m ON true LEFT JOIN roles rr ON rr.tenant_id = m.tenant_id AND rr.name = m.role
+			   WHERE `+fmt.Sprintf(shopOrderStep, "ro", "o")+`
+			     AND ((rr.name IS NULL AND m.role = ANY ($2)) OR rr.permissions && ARRAY['order.handle', 'storefront.manage'])
+			  UNION
 			  SELECT o.run_id, o.step_id, o.level, o.role, o.forbid_self, o.distinct_ap, o.forbid_sole, g.to_user FROM open o JOIN delegations g ON o.role = ANY (g.roles)
 			     AND g.revoked_at IS NULL AND g.starts_at <= now() AND g.ends_at > now()
 			     AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = g.from_user AND m.role IN (o.role, 'owner')))
@@ -165,7 +173,7 @@ func (s *Server) notifyApprovalsOn(ctx context.Context, tenant uuid.UUID, channe
 			   AND NOT (c.forbid_self AND c.user_id::text IN (COALESCE(taskiem_actor_human(r.started_by), ''),
 			                COALESCE(taskiem_actor_human(wv.created_by), ''), COALESCE(taskiem_actor_human(wv.published_by::text), ''))
 			            AND (c.forbid_sole OR NOT taskiem_sole_approver(c.role, c.user_id)))
-			 LIMIT 200`, channel)
+			 LIMIT 200`, channel, holdingAll(PermOrders))
 		if err != nil {
 			return err
 		}
@@ -695,7 +703,7 @@ func (s *Server) waDecide(ctx context.Context, c *chat, tok string) error {
 func (s *Server) waVote(ctx context.Context, c *chat, tenant tenantRef, p *Principal, cl whatsapp.Claims, stepUp, via string) error {
 	say := func(text string) error { return s.waSay(ctx, c.ch, c.addr, tenant.Name, text) }
 	ref := runtime.RunRef{ID: cl.Run, TenantID: tenant.ID}
-	res, err := s.Store.VoteApproval(ctx, ref, cl.Step, runtime.Vote{UserID: p.UserID, Roles: p.Roles, Decision: cl.Decision, Channel: c.ch.Name(), StepUp: stepUp,
+	res, err := s.Store.VoteApproval(ctx, ref, cl.Step, runtime.Vote{UserID: p.UserID, Roles: s.orderVoteRoles(ctx, p, ref.ID, cl.Step), Decision: cl.Decision, Channel: c.ch.Name(), StepUp: stepUp,
 		Audit: func(tx pgx.Tx, res runtime.VoteResult) error {
 			return waAudit(ctx, tx, c.ch.Name(), p, "approval.decide", cl.Run.String()+"/"+cl.Step, voteDetail(map[string]any{"decision": cl.Decision, "result": res.Status,
 				"level": res.Level + 1, "levels": res.Levels, "step_up": stepUp, "via": via}, res))
@@ -891,7 +899,7 @@ func (s *Server) completeHandoff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	res, err := s.Store.VoteApproval(r.Context(), runtime.RunRef{ID: cl.Run, TenantID: p.TenantID}, cl.Step,
-		runtime.Vote{UserID: p.UserID, Roles: p.Roles, Decision: cl.Decision, Channel: row.channel, IP: clientIP(r), StepUp: stepUp,
+		runtime.Vote{UserID: p.UserID, Roles: s.orderVoteRoles(r.Context(), p, cl.Run, cl.Step), Decision: cl.Decision, Channel: row.channel, IP: clientIP(r), StepUp: stepUp,
 			Audit: func(tx pgx.Tx, res runtime.VoteResult) error {
 				return auditTx(r, tx, "approval.decide", cl.Run.String()+"/"+cl.Step, voteDetail(map[string]any{"decision": cl.Decision, "result": res.Status,
 					"level": res.Level + 1, "levels": res.Levels, "step_up": stepUp, "channel": row.channel, "via": "handoff"}, res))

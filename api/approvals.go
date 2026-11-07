@@ -6,12 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/moneylog"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/runtime"
@@ -117,14 +119,14 @@ func (s *Server) openApprovalsTx(ctx context.Context, tx pgx.Tx, p *Principal) (
 			     AND g.revoked_at IS NULL AND g.starts_at <= now() AND g.ends_at > now()
 			     AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = g.from_user AND m.role IN (a.role, 'owner')) ORDER BY g.created_at LIMIT 1) END,
 			COALESCE((a.constraints->>'forbid_sole_approver')::boolean, false) = false AND taskiem_sole_approver(a.role, $2),
-			a.requested_at, a.timeout_at, a.subject
+			a.requested_at, a.timeout_at, a.subject, ($3 AND `+fmt.Sprintf(shopOrderStep, "r", "a")+`)
 		FROM approvals a JOIN runs r ON r.id = a.run_id JOIN workflows w ON w.id = r.workflow_id
 		JOIN workflow_versions wv ON wv.workflow_id = r.workflow_id AND wv.version = r.version
-		WHERE a.status = 'open' AND (a.role IS NULL OR a.role = ANY ($1) OR 'owner' = ANY ($1) OR EXISTS (SELECT 1 FROM delegations g WHERE g.to_user = $2 AND a.role = ANY (g.roles)
+		WHERE a.status = 'open' AND (a.role IS NULL OR a.role = ANY ($1) OR 'owner' = ANY ($1) OR ($3 AND `+fmt.Sprintf(shopOrderStep, "r", "a")+`) OR EXISTS (SELECT 1 FROM delegations g WHERE g.to_user = $2 AND a.role = ANY (g.roles)
 		    AND g.revoked_at IS NULL AND g.starts_at <= now() AND g.ends_at > now()
 		    AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = g.from_user AND m.role IN (a.role, 'owner'))))
 		  AND NOT EXISTS (SELECT 1 FROM approval_decisions d WHERE d.run_id = a.run_id AND d.step_id = a.step_id AND d.level = a.level AND d.user_id = $2)
-		ORDER BY a.requested_at`, p.Roles, p.UserID)
+		ORDER BY a.requested_at`, p.Roles, p.UserID, p.Can(PermOrders) && !p.Can(PermApprovalDecide))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -132,13 +134,15 @@ func (s *Server) openApprovalsTx(ctx context.Context, tx pgx.Tx, p *Principal) (
 	for rows.Next() {
 		var it approvalItem
 		var subj []byte
+		var shop bool
 		if err := rows.Scan(&it.RunID, &it.StepID, &it.StepName, &it.Workflow, &it.Environment, &it.Role, &it.Required, &it.Approvals,
-			&it.Level, &it.Levels, &it.StepUp, &it.Policy, &it.OnBehalfOf, &it.SoleApprover, &it.RequestedAt, &it.TimeoutAt, &subj); err != nil {
+			&it.Level, &it.Levels, &it.StepUp, &it.Policy, &it.OnBehalfOf, &it.SoleApprover, &it.RequestedAt, &it.TimeoutAt, &subj, &shop); err != nil {
 			return nil, nil, err
 		}
 		// A delegation needs approval.decide; a business role decides
-		// only the approvals naming it.
-		if !p.Can(PermApprovalDecide) && (it.OnBehalfOf != nil || !p.mayDecide(it.Role)) {
+		// only the approvals naming it; working the orders, the shop's
+		// order steps.
+		if !p.Can(PermApprovalDecide) && (it.OnBehalfOf != nil || !p.mayDecide(it.Role)) && !shop {
 			continue
 		}
 		out = append(out, it)
@@ -192,13 +196,13 @@ func (s *Server) decide(w http.ResponseWriter, r *http.Request) {
 			s.fail(w, r, err)
 			return
 		}
-		if !p.mayDecide(role) {
+		if !p.mayDecide(role) && len(s.orderVoteRoles(r.Context(), p, run, step)) == len(p.Roles) {
 			s.fail(w, r, fmt.Errorf("%w: deciding this approval needs %s or its role", errForbidden, PermApprovalDecide))
 			return
 		}
 	}
 	ref := runtime.RunRef{ID: run, TenantID: p.TenantID}
-	vote := runtime.Vote{UserID: p.UserID, Roles: p.Roles, Decision: req.Decision, Channel: "web", IP: clientIP(r)}
+	vote := runtime.Vote{UserID: p.UserID, Roles: s.orderVoteRoles(r.Context(), p, run, step), Decision: req.Decision, Channel: "web", IP: clientIP(r)}
 	// A passkey must have been asked for this decision on this approval.
 	method, ok := s.checkStepUp(w, r, stepUpProof{TOTP: req.TOTP, Passkey: req.Passkey}, approvalScope(run, step, req.Decision))
 	if !ok {
@@ -254,4 +258,30 @@ func (s *Server) decisionWords(r *http.Request, run uuid.UUID, step, decision st
 		return verb + " " + name
 	}
 	return fmt.Sprintf("%s %s (%s)", verb, name, flow)
+}
+
+// shopOrderStep is the SQL condition for an approval (alias a) of the
+// storefront's own order workflow that working the orders decides (chat
+// tools phase 5): accepting or declining an order and marking it delivered
+// or collected, never a refund. run is the run's alias.
+const shopOrderStep = `%[1]s.workflow_id IN (SELECT t.workflow_id FROM triggers t WHERE t.type = 'storefront' AND t.storefront_action = 'order')
+	AND %[2]s.step_id IN ('decide', 'done', 'done_paid')`
+
+// orderVoteRoles are the roles a vote is cast with: the person's own, and
+// the step's role when they work the orders (order.handle) and the step is
+// one of the storefront order's they decide (shopOrderStep).
+func (s *Server) orderVoteRoles(ctx context.Context, p *Principal, run uuid.UUID, step string) []string {
+	if p.Can(PermApprovalDecide) || !p.Can(PermOrders) {
+		return p.Roles
+	}
+	var role *string
+	var ok bool
+	_ = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT a.role, `+fmt.Sprintf(shopOrderStep, "r", "a")+` FROM approvals a JOIN runs r ON r.id = a.run_id
+			WHERE a.run_id = $1 AND a.step_id = $2 AND a.status = 'open'`, run, step).Scan(&role, &ok)
+	})
+	if !ok || role == nil {
+		return p.Roles
+	}
+	return append(slices.Clone(p.Roles), *role)
 }
