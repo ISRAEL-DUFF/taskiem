@@ -44,21 +44,42 @@ async function linked(browser: Browser, buyerOptions: Ctx = {}) {
     headers: H,
     data: { findable: true },
   });
-  const found = await (
-    await buyer.request.get(
-      `/v1/links/search?q=${encodeURIComponent(`dangote depot ${stamp}`)}`,
-      { headers: H },
+  // Each step says what it got: a search that misses, a request refused
+  // or a list without the link fails here with the answer, not later as
+  // "cannot read 'id'" (7 November 2026, under parallel workers).
+  const name = `Dangote Depot ${stamp}`;
+  let hit: { business: string } | undefined;
+  await expect
+    .poll(
+      async () => {
+        const r = await buyer.request.get(
+          `/v1/links/search?q=${encodeURIComponent(`dangote depot ${stamp}`)}`,
+          { headers: H },
+        );
+        expect(r.status(), await r.text()).toBe(200);
+        const found = (await r.json()) as { results?: { business: string; name: string }[] };
+        hit = (found.results ?? []).find((c) => c.name === name);
+        return hit?.business;
+      },
+      { message: `the search finds ${name}`, timeout: 10_000 },
     )
-  ).json();
-  await buyer.request.post("/v1/links", {
+    .toBeTruthy();
+  if (!hit) throw new Error(`the search did not find ${name}`);
+  const asked = await buyer.request.post("/v1/links", {
     headers: H,
-    data: { business: found.results[0].business, role: "supplier" },
+    data: { business: hit.business, role: "supplier" },
   });
-  const link = (
-    await (await seller.request.get("/v1/links", { headers: H })).json()
-  ).links[0].id as string;
-  await seller.request.post(`/v1/links/${link}/accept`, { headers: H });
-  return { seller, buyer, link, name: `Dangote Depot ${stamp}` };
+  expect(asked.status(), await asked.text()).toBe(201);
+  const listed = await seller.request.get("/v1/links", { headers: H });
+  expect(listed.status(), await listed.text()).toBe(200);
+  const links = ((await listed.json()) as { links: { id: string }[] }).links;
+  expect(links, "the request reached the seller").toHaveLength(1);
+  const first = links[0];
+  if (!first) throw new Error("the request did not reach the seller");
+  const link = first.id;
+  const accepted = await seller.request.post(`/v1/links/${link}/accept`, { headers: H });
+  expect([200, 204], await accepted.text()).toContain(accepted.status());
+  return { seller, buyer, link, name };
 }
 
 const say = (p: Page, link: string, text: string) =>
