@@ -1057,7 +1057,10 @@ table.audit code { font-size: 12px; white-space: nowrap; }
 .trigger-node .detail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
 
 /* Toasts (N12): after an action, at the bottom right on a wide screen and above the tab bar on a phone. */
-.toasts { position: fixed; bottom: 16px; right: 16px; z-index: 90; display: flex; flex-direction: column; gap: 8px; width: min(380px, calc(100vw - 32px)); pointer-events: none; }
+/* Under every overlay (editors 45, modals 50, the drawer 60, the step
+   window 70, explore 85): an error toast stays until dismissed, and one
+   that sat above a modal covered its Done button. The bell keeps the notice. */
+.toasts { position: fixed; bottom: 16px; right: 16px; z-index: 40; display: flex; flex-direction: column; gap: 8px; width: min(380px, calc(100vw - 32px)); pointer-events: none; }
 .toast {
   pointer-events: auto; display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 14px; border-radius: var(--radius-sm); background: var(--panel);
   color: var(--text); border: 1px solid var(--border-strong); border-left: 4px solid var(--ok); box-shadow: var(--shadow-lg); animation: fade-in 0.15s ease-out;
