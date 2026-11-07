@@ -340,3 +340,54 @@ button.tk-table-row { display: grid; gap: 2px; width: 100%; padding: 0; border: 
 .tk-review-stops { margin: 0; font-size: 14px; color: var(--muted); }
 /* A row of an order or a bill: its icon on the tile. */
 .tk-row-tile svg { width: 24px; height: 24px; }
+
+/* Alerts you can act on, and approvals (chat-tools.md §6, the Alerts
+   design): white cards at the end of the Taskiem conversation that rise in;
+   a dealt-with card leaves. */
+.tk-alerts { list-style: none; margin: 4px 0 8px; padding: 0; display: grid; gap: 12px; width: 100%; max-width: 480px; }
+.tk-alerts > li { animation: tk-rise 0.36s var(--ease) both; transition: opacity 0.26s var(--ease), transform 0.26s var(--ease); }
+.tk-alerts > li.leaving { opacity: 0; transform: translateY(-8px) scale(0.98); }
+.tk-alert, .tk-approve { display: grid; gap: 14px; padding: 16px; border-radius: 22px; background: var(--panel); box-shadow: 0 10px 30px -18px color-mix(in srgb, var(--brand) 45%, transparent); }
+.tk-alert-top { display: flex; align-items: center; gap: 14px; }
+.tk-alert-tile { flex: none; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--tk-lime-soft); color: var(--brand); }
+.tk-alert-tile.warn { background: var(--tk-warn-bg); color: var(--tk-warn-ink); }
+.tk-alert-acts .tk-alert-soft { padding: 0 22px; }
+.tk-alert-tile.plain { background: var(--tk-soft); color: var(--text); }
+.tk-alert-tile svg { width: 22px; height: 22px; }
+:root[data-theme="dark"] .tk-alert-tile { color: var(--brand-dark); }
+:root[data-theme="dark"] .tk-alert, :root[data-theme="dark"] .tk-approve { box-shadow: none; border: 1px solid var(--border); }
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] .tk-alert-tile { color: var(--brand-dark); }
+  :root[data-theme="system"] .tk-alert, :root[data-theme="system"] .tk-approve { box-shadow: none; border: 1px solid var(--border); }
+}
+.tk-alert-words { display: grid; gap: 2px; min-width: 0; }
+.tk-alert-title { font-weight: 700; font-size: 16px; color: var(--text); }
+.tk-alert-line { font-size: 14px; color: var(--muted); }
+.tk-alert-acts, .tk-approve-acts { display: flex; gap: 10px; }
+.tk-alert-go, .tk-alert-soft, .tk-approve-go { min-height: 52px; padding: 0 18px; border: 0; box-shadow: none; border-radius: 999px; font-weight: 700; font-size: 15px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.tk-alert-go { flex: 1; padding: 0 16px; background: var(--brand); color: var(--tk-on-pine); }
+.tk-alert-go:hover:not(:disabled) { background: var(--brand-hover); color: var(--tk-on-pine); }
+.tk-alert-soft { background: var(--tk-soft); color: var(--text); }
+.tk-alert-soft:hover:not(:disabled) { background: var(--tk-soft); color: var(--brand); }
+.tk-approve-acts .tk-alert-soft { flex: 1; }
+.tk-approve-go { flex: 1.4; background: var(--brand-dark); color: var(--brand); }
+.tk-approve-go:hover:not(:disabled) { background: var(--brand-dark-hover); color: var(--brand); }
+.tk-approve-go svg { width: 20px; height: 20px; }
+.tk-alert-go:focus-visible, .tk-alert-soft:focus-visible, .tk-approve-go:focus-visible { box-shadow: var(--ring); }
+.tk-alert-go:active:not(:disabled), .tk-approve-go:active:not(:disabled), .tk-alert-soft:active:not(:disabled) { transform: scale(0.97); }
+:root[data-theme="dark"] .tk-alert-go { background: var(--brand-dark); color: var(--brand-dark-text); }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .tk-alert-go { background: var(--brand-dark); color: var(--brand-dark-text); } }
+.tk-approve-head { display: flex; justify-content: space-between; align-items: baseline; }
+.tk-approve-head time { font-size: 13px; color: var(--muted); }
+.tk-approve-ask { font-size: 16px; color: var(--text); }
+.tk-approve-money { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; }
+.tk-approve-money b { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; color: var(--text); }
+.tk-approve-money span { text-align: right; font-size: 14px; color: var(--muted); }
+.tk-approve-notes { display: flex; flex-wrap: wrap; gap: 6px; }
+.tk-approve-notes .tk-pill svg { width: 14px; height: 14px; margin-right: 4px; }
+.tk-pad { margin: 0 20px 12px; }
+.tk-rows { list-style: none; margin: 0; padding: 0 12px; }
+button.tk-cta.tk-danger, button.tk-cta.tk-danger:hover:not(:disabled) { background: var(--danger); color: var(--tk-on-pine); }
+.tk-cta svg { width: 20px; height: 20px; }
+@media (prefers-reduced-motion: reduce) { .tk-alerts > li { animation: none; transition: none; } }
+.tk-form-body p.tk-approve-ask { margin: 0; font-weight: 600; }

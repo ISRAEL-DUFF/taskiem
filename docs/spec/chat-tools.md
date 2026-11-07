@@ -262,7 +262,39 @@ order's card and accepts it; the invoice arrives as the buyer's bill and is paid
 on the seller's checkout; both see the order and the invoice in their history.
 `api/chat_trade_test.go` runs exactly that.
 
-## 6. Tests
+## 6. Phase 4: alerts and approvals
+
+The Taskiem conversation ends with what needs the person now, as cards (the
+Alerts design): each says what it is and has its next step, which acts in
+place or opens the right tool, filled in. The cards are read when the person
+looks (`GET /v1/chat-alerts`, again every minute while the conversation is
+open), so one is gone as soon as it is dealt with, here or anywhere else; they
+are not messages kept in the history. Each kind is only for those whose role
+may see it:
+
+| Card | Who sees it | Its next step |
+|---|---|---|
+| Low stock: "Rice, 25kg bag is running low", "4 bags left · you reorder at 10" | `table.read` | **Reorder 20 from Bayo Rice Mills** when a linked supplier sells it (the item link) and the person may order: the Order sheet with that many in the bag (up to the item's target level, else twice its reorder level, at least the supplier's least). Otherwise **Record stock in** (the Stock tool at that item), or **Open stock** |
+| An overdue invoice | `invoice.read` | **Send reminder** (`invoice.manage`): the invoice's link sent again |
+| A new order from a linked business | `storefront.manage` | **Accept**, or **Open** (the Orders tool at that order) |
+| A paid delivery order no rider has been asked to take (when the business has riders) | `storefront.manage` | **Assign rider**: the riders on duty, or the next in turn |
+| A payment not matched yet | `invoice.read` | **Match it** (`invoice.manage`): the open invoices, the one of the same amount first |
+| An approval waiting for the person ("NEEDS YOUR OK", who asked, the amount and payee) | whoever may decide it | **Decline** or **Approve** |
+
+**Later** puts a card off for its person alone, for four hours
+(`POST /v1/chat-alerts/later`, kept in `chat_alerts_later`). A card dealt with
+leaves with a little motion, and the conversation pulls in its diary line.
+
+**Approvals** are confirmed in a sheet: what it is and who asked, the fields of
+its subject, a recorded comment, and the confirmation its rules ask for, a
+passkey for this decision on this approval, or an authenticator code (the chat
+PIN on WhatsApp, as before). The server refuses an approval without it, so a
+card cannot pass one on a tap. Decline is confirmed the same way.
+
+Cards are white with a pine next step and a soft Later; the approval's Approve
+is lime with the fingerprint, as drawn. On a computer they stay message-width.
+
+## 7. Tests
 
 - `api/chat_tools_test.go`: the switch (off by default, a viewer refused, on for
   everyone, off again); on, names straight to businesses with and without `...`,
@@ -304,3 +336,13 @@ on the seller's checkout; both see the order and the invoice in their history.
   linked once with a retry that repeats nothing, Same as last time; no Order
   without leave to send orders; a card opening its bill or order.
 - Unit tests: `lib/buyer` (steppers, the bag, the quote, an order's state, reorder).
+- `api/chat_alerts_test.go`: each kind of alert for the right people only (low
+  stock with and without Reorder, a new order for the seller alone, Later for
+  one person, accepted and gone, overdue, unmatched, an approval with who
+  asked, none for a viewer); a rider alert, gone once offered.
+- `web/e2e/chat-alerts.spec.ts`: on a phone and a computer, every card's
+  button: Reorder opens the Order sheet filled in, Record stock in the Stock
+  form, Send reminder, Open and Accept, Assign rider, Match it, Approve with a
+  comment; Later; Decline confirmed; an approval needing a code cannot pass
+  without six digits; none with chat tools off; axe in both themes.
+- Unit tests: `lib/alerts`.

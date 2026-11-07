@@ -36,6 +36,8 @@ const paths: Record<string, string> = {
   sparkle: "M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6",
   refund: "M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 010 11H11",
   lock: "M6 11h12v9H6zM8 11V8a4 4 0 018 0v3",
+  warn: "M12 4l9 16H3zM12 10v4M12 17v.5",
+  fingerprint: "M6.5 7.5A7 7 0 0119 12v2M5 11.5V12c0 3 .7 5.5 2 7.5M9 21c-1-2-1.5-4.5-1.5-9a4.5 4.5 0 019 0v1.5M12 12v1.5c0 3 .7 5.5 2 7.5M16.5 16.5c0 1.5.3 3 .8 4",
   clock: "M12 7v5l3 2M12 21a9 9 0 100-18 9 9 0 000 18z",
   bolt: "M13 3L5 14h6l-1 7 8-11h-6z",
   invoices: "M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3",

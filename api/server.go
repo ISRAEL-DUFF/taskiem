@@ -652,6 +652,8 @@ func (s *Server) Handler() http.Handler {
 			r.Get("/settings/chat-tools", s.getChatTools) // chat tools (chat_tools.go)
 			r.With(s.need(PermMemberManage), s.tenantWide).Put("/settings/chat-tools", s.putChatTools)
 			r.Post("/chat-diary", s.postChatDiary)
+			r.Get("/chat-alerts", s.getChatAlerts)
+			r.Post("/chat-alerts/later", s.postChatAlertLater)
 			r.Post("/chat-tools/request", s.postChatToolRequest)
 			r.Get("/settings/areas", s.getAreas) // which parts of Taskiem the business uses (areas.go)
 			r.With(s.tenantWide).Put("/settings/areas", s.putAreas)

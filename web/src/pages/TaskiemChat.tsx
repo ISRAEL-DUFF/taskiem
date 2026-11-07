@@ -9,6 +9,7 @@ import { ChatStream } from "./ChatStream";
 import { ChatHead } from "./ChatHead";
 import { ReadMore, useFold } from "./ReadMore";
 import { ComposerView, TASKIEM_FILES, useComposer } from "./ChatComposer";
+import { AlertCards, useChatAlerts } from "./ChatAlerts";
 import { BubbleShell, CopyItem, Ticks } from "./BubbleShell";
 import { useChatLive } from "./ChatLive";
 import { get, post, upload } from "../api";
@@ -97,6 +98,8 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
   );
   const act = useAction();
   const chatTools = useChatTools();
+  // Alerts you can act on, as cards at the end (chat-tools.md §6).
+  const alerts = useChatAlerts(!!chatTools);
   const afterDiary = useRef<() => void>(() => undefined);
   const localN = useRef(0);
   const c = useComposer<never>({
@@ -499,6 +502,16 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
         overlay={
           thread.away ? (
             <ThreadJump count={thread.newCount} onClick={thread.toBottom} />
+          ) : undefined
+        }
+        tail={
+          chatTools ? (
+            <AlertCards
+              alerts={alerts.list}
+              onReload={alerts.reload}
+              onDiary={() => afterDiary.current()}
+              openTool={c.openTool}
+            />
           ) : undefined
         }
       />

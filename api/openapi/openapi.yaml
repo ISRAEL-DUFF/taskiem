@@ -21678,6 +21678,71 @@ paths:
                     description: A TaskiemChat message, or a LinkMessage of kind diary
         default:
           $ref: '#/components/responses/Error'
+  /v1/chat-alerts:
+    get:
+      operationId: getChatAlerts
+      tags:
+      - Account
+      summary: The alerts you can act on, as chat cards
+      description: With chat tools on, what needs the caller now, each kind only for those whose role may see it, oldest first, at most 20, without those put off with Later. Low stock (with Reorder from a linked supplier's price list when the caller may order), overdue invoices, new orders from linked businesses, delivery orders waiting for a rider, payments not matched yet, and approvals waiting for the caller (docs/spec/chat-tools.md §6). Empty with chat tools off.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The alerts
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [alerts]
+                properties:
+                  alerts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChatAlert'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/chat-alerts/later:
+    post:
+      operationId: postChatAlertLater
+      tags:
+      - Account
+      summary: Put an alert card off for a few hours
+      description: The card is not shown to the caller again for four hours; others still see it.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [key]
+              properties:
+                key:
+                  type: string
+                  maxLength: 200
+      responses:
+        '200':
+          description: Put off
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [key, until]
+                properties:
+                  key:
+                    type: string
+                  until:
+                    type: string
+                    format: date-time
+        default:
+          $ref: '#/components/responses/Error'
   /v1/chat-tools/request:
     post:
       operationId: postChatToolRequest
@@ -25868,6 +25933,51 @@ components:
               request:
                 $ref: '#/components/schemas/SchoolPosting'
   schemas:
+    ChatAlert:
+      type: object
+      description: An alert as a chat card, with what its next step needs.
+      required: [key, kind, at, title, line]
+      properties:
+        key:
+          type: string
+          description: The alert's key, for Later (its kind and what it is about)
+        kind:
+          type: string
+          enum: [low_stock, overdue, new_order, rider, unmatched, approval]
+        at:
+          type: string
+          format: date-time
+        title:
+          type: string
+        line:
+          type: string
+        amount_kobo:
+          type: integer
+        id:
+          type: string
+          description: The stock item, invoice, order, payment entry or run it is about
+        reference:
+          type: string
+        reorder:
+          type: object
+          required: [link, supplier, seller_item_id, quantity, price_kobo]
+          properties:
+            link:
+              type: string
+              format: uuid
+            supplier:
+              type: string
+            seller_item_id:
+              type: string
+            quantity:
+              type: integer
+            price_kobo:
+              type: integer
+        approval:
+          $ref: '#/components/schemas/Approval'
+        who:
+          type: string
+          description: Who asked for the approval ("Tunde (cashier)")
     Agent:
       type: object
       required: [id, code, name, status, region, workspace_id]
