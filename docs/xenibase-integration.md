@@ -192,7 +192,6 @@ The joint doc's five questions come first (Q1–Q5). The rest came up while chec
 | `api/openapi.yaml` | ~~A parameterised SQL endpoint or row-write endpoints (P1-G1); `Idempotency-Key` (P1-G2); the error code list (P1-G4)~~ Done through the data API and `docs/errors.md` |
 | Authorization | The OAuth-style consent flow (P2-G1): built on the Xenibase branch (`docs/oauth-apps.md` there) |
 | CI | Run Taskiem's `xenibase@1` contract tests (P4-T5) |
-| Data API, schema API (asks of [decision 0064](decisions/0064-business-records-out-of-the-core.md), [core cleanup](spec/core-cleanup.md) §5) | **Sealed columns**: a column type encrypted under a per-project key the caller supplies, masked in Xenibase's pages, CSV and backups, returned by the data API only with the key, equality-searchable on a keyed hash. **Batch writes**: one data API call with several operations across the project's tables, applied in one transaction, refused whole if any is refused, under one `Idempotency-Key`. **Managed tier terms**: projects created by the platform token never pause for quota, carry a rate limit sized for the engine's webhook bursts, and are backed up on the engine's schedule |
 
 ### In the joint doc
 
