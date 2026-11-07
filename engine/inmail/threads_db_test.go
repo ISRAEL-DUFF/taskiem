@@ -648,3 +648,30 @@ func TestSendInThreadThroughAnotherWorkflowRefused(t *testing.T) {
 		t.Errorf("refused emails queued: %d", queued)
 	}
 }
+
+// The connector step takes the address: a workflow with no email trigger
+// sends in the helpdesk's thread through email@1.
+func TestSendInThreadStepWithAddress(t *testing.T) {
+	w := newThreadWorld(t)
+	ctx := context.Background()
+	desk := w.deploy(helpdesk)
+	var public string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT public_id FROM email_endpoints WHERE workflow_id = $1`, desk).Scan(&public); err != nil {
+		t.Fatal(err)
+	}
+	wf := w.env.Publish(t, `{"schema":"wd/v1","id":"wf_reply","version":1,"name":"Reply form","trigger":{"type":"manual"},
+	 "steps":[{"id":"answer","type":"connector","connector":"email@1","action":"send_in_thread","input":{
+	   "to":"ada@customer.example","subject":"Your ticket","message":"Done.","thread":"T-1007","address":"=trigger.body.helpdesk"}}]}`)
+	run := w.env.Start(t, wf, map[string]any{"type": "manual", "body": map[string]any{"helpdesk": public + "@in.taskiem.test"}})
+	w.env.Drain(t)
+	if st := w.env.Status(t, run); st != "completed" {
+		t.Fatalf("run: %s", st)
+	}
+	out, _ := w.event(run.ID, history.StepCompleted, "answer")["output"].(map[string]any)
+	if r, _ := out["reply_to"].(string); !strings.HasPrefix(r, public+"+t-1007-") {
+		t.Fatalf("output: %v", out)
+	}
+	if emails := w.sent(); len(emails) != 1 || header(emails[0], "Subject") != "[#T-1007] Your ticket" {
+		t.Fatalf("sent: %q", emails)
+	}
+}
