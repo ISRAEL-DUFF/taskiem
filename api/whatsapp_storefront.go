@@ -152,6 +152,9 @@ func (s *Server) waShopCommand(ctx context.Context, c *chat, text, cmd string) (
 		return strings.Trim(strings.Join(f[n:], " "), " ?!")
 	}
 	var do func() error
+	// Working the orders is a cashier's too (order.handle); the rest is
+	// the storefront's.
+	need := PermStorefrontManage
 	switch {
 	case cmd == "make my page" || cmd == "make my shop" || cmd == "my page" || cmd == "my shop" || cmd == "my storefront":
 		do = func() error { return s.waMyPage(ctx, c) }
@@ -183,8 +186,10 @@ func (s *Server) waShopCommand(ctx context.Context, c *chat, text, cmd string) (
 	case cmd == "open shop" || cmd == "open my shop" || cmd == "reopen shop" || cmd == "reopen":
 		do = func() error { return s.waShopOpen(ctx, c) }
 	case s.Orders != nil && (cmd == "orders" || cmd == "my orders" || cmd == "open orders"):
+		need = PermOrders
 		do = func() error { return s.waShopOrders(ctx, c) }
 	case s.Orders != nil && orderCmd.MatchString(cmd):
+		need = PermOrders
 		m := orderCmd.FindStringSubmatch(cmd)
 		ref, move := strings.ToUpper(m[1]), m[2]
 		switch move {
@@ -198,7 +203,7 @@ func (s *Server) waShopCommand(ctx context.Context, c *chat, text, cmd string) (
 	default:
 		return false, nil
 	}
-	if !c.p.Can(PermStorefrontManage) {
+	if !c.p.Can(need) {
 		return true, c.say(ctx, s, c.t("wa.shop.denied", "org", c.tenant.Name))
 	}
 	return true, do()
@@ -1418,7 +1423,13 @@ func (s *Server) waShopOrderMove(ctx context.Context, c *chat, ref, move string)
 // waShopApply does the confirmed change.
 func (s *Server) waShopApply(ctx context.Context, c *chat) error {
 	sh := c.data.Shop
-	if !c.p.Can(PermStorefrontManage) {
+	// Readying and completing an order are working the orders (a
+	// cashier's too); the rest is the storefront's.
+	need := PermStorefrontManage
+	if sh != nil && (sh.Action == "ready" || sh.Action == "delivered") {
+		need = PermOrders
+	}
+	if !c.p.Can(need) {
 		if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
 			return err
 		}

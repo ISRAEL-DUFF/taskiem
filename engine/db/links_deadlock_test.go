@@ -13,7 +13,7 @@ import (
 // TestLinkEnterFromBothSidesAtOnce: two linked businesses acting at the
 // same moment each write both audit chains. taskiem_link_enter takes the two
 // chains in one order (the lower tenant id first), so the calls queue and
-// never deadlock (00402).
+// never deadlock (00408).
 func TestLinkEnterFromBothSidesAtOnce(t *testing.T) {
 	d := dbtest.New(t)
 	ada, dangote := d.SeedTenant(t, nil), d.SeedTenant(t, nil)

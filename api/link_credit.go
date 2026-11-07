@@ -181,7 +181,7 @@ func (s *Server) creditTold(ctx context.Context, seller uuid.UUID, o links.Order
 	if !c.Over {
 		return
 	}
-	s.tellHoldersSent(ctx, seller, []string{PermStorefrontManage}, key, "/trade-orders/"+o.OrderReference, func(l lang.Tag) (string, string) {
+	s.tellHoldersSent(ctx, seller, []string{PermOrders}, key, "/trade-orders/"+o.OrderReference, func(l lang.Tag) (string, string) {
 		return tr(l, "order.link.over_limit_seller_title", "reference", o.Reference, "buyer", o.BuyerName),
 			tr(l, "order.link.over_limit_seller", "reference", o.Reference, "buyer", whatsapp.SafeText(o.BuyerName), "limit", invoicing.Naira(c.LimitKobo),
 				"owed", invoicing.Naira(c.BalanceKobo))

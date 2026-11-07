@@ -214,6 +214,13 @@ export const patch = <T>(path: string, body?: unknown) =>
 export const del = <T>(path: string, body?: unknown) =>
   api<T>("DELETE", path, body);
 
+/** A JSON write with headers of its own (a chat tool's mark). */
+export const sendWith = <T>(method: string, path: string, body: unknown, headers: Record<string, string>) =>
+  request<T>(method, path, JSON.stringify(body ?? {}), {
+    "Content-Type": "application/json",
+    ...headers,
+  });
+
 /** A POST with an Idempotency-Key header: retried with the same key, the
  * server makes or sends nothing more (invoices: creating and sending). */
 export const postOnce = <T>(path: string, key: string, body?: unknown) =>

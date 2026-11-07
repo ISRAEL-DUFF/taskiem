@@ -116,7 +116,24 @@ func (s *Server) recordSale(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	if !x.Replayed {
+		s.diaryChange(r.Context(), p, saleWords(x.Lines, x.AmountKobo, x.PaidHow))
+	}
 	writeJSON(w, http.StatusCreated, map[string]any{"sale": x})
+}
+
+// saleWords is a sale's diary line: "Sold 2 Rice 50kg, 1 Garri: ₦160,000
+// (cash)".
+func saleWords(lines []stock.SaleLine, amount int64, how string) string {
+	var parts []string
+	for _, l := range lines {
+		parts = append(parts, fmt.Sprintf("%d %s", l.Quantity, l.Item))
+	}
+	words := "Sold " + strings.Join(parts, ", ") + ": " + naira(amount)
+	if how != "" {
+		words += " (" + strings.ReplaceAll(how, "pos", "POS") + ")"
+	}
+	return words
 }
 
 // lagosDay reads ?day=2026-10-29, today in Lagos when absent.

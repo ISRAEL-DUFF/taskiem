@@ -220,6 +220,7 @@ func (s *Server) requestLink(w http.ResponseWriter, r *http.Request) {
 			shown = links.Mask("phone", blind.Phone)
 		}
 		out.Sent, out.Message = true, tr(lang.EN, "link.blind_sent", "shown", shown)
+		s.diaryChange(r.Context(), p, linkWords("asked", shown))
 		writeJSON(w, http.StatusAccepted, out)
 		return
 	}
@@ -230,6 +231,7 @@ func (s *Server) requestLink(w http.ResponseWriter, r *http.Request) {
 		// blind one of ours stood is the case the definer makes; it
 		// shows as sent.
 		out.Sent, out.Message = true, tr(lang.EN, "link.sent", "name", name)
+		s.diaryChange(r.Context(), p, linkWords("asked", name))
 		writeJSON(w, http.StatusAccepted, out)
 		return
 	}
@@ -240,6 +242,7 @@ func (s *Server) requestLink(w http.ResponseWriter, r *http.Request) {
 		out.Message = tr(lang.EN, "link.they_asked", "name", out.Link.Name)
 	default:
 		out.Sent, out.Message = true, tr(lang.EN, "link.sent", "name", out.Link.Name)
+		s.diaryChange(r.Context(), p, linkWords("asked", out.Link.Name))
 	}
 	writeJSON(w, http.StatusCreated, out)
 }
@@ -254,8 +257,14 @@ func (s *Server) answerLink(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	var l links.Link
 	var other uuid.UUID
+	var name string
 	shown := true
 	if err := s.tx(r, func(tx pgx.Tx) error {
+		// Its name before the answer, for the diary line (a declined or
+		// cancelled one is no longer to be read after).
+		if before, err := links.GetTx(r.Context(), tx, id); err == nil {
+			name = before.Name
+		}
 		if other, err = links.AnswerTx(r.Context(), tx, id, answer, links.Actor{Type: p.ActorType(), ID: p.Actor()}); err != nil {
 			return err
 		}
@@ -269,6 +278,9 @@ func (s *Server) answerLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.tellLinkAnswered(r.Context(), other, id, answer)
+	if name != "" {
+		s.diaryChange(r.Context(), p, linkWords(answer, name))
+	}
 	if !shown {
 		w.WriteHeader(http.StatusNoContent)
 		return
@@ -742,4 +754,26 @@ func boolOrder(b bool) int {
 		return 0
 	}
 	return 1
+}
+
+// linkWords is a link's step as a diary line (chat tools phase 6): "Asked
+// Kola's Bakery to link", "Linked with Kola's Bakery".
+func linkWords(step, name string) string {
+	switch step {
+	case "asked":
+		return fmt.Sprintf("Asked %s to link", name)
+	case "accept":
+		return fmt.Sprintf("Linked with %s", name)
+	case "decline":
+		return fmt.Sprintf("Said no to linking with %s", name)
+	case "cancel":
+		return fmt.Sprintf("Took back the request to link with %s", name)
+	case "end":
+		return fmt.Sprintf("Ended the link with %s", name)
+	case "block":
+		return fmt.Sprintf("Blocked %s", name)
+	case "unblock":
+		return fmt.Sprintf("Unblocked %s", name)
+	}
+	return ""
 }

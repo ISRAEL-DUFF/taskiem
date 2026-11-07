@@ -309,7 +309,7 @@ const ringOf = (p: Page) =>
     // The message box shows its ring on the pill around it.
     const pill = el.closest(".composer-pill");
     const pillRing =
-      !!pill && getComputedStyle(pill).boxShadow.includes("0px 0px 0px 2px");
+      !!pill && /0px 0px 0px [2-4]px/.test(getComputedStyle(pill).boxShadow);
     const r = el.getBoundingClientRect();
     const name =
       el.getAttribute("aria-label") ??

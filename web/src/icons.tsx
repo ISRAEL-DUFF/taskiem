@@ -36,6 +36,8 @@ const paths: Record<string, string> = {
   sparkle: "M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6",
   refund: "M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 010 11H11",
   lock: "M6 11h12v9H6zM8 11V8a4 4 0 018 0v3",
+  warn: "M12 4l9 16H3zM12 10v4M12 17v.5",
+  fingerprint: "M6.5 7.5A7 7 0 0119 12v2M5 11.5V12c0 3 .7 5.5 2 7.5M9 21c-1-2-1.5-4.5-1.5-9a4.5 4.5 0 019 0v1.5M12 12v1.5c0 3 .7 5.5 2 7.5M16.5 16.5c0 1.5.3 3 .8 4",
   clock: "M12 7v5l3 2M12 21a9 9 0 100-18 9 9 0 000 18z",
   bolt: "M13 3L5 14h6l-1 7 8-11h-6z",
   invoices: "M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3",
@@ -54,6 +56,9 @@ const paths: Record<string, string> = {
   emoji: "M12 21a9 9 0 100-18 9 9 0 000 18zM8.5 14a4.5 4.5 0 007 0M9 9.5v.01M15 9.5v.01",
   send: "M21 3L3 11l7 3 3 7zM10 14L21 3",
   down: "M6 9l6 6 6-6",
+  "arrow-up": "M12 19V5M5 12l7-7 7 7",
+  "arrow-right": "M5 12h14M13 5l7 7-7 7",
+  package: "M4 8h16v11a2 2 0 01-2 2H6a2 2 0 01-2-2zM3 4h18v4H3zM10 12h4",
   star: "M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z",
   image: "M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4M15 9h.01",
   pin: "M9 3h6l-1 6 3 3H7l3-3zM12 12v9",
@@ -82,6 +87,11 @@ const paths: Record<string, string> = {
   camera: "M3 8h4l2-3h6l2 3h4v12H3zM12 10a4 4 0 100 8 4 4 0 000-8z",
   mic: "M12 3a3 3 0 00-3 3v6a3 3 0 006 0V6a3 3 0 00-3-3zM5 11a7 7 0 0014 0M12 18v3",
   file: "M6 3h9l4 4v14H6zM14 3v5h5",
+  // Chat tools (chat-tools.md): a product, the tools button, stock, a price list.
+  box: "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7M12 11v10",
+  grid: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z",
+  store: "M4 20V10l8-6 8 6v10zM9 20v-6h6v6",
+  tag: "M20 12l-8 8-9-9V3h8zM7.5 7.5h.01",
 };
 
 export function Icon({ name, className }: { name: string; className?: string }) {
@@ -90,6 +100,17 @@ export function Icon({ name, className }: { name: string; className?: string }) 
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false" className={className}>
       <path d={d} />
+    </svg>
+  );
+}
+
+/** Taskiem's mark in the chat (the boards): a filled four-point spark with
+ * a small one beside it, in the colour around it. */
+export function TaskiemMark() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
+      <path d="M12 2l1.8 5.6L19.5 9l-5.7 1.5L12 16l-1.8-5.5L4.5 9l5.7-1.4z" />
+      <path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" />
     </svg>
   );
 }

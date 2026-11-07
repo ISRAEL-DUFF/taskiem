@@ -52,7 +52,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value: Auth = {
     me,
     refresh,
-    can: (perm) => !!me?.permissions.includes(perm),
+    // "a|b" is either of them (storefront.manage|order.handle).
+    can: (perm) => perm.split("|").some((p) => !!me?.permissions.includes(p)),
     login: async (email, password) => {
       await post("/v1/auth/login", { email, password });
       await refresh();

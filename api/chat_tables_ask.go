@@ -553,6 +553,12 @@ const chatAIReservation = 5 * time.Minute
 // for a bounded time. Only a provider's error is kept, redacted: the
 // others (a refused spec) can repeat what was asked.
 func (s *Server) recordModelCall(ctx context.Context, c *chat, kind, digest string, model ai.Provider, resp *ai.Response, outcome, errText string) {
+	s.recordModelCallFor(ctx, c.tenant.ID, c.p.Actor(), kind, digest, model, resp, outcome, errText)
+}
+
+// recordModelCallFor is recordModelCall for a tenant and an actor (a call
+// made from the web).
+func (s *Server) recordModelCallFor(ctx context.Context, tenant uuid.UUID, actor, kind, digest string, model ai.Provider, resp *ai.Response, outcome, errText string) {
 	var u ai.Usage
 	var stop, name string
 	if resp != nil {
@@ -567,11 +573,11 @@ func (s *Server) recordModelCall(ctx context.Context, c *chat, kind, digest stri
 	ctx = context.WithoutCancel(ctx)
 	msgs := []map[string]string{}
 	var respText *string
-	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `INSERT INTO ai_interactions (id, tenant_id, build_id, round, kind, actor, provider, model, system_digest, messages,
 			response, stop_reason, outcome, error, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, total_tokens)
 			VALUES ($1, $2, NULL, 0, $3, $4, $5, $6, $7, $8, $9, NULLIF($10, ''), $11, NULLIF($12, ''), $13, $14, $15, $16, $17)`,
-			uuid.Must(uuid.NewV7()), c.tenant.ID, kind, c.p.Actor(), model.Name(), name, digest, msgs, respText, stop, outcome, pii.Redact(errText),
+			uuid.Must(uuid.NewV7()), tenant, kind, actor, model.Name(), name, digest, msgs, respText, stop, outcome, pii.Redact(errText),
 			u.InputTokens, u.OutputTokens, u.CacheCreationTokens, u.CacheReadTokens, u.Total())
 		return err
 	})
