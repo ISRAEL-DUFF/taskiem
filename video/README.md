@@ -1,69 +1,103 @@
-# The Taskiem chat explainer
+# Taskiem explainers
 
-An animated film of the Taskiem chat, about 2 minutes 20 seconds, with a
-phone cut and six shorts made from its scenes. The plan is the shared doc
-"Taskiem chat: animated explainer plan"; the words and story are in
-[script.md](script.md).
+Animated films of Taskiem's features, made from code. Each film comes as a
+16:9 cut and a 9:16 cut, with shorts in 9:16 and 1:1, looping clips for the
+app, and stills, all with music written for them. The first is the chat
+([films/chat](films/chat/script.md)).
 
-Nothing here is filmed or drawn in a video editor: each scene is a web page
+Nothing here is filmed or drawn in a video editor. Each scene is a web page
 animated with CSS, drawn from the design boards and the app as built, and
-rendered frame by frame. A word, a price or a timing is changed in the page
-and the scene rendered again.
+rendered frame by frame. So a word, a price or a timing is changed in the
+page and the scene rendered again.
 
-| Path | What it is |
-| --- | --- |
-| `script.md` | The final script: scenes, captions, the deal's numbers, the shorts |
-| `kit/kit.css` | The stage (16:9 or 9:16), the phone, captions, a tap, the app's screen parts |
-| `kit/kit.js` | The timeline: a scene plays in a browser; the renderer steps it frame by frame |
-| `kit/kit.css` sizes | 16:9 (the film), 9:16 (the phone cut and shorts), 1:1 (shorts for feeds) |
-| `scenes/<nn>-<name>.html` | One scene each, numbered as in the script; `00-title` is a short's opening line |
-| `music/compose.py` | The music, written for the film: an original Afro-pop instrumental, made note by note |
-| `render.mjs` | Renders a still or a scene to video |
-| `assemble.mjs` | Renders the scenes and joins them into a film, with its captions (.srt) and its music |
-| `shorts.mjs` | The six shorts from the script's table, in 9:16 and 1:1 |
-| `clips.mjs` | The app's own looping clips (the phone alone) and the stills |
-| `out/` | What it renders (not in git) |
+| Path | What it is | Shared or per film |
+| --- | --- | --- |
+| `kit/kit.css`, `kit/kit.js` | The stage at 16:9, 9:16 or 1:1, the phone, captions, taps, the app's screen parts, the Motion board's moving parts, and the timeline | Shared |
+| `kit/title.html` | A short's opening line (scene `00-title`) | Shared |
+| `music/compose.py` | The music: an original Afro-pop instrumental, made note by note and written again for every cut | Shared |
+| `film.mjs`, `render.mjs`, `assemble.mjs`, `shorts.mjs`, `clips.mjs` | Find a film, render, join, make the shorts, make the clips and stills | Shared |
+| `films/<film>/script.md` | The script: scenes and their captions, the shorts | Per film |
+| `films/<film>/scenes/<nn>-<name>.html` | One scene each, numbered as in the script | Per film |
+| `films/<film>/film.json` | The end card's number, each scene's mood for the music, the clips, the stills' moments | Per film |
+| `films/_template/` | A film to start from | |
+| `out/<film>/` | What it renders (not in git) | |
 
 ## Rendering
 
 It uses Playwright's Chromium from the web app (`pnpm install`, then
 `pnpm --filter web exec playwright install chromium` once), the web app's own
-Inter font (so no network), and ffmpeg.
+Inter font (so no network), ffmpeg, and Python 3 with numpy for the music.
+Every command takes the film's name first.
 
 ```sh
-node video/render.mjs still 03-briefing 7000              # one frame, 16:9, at 7 s
-node video/render.mjs still 03-briefing 7000 --size 9x16  # the phone cut
-node video/render.mjs scene 03-briefing                   # the scene as MP4, 30 fps
-node video/assemble.mjs --name explainer                  # the film: out/explainer-16x9.mp4, .srt and .wav
-node video/assemble.mjs --name explainer --size 9x16 --keep  # the phone cut, reusing scenes already rendered
-node video/shorts.mjs                                     # out/short-<act>-9x16.mp4 and -1x1.mp4
-node video/clips.mjs                                      # out/clips/ and out/stills/
+node video/render.mjs chat still 03-briefing 7000              # one frame, 16:9, at 7 s
+node video/render.mjs chat still 03-briefing 7000 --size 9x16  # the phone cut (or 1x1)
+node video/render.mjs chat scene 03-briefing                   # the scene as MP4, 30 fps
+node video/assemble.mjs chat --name explainer                  # out/chat/explainer-16x9.mp4, .srt and .wav
+node video/assemble.mjs chat --name explainer --size 9x16 --keep  # the phone cut, reusing scenes already rendered
+node video/shorts.mjs chat                                     # out/chat/short-<name>-9x16.mp4 and -1x1.mp4
+node video/clips.mjs chat                                      # out/chat/clips/ and out/chat/stills/
 ```
 
-The whole film renders in about 7 minutes with four scenes at a time
-(`--jobs 4`); scenes are joined with a 0.4 s dissolve (`--cut` for straight
-cuts), so the film runs about 2:16.
+A film of 16 scenes renders in about 7 minutes with four scenes at a time
+(`--jobs 4`). Scenes are joined with a 0.4 s dissolve (`--cut` for straight
+cuts). To watch a scene while working on it, open its page in a browser: it
+plays and loops.
 
 ## The music and sound
 
-`music/compose.py` writes the music for each film from its timeline
-(`out/<name>-<size>.timeline.json`, which `assemble.mjs` writes), so a short
-gets a track that fits it too. It is an original Afro-pop instrumental at
-112 BPM in F major: a log-drum bass, kick, clap, rim, shaker, keys on the
-off-beats, a pad and a kalimba tune over F, Am, Dm and B♭. It rises and falls
-with the acts (`ACTS` in the file): sparse for the opening, the groove from
-the morning, full for tools, trade and deals, low and dark for the dark
-scene, and a held chord with a chime on the end card. Every tap in a scene
-gets a soft tock and every burst (a good moment) a short chime, read from
-the scene's page, so moving a tap moves its sound.
+`music/compose.py` writes the music for every cut from its timeline
+(`out/<film>/<name>-<size>.timeline.json`, which `assemble.mjs` writes), so
+a short gets a track that fits it too. It is an original Afro-pop
+instrumental at 112 BPM in F major: a log-drum bass, kick, clap, rim,
+shaker, keys on the off-beats, a pad and a kalimba tune over F, Am, Dm and
+B♭.
 
-The film is mixed to −16 LUFS (two passes of ffmpeg's `loudnorm`). Every
+A film says how the music feels in each scene with a mood, in `film.json`
+(`"moods": {"3": "build"}`; a scene without one is sparse):
+
+| Mood | What plays | For |
+| --- | --- | --- |
+| `sparse` | The pad and the tune, a light shaker | An opening, a title card |
+| `build` | The groove comes in, not yet full | The first act |
+| `full` | Everything, the tune in the back | The working middle |
+| `peak` | Everything, the tune in front | The acts the film builds to |
+| `lift` | A little less | A breath between acts |
+| `low` | A dark pad, the bass and a soft kick | Night, a pause |
+
+At the end card (`"end"`) the groove stops on a held chord and the mark
+gets its chime. Every tap in a scene gets a soft tock, and every burst (a
+good moment) a short chime, read from the scene's page, so moving a tap
+moves its sound.
+
+Each cut is mixed to −16 LUFS (two passes of ffmpeg's `loudnorm`). Every
 piece works muted too: the shorts carry their words on screen. To lay other
-music under it, `--music track.wav` (it is cut to the film and faded out);
-`--silent` for none.
+music under a cut, `--music track.wav` (it is cut to the length and faded
+out); `--silent` for none.
 
-To watch a scene while working on it, open its page in a browser: it plays
-and loops.
+## Making a new explainer
+
+1. **Start the film:** `cp -r video/films/_template video/films/<film>`. It
+   renders as it is, so `node video/render.mjs <film> still 01-open 3000`
+   shows the starting point.
+2. **Script** (`script.md`): who it follows, through which moments, and a
+   caption for each scene that carries the story with the sound off. Keep
+   the table's five columns: the assembler reads the captions from it. Add
+   the shorts' table: each short's scenes and its opening line, with the
+   words for pine in `*stars*`.
+3. **Style frames:** draw two or three key scenes in full (the opening, the
+   one moment that sells the feature, the end card) and check them as stills
+   at 16:9, 9:16 and 1:1 before going on.
+4. **Animatic:** every scene at its full length, simply moving, joined with
+   `assemble.mjs`, to check the story and the timing.
+5. **Polish:** each scene against its design board and the Motion board
+   (below), checked at every size and mid-motion.
+6. **Cuts and sound:** give each scene its mood and the end card's number
+   in `film.json`, list the clips and the stills' moments there, then
+   `assemble.mjs` at 16:9 and 9:16, `shorts.mjs` and `clips.mjs`.
+
+Reuse the kit's parts, and add a new part to the kit (not to one film) when
+a second film would want it too.
 
 ## Writing a scene
 
@@ -94,4 +128,6 @@ and loops.
   head as `<header data-name data-sub data-av data-tone>` and its composer as
   `<footer data-composer>` (see `kit/kit.js`); say the scene's length in
   `window.scene.duration`.
-- Check it at both sizes and mid-motion before it goes in.
+- A part placed beside the phone (`.float`) or a second phone needs a place
+  of its own at 9:16 (`.portrait …`) and 1:1 (`.square …`).
+- Check it at every size and mid-motion before it goes in.

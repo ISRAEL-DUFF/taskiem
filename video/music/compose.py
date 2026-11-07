@@ -1,15 +1,15 @@
-"""The explainer's music, written for it (video/README.md): an original
-Afro-pop instrumental, 112 BPM in F major, made here note by note so it is
-Taskiem's own, with no licence to buy.
+"""The explainers' music (video/README.md): an original Afro-pop
+instrumental, 112 BPM in F major, made here note by note so it is Taskiem's
+own, with no licence to buy, and written again for every cut.
 
-It follows the film: the timeline that assemble.mjs writes says which scene
-plays when, and the music rises and falls with the acts (sparse for the
-opening, the groove from the morning, full for tools, trade and deals,
-quiet for the dark scene, a held chord on the end card). Taps and the good
+It follows the cut: the timeline that assemble.mjs writes says which scene
+plays when, and the film's film.json gives each scene a mood (MOODS below:
+sparse, build, full, peak, lift, low); the music rises and falls with them,
+and stops on a held chord at the film's end card ("end"). Taps and the good
 moments (the bursts) get a soft sound of their own, read from each scene's
 page, where they are drawn.
 
-    python3 video/music/compose.py out/film-16x9.timeline.json out/film-16x9.wav [--no-sfx]
+    python3 video/music/compose.py films/chat/film.json out/chat/film-16x9.timeline.json out/chat/film-16x9.wav [--no-sfx]
 
 Only numpy and the standard library.
 """
@@ -31,7 +31,6 @@ SWING = 0.10  # the off sixteenths come a little late
 rng = np.random.default_rng(7)  # the same noise every time, so the same track
 
 HERE = Path(__file__).resolve().parent
-SCENES = HERE.parent / "scenes"
 
 
 def hz(m):
@@ -145,21 +144,17 @@ TUNE = [
     (3, 4, 67), (3, 8, 69), (3, 12, 72), (3, 14, 74),
 ]
 
-# How loud each part is in each act (scene numbers from script.md; 0 is a
-# short's title card).
+# How loud each part is in each mood. A film's film.json gives each scene
+# (by number) one; a scene without one, and a short's title card, is sparse.
 LAYERS = ["pad", "dark", "keys", "kalimba", "shaker", "kick", "clap", "rim", "bass"]
-ACTS = {
-    "open":    dict(pad=1.0, kalimba=0.7, shaker=0.35),
-    "morning": dict(pad=0.8, keys=0.6, kalimba=0.5, shaker=0.7, kick=0.8, clap=0.5, rim=0.4, bass=0.6),
-    "tools":   dict(pad=0.7, keys=0.8, kalimba=0.4, shaker=1.0, kick=1.0, clap=0.8, rim=0.7, bass=1.0),
-    "trade":   dict(pad=0.7, keys=0.8, kalimba=0.9, shaker=1.0, kick=1.0, clap=0.9, rim=1.0, bass=1.0),
-    "dark":    dict(dark=1.0, kalimba=0.3, shaker=0.25, kick=0.45, bass=0.7),
-    "explore": dict(pad=0.8, keys=0.5, kalimba=0.8, shaker=0.8, kick=0.7, clap=0.5, rim=0.6, bass=0.8),
-    "deals":   dict(pad=0.7, keys=0.8, kalimba=1.0, shaker=1.0, kick=1.0, clap=1.0, rim=1.0, bass=1.0),
+MOODS = {
+    "sparse": dict(pad=1.0, kalimba=0.7, shaker=0.35),  # an opening: the tune, no drums
+    "build":  dict(pad=0.8, keys=0.6, kalimba=0.5, shaker=0.7, kick=0.8, clap=0.5, rim=0.4, bass=0.6),
+    "full":   dict(pad=0.7, keys=0.8, kalimba=0.4, shaker=1.0, kick=1.0, clap=0.8, rim=0.7, bass=1.0),
+    "peak":   dict(pad=0.7, keys=0.8, kalimba=1.0, shaker=1.0, kick=1.0, clap=1.0, rim=1.0, bass=1.0),
+    "lift":   dict(pad=0.8, keys=0.5, kalimba=0.8, shaker=0.8, kick=0.7, clap=0.5, rim=0.6, bass=0.8),
+    "low":    dict(dark=1.0, kalimba=0.3, shaker=0.25, kick=0.45, bass=0.7),  # night, a pause
 }
-ACT_OF = {0: "open", 1: "open", 2: "open", 3: "morning", 4: "morning", 5: "tools", 6: "tools", 7: "tools",
-          8: "trade", 9: "trade", 10: "tools", 11: "dark", 12: "explore", 13: "deals", 14: "deals", 15: "deals"}
-END = 16  # the end card: the groove stops on a held chord
 
 
 def place(buf, at, sig, pan=0.0, gain=1.0):
@@ -196,19 +191,23 @@ def reverb(x, wet=0.2, decay=0.55, length=1.8):
     return out
 
 
-def moments(scene):
+def moments(scenes_dir, scene):
     """Taps and bursts drawn in a scene, in seconds from its start."""
-    html = (SCENES / f"{scene}.html").read_text()
+    page = scenes_dir / f"{scene}.html"
+    if not page.exists():  # the title card
+        return [], []
+    html = page.read_text()
     taps = [int(m) / 1000 for m in re.findall(r'class="tap"[^>]*data-at="(\d+)"', html)]
     bursts = [int(m) / 1000 for m in re.findall(r'class="burst"[^>]*data-at="(\d+)"', html)]
     return taps, bursts
 
 
-def compose(timeline, sfx=True):
+def compose(film, scenes_dir, timeline, sfx=True):
     length = timeline["length"]
     scenes = timeline["scenes"]
+    moods = film.get("moods", {})
     n = int((length + 0.1) * SR)
-    end_at = next((s["start"] + 0.2 for s in scenes if int(s["scene"][:2]) == END), length)
+    end_at = next((s["start"] + 0.2 for s in scenes if int(s["scene"][:2]) == film.get("end")), length)
     bars = int(np.ceil(end_at / BAR)) + 1
 
     parts = {k: np.zeros((2, n)) for k in LAYERS}
@@ -242,7 +241,7 @@ def compose(timeline, sfx=True):
     for k in LAYERS:
         target = np.zeros(n)
         for s in scenes:
-            act = ACTS[ACT_OF.get(int(s["scene"][:2]), "open")]
+            act = MOODS[moods.get(str(int(s["scene"][:2])), "sparse")]
             i, j = int(s["start"] * SR), int((s["start"] + s["duration"]) * SR)
             target[i:j] = act.get(k, 0.0)
         g = smooth(target, 0.6) * stop
@@ -257,7 +256,7 @@ def compose(timeline, sfx=True):
 
     if sfx:
         for s in scenes:
-            taps, bursts = moments(s["scene"])
+            taps, bursts = moments(scenes_dir, s["scene"])
             for a in taps:
                 place(mix, s["start"] + a, tock(), gain=1.0)
             for a in bursts:
@@ -277,18 +276,23 @@ def main():
     a = sys.argv[1:]
     sfx = "--no-sfx" not in a
     a = [x for x in a if not x.startswith("--")]
-    if len(a) != 2:
+    if len(a) != 3:
         print(__doc__)
         sys.exit(2)
-    timeline = json.loads(Path(a[0]).read_text())
-    out = compose(timeline, sfx)
+    film_json = Path(a[0])
+    film = json.loads(film_json.read_text())
+    unknown = set(film.get("moods", {}).values()) - set(MOODS)
+    if unknown:
+        sys.exit(f"{film_json}: unknown moods {sorted(unknown)}; the moods are {sorted(MOODS)}")
+    timeline = json.loads(Path(a[1]).read_text())
+    out = compose(film, film_json.parent / "scenes", timeline, sfx)
     pcm = (np.clip(out.T, -1, 1) * 32767).astype("<i2")
-    with wave.open(a[1], "wb") as w:
+    with wave.open(a[2], "wb") as w:
         w.setnchannels(2)
         w.setsampwidth(2)
         w.setframerate(SR)
         w.writeframes(pcm.tobytes())
-    print(f"{a[1]} ({timeline['length']:.1f} s)")
+    print(f"{a[2]} ({timeline['length']:.1f} s)")
 
 
 if __name__ == "__main__":

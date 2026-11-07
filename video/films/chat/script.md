@@ -1,7 +1,7 @@
 # Taskiem chat: the explainer's script
 
 The final words and story for the explainer film (plan: the shared doc
-"Taskiem chat: animated explainer plan"; how it is made: [README](README.md)).
+"Taskiem chat: animated explainer plan"; how it is made: [README](../../README.md)).
 One owner, Ada of Ada's Kitchen in Yaba, through one working day, with the
 people, products and prices of the design boards and the demo world
 (`web/e2e/demo/`). The captions carry the story with the sound off.

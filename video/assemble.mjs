@@ -1,23 +1,24 @@
-// Joins the explainer's scenes into one film (video/README.md): renders each
-// scene (scenes/<nn>-*.html, in order) with render.mjs, a few at a time,
-// joins them, writes the captions from script.md, and lays the music
-// (music/compose.py, written to the film's own timeline) under it.
+// Joins a film's scenes (video/README.md): renders each scene
+// (films/<film>/scenes/<nn>-*.html, in order) with render.mjs, a few at a
+// time, joins them, writes the captions from its script.md, and lays the
+// music (music/compose.py, written to this cut's own timeline) under it.
 //
-//   node video/assemble.mjs [--size 9x16|1x1] [--name film] [--jobs 3] [--keep] [--cut] [--silent]
-//   node video/assemble.mjs --scenes 13,14,15,16 --title "Haggle *in the chat.*" --name short-deals
+//   node video/assemble.mjs chat [--size 9x16|1x1] [--name film] [--jobs 3] [--keep] [--cut] [--silent]
+//   node video/assemble.mjs chat --scenes 13,14,15,16 --title "Haggle *in the chat.*" --name short-deals
 //
-// --keep reuses a scene's video already in out/ (render it again by deleting it).
-// --scenes takes some of the scenes, by number; --title puts a short's
-// title card (scenes/00-title.html) in front of them. --music other.wav lays
-// another track instead of the one written for the film; --silent, none.
+// It writes out/<film>/<name>-<size>.mp4 and .srt. --keep reuses a scene's
+// video already rendered (render it again by deleting it). --scenes takes
+// some of the scenes, by number; --title puts a short's title card
+// (kit/title.html) in front of them. --music other.wav lays another track
+// instead of the one written for the cut; --silent, none.
 
-import { readdir, readFile, writeFile, stat, rename, rm } from "node:fs/promises";
+import { writeFile, stat, rename, rm } from "node:fs/promises";
 import { spawn } from "node:child_process";
-import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { film, here } from "./film.mjs";
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const args = process.argv.slice(2);
+const [filmName, ...args] = process.argv.slice(2);
+const f = await film(filmName);
 const flag = (k, d) => {
   const i = args.indexOf(`--${k}`);
   return i >= 0 ? args[i + 1] : d;
@@ -27,7 +28,8 @@ const name = flag("name", "film");
 const title = flag("title");
 const jobs = Number(flag("jobs", "3"));
 const keep = args.includes("--keep");
-const out = path.join(here, "out");
+const out = f.out;
+const render = (argv) => run("node", [path.join(here, "render.mjs"), f.name, ...argv]);
 
 const run = (cmd, argv) =>
   new Promise((ok, fail) => {
@@ -37,15 +39,11 @@ const run = (cmd, argv) =>
 const exists = (f) => stat(f).then(() => true, () => false);
 
 const wanted = flag("scenes")?.split(",").map(Number);
-const scenes = (await readdir(path.join(here, "scenes")))
-  .filter((f) => /^\d\d-.+\.html$/.test(f) && !f.startsWith("00-"))
-  .filter((f) => !wanted || wanted.includes(Number(f.slice(0, 2))))
-  .sort()
-  .map((f) => f.replace(/\.html$/, ""));
+const scenes = f.scenes.filter((s) => !wanted || wanted.includes(Number(s.slice(0, 2))));
 const video = (s) => path.join(out, s === "00-title" ? `${name}-title-${size}.mp4` : `${s}-${size}.mp4`);
 if (title) {
   scenes.unshift("00-title");
-  await run("node", [path.join(here, "render.mjs"), "scene", "00-title", "--size", size, "--title", title, "--out", video("00-title")]);
+  await render(["scene", "00-title", "--size", size, "--title", title, "--out", video("00-title")]);
 }
 
 // Render, a few scenes at once.
@@ -55,7 +53,7 @@ await Promise.all(
     for (let s = queue.shift(); s; s = queue.shift()) {
       if (s === "00-title" || (keep && (await exists(video(s))))) continue;
       const t = Date.now();
-      await run("node", [path.join(here, "render.mjs"), "scene", s, "--size", size]);
+      await render(["scene", s, "--size", size]);
       console.log(`${s}: ${((Date.now() - t) / 1000).toFixed(0)} s`);
     }
   }),
@@ -75,7 +73,7 @@ for (const s of scenes) {
 
 // Join with a short dissolve between scenes (--cut for straight cuts).
 const fade = args.includes("--cut") ? 0 : 0.4;
-const film = path.join(out, `${name}-${size}.mp4`);
+const final = path.join(out, `${name}-${size}.mp4`);
 const picture = path.join(out, `${name}-${size}.picture.mp4`);
 if (fade === 0) {
   const list = path.join(out, `${name}-${size}.txt`);
@@ -97,7 +95,7 @@ if (fade === 0) {
 
 // Captions: each scene's caption from script.md, for as long as its scene
 // lasts in the film.
-const script = await readFile(path.join(here, "script.md"), "utf8");
+const script = await f.script();
 const caption = {};
 for (const line of script.split("\n")) {
   const m = /^\| (\d+) \| [^|]+ \| [^|]+ \| [^|]+ \| (.+) \|$/.exec(line);
@@ -122,7 +120,7 @@ await writeFile(path.join(out, `${name}-${size}.srt`), srt);
 // The music, written to this film's timeline, mixed to -16 LUFS (what
 // phones and the web expect) and laid under the picture.
 if (args.includes("--silent")) {
-  await rename(picture, film);
+  await rename(picture, final);
 } else {
   const timeline = path.join(out, `${name}-${size}.timeline.json`);
   const wav = path.join(out, `${name}-${size}.wav`);
@@ -134,7 +132,7 @@ if (args.includes("--silent")) {
   });
   await writeFile(timeline, JSON.stringify({ length: at, scenes: parts }, null, 1));
   if (flag("music")) await run("ffmpeg", ["-loglevel", "error", "-y", "-i", flag("music"), "-af", `afade=t=out:st=${Math.max(0, at - 2.5).toFixed(2)}:d=2.5`, "-t", at.toFixed(3), wav]);
-  else await run("python3", [path.join(here, "music", "compose.py"), timeline, wav]);
+  else await run("python3", [path.join(here, "music", "compose.py"), path.join(f.dir, "film.json"), timeline, wav]);
   // Two passes: measure, then one gain for the whole track (no pumping).
   const target = "I=-16:TP=-1.5:LRA=11";
   const measured = await new Promise((ok, fail) => {
@@ -144,7 +142,7 @@ if (args.includes("--silent")) {
     p.on("close", (c) => (c === 0 ? ok(JSON.parse(text.slice(text.lastIndexOf("{")))) : fail(new Error("loudnorm measure failed"))));
   });
   const m = `measured_I=${measured.input_i}:measured_TP=${measured.input_tp}:measured_LRA=${measured.input_lra}:measured_thresh=${measured.input_thresh}:offset=${measured.target_offset}:linear=true`;
-  await run("ffmpeg", ["-loglevel", "error", "-y", "-i", picture, "-i", wav, "-filter_complex", `[1:a]loudnorm=${target}:${m},aresample=48000[a]`, "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", film]);
+  await run("ffmpeg", ["-loglevel", "error", "-y", "-i", picture, "-i", wav, "-filter_complex", `[1:a]loudnorm=${target}:${m},aresample=48000[a]`, "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", final]);
   await rm(picture);
 }
-console.log(`${film} (${at.toFixed(1)} s)`);
+console.log(`${final} (${at.toFixed(1)} s)`);
