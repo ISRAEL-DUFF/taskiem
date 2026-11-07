@@ -2,6 +2,7 @@
 // orders"; /v1/stock/suppliers, /v1/stock/purchases): the API's shapes, how
 // a supplier and an order read in a row, and the forms.
 
+import type { DealStep } from "./deals";
 import { whenLabel } from "./bookings";
 import { feeInput, feeKobo } from "./orders";
 import { quantity } from "./stock";
@@ -84,6 +85,10 @@ export interface Purchase {
   seller_status?: "proposed" | "received" | "changed" | "accepted" | "ready" | "dispatched" | "delivered" | "declined" | "cancelled" | null;
   seller_note?: string;
   change?: PurchaseLine[];
+  /** Sent at our own prices (an offer), and its history (phase 7). */
+  offer?: boolean;
+  deal_history?: DealStep[] | null;
+  deal_until?: string | null;
   delivered_at?: string;
   cancel_asked_at?: string;
   short_at?: string;

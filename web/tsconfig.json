@@ -14,5 +14,6 @@
     "types": ["vite/client", "node"],
     "paths": { "@sdk/*": ["../sdk/src/*"] }
   },
-  "include": ["src", "e2e", "vite.config.ts", "vite.embed.config.ts", "vitest.config.ts", "playwright.config.ts"]
+  "include": ["src", "e2e", "vite.config.ts", "vite.embed.config.ts", "vitest.config.ts", "playwright.config.ts"],
+  "exclude": ["e2e/demo"]
 }

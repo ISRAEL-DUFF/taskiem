@@ -10,6 +10,7 @@ import { clearDrafts } from "./drafts";
 import { clearOutbox } from "./outboxStore";
 import { clearRecent } from "./schoolClearance";
 import { keepInflight } from "./taskiemchat";
+import { forgetChatTools } from "./useChatTools";
 
 const OWNER = "taskiem-owner";
 
@@ -18,6 +19,7 @@ function clearPersonal() {
   clearOutbox();
   keepInflight(undefined);
   clearRecent();
+  forgetChatTools();
   setAgentSession(null);
 }
 

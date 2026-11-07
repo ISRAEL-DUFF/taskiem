@@ -102,6 +102,20 @@ export const ROLE_CHOICES: { role: LinkRole; label: string }[] = [
   { role: "both", label: "Both" },
 ];
 
+/** A linked business in the chat tools picker: "Linked · buys from you". */
+export function linkedLine(role?: LinkRole): string {
+  switch (role) {
+    case "supplier":
+      return "Linked · supplies you";
+    case "customer":
+      return "Linked · buys from you";
+    case "both":
+      return "Linked · supplies you and buys from you";
+    default:
+      return "Linked";
+  }
+}
+
 /** How we trade with a linked business, as a row's line. */
 export function roleLine(role: LinkRole): string {
   switch (role) {
@@ -115,6 +129,19 @@ export function roleLine(role: LinkRole): string {
 }
 
 type Tone = "ok" | "warn" | "info" | "muted";
+
+/** Under a business's name in its conversation (the boards): "Your
+ * supplier · linked", "Buys from you · linked". */
+export function headLine(role: LinkRole): string {
+  switch (role) {
+    case "supplier":
+      return "Your supplier · linked";
+    case "customer":
+      return "Buys from you · linked";
+    default:
+      return "Supplies you and buys from you · linked";
+  }
+}
 
 /** A link's state in a word or two, with its tone. */
 export function stateWords(state: LinkState | "sent" | "none"): { label: string; tone: Tone } | null {

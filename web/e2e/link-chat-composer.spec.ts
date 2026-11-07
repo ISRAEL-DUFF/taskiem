@@ -878,15 +878,16 @@ test("on a phone the camera sits beside the microphone; on a computer it is in t
   const chooser = phone.buyer.waitForEvent("filechooser");
   await quick.click();
   await chooser; // the camera app, through the file input
-  // It goes once words are typed (the Send button takes over).
+  // It stays while words are typed, beside the clip, as the boards draw
+  // the composer; a computer has it too (DeskSeller).
   await phone.buyer.getByTestId("chat-pane").getByLabel("Message").fill("hi");
-  await expect(quick).toBeHidden();
+  await expect(quick).toBeVisible();
 
   const computer = await linked(browser);
   await computer.buyer.goto(`/chat?with=${computer.link}`);
   await expect(
     computer.buyer.getByTestId("chat-pane").getByTestId("camera-quick"),
-  ).toBeHidden();
+  ).toBeVisible();
 });
 
 test("Esc gives up a reply from anywhere in the chat, but closes an open menu first", async ({

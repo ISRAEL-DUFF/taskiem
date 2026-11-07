@@ -698,11 +698,19 @@ func (s *Server) addStockItem(w http.ResponseWriter, r *http.Request) {
 	if mv.ID != uuid.Nil {
 		out["movement"] = mv
 	}
+	line := "New product: " + it.Name
+	if it.PriceKobo != nil {
+		line += ", " + naira(*it.PriceKobo)
+		if it.Unit != "" {
+			line += " a " + it.Unit
+		}
+	}
+	s.diaryChange(r.Context(), principalFrom(r.Context()), line)
 	writeJSON(w, http.StatusCreated, out)
 }
 
 // patchStockItem is PATCH /v1/stock/items/{id}: an item's name, prices,
-// unit, levels or supplier. Its stock changes by movements only.
+// unit, levels, supplier, or whether it is shown. Its stock changes by movements only.
 func (s *Server) patchStockItem(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Name      *string `json:"name"`
@@ -712,6 +720,9 @@ func (s *Server) patchStockItem(w http.ResponseWriter, r *http.Request) {
 		Reorder   *int64  `json:"reorder_level"`
 		Target    *int64  `json:"target_level"`
 		Supplier  *string `json:"supplier"`
+		// Available shows or hides it on the storefront and the price
+		// lists it is on (chat tools' product form).
+		Available *bool `json:"available"`
 	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
@@ -792,6 +803,12 @@ func (s *Server) patchStockItem(w http.ResponseWriter, r *http.Request) {
 			}
 			return put(m.TargetLevel, "target level", *in.Target)
 		},
+		func() error {
+			if in.Available == nil {
+				return nil
+			}
+			return put(m.Available, "available", *in.Available)
+		},
 	} {
 		if perr = f(); perr != nil {
 			break
@@ -807,6 +824,8 @@ func (s *Server) patchStockItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := chi.URLParam(r, "id")
+	// What it was, for the diary line (chat_changes.go).
+	before, _ := s.stockItem(r.Context(), p.TenantID, sh, id)
 	if err := s.stockSetCells(r.Context(), p.TenantID, sh, id, key, set); err != nil {
 		s.stockFail(w, r, err)
 		return
@@ -829,6 +848,21 @@ func (s *Server) patchStockItem(w http.ResponseWriter, r *http.Request) {
 		s.stockFail(w, r, err)
 		return
 	}
+	var lines []string
+	if in.Name != nil && before.Name != "" && before.Name != it.Name {
+		lines = append(lines, fmt.Sprintf("Renamed %s to %s", before.Name, it.Name))
+	}
+	if in.PriceKobo != nil && (before.PriceKobo == nil || *before.PriceKobo != *in.PriceKobo) {
+		lines = append(lines, priceChangeWords(it.Name, before.PriceKobo, *in.PriceKobo))
+	}
+	if in.Available != nil && before.Available != *in.Available {
+		if *in.Available {
+			lines = append(lines, it.Name+" is shown on your storefront again")
+		} else {
+			lines = append(lines, it.Name+" is hidden from your storefront")
+		}
+	}
+	s.diaryChange(r.Context(), p, lines...)
 	writeJSON(w, http.StatusOK, map[string]any{"item": it})
 }
 
@@ -890,6 +924,7 @@ func (s *Server) moveStock(w http.ResponseWriter, r *http.Request) {
 	if m.Status == "pending" {
 		status = http.StatusAccepted
 	}
+	s.diaryChange(r.Context(), p, moveWords(it, in.Reason, in.Change, in.Count))
 	writeJSON(w, status, map[string]any{"movement": m})
 }
 
@@ -923,4 +958,30 @@ func (s *Server) stockFail(w http.ResponseWriter, r *http.Request, err error) {
 	default:
 		s.fail(w, r, err)
 	}
+}
+
+// moveWords is a stock movement as a diary line: "Stock in: Rice +20 bags
+// (now 24 bags)", "Stock of Rice counted: 4 bags → 6 bags".
+func moveWords(it stock.Item, reason string, change, count *int64) string {
+	switch {
+	case reason == stock.Received && change != nil:
+		line := fmt.Sprintf("Stock in: %s +%s", it.Name, qty(*change, it.Unit))
+		if it.Stock != nil {
+			line += fmt.Sprintf(" (now %s)", qty(*it.Stock+*change, it.Unit))
+		}
+		return line
+	case reason == stock.Count && count != nil:
+		was := "no count"
+		if it.Stock != nil {
+			was = qty(*it.Stock, it.Unit)
+		}
+		return fmt.Sprintf("Stock of %s counted: %s → %s", it.Name, was, qty(*count, it.Unit))
+	case change != nil:
+		sign := "+"
+		if *change < 0 {
+			sign = ""
+		}
+		return fmt.Sprintf("Stock of %s: %s%s", it.Name, sign, qty(*change, it.Unit))
+	}
+	return ""
 }
