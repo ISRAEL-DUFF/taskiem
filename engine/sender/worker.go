@@ -86,6 +86,7 @@ type claimed struct {
 	attempts                   int
 	expires                    *time.Time
 	to, subject, text, replyTo string
+	thread                     threading
 	erased                     bool
 }
 
@@ -144,6 +145,15 @@ func (w *Worker) tenantTick(ctx context.Context, tenant uuid.UUID) error {
 				c.subject, _ = m["subject"].(string)
 				c.text, _ = m["text"].(string)
 				c.replyTo, _ = m["reply_to"].(string)
+				c.thread.messageID, _ = m["message_id"].(string)
+				c.thread.inReplyTo, _ = m["in_reply_to"].(string)
+				if refs, ok := m["references"].([]any); ok {
+					for _, r := range refs {
+						if s, ok := r.(string); ok {
+							c.thread.references = append(c.thread.references, s)
+						}
+					}
+				}
 			}
 			due = append(due, c)
 		}
@@ -208,7 +218,13 @@ func (w *Worker) sendEmail(ctx context.Context, c claimed) outcome {
 		return outcome{retry: true, err: "no mail server is configured"}
 	}
 	id := uuid.NewString()
-	err := w.Mailer.Send(ctx, w.From, []string{c.to}, buildEmail(w.From, c.sender, c.to, c.replyTo, c.subject, c.text, id, w.clock()))
+	th := c.thread
+	if th.messageID != "" {
+		id = th.messageID // a thread's, made when it was queued
+	} else {
+		th.messageID = id + "@taskiem"
+	}
+	err := w.Mailer.Send(ctx, w.From, []string{c.to}, buildThreadEmail(w.From, c.sender, c.to, c.replyTo, c.subject, c.text, th, w.clock()))
 	var tp *textproto.Error
 	switch {
 	case err == nil:
