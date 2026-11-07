@@ -6,7 +6,7 @@ Status: **Plan** (proposed 6 November 2026) · Decision: [0063](../decisions/006
 
 A tailor sends Taskiem a photo on WhatsApp with "post this to my Instagram and Facebook at 6pm" and it goes out at six, on both, with a caption she read back and said **yes** to. A church posts its Sunday service details every Saturday from a table. A shop announces every new product in its catalogue the moment the owner adds it, once the owner approves the caption. A creator with no business at all signs up, connects an Instagram account and a Page, and schedules a week of posts from the phone, without opening a laptop.
 
-**Posting is a workflow like any other.** A post is an action on a connector (`instagram@1`, `messenger@1`, later `linkedin@1`, `tiktok@1`), the schedule is a schedule trigger, the caption is a text or an AI step, the yes is an approval, and the record is a known table (`posts`). Nothing new in the engine: the plan adds actions, triggers, two known tables, templates, chat commands, a limit, and the platform reviews that gate it all.
+**Posting is a workflow like any other.** A post is an action on a connector (`instagram@1`, `messenger@1`, later `linkedin@1`, `tiktok@1`), the schedule is a schedule trigger, the caption is a text or an AI step, the yes is an approval, and the record is a known table (`posts`). Nothing new in the engine: the plan adds actions, triggers, one known table, templates, chat commands, a limit, and the platform reviews that gate it all.
 
 **For anyone, not only businesses.** A tenant on Taskiem is an organisation, and a person alone is one too: sign-up (the web form, or chat) makes it. Nothing here needs a storefront, an invoice or a bank. What the platforms themselves require is a professional account: Meta's API posts to a Page and to an Instagram Business or Creator account, never to a personal profile or a personal Instagram account (§5). Switching an Instagram account to Creator is free and takes a minute; making a Page is the same. The chat says so when it is needed, and says how.
 
@@ -39,7 +39,7 @@ A tailor sends Taskiem a photo on WhatsApp with "post this to my Instagram and F
 | Email marketing with consent: Mailchimp, Brevo, Resend | [business connectors](business-connectors.md) |
 | Plan limits counted per month, with overage and holds (`whatsapp_templates_monthly`) | `deploy/plans.yaml`, `engine/runtime/limits.go` |
 
-Not built, and what this plan adds: publishing on any network; comments; scheduling content; the `posts` and `social_accounts` known tables; the chat commands; the posting limit; LinkedIn, TikTok, X and YouTube; adverts.
+Not built, and what this plan adds: publishing on any network; comments; scheduling content; the `posts` known table; the chat commands; the posting limit; LinkedIn, TikTok, X and YouTube; adverts.
 
 ## 4. What stays as it is
 
@@ -67,15 +67,15 @@ What this means for "anyone": a person needs a Page or a Creator account on Meta
 
 ## 6. How a post works
 
-### 6.1 The record: two known tables
+### 6.1 The record: one table, and the connections
 
-Two [known tables](no-sheet-needed.md#54-known-tables), the organisation's own data tables (rows in its own data project, listed on the Tables page, read by any workflow, exported like any other), not tables in Taskiem's own schema; made in the organisation the first time anything needs them:
+One [known table](no-sheet-needed.md#54-known-tables), the organisation's own data table (rows in its own data project, listed on the Tables page, read by any workflow, exported like any other), not a table in Taskiem's own schema; made in the organisation the first time anything needs it. Nothing about posting goes into the core: the engine knows connections, runs and steps, as it does for every connector, and the rest is this table and the workflows over it.
 
-**`social_accounts`**: one row per connected account. `network` (`facebook`, `instagram`, `linkedin`, `tiktok`, `youtube`), `account_id`, `name` (the Page's name, the Instagram username), `connection` (the connection's name), `connected_at`, `status` (`connected`, `expired`). Written by the connection, read by the chat and the templates so "my Instagram" resolves to one row. A [kept table](../data-tables.md#kept-tables) (`kept_by: social`, as the money log is kept): read, searched and exported like any table, written only by Taskiem, never edited by hand. The connection's token is in the connection's vault, never in a row.
+**`posts`**: one row per post per account. `caption` (text), `media` (links into the organisation's storage, 0 to 10), `network`, `account` (the connection's name, as every step names a connection), `publish_at` (time), `status` (`draft`, `scheduled`, `publishing`, `published`, `failed`, `cancelled`), `published_at`, `post_id` and `permalink` (from the network), `error`, `source` (`chat`, `template:<id>`, `web`, `api`), `run_id`. Insights (§6.6) are their own columns filled later: `reach`, `likes`, `comments`, `saves`, `insights_at`.
 
-**`posts`**: one row per post per account. `caption` (text), `media` (links into the organisation's storage, 0 to 10), `network`, `account_id`, `publish_at` (time), `status` (`draft`, `scheduled`, `publishing`, `published`, `failed`, `cancelled`), `published_at`, `post_id` and `permalink` (from the network), `error`, `source` (`chat`, `template:<id>`, `web`, `api`), `run_id`. Insights (§6.6) are their own columns filled later: `reach`, `likes`, `comments`, `saves`, `insights_at`.
+**The accounts are the connections.** A connected Page or Instagram account is a connection, and the connection already carries the Page id and name and the Instagram id and username; the Connections page and API list them. There is no table of accounts: the chat and the templates resolve "my Instagram" from the organisation's connections, as they resolve "my Paystack"; a workflow that needs the list reads it with `list_accounts` on the connector (§7.1). One source of truth, nothing kept in step with it.
 
-A post made from chat, from a template or on the web is the same row, and `posts` is an ordinary table, not a kept one: the person edits a row, and the publishing workflow writes its status through the ordinary data-tables connection, so the person's edits and Taskiem's updates share one row. Changing a row's `publish_at` or `caption` from chat ("move today's post to 7pm") is a table change after a yes, as R4 defines it; the scheduler reads the row when the time comes, so the change holds.
+A post made from chat, from a template or on the web is the same row, and `posts` is an ordinary table: the person edits a row, and the publishing workflow writes its status through the ordinary data-tables connection, so the person's edits and Taskiem's updates share one row. Changing a row's `publish_at` or `caption` from chat ("move today's post to 7pm") is a table change after a yes, as R4 defines it; the scheduler reads the row when the time comes, so the change holds.
 
 ### 6.2 Media
 
@@ -154,6 +154,7 @@ New actions on the existing connectors, on the existing Page token; the same con
 | --- | --- | --- |
 | `publish` | unsafe write | A post: `caption`, `media` (0 to 10 signed links; Instagram needs at least one), `kind` (`post`, `reel`, `story`, `carousel`; Facebook: `post`, `photos`, `video`, `reel`), `link` (Facebook). Returns `post_id`, `permalink`, `published_at`. Instagram: create the container(s), poll until ready, publish; the container id is in the output of a parked step |
 | `delete_post` | idempotent write | Removes a post by id |
+| `list_accounts` | read | The accounts this connection may post to (one, for Meta: the Page, and its Instagram account if linked), with ids and names; what the chat and templates use for "my Instagram" |
 | `get_post` | read | The post as the network has it, and whether it still exists |
 | `get_insights` | read | Reach, impressions, likes, comments, saves, shares for a post; followers and reach for the account |
 | `list_comments` | read | Comments on a post (sealed: names and text are personal) |
@@ -165,7 +166,7 @@ Permissions the Meta app asks for in the review, beside the four of K5: `pages_m
 
 ### 7.2 `linkedin@1`, `tiktok@1`, `youtube@1`, `x@1` (G5)
 
-Each a platform app on the K1 pattern ([0051](../decisions/0051-platform-apps.md)): one app Taskiem registers, one-click connection with OAuth, the token refreshed by Taskiem, the account key recorded, the same `publish`, `get_post`, `delete_post`, `get_insights` actions with the network's `kind` values, and the same two tables. TikTok has `publish` in two modes (`direct`, `inbox`) as its API does. YouTube's `publish` takes a video from storage, with `title`, `description`, `privacy` and a thumbnail. None has a comments trigger in G5 unless its API pushes comments (LinkedIn and TikTok poll; a later milestone).
+Each a platform app on the K1 pattern ([0051](../decisions/0051-platform-apps.md)): one app Taskiem registers, one-click connection with OAuth, the token refreshed by Taskiem, the account key recorded, the same `list_accounts`, `publish`, `get_post`, `delete_post`, `get_insights` actions with the network's `kind` values, and the same table. TikTok has `publish` in two modes (`direct`, `inbox`) as its API does. YouTube's `publish` takes a video from storage, with `title`, `description`, `privacy` and a thumbnail. None has a comments trigger in G5 unless its API pushes comments (LinkedIn and TikTok poll; a later milestone).
 
 Each is built only once its review is in hand, in the order of where the first businesses actually post (§8); X only when asked for, and its monthly cost shown to the founders before the app is registered.
 
@@ -184,7 +185,7 @@ Each milestone ships with its templates, its chat commands, its docs page, and w
 
 ### G1: Facebook and Instagram posting (M; needs the Meta app, not its review, on staging)
 
-The two known tables; media in storage with signed public links; `media.fit` and the ffmpeg transcode step with its cover frame (§6.7); `publish`, `delete_post`, `get_post` on both Meta connectors; the `social-publish` platform workflow and the never-twice rule; the limit (§10); the first three templates (§9); the web's Tables view showing posts.
+The `posts` table; media in storage with signed public links; `media.fit` and the ffmpeg transcode step with its cover frame (§6.7); `publish`, `delete_post`, `get_post` on both Meta connectors; the `social-publish` platform workflow and the never-twice rule; the limit (§10); the first three templates (§9); the web's Tables view showing posts.
 
 **Done when:** a test Page and Instagram account take a photo post, a carousel, a Reel and a text post (Facebook) from a template on a schedule, each exactly once across a lost answer; a 3:2 phone photo is padded to 4:5 for Instagram and left as it is for Facebook, and the read-back shows both; a 3-minute 4K video becomes a Reel within Instagram's limits through the container step, and is refused with Instagram's words on a plan with no container minutes; a 26th Instagram post in a day waits for tomorrow with a message; the limit holds.
 
