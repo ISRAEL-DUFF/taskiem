@@ -10,7 +10,7 @@ That reason is real. The cost is also real. Every such table is a module of the 
 
 **The rule.** A table a business could have made itself is the business's own, in its data project. A record with rules is a **kept table** in the business's project: written only by Taskiem, through one writer, exactly once; read, queried and exported by the business like any table. The core keeps only what the engine needs to run: references, workflow state, coordination that must be transactional with runs (holds, counters, leases, outboxes), and the platform's own records. Nothing else.
 
-**The one thing to decide first (§5).** A kept table in Xenibase cannot be written in the same transaction as the engine's state, is a minute behind, and is subject to the project's rate limits and pauses. For lists that is fine. For ledgers and orders it is the reason they are in the core today. So the plan asks for one decision before any move: whether Taskiem may **host** a data table itself, rows in a per-organisation schema in Taskiem's own Postgres under the same Tables API, so that a kept record can be transactional with the engine and sealed with the tenant's key, while staying the business's own, listed, exported and readable by every workflow. With it, every record below has a home with the properties its decision asked for. Without it, ledgers stay in the core and only lists move, which is a third of the gain.
+**How the records get there (§5).** Three things kept ledgers and orders in the core even after kept tables existed: one commit with the engine, sealed personal columns, and availability that does not depend on an external project. None of them needs a new place to put rows. What must commit with the engine is coordination, not the record: a counter, a hold, a lease, an undo. That stays in the core as engine state, beside a **stub** that names the record; the record itself is a kept table in the business's project, written exactly once through the outbox. The two things the business's project cannot do today, an all-or-nothing write of several rows and a sealed column, are asks to Xenibase, which the same company owns, and the managed tier the platform provisions is the platform's to keep available. Decision 0033 stands: one backend, Xenibase, and Taskiem's database stays the execution store.
 
 ## 2. Words used here
 
@@ -19,10 +19,11 @@ That reason is real. The cost is also real. Every such table is a module of the 
 | Core | Taskiem's own Postgres schema, `engine/db/migrations`, run on every installation, under row-level security and the audit chain |
 | Data table | A table the business owns in its data project, listed on the Tables page, read and written by workflows, exported ([data tables](../data-tables.md)) |
 | Kept table | A data table only Taskiem writes; the business reads, queries and exports it; its definition cannot be changed by hand ([kept tables](../data-tables.md#kept-tables)) |
-| Hosted table | Proposed (§5): a data table whose rows are in Taskiem's own Postgres, in the organisation's schema, behind the same Tables API as a Xenibase one |
+| Stub | The engine's own row for a record: the tenant, the record's id in its kept table, a version, a status, and the coordination the engine needs (a hold's expiry, a counter's value). Never a business field; a pointer, not a copy |
+| Ask | A feature Taskiem needs from Xenibase, recorded in the [integration plan](../xenibase-integration.md) as the earlier asks were (§5) |
 | List | Rows a person would keep in a sheet: students, suppliers, riders, price lists, a gallery. Edited by people and workflows |
 | Record with rules | Rows that must be true: a ledger entry never edited, an order whose status moves one way, a receipt numbered once, a payment matched exactly once. Written only by Taskiem |
-| Engine state | What the engine needs transactionally with runs: a hold on a slot with an expiry, a counter, a lease, an outbox row, a run's reference to a record. Stays in the core |
+| Engine state | What the engine needs transactionally with runs: a hold on a slot with an expiry, a counter, a lease, an outbox row, a stub. Stays in the core |
 | Twin | A core table and a kept copy of the same fact, as the money log is today |
 | Module | A feature's Go packages, API routes, chat commands and web pages (`engine/school`, `api/school*.go`, the Schools pages) |
 
@@ -57,37 +58,37 @@ Kept tables (0045 point 6) answered the first reason: only Taskiem writes them. 
 - **The engine and the platform**, every table of it. Tenancy, runs, steps, signals, timers, connections, secrets, approvals, policies, audit, anchors, billing, plans, limits, operators, the catalogue, worker pools, SSO, SCIM, passkeys, status page, data-table definitions.
 - **The channel plumbing**: WhatsApp, Telegram, Slack and USSD bindings, inboxes, outboxes, templates, OTPs, notices, chat sessions and history. They are the platform's, however many tables they take; a message is not a business record.
 - **Every API route, chat command and page.** The cleanup changes where rows live, not what people see. `GET /v1/invoices` keeps answering; it reads the business's table instead of a core one.
-- **Decision 0033**: Xenibase stays the home of ordinary data tables and of a business's own project. Hosted tables (§5) are an addition behind the same API, not a replacement.
+- **Decision 0033**, all of it: Xenibase is the one backend for data tables, the home of a business's own project, and Taskiem's database is the execution store and not a record store. This plan adds nothing beside it.
 - **Migrations are forward-only.** A core table leaves by a migration that stops writing it, a copy to the new home, a switch of readers, and a later migration that drops it, never by editing an old migration.
 
-## 5. The decision to take first: hosted tables
+## 5. How a record with rules lives in the business's project
 
-Today a data table's rows live only in the organisation's Xenibase project. Proposed: a second backend for the same thing, chosen per table by Taskiem and invisible to the business.
+A kept table today is a copy because three things could not be had from Xenibase. Each is answered below without a second place to put rows.
 
-| | Xenibase table (today) | Hosted table (proposed) |
-| --- | --- | --- |
-| Rows live in | The organisation's Xenibase project | A per-organisation schema in Taskiem's Postgres (`org_<id>.<name>`), under row-level security, in the engine's backups |
-| Same API | `GET/POST /v1/tables`, rows, search, export, the Tables page, `read_rows` and `query_rows` steps, chat | Identical: `data_tables` resolves to the backend per table |
-| Transactions with the engine | No (a minute behind, outbox needed) | Yes: one commit with the run, the webhook or the definer |
-| Sealed columns | No: `personal` columns are plain in the project | Yes: `personal` columns sealed with the tenant key as core sealed columns are today, masked on read as today |
-| Availability | The project's limits and pauses | The engine's |
-| Who writes a kept one | Taskiem, async, through the Xenibase API | Taskiem, in the transaction |
-| Bring-your-own project | The business's own Xenibase; it may edit rows there | Not applicable: hosted rows are Taskiem's to keep; the business reads and exports |
-| Export and portability | Already the business's | `GET /v1/tables/{name}/export` as today; a business leaving takes a dump of its schema |
+| What kept the record in the core | The answer |
+| --- | --- |
+| One commit with the engine | Split the record from its coordination. The receipt number, the hold on a slot, the lease, the undo marker and the run's reference are **engine state**: a stub in the module's schema, written in the engine's transaction. The receipt, the booking, the entry are the **record**: a kept table in the business's project, written through the outbox with the engine's idempotency key, exactly once. The stub carries the record's id and version once the write lands; until then the stub's status says so |
+| Sealed personal data | An ask to Xenibase: a **sealed column**. The project stores the value encrypted under a key Taskiem supplies per project, shows it masked in Xenibase's own pages and exports, and returns it through the data API only to a call that carries the key. Taskiem keeps the key in the tenant's vault as it keeps the tenant key today. Until it ships, Taskiem seals the value itself before the write and unseals it on read; the business's own Xenibase pages then show the envelope, and the Tables page the value |
+| Several rows that must land together | An ask to Xenibase: an **all-or-nothing batch write**, several operations on several tables of one project in one call, applied in one transaction, under one `Idempotency-Key`. An entry and its match, an order and its payment, a receipt and its account posting. Until it ships, the outbox writes them in order under one key and the stub's version makes a half-landed pair visible to the reconciler (§6) |
+| Availability on a page view or a webhook | The engine decides from the stub, never from the record: whether a hold is live, what amount it was placed for, whether an order may move. The record is read where a person reads, the page, the chat, the export, the workflow step. The managed projects the platform provisions (0033 point 2) are on the platform's own tier, which the company sets so that they do not pause and their rate limit covers a webhook burst; a business that brings its own project takes its project's limits, as it does for every table today |
 
-Rule for choosing: a **list** goes to the business's Xenibase project (or wherever its data project is), as today. A **record with rules** is a **kept hosted table**: the business's own in every way that matters (listed, queried by workflows, searched, exported, deleted with the business), and Taskiem's to write, transactionally. Nothing else is needed for the moves below.
+**Rule for the stub.** It holds what an engine decision needs before the record can be read and nothing else: identity, version, status, the coordination fields. A stub that grows a business field is a twin, and the review question for every stub column is "which engine decision reads this?".
 
-What it costs: one backend behind `engine/datatables` (schema per organisation, the same column types, RLS policies, the sealing of `personal` columns, export), about the size of the Xenibase backend; the Tables page showing where a table lives; one migration making the schemas. What it buys: every record below has a home outside the core with the properties its decision asked for, and no more twins.
+**The asks.** Two features and one tier setting, each recorded in the integration plan under "Taskiem integration asks" as the data API's writes and idempotency were:
 
-If the decision is **no**, the plan still moves the lists (H2, parts of H3 to H8) and stops the growth (H0, H1); the records stay in the core, and this document says which.
+1. **Sealed columns**: a column type whose values the project encrypts under a per-project key the caller supplies; masked in Xenibase's UI, CSV and backups; returned by the data API only with the key; searchable by equality on a keyed hash. Needed by H3, H6, H7 and the forms submissions.
+2. **Batch writes**: one data API call carrying several operations across the project's tables, applied in one transaction, refused whole if any is refused, under one idempotency key honoured for 24 hours. Needed by H4 first, then every record with more than one row.
+3. **Managed tier terms**: projects Taskiem provisions never pause for quota, carry a rate limit sized for the engine's bursts, and are backed up on the engine's schedule. A setting of the platform's Xenibase organisation, not a feature.
+
+Each move below says which ask it needs and what it does until the ask ships; the plan does not wait for Xenibase to move the lists.
 
 ## 6. The method, for every move
 
 Each area is moved the same way, so the first teaches the rest:
 
-1. **Classify** each table: list, record with rules, engine state, platform. Lists and records leave; engine state stays and is renamed into a module schema (`school.account_jobs`, not `public.school_account_jobs`), so the core's public schema is the engine's alone.
+1. **Classify** each table: list, record with rules, engine state, platform. Lists and records leave; engine state stays and is renamed into a module schema (`school.account_jobs`, not `public.school_account_jobs`), so the core's public schema is the engine's alone. A record's coordination fields are split out into its stub here (§5).
 2. **Define** the destination tables as known tables in `templates/tables/` (lists) or kept definitions in the module (records), with `personal` columns marked. The names already taken by kept copies keep their names: the copy becomes the record.
-3. **Write to both** for one release: the module writes the new home in the transaction (hosted) or through the outbox (Xenibase) and keeps writing the core table. A reconciler compares them nightly and reports differences as a platform alert; none for a week is the gate.
+3. **Write to both** for one release: the module writes the stub in its transaction and the record through the outbox, and keeps writing the core table. A reconciler compares them nightly and reports differences as a platform alert; none for a week is the gate.
 4. **Switch readers**: the API, chat, pages and workflow steps read the new home. The twin's sweeper stops. The core table becomes write-only.
 5. **Stop writing** the core table; a migration drops it a release later, after the next backup rotation.
 6. **Erasure and retention** follow the record: a person's erasure (`money_log_erasures`, `form_file_deletions` are the shapes) runs against the new home; retention is the business's `max_retention_days` as for every table.
@@ -101,15 +102,15 @@ A CI check from H0 holds the line meanwhile.
 
 - CONTRIBUTING gains the rule: a table a business could have made itself is the business's own; a record with rules is a kept table; only engine state and the platform's own records go in the core, each in its module's schema.
 - `engine/db/core_tables.txt`: the allow-list of the core's tables, as `dispatch_columns.txt` lists columns today. A migration that creates a table not on the list fails CI unless the migration's header names the decision that allows it (`-- decision: 0064`). The list starts as every table that exists, so nothing breaks, and shrinks with each milestone.
-- Decision 0064 accepted or amended with §5's answer.
+- Decision 0064 accepted; the three asks of §5 filed with Xenibase.
 
 **Done when:** CI refuses a new unlisted table; the social posting plan builds under the rule with nothing to add to the list.
 
-### H1: hosted tables (L; only if §5 is yes)
+### H1: the stub pattern and the outbox (M)
 
-The second backend behind `engine/datatables`: per-organisation schemas, RLS, the column types, `personal` sealing, search, export, the rows API, `read_rows` and `query_rows`, `EnsureKept` on it, the Tables page saying where each table lives, a limit on hosted rows per plan beside `max_data_tables`.
+A package the modules share: a stub table per record in the module's schema, the write of record and stub (stub in the transaction, record through the outbox under the engine's key, the record's id and version written back), the read path that decides from the stub and reads the record from the kept table, the nightly reconciler that compares a core table, its stubs and its kept table, and the sealing of `personal` columns on the way out until Xenibase's sealed columns ship. `engine/datatables` gains `WriteBatch`, which uses Xenibase's batch write where the project has it and ordered single writes otherwise, so a module is written once either way.
 
-**Done when:** a hosted table behaves as a Xenibase one through every API and step in the data-tables test suite; a `personal` column is sealed at rest and masked as today; a kept hosted table is written inside an engine transaction that rolls back together.
+**Done when:** a record written through the pattern lands exactly once under a crash at every point between the stub's commit and the outbox's delivery; the reconciler reports a planted difference; a `personal` column written through it reads back masked through every surface it does today.
 
 ### H2: lists that are plainly the business's (M)
 
@@ -117,35 +118,35 @@ Business profile and gallery, reach contacts, riders, suppliers, price lists and
 
 **Done when:** the Tables page lists them, a workflow reads a rider or a supplier with `read_rows`, exports work, and the core tables are dropped.
 
-### H3: invoices and the debtor book (M; needs H1 for the records)
+### H3: invoices and the debtor book (M; needs H1; sealed columns for the customer fields)
 
-`customer_invoices`, payments, amendments and accounts become kept hosted tables (`invoices`, `invoice_payments`, …); `invoice_customers` a list. Paid and payment starts stay as engine state under `invoices.*`.
+`customer_invoices`, payments, amendments and accounts become kept tables (`invoices`, `invoice_payments`, …) with a stub per invoice; `invoice_customers` a list. Paid and payment starts stay as engine state under `invoices.*`.
 
 **Done when:** every invoice route and chat command answers from the new tables; the matching tests pass; a customer's erasure clears the new home.
 
-### H4: the money log, matching and customer accounts (M; needs H1)
+### H4: the money log, matching and customer accounts (M; needs H1; the first user of batch writes)
 
-The kept copy `money_log` becomes the record: `money_entries` and the matching tables are written as kept hosted tables in the same transaction as the rail's webhook; the sweeper and the twin go. Match state stays as engine state.
+The kept copy `money_log` becomes the record: an entry and its match are one batch write from the rail's webhook, with the match state and the undo marker as the stub; the sweeper and the twin go.
 
-**Done when:** no row of the money log exists twice; a webhook's entry and its match commit together or not at all; the leak and digest reports read the new home; the money-log erasure path runs against it.
+**Done when:** no row of the money log exists twice; a webhook's entry and its match land together or not at all; the leak and digest reports read the new home; the money-log erasure path runs against it.
 
 ### H5: stock (M; needs H1)
 
-`stock_movements` (the kept copy) becomes the record; sales, purchase orders, payments, counts and low-stock become kept hosted tables; suppliers and settings lists (H2).
+`stock_movements` (the kept copy) becomes the record; sales, purchase orders, payments, counts and low-stock become kept tables; suppliers and settings lists (H2).
 
 **Done when:** the stock chat commands and the kept-copy sweeper tests pass without the twin.
 
-### H6: storefront orders, bookings and tickets (L; needs H1)
+### H6: storefront orders, bookings and tickets (L; needs H1; sealed columns)
 
-Orders, order payments, bookings and tickets become kept hosted tables with their customer columns sealed; holds, snapshots, inbox, actions and changes stay as engine state under `storefront.*`; catalogue and services are already the business's tables.
+Orders, order payments, bookings and tickets become kept tables with their customer columns sealed; the hold with its expiry and amount, the status and the snapshot reference are the order's stub; inbox, actions and changes stay as engine state under `storefront.*`; catalogue and services are already the business's tables.
 
 **Done when:** a storefront order placed on the public host, paid and delivered reads from the new tables at every step; the status link works; the browser tests pass.
 
-### H7: schools (L; needs H1)
+### H7: schools (L; needs H1; sealed columns for guardians)
 
-The largest area: students, classes and term fees are already kept copies and become the record; term invoices, receipts, student accounts, reminders, promises, clearance and daily closes become kept hosted tables; families and guardians lists (H2); account jobs, pending postings and invoicing runs stay as engine state under `school.*`.
+The largest area: students, classes and term fees are already kept copies and become the record; term invoices, receipts, student accounts, reminders, promises, clearance and daily closes become kept tables, the receipt counter and the posting lease their stubs; families and guardians lists (H2); account jobs, pending postings and invoicing runs stay as engine state under `school.*`.
 
-**Done when:** the schools walkthrough and the demo school seed run against the new tables; the receipt counter is still gapless; no twin remains.
+**Done when:** the schools walkthrough and the demo school seed run against the new tables; the receipt counter is still gapless and every number has exactly one receipt row; no twin remains.
 
 ### H8: business links and dispatch (L; needs H1, H3, H6)
 
@@ -163,25 +164,26 @@ The allow-list is the engine and the platform only; every module's engine state 
 
 | Property | How it is kept |
 | --- | --- |
-| Rules on records | Only Taskiem's writer writes a kept table (as today); hosted ones in the engine's transaction; a rule the writer enforces is a function in the module, with the same tests |
-| Sealed personal data | Hosted `personal` columns sealed with the tenant key; Xenibase ones stay unsealed and so take no sealed record |
-| Exactly once | Hosted: the transaction. Xenibase: the outbox and `Idempotency-Key`, as the mirrors and kept copies do today |
+| Rules on records | Only Taskiem's writer writes a kept table (as today); a rule the writer enforces is a function in the module, with the same tests; what must be decided atomically is decided on the stub in the engine's transaction |
+| Sealed personal data | Xenibase's sealed columns once they ship; Taskiem's own envelope in the column until then, unsealed on read by Taskiem alone |
+| Exactly once | The outbox and `Idempotency-Key`, as the mirrors and kept copies do today; batch writes for rows that must land together; the stub's version for the reconciler |
 | Audit | Every write to a kept record is audited in the business's chain as the module's writes are today; nothing changes because the table moved |
-| Row-level security | Hosted schemas carry the same policies as the core; a session never sees another organisation's schema |
+| Row-level security | Stubs and engine state carry the core's policies; the record is in the business's own project, which no other organisation can reach |
 | Erasure and retention | Follow the record (§6 point 6) |
 | Export | Every moved table exports as every table does; the business owns more than before |
-| Limits | Hosted rows count against a plan limit; kept records are not held back by it (a receipt is written whatever the plan), only lists are |
-| Backups and the VM kit | Hosted schemas are in the engine's database, so the VM's Postgres backup and the recovery sheet cover them with no change |
+| Limits | A kept record is never held back by `max_data_tables` or the project's quota (a receipt is written whatever the plan); the managed tier's terms (§5) make that true, and a business on its own project is told when its quota holds a record |
+| Backups | The record is in the project's backups, on the managed tier on the engine's schedule; the stubs in the engine's; the reconciler says when the two disagree |
 
 ## 9. Risks and open questions
 
 | Risk | What we do |
 | --- | --- |
-| §5 is answered no | Lists still move (H2 and the list parts of H3 to H8); records stay; the allow-list still stops growth. Say so in 0064 |
+| Xenibase's sealed columns or batch writes slip | Neither blocks a move: Taskiem seals the value itself and the outbox writes in order under one key until they ship (§5); the moves that carry personal data (H3, H6, H7) go in that order and switch to the native feature when it lands |
 | A move loses rows | Double-write and the nightly reconciler for a week before readers switch; the core table is dropped a release after it stops being written |
-| Performance of hosted tables with many organisations | One schema per organisation is the pattern Postgres handles well into the tens of thousands; measured in H1 on the load test |
+| The record is a minute behind the engine | Every decision the engine takes reads the stub, never the record; a page that shows a record just written shows the stub's status until the write lands, as the mirrors do today; measured in H1 |
+| A stub grows into a twin | The review question on every stub column is which engine decision reads it; the reconciler lists stub columns no decision reads |
 | Modules keep reaching into each other's tables | Module schemas make that visible in a query; the review rule is that a module reads another's records through its package, not its tables |
 | The migration numbering and forward-only rule | Every step is a new migration; nothing old is edited |
 | The team builds new features meanwhile | H0 comes first, so every plan from now on (social posting is the first) is written to the rule, and the list only shrinks |
 
-Open: whether hosted tables should also be offered to businesses as ordinary tables (a business with no Xenibase project could have tables at once), which 0033 did not consider; whether chat history and link conversations are "the platform's" or "the business's record" (proposed: the platform's, they are messages); the per-plan limit for hosted rows.
+Open: whether chat history and link conversations are "the platform's" or "the business's record" (proposed: the platform's, they are messages); the managed tier's rate limit, to be sized from the engine's busiest webhook hour on staging; whether a business that brings its own project should be offered the managed tier for its kept records.
