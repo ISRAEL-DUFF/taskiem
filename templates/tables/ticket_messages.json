@@ -1,0 +1,16 @@
+{
+  "name": "ticket_messages",
+  "title": "Ticket messages",
+  "description": "Every message of every ticket, oldest first: the ticket's reference, whether the customer wrote it (in), the business answered (out) or a member noted it for the team (note), who wrote it, what it says, when, and how it came or went. An answer to go out through the business's own mailbox waits here until it is sent.",
+  "columns": [
+    {"name": "reference", "title": "Ticket", "type": "text", "required": true},
+    {"name": "direction", "title": "Direction", "type": "text", "required": true},
+    {"name": "author", "title": "From", "type": "text", "personal": true},
+    {"name": "body", "title": "Message", "type": "text", "personal": true},
+    {"name": "at", "title": "When", "type": "datetime"},
+    {"name": "message_id", "title": "Email reference", "type": "text"},
+    {"name": "channel", "title": "Channel", "type": "text"},
+    {"name": "mail", "title": "Email goes by", "type": "text"},
+    {"name": "sent_at", "title": "Sent", "type": "datetime"}
+  ]
+}

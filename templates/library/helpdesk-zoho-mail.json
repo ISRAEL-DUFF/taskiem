@@ -1,0 +1,297 @@
+{
+  "id": "helpdesk-zoho-mail",
+  "title": "A helpdesk on your Zoho Mail mailbox",
+  "summary": "Every new email to your Zoho Mail mailbox becomes a numbered ticket for the right department; customers' replies join their ticket.",
+  "description": "Taskiem looks at your Zoho Mail inbox every few minutes. Each new conversation becomes a ticket with a number (T-1042), saved in your tickets table, and the customer is answered from your own mailbox in the same conversation with their number (by the Send ticket answers from Zoho Mail workflow, which you add with it). When the customer replies in the conversation, the reply joins their ticket, the ticket is open again and the department is told. A reply to a ticket resolved more than a few days ago (you choose how many) opens a new ticket that says which one it follows. You write your departments once; Taskiem's AI (or your words, or the customer's choice) sends each ticket to the right one, and its members are told on WhatsApp, Telegram or by email. They answer with the Answer customers' tickets form, and the Follow up tickets workflow reminds them and closes old tickets.",
+  "category": "customers",
+  "tags": [
+    "support",
+    "tickets",
+    "helpdesk",
+    "email",
+    "zoho"
+  ],
+  "keywords": [
+    "ticket",
+    "tickets",
+    "support",
+    "helpdesk",
+    "help desk",
+    "email",
+    "complaint",
+    "complaints",
+    "customer service",
+    "inbox",
+    "mailbox",
+    "zoho"
+  ],
+  "requires": [
+    "zoho"
+  ],
+  "connectors": [
+    "zoho_mail@1",
+    "xenibase@1",
+    "notify@1"
+  ],
+  "variables": [
+    {
+      "name": "ticket_reply_form",
+      "why": "The link of your ticket reply form (the Answer customers' tickets workflow), put in each message to a department so they can answer at once."
+    }
+  ],
+  "params": [
+    {
+      "name": "mail_connection",
+      "type": "connection",
+      "connector": "zoho_mail",
+      "title": "Zoho Mail connection",
+      "description": "Your Zoho Mail mailbox that customers write to, connected with one click.",
+      "required": false,
+      "default": "main",
+      "example": "main"
+    },
+    {
+      "name": "departments",
+      "type": "text",
+      "title": "Departments",
+      "description": "One department per line: its name, the role whose members answer its tickets, what it looks after, and words that send a ticket there, separated by a | sign. For example: Billing | accounts | Payments, invoices and refunds | refund, invoice, payment",
+      "required": true,
+      "example": "Billing | accounts | Payments, invoices and refunds | refund, invoice, payment, charged\nDelivery | dispatch | Orders on their way, late or damaged deliveries | delivery, late, rider, damaged\nGeneral | support | Anything else |",
+      "max_length": 2000
+    },
+    {
+      "name": "default_department",
+      "type": "string",
+      "title": "Department when none fits",
+      "description": "One of your departments, by its name: it gets the tickets that fit no other.",
+      "required": true,
+      "example": "General",
+      "max_length": 60
+    },
+    {
+      "name": "routing",
+      "type": "string",
+      "title": "How a ticket finds its department",
+      "description": "ai: Taskiem's AI reads the message and picks the department, how urgent it is and a one-line summary. rules: the first department with one of its words in the message. chosen: the department the customer picked.",
+      "required": false,
+      "default": "ai",
+      "example": "ai",
+      "enum": [
+        "ai",
+        "rules",
+        "chosen"
+      ]
+    },
+    {
+      "name": "acknowledgement",
+      "type": "text",
+      "title": "What the customer is told first",
+      "description": "The first answer a customer gets when they write; their ticket's reference is added after it.",
+      "required": false,
+      "default": "Thank you for getting in touch. We have your message and will answer you soon.",
+      "example": "Thank you for getting in touch. We have your message and will answer you soon.",
+      "max_length": 600
+    },
+    {
+      "name": "reopen_days",
+      "type": "integer",
+      "title": "Days a resolved ticket can be reopened",
+      "description": "A customer who writes back within these days after their ticket was resolved reopens it; later, they get a new ticket that says which one it follows.",
+      "required": false,
+      "default": 7,
+      "example": 7,
+      "minimum": 1,
+      "maximum": 90
+    }
+  ],
+  "tables": [
+    {
+      "known": "tickets"
+    },
+    {
+      "known": "ticket_messages"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_helpdeskZohoMail",
+    "version": 1,
+    "name": "Helpdesk on Zoho Mail",
+    "description": "Opens a ticket for each new conversation in the Zoho Mail inbox, and adds customers' replies to their tickets.",
+    "trigger": {
+      "type": "connector_event",
+      "config": {
+        "connector": "zoho_mail@1",
+        "trigger": "new_mail",
+        "connection": "{{mail_connection}}",
+        "events": [
+          "message.received"
+        ]
+      }
+    },
+    "steps": [
+      {
+        "id": "settings",
+        "type": "transform",
+        "name": "Use your reopening days",
+        "config": {
+          "output": {
+            "reopen_days": "{{reopen_days}}"
+          }
+        }
+      },
+      {
+        "id": "full",
+        "type": "connector",
+        "name": "Read the whole email",
+        "connector": "zoho_mail@1",
+        "action": "get_message",
+        "connection": "{{mail_connection}}",
+        "input": {
+          "folder_id": "=trigger.body.data.folder_id",
+          "message_id": "=trigger.body.data.message_id"
+        }
+      },
+      {
+        "id": "find",
+        "type": "connector",
+        "name": "Find the ticket of the email's conversation",
+        "connector": "xenibase@1",
+        "action": "read_rows",
+        "connection": "data_tables",
+        "input": {
+          "table": "tickets",
+          "filters": [
+            {
+              "column": "mail",
+              "op": "eq",
+              "value": "zoho"
+            },
+            {
+              "column": "thread",
+              "op": "eq",
+              "value": "=(trigger.body.data.?thread_id.orValue('') != '' ? trigger.body.data.thread_id : trigger.body.data.message_id)"
+            }
+          ],
+          "limit": 1
+        }
+      },
+      {
+        "id": "state",
+        "type": "transform",
+        "name": "Is it a new ticket or a reply",
+        "needs": [
+          "find",
+          "settings",
+          "full"
+        ],
+        "config": {
+          "output": {
+            "action": "=!(true) || steps.find.output.rows.size() == 0 || steps.find.output.rows[0].?reference.orValue('') == '' ? 'new' : !(steps.find.output.rows[0].?status.orValue('') in ['resolved', 'closed']) || (steps.find.output.rows[0].?resolved_at.orValue(null) != null && timestamp(trigger.body.data.?received_at.orValue(run.started_at)) - timestamp(steps.find.output.rows[0].resolved_at) <= duration(string(steps.settings.output.reopen_days * 24) + 'h')) ? 'reply' : 'follow'"
+          }
+        }
+      },
+      {
+        "id": "handle",
+        "type": "branch",
+        "name": "Add the reply to its ticket, or open a ticket",
+        "needs": [
+          "state"
+        ],
+        "config": {
+          "paths": [
+            {
+              "name": "reply",
+              "when": "=steps.state.output.action == 'reply'",
+              "steps": [
+                {
+                  "id": "append",
+                  "type": "connector",
+                  "name": "Add the customer's reply to the ticket",
+                  "connector": "xenibase@1",
+                  "action": "insert_rows",
+                  "connection": "data_tables",
+                  "input": {
+                    "table": "ticket_messages",
+                    "row": {
+                      "reference": "=steps.find.output.rows[0].reference",
+                      "direction": "in",
+                      "author": "=(trigger.body.data.from.contains('<') ? trigger.body.data.from.split('<')[0].trim().replace('\"', '') : '') != '' ? (trigger.body.data.from.contains('<') ? trigger.body.data.from.split('<')[0].trim().replace('\"', '') : '') : (trigger.body.data.from.contains('<') ? trigger.body.data.from.split('<')[1].split('>')[0].trim() : trigger.body.data.from.trim())",
+                      "body": "=((steps.full.output.?text.orValue('') != '' ? steps.full.output.text : trigger.body.data.?summary.orValue('')) != '' ? (steps.full.output.?text.orValue('') != '' ? steps.full.output.text : trigger.body.data.?summary.orValue('')) : '(no text)')",
+                      "at": "=trigger.body.data.?received_at.orValue(run.started_at)",
+                      "message_id": "=trigger.body.data.message_id",
+                      "channel": "email",
+                      "mail": "zoho"
+                    }
+                  }
+                },
+                {
+                  "id": "reopen",
+                  "type": "connector",
+                  "name": "Open the ticket again",
+                  "connector": "xenibase@1",
+                  "action": "update_rows",
+                  "connection": "data_tables",
+                  "input": {
+                    "table": "tickets",
+                    "key": "=steps.find.output.rows[0].id",
+                    "set": {
+                      "status": "open",
+                      "last_customer_at": "=trigger.body.data.?received_at.orValue(run.started_at)",
+                      "last_message_id": "=trigger.body.data.message_id"
+                    }
+                  }
+                },
+                {
+                  "id": "tell",
+                  "type": "connector",
+                  "name": "Tell the department the customer answered",
+                  "connector": "notify@1",
+                  "action": "tell",
+                  "input": {
+                    "to": "=steps.find.output.rows[0].?assigned_to.orValue('') != '' ? 'members' : 'role'",
+                    "members": "=steps.find.output.rows[0].?assigned_to.orValue('') != '' ? [steps.find.output.rows[0].assigned_to] : []",
+                    "role": "=steps.find.output.rows[0].?role.orValue('') != '' ? steps.find.output.rows[0].role : 'owner'",
+                    "title": "='The customer answered on ' + steps.find.output.rows[0].reference",
+                    "message": "=steps.find.output.rows[0].reference + ' (' + steps.find.output.rows[0].?department.orValue('') + ', was ' + steps.find.output.rows[0].status + '): ' + (trigger.body.data.?subject.orValue('') != '' ? trigger.body.data.subject : '(no subject)') + '\\n' + (((steps.full.output.?text.orValue('') != '' ? steps.full.output.text : trigger.body.data.?summary.orValue('')) != '' ? (steps.full.output.?text.orValue('') != '' ? steps.full.output.text : trigger.body.data.?summary.orValue('')) : '(no text)').size() > 500 ? ((steps.full.output.?text.orValue('') != '' ? steps.full.output.text : trigger.body.data.?summary.orValue('')) != '' ? (steps.full.output.?text.orValue('') != '' ? steps.full.output.text : trigger.body.data.?summary.orValue('')) : '(no text)').substring(0, 500) : ((steps.full.output.?text.orValue('') != '' ? steps.full.output.text : trigger.body.data.?summary.orValue('')) != '' ? (steps.full.output.?text.orValue('') != '' ? steps.full.output.text : trigger.body.data.?summary.orValue('')) : '(no text)'))"
+                  }
+                }
+              ]
+            }
+          ],
+          "default": {
+            "steps": [
+              {
+                "id": "open",
+                "type": "template",
+                "template": "ticket-open",
+                "name": "Open a ticket",
+                "params": {
+                  "departments": "{{departments}}",
+                  "default_department": "{{default_department}}",
+                  "routing": "{{routing}}",
+                  "acknowledgement": "{{acknowledgement}}"
+                },
+                "input": {
+                  "channel": "email",
+                  "subject": "=((trigger.body.data.?subject.orValue('') != '' ? trigger.body.data.subject : '(no subject)').size() > 300 ? (trigger.body.data.?subject.orValue('') != '' ? trigger.body.data.subject : '(no subject)').substring(0, 300) : (trigger.body.data.?subject.orValue('') != '' ? trigger.body.data.subject : '(no subject)'))",
+                  "message": "=(((steps.full.output.?text.orValue('') != '' ? steps.full.output.text : trigger.body.data.?summary.orValue('')) != '' ? (steps.full.output.?text.orValue('') != '' ? steps.full.output.text : trigger.body.data.?summary.orValue('')) : '(no text)').size() > 20000 ? ((steps.full.output.?text.orValue('') != '' ? steps.full.output.text : trigger.body.data.?summary.orValue('')) != '' ? (steps.full.output.?text.orValue('') != '' ? steps.full.output.text : trigger.body.data.?summary.orValue('')) : '(no text)').substring(0, 20000) : ((steps.full.output.?text.orValue('') != '' ? steps.full.output.text : trigger.body.data.?summary.orValue('')) != '' ? (steps.full.output.?text.orValue('') != '' ? steps.full.output.text : trigger.body.data.?summary.orValue('')) : '(no text)'))",
+                  "customer_name": "=(trigger.body.data.from.contains('<') ? trigger.body.data.from.split('<')[0].trim().replace('\"', '') : '')",
+                  "customer_email": "=(trigger.body.data.from.contains('<') ? trigger.body.data.from.split('<')[1].split('>')[0].trim() : trigger.body.data.from.trim())",
+                  "mail": "zoho",
+                  "thread": "=(trigger.body.data.?thread_id.orValue('') != '' ? trigger.body.data.thread_id : trigger.body.data.message_id)",
+                  "message_id": "=trigger.body.data.message_id",
+                  "received_at": "=trigger.body.data.?received_at.orValue(run.started_at)",
+                  "previous": "=steps.state.output.action == 'follow' ? steps.find.output.rows[0].reference : ''"
+                }
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "30m"
+    }
+  }
+}

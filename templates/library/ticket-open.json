@@ -1,0 +1,505 @@
+{
+  "id": "ticket-open",
+  "title": "Open a ticket for a customer",
+  "summary": "Give a customer's message a ticket number, send it to the right department, and tell the customer their number.",
+  "description": "Opens a ticket for a customer's message, however it came (email, your website's form, WhatsApp or a person at the business): it gets the next number (T-1042), is saved in your tickets table with the first message, goes to the right department (by Taskiem's AI, by your words, or as the customer chose), and the department is told on WhatsApp, Telegram or by email with the number, the subject, how urgent it is, a one-line summary and the link to your ticket reply form. The customer is told their ticket number: by email in the same conversation when they wrote by email, else on WhatsApp, Telegram or by text. The ticket templates use it; Taskiem makes the tickets tables when it is used.",
+  "category": "customers",
+  "tags": [
+    "support",
+    "tickets",
+    "helpdesk"
+  ],
+  "keywords": [
+    "ticket",
+    "tickets",
+    "support",
+    "helpdesk",
+    "complaint",
+    "open",
+    "number",
+    "department",
+    "customer service"
+  ],
+  "requires": [
+    "ticket",
+    "tickets",
+    "helpdesk",
+    "support desk",
+    "complaint",
+    "complaints"
+  ],
+  "connectors": [
+    "xenibase@1",
+    "notify@1",
+    "email@1"
+  ],
+  "variables": [
+    {
+      "name": "ticket_reply_form",
+      "why": "The link of your ticket reply form (the Answer customers' tickets workflow), put in each message to a department so they can answer at once."
+    }
+  ],
+  "params": [
+    {
+      "name": "departments",
+      "type": "text",
+      "title": "Departments",
+      "description": "One department per line: its name, the role whose members answer its tickets, what it looks after, and words that send a ticket there, separated by a | sign. For example: Billing | accounts | Payments, invoices and refunds | refund, invoice, payment",
+      "required": true,
+      "example": "Billing | accounts | Payments, invoices and refunds | refund, invoice, payment, charged\nDelivery | dispatch | Orders on their way, late or damaged deliveries | delivery, late, rider, damaged\nGeneral | support | Anything else |",
+      "max_length": 2000
+    },
+    {
+      "name": "default_department",
+      "type": "string",
+      "title": "Department when none fits",
+      "description": "One of your departments, by its name: it gets the tickets that fit no other.",
+      "required": true,
+      "example": "General",
+      "max_length": 60
+    },
+    {
+      "name": "routing",
+      "type": "string",
+      "title": "How a ticket finds its department",
+      "description": "ai: Taskiem's AI reads the message and picks the department, how urgent it is and a one-line summary. rules: the first department with one of its words in the message. chosen: the department the customer picked.",
+      "required": false,
+      "default": "ai",
+      "example": "ai",
+      "enum": [
+        "ai",
+        "rules",
+        "chosen"
+      ]
+    },
+    {
+      "name": "acknowledgement",
+      "type": "text",
+      "title": "What the customer is told first",
+      "description": "The first answer a customer gets when they write; their ticket's reference is added after it.",
+      "required": false,
+      "default": "Thank you for getting in touch. We have your message and will answer you soon.",
+      "example": "Thank you for getting in touch. We have your message and will answer you soon.",
+      "max_length": 600
+    }
+  ],
+  "tables": [
+    {
+      "known": "tickets"
+    },
+    {
+      "known": "ticket_messages"
+    }
+  ],
+  "callable": true,
+  "outputs": [
+    {
+      "name": "reference",
+      "type": "string",
+      "title": "Ticket number",
+      "description": "The ticket's reference, such as T-1042.",
+      "value": "=steps.ref.output.reference"
+    },
+    {
+      "name": "department",
+      "type": "string",
+      "title": "Department",
+      "description": "The department that answers it.",
+      "value": "=steps.route.output.department"
+    },
+    {
+      "name": "priority",
+      "type": "string",
+      "title": "Priority",
+      "description": "low, normal, high or urgent.",
+      "value": "=steps.route.output.priority"
+    },
+    {
+      "name": "summary",
+      "type": "string",
+      "title": "Summary",
+      "description": "What the customer wants, in one line.",
+      "value": "=steps.route.output.summary"
+    },
+    {
+      "name": "told_by",
+      "type": "string",
+      "title": "How the customer was told",
+      "description": "email (in the conversation), mailbox (from the business's own mailbox, by its sending workflow), message (WhatsApp, Telegram, text or email) or none.",
+      "value": "=steps.ref.output.how"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_ticketOpen",
+    "version": 1,
+    "name": "Open a ticket",
+    "trigger": {
+      "type": "manual"
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "channel",
+          "subject",
+          "message"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "channel": {
+            "type": "string",
+            "enum": [
+              "email",
+              "form",
+              "whatsapp",
+              "api",
+              "staff"
+            ],
+            "title": "How the customer wrote"
+          },
+          "subject": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300,
+            "title": "Subject",
+            "x-pii": "other"
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20000,
+            "title": "What the customer wrote",
+            "x-pii": "other"
+          },
+          "customer_name": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Customer's name",
+            "x-pii": "name"
+          },
+          "customer_email": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Customer's email",
+            "x-pii": "email"
+          },
+          "customer_phone": {
+            "type": "string",
+            "maxLength": 20,
+            "title": "Customer's phone",
+            "x-pii": "phone"
+          },
+          "department": {
+            "type": "string",
+            "maxLength": 60,
+            "title": "Department the customer chose"
+          },
+          "mail": {
+            "type": "string",
+            "enum": [
+              "taskiem",
+              "zoho",
+              "gmail"
+            ],
+            "title": "Email goes by",
+            "description": "taskiem: Taskiem's helpdesk address (mailbox); zoho or gmail: the business's own mailbox, whose sending workflow sends what is written to ticket_messages"
+          },
+          "mailbox": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Helpdesk address",
+            "description": "The Taskiem email address of the helpdesk workflow (threads on) the customer's email goes through"
+          },
+          "thread": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Mailbox conversation",
+            "description": "The mailbox's thread of the customer's email (Zoho Mail, Gmail)"
+          },
+          "message_id": {
+            "type": "string",
+            "maxLength": 300,
+            "title": "The customer's email",
+            "description": "Its id in the mailbox (Zoho Mail) or its Message-ID (Taskiem's address, Gmail), to answer it"
+          },
+          "previous": {
+            "type": "string",
+            "maxLength": 24,
+            "title": "Ticket it follows"
+          },
+          "received_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "When the customer wrote"
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "settings",
+        "type": "transform",
+        "name": "Use your first answer to customers",
+        "config": {
+          "output": {
+            "ack": "{{acknowledgement}}"
+          }
+        }
+      },
+      {
+        "id": "route",
+        "type": "template",
+        "template": "ticket-route",
+        "name": "Find the department",
+        "params": {
+          "departments": "{{departments}}",
+          "default_department": "{{default_department}}",
+          "routing": "{{routing}}"
+        },
+        "input": {
+          "subject": "=trigger.body.subject",
+          "message": "=trigger.body.message",
+          "department": "=trigger.body.?department.orValue('')"
+        }
+      },
+      {
+        "id": "ticket",
+        "type": "connector",
+        "name": "Save the ticket",
+        "connector": "xenibase@1",
+        "action": "insert_rows",
+        "connection": "data_tables",
+        "needs": [
+          "route"
+        ],
+        "input": {
+          "table": "tickets",
+          "row": {
+            "subject": "=trigger.body.subject",
+            "customer_name": "=trigger.body.?customer_name.orValue('')",
+            "customer_email": "=trigger.body.?customer_email.orValue('')",
+            "customer_phone": "=trigger.body.?customer_phone.orValue('')",
+            "channel": "=trigger.body.channel",
+            "department": "=steps.route.output.department",
+            "role": "=steps.route.output.role",
+            "priority": "=steps.route.output.priority",
+            "summary": "=steps.route.output.summary",
+            "status": "new",
+            "last_customer_at": "=trigger.body.?received_at.orValue(run.started_at)",
+            "thread": "=trigger.body.?thread.orValue('')",
+            "mail": "=trigger.body.?mail.orValue('')",
+            "mailbox": "=trigger.body.?mailbox.orValue('')",
+            "last_message_id": "=trigger.body.?message_id.orValue('')",
+            "previous_reference": "=trigger.body.?previous.orValue('')"
+          }
+        }
+      },
+      {
+        "id": "ref",
+        "type": "transform",
+        "name": "Number the ticket",
+        "needs": [
+          "ticket",
+          "settings"
+        ],
+        "config": {
+          "output": {
+            "id": "=steps.ticket.output.rows[0].?id.orValue(0)",
+            "reference": "='T-' + string(1000 + int(steps.ticket.output.rows[0].?id.orValue(0)))",
+            "how": "=trigger.body.?mail.orValue('') in ['zoho', 'gmail'] && trigger.body.?customer_email.orValue('') != '' ? 'mailbox' : trigger.body.?mail.orValue('') == 'taskiem' && trigger.body.?customer_email.orValue('') != '' && trigger.body.?mailbox.orValue('') != '' ? 'email' : trigger.body.?customer_phone.orValue('') != '' || trigger.body.?customer_email.orValue('') != '' ? 'message' : 'none'"
+          }
+        }
+      },
+      {
+        "id": "number",
+        "type": "connector",
+        "name": "Write the ticket's number on it",
+        "connector": "xenibase@1",
+        "action": "update_rows",
+        "connection": "data_tables",
+        "needs": [
+          "ref"
+        ],
+        "input": {
+          "table": "tickets",
+          "key": "=steps.ref.output.id",
+          "set": {
+            "reference": "=steps.ref.output.reference",
+            "thread": "=trigger.body.?mail.orValue('') in ['zoho', 'gmail'] && trigger.body.?thread.orValue('') != '' ? trigger.body.?thread.orValue('') : steps.ref.output.reference"
+          }
+        }
+      },
+      {
+        "id": "first",
+        "type": "connector",
+        "name": "Save the customer's message",
+        "connector": "xenibase@1",
+        "action": "insert_rows",
+        "connection": "data_tables",
+        "needs": [
+          "ref"
+        ],
+        "input": {
+          "table": "ticket_messages",
+          "row": {
+            "reference": "=steps.ref.output.reference",
+            "direction": "in",
+            "author": "=trigger.body.?customer_name.orValue('') != '' ? trigger.body.?customer_name.orValue('') : trigger.body.?customer_email.orValue('')",
+            "body": "=trigger.body.message",
+            "at": "=trigger.body.?received_at.orValue(run.started_at)",
+            "message_id": "=trigger.body.?message_id.orValue('')",
+            "channel": "=trigger.body.channel",
+            "mail": "=trigger.body.?mail.orValue('')"
+          }
+        }
+      },
+      {
+        "id": "tell",
+        "type": "connector",
+        "name": "Tell the department",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "ref"
+        ],
+        "input": {
+          "to": "role",
+          "role": "=steps.route.output.role",
+          "title": "='New ticket ' + steps.ref.output.reference + ' (' + steps.route.output.priority + ')'",
+          "message": "=steps.ref.output.reference + ' for ' + steps.route.output.department + ', ' + steps.route.output.priority + ' priority: ' + trigger.body.subject + '\\n' + steps.route.output.summary + (trigger.body.?previous.orValue('') != '' ? '\\nIt follows ticket ' + trigger.body.?previous.orValue('') + '.' : '') + (has(env.ticket_reply_form) ? '\\nAnswer it: ' + env.ticket_reply_form + '?ticket=' + steps.ref.output.reference : '\\nAnswer it with the ticket reply form.')"
+        }
+      },
+      {
+        "id": "tell_customer",
+        "type": "branch",
+        "name": "Tell the customer their ticket number",
+        "needs": [
+          "ref"
+        ],
+        "config": {
+          "paths": [
+            {
+              "name": "email",
+              "when": "=steps.ref.output.how == 'email'",
+              "steps": [
+                {
+                  "id": "ack_email",
+                  "type": "connector",
+                  "name": "Email the customer in the conversation",
+                  "connector": "email@1",
+                  "action": "send_in_thread",
+                  "input": {
+                    "to": "=trigger.body.customer_email",
+                    "subject": "=trigger.body.subject",
+                    "message": "=steps.settings.output.ack + '\\n\\nYour ticket is ' + steps.ref.output.reference + '.'",
+                    "thread": "=steps.ref.output.reference",
+                    "in_reply_to": "=trigger.body.?message_id.orValue('')",
+                    "address": "=trigger.body.mailbox"
+                  }
+                },
+                {
+                  "id": "ack_sent",
+                  "type": "connector",
+                  "name": "Save the answer",
+                  "connector": "xenibase@1",
+                  "action": "insert_rows",
+                  "connection": "data_tables",
+                  "needs": [
+                    "ack_email"
+                  ],
+                  "input": {
+                    "table": "ticket_messages",
+                    "row": {
+                      "reference": "=steps.ref.output.reference",
+                      "direction": "out",
+                      "author": "Taskiem",
+                      "body": "=steps.settings.output.ack + '\\n\\nYour ticket is ' + steps.ref.output.reference + '.'",
+                      "at": "=trigger.body.?received_at.orValue(run.started_at)",
+                      "message_id": "=steps.ack_email.output.message_id",
+                      "channel": "email",
+                      "mail": "taskiem",
+                      "sent_at": "=trigger.body.?received_at.orValue(run.started_at)"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "message",
+              "when": "=steps.ref.output.how == 'message'",
+              "steps": [
+                {
+                  "id": "ack_message",
+                  "type": "connector",
+                  "name": "Message the customer",
+                  "connector": "notify@1",
+                  "action": "message",
+                  "input": {
+                    "phone": "=trigger.body.?customer_phone.orValue('')",
+                    "email": "=trigger.body.?customer_email.orValue('')",
+                    "about": "='your ticket ' + steps.ref.output.reference",
+                    "title": "='Your ticket ' + steps.ref.output.reference",
+                    "message": "=steps.settings.output.ack + '\\n\\nYour ticket is ' + steps.ref.output.reference + '.'"
+                  }
+                },
+                {
+                  "id": "ack_noted",
+                  "type": "connector",
+                  "name": "Save the answer",
+                  "connector": "xenibase@1",
+                  "action": "insert_rows",
+                  "connection": "data_tables",
+                  "needs": [
+                    "ack_message"
+                  ],
+                  "input": {
+                    "table": "ticket_messages",
+                    "row": {
+                      "reference": "=steps.ref.output.reference",
+                      "direction": "out",
+                      "author": "Taskiem",
+                      "body": "=steps.settings.output.ack + '\\n\\nYour ticket is ' + steps.ref.output.reference + '.'",
+                      "at": "=trigger.body.?received_at.orValue(run.started_at)",
+                      "channel": "=trigger.body.channel",
+                      "sent_at": "=trigger.body.?received_at.orValue(run.started_at)"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "mailbox",
+              "when": "=steps.ref.output.how == 'mailbox'",
+              "steps": [
+                {
+                  "id": "ack_queued",
+                  "type": "connector",
+                  "name": "Leave the answer for your mailbox to send",
+                  "connector": "xenibase@1",
+                  "action": "insert_rows",
+                  "connection": "data_tables",
+                  "input": {
+                    "table": "ticket_messages",
+                    "row": {
+                      "reference": "=steps.ref.output.reference",
+                      "direction": "out",
+                      "author": "Taskiem",
+                      "body": "=steps.settings.output.ack + '\\n\\nYour ticket is ' + steps.ref.output.reference + '.'",
+                      "at": "=trigger.body.?received_at.orValue(run.started_at)",
+                      "channel": "email",
+                      "mail": "=trigger.body.mail"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "30m"
+    }
+  }
+}

@@ -178,7 +178,9 @@ func TestCallableTemplatesAsSteps(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if len(used) != 1 || used[0] != tpl.ID {
+				// The template, then those it uses itself (ticket-open's
+				// ticket-route).
+				if len(used) == 0 || used[0] != tpl.ID || len(used) != 1+len(nested(t, tpl)) {
 					t.Errorf("used %v", used)
 				}
 				def, err := wd.Load(expanded)
@@ -212,6 +214,26 @@ func TestCallableTemplatesAsSteps(t *testing.T) {
 	if n == 0 {
 		t.Fatal("no callable template has tests")
 	}
+}
+
+// nested are the templates a template's own steps use.
+func nested(t *testing.T, tpl *templates.Template) []string {
+	t.Helper()
+	doc, err := tpl.Instantiate(tpl.Examples(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	def, err := wd.Load(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	def.Walk(func(st *wd.Step) {
+		if st.Type == "template" && st.Template != "" {
+			out = append(out, st.Template)
+		}
+	})
+	return out
 }
 
 // outputTypes is a transform's output that is true for each output of tpl
@@ -283,7 +305,10 @@ func renameKeys[V any](m map[string]V, fn func(string) string) map[string]V {
 // The id budget holds on every rail: each callable template, used two
 // deep under template steps with the longest ids allowed, expands (its
 // capability steps too, on each rail that can run it) into ids a step may
-// have.
+// have. A callable template that uses a template itself (ticket-open) is
+// already two deep: templates nest three deep counting the workflow, so
+// it is a step of a workflow, never of another template, and is checked
+// so.
 func TestCallableTemplatesFitTwoDeepOnEveryRail(t *testing.T) {
 	reg := registry(t)
 	long := strings.Repeat("s", wd.MaxTemplateStepID)
@@ -315,6 +340,10 @@ func TestCallableTemplatesFitTwoDeepOnEveryRail(t *testing.T) {
 				input[k] = "=trigger.body['" + k + "']"
 			}
 			first := tpl.Outputs[0].Name
+			inner, params := "wrap", map[string]any{}
+			if len(nested(t, tpl)) > 0 {
+				inner, params = tpl.ID, tpl.Examples()
+			}
 			wrap := map[string]any{"id": "wrap", "title": "Wrap", "summary": "S", "description": "D", "category": tpl.Category, "tags": []any{},
 				"connectors": tpl.Connectors, "params": []any{}, "callable": true,
 				"outputs": []any{map[string]any{"name": "out", "type": tpl.Outputs[0].Type, "title": "Out", "description": "Out", "value": "=steps." + long + ".output." + first}},
@@ -332,7 +361,7 @@ func TestCallableTemplatesFitTwoDeepOnEveryRail(t *testing.T) {
 			}
 			caller, err := json.Marshal(map[string]any{"schema": "wd/v1", "id": "wf_caller", "version": 1, "name": "Caller",
 				"trigger": map[string]any{"type": "manual"}, "inputs": ownDef["inputs"],
-				"steps": []any{map[string]any{"id": long, "type": "template", "template": "wrap", "input": input}}})
+				"steps": []any{map[string]any{"id": long, "type": "template", "template": inner, "params": params, "input": input}}})
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -1,0 +1,255 @@
+{
+  "id": "ticket-route",
+  "title": "Find the department for a customer's ticket",
+  "summary": "Decide which department answers a customer's message, how urgent it is and what it is about, by Taskiem's AI, by your words, or as the customer chose.",
+  "description": "Reads a customer's message and gives the department that should answer it, from the list of departments you write once. Taskiem's AI can read the message and pick the department, say how urgent it is and sum it up in one line (names, emails and phone numbers are hidden from it); or the first department whose words are in the message gets it; or the department the customer picked on your form is kept. A message that fits none goes to the department you choose for that. The ticket templates use it.",
+  "category": "customers",
+  "tags": [
+    "support",
+    "tickets",
+    "helpdesk",
+    "ai"
+  ],
+  "keywords": [
+    "ticket",
+    "tickets",
+    "support",
+    "helpdesk",
+    "department",
+    "route",
+    "routing",
+    "classify",
+    "complaint"
+  ],
+  "requires": [
+    "ticket",
+    "tickets",
+    "helpdesk",
+    "support desk",
+    "complaint",
+    "complaints"
+  ],
+  "connectors": [],
+  "params": [
+    {
+      "name": "departments",
+      "type": "text",
+      "title": "Departments",
+      "description": "One department per line: its name, the role whose members answer its tickets, what it looks after, and words that send a ticket there, separated by a | sign. For example: Billing | accounts | Payments, invoices and refunds | refund, invoice, payment",
+      "required": true,
+      "example": "Billing | accounts | Payments, invoices and refunds | refund, invoice, payment, charged\nDelivery | dispatch | Orders on their way, late or damaged deliveries | delivery, late, rider, damaged\nGeneral | support | Anything else |",
+      "max_length": 2000
+    },
+    {
+      "name": "default_department",
+      "type": "string",
+      "title": "Department when none fits",
+      "description": "One of your departments, by its name: it gets the tickets that fit no other.",
+      "required": true,
+      "example": "General",
+      "max_length": 60
+    },
+    {
+      "name": "routing",
+      "type": "string",
+      "title": "How a ticket finds its department",
+      "description": "ai: Taskiem's AI reads the message and picks the department, how urgent it is and a one-line summary. rules: the first department with one of its words in the message. chosen: the department the customer picked.",
+      "required": false,
+      "default": "ai",
+      "example": "ai",
+      "enum": [
+        "ai",
+        "rules",
+        "chosen"
+      ]
+    }
+  ],
+  "callable": true,
+  "outputs": [
+    {
+      "name": "department",
+      "type": "string",
+      "title": "Department",
+      "description": "The department that answers the ticket, by its name.",
+      "value": "=steps.pick.output.department"
+    },
+    {
+      "name": "role",
+      "type": "string",
+      "title": "Role that answers",
+      "description": "The role whose members answer the department's tickets.",
+      "value": "=steps.pick.output.role"
+    },
+    {
+      "name": "priority",
+      "type": "string",
+      "title": "Priority",
+      "description": "low, normal, high or urgent; normal unless Taskiem's AI read the message.",
+      "value": "=steps.pick.output.priority"
+    },
+    {
+      "name": "summary",
+      "type": "string",
+      "title": "Summary",
+      "description": "What the customer wants, in one line; the subject unless Taskiem's AI read the message.",
+      "value": "=steps.pick.output.summary"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_ticketRoute",
+    "version": 1,
+    "name": "Find the department for a ticket",
+    "trigger": {
+      "type": "manual"
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "subject",
+          "message"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "subject": {
+            "type": "string",
+            "maxLength": 300,
+            "title": "Subject",
+            "x-pii": "other"
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 20000,
+            "title": "What the customer wrote",
+            "x-pii": "other"
+          },
+          "department": {
+            "type": "string",
+            "maxLength": 60,
+            "title": "Department the customer chose"
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "settings",
+        "type": "transform",
+        "name": "Use your departments and how tickets find theirs",
+        "config": {
+          "output": {
+            "departments": "{{departments}}",
+            "fallback": "{{default_department}}",
+            "routing": "{{routing}}"
+          }
+        }
+      },
+      {
+        "id": "list",
+        "type": "transform",
+        "name": "Read the list of departments",
+        "needs": [
+          "settings"
+        ],
+        "config": {
+          "output": {
+            "departments": "=steps.settings.output.departments.split('\\n').map(l, l.split('|')).filter(p, p[0].trim() != '').map(p, {'name': p[0].trim(), 'role': p.size() > 1 && p[1].trim() != '' ? p[1].trim() : p[0].trim().lowerAscii(), 'about': p.size() > 2 ? p[2].trim() : '', 'words': p.size() > 3 ? p[3].split(',').map(w, w.trim().lowerAscii()).filter(w, w != '') : []})"
+          }
+        }
+      },
+      {
+        "id": "route_by",
+        "type": "branch",
+        "name": "Ask Taskiem's AI when it routes the tickets",
+        "needs": [
+          "list"
+        ],
+        "config": {
+          "paths": [
+            {
+              "name": "ai",
+              "when": "=steps.settings.output.routing == 'ai' && steps.list.output.departments.size() > 0",
+              "steps": [
+                {
+                  "id": "classify",
+                  "type": "ai",
+                  "name": "Read the message for its department, priority and summary",
+                  "input": {
+                    "message": "=trigger.body.subject + '\\n\\n' + trigger.body.message"
+                  },
+                  "config": {
+                    "prompt": "='You sort the messages customers send a business into its departments. The departments:\\n' + steps.list.output.departments.map(d, '- ' + d.name + (d.about != '' ? ': ' + d.about : '')).join('\\n') + '\\n\\nGive the department for the message below (one of the names above, written exactly as it is there), its priority (urgent when the customer cannot work, pay or get what they paid for, or is very upset; high when they are waiting on something they paid for; low for a question that can wait; normal otherwise) and a summary of what the customer wants in one line of at most 20 words, with no names, email addresses or phone numbers.'",
+                    "personal_data": [
+                      "message"
+                    ],
+                    "output_schema": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "department",
+                        "priority",
+                        "summary"
+                      ],
+                      "properties": {
+                        "department": {
+                          "type": "string",
+                          "maxLength": 60
+                        },
+                        "priority": {
+                          "type": "string",
+                          "enum": [
+                            "low",
+                            "normal",
+                            "high",
+                            "urgent"
+                          ]
+                        },
+                        "summary": {
+                          "type": "string",
+                          "maxLength": 200
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "match",
+        "type": "transform",
+        "name": "Choose the department",
+        "needs": [
+          "route_by"
+        ],
+        "config": {
+          "output": {
+            "department": "=steps.settings.output.routing == 'ai' && steps.route_by.output.path == 'ai' && steps.list.output.departments.filter(d, d.name.lowerAscii() == steps.route_by.output.steps.classify.department.trim().lowerAscii()).size() > 0 ? steps.list.output.departments.filter(d, d.name.lowerAscii() == steps.route_by.output.steps.classify.department.trim().lowerAscii())[0].name : steps.settings.output.routing == 'rules' && steps.list.output.departments.exists(d, d.words.exists(w, (trigger.body.subject + ' ' + trigger.body.message).lowerAscii().contains(w))) ? steps.list.output.departments.filter(d, d.words.exists(w, (trigger.body.subject + ' ' + trigger.body.message).lowerAscii().contains(w)))[0].name : steps.settings.output.routing == 'chosen' && has(trigger.body.department) && steps.list.output.departments.filter(d, d.name.lowerAscii() == trigger.body.department.trim().lowerAscii()).size() > 0 ? steps.list.output.departments.filter(d, d.name.lowerAscii() == trigger.body.department.trim().lowerAscii())[0].name : steps.settings.output.fallback"
+          }
+        }
+      },
+      {
+        "id": "pick",
+        "type": "transform",
+        "name": "Give the department, its role, the priority and a summary",
+        "needs": [
+          "match"
+        ],
+        "config": {
+          "output": {
+            "department": "=steps.match.output.department",
+            "role": "=steps.list.output.departments.filter(d, d.name.lowerAscii() == steps.match.output.department.trim().lowerAscii()).size() > 0 ? steps.list.output.departments.filter(d, d.name.lowerAscii() == steps.match.output.department.trim().lowerAscii())[0].role : 'owner'",
+            "priority": "=steps.route_by.output.path == 'ai' ? steps.route_by.output.steps.classify.priority : 'normal'",
+            "summary": "=steps.route_by.output.path == 'ai' ? steps.route_by.output.steps.classify.summary : (trigger.body.subject.size() > 120 ? trigger.body.subject.substring(0, 120) : trigger.body.subject)"
+          }
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "15m"
+    }
+  }
+}

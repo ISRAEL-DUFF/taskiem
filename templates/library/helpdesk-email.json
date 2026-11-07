@@ -1,0 +1,269 @@
+{
+  "id": "helpdesk-email",
+  "title": "A helpdesk on your Taskiem email address",
+  "summary": "Every email to your helpdesk address becomes a numbered ticket for the right department; customers' replies join their ticket.",
+  "description": "Give customers your helpdesk workflow's Taskiem email address (or forward your support mailbox to it). Each new email becomes a ticket with a number (T-1042), saved in your tickets table, and the customer is answered at once in the same conversation with their number. When the customer replies, the reply joins their ticket, the ticket is open again and the department is told. A reply to a ticket resolved more than a few days ago (you choose how many) opens a new ticket that says which one it follows. You write your departments once; Taskiem's AI (or your words, or the customer's choice) sends each ticket to the right one, and its members are told on WhatsApp, Telegram or by email. They answer with the Answer customers' tickets form, and the Follow up tickets workflow reminds them and closes old tickets.",
+  "category": "customers",
+  "tags": [
+    "support",
+    "tickets",
+    "helpdesk",
+    "email"
+  ],
+  "keywords": [
+    "ticket",
+    "tickets",
+    "support",
+    "helpdesk",
+    "help desk",
+    "email",
+    "complaint",
+    "complaints",
+    "customer service",
+    "inbox",
+    "department"
+  ],
+  "requires": [
+    "ticket",
+    "tickets",
+    "helpdesk",
+    "help desk",
+    "support desk",
+    "support email",
+    "complaint",
+    "complaints",
+    "customer service"
+  ],
+  "connectors": [
+    "xenibase@1",
+    "notify@1"
+  ],
+  "variables": [
+    {
+      "name": "ticket_reply_form",
+      "why": "The link of your ticket reply form (the Answer customers' tickets workflow), put in each message to a department so they can answer at once."
+    }
+  ],
+  "params": [
+    {
+      "name": "departments",
+      "type": "text",
+      "title": "Departments",
+      "description": "One department per line: its name, the role whose members answer its tickets, what it looks after, and words that send a ticket there, separated by a | sign. For example: Billing | accounts | Payments, invoices and refunds | refund, invoice, payment",
+      "required": true,
+      "example": "Billing | accounts | Payments, invoices and refunds | refund, invoice, payment, charged\nDelivery | dispatch | Orders on their way, late or damaged deliveries | delivery, late, rider, damaged\nGeneral | support | Anything else |",
+      "max_length": 2000
+    },
+    {
+      "name": "default_department",
+      "type": "string",
+      "title": "Department when none fits",
+      "description": "One of your departments, by its name: it gets the tickets that fit no other.",
+      "required": true,
+      "example": "General",
+      "max_length": 60
+    },
+    {
+      "name": "routing",
+      "type": "string",
+      "title": "How a ticket finds its department",
+      "description": "ai: Taskiem's AI reads the message and picks the department, how urgent it is and a one-line summary. rules: the first department with one of its words in the message. chosen: the department the customer picked.",
+      "required": false,
+      "default": "ai",
+      "example": "ai",
+      "enum": [
+        "ai",
+        "rules",
+        "chosen"
+      ]
+    },
+    {
+      "name": "acknowledgement",
+      "type": "text",
+      "title": "What the customer is told first",
+      "description": "The first answer a customer gets when they write; their ticket's reference is added after it.",
+      "required": false,
+      "default": "Thank you for getting in touch. We have your message and will answer you soon.",
+      "example": "Thank you for getting in touch. We have your message and will answer you soon.",
+      "max_length": 600
+    },
+    {
+      "name": "reopen_days",
+      "type": "integer",
+      "title": "Days a resolved ticket can be reopened",
+      "description": "A customer who writes back within these days after their ticket was resolved reopens it; later, they get a new ticket that says which one it follows.",
+      "required": false,
+      "default": 7,
+      "example": 7,
+      "minimum": 1,
+      "maximum": 90
+    }
+  ],
+  "tables": [
+    {
+      "known": "tickets"
+    },
+    {
+      "known": "ticket_messages"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_helpdeskEmail",
+    "version": 1,
+    "name": "Helpdesk email",
+    "description": "Opens a ticket for each new email to the helpdesk address, and adds customers' replies to their tickets.",
+    "trigger": {
+      "type": "email",
+      "config": {
+        "threads": true
+      }
+    },
+    "steps": [
+      {
+        "id": "settings",
+        "type": "transform",
+        "name": "Use your reopening days",
+        "config": {
+          "output": {
+            "reopen_days": "{{reopen_days}}"
+          }
+        }
+      },
+      {
+        "id": "find",
+        "type": "connector",
+        "name": "Find the ticket the email answers",
+        "connector": "xenibase@1",
+        "action": "read_rows",
+        "connection": "data_tables",
+        "input": {
+          "table": "tickets",
+          "filters": [
+            {
+              "column": "reference",
+              "op": "eq",
+              "value": "=has(trigger.email.thread) ? trigger.email.thread : 'T-0'"
+            }
+          ],
+          "limit": 1
+        }
+      },
+      {
+        "id": "state",
+        "type": "transform",
+        "name": "Is it a new ticket or a reply",
+        "needs": [
+          "find",
+          "settings"
+        ],
+        "config": {
+          "output": {
+            "action": "=!(has(trigger.email.thread)) || steps.find.output.rows.size() == 0 || steps.find.output.rows[0].?reference.orValue('') == '' ? 'new' : !(steps.find.output.rows[0].?status.orValue('') in ['resolved', 'closed']) || (steps.find.output.rows[0].?resolved_at.orValue(null) != null && timestamp(trigger.email.received_at) - timestamp(steps.find.output.rows[0].resolved_at) <= duration(string(steps.settings.output.reopen_days * 24) + 'h')) ? 'reply' : 'follow'"
+          }
+        }
+      },
+      {
+        "id": "handle",
+        "type": "branch",
+        "name": "Add the reply to its ticket, or open a ticket",
+        "needs": [
+          "state"
+        ],
+        "config": {
+          "paths": [
+            {
+              "name": "reply",
+              "when": "=steps.state.output.action == 'reply'",
+              "steps": [
+                {
+                  "id": "append",
+                  "type": "connector",
+                  "name": "Add the customer's reply to the ticket",
+                  "connector": "xenibase@1",
+                  "action": "insert_rows",
+                  "connection": "data_tables",
+                  "input": {
+                    "table": "ticket_messages",
+                    "row": {
+                      "reference": "=steps.find.output.rows[0].reference",
+                      "direction": "in",
+                      "author": "=trigger.body.from.name != '' ? trigger.body.from.name : trigger.body.from.address",
+                      "body": "=(trigger.body.latest != '' ? trigger.body.latest : (trigger.body.text != '' ? trigger.body.text : '(no text)'))",
+                      "at": "=trigger.email.received_at",
+                      "message_id": "=trigger.body.message_id",
+                      "channel": "email",
+                      "mail": "taskiem"
+                    }
+                  }
+                },
+                {
+                  "id": "reopen",
+                  "type": "connector",
+                  "name": "Open the ticket again",
+                  "connector": "xenibase@1",
+                  "action": "update_rows",
+                  "connection": "data_tables",
+                  "input": {
+                    "table": "tickets",
+                    "key": "=steps.find.output.rows[0].id",
+                    "set": {
+                      "status": "open",
+                      "last_customer_at": "=trigger.email.received_at",
+                      "last_message_id": "=trigger.body.message_id"
+                    }
+                  }
+                },
+                {
+                  "id": "tell",
+                  "type": "connector",
+                  "name": "Tell the department the customer answered",
+                  "connector": "notify@1",
+                  "action": "tell",
+                  "input": {
+                    "to": "=steps.find.output.rows[0].?assigned_to.orValue('') != '' ? 'members' : 'role'",
+                    "members": "=steps.find.output.rows[0].?assigned_to.orValue('') != '' ? [steps.find.output.rows[0].assigned_to] : []",
+                    "role": "=steps.find.output.rows[0].?role.orValue('') != '' ? steps.find.output.rows[0].role : 'owner'",
+                    "title": "='The customer answered on ' + steps.find.output.rows[0].reference",
+                    "message": "=steps.find.output.rows[0].reference + ' (' + steps.find.output.rows[0].?department.orValue('') + ', was ' + steps.find.output.rows[0].status + '): ' + (trigger.body.subject != '' ? trigger.body.subject : '(no subject)') + '\\n' + ((trigger.body.latest != '' ? trigger.body.latest : (trigger.body.text != '' ? trigger.body.text : '(no text)')).size() > 500 ? (trigger.body.latest != '' ? trigger.body.latest : (trigger.body.text != '' ? trigger.body.text : '(no text)')).substring(0, 500) : (trigger.body.latest != '' ? trigger.body.latest : (trigger.body.text != '' ? trigger.body.text : '(no text)')))"
+                  }
+                }
+              ]
+            }
+          ],
+          "default": {
+            "steps": [
+              {
+                "id": "open",
+                "type": "template",
+                "template": "ticket-open",
+                "name": "Open a ticket",
+                "params": {
+                  "departments": "{{departments}}",
+                  "default_department": "{{default_department}}",
+                  "routing": "{{routing}}",
+                  "acknowledgement": "{{acknowledgement}}"
+                },
+                "input": {
+                  "channel": "email",
+                  "subject": "=((trigger.body.subject != '' ? trigger.body.subject : '(no subject)').size() > 300 ? (trigger.body.subject != '' ? trigger.body.subject : '(no subject)').substring(0, 300) : (trigger.body.subject != '' ? trigger.body.subject : '(no subject)'))",
+                  "message": "=((trigger.body.latest != '' ? trigger.body.latest : (trigger.body.text != '' ? trigger.body.text : '(no text)')).size() > 20000 ? (trigger.body.latest != '' ? trigger.body.latest : (trigger.body.text != '' ? trigger.body.text : '(no text)')).substring(0, 20000) : (trigger.body.latest != '' ? trigger.body.latest : (trigger.body.text != '' ? trigger.body.text : '(no text)')))",
+                  "customer_name": "=trigger.body.from.name",
+                  "customer_email": "=trigger.body.from.address",
+                  "mail": "taskiem",
+                  "mailbox": "=trigger.email.address",
+                  "message_id": "=trigger.body.message_id",
+                  "received_at": "=trigger.email.received_at",
+                  "previous": "=steps.state.output.action == 'follow' ? steps.find.output.rows[0].reference : ''"
+                }
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "30m"
+    }
+  }
+}

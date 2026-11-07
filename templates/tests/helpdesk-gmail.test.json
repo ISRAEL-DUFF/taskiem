@@ -1,0 +1,303 @@
+{
+  "schema": "wd-test/v1",
+  "template": "helpdesk-gmail",
+  "params": {},
+  "cases": [
+    {
+      "name": "a new conversation opens a ticket keyed by Gmail's thread, its answer left for the mailbox",
+      "trigger": {
+        "event": "message.received",
+        "body": {
+          "event": "message.received",
+          "data": {
+            "id": "18c2f1a9b3d4e5f6",
+            "thread_id": "18c2f0e1a2b3c4d5",
+            "message_id": "<CAF=ada.41@mail.gmail.com>",
+            "from": "Ada Obi <ada@example.com>",
+            "from_address": "ada@example.com",
+            "to": "help@adacakes.ng",
+            "cc": "",
+            "subject": "Order 42 is late",
+            "date": "Sat, 7 Nov 2026 10:02:00 +0100",
+            "received_at": "2026-11-07T09:02:00Z",
+            "snippet": "Where is my order?",
+            "latest": "Where is my order?",
+            "in_reply_to": "",
+            "references": "",
+            "label_ids": [
+              "INBOX"
+            ],
+            "unread": true,
+            "has_attachments": false
+          }
+        }
+      },
+      "mocks": {
+        "open__ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 43
+              }
+            ]
+          }
+        },
+        "open__number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__route__classify": {
+          "output": {
+            "department": "Billing",
+            "priority": "normal",
+            "summary": "Asks for a refund"
+          }
+        },
+        "open__ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "find": {
+          "output": {
+            "rows": []
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "find": {
+            "filters": [
+              {
+                "column": "mail",
+                "op": "eq",
+                "value": "gmail"
+              },
+              {
+                "column": "thread",
+                "op": "eq",
+                "value": "18c2f0e1a2b3c4d5"
+              }
+            ]
+          },
+          "open__ticket": {
+            "row": {
+              "customer_name": "Ada Obi",
+              "customer_email": "ada@example.com",
+              "mail": "gmail",
+              "thread": "18c2f0e1a2b3c4d5",
+              "last_message_id": "<CAF=ada.41@mail.gmail.com>"
+            }
+          },
+          "open__ack_queued": {
+            "row": {
+              "mail": "gmail"
+            }
+          }
+        },
+        "steps": {
+          "append": "not_run"
+        }
+      }
+    },
+    {
+      "name": "a reply long after the ticket was resolved opens a new ticket that follows it",
+      "trigger": {
+        "event": "message.received",
+        "body": {
+          "event": "message.received",
+          "data": {
+            "id": "18c2f1a9b3d4e5f6",
+            "thread_id": "18c2f0e1a2b3c4d5",
+            "message_id": "<CAF=ada.50@mail.gmail.com>",
+            "from": "Ada Obi <ada@example.com>",
+            "from_address": "ada@example.com",
+            "to": "help@adacakes.ng",
+            "cc": "",
+            "subject": "Re: Order 42 is late",
+            "date": "Sat, 7 Nov 2026 10:02:00 +0100",
+            "received_at": "2026-11-07T09:02:00Z",
+            "snippet": "It happened again.",
+            "latest": "It happened again.",
+            "in_reply_to": "",
+            "references": "",
+            "label_ids": [
+              "INBOX"
+            ],
+            "unread": true,
+            "has_attachments": false
+          }
+        }
+      },
+      "mocks": {
+        "open__ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 43
+              }
+            ]
+          }
+        },
+        "open__number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__route__classify": {
+          "output": {
+            "department": "Billing",
+            "priority": "normal",
+            "summary": "Asks for a refund"
+          }
+        },
+        "open__ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "find": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "T-1042",
+                "status": "resolved",
+                "department": "Delivery",
+                "role": "dispatch",
+                "assigned_to": "",
+                "resolved_at": "2026-10-01T09:00:00Z"
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "open__ticket": {
+            "row": {
+              "previous_reference": "T-1042",
+              "thread": "18c2f0e1a2b3c4d5",
+              "last_message_id": "<CAF=ada.50@mail.gmail.com>"
+            }
+          },
+          "open__first": {
+            "row": {
+              "body": "It happened again."
+            }
+          }
+        },
+        "steps": {
+          "append": "not_run"
+        }
+      }
+    },
+    {
+      "name": "a reply in the conversation joins its ticket",
+      "trigger": {
+        "event": "message.received",
+        "body": {
+          "event": "message.received",
+          "data": {
+            "id": "18c2f1a9b3d4e5f6",
+            "thread_id": "18c2f0e1a2b3c4d5",
+            "message_id": "<CAF=ada.42@mail.gmail.com>",
+            "from": "Ada Obi <ada@example.com>",
+            "from_address": "ada@example.com",
+            "to": "help@adacakes.ng",
+            "cc": "",
+            "subject": "Re: Order 42 is late",
+            "date": "Sat, 7 Nov 2026 10:02:00 +0100",
+            "received_at": "2026-11-07T09:02:00Z",
+            "snippet": "Thanks, a refund is fine.",
+            "latest": "Thanks, a refund is fine.",
+            "in_reply_to": "",
+            "references": "",
+            "label_ids": [
+              "INBOX"
+            ],
+            "unread": true,
+            "has_attachments": false
+          }
+        }
+      },
+      "mocks": {
+        "append": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "reopen": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "find": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "T-1042",
+                "status": "waiting_on_customer",
+                "department": "Delivery",
+                "role": "dispatch",
+                "assigned_to": "",
+                "resolved_at": null
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "append": {
+            "row": {
+              "author": "Ada Obi",
+              "body": "Thanks, a refund is fine.",
+              "message_id": "<CAF=ada.42@mail.gmail.com>",
+              "mail": "gmail"
+            }
+          },
+          "tell": {
+            "role": "dispatch",
+            "message": "T-1042 (Delivery, was waiting_on_customer): Re: Order 42 is late\nThanks, a refund is fine."
+          }
+        },
+        "steps": {
+          "open__ticket": "not_run"
+        }
+      }
+    }
+  ]
+}
