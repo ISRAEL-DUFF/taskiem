@@ -434,14 +434,14 @@ func (s *Server) getPurchase(w http.ResponseWriter, r *http.Request) {
 }
 
 // purchaseStep runs a step on an order by its id.
-func (s *Server) purchaseStep(w http.ResponseWriter, r *http.Request, action string, do func(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, actor string) (stock.Purchase, error)) {
+func (s *Server) purchaseStep(w http.ResponseWriter, r *http.Request, action string, do func(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, actor string) (stock.Purchase, error)) (ok bool) {
 	if !s.purchasesReady(w) {
-		return
+		return false
 	}
 	id, err := idParam(r)
 	if err != nil {
 		s.fail(w, r, err)
-		return
+		return false
 	}
 	p := principalFrom(r.Context())
 	var x stock.Purchase
@@ -453,7 +453,7 @@ func (s *Server) purchaseStep(w http.ResponseWriter, r *http.Request, action str
 		return auditTx(r, tx, action, x.Reference, map[string]any{"purchase_id": x.ID, "status": x.Status})
 	}); err != nil {
 		s.purchaseFail(w, r, err)
-		return
+		return false
 	}
 	if action == "purchase.send" {
 		if err := s.waDrainOutbox(r.Context(), p.TenantID); err != nil {
@@ -461,11 +461,26 @@ func (s *Server) purchaseStep(w http.ResponseWriter, r *http.Request, action str
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"purchase": x})
+	return true
 }
 
 // sendPurchase is POST /v1/stock/purchases/{id}/send: approved and sent.
 func (s *Server) sendPurchase(w http.ResponseWriter, r *http.Request) {
-	s.purchaseStep(w, r, "purchase.send", s.Purchases.SendTx)
+	// Sent now, not before (a send again answers the same): a diary line.
+	var drafted bool
+	var x stock.Purchase
+	ok := s.purchaseStep(w, r, "purchase.send", func(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, actor string) (stock.Purchase, error) {
+		was, err := stock.PurchaseTx(ctx, tx, tenant, id, false)
+		if err != nil {
+			return was, err
+		}
+		drafted = was.Status == stock.Drafted
+		x, err = s.Purchases.SendTx(ctx, tx, tenant, id, actor)
+		return x, err
+	})
+	if ok && drafted && x.Status != stock.Drafted {
+		s.diaryChange(r.Context(), principalFrom(r.Context()), buyerStepWords("send", x.Reference, x.Supplier, x.TotalKobo))
+	}
 }
 
 // confirmPurchase is POST /v1/stock/purchases/{id}/confirm: the supplier

@@ -193,7 +193,7 @@ func ReactTx(ctx context.Context, tx pgx.Tx, tenant, link, pair uuid.UUID, emoji
 		return uuid.Nil, false, fmt.Errorf("%w: you are no longer linked with %s", ErrState, l.Name)
 	}
 	var one int
-	if err := tx.QueryRow(ctx, `SELECT 1 FROM link_messages WHERE tenant_id = $1 AND link_id = $2 AND pair_id = $3 AND hidden_at IS NULL`, tenant, link, pair).Scan(&one); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT 1 FROM link_messages WHERE tenant_id = $1 AND link_id = $2 AND pair_id = $3 AND hidden_at IS NULL AND kind <> 'diary'`, tenant, link, pair).Scan(&one); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return uuid.Nil, false, ErrNotFound
 		}

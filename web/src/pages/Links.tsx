@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { useChatTools } from "../lib/useChatTools";
+import { setSound, soundOn } from "../lib/moments";
 import {
   Link,
   useNavigate,
@@ -41,6 +43,7 @@ import {
 } from "../lib/linkchat";
 import { ConversationPane } from "./Conversation";
 import { TaskiemPane } from "./TaskiemChat";
+import { useChatAlerts } from "./ChatAlerts";
 import { ChatRow } from "./ChatRow";
 import { useConfirm } from "./ConfirmSheet";
 import { Explore } from "./Explore";
@@ -253,6 +256,10 @@ function useLinks() {
  */
 export function ChatPage() {
   const { me, can } = useAuth();
+  const chatTools = useChatTools();
+  // Alerts waiting in the Taskiem conversation, said on its row.
+  const waiting = useChatAlerts(!!chatTools).list?.length ?? 0;
+  const [sound, setSoundState] = useState(soundOn);
   // Chat is also the person's own conversation with Taskiem: with Linked
   // businesses off it shows that alone, and asks for no business's chats.
   const linksOn = areaOn(me?.areas, "links");
@@ -415,7 +422,7 @@ export function ChatPage() {
         if (e.defaultPrevented || !k.openID) return;
         if (
           document.querySelector(
-            '[data-testid="chat-more"], [data-testid="chat-recording"], .chat-menu, .attach-menu, .chat-info, .modal, .mention-list, .emoji-panel, .explore',
+            '[data-testid="chat-more"], [data-testid="chat-recording"], .chat-menu, .attach-menu, .chat-info, .modal, .mention-list, .emoji-panel, .explore, .tk-sheet, .tk-tools, .tk-picker',
           )
         )
           return;
@@ -429,14 +436,16 @@ export function ChatPage() {
         );
         return;
       }
-      // Not under an open menu, sheet or panel: the letters are theirs.
+      // Not under an open menu, sheet, picker, tools or Explore: the
+      // letters are theirs.
       const covered = !!document.querySelector(
-        '[data-testid="chat-more"], [data-testid="chat-recording"], .chat-menu, .attach-menu, .chat-info, .modal, .mention-list, .emoji-panel, .explore',
+        '[data-testid="chat-more"], [data-testid="chat-recording"], .chat-menu, .attach-menu, .chat-info, .modal, .mention-list, .emoji-panel, .explore, .tk-sheet, .tk-tools, .tk-picker',
       );
       const what = shortcutOf(e, covered || isTyping(document.activeElement));
       if (!what || e.defaultPrevented) return;
       e.preventDefault();
       if (what === "help") setKeysOpen(true);
+      else if (what === "tag") startTag();
       else if (what === "search" || what === "new") {
         if (what === "new") return startNew.current();
         k.setParams({});
@@ -505,7 +514,10 @@ export function ChatPage() {
       <div className={`chat-layout${open || taskiemOpen ? " open" : ""}`}>
         <div className="chat-list-pane" onKeyDown={onListKey}>
           <div className="chat-list-head">
-            <h2>Chat</h2>
+            <h2>Chats</h2>
+            {me?.tenant_name && (
+              <span className="chat-list-biz">{me.tenant_name}</span>
+            )}
             {linksOn && (
               <button
                 type="button"
@@ -536,6 +548,20 @@ export function ChatPage() {
                   >
                     Your business in Explore
                   </Link>
+                  {chatTools && (
+                    <button
+                      type="button"
+                      className="menu-link"
+                      aria-pressed={sound}
+                      onClick={() => {
+                        setSound(!sound);
+                        setSoundState(!sound);
+                        close();
+                      }}
+                    >
+                      Sound for new orders and payments: {sound ? "on" : "off"}
+                    </button>
+                  )}
                 </>
               )}
             />
@@ -548,7 +574,7 @@ export function ChatPage() {
                 <input
                   type="search"
                   ref={searchBox}
-                  placeholder="Search or find a business"
+                  placeholder="Search chats, messages, businesses"
                   value={q}
                   onChange={(e) => (setQ(e.target.value), setHint(""))}
                   onKeyDown={(e) => {
@@ -617,6 +643,10 @@ export function ChatPage() {
                       <>
                         <span className="draft">Draft:</span> {drafts.taskiem}
                       </>
+                    ) : waiting > 0 ? (
+                      <span className="tk-waiting" data-testid="taskiem-waiting">
+                        {waiting === 1 ? "1 thing needs you" : `${waiting} things need you`}
+                      </span>
                     ) : (
                       "Your own conversation with Taskiem, as on your phone"
                     )
@@ -970,6 +1000,9 @@ export function ChatPage() {
             key={open.link}
             conv={open}
             others={all}
+            roles={Object.fromEntries(
+              (view.data?.links ?? []).map((l) => [l.id, l.role]),
+            )}
             onBack={() => setParams({})}
             onChanged={reloadConvs}
             focus={params.get("msg") ?? undefined}
@@ -1484,6 +1517,21 @@ function FindableQuestion({
       </div>
     </section>
   );
+}
+
+/** "@" away from the box: the open chat's box takes the focus and an "@",
+ * and the picker opens as if it were typed. */
+function startTag() {
+  const el = document.querySelector<HTMLTextAreaElement>(
+    "textarea[data-chat-box]",
+  );
+  if (!el) return;
+  const add = el.value && !/\s$/.test(el.value) ? " @" : "@";
+  const next = el.value + add;
+  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(el, next);
+  el.focus();
+  el.setSelectionRange(next.length, next.length);
+  el.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
 /** The keys of the Chat page, for a reader who has a keyboard. */

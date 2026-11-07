@@ -384,6 +384,61 @@ var actionFits = map[string][]string{
 	dispatch.Delivered: {"arrived", "picked_up"}, dispatch.Cash: {"arrived", "picked_up"}, dispatch.NewNumber: {"arrived"},
 }
 
+// riderJobWords ask a rider's open deliveries.
+var riderJobWords = map[string]bool{"my deliveries": true, "deliveries": true, "jobs": true, "my jobs": true, "today": true, "what do i have": true}
+
+// riderJobsWord answers a rider's "my deliveries" (chat tools phase 5: a
+// rider works a shift from chat alone): each open delivery, where it goes,
+// its map pin, and the word to send next. false when the words are not
+// those or the sender has no delivery.
+func (s *Server) riderJobsWord(ctx context.Context, ch chatChannel, channel, addr, text string) (bool, error) {
+	if !s.Dispatch.Ready() {
+		return false, nil
+	}
+	w := strings.Join(strings.Fields(strings.ToLower(strings.Trim(strings.TrimSpace(text), "/ .!?"))), " ")
+	if !riderJobWords[w] {
+		return false, nil
+	}
+	phone := ""
+	if channel == reach.WhatsApp {
+		phone = addr
+	}
+	list, err := s.Dispatch.RiderDeliveries(ctx, phone, channel, addr)
+	if err != nil || len(list) == 0 {
+		return false, err
+	}
+	l := s.chooseLang(ctx, ch.OwnTenant(), addr, "").Tag
+	lines := []string{tr(l, "rider.jobs")}
+	for _, o := range list {
+		// Done ones (kept two hours for their photo) are not open.
+		if (ch.OwnTenant() != uuid.Nil && ch.OwnTenant() != o.Tenant) || o.Status == "delivered" {
+			continue
+		}
+		var v dispatch.View
+		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{o.Tenant}, func(tx pgx.Tx) error {
+			var err error
+			v, err = s.Dispatch.ViewTx(ctx, tx, o.Tenant, o.Delivery)
+			return err
+		}); err != nil {
+			continue
+		}
+		drop := v.Area
+		if v.Held() && v.Address != "" {
+			drop = strings.TrimSpace(v.Address + ", " + v.Area)
+		}
+		line := tr(l, "rider.job", "reference", v.Reference, "business", whatsapp.SafeText(v.Business), "drop", whatsapp.SafeText(drop),
+			"step", tr(l, "rider.job_"+o.Status))
+		if v.Held() && v.Pin != "" {
+			line += "\n" + tr(l, "rider.pin", "pin", v.Pin)
+		}
+		lines = append(lines, line)
+	}
+	if len(lines) == 1 {
+		return false, nil
+	}
+	return true, s.waSay(ctx, ch, addr, "", strings.Join(lines, "\n\n"))
+}
+
 // riderDeliveryWord takes a rider's word for a tap ("picked up") on the
 // delivery it fits, from an address linked to no member; false when the
 // words are none of those, or the sender has no delivery they fit.
@@ -559,7 +614,7 @@ func (s *Server) listDeliveries(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"deliveries": s.proofURLs(r.Context(), p.TenantID, list)})
+	writeJSON(w, http.StatusOK, map[string]any{"deliveries": s.proofURLs(r.Context(), p.TenantID, cashierView(p, list))})
 }
 
 // orderDeliveries is GET /v1/storefront/orders/{reference}/deliveries: who
@@ -585,7 +640,7 @@ func (s *Server) orderDeliveries(w http.ResponseWriter, r *http.Request) {
 		s.dispatchFail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"deliveries": s.proofURLs(r.Context(), p.TenantID, list), "not_ready": why})
+	writeJSON(w, http.StatusOK, map[string]any{"deliveries": s.proofURLs(r.Context(), p.TenantID, cashierView(p, list)), "not_ready": why})
 }
 
 // offerOrder is POST /v1/storefront/orders/{reference}/offer: to a named
@@ -603,14 +658,23 @@ func (s *Server) offerOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := principalFrom(r.Context())
+	// A rider's pay is the storefront's to set, not a cashier's.
+	if req.FeeKobo != nil && !p.Can(PermStorefrontManage) {
+		s.fail(w, r, fmt.Errorf("%w: setting a rider's fee needs %s", errForbidden, PermStorefrontManage))
+		return
+	}
 	by := p.Actor()
 	if req.RiderID == nil {
 		by = "rotation"
 	}
-	out, err := s.Dispatch.Offer(r.Context(), p.TenantID, chi.URLParam(r, "reference"), dispatch.OfferIn{Rider: req.RiderID, FeeKobo: req.FeeKobo, By: by})
+	ref := chi.URLParam(r, "reference")
+	out, err := s.Dispatch.Offer(r.Context(), p.TenantID, ref, dispatch.OfferIn{Rider: req.RiderID, FeeKobo: req.FeeKobo, By: by})
 	if err != nil {
 		s.dispatchFail(w, r, err)
 		return
+	}
+	if out.Status == "offered" && out.Rider != "" {
+		s.diaryChange(r.Context(), p, fmt.Sprintf("Offered order %s to %s", ref, out.Rider))
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -721,4 +785,18 @@ func (s *Server) riderRemit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"owed_kobo": left})
+}
+
+// cashierView is deliveries as someone who works the orders without the
+// storefront's say sees them (a cashier): the rider by name, not their
+// phone or pay.
+func cashierView(p *Principal, list []dispatch.Delivery) []dispatch.Delivery {
+	if p.Can(PermStorefrontManage) {
+		return list
+	}
+	for i := range list {
+		list[i].RiderPhone = maskPhone(list[i].RiderPhone)
+		list[i].FeeKobo = 0
+	}
+	return list
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/dispatch"
 	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/moneydigest"
 	"github.com/israel-duff/taskiem/engine/moneyreport"
 	"github.com/israel-duff/taskiem/engine/stock"
@@ -130,6 +131,11 @@ func (s *Server) sendMoneyDailyItem(ctx context.Context, it whatsapp.OutboxItem)
 	if line := s.billsDueDailyLine(ctx, l, it.Tenant); line != "" {
 		text += "\n\n" + line
 	}
+	// Today's deliveries and bookings, and the morning card in the
+	// Taskiem chat (chat tools phase 5), before the riders and the link.
+	if line := s.todayDailyLine(ctx, l, it.Tenant, period.AddDate(0, 0, 1)); line != "" {
+		text += "\n\n" + line
+	}
 	// Each rider's day (dispatch D4), before the link.
 	if len(riderDays) > 0 {
 		text += "\n\n" + tr(l, "money.daily.riders")
@@ -151,4 +157,37 @@ func (s *Server) sendMoneyDailyItem(ctx context.Context, it whatsapp.OutboxItem)
 		return fmt.Errorf("%w: %w", whatsapp.ErrNothingToSend, err)
 	}
 	return fmt.Errorf("to %s: %w", whatsapp.MaskNumber(addr), err)
+}
+
+// todayDailyLine is the morning's today: deliveries and bookings, and,
+// with chat tools on, where the morning card is ("" with nothing to say).
+func (s *Server) todayDailyLine(ctx context.Context, l lang.Tag, tenant uuid.UUID, day time.Time) string {
+	var deliveries, bookings int
+	var tools bool
+	_ = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		var err error
+		if tools, err = chatToolsOn(ctx, tx, tenant); err != nil {
+			return err
+		}
+		today := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, moneyreport.Lagos)
+		if s.Dispatch.Ready() {
+			if list, err := s.Dispatch.ListTx(ctx, tx, tenant, dispatch.ListFilter{Day: today.Format("2006-01-02")}); err == nil {
+				deliveries = len(list)
+			}
+		}
+		if s.Orders != nil {
+			if list, err := s.Orders.Bookings(ctx, tx, tenant, today, today.AddDate(0, 0, 1)); err == nil {
+				bookings = len(list)
+			}
+		}
+		return nil
+	})
+	var lines []string
+	if deliveries > 0 || bookings > 0 {
+		lines = append(lines, tr(l, "money.daily.today", "deliveries", fmt.Sprint(deliveries), "bookings", fmt.Sprint(bookings)))
+	}
+	if tools && s.PublicURL != "" {
+		lines = append(lines, tr(l, "money.daily.card", "link", s.PublicURL+"/chat?with=taskiem"))
+	}
+	return strings.Join(lines, "\n")
 }

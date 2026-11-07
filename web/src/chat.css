@@ -1,0 +1,406 @@
+/* The chat redrawn to the designs. The shared parts (pills, the sheet,
+   rows, diary lines) are in kit.css (docs/spec/chat-tools.md §2, §3; the
+   design canvas "Taskiem chat: picker, cards and tool sheets"). WhatsApp's
+   behaviours stay; the look is Taskiem's. Loaded after styles.css and
+   motion.css. Colours come from tokens, light and dark. */
+
+/* ---------- The conversation ---------- */
+
+.chat-avatar[data-initials]::before { content: attr(data-initials); }
+.chat-avatar { background: var(--brand); color: var(--brand-dark); font-weight: 800; font-size: 14px; letter-spacing: 0.01em; }
+.chat-head .chat-avatar { width: 42px; height: 42px; font-size: 15px; }
+.chat-head { padding: 12px 16px; background: var(--panel); }
+.chat-head h2 { font-weight: 700; }
+
+/* Bubbles: soft corners, the first of a run with one sharp corner where a
+   tail would be. */
+.bubble { border-radius: 16px; padding: 8px 12px 6px; box-shadow: 0 1px 1px var(--chat-shadow); }
+.bubble.first::before { display: none; }
+.bubble.first:not(.mine) { border-top-left-radius: 4px; }
+.bubble.first.mine { border-top-right-radius: 4px; }
+.bubble .text { font-size: 15px; line-height: 1.4; }
+@media (max-width: 860px) { .bubble .text { font-size: 16px; } }
+
+/* The composer: the tools button, the pill with clip and camera, the round
+   send or microphone. */
+.chat-mode .composer, .chat-pane .composer { background: var(--tk-soft); border-top: 0; padding: 8px 10px 12px; gap: 8px; align-items: flex-end; }
+.composer-pill { border-radius: 24px; min-height: 46px; align-items: center; box-shadow: 0 1px 2px var(--chat-shadow); }
+.composer > .icon-button.primary, .composer > .send-button, .composer > .mic-button, .composer > button.primary { width: 46px; height: 46px; }
+.composer-tools {
+  flex: none; width: 46px; height: 46px; padding: 0; border-radius: 50%; display: grid; place-items: center;
+  background: var(--panel); color: var(--brand); border: 0; box-shadow: 0 1px 2px var(--chat-shadow);
+  transition: background-color var(--t-quick), color var(--t-quick), transform var(--t-press) var(--ease-out);
+}
+.composer-tools svg { width: 22px; height: 22px; stroke-width: 2; }
+.composer-tools:hover:not(:disabled) { background: var(--panel-2); }
+.composer-tools.open, .composer-tools.open:hover:not(:disabled) { background: var(--brand); color: var(--brand-dark); }
+:root[data-theme="dark"] .composer-tools { color: var(--brand-dark); }
+.composer-tools:focus-visible { box-shadow: var(--ring); }
+
+/* ---------- The picker (over the composer) ---------- */
+
+.tk-picker {
+  margin: 0 10px 8px; padding: 10px 8px 8px; background: var(--panel); border-radius: 22px; box-shadow: var(--tk-lift);
+  max-height: min(60vh, 460px); overflow-y: auto; transform-origin: 50% 100%;
+}
+.tk-picker-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 2px 10px 8px; font-size: 13px; color: var(--muted); }
+.tk-picker-head b { color: var(--text); }
+.tk-picker-head span + span { font-size: 12px; }
+.tk-picker-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding: 10px 10px 6px; }
+.tk-pick {
+  width: 100%; display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 14px; text-align: left;
+  background: none; border: 0; box-shadow: none; color: var(--text); min-height: 58px;
+}
+.tk-pick.first, .tk-pick:hover:not(:disabled), .tk-pick:focus-visible { background: var(--tk-soft); }
+.tk-pick:focus-visible { box-shadow: var(--ring); }
+.pick-icon { flex: none; width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; font-weight: 800; font-size: 14px; }
+.pick-icon svg { width: 20px; height: 20px; }
+.pick-icon.soft { background: var(--tk-lime-soft); color: var(--brand); }
+.pick-icon.blue { background: var(--tk-blue-bg); color: var(--tk-blue-ink); }
+.pick-icon.round { border-radius: 50%; }
+.pick-icon.lime { background: var(--brand-dark); color: var(--brand-dark-text); }
+.pick-icon.pine { background: var(--brand); color: var(--brand-dark); }
+:root[data-theme="dark"] .pick-icon.soft { color: var(--brand-dark); }
+.pick-words { flex: 1; min-width: 0; }
+.pick-name { display: block; font-weight: 600; font-size: 15px; overflow-wrap: anywhere; }
+.pick-sub { display: block; font-size: 13px; color: var(--muted); }
+.pick-badge { flex: none; font-size: 12px; font-weight: 700; color: var(--tk-warn-ink); background: var(--tk-warn-bg); padding: 4px 9px; border-radius: 999px; }
+.pick-enter { flex: none; font-size: 12px; font-weight: 600; color: var(--brand); background: var(--panel); border: 1px solid var(--border); padding: 4px 8px; border-radius: 999px; }
+:root[data-theme="dark"] .pick-enter { color: var(--brand-dark); }
+@media (pointer: coarse) { .pick-enter { display: none; } }
+
+/* ---------- The tools panel (over the composer) ---------- */
+
+.tk-tools { margin: 0 10px 8px; padding: 14px 12px 12px; background: var(--panel); border-radius: 22px; box-shadow: var(--tk-lift); transform-origin: 50% 100%; }
+.tk-tools-head { display: flex; align-items: baseline; justify-content: space-between; padding: 0 4px 12px; }
+.tk-tools-head h2 { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -0.01em; }
+.tk-tools-head span, .tk-tools-none { font-size: 12px; color: var(--muted); }
+.tk-tools-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.tk-tile {
+  position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 12px; min-height: 104px;
+  border-radius: 16px; background: var(--tk-tile); border: 0; box-shadow: none; text-align: left; color: var(--text);
+  transition: transform 0.2s var(--spring), box-shadow 0.2s;
+}
+.tk-tile:hover:not(:disabled) { background: var(--tk-tile); transform: translateY(-2px); box-shadow: 0 10px 24px -12px rgba(13, 59, 46, 0.35); }
+.tk-tile:focus-visible { box-shadow: var(--ring); }
+.tk-tile-icon { width: 40px; height: 40px; border-radius: 12px; background: var(--brand); color: var(--brand-dark); display: grid; place-items: center; }
+.tk-tile-icon svg { width: 20px; height: 20px; }
+.tk-tile-name { display: block; font-weight: 700; font-size: 14px; }
+.tk-tile-line { display: block; font-size: 12px; color: var(--muted); min-height: 1.2em; }
+.tk-tile-badge { position: absolute; top: 10px; right: 10px; }
+.tk-tile-badge .tk-pill { font-size: 11px; padding: 2px 7px; }
+.tk-tools-recent { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; padding: 10px 6px 2px; border-top: 1px solid var(--border); font-size: 13px; color: var(--muted); }
+.tk-tools-recent button { font-weight: 600; color: var(--brand); background: var(--tk-soft); border: 0; box-shadow: none; padding: 7px 12px; border-radius: 999px; min-height: 36px; }
+:root[data-theme="dark"] .tk-tools-recent button { color: var(--brand-dark); }
+@media (max-width: 360px) { .tk-tools-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+@media (prefers-reduced-motion: no-preference) {
+  .tk-picker, .tk-tools { animation: tk-spring-up var(--t-picker) var(--spring) backwards; }
+  .tk-pick { animation: tk-rise var(--t-picker) var(--ease-out) backwards; }
+  .tk-picker.leaving, .tk-tools.leaving { animation: tk-leave-down 180ms var(--ease-out) forwards; pointer-events: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tk-picker, .tk-tools, .tk-pick { animation: none; }
+}
+@media (min-width: 1200px) { .tk-picker, .tk-tools { max-width: 520px; } }
+
+/* ---------- The card frame ---------- */
+
+.bubble.card-bubble { box-shadow: 0 1px 1px var(--chat-shadow); padding: 6px; width: min(86%, 420px); max-width: min(86%, 420px); }
+.tk-chatcard { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; background: var(--tk-tile); }
+.bubble.mine .tk-chatcard { background: color-mix(in srgb, var(--panel) 70%, transparent); }
+.tk-chatcard-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.tk-chatcard .card-title { font-weight: 700; font-size: 15px; }
+.tk-chatcard-sub { font-size: 14px; color: var(--muted); }
+.bubble.mine .tk-chatcard-sub { color: var(--chat-out-meta); }
+.tk-progress { display: flex; flex-direction: column; gap: 6px; }
+.tk-progress-bar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+.tk-progress-bar span { height: 5px; border-radius: 3px; background: var(--border-strong); }
+.tk-progress-bar span.done { background: var(--brand); }
+:root[data-theme="dark"] .tk-progress-bar span.done { background: var(--brand-dark); }
+.tk-progress-words { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); font-size: 11.5px; color: var(--muted); }
+.tk-progress-words .now { color: var(--text); font-weight: 600; }
+.tk-chatcard-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.tk-chatcard-actions .row-actions { display: contents; }
+.tk-chatcard-actions .button.small, .tk-chatcard-actions button.small {
+  flex: 1; display: inline-flex; justify-content: center; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; font-weight: 700; font-size: 14px;
+}
+.tk-chatcard-actions .button.small:not(.primary), .tk-chatcard-actions button.small:not(.primary) { background: var(--panel); border: 1px solid var(--border-strong); color: var(--brand); }
+:root[data-theme="dark"] .tk-chatcard-actions .button.small:not(.primary), :root[data-theme="dark"] .tk-chatcard-actions button.small:not(.primary) { color: var(--text); }
+
+
+/* The picker and the tools float over the chat from the composer. */
+.composer { position: relative; }
+.composer > .tk-picker, .composer > .tk-tools { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); margin: 0 10px; z-index: 20; }
+@media (min-width: 1200px) {
+  .composer > .tk-picker, .composer > .tk-tools { left: 14px; right: auto; width: min(520px, calc(100% - 48px)); margin: 0; }
+}
+
+/* A run of diary lines folded into one. */
+.tk-diary-more { background: none; border: 0; box-shadow: none; padding: 0 0 0 6px; min-height: 0; font: inherit; font-size: 12px; font-weight: 600; color: var(--tint-text); cursor: pointer; text-decoration: underline; }
+.tk-diary-more:hover:not(:disabled) { background: none; }
+
+/* The same with the theme following the system, when it is dark. */
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] .composer-tools { color: var(--brand-dark); }
+  :root[data-theme="system"] .pick-icon.soft { color: var(--brand-dark); }
+  :root[data-theme="system"] .pick-enter { color: var(--brand-dark); }
+  :root[data-theme="system"] .tk-tools-recent button { color: var(--brand-dark); }
+  :root[data-theme="system"] .tk-progress-bar span.done { background: var(--brand-dark); }
+  :root[data-theme="system"] .tk-chatcard-actions .button.small:not(.primary), :root[data-theme="system"] .tk-chatcard-actions button.small:not(.primary) { color: var(--text); }
+}
+
+/* A good moment: a short lime ring around the card, never in the way. */
+.bubble { position: relative; }
+.tk-cheer { position: absolute; inset: -6px; border-radius: 22px; border: 3px solid var(--brand-dark); pointer-events: none; opacity: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .tk-cheer { animation: tk-cheer var(--t-cheer) var(--ease-out) forwards; }
+}
+
+/* A live card: a tagged product or service, with what is true now. */
+.tk-live { display: flex; flex-direction: column; background: var(--panel); border-radius: 12px; overflow: hidden; margin: 0 0 6px; box-shadow: 0 0 0 1px var(--border); }
+.tk-live-top { display: flex; gap: 12px; padding: 12px; }
+.tk-live-tile { flex: none; width: 56px; height: 56px; border-radius: 12px; display: grid; place-items: center; background: var(--tk-lime-soft); color: var(--brand); }
+.tk-live-tile.blue { background: var(--tk-blue-bg); color: var(--tk-blue-ink); }
+.tk-live-tile svg { width: 24px; height: 24px; }
+:root[data-theme="dark"] .tk-live-tile:not(.blue) { color: var(--brand-dark); }
+.tk-live-words { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tk-live-name { font-weight: 700; font-size: 16px; color: var(--text); overflow-wrap: anywhere; }
+.tk-live-sub { font-size: 14px; color: var(--muted); }
+.tk-live-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--border); }
+.tk-live-foot .tk-btn { min-height: 40px; padding: 0 16px; font-size: 14px; }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .tk-live-tile:not(.blue) { color: var(--brand-dark); } }
+
+/* A typed request's chip, over the composer: opens the form filled in. */
+.composer > .tk-request { position: absolute; left: 10px; right: 10px; bottom: calc(100% + 8px); z-index: 19; display: flex; }
+@media (min-width: 1200px) { .composer > .tk-request { left: 14px; right: auto; max-width: 520px; } }
+.tk-request-btn {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 14px 10px 10px; border-radius: 18px; border: 0;
+  background: var(--panel); color: var(--text); text-align: left; box-shadow: var(--tk-lift); min-height: 56px;
+}
+.tk-request-btn:hover:not(:disabled) { background: var(--panel-2); }
+.tk-request-btn:focus-visible { box-shadow: var(--ring); }
+.tk-request-icon { flex: none; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: var(--brand); color: var(--brand-dark); }
+.tk-request-icon svg { width: 18px; height: 18px; }
+.tk-request-words { display: flex; flex-direction: column; font-size: 14px; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.tk-request-kicker { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+@media (prefers-reduced-motion: no-preference) {
+  .tk-request { animation: tk-spring-up var(--t-picker) var(--spring) backwards; }
+}
+
+img.tk-live-tile { object-fit: cover; }
+
+/* ---------- Motion, as the boards draw it (designs 1 to 9) ----------
+   Each moment takes the keyframes, times, curves and staggers of its
+   board, so the app moves as the designs do. Motion turned down: nothing
+   moves (the block below the last). */
+@keyframes tkd-rise { from { opacity: 0; transform: translateY(18px) scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes tkd-up8 { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes tkd-up10 { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes tkd-sheet { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes tkd-dim { from { opacity: 0; } to { opacity: 1; } }
+@keyframes tkd-panel { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: none; } }
+@keyframes tkd-drawer { from { transform: translateX(100%); } to { transform: none; } }
+@keyframes tkd-in-l { from { opacity: 0; transform: translateX(-14px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes tkd-in-r { from { opacity: 0; transform: translateX(14px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes tkd-land { 0% { opacity: 0; transform: translateY(-14px) scale(0.96); background: #c8f169; } 40% { opacity: 1; transform: none; background: #c8f169; } }
+@keyframes tkd-bounce { 0% { opacity: 0; transform: translateY(24px) scale(0.96); } 60% { opacity: 1; transform: translateY(-4px) scale(1.01); } 100% { transform: none; } }
+@keyframes tkd-roll { from { transform: translateY(100%); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes tkd-pulse-warn { 0%, 100% { box-shadow: 0 0 0 0 rgba(180, 83, 9, 0.35); } 50% { box-shadow: 0 0 0 6px rgba(180, 83, 9, 0); } }
+@keyframes tkd-card-rise { from { opacity: 0; transform: translateY(22px) scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes tkd-grow-bar { from { transform: scaleY(0); } to { transform: none; } }
+@keyframes tkd-pulse-lime { 0%, 100% { box-shadow: 0 0 0 0 rgba(200, 241, 105, 0.55); } 50% { box-shadow: 0 0 0 8px rgba(200, 241, 105, 0); } }
+@keyframes tkd-bar-up { from { transform: translateY(120%); } to { transform: none; } }
+@keyframes tkd-pop { 0% { transform: scale(0.6); opacity: 0; } 60% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); } }
+@keyframes tkd-draw { from { stroke-dashoffset: 34; } to { stroke-dashoffset: 0; } }
+
+@media (prefers-reduced-motion: no-preference) {
+  /* 1 · The picker and the tools spring up from the composer; their rows
+     follow 40 ms apart (Main). */
+  .tk-picker, .tk-tools { transform-origin: 50% 100%; animation: tkd-rise 0.36s cubic-bezier(0.2, 0.9, 0.25, 1.12) both; }
+  .tk-pick { animation: tkd-up8 0.32s ease both; }
+  .tk-tools-grid > * { animation: tkd-up8 0.32s ease both; }
+  .tk-tools-grid > :nth-child(1) { animation-delay: 0.06s; }
+  .tk-tools-grid > :nth-child(2) { animation-delay: 0.1s; }
+  .tk-tools-grid > :nth-child(3) { animation-delay: 0.14s; }
+  .tk-tools-grid > :nth-child(4) { animation-delay: 0.18s; }
+  .tk-tools-grid > :nth-child(5) { animation-delay: 0.22s; }
+  .tk-tools-grid > :nth-child(n + 6) { animation-delay: 0.26s; }
+  .tk-tile { transition: transform 0.2s cubic-bezier(0.2, 0.9, 0.25, 1.1), box-shadow 0.2s; }
+
+  /* 2 · Messages slide in from their side; a diary line lands lit in lime
+     and settles over 1.8 s; a card arrives with a little bounce; a number
+     rolls up; a low stock pill pulses (Card). */
+  .chat-stream > .bubble:last-child { animation: tkd-in-l 0.4s ease both; }
+  .chat-stream > .bubble.mine:last-child { animation: tkd-in-r 0.45s cubic-bezier(0.2, 0.9, 0.25, 1.12) both; }
+  .tk-land { animation: tkd-land 1.8s cubic-bezier(0.2, 0.9, 0.25, 1.05) both; }
+  .tk-arrive { animation: tkd-bounce 0.6s cubic-bezier(0.2, 0.9, 0.25, 1.1) both; }
+  .tk-roll { display: inline-block; animation: tkd-roll 0.45s cubic-bezier(0.2, 0.9, 0.25, 1.1) both; }
+  .tk-pill.warn.tk-pulse { animation: tkd-pulse-warn 1.8s 1.6s infinite; }
+
+  /* 3 · A sheet rises (0.42 s) over a veil that dims (0.3 s); its rows
+     follow 40 ms apart from 120 ms; a save's tick pops and draws (Sheet). */
+  .tk-veil { animation: tkd-dim 0.3s both; }
+  .tk-sheet { animation: tkd-sheet 0.42s cubic-bezier(0.2, 0.95, 0.25, 1.04) both; }
+  .tk-sheet .tk-stagger > * { animation: tkd-up10 0.3s ease both; }
+  .tk-sheet .tk-stagger > :nth-child(1) { animation-delay: 0.12s; }
+  .tk-sheet .tk-stagger > :nth-child(2) { animation-delay: 0.16s; }
+  .tk-sheet .tk-stagger > :nth-child(3) { animation-delay: 0.2s; }
+  .tk-sheet .tk-stagger > :nth-child(4) { animation-delay: 0.24s; }
+  .tk-sheet .tk-stagger > :nth-child(5) { animation-delay: 0.28s; }
+  .tk-sheet .tk-stagger > :nth-child(n + 6) { animation-delay: 0.32s; }
+  .tk-tick circle { transform-origin: center; animation: tkd-pop 0.45s cubic-bezier(0.2, 0.9, 0.25, 1.2) both; }
+  .tk-tick path { stroke-dasharray: 34; animation: tkd-draw 0.35s 0.2s ease-out both; }
+
+  /* 4 · The order bag slides up from below (Buyer). */
+  .tk-bag { animation: tkd-bar-up 0.5s 0.35s cubic-bezier(0.2, 0.9, 0.25, 1.15) both; }
+
+  /* 5 · The briefing and the alert cards rise 300 ms apart; the week's
+     bars grow one after another; the live dot pulses (Alerts). */
+  .tk-brief, .tk-alerts > li { animation: tkd-card-rise 0.5s cubic-bezier(0.2, 0.9, 0.25, 1.12) both; }
+  .tk-brief { animation-delay: 0.05s; }
+  .tk-alerts > li:nth-child(1) { animation-delay: 0.35s; }
+  .tk-alerts > li:nth-child(2) { animation-delay: 0.65s; }
+  .tk-alerts > li:nth-child(n + 3) { animation-delay: 0.95s; }
+  .tk-brief-bars > span { transform-origin: 50% 100%; animation: tkd-grow-bar 0.6s cubic-bezier(0.2, 0.9, 0.25, 1.1) both; }
+  .tk-brief-bars > span:nth-child(1) { animation-delay: 0.3s; }
+  .tk-brief-bars > span:nth-child(2) { animation-delay: 0.35s; }
+  .tk-brief-bars > span:nth-child(3) { animation-delay: 0.4s; }
+  .tk-brief-bars > span:nth-child(4) { animation-delay: 0.45s; }
+  .tk-brief-bars > span:nth-child(5) { animation-delay: 0.5s; }
+  .tk-brief-bars > span:nth-child(6) { animation-delay: 0.55s; }
+  .tk-brief-bars > span:nth-child(n + 7) { animation-delay: 0.6s; }
+  .tk-brief-live { animation: tkd-pulse-lime 2s 1.2s infinite; }
+}
+/* 7, 8 · On a computer a panel slides in from 40 px; 9 · on a tablet a
+   drawer slides in from the edge. */
+@media (prefers-reduced-motion: no-preference) and (min-width: 768px) {
+  .tk-sheet { animation: tkd-drawer 0.45s cubic-bezier(0.2, 0.95, 0.25, 1.04) both; }
+}
+@media (prefers-reduced-motion: no-preference) and (min-width: 1200px) {
+  .tk-sheet { animation: tkd-panel 0.42s cubic-bezier(0.2, 0.95, 0.25, 1.04) both; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .tk-sheet.tk-morphing { animation: none; }
+  .tk-sheet.leaving { animation: tk-sheet-down var(--t-picker) var(--ease-out) forwards; }
+  .tk-picker.leaving, .tk-tools.leaving { animation: tk-leave-down 180ms var(--ease-out) forwards; }
+  .tk-veil.leaving { animation: tk-unfade var(--t-picker) var(--ease-out) forwards; }
+}
+@media (prefers-reduced-motion: no-preference) and (min-width: 768px) {
+  .tk-sheet.leaving { animation-name: tk-drawer-out; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tk-picker, .tk-tools, .tk-pick, .tk-tools-grid > *, .chat-stream > .bubble, .tk-land, .tk-arrive, .tk-roll, .tk-pulse,
+  .tk-veil, .tk-sheet, .tk-sheet .tk-stagger > *, .tk-tick circle, .tk-tick path, .tk-bag, .tk-brief, .tk-alerts > li,
+  .tk-brief-bars > span, .tk-brief-live { animation: none !important; transition: none !important; }
+}
+
+/* ---------- The composer and the head, as the boards draw them ---------- */
+/* A white pill with no line round it; the clip and the camera inside; the
+   tools, send and mic in round buttons, pine with lime on a light page. */
+.composer-pill, .composer-pill:focus-within { border: 0; background: var(--panel); box-shadow: 0 1px 2px rgba(14, 26, 20, 0.08); }
+.composer-pill:focus-within { box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-dark) 55%, transparent), 0 1px 2px rgba(14, 26, 20, 0.08); }
+.composer-pill textarea::placeholder { color: var(--muted); }
+.camera-quick { display: grid; }
+.composer > .send-button, .composer > .icon-button.primary, .composer > .send-button:hover:not(:disabled), .composer > .icon-button.primary:hover:not(:disabled) { background: var(--brand); color: var(--brand-dark); border: 0; box-shadow: none; }
+.composer > .send-button:disabled { opacity: 1; background: var(--brand); color: var(--brand-dark); }
+.composer > .send-button svg, .composer > .icon-button.primary svg { color: var(--brand-dark); stroke-width: 2.4; }
+:root[data-theme="dark"] .composer > .send-button, :root[data-theme="dark"] .composer > .icon-button.primary { background: var(--brand-dark); color: var(--brand-dark-text); }
+:root[data-theme="dark"] .composer > .send-button svg, :root[data-theme="dark"] .composer > .icon-button.primary svg { color: var(--brand-dark-text); }
+.composer-tools { background: var(--panel); color: var(--brand); box-shadow: 0 1px 2px rgba(14, 26, 20, 0.08); }
+:root[data-theme="dark"] .composer-tools { color: var(--text); }
+/* The head: on a phone only search (the board), Order as a pine pill on a
+   computer (DeskBuyer); Taskiem's mark is the spark. */
+.tk-head-order svg { display: none; }
+@media (max-width: 860px) { .tk-head-order { display: none; } }
+.chat-head .chat-avatar.accent svg, .chat-row .chat-avatar.accent svg { width: 20px; height: 20px; color: var(--brand-dark); }
+.chat-head .chat-sub { font-size: 13px; color: var(--muted); }
+.chat-head .chat-sub .typing { color: var(--brand); font-weight: 600; }
+:root[data-theme="dark"] .chat-head .chat-sub .typing { color: var(--brand-dark); }
+/* Diary lines: the pill alone (when it was is for a screen reader). */
+.tk-diary-when:not(:has(button)) { display: contents; }
+
+/* ---------- Sheets, as the boards draw them ---------- */
+/* A row's tile in its name's tone (lib/tone.ts), over the kit's lime. */
+.tk-row-tile[data-tone="pine"] { background: var(--tone-pine-bg); color: var(--tone-pine-ink); }
+.tk-row-tile[data-tone="lime"] { background: var(--tone-lime-bg); color: var(--tone-lime-ink); }
+.tk-row-tile[data-tone="peach"] { background: var(--tone-peach-bg); color: var(--tone-peach-ink); }
+.tk-row-tile[data-tone="yellow"] { background: var(--tone-yellow-bg); color: var(--tone-yellow-ink); }
+.tk-row-tile[data-tone="green"] { background: var(--tone-green-bg); color: var(--tone-green-ink); }
+.tk-row-tile[data-tone="lavender"] { background: var(--tone-lavender-bg); color: var(--tone-lavender-ink); }
+.tk-row-tile[data-tone="blue"] { background: var(--tone-blue-bg); color: var(--tone-blue-ink); }
+.tk-row-tile[data-tone="sand"] { background: var(--tone-sand-bg); color: var(--tone-sand-ink); }
+.tk-cta svg { width: 20px; height: 20px; color: var(--brand-dark); stroke-width: 2.4; }
+:root[data-theme="dark"] .tk-cta svg { color: var(--brand-dark-text); }
+.tk-sheet-more { display: flex; align-items: center; justify-content: center; gap: 4px; margin: 14px auto 4px; min-height: 40px; font-size: 14px; font-weight: 600; color: var(--muted); text-decoration: none; }
+.tk-sheet-more:hover { color: var(--text); text-decoration: none; }
+.tk-sheet-more svg { width: 16px; height: 16px; }
+/* A computer: the panel is 380px, beside the conversation (DeskSeller). */
+@media (min-width: 1200px) {
+  .tk-sheet { width: 380px; }
+  .tk-sheet-open .chat-mode .chat-layout, .tk-sheet-open .shell:not(.chat-mode) #main { padding-right: 380px; }
+}
+/* A sheet's head with a mark before the title and a line under it (Buyer). */
+.tk-sheet-titles { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tk-sheet-sub { font-size: 13px; color: var(--muted); }
+.tk-sheet-head .tk-sheet-lead { flex: none; width: 48px; height: 48px; font-size: 16px; }
+.tk-sheet-head:has(.tk-sheet-lead) h2 { font-size: 22px; line-height: 1.2; }
+.tk-order-row .tk-qty button:disabled { opacity: 1; }
+.tk-order-row .tk-row-tile svg { width: 22px; height: 22px; stroke-width: 1.8; }
+.tk-bag-go svg { width: 18px; height: 18px; }
+
+/* ---------- The chat list and the picker on a computer (DeskSeller) ---------- */
+.chat-list-head h2 { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; }
+.chat-list-biz { margin-left: auto; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.chat-list-head .chat-list-biz + * { margin-left: 8px; }
+.tk-picker-keys { display: none; }
+@media (min-width: 861px) and (pointer: fine) {
+  .tk-picker-keys { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 8px -12px -12px; padding: 10px 16px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); }
+  .tk-picker-keys kbd { display: inline-grid; place-items: center; min-width: 20px; padding: 1px 6px; border: 1px solid var(--border-strong); border-radius: 5px; background: var(--panel); font: inherit; font-size: 11px; font-weight: 700; color: var(--text); }
+}
+/* A computer: the order panel's head is its title and line (DeskBuyer). */
+@media (min-width: 1200px) { .tk-sheet-head .tk-sheet-lead { display: none; } }
+.chat-avatar.accent { background: var(--brand); color: var(--brand-dark); }
+.chat-avatar.accent svg { width: 20px; height: 20px; }
+.composer > .send-button:focus-visible, .composer > .icon-button.primary:focus-visible, .composer-tools:focus-visible { box-shadow: var(--ring); }
+/* The briefing: the live dot in its corner; Got it a quiet line under the
+   tiles (the Alerts board, with the person's answer). */
+.tk-brief-live { flex: none; width: 10px; height: 10px; margin: 6px 4px 0 0; border-radius: 50%; background: var(--brand-dark); }
+.tk-brief .tk-brief-ok, .tk-brief .tk-brief-ok:hover:not(:disabled) { display: block; width: 100%; min-height: 40px; margin-top: 10px; padding: 0; border: 0; border-radius: 12px; background: none; box-shadow: none; font-size: 13px; font-weight: 600; color: color-mix(in srgb, var(--tk-on-pine) 78%, transparent); text-align: center; }
+.tk-brief .tk-brief-ok:hover:not(:disabled) { color: var(--tk-on-pine); }
+.tk-brief .tk-brief-ok:focus-visible { box-shadow: 0 0 0 3px var(--brand-dark); }
+/* A form's head: "Products / Jollof rice" (DeskSeller), small. */
+.tk-sheet-head.crumbed { align-items: center; gap: 6px; }
+.tk-crumb-back, .tk-crumb-back:hover:not(:disabled) { flex: none; min-height: 32px; padding: 0; border: 0; background: none; box-shadow: none; font-size: 14px; font-weight: 500; color: var(--muted); }
+.tk-crumb-back:hover:not(:disabled) { color: var(--text); }
+.tk-crumb-back::after { content: "/"; margin: 0 2px 0 8px; color: var(--muted); }
+.tk-sheet-head.crumbed h2 { font-size: 14px; font-weight: 700; letter-spacing: 0; }
+.tk-sheet-head.crumbed .tk-sheet-titles { flex: 1; min-width: 0; }
+/* A form's foot: Cancel beside Save changes. */
+.tk-form-foot-two { display: flex; gap: 12px; }
+.tk-form-foot-two .tk-btn { flex: none; min-height: 56px; padding: 0 22px; font-size: 16px; }
+.tk-form-foot-two .tk-cta { flex: 1; }
+/* A product with no photo: its letters in its tone, large (DeskSeller). */
+.tk-photo-none[data-tone="pine"] { background: var(--tone-pine-bg); color: var(--tone-pine-ink); }
+.tk-photo-none[data-tone="lime"] { background: var(--tone-lime-bg); color: var(--tone-lime-ink); }
+.tk-photo-none[data-tone="peach"] { background: var(--tone-peach-bg); color: var(--tone-peach-ink); }
+.tk-photo-none[data-tone="yellow"] { background: var(--tone-yellow-bg); color: var(--tone-yellow-ink); }
+.tk-photo-none[data-tone="green"] { background: var(--tone-green-bg); color: var(--tone-green-ink); }
+.tk-photo-none[data-tone="lavender"] { background: var(--tone-lavender-bg); color: var(--tone-lavender-ink); }
+.tk-photo-none[data-tone="blue"] { background: var(--tone-blue-bg); color: var(--tone-blue-ink); }
+.tk-photo-none[data-tone="sand"] { background: var(--tone-sand-bg); color: var(--tone-sand-ink); }
+/* Alert cards' buttons as the Alerts board sizes them. */
+.tk-alerts .tk-btn, .tk-alerts button.tk-btn { min-height: 46px; }
+
+/* A product's price list and who sees it (the DeskSeller board). */
+.tk-form-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.tk-list-pick { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.tk-list-pick select { min-height: 40px; max-width: 60%; }
+.tk-share-box { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-radius: 14px; background: var(--tk-soft); }
+.tk-share-box > span { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tk-share-change, .tk-share-change:hover:not(:disabled) { flex: none; min-height: 36px; padding: 0 4px; border: 0; background: none; box-shadow: none; font-size: 14px; font-weight: 700; color: var(--brand); }
+:root[data-theme="dark"] .tk-share-change { color: var(--brand-dark); }
+.tk-share-pick { display: flex; flex-direction: column; gap: 2px; margin: -4px 0 0; padding: 6px 14px; border: 1px solid var(--border); border-radius: 14px; }
+.tk-share-row { display: flex; align-items: center; gap: 10px; min-height: 40px; font-size: 14px; font-weight: 500; color: var(--text); cursor: pointer; }
+.tk-share-note { margin: 0; padding: 12px 14px; border-radius: 14px; border: 1px dashed color-mix(in srgb, var(--brand-dark) 70%, var(--border-strong)); background: var(--tone-green-bg); color: var(--tone-green-ink); font-size: 13px; line-height: 1.45; }
+@media (prefers-reduced-motion: no-preference) { .tk-share-pick { animation: tkd-up8 0.25s ease both; } }

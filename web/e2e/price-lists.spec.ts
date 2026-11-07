@@ -70,7 +70,7 @@ test("a seller's price list, its items and who sees it", async ({ page }) => {
   await axeBoth(page, "a price list's items");
   await dialog.getByRole("button", { name: "Save" }).click();
   await expect(dialog).toHaveCount(0);
-  expect(saved).toEqual({ items: [{ item_id: "r1", price_kobo: 4_200_000, min_quantity: 5, available: true }] });
+  expect(saved).toEqual({ items: [{ item_id: "r1", price_kobo: 4_200_000, min_quantity: 5, available: true, breaks: [] }] });
 
   // Shared with Ada's Kitchen.
   await page.getByRole("button", { name: /^Share/ }).click();

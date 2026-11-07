@@ -209,6 +209,9 @@ type chat struct {
 	// in another language, by its words or the model's routing, still
 	// finds it (R6).
 	letGo *chatFound
+	// tools is the business's chat tools switch (chat_tools.go), and
+	// toTaskiem that this message called Taskiem with "@Taskiem".
+	tools, toTaskiem bool
 }
 
 // t is a message in the conversation's language.
@@ -443,6 +446,10 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	if err := s.loadSession(ctx, c); err != nil {
 		return err
 	}
+	// Chat tools: the switch, and "@Taskiem" taken off (chat_tools.go).
+	if err := s.chatToolsRead(ctx, c); err != nil {
+		return err
+	}
 	// A template a new business was offered (chat_signup.go).
 	if id, ok := strings.CutPrefix(in.Reply, signupTplPrefix); ok {
 		return s.chatTemplateBuild(ctx, c, id)
@@ -464,6 +471,15 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 		}
 		if marked && strings.Contains(caption, "@") {
 			return s.waDirectFile(ctx, c, caption)
+		}
+		// With chat tools, a caption naming linked businesses is for them.
+		if !marked {
+			if to, err := s.toolsFileTo(ctx, c, in.Text); err != nil || to {
+				if err != nil {
+					return err
+				}
+				return s.waDirectFile(ctx, c, strings.TrimSpace(in.Text))
+			}
 		}
 	}
 	// A completed WhatsApp form carries its flow token.
@@ -517,6 +533,9 @@ func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number st
 	// A rider's off, on or busy (whatsapp_riders.go), and their words for
 	// a delivery (dispatch.go).
 	if done, err := s.riderWord(ctx, wa, reach.WhatsApp, number, text); done || err != nil {
+		return err
+	}
+	if done, err := s.riderJobsWord(ctx, wa, reach.WhatsApp, number, text); done || err != nil {
 		return err
 	}
 	if done, err := s.riderDeliveryWord(ctx, wa, reach.WhatsApp, number, text); done || err != nil {
@@ -676,6 +695,24 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	// "..." first: a message straight to the linked businesses it
 	// mentions (chat_direct.go), read by no command and no model.
 	if done, err := s.waDirect(ctx, c); done || err != nil {
+		return err
+	}
+	// With chat tools, a message naming linked businesses is for them,
+	// unless it calls Taskiem (chat_tools.go).
+	if done, err := s.toolsDirect(ctx, c); done || err != nil {
+		return err
+	}
+	// "tools", "/products": links to the tools on the web (chat_tool_requests.go).
+	if done, err := s.waToolsCommand(ctx, c, cmd); done || err != nil {
+		return err
+	}
+	// "how did we do this week?": the numbers, and a chart card in the
+	// Taskiem conversation (chat_briefing.go).
+	if done, err := s.waHowDidWeDo(ctx, c, cmd); done || err != nil {
+		return err
+	}
+	// "counter 750k": a price on the order waiting on them (trade_deals.go).
+	if done, err := s.waDealCounter(ctx, c, cmd); done || err != nil {
 		return err
 	}
 	// Accept or Decline on a linked business's order, All came on its
@@ -929,6 +966,13 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if c.state == stateStepUp {
 		return c.say(ctx, s, c.t("wa.stepup_waiting", "step", c.data.Step))
 	}
+	// Not recognised: a typed request for a tool, read by the model, is
+	// answered with its form, filled in (chat_tool_requests.go).
+	if c.state == stateIdle && !matched {
+		if done, err := s.waToolRequest(ctx, c, text); done || err != nil {
+			return err
+		}
+	}
 	// Not recognised: in English, a question naming a table goes to the
 	// model as one (chat_tables_ask.go).
 	if c.state == stateIdle && !matched {
@@ -1082,6 +1126,8 @@ func (s *Server) waHelp(c *chat) string {
 	}
 	if c.p.Can(PermStorefrontManage) {
 		lines = append(lines, c.t("wa.help.shop"), c.t("wa.help.shop_catalogue"), c.t("wa.help.fronts"))
+	}
+	if c.p.Can(PermOrders) {
 		if s.Orders != nil {
 			lines = append(lines, c.t("wa.help.shop_orders"))
 		}

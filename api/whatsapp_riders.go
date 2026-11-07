@@ -37,18 +37,24 @@ func (s *Server) waRidersCommand(ctx context.Context, c *chat, text, cmd string)
 		return false, nil
 	}
 	var do func() error
+	// Offering, releasing and the day's deliveries are working the orders
+	// (a cashier's too); the riders themselves are the storefront's.
+	need := PermStorefrontManage
 	switch {
 	case cmd == "riders" || cmd == "my riders":
 		do = func() error { return s.waRiders(ctx, c) }
 	case cmd == "add rider" || strings.HasPrefix(cmd, "add rider "):
 		do = func() error { return s.waAddRider(ctx, c, text) }
 	case s.Dispatch.Ready() && offerCmd.MatchString(cmd):
+		need = PermOrders
 		m := offerCmd.FindStringSubmatch(cmd)
 		do = func() error { return s.waOfferOrder(ctx, c, strings.ToUpper(m[1]), m[2]) }
 	case s.Dispatch.Ready() && releaseCmd.MatchString(cmd):
+		need = PermOrders
 		m := releaseCmd.FindStringSubmatch(cmd)
 		do = func() error { return s.waReleaseOrder(ctx, c, strings.ToUpper(m[1])) }
 	case s.Dispatch.Ready() && (cmd == "deliveries" || cmd == "my deliveries" || cmd == "today's deliveries"):
+		need = PermOrders
 		do = func() error { return s.waDeliveries(ctx, c) }
 	case s.Dispatch.Ready() && (cmd == "turn on deliveries" || cmd == "start deliveries" || cmd == "use my riders"):
 		do = func() error {
@@ -57,7 +63,7 @@ func (s *Server) waRidersCommand(ctx context.Context, c *chat, text, cmd string)
 	default:
 		return false, nil
 	}
-	if !c.p.Can(PermStorefrontManage) {
+	if !c.p.Can(need) {
 		return true, c.say(ctx, s, c.t("wa.shop.denied", "org", c.tenant.Name))
 	}
 	return true, do()

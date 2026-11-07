@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { get, post } from "../api";
 import { Icon } from "../icons";
+import { photoSrc, type BusinessProfile } from "../lib/businessProfile";
 import { blindRowLine, type BusinessLink } from "../lib/links";
 import {
   cardLine,
@@ -30,16 +31,19 @@ const reduced = () =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /** The photos of a business: a row that swipes, with dots under it. */
-function Carousel({
+export function Carousel({
   business,
   name,
   count,
   v,
+  captions = [],
 }: {
   business: string;
   name: string;
   count: number;
   v?: string;
+  /** Each photo's words, shown on it (the Explore design). */
+  captions?: string[];
 }) {
   const track = useRef<HTMLDivElement>(null);
   const [at, setAt] = useState(0);
@@ -91,11 +95,17 @@ function Carousel({
             {!bad.has(n) && (
               <img
                 src={explorePhoto(business, n, v)}
-                alt={`Photo ${n + 1} of ${name}`}
+                alt={captions[n] || `Photo ${n + 1} of ${name}`}
                 loading={n === 0 ? "eager" : "lazy"}
                 draggable={false}
                 onError={() => setBad((s) => new Set(s).add(n))}
               />
+            )}
+            {bad.has(n) && <Icon name="image" />}
+            {captions[n] && (
+              <span className="tk-x-cap" aria-hidden="true">
+                {captions[n]}
+              </span>
             )}
           </div>
         ))}
@@ -118,8 +128,8 @@ function Carousel({
   );
 }
 
-/** One business: photos, who it is, and what can be done. */
-function Card({
+/** One business: who it is and what can be done, its photos, its words. */
+export function Card({
   card,
   manage,
   busy,
@@ -128,6 +138,9 @@ function Card({
   onConnect,
   onWithdraw,
   onMessage,
+  incoming,
+  onAnswer,
+  as = "li",
 }: {
   card: ExploreCard;
   manage: boolean;
@@ -138,26 +151,25 @@ function Card({
   onConnect: () => void;
   onWithdraw: () => void;
   onMessage: () => void;
+  /** Their ask to us (state asked_us), and how it is answered. */
+  incoming?: BusinessLink;
+  onAnswer?: (l: BusinessLink, answer: "accept" | "decline") => void;
+  /** A list item in Explore; a block of its own in a sheet. */
+  as?: "li" | "div";
 }) {
   const offer = asked ? "requested" : cardOffer(card.state);
   const line = cardLine(card);
+  const Tag = as;
   return (
-    <li
-      className="explore-card"
+    <Tag
+      className="explore-card tk-x-card"
       data-testid="explore-card"
       aria-label={card.name}
     >
-      {card.photos > 0 && (
-        <Carousel
-          business={card.business}
-          name={card.name}
-          count={card.photos}
-          v={card.v}
-        />
-      )}
       <div className="explore-head">
         <ChatAvatar
           name={card.name}
+          className="tk-x-logo"
           logo={card.logo ? exploreLogo(card.business, card.v) : undefined}
         />
         <div className="explore-who">
@@ -169,22 +181,22 @@ function Card({
             (manage ? (
               <button
                 type="button"
-                className="primary small"
+                className="tk-x-connect"
                 disabled={busy}
                 onClick={onConnect}
               >
                 Connect<span className="sr-only"> with {card.name}</span>
               </button>
             ) : (
-              <span className="hint">An owner or admin can connect.</span>
+              <span className="tk-pill">Not linked</span>
             ))}
           {offer === "requested" && (
-            <>
-              <span className="explore-state">Requested</span>
+            <span className="tk-x-asked">
+              <span className="tk-pill lime">Requested</span>
               {manage && (asked || pending) && (
                 <button
                   type="button"
-                  className="link small"
+                  className="tk-x-withdraw"
                   disabled={busy || !pending}
                   onClick={onWithdraw}
                 >
@@ -192,20 +204,58 @@ function Card({
                   <span className="sr-only"> request to {card.name}</span>
                 </button>
               )}
-            </>
+            </span>
           )}
           {offer === "message" && (
-            <button type="button" className="small" onClick={onMessage}>
+            <button type="button" className="tk-x-connect soft" onClick={onMessage}>
               Message<span className="sr-only"> {card.name}</span>
             </button>
           )}
-          {offer === "asked" && (
-            <span className="hint">Asked you to link.</span>
-          )}
+          {offer === "asked" &&
+            (manage && incoming && onAnswer ? (
+              <span className="tk-x-asked">
+                <button
+                  type="button"
+                  className="tk-x-connect"
+                  disabled={busy}
+                  onClick={() => onAnswer(incoming, "accept")}
+                >
+                  Accept<span className="sr-only"> {card.name}'s request to link</span>
+                </button>
+                <button
+                  type="button"
+                  className="tk-x-withdraw"
+                  disabled={busy}
+                  onClick={() => onAnswer(incoming, "decline")}
+                >
+                  Not now<span className="sr-only">: say no to {card.name}</span>
+                </button>
+              </span>
+            ) : (
+              <span className="tk-pill lime">Asked you</span>
+            ))}
         </div>
       </div>
+      {card.photos > 0 && (
+        <Carousel
+          business={card.business}
+          name={card.name}
+          count={card.photos}
+          v={card.v}
+          captions={card.captions}
+        />
+      )}
       {card.about && <p className="explore-about">{card.about}</p>}
-    </li>
+      {!manage && (offer === "connect" || offer === "asked") && (
+        <p className="tk-x-note">An owner or admin can connect.</p>
+      )}
+      {offer === "asked" && manage && (
+        <p className="tk-x-note">
+          {card.name} asked to link with you. Accept to message, share price
+          lists and order.
+        </p>
+      )}
+    </Tag>
   );
 }
 
@@ -244,6 +294,18 @@ export function Explore({
   const [blindSent, setBlindSent] = useState<string>();
   const [asked, setAsked] = useState<Record<string, BusinessLink | true>>({});
   const typed = q.trim();
+  // Ours, for the way to "Your business in Explore".
+  const [mine, setMine] = useState<BusinessProfile>();
+  useEffect(() => {
+    let live = true;
+    get<BusinessProfile>("/v1/business-profile").then(
+      (p) => live && setMine(p),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, []);
 
   useEffect(() => {
     let live = true;
@@ -305,6 +367,24 @@ export function Explore({
           },
       );
     }, "Request withdrawn");
+  // Their ask, answered here: linked (Message), or put back to Connect.
+  const answerAsk = (
+    card: ExploreCard,
+    link: BusinessLink,
+    answer: "accept" | "decline",
+  ) =>
+    void act.run(
+      async () => {
+        await post(`/v1/links/${link.id}/${answer}`);
+        const state: ExploreCard["state"] = answer === "accept" ? "active" : "none";
+        const put = (cards: ExploreCard[]) =>
+          cards.map((x) => (x.business === card.business ? { ...x, state } : x));
+        setStart((s) => s && { ...s, near: put(s.near), fresh: put(s.fresh) });
+        setFound((f) => f && { ...f, r: { ...f.r, results: put(f.r.results) } });
+        onChanged();
+      },
+      answer === "accept" ? `Linked with ${card.name}` : "Request declined",
+    );
   const blindSend = (shown: string) =>
     void act.run(async () => {
       await post("/v1/links", { phone: typed, role: "both" });
@@ -350,6 +430,10 @@ export function Explore({
             (a && a !== true ? a : undefined) ?? pendingTo(links, c.business);
           if (l) withdraw(c, l);
         }}
+        incoming={links.find(
+          (l) => l.business === c.business && l.state === "asked_us",
+        )}
+        onAnswer={(l, answer) => answerAsk(c, l, answer)}
         onMessage={() =>
           void (async () => {
             // The chat list may not have heard yet that they accepted.
@@ -374,47 +458,59 @@ export function Explore({
   const results = found && found.q === typed ? found.r : undefined;
   return createPortal(
     <div
-      className="explore"
+      className="explore tk-x"
       role="dialog"
       aria-modal="true"
       aria-label="Find a business"
       ref={box}
       data-testid="explore"
     >
-      <header className="explore-bar">
+      <header className="tk-x-head">
         <button
           type="button"
-          className="icon-button"
+          className="tk-x-back"
           aria-label="Back to the chats"
           onClick={onClose}
           data-testid="explore-back"
         >
           <Icon name="back" />
         </button>
-        <h2>Find a business</h2>
-      </header>
-      <div className="explore-search" role="search">
-        <label className="search">
-          <span className="sr-only">Search businesses</span>
-          <Icon name="search" />
-          <input
-            type="search"
-            autoFocus
-            value={q}
-            placeholder="Search businesses"
-            onChange={(e) => setQ(e.target.value)}
-            data-testid="explore-search"
+        <h2 className="tk-x-title">Find a business</h2>
+        <div className="tk-x-search" role="search">
+          <label>
+            <span className="sr-only">Search businesses</span>
+            <Icon name="search" />
+            {/* The focus trap gives it the focus as it starts listening
+                for Esc, so an Esc at once is never missed. */}
+            <input
+              type="search"
+              value={q}
+              placeholder="A name, what they sell, or an area"
+              onChange={(e) => setQ(e.target.value)}
+              data-testid="explore-search"
+            />
+          </label>
+        </div>
+        <Link
+          to="/settings/links/profile"
+          className="tk-x-mine"
+          data-testid="explore-mine"
+        >
+          <ChatAvatar
+            name={mine?.name || "Your business"}
+            logo={mine?.logo ? photoSrc(mine.logo) : undefined}
           />
-        </label>
-      </div>
-      <div className="explore-body">
+          Your business in Explore
+        </Link>
+      </header>
+      <div className="explore-body tk-x-body">
         <ErrorBox error={error ?? act.error} />
         {searching ? (
           !results ? (
             <Skeleton rows={2} label="Searching businesses…" />
           ) : results.blind ? (
             <ul className="explore-list">
-              <li className="explore-card" data-testid="explore-blind">
+              <li className="explore-card tk-x-card" data-testid="explore-blind">
                 <div className="explore-head">
                   <span className="chat-avatar" aria-hidden="true">
                     <Icon name="chat" />
@@ -433,7 +529,7 @@ export function Explore({
                     ) : (
                       <button
                         type="button"
-                        className="primary small"
+                        className="tk-x-connect"
                         disabled={act.busy}
                         onClick={() => blindSend(results.blind?.shown ?? "")}
                       >
@@ -464,34 +560,43 @@ export function Explore({
           <>
             {start.near.length > 0 && (
               <section aria-labelledby="explore-near">
-                <h3 id="explore-near">Near you</h3>
+                <div className="tk-x-sec">
+                  <h3 id="explore-near">
+                    Near you
+                    {start.area && <span> · {start.area}</span>}
+                  </h3>
+                  {start.near_more && (
+                    <button
+                      type="button"
+                      className="explore-more"
+                      disabled={act.busy || more}
+                      onClick={() => loadMore("near")}
+                    >
+                      Show more
+                      <span className="sr-only"> businesses near you</span>
+                    </button>
+                  )}
+                </div>
                 <ul className="explore-list">{start.near.map(cardOf)}</ul>
-                {start.near_more && (
-                  <button
-                    type="button"
-                    className="explore-more"
-                    disabled={act.busy || more}
-                    onClick={() => loadMore("near")}
-                  >
-                    Show more
-                  </button>
-                )}
               </section>
             )}
             {start.fresh.length > 0 && (
               <section aria-labelledby="explore-new">
-                <h3 id="explore-new">New on Taskiem</h3>
+                <div className="tk-x-sec">
+                  <h3 id="explore-new">New on Taskiem</h3>
+                  {start.more && (
+                    <button
+                      type="button"
+                      className="explore-more"
+                      disabled={act.busy || more}
+                      onClick={() => loadMore("new")}
+                    >
+                      Show more
+                      <span className="sr-only"> new businesses</span>
+                    </button>
+                  )}
+                </div>
                 <ul className="explore-list">{start.fresh.map(cardOf)}</ul>
-                {start.more && (
-                  <button
-                    type="button"
-                    className="explore-more"
-                    disabled={act.busy || more}
-                    onClick={() => loadMore("new")}
-                  >
-                    Show more
-                  </button>
-                )}
               </section>
             )}
           </>

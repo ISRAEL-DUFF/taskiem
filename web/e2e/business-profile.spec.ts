@@ -231,7 +231,7 @@ test("photos: added, counted, captioned, put in order, removed; twelve at most; 
     });
   await page.reload();
   await expect(count).toContainText("12 of 12 photos");
-  await expect(page.getByRole("button", { name: "Add photos" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Add a photo" })).toBeDisabled();
   // A photo the moderator refused says so, and can be removed.
   await expect(page.getByText("Not accepted for a public page")).toHaveCount(1);
 

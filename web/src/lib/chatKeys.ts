@@ -6,7 +6,7 @@
 /** Said on the window by the conversation's menu: show the list of keys. */
 export const KEYS_EVENT = "taskiem:keys";
 
-export type Shortcut = "search" | "new" | "next" | "previous" | "help";
+export type Shortcut = "search" | "new" | "tag" | "next" | "previous" | "help";
 
 export type KeyLike = {
   key: string;
@@ -25,6 +25,8 @@ export function shortcutOf(e: KeyLike, typing: boolean): Shortcut | undefined {
       return "search";
     case "n":
       return "new";
+    case "@":
+      return "tag";
     case "j":
       return "next";
     case "k":
@@ -60,7 +62,8 @@ export function step(
 
 export const SHORTCUTS: { keys: string[]; does: string }[] = [
   { keys: ["/"], does: "Find a business or a message" },
-  { keys: ["n"], does: "Find a business to link with" },
+  { keys: ["n"], does: "Find a business to link with (Explore)" },
+  { keys: ["@"], does: "Tag a thing or a business in the open chat" },
   { keys: ["j"], does: "Next chat" },
   { keys: ["k"], does: "Previous chat" },
   {

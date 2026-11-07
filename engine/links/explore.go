@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -32,7 +33,9 @@ type ExploreCard struct {
 	About    string    `json:"about,omitempty"`
 	Logo     bool      `json:"logo"`
 	Photos   int       `json:"photos"`
-	State    string    `json:"state"`
+	// Captions are its photos' words, in order ("" for none).
+	Captions []string `json:"captions"`
+	State    string   `json:"state"`
 	// Ver changes when its logo or photos do: it keys the pictures' cache.
 	Ver string `json:"v"`
 }
@@ -53,6 +56,9 @@ func ExploreTx(ctx context.Context, tx pgx.Tx, section, q string, limit, offset 
 	})
 	if out == nil {
 		out = []ExploreCard{}
+	}
+	if err == nil && len(out) > 0 {
+		err = exploreCaptionsTx(ctx, tx, out)
 	}
 	return out, pgErr(err)
 }
@@ -93,4 +99,43 @@ func ExploreLogoURLsTx(ctx context.Context, tx pgx.Tx, business uuid.UUID) (map[
 // ValidSection reports whether s is a section Explore lists.
 func ValidSection(s string) bool {
 	return s == SectionSearch || s == SectionNear || s == SectionNew
+}
+
+// exploreCaptionsTx fills in each card's photo captions, in one query.
+func exploreCaptionsTx(ctx context.Context, tx pgx.Tx, cards []ExploreCard) error {
+	ids := make([]uuid.UUID, len(cards))
+	for i, c := range cards {
+		ids[i] = c.Business
+		cards[i].Captions = []string{}
+	}
+	rows, err := tx.Query(ctx, `SELECT b.id, array_agg(p.caption ORDER BY p.n)
+		FROM unnest($1::uuid[]) AS b(id), LATERAL taskiem_link_photo_list(b.id) p GROUP BY b.id`, ids)
+	if err != nil {
+		return pgErr(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var b uuid.UUID
+		var caps []string
+		if err := rows.Scan(&b, &caps); err != nil {
+			return pgErr(err)
+		}
+		for i := range cards {
+			if cards[i].Business == b {
+				cards[i].Captions = caps
+			}
+		}
+	}
+	return pgErr(rows.Err())
+}
+
+// OwnAreaTx is our own area as Explore's "near you" reads it: the business
+// profile's, else the published storefront's ("" for neither).
+func OwnAreaTx(ctx context.Context, tx pgx.Tx, me uuid.UUID) (string, error) {
+	var area string
+	err := tx.QueryRow(ctx, `SELECT COALESCE(NULLIF(bp.area, ''), (SELECT snap.model->'card'->>'area'
+			FROM storefronts s JOIN storefront_snapshots snap ON snap.storefront_id = s.id AND snap.version = s.published_version
+			WHERE s.tenant_id = $1 AND s.status = 'published' LIMIT 1), '')
+		FROM (SELECT 1) one LEFT JOIN business_profile bp ON bp.tenant_id = $1`, me).Scan(&area)
+	return strings.TrimSpace(area), pgErr(err)
 }

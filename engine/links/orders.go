@@ -122,6 +122,9 @@ type OrderLine struct {
 	// itself.
 	ProposedKobo int64  `json:"proposed_kobo,omitempty"`
 	PricedBy     string `json:"priced_by,omitempty"`
+	// ListKobo is the seller's own price for the line when an offer was
+	// made (chat tools phase 7): what the offer is against ("was").
+	ListKobo int64 `json:"list_kobo,omitempty"`
 }
 
 // Whose price a line carries (OrderLine.PricedBy).
@@ -156,15 +159,15 @@ func AsProposed(lines []OrderLine) bool {
 
 // linkPrices is the price list the seller in scope shares with a link, by
 // the seller's item: what a linked buyer's order is priced at first.
-func linkPrices(ctx context.Context, tx pgx.Tx, seller, link uuid.UUID) (map[string]int64, error) {
+func linkPrices(ctx context.Context, tx pgx.Tx, seller, link uuid.UUID) (map[string]PriceItem, error) {
 	_, items, ok, err := LinkPricesTx(ctx, tx, seller, link)
 	if err != nil || !ok {
 		return nil, err
 	}
-	out := make(map[string]int64, len(items))
+	out := make(map[string]PriceItem, len(items))
 	for _, it := range items {
 		if it.PriceKobo > 0 {
-			out[it.ItemID] = it.PriceKobo
+			out[it.ItemID] = it
 		}
 	}
 	return out, nil
@@ -173,8 +176,10 @@ func linkPrices(ctx context.Context, tx pgx.Tx, seller, link uuid.UUID) (map[str
 // priceLine prices a line matched to one of the seller's items: the
 // link's list first, else the catalogue's price; neither leaves it as it
 // was. It reports whether the line's price changed.
-func priceLine(l *OrderLine, list map[string]int64, catalogue *int64) bool {
-	if p, ok := list[l.ItemID]; ok && p > 0 {
+func priceLine(l *OrderLine, list map[string]PriceItem, catalogue *int64) bool {
+	if it, ok := list[l.ItemID]; ok && it.PriceKobo > 0 {
+		// The quantity's price: a quantity break once reached (phase 7).
+		p := PriceAt(it, l.Quantity)
 		changed := l.PriceKobo != p || l.PricedBy != PricedByList
 		l.PriceKobo, l.PricedBy = p, PricedByList
 		return changed
@@ -232,6 +237,13 @@ type Order struct {
 	// OverLimitAt: the order takes the buyer past the credit limit set for
 	// the link (L5); it waits for payment or the seller's own accept.
 	OverLimitAt *time.Time `json:"over_limit_at,omitempty"`
+	// A deal (phase 7): its offers and counters, newest last; when the
+	// latest lapses; staff accepted it below the floor, waiting for the
+	// owner since, and who.
+	DealHistory []DealStep `json:"deal_history,omitempty"`
+	DealUntil   *time.Time `json:"deal_until,omitempty"`
+	DealOwnerAt *time.Time `json:"deal_owner_at,omitempty"`
+	DealOwnerBy string     `json:"deal_owner_by,omitempty"`
 }
 
 // Told is the business a step tells, and what happened, for its people
@@ -257,18 +269,20 @@ const orderCols = `s.id, s.reference, o.source_id, o.link_id, o.buyer_tenant, o.
 	COALESCE((SELECT t.invoice_at FROM trade_settings t WHERE t.tenant_id = o.tenant_id AND t.link_id = o.link_id), 'delivered'),
 	COALESCE((SELECT t.auto_accept FROM trade_settings t WHERE t.tenant_id = o.tenant_id AND t.link_id = o.link_id), false), o.placed_by_seller,
 	COALESCE(s.decided_by, ''), CASE WHEN s.status IN ('accepted', 'paid', 'dispatched', 'on_the_way', 'arrived', 'completed') THEN s.decided_at END,
-	o.ready_at, o.delivered_at, s.created_at, GREATEST(o.updated_at, s.updated_at), o.over_limit_at`
+	o.ready_at, o.delivered_at, s.created_at, GREATEST(o.updated_at, s.updated_at), o.over_limit_at,
+	o.deal_history, o.deal_until, o.deal_owner_at, COALESCE(o.deal_owner_by, '')`
 
 const orderFrom = ` FROM link_orders o JOIN storefront_orders s ON s.id = o.order_id`
 
 func scanOrder(r pgx.Row) (Order, error) {
 	var o Order
 	var ready bool
-	var lines, change, short []byte
+	var lines, change, short, deal []byte
 	err := r.Scan(&o.ID, &o.OrderReference, &o.Purchase, &o.LinkID, &o.Buyer, &o.BuyerName, &o.Reference, &lines, &o.TotalKobo, &o.Note,
 		&o.OrderStatus, &ready, &o.Fulfilment, &change, &o.SellerNote, &o.CancelAskedAt, &short, &o.ShortAt, &o.ReceiptAt,
 		&o.ShortAgreedAt, &o.InvoiceID, &o.InvoiceAt, &o.AutoAccept, &o.PlacedBySeller,
-		&o.DecidedBy, &o.AcceptedAt, &o.ReadyAt, &o.DeliveredAt, &o.CreatedAt, &o.UpdatedAt, &o.OverLimitAt)
+		&o.DecidedBy, &o.AcceptedAt, &o.ReadyAt, &o.DeliveredAt, &o.CreatedAt, &o.UpdatedAt, &o.OverLimitAt,
+		&deal, &o.DealUntil, &o.DealOwnerAt, &o.DealOwnerBy)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return o, fmt.Errorf("%w: no such order", ErrNotFound)
 	}
@@ -279,7 +293,7 @@ func scanOrder(r pgx.Row) (Order, error) {
 	for _, f := range []struct {
 		raw []byte
 		to  any
-	}{{lines, &o.Lines}, {change, &o.Change}, {short, &o.Short}} {
+	}{{lines, &o.Lines}, {change, &o.Change}, {short, &o.Short}, {deal, &o.DealHistory}} {
 		if f.raw != nil {
 			if err := json.Unmarshal(f.raw, f.to); err != nil {
 				return o, err
@@ -487,14 +501,16 @@ type purchase struct {
 	// (mirrored).
 	Short      []int64
 	InvoicedAt *time.Time
+	// Offer: sent at the buyer's own prices, a deal (phase 7).
+	Offer bool
 }
 
 func purchaseTx(ctx context.Context, tx pgx.Tx, id uuid.UUID) (purchase, error) {
 	var p purchase
 	var lines, change, short []byte
 	err := tx.QueryRow(ctx, `SELECT id, reference, link_id, lines, total_kobo, note, status, COALESCE(seller_status, ''), change, delivered_at, cancel_asked_at,
-		short_at, short_agreed_at, short, invoiced_at FROM purchase_orders WHERE id = $1 FOR UPDATE`, id).Scan(&p.ID, &p.Reference, &p.Link, &lines, &p.Total, &p.Note, &p.Status,
-		&p.SellerStatus, &change, &p.DeliveredAt, &p.CancelAskedAt, &p.ShortAt, &p.ShortAgreedAt, &short, &p.InvoicedAt)
+		short_at, short_agreed_at, short, invoiced_at, offer FROM purchase_orders WHERE id = $1 FOR UPDATE`, id).Scan(&p.ID, &p.Reference, &p.Link, &lines, &p.Total, &p.Note, &p.Status,
+		&p.SellerStatus, &change, &p.DeliveredAt, &p.CancelAskedAt, &p.ShortAt, &p.ShortAgreedAt, &short, &p.InvoicedAt, &p.Offer)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return p, fmt.Errorf("%w: no such purchase order", ErrNotFound)
 	}
@@ -728,6 +744,19 @@ func WriteOrderTx(ctx context.Context, tx pgx.Tx, v Vault, buyer, id uuid.UUID) 
 		return nil, err
 	}
 	for i := range lines {
+		if p.Offer {
+			// An offer (phase 7): the buyer's own prices stand, against the
+			// seller's for the same quantity.
+			lines[i].PricedBy = PricedByOffer
+			if lines[i].ItemID != "" {
+				tmp := lines[i]
+				tmp.PriceKobo, tmp.PricedBy = 0, ""
+				if priceLine(&tmp, list, nil) || tmp.PriceKobo > 0 {
+					lines[i].ListKobo = tmp.PriceKobo
+				}
+			}
+			continue
+		}
 		if lines[i].ItemID != "" {
 			lines[i].PriceKobo, lines[i].PricedBy = 0, ""
 			priceLine(&lines[i], list, nil)
@@ -738,12 +767,22 @@ func WriteOrderTx(ctx context.Context, tx pgx.Tx, v Vault, buyer, id uuid.UUID) 
 	if err != nil {
 		return nil, err
 	}
+	if p.Offer {
+		if _, err := tx.Exec(ctx, `UPDATE link_orders SET deal_history = $2, deal_until = now() + $3 * interval '1 second' WHERE order_id = $1`,
+			order, withStep(nil, dealStep("buyer", "", lines, false, p.Note)), int64(OfferFor/time.Second)); err != nil {
+			return nil, err
+		}
+	}
 	// For the seller's workflows (L6): a linked buyer's order.
 	if err := QueueEventTx(ctx, tx, seller, EventOrderReceived, order.String(), map[string]any{"link": *p.Link, "business": name,
 		"reference": p.Reference, "total_kobo": linesTotal(lines), "lines": lines, "note": p.Note}); err != nil {
 		return nil, err
 	}
-	return &Told{Tenant: seller, Event: "ordered", Reference: p.Reference, From: name, Order: order, Purchase: p.ID, Link: *p.Link, FromTenant: buyer}, nil
+	event := "ordered"
+	if p.Offer {
+		event = "offered"
+	}
+	return &Told{Tenant: seller, Event: event, Reference: p.Reference, From: name, Order: order, Purchase: p.ID, Link: *p.Link, FromTenant: buyer}, nil
 }
 
 // StepIn is what a step carries: the lines a change proposes, what was
@@ -752,6 +791,16 @@ type StepIn struct {
 	Lines     []OrderLine `json:"lines,omitempty"`
 	Delivered []int64     `json:"delivered,omitempty"`
 	Note      string      `json:"note,omitempty"`
+	// AsTotal: a change that is a total, spread over the lines (phase 7);
+	// Who: the person, as the deal's history names them.
+	AsTotal bool   `json:"as_total,omitempty"`
+	Who     string `json:"-"`
+	// KeepDays keeps an accepted offer's prices for the buyer that many
+	// days (the API's; 7, 14 or 30).
+	KeepDays int `json:"keep_days,omitempty"`
+	// TotalKobo: a seller's counter as one total, spread over the order's
+	// lines by the API (CounterIn) before the step is taken.
+	TotalKobo int64 `json:"total_kobo,omitempty"`
 }
 
 // Decisions DecideTx leaves to the storefront order's own Decide, once
@@ -804,6 +853,15 @@ func DecideTx(ctx context.Context, tx pgx.Tx, seller uuid.UUID, ref, step string
 				return o, "", fmt.Errorf("%w: %s has no price; change the order to give it yours", ErrInvalid, l.Item)
 			}
 		}
+		// An offer stands OfferFor (phase 7): a lapsed one is countered.
+		if lapsed(o) {
+			return o, "", fmt.Errorf("%w: their offer on %s has lapsed; send them your price instead", ErrState, o.Reference)
+		}
+		if o.DealOwnerAt != nil {
+			if _, err := tx.Exec(ctx, `UPDATE link_orders SET deal_owner_at = NULL, deal_owner_by = NULL WHERE order_id = $1`, o.ID); err != nil {
+				return o, "", err
+			}
+		}
 		// Over the buyer's limit, the seller's accept is its own call (L5):
 		// the flag goes with it.
 		if o.OverLimitAt != nil {
@@ -839,8 +897,16 @@ func DecideTx(ctx context.Context, tx pgx.Tx, seller uuid.UUID, ref, step string
 			change[i] = OrderLine{Item: l.Item, Unit: l.Unit, Quantity: in.Lines[i].Quantity, PriceKobo: in.Lines[i].PriceKobo, ItemID: l.ItemID, Matched: l.Matched,
 				ProposedKobo: l.ProposedKobo, PricedBy: PricedBySeller}
 		}
+		// The seller's counter (phase 7): its prices against its own list.
+		for i := range change {
+			if change[i].ListKobo == 0 {
+				change[i].ListKobo = o.Lines[i].ListKobo
+			}
+		}
 		raw, _ := json.Marshal(change)
-		if _, err := tx.Exec(ctx, `UPDATE link_orders SET change = $2, seller_note = NULLIF($3, ''), updated_at = now() WHERE order_id = $1`, o.ID, raw, in.Note); err != nil {
+		hist := withStep(o.DealHistory, dealStep("seller", in.Who, change, in.AsTotal, in.Note))
+		if _, err := tx.Exec(ctx, `UPDATE link_orders SET change = $2, seller_note = NULLIF($3, ''), deal_history = $4, deal_until = now() + $5 * interval '1 second',
+			deal_owner_at = NULL, deal_owner_by = NULL, updated_at = now() WHERE order_id = $1`, o.ID, raw, in.Note, hist, int64(OfferFor/time.Second)); err != nil {
 			return o, "", err
 		}
 		if _, err := tx.Exec(ctx, `UPDATE storefront_orders SET status = 'changed', updated_at = now() WHERE id = $1`, o.ID); err != nil {
@@ -1059,8 +1125,10 @@ func MirrorOrderTx(ctx context.Context, tx pgx.Tx, seller, id uuid.UUID) (*Told,
 		short_agreed_at = $11,
 		counter = CASE WHEN $12 <> '' THEN $12 ELSE counter END, counter_at = CASE WHEN $12 <> '' THEN now() ELSE counter_at END,
 		invoiced_at = CASE WHEN $13 THEN COALESCE(invoiced_at, now()) ELSE invoiced_at END,
+		deal_history = $14, deal_until = $15,
 		updated_at = now() WHERE id = $1`,
-		p.ID, now, o.SellerNote, change, raw, accepted, total, status, now == OrderDelivered, keepAsk, o.ShortAgreedAt, counter, o.InvoiceID != nil); err != nil {
+		p.ID, now, o.SellerNote, change, raw, accepted, total, status, now == OrderDelivered, keepAsk, o.ShortAgreedAt, counter, o.InvoiceID != nil,
+		dealJSON(o.DealHistory), o.DealUntil); err != nil {
 		return nil, err
 	}
 	// The seller agreed the buyer's count of a short delivery: what the
@@ -1694,6 +1762,16 @@ func MatchItemsTx(ctx context.Context, tx pgx.Tx, ref string, items []SellerItem
 			continue
 		}
 		o.Lines[i].ItemID, o.Lines[i].Matched = it.ID, how
+		if l.PricedBy == PricedByOffer {
+			// An offer keeps the buyer's price: the seller's is what it is
+			// against (phase 7).
+			tmp := o.Lines[i]
+			tmp.PriceKobo, tmp.PricedBy = 0, ""
+			priceLine(&tmp, list, it.PriceKobo)
+			o.Lines[i].ListKobo = tmp.PriceKobo
+			changed = true
+			continue
+		}
 		o.Lines[i].PriceKobo, o.Lines[i].PricedBy = 0, ""
 		priceLine(&o.Lines[i], list, it.PriceKobo)
 		changed = true

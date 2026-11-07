@@ -143,6 +143,7 @@ func TestEnvironmentLimitedKeysCannotManageIdentity(t *testing.T) {
 		{"POST", "/v1/sso/domains/acme.test/verify", nil},
 		{"DELETE", "/v1/members/" + bob + "/passkeys", nil},
 		{"PUT", "/v1/settings/advanced", map[string]any{"advanced": true}},
+		{"PUT", "/v1/settings/chat-tools", map[string]any{"chat_tools": true}},
 	} {
 		if out := dev.must(403, c.method, c.path, c.body); !strings.Contains(fmt.Sprint(out["error"]), "limited to dev") {
 			t.Errorf("%s %s: refused for another reason: %v", c.method, c.path, out)
