@@ -41,7 +41,7 @@ func TestChangeWords(t *testing.T) {
 		buyerStepWords("send", "PO-1", "Bayo Rice", 23400000):   "Sent order PO-1 to Bayo Rice: ₦234,000",
 		buyerStepWords("confirm", "PO-1", "Bayo Rice", 0):       "Confirmed Bayo Rice's quote for order PO-1",
 		buyerStepWords("all_came", "PO-1", "Bayo Rice", 0):      "All of order PO-1 came from Bayo Rice",
-		buyerStepWords("pay", "INV-7", "Bayo Rice", 500000):     "Paying INV-7 from Taskiem: ₦5,000 to Bayo Rice",
+		buyerStepWords("pay", "INV-7", "Bayo Rice", 500000):     "Started paying INV-7 from Taskiem: ₦5,000 to Bayo Rice",
 		buyerStepWords("declare", "INV-7", "Bayo Rice", 500000): "Told Bayo Rice you paid ₦5,000 of INV-7 outside Taskiem",
 		buyerStepWords("query", "INV-7", "Bayo Rice", 0):        "Questioned INV-7 from Bayo Rice",
 		diaryWords([]string{"A"}):                               "✓ A",

@@ -165,7 +165,7 @@ for (const [size, viewport] of [
       await pane.getByRole("button", { name: "Open tools" }).click();
       const panel = buyer.getByRole("region", { name: "Tools" });
       await expect(panel.getByRole("button", { name: /^Order From/ })).toContainText(`From ${name}`);
-      await panel.getByRole("button", { name: new RegExp(`^${title}`) }).click();
+      await panel.getByRole("button", { name: new RegExp(`^${title}`) }).first().click();
     };
     const sheet = buyer.getByTestId("tool-sheet");
     await tool("Bills");
@@ -222,4 +222,125 @@ test("a bill's card opens the bill beside the chat, and an order's card the orde
   await expect(sheet).toHaveCount(0);
   await pane.getByRole("button", { name: "View order PO-0042" }).click();
   await expect(sheet).toContainText("4 × Rice, 50kg bag");
+});
+
+test("a quote is confirmed with our own items, and not all of a delivery came", async ({ browser }) => {
+  test.setTimeout(120_000);
+  const { buyer, link, name } = await linked(browser, { width: 390, height: 844 });
+  const sent = await trade(buyer, link, name);
+  const now = new Date().toISOString();
+  const base = {
+    supplier_id: "sup", supplier: name, link_id: link, drafted_by: "them", approved_by: null, sent_at: null, confirmed_at: null,
+    confirmed_how: null, counter: null, counter_at: null, received_at: null, cancelled_at: null, received_kobo: 0, paid_kobo: 0, owed_kobo: 0, created_at: now,
+  };
+  const quote = { ...base, id: "q1", reference: "PO-0050", status: "drafted", seller_status: "proposed", total_kobo: 15_600_000,
+    lines: [{ item_id: "x", item: "Rice, 50kg bag", unit: "bag", quantity: 2, cost_kobo: 7_800_000, received: 0 }] };
+  const came = { ...base, id: "d1", reference: "PO-0051", status: "confirmed", seller_status: "delivered", total_kobo: 23_400_000, delivered_at: now,
+    lines: [{ item_id: "s1", item: "Rice, 50kg bag", unit: "bag", quantity: 3, cost_kobo: 7_800_000, received: 0, delivered: 3 }] };
+  await buyer.route("**/v1/stock/purchases", (r) => r.fulfill(json({ purchases: [quote, came] })));
+  for (const [id, step] of [["q1", "confirm-proposed"], ["d1", "not-all-came"]])
+    await buyer.route(`**/v1/stock/purchases/${id}/${step}`, async (r) => {
+      sent.push({ method: "POST", path: new URL(r.request().url()).pathname, body: r.request().postDataJSON() });
+      await r.fulfill(json({ purchase: {} }));
+    });
+  await buyer.goto(`/chat?with=${link}`);
+  const pane = buyer.getByTestId("chat-pane");
+  const sheet = buyer.getByTestId("tool-sheet");
+  const yourOrders = async () => {
+    await pane.getByRole("button", { name: "Open tools" }).click();
+    await buyer.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Your orders/ }).first().click();
+  };
+  await yourOrders();
+  await expect(buyer.getByRole("region", { name: "Tools" })).toHaveCount(0);
+  await expect(sheet.getByRole("button", { name: "New order" })).toBeVisible();
+  // Their quote: which of ours each line is (the same name found), then confirmed.
+  await sheet.getByRole("button", { name: /PO-0050/ }).click();
+  await expect(sheet.getByRole("heading", { name: "PO-0050" })).toBeVisible();
+  await sheet.getByRole("button", { name: "Confirm their quote" }).click();
+  await expect(sheet.getByLabel("Their Rice, 50kg bag")).toHaveValue("s1");
+  await axeBoth(buyer, "confirming a quote");
+  await sheet.getByRole("button", { name: "Confirm the order" }).click();
+  await expect(sheet).toHaveCount(0, { timeout: 5000 });
+  expect(sent.find((x) => x.path === "/v1/stock/purchases/q1/confirm-proposed")?.body).toEqual({ items: ["s1"] });
+
+  // A delivery: two of three came.
+  await yourOrders();
+  await sheet.getByRole("button", { name: /PO-0051/ }).click();
+  await sheet.getByRole("button", { name: "Not all came" }).click();
+  await sheet.getByLabel("Rice, 50kg bag: of 3").fill("2");
+  // Not now keeps the order open.
+  await sheet.getByRole("button", { name: "Not now" }).click();
+  await expect(sheet.getByRole("button", { name: "All came", exact: true })).toBeVisible();
+  await sheet.getByRole("button", { name: "Not all came" }).click();
+  await sheet.getByRole("button", { name: `Tell ${name}` }).click();
+  await expect(sheet).toHaveCount(0, { timeout: 5000 });
+  expect(sent.find((x) => x.path === "/v1/stock/purchases/d1/not-all-came")?.body).toEqual({ counts: [2] });
+});
+
+test("a supplier added and linked once, a retry that does nothing twice, and the same as last time", async ({ browser }) => {
+  test.setTimeout(120_000);
+  const { buyer, link, name } = await linked(browser, { width: 390, height: 844 });
+  const sent = await trade(buyer, link, name);
+  const suppliers: unknown[] = [];
+  let posts = 0;
+  await buyer.route("**/v1/stock/suppliers", async (r) => {
+    if (r.request().method() === "POST") {
+      posts++;
+      sent.push({ method: "POST", path: "/v1/stock/suppliers", body: r.request().postDataJSON() });
+      return r.fulfill(json({ supplier: { id: "new-sup" } }, 201));
+    }
+    return r.fulfill(json({ suppliers }));
+  });
+  await buyer.route("**/v1/stock/suppliers/new-sup/link", async (r) => {
+    sent.push({ method: "PUT", path: "/v1/stock/suppliers/new-sup/link", body: r.request().postDataJSON() });
+    await r.fulfill(json({ supplier: { id: "new-sup", link_id: link } }));
+  });
+  // The order fails once, then goes.
+  let tries = 0;
+  await buyer.route(`**/v1/supplier-prices/${link}/order`, async (r) => {
+    tries++;
+    if (tries === 1) return r.fulfill(json({ error: "Something went wrong" }, 500));
+    sent.push({ method: "POST", path: "order", body: r.request().postDataJSON() });
+    return r.fulfill(json({ purchase: { id: "u2", reference: "PO-0099", status: "drafted" } }, 201));
+  });
+  await buyer.goto(`/chat?with=${link}`);
+  const pane = buyer.getByTestId("chat-pane");
+  const order = buyer.getByTestId("order-sheet");
+  await pane.getByTestId("chat-order").click();
+  // Same as last time: the last order's lines at today's prices.
+  await order.getByRole("button", { name: /Same as last time/ }).click();
+  await expect(order.getByRole("group", { name: "How many Rice, 50kg bag" })).toContainText("4");
+  await order.getByRole("button", { name: "Review order" }).click();
+  // Not one of our suppliers yet: their number first, and why Place waits.
+  await expect(order).toContainText(`${name} is not one of your suppliers yet`);
+  await expect(order).toContainText(`Add ${name}'s phone number to place the order.`);
+  await expect(order.getByRole("button", { name: "Place order" })).toBeDisabled();
+  await order.getByLabel(`${name}'s phone number`).fill("0803 123 4567");
+  await order.getByRole("button", { name: "Place order" }).click();
+  await expect(order.getByRole("alert")).toBeVisible();
+  await order.getByRole("button", { name: "Place order" }).click();
+  await expect(order).toHaveCount(0, { timeout: 5000 });
+  expect(posts).toBe(1);
+  expect(sent.filter((x) => x.path === "/v1/stock/suppliers/new-sup/link")).toHaveLength(1);
+  expect(sent.find((x) => x.path === "/v1/stock/suppliers")?.body).toEqual({ name, phone: "0803 123 4567" });
+});
+
+test("without leave to send orders, there is no Order, and the card's Order is the prices page", async ({ browser }) => {
+  test.setTimeout(120_000);
+  const { buyer, link, name } = await linked(browser, { width: 390, height: 844 });
+  await trade(buyer, link, name);
+  await buyer.route("**/v1/me", async (r) => {
+    const res = await r.fetch();
+    const me = await res.json();
+    me.permissions = (me.permissions as string[]).filter((p) => p !== "storefront.manage");
+    await r.fulfill({ response: res, json: me });
+  });
+  await buyer.goto(`/chat?with=${link}`);
+  const pane = buyer.getByTestId("chat-pane");
+  await expect(pane.getByRole("button", { name: "Open tools" })).toBeVisible();
+  await expect(pane.getByTestId("chat-order")).toHaveCount(0);
+  await pane.getByRole("button", { name: "Open tools" }).click();
+  const panel = buyer.getByRole("region", { name: "Tools" });
+  await expect(panel.getByRole("button", { name: /^Your orders/ })).toBeVisible();
+  await expect(panel.getByRole("button", { name: /^Order From/ })).toHaveCount(0);
 });

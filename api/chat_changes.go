@@ -160,7 +160,7 @@ func buyerStepWords(step, reference, supplier string, kobo int64) string {
 	case "not_all_came":
 		return fmt.Sprintf("Not all of order %s came from %s", reference, supplier)
 	case "pay":
-		return fmt.Sprintf("Paying %s from Taskiem: %s to %s", reference, naira(kobo), supplier)
+		return fmt.Sprintf("Started paying %s from Taskiem: %s to %s", reference, naira(kobo), supplier)
 	case "declare":
 		return fmt.Sprintf("Told %s you paid %s of %s outside Taskiem", supplier, naira(kobo), reference)
 	case "query":

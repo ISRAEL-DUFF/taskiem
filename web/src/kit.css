@@ -3,6 +3,7 @@
    rest of the app moves onto them page by page. Timings in motion.css. */
 
 :root {
+  --tk-on-pine: #ffffff;       /* words on pine, in every theme */
   --tk-soft: #f1f4ef;          /* footer, search, chips */
   --tk-tile: #f6f8f4;          /* tiles, the order card */
   --tk-lime-soft: #e9f7d0;     /* a product's tile */
@@ -60,7 +61,10 @@
 /* ---------- Fields ---------- */
 
 .tk-field { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-size: 13px; color: var(--muted); }
-.tk-field input, .tk-field select, .tk-field textarea { min-height: 54px; padding: 0 16px; border: 1.5px solid var(--border); border-radius: 14px; font-size: 17px; font-weight: 600; color: var(--text); background: var(--panel); }
+/* A field is the app's soft filled shape (styles.css), only taller: selects
+   and text boxes too, their arrow kept. */
+.tk-field input, .tk-field select, .tk-field textarea { min-height: 54px; padding: 0 16px; border: 1.5px solid transparent; border-radius: 14px; font-size: 17px; font-weight: 600; color: var(--text); background-color: var(--field); }
+.tk-field select { padding-right: 40px; background-position: right 16px center; }
 .tk-field textarea { padding: 14px 16px; }
 .tk-field-hint { font-weight: 400; font-size: 13px; }
 
@@ -277,9 +281,9 @@ button.tk-table-row { display: grid; gap: 2px; width: 100%; padding: 0; border: 
 .tk-order-row { display: flex; align-items: center; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--border); }
 .tk-order-row .tk-row-words { flex: 1; min-width: 0; }
 .tk-qty { flex: none; display: inline-flex; align-items: center; border-radius: 999px; background: var(--tk-soft); color: var(--text); transition: background var(--tk-quick, 0.2s) var(--ease), color var(--tk-quick, 0.2s) var(--ease); }
-.tk-order-row.on .tk-qty { background: var(--brand); color: #ffffff; }
+.tk-order-row.on .tk-qty { background: var(--brand); color: var(--tk-on-pine); }
 :root[data-theme="dark"] .tk-order-row.on .tk-qty { background: var(--brand-dark); color: var(--brand-dark-text); }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .tk-order-row.on .tk-qty { background: var(--brand-dark); color: var(--brand-dark-text); } }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .tk-order-row.on .tk-qty { background: var(--brand-dark); color: var(--brand-dark-text); } }
 .tk-qty button { width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: none; box-shadow: none; color: inherit; font-size: 20px; font-weight: 600; cursor: pointer; }
 .tk-qty button:hover:not(:disabled) { background: none; color: inherit; }
 .tk-qty button:disabled { opacity: 0.35; cursor: default; }
@@ -289,7 +293,7 @@ button.tk-table-row { display: grid; gap: 2px; width: 100%; padding: 0; border: 
 
 /* The bag bar floats over the list: pine, its button lime. */
 .tk-sheet-foot:has(.tk-bag) { border-top: 0; padding-top: 0; background: transparent; }
-.tk-bag { display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 20px; border-radius: 22px; background: var(--brand); color: #ffffff; box-shadow: 0 20px 40px -14px rgba(13, 59, 46, 0.6); animation: tk-rise 0.32s var(--ease) both; }
+.tk-bag { display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 20px; border-radius: 22px; background: var(--brand); color: var(--tk-on-pine); box-shadow: 0 20px 40px -14px color-mix(in srgb, var(--brand) 60%, transparent); animation: tk-rise 0.32s var(--ease) both; }
 .tk-bag > span { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .tk-bag-count { font-size: 13px; opacity: 0.8; }
 .tk-bag-total { font-size: 20px; font-weight: 800; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
@@ -305,23 +309,34 @@ button.tk-table-row { display: grid; gap: 2px; width: 100%; padding: 0; border: 
 .tk-review-total b { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
 
 /* A bill: a pine hero with the money, lime on pine. */
-.tk-bill-hero { display: grid; gap: 4px; padding: 20px; border-radius: 22px; background: var(--brand); color: #ffffff; position: relative; }
+.tk-bill-hero { display: grid; gap: 4px; padding: 20px; border-radius: 22px; background: var(--brand); color: var(--tk-on-pine); position: relative; }
 .tk-bill-hero .tk-kicker { color: var(--brand-dark); }
 .tk-bill-hero b { font-size: 32px; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
-.tk-bill-hero .tk-row-sub { color: rgba(255, 255, 255, 0.82); }
+.tk-bill-hero .tk-row-sub { color: color-mix(in srgb, var(--tk-on-pine) 82%, transparent); }
 .tk-bill-hero .tk-pill { position: absolute; top: 18px; right: 18px; }
 .tk-bill-hero .tk-pill.lime { background: var(--brand-dark); color: var(--brand); }
 .tk-bill-more { display: flex; gap: 10px; flex-wrap: wrap; }
 
 /* In a supplier's conversation: Order beside the search. */
-.tk-head-order { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border: 0; box-shadow: none; border-radius: 999px; background: var(--brand); color: #ffffff; font-weight: 700; font-size: 14px; cursor: pointer; }
-.tk-head-order:hover { background: var(--brand-hover); color: #ffffff; }
+.tk-head-order { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border: 0; box-shadow: none; border-radius: 999px; background: var(--brand); color: var(--tk-on-pine); font-weight: 700; font-size: 14px; cursor: pointer; }
+.tk-head-order:hover { background: var(--brand-hover); color: var(--tk-on-pine); }
 .tk-head-order svg { width: 18px; height: 18px; }
 :root[data-theme="dark"] .tk-head-order { background: var(--brand-dark); color: var(--brand-dark-text); }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .tk-head-order { background: var(--brand-dark); color: var(--brand-dark-text); } }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .tk-head-order { background: var(--brand-dark); color: var(--brand-dark-text); } }
 /* A narrow phone keeps the name: Order is a round button, like search. */
 @media (max-width: 420px) {
   .tk-head-order { width: 40px; padding: 0; justify-content: center; }
   .tk-head-order-word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
 @media (prefers-reduced-motion: reduce) { .tk-bag { animation: none; } }
+
+/* An order's supplier and its state, side by side. */
+.tk-who-state { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+/* "Same as last time": a small soft chip after the prices line. */
+.tk-chip-btn { margin-left: auto; min-height: 36px; padding: 0 14px; border-radius: 999px; border: 0; box-shadow: none; background: var(--tk-soft); color: var(--text); font-weight: 600; font-size: 14px; cursor: pointer; }
+.tk-chip-btn:hover:not(:disabled) { background: var(--tk-soft); color: var(--brand); }
+.tk-chip-btn:focus-visible { box-shadow: var(--ring); }
+/* What still stops an order being placed, above its buttons. */
+.tk-review-stops { margin: 0; font-size: 14px; color: var(--muted); }
+/* A row of an order or a bill: its icon on the tile. */
+.tk-row-tile svg { width: 24px; height: 24px; }

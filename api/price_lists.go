@@ -337,13 +337,22 @@ func (s *Server) putLinkPrices(w http.ResponseWriter, r *http.Request) {
 	}
 	p := principalFrom(r.Context())
 	out := linkPricesOut{Link: link, Items: []links.PriceItem{}}
+	// What the prices were, and who the buyer is, for the diary line: read
+	// on their own, so a failure here never touches the save.
 	var before []links.PriceItem
 	var buyer string
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		_, before, _, _ = links.LinkPricesTx(r.Context(), tx, p.TenantID, link)
-		if l, err := links.GetTx(r.Context(), tx, link); err == nil {
-			buyer = l.Name
+		var err error
+		if _, before, _, err = links.LinkPricesTx(r.Context(), tx, p.TenantID, link); err != nil {
+			return err
 		}
+		l, err := links.GetTx(r.Context(), tx, link)
+		buyer = l.Name
+		return err
+	}); err != nil {
+		before, buyer = nil, ""
+	}
+	if err := s.tx(r, func(tx pgx.Tx) error {
 		if err := links.SetOverridesTx(r.Context(), tx, p.TenantID, link, in.Prices, p.Actor()); err != nil {
 			return err
 		}
@@ -360,7 +369,9 @@ func (s *Server) putLinkPrices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.mirrorPrices(r.Context(), p.TenantID, []uuid.UUID{link})
-	s.diaryChange(r.Context(), p, linkPriceWords(before, out.Items, buyer)...)
+	if buyer != "" {
+		s.diaryChange(r.Context(), p, linkPriceWords(before, out.Items, buyer)...)
+	}
 	writeJSON(w, http.StatusOK, out)
 }
 

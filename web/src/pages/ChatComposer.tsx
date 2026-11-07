@@ -454,6 +454,9 @@ export function ComposerView<R>({
               ? (p) => c.openTool("order", undefined, { order: { last: p } })
               : undefined
           }
+          onNewOrder={
+            c.o.scope?.supplies ? () => c.openTool("order") : undefined
+          }
           onClose={() => c.setTool(undefined)}
           onSaved={() => {
             // The server tells the change as a diary line in the person's

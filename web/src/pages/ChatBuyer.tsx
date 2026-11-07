@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { get, post, postOnce, put } from "../api";
+import { ApiError, get, post, postOnce, put } from "../api";
 import { useAuth } from "../auth";
 import { Icon } from "../icons";
 import { KitEmpty, KitField, KitLoading, Pill, SavedTick, Sheet } from "../kit";
@@ -21,6 +21,8 @@ import {
   stepQty,
 } from "../lib/buyer";
 import { ORDER_STEPS } from "../lib/cardframe";
+import { answersDelivery } from "../lib/purchases";
+import { buyerSteps, sameName } from "../lib/tradeorders";
 import type { ItemLink, PriceItem, SupplierPrices } from "../lib/pricelists";
 import type { Purchase } from "../lib/purchases";
 import type { StockItem, StockView } from "../lib/stock";
@@ -82,9 +84,25 @@ export function OrderSheet({
     () =>
       get<{ suppliers: Supplier[] }>("/v1/stock/suppliers").then(
         (r) => r.suppliers,
-        () => [] as Supplier[],
       ),
     [],
+  );
+  // Our last order with them, for "Same as last time".
+  const last = useLoad(
+    () =>
+      get<{ purchases: Purchase[] }>("/v1/stock/purchases").then(
+        (r) =>
+          r.purchases
+            .filter(
+              (p) =>
+                p.link_id === link &&
+                p.status !== "cancelled" &&
+                p.seller_status !== "proposed",
+            )
+            .sort((a, b) => b.created_at.localeCompare(a.created_at))[0],
+        () => undefined,
+      ),
+    [link],
   );
   const theirs = suppliers.data?.find((x) => x.link_id === link);
   const [who, setWho] = useState<string>();
@@ -146,49 +164,77 @@ export function OrderSheet({
         (x) => x.name.toLowerCase() === business.toLowerCase(),
       )?.id ??
       "new");
+  // What placing has made so far, kept for the sheet's life: a retry after
+  // a failure part way does each step once (the same keys, the same ids).
+  const made = useRef<{
+    supplier?: string;
+    linked?: boolean;
+    items: Record<string, string>;
+    orders: Record<string, Purchase>;
+    keys: Record<string, string>;
+  }>({ items: {}, orders: {}, keys: {} });
+  const keyOf = (what: string) => (made.current.keys[what] ??= key());
   const place = async () => {
     setBusy(true);
     setError(undefined);
+    const m = made.current;
     try {
-      if (!theirs) {
-        let id = supplierFor;
-        if (id === "new") {
-          const made = await post<{ supplier: { id: string } }>(
+      if (!theirs && !m.linked) {
+        let id = supplierFor === "new" ? m.supplier : supplierFor;
+        if (!id) {
+          const out = await postOnce<{ supplier: { id: string } }>(
             "/v1/stock/suppliers",
+            keyOf("supplier"),
             { name: business, phone: phone.trim() },
           );
-          id = made.supplier.id;
+          id = m.supplier = out.supplier.id;
         }
         await put(`/v1/stock/suppliers/${encodeURIComponent(id)}/link`, {
           link_id: link,
         });
-        suppliers.reload();
+        m.linked = true;
       }
       const lines = [];
       for (const l of bag.lines) {
-        let itemId = ownFor(l.item);
+        const seller = l.item.item_id;
+        let itemId = m.items[seller] ?? ownFor(l.item);
         if (itemId === "new") {
-          const made = await postOnce<{ item: { id: string } }>(
+          const out = await postOnce<{ item: { id: string } }>(
             "/v1/stock/items",
-            key(),
+            keyOf(`item-${seller}`),
             { name: l.item.name, unit: l.item.unit ?? "", quantity: 0 },
           );
-          itemId = made.item.id;
+          itemId = m.items[seller] = out.item.id;
         }
         lines.push({
-          seller_item_id: l.item.item_id,
+          seller_item_id: seller,
           quantity: l.quantity,
-          item_id: linkedTo(l.item.item_id) ? undefined : itemId,
+          item_id: linkedTo(seller) ? undefined : itemId,
         });
       }
-      const out = await postOnce<{ purchase: Purchase }>(
-        `/v1/supplier-prices/${encodeURIComponent(link)}/order`,
-        key(),
-        { lines, note: note.trim() },
-      );
-      await post(
-        `/v1/stock/purchases/${encodeURIComponent(out.purchase.id)}/send`,
-      );
+      // The same bag and note is the same order: drafted once.
+      const what = JSON.stringify([lines, note.trim()]);
+      let order = m.orders[what];
+      if (!order) {
+        const out = await postOnce<{ purchase: Purchase }>(
+          `/v1/supplier-prices/${encodeURIComponent(link)}/order`,
+          keyOf(`order-${what}`),
+          { lines, note: note.trim() },
+        );
+        order = m.orders[what] = out.purchase;
+      }
+      try {
+        await post(`/v1/stock/purchases/${encodeURIComponent(order.id)}/send`);
+      } catch (e) {
+        // Above the business's limit: drafted, for someone else to approve.
+        if (e instanceof ApiError && e.status === 409) {
+          finish(
+            `${order.reference} is drafted: it is above your limit, so someone else sends it`,
+          );
+          return;
+        }
+        throw e;
+      }
       finish(`Order sent to ${business}: ${formatPrice(bag.total)}`);
     } catch (e) {
       setError(e);
@@ -213,6 +259,15 @@ export function OrderSheet({
     new Date(list.updated_at).toDateString() === new Date().toDateString()
       ? "updated today"
       : "as they share them";
+  // Everything placing reads is here; what still stops it, said.
+  const loaded = !!suppliers.data && !!own.data && !!links.data;
+  const needPhone =
+    !!suppliers.data && !theirs && supplierFor === "new" && phone.trim() === "";
+  const stops = !loaded
+    ? undefined
+    : needPhone
+      ? `Add ${business}'s phone number to place the order.`
+      : undefined;
   return (
     <Sheet
       title={step === "review" ? "Review your order" : `Order from ${business}`}
@@ -243,26 +298,22 @@ export function OrderSheet({
               <span>Total</span>
               <b>{formatPrice(bag.total)}</b>
             </div>
+            {stops && <p className="tk-review-stops">{stops}</p>}
             <div className="tk-foot-two">
-              <button
-                type="button"
-                className="tk-btn ghost"
-                disabled={busy}
-                onClick={() => void askQuote()}
-              >
-                Ask for a quote
-              </button>
+              {can("chat.trade") && (
+                <button
+                  type="button"
+                  className="tk-btn ghost"
+                  disabled={busy}
+                  onClick={() => void askQuote()}
+                >
+                  Ask for a quote
+                </button>
+              )}
               <button
                 type="button"
                 className="tk-cta"
-                disabled={
-                  busy ||
-                  !can("table.edit") ||
-                  (!!suppliers.data &&
-                    !theirs &&
-                    supplierFor === "new" &&
-                    phone.trim() === "")
-                }
+                disabled={busy || !loaded || needPhone}
                 onClick={() => void place()}
               >
                 {busy ? "Sending…" : "Place order"}
@@ -273,14 +324,34 @@ export function OrderSheet({
       }
     >
       {done && <SavedTick words={done} />}
-      <div className="tk-order-who">
-        <span
-          className="chat-avatar"
-          aria-hidden="true"
-          data-initials={initialsOf(business)}
-        />
-        <span className="tk-row-sub">Your prices · {updated}</span>
-      </div>
+      {step === "pick" && (
+        <div className="tk-order-who">
+          <span
+            className="chat-avatar"
+            aria-hidden="true"
+            data-initials={initialsOf(business)}
+          />
+          <span className="tk-row-sub">Your prices · {updated}</span>
+          {last.data && bag.lines.length === 0 && list && (
+            <button
+              type="button"
+              className="tk-chip-btn"
+              onClick={() =>
+                setQty(
+                  reorderQty(
+                    last.data as Purchase,
+                    links.data?.item_links ?? [],
+                    list.items,
+                  ),
+                )
+              }
+            >
+              Same as last time
+              <span className="sr-only">: {last.data.reference}</span>
+            </button>
+          )}
+        </div>
+      )}
       {!prices.data ? (
         prices.error ? (
           <ErrorBox error={prices.error} />
@@ -364,44 +435,6 @@ export function OrderSheet({
         </>
       ) : (
         <div className="tk-sheet-list tk-form-body">
-          <ul className="tk-lines">
-            {bag.lines.map((l) => (
-              <li key={l.item.item_id}>
-                <span>
-                  {l.quantity} × {l.item.name}
-                </span>
-                <b>{formatPrice(l.quantity * l.item.price_kobo)}</b>
-              </li>
-            ))}
-          </ul>
-          {bag.lines.some((l) => !linkedTo(l.item.item_id)) && (
-            <>
-              <p className="tk-form-now">
-                Which of your items is each? It is remembered for next time.
-              </p>
-              {bag.lines
-                .filter((l) => !linkedTo(l.item.item_id))
-                .map((l) => (
-                  <KitField key={l.item.item_id} label={l.item.name}>
-                    <select
-                      value={ownFor(l.item)}
-                      onChange={(e) =>
-                        setMine({ ...mine, [l.item.item_id]: e.target.value })
-                      }
-                    >
-                      <option value="new">
-                        A new item of mine: {l.item.name}
-                      </option>
-                      {(own.data ?? []).map((x) => (
-                        <option key={x.id} value={x.id}>
-                          {x.name}
-                        </option>
-                      ))}
-                    </select>
-                  </KitField>
-                ))}
-            </>
-          )}
           {suppliers.data && !theirs && (
             <>
               <p className="tk-form-now">
@@ -440,6 +473,44 @@ export function OrderSheet({
               )}
             </>
           )}
+          <ul className="tk-lines">
+            {bag.lines.map((l) => (
+              <li key={l.item.item_id}>
+                <span>
+                  {l.quantity} × {l.item.name}
+                </span>
+                <b>{formatPrice(l.quantity * l.item.price_kobo)}</b>
+              </li>
+            ))}
+          </ul>
+          {bag.lines.some((l) => !linkedTo(l.item.item_id)) && (
+            <>
+              <p className="tk-form-now">
+                Which of your items is each? It is remembered for next time.
+              </p>
+              {bag.lines
+                .filter((l) => !linkedTo(l.item.item_id))
+                .map((l) => (
+                  <KitField key={l.item.item_id} label={l.item.name}>
+                    <select
+                      value={ownFor(l.item)}
+                      onChange={(e) =>
+                        setMine({ ...mine, [l.item.item_id]: e.target.value })
+                      }
+                    >
+                      <option value="new">
+                        A new item of mine: {l.item.name}
+                      </option>
+                      {(own.data ?? []).map((x) => (
+                        <option key={x.id} value={x.id}>
+                          {x.name}
+                        </option>
+                      ))}
+                    </select>
+                  </KitField>
+                ))}
+            </>
+          )}
           <KitField label="A note for them (optional)">
             <input
               value={note}
@@ -459,22 +530,44 @@ export function OrderSheet({
 }
 
 /** An order sent to a supplier: what it asks for, where it is, and what
- * the buyer can do (confirm their quote, cancel, say all came, reorder). */
+ * the buyer can do now (confirm their quote, saying which of our items each
+ * line is; accept their change; say all came, or how many did; cancel;
+ * reorder), each as its permission allows. */
 export function PurchaseView({
   purchase,
   onSaved,
   onReorder,
-  canEdit = true,
 }: {
   purchase: Purchase;
   onSaved: (line: string | null) => void;
   onReorder?: (p: Purchase) => void;
-  canEdit?: boolean;
 }) {
+  const { can } = useAuth();
+  const manage = can("storefront.manage");
+  const receive = can("table.edit");
   const { confirm, node } = useConfirm();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
+  const [mode, setMode] = useState<"" | "confirm" | "short">("");
   const st = purchaseState(purchase);
+  const steps = buyerSteps(purchase);
+  // Delivered and not yet said what came (a received order is done).
+  const delivery = answersDelivery(purchase) && purchase.status !== "received";
+  const own = useLoad(
+    () =>
+      mode === "confirm"
+        ? get<StockView>("/v1/stock").then((r) => r.items)
+        : Promise.resolve(undefined),
+    [mode],
+  );
+  const [chosen, setChosen] = useState<Record<number, string>>({});
+  const pick = (i: number) =>
+    chosen[i] ?? sameName(own.data ?? [], purchase.lines[i]?.item ?? "");
+  const picks = purchase.lines.map((_, i) => pick(i));
+  const [counts, setCounts] = useState<Record<number, string>>({});
+  const countOf = (i: number) =>
+    counts[i] ??
+    String(purchase.lines[i]?.delivered ?? purchase.lines[i]?.quantity ?? 0);
   const act = async (what: string, words: string, body?: unknown) => {
     setBusy(true);
     setError(undefined);
@@ -489,13 +582,29 @@ export function PurchaseView({
       setBusy(false);
     }
   };
-  const open =
-    purchase.status !== "cancelled" && purchase.status !== "received";
+  // Their change, while it waits on us: its lines and what it comes to.
+  const lines =
+    steps.acceptChange && purchase.change ? purchase.change : purchase.lines;
+  const total =
+    steps.acceptChange && purchase.change
+      ? purchase.change.reduce((n, l) => n + l.quantity * l.cost_kobo, 0)
+      : purchase.total_kobo;
+  const back = (
+    <button
+      type="button"
+      className="tk-btn ghost"
+      disabled={busy}
+      onClick={() => (setMode(""), setError(undefined))}
+    >
+      Not now
+    </button>
+  );
   return (
     <>
       <div className="tk-sheet-list tk-form-body">
-        <p className="tk-form-now">
-          {purchase.supplier} · <Pill tone={st.tone}>{st.word}</Pill>
+        <p className="tk-form-now tk-who-state">
+          <span>{purchase.supplier}</span>
+          <Pill tone={st.tone}>{st.word}</Pill>
         </p>
         {st.step !== undefined && (
           <span className="tk-progress">
@@ -517,31 +626,93 @@ export function PurchaseView({
             </span>
           </span>
         )}
-        <ul className="tk-lines">
-          {(purchase.seller_status === "changed" && purchase.change
-            ? purchase.change
-            : purchase.lines
-          ).map((l, i) => (
-            <li key={i}>
-              <span>
-                {l.quantity} × {l.item}
-              </span>
-              <b>
-                {l.cost_kobo
-                  ? formatPrice(l.quantity * l.cost_kobo)
-                  : "No price"}
-              </b>
+        {steps.acceptChange && (
+          <p className="tk-form-now">
+            {purchase.supplier} changed it
+            {purchase.counter ? `: “${purchase.counter}”` : ""}. It comes to{" "}
+            {formatPrice(total)} now, from {formatPrice(purchase.total_kobo)}.
+          </p>
+        )}
+        {mode === "" && (
+          <ul className="tk-lines">
+            {lines.map((l, i) => (
+              <li key={i}>
+                <span>
+                  {l.quantity} × {l.item}
+                </span>
+                <b>
+                  {l.cost_kobo
+                    ? formatPrice(l.quantity * l.cost_kobo)
+                    : "No price"}
+                </b>
+              </li>
+            ))}
+            <li className="tk-lines-total">
+              <span>Total</span>
+              <b>{formatPrice(total)}</b>
             </li>
+          </ul>
+        )}
+        {mode === "confirm" &&
+          (!own.data ? (
+            own.error ? (
+              <p className="tk-form-now">
+                Keep your stock on Taskiem to confirm it, so what comes is
+                received into your items.
+              </p>
+            ) : (
+              <KitLoading rows={2} label="Loading your items…" />
+            )
+          ) : (
+            <>
+              <p className="tk-form-now">
+                Which of your items is each? What comes is received into it.
+              </p>
+              {purchase.lines.map((l, i) => (
+                <KitField key={i} label={`Their ${l.item}`}>
+                  <select
+                    value={pick(i)}
+                    onChange={(e) =>
+                      setChosen({ ...chosen, [i]: e.target.value })
+                    }
+                  >
+                    <option value="">Choose your item</option>
+                    {(own.data ?? []).map((it) => (
+                      <option key={it.id} value={it.id}>
+                        {it.name}
+                      </option>
+                    ))}
+                  </select>
+                </KitField>
+              ))}
+            </>
           ))}
-          <li className="tk-lines-total">
-            <span>Total</span>
-            <b>{formatPrice(purchase.total_kobo)}</b>
-          </li>
-        </ul>
-        {purchase.seller_note && (
+        {mode === "short" && (
+          <>
+            <p className="tk-form-now">
+              How many of each came? {purchase.supplier} is told, and agrees the
+              count or talks to you.
+            </p>
+            {purchase.lines.map((l, i) => (
+              <KitField key={i} label={`${l.item}: of ${l.quantity}`}>
+                <input
+                  inputMode="numeric"
+                  value={countOf(i)}
+                  onChange={(e) =>
+                    setCounts({
+                      ...counts,
+                      [i]: e.target.value.replace(/\D/g, ""),
+                    })
+                  }
+                />
+              </KitField>
+            ))}
+          </>
+        )}
+        {purchase.seller_note && mode === "" && (
           <p className="tk-form-now">Their note: “{purchase.seller_note}”</p>
         )}
-        {purchase.delivered_at && (
+        {purchase.delivered_at && mode === "" && (
           <p className="tk-form-now">
             Delivered{" "}
             {new Date(purchase.delivered_at).toLocaleDateString("en-GB", {
@@ -553,79 +724,124 @@ export function PurchaseView({
         <ErrorBox error={error} />
       </div>
       <div className="tk-sheet-foot tk-foot-two">
-        {canEdit && st.quote && (
-          <button
-            type="button"
-            className="tk-cta"
-            disabled={busy}
-            onClick={() =>
-              void act(
-                "confirm-proposed",
-                `Confirmed ${purchase.reference}`,
-                {},
-              )
-            }
-          >
-            Confirm their quote
-          </button>
-        )}
-        {canEdit && purchase.seller_status === "changed" && (
-          <button
-            type="button"
-            className="tk-cta"
-            disabled={busy}
-            onClick={() =>
-              void act(
-                "accept-change",
-                `Accepted the change to ${purchase.reference}`,
-              )
-            }
-          >
-            Accept the change
-          </button>
-        )}
-        {canEdit &&
-          purchase.seller_status === "delivered" &&
-          purchase.status !== "received" && (
+        {mode === "confirm" ? (
+          <>
+            {back}
             <button
               type="button"
               className="tk-cta"
-              disabled={busy}
+              disabled={busy || !own.data || picks.some((x) => !x)}
               onClick={() =>
-                void act("all-came", `All of ${purchase.reference} came`)
+                void act(
+                  "confirm-proposed",
+                  `Confirmed ${purchase.reference}`,
+                  { items: picks },
+                )
               }
             >
-              All came
+              Confirm the order
             </button>
-          )}
-        {canEdit &&
-          open &&
-          !purchase.cancel_asked_at &&
-          purchase.seller_status !== "delivered" && (
+          </>
+        ) : mode === "short" ? (
+          <>
+            {back}
             <button
               type="button"
-              className="tk-btn ghost"
-              disabled={busy}
-              onClick={async () =>
-                (await confirm({
-                  title: `Cancel ${purchase.reference}?`,
-                  body: `${purchase.supplier} is told.`,
-                  ok: "Cancel the order",
-                  danger: true,
-                })) && void act("cancel", `Cancelled ${purchase.reference}`)
+              className="tk-cta"
+              disabled={
+                busy || purchase.lines.some((_, i) => countOf(i) === "")
+              }
+              onClick={() =>
+                void act(
+                  "not-all-came",
+                  `Told ${purchase.supplier} what came of ${purchase.reference}`,
+                  { counts: purchase.lines.map((_, i) => Number(countOf(i))) },
+                )
               }
             >
-              Cancel
+              Tell {purchase.supplier}
             </button>
-          )}
-        {onReorder && (
-          <button
-            type="button"
-            className={st.quote || open ? "tk-btn ghost" : "tk-cta"}
-            onClick={() => onReorder(purchase)}
-          >
-            Reorder
-          </button>
+          </>
+        ) : (
+          <>
+            {manage && steps.confirmProposed && (
+              <button
+                type="button"
+                className="tk-cta"
+                disabled={busy}
+                onClick={() => setMode("confirm")}
+              >
+                Confirm their quote
+              </button>
+            )}
+            {manage && steps.acceptChange && (
+              <button
+                type="button"
+                className="tk-cta"
+                disabled={busy}
+                onClick={() =>
+                  void act(
+                    "accept-change",
+                    `Accepted the change to ${purchase.reference}`,
+                  )
+                }
+              >
+                Accept the change
+              </button>
+            )}
+            {receive && delivery && (
+              <>
+                <button
+                  type="button"
+                  className="tk-btn ghost"
+                  disabled={busy}
+                  onClick={() => setMode("short")}
+                >
+                  Not all came
+                </button>
+                <button
+                  type="button"
+                  className="tk-cta"
+                  disabled={busy}
+                  onClick={() =>
+                    void act("all-came", `All of ${purchase.reference} came`)
+                  }
+                >
+                  All came
+                </button>
+              </>
+            )}
+            {manage && steps.cancel && !delivery && (
+              <button
+                type="button"
+                className="tk-btn ghost"
+                disabled={busy}
+                onClick={async () =>
+                  (await confirm({
+                    title: `Cancel ${purchase.reference}?`,
+                    body: `${purchase.supplier} is told.`,
+                    ok: "Cancel the order",
+                    danger: true,
+                  })) && void act("cancel", `Cancelled ${purchase.reference}`)
+                }
+              >
+                {steps.confirmProposed ? "Decline" : "Cancel"}
+              </button>
+            )}
+            {onReorder && !delivery && (
+              <button
+                type="button"
+                className={
+                  steps.confirmProposed || steps.acceptChange
+                    ? "tk-btn ghost"
+                    : "tk-cta"
+                }
+                onClick={() => onReorder(purchase)}
+              >
+                Reorder
+              </button>
+            )}
+          </>
         )}
       </div>
       {node}
@@ -775,6 +991,16 @@ export function BillView({
         )}
       </div>
       <div className="tk-sheet-foot tk-foot-two">
+        {mode !== "" && (
+          <button
+            type="button"
+            className="tk-btn ghost"
+            disabled={busy}
+            onClick={() => (setMode(""), setError(undefined))}
+          >
+            Not now
+          </button>
+        )}
         {mode === "query" ? (
           <button
             type="button"

@@ -111,6 +111,17 @@ func TestChatTrade(t *testing.T) {
 	if d := diary(buyer); !has(d, "Sent order "+ref+" to Dangote Stores: ₦234,000") {
 		t.Fatalf("step 2, the buyer's diary: %q", d)
 	}
+	// Sent again: the same answer, and no second line.
+	buyer.must(200, "POST", "/v1/stock/purchases/"+po["id"].(string)+"/send", nil)
+	var sentLines int
+	for _, l := range diary(buyer) {
+		if strings.HasPrefix(l, "Sent order "+ref) {
+			sentLines++
+		}
+	}
+	if sentLines != 1 {
+		t.Fatalf("step 2, sent once: %d lines", sentLines)
+	}
 	drainLinked(t, w.world)
 
 	// 3. The seller sees the order's card, and accepts it from Orders.

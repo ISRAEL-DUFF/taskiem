@@ -195,7 +195,7 @@ item links, purchase orders, bills); the chat adds no new kind of record.
 
 **Where they show.** In a conversation with a business that shares a price list
 with us (`/v1/link-chats/{link}/items` answers `whose: theirs`), to someone who
-may change stock (`table.edit`):
+may both draft (`table.edit`) and send (`storefront.manage`) orders:
 
 - an **Order** button in the conversation's head, and **Order** first in the
   tools panel ("From Bayo Rice");
@@ -207,23 +207,31 @@ may change stock (`table.edit`):
 Two more tools in every panel: **Your orders** (`table.read`, the orders sent to
 suppliers, "3 to confirm" when they wait on us) and **Bills** (`invoice.read`,
 "2 to pay"). In a business's conversation both list only what is with that
-business.
+business, and Your orders ends with **New order**; an order to a supplier not on
+Taskiem shows in no conversation. Order cards and bill rows show an icon, and an
+order or bill is titled by its number.
 
 **Order** (the Buyer design). Their price list as rows, each with a stepper:
 the first tap takes their least ("min 2"), then one at a time, down to none; an
-item not available now cannot be added. A pine bar floats over the list with
-how many items and the total, and **Review order**. Reviewing shows the lines
+item not available now cannot be added. **Same as last time** fills the bag
+with the last order to them at today's prices. A pine bar floats over the list with
+how many items and the total, and **Review order**. Reviewing first asks, when they are not yet one of our suppliers, which of
+ours they are or for their phone number to make them one; then shows the lines
 and the total; says once which of our items each of theirs is (the same name is
 found first, or a new item of ours), which is remembered as the item link; a
-note for them. When they are not yet one of our suppliers, it asks which of
-ours they are, or makes them one with a phone number, and links it, so the
-order goes to them on Taskiem. **Place order** drafts the order at their price
-for us and sends it; **Ask for a quote** sends the lines to them as a message
-instead. The tick, then the sheet goes.
+note for them. What still stops the order is said above the buttons. **Place
+order** links the supplier, drafts the order at their price for us and sends
+it; a retry after a failure part way repeats nothing already done (each step
+keeps its key). Above the business's purchase limit the order stays drafted for
+someone else to send, and the sheet says so. **Ask for a quote** (for those who
+may write to businesses) sends the lines to them as a message instead. The
+tick, then the sheet goes.
 
 **Your orders.** An order's steps (Placed, Accepted, On the way, Delivered), its
-lines and what they said; what we can do now: confirm their quote, accept their
-change, say all came, cancel; and **Reorder**, which opens Order with the last
+lines and what they said (their change with what it comes to now); what we can
+do now, each as the person's permission allows: confirm their quote (saying
+which of our items each line is), accept their change, say all came or how many
+of each did (**Not all came**), cancel or decline; and **Reorder**, which opens Order with the last
 order's lines at today's prices (their least where it went up, and nothing
 they no longer offer).
 
@@ -231,15 +239,18 @@ they no longer offer).
 the account to transfer to with the bill's number; **Pay ₦X** opens the
 supplier's own checkout (their invoice page, a card or a transfer) in a new
 tab, and **Pay from Taskiem** where the business pays bills by a workflow;
-**Question it** and **I paid outside Taskiem**, each telling the supplier.
+**Question it** and **I paid outside Taskiem**, each telling the supplier, with
+**Not now** back to the bill.
 
 **Diary lines** for the buyer's steps, kept and told like the seller's (§4):
 "Sent order PO-0042 to Bayo Rice: ₦234,000", "Confirmed Bayo Rice's quote for
-order PO-0042", "All of order PO-0042 came from Bayo Rice", "Paying INV-0107
-from Taskiem: ₦304,000 to Bayo Rice", "Told Bayo Rice you paid ₦50,000 of
+order PO-0042", "All of order PO-0042 came from Bayo Rice", "Started paying
+INV-0107 from Taskiem: ₦304,000 to Bayo Rice", "Told Bayo Rice you paid ₦50,000 of
 INV-0107 outside Taskiem", "Questioned INV-0107 from Bayo Rice". The seller's
 price for one buyer is a line too: "Price of Rice 50kg for Ada's Kitchen:
-₦76,000 → ₦78,000". Order cards now carry the order's total on both sides.
+₦76,000 → ₦78,000". An order sent again writes no second line. Order cards
+now carry the order's total on both sides (a change's card, what the change
+comes to).
 
 **From the phone.** "tools" lists Your orders and Bills with the rest, and
 "/bills" opens Bills on the web.
@@ -288,5 +299,8 @@ on the seller's checkout; both see the order and the invoice in their history.
 - `web/e2e/chat-buyer.spec.ts`: on a phone and a computer, Order from the
   conversation's head (steppers, their least, the bag, review, our item found by
   its name, the note, placed and sent), Ask for a quote, a bill paid on their
-  checkout and questioned, and Reorder from Your orders; axe in both themes.
+  checkout and questioned, and Reorder from Your orders; axe in both themes;
+  a quote confirmed with our items, Not all came, Not now; a supplier added and
+  linked once with a retry that repeats nothing, Same as last time; no Order
+  without leave to send orders; a card opening its bill or order.
 - Unit tests: `lib/buyer` (steppers, the bag, the quote, an order's state, reorder).

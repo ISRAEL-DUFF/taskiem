@@ -36,7 +36,8 @@ export interface ToolRow {
   tags: string[];
   /** What it is, for its form (a stock item, an order, a table…). */
   data?: unknown;
-  /** The linked business it is with (a buyer's orders and bills). */
+  /** The linked business it is with (a buyer's orders and bills): ""
+   * for one with a business not on Taskiem, so no conversation shows it. */
   link?: string;
 }
 
@@ -58,6 +59,9 @@ export interface Tool {
   chips?: { label: string; tag: string }[];
   /** The full page's button. */
   more: string;
+  /** Rows with no name of their own to show (an order, a bill): an icon
+   * on each row's tile, not letters of a reference. */
+  rowIcon?: string;
 }
 
 const count = (n: number, one: string, many = `${one}s`) =>
@@ -202,8 +206,8 @@ export const TOOLS: Tool[] = [
       ((data as { orders?: TradeOrder[] } | undefined)?.orders ?? []).map(
         (o) => ({
           id: o.id,
-          name: `${o.order_reference} · ${o.buyer_name}`,
-          sub: formatPrice(o.total_kobo),
+          name: o.order_reference,
+          sub: `${o.buyer_name} · ${formatPrice(o.total_kobo)}`,
           pill: {
             text: ORDER_WORD[o.status] ?? o.status,
             tone:
@@ -219,6 +223,7 @@ export const TOOLS: Tool[] = [
         }),
       ),
     line: () => "From businesses",
+    rowIcon: "invoices",
     badge: (r) => {
       const n = tagged(r, "new");
       return n > 0 ? { text: `${n} new`, tone: "lime" } : undefined;
@@ -266,8 +271,8 @@ TOOLS.push(
           const st = purchaseState(p);
           return {
             id: p.id,
-            name: `${p.reference} · ${p.supplier}`,
-            sub: `${formatPrice(p.total_kobo)} · ${day(p.created_at)}`,
+            name: p.reference,
+            sub: `${p.supplier} · ${formatPrice(p.total_kobo)} · ${day(p.created_at)}`,
             pill: {
               text: st.word,
               tone: st.tone === "danger" ? "warn" : st.tone,
@@ -279,11 +284,12 @@ TOOLS.push(
                 ? []
                 : ["open"],
             data: p,
-            link: p.link_id,
+            link: p.link_id ?? "",
           };
         },
       ),
     line: (r) => count(r.length, "order"),
+    rowIcon: "orders",
     badge: (r) => {
       const n = tagged(r, "quote");
       return n > 0 ? { text: `${n} to confirm`, tone: "warn" } : undefined;
@@ -297,18 +303,19 @@ TOOLS.push(
   {
     key: "bills",
     title: "Bills",
-    icon: "invoices",
+    icon: "money",
     perm: "invoice.read",
     url: "/v1/bills?status=all",
     page: "/bills",
     rows: (data) =>
       ((data as { bills?: Bill[] } | undefined)?.bills ?? []).map((b) => ({
         id: b.id,
-        name: `${b.reference} · ${b.supplier_name}`,
-        sub:
+        name: b.reference,
+        sub: `${b.supplier_name} · ${
           b.due_kobo > 0
             ? `${formatPrice(b.due_kobo)} to pay${b.due_on ? ` · due ${day(b.due_on)}` : ""}`
-            : `${formatPrice(b.amount_kobo)} · paid`,
+            : formatPrice(b.amount_kobo)
+        }`,
         pill:
           b.status === "paid"
             ? { text: "Paid", tone: "lime" }
@@ -323,6 +330,7 @@ TOOLS.push(
         link: b.link,
       })),
     line: (r) => `${tagged(r, "due")} to pay`,
+    rowIcon: "money",
     badge: (r) => {
       const n = tagged(r, "due");
       return n > 0 ? { text: `${n} to pay`, tone: "warn" } : undefined;

@@ -77,7 +77,9 @@ func TestChatDiary(t *testing.T) {
 func TestChangesTold(t *testing.T) {
 	w := shopWorld(t)
 	withStock(w.world)
-	w.srv.DiaryWindow = 100 * time.Millisecond
+	// Wide enough that seven changes made one after another fall in one
+	// window even on a busy machine; told() waits it out.
+	w.srv.DiaryWindow = 2 * time.Second
 	owner := w.tenant(t, "Bayo Rice", "bayo@changes.test")
 	const on = "+2348010000741"
 	w.bind(t, owner, on)
@@ -94,7 +96,7 @@ func TestChangesTold(t *testing.T) {
 	}
 	told := func() []string {
 		t.Helper()
-		time.Sleep(250 * time.Millisecond)
+		time.Sleep(w.srv.DiaryWindow + 250*time.Millisecond)
 		w.srv.WaitBackground()
 		var out []string
 		for _, m := range w.graph.Sent(on) {

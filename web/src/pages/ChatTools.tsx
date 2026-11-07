@@ -160,8 +160,8 @@ export function ToolsPanel({
         {
           key: "order",
           title: "Order",
-          icon: "orders",
-          perm: "table.edit",
+          icon: "plus",
+          perm: "storefront.manage",
           url: "",
           page: "/storefront/suppliers",
           rows: () => [],
@@ -286,8 +286,10 @@ export function mayEdit(tool: ToolKey, can: (p: string) => boolean): boolean {
     case "services":
       return can("table.edit") && can("storefront.manage");
     case "purchases":
+      return can("storefront.manage");
     case "order":
-      return can("table.edit");
+      // Drafting needs table.edit; sending and the supplier, storefront.manage.
+      return can("table.edit") && can("storefront.manage");
     case "bills":
       return can("invoice.manage");
     default:
@@ -372,7 +374,6 @@ function Detail({
         <PurchaseView
           purchase={row.data as Purchase}
           onSaved={onSaved}
-          canEdit={canEdit}
           onReorder={
             onReorder && (row.data as Purchase).link_id ? onReorder : undefined
           }
@@ -404,6 +405,7 @@ export function ToolSheet({
   start,
   scope,
   onReorder,
+  onNewOrder,
 }: {
   tool: ToolKey;
   from?: DOMRect | null;
@@ -412,6 +414,8 @@ export function ToolSheet({
   scope?: string;
   /** Your orders: an order again, in the Order sheet. */
   onReorder?: (p: Purchase) => void;
+  /** Your orders, in a supplier's conversation: a new order to them. */
+  onNewOrder?: () => void;
   /** Where a typed request points: a row, or a new one, filled in. */
   start?: { rowId?: string; add?: boolean; prefill?: Prefill };
   /** Tells a change (its diary line). */
@@ -473,7 +477,11 @@ export function ToolSheet({
         </Link>
       }
       footer={
-        open ? undefined : add && mayEdit(key, can) ? (
+        open ? undefined : key === "purchases" && onNewOrder ? (
+          <button type="button" className="tk-cta" onClick={onNewOrder}>
+            New order
+          </button>
+        ) : add && mayEdit(key, can) ? (
           <button
             type="button"
             className="tk-cta"
@@ -571,7 +579,11 @@ export function ToolSheet({
                       onClick={() => setOpen(r)}
                     >
                       <span className="tk-row-tile" aria-hidden="true">
-                        {tileLetters(r.name)}
+                        {tool.rowIcon ? (
+                          <Icon name={tool.rowIcon} />
+                        ) : (
+                          tileLetters(r.name)
+                        )}
                       </span>
                       <span className="tk-row-words">
                         <span className="tk-row-name">{r.name}</span>

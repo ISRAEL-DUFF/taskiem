@@ -695,8 +695,19 @@ func (s *Server) orderCards(ctx context.Context, t links.Told) uuid.UUID {
 	var amount *int64
 	_ = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{buyer}, func(tx pgx.Tx) error {
 		x, err := stock.PurchaseTx(ctx, tx, buyer, t.Purchase, false)
-		if err == nil && x.TotalKobo > 0 {
-			amount = &x.TotalKobo
+		if err != nil {
+			return err // no total: the cards go without it
+		}
+		total := x.TotalKobo
+		// A change waiting on the buyer: what it would come to.
+		if len(x.Change) > 0 {
+			total = 0
+			for _, l := range x.Change {
+				total += l.Quantity * l.CostKobo
+			}
+		}
+		if total > 0 {
+			amount = &total
 		}
 		return nil
 	})

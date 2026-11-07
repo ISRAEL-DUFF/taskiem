@@ -1062,17 +1062,24 @@ export function ConversationPane({
         : Promise.resolve({} as Record<string, string>),
     [chatTools, priced.data?.whose],
   );
+  // We buy from them: the Order sheet (drafting needs table.edit; sending
+  // and the supplier, storefront.manage), and our orders and bills with them.
+  const supplies =
+    chatTools &&
+    priced.data?.whose === "theirs" &&
+    can("table.edit") &&
+    can("storefront.manage");
   const liveNow: Live = {
     photos: ownPhotos.data,
     items: priced.data?.items ?? [],
     whose: priced.data?.whose ?? "",
     stock: ownStock.data ?? [],
     link: conv.link,
-    onOrder: (itemId, from) => c.openTool("order", from, { order: { itemId } }),
+    // Without leave to order, Order is the prices page, as before.
+    onOrder: supplies
+      ? (itemId, from) => c.openTool("order", from, { order: { itemId } })
+      : undefined,
   };
-  // We buy from them: the Order sheet, and our orders and bills with them.
-  const supplies =
-    chatTools && priced.data?.whose === "theirs" && can("table.edit");
   const openDoc = (card: DocCard, from: DOMRect) =>
     c.openTool(card.doc === "purchase" ? "purchases" : "bills", from, {
       rowId: card.id,

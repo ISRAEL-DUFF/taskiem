@@ -42,7 +42,7 @@ describe("the chat's tools", () => {
     const rows = tool("orders").rows({
       orders: [{ id: "o1", order_reference: "AD-1", buyer_name: "Ada", total_kobo: 82_000_000, status: "received" }],
     });
-    expect(rows[0]).toMatchObject({ name: "AD-1 · Ada", sub: "₦820,000", pill: { text: "New", tone: "lime" } });
+    expect(rows[0]).toMatchObject({ name: "AD-1", sub: "Ada · ₦820,000", pill: { text: "New", tone: "lime" } });
     expect(tool("orders").badge?.(rows)).toEqual({ text: "1 new", tone: "lime" });
   });
 });
