@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>7 · Every change is written down</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script src="../kit/kit.js"></script>
+<script>window.scene = { duration: 6000 };</script>
+<style>
+/* Scene 7 (video/script.md): the change lands as a line (400 ms) and
+   glows lime; the same line reaches Ada on WhatsApp (a plain card: the
+   words Taskiem sends, no one's brand). */
+.float { right: 650px; top: 650px; }
+.portrait .float { right: auto; left: 70px; top: 1460px; width: 600px; }
+.float .from { font-size: 15px; color: var(--muted); }
+.float .msg { margin-top: 12px; padding: 14px 16px; border-radius: 16px; background: #f3f5f1; font-size: 18px; line-height: 1.4; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="caption">
+    <span class="kicker show">2 · Tools</span>
+    <h1 class="headline up" style="--at:.15s">Every change is <em>written down</em>.</h1>
+    <p class="sub up" style="--at:.35s">In the chat where you made it, and on WhatsApp, Telegram or Slack.</p>
+  </div>
+  <div class="phone"><div class="island"></div><div class="screen"><div class="app">
+    <header data-name="Rivers Foods Ltd" data-sub="Buys from you · price list: Trade" data-av="RF" data-tone="lime"></header>
+    <main class="chat">
+      <div class="day">Today</div>
+      <div class="bubble">Can we get the party pack on Saturday? 40 plates.<time>8:21</time></div>
+      <div class="dl lands" style="--at:.5s">✓ You changed Party pack, 10 plates: ₦42,000 → ₦45,000</div>
+      <div class="bubble mine in" style="--at:3.6s">Yes! New trade price is on your list.<time>8:24</time></div>
+    </main>
+    <footer data-composer="Message, @ to tag"></footer>
+  </div></div></div>
+  <aside class="float pop" style="--at:2.0s" aria-label="The same line on WhatsApp">
+    <div class="from">On WhatsApp · Taskiem</div>
+    <div class="msg">✓ You changed <b>Party pack, 10 plates</b>: ₦42,000 → ₦45,000 on the Trade price list.</div>
+  </aside>
+</div>
+</body>
+</html>

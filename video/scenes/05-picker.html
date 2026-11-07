@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>5 · Tag a product, a service or a business</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script src="../kit/kit.js"></script>
+<script>window.scene = { duration: 10000 };</script>
+<style>
+/* Scene 5 (video/script.md): "Need 20 more @ri" typed in Bayo's chat; the
+   picker grows over the chat (280 ms) as the Main board draws it; the
+   rice is tagged and sent. */
+@keyframes picker { from { opacity: 0; transform: translateY(12px) scale(.97); } to { opacity: 1; transform: none; } }
+.picker { position: absolute; left: 10px; right: 10px; bottom: 84px; background: #fff; border-radius: 22px; box-shadow: 0 24px 48px -16px rgba(14,26,20,.35); padding: 12px 8px; z-index: 3; transform-origin: 50% 100%; animation: picker .28s var(--ease) both, k-gone .2s var(--ease) both; animation-delay: 2.5s, 5.7s; }
+.picker .hd { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); padding: 0 10px 6px; }
+.picker .grp { font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--muted); padding: 8px 10px 2px; }
+.picker .prow { padding: 7px 10px; border-radius: 14px; }
+.picker .prow.on { background: var(--soft); }
+.typed span { color: var(--ink); }
+.typed b { color: var(--pine); }
+.tagchip { color: var(--pine); font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="caption">
+    <span class="kicker up" style="--at:.1s">2 · Tools</span>
+    <h1 class="headline up" style="--at:.25s">Tag a product, a service <em>or a business</em>.</h1>
+    <p class="sub up" style="--at:.45s">Type @ and pick: its price and stock come with it.</p>
+  </div>
+  <div class="phone show"><div class="island"></div><div class="screen"><div class="app">
+    <header data-name="Bayo Rice Mills" data-sub="Your supplier · linked" data-av="BR"></header>
+    <main class="chat">
+      <div class="day">Today</div>
+      <div class="bubble">Morning Ada! New harvest just landed, prices are up a little.<time>8:12</time></div>
+      <div class="bubble mine pop" style="--at:7.3s">Need 20 more <span class="tagchip">Rice, 25kg bag</span><time>8:15</time></div>
+    </main>
+    <footer>
+      <span class="round" style="background:#fff;box-shadow:0 1px 2px rgba(14,26,20,.12)" data-icon="tools"></span>
+      <span class="box typed">
+        <span class="show-io" style="--at:1.0s;--out:6.9s">Need</span>&nbsp;<span class="show-io" style="--at:1.3s;--out:6.9s">20</span>&nbsp;<span class="show-io" style="--at:1.6s;--out:6.9s">more</span>&nbsp;<b class="show-io" style="--at:2.0s;--out:5.8s">@</b><b class="show-io" style="--at:2.25s;--out:5.8s">ri</b><b class="show-io tagchip" style="--at:5.8s;--out:6.9s;margin-left:-26px">Rice, 25kg bag</b>
+      </span>
+      <span class="round" style="background:#0d3b2e" data-icon="send"></span>
+    </footer>
+    <section class="picker">
+      <div class="hd"><span>Matches for <b style="color:#0e1a14">ri</b></span><span>Tag a thing or a business</span></div>
+      <div class="grp">PRODUCTS</div>
+      <div class="prow on"><span class="tile" style="background:#e9f7d0;color:#0d3b2e;width:42px;height:42px">RB</span><div class="nm"><b>Rice, 50kg bag</b><span>₦78,000 · 42 in stock</span></div><span class="chip">Enter</span></div>
+      <div class="prow"><span class="tile" style="background:#e9f7d0;color:#0d3b2e;width:42px;height:42px">RB</span><div class="nm"><b>Rice, 25kg bag</b><span>₦41,000</span></div><span class="pill warn">4 left</span></div>
+      <div class="grp">SERVICES</div>
+      <div class="prow"><span class="tile" style="background:#dce8fb;color:#2f5bd3;width:42px;height:42px">RM</span><div class="nm"><b>Rice milling, per bag</b><span>₦2,500 · 30 min</span></div></div>
+      <div class="grp">BUSINESSES</div>
+      <div class="prow"><span class="avatar lime">RF</span><div class="nm"><b>Rivers Foods Ltd</b><span>Linked · buys from you</span></div></div>
+      <div class="prow"><span class="avatar pine" data-icon="spark"></span><div class="nm"><b>Taskiem</b><span>Ask Taskiem to do it for you</span></div></div>
+    </section>
+    <i class="tap" data-at="5300" style="left:180px;top:494px"></i>
+    <i class="tap" data-at="6900" style="left:356px;top:791px"></i>
+  </div></div></div>
+</div>
+</body>
+</html>

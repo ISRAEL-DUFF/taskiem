@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>2 · What if the chat could run it with you</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script src="../kit/kit.js"></script>
+<script>window.scene = { duration: 5000 };</script>
+<style>
+/* Scene 2 (video/script.md): the Taskiem chat list, rows arriving 40 ms
+   apart (the app's stagger), the Taskiem conversation first. */
+.chats { background: #fff; flex: 1; }
+.chats h2 { margin: 0; padding: 58px 16px 10px; font-size: 30px; font-weight: 800; letter-spacing: -.02em; display: flex; align-items: center; justify-content: space-between; }
+.chats h2 small { font-size: 14px; font-weight: 500; color: var(--muted); }
+.search { margin: 0 16px 10px; height: 42px; border-radius: 12px; background: var(--soft); display: flex; align-items: center; padding: 0 14px; color: var(--muted); font-size: 15px; }
+.list-row .avatar.peach { background: var(--peach-bg); color: var(--peach-ink); }
+.list-row .avatar.blue { background: #dce8fb; color: #2f5bd3; }
+.list-row .avatar.sand { background: #f3ead2; color: #6f5420; }
+.list-row .avatar.lav { background: #ece6f4; color: #5b3d86; }
+.need { color: var(--pine) !important; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="caption">
+    <span class="kicker up" style="--at:.1s">Taskiem chat</span>
+    <h1 class="headline up" style="--at:.25s">What if the chat could <em>run it with you</em>?</h1>
+    <p class="sub up" style="--at:.45s">One chat that holds your business: its tools, its orders, its people.</p>
+  </div>
+  <div class="phone pop" style="--at:.2s"><div class="island"></div><div class="screen"><div class="app">
+    <div class="chats">
+      <h2>Chats <small>Ada's Kitchen</small></h2>
+      <div class="search">Search chats, messages, businesses</div>
+      <div class="list-row in" style="--at:.6s"><div class="avatar pine" data-spark></div><div class="nm"><b>Taskiem</b><span class="need">8 things need you</span></div><time>8:00</time></div>
+      <div class="list-row in" style="--at:.64s"><div class="avatar lime">RF</div><div class="nm"><b>Rivers Foods Ltd</b><span>Can we get the party pack on Saturday?</span></div><time>8:21</time></div>
+      <div class="list-row in" style="--at:.68s"><div class="avatar pine">BR</div><div class="nm"><b>Bayo Rice Mills</b><span>Order AD‑7Q4K2P accepted</span></div><span class="badge">2</span></div>
+      <div class="list-row in" style="--at:.72s"><div class="avatar peach">EE</div><div class="nm"><b>Eko Events Co.</b><span>Yes we can. I'll send you a quote</span></div><span class="badge">1</span></div>
+      <div class="list-row in" style="--at:.76s"><div class="avatar blue">CL</div><div class="nm"><b>CoolBox Logistics</b><span>Rider is on the way to Yaba</span></div><time>7:52</time></div>
+      <div class="list-row in" style="--at:.80s"><div class="avatar sand">MN</div><div class="nm"><b>Mama Ngozi Stores</b><span>Invoice INV‑2287 paid</span></div><time>Tue</time></div>
+      <div class="list-row in" style="--at:.84s"><div class="avatar lav">KB</div><div class="nm"><b>Kola's Bakery</b><span>Asks to link · Yaba</span></div><time>Mon</time></div>
+    </div>
+  </div></div></div>
+</div>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    for (const a of document.querySelectorAll("[data-spark]")) a.innerHTML = window.kitIcon.spark;
+  });
+</script>
+</body>
+</html>

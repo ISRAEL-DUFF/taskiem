@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>13 · Haggle in the chat</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script src="../kit/kit.js"></script>
+<script>window.scene = { duration: 10000 };</script>
+<style>
+/* Scene 13 (video/script.md): Rivers Foods orders 20 party packs from
+   Ada's price list; the quantity price lights up past 10; review; Make an
+   offer: ₦800,000 against ₦860,000. Chat tools phase 7. */
+@keyframes lit { from { background: transparent; } to { background: #e9f7d0; } }
+.brk { display: inline-block; margin-top: 2px; font-size: 13px; font-weight: 700; color: var(--pine); border-radius: 6px; padding: 1px 6px; margin-left: -6px; animation: lit .3s var(--ease) both; animation-delay: 1.7s; }
+.qty { display: inline-flex; align-items: center; gap: 10px; border-radius: 999px; background: var(--soft); padding: 4px; }
+.qty i { width: 30px; height: 30px; border-radius: 50%; background: #fff; display: grid; place-items: center; font-style: normal; font-weight: 700; }
+.qty b { min-width: 22px; text-align: center; }
+.bag { position: absolute; left: 12px; right: 12px; bottom: 30px; border-radius: 999px; background: var(--pine); color: #fff; display: flex; align-items: center; justify-content: space-between; padding: 8px 8px 8px 20px; z-index: 4; }
+.bag b { color: var(--lime); font-size: 18px; }
+.bag span.go { background: var(--lime); color: var(--pine); border-radius: 999px; padding: 12px 18px; font-weight: 800; }
+.foot { position: absolute; left: 0; right: 0; bottom: 0; background: #fff; border-top: 1px solid var(--line); padding: 12px 16px 30px; z-index: 4; }
+.foot .tot { display: flex; justify-content: space-between; align-items: baseline; font-size: 15px; color: var(--muted); }
+.foot .tot b { font-size: 22px; color: var(--ink); }
+.foot s { font-size: 15px; color: var(--muted); font-weight: 500; margin-left: 6px; }
+.chipbtn { display: inline-block; padding: 9px 14px; border-radius: 999px; background: var(--soft); font-weight: 700; font-size: 14px; }
+.chipbtn.on { background: #e9f7d0; color: var(--pine); }
+.lines { list-style: none; margin: 0; padding: 0; font-size: 15px; }
+.lines li { display: flex; justify-content: space-between; padding: 6px 0; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="caption">
+    <span class="kicker up" style="--at:.1s">6 · Deals</span>
+    <h1 class="headline up" style="--at:.25s">Haggle in the chat, <em>the way trade is done</em>.</h1>
+    <p class="sub up" style="--at:.45s">Lower prices for larger orders, and an offer for the whole order.</p>
+  </div>
+  <div class="phone show"><div class="island"></div><div class="screen"><div class="app">
+    <header data-name="Ada's Kitchen" data-sub="Your supplier · linked" data-av="AK" data-tone="lime"></header>
+    <main class="chat"></main>
+    <section class="sheet" style="top:96px;bottom:0">
+      <div class="grab"></div>
+      <div class="swap">
+        <div class="show-io" style="--out:3.4s">
+          <h4>Order from Ada's Kitchen</h4>
+          <div class="prow"><span class="tile" style="background:#fde3d8;color:#a3401c">PP</span><div class="nm"><b>Party pack, 10 plates</b><span>₦45,000 · min 5</span><span class="brk">from 10 packs ₦43,000</span></div><span class="qty"><i>−</i><b data-count="20" data-at="800" data-dur="1600">20</b><i>+</i></span></div>
+          <div class="prow"><span class="tile" style="background:#fde3d8;color:#a3401c">JR</span><div class="nm"><b>Jollof rice, cooler</b><span>₦38,000 · min 2</span></div><span class="qty"><i>−</i><b>0</b><i>+</i></span></div>
+        </div>
+        <div class="show" style="--at:3.4s">
+          <h4>Review your order</h4>
+          <ul class="lines"><li><span>20 × Party pack, 10 plates<br><small style="color:#55615a">at ₦43,000 for 20</small></span><b>₦860,000</b></li></ul>
+          <div style="margin-top:14px" class="swap"><span class="chipbtn show-io" style="--out:4.4s">Make an offer</span><span class="chipbtn on show" style="--at:4.4s">Pay their price instead</span></div>
+          <div class="field show" style="--at:4.5s">Your price for the whole order<span class="in-box"><span class="show" style="--at:5.1s">800</span><span class="show" style="--at:5.35s">k</span></span></div>
+          <p class="show" style="--at:5.7s;font-size:13px;color:#55615a;margin:8px 0 0">7% off their price. They can accept, counter or decline; it lapses in 48 hours.</p>
+        </div>
+      </div>
+    </section>
+    <div class="bag show-io" style="--out:3.4s"><span>1 item · <b data-count="860000" data-at="800" data-dur="1600" data-naira>₦860,000</b></span><span class="go">Review order</span></div>
+    <div class="foot show" style="--at:3.4s">
+      <div class="tot"><span class="swap"><span class="show-io" style="--out:5.7s">Total</span><span class="show" style="--at:5.7s">Your offer</span></span><span class="swap"><b class="show-io" style="--out:5.7s">₦860,000</b><b class="show" style="--at:5.7s">₦800,000<s>₦860,000</s></b></span></div>
+      <span class="btn pine" style="width:100%;min-height:50px;margin-top:10px;font-size:16px"><span class="swap"><span class="show-io" style="--out:5.7s">Place order</span><span class="show" style="--at:5.7s">Send offer</span></span></span>
+    </div>
+    <div class="toast toasts" style="--at:7.7s;bottom:130px">Offer sent to Ada's Kitchen: ₦800,000</div>
+    <i class="tap" data-at="3000" style="left:320px;top:792px"></i>
+    <i class="tap" data-at="4100" style="left:80px;top:243px"></i>
+    <i class="tap" data-at="7200" style="left:195px;top:782px"></i>
+  </div></div></div>
+</div>
+</body>
+</html>

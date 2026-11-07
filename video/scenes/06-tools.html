@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>6 · Open any tool without leaving the chat</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script src="../kit/kit.js"></script>
+<script>window.scene = { duration: 12000 };</script>
+<style>
+/* Scene 6 (video/script.md): the tools; Products as a sheet (360 ms);
+   the party pack's trade price from ₦42,000 to ₦45,000; Save. As the
+   Sheet and DeskProduct boards draw them. */
+.tall { top: 110px; }
+.ico.lime { background: #e9f7d0; color: #0d3b2e; }
+.ico.blue { background: #dce8fb; color: #2f5bd3; }
+.ico.warn { background: #fdf0dc; color: #8a3410; }
+.ico.lav { background: #ece6f4; color: #5b3d86; }
+.ico.sand { background: #f3ead2; color: #6f5420; }
+.chips { display: flex; gap: 8px; margin-bottom: 8px; }
+.chips span { padding: 8px 14px; border-radius: 999px; background: var(--soft); font-weight: 600; font-size: 14px; }
+.chips span.on { background: var(--pine); color: #fff; }
+.crumb { font-size: 15px; color: var(--muted); margin-bottom: 10px; }
+.crumb b { color: var(--ink); }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.save { display: flex; gap: 10px; margin-top: 18px; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="caption">
+    <span class="kicker show">2 · Tools</span>
+    <h1 class="headline up" style="--at:.15s">Open any tool <em>without leaving</em> the chat.</h1>
+    <p class="sub up" style="--at:.35s">Products, stock, price lists, orders and tables, in a sheet over the conversation.</p>
+  </div>
+  <div class="phone"><div class="island"></div><div class="screen"><div class="app">
+    <header data-name="Rivers Foods Ltd" data-sub="Buys from you · price list: Trade" data-av="RF" data-tone="lime"></header>
+    <main class="chat">
+      <div class="day">Today</div>
+      <div class="bubble">Can we get the party pack on Saturday? 40 plates.<time>8:21</time></div>
+    </main>
+    <footer data-composer="Message, @ to tag"></footer>
+    <div class="veil show-io" style="--at:1.0s;--out:9.3s"></div>
+
+    <section class="sheet sheet-io" style="--at:1.0s;--out:3.1s">
+      <div class="grab"></div>
+      <h4>Tools</h4>
+      <div class="tiles6">
+        <div><span class="ico lime">▦</span>Products<small>34</small></div>
+        <div><span class="ico blue">◷</span>Services<small>6</small></div>
+        <div><span class="ico warn">!</span>Stock<small>3 low</small></div>
+        <div><span class="ico sand">₦</span>Price lists<small>2</small></div>
+        <div><span class="ico lime">⇄</span>Orders<small>4 new</small></div>
+        <div><span class="ico lav">▤</span>Tables<small>5</small></div>
+      </div>
+    </section>
+
+    <section class="sheet tall sheet-io" style="--at:3.2s;--out:9.3s">
+      <div class="grab"></div>
+      <div class="swap">
+        <div class="show-io" style="--out:5.6s">
+          <h4>Products <small style="font-size:14px;color:#55615a;font-weight:500">34</small></h4>
+          <div class="chips"><span class="on">All</span><span>Low stock · 3</span><span>Hidden · 2</span></div>
+          <div class="prow"><span class="tile" style="background:#fde3d8;color:#a3401c">PP</span><div class="nm"><b>Party pack, 10 plates</b><span>₦48,000 · trade ₦42,000</span></div><span class="chip">12 today</span></div>
+          <div class="prow"><span class="tile" style="background:#fde3d8;color:#a3401c">JR</span><div class="nm"><b>Jollof rice</b><span>₦4,000</span></div><span class="chip">34 in stock</span></div>
+          <div class="prow"><span class="tile" style="background:#fbf0c4;color:#7a5a00">FR</span><div class="nm"><b>Fried rice and turkey</b><span>₦5,200</span></div><span class="chip">12 in stock</span></div>
+          <div class="prow"><span class="tile" style="background:#fde3d8;color:#a3401c">PS</span><div class="nm"><b>Pepper soup</b><span>₦3,500</span></div><span class="pill warn">3 left</span></div>
+          <div class="prow"><span class="tile" style="background:#dce8fb;color:#2f5bd3">CH</span><div class="nm"><b>Chapman</b><span>₦1,200</span></div><span class="pill warn">2 left</span></div>
+        </div>
+        <div class="show" style="--at:5.6s">
+          <div class="crumb">Products / <b>Party pack, 10 plates</b></div>
+          <div class="field">Name<span class="in-box">Party pack, 10 plates</span></div>
+          <div class="two">
+            <div class="field">Storefront price<span class="in-box">₦48,000</span></div>
+            <div class="field">Trade price list<span class="in-box swap"><span class="show-io" style="--out:7.2s">₦42,000</span><span class="show" style="--at:7.2s">₦45,000</span></span></div>
+          </div>
+          <div class="field">Shared with<span class="in-box" style="font-size:15px;font-weight:600">Rivers Foods Ltd, Mama Ngozi Stores</span></div>
+          <div class="save"><span class="btn soft" style="min-height:50px;flex:0 0 110px">Cancel</span><span class="btn pine" style="min-height:50px;flex:1">Save changes</span></div>
+        </div>
+      </div>
+    </section>
+    <div style="position:absolute;left:0;right:0;top:232px;display:flex;justify-content:center"><div class="dl lands" style="--at:9.6s;white-space:nowrap">✓ You changed Party pack, 10 plates: ₦42,000 → ₦45,000</div></div>
+
+    <i class="tap" data-at="700" style="left:33px;top:791px"></i>
+    <i class="tap" data-at="2800" style="left:75px;top:690px"></i>
+    <i class="tap" data-at="5200" style="left:180px;top:240px"></i>
+    <i class="tap" data-at="6700" style="left:290px;top:296px"></i>
+    <i class="tap" data-at="8900" style="left:260px;top:451px"></i>
+  </div></div></div>
+</div>
+</body>
+</html>

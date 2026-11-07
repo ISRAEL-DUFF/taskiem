@@ -18,7 +18,7 @@ export default tseslint.config(
   // The explainer's renderer (video/README.md) runs on Node; the scenes'
   // timeline runs in Chromium.
   {
-    files: ["video/render.mjs"],
+    files: ["video/render.mjs", "video/assemble.mjs"],
     languageOptions: { globals: { process: "readonly", console: "readonly", window: "readonly", document: "readonly" } },
   },
   {

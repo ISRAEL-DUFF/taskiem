@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>1 · Your business already runs on chat</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script src="../kit/kit.js"></script>
+<script>window.scene = { duration: 7000 };</script>
+<style>
+/* Scene 1 (video/script.md): a plain chat app, not Taskiem and no one's
+   brand, piling up the day's trade until it blurs. */
+@keyframes pile { from { transform: none; } to { transform: translateY(-560px); } }
+@keyframes blur { from { filter: none; opacity: 1; } to { filter: blur(10px); opacity: .55; } }
+.plain header { background: #f4f4f2; }
+.plain .avatar { background: #8a9089; color: #fff; }
+.plain .chat { background: #e9e7e2; gap: 8px; }
+.plain .bubble.mine { background: #e1efd9; }
+.plain footer .round:first-child { display: none; }
+.plain footer .round:last-child { background: #8a9089 !important; }
+.pile { display: flex; flex-direction: column; gap: 8px; animation: pile 2.4s cubic-bezier(.5,0,.2,1) both; animation-delay: 2.4s; }
+.mess { animation: blur 1.1s var(--ease) both; animation-delay: 5.4s; }
+.voice { display: flex; align-items: center; gap: 8px; }
+.voice i { width: 120px; height: 18px; background: repeating-linear-gradient(90deg, #8a9089 0 3px, transparent 3px 6px); opacity: .6; }
+.photo { width: 180px; height: 120px; border-radius: 10px; background: linear-gradient(135deg, #d8d2c4, #bfb6a2); display: grid; place-items: center; color: #5b5546; font-size: 13px; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="caption">
+    <span class="kicker up" style="--at:.1s">Every day</span>
+    <h1 class="headline up" style="--at:.25s">Your business already runs on <em>chat</em>.</h1>
+    <p class="sub up" style="--at:.45s">Orders, prices, payments and questions, all in one stream, all to remember.</p>
+  </div>
+  <div class="phone show"><div class="island"></div><div class="screen"><div class="app plain mess">
+    <header data-name="Customers and suppliers" data-sub="3 groups · 214 unread" data-av="C"></header>
+    <main class="chat"><div class="pile">
+      <div class="bubble in" style="--at:.5s">how much 25kg now?<time>8:02</time></div>
+      <div class="bubble in voice" style="--at:1.0s">🎤 <i></i> 0:42<time>8:03</time></div>
+      <div class="bubble in" style="--at:1.5s"><div class="photo">Price list, new</div><time>8:05</time></div>
+      <div class="bubble in" style="--at:1.9s">pls confirm order<time>8:06</time></div>
+      <div class="bubble in" style="--at:2.25s">Did you send the invoice?<time>8:07</time></div>
+      <div class="bubble mine in" style="--at:2.55s">Which order be this?<time>8:07</time></div>
+      <div class="bubble in" style="--at:2.8s">Driver don reach?<time>8:08</time></div>
+      <div class="bubble in" style="--at:3.0s">I paid 150k yesterday o<time>8:08</time></div>
+      <div class="bubble in" style="--at:3.2s">Abeg send account number<time>8:09</time></div>
+      <div class="bubble in" style="--at:3.38s">Price don change?<time>8:09</time></div>
+      <div class="bubble in" style="--at:3.54s">Na 20 bags I talk, not 10<time>8:10</time></div>
+      <div class="bubble in" style="--at:3.7s">Confirm stock pls<time>8:10</time></div>
+      <div class="bubble mine in" style="--at:3.85s">Let me check<time>8:10</time></div>
+      <div class="bubble in" style="--at:4.0s">Any discount for 40 packs?<time>8:11</time></div>
+      <div class="bubble in" style="--at:4.12s">Who collected the cash?<time>8:11</time></div>
+      <div class="bubble in" style="--at:4.24s">Send the receipt<time>8:11</time></div>
+    </div></main>
+    <footer data-composer="Message"></footer>
+  </div></div></div>
+</div>
+</body>
+</html>

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>12 · Find businesses near you</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script src="../kit/kit.js"></script>
+<script>window.scene = { duration: 10000 };</script>
+<style>
+/* Scene 12 (video/script.md): @Kola in the chat finds Kola's Bakery, not
+   linked; its Explore card (the Explore board) rises; Connect, Requested,
+   Linked; the line in the chat. */
+@keyframes picker { from { opacity: 0; transform: translateY(12px) scale(.97); } to { opacity: 1; transform: none; } }
+.picker { position: absolute; left: 10px; right: 10px; bottom: 84px; background: #fff; border-radius: 22px; box-shadow: 0 24px 48px -16px rgba(14,26,20,.35); padding: 12px 8px; z-index: 3; transform-origin: 50% 100%; animation: picker .28s var(--ease) both, k-gone .2s var(--ease) both; animation-delay: 1.5s, 3.0s; }
+.picker .grp { font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--muted); padding: 6px 10px 2px; }
+.picker .prow { padding: 7px 10px; border-radius: 14px; }
+.picker .prow.on { background: var(--soft); }
+.avatar.sand { background: #f3ead2; color: #6f5420; }
+.photos { display: grid; grid-template-columns: 2fr 1fr; gap: 6px; height: 170px; border-radius: 16px; overflow: hidden; }
+.photos div { position: relative; }
+.photos .a { background: linear-gradient(140deg, #e9b874, #b26d2e); grid-row: span 2; }
+.photos .b { background: linear-gradient(140deg, #f2dcb6, #c99b62); }
+.photos .c { background: linear-gradient(140deg, #d9a35c, #8b5426); }
+.photos em { position: absolute; left: 8px; bottom: 8px; font-style: normal; font-size: 11px; font-weight: 700; background: rgba(255,255,255,.88); color: #0e1a14; padding: 3px 8px; border-radius: 999px; }
+.place { font-size: 13px; color: var(--muted); }
+.about { font-size: 14px; line-height: 1.45; color: var(--ink); margin: 10px 0 0; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="caption">
+    <span class="kicker up" style="--at:.1s">5 · Explore</span>
+    <h1 class="headline up" style="--at:.25s">Find businesses <em>near you</em>.</h1>
+    <p class="sub up" style="--at:.45s">Tag one you don't trade with yet, see their card, and connect.</p>
+  </div>
+  <div class="phone show"><div class="island"></div><div class="screen"><div class="app">
+    <header data-name="Taskiem" data-sub="Ada's Kitchen" data-av="spark"></header>
+    <main class="chat">
+      <div class="bubble mine">Who sells fresh bread near Yaba?<time>2:10</time></div>
+      <div class="dl lands" style="--at:8.4s">✓ Linked with Kola's Bakery</div>
+    </main>
+    <footer>
+      <span class="round" style="background:#fff;box-shadow:0 1px 2px rgba(14,26,20,.12)" data-icon="tools"></span>
+      <span class="box"><b class="show-io" style="--at:.7s;--out:3.0s;color:#0d3b2e">@Kola</b></span>
+      <span class="round" style="background:#0d3b2e" data-icon="send"></span>
+    </footer>
+    <section class="picker">
+      <div class="grp">BUSINESSES</div>
+      <div class="prow on"><span class="avatar sand">KB</span><div class="nm"><b>Kola's Bakery</b><span>Not linked · Yaba</span></div></div>
+      <div class="prow"><span class="avatar pine" data-icon="spark"></span><div class="nm"><b>Taskiem</b><span>Ask Taskiem to do it for you</span></div></div>
+    </section>
+    <div class="veil show-io" style="--at:3.1s;--out:8.0s"></div>
+    <section class="sheet sheet-io" style="--at:3.1s;--out:8.0s;top:150px">
+      <div class="grab"></div>
+      <div class="photos"><div class="a"><em>Fresh agege bread, 6am</em></div><div class="b"></div><div class="c"></div></div>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:14px">
+        <span class="avatar sand" style="width:48px;height:48px">KB</span>
+        <div style="flex:1"><b style="font-size:18px">Kola's Bakery</b><div class="place">Bread and pastries · Yaba, Lagos</div></div>
+      </div>
+      <p class="about">Agege bread, buns and meat pies, baked every morning. We deliver to shops and kitchens in Yaba and Surulere.</p>
+      <div class="swap" style="margin-top:16px">
+        <span class="btn pine show-io" style="--out:5.8s;min-height:52px;font-size:16px">Connect</span>
+        <span class="show-io" style="--at:5.8s;--out:7.4s;display:flex;gap:8px"><span class="btn ghost" style="flex:1;min-height:52px">Requested</span><span class="btn soft" style="min-height:52px">Withdraw</span></span>
+        <span class="show" style="--at:7.4s;display:flex;gap:8px"><span class="btn ghost" style="flex:1;min-height:52px">✓ Linked</span><span class="btn pine" style="flex:1;min-height:52px">Message</span></span>
+      </div>
+    </section>
+    <i class="tap" data-at="2600" style="left:180px;top:640px"></i>
+    <i class="tap" data-at="5400" style="left:195px;top:523px"></i>
+  </div></div></div>
+</div>
+</body>
+</html>

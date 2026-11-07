@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>10 · Staff see what their role needs</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script src="../kit/kit.js"></script>
+<script>window.scene = { duration: 12000 };</script>
+<style>
+/* Scene 10 (video/script.md): Tunde, the cashier, has three tools; he
+   records a sale with Sell; at closing the shift is handed over with the
+   cash counted. Chat tools phase 5. */
+.tiles3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.tiles3 div { border-radius: 16px; background: var(--soft); padding: 14px 10px; font-weight: 700; font-size: 15px; }
+.tiles3 .ico { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; margin-bottom: 8px; background: #e9f7d0; color: #0d3b2e; font-size: 17px; }
+.n { min-width: 26px; text-align: center; font-weight: 800; }
+.plus { width: 34px; height: 34px; border-radius: 50%; background: var(--pine); color: #fff; display: grid; place-items: center; font-weight: 700; }
+.pay { display: flex; gap: 8px; margin-top: 12px; }
+.pay span { flex: 1; text-align: center; padding: 10px; border-radius: 12px; background: var(--soft); font-weight: 700; font-size: 14px; }
+.pay span.on { background: var(--pine); color: #fff; }
+.hand { border-radius: 20px; background: var(--pine); color: #fff; padding: 16px; box-shadow: 0 18px 36px -18px rgba(13,59,46,.7); }
+.hand .k { font-size: 12px; font-weight: 700; letter-spacing: .08em; color: var(--lime); }
+.hand .row { display: flex; justify-content: space-between; margin-top: 8px; font-size: 15px; color: #b9d1c6; }
+.hand .row b { color: #fff; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="caption">
+    <span class="kicker up" style="--at:.1s">4 · Staff</span>
+    <h1 class="headline up" style="--at:.25s">Staff see <em>what their role needs</em>.</h1>
+    <p class="sub up" style="--at:.45s">A cashier sells and counts. You set the limits, and every sale is a line in your chat.</p>
+  </div>
+  <div class="phone show"><div class="island"></div><div class="screen"><div class="app">
+    <header data-name="Taskiem" data-sub="Ada's Kitchen · Tunde, cashier" data-av="spark"></header>
+    <main class="chat">
+      <div class="dl">✓ Shift opened by Tunde · 8:00</div>
+      <div class="dl lands" style="--at:6.4s">✓ Sale recorded: ₦9,200, cash</div>
+      <article class="hand pop" style="--at:8.4s">
+        <div class="k">SHIFT HANDOVER · 6:00 PM</div>
+        <div style="font-size:18px;font-weight:800;margin-top:6px">Tunde hands over to Ngozi</div>
+        <div class="row"><span>Cash sold</span><b>₦184,500</b></div>
+        <div class="row"><span>Cash counted</span><b>₦184,500 ✓</b></div>
+        <div class="row"><span>Sales</span><b>46</b></div>
+      </article>
+    </main>
+    <footer data-composer="Ask Taskiem, or @ to tag"></footer>
+    <div class="veil show-io" style="--at:.9s;--out:6.0s"></div>
+    <section class="sheet sheet-io" style="--at:.9s;--out:2.5s">
+      <div class="grab"></div>
+      <h4>Tools</h4>
+      <div class="tiles3"><div><span class="ico">₦</span>Sell</div><div><span class="ico">▦</span>Stock</div><div><span class="ico">⇄</span>Orders</div></div>
+      <p style="margin:14px 2px 0;font-size:13px;color:#55615a">Your role: cashier. Prices and payments are the owner's.</p>
+    </section>
+    <section class="sheet sheet-io" style="--at:2.6s;--out:6.0s">
+      <div class="grab"></div>
+      <h4>Sell</h4>
+      <div class="prow"><span class="tile" style="background:#fde3d8;color:#a3401c">JR</span><div class="nm"><b>Jollof rice</b><span>₦4,000</span></div><span class="n" data-count="2" data-at="3400" data-dur="500">2</span><span class="plus">+</span></div>
+      <div class="prow"><span class="tile" style="background:#dce8fb;color:#2f5bd3">CH</span><div class="nm"><b>Chapman</b><span>₦1,200</span></div><span class="n" data-count="1" data-at="4100" data-dur="200">1</span><span class="plus">+</span></div>
+      <div class="prow"><span class="tile" style="background:#fbf0c4;color:#7a5a00">FR</span><div class="nm"><b>Fried rice and turkey</b><span>₦5,200</span></div><span class="n">0</span><span class="plus">+</span></div>
+      <div class="pay"><span class="on">Cash</span><span>Transfer</span><span>Card</span></div>
+      <span class="btn pine" style="width:100%;min-height:52px;margin-top:14px;font-size:16px">Record sale · <span data-count="9200" data-at="3400" data-dur="900" data-naira>₦9,200</span></span>
+    </section>
+    <i class="tap" data-at="600" style="left:33px;top:791px"></i>
+    <i class="tap" data-at="2300" style="left:70px;top:690px"></i>
+    <i class="tap" data-at="3300" style="left:358px;top:560px"></i>
+    <i class="tap" data-at="3800" style="left:358px;top:560px"></i>
+    <i class="tap" data-at="4100" style="left:358px;top:622px"></i>
+    <i class="tap" data-at="5600" style="left:195px;top:790px"></i>
+  </div></div></div>
+</div>
+</body>
+</html>

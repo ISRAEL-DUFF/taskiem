@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>14 · Offers and counters, from the app or WhatsApp</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script src="../kit/kit.js"></script>
+<script>window.scene = { duration: 10000 };</script>
+<style>
+/* Scene 14 (video/script.md): the offer reaches Tunde's chat as a card;
+   he counters ₦840,000; Rivers Foods answers from WhatsApp, "counter
+   820k"; the card's thread grows. The WhatsApp words are Taskiem's own
+   (order.link.seller_countered, deal.counter_sent). */
+.thread { list-style: none; margin: 10px 0 0; padding: 0 0 0 12px; border-left: 2px solid var(--line); display: flex; flex-direction: column; gap: 3px; font-size: 13px; color: var(--muted); }
+.thread li[data-by="us"] { color: var(--pine); }
+.thread li.last { font-weight: 700; color: var(--ink); }
+.float { right: 650px; top: 470px; width: 500px; }
+.portrait .float { right: auto; left: 60px; top: 1360px; width: 620px; }
+.float .from { font-size: 15px; color: var(--muted); }
+.wa { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.wa div { max-width: 88%; padding: 10px 14px; border-radius: 14px; font-size: 16px; line-height: 1.4; }
+.wa .them { background: #f3f5f1; }
+.wa .me { align-self: flex-end; background: #e1efd9; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="caption">
+    <span class="kicker show">6 · Deals</span>
+    <h1 class="headline up" style="--at:.15s">Offers and counters, <em>from anywhere</em>.</h1>
+    <p class="sub up" style="--at:.35s">Counter in the app, or answer "counter 820k" on WhatsApp.</p>
+  </div>
+  <div class="phone"><div class="island"></div><div class="screen"><div class="app">
+    <header data-name="Rivers Foods Ltd" data-sub="Buys from you · linked" data-av="RF" data-tone="lime"></header>
+    <main class="chat">
+      <div class="bubble">Can you do better on the 20 party packs? We order every month.<time>10:12</time></div>
+      <article class="card pop" style="--at:.4s">
+        <div class="top"><span class="kick">ORDER · P‑7QX4KD</span><span class="swap"><span class="pill warn show-io" style="--out:7.6s">Offer</span><span class="pill warn show" style="--at:7.6s">Counter</span></span></div>
+        <div class="ttl">Rivers Foods Ltd made an offer on order P‑7QX4KD</div>
+        <div class="csub"><span class="swap"><span class="show-io" style="--out:7.6s">₦800,000 · was ₦860,000 · “Regular buyer”</span><span class="show" style="--at:7.6s">₦820,000 · was ₦860,000</span></span></div>
+        <ol class="thread">
+          <li class="show" style="--at:3.6s">They offered ₦800,000</li>
+          <li data-by="us" class="show" style="--at:3.6s">Tunde countered ₦840,000</li>
+          <li class="last show" style="--at:7.6s">They countered ₦820,000</li>
+        </ol>
+        <div class="swap" style="margin-top:12px">
+          <div class="acts show-io" style="--out:2.0s;margin-top:0"><span class="btn pine" style="flex:1 0 100%">Accept ₦800,000</span><span class="btn ghost">Counter</span><span class="btn ghost">Decline</span></div>
+          <div class="show-io" style="--at:2.0s;--out:3.5s">
+            <div class="field" style="margin-top:0">Your price for the whole order<span class="in-box">840,000</span></div>
+            <div class="acts"><span class="btn pine" style="flex:1 0 100%">Send counter</span></div>
+          </div>
+          <div class="show-io" style="--at:3.6s;--out:7.6s;font-size:13px;color:#55615a;padding-top:6px">Waiting for Rivers Foods · lapses in 48 hours</div>
+          <div class="acts show" style="--at:7.6s;margin-top:0"><span class="btn pine" style="flex:1 0 100%">Accept ₦820,000</span><span class="btn ghost">Counter</span><span class="btn ghost">Decline</span></div>
+        </div>
+      </article>
+    </main>
+    <footer data-composer="Message, @ to tag"></footer>
+    <i class="tap" data-at="1700" style="left:105px;top:487px"></i>
+    <i class="tap" data-at="3200" style="left:195px;top:430px"></i>
+  </div></div></div>
+  <aside class="float pop" style="--at:4.6s" aria-label="Rivers Foods on WhatsApp">
+    <div class="from">Rivers Foods' phone · on WhatsApp</div>
+    <div class="wa">
+      <div class="them"><b>Ada's Kitchen</b> answers your offer on order P‑7QX4KD: ₦840,000 (was ₦860,000) for 20 Party pack, 10 plates.</div>
+      <div class="me in" style="--at:5.8s">counter 820k</div>
+      <div class="them in" style="--at:6.6s">Sent: ₦820,000 for P‑7QX4KD. They can accept it or answer.</div>
+    </div>
+  </aside>
+</div>
+</body>
+</html>

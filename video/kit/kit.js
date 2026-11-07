@@ -41,6 +41,28 @@
     }
   }
 
+  // Shorthands a scene may use, expanded before anything plays:
+  //   <header data-name="Rivers Foods Ltd" data-sub="Buys from you · linked" data-av="RF" data-tone="lime">
+  //   <footer data-composer="Message, @ to tag">  (data-send="1": the send arrow, not the mic)
+  const icon = {
+    tools: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0d3b2e" stroke-width="2" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg>',
+    mic: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#c8f169" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
+    send: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#c8f169" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>',
+    spark: '<svg width="20" height="20" viewBox="0 0 24 24" fill="#c8f169" aria-hidden="true"><path d="M12 2l1.8 5.6L19.5 9l-5.7 1.5L12 16l-1.8-5.5L4.5 9l5.7-1.4z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>',
+  };
+  function expand() {
+    for (const h of document.querySelectorAll("header[data-name]")) {
+      const av = h.dataset.av === "spark" ? icon.spark : h.dataset.av;
+      h.innerHTML = `<div class="avatar ${h.dataset.tone || "pine"}">${av}</div><div class="who"><b>${h.dataset.name}</b><span>${h.dataset.sub || ""}</span></div>`;
+    }
+    for (const el of document.querySelectorAll("[data-icon]")) el.innerHTML = icon[el.dataset.icon] || "";
+    for (const f of document.querySelectorAll("footer[data-composer]")) {
+      const typed = f.dataset.typed ? `<span style="color:#0e1a14">${f.dataset.typed}</span>` : f.dataset.composer;
+      f.innerHTML = `<span class="round" style="background:#fff;box-shadow:0 1px 2px rgba(14,26,20,.12)">${icon.tools}</span><span class="box">${typed}</span><span class="round" style="background:#0d3b2e">${f.dataset.send ? icon.send : icon.mic}</span>`;
+    }
+  }
+  window.kitIcon = icon;
+
   // Every animation the page has, held at one moment.
   async function seek(ms) {
     for (const a of document.getAnimations()) {
@@ -55,11 +77,15 @@
 
   if (rendering) {
     document.documentElement.classList.add("rendering");
-    addEventListener("DOMContentLoaded", () => seek(0));
+    addEventListener("DOMContentLoaded", () => {
+      expand();
+      seek(0);
+    });
     return;
   }
   // Playing in a browser: the clock runs, and the scene loops.
   addEventListener("DOMContentLoaded", () => {
+    expand();
     const start = performance.now();
     const length = (window.scene && window.scene.duration) || 8000;
     const tick = (now) => {
