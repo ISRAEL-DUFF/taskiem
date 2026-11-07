@@ -1,6 +1,6 @@
 # Chat push: a notification when the app is closed
 
-Status: **spec, nothing built.** Written 2026-11-07, after the profile, logo,
+Status: **spec; step 1 (the server) built, steps 2 and 3 not.** Written 2026-11-07, after the profile, logo,
 Explore and Contact info work of [business links](business-links.md) (§16.9 and §16.10 there, and §5.5 for
 the conversation).
 
@@ -356,3 +356,59 @@ Three changes, each with its tests, in this order:
    `notificationclick` handlers.
 3. **Polish**: the badge, the business logo as the icon if it works, the
    "As built" and the owner's device checklist.
+
+## 12. As built (step 1, the server)
+
+The server half: nothing is visible to a person yet, because no browser
+subscribes until step 2. Migration 00402.
+
+- **The package** `engine/push`: `Config` (the keys; with none the feature is
+  off), `ValidEndpoint` (the allow-list of §8: `https`, the host a push
+  service's, no user information, no other port, no fragment), `Subscription`
+  and the database functions (`AddTx`, `ListTx`, `UpdateTx`, `RemoveTx`,
+  `RemoveEndpointTx`, `TargetsTx`, `RecordTx`, `DropOrphansTx`), `Payload`
+  (JSON, at most 2 KB; a browser with the preview off is sent "New message"),
+  `Topic`, and `Sender`. The sender uses `github.com/SherClockHolmes/webpush-go`
+  (MIT; the licence gate passes with it, 81 dependencies, none failing) with
+  the egress guard's client (purpose `webpush`, the endpoint's own host the only
+  one allowed, no redirect followed), TTL 12 hours, `Urgency: high`, a `Topic`
+  per conversation, one retry after a network error, a 429 or a 5xx, and 404
+  and 410 as gone. The VAPID subject goes to the library without its `mailto:`
+  (it adds it).
+- **The table** `push_subscriptions` as §5.3, row-level secured by business;
+  `endpoint`, `p256dh` and `auth` are never returned. A browser that answers
+  404 or 410 is deleted; one that fails is marked (`failed_since`) and dropped
+  after 72 hours of failing. A person's last role in the business ending
+  (revoking a role, SCIM, single sign-on) deletes their browsers there.
+- **The API** `/v1/me/push` as §5.4 (`GET /key`, `GET`, `PUT`, `PATCH /{id}`,
+  `DELETE /{id}`, `DELETE` by address), for a person and not an API key; 404
+  for all of it when the server has no keys. The address is checked with
+  `Sender.Check` before it is kept; each change is audited (`push.add`,
+  `push.remove`) without the address.
+- **Sending:** `tellLinkMessage` (after the message commits, in the
+  background) calls `pushMessage` first and the phone messages after.
+  `pushMessage` finds the members whose role holds `chat.trade`, their
+  browsers, and the number of conversations with something unread, sends to up
+  to eight browsers at once, and records each outcome. The body is the line the
+  phone messages carry **without the "about INV-0001" prefix** (a push carries
+  no document reference, §5.2.5), and a document card is "Sent you a
+  document". The mute is the one `tellLinkMessage` already checks. (A link
+  that has ended cannot receive a message, so the "active link" rule of §5.2.2
+  holds by what the message API already refuses.)
+- **Settings and command:** `TASKIEM_VAPID_PUBLIC_KEY`,
+  `TASKIEM_VAPID_PRIVATE_KEY`, `TASKIEM_VAPID_SUBJECT` (both keys or neither;
+  the subject with them), `taskiem push keys`; metrics `taskiem_push_total`
+  and `taskiem_push_seconds`; the rows in [operations](../operations.md).
+- **Tests:** `engine/push` (the allow-list, the payload and its cut at a
+  letter's edge, the topic, the configuration, and a fake push service that
+  checks the headers, the encryption and the VAPID signature, each outcome and
+  that a redirect is not followed), `TestChatPush` (no keys: 404; the
+  allow-list at the API; one browser once; each person sees and changes only
+  their own; a message pushed to the member who writes and not to the viewer,
+  **decrypted as a browser does** and not readable by another's keys; the
+  preview off; mute; failure kept, 410 dropped; ten at most; a browser taking
+  itself off; a role ending), `cmd/taskiem` (the settings and `push keys`).
+- **Not yet:** the service worker, the switch and the device list (step 2),
+  the badge (step 3). No real push service was reached: a real delivery needs
+  the keys on a deployment and a real browser, and is on the owner's checklist
+  at the end of step 3.

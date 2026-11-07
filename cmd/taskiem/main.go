@@ -70,6 +70,8 @@ Usage:
   taskiem serve [--role ROLE]        run an engine role: api, edge, orchestrator, scheduler, worker, all (default)
   taskiem bootstrap --tenant NAME --email EMAIL
                                      create the first tenant and its owner (password from $TASKIEM_BOOTSTRAP_PASSWORD)
+  taskiem push keys [--subject ADDRESS]
+                                     make the VAPID keys for chat push (put them in TASKIEM_VAPID_*)
   taskiem audit verify FILE          verify an audit export (GET /v1/audit/export) offline
   taskiem passkeys reset --email EMAIL
                                      remove someone's passkeys when no owner can (recovery; audited)
@@ -172,6 +174,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return statusCmd(context.Background(), args[1:], stdout)
 	case "operators":
 		return operatorsCmd(context.Background(), args[1:], stdout)
+	case "push":
+		return pushCmd(args[1:], stdout)
 	case "messages":
 		return messagesCmd(context.Background(), args[1:], stdout)
 	case "whatsapp":

@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/access"
+	"github.com/israel-duff/taskiem/engine/push"
 )
 
 // Custom roles (spec 13.3): a tenant names a set of permissions, and
@@ -324,6 +325,9 @@ func (s *Server) revokeRole(w http.ResponseWriter, r *http.Request) {
 		}
 		if _, err := tx.Exec(r.Context(), `UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL
 			AND NOT EXISTS (SELECT 1 FROM memberships WHERE user_id = $1)`, user); err != nil {
+			return err
+		}
+		if err := push.DropOrphansTx(r.Context(), tx, user); err != nil {
 			return err
 		}
 		return auditTx(r, tx, "member.revoke", user.String(), map[string]any{"role": role})

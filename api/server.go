@@ -43,6 +43,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/lru"
 	"github.com/israel-duff/taskiem/engine/matching"
 	"github.com/israel-duff/taskiem/engine/media"
+	"github.com/israel-duff/taskiem/engine/push"
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/riders"
@@ -118,6 +119,10 @@ type Server struct {
 	// Media stores storefront photos in tenants' Xenibase storage
 	// (docs/media.md); nil refuses uploads.
 	Media *media.Service
+	// Push sends a notification to the browsers a member allowed when a chat
+	// message comes and the app is closed (push.go, docs/spec/chat-push.md). Nil,
+	// or with no keys, it is off.
+	Push *push.Sender
 	// Moderator checks storefront images before they may be shown (S8);
 	// nil records them as unreviewed.
 	Moderator storefront.Moderator
@@ -634,6 +639,7 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/notifications/read", s.readNotifications)
 			r.Get("/me/notification-settings", s.getNotificationSettings)
 			r.Put("/me/notification-settings", s.putNotificationSettings)
+			s.pushRoutes(r) // the browsers a person allowed to be pushed to (push.go)
 
 			r.With(s.need(PermConnectionManage)).Get("/connections", s.listConnections)
 			r.With(s.need(PermConnectionManage)).Post("/connections", s.createConnection)
