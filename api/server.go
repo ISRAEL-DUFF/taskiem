@@ -61,6 +61,10 @@ import (
 
 // Server serves the API.
 type Server struct {
+	// DiaryWindow is how long changes wait to be told together on the
+	// chat apps (chat_changes.go); 0 is a minute.
+	DiaryWindow time.Duration
+	diary       diaryQueue
 	// chatGate caps the open Chat page streams (chat_stream.go).
 	chatGate chatStreamGate
 	// ChatStreamPing is how often an open chat stream says something when it

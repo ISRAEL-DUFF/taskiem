@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import type { Prefill } from "../lib/intents";
 import { Link } from "react-router-dom";
 import { get } from "../api";
@@ -15,8 +21,7 @@ import {
   PriceListForm,
   ProductAdd,
   ProductForm,
-  ServiceAdd,
-  ServiceView,
+  ServiceForm,
   StockInForm,
   TableTool,
 } from "./ChatToolForms";
@@ -232,37 +237,98 @@ const tileLetters = (name: string) =>
   );
 
 /** What a tool's row opens: its form, or a look at it. */
+/** Whether the person may change what a tool shows (else they see it). */
+export function mayEdit(tool: ToolKey, can: (p: string) => boolean): boolean {
+  switch (tool) {
+    case "products":
+    case "stock":
+    case "tables":
+      return can("table.edit");
+    case "services":
+      return can("table.edit") && can("storefront.manage");
+    default:
+      return can("storefront.manage");
+  }
+}
+
 function Detail({
   tool,
   row,
   onSaved,
   prefill,
+  canEdit,
 }: {
   tool: ToolKey;
   row: ToolRow | "add";
   onSaved: (line: string | null) => void;
   prefill?: Prefill;
+  canEdit: boolean;
 }) {
   if (row === "add")
-    return tool === "services" ? <ServiceAdd onSaved={onSaved} prefill={prefill} /> : <ProductAdd onSaved={onSaved} />;
+    return tool === "services" ? (
+      <ServiceForm onSaved={onSaved} prefill={prefill} />
+    ) : (
+      <ProductAdd onSaved={onSaved} />
+    );
   switch (tool) {
     case "products":
-      return <ProductForm item={row.data as StockItem} onSaved={onSaved} prefill={prefill} />;
+      return (
+        <ProductForm
+          item={row.data as StockItem}
+          onSaved={onSaved}
+          prefill={prefill}
+          canEdit={canEdit}
+        />
+      );
     case "stock":
-      return <StockInForm item={row.data as StockItem} onSaved={onSaved} prefill={prefill} />;
+      return (
+        <StockInForm
+          item={row.data as StockItem}
+          onSaved={onSaved}
+          prefill={prefill}
+          canEdit={canEdit}
+        />
+      );
     case "services":
-      return <ServiceView service={row.data as Service} />;
+      return (
+        <ServiceForm
+          service={row.data as Service}
+          onSaved={onSaved}
+          canEdit={canEdit}
+        />
+      );
     case "prices":
-      return <PriceListForm list={row.data as PriceList} onSaved={onSaved} />;
+      return (
+        <PriceListForm
+          list={row.data as PriceList}
+          onSaved={onSaved}
+          canEdit={canEdit}
+        />
+      );
     case "orders":
-      return <OrderView order={row.data as TradeOrder} onSaved={onSaved} />;
+      return (
+        <OrderView
+          order={row.data as TradeOrder}
+          onSaved={onSaved}
+          canEdit={canEdit}
+        />
+      );
     case "tables":
-      return <TableTool table={row.data as Table} onSaved={onSaved} />;
+      return (
+        <TableTool
+          table={row.data as Table}
+          onSaved={onSaved}
+          canEdit={canEdit}
+        />
+      );
   }
 }
 
 /** The tools that add a new one from their sheet, and the button's words. */
-const ADDS: Partial<Record<ToolKey, string>> = { products: "Add product", services: "Add service" };
+const ADDS: Partial<Record<ToolKey, string>> = {
+  products: "Add product",
+  services: "Add service",
+};
 
 /** A tool's sheet: its list (search, chips, the full page), and each row's
  * form; a save shows the tick, tells the change as a diary line where the
@@ -286,7 +352,9 @@ export function ToolSheet({
   const tool = toolsFor(can).find((t) => t.key === key);
   const [search, setSearch] = useState("");
   const [chip, setChip] = useState<string>();
-  const [open, setOpen] = useState<ToolRow | "add" | undefined>(start?.add ? "add" : undefined);
+  const [open, setOpen] = useState<ToolRow | "add" | undefined>(
+    start?.add ? "add" : undefined,
+  );
   const [saved, setSaved] = useState(false);
   const [shut, setShut] = useState(false);
   const { rows: all, retry } = useToolRows(tool ? [tool] : []);
@@ -313,47 +381,76 @@ export function ToolSheet({
   const add = ADDS[key];
   return (
     <Sheet
-      title={open === "add" ? (add ?? tool.title) : open ? open.name : tool.title}
+      title={
+        open === "add" ? (add ?? tool.title) : open ? open.name : tool.title
+      }
       count={open ? undefined : list?.length}
       from={from}
       onClose={onClose}
       onBack={open ? () => setOpen(undefined) : undefined}
       shut={shut}
       testid="tool-sheet"
+      headExtra={
+        // The full page, for what the sheet does not do.
+        <Link className="tk-head-link" to={tool.page} onClick={onClose}>
+          Full page<span className="sr-only">: {tool.more.toLowerCase()}</span>
+        </Link>
+      }
       footer={
-        open ? undefined : (
-          <span className="tk-foot-two">
-            <Link className={add && can("table.edit") ? "tk-btn ghost" : "tk-cta"} to={tool.page} onClick={onClose}>
-              {tool.more}
-            </Link>
-            {add && can("table.edit") && (
-              <button type="button" className="tk-cta" onClick={() => setOpen("add")}>
-                {add}
-              </button>
-            )}
-          </span>
+        open ? undefined : add && mayEdit(key, can) ? (
+          <button
+            type="button"
+            className="tk-cta"
+            onClick={() => setOpen("add")}
+          >
+            {add}
+          </button>
+        ) : (
+          <Link className="tk-cta" to={tool.page} onClick={onClose}>
+            {tool.more}
+          </Link>
         )
       }
     >
       {saved && <SavedTick />}
       {open ? (
-        <Detail tool={key} row={open} onSaved={done} prefill={start?.prefill} />
+        <Detail
+          tool={key}
+          row={open}
+          onSaved={done}
+          prefill={start?.prefill}
+          canEdit={mayEdit(key, can)}
+        />
       ) : (
         <>
           <label className="tk-search">
             <Icon name="search" />
             <span className="sr-only">Search {name}</span>
-            <input type="search" placeholder={`Search ${name}`} value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input
+              type="search"
+              placeholder={`Search ${name}`}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </label>
           {tool.chips && list && (
             <div className="tk-chips" role="group" aria-label="Show">
-              <button type="button" aria-pressed={!chip} onClick={() => setChip(undefined)}>
+              <button
+                type="button"
+                aria-pressed={!chip}
+                onClick={() => setChip(undefined)}
+              >
                 All
               </button>
               {tool.chips.map((c) => {
                 const n = list.filter((r) => r.tags.includes(c.tag)).length;
                 return (
-                  <button key={c.tag} type="button" aria-pressed={chip === c.tag} onClick={() => setChip(chip === c.tag ? undefined : c.tag)}>
+                  <button
+                    key={c.tag}
+                    type="button"
+                    aria-pressed={chip === c.tag}
+                    onClick={() => setChip(chip === c.tag ? undefined : c.tag)}
+                  >
                     {c.label} · {n}
                   </button>
                 );
@@ -378,7 +475,9 @@ export function ToolSheet({
             ) : shown.length === 0 ? (
               rows.length === 0 ? (
                 <KitEmpty icon={tool.icon} title={`No ${name} yet`}>
-                  {add ? `${add} to put the first one here.` : `${tool.more} to add the first.`}
+                  {add
+                    ? `${add} to put the first one here.`
+                    : `${tool.more} to add the first.`}
                 </KitEmpty>
               ) : (
                 <KitEmpty icon="search" title="Nothing matches">
@@ -389,7 +488,11 @@ export function ToolSheet({
               <ul className="tk-stagger">
                 {shown.map((r) => (
                   <li key={r.id}>
-                    <button type="button" className="tk-row" onClick={() => setOpen(r)}>
+                    <button
+                      type="button"
+                      className="tk-row"
+                      onClick={() => setOpen(r)}
+                    >
                       <span className="tk-row-tile" aria-hidden="true">
                         {tileLetters(r.name)}
                       </span>

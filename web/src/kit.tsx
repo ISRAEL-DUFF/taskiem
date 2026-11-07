@@ -180,10 +180,22 @@ export function DiaryLine({
   /** The message it is (search results and quotes jump to it). */
   msg?: string;
 }) {
+  // "Price of Rice: ₦76,000 → ₦78,000": the new value rolls into place.
+  const words =
+    typeof children === "string" && children.includes(" → ") ? (
+      <>
+        {children.slice(0, children.lastIndexOf(" → ") + 3)}
+        <b className={fresh ? "tk-roll" : undefined}>
+          {children.slice(children.lastIndexOf(" → ") + 3)}
+        </b>
+      </>
+    ) : (
+      children
+    );
   const body = (
     <>
       <Icon name="tick" />
-      <span>{children}</span>
+      <span>{words}</span>
     </>
   );
   return (
@@ -221,6 +233,7 @@ export function Sheet({
   testid,
   onBack,
   shut = false,
+  headExtra,
   children,
 }: {
   title: string;
@@ -234,6 +247,8 @@ export function Sheet({
   onBack?: () => void;
   /** Closes it, with its motion (after a save). */
   shut?: boolean;
+  /** Beside the title: a link to the full page. */
+  headExtra?: ReactNode;
   children: ReactNode;
 }) {
   const ref = useRef<HTMLElement>(null);
@@ -250,7 +265,15 @@ export function Sheet({
     setLeaving(true);
     window.setTimeout(onClose, 260);
   };
-  useFocusTrap(ref, !docked, close);
+  // A step inside (a list to its form and back) keeps the focus in the
+  // sheet: what was tapped is gone, and Esc must still reach it.
+  useEffect(() => {
+    const el = ref.current;
+    if (el && !el.contains(document.activeElement)) el.focus({ preventScroll: true });
+  }, [title]);
+  // Esc steps back from a form to its list, then closes the sheet only.
+  const escape = () => (onBack ? onBack() : close());
+  useFocusTrap(ref, !docked, escape);
   useEffect(() => {
     if (shut) close();
   }, [shut]);
@@ -307,10 +330,12 @@ export function Sheet({
         tabIndex={-1}
         data-testid={testid}
         onKeyDown={(e) => {
-          // Esc closes the sheet only, not what is under it.
-          if (e.key === "Escape") {
+          // Esc steps back from a form to its list, then closes the
+          // sheet only, not what is under it.
+          // (With the focus held, the trap hears Esc; docked, this does.)
+          if (e.key === "Escape" && docked) {
             e.preventDefault();
-            close();
+            escape();
           }
         }}
       >
@@ -318,7 +343,12 @@ export function Sheet({
         <div ref={body} className="tk-sheet-body">
           <div className="tk-sheet-head">
             {onBack && (
-              <button type="button" className="tk-round tk-back" aria-label="Back" onClick={onBack}>
+              <button
+                type="button"
+                className="tk-round tk-back"
+                aria-label="Back"
+                onClick={onBack}
+              >
                 <Icon name="back" />
               </button>
             )}
@@ -328,6 +358,7 @@ export function Sheet({
                 <span className="tk-sheet-count">{count}</span>
               )}
             </h2>
+            {headExtra}
             <button
               type="button"
               className="tk-round"

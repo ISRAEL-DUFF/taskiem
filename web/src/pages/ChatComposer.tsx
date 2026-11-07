@@ -9,7 +9,6 @@ import {
 } from "react";
 import { Icon } from "../icons";
 import { toast } from "../toast";
-import { post } from "../api";
 import { insertAt } from "../lib/emoji";
 import { isHeic, preparePhoto } from "../lib/photo";
 import { useComposerFocus } from "../lib/composerFocus";
@@ -112,9 +111,9 @@ export type ComposerOptions<R> = {
   grouped?: { taskiem: boolean };
   /** Chat tools: the tools button, and "/". */
   tools?: boolean;
-  /** Where a tool's change is told as a diary line: "taskiem" or a link. */
+  /** Where the tools are open: "taskiem" or a link. */
   diaryWhere?: string;
-  /** A diary line was kept (the server's copy): show it. */
+  /** A tool saved a change: what is newer is shown. */
   onDiary?: (line: unknown) => void;
 };
 
@@ -422,15 +421,13 @@ export function ComposerView<R>({
           from={c.tool.from}
           start={c.tool.start}
           onClose={() => c.setTool(undefined)}
-          onSaved={async (text) => {
-            const where = c.o.diaryWhere;
-            if (!where) return;
-            try {
-              const r = await post<{ line: unknown }>("/v1/chat-diary", { where, text });
-              c.o.onDiary?.(r.line);
-            } catch {
-              toast("Saved, but the change could not be told in the chat.", "info");
-            }
+          onSaved={() => {
+            // The server tells the change as a diary line in the person's
+            // Taskiem conversation (chat_changes.go): shown there at once;
+            // from a business's conversation, said where it went.
+            c.o.onDiary?.(undefined);
+            if (c.o.diaryWhere && c.o.diaryWhere !== "taskiem")
+              toast("Saved. The change is in your Taskiem chat.", "success", { href: "/chat?with=taskiem", linkText: "Open" });
           }}
         />
       )}

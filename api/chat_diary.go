@@ -8,7 +8,6 @@ package api
 // never sees it), and their own WhatsApp and Telegram.
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -18,9 +17,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/db"
-	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/links"
-	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
 // postChatDiary answers POST /v1/chat-diary with {"where": "taskiem" or a
@@ -99,54 +96,6 @@ func (s *Server) postChatDiary(w http.ResponseWriter, r *http.Request) {
 		}
 		out = m
 	}
-	s.background(r.Context(), "chat diary", func(ctx context.Context) { s.tellDiary(ctx, p.UserID, p.TenantID, text) })
+	s.queueDiaryTell(p.TenantID, p.UserID, text)
 	writeJSON(w, http.StatusCreated, map[string]any{"line": out})
-}
-
-// tellDiary tells the person on their own chat apps (outside WhatsApp's
-// window as the alert template), so a change made on the web is still
-// told where they chat.
-func (s *Server) tellDiary(ctx context.Context, user, tenant uuid.UUID, text string) {
-	type to struct{ channel, addr string }
-	var sends []to
-	var org string
-	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, tenant).Scan(&org); err != nil {
-			return err
-		}
-		for _, channel := range []string{"whatsapp", "telegram"} {
-			addrs, err := chatAddrsTx(ctx, tx, channel, []uuid.UUID{user})
-			if err != nil {
-				return err
-			}
-			if a, ok := addrs[user]; ok {
-				sends = append(sends, to{channel, a})
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		s.Logger.Warn("chat diary: telling", "err", err)
-		return
-	}
-	link := strings.TrimRight(s.PublicURL, "/") + "/chat"
-	// The line is in the history already: the phone's copy is not kept again.
-	ctx = unkept(ctx)
-	for _, t := range sends {
-		ch, err := s.chatChannelFor(ctx, t.channel, tenant)
-		if err != nil {
-			continue
-		}
-		words := diaryWords(s.chooseLang(ctx, tenant, t.addr, "").Tag, text)
-		tpl := whatsapp.TplAlert
-		msg := whatsapp.Message{Tenant: tenant, Text: words, Template: &tpl, Vars: map[string]string{"tenant": org, "title": words, "link": link}}
-		if _, err := ch.Send(ctx, t.addr, msg); err != nil {
-			s.Logger.Warn("chat diary: the chat", "channel", t.channel, "err", err)
-		}
-	}
-}
-
-// diaryWords is a diary line as the chat apps say it.
-func diaryWords(_ lang.Tag, text string) string {
-	return "✓ " + whatsapp.SafeText(text)
 }

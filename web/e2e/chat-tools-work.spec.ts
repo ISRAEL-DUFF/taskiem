@@ -2,10 +2,11 @@ import { expect, test, type Browser, type Page, type Route } from "@playwright/t
 import { axe, describe } from "./a11y";
 
 // Chat tools, phase 2 (docs/spec/chat-tools.md): from chat, an owner
-// changes a price, records stock in, accepts an order and adds a service,
-// and each change is told as a diary line where the tool was opened. The
-// tools' own API calls are answered here (they have tests of their own);
-// the diary lines are the server's.
+// changes a price, records stock in, accepts an order and adds a service.
+// The tools' own API calls are answered here (they have tests of their
+// own, and the server's diary lines for them are tested in
+// api/chat_diary_test.go): here, what each form sends, and what the person
+// is told.
 test.use({ bypassCSP: true });
 
 const H = { "X-Taskiem-Request": "1" };
@@ -55,6 +56,7 @@ async function shop(page: Page) {
   const items = [
     { id: "s1", name: "Rice, 50kg bag", available: true, stock: 42, unit: "bag", price_kobo: 7_600_000 },
     { id: "s2", name: "Rice, 25kg bag", available: true, stock: 4, low: true, unit: "bag", price_kobo: 4_100_000 },
+    { id: "s3", name: "Garri, Ijebu", available: true, stock: null, unit: "bag", price_kobo: 3_200_000 },
   ];
   const remember = async (route: Route) => {
     const r = route.request();
@@ -78,14 +80,14 @@ for (const [size, viewport] of [
   ["a phone", { width: 390, height: 844 }],
   ["a computer", { width: 1440, height: 900 }],
 ] as const) {
-  test(`from chat on ${size}: a price, stock in, an order and a service, each a diary line`, async ({ browser }) => {
+  test(`from chat on ${size}: a price, stock in, an order and a service`, async ({ browser }) => {
     test.setTimeout(180_000);
     const { owner, seller, link } = await linked(browser, viewport);
     const sent = await shop(owner);
     await owner.goto(`/chat?with=${link}`);
     const pane = owner.getByTestId("chat-pane");
     const sheet = owner.getByTestId("tool-sheet");
-    const diary = pane.getByTestId("chat-diary");
+    const saved = owner.locator(".toast", { hasText: "The change is in your Taskiem chat" });
     const tool = async (name: string) => {
       await pane.getByRole("button", { name: "Open tools" }).click();
       await owner.getByRole("region", { name: "Tools" }).getByRole("button", { name: new RegExp(`^${name}`) }).click();
@@ -96,13 +98,22 @@ for (const [size, viewport] of [
     await tool("Products");
     await sheet.getByRole("button", { name: /Rice, 50kg bag/ }).click();
     await expect(sheet.getByRole("heading", { name: "Rice, 50kg bag" })).toBeVisible();
+    await expect(sheet.getByRole("switch", { name: "Show on your storefront" })).toHaveAttribute("aria-checked", "true");
+    await expect(sheet.getByRole("button", { name: "Add a photo" })).toBeVisible();
     await axeBoth(owner, "a product's form");
+    // Esc steps back to the list, then closes.
+    await owner.keyboard.press("Escape");
+    await expect(sheet.getByRole("button", { name: /Rice, 50kg bag/ })).toBeVisible();
+    await sheet.getByRole("button", { name: /Rice, 50kg bag/ }).click();
     await sheet.getByLabel("Price in naira").fill("78,000");
+    await sheet.getByRole("switch", { name: "Show on your storefront" }).click();
     await sheet.getByRole("button", { name: "Save" }).click();
     await expect(owner.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
     await expect(sheet).toHaveCount(0, { timeout: 5000 });
-    await expect(diary.last()).toContainText("Price of Rice, 50kg bag: ₦76,000 → ₦78,000");
-    expect(sent.find((x) => x.method === "PATCH")?.body).toEqual({ price_kobo: 7_800_000 });
+    await expect(saved).toBeVisible();
+    // The price and whether it shows; no count was touched, so none is sent.
+    expect(sent.find((x) => x.method === "PATCH")?.body).toEqual({ price_kobo: 7_800_000, available: false });
+    expect(sent.filter((x) => x.path === "/v1/stock/movements")).toEqual([]);
 
     // Stock in.
     await tool("Stock");
@@ -110,16 +121,16 @@ for (const [size, viewport] of [
     await sheet.getByRole("button", { name: "One more" }).click();
     await sheet.getByRole("button", { name: "Record stock in" }).click();
     await expect(sheet).toHaveCount(0, { timeout: 5000 });
-    await expect(pane).toContainText("Stock in: Rice, 25kg bag +2 bags (now 6 bags)");
     expect(sent.find((x) => x.path === "/v1/stock/movements")?.body).toMatchObject({ item_id: "s2", reason: "received", change: 2 });
 
     // An order accepted.
     await tool("Orders");
     await sheet.getByRole("button", { name: /AD-7Q4K2P/ }).click();
     await expect(sheet).toContainText("20 × Rice, 25kg bag");
+    await expect(sheet.getByRole("img", { name: "Placed: step 1 of 4" })).toBeVisible();
     await sheet.getByRole("button", { name: "Accept" }).click();
     await expect(sheet).toHaveCount(0, { timeout: 5000 });
-    await expect(pane).toContainText("Accepted order AD-7Q4K2P from Rivers Foods");
+    expect(sent.find((x) => x.path === "/v1/trade-orders/o1/accept")).toBeTruthy();
 
     // A service added, with how long it takes and its price.
     await tool("Services");
@@ -129,13 +140,11 @@ for (const [size, viewport] of [
     await axeBoth(owner, "adding a service");
     await sheet.getByRole("button", { name: "Add service" }).click();
     await expect(sheet).toHaveCount(0, { timeout: 5000 });
-    await expect(pane).toContainText("New service: Rice milling, per bag, 30 min, ₦2,500");
     expect(sent.find((x) => x.path === "/v1/tables/svc/rows")?.body).toMatchObject({ row: { name: "Rice milling, per bag" } });
 
-    // The changes are ours alone: the other business sees none of them.
+    // Nothing of it reaches the other business.
     const theirs = (await (await seller.request.get(`/v1/link-chats/${link}/messages`, { headers: H })).json()).messages as { kind: string }[];
     expect(theirs.filter((m) => m.kind === "diary")).toEqual([]);
-    await axeBoth(owner, "diary lines in a conversation");
     expect(await owner.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width);
   });
 }
@@ -145,16 +154,36 @@ test("in the Taskiem chat, a change is a diary line there", async ({ browser }) 
   const sent = await shop(owner);
   await owner.goto("/chat?with=taskiem");
   await owner.getByRole("button", { name: "Open tools" }).click();
-  await owner.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Products/ }).click();
+  await owner.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Stock/ }).first().click();
   const sheet = owner.getByTestId("tool-sheet");
   await sheet.getByRole("button", { name: /Rice, 25kg bag/ }).click();
   await sheet.getByRole("button", { name: "One more" }).click();
+  await sheet.getByRole("button", { name: "Record stock in" }).click();
+  await expect(sheet).toHaveCount(0, { timeout: 5000 });
+  expect(sent.find((x) => x.path === "/v1/stock/movements")?.body).toMatchObject({ reason: "received", change: 2 });
+  // A product with no count yet: its price saved, no count of 0 recorded;
+  // the stock tool offers it for its first goods in.
+  await owner.getByRole("button", { name: "Open tools" }).click();
+  await owner.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Products/ }).first().click();
+  await sheet.getByRole("button", { name: /Garri, Ijebu/ }).click();
+  await expect(sheet).toContainText("No count yet: set one");
+  await sheet.getByLabel("Price in naira").fill("33,000");
   await sheet.getByRole("button", { name: "Save" }).click();
-  await expect(owner.getByTestId("chat-diary")).toContainText("Stock of Rice, 25kg bag counted: 4 bags → 5 bags");
-  expect(sent.find((x) => x.path === "/v1/stock/movements")?.body).toMatchObject({ reason: "count", count: 5 });
-  // Kept: still there after a reload.
+  await expect(sheet).toHaveCount(0, { timeout: 5000 });
+  expect(sent.filter((x) => x.path === "/v1/stock/movements")).toHaveLength(1);
+  await owner.getByRole("button", { name: "Open tools" }).click();
+  await owner.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Stock/ }).first().click();
+  await expect(sheet.getByRole("button", { name: /Garri, Ijebu/ })).toContainText("No count");
+  await sheet.getByRole("button", { name: "Close" }).click();
+
+  // A line the server keeps shows as a diary line, its new value in bold.
+  const r = await owner.request.post("/v1/chat-diary", { headers: H, data: { where: "taskiem", text: "Price of Rice: ₦76,000 → ₦78,000" } });
+  expect(r.status()).toBe(201);
   await owner.reload();
-  await expect(owner.getByTestId("chat-diary")).toContainText("counted: 4 bags → 5 bags");
+  const line = owner.getByTestId("chat-diary").last();
+  await expect(line).toContainText("Price of Rice: ₦76,000 → ₦78,000");
+  await expect(line.locator("b")).toHaveText("₦78,000");
+  await axeBoth(owner, "a diary line in the Taskiem chat");
 });
 
 test("typed words open the form filled in, and saving stays a tap", async ({ browser }) => {
@@ -174,7 +203,7 @@ test("typed words open the form filled in, and saving stays a tap", async ({ bro
   await expect(sheet.getByLabel("Price in naira")).toHaveValue("80,000");
   await expect(box).toHaveValue("");
   await sheet.getByRole("button", { name: "Save" }).click();
-  await expect(pane.getByTestId("chat-diary")).toContainText("Price of Rice, 50kg bag: ₦76,000 → ₦80,000");
+  await expect(sheet).toHaveCount(0, { timeout: 5000 });
   expect(sent.find((x) => x.method === "PATCH")?.body).toEqual({ price_kobo: 8_000_000 });
 
   // Ordinary words offer nothing.

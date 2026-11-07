@@ -95,13 +95,15 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
   );
   const act = useAction();
   const chatTools = useChatTools();
+  const afterDiary = useRef<() => void>(() => undefined);
   const localN = useRef(0);
   const c = useComposer<never>({
     draftKey: "taskiem",
     rules: TASKIEM_FILES,
     tools: chatTools,
     diaryWhere: "taskiem",
-    onDiary: (line) => setMessages((cur) => mergeTaskiem(cur ?? [], [line as TaskiemMessage])),
+    // A tool saved: the server's diary line is pulled in.
+    onDiary: () => afterDiary.current(),
     sources: {
       "@": (convs.data ?? [])
         .filter((x) => x.state === "active")
@@ -151,6 +153,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
     if (after && out.messages.length >= 200 && newest)
       await pull(newest.created_at);
   }, []);
+  afterDiary.current = () => void pull(messages?.[messages.length - 1]?.created_at).catch(setError);
   // The newest page: the view is placed at its end.
   useEffect(() => {
     get<{ messages: TaskiemMessage[] }>("/v1/taskiem-chat")

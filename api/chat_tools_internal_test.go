@@ -26,3 +26,23 @@ func TestCutTaskiem(t *testing.T) {
 		}
 	}
 }
+
+// The words of changes told as diary lines (chat_changes.go).
+func TestChangeWords(t *testing.T) {
+	for got, want := range map[string]string{
+		orderStepWords("accept", "AD-1", "Rivers Foods"):     "Accepted order AD-1 from Rivers Foods",
+		orderStepWords("dispatched", "AD-1", "Rivers Foods"): "Order AD-1 from Rivers Foods is on its way",
+		orderStepWords("some_step", "AD-1", "Rivers Foods"):  "Order AD-1 from Rivers Foods: some step",
+		qty(1, "bag"):                  "1 bag",
+		qty(20, "bag"):                 "20 bags",
+		qty(3, "box"):                  "3 boxes",
+		qty(4, ""):                     "4",
+		qty(2, "pieces"):               "2 pieces",
+		diaryWords([]string{"A"}):      "✓ A",
+		diaryWords([]string{"A", "B"}): "✓ 2 changes:\n• A\n• B",
+	} {
+		if got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	}
+}

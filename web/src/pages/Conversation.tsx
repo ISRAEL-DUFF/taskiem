@@ -39,7 +39,13 @@ import { useConfirm } from "./ConfirmSheet";
 import { useChatTools } from "../lib/useChatTools";
 import { ORDER_STEPS, cardKicker, cardStatus, isDiary } from "../lib/cardframe";
 import { DiaryLine } from "../kit";
-import { chime, isGoodMoment, isNews, soundOn } from "../lib/moments";
+import {
+  chime,
+  isGoodMoment,
+  isNews,
+  primeSound,
+  soundOn,
+} from "../lib/moments";
 import { LiveCard, liveMention, type Live } from "./ChatLiveCard";
 import { formatPrice } from "../lib/storefront";
 import type { StockItem, StockView } from "../lib/stock";
@@ -757,7 +763,14 @@ function Bubble({
             <AttachmentView m={m} a={m.attachment} other={other} />
           )}
           {live && liveMention(m.mentions) && (
-            <LiveCard m={liveMention(m.mentions) as NonNullable<ReturnType<typeof liveMention>>} live={live} />
+            <LiveCard
+              m={
+                liveMention(m.mentions) as NonNullable<
+                  ReturnType<typeof liveMention>
+                >
+              }
+              live={live}
+            />
           )}
           {m.body && (
             <span className="text">
@@ -857,9 +870,15 @@ function DiaryRun({
           </time>
         }
       >
-        {m.card ? cardLine(m.card, true, other) : m.body}
-        {m.card && cardSub(m.card) && (
-          <span className="tk-diary-sub"> {cardSub(m.card)}</span>
+        {m.card ? (
+          <>
+            {cardLine(m.card, true, other)}
+            {cardSub(m.card) && (
+              <span className="tk-diary-sub"> {cardSub(m.card)}</span>
+            )}
+          </>
+        ) : (
+          (m.body ?? "")
         )}
       </DiaryLine>
     );
@@ -1382,6 +1401,9 @@ export function ConversationPane({
   // News that arrives while the conversation is open: a sound (unless
   // switched off) for an order or a payment, and a burst for a good moment.
   const told = useRef(new Set<string>());
+  useEffect(() => {
+    if (chatTools && soundOn()) primeSound();
+  }, [chatTools]);
   const [cheer, setCheer] = useState<string>();
   useEffect(() => {
     if (!chatTools || !shown) return;
@@ -1402,7 +1424,8 @@ export function ConversationPane({
         setCheer(m.id);
         window.setTimeout(() => setCheer(undefined), 900);
       }
-      if (m.card.event === "ordered" || m.card.event === "auto_accepted") firstOrder = false;
+      if (m.card.event === "ordered" || m.card.event === "auto_accepted")
+        firstOrder = false;
     }
   }, [shown, chatTools]);
   // Diary lines made close together on one day are one line (its first).
@@ -1411,7 +1434,9 @@ export function ConversationPane({
     const member = new Set<string>();
     let run: LinkMessage[] | undefined;
     for (const m of shown ?? []) {
-      const diary = m.kind === "diary" || (chatTools && !!m.card && isDiary(m.card, m.mine));
+      const diary =
+        m.kind === "diary" ||
+        (chatTools && !!m.card && isDiary(m.card, m.mine));
       const last = run?.[run.length - 1];
       if (
         diary &&

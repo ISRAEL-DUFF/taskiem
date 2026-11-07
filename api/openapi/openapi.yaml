@@ -10148,6 +10148,9 @@ paths:
                   type: integer
                 supplier:
                   type: string
+                available:
+                  type: boolean
+                  description: Shown on the storefront and the price lists it is on
       responses:
         '200':
           description: The item
@@ -26056,7 +26059,7 @@ components:
         group:
           type: string
           description: More groups may be added; a client shows a group it does not know generically or skips it.
-          enum: [failures, setup, finished, money]
+          enum: [failures, setup, finished, money, changes]
         chat:
           type: boolean
         email:

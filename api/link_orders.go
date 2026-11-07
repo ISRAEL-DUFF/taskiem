@@ -121,6 +121,7 @@ func (s *Server) tradeOrderStep(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, orderErr(err))
 		return
 	}
+	s.diaryChange(r.Context(), p, orderStepWords(step, o.OrderReference, o.BuyerName))
 	writeJSON(w, http.StatusOK, map[string]any{"order": o, "short": short})
 }
 

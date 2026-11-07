@@ -189,9 +189,53 @@ func (s *Server) putPriceListItems(w http.ResponseWriter, r *http.Request) {
 		}
 		list = append(list, pi)
 	}
-	s.priceChange(w, r, "price_list.items", id.String(), map[string]any{"items": len(list)}, func(tx pgx.Tx, tenant uuid.UUID) ([]uuid.UUID, error) {
-		return links.SetListItemsTx(r.Context(), tx, tenant, id, list)
+	// What it held, for the diary line (chat_changes.go).
+	var before links.PriceList
+	_ = s.tx(r, func(tx pgx.Tx) error {
+		lists, err := links.ListsTx(r.Context(), tx, p.TenantID)
+		for _, l := range lists {
+			if l.ID == id {
+				before = l
+			}
+		}
+		return err
 	})
+	if s.priceChange(w, r, "price_list.items", id.String(), map[string]any{"items": len(list)}, func(tx pgx.Tx, tenant uuid.UUID) ([]uuid.UUID, error) {
+		return links.SetListItemsTx(r.Context(), tx, tenant, id, list)
+	}) {
+		s.diaryChange(r.Context(), p, priceListWords(before, list))
+	}
+}
+
+// priceListWords is a price list's change as a diary line: its first
+// changed price and how many more, else how many items it holds.
+func priceListWords(before links.PriceList, after []links.PriceItem) string {
+	was := map[string]int64{}
+	for _, it := range before.Items {
+		was[it.ItemID] = it.PriceKobo
+	}
+	var changes []string
+	for _, it := range after {
+		if old, ok := was[it.ItemID]; ok && old != it.PriceKobo {
+			changes = append(changes, fmt.Sprintf("%s %s → %s", it.Name, naira(old), naira(it.PriceKobo)))
+		}
+	}
+	name := before.Name
+	if name == "" {
+		name = "saved"
+	}
+	switch {
+	case len(changes) == 1:
+		return fmt.Sprintf("Price list %s: %s", name, changes[0])
+	case len(changes) > 1:
+		return fmt.Sprintf("Price list %s: %s, and %d more", name, changes[0], len(changes)-1)
+	case len(after) != len(before.Items):
+		if len(after) == 1 {
+			return fmt.Sprintf("Price list %s now holds 1 item", name)
+		}
+		return fmt.Sprintf("Price list %s now holds %d items", name, len(after))
+	}
+	return ""
 }
 
 // sharePriceList is PUT /v1/price-lists/{id}/links: the linked buyers it
@@ -221,7 +265,7 @@ func (s *Server) sharePriceList(w http.ResponseWriter, r *http.Request) {
 
 // priceChange writes a seller's change and its audit, answers the lists,
 // and brings the changed links' prices to their buyers.
-func (s *Server) priceChange(w http.ResponseWriter, r *http.Request, action, target string, detail map[string]any, fn func(pgx.Tx, uuid.UUID) ([]uuid.UUID, error)) {
+func (s *Server) priceChange(w http.ResponseWriter, r *http.Request, action, target string, detail map[string]any, fn func(pgx.Tx, uuid.UUID) ([]uuid.UUID, error)) bool {
 	p := principalFrom(r.Context())
 	var changed []uuid.UUID
 	var out priceListsOut
@@ -237,10 +281,11 @@ func (s *Server) priceChange(w http.ResponseWriter, r *http.Request, action, tar
 		return err
 	}); err != nil {
 		s.fail(w, r, linkMessageErr(err))
-		return
+		return false
 	}
 	s.mirrorPrices(r.Context(), p.TenantID, changed)
 	writeJSON(w, http.StatusOK, out)
+	return true
 }
 
 type linkPricesOut struct {

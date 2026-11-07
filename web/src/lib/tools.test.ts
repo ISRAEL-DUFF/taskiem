@@ -22,7 +22,9 @@ describe("the chat's tools", () => {
     expect(rows[2]?.sub).toBe("No price yet");
     expect(tool("products").line(rows)).toBe("3 items");
     expect(tool("stock").badge?.(tool("stock").rows(stock))).toEqual({ text: "1 low", tone: "warn" });
-    expect(tool("stock").rows(stock).map((r) => r.id)).toEqual(["2", "1"]);
+    // The stock tool lists every item, those with no count too (their first goods in).
+    expect(tool("stock").rows(stock).map((r) => r.id)).toEqual(["2", "1", "3"]);
+    expect(tool("stock").rows(stock)[2]?.pill).toEqual({ text: "No count", tone: "plain" });
   });
   it("filters by chip and by search", () => {
     const rows = tool("products").rows(stock);

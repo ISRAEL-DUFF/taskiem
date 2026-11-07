@@ -26,23 +26,58 @@ export function setSound(on: boolean) {
 
 /** A card that is news: an order or a payment, from the other side. */
 export function isNews(card: DocCard, mine: boolean): boolean {
-  return !mine && ["ordered", "auto_accepted", "bill", "declared"].includes(card.event);
+  return (
+    !mine &&
+    ["ordered", "auto_accepted", "bill", "declared"].includes(card.event)
+  );
 }
 
 /** A good moment: a payment, or the first order of the day. */
-export function isGoodMoment(card: DocCard, mine: boolean, firstOrderToday: boolean): boolean {
+export function isGoodMoment(
+  card: DocCard,
+  mine: boolean,
+  firstOrderToday: boolean,
+): boolean {
   if (mine) return false;
-  return card.event === "declared" || ((card.event === "ordered" || card.event === "auto_accepted") && firstOrderToday);
+  return (
+    card.event === "declared" ||
+    ((card.event === "ordered" || card.event === "auto_accepted") &&
+      firstOrderToday)
+  );
 }
 
 let audio: AudioContext | undefined;
 
+/** Browsers let a page make a sound only after a tap: the first one
+ * opens the way, so the first new order is heard. */
+export function primeSound() {
+  if (typeof window === "undefined" || audio) return;
+  const open = () => {
+    try {
+      const Ctx =
+        window.AudioContext ??
+        (window as unknown as { webkitAudioContext?: typeof AudioContext })
+          .webkitAudioContext;
+      if (Ctx && !audio) audio = new Ctx();
+      void audio?.resume();
+    } catch {
+      // No sound: nothing else changes.
+    }
+  };
+  window.addEventListener("pointerdown", open, { once: true, capture: true });
+  window.addEventListener("keydown", open, { once: true, capture: true });
+}
+
 /** Two soft notes, rising. */
 export function chime() {
   try {
-    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    const Ctx =
+      window.AudioContext ??
+      (window as unknown as { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
     if (!Ctx) return;
     audio ??= new Ctx();
+    if (audio.state === "suspended") void audio.resume();
     const now = audio.currentTime;
     for (const [i, f] of [660, 880].entries()) {
       const o = audio.createOscillator();

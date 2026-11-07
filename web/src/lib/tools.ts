@@ -149,7 +149,8 @@ export const TOOLS: Tool[] = [
     page: "/storefront/stock",
     rows: (data) =>
       stockRows(data)
-        .filter((r) => r.pill)
+        // Every item, those with no count yet too (their first goods in).
+        .map((r) => (r.pill ? r : { ...r, pill: { text: "No count", tone: "plain" as const } }))
         .sort(
           (a, b) =>
             Number(b.tags.includes("low")) - Number(a.tags.includes("low")),
