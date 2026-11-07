@@ -45,6 +45,7 @@ var areaPaths = []struct {
 	{"/v1/price-lists", areas.Stock},
 	{"/v1/link-prices", areas.Stock},
 	{"/v1/supplier-prices", areas.Stock},
+	{"/v1/trade-floors", areas.Stock}, // a product's lowest price for deals, beside its price lists
 	{"/v1/item-links", areas.Stock},
 
 	{"/v1/invoices", areas.Money},
