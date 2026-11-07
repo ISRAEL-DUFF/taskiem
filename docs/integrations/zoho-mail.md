@@ -64,6 +64,7 @@ Zoho Mail documents no webhook for new mail, so Taskiem asks the mailbox itself 
 ## Templates
 
 - **Email a receipt from your Zoho mailbox** (`zoho-mail-paid-receipt`): when an invoice is paid in full, the customer is emailed a short receipt from the business's own address.
+- **A helpdesk on your Zoho Mail mailbox** (`helpdesk-zoho-mail`) and **Send ticket answers from your Zoho Mail mailbox** (`helpdesk-zoho-mail-send`): each new conversation in the inbox becomes a numbered ticket, replies join it (found by `thread_id`), and the business's answers go back with `reply` in the customer's conversation ([customer tickets](../guide/tickets.md), [the kit](../spec/tickets.md#7-phase-2-the-ticket-kit)).
 
 ## Needs a person
 

@@ -80,6 +80,10 @@ Gmail's push notifications need a Cloud Pub/Sub topic in the business's own Goog
 - **Options** (`config.options` of the workflow's trigger), applied to each workflow on its own: `inbox_only` (default `true`: not mail a Gmail filter archived), `label_ids` (every one of these labels: ids as `list_labels` lists them, such as `Label_12`, `IMPORTANT` or `CATEGORY_PERSONAL`) and `senders` (addresses, `@domain` or `domain`; a subdomain is another domain). Options choose which mail starts the workflow; a run waiting on a thread hears every reply in it, whatever the options.
 - **Personal data:** the addresses, subject, snippet and text are sealed in run history (rule 21's `pii`).
 
+## Templates
+
+- **A helpdesk on your Gmail mailbox** (`helpdesk-gmail`) and **Send ticket answers from your Gmail mailbox** (`helpdesk-gmail-send`): each new conversation in the inbox becomes a numbered ticket, replies join it (found by `thread_id`), and the business's answers go back with `send_message` in the customer's thread (`thread_id`, `in_reply_to`, `references`) ([customer tickets](../guide/tickets.md), [the kit](../spec/tickets.md#7-phase-2-the-ticket-kit)).
+
 ## Needs a person
 
 - A Google Cloud project with the Gmail API enabled, and either a Workspace super administrator to grant domain-wide delegation to a service account, or a Gmail user to consent for a refresh token, for a live check.

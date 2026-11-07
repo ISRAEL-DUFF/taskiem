@@ -28,3 +28,7 @@ Support-ticket templates need an email conversation per ticket: the customer wri
 - The mail role keeps the tag of the address a message came to; the api role verifies it.
 - A message listed in the trigger's tab may be **Replied** (it woke a run) besides started, refused and confirmation.
 - Phase 2 (the ticket templates) builds on this; nothing here makes tickets.
+
+## Amendment, 2026-11-07
+
+[Decision 0064](0064-ticket-kit.md): `email@1 send_in_thread` may send from another threaded email workflow's address of the same business and environment (`address`), the thread's records then being that address's; and only a still-going run of the address's own workflow holds a reply back.

@@ -1,12 +1,12 @@
 # Support tickets: email threads
 
-Status: **Phase 1 built** 7 November 2026 (email threading, §3 to §6); phase 2, the ticket templates, planned · Decision: [0063](../decisions/0063-email-threads.md) · Builds on: [email triggers](../email.md) ([0038](../decisions/0038-inbound-email.md)), signal steps ([wd/v1](../contracts/wd-v1.md#runtime-semantics-enginedecide)), [messages to people outside](../messages.md)
+Status: **Phase 1 built** 7 November 2026 (email threading, §3 to §6); **phase 2, the ticket kit, part 1 built** 7 November 2026 (§7: the shared pieces and the email entrances); the other entrances planned (§8) · Decisions: [0063](../decisions/0063-email-threads.md), [0064](../decisions/0064-ticket-kit.md) · Guide: [customer tickets](../guide/tickets.md) · Builds on: [email triggers](../email.md) ([0038](../decisions/0038-inbound-email.md)), signal steps ([wd/v1](../contracts/wd-v1.md#runtime-semantics-enginedecide)), [messages to people outside](../messages.md)
 
 ## 1. Summary
 
 A family of ticketing templates is coming: a customer opens a ticket by email, a workflow records it, an `ai` step picks the department, the department is told, and the workflow then carries a conversation with the customer until the ticket is resolved. All of it rests on one thing a workflow cannot do today: keep an email conversation together. A reply must find the ticket it answers and reach the run that waits for it, and Taskiem's own email to the customer must thread in the customer's mail app.
 
-Phase 1, this document, builds the threading. Phase 2 builds the templates on it.
+Phase 1 builds the threading (§3 to §6). Phase 2 builds the templates on it (§7), and the entrances other than email after them (§8).
 
 ## 2. Words used here
 
@@ -68,6 +68,58 @@ A message whose ticket cannot be found starts a run as in any email workflow.
 
 Each address has a secret of its own (`email_endpoints.reply_key`, 32 random bytes, made the first time it sends in a thread), from which reply tags and Message-IDs are derived.
 
-## 7. Phase 2: the templates
+## 7. Phase 2: the ticket kit
 
-Not built here: the ticket templates (opening, numbering, routing by an `ai` step, telling the department, the conversation loop, resolving and reopening), their data table, and an owner's view of open tickets.
+### 7.1 Shape
+
+A ticket's state lives in two data tables, not in one long-running run: each event (a message in, an answer out, a quarter-hour passing) is a short run of one of a family of small workflows that read and write them ([decision 0064](../decisions/0064-ticket-kit.md)). A run never waits for a customer, so a ticket can stay open for weeks, a workflow can be changed and republished meanwhile, and the owner sees every ticket on the Tables page.
+
+| Table (known, `templates/tables/`) | Columns |
+| --- | --- |
+| `tickets` | `reference` (T-1042), `subject`, `customer_name`, `customer_email`, `customer_phone`, `channel` (`email`, `form`, `whatsapp`, `api`, `staff`), `department`, `role` (the department's role), `priority` (`low`, `normal`, `high`, `urgent`), `status` (`new`, `open`, `waiting_on_customer`, `resolved`, `closed`), `assigned_to` (a member's sign-in email), `summary`, `last_customer_at`, `last_reply_at`, `resolved_at`, `reminded_at`, `escalated_at`, `thread` (the conversation: the reference on Taskiem's address, the mailbox's `thread_id` on Zoho Mail and Gmail), `mail` (how its email goes: `taskiem`, `zoho`, `gmail`, or empty), `mailbox` (the helpdesk's Taskiem address), `last_message_id` (the customer's last email, to answer it), `previous_reference` (the ticket it follows); and every table's `id`, `created_at`, `updated_at` |
+| `ticket_messages` | `reference`, `direction` (`in`, `out`, `note`), `author`, `body`, `at`, `message_id`, `channel`, `mail`, `sent_at` (empty on an answer waiting for the business's mailbox to send it) |
+
+The subject, names, summary, author and body are personal columns; the email and phone are personal by type.
+
+**Numbers.** A ticket's reference is `T-` and 1000 plus its row's `id`: the insert answers the row, and the next step writes the reference. It is unique and in order without a counter, and a retried insert (its idempotency key) does not number twice. A row without a reference (the second step failed) is not a ticket to the other workflows.
+
+### 7.2 The pieces (templates)
+
+| Template | Kind | Does |
+| --- | --- | --- |
+| `ticket-route` | callable | Department, role, priority and summary: an `ai` step reads the subject and message with the departments' descriptions (`routing: ai`), else the first department with one of its words in the message (`rules`), else the department the customer chose (`chosen`); one that is none of the departments gives the default department |
+| `ticket-open` | callable, uses `ticket-route` | Inserts the ticket (`new`), numbers it, saves the first message, tells the department's role (`notify@1 tell`) with the reference, subject, priority, summary and the reply form's link (`env.ticket_reply_form` + `?ticket=T-1042`), and tells the customer their number (below) |
+| `ticket-answer` | callable | Finds the ticket by reference, sends the answer the way the ticket came, saves it as an `out` message, and sets the status, `last_reply_at`, `resolved_at` and, when nobody has it, `assigned_to` |
+| `ticket-reply` | members' form | A member's answer, resolution or note on a ticket by its number (prefilled from the link); answers go through `ticket-answer`; an unknown number is told to the member |
+| `ticket-follow-up` | every 15 minutes | Reminds the department (or the assigned member) of `new` and `open` tickets with no answer since the customer last wrote, past the first-answer hours, once per customer message; tells the escalation role past twice that, once; resolves `waiting_on_customer` tickets quiet past the days allowed through `ticket-answer` with the closing message; closes `resolved` tickets past their days |
+| `helpdesk-email` | email trigger, `threads: true` | T1: Taskiem's address (below) |
+| `helpdesk-zoho-mail`, `helpdesk-gmail` | `new_mail` | T2, T3: the business's own mailbox (below) |
+| `helpdesk-zoho-mail-send`, `helpdesk-gmail-send` | `row_changed` on `ticket_messages` | Send each answer left for that mailbox |
+
+Parameters a business sets: `departments` (one per line, `name | role | what it looks after | words`), `default_department`, `routing`, `acknowledgement`, `reopen_days` (T1 to T3); `first_answer_hours`, `escalation_role`, `waiting_days`, `closing_message`, `close_days` (follow-up); the mailbox connection (T2, T3). Business hours are not a parameter yet: the follow-up counts every hour.
+
+**How a customer hears from the business.** Every piece chooses the same way from the ticket: `mail` is `zoho` or `gmail` and there is an email: the answer is saved as an `out` message with that `mail` and no `sent_at`, and the mailbox's sending workflow sends it as a reply in the conversation and marks it sent; `mail` is `taskiem` with an email and a `mailbox`: `email@1 send_in_thread` from that address (§4), thread the reference; else a phone or an email: `notify@1 message` (WhatsApp or Telegram where the customer asked, else SMS, else email); else nobody is told, and the answer is still saved. So `ticket-reply` and `ticket-follow-up` work for every entrance without a connection of their own: a mailbox connection would otherwise be needed to publish them even by a business that does not use that mailbox (readiness).
+
+**The email entrances.** T1 finds the ticket of a reply by `trigger.email.thread` (the reference); T2 and T3 by `mail` and the mailbox's `thread_id`. A message in a known ticket's conversation is appended (`in`), the ticket's status becomes `open`, `last_customer_at` and `last_message_id` are kept, and the department's role (or the assigned member) is told. A ticket `resolved` or `closed` longer than `reopen_days` ago is not reopened: a new ticket opens with `previous_reference` naming it. Anything else opens a ticket through `ticket-open`.
+
+### 7.3 Personal data
+
+Run histories seal what the triggers and steps carry as usual. The `ai` step lets the message's subject and text reach the model (`personal_data: [message]`), since it must read them to route the ticket; the customer's name, email and phone are not in its input, and every other personal value in its prompt is masked ([AI steps](../contracts/wd-v1.md#ai-steps)). A business that does not want this chooses `rules` or `chosen`. The tables are the business's records: their personal columns are masked in run outputs and chat, as every table's are.
+
+## 8. How another entrance plugs in
+
+The web form, WhatsApp, webhook and staff entrances (IT, HR) come next, each a template of its own whose workflow calls `ticket-open` as a template step (a workflow, not another template: `ticket-open` already nests `ticket-route`, and templates nest three deep):
+
+```json
+{"id": "open", "type": "template", "template": "ticket-open",
+ "params": {"departments": "{{departments}}", "default_department": "{{default_department}}", "routing": "{{routing}}", "acknowledgement": "{{acknowledgement}}"},
+ "input": {"channel": "form", "subject": "=trigger.body.subject", "message": "=trigger.body.message",
+           "customer_name": "=trigger.body.name", "customer_email": "=trigger.body.email", "customer_phone": "=trigger.body.phone",
+           "department": "=trigger.body.department", "mail": "taskiem", "mailbox": "{{helpdesk_address}}"}}
+```
+
+- `channel` is `form`, `whatsapp`, `api` or `staff`; `subject` and `message` are required; the customer's name, email and phone as far as known.
+- `department` is the customer's choice, used with `routing: chosen`.
+- To answer by email in a conversation whose replies come back as tickets, give `mail: taskiem` and `mailbox`, the address of the business's `helpdesk-email` workflow (a parameter the entrance asks for). Its replies then reach `helpdesk-email`, which appends them to the ticket. Without them the customer is answered on their phone (`notify@1 message`), or by a plain email when they gave only that.
+- For a customer who keeps writing on WhatsApp, the entrance itself finds their open ticket (by `customer_phone` and `status`) and appends to `ticket_messages`, as T1 to T3 do for a reply; `ticket-answer` already answers such tickets on their phone.
+- `ticket-open`'s outputs are `reference`, `department`, `priority`, `summary` and `told_by` (`email`, `mailbox`, `message` or `none`).
