@@ -74,9 +74,14 @@ func TestChatAlerts(t *testing.T) {
 	if low == nil || low["line"] != "4 bags left · you reorder at 10" || low["id"] != rice || low["reorder"] != nil {
 		t.Fatalf("low stock: %v", low)
 	}
-	// Ordered once, so linked: Reorder up to the target, at their price.
-	po := buyer.must(201, "POST", "/v1/supplier-prices/"+link+"/order", map[string]any{"lines": []any{map[string]any{"seller_item_id": sRice, "quantity": 2, "item_id": rice}}},
-		"Idempotency-Key", "o1")["purchase"].(map[string]any)
+	// Ordered once, so linked; while that order is open there is no card
+	// (dealt with). Cancelled: Reorder up to the target, at their price.
+	first := buyer.must(201, "POST", "/v1/supplier-prices/"+link+"/order", map[string]any{"lines": []any{map[string]any{"seller_item_id": sRice, "quantity": 2, "item_id": rice}}},
+		"Idempotency-Key", "o0")["purchase"].(map[string]any)
+	if find(alerts(buyer), "low_stock", "Rice 50kg") != nil {
+		t.Fatal("on order, still a low stock card")
+	}
+	buyer.must(200, "POST", "/v1/stock/purchases/"+first["id"].(string)+"/cancel", nil)
 	low = find(alerts(buyer), "low_stock", "Rice 50kg")
 	re, _ := low["reorder"].(map[string]any)
 	if re == nil || re["link"] != link || re["supplier"] != "Dangote Stores" || re["seller_item_id"] != sRice || re["quantity"] != float64(20) || re["price_kobo"] != float64(7800000) {
@@ -89,6 +94,8 @@ func TestChatAlerts(t *testing.T) {
 	}
 
 	// The order sent: a new order for the seller, not the buyer.
+	po := buyer.must(201, "POST", "/v1/supplier-prices/"+link+"/order", map[string]any{"lines": []any{map[string]any{"seller_item_id": sRice, "quantity": 2, "item_id": rice}}},
+		"Idempotency-Key", "o1")["purchase"].(map[string]any)
 	buyer.must(200, "POST", "/v1/stock/purchases/"+po["id"].(string)+"/send", nil)
 	drainLinked(t, w.world)
 	ref := po["reference"].(string)
@@ -103,6 +110,7 @@ func TestChatAlerts(t *testing.T) {
 	partner := addMember(t, w.world, seller, "sal", "owner")
 	partner.must(200, "GET", "/v1/chat-alerts", nil)
 	seller.must(400, "POST", "/v1/chat-alerts/later", map[string]any{"key": " "})
+	seller.must(400, "POST", "/v1/chat-alerts/later", map[string]any{"key": "x", "hours": 100})
 	seller.must(200, "POST", "/v1/chat-alerts/later", map[string]any{"key": order["key"]})
 	if find(alerts(seller), "new_order", ref) != nil {
 		t.Fatal("put off, still shown")
@@ -130,6 +138,15 @@ func TestChatAlerts(t *testing.T) {
 	if find(alerts(buyer), "overdue", inv["number"].(string)) != nil {
 		t.Fatal("another business's invoice")
 	}
+	// A reminder: a diary line, and the card put off for a day.
+	seller.must(200, "POST", "/v1/invoices/"+inv["id"].(string)+"/send", nil, "Idempotency-Key", "s2")
+	seller.must(200, "POST", "/v1/chat-alerts/later", map[string]any{"key": over["key"], "hours": 24})
+	if find(alerts(seller), "overdue", inv["number"].(string)) != nil {
+		t.Fatal("reminded, still a card")
+	}
+	if d := diaryOf(t, seller); !hasLine(d, "Sent a reminder for invoice "+inv["number"].(string)) || !hasLine(d, "Sent invoice "+inv["number"].(string)) {
+		t.Fatalf("the reminder's diary: %q", d)
+	}
 
 	// A payment that matches nothing.
 	sellerTenant := uuid.MustParse(tenantOf(t, seller))
@@ -140,8 +157,28 @@ func TestChatAlerts(t *testing.T) {
 	if err := (&matching.Matcher{Invoices: w.srv.Invoices, PII: w.env.Vault}).Tick(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if u := find(alerts(seller), "unmatched", "₦1,234"); u == nil || u["id"] == "" || !strings.Contains(u["line"].(string), "VA-9") {
+	u := find(alerts(seller), "unmatched", "₦1,234")
+	if u == nil || u["id"] == "" || !strings.Contains(u["line"].(string), "VA-9") {
 		t.Fatalf("unmatched: %v", alerts(seller))
+	}
+	// Match it: the open invoices, masked; matched, a diary line.
+	open := seller.must(201, "POST", "/v1/invoices", map[string]any{"customer": map[string]any{"name": "Chidi Eze", "phone": "+2348031234568"}, "amount_kobo": 123400})
+	seller.must(200, "POST", "/v1/invoices/"+open["id"].(string)+"/send", nil, "Idempotency-Key", "s3")
+	opts := seller.must(200, "GET", "/v1/chat-alerts/match-options", nil)["options"].([]any)
+	var mine map[string]any
+	for _, o := range opts {
+		if o.(map[string]any)["number"] == open["number"] {
+			mine = o.(map[string]any)
+		}
+	}
+	if mine == nil || mine["kind"] != "invoice" || mine["customer"] != "C•••" || mine["due_kobo"] != float64(123400) {
+		t.Fatalf("match options: %v", opts)
+	}
+	viewer2 := addMember(t, w.world, seller, "val", "viewer")
+	viewer2.must(403, "GET", "/v1/chat-alerts/match-options", nil)
+	seller.must(200, "POST", "/v1/money/entries/"+u["id"].(string)+"/match", map[string]any{"invoice": open["number"]})
+	if d := diaryOf(t, seller); !hasLine(d, "Matched a payment to invoice "+open["number"].(string)) {
+		t.Fatalf("the match's diary: %q", d)
 	}
 	if find(alerts(addMember(t, w.world, seller, "bob", "builder")), "unmatched", "₦1,234") != nil {
 		t.Fatal("a builder told of money")
@@ -162,7 +199,36 @@ func TestChatAlerts(t *testing.T) {
 	if find(alerts(viewer), "approval", "") != nil {
 		t.Fatal("a viewer asked to approve")
 	}
+	// Approved: gone, and a diary line.
+	ar := ap["approval"].(map[string]any)
+	buyer.must(200, "POST", "/v1/approvals/"+ar["run_id"].(string)+"/"+ar["step_id"].(string), map[string]any{"decision": "approved"})
+	if find(alerts(buyer), "approval", "") != nil {
+		t.Fatal("approved, still a card")
+	}
+	if d := diaryOf(t, buyer); !hasLine(d, "Approved "+ar["step_name"].(string)+" ("+ar["workflow"].(string)+")") {
+		t.Fatalf("the decision's diary: %q", d)
+	}
 	_ = buyerID
+}
+
+func diaryOf(t *testing.T, c *client) []string {
+	t.Helper()
+	var out []string
+	for _, x := range c.must(200, "GET", "/v1/taskiem-chat", nil)["messages"].([]any) {
+		if m := x.(map[string]any); m["kind"] == "diary" {
+			out = append(out, m["text"].(string))
+		}
+	}
+	return out
+}
+
+func hasLine(lines []string, want string) bool {
+	for _, l := range lines {
+		if l == want {
+			return true
+		}
+	}
+	return false
 }
 
 // A delivery order no rider has been asked to take is an alert, with
@@ -179,6 +245,8 @@ func TestChatAlertRider(t *testing.T) {
 		}
 		return nil
 	}
+	// Accepted, to be paid before it goes: not ready for a rider.
+	unpaid := w.order(t, "after_accept")
 	// No riders yet: nothing to assign.
 	ref := w.order(t, "none")
 	if riderAlert(ref) != nil {
@@ -190,11 +258,17 @@ func TestChatAlertRider(t *testing.T) {
 	w.whatsapp(t, musa, loc.Query().Get("text"))
 	ada.must(201, "POST", "/v1/riders", map[string]any{"name": "Musa Bello", "phone": musa, "zones": []string{"Lekki"}, "fee_kobo": 100000})
 	a := riderAlert(ref)
-	if a == nil || a["title"] != "Order "+ref+" needs a rider" || !strings.Contains(a["line"].(string), "for delivery") {
+	if a == nil || a["title"] != "Order "+ref+" needs a rider" || !strings.Contains(a["line"].(string), "paid on delivery") {
 		t.Fatalf("rider alert: %v", a)
 	}
-	ada.must(200, "POST", "/v1/storefront/orders/"+ref+"/offer", map[string]any{})
+	if riderAlert(unpaid) != nil {
+		t.Fatal("a rider alert for an order not paid yet")
+	}
+	out := ada.must(200, "POST", "/v1/storefront/orders/"+ref+"/offer", map[string]any{})
 	if riderAlert(ref) != nil {
 		t.Fatal("offered, still waiting for a rider")
+	}
+	if d := diaryOf(t, ada); out["status"] != "offered" || !hasLine(d, "Offered order "+ref+" to Musa Bello") {
+		t.Fatalf("the offer's diary: %v %q", out, d)
 	}
 }

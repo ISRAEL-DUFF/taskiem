@@ -233,5 +233,25 @@ func (s *Server) decide(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	status := result.Status
+	s.diaryChange(r.Context(), p, s.decisionWords(r, run, step, req.Decision))
 	writeJSON(w, http.StatusOK, map[string]any{"run_id": run, "step_id": step, "status": status, "level": result.Level + 1, "levels": result.Levels, "self_approved": result.SelfApproved})
+}
+
+// decisionWords is a decision's diary line: "Approved Pay Bayo Rice Mills
+// (Pay supplier bills)".
+func (s *Server) decisionWords(r *http.Request, run uuid.UUID, step, decision string) string {
+	name, flow := step, ""
+	_ = s.tx(r, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `SELECT COALESCE(NULLIF(taskiem_step_name(wv.definition, $2), ''), $2), w.name FROM runs x
+			JOIN workflows w ON w.id = x.workflow_id JOIN workflow_versions wv ON wv.workflow_id = x.workflow_id AND wv.version = x.version
+			WHERE x.id = $1`, run, step).Scan(&name, &flow)
+	})
+	verb := "Approved"
+	if decision != "approved" {
+		verb = "Declined"
+	}
+	if flow == "" {
+		return verb + " " + name
+	}
+	return fmt.Sprintf("%s %s (%s)", verb, name, flow)
 }

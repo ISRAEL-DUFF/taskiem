@@ -268,17 +268,20 @@ The Taskiem conversation ends with what needs the person now, as cards (the
 Alerts design): each says what it is and has its next step, which acts in
 place or opens the right tool, filled in. The cards are read when the person
 looks (`GET /v1/chat-alerts`, again every minute while the conversation is
-open), so one is gone as soon as it is dealt with, here or anywhere else; they
-are not messages kept in the history. Each kind is only for those whose role
-may see it:
+open and in view, at once when the person comes back to the tab), so one is
+gone as soon as it is dealt with, here or anywhere else; they are not messages
+kept in the history. At most five of a kind and twenty in all, approvals never
+left out. A new order, money in or an approval arriving makes the sound the
+owner can turn off, and the conversation list's Taskiem row says how many
+things need them. Each kind is only for those whose role may see it:
 
 | Card | Who sees it | Its next step |
 |---|---|---|
-| Low stock: "Rice, 25kg bag is running low", "4 bags left · you reorder at 10" | `table.read` | **Reorder 20 from Bayo Rice Mills** when a linked supplier sells it (the item link) and the person may order: the Order sheet with that many in the bag (up to the item's target level, else twice its reorder level, at least the supplier's least). Otherwise **Record stock in** (the Stock tool at that item), or **Open stock** |
-| An overdue invoice | `invoice.read` | **Send reminder** (`invoice.manage`): the invoice's link sent again |
-| A new order from a linked business | `storefront.manage` | **Accept**, or **Open** (the Orders tool at that order) |
-| A paid delivery order no rider has been asked to take (when the business has riders) | `storefront.manage` | **Assign rider**: the riders on duty, or the next in turn |
-| A payment not matched yet | `invoice.read` | **Match it** (`invoice.manage`): the open invoices, the one of the same amount first |
+| Low stock: "Rice, 25kg bag is running low", "4 bags left · you reorder at 10"; none while the item is on an open order | `table.read` | **Reorder 20 from Bayo Rice Mills** when a linked supplier sells it (the item link) and the person may order: the Order sheet with that many in the bag (up to the item's target level, else twice its reorder level, at least the supplier's least). Otherwise **Record stock in** (the Stock tool at that item), or **Open stock** |
+| An overdue invoice (not the debtor notebook's entries) | `invoice.read` | **Send reminder** (`invoice.manage`): the invoice's link sent again, and the card put off for a day |
+| A new order from a linked business | `storefront.manage` | **Review order**: the Orders tool at that order, its lines first, Accept there |
+| A delivery order ready to go (paid, or paid on delivery) that no rider has been asked to take, when the business has riders and deliveries | `storefront.manage` | **Assign rider**: the riders on duty, or the next in turn; an offer nobody could take says so and the card stays |
+| A payment not matched yet | `invoice.read` | **Match it** (`invoice.manage`): every open invoice and order (`GET /v1/chat-alerts/match-options`), the same amount first, found by number, amount or name; a match held for a second person says so |
 | An approval waiting for the person ("NEEDS YOUR OK", who asked, the amount and payee) | whoever may decide it | **Decline** or **Approve** |
 
 **Later** puts a card off for its person alone, for four hours
@@ -289,7 +292,14 @@ leaves with a little motion, and the conversation pulls in its diary line.
 its subject, a recorded comment, and the confirmation its rules ask for, a
 passkey for this decision on this approval, or an authenticator code (the chat
 PIN on WhatsApp, as before). The server refuses an approval without it, so a
-card cannot pass one on a tap. Decline is confirmed the same way.
+card cannot pass one on a tap. Decline is confirmed the same way, with the same
+confirmation, and the sheet asks for whatever the server says it needs. The card
+and sheet say a first payment, the level of several and the approvals counted.
+
+Each action is a diary line, wherever it is taken: "Approved Pay Bayo Rice
+Mills (Pay supplier bills)", "Declined …", "Sent invoice INV-0042", "Sent a
+reminder for invoice INV-0042", "Matched a payment to invoice INV-0009",
+"Offered order ADA-1234 to Musa Bello".
 
 Cards are white with a pine next step and a soft Later; the approval's Approve
 is lime with the fingerprint, as drawn. On a computer they stay message-width.
@@ -337,12 +347,17 @@ is lime with the fingerprint, as drawn. On a computer they stay message-width.
   without leave to send orders; a card opening its bill or order.
 - Unit tests: `lib/buyer` (steppers, the bag, the quote, an order's state, reorder).
 - `api/chat_alerts_test.go`: each kind of alert for the right people only (low
-  stock with and without Reorder, a new order for the seller alone, Later for
-  one person, accepted and gone, overdue, unmatched, an approval with who
-  asked, none for a viewer); a rider alert, gone once offered.
+  stock with and without Reorder, none while on order, a new order for the
+  seller alone, Later for one person, accepted and gone, overdue and its
+  reminder, unmatched and its match options, an approval with who asked, none
+  for a viewer, approved and gone); a rider alert only when ready, gone once
+  offered; each action's diary line.
 - `web/e2e/chat-alerts.spec.ts`: on a phone and a computer, every card's
   button: Reorder opens the Order sheet filled in, Record stock in the Stock
-  form, Send reminder, Open and Accept, Assign rider, Match it, Approve with a
-  comment; Later; Decline confirmed; an approval needing a code cannot pass
-  without six digits; none with chat tools off; axe in both themes.
+  form, Send reminder (put off a day), Review order and Accept there, Assign
+  rider, Match it (invoices and orders), Approve with a comment; Later; Decline
+  confirmed, with its code; an approval needing a code cannot pass without six
+  digits; an offer nobody took; levels and approvals; the Taskiem row's count;
+  nothing sideways at 360 px; none with chat tools off; axe in both themes.
+- `api/chat_alerts_internal_test.go`: the caps per kind, who asked.
 - Unit tests: `lib/alerts`.

@@ -43,6 +43,7 @@ import {
 } from "../lib/linkchat";
 import { ConversationPane } from "./Conversation";
 import { TaskiemPane } from "./TaskiemChat";
+import { useChatAlerts } from "./ChatAlerts";
 import { ChatRow } from "./ChatRow";
 import { useConfirm } from "./ConfirmSheet";
 import { Explore } from "./Explore";
@@ -256,6 +257,8 @@ function useLinks() {
 export function ChatPage() {
   const { me, can } = useAuth();
   const chatTools = useChatTools();
+  // Alerts waiting in the Taskiem conversation, said on its row.
+  const waiting = useChatAlerts(!!chatTools).list?.length ?? 0;
   const [sound, setSoundState] = useState(soundOn);
   // Chat is also the person's own conversation with Taskiem: with Linked
   // businesses off it shows that alone, and asks for no business's chats.
@@ -635,6 +638,10 @@ export function ChatPage() {
                       <>
                         <span className="draft">Draft:</span> {drafts.taskiem}
                       </>
+                    ) : waiting > 0 ? (
+                      <span className="tk-waiting" data-testid="taskiem-waiting">
+                        {waiting === 1 ? "1 thing needs you" : `${waiting} things need you`}
+                      </span>
                     ) : (
                       "Your own conversation with Taskiem, as on your phone"
                     )

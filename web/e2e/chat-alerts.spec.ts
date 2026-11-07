@@ -100,12 +100,13 @@ async function answer(page: Page, alerts: unknown[] = ALERTS) {
   await page.route("**/v1/riders", (r) =>
     r.fulfill(json({ riders: [{ id: "rd1", name: "Musa Bello", active: true, zones: ["Lekki"] }, { id: "rd2", name: "Off Duty", active: false, zones: [] }] })),
   );
-  await page.route("**/v1/storefront/orders/ADA-1234/offer", (r) => remember(r, { status: "offered", rider: "Musa Bello" }));
-  await page.route("**/v1/invoices?*", (r) =>
-    r.fulfill(json({ invoices: [
-      { id: "i7", number: "INV-0007", status: "sent", customer: { name: "C•••" }, due_kobo: 2_000_000 },
-      { id: "i9", number: "INV-0009", status: "part_paid", customer: { name: "B•••" }, due_kobo: 900_000 },
-      { id: "i8", number: "INV-0008", status: "paid", customer: { name: "D•••" }, due_kobo: 0 },
+  let offerStatus = "offered";
+  await page.route("**/v1/storefront/orders/ADA-1234/offer", (r) => remember(r, { status: offerStatus, rider: offerStatus === "offered" ? "Musa Bello" : undefined }));
+  await page.route("**/v1/chat-alerts/match-options", (r) =>
+    r.fulfill(json({ options: [
+      { kind: "invoice", number: "INV-0007", customer: "C•••", due_kobo: 2_000_000 },
+      { kind: "invoice", number: "INV-0009", customer: "B•••", due_kobo: 900_000 },
+      { kind: "order", number: "ADA-2001", customer: "E•••", due_kobo: 1_500_000 },
     ] })),
   );
   await page.route("**/v1/money/entries/e1/match", (r) => remember(r, { payments: [] }));
@@ -116,7 +117,7 @@ async function answer(page: Page, alerts: unknown[] = ALERTS) {
       return remember(r, { error: "this approval needs your passkey or a code", step_up: "totp" }, 403);
     return remember(r, { status: body.decision });
   });
-  return { sent, set: (l: unknown[]) => (list = l) };
+  return { sent, set: (l: unknown[]) => (list = l), offerAs: (st: string) => (offerStatus = st) };
 }
 
 for (const [size, viewport] of [
@@ -146,7 +147,7 @@ for (const [size, viewport] of [
     const card = (title: string) => cards.getByRole("article", { name: title });
 
     // Low stock: Reorder opens the Order sheet with the quantity in the bag.
-    await card("Rice, 25kg bag is running low").getByRole("button", { name: "Reorder 20 from Bayo Rice Mills" }).click();
+    await card("Rice, 25kg bag is running low").getByRole("button", { name: /^Reorder 20 from Bayo Rice Mills/ }).click();
     const order = page.getByTestId("order-sheet");
     await expect(order.getByRole("heading", { name: "Order from Bayo Rice Mills" })).toBeVisible();
     await expect(order.getByRole("group", { name: "How many Rice, 25kg bag" })).toContainText("20");
@@ -155,29 +156,30 @@ for (const [size, viewport] of [
     await expect(order).toHaveCount(0);
 
     // Low, with no supplier on Taskiem: Record stock in, at its form.
-    await card("Garri, Ijebu is running low").getByRole("button", { name: "Record stock in" }).click();
+    await card("Garri, Ijebu is running low").getByRole("button", { name: /^Record stock in/ }).click();
     const sheet = page.getByTestId("tool-sheet");
     await expect(sheet.getByRole("heading", { name: "Garri, Ijebu" })).toBeVisible();
     await sheet.getByRole("button", { name: /^Close/ }).click();
     await expect(sheet).toHaveCount(0);
 
     // Overdue: the reminder goes, once, and the card leaves.
-    await card("Invoice INV-0042 is overdue").getByRole("button", { name: "Send reminder" }).click();
+    await card("Invoice INV-0042 is overdue").getByRole("button", { name: /^Send reminder/ }).click();
     await expect(card("Invoice INV-0042 is overdue")).toHaveCount(0);
     const reminder = sent.find((x) => x.path === "/v1/invoices/i1/send");
     expect(reminder?.key).toBeTruthy();
+    // Put off for a day, so it does not come straight back.
+    expect(sent.find((x) => x.path === "/v1/chat-alerts/later")?.body).toEqual({ key: "overdue:i1", hours: 24 });
 
-    // A new order: Open is the Orders tool at that order; Accept accepts it.
-    await card("New order AD-7Q4K2P from Rivers Foods").getByRole("button", { name: "Open AD-7Q4K2P" }).click();
+    // A new order: its lines first, in the Orders tool, and Accept there.
+    await card("New order AD-7Q4K2P from Rivers Foods").getByRole("button", { name: /^Review order/ }).click();
     await expect(sheet.getByRole("heading", { name: "AD-7Q4K2P" })).toBeVisible();
     await expect(sheet).toContainText("20 × Rice, 25kg bag");
-    await sheet.getByRole("button", { name: /^Close/ }).click();
-    await card("New order AD-7Q4K2P from Rivers Foods").getByRole("button", { name: "Accept" }).click();
-    await expect(card("New order AD-7Q4K2P from Rivers Foods")).toHaveCount(0);
+    await sheet.getByRole("button", { name: "Accept" }).click();
+    await expect(sheet).toHaveCount(0, { timeout: 5000 });
     expect(sent.some((x) => x.path === "/v1/trade-orders/o1/accept")).toBe(true);
 
     // A rider: the riders on duty, Musa chosen.
-    await card("Order ADA-1234 needs a rider").getByRole("button", { name: "Assign rider" }).click();
+    await card("Order ADA-1234 needs a rider").getByRole("button", { name: /^Assign rider/ }).click();
     const riders = page.getByTestId("rider-sheet");
     await expect(riders.getByRole("button", { name: /Next in turn/ })).toBeVisible();
     await expect(riders).not.toContainText("Off Duty");
@@ -187,10 +189,10 @@ for (const [size, viewport] of [
     expect(sent.find((x) => x.path === "/v1/storefront/orders/ADA-1234/offer")?.body).toEqual({ rider_id: "rd1" });
 
     // A payment: the open invoices, the same amount first.
-    await card("A payment of ₦9,000 is not matched yet").getByRole("button", { name: "Match it" }).click();
+    await card("A payment of ₦9,000 is not matched yet").getByRole("button", { name: /^Match it/ }).click();
     const match = page.getByTestId("match-sheet");
-    const rows = match.getByRole("button", { name: /INV-/ });
-    await expect(rows).toHaveCount(2);
+    const rows = match.getByRole("button", { name: /INV-|Order / });
+    await expect(rows).toHaveCount(3);
     await expect(rows.first()).toContainText("INV-0009");
     await expect(rows.first()).toContainText("Same amount");
     await rows.first().click();
@@ -217,7 +219,7 @@ test("Later puts a card off, and Decline is confirmed too", async ({ browser }) 
   const { sent } = await answer(page);
   await page.goto("/chat?with=taskiem");
   const cards = page.getByTestId("chat-alerts");
-  await cards.getByRole("article", { name: "Order ADA-1234 needs a rider" }).getByRole("button", { name: "Later" }).click();
+  await cards.getByRole("article", { name: "Order ADA-1234 needs a rider" }).getByRole("button", { name: /^Later/ }).click();
   await expect(cards.getByRole("article", { name: "Order ADA-1234 needs a rider" })).toHaveCount(0);
   expect(sent.find((x) => x.path === "/v1/chat-alerts/later")?.body).toEqual({ key: "rider:r1" });
   await cards.getByTestId("chat-approval").getByRole("button", { name: /^Decline/ }).click();
@@ -261,4 +263,44 @@ test("with chat tools off there are no alert cards", async ({ browser }) => {
   await page.goto("/chat?with=taskiem");
   await expect(page.getByTestId("taskiem-pane")).toBeVisible();
   await expect(page.getByTestId("chat-alerts")).toHaveCount(0);
+});
+
+test("a decline asks for the code too; an offer nobody took says so and the card stays", async ({ browser }) => {
+  test.setTimeout(120_000);
+  const context = await browser.newContext({ viewport: { width: 360, height: 780 } });
+  await context.addInitScript(() => delete (window as { PublicKeyCredential?: unknown }).PublicKeyCredential);
+  const page = await context.newPage();
+  await owner(page);
+  const { sent, offerAs } = await answer(page, [ALERTS[4], { ...ALERTS[6], approval: { ...approval("totp"), levels: 2, required: 2 } }]);
+  await page.goto("/chat?with=taskiem");
+  const card = page.getByTestId("chat-approval");
+  await expect(card).toContainText("Level 1 of 2");
+  await expect(card).toContainText("0 of 2 approvals");
+  // Nothing scrolls sideways on a small phone.
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await card.getByRole("button", { name: /^Decline/ }).click();
+  const sheet = page.getByTestId("approve-sheet");
+  const decline = sheet.getByRole("button", { name: "Decline", exact: true });
+  await expect(decline).toBeDisabled();
+  await sheet.getByLabel("Or a code from your authenticator app").fill("654321");
+  await decline.click();
+  await expect(sheet).toHaveCount(0, { timeout: 5000 });
+  expect(sent.find((x) => x.path.startsWith("/v1/approvals/"))?.body).toEqual({ decision: "rejected", totp: "654321" });
+
+  offerAs("no_rider");
+  await page.getByTestId("chat-alerts").getByRole("button", { name: /^Assign rider/ }).click();
+  const riders = page.getByTestId("rider-sheet");
+  await riders.getByRole("button", { name: /Next in turn/ }).click();
+  await expect(riders.getByRole("status")).toContainText("No rider could take it");
+  await expect(riders).toBeVisible();
+  await riders.getByRole("button", { name: /^Close/ }).click();
+  await expect(page.getByTestId("chat-alerts").getByRole("article", { name: "Order ADA-1234 needs a rider" })).toBeVisible();
+});
+
+test("the Taskiem row says how many things need you", async ({ browser }) => {
+  const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
+  await owner(page);
+  await answer(page);
+  await page.goto("/chat");
+  await expect(page.getByTestId("taskiem-waiting")).toHaveText("7 things need you");
 });

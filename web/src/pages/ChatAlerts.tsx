@@ -1,9 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { ApiError, get, post, postOnce } from "../api";
 import { useAuth } from "../auth";
 import { Icon } from "../icons";
-import { KitEmpty, KitField, KitLoading, SavedTick, Sheet } from "../kit";
+import {
+  KitEmpty,
+  KitField,
+  KitLoading,
+  reducedMotion,
+  SavedTick,
+  Sheet,
+} from "../kit";
 import {
   ago,
   ALERT_LOOK,
@@ -12,6 +20,7 @@ import {
   type ChatAlert,
 } from "../lib/alerts";
 import { subjectWords } from "../lib/approvals";
+import { chime, soundOn } from "../lib/moments";
 import { formatPrice } from "../lib/storefront";
 import type { ToolKey } from "../lib/tools";
 import { passkeysSupported, stepUpAssert } from "../passkeys";
@@ -21,34 +30,75 @@ import { OrderSheet } from "./ChatBuyer";
 // Alerts you can act on (docs/spec/chat-tools.md §6, the Alerts design): the
 // Taskiem conversation ends with what needs the person now, each a card with
 // its next step, which acts in place or opens the right tool, filled in.
-// Read from GET /v1/chat-alerts while the conversation is open; a card dealt
-// with leaves, and Later puts it off for a few hours.
+// Read from GET /v1/chat-alerts while the app is in view; a card dealt with
+// leaves, and Later puts it off for a few hours.
 
 const key = () => `alert-${crypto.randomUUID()}`;
 
-/** The person's alerts, read now and every minute while chat tools are on. */
+// One read of the alerts for the whole app (the conversation and the list
+// of conversations), every minute while the tab is in view and at once when
+// it comes back.
+const store = {
+  list: undefined as ChatAlert[] | undefined,
+  users: 0,
+  timer: 0,
+  seen: undefined as Set<string> | undefined,
+  listeners: new Set<() => void>(),
+};
+const tell = () => store.listeners.forEach((f) => f());
+// News worth a sound: a new order, money that came in, an approval.
+const NEWS = new Set(["new_order", "unmatched", "approval"]);
+
+function loadAlerts() {
+  if (typeof document !== "undefined" && document.visibilityState === "hidden")
+    return;
+  get<{ alerts: ChatAlert[] }>("/v1/chat-alerts").then(
+    (r) => {
+      // A card new since the last read comes with the sound the owner can
+      // turn off; the first read is quiet.
+      if (
+        store.seen &&
+        soundOn() &&
+        r.alerts.some((a) => NEWS.has(a.kind) && !store.seen?.has(a.key))
+      )
+        chime();
+      store.seen = new Set(r.alerts.map((a) => a.key));
+      store.list = r.alerts;
+      tell();
+    },
+    () => undefined,
+  );
+}
+const onVisible = () => document.visibilityState === "visible" && loadAlerts();
+
+function start() {
+  if (store.users++ > 0) return;
+  loadAlerts();
+  store.timer = window.setInterval(loadAlerts, 60_000);
+  document.addEventListener("visibilitychange", onVisible);
+  window.addEventListener("focus", loadAlerts);
+}
+function stop() {
+  if (--store.users > 0) return;
+  window.clearInterval(store.timer);
+  document.removeEventListener("visibilitychange", onVisible);
+  window.removeEventListener("focus", loadAlerts);
+  store.list = undefined;
+  store.seen = undefined;
+}
+
+/** The person's alerts while chat tools are on (none otherwise). */
 export function useChatAlerts(on: boolean) {
-  const [list, setList] = useState<ChatAlert[]>();
-  const [tick, setTick] = useState(0);
   useEffect(() => {
-    if (!on) {
-      setList([]);
-      return;
-    }
-    let live = true;
-    const load = () =>
-      get<{ alerts: ChatAlert[] }>("/v1/chat-alerts").then(
-        (r) => live && setList(r.alerts),
-        () => undefined,
-      );
-    void load();
-    const t = window.setInterval(() => void load(), 60_000);
-    return () => {
-      live = false;
-      window.clearInterval(t);
-    };
-  }, [on, tick]);
-  return { list, reload: () => setTick((n) => n + 1) };
+    if (!on) return;
+    start();
+    return stop;
+  }, [on]);
+  const list = useSyncExternalStore(
+    (f) => (store.listeners.add(f), () => store.listeners.delete(f)),
+    () => store.list,
+  );
+  return { list: on ? list : [], reload: loadAlerts };
 }
 
 type Open = (k: ToolKey, from?: DOMRect, start?: { rowId?: string }) => void;
@@ -61,7 +111,9 @@ type SheetFor =
       from?: DOMRect;
     };
 
-/** The cards at the end of the conversation, and the sheets they open. */
+/** The cards at the end of the conversation, and the sheets they open (out
+ * of the conversation's log, so a screen reader does not read them as new
+ * messages). */
 export function AlertCards({
   alerts,
   onReload,
@@ -77,48 +129,23 @@ export function AlertCards({
   const [gone, setGone] = useState<Set<string>>(new Set());
   const [leaving, setLeaving] = useState<Set<string>>(new Set());
   const [sheet, setSheet] = useState<SheetFor>();
-  // Dealt with: it leaves with its motion, then the list is read again.
+  // Dealt with: it leaves with its motion (at once with motion turned
+  // down), then the list is read again.
   const done = (a: ChatAlert) => {
-    setLeaving((s) => new Set([...s, a.key]));
-    window.setTimeout(() => {
+    const go = () => {
       setGone((s) => new Set([...s, a.key]));
       onDiary();
       onReload();
-    }, 280);
+    };
+    if (reducedMotion()) return go();
+    setLeaving((s) => new Set([...s, a.key]));
+    window.setTimeout(go, 280);
   };
   const shown = shownAlerts(alerts, gone);
-  if (shown.length === 0 && !sheet) return null;
-  return (
+  const close = () => setSheet(undefined);
+  const sheets = sheet && (
     <>
-      <ul
-        className="tk-alerts"
-        aria-label="Needs you"
-        data-testid="chat-alerts"
-      >
-        {shown.map((a) => (
-          <li
-            key={a.key}
-            className={leaving.has(a.key) ? "leaving" : undefined}
-          >
-            {a.kind === "approval" ? (
-              <ApprovalCard
-                a={a}
-                onDecide={(decision, from) =>
-                  setSheet({ kind: "approve", a, decision, from })
-                }
-              />
-            ) : (
-              <AlertCard
-                a={a}
-                onDone={() => done(a)}
-                onSheet={(kind, from) => setSheet({ kind, a, from })}
-                openTool={openTool}
-              />
-            )}
-          </li>
-        ))}
-      </ul>
-      {sheet?.kind === "order" && sheet.a.reorder && (
+      {sheet.kind === "order" && sheet.a.reorder && (
         <OrderSheet
           link={sheet.a.reorder.link}
           business={sheet.a.reorder.supplier}
@@ -126,40 +153,78 @@ export function AlertCards({
           start={{
             qty: { [sheet.a.reorder.seller_item_id]: sheet.a.reorder.quantity },
           }}
-          onClose={() => setSheet(undefined)}
+          onClose={close}
           onPlaced={() => done(sheet.a)}
         />
       )}
-      {sheet?.kind === "rider" && (
+      {sheet.kind === "rider" && (
         <RiderSheet
           a={sheet.a}
           from={sheet.from}
-          onClose={() => setSheet(undefined)}
+          onClose={close}
           onDone={() => done(sheet.a)}
         />
       )}
-      {sheet?.kind === "match" && (
+      {sheet.kind === "match" && (
         <MatchSheet
           a={sheet.a}
           from={sheet.from}
-          onClose={() => setSheet(undefined)}
+          onClose={close}
           onDone={() => done(sheet.a)}
         />
       )}
-      {sheet?.kind === "approve" && (
+      {sheet.kind === "approve" && (
         <ApproveSheet
           a={sheet.a}
           decision={sheet.decision}
           from={sheet.from}
-          onClose={() => setSheet(undefined)}
+          onClose={close}
           onDone={() => done(sheet.a)}
         />
       )}
     </>
   );
+  if (shown.length === 0 && !sheet) return null;
+  return (
+    <>
+      {shown.length > 0 && (
+        <ul
+          className="tk-alerts"
+          role="list"
+          aria-label="Needs you"
+          data-testid="chat-alerts"
+        >
+          {shown.map((a) => (
+            <li
+              key={a.key}
+              className={leaving.has(a.key) ? "leaving" : undefined}
+            >
+              {a.kind === "approval" ? (
+                <ApprovalCard
+                  a={a}
+                  onDecide={(decision, from) =>
+                    setSheet({ kind: "approve", a, decision, from })
+                  }
+                />
+              ) : (
+                <AlertCard
+                  a={a}
+                  onDone={() => done(a)}
+                  onSheet={(kind, from) => setSheet({ kind, a, from })}
+                  openTool={openTool}
+                />
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {sheets && createPortal(sheets, document.body)}
+    </>
+  );
 }
 
-/** An alert: what it is, and its next step with Later. */
+/** An alert: what it is, and its next step with Later. Every button names
+ * its card for a screen reader ("Later: Rice is running low"). */
 function AlertCard({
   a,
   onDone,
@@ -201,31 +266,23 @@ function AlertCard({
         if (!can("invoice.manage")) return undefined;
         return {
           words: "Send reminder",
+          // Sent: the card is put off for a day, not shown again at once.
           go: () =>
             void act
-              .run(
-                () =>
-                  postOnce(
-                    `/v1/invoices/${encodeURIComponent(a.id ?? "")}/send`,
-                    key(),
-                  ),
-                `Reminder sent for ${a.reference}`,
-              )
+              .run(async () => {
+                await postOnce(
+                  `/v1/invoices/${encodeURIComponent(a.id ?? "")}/send`,
+                  key(),
+                );
+                await post("/v1/chat-alerts/later", { key: a.key, hours: 24 });
+              }, `Reminder sent for ${a.reference}`)
               .then((ok) => ok && onDone()),
         };
       case "new_order":
+        // The order's lines first, then Accept there.
         return {
-          words: "Accept",
-          go: () =>
-            void act
-              .run(
-                () =>
-                  post(
-                    `/v1/trade-orders/${encodeURIComponent(a.id ?? "")}/accept`,
-                  ),
-                `${a.reference} accepted`,
-              )
-              .then((ok) => ok && onDone()),
+          words: "Review order",
+          go: () => openTool("orders", from(), { rowId: a.id }),
         };
       case "rider":
         return { words: "Assign rider", go: () => onSheet("rider", from()) };
@@ -237,6 +294,7 @@ function AlertCard({
         return undefined;
     }
   })();
+  const named = <span className="sr-only">: {a.title}</span>;
   return (
     <article
       ref={card}
@@ -263,26 +321,17 @@ function AlertCard({
             onClick={step.go}
           >
             {step.words}
+            {named}
           </button>
         )}
-        {a.kind === "new_order" ? (
-          <button
-            type="button"
-            className="tk-alert-soft"
-            onClick={() => openTool("orders", from(), { rowId: a.id })}
-          >
-            Open<span className="sr-only"> {a.reference}</span>
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="tk-alert-soft"
-            disabled={act.busy}
-            onClick={later}
-          >
-            Later
-          </button>
-        )}
+        <button
+          type="button"
+          className="tk-alert-soft"
+          disabled={act.busy}
+          onClick={later}
+        >
+          Later{named}
+        </button>
       </span>
       <ErrorBox error={act.error} />
     </article>
@@ -326,28 +375,14 @@ function ApprovalCard({
           </span>
         )}
       </span>
-      {(ap.first_payment || ap.step_up) && (
-        <span className="tk-approve-notes">
-          {ap.first_payment && (
-            <span className="tk-pill warn">First payment to this account</span>
-          )}
-          {ap.step_up && (
-            <span className="tk-pill plain">
-              <Icon name="lock" />
-              {ap.step_up === "passkey"
-                ? "Needs your passkey"
-                : "Needs your passkey or a code"}
-            </span>
-          )}
-        </span>
-      )}
+      <ApprovalNotes ap={ap} />
       <span className="tk-approve-acts">
         <button
           type="button"
           className="tk-alert-soft"
           onClick={() => onDecide("rejected", from())}
         >
-          Decline<span className="sr-only"> {a.title}</span>
+          Decline<span className="sr-only">: {a.title}</span>
         </button>
         <button
           type="button"
@@ -355,15 +390,55 @@ function ApprovalCard({
           onClick={() => onDecide("approved", from())}
         >
           <Icon name="fingerprint" />
-          Approve<span className="sr-only"> {a.title}</span>
+          Approve<span className="sr-only">: {a.title}</span>
         </button>
       </span>
     </article>
   );
 }
 
+/** What else an approval says: a first payment, the confirmation it needs,
+ * and where it is among several levels or approvers. */
+function ApprovalNotes({
+  ap,
+  stepUp = ap.step_up,
+}: {
+  ap: NonNullable<ChatAlert["approval"]>;
+  stepUp?: string | null;
+}) {
+  const notes = [
+    ap.first_payment && (
+      <span key="first" className="tk-pill warn">
+        First payment to this account
+      </span>
+    ),
+    stepUp && (
+      <span key="up" className="tk-pill plain">
+        <Icon name="lock" />
+        {stepUp === "passkey"
+          ? "Needs your passkey"
+          : "Needs your passkey or a code"}
+      </span>
+    ),
+    ap.levels > 1 && (
+      <span key="level" className="tk-pill plain">
+        Level {ap.level} of {ap.levels}
+      </span>
+    ),
+    ap.required > 1 && (
+      <span key="req" className="tk-pill plain">
+        {ap.approvals} of {ap.required} approvals
+      </span>
+    ),
+  ].filter(Boolean);
+  return notes.length > 0 ? (
+    <span className="tk-approve-notes">{notes}</span>
+  ) : null;
+}
+
 /** Approve or Decline, confirmed: what it is, a comment, and the passkey
- * or code its rules ask for; the server refuses it without them. */
+ * or code its rules ask for (for a decline too); the server refuses it
+ * without them, and what it asks for is what the sheet asks next. */
 function ApproveSheet({
   a,
   decision,
@@ -382,8 +457,10 @@ function ApproveSheet({
   const w = subjectWords(ap.subject);
   const [comment, setComment] = useState("");
   const [code, setCode] = useState("");
-  const [needsCode, setNeedsCode] = useState(Boolean(ap.step_up) && approve);
-  const passkeyOnly = ap.step_up === "passkey";
+  // The confirmation asked for: the approval's rule, or what the server
+  // says it needs now.
+  const [stepUp, setStepUp] = useState<string | null>(ap.step_up);
+  const passkeyOnly = stepUp === "passkey";
   const act = useAction();
   const [saved, setSaved] = useState(false);
   const [shut, setShut] = useState(false);
@@ -398,7 +475,8 @@ function ApproveSheet({
         },
       );
     } catch (e) {
-      if (e instanceof ApiError && e.body.step_up) setNeedsCode(true);
+      if (e instanceof ApiError && typeof e.body.step_up === "string")
+        setStepUp(e.body.step_up);
       throw e;
     }
     setSaved(true);
@@ -427,6 +505,7 @@ function ApproveSheet({
     ...(w.account ? [["Account", w.account] as [string, string]] : []),
     ...w.rest,
   ];
+  const usePasskey = !!stepUp && passkeysSupported() && code === "";
   return (
     <Sheet
       title={approve ? "Approve it?" : "Decline it?"}
@@ -444,6 +523,7 @@ function ApproveSheet({
           From {ap.workflow}. Your decision and what you were shown are
           recorded.
         </p>
+        <ApprovalNotes ap={ap} stepUp={stepUp} />
         {rows.length > 0 && (
           <ul className="tk-lines">
             {rows.map(([k, v]) => (
@@ -468,7 +548,7 @@ function ApproveSheet({
             onChange={(e) => setComment(e.target.value)}
           />
         </KitField>
-        {needsCode && !passkeyOnly && (
+        {stepUp && !passkeyOnly && (
           <KitField
             label="Or a code from your authenticator app"
             hint={
@@ -487,9 +567,9 @@ function ApproveSheet({
             />
           </KitField>
         )}
-        {needsCode && !passkeysSupported() && passkeyOnly && (
+        {passkeyOnly && !passkeysSupported() && (
           <p className="tk-form-now">
-            This needs your passkey, and this browser cannot use one. Approve it
+            This needs your passkey, and this browser cannot use one. Decide it
             on a device with your passkey.
           </p>
         )}
@@ -504,7 +584,7 @@ function ApproveSheet({
         >
           Not now
         </button>
-        {needsCode && passkeysSupported() && code === "" ? (
+        {usePasskey ? (
           <button
             type="button"
             className="tk-cta"
@@ -517,9 +597,9 @@ function ApproveSheet({
         ) : (
           <button
             type="button"
-            className={approve ? "tk-cta" : "tk-cta tk-danger"}
+            className={approve ? "tk-cta" : "tk-cta tk-cta-danger"}
             disabled={
-              act.busy || (needsCode && (passkeyOnly || code.length !== 6))
+              act.busy || (!!stepUp && (passkeyOnly || code.length !== 6))
             }
             onClick={confirm}
           >
@@ -538,6 +618,13 @@ interface Rider {
   zones: string[];
 }
 
+/** What an offer came to, in words, when it did not go out to a rider. */
+const offerWords: Record<string, string> = {
+  held: "A rider has it already",
+  no_rider: "No rider could take it. You are told when one is free",
+  asked_owner: "You are asked who takes it",
+};
+
 /** Assign rider: the next in turn, or one by name. */
 function RiderSheet({
   a,
@@ -552,6 +639,7 @@ function RiderSheet({
 }) {
   const [riders, setRiders] = useState<Rider[]>();
   const [error, setError] = useState<unknown>();
+  const [note, setNote] = useState<string>();
   const act = useAction();
   const [saved, setSaved] = useState<string>();
   const [shut, setShut] = useState(false);
@@ -562,23 +650,23 @@ function RiderSheet({
     );
   }, []);
   const offer = (r?: Rider) =>
-    void act
-      .run(
-        () =>
-          post<{ rider?: string }>(
-            `/v1/storefront/orders/${encodeURIComponent(a.reference ?? "")}/offer`,
-            r ? { rider_id: r.id } : {},
-          ),
-        false,
-      )
-      .then((ok) => {
-        if (!ok) return;
-        setSaved(r ? `Offered to ${r.name}` : "Offered to the next rider");
-        window.setTimeout(() => {
-          setShut(true);
-          onDone();
-        }, 1200);
-      });
+    void act.run(async () => {
+      setNote(undefined);
+      const out = await post<{ status: string; rider?: string }>(
+        `/v1/storefront/orders/${encodeURIComponent(a.reference ?? "")}/offer`,
+        r ? { rider_id: r.id } : {},
+      );
+      // Only an offer out to a rider is done; the rest say why not.
+      if (out.status !== "offered") {
+        setNote(offerWords[out.status] ?? "It was not offered");
+        return;
+      }
+      setSaved(`Offered to ${out.rider ?? r?.name ?? "a rider"}`);
+      window.setTimeout(() => {
+        setShut(true);
+        onDone();
+      }, 1200);
+    }, false);
   return (
     <Sheet
       title={`A rider for ${a.reference}`}
@@ -588,7 +676,12 @@ function RiderSheet({
       testid="rider-sheet"
     >
       {saved && <SavedTick words={saved} />}
-      <p className="tk-form-now tk-pad">{a.line}</p>
+      <p className="tk-form-now tk-alert-pad">{a.line}</p>
+      {note && (
+        <p className="tk-form-now tk-alert-pad" role="status">
+          {note}
+        </p>
+      )}
       <ErrorBox error={error ?? act.error} />
       {!riders ? (
         !error && <KitLoading rows={2} label="Loading your riders…" />
@@ -597,7 +690,7 @@ function RiderSheet({
           Add riders on the Deliveries page.
         </KitEmpty>
       ) : (
-        <ul className="tk-sheet-list tk-rows">
+        <ul className="tk-sheet-list tk-alert-rows">
           <li>
             <button
               type="button"
@@ -642,15 +735,15 @@ function RiderSheet({
   );
 }
 
-interface OpenInvoice {
-  id: string;
+interface MatchOption {
+  kind: "invoice" | "order";
   number: string;
-  status: string;
-  customer: { name: string };
+  customer: string;
   due_kobo: number;
 }
 
-/** Match a payment: the open invoices, the one of the same amount first. */
+/** Match a payment: every open invoice and order, the same amount first;
+ * found by number, amount or name. */
 function MatchSheet({
   a,
   from,
@@ -662,55 +755,53 @@ function MatchSheet({
   onClose: () => void;
   onDone: () => void;
 }) {
-  const [list, setList] = useState<OpenInvoice[]>();
+  const [list, setList] = useState<MatchOption[]>();
   const [error, setError] = useState<unknown>();
   const [search, setSearch] = useState("");
   const act = useAction();
   const [saved, setSaved] = useState<string>();
   const [shut, setShut] = useState(false);
   useEffect(() => {
-    get<{ invoices: OpenInvoice[] }>("/v1/invoices?limit=200").then(
+    get<{ options: MatchOption[] }>("/v1/chat-alerts/match-options").then(
       (r) =>
         setList(
-          r.invoices
-            .filter(
-              (x) =>
-                x.due_kobo > 0 &&
-                ["recorded", "sent", "part_paid", "overdue"].includes(x.status),
-            )
-            .sort(
-              (x, y) =>
-                Math.abs(x.due_kobo - (a.amount_kobo ?? 0)) -
-                Math.abs(y.due_kobo - (a.amount_kobo ?? 0)),
-            ),
+          [...r.options].sort(
+            (x, y) =>
+              Math.abs(x.due_kobo - (a.amount_kobo ?? 0)) -
+              Math.abs(y.due_kobo - (a.amount_kobo ?? 0)),
+          ),
         ),
       setError,
     );
   }, []);
-  const q = search.trim().toLowerCase();
+  const q = search
+    .trim()
+    .toLowerCase()
+    .replace(/[₦,\s]/g, "");
   const shown = (list ?? []).filter(
     (x) =>
       !q ||
       x.number.toLowerCase().includes(q) ||
-      x.customer.name.toLowerCase().includes(q),
+      x.customer.toLowerCase().includes(q) ||
+      String(x.due_kobo / 100).includes(q),
   );
-  const match = (x: OpenInvoice) =>
-    void act
-      .run(
-        () =>
-          post(`/v1/money/entries/${encodeURIComponent(a.id ?? "")}/match`, {
-            invoice: x.number,
-          }),
-        false,
-      )
-      .then((ok) => {
-        if (!ok) return;
-        setSaved(`Matched to ${x.number}`);
-        window.setTimeout(() => {
-          setShut(true);
-          onDone();
-        }, 1200);
-      });
+  const match = (x: MatchOption) =>
+    void act.run(async () => {
+      const out = await post<{ code?: string }>(
+        `/v1/money/entries/${encodeURIComponent(a.id ?? "")}/match`,
+        x.kind === "order" ? { order: x.number } : { invoice: x.number },
+      );
+      // Held for a second person (a school's cash threshold).
+      setSaved(
+        out?.code === "needs_approval"
+          ? "Sent for a second person to approve"
+          : `Matched to ${x.number}`,
+      );
+      window.setTimeout(() => {
+        setShut(true);
+        onDone();
+      }, 1200);
+    }, false);
   return (
     <Sheet
       title={
@@ -724,29 +815,29 @@ function MatchSheet({
       testid="match-sheet"
     >
       {saved && <SavedTick words={saved} />}
-      <p className="tk-form-now tk-pad">{a.line}. Which invoice does it pay?</p>
+      <p className="tk-form-now tk-alert-pad">{a.line}. What does it pay?</p>
       <label className="tk-search">
         <Icon name="search" />
-        <span className="sr-only">Search open invoices</span>
+        <span className="sr-only">Search by number, amount or name</span>
         <input
           type="search"
-          placeholder="Search open invoices"
+          placeholder="Number, amount or name"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
       </label>
       <ErrorBox error={error ?? act.error} />
       {!list ? (
-        !error && <KitLoading rows={3} label="Loading open invoices…" />
+        !error && <KitLoading rows={3} label="Loading what is open…" />
       ) : shown.length === 0 ? (
         <KitEmpty
           icon="invoices"
-          title={q ? "No open invoice like that" : "No open invoices"}
+          title={q ? "Nothing open like that" : "Nothing open to match"}
         />
       ) : (
-        <ul className="tk-sheet-list tk-rows">
+        <ul className="tk-sheet-list tk-alert-rows">
           {shown.map((x) => (
-            <li key={x.id}>
+            <li key={`${x.kind}-${x.number}`}>
               <button
                 type="button"
                 className="tk-row"
@@ -754,12 +845,15 @@ function MatchSheet({
                 onClick={() => match(x)}
               >
                 <span className="tk-row-tile" aria-hidden="true">
-                  <Icon name="invoices" />
+                  <Icon name={x.kind === "order" ? "orders" : "invoices"} />
                 </span>
                 <span className="tk-row-words">
-                  <span className="tk-row-name">{x.number}</span>
+                  <span className="tk-row-name">
+                    {x.kind === "order" ? "Order " : ""}
+                    {x.number}
+                  </span>
                   <span className="tk-row-sub">
-                    {x.customer.name} · {formatPrice(x.due_kobo)} to pay
+                    {x.customer} · {formatPrice(x.due_kobo)} to pay
                   </span>
                 </span>
                 {x.due_kobo === a.amount_kobo && (

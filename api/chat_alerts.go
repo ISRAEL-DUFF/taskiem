@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -117,11 +118,30 @@ func (s *Server) getChatAlerts(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].At.Before(out[j].At) })
-	if len(out) > maxChatAlerts {
-		out = out[len(out)-maxChatAlerts:]
+	writeJSON(w, http.StatusOK, map[string]any{"alerts": capAlerts(out)})
+}
+
+// perKind is how many cards of one kind the conversation shows at most, so
+// a long list of one (twenty items low) never pushes the others out.
+const perKind = 5
+
+// capAlerts keeps the newest perKind of each kind and maxChatAlerts in all,
+// approvals first among what is kept, oldest first.
+func capAlerts(all []chatAlert) []chatAlert {
+	sort.SliceStable(all, func(i, j int) bool { return all[i].At.After(all[j].At) })
+	n := map[string]int{}
+	out := []chatAlert{}
+	for _, pass := range []bool{true, false} {
+		for _, a := range all {
+			if (a.Kind == "approval") != pass || n[a.Kind] >= perKind || len(out) >= maxChatAlerts {
+				continue
+			}
+			n[a.Kind]++
+			out = append(out, a)
+		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"alerts": out})
+	sort.SliceStable(out, func(i, j int) bool { return out[i].At.Before(out[j].At) })
+	return out
 }
 
 // postChatAlertLater is POST /v1/chat-alerts/later {key}: the card is put
@@ -134,6 +154,8 @@ func (s *Server) postChatAlertLater(w http.ResponseWriter, r *http.Request) {
 	}
 	var in struct {
 		Key string `json:"key"`
+		// Hours it is put off for: 4 unless said (a reminder sent, 24).
+		Hours int `json:"hours"`
 	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
@@ -143,7 +165,14 @@ func (s *Server) postChatAlertLater(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, fmt.Errorf("%w: key is the alert's key", errBadRequest))
 		return
 	}
+	if in.Hours < 0 || in.Hours > 72 {
+		s.fail(w, r, fmt.Errorf("%w: hours is 1 to 72", errBadRequest))
+		return
+	}
 	until := time.Now().Add(laterFor)
+	if in.Hours > 0 {
+		until = time.Now().Add(time.Duration(in.Hours) * time.Hour)
+	}
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		_, err := tx.Exec(r.Context(), `INSERT INTO chat_alerts_later (tenant_id, user_id, alert_key, until) VALUES ($1, $2, $3, $4)
 			ON CONFLICT (tenant_id, user_id, alert_key) DO UPDATE SET until = EXCLUDED.until`, p.TenantID, p.UserID, in.Key, until)
@@ -162,16 +191,34 @@ func (s *Server) lowStockAlerts(ctx context.Context, p *Principal) ([]chatAlert,
 	if !p.Can(PermTableRead) || s.Store == nil {
 		return nil, nil
 	}
-	_, items, err := s.stockItems(ctx, p.TenantID)
+	items, err := s.alertStockItems(ctx, p.TenantID)
 	if errors.Is(err, errStockOff) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
+	// An item already on an open order is dealt with: no card.
+	onOrder := map[string]bool{}
+	if err := db0(ctx, s, p.TenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT DISTINCT l->>'item_id' FROM purchase_orders o, jsonb_array_elements(o.lines) l
+			WHERE o.tenant_id = $1 AND o.status IN ('drafted', 'sent', 'confirmed', 'part_received')`, p.TenantID)
+		if err != nil {
+			return err
+		}
+		ids, err := pgx.CollectRows(rows, pgx.RowTo[*string])
+		for _, id := range ids {
+			if id != nil {
+				onOrder[*id] = true
+			}
+		}
+		return err
+	}); err != nil {
+		return nil, err
+	}
 	var low []stock.Item
 	for _, it := range items {
-		if it.Low() {
+		if it.Low() && !onOrder[it.ID] {
 			low = append(low, it)
 		}
 	}
@@ -231,6 +278,43 @@ func (s *Server) lowStockAlerts(ctx context.Context, p *Principal) ([]chatAlert,
 	return out, nil
 }
 
+// alertStock keeps each business's stock items for a little while: the
+// cards are read every minute by each open conversation, and reading the
+// catalogue is the costly part.
+var alertStock = struct {
+	sync.Mutex
+	m map[uuid.UUID]stockSnap
+}{m: map[uuid.UUID]stockSnap{}}
+
+type stockSnap struct {
+	at    time.Time
+	items []stock.Item
+}
+
+const alertStockFor = 30 * time.Second
+
+func (s *Server) alertStockItems(ctx context.Context, tenant uuid.UUID) ([]stock.Item, error) {
+	alertStock.Lock()
+	snap, ok := alertStock.m[tenant]
+	alertStock.Unlock()
+	if ok && time.Since(snap.at) < alertStockFor {
+		return snap.items, nil
+	}
+	_, items, err := s.stockItems(ctx, tenant)
+	if err != nil {
+		return nil, err
+	}
+	alertStock.Lock()
+	for k, v := range alertStock.m {
+		if time.Since(v.at) >= alertStockFor {
+			delete(alertStock.m, k)
+		}
+	}
+	alertStock.m[tenant] = stockSnap{at: time.Now(), items: items}
+	alertStock.Unlock()
+	return items, nil
+}
+
 // overdueAlerts are the business's invoices past their due date.
 func (s *Server) overdueAlerts(ctx context.Context, p *Principal) ([]chatAlert, error) {
 	if !p.Can(PermInvoiceRead) || s.Invoices == nil {
@@ -239,7 +323,8 @@ func (s *Server) overdueAlerts(ctx context.Context, p *Principal) ([]chatAlert, 
 	var list []invoicing.Invoice
 	if err := db0(ctx, s, p.TenantID, func(tx pgx.Tx) error {
 		var err error
-		list, err = s.Invoices.List(ctx, tx, p.TenantID, "overdue", maxChatAlerts)
+		// Invoices, not the debtor notebook's entries (no one to remind).
+		list, err = s.Invoices.ListOf(ctx, tx, p.TenantID, "overdue", "invoice", maxChatAlerts)
 		return err
 	}); err != nil {
 		return nil, err
@@ -289,13 +374,16 @@ func (s *Server) newOrderAlerts(ctx context.Context, p *Principal) ([]chatAlert,
 // riderAlerts are the storefront's paid orders for delivery that no rider
 // has been asked to take, when the business has riders.
 func (s *Server) riderAlerts(ctx context.Context, p *Principal) ([]chatAlert, error) {
-	if !p.Can(PermStorefrontManage) {
+	if !p.Can(PermStorefrontManage) || s.Dispatch == nil {
 		return nil, nil
 	}
 	var out []chatAlert
 	err := db0(ctx, s, p.TenantID, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT o.id, o.reference, o.total_kobo, o.created_at FROM storefront_orders o
+		// Ready to go out, as dispatch has it (dispatch.ReadyReason): paid,
+		// or nothing to pay before delivery.
+		rows, err := tx.Query(ctx, `SELECT o.id, o.reference, o.total_kobo, o.created_at, o.paid_at IS NOT NULL FROM storefront_orders o
 			WHERE o.tenant_id = $1 AND o.fulfilment = 'delivery' AND o.status IN ('paid', 'accepted') AND o.created_at > now() - interval '14 days'
+			  AND (o.paid_at IS NOT NULL OR o.payment = 'none')
 			  AND EXISTS (SELECT 1 FROM riders x WHERE x.tenant_id = $1 AND x.retired_at IS NULL AND x.active)
 			  AND NOT EXISTS (SELECT 1 FROM deliveries d WHERE d.tenant_id = $1 AND d.order_id = o.id
 			                  AND d.status IN ('offered', 'accepted', 'picked_up', 'arrived', 'delivered'))
@@ -309,11 +397,16 @@ func (s *Server) riderAlerts(ctx context.Context, p *Principal) ([]chatAlert, er
 			var ref string
 			var total int64
 			var at time.Time
-			if err := rows.Scan(&id, &ref, &total, &at); err != nil {
+			var paid bool
+			if err := rows.Scan(&id, &ref, &total, &at, &paid); err != nil {
 				return err
 			}
+			line := invoicing.Naira(total) + " · paid on delivery"
+			if paid {
+				line = "Paid " + invoicing.Naira(total) + " · for delivery"
+			}
 			out = append(out, chatAlert{Key: "rider:" + id.String(), Kind: "rider", At: at, ID: id.String(), Reference: ref,
-				Title: "Order " + ref + " needs a rider", Line: "Paid " + invoicing.Naira(total) + " · for delivery", AmountKobo: &total})
+				Title: "Order " + ref + " needs a rider", Line: line, AmountKobo: &total})
 		}
 		return rows.Err()
 	})
@@ -399,25 +492,44 @@ func (s *Server) approvalAlerts(ctx context.Context, p *Principal) ([]chatAlert,
 	return out, err
 }
 
-var actorUser = regexp.MustCompile(`[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+// actorUser is a person as a run records who started it: their id, alone
+// or as "user:<id>"; subflowOf, a run started by another run's step.
+var (
+	actorUser = regexp.MustCompile(`^(?:user:)?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$`)
+	subflowOf = regexp.MustCompile(`^subflow:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/`)
+)
 
 // runAsker is who started a run, as "Tunde (cashier)": a person of the
 // business, by their name and role; "" for a workflow, key or stranger.
 func runAsker(ctx context.Context, tx pgx.Tx, tenant, run uuid.UUID) (string, error) {
 	var by *string
-	if err := tx.QueryRow(ctx, `SELECT started_by FROM runs WHERE id = $1`, run).Scan(&by); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return "", nil
+	// A run a step of another started is asked for by whoever started that
+	// one (a few levels at most).
+	for range 4 {
+		by = nil
+		if err := tx.QueryRow(ctx, `SELECT started_by FROM runs WHERE id = $1`, run).Scan(&by); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return "", nil
+			}
+			return "", err
 		}
-		return "", err
+		m := (*regexp.Regexp)(nil)
+		if by != nil {
+			m = subflowOf
+		}
+		if m == nil || !m.MatchString(*by) {
+			break
+		}
+		run = uuid.MustParse(m.FindStringSubmatch(*by)[1])
 	}
-	if by == nil || strings.HasPrefix(*by, "workflow:") || strings.HasPrefix(*by, "key:") {
+	if by == nil {
 		return "", nil
 	}
-	id := actorUser.FindString(*by)
-	if id == "" {
+	found := actorUser.FindStringSubmatch(*by)
+	if found == nil {
 		return "", nil
 	}
+	id := found[1]
 	var name, email, role string
 	err := tx.QueryRow(ctx, `SELECT u.name, u.email, m.role FROM users u JOIN memberships m ON m.user_id = u.id AND m.tenant_id = $1
 		WHERE u.id = $2 ORDER BY m.created_at LIMIT 1`, tenant, id).Scan(&name, &email, &role)
@@ -437,4 +549,53 @@ func runAsker(ctx context.Context, tx pgx.Tx, tenant, run uuid.UUID) (string, er
 // db0 runs f in the business's own scope.
 func db0(ctx context.Context, s *Server, tenant uuid.UUID, f func(pgx.Tx) error) error {
 	return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, f)
+}
+
+// matchOption is an invoice or order a payment can be matched to.
+type matchOption struct {
+	// Kind is invoice or order; Number what the match names (the invoice's
+	// number, the order's reference).
+	Kind     string `json:"kind"`
+	Number   string `json:"number"`
+	Customer string `json:"customer"`
+	DueKobo  int64  `json:"due_kobo"`
+}
+
+// getMatchOptions is GET /v1/chat-alerts/match-options: every open invoice
+// (not the debtor notebook's entries) and order money can be matched to,
+// for Match it; names masked, as the money pages show them unrevealed.
+func (s *Server) getMatchOptions(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r.Context())
+	if !p.Can(PermInvoiceManage) {
+		s.fail(w, r, fmt.Errorf("%w: matching money needs %s", errForbidden, PermInvoiceManage))
+		return
+	}
+	if !s.invoicesOn(w, r) {
+		return
+	}
+	out := []matchOption{}
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		for _, st := range []string{"overdue", "part_paid", "sent", "recorded"} {
+			list, err := s.Invoices.ListOf(r.Context(), tx, p.TenantID, st, "invoice", 500)
+			if err != nil {
+				return err
+			}
+			for _, x := range list {
+				if x.DueKobo <= 0 {
+					continue
+				}
+				maskInvoice(&x)
+				out = append(out, matchOption{Kind: "invoice", Number: x.Number, Customer: x.Customer.Name, DueKobo: x.DueKobo})
+			}
+		}
+		orders, err := s.matcher().OpenOrders(r.Context(), tx, p.TenantID, 200)
+		for _, o := range orders {
+			out = append(out, matchOption{Kind: "order", Number: o.Number, Customer: maskName(o.Customer), DueKobo: o.DueKobo})
+		}
+		return err
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"options": out})
 }

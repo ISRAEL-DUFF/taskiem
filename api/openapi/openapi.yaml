@@ -21704,6 +21704,43 @@ paths:
                       $ref: '#/components/schemas/ChatAlert'
         default:
           $ref: '#/components/responses/Error'
+  /v1/chat-alerts/match-options:
+    get:
+      operationId: getMatchOptions
+      tags:
+      - Account
+      summary: What a payment can be matched to
+      description: Every open invoice (not the debtor notebook's entries) and order money can be matched to, for an unmatched payment's Match it card; customers' names masked. Needs invoice.manage.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The options
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [options]
+                properties:
+                  options:
+                    type: array
+                    items:
+                      type: object
+                      required: [kind, number, customer, due_kobo]
+                      properties:
+                        kind:
+                          type: string
+                          enum: [invoice, order]
+                        number:
+                          type: string
+                        customer:
+                          type: string
+                        due_kobo:
+                          type: integer
+        default:
+          $ref: '#/components/responses/Error'
   /v1/chat-alerts/later:
     post:
       operationId: postChatAlertLater
@@ -21727,6 +21764,11 @@ paths:
                 key:
                   type: string
                   maxLength: 200
+                hours:
+                  type: integer
+                  minimum: 0
+                  maximum: 72
+                  description: How long it is put off for, 4 hours unless said
       responses:
         '200':
           description: Put off

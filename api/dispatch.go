@@ -607,10 +607,14 @@ func (s *Server) offerOrder(w http.ResponseWriter, r *http.Request) {
 	if req.RiderID == nil {
 		by = "rotation"
 	}
-	out, err := s.Dispatch.Offer(r.Context(), p.TenantID, chi.URLParam(r, "reference"), dispatch.OfferIn{Rider: req.RiderID, FeeKobo: req.FeeKobo, By: by})
+	ref := chi.URLParam(r, "reference")
+	out, err := s.Dispatch.Offer(r.Context(), p.TenantID, ref, dispatch.OfferIn{Rider: req.RiderID, FeeKobo: req.FeeKobo, By: by})
 	if err != nil {
 		s.dispatchFail(w, r, err)
 		return
+	}
+	if out.Status == "offered" && out.Rider != "" {
+		s.diaryChange(r.Context(), p, fmt.Sprintf("Offered order %s to %s", ref, out.Rider))
 	}
 	writeJSON(w, http.StatusOK, out)
 }

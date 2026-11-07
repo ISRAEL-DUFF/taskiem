@@ -108,7 +108,8 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
     tools: chatTools,
     diaryWhere: "taskiem",
     // A tool saved: the server's diary line is pulled in.
-    onDiary: () => afterDiary.current(),
+    // A tool saved a change: its diary line, and the cards it settles.
+    onDiary: () => (afterDiary.current(), alerts.reload()),
     sources: {
       "@": (convs.data ?? [])
         .filter((x) => x.state === "active")
