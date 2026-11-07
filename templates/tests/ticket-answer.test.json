@@ -1,0 +1,272 @@
+{
+  "schema": "wd-test/v1",
+  "template": "ticket-answer",
+  "params": {},
+  "cases": [
+    {
+      "name": "an emailed ticket is answered in its conversation through the helpdesk address",
+      "trigger": {
+        "body": {
+          "reference": "t-1042",
+          "message": "Your order left this morning.",
+          "author": "Bola",
+          "status": "waiting_on_customer",
+          "assign_to": "bola@adacakes.ng"
+        }
+      },
+      "mocks": {
+        "record": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "update": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "find": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "T-1042",
+                "subject": "Order 42 is late",
+                "customer_name": "Ada Obi",
+                "customer_email": "ada@example.com",
+                "customer_phone": "",
+                "channel": "email",
+                "status": "open",
+                "assigned_to": "",
+                "thread": "T-1042",
+                "mail": "taskiem",
+                "mailbox": "k3x9q2m7a1bz@in.taskiem.app"
+              }
+            ]
+          }
+        },
+        "email": {
+          "output": {
+            "message_id": "tk-2@in.taskiem.app",
+            "thread": "T-1042"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "find": {
+            "filters": [
+              {
+                "column": "reference",
+                "op": "eq",
+                "value": "T-1042"
+              }
+            ]
+          },
+          "email": {
+            "to": "ada@example.com",
+            "subject": "Order 42 is late",
+            "message": "Your order left this morning.",
+            "thread": "T-1042",
+            "address": "k3x9q2m7a1bz@in.taskiem.app"
+          },
+          "record": {
+            "table": "ticket_messages",
+            "row": {
+              "reference": "T-1042",
+              "direction": "out",
+              "author": "Bola",
+              "body": "Your order left this morning.",
+              "channel": "email",
+              "mail": "taskiem",
+              "message_id": "tk-2@in.taskiem.app"
+            }
+          },
+          "update": {
+            "table": "tickets",
+            "key": 42,
+            "set": {
+              "status": "waiting_on_customer",
+              "assigned_to": "bola@adacakes.ng"
+            }
+          }
+        },
+        "steps": {
+          "message": "not_run"
+        },
+        "outputs": {
+          "how": {
+            "found": true,
+            "how": "email"
+          }
+        }
+      }
+    },
+    {
+      "name": "a Gmail ticket's answer is left for the mailbox's sending workflow, and resolving it is recorded",
+      "trigger": {
+        "body": {
+          "reference": "T-1042",
+          "message": "Refunded. Thank you!",
+          "status": "resolved"
+        }
+      },
+      "mocks": {
+        "record": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "update": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "find": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "T-1042",
+                "subject": "Order 42 is late",
+                "customer_name": "Ada Obi",
+                "customer_email": "ada@example.com",
+                "customer_phone": "",
+                "channel": "email",
+                "status": "open",
+                "assigned_to": "bola@adacakes.ng",
+                "thread": "18c2f0e1a2b3c4d5",
+                "mail": "gmail",
+                "mailbox": ""
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "record": {
+            "row": {
+              "author": "Taskiem",
+              "mail": "gmail",
+              "channel": "email",
+              "message_id": ""
+            }
+          },
+          "update": {
+            "set": {
+              "status": "resolved"
+            }
+          }
+        },
+        "steps": {
+          "email": "not_run",
+          "message": "not_run"
+        }
+      }
+    },
+    {
+      "name": "a WhatsApp ticket is answered on the customer's phone",
+      "trigger": {
+        "body": {
+          "reference": "T-1042",
+          "message": "We will call you today."
+        }
+      },
+      "mocks": {
+        "record": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "update": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "find": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "T-1042",
+                "subject": "Order 42 is late",
+                "customer_name": "Ada Obi",
+                "customer_email": "",
+                "customer_phone": "+2348030000001",
+                "channel": "whatsapp",
+                "status": "new",
+                "assigned_to": "",
+                "thread": "T-1042",
+                "mail": "",
+                "mailbox": ""
+              }
+            ]
+          }
+        },
+        "message": {
+          "output": {
+            "via": "whatsapp"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "message": {
+            "phone": "+2348030000001",
+            "about": "your ticket T-1042",
+            "message": "We will call you today."
+          },
+          "record": {
+            "row": {
+              "channel": "whatsapp",
+              "mail": ""
+            }
+          },
+          "update": {
+            "set": {
+              "status": "new"
+            }
+          }
+        },
+        "steps": {
+          "email": "not_run"
+        }
+      }
+    },
+    {
+      "name": "no such ticket: nothing is sent or saved",
+      "trigger": {
+        "body": {
+          "reference": "T-9999",
+          "message": "Hello"
+        }
+      },
+      "mocks": {
+        "find": {
+          "output": {
+            "rows": []
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "email": "not_run",
+          "message": "not_run",
+          "record": "skipped",
+          "update": "skipped"
+        },
+        "outputs": {
+          "how": {
+            "found": false,
+            "how": "missing"
+          }
+        }
+      }
+    }
+  ]
+}

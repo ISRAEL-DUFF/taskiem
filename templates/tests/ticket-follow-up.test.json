@@ -1,0 +1,294 @@
+{
+  "schema": "wd-test/v1",
+  "template": "ticket-follow-up",
+  "params": {},
+  "cases": [
+    {
+      "name": "late tickets are reminded once and escalated after twice the time; quiet ones resolved; old ones closed",
+      "trigger": {
+        "type": "schedule",
+        "scheduled_time": "2026-11-07T10:00:00Z"
+      },
+      "mocks": {
+        "late": {
+          "output": {
+            "rows": [
+              {
+                "id": 1,
+                "reference": "T-1001",
+                "subject": "Order T-1001",
+                "department": "Delivery",
+                "role": "dispatch",
+                "priority": "high",
+                "assigned_to": "",
+                "status": "open",
+                "last_customer_at": "2026-11-07T01:00:00Z",
+                "last_reply_at": null,
+                "reminded_at": null,
+                "escalated_at": null
+              },
+              {
+                "id": 2,
+                "reference": "T-1002",
+                "subject": "Order T-1002",
+                "department": "Delivery",
+                "role": "dispatch",
+                "priority": "high",
+                "assigned_to": "",
+                "status": "open",
+                "last_customer_at": "2026-11-07T05:00:00Z",
+                "last_reply_at": null,
+                "reminded_at": "2026-11-07T09:30:00Z",
+                "escalated_at": null
+              },
+              {
+                "id": 3,
+                "reference": "T-1003",
+                "subject": "Order T-1003",
+                "department": "Delivery",
+                "role": "dispatch",
+                "priority": "high",
+                "assigned_to": "bola@adacakes.ng",
+                "status": "open",
+                "last_customer_at": "2026-11-07T05:00:00Z",
+                "last_reply_at": null,
+                "reminded_at": null,
+                "escalated_at": null
+              },
+              {
+                "id": 4,
+                "reference": "T-1004",
+                "subject": "Order T-1004",
+                "department": "Delivery",
+                "role": "dispatch",
+                "priority": "high",
+                "assigned_to": "",
+                "status": "open",
+                "last_customer_at": "2026-11-07T02:00:00Z",
+                "last_reply_at": "2026-11-07T03:00:00Z",
+                "reminded_at": null,
+                "escalated_at": null
+              }
+            ]
+          }
+        },
+        "quiet": {
+          "output": {
+            "rows": [
+              {
+                "id": 9,
+                "reference": "T-1009",
+                "status": "waiting_on_customer",
+                "last_reply_at": "2026-11-01T10:00:00Z"
+              }
+            ]
+          }
+        },
+        "tell_department": {
+          "output": {
+            "people": 1
+          }
+        },
+        "reminded": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell_escalation": {
+          "output": {
+            "people": 1
+          }
+        },
+        "escalated": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "bye__find": {
+          "output": {
+            "rows": [
+              {
+                "id": 9,
+                "reference": "T-1009",
+                "subject": "Refund",
+                "customer_email": "ada@example.com",
+                "channel": "email",
+                "status": "waiting_on_customer",
+                "thread": "T-1009",
+                "mail": "taskiem",
+                "mailbox": "k3x9q2m7a1bz@in.taskiem.app",
+                "assigned_to": "bola@adacakes.ng"
+              }
+            ]
+          }
+        },
+        "bye__email": {
+          "output": {
+            "message_id": "tk-9@in.taskiem.app"
+          }
+        },
+        "bye__record": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "bye__update": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "close": {
+          "output": {
+            "affected": 3
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "late": {
+            "filters": [
+              {
+                "column": "status",
+                "op": "in",
+                "values": [
+                  "new",
+                  "open"
+                ]
+              },
+              {
+                "column": "last_customer_at",
+                "op": "lt",
+                "value": "2026-11-07T06:00:00Z"
+              }
+            ]
+          },
+          "remind[0].tell_department": {
+            "to": "role",
+            "role": "dispatch",
+            "title": "Ticket T-1001 is waiting for an answer",
+            "message": "T-1001 (high priority) has waited more than 4 hours for an answer: Order T-1001"
+          },
+          "remind[0].reminded": {
+            "key": 1,
+            "set": {
+              "reminded_at": "2026-11-07T10:00:00Z"
+            }
+          },
+          "remind[1].tell_department": {
+            "to": "members",
+            "members": [
+              "bola@adacakes.ng"
+            ]
+          },
+          "escalate[0].tell_escalation": {
+            "to": "role",
+            "role": "manager",
+            "title": "Ticket T-1001 is still not answered"
+          },
+          "quiet": {
+            "filters": [
+              {
+                "column": "status",
+                "op": "eq",
+                "value": "waiting_on_customer"
+              },
+              {
+                "column": "last_reply_at",
+                "op": "lt",
+                "value": "2026-11-02T10:00:00Z"
+              }
+            ]
+          },
+          "resolve[0].bye__email": {
+            "to": "ada@example.com",
+            "thread": "T-1009",
+            "message": "Ticket T-1009: We have not heard back from you, so we are closing this ticket for now. Just reply if you still need help."
+          },
+          "resolve[0].bye__update": {
+            "key": 9,
+            "set": {
+              "status": "resolved",
+              "assigned_to": "bola@adacakes.ng"
+            }
+          },
+          "close": {
+            "filters": [
+              {
+                "column": "status",
+                "op": "eq",
+                "value": "resolved"
+              },
+              {
+                "column": "resolved_at",
+                "op": "lt",
+                "value": "2026-10-31T10:00:00Z"
+              }
+            ],
+            "set": {
+              "status": "closed"
+            }
+          }
+        },
+        "calls": {
+          "tell_department": 2,
+          "tell_escalation": 1
+        }
+      }
+    },
+    {
+      "name": "nothing waiting: nothing said",
+      "params": {
+        "first_answer_hours": 2,
+        "escalation_role": "manager"
+      },
+      "trigger": {
+        "type": "schedule",
+        "scheduled_time": "2026-11-07T10:00:00Z"
+      },
+      "mocks": {
+        "late": {
+          "output": {
+            "rows": []
+          }
+        },
+        "quiet": {
+          "output": {
+            "rows": []
+          }
+        },
+        "close": {
+          "output": {
+            "affected": 0
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "late": {
+            "filters": [
+              {
+                "column": "status",
+                "op": "in",
+                "values": [
+                  "new",
+                  "open"
+                ]
+              },
+              {
+                "column": "last_customer_at",
+                "op": "lt",
+                "value": "2026-11-07T08:00:00Z"
+              }
+            ]
+          }
+        },
+        "calls": {
+          "tell_department": 0,
+          "tell_escalation": 0
+        }
+      }
+    }
+  ]
+}

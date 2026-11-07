@@ -1,0 +1,153 @@
+{
+  "schema": "wd-test/v1",
+  "template": "helpdesk-zoho-mail-send",
+  "params": {},
+  "cases": [
+    {
+      "name": "an answer left for the mailbox is sent in the conversation and marked sent",
+      "trigger": {
+        "event": "INSERT",
+        "body": {
+          "type": "INSERT",
+          "record": {
+            "id": 501,
+            "reference": "T-1042",
+            "direction": "out",
+            "author": "Bola",
+            "body": "Your order left this morning.",
+            "mail": "zoho",
+            "sent_at": null
+          }
+        }
+      },
+      "mocks": {
+        "ticket": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "T-1042",
+                "subject": "Order 42 is late",
+                "customer_email": "ada@example.com",
+                "thread": "1761480000000100001",
+                "last_message_id": "1761480000000100009",
+                "mail": "zoho"
+              }
+            ]
+          }
+        },
+        "reply": {
+          "output": {
+            "message_id": "1761480000000200001"
+          }
+        },
+        "mark": {
+          "output": {
+            "affected": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "ticket": {
+            "filters": [
+              {
+                "column": "reference",
+                "op": "eq",
+                "value": "T-1042"
+              }
+            ]
+          },
+          "reply": {
+            "message_id": "1761480000000100009",
+            "to": [
+              "ada@example.com"
+            ],
+            "text": "Your order left this morning."
+          },
+          "mark": {
+            "table": "ticket_messages",
+            "key": 501,
+            "set": {
+              "message_id": "1761480000000200001"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "a customer's message, a note, or an answer sent another way is left alone",
+      "trigger": {
+        "event": "INSERT",
+        "body": {
+          "type": "INSERT",
+          "record": {
+            "id": 502,
+            "reference": "T-1042",
+            "direction": "in",
+            "body": "Hello",
+            "mail": "zoho"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "ticket": "skipped",
+          "reply": "skipped",
+          "mark": "skipped"
+        }
+      }
+    },
+    {
+      "name": "an answer already sent is not sent again",
+      "trigger": {
+        "event": "INSERT",
+        "body": {
+          "type": "INSERT",
+          "record": {
+            "id": 501,
+            "reference": "T-1042",
+            "direction": "out",
+            "author": "Bola",
+            "body": "Your order left this morning.",
+            "mail": "zoho",
+            "sent_at": "2026-11-07T09:00:00Z"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "ticket": "skipped",
+          "reply": "skipped"
+        }
+      }
+    },
+    {
+      "name": "an answer for another mailbox is left alone",
+      "trigger": {
+        "event": "INSERT",
+        "body": {
+          "type": "INSERT",
+          "record": {
+            "id": 501,
+            "reference": "T-1042",
+            "direction": "out",
+            "author": "Bola",
+            "body": "Your order left this morning.",
+            "mail": "gmail",
+            "sent_at": null
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "ticket": "skipped"
+        }
+      }
+    }
+  ]
+}

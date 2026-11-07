@@ -1,0 +1,177 @@
+{
+  "id": "helpdesk-zoho-mail-send",
+  "title": "Send ticket answers from your Zoho Mail mailbox",
+  "summary": "Answers to tickets that came by Zoho Mail go to the customer from your own mailbox, in the same conversation.",
+  "description": "The partner of A helpdesk on your Zoho Mail mailbox: whenever an answer to a ticket that came to your Zoho Mail mailbox is saved (the first answer with the ticket's number, your team's answers from the ticket reply form, and the closing message when a customer stops answering), it is sent to the customer from your own mailbox as a reply in their conversation, and marked as sent. Answers to tickets that came another way are left alone.",
+  "category": "customers",
+  "tags": [
+    "support",
+    "tickets",
+    "helpdesk",
+    "email",
+    "zoho"
+  ],
+  "keywords": [
+    "ticket",
+    "tickets",
+    "support",
+    "helpdesk",
+    "email",
+    "answer",
+    "reply",
+    "mailbox",
+    "zoho"
+  ],
+  "requires": [
+    "zoho"
+  ],
+  "connectors": [
+    "xenibase@1",
+    "zoho_mail@1"
+  ],
+  "params": [
+    {
+      "name": "mail_connection",
+      "type": "connection",
+      "connector": "zoho_mail",
+      "title": "Zoho Mail connection",
+      "description": "The Zoho Mail mailbox your customers write to, connected with one click: the same as your helpdesk's.",
+      "required": false,
+      "default": "main",
+      "example": "main"
+    }
+  ],
+  "tables": [
+    {
+      "known": "tickets"
+    },
+    {
+      "known": "ticket_messages"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_helpdeskZohoMailSend",
+    "version": 1,
+    "name": "Send ticket answers from Zoho Mail",
+    "description": "Sends each ticket answer left for the Zoho Mail mailbox, in the customer's conversation, and marks it sent.",
+    "trigger": {
+      "type": "connector_event",
+      "config": {
+        "connector": "xenibase@1",
+        "trigger": "row_changed",
+        "connection": "data_tables",
+        "events": [
+          "INSERT"
+        ],
+        "options": {
+          "tables": [
+            "ticket_messages"
+          ]
+        }
+      }
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "record": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "reference": {
+                "type": "string"
+              },
+              "direction": {
+                "type": "string"
+              },
+              "mail": {
+                "type": "string"
+              },
+              "author": {
+                "type": "string",
+                "x-pii": "name"
+              },
+              "body": {
+                "type": "string",
+                "x-pii": "other"
+              },
+              "sent_at": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "ticket",
+        "type": "connector",
+        "name": "Find the answer's ticket",
+        "connector": "xenibase@1",
+        "action": "read_rows",
+        "connection": "data_tables",
+        "when": "=has(trigger.body.record.direction) && trigger.body.record.direction == 'out' && trigger.body.record.?mail.orValue('') == 'zoho' && trigger.body.record.?sent_at.orValue(null) == null && trigger.body.record.?body.orValue('') != ''",
+        "input": {
+          "table": "tickets",
+          "filters": [
+            {
+              "column": "reference",
+              "op": "eq",
+              "value": "=trigger.body.record.reference"
+            }
+          ],
+          "limit": 1
+        }
+      },
+      {
+        "id": "reply",
+        "type": "connector",
+        "name": "Answer the customer from your mailbox, in the conversation",
+        "connector": "zoho_mail@1",
+        "action": "reply",
+        "connection": "{{mail_connection}}",
+        "needs": [
+          "ticket"
+        ],
+        "when": "=steps.ticket.output.rows.size() > 0 && steps.ticket.output.rows[0].?customer_email.orValue('') != '' && steps.ticket.output.rows[0].?last_message_id.orValue('') != ''",
+        "input": {
+          "message_id": "=steps.ticket.output.rows[0].last_message_id",
+          "to": "=[steps.ticket.output.rows[0].customer_email]",
+          "text": "=trigger.body.record.body"
+        }
+      },
+      {
+        "id": "mark",
+        "type": "connector",
+        "name": "Mark the answer sent",
+        "connector": "xenibase@1",
+        "action": "update_rows",
+        "connection": "data_tables",
+        "needs": [
+          "reply"
+        ],
+        "input": {
+          "table": "ticket_messages",
+          "key": "=trigger.body.record.id",
+          "set": {
+            "sent_at": "=run.started_at",
+            "message_id": "=steps.reply.output.?message_id.orValue('')"
+          }
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "15m"
+    }
+  }
+}
