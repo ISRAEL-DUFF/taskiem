@@ -699,6 +699,10 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if done, err := s.toolsDirect(ctx, c); done || err != nil {
 		return err
 	}
+	// "tools", "/products": links to the tools on the web (chat_tool_requests.go).
+	if done, err := s.waToolsCommand(ctx, c, cmd); done || err != nil {
+		return err
+	}
 	// Accept or Decline on a linked business's order, All came on its
 	// delivery (link_orders.go).
 	if strings.HasPrefix(text, orderPrefix) {
@@ -949,6 +953,13 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	}
 	if c.state == stateStepUp {
 		return c.say(ctx, s, c.t("wa.stepup_waiting", "step", c.data.Step))
+	}
+	// Not recognised: a typed request for a tool, read by the model, is
+	// answered with its form, filled in (chat_tool_requests.go).
+	if c.state == stateIdle && !matched {
+		if done, err := s.waToolRequest(ctx, c, text); done || err != nil {
+			return err
+		}
 	}
 	// Not recognised: in English, a question naming a table goes to the
 	// model as one (chat_tables_ask.go).

@@ -47,7 +47,7 @@ import {
   soundOn,
 } from "../lib/moments";
 import { LiveCard, liveMention, type Live } from "./ChatLiveCard";
-import { formatPrice } from "../lib/storefront";
+import { formatPrice, thumb, type Catalogue } from "../lib/storefront";
 import type { StockItem, StockView } from "../lib/stock";
 import type { Service } from "../lib/bookings";
 import {
@@ -999,7 +999,22 @@ export function ConversationPane({
         : Promise.resolve([] as Service[]),
     [chatTools],
   );
+  // Our own products' photos, for cards of our own items.
+  const ownPhotos = useLoad(
+    () =>
+      chatTools && can("storefront.manage") && priced.data?.whose === "ours"
+        ? get<Catalogue>("/v1/storefront/catalogue").then(
+            (r) =>
+              Object.fromEntries(
+                r.items.map((it) => [it.id, thumb(it.photo)]).filter((x): x is [string, string] => !!x[1]),
+              ),
+            () => ({}) as Record<string, string>,
+          )
+        : Promise.resolve({} as Record<string, string>),
+    [chatTools, priced.data?.whose],
+  );
   const liveNow: Live = {
+    photos: ownPhotos.data,
     items: priced.data?.items ?? [],
     whose: priced.data?.whose ?? "",
     stock: ownStock.data ?? [],

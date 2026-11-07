@@ -187,3 +187,5 @@
 @media (prefers-reduced-motion: no-preference) {
   .tk-request { animation: tk-spring-up var(--t-picker) var(--spring) backwards; }
 }
+
+img.tk-live-tile { object-fit: cover; }

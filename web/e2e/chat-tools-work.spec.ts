@@ -268,3 +268,32 @@ test("the sound for new orders and payments can be switched off", async ({ brows
   await owner.getByRole("button", { name: "More about the chats" }).click();
   await expect(owner.getByRole("button", { name: "Sound for new orders and payments: off" })).toHaveAttribute("aria-pressed", "false");
 });
+
+test("a link from WhatsApp opens the tool at its form, filled in; the model reads what patterns do not", async ({ browser }) => {
+  const { owner, link } = await linked(browser, { width: 390, height: 844 });
+  await shop(owner);
+  // The link "tools" or a typed request gets on WhatsApp.
+  await owner.goto("/chat?with=taskiem&tool=products&row=s1&price=8000000");
+  const sheet = owner.getByTestId("tool-sheet");
+  await expect(sheet.getByRole("heading", { name: "Rice, 50kg bag" })).toBeVisible();
+  await expect(sheet.getByLabel("Price in naira")).toHaveValue("80,000");
+  await expect(owner).toHaveURL(/\/chat\?with=taskiem$/);
+  await sheet.getByRole("button", { name: "Close" }).click();
+
+  // Words the patterns do not know: the model's reading.
+  let asked = "";
+  await owner.route("**/v1/chat-tools/request", async (r) => {
+    asked = (r.request().postDataJSON() as { text: string }).text;
+    await r.fulfill(
+      json({ request: { tool: "products", row_id: "s1", prefill: { price_kobo: 8_000_000 }, words: "Change the price of Rice, 50kg bag to ₦80,000" } }),
+    );
+  });
+  await owner.goto(`/chat?with=${link}`);
+  const pane = owner.getByTestId("chat-pane");
+  await pane.getByLabel("Message").fill("make the big rice price eighty thousand");
+  const chip = pane.getByTestId("request-chip");
+  await expect(chip).toContainText("Change the price of Rice, 50kg bag to ₦80,000");
+  expect(asked).toBe("make the big rice price eighty thousand");
+  await chip.getByRole("button").click();
+  await expect(sheet.getByLabel("Price in naira")).toHaveValue("80,000");
+});

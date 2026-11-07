@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { TOOLS, type ToolKey } from "../lib/tools";
 import { DiaryLine } from "../kit";
 import { useChatTools } from "../lib/useChatTools";
 import { useThread } from "../lib/useThread";
@@ -154,6 +156,24 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
       await pull(newest.created_at);
   }, []);
   afterDiary.current = () => void pull(messages?.[messages.length - 1]?.created_at).catch(setError);
+  // A link from the chat apps ("tools", a typed request) opens its tool,
+  // at its form, filled in (chat_tool_requests.go); the link's words go.
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    const tool = params.get("tool") as ToolKey | null;
+    if (!chatTools || !tool || !TOOLS.some((t) => t.key === tool)) return;
+    const num = (k: string) => {
+      const v = params.get(k);
+      return v && /^\d+$/.test(v) ? Number(v) : undefined;
+    };
+    c.openTool(tool, undefined, {
+      rowId: params.get("row") ?? undefined,
+      add: params.get("add") === "1",
+      prefill: { priceKobo: num("price"), count: num("count"), name: params.get("name") ?? undefined, minutes: num("minutes") },
+    });
+    setParams({ with: "taskiem" }, { replace: true });
+    // Once, when the switch is known.
+  }, [chatTools]);
   // The newest page: the view is placed at its end.
   useEffect(() => {
     get<{ messages: TaskiemMessage[] }>("/v1/taskiem-chat")

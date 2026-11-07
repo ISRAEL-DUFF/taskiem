@@ -20,6 +20,8 @@ export interface Live {
   stock: StockItem[];
   /** The conversation (for Order). */
   link: string;
+  /** Our own catalogue's photos, by item (a card of our own product). */
+  photos?: Record<string, string>;
 }
 
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
@@ -56,9 +58,13 @@ export function LiveCard({ m, live }: { m: Mention; live: Live }) {
   return (
     <article className="tk-live" aria-label={`Product: ${m.name}`}>
       <span className="tk-live-top">
-        <span className="tk-live-tile" aria-hidden="true">
-          <Icon name="box" />
-        </span>
+        {m.item_id && live.photos?.[m.item_id] ? (
+          <img className="tk-live-tile" src={live.photos[m.item_id]} alt="" />
+        ) : (
+          <span className="tk-live-tile" aria-hidden="true">
+            <Icon name="box" />
+          </span>
+        )}
         <span className="tk-live-words">
           <span className="tk-kicker">Product</span>
           <span className="tk-live-name">{m.name}</span>

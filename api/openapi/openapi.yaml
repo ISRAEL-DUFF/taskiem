@@ -21678,6 +21678,64 @@ paths:
                     description: A TaskiemChat message, or a LinkMessage of kind diary
         default:
           $ref: '#/components/responses/Error'
+  /v1/chat-tools/request:
+    post:
+      operationId: postChatToolRequest
+      tags:
+      - Account
+      summary: What a typed request asks a chat tool to do
+      description: With chat tools on, the model reads words such as "change the price of rice 50kg to 80k" and the request comes back with the tool, the row it is about and what its form starts with; nothing is saved. Null when the words ask for nothing a tool does, or with no model or budget.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text:
+                  type: string
+                  maxLength: 300
+      responses:
+        '200':
+          description: The request, or null
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [request]
+                properties:
+                  request:
+                    type: [object, 'null']
+                    required: [tool, prefill, words]
+                    properties:
+                      tool:
+                        type: string
+                        enum: [products, stock, services, prices, orders, tables]
+                      row_id:
+                        type: string
+                      add:
+                        type: boolean
+                      prefill:
+                        type: object
+                        properties:
+                          price_kobo:
+                            type: integer
+                          count:
+                            type: integer
+                          name:
+                            type: string
+                          minutes:
+                            type: integer
+                      words:
+                        type: string
+        default:
+          $ref: '#/components/responses/Error'
   /v1/settings/chat-tools:
     get:
       operationId: getChatTools

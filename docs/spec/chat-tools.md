@@ -136,36 +136,55 @@ and price, and each change shows as a diary line (`web/e2e/chat-tools-work.spec.
   - Price lists: each item's price.
   - Orders: what a linked business asks for, Accept or Decline (confirmed).
   - Tables: any data table's latest rows, and a row added.
-- **Saving.** The tick draws itself (260 ms, a light buzz), the sheet closes at
-  1.3 s and the change lands as a diary line where the tool was opened.
-- **Diary lines** (`POST /v1/chat-diary`, `api/chat_diary.go`): in a business
-  conversation a row on our side only (kind `diary`: no pair on the other side,
-  which never sees it; reactions and replies to it are refused); in the Taskiem
-  conversation a line of the person's own history (kind `diary`). Either way it
-  is told on the person's own WhatsApp and Telegram as "✓ …" (the alert template
-  outside the window) and not kept twice. Only with chat tools on, and only for a
-  person (an API key is refused). A line reaches no one but the person who made
-  the change. The words come from the tool that saved: changes made on other
-  pages are not told yet.
+- **Saving.** The tick draws itself (260 ms, a light buzz) and the sheet closes
+  at 1.3 s. Someone who may not change a tool's thing sees it, with no Save
+  (products, stock and tables need `table.edit`; services `table.edit` and
+  `storefront.manage`; prices and orders `storefront.manage`). Esc steps back from
+  a form to its list, then closes. The product form has its photos (add one),
+  its price, its count (sent only when changed: an item may have none) and "Show
+  on your storefront" (`available` on `PATCH /v1/stock/items/{id}`). Services
+  can be changed and removed; a table's rows changed and added. An order shows
+  its four steps.
+- **Changes told, from anywhere** (`api/chat_changes.go`). With chat tools on, a
+  change a person makes on any page or tool is a diary line in their own
+  Taskiem conversation, written by the server: a price, showing or hiding, a new
+  product, stock in, a count, a price list, an order's step, a service added or
+  changed, and a table row added or changed from a chat tool (not imports or
+  page edits of other tables). The line's new value rolls into place. It is told
+  on the person's own WhatsApp, Telegram or Slack as their "changes" setting says
+  (Settings, Notifications: on by default, never by email); changes made within a
+  minute are told in one message ("✓ 3 changes: …"). From a business's
+  conversation a tool says the change is in the Taskiem chat; the business
+  conversation keeps its own cards (an accepted order), on our side as lines.
+  `POST /v1/chat-diary` stays for a client that tells a change itself (a line on
+  our side of a business's conversation, or in the Taskiem conversation).
 - **Live cards.** A product tagged in a message is a card with what is true now:
   today's price on the conversation's price list (and what it was when tagged),
-  our own stock of it (to those who may see stock), and Order when we buy from
-  them. A service of our own (from the picker's Services; `{kind: service,
-  service_id}`, checked against our storefront's services) shows its price and
-  minutes, on both sides.
-- **Typed requests** (`web/src/lib/intents.ts`): "change the price of rice 50kg
-  to 80k", "20 bags of rice 25kg came in", "add a service: rice milling, 30 min,
-  2500", "accept order AD-…" offer a chip over the composer that opens the
-  form filled in. Words never save anything: the form's Save does. A thing is
-  never guessed between two that fit as well. The words are matched in the
-  browser, not by a model, for now.
-- **Moments.** A soft sound for a new order or payment while the chat is open,
-  switched off from the chat menu ("Sound for new orders and payments"); a short
-  lime ring around a payment or the day's first order. Neither with motion
+  our own stock of it (to those who may see stock), Order when we buy from them,
+  and its photo when it is our own product. A service of our own (from the
+  picker's Services; `{kind: service, service_id}`, checked against our
+  storefront's services) shows its price and minutes, on both sides.
+- **Typed requests** (`web/src/lib/intents.ts`, `api/chat_tool_requests.go`):
+  "change the price of rice 50kg to 80k", "20 bags of rice 25kg came in", "add a
+  service: rice milling, 30 min, 2500", "accept order AD-…" offer a chip over the
+  composer that opens the form filled in. Patterns read the common wordings in
+  the browser; what they do not know, the model reads once typing pauses
+  (`POST /v1/chat-tools/request`, metered against the AI budget like a chat
+  question). Words never save anything: the form's Save does. A thing is never
+  guessed between two that fit as well.
+- **On WhatsApp, Telegram and Slack.** "tools" (or "/tools") answers with a link
+  to each tool the person may open; "/pro" with Products'. A typed request no
+  command claims is read by the model and answered with a link to its form,
+  filled in ("Change the price of Rice, 50kg bag to ₦80,000? Open the form,
+  filled in, and Save there: …"). The link opens the Taskiem conversation on the
+  web with the tool at that form (`/chat?with=taskiem&tool=…&row=…&price=…`).
+- **Moments.** A soft sound for a new order or payment while the chat is open
+  (opened by the first tap, as browsers ask), switched off from the chat menu; a
+  short lime ring around a payment or the day's first order. Neither with motion
   turned down.
-- **Still to come:** a product's photo and "show on your storefront" in its form;
-  diary lines for changes made on the other pages; requests read by Taskiem's
-  model on WhatsApp.
+- **Still to come:** a buyer's live card shows no photo (the price list a seller
+  shares carries none yet); requests the model reads offer prices, stock in and
+  new services, and "accept order" only from the browser's patterns.
 
 ## 5. Tests
 
@@ -183,6 +202,12 @@ and price, and each change shows as a diary line (`web/e2e/chat-tools-work.spec.
   a card with its progress and a diary line.
 - `api/chat_diary_test.go`: a diary line in each place, the other business never
   seeing it, refused reactions and replies, told once on WhatsApp, who may.
+- `api/chat_diary_test.go` (`TestChangesTold`): changes made on the pages told
+  as lines, together on WhatsApp in one message, not at all with the setting off
+  or chat tools off.
+- `api/chat_tool_requests_test.go`: "tools" and "/pro" on WhatsApp; a request read
+  by the model from the web and from WhatsApp, as links to the filled-in form; no
+  guess between two products; a question is no request; nothing saved.
 - `api/chat_tools_test.go` (`TestServiceMention`): a service of ours tagged, on
   both sides; one not ours refused.
 - `web/e2e/chat-tools-work.spec.ts`: price, stock in, order and service from
