@@ -15,19 +15,6 @@ export default tseslint.config(
       globals: { window: "readonly", document: "readonly", crypto: "readonly", TextEncoder: "readonly", setTimeout: "readonly", URLSearchParams: "readonly" },
     },
   },
-  // The explainer's renderer (video/README.md) runs on Node; the scenes'
-  // timeline runs in Chromium.
-  {
-    files: ["video/render.mjs"],
-    languageOptions: { globals: { process: "readonly", console: "readonly", window: "readonly", document: "readonly" } },
-  },
-  {
-    files: ["video/kit/kit.js"],
-    languageOptions: {
-      sourceType: "script",
-      globals: { window: "readonly", document: "readonly", location: "readonly", addEventListener: "readonly", performance: "readonly", requestAnimationFrame: "readonly", URLSearchParams: "readonly" },
-    },
-  },
   // The card maker's Node script, whose callbacks also run in the browser (docs/strategy/marketing/cards).
   {
     files: ["docs/strategy/marketing/cards/*.mjs"],
