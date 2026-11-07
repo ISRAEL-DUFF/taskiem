@@ -21,7 +21,11 @@
     "chat"
   ],
   "requires": [
-    "whatsapp"
+    "ticket",
+    "tickets",
+    "helpdesk",
+    "help desk",
+    "support desk"
   ],
   "connectors": [
     "xenibase@1",

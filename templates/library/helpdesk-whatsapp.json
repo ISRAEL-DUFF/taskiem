@@ -24,7 +24,14 @@
     "department"
   ],
   "requires": [
-    "whatsapp"
+    "ticket",
+    "tickets",
+    "helpdesk",
+    "help desk",
+    "support desk",
+    "complaint",
+    "complaints",
+    "customer service"
   ],
   "connectors": [
     "xenibase@1",
