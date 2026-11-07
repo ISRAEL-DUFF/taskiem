@@ -434,6 +434,320 @@
           }
         }
       }
+    },
+    {
+      "name": "a customer who wrote to the business's WhatsApp number is answered from it: the answer is left for its sending workflow",
+      "params": {
+        "routing": "rules"
+      },
+      "trigger": {
+        "body": {
+          "channel": "whatsapp",
+          "subject": "Where is my order?",
+          "message": "Where is my order? The rider is late.",
+          "customer_phone": "+2348030000001",
+          "mail": "whatsapp",
+          "received_at": "2026-11-07T09:00:00Z"
+        }
+      },
+      "mocks": {
+        "number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_noted": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_told": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "ack_message": {
+          "output": {
+            "via": "whatsapp"
+          }
+        },
+        "ack_member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 10
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "ticket": {
+            "row": {
+              "channel": "whatsapp",
+              "mail": "whatsapp",
+              "customer_phone": "+2348030000001",
+              "last_customer_at": "2026-11-07T09:00:00Z"
+            }
+          },
+          "number": {
+            "set": {
+              "reference": "T-1010",
+              "thread": "T-1010"
+            }
+          },
+          "ack_queued": {
+            "table": "ticket_messages",
+            "row": {
+              "reference": "T-1010",
+              "direction": "out",
+              "author": "Taskiem",
+              "body": "Thank you for getting in touch. We have your message and will answer you soon.\n\nYour ticket is T-1010.",
+              "channel": "whatsapp",
+              "mail": "whatsapp"
+            }
+          }
+        },
+        "steps": {
+          "ack_email": "not_run",
+          "ack_message": "not_run",
+          "ack_member": "not_run"
+        },
+        "outputs": {
+          "ref": {
+            "reference": "T-1010",
+            "how": "mailbox"
+          }
+        }
+      }
+    },
+    {
+      "name": "a member's own request: they are told their number as a member",
+      "params": {
+        "routing": "chosen",
+        "acknowledgement": "IT has your request."
+      },
+      "trigger": {
+        "body": {
+          "channel": "staff",
+          "subject": "Laptop will not start",
+          "message": "My laptop will not start since this morning.",
+          "customer_name": "Bola Ade",
+          "customer_email": "bola@adacakes.ng",
+          "department": "General",
+          "mail": "member"
+        }
+      },
+      "mocks": {
+        "number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_noted": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_told": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "ack_message": {
+          "output": {
+            "via": "whatsapp"
+          }
+        },
+        "ack_member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 11
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "ticket": {
+            "row": {
+              "channel": "staff",
+              "mail": "member",
+              "customer_email": "bola@adacakes.ng",
+              "department": "General"
+            }
+          },
+          "ack_member": {
+            "to": "members",
+            "members": [
+              "bola@adacakes.ng"
+            ],
+            "title": "Your request T-1011",
+            "message": "IT has your request.\n\nYour ticket is T-1011."
+          },
+          "ack_told": {
+            "table": "ticket_messages",
+            "row": {
+              "reference": "T-1011",
+              "direction": "out",
+              "channel": "staff",
+              "mail": "member"
+            }
+          }
+        },
+        "steps": {
+          "ack_email": "not_run",
+          "ack_message": "not_run",
+          "ack_queued": "not_run"
+        },
+        "outputs": {
+          "ref": {
+            "how": "member"
+          }
+        }
+      }
+    },
+    {
+      "name": "a member's request without their email is told to nobody, and still a ticket",
+      "params": {
+        "routing": "rules"
+      },
+      "trigger": {
+        "body": {
+          "channel": "staff",
+          "subject": "Printer",
+          "message": "The printer is jammed.",
+          "mail": "member"
+        }
+      },
+      "mocks": {
+        "number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_noted": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_told": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "ack_message": {
+          "output": {
+            "via": "whatsapp"
+          }
+        },
+        "ack_member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 12
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "ack_email": "not_run",
+          "ack_message": "not_run",
+          "ack_queued": "not_run",
+          "ack_member": "not_run"
+        },
+        "outputs": {
+          "ref": {
+            "how": "none"
+          }
+        }
+      }
     }
   ]
 }

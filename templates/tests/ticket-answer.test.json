@@ -267,6 +267,190 @@
           }
         }
       }
+    },
+    {
+      "name": "a ticket from the business's WhatsApp number: the answer is left for its sending workflow",
+      "trigger": {
+        "body": {
+          "reference": "T-1042",
+          "message": "Your rider is 10 minutes away.",
+          "author": "Bola",
+          "status": "waiting_on_customer"
+        }
+      },
+      "mocks": {
+        "record": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "update": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "find": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "T-1042",
+                "subject": "Order 42 is late",
+                "customer_name": "",
+                "customer_email": "",
+                "customer_phone": "+2348030000001",
+                "channel": "whatsapp",
+                "status": "open",
+                "assigned_to": "",
+                "thread": "T-1042",
+                "mail": "whatsapp",
+                "mailbox": ""
+              }
+            ]
+          }
+        },
+        "email": {
+          "output": {
+            "message_id": "x"
+          }
+        },
+        "message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "member": {
+          "output": {
+            "people": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "record": {
+            "table": "ticket_messages",
+            "row": {
+              "reference": "T-1042",
+              "direction": "out",
+              "author": "Bola",
+              "body": "Your rider is 10 minutes away.",
+              "channel": "whatsapp",
+              "mail": "whatsapp",
+              "message_id": "",
+              "sent_at": null
+            }
+          },
+          "update": {
+            "set": {
+              "status": "waiting_on_customer"
+            }
+          }
+        },
+        "steps": {
+          "email": "not_run",
+          "message": "not_run",
+          "member": "not_run"
+        },
+        "outputs": {
+          "how": {
+            "found": true,
+            "how": "mailbox"
+          }
+        }
+      }
+    },
+    {
+      "name": "a member's request is answered to the member",
+      "trigger": {
+        "body": {
+          "reference": "T-1042",
+          "message": "Your new password is on its way to your phone.",
+          "author": "Chidi",
+          "status": "resolved"
+        }
+      },
+      "mocks": {
+        "record": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "update": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "find": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "T-1042",
+                "subject": "Locked out of email",
+                "customer_name": "Bola Ade",
+                "customer_email": "bola@adacakes.ng",
+                "customer_phone": "",
+                "channel": "staff",
+                "status": "open",
+                "assigned_to": "",
+                "thread": "T-1042",
+                "mail": "member",
+                "mailbox": ""
+              }
+            ]
+          }
+        },
+        "email": {
+          "output": {
+            "message_id": "x"
+          }
+        },
+        "message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "member": {
+          "output": {
+            "people": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "member": {
+            "to": "members",
+            "members": [
+              "bola@adacakes.ng"
+            ],
+            "title": "Your request T-1042",
+            "message": "T-1042 (Locked out of email):\nYour new password is on its way to your phone."
+          },
+          "record": {
+            "row": {
+              "channel": "staff",
+              "mail": "member"
+            }
+          },
+          "update": {
+            "set": {
+              "status": "resolved"
+            }
+          }
+        },
+        "steps": {
+          "email": "not_run",
+          "message": "not_run"
+        },
+        "outputs": {
+          "how": {
+            "found": true,
+            "how": "member"
+          }
+        }
+      }
     }
   ]
 }

@@ -2,7 +2,7 @@
   "id": "ticket-answer",
   "title": "Answer a customer's ticket",
   "summary": "Send a customer the answer to their ticket the way they wrote to you, and record it on the ticket.",
-  "description": "Sends the answer to the customer of a ticket the way the ticket came: by email in the same conversation (through your Taskiem helpdesk address), from your own Zoho Mail or Gmail mailbox (the mailbox's sending workflow sends it), or on WhatsApp, Telegram or by text. The answer is saved with the ticket's messages, and the ticket is marked waiting on the customer or resolved. The ticket reply form and the follow-up workflow use it.",
+  "description": "Sends the answer to the customer of a ticket the way the ticket came: by email in the same conversation (through your Taskiem helpdesk address), from your own Zoho Mail or Gmail mailbox or WhatsApp number (its sending workflow sends it), to a member of your business who asked (IT and HR requests), or on WhatsApp, Telegram or by text. The answer is saved with the ticket's messages, and the ticket is marked waiting on the customer or resolved. The ticket reply form and the follow-up workflow use it.",
   "category": "customers",
   "tags": [
     "support",
@@ -51,7 +51,7 @@
       "name": "sent_by",
       "type": "string",
       "title": "How it went",
-      "description": "email (in the conversation), mailbox (left for the business's mailbox to send), message (WhatsApp, Telegram, text or email), none (no way to reach the customer) or missing (no such ticket).",
+      "description": "email (in the conversation), mailbox (left for the business's own mailbox or WhatsApp number to send), member (told as a member of the business), message (WhatsApp, Telegram, text or email), none (no way to reach the customer) or missing (no such ticket).",
       "value": "=steps.how.output.how"
     }
   ],
@@ -139,7 +139,7 @@
         "config": {
           "output": {
             "found": "=steps.find.output.rows.size() > 0 && steps.find.output.rows[0].?reference.orValue('') != ''",
-            "how": "=steps.find.output.rows.size() == 0 || steps.find.output.rows[0].?reference.orValue('') == '' ? 'missing' : steps.find.output.rows[0].?mail.orValue('') in ['zoho', 'gmail'] && steps.find.output.rows[0].?customer_email.orValue('') != '' ? 'mailbox' : steps.find.output.rows[0].?mail.orValue('') == 'taskiem' && steps.find.output.rows[0].?customer_email.orValue('') != '' && steps.find.output.rows[0].?mailbox.orValue('') != '' ? 'email' : steps.find.output.rows[0].?customer_phone.orValue('') != '' || steps.find.output.rows[0].?customer_email.orValue('') != '' ? 'message' : 'none'"
+            "how": "=steps.find.output.rows.size() == 0 || steps.find.output.rows[0].?reference.orValue('') == '' ? 'missing' : steps.find.output.rows[0].?mail.orValue('') in ['zoho', 'gmail'] && steps.find.output.rows[0].?customer_email.orValue('') != '' ? 'mailbox' : steps.find.output.rows[0].?mail.orValue('') == 'whatsapp' && steps.find.output.rows[0].?customer_phone.orValue('') != '' ? 'mailbox' : steps.find.output.rows[0].?mail.orValue('') == 'member' && steps.find.output.rows[0].?customer_email.orValue('') != '' ? 'member' : steps.find.output.rows[0].?mail.orValue('') == 'taskiem' && steps.find.output.rows[0].?customer_email.orValue('') != '' && steps.find.output.rows[0].?mailbox.orValue('') != '' ? 'email' : steps.find.output.rows[0].?customer_phone.orValue('') != '' || steps.find.output.rows[0].?customer_email.orValue('') != '' ? 'message' : 'none'"
           }
         }
       },
@@ -191,6 +191,25 @@
                   }
                 }
               ]
+            },
+            {
+              "name": "member",
+              "when": "=steps.how.output.how == 'member'",
+              "steps": [
+                {
+                  "id": "member",
+                  "type": "connector",
+                  "name": "Tell the member",
+                  "connector": "notify@1",
+                  "action": "tell",
+                  "input": {
+                    "to": "members",
+                    "members": "=[steps.find.output.rows[0].customer_email]",
+                    "title": "='Your request ' + steps.find.output.rows[0].reference",
+                    "message": "=steps.find.output.rows[0].reference + (steps.find.output.rows[0].?subject.orValue('') != '' ? ' (' + steps.find.output.rows[0].subject + ')' : '') + ':\\n' + trigger.body.message"
+                  }
+                }
+              ]
             }
           ]
         }
@@ -214,8 +233,8 @@
             "author": "=trigger.body.?author.orValue('') != '' ? trigger.body.author : 'Taskiem'",
             "body": "=trigger.body.message",
             "at": "=run.started_at",
-            "channel": "=steps.how.output.how == 'message' ? steps.find.output.rows[0].?channel.orValue('') : 'email'",
-            "mail": "=steps.how.output.how in ['email', 'mailbox'] ? steps.find.output.rows[0].mail : ''",
+            "channel": "=steps.how.output.how == 'message' ? steps.find.output.rows[0].?channel.orValue('') : steps.how.output.how == 'member' ? steps.find.output.rows[0].?channel.orValue('staff') : steps.how.output.how == 'mailbox' && steps.find.output.rows[0].?mail.orValue('') == 'whatsapp' ? 'whatsapp' : 'email'",
+            "mail": "=steps.how.output.how in ['email', 'mailbox', 'member'] ? steps.find.output.rows[0].mail : ''",
             "message_id": "=steps.how.output.how == 'email' ? steps.send.output.steps.email.message_id : ''",
             "sent_at": "=steps.how.output.how in ['mailbox', 'none'] ? null : run.started_at"
           }
