@@ -10,7 +10,7 @@ A tailor sends Taskiem a photo on WhatsApp with "post this to my Instagram and F
 
 **For anyone, not only businesses.** A tenant on Taskiem is an organisation, and a person alone is one too: sign-up (the web form, or chat) makes it. Nothing here needs a storefront, an invoice or a bank. What the platforms themselves require is a professional account: Meta's API posts to a Page and to an Instagram Business or Creator account, never to a personal profile or a personal Instagram account (§5). Switching an Instagram account to Creator is free and takes a minute; making a Page is the same. The chat says so when it is needed, and says how.
 
-**The order of things.** Meta's reviews gate everything that reaches the public (§13), and they are the same reviews K5 already needs, with four more permissions. So: start the review now with posting in it (G0); build Facebook and Instagram posting on the connectors that exist (G1); the chat (G2); comments (G3); the web's calendar and insights (G4); other networks (G5); adverts last and separately, because they spend money (G6).
+**The order of things.** Meta's reviews gate everything that reaches the public (§13), and they are the same reviews K5 already needs, with seven more permissions. So: start the review now with posting in it (G0); build Facebook and Instagram posting on the connectors that exist (G1); the chat (G2); comments (G3); the web's calendar and insights (G4); other networks (G5); adverts last and separately, because they spend money (G6).
 
 ## 2. Words used here
 
@@ -18,12 +18,13 @@ A tailor sends Taskiem a photo on WhatsApp with "post this to my Instagram and F
 | --- | --- |
 | Account | One place a post goes: a Facebook Page, an Instagram professional account, a LinkedIn profile or company page, a TikTok account, a YouTube channel. Each is one connection |
 | Post | One piece of content on one account: a caption and zero or more media, published at a time. The same words on three accounts are three posts, from one draft |
-| Draft | The caption and media before they go out, in the `posts` table with `status = draft` |
+| Draft | The caption and media before they go out, in the `posts` table with `status = draft`. One draft to three accounts is three rows sharing a `draft_id`; chat shows and moves the draft as one |
 | Scheduled | A post with a time, waiting. Taskiem holds it and publishes it then; Facebook's own scheduling is not used, so every network behaves the same (§6.3) |
 | Network | A platform: Meta (Facebook and Instagram), LinkedIn, TikTok, X, YouTube |
 | Professional account | What a network lets an app post to: a Page, an Instagram Business or Creator account, a LinkedIn member who allowed it, a company page |
 | Media | A photo or video, held in the organisation's own storage (§6.2), handed to the network by a link it fetches once |
 | Insights | What the network reports about a post or an account: reach, likes, comments, saves, followers |
+| Usual accounts | The organisation's default set of accounts a post goes to when none is named: every connected account until the owner chooses (§6.4) |
 
 ## 3. Where we are
 
@@ -71,25 +72,31 @@ What this means for "anyone": a person needs a Page or a Creator account on Meta
 
 One [known table](no-sheet-needed.md#54-known-tables), the organisation's own data table (rows in its own data project, listed on the Tables page, read by any workflow, exported like any other), not a table in Taskiem's own schema; made in the organisation the first time anything needs it. Nothing about posting goes into the core: the engine knows connections, runs and steps, as it does for every connector, and the rest is this table and the workflows over it.
 
-**`posts`**: one row per post per account. `caption` (text), `media` (links into the organisation's storage, 0 to 10), `network`, `account` (the connection's name, as every step names a connection), `publish_at` (time), `status` (`draft`, `scheduled`, `publishing`, `published`, `failed`, `cancelled`), `published_at`, `post_id` and `permalink` (from the network), `error`, `source` (`chat`, `template:<id>`, `web`, `api`), `run_id`. Insights (§6.6) are their own columns filled later: `reach`, `likes`, `comments`, `saves`, `insights_at`.
+**`posts`**: one row per post per account. `draft_id` (the rows of one draft share it), `caption` (text), `media` (links into the organisation's storage, 0 to 10), `link` (a link to post with it, where the network shows one), `kind` (`post`, `reel`, `story`, `carousel`, or the network's own), `network`, `account` (the connection's name, as every step names a connection), `publish_at` (time, in the organisation's zone, `Africa/Lagos` unless set), `status` (`draft`, `scheduled`, `publishing`, `published`, `failed`, `cancelled`), `published_at`, `container_id` (Instagram's, for never twice, §6.3), `post_id` and `permalink` (from the network), `error` (the network's words), `source` (`chat`, `template:<id>`, `web`, `api`), `run_id`, `approved_by` (who said yes). Insights (§6.6) are their own columns filled later: `reach`, `likes`, `comments`, `saves`, `insights_at`. Stories are rows with `kind = story` and no insights.
 
 **The accounts are the connections.** A connected Page or Instagram account is a connection, and the connection already carries the Page id and name and the Instagram id and username; the Connections page and API list them. There is no table of accounts: the chat and the templates resolve "my Instagram" from the organisation's connections, as they resolve "my Paystack"; a workflow that needs the list reads it with `list_accounts` on the connector (§7.1). One source of truth, nothing kept in step with it.
 
-A post made from chat, from a template or on the web is the same row, and `posts` is an ordinary table: the person edits a row, and the publishing workflow writes its status through the ordinary data-tables connection, so the person's edits and Taskiem's updates share one row. Changing a row's `publish_at` or `caption` from chat ("move today's post to 7pm") is a table change after a yes, as R4 defines it; the scheduler reads the row when the time comes, so the change holds.
+A post made from chat, from a template or on the web is the same row, and `posts` is an ordinary table: the person edits a row, and the publishing workflow writes its status through the ordinary data-tables connection, so the person's edits and Taskiem's updates share one row. Changing a row's `publish_at` or `caption` from chat ("move today's post to 7pm") is a table change after a yes, as R4 defines it, applied to every row of the draft; the publishing run reads the row when the time comes, so the change holds. A row in `publishing` is not edited: the chat and the page say it is going out now.
 
 ### 6.2 Media
 
 A photo or video to post is held in the organisation's own storage (the same bucket as storefront photos and form files), under `social/`, cleaned of its metadata, counted against the organisation's storage. The network fetches it by a **signed link on the public host**, good for one hour, made at publish time; the link is never shown to the person and never reused. A photo sent in chat is written there as the draft is made, so nothing is held only in memory. A post's media are deleted when the row is deleted, and after `max_retention_days` for failed and cancelled posts.
 
-A video for Instagram or TikTok is checked for the network's limits (length, size, aspect) before the row is scheduled, with the network's words for what is wrong, so a 20-minute video is refused at the draft, not at six o'clock.
+A video for Instagram or TikTok is checked for the network's limits (length, size, aspect) before the row is scheduled, with the network's words for what is wrong, so a 20-minute video is refused at the draft, not at six o'clock. Photos from an iPhone on the web arrive as HEIC and are converted to JPEG on the way in (WhatsApp re-encodes before Taskiem sees a photo; Telegram sends the original); `engine/media` gains the decoder.
+
+The signed link is served by the public host, so the network must reach it: posting needs a public https host as the storefront does, and a staging or self-hosted installation behind a private address cannot publish media (the read-back says so at the draft).
 
 ### 6.3 Scheduling and publishing
 
-A scheduled post is a row with `publish_at`. One platform workflow per organisation, `social-publish`, made with the first table (as the storefront's order workflow is), runs on a minute schedule, takes rows due (`status = scheduled`, `publish_at <= now`, claimed with `SKIP LOCKED`), and for each runs the account's `publish` action. Taskiem does the holding, on every network alike, so a person sees one calendar and one set of words; Facebook's own scheduling, which Instagram and the others lack, is not used.
+A scheduled post is a row with `publish_at`, and a run waiting for it. The `posts` rows live in the organisation's data project, so nothing polls them: one platform workflow per organisation, `social-publish`, made with the table (as the storefront's order workflow is, and like it not counted against `max_workflows`), starts a run for each draft when it is scheduled, from the table's `row_changed` trigger. The run **waits** until `publish_at` on the engine's own timer, re-reads the row then, and publishes; a row moved to another time ends the waiting run and starts another (the same trigger); a cancelled row ends it. A sweep every hour catches a row whose run is missing (an edit made in Xenibase directly, a restore from a backup) and starts one. The claim is the row itself: the run sets `status = publishing` with a filter on `status = scheduled` and `max_affected: 1` through the data API, so two runs for one row cannot both go on. Taskiem does the holding, on every network alike, so a person sees one calendar and one set of words; Facebook's own scheduling, which Instagram and the others lack, is not used.
 
-`publish` is an **unsafe write**, as `send_message` is: Meta's publish takes no idempotency key. Instagram's two steps give one anyway: the container id is written to the row (`status = publishing`) before the publish call, and a retry with a container already published is read as done. Facebook's `/feed` returns the post id; a retry after an unknown outcome reads the Page's recent posts for one with the same message and media within the last minutes before posting again, and otherwise parks the row for a person, as other unsafe writes do. A post is never published twice.
+Everyone posts on the hour, and Meta's rate limit is per app, across every business. A run due at 18:00 publishes within the first minute, spread by a random few seconds, and a `429` or a `5xx` from the network backs off and retries for up to ten minutes before the row fails; the read-back always says "at 6pm" and never promises the second.
+
+`publish` is an **unsafe write**, as `send_message` is: Meta's publish takes no idempotency key. Instagram's two steps give one anyway: the container id is written to the row (`status = publishing`) before the publish call, and a retry with a container already published is read as done. Facebook's `/feed` returns the post id; a retry after an unknown outcome reads the Page's recent posts for one with the same message created within the last minutes (the media links are signed and differ per attempt, so the message and the time are the match) before posting again, and otherwise parks the row for a person, as other unsafe writes do. A post is never published twice.
 
 Meta's 25 posts a day per Instagram account, and each network's rate, are counted in the row's account; the 26th is kept for tomorrow with a message to the owner, not refused silently.
+
+**When it fails.** A publish that fails after its retries sets `status = failed` and `error` to the network's words, and tells the owner (and whoever scheduled it) on WhatsApp at once, with **Try again** and **Edit**; a run never fails silently into a table. **Before it fails.** The connection is checked when a draft is scheduled and again the day before it goes out (`get_page`, the connection's test): a Page token invalidated by a password change or the app's removal is found then, and the owner gets the reconnect link, not a failure at six o'clock. **Every publish is audited** (`social.publish`, with the row, the accounts and who said yes), as money actions are.
 
 ### 6.4 The chat
 
@@ -97,7 +104,7 @@ The chat is where most people will post from, and every command reads back exact
 
 | Said | What happens |
 | --- | --- |
-| A photo (or several, or a video) with a caption | A draft: the caption, the media, the accounts it will go to (every connected account unless named), and **Now**, **At a time**, **Keep as draft** |
+| "post" (or "post this", "share") with a photo, several, or a video, and a caption | A draft: the caption, the media, the accounts it will go to (the usual accounts unless named), the time in the organisation's zone, and **Now**, **At a time**, **Keep as draft**. A photo with a caption and no "post" keeps its meaning today (`add product Jollof rice 2000` makes a catalogue item); a photo with a caption that is neither asks once: **Add to your catalogue** or **Post it** |
 | "post this to Instagram and Facebook at 6pm" with a photo | A draft to those two accounts at 18:00 today (tomorrow if past), read back, **Yes** |
 | "post: We open 8am tomorrow" | A text post to the accounts that take text (Facebook, LinkedIn, X); Instagram is left out and the reply says so |
 | "write a caption for this" with a photo | An AI step drafts three captions in the organisation's voice (its name, what it sells, its last captions), the person picks one or writes their own; nothing is posted until the yes |
@@ -106,9 +113,13 @@ The chat is where most people will post from, and every command reads back exact
 | "move tonight's post to 7pm", "cancel Saturday's post" | A row change after a yes (R4) |
 | "how did yesterday's post do" | Insights for the row, if the network has them yet |
 | "connect my Instagram", "connect my Page" | The connect link (C2 of chat as the way in), and when the account is personal, the three steps to make it a Creator account, with Meta's own words |
+| "post to my Instagram" when two are connected | One question with the two names; a connection's name is the account's (the Page's name, the Instagram username) unless renamed |
+| "my usual accounts are Instagram and the Page" | Sets the organisation's usual accounts, the default for every post that names none (every connected account until set) |
 | "stop posting" | Every scheduled row cancelled, the publishing workflow paused; **start posting** resumes |
 
-Captions written in chat are posted as written: no hashtags added, no link shortened, no emoji changed. Nothing is ever posted without a yes, and the yes says where and when.
+Captions written in chat are posted as written: no hashtags added, no link shortened, no emoji changed. Nothing is ever posted without a yes, and the yes says where and when, in the organisation's zone. On Instagram a link in a caption is not clickable, and the read-back says so when a caption carries one: the order link goes in the Page's post and the LinkedIn post, and on Instagram the `social-comment-price-dm` template is the way to hand someone a link.
+
+**Who may post.** Two permissions, as storefronts have: `social.post` (make and schedule a draft on the usual accounts, see the calendar and insights) and `social.manage` (connect and name accounts, set the usual accounts, the policy below, delete on the network). Owners, admins and builders have both; a member with neither sees nothing of it, and a cashier cannot post on the business's account by sending a photo to the shared number. **The policy**: an organisation may require that a member's draft goes out only after an owner's or admin's yes, through the approval engine as every other approval, with the draft read back to the approver; the catalogue templates ask the owner each time by default (§11).
 
 ### 6.5 The web
 
@@ -116,7 +127,7 @@ The Tables page shows `posts` as any table. G4 adds a **Posts** page: a week cal
 
 ### 6.6 Insights
 
-A `get_insights` read on each connector (Instagram: `/{media-id}/insights`; Facebook: `/{post-id}/insights`; LinkedIn and TikTok where their APIs give them) fills the row's insight columns on a schedule (a day after publishing, then weekly for a month). A template (§9) tells the owner every Monday which posts did best. Insights are the network's numbers as it gives them, with the network's names; Taskiem adds no scores of its own.
+A `get_insights` read on each connector (Instagram: `/{media-id}/insights`; Facebook: `/{post-id}/insights`; LinkedIn and TikTok where their APIs give them) fills the row's insight columns on a schedule: once a day per account, for the posts of the last month, in one call per account where the API allows, so a thousand businesses' insights are a thousand calls a day, not a call per post per hour. A template (§9) tells the owner every Monday which posts did best. Insights are the network's numbers as it gives them, with the network's names; Taskiem adds no scores of its own.
 
 ### 6.7 Media processing
 
@@ -160,7 +171,7 @@ New actions on the existing connectors, on the existing Page token; the same con
 | `list_comments` | read | Comments on a post (sealed: names and text are personal) |
 | `reply_comment` | unsafe write | A reply to a comment, by the comment's id; Instagram also `hide_comment` |
 
-New trigger, both connectors, on the app webhook (routed by Page or Instagram account id as messages are): **`comments`**: a comment on a post (`comment_id`, `post_id`, `text`, `from_id`, sealed), for "reply in DM to everyone who commented PRICE" and for a workflow that assigns comments to a member. `from_id` and `text` reach an `ai` step only as placeholders unless let through, as messages do.
+New trigger, both connectors, on the app webhook (routed by Page or Instagram account id as messages are): **`comments`**: a comment on a post (`comment_id`, `post_id`, `text`, `from_id`, sealed), for "reply in DM to everyone who commented PRICE" and for a workflow that assigns comments to a member. `from_id` and `text` reach an `ai` step only as placeholders unless let through, as messages do. A comment is one event and one run, under the organisation's ingest limits as every trigger is; a post that goes viral queues its comments rather than dropping them, and a DM reply from a run is paced to Meta's messaging limits by the connector, so a hundred comments in a minute become a hundred DMs over the minutes that follow, each inside its own window.
 
 Permissions the Meta app asks for in the review, beside the four of K5: `pages_manage_posts`, `pages_read_engagement`, `pages_manage_engagement`, `instagram_content_publish`, `instagram_manage_comments`, `instagram_manage_insights`, `read_insights`. Each with a screencast of the use, from the real product.
 
@@ -180,14 +191,15 @@ Each milestone ships with its templates, its chat commands, its docs page, and w
 2. **Confirm every G0 line in §5** from the networks' current documentation and record it in the integration pages.
 3. **Register the LinkedIn, YouTube and TikTok apps and start their reviews**, so G5 is not waiting on them later: LinkedIn's Community Management API access, Google's OAuth verification of the YouTube app (its branding, privacy policy, scope justification and a demo video) with a quota increase asked for at the same time, TikTok's Content Posting audit. X's when its milestone is chosen.
 4. **Test accounts:** a Page and an Instagram Creator account for CI's recorded fixtures, beside K0's.
+5. **Testers.** Until Meta approves the review, only people with a role on the Meta app can connect, and Meta caps how many testers an app may have: the founders' and the pilots' accounts are added as testers for G1 and G2, and the cap is read in G0.
 
 **Done when:** the Meta review is submitted with posting in it; every G0 line has an answer.
 
 ### G1: Facebook and Instagram posting (M; needs the Meta app, not its review, on staging)
 
-The `posts` table; media in storage with signed public links; `media.fit` and the ffmpeg transcode step with its cover frame (§6.7); `publish`, `delete_post`, `get_post` on both Meta connectors; the `social-publish` platform workflow and the never-twice rule; the limit (§10); the first three templates (§9); the web's Tables view showing posts.
+The `posts` table; media in storage with signed public links; HEIC in; `media.fit` and the ffmpeg transcode step with its cover frame (§6.7); `list_accounts`, `publish`, `delete_post`, `get_post` on both Meta connectors; the `social-publish` platform workflow on the engine's timers, the claim, the spread and the backoff, and the never-twice rule (§6.3); the failure message and the connection check the day before; the two permissions and the policy (§6.4); the audit entry; the limit and what a held post does (§10); the first three templates (§9); the web's Tables view showing posts; the metrics (§14).
 
-**Done when:** a test Page and Instagram account take a photo post, a carousel, a Reel and a text post (Facebook) from a template on a schedule, each exactly once across a lost answer; a 3:2 phone photo is padded to 4:5 for Instagram and left as it is for Facebook, and the read-back shows both; a 3-minute 4K video becomes a Reel within Instagram's limits through the container step, and is refused with Instagram's words on a plan with no container minutes; a 26th Instagram post in a day waits for tomorrow with a message; the limit holds.
+**Done when:** a test Page and Instagram account take a photo post, a carousel, a Reel and a text post (Facebook) from a template on a schedule, each exactly once across a lost answer; a post moved to another time goes at the new time and not the old; an invalidated Page token is reported the day before with a reconnect link; a failed publish reaches the owner on WhatsApp with the network's words; a 3:2 phone photo is padded to 4:5 for Instagram and left as it is for Facebook, and the read-back shows both; a 3-minute 4K video becomes a Reel within Instagram's limits through the container step, and is refused with Instagram's words on a plan with no container minutes; a 26th Instagram post in a day waits for tomorrow with a message; the limit holds.
 
 ### G2: posting from chat (M; needs G1, chat as the way in C2)
 
@@ -234,7 +246,7 @@ In the library, offered by the chat and the Start page as the others are, each w
 
 ## 10. Limits and plans
 
-A new monthly limit, `social_posts_monthly`, counted at publish, per organisation across accounts: beyond it posts are held (status `scheduled`, with a message saying why) until the month turns or the plan changes; nothing is lost. Proposed in `deploy/plans.yaml`: Shop 60, Shop Plus 300, Starter Trader 100, Growing Business 500, Business 2,000, Enterprise 0 (no limit). AI captions and AI images spend `ai_monthly_tokens` as every AI step does. Video transcoding spends `container_minutes_monthly`; a plan with none is told so at the draft. Media counts against storage. The numbers are settled in G1 with the founders.
+A new monthly limit, `social_posts_monthly`, counted at publish, per organisation across accounts: beyond it a post is held (status `scheduled`, `error` saying why, a message to the owner) until the month turns or the plan changes; nothing is lost, and nothing stale goes out: a held post whose time is more than a day past when the hold lifts is not published but asked about, **Post it now**, **Pick a time** or **Cancel**, since a Friday offer posted three weeks late is worse than none. Proposed in `deploy/plans.yaml`: Shop 60, Shop Plus 300, Starter Trader 100, Growing Business 500, Business 2,000, Enterprise 0 (no limit). AI captions and AI images spend `ai_monthly_tokens` as every AI step does. Video transcoding spends `container_minutes_monthly`; a plan with none is told so at the draft. Media counts against storage. The numbers are settled in G1 with the founders.
 
 ## 11. Rules
 
@@ -244,6 +256,7 @@ A new monthly limit, `social_posts_monthly`, counted at publish, per organisatio
 - **The network's rules are Taskiem's.** Rates, media limits, the 24-hour messaging window for DMs from comments, and each network's content rules are enforced before a call is made, with the network's own words in the refusal.
 - **Personal data.** Commenters' names and text are sealed, reach an `ai` step as placeholders, and are deleted with the comment's row after `max_retention_days`. Nothing a commenter wrote is posted anywhere by Taskiem.
 - **Deleting.** Deleting a row that was published asks whether to delete the post on the network too; the connection's own uninstall at the network ends everything.
+- **Not in this plan.** Tagging products or people in a post (Instagram's product tagging needs a Meta commerce catalogue), collaborator posts, and cross-posting a Page's post to a group: each is its own permission and review, named here so nobody expects them in G1.
 
 ## 12. Adverts: what is different
 
@@ -273,7 +286,10 @@ An advert spends money from the person's ad account. So G6, when decided: every 
 | Processing | A 3:2 photo fits 4:5 and 1.91:1 by padding and by cropping with the right pixels; a video is transcoded within each network's limits and its cover frame taken, on the container worker with no egress; a video within the limits is byte-identical after; `media.text` places text where asked in the organisation's colour; the original is kept until publish |
 | Chat | Every command of §6.4 in the chat evaluation suite in five languages; nothing posts without the yes; a personal Instagram account gets the walk-through, not an error |
 | Moderation | A prohibited draft is refused; a suspended organisation posts nothing |
+| Scheduling | A scheduled row's run waits on the engine timer and publishes within the first minute; a moved row ends the old run and starts a new one; two runs for one row cannot both claim it; the hourly sweep starts a run for a row that has none |
+| Permissions | A member without `social.post` cannot draft from chat, the page or the API; the policy routes a member's draft to an owner's yes |
 | Templates | Workflow tests per template on fake Meta services |
+| Metrics | `taskiem_social_posts_total{network, outcome}` (published, failed, held, cancelled), publish latency from `publish_at`, and the count of rows waiting, on the operator dashboards |
 
 ## 15. Risks and open questions
 
@@ -288,4 +304,4 @@ An advert spends money from the person's ad account. So G6, when decided: every 
 | Video transcoding is slow and spends container minutes | Only videos outside the limits are transcoded; the step runs when the draft is made, not at publish time, so a six o'clock post is ready by six; plans without minutes are told at the draft |
 | Cost of X's API | Decided by the founders with the number in front of them; off by default |
 
-Open: whether a `posts` row for one draft on three accounts is three rows (proposed: yes, one per account, joined by `draft_id`, so each has its own status and insights) or one with three statuses; whether stories, which vanish in a day, belong in the same table (proposed: yes, `kind = story`, no insights); the plan numbers of §10.
+Settled in this revision: one draft to three accounts is three rows sharing a `draft_id`, each with its own status and insights, moved and cancelled together; stories are rows with `kind = story` and no insights. Open: the plan numbers of §10; whether a viral post's comment runs should be batched into one run per minute rather than one per comment (proposed: one per comment under the ingest limits, batching only if the first businesses hit them).
