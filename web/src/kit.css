@@ -189,7 +189,8 @@
 .tk-row { display: flex; align-items: center; gap: 14px; padding: 10px 8px; border-radius: 16px; color: var(--text); text-decoration: none; }
 .tk-row:hover, .tk-row:focus-visible { background: var(--tk-soft); text-decoration: none; }
 .tk-row-tile { flex: none; width: 52px; height: 52px; border-radius: 14px; background: var(--tk-lime-soft); color: var(--brand); display: grid; place-items: center; font-weight: 800; font-size: 16px; }
-:root[data-theme="dark"] .tk-row-tile { color: var(--brand-dark); }
+/* An icon tile turns lime in dark; a coloured name tile keeps its own ink. */
+:root[data-theme="dark"] .tk-row-tile:not([data-tone]) { color: var(--brand-dark); }
 .tk-row-words { flex: 1; min-width: 0; }
 .tk-row-name { display: block; font-weight: 600; font-size: 16px; overflow-wrap: anywhere; }
 .tk-row-sub { display: block; font-size: 14px; color: var(--muted); }
@@ -306,7 +307,7 @@ button.tk-cta:hover:not(:disabled) { background: var(--brand-hover); }
   :root[data-theme="system"] .tk-btn.soft, :root[data-theme="system"] .tk-btn.ghost { color: var(--text); }
   :root[data-theme="system"] .tk-empty-icon { color: var(--brand-dark); }
   :root[data-theme="system"] .tk-chips button[aria-pressed="true"] { background: var(--brand-dark); color: var(--brand-dark-text); }
-  :root[data-theme="system"] .tk-row-tile { color: var(--brand-dark); }
+  :root[data-theme="system"] .tk-row-tile:not([data-tone]) { color: var(--brand-dark); }
   :root[data-theme="system"] .tk-cta { background: var(--brand-dark); color: var(--brand-dark-text); }
   :root[data-theme="system"] button.tk-cta, :root[data-theme="system"] button.tk-cta:hover:not(:disabled), :root[data-theme="system"] button.tk-cta:disabled { background: var(--brand-dark); color: var(--brand-dark-text); }
 }

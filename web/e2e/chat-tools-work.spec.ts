@@ -350,3 +350,25 @@ test("a product's trade price list price and who it is shared with, saved from c
   // The product itself was not changed.
   expect(sent.filter((x) => x.path.includes("/v1/stock/items/"))).toEqual([]);
 });
+
+test("in dark, every product tile keeps its own initials' colour (the lime tile was blank)", async ({ browser }) => {
+  test.setTimeout(120_000);
+  const { owner, link } = await linked(browser, { width: 390, height: 844 });
+  // One name for each of the eight tile colours (lib/tone).
+  const names = ["Beans and plantain", "Afang soup and fufu", "Asun", "Banga soup and starch", "Chapman", "Puff puff", "Small chops", "Gala"];
+  await owner.route("**/v1/stock", (r) =>
+    r.fulfill(json({ keeps_stock: true, catalogue: "products", items: names.map((name, i) => ({ id: `t${i}`, name, available: true, stock: 9, unit: "plate", price_kobo: 300_000 })) })),
+  );
+  await owner.addInitScript(() => localStorage.setItem("taskiem-theme", "dark"));
+  await owner.goto(`/chat?with=${link}`);
+  await owner.getByTestId("chat-pane").getByRole("button", { name: "Open tools" }).click();
+  await owner.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Products/ }).click();
+  const tiles = owner.getByTestId("tool-sheet").locator(".tk-row-tile[data-tone]");
+  await expect(tiles).toHaveCount(8);
+  const seen = await tiles.evaluateAll((els) =>
+    els.map((el) => ({ tone: el.getAttribute("data-tone"), ink: getComputedStyle(el).color, ground: getComputedStyle(el).backgroundColor })),
+  );
+  expect(new Set(seen.map((s) => s.tone)).size).toBe(8);
+  for (const s of seen) expect(s.ink, `${s.tone} tile's initials`).not.toBe(s.ground);
+  await axeBoth(owner, "product tiles in every colour");
+});
