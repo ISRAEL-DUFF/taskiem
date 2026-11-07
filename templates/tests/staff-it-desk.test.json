@@ -1,0 +1,354 @@
+{
+  "schema": "wd-test/v1",
+  "template": "staff-it-desk",
+  "params": {},
+  "cases": [
+    {
+      "name": "a member's request opens a ticket for IT, and they are told its number as a member",
+      "trigger": {
+        "body": {
+          "subject": "Locked out of my email",
+          "message": "I typed the wrong password too many times.",
+          "requester": "Bola Ade",
+          "requester_email": "bola@adacakes.ng"
+        },
+        "form": {
+          "submission_id": "00000000-0000-7000-8000-000000000001",
+          "reference": "F-1",
+          "submitted_at": "2026-11-07T10:00:00Z",
+          "respondent": {
+            "kind": "member",
+            "member_id": "00000000-0000-7000-8000-000000000002"
+          },
+          "channel": "direct",
+          "consents": []
+        }
+      },
+      "mocks": {
+        "open__ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 42
+              }
+            ]
+          }
+        },
+        "open__number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_email": {
+          "output": {
+            "message_id": "x"
+          }
+        },
+        "open__ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "open__ack_noted": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_told": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "thanks": {
+          "output": {
+            "reference": "F-1",
+            "message": "ok"
+          }
+        },
+        "open__route__classify": {
+          "output": {
+            "department": "Accounts and access",
+            "priority": "high",
+            "summary": "Locked out of email"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "open__ticket": {
+            "row": {
+              "channel": "staff",
+              "mail": "member",
+              "customer_name": "Bola Ade",
+              "customer_email": "bola@adacakes.ng",
+              "customer_phone": "",
+              "department": "Accounts and access",
+              "role": "it",
+              "priority": "high"
+            }
+          },
+          "open__tell": {
+            "to": "role",
+            "role": "it"
+          },
+          "open__ack_member": {
+            "to": "members",
+            "members": [
+              "bola@adacakes.ng"
+            ],
+            "message": "Thank you. IT has your request and will get back to you.\n\nYour ticket is T-1042."
+          },
+          "thanks": {
+            "message": "Thank you. Your request is T-1042, with Accounts and access."
+          }
+        },
+        "steps": {
+          "open__ack_message": "not_run",
+          "open__ack_email": "not_run"
+        }
+      }
+    },
+    {
+      "name": "by rules, the request's words pick its kind",
+      "params": {
+        "routing": "rules"
+      },
+      "trigger": {
+        "body": {
+          "subject": "Printer jammed",
+          "message": "The printer on floor 2 is jammed.",
+          "requester": "Bola Ade",
+          "requester_email": "bola@adacakes.ng"
+        },
+        "form": {
+          "submission_id": "00000000-0000-7000-8000-000000000001",
+          "reference": "F-1",
+          "submitted_at": "2026-11-07T10:00:00Z",
+          "respondent": {
+            "kind": "member",
+            "member_id": "00000000-0000-7000-8000-000000000002"
+          },
+          "channel": "direct",
+          "consents": []
+        }
+      },
+      "mocks": {
+        "open__ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 43
+              }
+            ]
+          }
+        },
+        "open__number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_email": {
+          "output": {
+            "message_id": "x"
+          }
+        },
+        "open__ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "open__ack_noted": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_told": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "thanks": {
+          "output": {
+            "reference": "F-1",
+            "message": "ok"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "open__ticket": {
+            "row": {
+              "department": "Hardware",
+              "priority": "normal"
+            }
+          }
+        },
+        "steps": {
+          "open__route__classify": "not_run"
+        }
+      }
+    },
+    {
+      "name": "chosen: the member's kind is used, and one that is not on the list goes to Other",
+      "params": {
+        "routing": "chosen"
+      },
+      "trigger": {
+        "body": {
+          "subject": "Locked out of my email",
+          "message": "I typed the wrong password too many times.",
+          "requester": "Bola Ade",
+          "requester_email": "bola@adacakes.ng",
+          "department": "Printers"
+        },
+        "form": {
+          "submission_id": "00000000-0000-7000-8000-000000000001",
+          "reference": "F-1",
+          "submitted_at": "2026-11-07T10:00:00Z",
+          "respondent": {
+            "kind": "member",
+            "member_id": "00000000-0000-7000-8000-000000000002"
+          },
+          "channel": "direct",
+          "consents": []
+        }
+      },
+      "mocks": {
+        "open__ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 44
+              }
+            ]
+          }
+        },
+        "open__number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_email": {
+          "output": {
+            "message_id": "x"
+          }
+        },
+        "open__ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "open__ack_noted": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_told": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "thanks": {
+          "output": {
+            "reference": "F-1",
+            "message": "ok"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "open__ticket": {
+            "row": {
+              "department": "Other",
+              "role": "it"
+            }
+          },
+          "thanks": {
+            "message": "Thank you. Your request is T-1044, with Other."
+          }
+        }
+      }
+    }
+  ]
+}
