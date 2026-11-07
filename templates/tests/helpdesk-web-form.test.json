@@ -1,0 +1,595 @@
+{
+  "schema": "wd-test/v1",
+  "template": "helpdesk-web-form",
+  "params": {},
+  "cases": [
+    {
+      "name": "a message opens a ticket, the customer is emailed from the helpdesk address and sees their number",
+      "params": {
+        "helpdesk_address": "k3x9q2m7a1bz@in.taskiem.app"
+      },
+      "trigger": {
+        "body": {
+          "name": "Ada Obi",
+          "subject": "Charged twice",
+          "message": "I was charged twice for order 42."
+        },
+        "form": {
+          "submission_id": "00000000-0000-7000-8000-000000000001",
+          "reference": "F-1",
+          "submitted_at": "2026-11-07T10:00:00Z",
+          "respondent": {
+            "kind": "verified",
+            "email": "ada@example.com"
+          },
+          "channel": "direct",
+          "consents": []
+        }
+      },
+      "mocks": {
+        "open__ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 42
+              }
+            ]
+          }
+        },
+        "open__number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_email": {
+          "output": {
+            "message_id": "tk-1@in.taskiem.app"
+          }
+        },
+        "open__ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "open__ack_noted": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_told": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "thanks": {
+          "output": {
+            "reference": "F-1",
+            "message": "ok"
+          }
+        },
+        "open__route__classify": {
+          "output": {
+            "department": "Billing",
+            "priority": "high",
+            "summary": "Charged twice"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "open__ticket": {
+            "row": {
+              "channel": "form",
+              "subject": "Charged twice",
+              "customer_name": "Ada Obi",
+              "customer_email": "ada@example.com",
+              "customer_phone": "",
+              "department": "Billing",
+              "priority": "high",
+              "mail": "taskiem",
+              "mailbox": "k3x9q2m7a1bz@in.taskiem.app",
+              "last_customer_at": "2026-11-07T10:00:00Z"
+            }
+          },
+          "open__ack_email": {
+            "to": "ada@example.com",
+            "subject": "Charged twice",
+            "thread": "T-1042",
+            "address": "k3x9q2m7a1bz@in.taskiem.app"
+          },
+          "open__tell": {
+            "role": "accounts"
+          },
+          "thanks": {
+            "message": "Thank you. Your ticket number is T-1042. We have sent it to you too, and will answer you there."
+          }
+        },
+        "steps": {
+          "open__ack_message": "not_run",
+          "open__ack_queued": "not_run",
+          "open__ack_member": "not_run"
+        }
+      }
+    },
+    {
+      "name": "without a helpdesk address the customer is answered on their phone",
+      "trigger": {
+        "body": {
+          "name": "Bola",
+          "phone": "08030000001",
+          "subject": "Late delivery",
+          "message": "My order has not come."
+        },
+        "form": {
+          "submission_id": "00000000-0000-7000-8000-000000000001",
+          "reference": "F-1",
+          "submitted_at": "2026-11-07T10:00:00Z",
+          "respondent": {
+            "kind": "verified",
+            "email": "bola@example.com"
+          },
+          "channel": "direct",
+          "consents": []
+        }
+      },
+      "mocks": {
+        "open__ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 43
+              }
+            ]
+          }
+        },
+        "open__number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_email": {
+          "output": {
+            "message_id": "tk-1@in.taskiem.app"
+          }
+        },
+        "open__ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "open__ack_noted": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_told": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "thanks": {
+          "output": {
+            "reference": "F-1",
+            "message": "ok"
+          }
+        },
+        "open__route__classify": {
+          "output": {
+            "department": "Billing",
+            "priority": "high",
+            "summary": "Charged twice"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "open__ticket": {
+            "row": {
+              "customer_phone": "08030000001",
+              "customer_email": "bola@example.com",
+              "mailbox": ""
+            }
+          },
+          "open__ack_message": {
+            "phone": "08030000001",
+            "email": "bola@example.com",
+            "about": "your ticket T-1043"
+          },
+          "thanks": {
+            "message": "Thank you. Your ticket number is T-1043. We have sent it to you too, and will answer you there."
+          }
+        },
+        "steps": {
+          "open__ack_email": "not_run",
+          "open__ack_queued": "not_run"
+        }
+      },
+      "params": {
+        "helpdesk_address": ""
+      }
+    },
+    {
+      "name": "routing chosen: the customer's department is used, and nothing goes to the AI",
+      "params": {
+        "routing": "chosen"
+      },
+      "trigger": {
+        "body": {
+          "name": "Ada Obi",
+          "subject": "Rider was rude",
+          "message": "The rider shouted at me.",
+          "department": "delivery"
+        },
+        "form": {
+          "submission_id": "00000000-0000-7000-8000-000000000001",
+          "reference": "F-1",
+          "submitted_at": "2026-11-07T10:00:00Z",
+          "respondent": {
+            "kind": "verified",
+            "email": "ada@example.com"
+          },
+          "channel": "direct",
+          "consents": []
+        }
+      },
+      "mocks": {
+        "open__ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 44
+              }
+            ]
+          }
+        },
+        "open__number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_email": {
+          "output": {
+            "message_id": "tk-1@in.taskiem.app"
+          }
+        },
+        "open__ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "open__ack_noted": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_told": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "thanks": {
+          "output": {
+            "reference": "F-1",
+            "message": "ok"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "open__ticket": {
+            "row": {
+              "department": "Delivery",
+              "role": "dispatch",
+              "priority": "normal"
+            }
+          },
+          "open__tell": {
+            "role": "dispatch"
+          }
+        },
+        "steps": {
+          "open__route__classify": "not_run"
+        }
+      }
+    },
+    {
+      "name": "routing chosen: a department that is not one of yours gives the default one",
+      "params": {
+        "routing": "chosen"
+      },
+      "trigger": {
+        "body": {
+          "name": "Ada Obi",
+          "subject": "Question",
+          "message": "Do you sell gift cards?",
+          "department": "Sales"
+        },
+        "form": {
+          "submission_id": "00000000-0000-7000-8000-000000000001",
+          "reference": "F-1",
+          "submitted_at": "2026-11-07T10:00:00Z",
+          "respondent": {
+            "kind": "verified",
+            "email": "ada@example.com"
+          },
+          "channel": "direct",
+          "consents": []
+        }
+      },
+      "mocks": {
+        "open__ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 45
+              }
+            ]
+          }
+        },
+        "open__number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_email": {
+          "output": {
+            "message_id": "tk-1@in.taskiem.app"
+          }
+        },
+        "open__ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "open__ack_noted": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_told": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "thanks": {
+          "output": {
+            "reference": "F-1",
+            "message": "ok"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "open__ticket": {
+            "row": {
+              "department": "General",
+              "role": "support"
+            }
+          },
+          "open__tell": {
+            "role": "support"
+          }
+        }
+      }
+    },
+    {
+      "name": "no checked email and no phone: still a ticket, and the page gives the number",
+      "trigger": {
+        "body": {
+          "name": "Ada Obi",
+          "subject": "Question",
+          "message": "Are you open on Sunday?"
+        },
+        "form": {
+          "submission_id": "00000000-0000-7000-8000-000000000001",
+          "reference": "F-1",
+          "submitted_at": "2026-11-07T10:00:00Z",
+          "respondent": {
+            "kind": "verified"
+          },
+          "channel": "direct",
+          "consents": []
+        }
+      },
+      "mocks": {
+        "open__ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 46
+              }
+            ]
+          }
+        },
+        "open__number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_email": {
+          "output": {
+            "message_id": "tk-1@in.taskiem.app"
+          }
+        },
+        "open__ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "open__ack_noted": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_told": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "thanks": {
+          "output": {
+            "reference": "F-1",
+            "message": "ok"
+          }
+        },
+        "open__route__classify": {
+          "output": {
+            "department": "Billing",
+            "priority": "high",
+            "summary": "Charged twice"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "thanks": {
+            "message": "Thank you. Your ticket number is T-1046."
+          }
+        },
+        "steps": {
+          "open__ack_email": "not_run",
+          "open__ack_message": "not_run",
+          "open__ack_queued": "not_run"
+        }
+      },
+      "params": {
+        "helpdesk_address": ""
+      }
+    }
+  ]
+}
