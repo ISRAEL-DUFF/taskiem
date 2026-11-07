@@ -848,6 +848,10 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 		e.messages = &sender.Queue{Vault: vault, HashKey: cfg.Messages.HashKey, Countries: cfg.Messages.Countries, Allowance: e.smsAllowance}
 		e.reach = &reach.Book{Pool: pool, Vault: vault, HashKey: cfg.Messages.HashKey, Countries: cfg.Messages.Countries}
 		n.Messages, n.Reach = e.messages, e.reach
+		if e.email != nil {
+			// Email in a thread (email@1 send_in_thread) goes the same way.
+			e.email.Messages = e.messages
+		}
 	}
 	tell.Set(n)
 	// Riders (dispatch D1): people outside the business, reached as its

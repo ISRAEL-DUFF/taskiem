@@ -29,3 +29,45 @@ actions:
         name:       { type: string }
         type:       { type: string }
         size:       { type: integer }
+  send_in_thread:
+    title: Email a customer in a conversation
+    description: >-
+      An email to a customer about one ticket or conversation (thread, such
+      as T-1042), from Taskiem's sending address in the business's name.
+      Replies come back to this workflow's own address with the thread's
+      reply tag and wake the run waiting on email.reply for that thread
+      (docs/email.md#threads); mail apps keep the conversation together
+      (Reply-To, Message-ID, In-Reply-To, References, and [#T-1042] in the
+      subject once). Needs the workflow's email trigger with threads on.
+      Counted and limited per recipient like every email Taskiem sends.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [to, subject, message, thread]
+      properties:
+        to:          { type: string, description: "The customer's email address (trigger.body.from.address)" }
+        subject:     { type: string, minLength: 1, maxLength: 180, description: "The subject; [#<thread>] is put before it unless it carries it already" }
+        message:     { type: string, minLength: 1, maxLength: 20000, description: The email, in plain text }
+        thread:      { type: string, minLength: 1, maxLength: 24, description: "The ticket key (T-1042): letters, digits and single hyphens" }
+        in_reply_to: { type: string, description: "The customer's message this answers (trigger.body.message_id); default: the last email sent in the thread" }
+        references:  { type: array, maxItems: 20, items: { type: string }, description: "The thread's earlier Message-IDs (trigger.body.references)" }
+    output:
+      type: object
+      properties:
+        message_id:  { type: string, description: "The Message-ID it is sent with, without brackets: the same on a retry" }
+        thread:      { type: string, description: "The ticket key, in capitals: the email.reply signal's correlation" }
+        reply_to:    { type: string, description: The thread's reply address }
+        subject:     { type: string }
+        in_reply_to: { type: string }
+        references:  { type: array, items: { type: string } }
+    pii:
+      - { field: input.to, category: email }
+      - { field: input.subject, category: other }
+      - { field: input.message, category: other }
+      - { field: output.subject, category: other }

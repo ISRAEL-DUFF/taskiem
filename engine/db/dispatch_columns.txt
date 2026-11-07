@@ -382,6 +382,7 @@ email_endpoints.created_at
 email_endpoints.environment
 email_endpoints.id
 email_endpoints.public_id
+email_endpoints.reply_key
 email_endpoints.status
 email_endpoints.tenant_id
 email_endpoints.updated_at
