@@ -138,8 +138,14 @@ test("the chat shows a linked business by its profile name and logo; the links l
   const row2 = buyer
     .getByTestId("link-linked")
     .filter({ hasText: profileName });
-  await expect(row2.locator(".chat-avatar")).toHaveText(
-    profileName.charAt(0).toUpperCase(),
+  // Its initials: the first letters of its first two words.
+  await expect(row2.locator(".chat-avatar")).toHaveAttribute(
+    "data-initials",
+    profileName
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((w) => w.charAt(0).toUpperCase())
+      .join(""),
   );
   await expect(row2.locator("img.chat-avatar")).toHaveCount(0);
 });

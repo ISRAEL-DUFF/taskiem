@@ -209,10 +209,22 @@ func (s *Server) sendInvoice(w http.ResponseWriter, r *http.Request) {
 	if key == "" {
 		key = "api:" + uuid.NewString()
 	}
+	// Sent before: this send is a reminder (the diary says which).
+	var again bool
+	_ = s.tx(r, func(tx pgx.Tx) error {
+		cur, err := s.Invoices.Get(r.Context(), tx, p.TenantID, chi.URLParam(r, "id"))
+		again = err == nil && cur.SentAt != nil
+		return nil
+	})
 	out, err := s.Invoices.Send(r.Context(), p.TenantID, chi.URLParam(r, "id"), p.Actor(), key)
 	if err != nil {
 		s.fail(w, r, invoiceErr(err))
 		return
+	}
+	if again {
+		s.diaryChange(r.Context(), p, "Sent a reminder for invoice "+out.Invoice.Number)
+	} else {
+		s.diaryChange(r.Context(), p, "Sent invoice "+out.Invoice.Number)
 	}
 	maskInvoice(&out.Invoice)
 	writeJSON(w, http.StatusOK, out)

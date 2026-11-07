@@ -603,7 +603,13 @@ func TestLifecycle(t *testing.T) {
 	if len(inv) != 2 || inv[0].Kind != "renewal" || inv[0].Status != "paid" || inv[1].Status != "paid" {
 		t.Fatalf("renewal invoice: %+v", inv)
 	}
-	if !strings.HasSuffix(inv[1].Number, "-000001") || !strings.HasSuffix(inv[0].Number, "-000002") {
+	// Numbers run per year (TKM-2026-000001): a renewal that falls in the
+	// next year starts it again, as the test's clock (today's date) may.
+	want := "-000002"
+	if inv[0].Number[:8] != inv[1].Number[:8] {
+		want = "-000001"
+	}
+	if !strings.HasSuffix(inv[1].Number, "-000001") || !strings.HasSuffix(inv[0].Number, want) {
 		t.Fatalf("numbering: %s %s", inv[1].Number, inv[0].Number)
 	}
 

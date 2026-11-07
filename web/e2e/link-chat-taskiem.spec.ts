@@ -235,7 +235,7 @@ test("the composer is the business chat's: a draft kept, emoji, a photo (no docu
   await expect(pane(page).getByTestId("emoji-panel")).toHaveCount(0);
   await expect(page).toHaveURL(/with=taskiem/);
   await pane(page).getByTestId("attach").click();
-  await expect(pane(page).getByRole("button", { name: "Photo" })).toBeVisible();
+  await expect(pane(page).getByRole("button", { name: "Photo", exact: true })).toBeVisible();
   await expect(
     pane(page).getByRole("button", { name: "Document" }),
   ).toHaveCount(0);

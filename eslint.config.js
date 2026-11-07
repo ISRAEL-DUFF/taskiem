@@ -4,7 +4,7 @@ import tseslint from "typescript-eslint";
 export default tseslint.config(
   // .claude/ holds agent worktrees (other checkouts of this repository);
   // site/ is the built docs site (make docs).
-  { ignores: ["**/dist/**", "**/node_modules/**", "web/test-results/**", "web/playwright-report/**", ".claude/**", "site/**"] },
+  { ignores: ["**/dist/**", "**/node_modules/**", "web/test-results/**", "web/playwright-report/**", ".claude/**", "site/**", "web/e2e/demo/**"] },
   js.configs.recommended,
   ...tseslint.configs.strict,
   // Plain scripts the public host serves to browsers (docs/public-host.md).

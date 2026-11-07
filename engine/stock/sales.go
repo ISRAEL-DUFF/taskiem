@@ -66,6 +66,8 @@ type SaleIn struct {
 
 // CounterSale is a recorded sale.
 type CounterSale struct {
+	// Replayed: the key named a sale recorded before, answered again.
+	Replayed   bool       `json:"-"`
 	ID         uuid.UUID  `json:"id"`
 	Reference  string     `json:"reference"`
 	Lines      []SaleLine `json:"lines"`
@@ -296,6 +298,7 @@ func (s *Stock) RecordSale(ctx context.Context, tenant uuid.UUID, in SaleIn, log
 		return CounterSale{}, err
 	}
 	if !fresh {
+		x.Replayed = true
 		return s.withShort(ctx, tenant, x)
 	}
 	for _, id := range moves {

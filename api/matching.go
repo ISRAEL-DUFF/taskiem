@@ -316,6 +316,11 @@ func (s *Server) matchEntry(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, invoiceErr(err))
 		return
 	}
+	if req.Order != "" {
+		s.diaryChange(r.Context(), p, "Matched a payment to order "+req.Order)
+	} else {
+		s.diaryChange(r.Context(), p, "Matched a payment to invoice "+req.Invoice)
+	}
 	s.writeMatched(w, r, x)
 }
 

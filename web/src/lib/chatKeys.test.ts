@@ -8,9 +8,10 @@ describe("shortcutOf", () => {
     expect(shortcutOf({ key: "j" }, false)).toBe("next");
     expect(shortcutOf({ key: "k" }, false)).toBe("previous");
     expect(shortcutOf({ key: "?" }, false)).toBe("help");
+    expect(shortcutOf({ key: "@" }, false)).toBe("tag");
   });
   it("is silent while typing", () => {
-    for (const k of ["/", "n", "j", "k", "?"])
+    for (const k of ["/", "n", "j", "k", "?", "@"])
       expect(shortcutOf({ key: k }, true)).toBeUndefined();
   });
   it("leaves the browser's own shortcuts alone", () => {

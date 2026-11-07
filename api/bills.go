@@ -444,11 +444,7 @@ func (s *Server) tellHoldersSent(ctx context.Context, tenant uuid.UUID, perms []
 	buttons func(lang.Tag) []whatsapp.Button, sent func(channel, addr, id string)) {
 	var to []linkTold
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT DISTINCT user_id FROM memberships WHERE role = ANY ($1)`, holdingAll(perms...))
-		if err != nil {
-			return err
-		}
-		users, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+		users, err := holdersTx(ctx, tx, perms...)
 		if err != nil {
 			return err
 		}
@@ -517,18 +513,63 @@ func (s *Server) tellNotice(ctx context.Context, tenant, from uuid.UUID, n links
 	})
 }
 
-// holdingAll are the built-in roles holding every one of perms.
+// holdersTx are the people of the business in scope whose role holds every
+// one of perms ("a|b": either): a built-in role, or the business's own
+// role (which wins over a built-in one of the same name, as loadRoles).
+func holdersTx(ctx context.Context, tx pgx.Tx, perms ...string) ([]uuid.UUID, error) {
+	args := []any{holdingAll(perms...)}
+	custom := []string{"true"}
+	for _, p := range perms {
+		args = append(args, strings.Split(p, "|"))
+		custom = append(custom, fmt.Sprintf("r.permissions && $%d::text[]", len(args)))
+	}
+	rows, err := tx.Query(ctx, `SELECT DISTINCT m.user_id FROM memberships m
+		LEFT JOIN roles r ON r.tenant_id = m.tenant_id AND r.name = m.role
+		WHERE (r.name IS NULL AND m.role = ANY ($1)) OR (r.name IS NOT NULL AND `+strings.Join(custom, " AND ")+`)`, args...)
+	if err != nil {
+		return nil, err
+	}
+	users, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return nil, err
+	}
+	// Someone told of their own doing is told nothing (a handover).
+	if except, ok := ctx.Value(exceptUserKey{}).(uuid.UUID); ok {
+		users = slices.DeleteFunc(users, func(u uuid.UUID) bool { return u == except })
+	}
+	return users, nil
+}
+
+// exceptUserKey leaves a person out of those told (withoutUser).
+type exceptUserKey struct{}
+
+// withoutUser is ctx telling everyone but user.
+func withoutUser(ctx context.Context, user uuid.UUID) context.Context {
+	return context.WithValue(ctx, exceptUserKey{}, user)
+}
+
+// holdingAll are the built-in roles holding every one of perms ("a|b":
+// either of them).
 func holdingAll(perms ...string) []string {
+	has := func(r, perm string) bool {
+		for _, p := range strings.Split(perm, "|") {
+			if slices.Contains(access.Roles[r], p) {
+				return true
+			}
+		}
+		return false
+	}
 	var out []string
-	for _, r := range access.Holding(perms[0]) {
+	for _, r := range access.BuiltinNames() {
 		ok := true
-		for _, p := range perms[1:] {
-			ok = ok && slices.Contains(access.Roles[r], p)
+		for _, p := range perms {
+			ok = ok && has(r, p)
 		}
 		if ok {
 			out = append(out, r)
 		}
 	}
+	slices.Sort(out)
 	return out
 }
 
@@ -776,14 +817,17 @@ func (s *Server) payBill(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	p := principalFrom(r.Context())
+	var bill links.Bill
 	pay, err := s.startBillPay(r.Context(), p.TenantID, chi.URLParam(r, "id"), in.AmountKobo, p.ActorType()+":"+p.Actor(), p.Actor(),
 		func(tx pgx.Tx, b links.Bill, pay links.BillPayment) error {
+			bill = b
 			return auditTx(r, tx, "bill.pay", b.Reference, map[string]any{"amount_kobo": pay.AmountKobo, "payment": pay.ID})
 		})
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
+	s.diaryChange(r.Context(), p, buyerStepWords("pay", bill.Reference, bill.SupplierName, pay.AmountKobo))
 	writeJSON(w, http.StatusAccepted, billPayOut{Payment: pay, RunID: *pay.RunID})
 }
 
@@ -965,6 +1009,7 @@ func (s *Server) declareBillPaid(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.tellNotice(r.Context(), seller, p.TenantID, n, "/invoices/"+b.Reference)
+	s.diaryChange(r.Context(), p, buyerStepWords("declare", b.Reference, b.SupplierName, in.AmountKobo))
 	writeJSON(w, http.StatusOK, b)
 }
 
@@ -997,6 +1042,7 @@ func (s *Server) queryBill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.tellNotice(r.Context(), seller, p.TenantID, n, "/invoices/"+b.Reference)
+	s.diaryChange(r.Context(), p, buyerStepWords("query", b.Reference, b.SupplierName, 0))
 	writeJSON(w, http.StatusOK, b)
 }
 

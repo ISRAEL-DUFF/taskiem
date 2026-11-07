@@ -1,16 +1,34 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { TOOLS, type ToolKey } from "../lib/tools";
+import { DiaryLine } from "../kit";
+import { useChatTools } from "../lib/useChatTools";
 import { useThread } from "../lib/useThread";
 import { ThreadJump } from "./ThreadParts";
 import { ChatStream } from "./ChatStream";
 import { ChatHead } from "./ChatHead";
 import { ReadMore, useFold } from "./ReadMore";
 import { ComposerView, TASKIEM_FILES, useComposer } from "./ChatComposer";
+import { AlertCards, useChatAlerts } from "./ChatAlerts";
+import { BriefingCard, ChartCard } from "./ChatStaff";
+import { useAuth } from "../auth";
+import type { SalesChart } from "../lib/staff";
+
+/** A chart message's numbers, or undefined when they cannot be read. */
+function parseChart(text: string): SalesChart | undefined {
+  try {
+    const v = JSON.parse(text) as SalesChart;
+    return Array.isArray(v.bars) ? v : undefined;
+  } catch {
+    return undefined;
+  }
+}
 import { BubbleShell, CopyItem, Ticks } from "./BubbleShell";
 import { useChatLive } from "./ChatLive";
 import { get, post, upload } from "../api";
 import type { Conversation } from "../lib/linkchat";
 import { priceWords, type SupplierPrices } from "../lib/pricelists";
-import { Icon } from "../icons";
+import { Icon, TaskiemMark } from "../icons";
 import { clock } from "../lib/linkchat";
 import {
   boldParts,
@@ -92,10 +110,25 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
     [],
   );
   const act = useAction();
+  const chatTools = useChatTools();
+  const { can, me } = useAuth();
+  // Alerts you can act on, as cards at the end (chat-tools.md §6).
+  const alerts = useChatAlerts(!!chatTools);
+  const afterDiary = useRef<() => void>(() => undefined);
   const localN = useRef(0);
   const c = useComposer<never>({
     draftKey: "taskiem",
     rules: TASKIEM_FILES,
+    tools: chatTools,
+    // With chat tools, "@" tags things and businesses in groups, and finds
+    // businesses not yet linked (their card, with Connect); Taskiem is
+    // who is being talked to, so it is not offered.
+    grouped: chatTools ? { taskiem: false } : undefined,
+    placeholder: chatTools ? "Ask Taskiem, or @ to tag" : undefined,
+    diaryWhere: "taskiem",
+    // A tool saved: the server's diary line is pulled in.
+    // A tool saved a change: its diary line, and the cards it settles.
+    onDiary: () => (afterDiary.current(), alerts.reload()),
     sources: {
       "@": (convs.data ?? [])
         .filter((x) => x.state === "active")
@@ -145,6 +178,25 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
     if (after && out.messages.length >= 200 && newest)
       await pull(newest.created_at);
   }, []);
+  afterDiary.current = () => void pull(messages?.[messages.length - 1]?.created_at).catch(setError);
+  // A link from the chat apps ("tools", a typed request) opens its tool,
+  // at its form, filled in (chat_tool_requests.go); the link's words go.
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    const tool = params.get("tool") as ToolKey | null;
+    if (!chatTools || !tool || !TOOLS.some((t) => t.key === tool)) return;
+    const num = (k: string) => {
+      const v = params.get(k);
+      return v && /^\d+$/.test(v) ? Number(v) : undefined;
+    };
+    c.openTool(tool, undefined, {
+      rowId: params.get("row") ?? undefined,
+      add: params.get("add") === "1",
+      prefill: { priceKobo: num("price"), count: num("count"), name: params.get("name") ?? undefined, minutes: num("minutes") },
+    });
+    setParams({ with: "taskiem" }, { replace: true });
+    // Once, when the switch is known.
+  }, [chatTools]);
   // The newest page: the view is placed at its end.
   useEffect(() => {
     get<{ messages: TaskiemMessage[] }>("/v1/taskiem-chat")
@@ -333,8 +385,8 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
         onBack={onBack}
         menuLabel="More about this conversation"
         avatar={
-          <span className="chat-avatar" aria-hidden="true">
-            T
+          <span className="chat-avatar accent" aria-hidden="true">
+            <TaskiemMark />
           </span>
         }
         title="Taskiem"
@@ -344,7 +396,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
               typing…
             </span>
           ) : (
-            "Your assistant, as on your phone"
+            (me?.tenant_name ?? "Your assistant")
           )
         }
       />
@@ -365,6 +417,31 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
           </>
         }
         render={(m, { first }) => {
+          // "How did we do?" answered: its chart, as a card.
+          if (m.kind === "chart") {
+            const chart = parseChart(m.text);
+            if (chart)
+              return (
+                <div className="tk-chart-row" data-msg={m.id}>
+                  <ChartCard chart={chart} />
+                </div>
+              );
+          }
+          // A change made with a chat tool: a line, not a bubble.
+          if (m.kind === "diary")
+            return (
+              <DiaryLine
+                msg={m.id}
+                fresh={Date.now() - Date.parse(m.created_at) < 60_000}
+                when={
+                  <time dateTime={m.created_at} title={fmtTime(m.created_at)}>
+                    You, {clock(m.created_at)}
+                  </time>
+                }
+              >
+                {m.text}
+              </DiaryLine>
+            );
           const choice = pressed.get(m.id);
           const pressable = m.id === pressableId;
           // The time sits in the corner of the last line when there are no
@@ -455,6 +532,21 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
         overlay={
           thread.away ? (
             <ThreadJump count={thread.newCount} onClick={thread.toBottom} />
+          ) : undefined
+        }
+        tail={
+          chatTools ? (
+            <>
+              {(can("storefront.manage") || can("invoice.manage")) && (
+                <BriefingCard openTool={c.openTool} onAsk={(text) => say({ text })} />
+              )}
+              <AlertCards
+              alerts={alerts.list}
+              onReload={alerts.reload}
+              onDiary={() => afterDiary.current()}
+              openTool={c.openTool}
+              />
+            </>
           ) : undefined
         }
       />

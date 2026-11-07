@@ -13,6 +13,8 @@ export interface ExploreCard {
   logo: boolean;
   /** How many photos it shows, at most eight. */
   photos: number;
+  /** Its photos' words, in order ("" for none). */
+  captions?: string[];
   state: LinkState | "none";
   /** Changes when its logo or photos do (keys the pictures' cache). */
   v?: string;
@@ -24,6 +26,8 @@ export interface ExploreResult {
   near_more: boolean;
   fresh: ExploreCard[];
   more: boolean;
+  /** Our own area, as near you reads it. */
+  area?: string;
   blind?: BlindOffer;
 }
 

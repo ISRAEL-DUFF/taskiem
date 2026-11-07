@@ -6461,7 +6461,7 @@ paths:
       - sessionCookie: []
       - sessionToken: []
       - apiKey: []
-      x-taskiem-permission: storefront.manage
+      x-taskiem-permission: 'storefront.manage|order.handle'
       parameters:
       - name: open
         in: query
@@ -6559,7 +6559,7 @@ paths:
       - sessionCookie: []
       - sessionToken: []
       - apiKey: []
-      x-taskiem-permission: storefront.manage
+      x-taskiem-permission: 'storefront.manage|order.handle'
       parameters:
       - name: id
         in: path
@@ -6632,6 +6632,69 @@ paths:
                     $ref: '#/components/schemas/TradeOrder'
         default:
           $ref: '#/components/responses/Error'
+  /v1/trade-floors:
+    get:
+      operationId: getTradeFloors
+      tags:
+      - Stock
+      summary: The lowest prices staff may agree
+      description: A deal (chat tools phase 7). Each item's lowest price, by our item id, and the largest discount on a whole order. Staff who work the orders without setting prices may accept or counter an offer at or above them; below, an accept waits for the owner and a counter is refused.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      responses:
+        '200':
+          description: The floors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TradeFloors'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putTradeFloor
+      tags:
+      - Stock
+      summary: Set an item's lowest price, or the largest discount
+      description: '{item_id, floor_kobo} sets an item''s lowest price (0, none); with set_discount, max_discount_pct sets the largest discount on a whole order (null, none). Answers all of them.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                item_id:
+                  type: string
+                  maxLength: 100
+                floor_kobo:
+                  type: integer
+                  minimum: 0
+                set_discount:
+                  type: boolean
+                max_discount_pct:
+                  type: [integer, 'null']
+                  minimum: 1
+                  maximum: 90
+      responses:
+        '200':
+          description: The floors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TradeFloors'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/trade-orders/{id}/{step}:
     post:
       operationId: tradeOrderStep
@@ -6644,7 +6707,7 @@ paths:
         csrfHeader: []
       - sessionToken: []
       - apiKey: []
-      x-taskiem-permission: storefront.manage
+      x-taskiem-permission: 'storefront.manage|order.handle'
       x-taskiem-all-environments: true
       parameters:
       - name: id
@@ -6680,7 +6743,34 @@ paths:
                 note:
                   type: string
                   maxLength: 500
+                as_total:
+                  type: boolean
+                  description: change only, a counter that is a total spread over the lines (a deal)
+                total_kobo:
+                  type: integer
+                  minimum: 1
+                  description: change only, without lines; a counter as one total, spread over the order's lines in proportion to your own prices
+                keep_days:
+                  type: integer
+                  enum: [7, 14, 30]
+                  description: accept only, by those who set prices; keep the offer's prices as the buyer's own for that many days
       responses:
+        '202':
+          description: Accept only, by staff, on an offer below the floor (the lowest price, or the largest discount on the order) — not accepted; it waits for the owner, who is told
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [waiting, why]
+                properties:
+                  waiting:
+                    type: string
+                    enum: [owner]
+                  why:
+                    type: array
+                    items:
+                      type: string
         '200':
           description: The order
           content:
@@ -7293,7 +7383,7 @@ paths:
                 mentions:
                   type: array
                   maxItems: 10
-                  description: 'Each a business you are linked with ({kind: business, link}) or an item of this conversation''s price list ({kind: item, item_id}), named in the text as @Name or #Name; one the text does not name is left out.'
+                  description: 'Each a business you are linked with ({kind: business, link}), an item of this conversation''s price list ({kind: item, item_id}) or one of your own services ({kind: service, service_id}), named in the text as @Name (an item or a service also #Name); one the text does not name is left out.'
                   items:
                     type: object
                     additionalProperties: false
@@ -7301,11 +7391,13 @@ paths:
                     properties:
                       kind:
                         type: string
-                        enum: [business, item]
+                        enum: [business, item, service]
                       link:
                         type: string
                         format: uuid
                       item_id:
+                        type: string
+                      service_id:
                         type: string
       responses:
         '201':
@@ -7319,6 +7411,29 @@ paths:
                 properties:
                   message:
                     $ref: '#/components/schemas/LinkMessage'
+                  also:
+                    type: array
+                    description: With chat tools on, the other linked businesses the message named, each sent it as its own message in our conversation with it.
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [link, name, sent]
+                      properties:
+                        link:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        sent:
+                          type: boolean
+                        reason:
+                          type: string
+        '202':
+          description: With chat tools on, a message with @Taskiem goes to the sender's own Taskiem conversation and to no business; the answer is what Taskiem said there
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskiemChat'
         '200':
           description: The same send repeated (its client_id), answered with the first message and not sent again
           content:
@@ -7532,6 +7647,21 @@ paths:
                         minimum: 1
                       available:
                         type: boolean
+                      breaks:
+                        type: array
+                        maxItems: 5
+                        description: Lower prices from a quantity up, quantity going up and price going down
+                        items:
+                          type: object
+                          additionalProperties: false
+                          required: [min_quantity, price_kobo]
+                          properties:
+                            min_quantity:
+                              type: integer
+                              minimum: 2
+                            price_kobo:
+                              type: integer
+                              minimum: 1
       responses:
         '200':
           description: Done
@@ -7772,8 +7902,19 @@ paths:
                         minimum: 1
                       item_id:
                         type: string
+                      price_kobo:
+                        type: integer
+                        minimum: 1
+                        description: With offer, our own price for the line
                 note:
                   type: string
+                offer:
+                  type: boolean
+                  description: An offer (a deal, chat tools phase 7) at our own prices, the lines' price_kobo, or total_kobo spread over them; else the supplier's prices, with its quantity breaks
+                total_kobo:
+                  type: integer
+                  minimum: 1
+                  description: With offer, a total for the whole order
       responses:
         '201':
           description: Done
@@ -9218,7 +9359,7 @@ paths:
       - sessionCookie: []
       - sessionToken: []
       - apiKey: []
-      x-taskiem-permission: storefront.manage
+      x-taskiem-permission: 'storefront.manage|order.handle'
       parameters:
       - name: status
         in: query
@@ -9269,7 +9410,7 @@ paths:
       - sessionCookie: []
       - sessionToken: []
       - apiKey: []
-      x-taskiem-permission: storefront.manage
+      x-taskiem-permission: 'storefront.manage|order.handle'
       parameters:
       - name: reference
         in: path
@@ -9429,12 +9570,12 @@ paths:
       tags:
       - Riders
       summary: The business's riders
-      description: Its current riders by name (retired=true for those retired), with where each is reached and their state; the order form's delivery areas; and the tap-in page riders open to get deliveries on WhatsApp or Telegram.
+      description: Its current riders by name (retired=true for those retired), with where each is reached and their state; the order form's delivery areas; and the tap-in page riders open to get deliveries on WhatsApp or Telegram. Those who work the orders without storefront.manage (a cashier) see each rider's number to its last four digits, and no fee, bank or tap-in page.
       security:
       - sessionCookie: []
       - sessionToken: []
       - apiKey: []
-      x-taskiem-permission: storefront.manage
+      x-taskiem-permission: 'storefront.manage|order.handle'
       parameters:
       - name: retired
         in: query
@@ -10123,6 +10264,9 @@ paths:
                   type: integer
                 supplier:
                   type: string
+                available:
+                  type: boolean
+                  description: Shown on the storefront and the price lists it is on
       responses:
         '200':
           description: The item
@@ -11126,6 +11270,61 @@ paths:
                     $ref: '#/components/schemas/PurchaseOrder'
         default:
           $ref: '#/components/responses/Error'
+  /v1/stock/purchases/{id}/counter:
+    post:
+      operationId: counterPurchase
+      tags:
+      - Stock
+      summary: Answer a linked supplier's price with our own
+      description: A deal (chat tools phase 7). The supplier's change (its quantities and prices) is answered with our prices, one per line in order, or a total spread over the lines in proportion; it goes back to the supplier as an offer, which lapses in 48 hours. 409 when there is no change of theirs to answer.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                prices:
+                  type: array
+                  description: Our price for each line of their change, in order
+                  items:
+                    type: integer
+                    minimum: 1
+                total_kobo:
+                  type: integer
+                  minimum: 1
+                  description: A total for the whole order instead, spread over the lines
+                note:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [purchase]
+                properties:
+                  purchase:
+                    $ref: '#/components/schemas/PurchaseOrder'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/stock/purchases/{id}/confirm-proposed:
     post:
       operationId: confirmProposed
@@ -11383,7 +11582,7 @@ paths:
       - sessionCookie: []
       - sessionToken: []
       - apiKey: []
-      x-taskiem-permission: storefront.manage
+      x-taskiem-permission: 'storefront.manage|order.handle'
       parameters:
       - name: day
         in: query
@@ -11526,7 +11725,7 @@ paths:
       - sessionCookie: []
       - sessionToken: []
       - apiKey: []
-      x-taskiem-permission: storefront.manage
+      x-taskiem-permission: 'storefront.manage|order.handle'
       parameters:
       - name: reference
         in: path
@@ -11562,7 +11761,7 @@ paths:
         csrfHeader: []
       - sessionToken: []
       - apiKey: []
-      x-taskiem-permission: storefront.manage
+      x-taskiem-permission: 'storefront.manage|order.handle'
       x-taskiem-all-environments: true
       parameters:
       - name: reference
@@ -11614,7 +11813,7 @@ paths:
         csrfHeader: []
       - sessionToken: []
       - apiKey: []
-      x-taskiem-permission: storefront.manage
+      x-taskiem-permission: 'storefront.manage|order.handle'
       x-taskiem-all-environments: true
       parameters:
       - name: reference
@@ -21611,6 +21810,375 @@ paths:
                 $ref: '#/components/schemas/AdvancedSetting'
         default:
           $ref: '#/components/responses/Error'
+  /v1/chat-diary:
+    post:
+      operationId: postChatDiary
+      tags:
+      - Account
+      summary: Tell a change made with a chat tool as a diary line
+      description: With chat tools on, a line where the tool was used (the person's Taskiem conversation, or our side of a conversation with a business, which the other business never sees), also told on the person's own WhatsApp and Telegram (docs/spec/chat-tools.md).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [where, text]
+              properties:
+                where:
+                  type: string
+                  description: taskiem, or a link's id
+                text:
+                  type: string
+                  maxLength: 300
+      responses:
+        '201':
+          description: Kept
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [line]
+                properties:
+                  line:
+                    description: A TaskiemChat message, or a LinkMessage of kind diary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/chat-alerts:
+    get:
+      operationId: getChatAlerts
+      tags:
+      - Account
+      summary: The alerts you can act on, as chat cards
+      description: With chat tools on, what needs the caller now, each kind only for those whose role may see it, oldest first, at most 20, without those put off with Later. Low stock (with Reorder from a linked supplier's price list when the caller may order), overdue invoices, new orders from linked businesses, delivery orders waiting for a rider, payments not matched yet, and approvals waiting for the caller (docs/spec/chat-tools.md §6). Empty with chat tools off.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The alerts
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [alerts]
+                properties:
+                  alerts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChatAlert'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/chat-alerts/match-options:
+    get:
+      operationId: getMatchOptions
+      tags:
+      - Account
+      summary: What a payment can be matched to
+      description: Every open invoice (not the debtor notebook's entries) and order money can be matched to, for an unmatched payment's Match it card; customers' names masked. Needs invoice.manage.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The options
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [options]
+                properties:
+                  options:
+                    type: array
+                    items:
+                      type: object
+                      required: [kind, number, customer, due_kobo]
+                      properties:
+                        kind:
+                          type: string
+                          enum: [invoice, order]
+                        number:
+                          type: string
+                        customer:
+                          type: string
+                        due_kobo:
+                          type: integer
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/chat-briefing:
+    get:
+      operationId: getChatBriefing
+      tags:
+      - Account
+      summary: The morning briefing card
+      description: For those who run the business (storefront.manage or invoice.manage), with chat tools on, from 8am Lagos time (ready); yesterday's sales against the same day a week before with the week's bars, what customers owe, how many items are low, and today's deliveries and bookings, each only for those who may see it. put_off once the person has said Got it (Later with key).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The briefing
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ready, day, key, put_off]
+                properties:
+                  ready:
+                    type: boolean
+                  day:
+                    type: string
+                    format: date
+                  key:
+                    type: string
+                  put_off:
+                    type: boolean
+                  sales:
+                    type: object
+                    properties:
+                      yesterday_kobo:
+                        type: integer
+                      change_pct:
+                        type: [integer, 'null']
+                      weekday:
+                        type: string
+                      week:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/DaySales'
+                  owed_kobo:
+                    type: integer
+                  low:
+                    type: integer
+                  deliveries:
+                    type: integer
+                  bookings:
+                    type: integer
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/chat-handover:
+    get:
+      operationId: getChatHandover
+      tags:
+      - Account
+      summary: The shift so far, for its handover
+      description: Today (Lagos) so far, for a shift manager's handover in chat; what was sold and how it was paid, the orders still open and the deliveries out and done (for those who work the orders), and the items that are low.
+      x-taskiem-permission: table.read
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The shift so far
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Handover'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: postChatHandover
+      tags:
+      - Account
+      summary: Hand the shift over
+      description: The shift so far, with the cash counted against the cash sold and a note (300 characters at most), told to those who run the business but not the one handing over (in the app's bell and on their chat), and a diary line for the person. Needs invoice.manage or storefront.manage (a shift manager or those who run the business) and chat tools on; three handovers in ten minutes at most.
+      x-taskiem-permission: table.read
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cash_counted_kobo:
+                  type: integer
+                  minimum: 0
+                note:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: Handed over
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [handover, words]
+                properties:
+                  handover:
+                    $ref: '#/components/schemas/Handover'
+                  words:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/chat-alerts/later:
+    post:
+      operationId: postChatAlertLater
+      tags:
+      - Account
+      summary: Put an alert card off for a few hours
+      description: The card is not shown to the caller again for four hours; others still see it.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [key]
+              properties:
+                key:
+                  type: string
+                  maxLength: 200
+                hours:
+                  type: integer
+                  minimum: 0
+                  maximum: 72
+                  description: How long it is put off for, 4 hours unless said
+      responses:
+        '200':
+          description: Put off
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [key, until]
+                properties:
+                  key:
+                    type: string
+                  until:
+                    type: string
+                    format: date-time
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/chat-tools/request:
+    post:
+      operationId: postChatToolRequest
+      tags:
+      - Account
+      summary: What a typed request asks a chat tool to do
+      description: With chat tools on, the model reads words such as "change the price of rice 50kg to 80k" and the request comes back with the tool, the row it is about and what its form starts with; nothing is saved. Null when the words ask for nothing a tool does, or with no model or budget.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text:
+                  type: string
+                  maxLength: 300
+      responses:
+        '200':
+          description: The request, or null
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [request]
+                properties:
+                  request:
+                    type: [object, 'null']
+                    required: [tool, prefill, words]
+                    properties:
+                      tool:
+                        type: string
+                        enum: [products, stock, services, prices, orders, tables]
+                      row_id:
+                        type: string
+                      add:
+                        type: boolean
+                      prefill:
+                        type: object
+                        properties:
+                          price_kobo:
+                            type: integer
+                          count:
+                            type: integer
+                          name:
+                            type: string
+                          minutes:
+                            type: integer
+                      words:
+                        type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/settings/chat-tools:
+    get:
+      operationId: getChatTools
+      tags:
+      - Account
+      summary: Whether the business has chat tools on
+      description: The chat tools switch (docs/spec/chat-tools.md). Off until an owner or admin turns it on.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatToolsSetting'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putChatTools
+      tags:
+      - Account
+      summary: Turn chat tools on or off
+      description: For everyone in the business. With it on, a message's recipients decide who gets it (linked businesses it names, and @Taskiem). Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: member.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [chat_tools]
+              properties:
+                chat_tools:
+                  type: boolean
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatToolsSetting'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/settings/schools/wallet:
     post:
       operationId: createSchoolWallet
@@ -25691,6 +26259,95 @@ components:
               request:
                 $ref: '#/components/schemas/SchoolPosting'
   schemas:
+    DaySales:
+      type: object
+      required: [day, label, kobo]
+      properties:
+        day:
+          type: string
+          format: date
+        label:
+          type: string
+        kobo:
+          type: integer
+    Handover:
+      type: object
+      required: [day, low]
+      properties:
+        day:
+          type: string
+          format: date
+        sales:
+          type: object
+          properties:
+            total_kobo:
+              type: integer
+            count:
+              type: integer
+            by_how:
+              type: object
+              additionalProperties:
+                type: integer
+            waiting:
+              type: integer
+        orders_open:
+          type: integer
+        deliveries:
+          type: object
+          properties:
+            out:
+              type: integer
+            done:
+              type: integer
+        low:
+          type: array
+          items:
+            type: string
+    ChatAlert:
+      type: object
+      description: An alert as a chat card, with what its next step needs.
+      required: [key, kind, at, title, line]
+      properties:
+        key:
+          type: string
+          description: The alert's key, for Later (its kind and what it is about)
+        kind:
+          type: string
+          enum: [low_stock, overdue, new_order, rider, unmatched, approval, deal]
+        at:
+          type: string
+          format: date-time
+        title:
+          type: string
+        line:
+          type: string
+        amount_kobo:
+          type: integer
+        id:
+          type: string
+          description: The stock item, invoice, order, payment entry or run it is about
+        reference:
+          type: string
+        reorder:
+          type: object
+          required: [link, supplier, seller_item_id, quantity, price_kobo]
+          properties:
+            link:
+              type: string
+              format: uuid
+            supplier:
+              type: string
+            seller_item_id:
+              type: string
+            quantity:
+              type: integer
+            price_kobo:
+              type: integer
+        approval:
+          $ref: '#/components/schemas/Approval'
+        who:
+          type: string
+          description: Who asked for the approval ("Tunde (cashier)")
     Agent:
       type: object
       required: [id, code, name, status, region, workspace_id]
@@ -25940,7 +26597,7 @@ components:
         group:
           type: string
           description: More groups may be added; a client shows a group it does not know generically or skips it.
-          enum: [failures, setup, finished, money]
+          enum: [failures, setup, finished, money, changes]
         chat:
           type: boolean
         email:
@@ -28901,6 +29558,12 @@ components:
                   type: string
               enabled:
                 type: boolean
+    ChatToolsSetting:
+      type: object
+      required: [chat_tools]
+      properties:
+        chat_tools:
+          type: boolean
     AdvancedSetting:
       type: object
       required: [advanced, chosen]
@@ -31169,6 +31832,56 @@ components:
           type: string
           format: date-time
           description: The linked supplier raised the order's invoice (mirrored)
+        offer:
+          type: boolean
+          description: Sent at our own prices (a deal, chat tools phase 7), not the supplier's
+        deal_history:
+          type: array
+          description: The deal's offers and counters, newest last (mirrored from the supplier)
+          items:
+            $ref: '#/components/schemas/DealStep'
+        deal_until:
+          type: string
+          format: date-time
+          description: When the latest offer or counter lapses
+    DealStep:
+      type: object
+      additionalProperties: false
+      description: An offer or a counter in a deal (chat tools phase 7)
+      required: [by, lines, total_kobo, at]
+      properties:
+        by:
+          type: string
+          enum: [buyer, seller]
+        who:
+          type: string
+          description: The person who made it
+        lines:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [item, quantity, price_kobo]
+            properties:
+              item:
+                type: string
+              quantity:
+                type: integer
+              price_kobo:
+                type: integer
+        total_kobo:
+          type: integer
+        list_kobo:
+          type: integer
+          description: What the lines come to at the seller's own prices (the was)
+        as_total:
+          type: boolean
+          description: A total was offered, spread over the lines
+        note:
+          type: string
+        at:
+          type: string
+          format: date-time
     DeliverTo:
       type: object
       additionalProperties: false
@@ -31198,8 +31911,39 @@ components:
           description: Our document's id or number, to open it
         amount_kobo:
           type: integer
+        was_kobo:
+          type: integer
+          description: A deal's prices are against this (the seller's own), when more than amount_kobo
         note:
           type: string
+        deal:
+          type: object
+          additionalProperties: false
+          required: [steps]
+          description: A deal as it stood when the card was posted (chat tools phase 7)
+          properties:
+            steps:
+              type: array
+              description: Offer first, then counters, newest last; a person is named only on our own side's steps
+              items:
+                type: object
+                additionalProperties: false
+                required: [by, total_kobo, at]
+                properties:
+                  by:
+                    type: string
+                    enum: [buyer, seller]
+                  who:
+                    type: string
+                  total_kobo:
+                    type: integer
+                  at:
+                    type: string
+                    format: date-time
+            until:
+              type: string
+              format: date-time
+              description: When the offer lapses unless answered
     PriceItem:
       type: object
       additionalProperties: false
@@ -31221,6 +31965,21 @@ components:
         overridden:
           type: boolean
           description: This link's own price, not the list's
+        breaks:
+          type: array
+          maxItems: 5
+          description: Lower prices from a quantity up (from 10 bags ₦39,500), quantity going up and price going down; none on a link's own price
+          items:
+            type: object
+            additionalProperties: false
+            required: [min_quantity, price_kobo]
+            properties:
+              min_quantity:
+                type: integer
+                minimum: 2
+              price_kobo:
+                type: integer
+                minimum: 1
     PriceList:
       type: object
       additionalProperties: false
@@ -31299,7 +32058,7 @@ components:
                 description: The person said it (else Taskiem did)
               kind:
                 type: string
-                enum: [text, button, voice, photo, form, location]
+                enum: [text, button, voice, photo, form, location, diary, chart]
               text:
                 type: string
               buttons:
@@ -31325,7 +32084,7 @@ components:
       properties:
         kind:
           type: string
-          enum: [business, item]
+          enum: [business, item, service]
         name:
           type: string
         link:
@@ -31338,6 +32097,12 @@ components:
           type: string
         price_kobo:
           type: integer
+        service_id:
+          type: string
+          description: One of the sender's own services
+        minutes:
+          type: integer
+          description: How long the service takes
     LinkReaction:
       type: object
       additionalProperties: false
@@ -31374,7 +32139,8 @@ components:
           description: We sent it (a card, we acted)
         kind:
           type: string
-          enum: [text, card]
+          enum: [text, card, diary]
+          description: A diary line is a change we made with a chat tool, on our side only
         body:
           type: string
         sender_name:
@@ -31498,6 +32264,19 @@ components:
         typing:
           type: boolean
           description: Someone on the other side is typing now
+    TradeFloors:
+      type: object
+      additionalProperties: false
+      required: [floors, max_discount_pct]
+      properties:
+        floors:
+          type: object
+          description: Each item's lowest price in kobo, by our item id
+          additionalProperties:
+            type: integer
+        max_discount_pct:
+          type: [integer, 'null']
+          description: The largest discount on a whole order staff may agree, in percent
     TradeOrderLine:
       type: object
       additionalProperties: false
@@ -31529,8 +32308,12 @@ components:
           description: The price the buyer proposed; never the order's price
         priced_by:
           type: string
-          enum: [list, catalogue, seller]
-          description: Whose price price_kobo is (the list shared with the buyer, our catalogue, ourselves); absent, the buyer's proposal, never accepted by itself
+          enum: [list, catalogue, seller, offer]
+          description: Whose price price_kobo is (the list shared with the buyer, our catalogue, ourselves, or the buyer's offer in a deal); absent, the buyer's proposal, never accepted by itself
+        list_kobo:
+          type: integer
+          minimum: 0
+          description: Our own price for the line when the buyer offered its own (what the offer is against)
     TradeOrder:
       type: object
       additionalProperties: false
@@ -31613,6 +32396,21 @@ components:
           type: string
           format: date-time
           description: The order takes the buyer past the credit limit; it is not accepted by itself, and may still be accepted
+        deal_history:
+          type: array
+          description: A deal's offers and counters, newest last (chat tools phase 7)
+          items:
+            $ref: '#/components/schemas/DealStep'
+        deal_until:
+          type: string
+          format: date-time
+          description: When the latest offer or counter lapses; a lapsed offer is not accepted
+        deal_owner_at:
+          type: string
+          format: date-time
+          description: Staff accepted the offer below the floor; it waits for the owner since
+        deal_owner_by:
+          type: string
         placed_by_seller:
           type: boolean
         decided_by:
@@ -32946,7 +33744,7 @@ components:
     ExploreCard:
       type: object
       additionalProperties: false
-      required: [business, name, logo, photos, state, v]
+      required: [business, name, logo, photos, captions, state, v]
       properties:
         business:
           type: string
@@ -32967,6 +33765,11 @@ components:
         photos:
           type: integer
           description: How many photos it shows, at GET /v1/explore/{business}/photos/{photo}
+        captions:
+          type: array
+          items:
+            type: string
+          description: Its photos' captions, in order ("" for a photo with none)
         state:
           type: string
           description: Our link with it, as in a search (none when there is none)
@@ -32994,6 +33797,9 @@ components:
           type: boolean
         more:
           type: boolean
+        area:
+          type: string
+          description: Our own area, as near you reads it (the first page only)
         blind:
           type: object
           additionalProperties: false

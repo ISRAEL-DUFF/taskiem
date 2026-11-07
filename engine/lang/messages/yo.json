@@ -568,6 +568,38 @@
       "text": "Mo ti gba ibi tí o wà: ó wà pẹ̀lú ìfijíṣẹ́ náà.",
       "reviewed": false
     },
+    "rider.jobs": {
+      "text": "Àwọn ẹrù tí o ní láti fi jíṣẹ́ báyìí:",
+      "reviewed": false
+    },
+    "rider.job": {
+      "text": "*{reference}* láti {business}, sí {drop}: {step}",
+      "reviewed": false
+    },
+    "rider.job_offered": {
+      "text": "wọ́n fi lọ̀ ọ́. Fi ACCEPT tàbí CAN'T ránṣẹ́.",
+      "reviewed": false
+    },
+    "rider.job_accepted": {
+      "text": "tìrẹ ni. Fi PICKED UP ránṣẹ́ nígbà tí o bá gbà á.",
+      "reviewed": false
+    },
+    "rider.job_picked_up": {
+      "text": "ó wà lọ́nà. Fi ARRIVED ránṣẹ́ ní ẹnu ọ̀nà, tàbí DELIVERED.",
+      "reviewed": false
+    },
+    "rider.job_arrived": {
+      "text": "ó ti dé ẹnu ọ̀nà. Fi DELIVERED ránṣẹ́ nígbà tí o bá fi lé wọn lọ́wọ́.",
+      "reviewed": false
+    },
+    "money.daily.today": {
+      "text": "Lónìí: ẹrù {deliveries} láti fi jíṣẹ́, ìpàdé {bookings}.",
+      "reviewed": false
+    },
+    "money.daily.card": {
+      "text": "Káàdì òwúrọ̀ rẹ, ìlà kọ̀ọ̀kan ń ṣí irinṣẹ́ rẹ̀: {link}",
+      "reviewed": false
+    },
     "rider.no_delivery": {
       "text": "O kò ní ìfijíṣẹ́ tó bá ìyẹn mu báyìí.",
       "reviewed": false
@@ -4990,6 +5022,66 @@
     },
     "bill.notice.paired": {
       "text": "*{from}* sọ pé ìfiránṣẹ́ owó rẹ̀ {amount} ({note}) jẹ́ fún owó-ìpè {reference}. Bí a bá ti kà á sí owó-ìpè mìíràn, ẹ gbé e lọ ní ojú-ìwé owó-ìpè náà.",
+      "reviewed": false
+    },
+    "order.link.offered_title": {
+      "text": "{from} fi iye kan lélẹ̀ fún {reference}",
+      "reviewed": false
+    },
+    "order.link.offered": {
+      "text": "*{from}* fi iye tirẹ̀ lélẹ̀ lórí àṣẹ {reference}: {note}. Ẹ gbà á tàbí ẹ kọ̀ ọ́, tàbí ẹ fi iye tiyín ránṣẹ́: counter {reference} 785k",
+      "reviewed": false
+    },
+    "order.link.countered_title": {
+      "text": "{from} dáhùn iye rẹ lórí {reference}",
+      "reviewed": false
+    },
+    "order.link.countered": {
+      "text": "*{from}* dáhùn iye yín lórí àṣẹ {reference}: {note}. Ẹ gbà á tàbí ẹ kọ̀ ọ́, tàbí ẹ fi iye tiyín ránṣẹ́: counter {reference} 790k",
+      "reviewed": false
+    },
+    "order.link.seller_countered_title": {
+      "text": "{from} dáhùn ìfilọ̀ yín lórí {reference}",
+      "reviewed": false
+    },
+    "order.link.seller_countered": {
+      "text": "*{from}* dáhùn ìfilọ̀ yín lórí àṣẹ {reference}: {note}. Ẹ gbà á, ẹ fagilé àṣẹ náà, tàbí ẹ fi iye tiyín ránṣẹ́: counter {reference} 760k",
+      "reviewed": false
+    },
+    "order.link.button_accept_change": {
+      "text": "Gbà á",
+      "reviewed": false
+    },
+    "order.link.done_accept_change": {
+      "text": "O ti gba iye wọn lórí {reference}. A ti sọ fún wọn.",
+      "reviewed": false
+    },
+    "deal.owner_title": {
+      "text": "{who} fẹ́ gbà {amount} pẹ̀lú {business}",
+      "reviewed": false
+    },
+    "deal.owner_body": {
+      "text": "Order {reference}: {why}. Gbà á tàbí kọ̀ ọ́ nínú ìjíròrò Taskiem.",
+      "reviewed": false
+    },
+    "deal.owner_asked": {
+      "text": "Iye yẹn kéré ju èyí tó kéré jù tí iṣẹ́ yín ń gbà, nítorí náà olówó ni yóò pinnu {reference}. A ti sọ fún un.",
+      "reviewed": false
+    },
+    "deal.counter_sent": {
+      "text": "A ti fi ránṣẹ́: {amount} fún {reference}. Wọ́n lè gbà á tàbí dáhùn.",
+      "reviewed": false
+    },
+    "deal.counter_none": {
+      "text": "Kò sí order tó ń dúró de iye rẹ. Ṣí order náà nínú Taskiem láti fi iye lélẹ̀.",
+      "reviewed": false
+    },
+    "deal.counter_which": {
+      "text": "Ju order kan lọ ló ń dúró ({references}). Sọ èwo, bíi: counter {reference} 750k",
+      "reviewed": false
+    },
+    "deal.counter_how": {
+      "text": "Fi iye rẹ ránṣẹ́ báyìí: counter 750k (tàbí counter {reference} 750k).",
       "reviewed": false
     },
     "order.link.ordered_title": {
