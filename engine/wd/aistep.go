@@ -37,6 +37,9 @@ func checkAI(d *Definition) []Problem {
 			add("an ai step's output_schema is an object schema ({\"type\": \"object\", \"properties\": ...}): the answer is a JSON object")
 		}
 		for _, f := range s.AI.PersonalData {
+			if f == "history" && len(s.AI.History) > 0 {
+				continue // the conversation's words (decision 0062 D6)
+			}
 			if _, ok := s.Input[f]; !ok {
 				add("personal_data names %q, which is not a field of the step's input", f)
 			}

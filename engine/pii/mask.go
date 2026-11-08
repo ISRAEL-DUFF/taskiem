@@ -291,3 +291,24 @@ func (m *Masker) unmaskText(t string) string {
 	}
 	return out
 }
+
+// MaskKeepingWords masks a text's identifiers but lets its words through
+// (decision 0062 D6, for a conversation's turns a step lets the model
+// read): the run's known names, phones, emails and other identified
+// values, and what the text patterns recognise, become placeholders, as
+// MaskText does; values known only as free text ("other": a whole
+// message, sealed as one) do not, since they are the words themselves.
+// The placeholders are the masker's own, so the same value has the same
+// one wherever it appears.
+func (m *Masker) MaskKeepingWords(s string) string {
+	all := m.taint
+	ids := make(Taint, len(all))
+	for k, cat := range all {
+		if cat != "other" && cat != "" {
+			ids[k] = cat
+		}
+	}
+	m.taint = ids
+	defer func() { m.taint = all }()
+	return m.MaskText(s)
+}

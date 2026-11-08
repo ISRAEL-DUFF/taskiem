@@ -201,14 +201,27 @@ func (w *Worker) aiAttempt(ctx context.Context, p *plan, in any) history.Event {
 	question, logged := aiQuestion(prompt, maskedIn), aiQuestion(prompt, logIn)
 	// The conversation so far and the business's instruction, masked
 	// with the same placeholders (decision 0062 V4).
-	var turns []wd.AITurn
+	// With "history" in personal_data the turns' words reach the model,
+	// their identifiers still masked (decision 0062 D6); without it each
+	// personal value in them, a whole sealed message among them, is a
+	// placeholder. The record of the call keeps the words redacted either
+	// way, as it does fields let through.
+	var turns, logTurns []wd.AITurn
 	if h, ok := q["history"]; ok {
 		var err error
 		if turns, err = wd.AIHistory(h); err != nil {
 			return fail("invalid_step", "history: %v", err)
 		}
+		words := containsString(cfg.PersonalData, "history")
+		logTurns = make([]wd.AITurn, len(turns))
 		for i := range turns {
-			turns[i].Text = fmt.Sprint(masker.Mask(turns[i].Text))
+			if words {
+				logTurns[i] = wd.AITurn{Role: turns[i].Role, Text: redactAnswer(p.taint, turns[i].Text)}
+				turns[i].Text = masker.MaskKeepingWords(turns[i].Text)
+			} else {
+				turns[i].Text = fmt.Sprint(masker.Mask(turns[i].Text))
+				logTurns[i] = turns[i]
+			}
 		}
 	}
 	instruction := ""
@@ -279,7 +292,7 @@ func (w *Worker) aiAttempt(ctx context.Context, p *plan, in any) history.Event {
 		Schema:    closeObjects(schema),
 		MaxTokens: maxTokens,
 	}
-	sent := conversation(turns, logged)
+	sent := conversation(logTurns, logged)
 	h := sha256.New()
 	for _, b := range system {
 		h.Write([]byte(b.Text))
@@ -405,7 +418,9 @@ func redactThrough(taint pii.Taint, v any) any {
 	if err != nil {
 		return "[personal data]"
 	}
-	s := taint.RedactText(pii.Redact(string(raw)))
+	// Known values first: a whole message is one, which a number masked
+	// inside it first would hide from the match.
+	s := pii.Redact(taint.RedactText(string(raw)))
 	if json.Valid([]byte(s)) {
 		return json.RawMessage(s)
 	}
@@ -414,7 +429,7 @@ func redactThrough(taint pii.Taint, v any) any {
 
 // redactAnswer is a model's answer as its record keeps it: it may repeat
 // the fields let through.
-func redactAnswer(taint pii.Taint, s string) string { return taint.RedactText(pii.Redact(s)) }
+func redactAnswer(taint pii.Taint, s string) string { return pii.Redact(taint.RedactText(s)) }
 
 // maxAIQuestion bounds what an ai step sends, its prompt and input: as
 // large as a step's output may be (maxStepOutput), so a step can pass

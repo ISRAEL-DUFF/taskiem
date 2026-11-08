@@ -641,7 +641,7 @@ function AIConfig({ step, set, advanced }: { step: Extract<Step, { type: "ai" }>
         is; publishing such a step is recorded in the audit log.
       </p>
       {Object.keys(input).length === 0 && <p className="hint">The step reads no fields yet.</p>}
-      {Object.keys(input).map((k) => (
+      {[...Object.keys(input), ...(cfg.history ? ["history"] : [])].map((k) => (
         <label key={k} style={{ display: "block" }}>
           <input
             type="checkbox"
@@ -651,7 +651,13 @@ function AIConfig({ step, set, advanced }: { step: Extract<Step, { type: "ai" }>
               setCfg({ personal_data: next.length > 0 ? next : undefined });
             }}
           />{" "}
-          Let the model see <code>{k}</code> as it is
+          {k === "history" && !(k in input) ? (
+            <>Let the model read the conversation's words (numbers, emails and names stay hidden)</>
+          ) : (
+            <>
+              Let the model see <code>{k}</code> as it is
+            </>
+          )}
         </label>
       ))}
       {advanced && st?.enabled && (

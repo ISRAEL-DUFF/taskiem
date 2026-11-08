@@ -574,6 +574,11 @@ func (s *Store) decideInline(ctx context.Context, tx pgx.Tx, ref RunRef) error {
 				if paths, err = s.connectorPIIPaths(ctx, ref.TenantID, p); err != nil {
 					return err
 				}
+				tp, err := tablePIIPaths(ctx, tx, ref.TenantID, p.Connector, p.Action, p.Input, false)
+				if err != nil {
+					return err
+				}
+				paths = append(paths, tp...)
 				paths = append(paths, aiTextPaths(p, taint)...)
 			}
 			sealed, err := s.sealPayload(ctx, tx, ref.TenantID, ev.Payload, paths, taint)
