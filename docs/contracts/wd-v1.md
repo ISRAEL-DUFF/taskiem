@@ -158,7 +158,7 @@ CEL with the standard library and cel-go's strings, math, lists and optional-typ
 
 ### Long messages
 
-`chunks(text, max)` splits a text into pieces of at most `max` characters, breaking after a sentence (`.`, `!`, `?` or a line break) where it can, else between words, and inside a word only when one word is longer than `max`. WhatsApp and Telegram refuse a message over 4,096 characters, so a long reply is sent as a `foreach` over `chunks(reply, 4000)`, one send step per piece, each with its own key and retry ([decision 0062](../decisions/0062-customer-assistant.md) C20). `max` is 1 to 100,000; the text at most 1 MB.
+`chunks(text, max)` splits a text into pieces of at most `max` characters, breaking after a sentence (`.`, `!`, `?` or a line break) where it can, else between words, and inside a word only when one word is longer than `max`. WhatsApp and Telegram refuse a message over 4,096 characters, so a long reply is sent as a `foreach` over `chunks(reply, 4000)`, one send step per piece, each with its own key and retry ([decision 0062](../decisions/0062-customer-assistant.md) C20). `max` is 1 to 100,000; the text at most 1 MB. `chunks(text, max, "utf16")` counts as those channels count, in UTF-16 code units, where an emoji counts two; use it for a reply that may hold emoji, e.g. `chunks(reply, 4000, "utf16")`. `"characters"` is the two-argument form. A piece never splits a character.
 
 ### Files
 

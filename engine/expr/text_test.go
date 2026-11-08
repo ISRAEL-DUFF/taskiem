@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"unicode/utf16"
 	"unicode/utf8"
 )
 
@@ -44,9 +45,32 @@ func TestChunksInExpressions(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(got, []any{"One. Two.", "Three."}) {
 		t.Fatalf("%v %v", got, err)
 	}
-	for _, bad := range []string{"=chunks('x', 0)", "=chunks(1, 5)"} {
+	got, err = e.Eval("=chunks('ab\U0001F600cd', 3, 'utf16')", nil)
+	if err != nil || !reflect.DeepEqual(got, []any{"ab", "\U0001F600c", "d"}) {
+		t.Fatalf("utf16: %q %v", got, err)
+	}
+	got, err = e.Eval("=chunks('ab\U0001F600cd', 3, 'characters')", nil)
+	if err != nil || !reflect.DeepEqual(got, []any{"ab\U0001F600", "cd"}) {
+		t.Fatalf("characters: %q %v", got, err)
+	}
+	for _, bad := range []string{"=chunks('x', 0)", "=chunks(1, 5)", "=chunks('x', 5, 'bytes')"} {
 		if _, err := e.Eval(bad, nil); err == nil {
 			t.Errorf("%s: want an error", bad)
 		}
+	}
+}
+
+// An emoji counts two in UTF-16, so a reply that fits in characters can
+// still be too long for Telegram; utf16 keeps every piece within max.
+func TestChunksUTF16(t *testing.T) {
+	smile := "\U0001F600"
+	text := strings.Repeat(smile+" ", 3000)
+	for _, p := range ChunksIn(text, 4096, UTF16) {
+		if n := len(utf16.Encode([]rune(p))); n > 4096 {
+			t.Fatalf("a piece is %d UTF-16 units", n)
+		}
+	}
+	if got := ChunksIn(smile+smile, 1, UTF16); !reflect.DeepEqual(got, []string{smile, smile}) {
+		t.Fatalf("a two-unit character with max 1: %q", got)
 	}
 }

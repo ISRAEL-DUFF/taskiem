@@ -17,41 +17,80 @@ import (
 // when one word is longer than max. Pieces are trimmed; an empty text
 // gives an empty list. A workflow sends each piece as its own step
 // (foreach), so each send keeps its own key and retry (decision 0062 C20).
-var chunksFunction = cel.Function("chunks", cel.Overload("chunks_string_int", []*cel.Type{cel.StringType, cel.IntType}, cel.ListType(cel.StringType),
-	cel.BinaryBinding(func(t, m ref.Val) ref.Val {
-		s, ok1 := t.(types.String)
-		n, ok2 := m.(types.Int)
-		if !ok1 || !ok2 {
-			return types.NewErr("chunks: takes a text and a number")
-		}
-		if n < 1 || n > 100_000 {
-			return types.NewErr("chunks: the size must be between 1 and 100000")
-		}
-		if len(s) > 1<<20 {
-			return types.NewErr("chunks: the text is longer than 1 MB")
-		}
-		out := Chunks(string(s), int(n))
-		vals := make([]ref.Val, len(out))
-		for i, c := range out {
-			vals[i] = types.String(c)
-		}
-		return types.NewRefValList(types.DefaultTypeAdapter, vals)
-	})))
+//
+// chunks(text, max, "utf16") counts as Telegram and WhatsApp do: in UTF-16
+// code units, where an emoji or another character outside the Basic
+// Multilingual Plane counts two. chunks(text, max, "characters") is the
+// two-argument form.
+var chunksFunction = cel.Function("chunks",
+	cel.Overload("chunks_string_int", []*cel.Type{cel.StringType, cel.IntType}, cel.ListType(cel.StringType),
+		cel.BinaryBinding(func(t, m ref.Val) ref.Val { return chunksVal(t, m, types.String(Characters)) })),
+	cel.Overload("chunks_string_int_string", []*cel.Type{cel.StringType, cel.IntType, cel.StringType}, cel.ListType(cel.StringType),
+		cel.FunctionBinding(func(args ...ref.Val) ref.Val { return chunksVal(args[0], args[1], args[2]) })))
+
+// The units chunks() counts in.
+const (
+	Characters = "characters"
+	UTF16      = "utf16"
+)
+
+func chunksVal(t, m, u ref.Val) ref.Val {
+	s, ok1 := t.(types.String)
+	n, ok2 := m.(types.Int)
+	unit, ok3 := u.(types.String)
+	if !ok1 || !ok2 || !ok3 {
+		return types.NewErr("chunks: takes a text, a number and optionally \"characters\" or \"utf16\"")
+	}
+	if unit != Characters && unit != UTF16 {
+		return types.NewErr("chunks: the unit must be \"characters\" or \"utf16\"")
+	}
+	if n < 1 || n > 100_000 {
+		return types.NewErr("chunks: the size must be between 1 and 100000")
+	}
+	if len(s) > 1<<20 {
+		return types.NewErr("chunks: the text is longer than 1 MB")
+	}
+	out := ChunksIn(string(s), int(n), string(unit))
+	vals := make([]ref.Val, len(out))
+	for i, c := range out {
+		vals[i] = types.String(c)
+	}
+	return types.NewRefValList(types.DefaultTypeAdapter, vals)
+}
 
 // Chunks is chunks() in Go: pieces of at most max characters (runes).
-func Chunks(text string, max int) []string {
+func Chunks(text string, max int) []string { return ChunksIn(text, max, Characters) }
+
+// width is how much one character counts in the unit.
+func width(r rune, unit string) int {
+	if unit == UTF16 && r > 0xFFFF {
+		return 2
+	}
+	return 1
+}
+
+// ChunksIn is chunks() with a unit: Characters (runes) or UTF16 (code
+// units). A piece never splits a character.
+func ChunksIn(text string, max int, unit string) []string {
 	text = strings.TrimSpace(text)
 	var out []string
 	for text != "" {
-		if utf8.RuneCountInString(text) <= max {
+		// The byte offset just after max units, at a character boundary;
+		// at least one character, so a two-unit character with max 1
+		// still moves on.
+		end, used := 0, 0
+		for end < len(text) {
+			r, size := utf8.DecodeRuneInString(text[end:])
+			w := width(r, unit)
+			if used+w > max && end > 0 {
+				break
+			}
+			used += w
+			end += size
+		}
+		if end == len(text) {
 			out = append(out, text)
 			break
-		}
-		// The byte offset just after max runes.
-		end := 0
-		for i := 0; i < max; i++ {
-			_, size := utf8.DecodeRuneInString(text[end:])
-			end += size
 		}
 		cut := -1
 		// The last sentence end in reach, then the last space.
