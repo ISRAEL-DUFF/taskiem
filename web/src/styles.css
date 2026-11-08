@@ -550,6 +550,7 @@ a.list-row:hover { background: var(--panel-2); text-decoration: none; }
   table.cards td { display: block; padding: 0; border: none; background: none !important; min-width: 0; overflow-wrap: anywhere; }
   table.cards td[data-label]::before { content: attr(data-label); display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 2px; }
   table.cards td.primary { grid-column: 1 / -1; font-weight: 500; }
+  table.cards td.wide { grid-column: 1 / -1; }
   .modal-backdrop { place-items: end center; }
   .modal { width: 100vw; max-height: 92dvh; border-radius: 16px 16px 0 0; padding: 20px 16px calc(20px + env(safe-area-inset-bottom)); }
   .modal:has(.ai-builder) { width: 100vw; }
