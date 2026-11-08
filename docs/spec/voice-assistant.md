@@ -328,6 +328,17 @@ V1 and V2 were reviewed for gaps before V3; 21 were found and all are fixed on t
 
 ### V4. The model step, made fit for conversation
 
+**Built** (2026-11-08):
+- **A conversation in the ai step** (A1, A2): wd/v1 `history` (the last 50 `{role, text}` turns, masked like the prompt), `system` (the business's instruction, after Taskiem's rules, which it cannot change) and `max_tokens`. These go through schema, Go, SDK, read-back, checks, builder rule 21 and the canvas, and the harness replays every test run.
+- **`fallback`** (A12): the output when the model cannot answer, checked against `output_schema` when saved and when used. It is used at once for budget, off, refusal or a never-matching answer, and on the last attempt when the provider is down. A mistake in the step itself (`invalid_step`) never gets it.
+- **`language(text[, otherwise])`** (A9), on chat's detection. English is sure only with three of its common words and nothing of the other languages.
+- **`ai_step_monthly_tokens`** (A7, A8, D7), migration 00316. AI steps spend it and never building's `ai_monthly_tokens`. 0 means AI steps are off, and it, not the `ai` feature, decides, so a shop's plan can run an assistant without AI building. Overage is billed per budget, and plans carry placeholders until VP7.
+- **`claude-haiku-5-5`** is offered for AI steps by default on Anthropic (A6).
+- **`tools/replybench`** (A10) measures delivery to reply for text and voice, and with many conversations at once. The runs to record are in [performance](../performance.md#replies-to-customers-decision-0062-a10).
+- **Not done here:**
+  - The numbers themselves: they need staging with real providers (VP5).
+  - A11, the reply policy: in V6.
+
 - `ai` step gains `history` (a list of `{role, text}` turns, capped), `max_tokens`, and a `system` instruction (kept under Taskiem's own fixed rules) (A1, A2).
 - A `language` expression function over `lang.Detect`, so a workflow knows the customer's language before the model answers (A9).
 - A small, fast model offered for ai steps by default in deployments that run assistants (A6).

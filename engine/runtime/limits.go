@@ -526,17 +526,17 @@ type LimitsView struct {
 
 // Usage is a tenant's current consumption of its limits.
 type Usage struct {
-	RunsToday     int64          `json:"runs_today"`
-	RunsThisMonth int64          `json:"runs_this_month"`
-	RunningRuns   int64          `json:"running_runs"`
-	QueuedRuns    int64          `json:"queued_runs"`
-	Workflows     int64          `json:"workflows"`
-	Secrets       int64          `json:"secrets"`
-	Connections   int64          `json:"connections"`
-	AITokens      int64          `json:"ai_tokens_this_month"`
+	RunsToday     int64 `json:"runs_today"`
+	RunsThisMonth int64 `json:"runs_this_month"`
+	RunningRuns   int64 `json:"running_runs"`
+	QueuedRuns    int64 `json:"queued_runs"`
+	Workflows     int64 `json:"workflows"`
+	Secrets       int64 `json:"secrets"`
+	Connections   int64 `json:"connections"`
+	AITokens      int64 `json:"ai_tokens_this_month"`
 	// AI steps' tokens this UTC month (ai_step_monthly_tokens); AITokens
 	// is the rest: building, repair and chat routing.
-	AIStepTokens int64 `json:"ai_step_tokens_this_month"`
+	AIStepTokens  int64          `json:"ai_step_tokens_this_month"`
 	TasksInFlight map[string]int `json:"tasks_in_flight"` // per queue
 	// WhatsApp template messages this UTC month (spec 16).
 	WhatsAppTemplates WhatsAppTemplateUsage `json:"whatsapp_templates_this_month"`
