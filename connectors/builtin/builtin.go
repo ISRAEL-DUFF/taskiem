@@ -18,6 +18,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/interswitch"
 	"github.com/israel-duff/taskiem/connectors/invoices"
 	"github.com/israel-duff/taskiem/connectors/iswallet"
+	"github.com/israel-duff/taskiem/connectors/knowledge"
 	"github.com/israel-duff/taskiem/connectors/lenco"
 	linkconn "github.com/israel-duff/taskiem/connectors/link"
 	"github.com/israel-duff/taskiem/connectors/mailchimp"
@@ -139,6 +140,9 @@ type Options struct {
 	// Speech binds the speech platform connector (docs/speech.md); nil:
 	// hearing and speaking fail plainly.
 	Speech speech.Ops
+	// Knowledge binds what the assistant knows (docs/knowledge.md); nil:
+	// its actions fail plainly.
+	Knowledge knowledge.Ops
 	// Notify delivers Tell me messages (notify@1) to the business's own
 	// people; nil: they fail plainly.
 	Notify notify.Teller
@@ -199,6 +203,7 @@ func Register(r *connector.Registry, o Options) error {
 		email.New(o.Email),
 		files.New(o.Files),
 		speech.New(o.Speech),
+		knowledge.New(o.Knowledge),
 		notify.New(o.Notify),
 	} {
 		if err := r.Register(c); err != nil {

@@ -402,7 +402,7 @@ func (s *Service) Refresh(ctx context.Context, tenant, id uuid.UUID) (Refreshed,
 		if approved {
 			status = StatusActive
 		}
-		_, err := tx.Exec(ctx, `UPDATE knowledge_sources SET status = $2, read_at = $3, digest = $4, error = NULL, failed_at = NULL,
+		_, err := tx.Exec(ctx, `UPDATE knowledge_sources SET status = $2, read_at = $3, digest = $4, error = NULL, failed_at = NULL, refresh_at = NULL,
 			changed_at = CASE WHEN $5 THEN $3 ELSE changed_at END,
 			approved_at = CASE WHEN kind = 'about' THEN COALESCE(approved_at, $3) ELSE approved_at END,
 			approved_by = CASE WHEN kind = 'about' THEN COALESCE(approved_by, created_by) ELSE approved_by END,
@@ -422,7 +422,7 @@ func (s *Service) failed(ctx context.Context, tenant uuid.UUID, src Source, caus
 	day := s.now().UTC().Format("2006-01-02")
 	_ = s.tx(context.WithoutCancel(ctx), tenant, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `UPDATE knowledge_sources SET status = CASE WHEN status = 'paused' THEN 'paused' ELSE 'failed' END,
-			error = $2, failed_at = now(), updated_at = now() WHERE id = $1`, src.ID, msg); err != nil {
+			error = $2, failed_at = now(), refresh_at = NULL, updated_at = now() WHERE id = $1`, src.ID, msg); err != nil {
 			return err
 		}
 		keeps := "Your assistant keeps using what it read last time."
@@ -440,6 +440,19 @@ func (s *Service) failed(ctx context.Context, tenant uuid.UUID, src Source, caus
 
 // AlertKind is the alert a failed read raises.
 const AlertKind = "knowledge_source"
+
+// RequestRefresh asks for a source to be read again soon, by the api
+// role's refresh loop (a workflow's knowledge@1 refresh runs where the
+// readers are not).
+func (s *Service) RequestRefresh(ctx context.Context, tenant, id uuid.UUID) error {
+	return s.tx(ctx, tenant, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `UPDATE knowledge_sources SET refresh_at = now(), updated_at = now() WHERE id = $1 AND status <> 'paused'`, id)
+		if err == nil && tag.RowsAffected() == 0 {
+			err = fmt.Errorf("%w: no such source, or it is paused", ErrBadInput)
+		}
+		return err
+	})
+}
 
 // Due are the sources due their daily refresh, across tenants.
 func (s *Service) Due(ctx context.Context, limit int) ([][2]uuid.UUID, error) {

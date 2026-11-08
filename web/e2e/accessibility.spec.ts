@@ -409,6 +409,7 @@ test.describe("on a phone-sized screen", () => {
       "/members",
       "/alerts",
       "/settings",
+      "/knowledge",
       "/dashboard",
       "/storefront",
       "/storefront/fronts",

@@ -25,6 +25,7 @@ CREATE TABLE knowledge_sources (
   digest       bytea,                     -- of the text read last, to tell a change
   error        text,                      -- the last failure, in plain words
   failed_at    timestamptz,
+  refresh_at   timestamptz,               -- a read asked for now (a workflow's refresh, the owner's button)
   created_by   text NOT NULL,
   created_at   timestamptz NOT NULL DEFAULT now(),
   updated_at   timestamptz NOT NULL DEFAULT now()
@@ -61,15 +62,16 @@ GRANT UPDATE (pending) ON knowledge_passages TO taskiem_app;
 -- ago, never paused, of a kind that changes outside Taskiem's page), ids
 -- only.
 CREATE POLICY refresh_read ON knowledge_sources FOR SELECT TO taskiem_dispatch USING (true);
-GRANT SELECT (id, tenant_id, kind, status, read_at, failed_at) ON knowledge_sources TO taskiem_dispatch;
+GRANT SELECT (id, tenant_id, kind, status, read_at, failed_at, refresh_at) ON knowledge_sources TO taskiem_dispatch;
 -- +goose StatementBegin
 CREATE FUNCTION taskiem_knowledge_due(p_limit int) RETURNS TABLE (tenant_id uuid, source_id uuid)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
   SELECT s.tenant_id, s.id FROM knowledge_sources s
-   WHERE s.kind IN ('storefront', 'table', 'website', 'sheet', 'books')
-     AND s.status IN ('review', 'active', 'failed')
-     AND COALESCE(GREATEST(s.read_at, s.failed_at), '-infinity') < now() - interval '1 day'
-   ORDER BY COALESCE(GREATEST(s.read_at, s.failed_at), '-infinity'), s.id
+   WHERE s.status <> 'paused'
+     AND (s.refresh_at <= now()
+          OR (s.kind IN ('storefront', 'table', 'website', 'sheet', 'books') AND s.status IN ('review', 'active', 'failed')
+              AND COALESCE(GREATEST(s.read_at, s.failed_at), '-infinity') < now() - interval '1 day'))
+   ORDER BY s.refresh_at NULLS LAST, COALESCE(GREATEST(s.read_at, s.failed_at), '-infinity'), s.id
    LIMIT p_limit
 $$;
 -- +goose StatementEnd

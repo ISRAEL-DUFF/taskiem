@@ -889,6 +889,25 @@ export const iswallet = {
   transfer: (input: IswalletTransferInput, extra?: ConnectorExtra): StepSpec => connector("iswallet@1", "transfer", input, extra),
 };
 
+// What your assistant knows (knowledge@1)
+export interface KnowledgeRefreshInput {
+  /** The source's title or id */
+  source: Val<string>;
+}
+export interface KnowledgeSearchInput {
+  limit?: Val<number>;
+  /** The most text the passages come to */
+  max_chars?: Val<number>;
+  /** The customer's message (what was heard, for a voice note) */
+  question: Val<string>;
+}
+export const knowledge = {
+  /** Read a source again (idempotent_write) */
+  refresh: (input: KnowledgeRefreshInput, extra?: ConnectorExtra): StepSpec => connector("knowledge@1", "refresh", input, extra),
+  /** Find what answers a question (read) */
+  search: (input: KnowledgeSearchInput, extra?: ConnectorExtra): StepSpec => connector("knowledge@1", "search", input, extra),
+};
+
 // Lenco (lenco@1)
 export interface LencoCreateVirtualAccountInput {
   /** Shown when payers resolve the number */
@@ -4008,6 +4027,7 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "interswitch@1": "interswitch",
   "invoices@1": "invoices",
   "iswallet@1": "iswallet",
+  "knowledge@1": "knowledge",
   "lenco@1": "lenco",
   "link@1": "link",
   "mailchimp@1": "mailchimp",
@@ -4065,6 +4085,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "interswitch@1": ["get_payment", "get_transfer", "list_banks", "resolve_account", "transfer"],
   "invoices@1": ["create", "customer_link", "get", "list", "notify_customer", "register_account", "send", "void"],
   "iswallet@1": ["create_dynamic_account", "create_wallet", "get_balance", "get_payout", "issue_virtual_account", "issue_virtual_accounts", "list_banks", "list_providers", "list_transactions", "name_enquiry", "payout", "transfer"],
+  "knowledge@1": ["refresh", "search"],
   "lenco@1": ["create_virtual_account", "get_balance", "get_transfer", "list_accounts", "list_banks", "resolve_account", "transfer"],
   "link@1": ["get_bill", "get_order", "list_bills", "low_orders", "order_step", "pay_bill", "place_order", "price_of", "reply"],
   "mailchimp@1": ["add_or_update_member", "create_campaign", "get_account", "list_audiences", "send_campaign", "tag_member"],

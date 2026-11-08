@@ -49,6 +49,7 @@ import { Guide, Start } from "./pages/Start";
 import { OnboardingProvider, useOnboarding } from "./onboarding";
 import { Keys } from "./pages/Keys";
 import { TablePage, Tables } from "./pages/Tables";
+import { Knowledge, KnowledgeSourcePage } from "./pages/Knowledge";
 import { Storefront } from "./pages/Storefront";
 import { Look } from "./pages/Look";
 import { StorefrontOrder, StorefrontOrders } from "./pages/StorefrontOrders";
@@ -439,6 +440,8 @@ function SignedIn() {
     ["/forms/requests", "To fill in", "inbox", toFill > 0, String(toFill)],
     ["/runs", "Activity", "activity", can("run.read")],
     ["/tables", "Tables", "tables", can("table.read")],
+    // What the assistant answers customers from (decision 0062 D12).
+    ["/knowledge", "What your assistant knows", "templates", can("secret.manage")],
     // Other businesses on Taskiem (business links, pages/Links.tsx).
     ["/chat", "Chat", "chat", true],
     [
@@ -683,6 +686,8 @@ function SignedIn() {
                   <Route path="/workflows/:id" element={<Editor />} />
                   <Route path="/templates" element={<Templates />} />
                   <Route path="/tables" element={<Tables />} />
+                  <Route path="/knowledge" element={<Knowledge />} />
+                  <Route path="/knowledge/:id" element={<KnowledgeSourcePage />} />
                   <Route path="/tables/:id" element={<TablePage />} />
                   <Route path="/storefront" element={<Storefront />} />
                   <Route path="/storefront/look" element={<Look />} />

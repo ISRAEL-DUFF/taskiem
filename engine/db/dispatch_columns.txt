@@ -551,6 +551,7 @@ knowledge_sources.failed_at
 knowledge_sources.id
 knowledge_sources.kind
 knowledge_sources.read_at
+knowledge_sources.refresh_at
 knowledge_sources.status
 knowledge_sources.tenant_id
 link_mirrors_due.due_at

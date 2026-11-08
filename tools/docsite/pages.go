@@ -60,6 +60,7 @@ var internal = []struct{ pattern, why string }{
 	{"media", "storage for storefronts and forms is built but idle until Phase 5 ships; publish it with storefronts"},
 	{"files", "files in runs are built for the customer assistant (decision 0062), which is not released; publish with it"},
 	{"speech", "speech in workflows is built for the customer assistant (decision 0062), which is not released; publish with it"},
+	{"knowledge", "what the assistant knows is built for the customer assistant (decision 0062), which is not released; publish with it"},
 	{"embed-sites", "embedding storefronts and forms is built but off until Phase 5 ships; publish it with storefronts"},
 	{"storefronts", "storefronts are built but off until Phase 5 ships; publish with them"},
 	{"dispatch", "riders and deliveries ride on storefront orders, off until Phase 5 ships; publish them with storefronts"},
