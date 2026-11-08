@@ -290,7 +290,12 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     const r = insertAt(text, start, el?.selectionEnd ?? start, c);
     typed(r.text);
     mentions.update(r.text, r.caret);
+    // Back to the message after the render, unless the person has gone on
+    // somewhere (the search box, to find the next one) in the meantime.
+    const from = document.activeElement;
     requestAnimationFrame(() => {
+      const now = document.activeElement;
+      if (now !== from && now !== document.body && now !== el) return;
       el?.focus();
       el?.setSelectionRange(r.caret, r.caret);
     });

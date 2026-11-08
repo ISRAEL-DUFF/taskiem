@@ -1106,3 +1106,27 @@ test("a message that was not sent keeps its two icon buttons on the screen, besi
     await buyer.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1),
   ).toBe(false);
 });
+
+test("after an emoji is picked, going to the search box keeps the typing there, however slow the screen", async ({
+  browser,
+}) => {
+  const { buyer, link } = await linked(browser);
+  await buyer.goto(`/chat?with=${link}`);
+  const pane = buyer.getByTestId("chat-pane");
+  await pane.getByTestId("emoji-button").click();
+  const panel = pane.getByTestId("emoji-panel");
+  const search = panel.getByLabel("Search emoji");
+  await expect(search).toBeVisible();
+  // A slow screen: the message box's focus after the pick comes late.
+  await buyer.evaluate(() => {
+    const raf = window.requestAnimationFrame.bind(window);
+    window.requestAnimationFrame = (cb) => (setTimeout(() => raf(cb), 400), 0);
+  });
+  await search.fill("okada");
+  await panel.getByRole("button", { name: "motorcycle" }).click();
+  await search.click();
+  await buyer.waitForTimeout(700);
+  await buyer.keyboard.type(" bike");
+  await expect(search).toHaveValue("okada bike");
+  await expect(pane.getByLabel("Message")).toHaveValue("🏍️");
+});
