@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"regexp"
 	"slices"
@@ -697,6 +698,33 @@ func (s *Server) testCredentials(ctx context.Context, tenant uuid.UUID, c *conne
 	return nil
 }
 
+// unsignedTriggers says, in plain words, which of a connector's triggers
+// this connection cannot receive: a trigger verified with a connection
+// field the connection does not have refuses every delivery, so a workflow
+// on it would stay silent (decision 0062 C17). Triggers Taskiem registers
+// itself keep their own secret and are not listed.
+func unsignedTriggers(c *connector.Connector, creds map[string]string) []string {
+	var out []string
+	for _, name := range slices.Sorted(maps.Keys(c.Manifest.Triggers)) {
+		t := c.Manifest.Triggers[name]
+		if t.Registered() || t.Verify == nil || t.Verify.SecretField == "" || strings.TrimSpace(creds[t.Verify.SecretField]) != "" {
+			continue
+		}
+		label := t.Verify.SecretField
+		for _, f := range c.Manifest.Auth.Fields {
+			if f.Key == t.Verify.SecretField && f.Label != "" {
+				label = f.Label
+			}
+		}
+		what := t.Title
+		if what == "" {
+			what = strings.ReplaceAll(name, "_", " ")
+		}
+		out = append(out, fmt.Sprintf("%s cannot be received yet: add %q to this connection, or every one %s sends is refused.", what, label, c.Manifest.Name))
+	}
+	return out
+}
+
 // checkConnection answers POST /v1/connections/check: the same checks as
 // saving, without saving, as a key is pasted.
 func (s *Server) checkConnection(w http.ResponseWriter, r *http.Request) {
@@ -798,6 +826,9 @@ func (s *Server) checkSavedConnection(w http.ResponseWriter, r *http.Request) {
 		s.applyConnectionSubscriptions(r)
 	}
 	out := map[string]any{"ok": true}
+	if warn := unsignedTriggers(c, creds); len(warn) > 0 {
+		out["warnings"] = warn
+	}
 	if c.Manifest.Auth.Test == nil {
 		out["message"] = c.Manifest.Name + " has no check of its own: a step that uses it is the test."
 		writeJSON(w, http.StatusOK, out)

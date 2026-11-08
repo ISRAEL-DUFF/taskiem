@@ -468,6 +468,10 @@
       "text": "Cika {name}.",
       "reviewed": false
     },
+    "ready.whatsapp_callback": {
+      "text": "Customers' messages reach this workflow only once {service} sends them to Taskiem. In Meta's App Dashboard, under WhatsApp then Configuration, paste {url} as the callback address, enter the same check value you saved on your connection, and subscribe to messages. Keep the app secret on your connection too, or every message is refused.",
+      "reviewed": false
+    },
     "rider.arrived": {
       "text": "Ka iso da {reference}: ba su kuma ka taɓa Na kai.",
       "reviewed": false

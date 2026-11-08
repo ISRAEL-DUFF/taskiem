@@ -584,6 +584,11 @@
       "reviewed": true,
       "context": "Readiness: a setting (variable) the workflow reads is not set"
     },
+    "ready.whatsapp_callback": {
+      "text": "Customers' messages reach this workflow only once {service} sends them to Taskiem. In Meta's App Dashboard, under WhatsApp then Configuration, paste {url} as the callback address, enter the same check value you saved on your connection, and subscribe to messages. Keep the app secret on your connection too, or every message is refused.",
+      "reviewed": true,
+      "context": "Readiness: a workflow starts on WhatsApp messages, which Meta sends only once its callback URL is set by hand"
+    },
     "rider.arrived": {
       "text": "At the door with {reference}: hand it over and tap Delivered.",
       "reviewed": true,

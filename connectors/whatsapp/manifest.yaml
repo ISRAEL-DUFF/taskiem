@@ -256,6 +256,7 @@ triggers:
   # items and are acknowledged.
   messages:
     type: webhook
+    title: Messages from customers
     verify: { scheme: hmac_sha256, header: X-Hub-Signature-256, secret_field: app_secret }
     handshake: { method: GET, token_query: hub.verify_token, secret_field: verify_token, respond: '=query["hub.challenge"]' }
     events: [message, status.sent, status.delivered, status.read, status.failed, status.played, error]

@@ -24910,7 +24910,7 @@ components:
       properties:
         kind:
           type: string
-          enum: [connection, variable, secret, table, role, field]
+          enum: [connection, variable, secret, table, role, field, setup]
         name:
           type: string
           description: The connection's, variable's, secret's, table's or role's name; empty for a connection a step does not name.
@@ -24922,7 +24922,7 @@ components:
           description: The connector's display name.
         problem:
           type: string
-          enum: [missing, expired, disabled, ambiguous, nobody, chat_id, cannot, support]
+          enum: [missing, expired, disabled, ambiguous, nobody, chat_id, cannot, support, setup]
           description: "cannot, for a capability step whose connection's rail cannot do it; support, for a connection whose service must turn a feature on for the business (Paystack's Pay with Transfer), never blocking."
         capability:
           type: string

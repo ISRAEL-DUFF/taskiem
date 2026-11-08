@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"regexp"
 	"slices"
 	"sort"
@@ -201,6 +202,20 @@ func (s *Server) readinessWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 			}
 		}
 	})
+	// The trigger's own connection (decision 0062 C9): a workflow that
+	// starts on a provider's events needs that provider connected, as a
+	// step that calls it does.
+	if d.Trigger.Type == "connector_event" {
+		ref, _ := d.Trigger.Config["connector"].(string)
+		if c, ok := reg.Get(ref); ok && c.Manifest.Auth.Type != "" && c.Manifest.Auth.Type != "none" {
+			name, _ := d.Trigger.Config["connection"].(string)
+			conns = append(conns, struct {
+				step            *wd.Step
+				connector, name string
+				service         string
+			}{nil, c.Manifest.ID, name, c.Manifest.Name})
+		}
+	}
 	// Roles named by the policies the approvals use.
 	for _, u := range policies {
 		var doc []byte
@@ -267,6 +282,21 @@ func (s *Server) readinessWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 		if len(caps) > 0 {
 			if err := capabilityNeeds(ctx, tx, l, env, caps, reg, add); err != nil {
 				return nil, err
+			}
+		}
+		if d.Trigger.Type == "connector_event" {
+			// Meta sends WhatsApp messages only to a callback URL set by
+			// hand in its App Dashboard (decision 0062 C8): say exactly
+			// what to set. Not blocking: Taskiem cannot see Meta's side.
+			if ref, _ := d.Trigger.Config["connector"].(string); ref == "whatsapp@1" {
+				name, _ := d.Trigger.Config["connection"].(string)
+				q := "?env=" + url.QueryEscape(env)
+				if name != "" {
+					q += "&connection=" + url.QueryEscape(name)
+				}
+				hook := s.hooksBase() + "/" + tenant.String() + "/connectors/whatsapp@1/messages" + q
+				add(key{"setup", "whatsapp_callback", "whatsapp", env}, readyNeed{Service: "WhatsApp", Problem: "setup",
+					Message: tr(l, "ready.whatsapp_callback", "service", "WhatsApp", "url", hook)}, nil)
 			}
 		}
 		if d.Trigger.Type == "capability_event" {
