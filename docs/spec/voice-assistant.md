@@ -236,7 +236,7 @@ Milestones in order. Each lists what is built, its tests and docs. Nothing in a 
 
 ### V1. Files in runs
 
-**Built** (2026-11-08), see [Files in runs](../files.md): the reference `{file, name, type, size, sha256}` (plain JSON: no wd/v1 schema change was needed); `engine/runfiles` with `run_files` (migration 00313), checks on type, size, Ogg length and malware for what a person sent, 30 days capped by the plan, a sweep every 10 minutes; `connector.Request.Files` for every connector call in a run; `files@1` (`link`, `delete`). The file reference is not itself personal data (an id and a name); the content stays in storage and is marked personal. Erasing a customer's files with the rest of their data is V6.
+**Built** (2026-11-08), see [Files in runs](../files.md): the reference `{file, name, type, size, sha256}` (plain JSON: no wd/v1 schema change was needed); `engine/runfiles` with `run_files` (migration 00313), checks on type, size, Ogg length and malware for what a person sent, 30 days capped by the plan, a sweep every 10 minutes; `connector.Request.Files` for every connector call in a run; `files@1` (`link`, `delete`). The file reference is not itself personal data (an id and a name); the content stays in storage and is marked personal. Erasing a customer's files with the rest of their data was brought forward from V6 by the review below (gap 16).
 
 - A **file reference** kind in wd/v1: `{file: <id>, name, type, size, sha256}` in trigger bodies and step outputs, never the bytes (F1).
 - A **run files** store on `engine/media`: private bucket, per tenant, signed links on request, a retention per workflow capped by plan (F2, F6), sealed as personal data when it came from a person.
@@ -264,6 +264,34 @@ Milestones in order. Each lists what is built, its tests and docs. Nothing in a 
 - Long replies split at sentence ends under each channel's limit (C20).
 - Retry once on a lost answer for chat reply sends, behind a step setting (L7, D11).
 - Fixtures: inbound voice note on each channel; tests of each new action against recorded shapes.
+
+#### Review of V1 and V2 (2026-11-08)
+
+V1 and V2 were reviewed for gaps before V3; 21 were found and all are fixed on the same branch.
+
+| # | Gap | Fix |
+| --- | --- | --- |
+| 1 | A run's `concurrency_key` (often a customer's number) was stored as written | Stored as a keyed hash, never the value; the declared category keys it ([architecture](architecture.md)) |
+| 2 | Saving a Telegram connection took over the bot's webhook, even for a bot used only to send, and two environments fought over one bot | Option A: `registration: connection_when_used`; set only while a published workflow starts on the bot's updates; a second environment fails in plain words (item 4) |
+| 3 | `files@1 link` put a working download link in run history | The link is declared personal and sealed; later steps still read it |
+| 4 | WhatsApp downloads had no size cap before reading | 25 MB, and 16 MB for audio, checked before and while reading |
+| 5 | A "voice note" could be Ogg Vorbis, which neither app plays as a voice message | `media.IsOpus` checked by WhatsApp's `upload_media`/`send_media` and Telegram's `send_voice` |
+| 6 | The "cannot receive messages" warning only came from **Check** | Saving, pasting and adding to a connection answer `warnings`; the web app shows them |
+| 7 | A Taskiem with no malware scanner refused every customer file only at run time | Readiness: a blocking `setup/file_scanner` need, in plain words |
+| 8 | Repair's worker had no run file store | `api.Server.RunFiles`, given to repair's worker |
+| 9 | AAC and AMR voice notes (older phones) were refused | Kept, with frame checks |
+| 10 | `chunks` counted characters where the channels count UTF-16 units | `chunks(text, max, "utf16")` |
+| 11 | `resend_if_lost` on a step with `retry.max: 0` could never resend | Publishing refuses it |
+| 12 | No cap on how much an organisation's runs could keep | 1 GB of new files a day per organisation |
+| 13 | A customer's file kept the name it was sent with | Kept under a neutral name |
+| 14 | Meta's media redirects to its CDN were refused; typing was refused on some accounts; the upload type was not Meta's | Redirects followed to Meta's hosts only (in the egress list); typing falls back to a read receipt; `audio/ogg` |
+| 15 | Owner warnings carried technical words from field labels | Labels in plain words; the explanation in brackets is left out of warnings |
+| 16 | Erasing a customer left their files until expiry | `get_media`/`get_file` take `sender`; erasure deletes the files at once (expiring them first, so a storage failure leaves nothing readable) |
+| 17 | Telegram's health check missed a webhook that had just started failing | A delivery error in the last hour reports failing |
+| 18 | WhatsApp media was looked up without the number | `?phone_number_id=` on the lookup |
+| 19 | Docs behind the code | Files, WhatsApp, Telegram, readiness, wd/v1 and action classes updated |
+| 20 | No test of a whole voice round trip | `TestWhatsAppVoiceRoundTrip`: fake Graph API, get_media, a speech stand-in, send_media as a voice note |
+| 21 | No measure of scanning or of files kept | `taskiem_file_scan_seconds`, `taskiem_run_files_total` |
 
 ### V3. Speech steps
 

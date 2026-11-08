@@ -24,7 +24,7 @@ The reference is ordinary JSON: nothing in wd/v1 changed for it, and a run's his
 
 Anything else is refused (`runfiles.ErrRefused`), and so is an empty file.
 
-**What a person sent is scanned** for malware before it is kept, by the clamd the operator runs (`TASKIEM_CLAMD_ADDR`). Without one, such files are refused, as hosted forms' files are. Files a step made itself (a reply a speech step spoke) are not scanned. A person's file is marked personal (`run_files.personal`) and kept under a neutral name (`voice-note.ogg`, `photo.jpg`, `document.pdf`), never the name it was sent with, which can carry a person's name or number. The time each scan takes is measured (`taskiem_file_scan_seconds`), and so is every file kept or refused (`taskiem_run_files_kept_total{origin="person"|"step", outcome="kept"|"refused"|"over_allowance"}`), for [operations](operations.md).
+**What a person sent is scanned** for malware before it is kept, by the clamd the operator runs (`TASKIEM_CLAMD_ADDR`). Without one, such files are refused, as hosted forms' files are. Files a step made itself (a reply a speech step spoke) are not scanned. A person's file is marked personal (`run_files.personal`) and kept under a neutral name (`voice-note.ogg`, `photo.jpg`, `document.pdf`), never the name it was sent with, which can carry a person's name or number. The time each scan takes is measured (`taskiem_file_scan_seconds`), and so is every file kept or refused (`taskiem_run_files_total{origin="person"|"made", outcome="kept"|"refused"|"over_allowance"}`), for [operations](operations.md).
 
 ## How much can be kept
 

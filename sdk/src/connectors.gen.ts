@@ -3195,6 +3195,8 @@ export interface TelegramGetFileInput {
   file_id: Val<string>;
   /** A file name to keep it under */
   name?: Val<string>;
+  /** Who sent it (trigger.body.message.chat.id or .from.id): erasing that id deletes the file too */
+  sender?: Val<string>;
 }
 export interface TelegramGetMeInput {
   [key: string]: Value;
@@ -3338,6 +3340,8 @@ export interface WhatsappGetMediaInput {
   media_id: Val<string>;
   /** A file name to keep it under */
   name?: Val<string>;
+  /** Who sent it (trigger.item.message.from): erasing that number deletes the file too */
+  sender?: Val<string>;
 }
 export interface WhatsappGetPhoneNumberInput {
   [key: string]: Value;

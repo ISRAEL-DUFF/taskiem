@@ -172,6 +172,8 @@ Run `taskiem migrate` as the schema owner, and `taskiem serve` as `taskiem`. Or 
 | `taskiem_ingest_deliveries_total` | kind (`webhook`, `connector`, `schedule`), result |
 | `taskiem_steps_total`, `taskiem_step_duration_seconds` | queue, target (connector or step type), outcome |
 | `taskiem_queue_ready`, `taskiem_queue_leased`, `taskiem_queue_oldest_ready_seconds` | queue |
+| `taskiem_file_scan_seconds` | none: how long the malware scan of a file a person sent takes ([files in runs](files.md)) |
+| `taskiem_run_files_total` | origin (`person`, `made`: a file a step made), outcome (`kept`, `refused`, `over_allowance`) |
 | `taskiem_pool_ready`, `taskiem_pool_leased`, `taskiem_pool_oldest_ready_seconds` | pool, queue ([worker pools](cloud.md#dedicated-worker-pools)) |
 | `taskiem_db_retries_total` | outcome (`retried`, `recovered`, `gave_up`): transactions retried through a failover ([cloud](cloud.md#what-happens-during-a-failover)) |
 | `taskiem_db_replica_lag_seconds`, `taskiem_db_replica_in_use`, `taskiem_db_reads_total` | `taskiem_db_reads_total`: target (`replica`, `fallback`, `no_replica`) ([read replica](cloud.md#read-replica)) |
