@@ -1068,7 +1068,7 @@ func (s *Server) stockFail(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, errNoItem):
 		writeErr(w, http.StatusNotFound, "no such item")
 	case errors.Is(err, errNoCategoryColumn):
-		writeJSON(w, http.StatusConflict, map[string]any{"error": "Add a category column to use categories", "code": "no_category_column"})
+		writeJSON(w, http.StatusConflict, map[string]any{"error": "Add a category column to use categories: on the Tables page, open your products table and add a text column called category.", "code": "no_category_column"})
 	case errors.Is(err, stock.ErrInvalid):
 		s.fail(w, r, fmt.Errorf("%w: %s", errBadRequest, strings.TrimPrefix(err.Error(), "stock: invalid: ")))
 	case errors.Is(err, stock.ErrSaleInvalid):

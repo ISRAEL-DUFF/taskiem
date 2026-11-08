@@ -24,7 +24,8 @@ import {
 } from "../lib/pricelists";
 import type { BusinessLink } from "../lib/links";
 import { useAuth } from "../auth";
-import { quantity, type StockItem } from "../lib/stock";
+import { quantity, type StockItem, type StockView } from "../lib/stock";
+import { categoriesOf } from "../lib/mentions";
 import {
   formatPrice,
   imageProblem,
@@ -288,6 +289,59 @@ function Photos({ item, canEdit }: { item: StockItem; canEdit: boolean }) {
   );
 }
 
+/** A product's category (docs/spec/chat-categories-and-variants.md): any
+ * word the owner types, with the categories already used offered as chips
+ * ("Sneakers · 48"), so spellings don't drift. */
+function CategoryField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const used = useLoad(
+    () =>
+      get<StockView>("/v1/stock").then(
+        (r) => categoriesOf(r.items),
+        () => [],
+      ),
+    [],
+  );
+  const q = value.trim().toLowerCase();
+  const offer = (used.data ?? [])
+    .filter(
+      (c) =>
+        c.name.toLowerCase() !== q &&
+        (q === "" || c.name.toLowerCase().includes(q)),
+    )
+    .slice(0, 6);
+  return (
+    <div className="tk-category">
+      <KitField label="Category" hint="Sneakers, Soft drinks… Search and the chips use it.">
+        <input
+          value={value}
+          maxLength={60}
+          placeholder="None"
+          onChange={(e) => onChange(e.target.value)}
+        />
+      </KitField>
+      {offer.length > 0 && (
+        <div
+          className="tk-chips tk-field-chips"
+          role="group"
+          aria-label="Categories you use"
+        >
+          {offer.map((c) => (
+            <button key={c.name} type="button" onClick={() => onChange(c.name)}>
+              {c.name} · {c.count}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** A product: its photo, price, count on the shelf, and whether it shows. */
 export function ProductForm({
   item,
@@ -365,6 +419,7 @@ export function ProductForm({
   // The count is sent only when it was changed (an item may have none).
   const [count, setCount] = useState<number | null>(item.stock);
   const [shown, setShown] = useState(item.available);
+  const [category, setCategory] = useState(item.category ?? "");
   const kobo = nairaKobo(price);
   const save: Saver = async () => {
     const said: string[] = [];
@@ -373,6 +428,7 @@ export function ProductForm({
       change.price_kobo = kobo;
     if (name.trim() && name.trim() !== item.name) change.name = name.trim();
     if (shown !== item.available) change.available = shown;
+    if (category.trim() !== (item.category ?? "")) change.category = category.trim();
     if (Object.keys(change).length) {
       await patch(`/v1/stock/items/${encodeURIComponent(item.id)}`, change);
       said.push("Saved");
@@ -434,6 +490,7 @@ export function ProductForm({
       <KitField label="Name">
         <input value={name} maxLength={120} onChange={(e) => setName(e.target.value)} />
       </KitField>
+      <CategoryField value={category} onChange={setCategory} />
       {chosen ? (
         <>
           <div className="tk-form-two">
@@ -560,6 +617,7 @@ export function ProductAdd({
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
   const [unit, setUnit] = useState("");
+  const [category, setCategory] = useState("");
   const [count, setCount] = useState(0);
   const kobo = nairaKobo(price);
   const save: Saver = async () => {
@@ -568,6 +626,7 @@ export function ProductAdd({
       price_kobo: kobo,
       unit: unit.trim(),
       quantity: count,
+      ...(category.trim() ? { category: category.trim() } : {}),
     });
     return productLine(name.trim(), kobo, unit.trim() || undefined);
   };
@@ -585,6 +644,7 @@ export function ProductAdd({
           placeholder="Rice, 50kg bag"
         />
       </KitField>
+      <CategoryField value={category} onChange={setCategory} />
       <Money label="Price" value={price} onChange={setPrice} />
       <KitField label="Sold by the" hint="bag, carton, piece…">
         <input value={unit} onChange={(e) => setUnit(e.target.value)} />

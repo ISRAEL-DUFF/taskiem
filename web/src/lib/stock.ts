@@ -19,6 +19,11 @@ export interface StockItem {
   reorder_level?: number;
   target_level?: number;
   supplier?: string;
+  /** The kind of thing it is ("Sneakers"), when the catalogue has a
+   * category column. */
+  category?: string;
+  /** Its words on the storefront, when the catalogue maps them. */
+  description?: string;
   low?: boolean;
   /** How many to order, when low. */
   suggest?: number;

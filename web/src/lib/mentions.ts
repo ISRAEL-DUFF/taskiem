@@ -4,8 +4,9 @@ import type { ExploreCard } from "./explore";
 // in the text and, in a conversation, a structured reference beside it.
 
 export interface Suggestion {
-  /** A linked business, an item of a price list, a service, or Taskiem. */
-  kind: "business" | "item" | "service" | "taskiem";
+  /** A linked business, an item of a price list, a service, Taskiem, or
+   * a category of items (picking it opens them, filtered). */
+  kind: "business" | "item" | "service" | "taskiem" | "category";
   /** The link (a business) or the seller's item id. */
   id: string;
   name: string;
@@ -16,6 +17,10 @@ export interface Suggestion {
   /** A business we are not linked with, found in Explore: picking it
    * shows its card (with Connect) rather than tagging it. */
   explore?: ExploreCard;
+  /** An item's category ("Sneakers") and its words (the storefront's
+   * description): search reads both, after the name. */
+  category?: string;
+  words?: string;
 }
 
 /** A mention as a message stores it. */
@@ -55,23 +60,67 @@ export function mentionQuery(text: string, caret: number): MentionQuery | null {
   return null;
 }
 
+/** Whether a word of the text starts with q. */
+const wordStarts = (text: string, q: string) =>
+  text.startsWith(q) || text.split(/\s+/).some((w) => w.startsWith(q));
+
 /** The suggestions a query fits: a word of the name starting with it
- * first, then the name holding it; six at most. */
+ * first, then the name holding it, then those whose category or words
+ * hold it ("nike" finds a shoe whose description says Nike); six at most. */
 export function suggest(list: Suggestion[], query: string): Suggestion[] {
   const q = query.trim().toLowerCase();
   const starts: Suggestion[] = [];
   const holds: Suggestion[] = [];
+  const about: Suggestion[] = [];
   for (const s of list) {
     const n = s.name.toLowerCase();
-    if (
-      q === "" ||
-      n.startsWith(q) ||
-      n.split(/\s+/).some((w) => w.startsWith(q))
-    )
-      starts.push(s);
+    if (q === "" || wordStarts(n, q)) starts.push(s);
     else if (n.includes(q)) holds.push(s);
+    else if (
+      (s.category ?? "").toLowerCase().includes(q) ||
+      (s.words ?? "").toLowerCase().includes(q)
+    )
+      about.push(s);
   }
-  return [...starts, ...holds].slice(0, 6);
+  return [...starts, ...holds, ...about].slice(0, 6);
+}
+
+/** The categories of a list with how many items each has, the most used
+ * first (then by name). */
+export function categoriesOf(
+  list: { category?: string }[],
+): { name: string; count: number }[] {
+  const n = new Map<string, { name: string; count: number }>();
+  for (const it of list) {
+    const c = it.category?.trim();
+    if (!c) continue;
+    const k = c.toLowerCase();
+    const got = n.get(k);
+    if (got) got.count++;
+    else n.set(k, { name: c, count: 1 });
+  }
+  return [...n.values()].sort(
+    (a, b) => b.count - a.count || a.name.localeCompare(b.name),
+  );
+}
+
+/** The categories a query names, as the picker's first rows: "Sneakers ·
+ * 48 items"; two at most, none for an empty query. */
+export function categorySuggestions(
+  categories: { name: string; count: number }[],
+  query: string,
+): Suggestion[] {
+  const q = query.trim().toLowerCase();
+  if (q === "") return [];
+  return categories
+    .filter((c) => wordStarts(c.name.toLowerCase(), q))
+    .slice(0, 2)
+    .map((c) => ({
+      kind: "category" as const,
+      id: c.name,
+      name: c.name,
+      sub: `${c.count} ${c.count === 1 ? "item" : "items"}`,
+    }));
 }
 
 /** The text with the query replaced by the picked name and a space, and
@@ -166,6 +215,9 @@ export function groupSuggestions(
     businesses: Suggestion[];
     /** Found in Explore for these words: not linked, after the linked. */
     unlinked?: Suggestion[];
+    /** The categories offered (the business's own, in its Taskiem chat);
+     * else the items' own. */
+    categories?: { name: string; count: number }[];
   },
   taskiem: boolean,
 ): SuggestionGroup[] {
@@ -176,6 +228,9 @@ export function groupSuggestions(
     const all = [...got, ...more.filter((s) => !names.has(s.name.toLowerCase())).slice(0, 3)];
     if (all.length > 0) out.push({ label, items: all });
   };
+  // A category the words name comes first: it opens its items, filtered.
+  const cats = categorySuggestions(src.categories ?? categoriesOf(src.items), query);
+  if (cats.length > 0) out.push({ label: "Categories", items: cats });
   add("Products", src.items, 4);
   add("Services", src.services, 3);
   add("Businesses", src.businesses, 4, src.unlinked);

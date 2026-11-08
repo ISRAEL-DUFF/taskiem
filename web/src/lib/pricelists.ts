@@ -11,6 +11,8 @@ export interface PriceItem {
   item_id: string;
   name: string;
   unit?: string;
+  /** The seller's category for it ("Sneakers"). */
+  category?: string;
   price_kobo: number;
   min_quantity: number;
   available: boolean;

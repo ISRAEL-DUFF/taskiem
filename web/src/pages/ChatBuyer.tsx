@@ -21,6 +21,7 @@ import {
   stepQty,
 } from "../lib/buyer";
 import { ORDER_STEPS } from "../lib/cardframe";
+import { categoryChips, categoryTag } from "../lib/tools";
 import { breakWords, dealKobo, offWords, priceAt } from "../lib/deals";
 import { answersDelivery } from "../lib/purchases";
 import { buyerSteps, sameName } from "../lib/tradeorders";
@@ -46,10 +47,59 @@ export interface OrderStart {
   qty?: Record<string, number>;
   /** Reorder: the last order's lines, as the price list has them now. */
   last?: Purchase;
+  /** A category picked in "@": the list opens showing it. */
+  category?: string;
 }
 
 /** An order from a supplier's price list: pick, review, place (or ask them
  * to quote). Placing drafts the order at their prices and sends it. */
+/** The items of their list a chip and a search show: by name first, then
+ * those whose category holds the words. */
+export function orderShown(
+  items: PriceItem[],
+  chip: string | undefined,
+  search: string,
+): PriceItem[] {
+  const q = search.trim().toLowerCase();
+  const picked = items.filter(
+    (it) => !chip || (it.category && categoryTag(it.category) === chip),
+  );
+  if (q === "") return picked;
+  return [
+    ...picked.filter((it) => it.name.toLowerCase().includes(q)),
+    ...picked.filter(
+      (it) =>
+        !it.name.toLowerCase().includes(q) &&
+        (it.category ?? "").toLowerCase().includes(q),
+    ),
+  ];
+}
+
+/** Their list under its categories' headings, in the order the list has
+ * them, "Other" last; one section with no heading when it has none. */
+export function orderSections(
+  items: PriceItem[],
+): { label: string; items: PriceItem[] }[] {
+  if (!items.some((it) => it.category))
+    return items.length ? [{ label: "", items }] : [];
+  const by = new Map<string, { label: string; items: PriceItem[] }>();
+  const other: PriceItem[] = [];
+  for (const it of items) {
+    const c = it.category?.trim();
+    if (!c) {
+      other.push(it);
+      continue;
+    }
+    const k = c.toLowerCase();
+    const sec = by.get(k) ?? { label: c, items: [] };
+    sec.items.push(it);
+    by.set(k, sec);
+  }
+  const out = [...by.values()];
+  if (other.length) out.push({ label: "Other", items: other });
+  return out;
+}
+
 export function OrderSheet({
   link,
   business,
@@ -131,6 +181,9 @@ export function OrderSheet({
   }
   const [step, setStep] = useState<"pick" | "review">("pick");
   const [search, setSearch] = useState("");
+  const [chip, setChip] = useState<string | undefined>(
+    start?.category ? categoryTag(start.category) : undefined,
+  );
   const [note, setNote] = useState("");
   // Make an offer (phase 7): our own price for the whole order.
   const [offering, setOffering] = useState(false);
@@ -161,9 +214,10 @@ export function OrderSheet({
     mine[it.item_id] ??
     own.data?.find((x) => x.name.toLowerCase() === it.name.toLowerCase())?.id ??
     "new";
-  const shown = (list?.items ?? []).filter((it) =>
-    it.name.toLowerCase().includes(search.trim().toLowerCase()),
-  );
+  // Their categories as chips; the list under their headings.
+  const cats = categoryChips(list?.items ?? []);
+  const shown = orderShown(list?.items ?? [], chip, search);
+  const sections = orderSections(shown);
   const finish = (words: string) => {
     setDone(words);
     onPlaced?.(words);
@@ -408,70 +462,106 @@ export function OrderSheet({
               onChange={(e) => setSearch(e.target.value)}
             />
           </label>
-          <ul className="tk-sheet-list tk-order-list tk-stagger">
-            {shown.map((it) => {
-              const n = qty[it.item_id] ?? 0;
-              return (
-                <li
-                  key={it.item_id}
-                  className={`tk-order-row${n > 0 ? " on" : ""}`}
-                  data-testid="order-row"
+          {cats.length > 0 && (
+            <div className="tk-chips" role="group" aria-label="Show">
+              <button
+                type="button"
+                aria-pressed={!chip}
+                onClick={() => setChip(undefined)}
+              >
+                All
+              </button>
+              {cats.map((c) => (
+                <button
+                  key={c.tag}
+                  type="button"
+                  aria-pressed={chip === c.tag}
+                  onClick={() => setChip(chip === c.tag ? undefined : c.tag)}
                 >
-                  <span
-                    className="tk-row-tile"
-                    aria-hidden="true"
-                    data-tone="sand"
-                  >
-                    <Icon name="package" />
-                  </span>
-                  <span className="tk-row-words">
-                    <span className="tk-row-name">{it.name}</span>
-                    <span className="tk-row-sub">
-                      {it.available ? orderLine(it) : "Not available now"}
-                    </span>
-                    {it.available && !!it.breaks?.length && (
-                      <span className="tk-row-sub tk-breaks">
-                        {breakWords(it)}
-                      </span>
-                    )}
-                  </span>
-                  <span
-                    className="tk-qty"
-                    role="group"
-                    aria-label={`How many ${it.name}`}
-                  >
-                    <button
-                      type="button"
-                      aria-label={`One fewer ${it.name}`}
-                      disabled={n === 0}
-                      onClick={() =>
-                        setQty({
-                          ...qty,
-                          [it.item_id]: stepQty(n, it.min_quantity, -1),
-                        })
-                      }
-                    >
-                      −
-                    </button>
-                    <span aria-live="polite">{n}</span>
-                    <button
-                      type="button"
-                      aria-label={`One more ${it.name}`}
-                      disabled={!it.available}
-                      onClick={() =>
-                        setQty({
-                          ...qty,
-                          [it.item_id]: stepQty(n, it.min_quantity, 1),
-                        })
-                      }
-                    >
-                      +
-                    </button>
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="tk-sheet-list tk-order-sections">
+            {shown.length === 0 && (
+              <KitEmpty icon="search" title="Nothing matches">
+                Try another word, or show all.
+              </KitEmpty>
+            )}
+            {sections.map((sec) => (
+              <section
+                key={sec.label || "all"}
+                aria-label={sec.label || undefined}
+              >
+                {sec.label && <h3 className="tk-order-cat">{sec.label}</h3>}
+                <ul className="tk-order-list tk-stagger">
+                  {sec.items.map((it) => {
+                    const n = qty[it.item_id] ?? 0;
+                    return (
+                      <li
+                        key={it.item_id}
+                        className={`tk-order-row${n > 0 ? " on" : ""}`}
+                        data-testid="order-row"
+                      >
+                        <span
+                          className="tk-row-tile"
+                          aria-hidden="true"
+                          data-tone="sand"
+                        >
+                          <Icon name="package" />
+                        </span>
+                        <span className="tk-row-words">
+                          <span className="tk-row-name">{it.name}</span>
+                          <span className="tk-row-sub">
+                            {it.available ? orderLine(it) : "Not available now"}
+                          </span>
+                          {it.available && !!it.breaks?.length && (
+                            <span className="tk-row-sub tk-breaks">
+                              {breakWords(it)}
+                            </span>
+                          )}
+                        </span>
+                        <span
+                          className="tk-qty"
+                          role="group"
+                          aria-label={`How many ${it.name}`}
+                        >
+                          <button
+                            type="button"
+                            aria-label={`One fewer ${it.name}`}
+                            disabled={n === 0}
+                            onClick={() =>
+                              setQty({
+                                ...qty,
+                                [it.item_id]: stepQty(n, it.min_quantity, -1),
+                              })
+                            }
+                          >
+                            −
+                          </button>
+                          <span aria-live="polite">{n}</span>
+                          <button
+                            type="button"
+                            aria-label={`One more ${it.name}`}
+                            disabled={!it.available}
+                            onClick={() =>
+                              setQty({
+                                ...qty,
+                                [it.item_id]: stepQty(n, it.min_quantity, 1),
+                              })
+                            }
+                          >
+                            +
+                          </button>
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ))}
+          </div>
         </>
       ) : (
         <div className="tk-sheet-list tk-form-body">

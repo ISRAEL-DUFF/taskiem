@@ -31,6 +31,7 @@ import {
 } from "./ChatToolForms";
 import {
   filterRows,
+  categoryChips,
   toolsFor,
   type Tool,
   type ToolKey,
@@ -421,15 +422,16 @@ export function ToolSheet({
   onReorder?: (p: Purchase) => void;
   /** Your orders, in a supplier's conversation: a new order to them. */
   onNewOrder?: () => void;
-  /** Where a typed request points: a row, or a new one, filled in. */
-  start?: { rowId?: string; add?: boolean; prefill?: Prefill };
+  /** Where a typed request points: a row, or a new one, filled in; or a
+   * chip already on (a category picked in "@"). */
+  start?: { rowId?: string; add?: boolean; prefill?: Prefill; chip?: string };
   /** Tells a change (its diary line). */
   onSaved?: (line: string) => Promise<void> | void;
 }) {
   const { can, me } = useAuth();
   const tool = toolsFor(can, "", me?.roles).find((t) => t.key === key);
   const [search, setSearch] = useState("");
-  const [chip, setChip] = useState<string>();
+  const [chip, setChip] = useState<string | undefined>(start?.chip);
   const [open, setOpen] = useState<ToolRow | "add" | undefined>(
     start?.add ? "add" : undefined,
   );
@@ -456,6 +458,8 @@ export function ToolSheet({
   // In a business's conversation, the orders and bills with that business.
   const list = Array.isArray(rows) ? inScope(rows, scope) : undefined;
   const shown = list ? filterRows(list, chip, search) : [];
+  // The rows' categories, as chips after the tool's own.
+  const cats = list ? categoryChips(list) : [];
   const name = tool.title.toLowerCase();
   const done = (line: string | null) => {
     if (line) void onSaved?.(line);
@@ -521,7 +525,7 @@ export function ToolSheet({
               onChange={(e) => setSearch(e.target.value)}
             />
           </label>
-          {tool.chips && list && (
+          {list && (tool.chips || cats.length > 0) && (
             <div className="tk-chips" role="group" aria-label="Show">
               <button
                 type="button"
@@ -530,7 +534,7 @@ export function ToolSheet({
               >
                 All
               </button>
-              {tool.chips.map((c) => {
+              {[...(tool.chips ?? []), ...cats].map((c) => {
                 const n = list.filter((r) => r.tags.includes(c.tag)).length;
                 return (
                   <button

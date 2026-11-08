@@ -1169,6 +1169,7 @@ export function ConversationPane({
           id: it.item_id,
           name: it.name,
           sub: priceWords(it),
+          category: it.category,
         })),
     },
     replyLine: (r) => previewLine(r, conv.name),

@@ -721,3 +721,10 @@ input.tk-switch:disabled { cursor: default; opacity: 0.7; }
 .tk-x-sheet { display: flex; flex-direction: column; gap: 12px; padding: 4px 16px 16px; }
 .tk-x-sheet .tk-x-card.explore-card { box-shadow: 0 0 0 1px var(--border); }
 .tk-x-note { margin: 0 4px; font-size: 13px; color: var(--muted); }
+/* A supplier's list under its categories' headings (chat categories). */
+.tk-order-sections { padding-bottom: 96px; }
+.tk-order-sections .tk-order-list { padding-bottom: 0; }
+.tk-order-cat { margin: 14px 20px 0; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+/* A product's category and the ones already used (chat categories). */
+.tk-category { display: flex; flex-direction: column; gap: 8px; }
+.tk-field-chips { padding: 0; }
