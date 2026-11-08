@@ -547,6 +547,12 @@ invoice_payment_starts.workflow_id
 key_parked_steps.tenant_id
 key_rewrap_due.not_before
 key_rewrap_due.tenant_id
+knowledge_sources.failed_at
+knowledge_sources.id
+knowledge_sources.kind
+knowledge_sources.read_at
+knowledge_sources.status
+knowledge_sources.tenant_id
 link_mirrors_due.due_at
 link_mirrors_due.invoice_id
 link_mirrors_due.tenant_id
