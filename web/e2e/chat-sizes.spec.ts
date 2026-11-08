@@ -128,6 +128,11 @@ async function answer(page: Page, items: unknown[]) {
 async function tool(page: Page, word: string) {
   const box = page.getByTestId("taskiem-pane").getByLabel("Message");
   await box.fill(`/${word}`);
+  // The tools come once the page knows they are on: Enter before then
+  // sends the words as a message.
+  await expect(
+    page.getByRole("region", { name: "Tools" }).getByRole("button"),
+  ).toHaveCount(1);
   await box.press("Enter");
   await page.keyboard.press("Enter");
 }

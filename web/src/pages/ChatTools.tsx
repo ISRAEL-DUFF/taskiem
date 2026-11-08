@@ -9,6 +9,7 @@ import type { Prefill } from "../lib/intents";
 import type { Purchase } from "../lib/purchases";
 import type { Bill } from "../lib/bills";
 import { BillView, PurchaseView } from "./ChatBuyer";
+import { GroupForm } from "./SizesForms";
 import { Link } from "react-router-dom";
 import { get } from "../api";
 import { useAuth } from "../auth";
@@ -394,6 +395,13 @@ function Detail({
   }
 }
 
+/** A product row that can be made one of a product's sizes: an item of
+ * its own, not sold in sizes and colours, nor one of them. */
+function plainItem(r: ToolRow): boolean {
+  const it = r.data as StockItem | undefined;
+  return !!it && !it.variant_of && !it.choices?.length;
+}
+
 /** The tools that add a new one from their sheet, and the button's words. */
 const ADDS: Partial<Record<ToolKey, string>> = {
   products: "Add product",
@@ -437,6 +445,11 @@ export function ToolSheet({
   );
   const [saved, setSaved] = useState(false);
   const [shut, setShut] = useState(false);
+  // Make one product with sizes and colours: the items chosen, then the
+  // form (Products only, for those who may change them).
+  const [picking, setPicking] = useState(false);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [grouping, setGrouping] = useState(false);
   const { rows: all, retry } = useToolRows(tool ? [tool] : []);
   const rows = all[key];
   useEffect(() => remember(key), [key]);
@@ -468,20 +481,54 @@ export function ToolSheet({
     window.setTimeout(() => setShut(true), 1300);
   };
   const add = ADDS[key];
+  const groupable =
+    key === "products" &&
+    mayEdit(key, can) &&
+    (list ?? []).filter(plainItem).length >= 2;
+  const pickedItems = (list ?? [])
+    .filter((r) => picked.includes(r.id))
+    .map((r) => r.data as StockItem);
+  const stopPicking = () => {
+    setPicking(false);
+    setPicked([]);
+  };
   return (
     <Sheet
       title={
-        open === "add" ? (add ?? tool.title) : open ? open.name : tool.title
+        grouping
+          ? "Make one product"
+          : open === "add"
+            ? (add ?? tool.title)
+            : open
+              ? open.name
+              : tool.title
       }
-      count={open ? undefined : list?.length}
+      count={open || grouping ? undefined : list?.length}
       crumb={open && open !== "add" ? tool.title : undefined}
       from={from}
       onClose={onClose}
-      onBack={open ? () => setOpen(undefined) : undefined}
+      onBack={
+        open
+          ? () => setOpen(undefined)
+          : grouping
+            ? () => setGrouping(false)
+            : undefined
+      }
       shut={shut}
       testid="tool-sheet"
       footer={
-        open ? undefined : key === "purchases" && onNewOrder ? (
+        open || grouping ? undefined : picking ? (
+          <button
+            type="button"
+            className="tk-cta"
+            disabled={picked.length < 2}
+            onClick={() => setGrouping(true)}
+          >
+            {picked.length < 2
+              ? "Choose at least two"
+              : `Make one product of ${picked.length}`}
+          </button>
+        ) : key === "purchases" && onNewOrder ? (
           <button type="button" className="tk-cta" onClick={onNewOrder}>
             New order
           </button>
@@ -502,7 +549,16 @@ export function ToolSheet({
       }
     >
       {saved && <SavedTick />}
-      {open ? (
+      {grouping ? (
+        <GroupForm
+          items={pickedItems}
+          onSaved={(line) => {
+            stopPicking();
+            done(line);
+          }}
+          onCancel={() => setGrouping(false)}
+        />
+      ) : open ? (
         <Detail
           tool={key}
           row={open}
@@ -549,6 +605,33 @@ export function ToolSheet({
               })}
             </div>
           )}
+          {groupable && (
+            <p className="tk-group-bar">
+              {picking ? (
+                <>
+                  <span role="status">
+                    Choose the items that are one product in sizes and
+                    colours.
+                  </span>
+                  <button
+                    type="button"
+                    className="tk-btn soft"
+                    onClick={stopPicking}
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="tk-btn soft"
+                  onClick={() => setPicking(true)}
+                >
+                  Make one product with sizes and colours
+                </button>
+              )}
+            </p>
+          )}
           <div className="tk-sheet-list">
             {rows === undefined ? (
               <KitLoading label={`Loading ${name}…`} />
@@ -581,6 +664,32 @@ export function ToolSheet({
                 <ul className="tk-stagger">
                   {shown.map((r) => (
                     <li key={r.id}>
+                      {picking ? (
+                        <label
+                          className={`tk-row tk-pick${plainItem(r) ? "" : " off"}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={picked.includes(r.id)}
+                            disabled={!plainItem(r)}
+                            onChange={(e) =>
+                              setPicked(
+                                e.target.checked
+                                  ? [...picked, r.id]
+                                  : picked.filter((x) => x !== r.id),
+                              )
+                            }
+                          />
+                          <span className="tk-row-words">
+                            <span className="tk-row-name">{r.name}</span>
+                            <span className="tk-row-sub">
+                              {plainItem(r)
+                                ? r.sub
+                                : "Already sold in sizes and colours"}
+                            </span>
+                          </span>
+                        </label>
+                      ) : (
                       <button
                         type="button"
                         className="tk-row"
@@ -605,6 +714,7 @@ export function ToolSheet({
                           <Pill tone={r.pill.tone}>{r.pill.text}</Pill>
                         )}
                       </button>
+                      )}
                     </li>
                   ))}
                 </ul>

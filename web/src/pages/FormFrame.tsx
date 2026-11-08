@@ -56,7 +56,11 @@ export function FormFrame({
               Cancel
             </button>
             <button type="submit" className="tk-cta" disabled={busy || !ready}>
-              {busy ? "Saving…" : "Save changes"}
+              {busy
+                ? "Saving…"
+                : saveWords === "Save"
+                  ? "Save changes"
+                  : saveWords}
             </button>
           </div>
         ) : canEdit ? (

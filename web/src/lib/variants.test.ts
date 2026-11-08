@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allCells, findSize, keyOf, label, parseValues, pickable, sizesLine } from "./variants";
+import { allCells, findSize, keyOf, label, parseValues, pickable, proposeGroup, sizesLine } from "./variants";
 import type { StockItem } from "./stock";
 
 const cs = [
@@ -44,5 +44,37 @@ describe("sizes and colours", () => {
   });
   it("reads values typed on one line or several", () => {
     expect(parseValues("40, 41,41\n 42 ,, ")).toEqual(["40", "41", "42"]);
+  });
+});
+
+describe("proposing one product of look-alike items", () => {
+  it("takes the shared start as the name and sizes and colours from the rest", () => {
+    const got = proposeGroup([
+      { id: "a", name: "Ankara Kaftan S Blue" },
+      { id: "b", name: "Ankara Kaftan M Blue" },
+      { id: "c", name: "Ankara Kaftan – M, Red" },
+    ]);
+    expect(got.name).toBe("Ankara Kaftan");
+    expect(got.choices).toEqual(["Size", "Colour"]);
+    expect(got.values).toEqual({ a: { Size: "S", Colour: "Blue" }, b: { Size: "M", Colour: "Blue" }, c: { Size: "M", Colour: "Red" } });
+  });
+
+  it("shoe sizes alone, and a word it does not know as a style", () => {
+    const got = proposeGroup([
+      { id: "a", name: "Air Max 90 42" },
+      { id: "b", name: "Air Max 90 43 Suede" },
+    ]);
+    expect(got.name).toBe("Air Max 90");
+    expect(got.choices).toEqual(["Size", "Style"]);
+    expect(got.values.a).toEqual({ Size: "42", Style: "" });
+    expect(got.values.b).toEqual({ Size: "43", Style: "Suede" });
+  });
+
+  it("never takes a whole name as the product's", () => {
+    const got = proposeGroup([
+      { id: "a", name: "Kaftan" },
+      { id: "b", name: "Kaftan Red" },
+    ]);
+    expect(got.name).toBe("");
   });
 });

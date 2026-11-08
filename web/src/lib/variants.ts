@@ -126,3 +126,62 @@ export function parseValues(text: string): string[] {
   }
   return out;
 }
+
+const COLOURS = new Set(
+  ("black white red blue navy green yellow orange purple pink brown grey gray beige cream gold silver " +
+    "maroon wine burgundy khaki olive teal turquoise lilac peach coral ivory tan camel mint denim multi multicolour").split(" "),
+);
+const SIZE_WORD = /^(\d+(\.\d+)?([a-z]{1,3})?|x{0,3}[sl]|m|xxxl|[2-5]xl|small|medium|large|free|one ?size|uk\d+|us\d+|eu\d+)$/i;
+
+/** What a word of an item's name says it is: a size, a colour, or other. */
+function kindOf(word: string): "Size" | "Colour" | "Style" {
+  const w = word.toLowerCase();
+  if (COLOURS.has(w)) return "Colour";
+  if (SIZE_WORD.test(w)) return "Size";
+  return "Style";
+}
+
+/** Items made one product (Make one product with sizes and colours): its
+ * name, the words their names share at the start; its choices, from what
+ * the rest of each name is (a number or S/M/L a size, a colour word a
+ * colour, other words a style); each item's values. Only a proposal: the
+ * owner changes any of it before saving. */
+export function proposeGroup(items: { id: string; name: string }[]): {
+  name: string;
+  choices: string[];
+  values: Record<string, Variant>;
+} {
+  const words = items.map((it) =>
+    it.name.split(/[\s,–—/|-]+/).filter(Boolean),
+  );
+  const head = words[0] ?? [];
+  // The words all share at the start, leaving each at least one of its own.
+  let common = 0;
+  while (
+    common < head.length &&
+    words.every(
+      (w) =>
+        common < w.length - 1 &&
+        w[common]?.toLowerCase() === head[common]?.toLowerCase(),
+    )
+  )
+    common++;
+  const name = head.slice(0, common).join(" ");
+  const kinds: ("Size" | "Colour" | "Style")[] = [];
+  const values: Record<string, Variant> = {};
+  items.forEach((it, i) => {
+    const v: Variant = {};
+    for (const w of (words[i] ?? []).slice(common)) {
+      const k = kindOf(w);
+      v[k] = v[k] ? `${v[k]} ${w}` : w;
+    }
+    values[it.id] = v;
+  });
+  for (const k of ["Size", "Colour", "Style"] as const)
+    if (Object.values(values).some((v) => v[k])) kinds.push(k);
+  // Every item says every choice: one an item does not say is left for
+  // the owner to fill.
+  for (const v of Object.values(values))
+    for (const k of kinds) v[k] = v[k] ?? "";
+  return { name, choices: kinds, values };
+}

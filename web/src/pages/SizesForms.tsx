@@ -18,6 +18,7 @@ import {
   MAX_VALUES,
   parseValues,
   PRESETS,
+  proposeGroup,
   sizesOf,
   sizesWords,
   type Choice,
@@ -595,6 +596,145 @@ export function GridStockIn({
       {bad && (
         <p className="tk-field-error" role="alert">
           A box holds a whole number.
+        </p>
+      )}
+    </FormFrame>
+  );
+}
+
+/** Make one product with sizes and colours (Part B, grouping): the items
+ * chosen in the Products sheet become one product's sizes and colours.
+ * Taskiem proposes the product's name, its choices and each item's values
+ * from their names; the owner changes any of it. Each item keeps its own
+ * stock, history, price and links. */
+export function GroupForm({
+  items,
+  onSaved,
+  onCancel,
+}: {
+  items: StockItem[];
+  onSaved: (line: string | null) => void;
+  onCancel: () => void;
+}) {
+  const [first] = useState(() => proposeGroup(items));
+  const [name, setName] = useState(first.name);
+  const [choices, setChoices] = useState<string[]>(
+    first.choices.length ? first.choices : ["Size"],
+  );
+  const [values, setValues] = useState<Record<string, Variant>>(first.values);
+  // One key for this grouping: a retry makes nothing twice.
+  const [saveKey] = useState(formKey);
+  const named = choices.map((c) => c.trim());
+  const valueOf = (id: string, i: number) =>
+    values[id]?.[choices[i] ?? ""] ?? values[id]?.[named[i] ?? ""] ?? "";
+  const filled = items.map((it) =>
+    Object.fromEntries(named.map((c, i) => [c, valueOf(it.id, i).trim()])),
+  );
+  const keys = filled.map((v) => keyOf(v));
+  const problem = !name.trim()
+    ? "Give the product a name."
+    : named.some((c) => !c)
+      ? "Give each choice a name: Size, Colour…"
+      : new Set(named.map((c) => c.toLowerCase())).size !== named.length
+        ? "Each choice has its own name."
+        : filled.some((v) => Object.values(v).some((x) => !x))
+          ? "Say each item's size and colour."
+          : new Set(keys).size !== keys.length
+            ? "Two items have the same size and colour: change one."
+            : "";
+  const setChoice = (i: number, next: string) => {
+    const was = choices[i] ?? "";
+    setChoices(choices.map((c, j) => (j === i ? next : c)));
+    // Each item's value stays with the renamed choice.
+    setValues(
+      Object.fromEntries(
+        Object.entries(values).map(([id, v]) => {
+          const { [was]: x, ...rest } = v;
+          return [id, { ...rest, [next]: x ?? "" }];
+        }),
+      ),
+    );
+  };
+  const setValue = (id: string, i: number, x: string) =>
+    setValues({ ...values, [id]: { ...values[id], [choices[i] ?? ""]: x } });
+  const save: Saver = async () => {
+    await postKeyed("/v1/stock/group", saveKey, {
+      name: name.trim(),
+      choices: named,
+      items: items.map((it, i) => ({ item_id: it.id, variant: filled[i] })),
+    });
+    return `${name.trim()}: ${sizesWords(items.length)}`;
+  };
+  return (
+    <FormFrame
+      save={save}
+      onSaved={onSaved}
+      onCancel={onCancel}
+      saveWords="Make one product"
+      ready={!problem}
+    >
+      <p className="tk-form-now">
+        These {items.length} become one product&apos;s sizes and colours. Each
+        keeps its own stock, history and price.
+      </p>
+      <KitField label="The product's name">
+        <input
+          value={name}
+          maxLength={120}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </KitField>
+      <fieldset className="tk-choice">
+        <legend>Its choices</legend>
+        {choices.map((c, i) => (
+          <KitField
+            key={i}
+            label={`Choice ${i + 1}`}
+            hint="Size, Colour, Style…"
+          >
+            <input
+              value={c}
+              maxLength={30}
+              onChange={(e) => setChoice(i, e.target.value)}
+            />
+          </KitField>
+        ))}
+        {choices.length < MAX_CHOICES && (
+          <button
+            type="button"
+            className="tk-btn soft"
+            onClick={() => setChoices([...choices, ""])}
+          >
+            Add a choice
+          </button>
+        )}
+        {choices.length > 1 && (
+          <button
+            type="button"
+            className="tk-btn soft"
+            onClick={() => setChoices(choices.slice(0, -1))}
+          >
+            Take away {choices[choices.length - 1] || "the last choice"}
+          </button>
+        )}
+      </fieldset>
+      {items.map((it) => (
+        <fieldset key={it.id} className="tk-choice" data-testid="group-item">
+          <legend>{it.name}</legend>
+          {choices.map((c, i) => (
+            <KitField key={i} label={c.trim() || `Choice ${i + 1}`}>
+              <input
+                value={valueOf(it.id, i)}
+                maxLength={30}
+                onChange={(e) => setValue(it.id, i, e.target.value)}
+              />
+            </KitField>
+          ))}
+        </fieldset>
+      ))}
+      {problem && (
+        <p className="tk-form-now" role="status">
+          {problem}
         </p>
       )}
     </FormFrame>

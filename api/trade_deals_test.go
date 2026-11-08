@@ -122,7 +122,9 @@ func TestTradeDeal(t *testing.T) {
 	}
 
 	// The buyer answers from WhatsApp: ₦760,000.
-	// The buyer's card carries the deal so far, its people unnamed.
+	// The buyer's card carries the deal so far, its people unnamed (the
+	// cards are written in the background: wait for them).
+	w.srv.WaitBackground()
 	var dealCard map[string]any
 	for _, x := range buyer.must(200, "GET", "/v1/link-chats/"+link+"/messages", nil)["messages"].([]any) {
 		if c, _ := x.(map[string]any)["card"].(map[string]any); c != nil && c["event"] == "change" {

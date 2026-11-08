@@ -777,3 +777,9 @@ input.tk-switch:disabled { cursor: default; opacity: 0.7; }
 .tk-order-row .tk-order-sizes { flex-basis: 100%; display: grid; gap: 6px; padding-top: 8px; }
 .tk-order-row { flex-wrap: wrap; }
 .tk-grid-cell.off { opacity: .55; }
+/* Make one product with sizes and colours: the bar over the Products list,
+   and its rows as boxes to tick. */
+.tk-group-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 8px; color: var(--muted); }
+.tk-pick { cursor: pointer; }
+.tk-pick input { width: 22px; height: 22px; flex: none; accent-color: var(--brand); }
+.tk-pick.off { cursor: default; color: var(--muted); }

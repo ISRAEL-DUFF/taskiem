@@ -563,7 +563,7 @@ func lowByProduct(items []stock.Item) []string {
 	for _, it := range items {
 		names[it.ID] = it.Name
 	}
-	var out []string
+	out := []string{} // none low: an empty list, never null
 	sizes := map[string]int{}
 	one := map[string]string{} // the low size, when it is the only one
 	var products []string

@@ -10314,6 +10314,77 @@ paths:
                     $ref: '#/components/schemas/StockItem'
         default:
           $ref: '#/components/responses/Error'
+  /v1/stock/group:
+    post:
+      operationId: groupStockItems
+      tags:
+      - Stock
+      summary: Make existing items one product with sizes and colours
+      description: 'Items sold as separate products ("Ankara Kaftan S Blue", "Ankara Kaftan M Blue") become one product''s sizes and colours. Each keeps its row, so its stock, history, sales, prices and links stay with it; it gains its product and its values, and its name is written out in full ("Ankara Kaftan – S, Blue"). The product is a new row with the first item''s unit, category and supplier, and the price most of the items have (those at another price keep it as their own). A price list that held some of the items one by one holds the product in their place. At least two items, all plain products with the same choices and no two of the same values; everything is checked before anything is written.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit
+      x-taskiem-all-environments: true
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Makes the request safe to retry: the same key is the same change'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, items]
+              properties:
+                name:
+                  type: string
+                  description: The product's name ("Ankara Kaftan")
+                choices:
+                  type: array
+                  description: The choices' order ("Size", then "Colour")
+                  items:
+                    type: string
+                items:
+                  type: array
+                  minItems: 2
+                  maxItems: 100
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [item_id, variant]
+                    properties:
+                      item_id:
+                        type: string
+                      variant:
+                        type: object
+                        description: 'Its values: {"Size": "M", "Colour": "Blue"}'
+                        additionalProperties:
+                          type: string
+      responses:
+        '200':
+          description: The product and its sizes and colours
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  item:
+                    $ref: '#/components/schemas/StockItem'
+                  variants:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StockItem'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/stock/items/{id}/variants:
     put:
       operationId: setStockVariants
