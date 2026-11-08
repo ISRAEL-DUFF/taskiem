@@ -440,3 +440,31 @@ test("the Taskiem conversation loads older messages and follows new ones only at
   await jump.click();
   expect(await fromBottom()).toBeLessThan(5);
 });
+
+test("older messages keep coming while the reader stays at the top as each page lands", async ({
+  browser,
+}) => {
+  const page = await (
+    await browser.newContext({ viewport: { width: 390, height: 844 } })
+  ).newPage();
+  await signUp(page, `Ada Kitchen ${letters()}`);
+  await page.route("**/v1/chat/stream", (route) => route.abort());
+  await page.route(
+    /\/v1\/taskiem-chat(\?.*)?$/,
+    serveTaskiem(taskiemChat(120)),
+  );
+  await page.goto("/chat?with=taskiem");
+  const pane = page.getByTestId("taskiem-pane");
+  await expect(pane.getByTestId("taskiem-message")).toHaveCount(50);
+  // A thumb still on the top: as soon as a page is added (the view kept in
+  // place), the reader is back at the top, before the browser looks again.
+  await page.getByTestId("taskiem-stream").evaluate((el) => {
+    new MutationObserver(() => (el.scrollTop = 0)).observe(el, {
+      childList: true,
+      subtree: true,
+    });
+    el.scrollTop = 0;
+  });
+  await expect(pane.getByTestId("taskiem-message")).toHaveCount(120);
+  await expect(pane.getByTestId("taskiem-top")).toHaveCount(0);
+});
