@@ -537,7 +537,7 @@ func (s *Server) storeStorefrontImage(r *http.Request) (storefront.Media, error)
 		}
 		link = strings.TrimSpace(in.URL)
 		var err error
-		if data, err = s.imageFromLink(r.Context(), principalFrom(r.Context()).TenantID, link); err != nil {
+		if data, err = s.imageFromLink(r.Context(), principalFrom(r.Context()), link); err != nil {
 			return storefront.Media{}, err
 		}
 	} else {
@@ -569,6 +569,10 @@ func (s *Server) storeStorefrontImage(r *http.Request) (storefront.Media, error)
 // business's data project, where photos live, is said as tables say it
 // (being set up, or what Xenibase refused), not as an internal error.
 func (s *Server) failImage(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, errPhotoLinksTooFast) {
+		writeErr(w, http.StatusTooManyRequests, err.Error())
+		return
+	}
 	var xe *datatables.Error
 	if errors.Is(err, datatables.ErrUnavailable) || errors.Is(err, datatables.ErrProvisioning) || errors.Is(err, datatables.ErrProjectFailed) || errors.As(err, &xe) {
 		s.failTables(w, r, err)
@@ -667,6 +671,7 @@ func (s *Server) changePhotos(ctx context.Context, tenant uuid.UUID, t datatable
 	if err != nil {
 		return err
 	}
+	call := uuid.NewString()
 	for attempt := range photoAttempts {
 		was, have, err := s.photoCell(ctx, tr, t, key, col)
 		if err != nil {
@@ -676,6 +681,10 @@ func (s *Server) changePhotos(ctx context.Context, tenant uuid.UUID, t datatable
 		if err != nil {
 			return err
 		}
+		// Nothing to change (the photo is there already): done.
+		if slices.Equal(next, have) {
+			return nil
+		}
 		var value any
 		if len(next) > 0 {
 			value = strings.Join(next, ",")
@@ -684,8 +693,11 @@ func (s *Server) changePhotos(ctx context.Context, tenant uuid.UUID, t datatable
 		if was == nil {
 			still = map[string]any{"column": col, "op": "is_null"}
 		}
+		// The key is this request's own (once per call, then per attempt):
+		// the same change asked again later, such as a photo added back
+		// after it was taken out, is a new write, not an answer replayed.
 		out, err := tr.call(ctx, s, "update_rows", map[string]any{"table": t.Name, "set": map[string]any{col: value}, "max_affected": 1, "return": "minimal",
-			"filters": []any{map[string]any{"column": "id", "op": "eq", "value": key}, still}}, idem+":"+strconv.Itoa(attempt))
+			"filters": []any{map[string]any{"column": "id", "op": "eq", "value": key}, still}}, idem+":"+call+":"+strconv.Itoa(attempt))
 		if err != nil {
 			return err
 		}
@@ -825,6 +837,50 @@ func (s *Server) catalogueItemChanged(r *http.Request, action string, t datatabl
 	if err := s.SyncStorefront(r.Context(), p.TenantID); err != nil && !errors.Is(err, r.Context().Err()) && !errors.Is(err, storefront.ErrNotFound) {
 		s.Logger.Warn("storefront: refreshing the copies", "tenant", p.TenantID, "err", err)
 	}
+	// The change in the diary, as a price or a category is.
+	name := s.catalogueRowName(r.Context(), p.TenantID, t, row)
+	if name == "" {
+		return
+	}
+	switch action {
+	case "storefront.item_photo":
+		s.diaryChange(r.Context(), p, "New photo of "+name)
+	case "storefront.item_photo_remove":
+		s.diaryChange(r.Context(), p, "A photo of "+name+" taken out")
+	case "storefront.item_photo_main":
+		s.diaryChange(r.Context(), p, "New main photo of "+name)
+	}
+}
+
+// catalogueRowName is a catalogue row's name as the mapping names it; ""
+// when it cannot be read.
+func (s *Server) catalogueRowName(ctx context.Context, tenant uuid.UUID, t datatables.Table, row int64) string {
+	var sf storefront.Storefront
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		var err error
+		sf, err = storefront.Get(ctx, tx, tenant)
+		return err
+	}); err != nil || sf.CatalogueColumns.Name == "" {
+		return ""
+	}
+	tr, err := s.tableRowsFor(ctx, tenant, t, storefrontPurpose)
+	if err != nil {
+		return ""
+	}
+	col := sf.CatalogueColumns.Name
+	page, err := tr.call(ctx, s, "read_rows", map[string]any{"table": t.Name, "limit": 1, "select": "id," + col,
+		"filters": []any{map[string]any{"column": "id", "op": "eq", "value": row}}}, "")
+	if err != nil {
+		return ""
+	}
+	for _, x := range rowsOf(page) {
+		if m, ok := x.(map[string]any); ok {
+			if v, ok := m[col].(string); ok {
+				return strings.TrimSpace(v)
+			}
+		}
+	}
+	return ""
 }
 
 // cataloguePhotoRow reads the request's catalogue row and the table its
