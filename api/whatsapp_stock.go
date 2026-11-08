@@ -45,6 +45,8 @@ type stockChat struct {
 	Purchase *purchaseChat `json:"purchase,omitempty"`
 	// Count is a count being taken (stock_counts.go).
 	Count *countChat `json:"count,omitempty"`
+	// SaleAsk is a sale waiting on a size (whatsapp_sizes.go).
+	SaleAsk *saleAsk `json:"sale_ask,omitempty"`
 }
 
 // waStockCommand acts on a stock command; false when cmd is not one (or
@@ -235,7 +237,15 @@ func matchStock(items []stock.Item, name string) []stock.Item {
 			}
 		}
 	}
-	return stockHolders(items, out)
+	held := stockHolders(items, out)
+	// "air max 90 size 42", "air max 90 black": a product sold in sizes
+	// named with values said after it.
+	if len(held) == 0 {
+		if product, have, ok := findSized(items, name); ok {
+			return narrowSizes(items, product.ID, have)
+		}
+	}
+	return held
 }
 
 // stockHolders narrows matches to the items that hold stock: a product
@@ -296,17 +306,9 @@ func whichSizeOf(c *chat, product string, n int, example string) string {
 
 // stockPick offers a numbered list when several items match.
 func (s *Server) stockPick(ctx context.Context, c *chat, sh *chatShop, match []stock.Item) error {
-	if len(match) > shopPickMax {
-		_, items, ok, err := s.stockChatItems(ctx, c)
-		if !ok || err != nil {
-			return err
-		}
-		if product, one := sizesOfOne(items, match); one {
-			if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
-				return err
-			}
-			return c.say(ctx, s, whichSize(c, product, match))
-		}
+	// Several sizes of one product: asked one choice at a time.
+	if done, err := s.sizedPick(ctx, c, sh, sh.Name, match); done || err != nil {
+		return err
 	}
 	for _, it := range match[:min(shopPickMax, len(match))] {
 		sh.Pick = append(sh.Pick, shopChoice{Row: it.ID, Name: it.Name})
@@ -366,11 +368,18 @@ func (s *Server) waStockShow(ctx context.Context, c *chat, name string) error {
 	if cat := stockCategory(items, name); cat != "" && (len(match) != 1 || matchKey(match[0].Name) != matchKey(name)) {
 		return s.waStockCategoryPage(ctx, c, items, cat, 0)
 	}
+	// "stock Air Max 90": its sizes and colours in words, when only the
+	// product is named.
+	if product, one := sizesOfOne(items, match); one {
+		if _, have, found := findSized(items, name); !found || len(have) == 0 {
+			return c.say(ctx, s, sizesGrid(c, product, sizesOnSale(items, product.ID)))
+		}
+	}
 	switch {
 	case len(match) == 0:
 		return c.say(ctx, s, c.t("wa.shop.no_item", "name", whatsapp.SafeText(name)))
 	case len(match) > 1:
-		return s.stockPick(ctx, c, &chatShop{Action: "stock_show"}, match)
+		return s.stockPick(ctx, c, &chatShop{Action: "stock_show", Name: name}, match)
 	}
 	return s.stockSay(ctx, c, match[0])
 }
@@ -795,13 +804,79 @@ func (s *Server) waStockSale(ctx context.Context, c *chat, args string) error {
 	if !ok || err != nil {
 		return err
 	}
-	sale := &saleChat{AmountKobo: said.AmountKobo, PaidHow: said.PaidHow, Customer: customer, CustomerKey: customerKey, CustomerID: customerID}
+	paid := said.PaidHow
+	if said, ok = saleSaid(args, items); !ok {
+		return c.say(ctx, s, c.t("wa.sale.how"))
+	}
+	said.PaidHow = paid // on credit, as found above
+	return s.saleFrom(ctx, c, &saleAsk{Said: said, Customer: customer, CustomerKey: customerKey, CustomerID: customerID})
+}
+
+// saleSaid reads a sale's words as the catalogue has its items: a size
+// written out with a comma ("2 Air Max 90 – 42, Black") is one item, not
+// two; and a number after a product sold in sizes that is one of its
+// values is that value ("sold 2 air max 90 42"), not the amount.
+func saleSaid(args string, items []stock.Item) (stock.Sold, bool) {
+	said, ok := stock.ParseSale(args)
+	// Each item of it names exactly one of the catalogue's.
+	exact := func(sd stock.Sold) bool {
+		for _, x := range sd.Items {
+			if len(matchStock(items, x.Name)) != 1 {
+				return false
+			}
+		}
+		return len(sd.Items) > 0
+	}
+	if ok && strings.Contains(args, ",") && !exact(said) {
+		if joined, ok2 := stock.ParseSale(strings.ReplaceAll(args, ",", " ")); ok2 && exact(joined) {
+			said = joined
+		}
+	}
+	if ok && said.AmountKobo != nil && *said.AmountKobo%100 == 0 && len(said.Items) == 1 {
+		n := strconv.FormatInt(*said.AmountKobo/100, 10)
+		x := said.Items[0]
+		if _, have, found := findSized(items, x.Name+" "+n); found {
+			for _, v := range have {
+				if matchKey(v) == n {
+					said.Items[0].Name = x.Name + " " + n
+					said.AmountKobo = nil
+					break
+				}
+			}
+		}
+	}
+	return said, ok
+}
+
+// saleFrom shows a sale for yes: its items found as the other stock words
+// find them, a product's size asked one choice at a time (the sale waits,
+// then goes on). One that matches several others, or none, is said, and
+// nothing is recorded.
+func (s *Server) saleFrom(ctx context.Context, c *chat, ask *saleAsk) error {
+	said := ask.Said
+	_, items, ok, err := s.stockChatItems(ctx, c)
+	if !ok || err != nil {
+		return err
+	}
+	byID := map[string]stock.Item{}
+	for _, it := range items {
+		byID[it.ID] = it
+	}
+	sale := &saleChat{AmountKobo: said.AmountKobo, PaidHow: said.PaidHow, Customer: ask.Customer, CustomerKey: ask.CustomerKey, CustomerID: ask.CustomerID}
 	if sale.PaidHow == "" {
 		sale.PaidHow = stock.Cash
 	}
 	var total int64
-	for _, x := range said.Items {
-		match := matchStock(items, x.Name)
+	for i, x := range said.Items {
+		var match []stock.Item
+		if id, chosen := ask.Chosen[i]; chosen {
+			if it, ok := byID[id]; ok {
+				match = []stock.Item{it}
+			}
+		}
+		if match == nil {
+			match = matchStock(items, x.Name)
+		}
 		if len(match) > 1 {
 			var exact []stock.Item
 			for _, it := range match {
@@ -813,8 +888,14 @@ func (s *Server) waStockSale(ctx context.Context, c *chat, args string) error {
 				match = exact
 			}
 		}
-		if product, one := sizesOfOne(items, match); one && len(match) > shopPickMax {
-			return c.say(ctx, s, whichSize(c, product, match))
+		// Several sizes of one product: its size asked, the sale waiting.
+		if product, one := sizesOfOne(items, match); one {
+			ask.At = i
+			have := map[string]string{}
+			if p, h, found := findSized(items, x.Name); found && p.ID == product.ID {
+				have = h
+			}
+			return s.askSize(ctx, c, &chatShop{Action: "stock_sale_size", Name: x.Name, StockChat: &stockChat{SaleAsk: ask}}, product, have)
 		}
 		switch {
 		case len(match) == 0:

@@ -66,6 +66,9 @@ type chatShop struct {
 	// Pick are the items offered for a numbered pick, when a name matched
 	// several.
 	Pick []shopChoice `json:"pick,omitempty"`
+	// Size is a product's size being picked one choice at a time
+	// (whatsapp_sizes.go).
+	Size *sizeAsk `json:"size,omitempty"`
 	// Nonce is the row write's idempotency key.
 	Nonce string `json:"nonce,omitempty"`
 	// StockChat is a stock change being confirmed (whatsapp_stock.go).
@@ -228,6 +231,9 @@ func (s *Server) waShopReply(ctx context.Context, c *chat, text, cmd string) err
 		}
 		if sh.StockChat != nil && sh.StockChat.Count != nil && sh.StockChat.Count.Asking {
 			return s.waStockCountAnswer(ctx, c, text)
+		}
+		if sh.Size != nil {
+			return s.waSizeAnswer(ctx, c, text)
 		}
 		if len(sh.Pick) > 0 {
 			if strings.HasPrefix(sh.Action, "stock_") {

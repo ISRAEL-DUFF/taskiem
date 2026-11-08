@@ -1380,6 +1380,26 @@
       "text": "{name} nwere nha na agba {count}. Kwuo nke ọ bụ, tinye nha na agba ya mgbe aha gachara, dị ka *{example}*.",
       "reviewed": false
     },
+    "wa.order.which_size": {
+      "text": "{name} si {business} na-abịa na nha na agba: {sizes}. Kwuo nke ọ bụ, dị ka *{example}*, ma ọ bụ họrọ ọtụtụ otu mgbe na nkata gị na ha na Taskiem.",
+      "reviewed": false
+    },
+    "wa.size.which": {
+      "text": "Kedu {choice} nke {name}? Zaa nọmba ya, ma ọ bụ kwuo ya:\n{list}",
+      "reviewed": false
+    },
+    "wa.size.again": {
+      "text": "Zaa nọmba {choice} ahụ, ma ọ bụ kwuo ya:\n{list}",
+      "reviewed": false
+    },
+    "wa.size.none": {
+      "text": "{name} enweghị nke a na-ere na {said}. Ọ na-abịa na {sizes}.",
+      "reviewed": false
+    },
+    "wa.stock.sizes": {
+      "text": "{name}: nha na agba {count}, {total} n'ozuzu.\n{lines}",
+      "reviewed": false
+    },
     "wa.stock.low_tag": {
       "text": "(ọ dịla ala)",
       "reviewed": false

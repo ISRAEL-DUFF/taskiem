@@ -1724,6 +1724,31 @@
       "reviewed": true,
       "context": "A product has more sizes and colours than a numbered list shows"
     },
+    "wa.order.which_size": {
+      "text": "{name} from {business} comes in sizes and colours: {sizes}. Say which, like *{example}*, or choose many at once in your chat with them on Taskiem.",
+      "reviewed": true,
+      "context": "A buyer ordered a supplier's product sold in sizes without saying which size; a link to the order sheet follows"
+    },
+    "wa.size.which": {
+      "text": "Which {choice} of {name}? Reply with its number, or say it:\n{list}",
+      "reviewed": true,
+      "context": "A product sold in sizes and colours was named without saying which: one choice asked at a time, its values numbered"
+    },
+    "wa.size.again": {
+      "text": "Reply with the number of the {choice}, or say it:\n{list}",
+      "reviewed": true,
+      "context": "The answer to a size or colour question was neither a number on the list nor one of the values"
+    },
+    "wa.size.none": {
+      "text": "{name} has none on sale in {said}. It comes in {sizes}.",
+      "reviewed": true,
+      "context": "The size and colour said is not one on sale; what the product comes in follows"
+    },
+    "wa.stock.sizes": {
+      "text": "{name}: {count} sizes and colours, {total} in all.\n{lines}",
+      "reviewed": true,
+      "context": "stock <product> for a product sold in sizes and colours: each size's count, by colour"
+    },
     "wa.stock.low_tag": {
       "text": "(low)",
       "reviewed": true,
