@@ -283,7 +283,7 @@ function LinesTable({
     (l) => l.proposed_kobo !== undefined && l.proposed_kobo !== l.price_kobo,
   );
   return (
-    <table>
+    <table className="cards">
       <thead>
         <tr>
           <th scope="col">Item</th>
@@ -297,16 +297,18 @@ function LinesTable({
       <tbody>
         {lines.map((l, i) => (
           <tr key={i}>
-            <td>{l.item}</td>
-            <td>{quantity(l.quantity, l.unit)}</td>
-            <td className="sf-price">
+            <td data-label="Item">{l.item}</td>
+            <td data-label="Quantity">{quantity(l.quantity, l.unit)}</td>
+            <td className="sf-price" data-label="Price each">
               {l.price_kobo > 0 ? naira(l.price_kobo) : "No price yet"}
             </td>
             {proposed && (
-              <td className="sf-price">{naira(l.proposed_kobo ?? 0)}</td>
+              <td className="sf-price" data-label="They proposed">
+                {naira(l.proposed_kobo ?? 0)}
+              </td>
             )}
-            {delivered && <td>{l.delivered ?? 0}</td>}
-            {short && <td>{short[i] ?? 0}</td>}
+            {delivered && <td data-label="Delivered">{l.delivered ?? 0}</td>}
+            {short && <td data-label="They counted">{short[i] ?? 0}</td>}
           </tr>
         ))}
       </tbody>
@@ -792,7 +794,10 @@ function DraftOrder({
   onClose: () => void;
   onDone: () => void;
 }) {
-  const links = useLoad(() => whenOff(get<LinksView>("/v1/links"), { links: [], sent: [] }), []);
+  const links = useLoad(
+    () => whenOff(get<LinksView>("/v1/links"), { links: [], sent: [] }),
+    [],
+  );
   const items = useOwnItems();
   const act = useAction();
   const buyers = (links.data?.links ?? []).filter(
@@ -1000,7 +1005,7 @@ export function PurchasePage() {
           )}
           <section className="card" aria-labelledby="purchase-lines">
             <h2 id="purchase-lines">What you ordered</h2>
-            <table>
+            <table className="cards">
               <thead>
                 <tr>
                   <th scope="col">Item</th>
@@ -1013,11 +1018,15 @@ export function PurchasePage() {
               <tbody>
                 {p.lines.map((l) => (
                   <tr key={l.item_id}>
-                    <td>{l.item}</td>
-                    <td>{quantity(l.quantity, l.unit)}</td>
-                    <td className="sf-price">{naira(l.cost_kobo)}</td>
-                    {p.delivered_at && <td>{l.delivered ?? 0}</td>}
-                    <td>{l.received}</td>
+                    <td data-label="Item">{l.item}</td>
+                    <td data-label="Ordered">{quantity(l.quantity, l.unit)}</td>
+                    <td className="sf-price" data-label="Price each">
+                      {naira(l.cost_kobo)}
+                    </td>
+                    {p.delivered_at && (
+                      <td data-label="Delivered">{l.delivered ?? 0}</td>
+                    )}
+                    <td data-label="Received">{l.received}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1030,7 +1039,7 @@ export function PurchasePage() {
               data-testid="purchase-change"
             >
               <h2 id="purchase-change">{p.supplier} can supply it like this</h2>
-              <table>
+              <table className="cards">
                 <thead>
                   <tr>
                     <th scope="col">Item</th>
@@ -1041,13 +1050,15 @@ export function PurchasePage() {
                 <tbody>
                   {p.change.map((l) => (
                     <tr key={l.item_id}>
-                      <td>{l.item}</td>
-                      <td>
+                      <td data-label="Item">{l.item}</td>
+                      <td data-label="Quantity">
                         {l.quantity === 0
                           ? "None"
                           : quantity(l.quantity, l.unit)}
                       </td>
-                      <td className="sf-price">{naira(l.cost_kobo)}</td>
+                      <td className="sf-price" data-label="Price each">
+                        {naira(l.cost_kobo)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
