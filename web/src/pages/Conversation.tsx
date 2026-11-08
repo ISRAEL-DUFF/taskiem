@@ -523,6 +523,7 @@ function Bubble({
   onReply,
   canReply,
   latest = false,
+  current,
   onDone = () => undefined,
   onForward,
   onHide,
@@ -544,6 +545,8 @@ function Bubble({
   onReply: (m: LinkMessage) => void;
   canReply: boolean;
   latest?: boolean;
+  /** The newest card of the same document: where it is now. */
+  current?: DocCard;
   onDone?: () => void;
   onForward?: (m: LinkMessage) => void;
   onHide?: (m: LinkMessage) => void;
@@ -788,7 +791,11 @@ function Bubble({
       )}
       {cheer && <span className="tk-cheer" aria-hidden="true" />}
       {card ? (
-        <CardFrame card={card} title={cardLine(card, m.mine, other)}>
+        <CardFrame
+          card={card}
+          now={current}
+          title={cardLine(card, m.mine, other)}
+        >
           {onOpenDoc && (card.doc === "purchase" || card.doc === "bill") ? (
             <button
               type="button"
@@ -856,14 +863,17 @@ function Bubble({
  * its state as a pill, what it is, an order's progress, and its buttons. */
 function CardFrame({
   card,
+  now,
   title,
   children,
 }: {
   card: DocCard;
+  /** The document's newest card, when this one is older: its status shows. */
+  now?: DocCard;
   title: string;
   children: ReactNode;
 }) {
-  const st = cardStatus(card);
+  const st = cardStatus(now ?? card);
   return (
     <article className="tk-chatcard" aria-label={cardKicker(card)}>
       <span className="tk-chatcard-top">
@@ -1551,14 +1561,16 @@ export function ConversationPane({
     }
     return { lead, member };
   }, [shown, chatTools]);
-  // A card's actions are offered on its document's newest card only.
+  // A card's actions are offered on its document's newest card only, and
+  // every card of a document shows where it is now (its newest card's
+  // status): an order accepted since it arrived no longer reads "New".
   const newest = new Set<string>();
-  const seen = new Set<string>();
+  const now = new Map<string, DocCard>();
   for (const m of [...(messages ?? [])].reverse()) {
     if (m.kind !== "card" || !m.card) continue;
     const key = `${m.card.doc}:${m.card.reference}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
+    if (now.has(key)) continue;
+    now.set(key, m.card);
     newest.add(m.id);
   }
   return (
@@ -1709,6 +1721,7 @@ export function ConversationPane({
               first={first}
               flash={flashId === m.id}
               latest={newest.has(m.id)}
+              current={m.card && now.get(`${m.card.doc}:${m.card.reference}`)}
               onDone={() => pull(last).catch(setError)}
               onForward={
                 write && others.some((o) => o.state === "active")

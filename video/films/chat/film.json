@@ -1,0 +1,29 @@
+{
+  "title": "Taskiem chat",
+  "end": 16,
+  "moods": {
+    "1": "sparse", "2": "sparse",
+    "3": "build", "4": "build",
+    "5": "full", "6": "full", "7": "full",
+    "8": "peak", "9": "peak",
+    "10": "full",
+    "11": "low",
+    "12": "lift",
+    "13": "peak", "14": "peak", "15": "peak"
+  },
+  "clips": [
+    { "name": "briefing", "scene": "03-briefing", "from": 0, "to": 9000 },
+    { "name": "tag", "scene": "05-picker", "from": 1000, "to": 9500 },
+    { "name": "tools", "scene": "06-tools", "from": 0, "to": 10000 },
+    { "name": "diary", "scene": "07-diary", "from": 0, "to": 6000 },
+    { "name": "orders", "scene": "08-trade", "from": 1500, "to": 11500 },
+    { "name": "sell", "scene": "10-staff", "from": 0, "to": 8000 },
+    { "name": "offer", "scene": "13-offer", "from": 2000, "to": 10000 }
+  ],
+  "stills": {
+    "01-open": 3000, "02-intro": 3000, "03-briefing": 7000, "04-alerts": 4600,
+    "05-picker": 3200, "06-tools": 7500, "07-diary": 4000, "08-trade": 11000,
+    "09-both": 5000, "10-staff": 7000, "11-dark": 3000, "12-explore": 6000,
+    "13-offer": 6500, "14-counter": 8600, "15-deal": 5000, "16-end": 5000
+  }
+}
