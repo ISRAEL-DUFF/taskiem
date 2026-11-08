@@ -1,8 +1,8 @@
 # Chat: product categories and variants
 
-Status: **phases 1 (categories), 2 (photos), 3 (sizes and colours for the shop
-itself) and 4 (sizes on the storefront and in trade) built**; phase 5 is the plan (8 November 2026; photos, Part C and
-phase 2, added the same day).
+Status: **all five phases built**: categories, photos, sizes and colours for the shop
+itself, sizes on the storefront and in trade, and the chat apps, grouping and the demo
+(8 November 2026; photos, Part C and phase 2, added the same day).
 Written with the founder; the live doc is [the shared plan](https://claude.ai/artifact/HA9Y7M1vLM4PprjoyRidaX),
 and this file is its copy beside the code. What phase 1 built, and where it differs
 from the plan, is in [As built: phase 1](#as-built-phase-1-categories).
@@ -502,3 +502,71 @@ and the shared `choosesize` template, `engine/links` (`PriceSize`, `Flat`, `Prod
   (the grid, the minimum, ₦1,456,000 for 36 pairs and ₦1,832,000 for 50, review and
   place) and `e2e/chat-sizes.spec.ts` (a price list ticking the product with a size's
   own price).
+
+## As built: phase 5 (chat apps, grouping, the demo)
+
+`api/whatsapp_sizes.go`, the sale in `api/whatsapp_stock.go`, `api/price_lists_chat.go`,
+`api/chat_tool_requests.go`, `api/stock_group.go`; on the web `GroupForm` in
+`SizesForms.tsx`, the Products sheet's pick in `ChatTools.tsx`, `proposeGroup` in
+`src/lib/variants.ts`; the demo in `web/e2e/demo/seed.ts`; the recording's act 9 in
+`video/recording/tour.mjs`.
+
+- **WhatsApp and Telegram words.**
+  - *stock Air Max 90* answers its sizes' counts in words, by colour, in the product's
+    order, low ones marked, and their total ("Black: 40 × 3, 41 × 0 (low), 42 × 5").
+  - A product named alone in a sale, stock in, a stock change or *stock* is asked one
+    choice at a time ("Which size of Air Max 90? 1. 40 2. 41 …"); a value said as a word
+    is as good as its number; a choice with one value left is not asked. Then the word
+    goes on: a sale waits and resumes, each of its items in turn.
+  - Values said after the name pick the size at once, in any order ("add 5 ankara kaftan
+    size s red", "sold 1 air max 90 black" asks only the size). A value the product does
+    not have is said with what it comes in.
+  - A size's number is not taken for a sale's amount ("sold 1 air max 90 42"), and a
+    size's full name with its comma is one item.
+  - Counts and deliveries still ask for the size by name (they take several items at
+    once); the words above find it.
+- **Buyers on WhatsApp.** *order 6 air max 90 43 black from Zuri* orders that size; it
+  is added to the buyer's product as the order sheet does. The product alone is asked
+  for by name, with the chat on Taskiem to choose many sizes at once.
+- **The model's requests.** The request sorter hands back the choices it heard with
+  the product ("size 42", "black"), and knows a product may be named with its category.
+  Matching stays in our code: a size by its full name, or by its product and the choices
+  heard (by the choice's name, else wherever the value is one); a product's category
+  words count with its name; a product whose size is not said is the product (its form
+  or grid), never a guess between sizes.
+- **Make one product with sizes and colours.** In the Products sheet the owner ticks
+  look-alike items (one already in sizes cannot be ticked); the form proposes the
+  product's name (the words their names share at the start), its choices (a number or
+  S/M/L a size, a colour word a colour, other words a style) and each item's values, for
+  the owner to change. `POST /v1/stock/group` makes the product (the first item's unit,
+  category and supplier; the price most of them have, the others keeping theirs as their
+  own) and gives each item its product and values: each keeps its row, so its stock,
+  history, sales, prices and links stay with it, and its name is written out in full. A
+  price list that held some of the items one by one holds the product in their place, a
+  size the list did not hold being off it. Everything is checked first; a retry with the
+  same key answers the same.
+- **The demo.** Zuri Atelier keeps stock in sizes and colours: kitchen clogs in sizes 38
+  to 44, black and white; a chef jacket; an Ankara kaftan; three aprons still sold one by
+  one (for grouping). It is Ada's Kitchen's linked supplier, with a trade list: the clogs
+  from 12 pairs, cheaper from 50, their sizes counted together.
+- **The recording's act 9** (*Sizes and colours, one product*): Zuri opens Products,
+  taps the Uniforms chip, opens the chef jacket's grid and sells the clogs in size 42,
+  black; Ada orders 36 pairs in 7 sizes from Zuri on one sheet. Both run on the real app
+  with their timings (each step under 100 ms but opening Sell from the tools, about a
+  second).
+- **Where it differs from the plan:** the act's category chip is Uniforms (a category
+  has a chip once it holds two products; the clogs are Zuri's only footwear); grouping
+  proposes from the names on the web, not on WhatsApp.
+- **Also in this phase:** each test database is a copy of one migrated template
+  (`engine/db/dbtest`, keyed by the migrations' digest), so the api package's tests no
+  longer migrate a database per test; chat tokens are decoded strictly (one spelling
+  each).
+- **Tests.** Go: `api/whatsapp_sizes_test.go` (the grid in words, one choice at a time,
+  a value said as a word, values said at once, a value not sold, a size's number not the
+  amount, the comma, a buyer's size ordered and added), `api/stock_group_test.go`
+  (refusals, the product and its rows, stock and history kept, prices, a retry, the price
+  list), `api/chat_tool_requests_test.go` (`TestChatToolRequestsSizes`),
+  `api/stock_variants_fixes_test.go` (the sale asking the size then going on). Web:
+  `src/lib/variants.test.ts` (`proposeGroup`); `e2e/chat-group.spec.ts` at 390 and 360
+  px with axe in both themes (ticking, the proposal, two the same refused, what is sent).
+
