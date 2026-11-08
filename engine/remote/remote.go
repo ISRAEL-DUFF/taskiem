@@ -113,10 +113,14 @@ func release(ctx context.Context, tx pgx.Tx, where string, args ...any) error {
 
 // Repair marks wf's live subscriptions to be applied again, in every
 // environment: republishing a version puts back a webhook someone paused,
-// broke or deleted at the provider.
+// broke or deleted at the provider. So are the connections' subscriptions
+// its deployed connector triggers use (a Telegram bot's webhook).
 func Repair(ctx context.Context, tx pgx.Tx, wf uuid.UUID) error {
 	_, err := tx.Exec(ctx, `UPDATE remote_subscriptions SET applied_hash = NULL, next_attempt_at = now(), attempts = 0, updated_at = now()
-		WHERE workflow_id = $1 AND desired = 'present'`, wf)
+		WHERE desired = 'present' AND (workflow_id = $1 OR workflow_id IS NULL AND EXISTS (SELECT 1 FROM triggers t
+			WHERE t.workflow_id = $1 AND t.type = 'connector_event' AND t.environment = remote_subscriptions.environment
+			  AND t.connector = remote_subscriptions.connector AND t.trigger_name = remote_subscriptions.trigger_name
+			  AND (t.connection IS NULL OR t.connection = remote_subscriptions.connection)))`, wf)
 	return err
 }
 
@@ -140,6 +144,80 @@ func DeclareConnection(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env, co
 	_, err = tx.Exec(ctx, `INSERT INTO remote_subscriptions (id, tenant_id, workflow_id, environment, connector, trigger_name, connection, version, events, options, desired, next_attempt_at)
 		VALUES ($1, $2, NULL, $3, $4, $5, NULLIF($6, ''), 0, $7, '{}', 'present', now())`, id, tenant, env, connector, trigger, connection, events)
 	return id, err
+}
+
+// DeclareInUse records, in the transaction that deploys a workflow whose
+// trigger is registered per connection while used (connector/v1
+// registration: connection_when_used), that the connection holds the
+// trigger's subscription in env. connection is the trigger's; when it
+// names none, the environment's only active connection of the connector
+// is meant. With none or several, the subscription names no connection
+// and fails as an unnamed step does ("no active connection", "several
+// connections") until a deploy finds exactly one or the connection is
+// made. A subscription naming no connection is released once one naming
+// the only connection is declared, so a bot never holds two. One live is
+// kept and applied again (which repairs it). Nothing is sent here.
+func DeclareInUse(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env, ref, trigger, connection string, events []string) (uuid.UUID, error) {
+	id, _, _ := strings.Cut(ref, "@")
+	rows, err := tx.Query(ctx, `SELECT name FROM connections WHERE tenant_id = $1 AND environment = $2 AND connector = $3 AND status = 'active' ORDER BY name`, tenant, env, id)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	active, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if connection == "" && len(active) == 1 {
+		connection = active[0]
+	}
+	if connection != "" && len(active) == 1 && active[0] == connection {
+		if err := release(ctx, tx, `workflow_id IS NULL AND environment = $1 AND connector = $2 AND trigger_name = $3 AND connection IS NULL`, env, ref, trigger); err != nil {
+			return uuid.Nil, err
+		}
+	}
+	return DeclareConnection(ctx, tx, tenant, env, ref, trigger, connection, events)
+}
+
+// CheckUse records, in the transaction that takes a workflow's
+// connector_event trigger out of env (an undeploy, a redeploy), that the
+// connections' subscriptions to that trigger are to be checked now: the
+// reconciler releases a connection_when_used one that no deployed
+// workflow uses any more. Nothing else changes.
+func CheckUse(ctx context.Context, tx pgx.Tx, env, connector, trigger string) error {
+	_, err := tx.Exec(ctx, `UPDATE remote_subscriptions SET checked_at = NULL,
+		next_attempt_at = CASE WHEN remote_id IS NULL THEN now() ELSE next_attempt_at END
+		WHERE workflow_id IS NULL AND desired = 'present' AND environment = $1 AND connector = $2 AND trigger_name = $3`, env, connector, trigger)
+	return err
+}
+
+// inUse holds when a deployed workflow in a connection subscription's
+// environment starts on its trigger with its connection, or with none
+// named (which may mean it).
+const inUse = `EXISTS (SELECT 1 FROM triggers t WHERE t.type = 'connector_event' AND t.environment = remote_subscriptions.environment
+	AND t.connector = remote_subscriptions.connector AND t.trigger_name = remote_subscriptions.trigger_name
+	AND (t.connection IS NULL OR t.connection = remote_subscriptions.connection))`
+
+// RepairConnection marks the live subscriptions a connection holds to a
+// connection_when_used trigger in env to be applied again, when checking
+// or saving it: it never declares one, since only a deployment does. A
+// subscription declared naming no connection is tried again too: this may
+// be the connection it waited for. It reports whether there was one.
+func RepairConnection(ctx context.Context, tx pgx.Tx, env, connector, trigger, connection string) (bool, error) {
+	tag, err := tx.Exec(ctx, `UPDATE remote_subscriptions SET applied_hash = NULL, next_attempt_at = now(), attempts = 0, updated_at = now()
+		WHERE workflow_id IS NULL AND desired = 'present' AND environment = $1 AND connector = $2 AND trigger_name = $3
+		  AND (connection = $4 OR connection IS NULL)`, env, connector, trigger, connection)
+	return tag.RowsAffected() > 0, err
+}
+
+// ReleaseUnnamed records, in the transaction that removes connection,
+// that a connection_when_used subscription declared naming no connection
+// goes too when it could only have meant this one (no other active
+// connection of the connector in env).
+func ReleaseUnnamed(ctx context.Context, tx pgx.Tx, env, ref, trigger, connection string) error {
+	id, _, _ := strings.Cut(ref, "@")
+	return release(ctx, tx, `workflow_id IS NULL AND environment = $1 AND connector = $2 AND trigger_name = $3 AND connection IS NULL
+		AND NOT EXISTS (SELECT 1 FROM connections c WHERE c.environment = $1 AND c.connector = $4 AND c.status = 'active' AND c.name <> $5)`,
+		env, ref, trigger, id, connection)
 }
 
 // ReleaseConnection records, in the transaction that removes a
@@ -348,7 +426,9 @@ func (r *Reconciler) ReconcileTenant(ctx context.Context, tenant uuid.UUID) erro
 }
 
 // ReconcileWorkflow applies wf's pending subscriptions now (after a
-// publish or undeploy), so the answer can show their state. What it does
+// publish or undeploy), so the answer can show their state, with the
+// connections' subscriptions due (a deployment declares a
+// connection_when_used one, and an undeploy has it checked). What it does
 // not finish, the next Tick does.
 func (r *Reconciler) ReconcileWorkflow(ctx context.Context, tenant, wf uuid.UUID) error {
 	_, err := r.reconcileTenant(ctx, tenant, wf)
@@ -380,7 +460,8 @@ func (r *Reconciler) claim(ctx context.Context, tenant, wf uuid.UUID) ([]row, er
 			 WHERE ((next_attempt_at IS NOT NULL AND next_attempt_at <= now())
 			    OR (desired = 'present' AND remote_id IS NOT NULL AND (checked_at IS NULL OR checked_at < $4)))
 			   AND (lease_until IS NULL OR lease_until < now())
-			   AND ($1::uuid IS NULL OR workflow_id = $1)
+			   AND ($1::uuid IS NULL OR workflow_id = $1
+			        OR workflow_id IS NULL AND (next_attempt_at <= now() OR checked_at IS NULL))
 			 ORDER BY next_attempt_at NULLS LAST LIMIT $2 FOR UPDATE SKIP LOCKED)
 			RETURNING id, COALESCE(workflow_id, '00000000-0000-0000-0000-000000000000'), environment, connector, trigger_name, COALESCE(connection, ''), events, options, desired,
 			  COALESCE(remote_id, ''), COALESCE(applied_hash, ''), attempts, next_attempt_at IS NULL OR next_attempt_at > now(), COALESCE(remote_status, ''), updated_at`,
@@ -449,8 +530,67 @@ func hash(spec connector.RemoteSpec) string {
 }
 
 func (r *Reconciler) reconcile(ctx context.Context, tenant uuid.UUID, x row) error {
+	if x.wf == uuid.Nil && x.desired == "present" {
+		if err := r.releaseUnused(ctx, tenant, &x); err != nil {
+			return err
+		}
+	}
 	out, err := r.apply(ctx, tenant, x)
 	return r.record(ctx, tenant, x, out, err)
+}
+
+// releaseUnused releases a connection_when_used subscription that no
+// deployed workflow in its environment uses any more, in one statement,
+// so a deployment declaring it at the same moment finds it gone and
+// declares another. x then goes on to be deleted at the provider.
+func (r *Reconciler) releaseUnused(ctx context.Context, tenant uuid.UUID, x *row) error {
+	reg, err := r.Registry.For(connector.ManifestsOnly(ctx), tenant.String())
+	if err != nil {
+		return err
+	}
+	conn, ok := reg.Get(x.ref)
+	if !ok || !conn.Manifest.Triggers[x.trigger].WhenUsed() {
+		return nil
+	}
+	return db.InTenantTx(ctx, r.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx, `UPDATE remote_subscriptions SET desired = 'absent', next_attempt_at = now(), attempts = 0, updated_at = now()
+			WHERE id = $1 AND desired = 'present' AND NOT `+inUse+` RETURNING updated_at`, x.id).Scan(&x.updatedAt)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err == nil {
+			x.desired = "absent"
+		}
+		return err
+	})
+}
+
+// claimed answers RemoteCall.Claimed for x: the environment of the
+// tenant's other live subscription that u, one of Taskiem's ingest URLs,
+// names.
+func (r *Reconciler) claimed(ctx context.Context, tenant uuid.UUID, x row, u string) (string, error) {
+	prefix := strings.TrimRight(r.HooksURL, "/") + "/" + tenant.String() + "/connectors/"
+	if r.HooksURL == "" || !strings.HasPrefix(u, prefix) {
+		return "", nil
+	}
+	p, err := url.Parse(u)
+	if err != nil {
+		return "", nil
+	}
+	id, err := uuid.Parse(p.Query().Get("subscription"))
+	if err != nil || id == x.id {
+		return "", nil
+	}
+	var sub *Subscription
+	err = db.InTenantTx(ctx, r.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		var err error
+		sub, err = Lookup(ctx, tx, id)
+		return err
+	})
+	if err != nil || sub == nil || !sub.Present {
+		return "", err
+	}
+	return sub.Environment, nil
 }
 
 func (r *Reconciler) apply(ctx context.Context, tenant uuid.UUID, x row) (outcome, error) {
@@ -490,7 +630,8 @@ func (r *Reconciler) apply(ctx context.Context, tenant uuid.UUID, x row) (outcom
 		HTTP: r.Egress.Client(egress.Policy{Tenant: tenant.String(), Hosts: conn.Manifest.HostsFor(creds), Purpose: "connector:" + conn.Manifest.ID + ":registration"}, timeout),
 		Rotate: func(ctx context.Context, fn connector.RotateFunc) (map[string]string, error) {
 			return r.Vault.RotateCredentials(use, tenant, x.env, conn.Manifest.ID, x.connection, fn)
-		}}
+		},
+		Claimed: func(ctx context.Context, u string) (string, error) { return r.claimed(ctx, tenant, x, u) }}
 	name := Name(x.id)
 
 	if x.desired == "absent" {
@@ -626,6 +767,14 @@ func (r *Reconciler) record(ctx context.Context, tenant uuid.UUID, x row, out ou
 			}
 			if _, err := tx.Exec(ctx, `DELETE FROM remote_subscriptions WHERE id = $1 AND desired = 'absent'`, x.id); err != nil {
 				return err
+			}
+			// A connection's subscription refused because this one held
+			// the provider's (one bot in two environments) may take it now.
+			if x.wf == uuid.Nil {
+				if _, err := tx.Exec(ctx, `UPDATE remote_subscriptions SET next_attempt_at = now(), attempts = 0
+					WHERE workflow_id IS NULL AND connector = $1 AND trigger_name = $2 AND desired = 'present' AND state = 'failed'`, x.ref, x.trigger); err != nil {
+					return err
+				}
 			}
 			if out.audit == "" {
 				return nil

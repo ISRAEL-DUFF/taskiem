@@ -350,12 +350,14 @@ triggers:
   # one of its optional fields is present, and that field is the event.
   update:
     type: webhook
-    # The bot's one webhook is set when the connection is saved (decision
-    # 0021 registration: connection; decision 0062 C7), with a secret token
-    # Taskiem keeps. A webhook set by hand instead is verified with the
-    # connection's webhook_secret.
-    registration: connection
-    where: "Taskiem sets this bot's webhook itself when the connection is saved; one set by hand instead needs the connection's webhook secret"
+    # The bot's one webhook is set while a published workflow starts on
+    # this trigger with the connection, and removed when the last one is
+    # unpublished (decision 0021 registration: connection_when_used;
+    # decision 0062 C7), with a secret token Taskiem keeps. A bot used only
+    # to send is never touched. A webhook set by hand instead is verified
+    # with the connection's webhook_secret.
+    registration: connection_when_used
+    where: "Taskiem sets this bot's webhook itself while a published workflow starts on its messages; one set by hand instead needs the connection's webhook secret"
     verify: { scheme: header_secret, header: X-Telegram-Bot-Api-Secret-Token, secret_field: webhook_secret }
     events: [message, edited_message, channel_post, edited_channel_post, business_connection, business_message,
       edited_business_message, deleted_business_messages, guest_message, message_reaction, message_reaction_count,

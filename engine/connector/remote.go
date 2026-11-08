@@ -71,6 +71,12 @@ type RemoteCall struct {
 	// tokens), as Request.Rotate does for actions; nil where they cannot
 	// be stored.
 	Rotate func(ctx context.Context, fn RotateFunc) (map[string]string, error)
+	// Claimed tells a registrar whose provider holds one subscription per
+	// account (a Telegram bot's one webhook) whether the URL found there
+	// is another of the tenant's live subscriptions: its environment, or
+	// "" when it is not (not Taskiem's, the tenant's, or one being
+	// removed). Nil where it cannot be told.
+	Claimed func(ctx context.Context, url string) (string, error)
 }
 
 // Request is the call as an action's request, for registrars that share
