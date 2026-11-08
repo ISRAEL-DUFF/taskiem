@@ -56,6 +56,10 @@ func New(o Options) *connector.Connector {
 		"set_webhook":           connector.ActionFunc(c.setWebhook),
 		"delete_webhook":        connector.ActionFunc(c.deleteWebhook),
 		"get_webhook_info":      connector.ActionFunc(c.getWebhookInfo),
+		"get_file":              connector.ActionFunc(c.getFile),
+		"send_voice":            connector.ActionFunc(c.sendSound("sendVoice", "voice", []string{"audio/ogg", "audio/mpeg", "audio/mp4"})),
+		"send_audio":            connector.ActionFunc(c.sendSound("sendAudio", "audio", []string{"audio/mpeg", "audio/mp4"})),
+		"send_chat_action":      connector.ActionFunc(c.sendChatAction),
 	}}
 }
 
@@ -111,6 +115,12 @@ func scrub(err error, token string) error {
 
 // call invokes one Bot API method and decodes "result" into out.
 func (c *client) call(ctx context.Context, req connector.Request, method string, body map[string]any, out *any) error {
+	return c.invoke(ctx, req, method, body, nil, out)
+}
+
+// invoke is call, with a file sent as a multipart form when file is set
+// (sendVoice and sendAudio of a run file).
+func (c *client) invoke(ctx context.Context, req connector.Request, method string, body map[string]any, file *connector.FilePart, out *any) error {
 	tok := strings.TrimSpace(req.Credentials["bot_token"])
 	if tok == "" {
 		return fmt.Errorf("telegram: the connection has no bot_token: %w", effects.ErrFatal)
@@ -119,7 +129,25 @@ func (c *client) call(ctx context.Context, req connector.Request, method string,
 		body = map[string]any{}
 	}
 	var env envelope
-	err := connector.DoJSON(ctx, req.HTTP, http.MethodPost, c.base+"/bot"+tok+"/"+method, nil, body, &env)
+	var err error
+	if file == nil {
+		err = connector.DoJSON(ctx, req.HTTP, http.MethodPost, c.base+"/bot"+tok+"/"+method, nil, body, &env)
+	} else {
+		fields := map[string]string{}
+		for k, v := range body {
+			switch x := v.(type) {
+			case string:
+				fields[k] = x
+			default:
+				raw, merr := json.Marshal(x)
+				if merr != nil {
+					return fmt.Errorf("telegram %s: %s: %w: %w", method, k, merr, effects.ErrFatal)
+				}
+				fields[k] = string(raw)
+			}
+		}
+		_, err = connector.DoMultipart(ctx, req.HTTP, c.base+"/bot"+tok+"/"+method, nil, fields, *file, &env)
+	}
 	var he *connector.HTTPError
 	if errors.As(err, &he) {
 		var e envelope

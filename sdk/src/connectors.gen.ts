@@ -3190,11 +3190,35 @@ export interface TelegramGetChatInput {
   /** Chat id */
   chat_id: Value;
 }
+export interface TelegramGetFileInput {
+  /** The update's file id (trigger.body.message.voice.file_id, .audio, .document, the last of .photo) */
+  file_id: Val<string>;
+  /** A file name to keep it under */
+  name?: Val<string>;
+}
 export interface TelegramGetMeInput {
   [key: string]: Value;
 }
 export interface TelegramGetWebhookInfoInput {
   [key: string]: Value;
+}
+export interface TelegramSendAudioInput {
+  /** A file_id or URL, instead of file */
+  audio?: Val<string>;
+  caption?: Val<string>;
+  chat_id: Value;
+  disable_notification?: Val<boolean>;
+  duration?: Val<number>;
+  /** A run file's reference, or its id */
+  file?: Value;
+  message_thread_id?: Val<number>;
+  protect_content?: Val<boolean>;
+  reply_to_message_id?: Val<number>;
+}
+export interface TelegramSendChatActionInput {
+  action?: Val<"typing" | "record_voice" | "upload_voice" | "upload_document" | "upload_photo">;
+  chat_id: Value;
+  message_thread_id?: Val<number>;
 }
 export interface TelegramSendDocumentInput {
   caption?: Val<string>;
@@ -3236,6 +3260,19 @@ export interface TelegramSendPhotoInput {
   reply_markup?: Value;
   reply_to_message_id?: Val<number>;
 }
+export interface TelegramSendVoiceInput {
+  caption?: Val<string>;
+  chat_id: Value;
+  disable_notification?: Val<boolean>;
+  duration?: Val<number>;
+  /** A run file's reference, or its id */
+  file?: Value;
+  message_thread_id?: Val<number>;
+  protect_content?: Val<boolean>;
+  reply_to_message_id?: Val<number>;
+  /** A file_id or URL, instead of file */
+  voice?: Val<string>;
+}
 export interface TelegramSetWebhookInput {
   /** Update types to receive, e.g. [message, callback_query]; empty for Telegram's default */
   allowed_updates?: Value;
@@ -3254,16 +3291,24 @@ export const telegram = {
   edit_message_text: (input: TelegramEditMessageTextInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "edit_message_text", input, extra),
   /** Get a chat (read) */
   get_chat: (input: TelegramGetChatInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "get_chat", input, extra),
+  /** Get a file a customer sent (read) */
+  get_file: (input: TelegramGetFileInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "get_file", input, extra),
   /** Get the bot (read) */
   get_me: (input?: TelegramGetMeInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "get_me", input, extra),
   /** Get the webhook's status (read) */
   get_webhook_info: (input?: TelegramGetWebhookInfoInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "get_webhook_info", input, extra),
+  /** Send an audio file (unsafe_write) */
+  send_audio: (input: TelegramSendAudioInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "send_audio", input, extra),
+  /** Show that a reply is on its way (idempotent_write) */
+  send_chat_action: (input: TelegramSendChatActionInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "send_chat_action", input, extra),
   /** Send a document (unsafe_write) */
   send_document: (input: TelegramSendDocumentInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "send_document", input, extra),
   /** Send a message (unsafe_write) */
   send_message: (input: TelegramSendMessageInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "send_message", input, extra),
   /** Send a photo (unsafe_write) */
   send_photo: (input: TelegramSendPhotoInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "send_photo", input, extra),
+  /** Send a voice message (unsafe_write) */
+  send_voice: (input: TelegramSendVoiceInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "send_voice", input, extra),
   /** Set the webhook (idempotent_write) */
   set_webhook: (input: TelegramSetWebhookInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "set_webhook", input, extra),
 };
@@ -4011,7 +4056,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "slack@1": ["add_reaction", "auth_test", "get_conversation", "get_user", "list_conversations", "list_users", "lookup_user_by_email", "open_conversation", "post_ephemeral", "post_message", "schedule_message", "update_message", "upload_file"],
   "stock@1": ["adjust", "count", "draft_purchase", "get_item", "list_items", "list_purchases", "low_items", "movements", "receive", "record_sale", "sales_day", "send_purchase"],
   "storefront@1": ["decide", "get_booking", "issue_tickets", "mark_returned", "notify_customer", "offer_place", "payment_link", "refund"],
-  "telegram@1": ["answer_callback_query", "delete_webhook", "edit_message_text", "get_chat", "get_me", "get_webhook_info", "send_document", "send_message", "send_photo", "set_webhook"],
+  "telegram@1": ["answer_callback_query", "delete_webhook", "edit_message_text", "get_chat", "get_file", "get_me", "get_webhook_info", "send_audio", "send_chat_action", "send_document", "send_message", "send_photo", "send_voice", "set_webhook"],
   "termii@1": ["check_balance", "send_sms"],
   "whatsapp@1": ["get_media", "get_phone_number", "list_templates", "mark_as_read", "send_interactive", "send_media", "send_template", "send_text", "send_typing", "upload_media"],
   "xenibase@1": ["call_function", "delete_rows", "get_row", "insert_rows", "query_rows", "read_rows", "test_connection", "update_rows", "upsert_rows"],

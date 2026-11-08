@@ -133,6 +133,96 @@ actions:
     pii:
       - { field: caption, category: other }
       - { field: output.message, category: other }
+  get_file:
+    title: Get a file a customer sent
+    description: >-
+      Downloads a file from an update (a voice note, a photo, a document)
+      by its file_id and keeps it as a run file (docs/files.md): the run
+      gets the file's reference, never its bytes. A bot can download files
+      up to 20 MB. What a customer sent is scanned for malware and kept as
+      personal data.
+    class: read
+    input:
+      type: object
+      required: [file_id]
+      properties:
+        file_id: { type: string, description: "The update's file id (trigger.body.message.voice.file_id, .audio, .document, the last of .photo)" }
+        name:    { type: string, description: A file name to keep it under }
+    output:
+      type: object
+      properties:
+        file: { type: object, description: "The run file's reference: file, name, type, size, sha256" }
+    pii:
+      - { field: output.file.name, category: other }
+  send_voice:
+    title: Send a voice message
+    description: >-
+      A run file's reference (uploaded with the message), a file_id or a
+      URL. OGG/Opus, MP3 or M4A, shown as a voice message. Not idempotent,
+      like send_message.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [chat_id]
+      properties:
+        chat_id:              { type: [string, integer] }
+        file:                 { description: "A run file's reference, or its id" }
+        voice:                { type: string, description: "A file_id or URL, instead of file" }
+        caption:              { type: string, maxLength: 1024 }
+        duration:             { type: integer }
+        reply_to_message_id:  { type: integer }
+        message_thread_id:    { type: integer }
+        disable_notification: { type: boolean }
+        protect_content:      { type: boolean }
+    output: { $ref: '#/actions/send_photo/output' }
+    pii:
+      - { field: caption, category: other }
+      - { field: output.message, category: other }
+  send_audio:
+    title: Send an audio file
+    description: >-
+      A run file's reference, a file_id or a URL; MP3 or M4A, shown in the
+      music player. Not idempotent, like send_message.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [chat_id]
+      properties:
+        chat_id:              { type: [string, integer] }
+        file:                 { description: "A run file's reference, or its id" }
+        audio:                { type: string, description: "A file_id or URL, instead of file" }
+        caption:              { type: string, maxLength: 1024 }
+        duration:             { type: integer }
+        reply_to_message_id:  { type: integer }
+        message_thread_id:    { type: integer }
+        disable_notification: { type: boolean }
+        protect_content:      { type: boolean }
+    output: { $ref: '#/actions/send_photo/output' }
+    pii:
+      - { field: caption, category: other }
+      - { field: output.message, category: other }
+  send_chat_action:
+    title: Show that a reply is on its way
+    description: >-
+      Shows "typing…" (or "recording a voice message…") in the chat for up
+      to 5 seconds, or until the bot sends a message. Showing it twice
+      changes nothing, so a retry is safe.
+    class: idempotent_write
+    idempotency: { field: "header:X-Taskiem-Idempotency-Key", encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [chat_id]
+      properties:
+        chat_id:           { type: [string, integer] }
+        action:            { type: string, enum: [typing, record_voice, upload_voice, upload_document, upload_photo], default: typing }
+        message_thread_id: { type: integer }
+    output:
+      type: object
+      properties:
+        ok: { type: boolean }
   edit_message_text:
     title: Edit a message's text
     description: >-

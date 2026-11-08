@@ -7,6 +7,8 @@ package runfilestest
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"sync"
 	"time"
@@ -14,6 +16,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/israel-duff/taskiem/engine/media"
+	"github.com/israel-duff/taskiem/engine/runfiles"
 )
 
 // Store is the storage.
@@ -96,3 +99,71 @@ func (f *Store) Count() int { f.mu.Lock(); defer f.mu.Unlock(); return len(f.obj
 
 // Scanned is how many files were checked for malware.
 func (f *Store) Scanned() int { f.mu.Lock(); defer f.mu.Unlock(); return f.scanned }
+
+// Files is one run's file store in memory, as a connector sees it
+// (connector.Files): what connector tests keep and read.
+type Files struct {
+	mu       sync.Mutex
+	data     map[string][]byte
+	refs     map[string]map[string]any
+	personal map[string]bool
+	// Refuse makes Put refuse every file (malware, too long).
+	Refuse bool
+}
+
+// NewFiles returns an empty store.
+func NewFiles() *Files {
+	return &Files{data: map[string][]byte{}, refs: map[string]map[string]any{}, personal: map[string]bool{}}
+}
+
+// Put keeps data; Ogg is audio/ogg, MP3 (ID3) audio/mpeg, PDF
+// application/pdf.
+func (f *Files) Put(_ context.Context, name string, data []byte, personal bool) (map[string]any, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.Refuse {
+		return nil, runfiles.ErrRefused
+	}
+	typ := "application/octet-stream"
+	switch {
+	case bytes.HasPrefix(data, []byte("OggS")):
+		typ = "audio/ogg"
+	case bytes.HasPrefix(data, []byte("ID3")):
+		typ = "audio/mpeg"
+	case bytes.HasPrefix(data, []byte("%PDF")):
+		typ = "application/pdf"
+	}
+	id := uuid.NewString()
+	sum := sha256.Sum256(data)
+	ref := map[string]any{"file": id, "name": name, "type": typ, "size": int64(len(data)), "sha256": hex.EncodeToString(sum[:])}
+	f.data[id], f.refs[id], f.personal[id] = append([]byte(nil), data...), ref, personal
+	return ref, nil
+}
+
+// Read answers a file's bytes and reference.
+func (f *Files) Read(_ context.Context, ref any) ([]byte, map[string]any, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	id := ""
+	switch x := ref.(type) {
+	case string:
+		id = x
+	case map[string]any:
+		id, _ = x["file"].(string)
+	}
+	b, ok := f.data[id]
+	if !ok {
+		return nil, nil, runfiles.ErrNotFound
+	}
+	return b, f.refs[id], nil
+}
+
+// Kept is a kept file's bytes and whether it was a person's.
+func (f *Files) Kept(id string) ([]byte, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.data[id], f.personal[id]
+}
+
+// Len is how many files are kept.
+func (f *Files) Len() int { f.mu.Lock(); defer f.mu.Unlock(); return len(f.data) }

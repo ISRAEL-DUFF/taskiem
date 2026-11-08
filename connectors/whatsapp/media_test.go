@@ -12,48 +12,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/uuid"
-
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/effects"
-	"github.com/israel-duff/taskiem/engine/runfiles"
+	"github.com/israel-duff/taskiem/engine/runfiles/runfilestest"
 )
-
-// memFiles is a run's file store in memory.
-type memFiles struct {
-	files    map[string][]byte
-	refs     map[string]map[string]any
-	personal map[string]bool
-	refuse   bool
-}
-
-func newFiles() *memFiles {
-	return &memFiles{files: map[string][]byte{}, refs: map[string]map[string]any{}, personal: map[string]bool{}}
-}
-
-func (m *memFiles) Put(_ context.Context, name string, data []byte, personal bool) (map[string]any, error) {
-	if m.refuse {
-		return nil, runfiles.ErrRefused
-	}
-	id := uuid.NewString()
-	sum := sha256.Sum256(data)
-	typ := "application/octet-stream"
-	if strings.HasPrefix(string(data), "OggS") {
-		typ = "audio/ogg"
-	}
-	ref := map[string]any{"file": id, "name": name, "type": typ, "size": int64(len(data)), "sha256": hex.EncodeToString(sum[:])}
-	m.files[id], m.refs[id], m.personal[id] = data, ref, personal
-	return ref, nil
-}
-
-func (m *memFiles) Read(_ context.Context, ref any) ([]byte, map[string]any, error) {
-	id := connector.FileID(ref)
-	b, ok := m.files[id]
-	if !ok {
-		return nil, nil, runfiles.ErrNotFound
-	}
-	return b, m.refs[id], nil
-}
 
 // graph is a fake Graph API with a media host on the same server.
 type graph struct {
@@ -123,7 +85,7 @@ func (g *graph) call(action string, in map[string]any, files connector.Files) (c
 
 func TestGetMediaKeepsTheVoiceNoteAsARunFile(t *testing.T) {
 	g := newGraph(t)
-	fs := newFiles()
+	fs := runfilestest.NewFiles()
 	r, err := g.call("get_media", map[string]any{"media_id": "media-1"}, fs)
 	if err != nil {
 		t.Fatal(err)
@@ -133,8 +95,8 @@ func TestGetMediaKeepsTheVoiceNoteAsARunFile(t *testing.T) {
 	if ref["name"] != "whatsapp-media-1.ogg" || o["mime_type"] != "audio/ogg; codecs=opus" {
 		t.Fatalf("output %v", o)
 	}
-	id := ref["file"].(string)
-	if string(fs.files[id]) != string(g.voice) || !fs.personal[id] {
+	kept, personal := fs.Kept(ref["file"].(string))
+	if string(kept) != string(g.voice) || !personal {
 		t.Fatal("the voice note was not kept as a person's file")
 	}
 	if _, err := json.Marshal(o); err != nil || strings.Contains(string(mustJSON(o)), "voice note bytes") {
@@ -147,25 +109,25 @@ func mustJSON(v any) []byte { b, _ := json.Marshal(v); return b }
 func TestGetMediaRefusals(t *testing.T) {
 	g := newGraph(t)
 	// Not on Meta's media host: never fetched.
-	if _, err := g.call("get_media", map[string]any{"media_id": "media-elsewhere"}, newFiles()); !errors.Is(err, effects.ErrFatal) {
+	if _, err := g.call("get_media", map[string]any{"media_id": "media-elsewhere"}, runfilestest.NewFiles()); !errors.Is(err, effects.ErrFatal) {
 		t.Fatalf("a URL elsewhere: %v", err)
 	}
 	// A digest that does not match: retried, never kept.
 	g.digest = strings.Repeat("0", 64)
-	fs := newFiles()
-	if _, err := g.call("get_media", map[string]any{"media_id": "media-1"}, fs); !errors.Is(err, effects.ErrRetryable) || len(fs.files) != 0 {
-		t.Fatalf("a wrong digest: %v, %d kept", err, len(fs.files))
+	fs := runfilestest.NewFiles()
+	if _, err := g.call("get_media", map[string]any{"media_id": "media-1"}, fs); !errors.Is(err, effects.ErrRetryable) || fs.Len() != 0 {
+		t.Fatalf("a wrong digest: %v, %d kept", err, fs.Len())
 	}
 	// The short-lived URL expired: retried (the id is looked up again).
 	g = newGraph(t)
 	g.expired = true
-	if _, err := g.call("get_media", map[string]any{"media_id": "media-1"}, newFiles()); !errors.Is(err, effects.ErrRetryable) {
+	if _, err := g.call("get_media", map[string]any{"media_id": "media-1"}, runfilestest.NewFiles()); !errors.Is(err, effects.ErrRetryable) {
 		t.Fatalf("an expired URL: %v", err)
 	}
 	// The store refuses it (malware, too long): fatal.
 	g.expired = false
-	fs = newFiles()
-	fs.refuse = true
+	fs = runfilestest.NewFiles()
+	fs.Refuse = true
 	if _, err := g.call("get_media", map[string]any{"media_id": "media-1"}, fs); !errors.Is(err, effects.ErrFatal) {
 		t.Fatalf("a refused file: %v", err)
 	}
@@ -173,14 +135,14 @@ func TestGetMediaRefusals(t *testing.T) {
 	if _, err := g.call("get_media", map[string]any{"media_id": "media-1"}, nil); !errors.Is(err, effects.ErrFatal) {
 		t.Fatalf("no store: %v", err)
 	}
-	if _, err := g.call("get_media", map[string]any{"media_id": "../x"}, newFiles()); !errors.Is(err, effects.ErrFatal) {
+	if _, err := g.call("get_media", map[string]any{"media_id": "../x"}, runfilestest.NewFiles()); !errors.Is(err, effects.ErrFatal) {
 		t.Fatalf("a bad id: %v", err)
 	}
 }
 
 func TestSendAVoiceNoteFromARunFile(t *testing.T) {
 	g := newGraph(t)
-	fs := newFiles()
+	fs := runfilestest.NewFiles()
 	ref, _ := fs.Put(context.Background(), "reply.ogg", []byte("OggS spoken reply"), false)
 	r, err := g.call("send_media", map[string]any{"to": "2348031234567", "media_type": "audio", "file": ref, "voice": true}, fs)
 	if err != nil {
@@ -210,7 +172,7 @@ func TestSendAVoiceNoteFromARunFile(t *testing.T) {
 
 func TestUploadMediaAndTyping(t *testing.T) {
 	g := newGraph(t)
-	fs := newFiles()
+	fs := runfilestest.NewFiles()
 	ref, _ := fs.Put(context.Background(), "doc.pdf", []byte("%PDF-1.4"), false)
 	r, err := g.call("upload_media", map[string]any{"file": ref}, fs)
 	if err != nil || out(r)["media_id"] != "uploaded-9" {
