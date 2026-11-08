@@ -57,7 +57,7 @@ For a threaded workflow, in this order:
 Then:
 
 - **A run of the workflow waits** on `email.reply` for that key in the same environment: the reply is delivered to it, and no run starts. The trigger's tab lists the message as a reply given to the run (status `replied`).
-- **A run of the workflow, which sent in the thread, is still going but not waiting** (it is between steps, or waiting on something else): the message stays in the inbox and is looked at again every 5 minutes, for up to 7 days. If the run waits by then, it gets the reply; if it ends, the reply starts a new run.
+- **A run of the workflow, which sent in the thread, is still going but not waiting** (it is between steps, or waiting on something else): the message stays in the inbox for up to 7 days, held for the thread (`email_inbox.held_thread`). A run that starts waiting on `email.reply` releases the held messages of its key at once, so it gets the reply on the next drain; otherwise the message is looked at again after 5 minutes, then 10, 20, 40, and at most every hour, so a reply whose run ended starts a new run within the hour. The inbox takes new mail before held replies, so held ones never crowd it out.
 - **Otherwise** (the ticket's run ended, or there never was one): a new run starts, with `trigger.email.thread` set, so the workflow can reopen the ticket.
 
 A message whose ticket cannot be found starts a run as in any email workflow.

@@ -121,8 +121,14 @@ func (s *Service) Drain(ctx context.Context) error {
 	var errs []error
 	for _, x := range list {
 		if err := s.process(ctx, x); errors.Is(err, errHeld) {
-			// Waiting for its ticket's run: looked at again once the
-			// claim lapses.
+			// Waiting for its ticket's run: left alone longer each time
+			// (up to an hour), and released as soon as a run waits on its
+			// thread.
+			var h heldError
+			errors.As(err, &h)
+			if _, err := s.Pool.Exec(ctx, `SELECT taskiem_email_inbox_hold($1, $2)`, x.id, h.thread); err != nil {
+				errs = append(errs, err)
+			}
 			continue
 		} else if err != nil {
 			errs = append(errs, fmt.Errorf("email %s: %w", x.id, err))

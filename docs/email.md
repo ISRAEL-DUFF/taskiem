@@ -72,7 +72,7 @@ The email comes from Taskiem's sending address in the business's name ("Ada's Ki
 A reply is matched to its conversation by, in order: its verified reply tag; its `In-Reply-To` or `References` naming an email this workflow sent; or a `[#T-1042]` in its subject, only when the sender is proven (`auth.aligned`) and is someone the workflow emailed in that conversation. Then:
 
 - a run of the workflow waiting on `email.reply` for that key gets it, and nothing starts. The tab lists the message as **a reply, given to the conversation's run**. Runs of other workflows never get it, even with the same key;
-- a run of the workflow that emailed in the conversation and is still going, but is not waiting yet (it is between steps), gets it when it waits: the message is looked at again every 5 minutes, for up to 7 days;
+- a run of the workflow that emailed in the conversation and is still going, but is not waiting yet (it is between steps), gets it as soon as it waits: the message is held for up to 7 days, handed over the moment the run waits for the conversation, and otherwise looked at again after 5 minutes, then 10, 20, 40 and at most every hour (so a reply whose run ended starts a new run within the hour). New mail is always taken before held replies;
 - otherwise (the conversation's run ended) a new run starts with `trigger.email.thread` set, so the workflow can reopen the ticket.
 
 The reply's sender, recipients, subject and text are sealed before the run gets them, as a trigger's are. A message matched to nothing starts a run as usual. Without **Replies continue the conversation**, every message starts a run as before; the tag and the threading headers are only shown to it.

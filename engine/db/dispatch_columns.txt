@@ -392,6 +392,8 @@ email_endpoints.workflow_id
 email_inbox.claimed_until
 email_inbox.created_at
 email_inbox.endpoint_id
+email_inbox.held_count
+email_inbox.held_thread
 email_inbox.id
 email_inbox.idem
 email_inbox.meta

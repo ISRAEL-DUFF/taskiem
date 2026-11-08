@@ -31,6 +31,14 @@ type Vault interface {
 // but not waiting for a reply yet.
 var errHeld = errors.New("inmail: held for the ticket's run")
 
+// heldError is errHeld for a thread: the inbox row is held for it
+// (taskiem_email_inbox_hold), so a run that starts waiting on the thread
+// releases it at once.
+type heldError struct{ thread string }
+
+func (e heldError) Error() string        { return errHeld.Error() + " " + e.thread }
+func (e heldError) Is(target error) bool { return target == errHeld }
+
 // HoldFor is how long a reply waits in the inbox for its ticket's run to
 // wait for it; after that it starts a run of its own.
 const HoldFor = 7 * 24 * time.Hour
@@ -141,7 +149,7 @@ func (s *Service) threaded(ctx context.Context, x inboxRow, meta Meta, msg *Mess
 		return s.startRun(ctx, x, meta, msg, ep, cfg, th)
 	}
 	if !waiting {
-		return record{}, nil, errHeld
+		return record{}, nil, heldError{thread: th.thread}
 	}
 	files, refs, skipped, err := s.attachments(ctx, x.tenant, msg, cfg)
 	if err != nil {
@@ -197,7 +205,7 @@ func (s *Service) threaded(ctx context.Context, x inboxRow, meta Meta, msg *Mess
 	case len(woke) == 0:
 		// It stopped waiting since: looked at again shortly.
 		discard()
-		return record{}, nil, errHeld
+		return record{}, nil, heldError{thread: th.thread}
 	}
 	return rec, files, nil
 }

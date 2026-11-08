@@ -388,22 +388,62 @@ func TestEmailReplyHeldUntilTheRunWaits(t *testing.T) {
 	if inbox != 1 || len(w.runs(wf)) != 1 || len(w.messageStatus(t, wf)) != 1 {
 		t.Fatalf("not held: inbox %d, runs %d, messages %q", inbox, len(w.runs(wf)), w.messageStatus(t, wf))
 	}
-	// The wait ends; the run waits for the reply; the held message is
-	// looked at again and delivered.
+	// Held for its thread, and left alone longer each time it is looked
+	// at again: 5 minutes, then 10.
+	held := func() (int, string, time.Duration) {
+		t.Helper()
+		var n int
+		var thread string
+		var left time.Duration
+		if err := w.env.DB.Admin.QueryRow(ctx, `SELECT held_count, held_thread, claimed_until - now() FROM email_inbox`).Scan(&n, &thread, &left); err != nil {
+			t.Fatal(err)
+		}
+		return n, thread, left
+	}
+	if n, thread, left := held(); n != 1 || thread != "T-1042" || left < 4*time.Minute || left > 6*time.Minute {
+		t.Fatalf("first hold: %d %q %v", n, thread, left)
+	}
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE email_inbox SET claimed_until = now() - interval '1 second'`); err != nil {
+		t.Fatal(err)
+	}
+	// Fresh mail is claimed before a held reply, however old the reply.
+	w.receiveTo(public, "", customerMail("c1@customer.example", "bola@customer.example", "Another", "", "New."), proven, "bola@customer.example")
+	func() {
+		tx, err := w.env.DB.App.Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = tx.Rollback(ctx) }()
+		var first time.Time
+		var count int
+		if err := tx.QueryRow(ctx, `SELECT created_at FROM taskiem_email_inbox_claim(1)`).Scan(&first); err != nil {
+			t.Fatal(err)
+		}
+		_ = tx.QueryRow(ctx, `SELECT count(*) FROM taskiem_email_inbox_claim(5)`).Scan(&count)
+		var newest time.Time
+		_ = w.env.DB.Admin.QueryRow(ctx, `SELECT max(created_at) FROM email_inbox`).Scan(&newest)
+		if !first.Equal(newest) || count != 1 {
+			t.Errorf("the claim took the held reply before fresh mail: %v (fresh %v), then %d", first, newest, count)
+		}
+	}()
+	w.drain()
+	if n, _, left := held(); n != 2 || left < 9*time.Minute || left > 11*time.Minute {
+		t.Fatalf("second hold: %d %v", n, left)
+	}
+	// The wait ends; the run waits for the reply, which releases the held
+	// message at once: it is delivered on the next drain.
 	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE timers SET fire_at = now() WHERE run_id = $1`, run); err != nil {
 		t.Fatal(err)
 	}
 	w.env.Drain(t)
-	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE email_inbox SET claimed_until = NULL`); err != nil {
-		t.Fatal(err)
-	}
 	w.drain()
 	o := w.event(run, history.StepCompleted, "answer")
 	if o == nil || o["output"].(map[string]any)["body"].(map[string]any)["latest"] != "Early reply." {
 		t.Fatalf("the held reply was not delivered: %v", o)
 	}
 	_ = w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM email_inbox`).Scan(&inbox)
-	if inbox != 0 || len(w.runs(wf)) != 1 {
+	// Bola's fresh message started a run of its own.
+	if inbox != 0 || len(w.runs(wf)) != 2 {
 		t.Fatalf("inbox %d, runs %d", inbox, len(w.runs(wf)))
 	}
 
@@ -412,7 +452,7 @@ func TestEmailReplyHeldUntilTheRunWaits(t *testing.T) {
 	w.receiveTo(public, tag, customerMail("r2@customer.example", ada, "Re: [#T-1042] Help", "", "Late reply."), proven, ada)
 	w.svc.Now = func() time.Time { return time.Now().Add(inmail.HoldFor + time.Hour) }
 	w.drain()
-	if n := len(w.runs(wf)); n != 2 {
+	if n := len(w.runs(wf)); n != 3 {
 		t.Fatalf("a reply held too long: %d runs", n)
 	}
 }
