@@ -1200,6 +1200,7 @@ tenant_connectors.module
 tenant_connectors.tenant_id
 tenant_connectors.version
 tenant_limits.ai_monthly_tokens
+tenant_limits.ai_step_monthly_tokens
 tenant_limits.container_concurrency
 tenant_limits.container_minutes_monthly
 tenant_limits.embed_sites

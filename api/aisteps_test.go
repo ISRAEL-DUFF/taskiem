@@ -72,9 +72,11 @@ func TestAISteps(t *testing.T) {
 	if !strings.Contains(fake.Requests()[0].Messages[0].Text, "+2348031234567") {
 		t.Errorf("the phone, let through, did not reach the model: %s", fake.Requests()[0].Messages[0].Text)
 	}
-	// Its tokens count against the month's budget.
-	if st := owner.must(200, "GET", "/v1/ai/status", nil); st["budget"].(map[string]any)["used_tokens"].(float64) == 0 {
-		t.Errorf("budget use: %v", st["budget"])
+	// Its tokens count against the allowance for AI steps, not building's
+	// budget (decision 0062 D7).
+	st = owner.must(200, "GET", "/v1/ai/status", nil)
+	if st["step_budget"].(map[string]any)["used_tokens"].(float64) == 0 || st["budget"].(map[string]any)["used_tokens"].(float64) != 0 {
+		t.Errorf("budget use: %v, steps %v", st["budget"], st["step_budget"])
 	}
 }
 

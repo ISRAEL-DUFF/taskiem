@@ -9,7 +9,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/israel-duff/taskiem/engine/billing"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/expansion"
 	"github.com/israel-duff/taskiem/engine/runtime"
@@ -20,7 +19,7 @@ import (
 // AI steps (decision 0050) ask the deployment's model at run time. Saving
 // a version that has one checks what the runtime would refuse: a
 // deployment without a model, a model it does not offer, a plan without
-// the ai feature, or a business that has turned AI steps off. Publishing
+// an allowance for AI steps, or a business that has turned AI steps off. Publishing
 // one that lets personal data reach the model is audited. Both look at
 // the ai steps inside the callable templates a version uses too: they
 // are expanded into the run when it starts, and run like its own.
@@ -40,6 +39,14 @@ func aiSteps(doc []byte, find expansion.Templates) (*wd.Definition, error) {
 		}
 	}
 	return def, nil
+}
+
+// aiStepsInPlan reports whether the tenant's plan has an allowance for AI
+// steps (ai_step_monthly_tokens, decision 0062 D7): it, not the ai
+// feature (AI building's), decides. A failure to read the limits says no.
+func (s *Server) aiStepsInPlan(ctx context.Context, tenant uuid.UUID) bool {
+	lim, err := s.Store.LimitsFor(ctx, tenant)
+	return err == nil && lim.AIStepMonthlyTokens > 0
 }
 
 // aiStepProblems checks a definition's ai steps, its templates' among
@@ -62,8 +69,8 @@ func (s *Server) aiStepProblems(ctx context.Context, tenant uuid.UUID, doc []byt
 				Message: fmt.Sprintf("the model %s is not offered for AI steps here; offered: %v", st.AI.Model, s.AI.Config.OfferedStepModels())})
 		}
 	})
-	if err := s.Billing.Require(ctx, tenant, billing.FeatureAI); err != nil {
-		out = append(out, problem{Path: "/steps", Message: "AI steps need a plan with AI: " + err.Error()})
+	if !s.aiStepsInPlan(ctx, tenant) {
+		out = append(out, problem{Path: "/steps", Message: "AI steps need a plan with an allowance for them (ai_step_monthly_tokens); change plan under Billing"})
 	}
 	var allowed bool
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {

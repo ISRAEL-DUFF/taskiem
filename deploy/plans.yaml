@@ -57,6 +57,7 @@ plans:
       max_steps_per_run: 2000
       max_retention_days: 7
       ai_monthly_tokens: 0
+      ai_step_monthly_tokens: 300000   # PLACEHOLDER (VP7): AI steps in runs, an assistant's replies among them; 0 = AI steps off
       whatsapp_templates_monthly: 300
       container_minutes_monthly: 0
       speech_seconds_monthly: 1800   # PLACEHOLDER (VP7): voice notes heard and replies spoken
@@ -89,6 +90,7 @@ plans:
       max_steps_per_run: 5000
       max_retention_days: 7
       ai_monthly_tokens: 0
+      ai_step_monthly_tokens: 600000   # PLACEHOLDER (VP7): AI steps in runs, an assistant's replies among them; 0 = AI steps off
       whatsapp_templates_monthly: 500
       container_minutes_monthly: 0
       speech_seconds_monthly: 3600   # PLACEHOLDER (VP7): voice notes heard and replies spoken
@@ -120,6 +122,7 @@ plans:
       max_steps_per_run: 10000
       max_retention_days: 7
       ai_monthly_tokens: 500000
+      ai_step_monthly_tokens: 1000000   # PLACEHOLDER (VP7): AI steps in runs, an assistant's replies among them; 0 = AI steps off
       whatsapp_templates_monthly: 500
       container_minutes_monthly: 0   # PLACEHOLDER (CS3): 0 = container steps off
       speech_seconds_monthly: 3600   # PLACEHOLDER (VP7): voice notes heard and replies spoken
@@ -149,6 +152,7 @@ plans:
       max_steps_per_run: 50000
       max_retention_days: 30
       ai_monthly_tokens: 2000000
+      ai_step_monthly_tokens: 3000000   # PLACEHOLDER (VP7): AI steps in runs, an assistant's replies among them; 0 = AI steps off
       whatsapp_templates_monthly: 2000
       container_minutes_monthly: 0   # PLACEHOLDER (CS3): 0 = container steps off
       speech_seconds_monthly: 18000   # PLACEHOLDER (VP7): voice notes heard and replies spoken
@@ -178,6 +182,7 @@ plans:
       max_steps_per_run: 100000
       max_retention_days: 90
       ai_monthly_tokens: 10000000
+      ai_step_monthly_tokens: 10000000   # PLACEHOLDER (VP7): AI steps in runs, an assistant's replies among them; 0 = AI steps off
       whatsapp_templates_monthly: 10000
       container_minutes_monthly: 600   # PLACEHOLDER (CS3): 0 = container steps off
       speech_seconds_monthly: 36000   # PLACEHOLDER (VP7): voice notes heard and replies spoken
@@ -209,6 +214,7 @@ plans:
       max_workflows: 0
       max_retention_days: 2555   # up to 7 years (spec 16.1)
       ai_monthly_tokens: 50000000
+      ai_step_monthly_tokens: 50000000   # PLACEHOLDER (VP7): AI steps in runs, an assistant's replies among them; 0 = AI steps off
       whatsapp_templates_monthly: 100000
       container_minutes_monthly: 3000   # PLACEHOLDER (CS3): 0 = container steps off
       speech_seconds_monthly: 0   # PLACEHOLDER (VP7): voice notes heard and replies spoken (0: no limit)

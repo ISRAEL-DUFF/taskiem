@@ -28666,7 +28666,19 @@ components:
           properties:
             monthly_tokens:
               type: integer
-              description: The plan's monthly token budget; 0 is no limit (or overage billed).
+              description: The plan's monthly token budget for AI building, repair and chat routing; 0 is no limit (or overage billed).
+            used_tokens:
+              type: integer
+          additionalProperties: false
+        step_budget:
+          type: object
+          description: The plan's monthly allowance for AI steps in runs (ai_step_monthly_tokens; 0 turns them off) and what they used. Present when enabled.
+          required:
+          - monthly_tokens
+          - used_tokens
+          properties:
+            monthly_tokens:
+              type: integer
             used_tokens:
               type: integer
           additionalProperties: false
@@ -32947,6 +32959,9 @@ components:
           type: integer
         ai_monthly_tokens:
           type: integer
+        ai_step_monthly_tokens:
+          type: integer
+          description: Tokens the AI steps of runs may use per UTC month (0 turns AI steps off).
         whatsapp_templates_monthly:
           type: integer
         speech_seconds_monthly:
@@ -32987,6 +33002,7 @@ components:
       - secrets
       - connections
       - ai_tokens_this_month
+      - ai_step_tokens_this_month
       - tasks_in_flight
       - whatsapp_templates_this_month
       - container_seconds_this_month
@@ -33008,6 +33024,10 @@ components:
           type: integer
         ai_tokens_this_month:
           type: integer
+          description: AI building, repair and chat routing this UTC month.
+        ai_step_tokens_this_month:
+          type: integer
+          description: AI steps in runs this UTC month (ai_step_monthly_tokens).
         tasks_in_flight:
           type:
           - object

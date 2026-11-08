@@ -41,9 +41,9 @@ type AISteps struct {
 	// For returns the provider for a model; nil uses ai.New with the
 	// model put in Config.
 	For func(model string) (ai.Provider, error)
-	// Plan reports whether the tenant's plan includes AI (the billing
-	// feature "ai"); an error is a failure to tell, retried. Nil: every
-	// plan does (billing off).
+	// Plan, when set, is a further check that the tenant's plan has AI
+	// steps; an error is a failure to tell, retried. The deployment leaves
+	// it unset: the allowance ai_step_monthly_tokens decides (0: none).
 	Plan func(ctx context.Context, tenant uuid.UUID) (bool, error)
 	// Overage reports a plan's AI overage rate: a tenant whose plan bills
 	// tokens beyond the budget is not stopped by it. Nil: no overage.
@@ -138,7 +138,7 @@ func (w *Worker) aiAttempt(ctx context.Context, p *plan, in any) history.Event {
 			return err
 		}
 		lim, err := w.Store.limitsTx(ctx, tx, p.c.tenant)
-		limit = lim.AIMonthlyTokens
+		limit = lim.AIStepMonthlyTokens
 		return err
 	})
 	if err != nil {
@@ -146,6 +146,11 @@ func (w *Worker) aiAttempt(ctx context.Context, p *plan, in any) history.Event {
 	}
 	if !allowed {
 		return fail("disabled", "the business has turned AI steps off (Secrets & settings, AI steps)")
+	}
+	if limit <= 0 {
+		// 0 is none, not no check (A8): the plan has no allowance for AI
+		// steps (ai_step_monthly_tokens).
+		return fail("disabled", "the business's plan has no allowance for AI steps; change plan under Billing")
 	}
 	if w.AI.Plan != nil {
 		ok, err := w.AI.Plan(ctx, p.c.tenant)
@@ -241,7 +246,7 @@ func (w *Worker) aiAttempt(ctx context.Context, p *plan, in any) history.Event {
 	// not be recorded keeps the reservation until it lapses: the provider
 	// billed it, so the retry must not spend outside the budget.
 	unrecorded := false
-	if limit > 0 {
+	{
 		estimate := int64(2 * (len(aiStepSystem)/4 + size/4 + maxTokens))
 		release, over, err := w.reserveAI(ctx, p, limit, estimate, 2*timeout+time.Minute)
 		if err != nil {
@@ -258,7 +263,7 @@ func (w *Worker) aiAttempt(ctx context.Context, p *plan, in any) history.Event {
 			}
 		}
 		if over {
-			return fail("limit", "this month's AI budget is used up (%d tokens); the step is not tried again (the budget starts afresh next month, UTC)", limit)
+			return fail("limit", "this month's allowance for AI steps is used up (%d tokens); the step is not tried again (it starts afresh next month, UTC)", limit)
 		}
 	}
 	system := []ai.SystemBlock{{Text: aiStepSystem, Cache: true}}
@@ -416,7 +421,7 @@ func redactAnswer(taint pii.Taint, s string) string { return taint.RedactText(pi
 // another's whole output to the model, but not an unbounded one.
 const maxAIQuestion = maxStepOutput
 
-// reserveAI checks the tenant's monthly AI budget, counting the tokens
+// reserveAI checks the tenant's monthly allowance for AI steps, counting the tokens
 // recorded and those the ai steps calling now have reserved, and reserves
 // estimate tokens for this step until release is called (or ttl passes,
 // if its worker dies first). Checks are serialised per tenant, so steps
@@ -429,7 +434,7 @@ func (w *Worker) reserveAI(ctx context.Context, p *plan, limit, estimate int64, 
 		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('taskiem ai budget ' || $1::text, 0))`, p.c.tenant); err != nil {
 			return err
 		}
-		used, err := AITokensThisMonth(ctx, tx, p.c.tenant)
+		used, err := AIStepTokensThisMonth(ctx, tx, p.c.tenant)
 		if err != nil {
 			return err
 		}

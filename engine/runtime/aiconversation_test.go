@@ -7,9 +7,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/ai"
+	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/history"
+	"github.com/israel-duff/taskiem/engine/runtime"
 	rt "github.com/israel-duff/taskiem/engine/runtime/runtimetest"
 )
 
@@ -161,5 +164,46 @@ func TestAIStepFallback(t *testing.T) {
 		if ev.Type == history.StepCompleted && ev.StepID == "reply" && !strings.Contains(string(ev.Payload), "fallback was used") {
 			t.Fatalf("no note: %s", ev.Payload)
 		}
+	}
+}
+
+// AI steps spend their own allowance (decision 0062 D7): a building
+// budget used up does not stop them, their tokens do not count against
+// building, and an allowance of 0 turns them off (A8), with the set reply.
+func TestAIStepAllowanceIsSeparate(t *testing.T) {
+	e := rt.New(t)
+	wf := e.Publish(t, aiChat)
+	if err := e.Store.SetLimits(ctx, e.Tenant, map[string]any{"ai_monthly_tokens": 1}, "test"); err != nil {
+		t.Fatal(err)
+	}
+	e.AI = &ai.Fake{Script: []ai.Response{aiAnswer(`{"reply":"Yes o."}`)}}
+	ref := e.Start(t, wf, chatBody(nil))
+	e.Drain(t)
+	if out := outputOf(t, "after", events(t, e, ref)); out["reply"] != "Yes o." {
+		t.Fatalf("with building's budget used up: %v %s", out, types(events(t, e, ref)))
+	}
+	var building, steps int64
+	if err := db.InTenantTx(ctx, e.DB.App, []uuid.UUID{e.Tenant}, func(tx pgx.Tx) error {
+		var err error
+		if building, err = runtime.AITokensThisMonth(ctx, tx, e.Tenant); err != nil {
+			return err
+		}
+		steps, err = runtime.AIStepTokensThisMonth(ctx, tx, e.Tenant)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if building != 0 || steps == 0 {
+		t.Fatalf("counted %d building, %d steps", building, steps)
+	}
+	if err := e.Store.SetLimits(ctx, e.Tenant, map[string]any{"ai_step_monthly_tokens": 0}, "test"); err != nil {
+		t.Fatal(err)
+	}
+	fake := &ai.Fake{Script: []ai.Response{aiAnswer(`{"reply":"x"}`)}}
+	e.AI = fake
+	ref = e.Start(t, wf, chatBody(nil))
+	e.Drain(t)
+	if out := outputOf(t, "after", events(t, e, ref)); out["fallback"] != true || len(fake.Requests()) != 0 {
+		t.Fatalf("an allowance of 0: %v, %d calls", out, len(fake.Requests()))
 	}
 }

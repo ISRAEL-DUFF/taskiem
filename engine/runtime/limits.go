@@ -55,6 +55,11 @@ type Limits struct {
 	// 12.3). Beyond it AI building is refused and people build by hand;
 	// runs are never affected.
 	AIMonthlyTokens int64 `json:"ai_monthly_tokens"`
+	// AIStepMonthlyTokens: tokens the ai steps of runs may use per UTC
+	// month (decision 0062 D7): an assistant answering customers spends
+	// these, never AIMonthlyTokens, so it cannot starve building. 0 turns
+	// AI steps off for the plan.
+	AIStepMonthlyTokens int64 `json:"ai_step_monthly_tokens"`
 	// WhatsAppTemplatesMonthly: WhatsApp template messages included per UTC
 	// month (spec 16). Beyond it they are still sent and counted as
 	// overage for pass-through billing; only marketing templates are held
@@ -165,7 +170,7 @@ func (l Limits) Exceeds(ceiling Limits) []string {
 
 // zeroIsOff are the limits whose 0 turns a feature off rather than lifting
 // the limit; a partner's 0 turns it off for its sub-tenants too.
-var zeroIsOff = map[string]bool{"container_minutes_monthly": true}
+var zeroIsOff = map[string]bool{"container_minutes_monthly": true, "ai_step_monthly_tokens": true}
 
 // LimitKeys describes every limit, in display order.
 var LimitKeys = []struct{ Key, Help string }{
@@ -183,7 +188,8 @@ var LimitKeys = []struct{ Key, Help string }{
 	{"max_payload_bytes", "largest webhook body accepted (0: the platform maximum)"},
 	{"max_secrets", "named secrets (0: no limit)"},
 	{"max_connections", "active connections (0: no limit)"},
-	{"ai_monthly_tokens", "tokens AI building may use per UTC month; beyond it, build by hand (0: no limit)"},
+	{"ai_monthly_tokens", "tokens AI building, repair and chat routing may use per UTC month; beyond it, build by hand (0: no limit)"},
+	{"ai_step_monthly_tokens", "tokens the AI steps of runs (assistants answering customers among them) may use per UTC month; beyond it AI steps answer with their fallback or fail (0: AI steps are off)"},
 	{"whatsapp_templates_monthly", "WhatsApp template messages included per UTC month; beyond it they are counted as overage, and only marketing ones are held back (0: no limit)"},
 	{"speech_seconds_monthly", "seconds of speech (voice notes heard and replies spoken) workflows may use per UTC month; beyond it speech steps are refused (0: no limit)"},
 	{"container_minutes_monthly", "container-step minutes per UTC month; beyond it container steps fail (0: container steps are off)"},
@@ -215,6 +221,11 @@ const DefaultWhatsAppTemplatesMonthly = 1000
 // allowance: 100 minutes heard and spoken (prices are people item VP7).
 const DefaultSpeechSecondsMonthly = 6000
 
+// DefaultAIStepMonthlyTokens is the platform's default monthly allowance
+// for AI steps: a few thousand short replies on a small model (prices are
+// people item VP7).
+const DefaultAIStepMonthlyTokens = 2_000_000
+
 // DefaultAIMonthlyTokens is the platform's default monthly AI budget: a
 // few dozen builds with self-correction on a frontier model.
 const DefaultAIMonthlyTokens = 2_000_000
@@ -239,6 +250,8 @@ func DefaultLimits() Limits {
 		WorkerConcurrency: 32,
 		MaxPayloadBytes:   1 << 20,
 		AIMonthlyTokens:   DefaultAIMonthlyTokens,
+
+		AIStepMonthlyTokens: DefaultAIStepMonthlyTokens,
 
 		SpeechSecondsMonthly: DefaultSpeechSecondsMonthly,
 
@@ -299,7 +312,7 @@ func ParseLimit(key, s string) (any, error) {
 		return f, nil
 	}
 	n, err := strconv.ParseInt(s, 10, 64)
-	if err != nil || n < 0 || (key != "runs_per_day" && key != "runs_per_month" && key != "ai_monthly_tokens" && key != "whatsapp_templates_monthly" && key != "container_minutes_monthly" && key != "speech_seconds_monthly" && n > math.MaxInt32) {
+	if err != nil || n < 0 || (key != "runs_per_day" && key != "runs_per_month" && key != "ai_monthly_tokens" && key != "ai_step_monthly_tokens" && key != "whatsapp_templates_monthly" && key != "container_minutes_monthly" && key != "speech_seconds_monthly" && n > math.MaxInt32) {
 		return nil, fmt.Errorf("%s: %q is not a non-negative whole number", key, s)
 	}
 	if key == "max_payload_bytes" && n > MaxPayload {
@@ -521,6 +534,9 @@ type Usage struct {
 	Secrets       int64          `json:"secrets"`
 	Connections   int64          `json:"connections"`
 	AITokens      int64          `json:"ai_tokens_this_month"`
+	// AI steps' tokens this UTC month (ai_step_monthly_tokens); AITokens
+	// is the rest: building, repair and chat routing.
+	AIStepTokens int64 `json:"ai_step_tokens_this_month"`
 	TasksInFlight map[string]int `json:"tasks_in_flight"` // per queue
 	// WhatsApp template messages this UTC month (spec 16).
 	WhatsAppTemplates WhatsAppTemplateUsage `json:"whatsapp_templates_this_month"`
@@ -602,6 +618,9 @@ func (s *Store) ViewLimits(ctx context.Context, tenant uuid.UUID) (LimitsView, e
 		if u.AITokens, err = AITokensThisMonth(ctx, tx, tenant); err != nil {
 			return err
 		}
+		if u.AIStepTokens, err = AIStepTokensThisMonth(ctx, tx, tenant); err != nil {
+			return err
+		}
 		if u.WhatsAppTemplates, err = WhatsAppTemplatesThisMonth(ctx, tx, tenant); err != nil {
 			return err
 		}
@@ -647,13 +666,28 @@ func (s *Store) ViewLimits(ctx context.Context, tenant uuid.UUID) (LimitsView, e
 	return v, err
 }
 
-// AITokensThisMonth is what a tenant's AI building used this UTC month.
+// AITokensThisMonth is what a tenant's AI building, repair and chat
+// routing used this UTC month: everything but AI steps.
 func AITokensThisMonth(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (int64, error) {
 	var n int64
 	err := tx.QueryRow(ctx, `SELECT COALESCE(sum(total_tokens), 0)::bigint FROM ai_interactions
-		WHERE tenant_id = $1 AND created_at >= date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'`, tenant).Scan(&n)
+		WHERE tenant_id = $1 AND created_at >= date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
+		AND kind NOT IN (`+AIStepKinds+`)`, tenant).Scan(&n)
 	return n, err
 }
+
+// AIStepTokensThisMonth is what a tenant's AI steps used this UTC month
+// (ai_step_monthly_tokens).
+func AIStepTokensThisMonth(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (int64, error) {
+	var n int64
+	err := tx.QueryRow(ctx, `SELECT COALESCE(sum(total_tokens), 0)::bigint FROM ai_interactions
+		WHERE tenant_id = $1 AND created_at >= date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
+		AND kind IN (`+AIStepKinds+`)`, tenant).Scan(&n)
+	return n, err
+}
+
+// AIStepKinds are the ai_interactions kinds of AI steps, as SQL.
+const AIStepKinds = `'step', 'step_correct'`
 
 // SetLimits changes a tenant's limits (operators only: no API calls it).
 // A nil value returns that limit to the platform default. It is audited.

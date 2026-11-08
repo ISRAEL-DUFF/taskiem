@@ -430,15 +430,24 @@ func (s *Service) overageLines(ctx context.Context, tx pgx.Tx, sub *Subscription
 			return nil, err
 		}
 		for m := from; m.Before(thisMonth); m = m.AddDate(0, 1, 0) {
-			var used int64
-			if err := tx.QueryRow(ctx, `SELECT COALESCE(sum(total_tokens), 0)::bigint FROM ai_interactions WHERE tenant_id = $1 AND created_at >= $2 AND created_at < $3`,
-				sub.TenantID, m, m.AddDate(0, 1, 0)).Scan(&used); err != nil {
+			// Building, repair and chat routing against ai_monthly_tokens;
+			// AI steps against their own allowance (decision 0062 D7).
+			var building, steps int64
+			if err := tx.QueryRow(ctx, `SELECT COALESCE(sum(total_tokens) FILTER (WHERE kind NOT IN (`+runtime.AIStepKinds+`)), 0)::bigint,
+				COALESCE(sum(total_tokens) FILTER (WHERE kind IN (`+runtime.AIStepKinds+`)), 0)::bigint
+				FROM ai_interactions WHERE tenant_id = $1 AND created_at >= $2 AND created_at < $3`,
+				sub.TenantID, m, m.AddDate(0, 1, 0)).Scan(&building, &steps); err != nil {
 				return nil, err
 			}
-			if over := used - lim.AIMonthlyTokens; lim.AIMonthlyTokens > 0 && over > 0 {
+			if over := building - lim.AIMonthlyTokens; lim.AIMonthlyTokens > 0 && over > 0 {
 				amount := (over*rate + 999_999) / 1_000_000
 				lines = append(lines, Line{Kind: "ai_overage", Quantity: over, UnitKobo: rate, AmountKobo: amount,
 					Description: fmt.Sprintf("AI tokens beyond the budget, %s (per million tokens)", m.Format("Jan 2006"))})
+			}
+			if over := steps - lim.AIStepMonthlyTokens; lim.AIStepMonthlyTokens > 0 && over > 0 {
+				amount := (over*rate + 999_999) / 1_000_000
+				lines = append(lines, Line{Kind: "ai_step_overage", Quantity: over, UnitKobo: rate, AmountKobo: amount,
+					Description: fmt.Sprintf("AI step tokens beyond the allowance, %s (per million tokens)", m.Format("Jan 2006"))})
 			}
 		}
 	}

@@ -96,6 +96,7 @@ export interface BillingOverview {
     secrets: number;
     connections: number;
     ai_tokens_this_month: number;
+    ai_step_tokens_this_month?: number;
     whatsapp_templates_this_month?: { sent: number; overage: number };
     speech_seconds_this_month?: number;
   };
@@ -135,6 +136,7 @@ const meterDefs: [key: string, label: string, used: (u: BillingOverview["usage"]
   ["max_queued_runs", "Runs queued", (u) => u.queued_runs],
   ["runs_per_month", "Runs this month", (u) => u.runs_this_month],
   ["ai_monthly_tokens", "AI tokens this month", (u) => u.ai_tokens_this_month],
+  ["ai_step_monthly_tokens", "AI replies' tokens this month", (u) => u.ai_step_tokens_this_month ?? 0],
   ["whatsapp_templates_monthly", "WhatsApp templates this month", (u) => u.whatsapp_templates_this_month?.sent ?? 0],
   ["speech_seconds_monthly", "Voice seconds this month", (u) => u.speech_seconds_this_month ?? 0],
   ["max_secrets", "Secrets", (u) => u.secrets],

@@ -146,7 +146,7 @@ func TestAIStep(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The month's budget is spent.
-	if err := e.Store.SetLimits(ctx, e.Tenant, map[string]any{"ai_monthly_tokens": 1}, "test"); err != nil {
+	if err := e.Store.SetLimits(ctx, e.Tenant, map[string]any{"ai_step_monthly_tokens": 1}, "test"); err != nil {
 		t.Fatal(err)
 	}
 	ref = start()
@@ -155,7 +155,7 @@ func TestAIStep(t *testing.T) {
 		t.Errorf("over budget: %v", f)
 	}
 	// No model on the deployment.
-	if err := e.Store.SetLimits(ctx, e.Tenant, map[string]any{"ai_monthly_tokens": nil}, "test"); err != nil {
+	if err := e.Store.SetLimits(ctx, e.Tenant, map[string]any{"ai_step_monthly_tokens": nil}, "test"); err != nil {
 		t.Fatal(err)
 	}
 	e.AI = nil
@@ -264,7 +264,7 @@ func TestAIStepUnrecordedCallKeepsItsReservation(t *testing.T) {
 	start := func() runtime.RunRef {
 		return e.Start(t, wf, map[string]any{"body": map[string]any{"name": "Ada", "phone": "+2348031234567", "note": "n"}})
 	}
-	if err := e.Store.SetLimits(ctx, e.Tenant, map[string]any{"ai_monthly_tokens": 10000000}, "test"); err != nil {
+	if err := e.Store.SetLimits(ctx, e.Tenant, map[string]any{"ai_step_monthly_tokens": 10000000}, "test"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := e.DB.Admin.Exec(ctx, `CREATE FUNCTION test_no_ai_record() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'no room'; END $$;
@@ -288,7 +288,7 @@ func TestAIStepUnrecordedCallKeepsItsReservation(t *testing.T) {
 	}
 	// With a budget the held tokens fill, the next step is refused
 	// without asking the model.
-	if err := e.Store.SetLimits(ctx, e.Tenant, map[string]any{"ai_monthly_tokens": held}, "test"); err != nil {
+	if err := e.Store.SetLimits(ctx, e.Tenant, map[string]any{"ai_step_monthly_tokens": held}, "test"); err != nil {
 		t.Fatal(err)
 	}
 	calls := len(fake.Requests())
@@ -323,7 +323,7 @@ func TestAIStepReservesBudget(t *testing.T) {
 	start := func(note string) runtime.RunRef {
 		return e.Start(t, wf, map[string]any{"body": map[string]any{"name": "Ada", "phone": "+2348031234567", "note": note}})
 	}
-	if err := e.Store.SetLimits(ctx, e.Tenant, map[string]any{"ai_monthly_tokens": 100000}, "test"); err != nil {
+	if err := e.Store.SetLimits(ctx, e.Tenant, map[string]any{"ai_step_monthly_tokens": 100000}, "test"); err != nil {
 		t.Fatal(err)
 	}
 	// Another step is calling, and has reserved what is left.

@@ -145,6 +145,8 @@ interface LimitsView {
     whatsapp_templates_this_month?: { sent: number; by_category: Record<string, number>; overage: number; blocked: number };
     container_seconds_this_month?: number;
     speech_seconds_this_month?: number;
+    ai_tokens_this_month?: number;
+    ai_step_tokens_this_month?: number;
   };
   recent_hits: { limit: string; day: string; hits: number }[];
   help: Record<string, string>;
@@ -165,6 +167,8 @@ function PlanLimits() {
     whatsapp_templates_monthly: data.usage.whatsapp_templates_this_month?.sent ?? 0,
     container_minutes_monthly: Math.ceil((data.usage.container_seconds_this_month ?? 0) / 60),
     speech_seconds_monthly: data.usage.speech_seconds_this_month ?? 0,
+    ai_monthly_tokens: data.usage.ai_tokens_this_month ?? 0,
+    ai_step_monthly_tokens: data.usage.ai_step_tokens_this_month ?? 0,
   };
   const wt = data.usage.whatsapp_templates_this_month;
   return (

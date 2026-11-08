@@ -9,7 +9,7 @@ import (
 
 // Line is one invoice line. Credits are negative.
 type Line struct {
-	Kind        string `json:"kind"` // plan, proration_credit, credit, whatsapp_overage, ai_overage
+	Kind        string `json:"kind"` // plan, proration_credit, credit, whatsapp_overage, ai_overage, ai_step_overage
 	Description string `json:"description"`
 	Quantity    int64  `json:"quantity"`
 	UnitKobo    int64  `json:"unit_kobo"`

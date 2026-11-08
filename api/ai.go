@@ -17,7 +17,6 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/ai/builder"
-	"github.com/israel-duff/taskiem/engine/billing"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
@@ -108,6 +107,23 @@ func (s *Server) aiStatus(w http.ResponseWriter, r *http.Request) {
 		}
 		out["provider"], out["model"] = s.AI.Provider.Name(), s.AI.Provider.Model()
 		out["budget"] = map[string]int64{"monthly_tokens": limit, "used_tokens": used}
+		// AI steps spend their own allowance (decision 0062 D7).
+		tenant := principalFrom(r.Context()).TenantID
+		lim, err := s.Store.LimitsFor(r.Context(), tenant)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		var steps int64
+		if err := db.InTenantTx(r.Context(), s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			var err error
+			steps, err = runtime.AIStepTokensThisMonth(r.Context(), tx, tenant)
+			return err
+		}); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		out["step_budget"] = map[string]int64{"monthly_tokens": lim.AIStepMonthlyTokens, "used_tokens": steps}
 		// AI steps (decision 0050): the models they may name, what the
 		// provider keeps, and whether the business allows them.
 		out["step_models"] = nonNil(s.AI.Config.OfferedStepModels())
@@ -123,7 +139,7 @@ func (s *Server) aiStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out["steps_allowed"] = allowed
-	out["steps_plan"] = s.Billing.Require(r.Context(), principalFrom(r.Context()).TenantID, billing.FeatureAI) == nil
+	out["steps_plan"] = s.aiStepsInPlan(r.Context(), principalFrom(r.Context()).TenantID)
 	writeJSON(w, http.StatusOK, out)
 }
 
@@ -202,8 +218,8 @@ func (s *Server) startAIBuild(ctx context.Context, who aiActor, req aiBuildReq, 
 		if breq.Context, err = aiContext(ctx, tx, reg, req.Environment, req.Workflow); err != nil {
 			return err
 		}
-		// A plan without AI gets no ai steps proposed.
-		breq.Context.AISteps = breq.Context.AISteps && s.Billing.Require(ctx, who.tenant, billing.FeatureAI) == nil
+		// A plan without an allowance for AI steps gets none proposed.
+		breq.Context.AISteps = breq.Context.AISteps && s.aiStepsInPlan(ctx, who.tenant)
 		_, err = tx.Exec(ctx, `INSERT INTO ai_builds (id, tenant_id, actor, goal, workflow_id, environment, provider, model, channel, base_digest)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`, id, who.tenant, who.actor, pii.Redact(req.Goal), req.Workflow, req.Environment,
 			s.AI.Provider.Name(), s.AI.Provider.Model(), channel, baseDigest)

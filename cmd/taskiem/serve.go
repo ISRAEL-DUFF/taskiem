@@ -1477,8 +1477,10 @@ func serve(ctx context.Context, args []string) error {
 			}
 			if w.Queue == "ai" && cfg.AI.Provider != "" {
 				// AI steps (decision 0050): the deployment's model, the
-				// models steps may name, whether the plan has AI, and its
-				// AI overage.
+				// models steps may name, and the plan's AI overage. The
+				// plan's allowance for AI steps (ai_step_monthly_tokens,
+				// decision 0062 D7) decides whether it has them, not the
+				// ai feature, which is AI building's.
 				w.AI = &runtime.AISteps{Config: cfg.AI}
 				if cfg.Billing.On {
 					bill, err := e.billingService(ctx, nil)
@@ -1486,13 +1488,6 @@ func serve(ctx context.Context, args []string) error {
 						return fmt.Errorf("serve: ai queue: %w", err)
 					}
 					w.AI.Overage = bill.AIOverage
-					w.AI.Plan = func(ctx context.Context, tenant uuid.UUID) (bool, error) {
-						err := bill.Require(ctx, tenant, billing.FeatureAI)
-						if fe := (*billing.FeatureError)(nil); errors.As(err, &fe) {
-							return false, nil
-						}
-						return err == nil, err
-					}
 				}
 			}
 			tasks = append(tasks, w.Run)
