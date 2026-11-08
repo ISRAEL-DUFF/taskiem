@@ -171,6 +171,38 @@ Metrics: `taskiem_chat_streams_open` (gauge), `taskiem_chat_stream_polls_total`,
 
 The cost is one transaction per stream per second, linear in the streams and independent of the messages; the 95th percentile is the polling interval. At the plan's two seconds for the median this has a wide margin. What to watch on the target hardware: the transactions per second from open streams against the runs' own, and the number of streams (tabs left open on a business's side); if either grows, the interval can lengthen for streams that have been idle, or one poller per business can serve all of its streams (each stream then only filters), neither of which changes the page. A longer-term option is a table of changes written with each message, read by sequence.
 
+## Replies to customers (decision 0062 A10)
+
+How long a customer waits between sending a message and getting the reply, by text and by voice, and how that holds with many conversations at once. **Not measured yet:** it needs staging with real providers (the model, speech, and Meta's Graph API to a test number: people item VP5). This section says how, and the results go here.
+
+**The tool.** `tools/replybench` sends WhatsApp messages the way Meta does: signed with the app secret, to the connection's callback address. It finds the run each message started, by the sender's number (the trigger's correlation key), and reads from the run's history when the step that sends the reply completed. It reports p50, p95 and the slowest for three spans:
+- delivery to the run's start;
+- the run's start to the reply;
+- delivery to reply.
+
+```
+go run ./tools/replybench -url https://staging... -tenant <id> -app-secret "$META_APP_SECRET" \
+  -phone-number-id <id> -api-key "$TASKIEM_API_KEY" -workflow <id> -reply-step reply \
+  -from <the test number> -n 30
+```
+
+**The runs to record:**
+
+| Run | Flags | What it answers |
+| --- | --- | --- |
+| Text, one at a time | `-from <test number> -n 30` | The wait for a typed reply: two model rounds at most, the send |
+| Voice, one at a time | `-from <test number> -voice-media-id <id> -n 30` | The voice round trip: download, scan, hear, answer, speak, upload, send |
+| Many at once | `-n 500 -concurrency 50`, against a copy of the workflow whose reply goes to a fake Graph API | Capacity: the queues, the per-sender order (`concurrency_key`), the allowance checks |
+
+The many-at-once run uses made-up senders, so many conversations are in flight, and replies Meta would refuse go to a fake. The two single runs use one test number, which Meta's test app may reply to, one message at a time (`-from`).
+
+For each run, record the date, the commit, the model and speech services, the workflow, and the three spans. The step timings in the run's page and `taskiem_step_duration_seconds`, `taskiem_speech_duration_seconds` and `taskiem_file_scan_seconds` say where the time went.
+
+**What the code already does for the wait:**
+- `send_typing` (WhatsApp) and `send_chat_action` (Telegram) show "typing" or "recording" at once.
+- The reply model can be small (`claude-haiku-5-5`, offered by default) with `max_tokens` about 300.
+- `transcribe` and `speak` may each take up to three minutes (`call_timeout`), but are counted only once.
+
 ## How to rerun
 
 ```sh
