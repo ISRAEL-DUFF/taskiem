@@ -337,7 +337,7 @@ func (s *Store) startIn(ctx context.Context, tx pgx.Tx, req StartRequest, ref *R
 		if out.HeldBy != "" {
 			// Waits for the scheduler to admit it at the tenant's rate; its
 			// workflow's concurrency is checked then.
-			key, err := concurrencyKey(def, payload)
+			key, err := s.storedConcurrencyKey(ctx, tx, req.TenantID, def, payload)
 			if err != nil {
 				return err
 			}

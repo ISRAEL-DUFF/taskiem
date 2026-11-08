@@ -2,6 +2,8 @@ package runtime
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/expr"
 	"github.com/israel-duff/taskiem/engine/history"
+	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
 
@@ -43,6 +46,36 @@ func concurrencyKey(def *wd.Definition, started history.RunStartedPayload) (stri
 	return fmt.Sprint(v), nil
 }
 
+// ConcurrencyCategory is the pseudonym category runs.concurrency_key and
+// concurrency_slots.key are kept under: a keyed hash of the evaluated
+// settings.concurrency_key under the tenant's pseudonymisation key, never
+// the value. A recipe often keys concurrency on personal data (a
+// customer's phone number); the columns must not keep it in the clear,
+// past erasure, for the run's whole retention. The hash is deterministic
+// per tenant, so two runs with the same key still share one slot.
+//
+// Rows written before keys were hashed hold the raw value: a run queued or
+// holding a slot at deploy time does not match a new run's hashed key, so
+// for that short while two runs with the same key may run side by side.
+// No migration: the old slots are freed as those runs finish.
+const ConcurrencyCategory = "concurrency"
+
+// storedConcurrencyKey evaluates settings.concurrency_key for a run and
+// returns what is stored and compared: its keyed hash ("" when the
+// workflow has no key or it evaluates to ""). Without a pseudonym store
+// (tests) it falls back to a SHA-256 of tenant and value, never the value.
+func (s *Store) storedConcurrencyKey(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, def *wd.Definition, started history.RunStartedPayload) (string, error) {
+	key, err := concurrencyKey(def, started)
+	if err != nil || key == "" {
+		return "", err
+	}
+	if ss, ok := s.PII.(pii.SubjectSealer); ok {
+		return ss.SubjectForTx(ctx, tx, tenant, ConcurrencyCategory, key)
+	}
+	sum := sha256.Sum256([]byte(ConcurrencyCategory + "\x00" + tenant.String() + "\x00" + key))
+	return "sha256:" + hex.EncodeToString(sum[:]), nil
+}
+
 // admit decides whether a new run may start now (spec 4.8): it needs its
 // concurrency_key slot, and the workflow must be under max_concurrency.
 // A run that may not start is recorded as queued; it is refused only when
@@ -51,7 +84,7 @@ func (s *Store) admit(ctx context.Context, tx pgx.Tx, ref RunRef, workflow uuid.
 	if def.Settings.ConcurrencyKey == "" && def.Settings.MaxConcurrency <= 0 {
 		return true, nil
 	}
-	key, err := concurrencyKey(def, started)
+	key, err := s.storedConcurrencyKey(ctx, tx, ref.TenantID, def, started)
 	if err != nil {
 		return false, err
 	}
