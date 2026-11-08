@@ -150,6 +150,23 @@ type Item struct {
 	// when it starts.
 	Starts *time.Time `json:"starts,omitempty"`
 	Venue  string     `json:"venue,omitempty"`
+	// Sizes and colours: a variant's product (its row id); a product's
+	// number of variants on sale, its Stock then being theirs together.
+	VariantOf string `json:"variant_of,omitempty"`
+	Variants  int    `json:"variants,omitempty"`
+}
+
+// PublicItems is the items a public page lists: a product, not its
+// sizes and colours one by one (picked on the page from phase 4 of the
+// plan). Items keeps them, so an order's live prices still find them.
+func PublicItems(items []Item) []Item {
+	out := make([]Item, 0, len(items))
+	for _, it := range items {
+		if it.VariantOf == "" {
+			out = append(out, it)
+		}
+	}
+	return out
 }
 
 // SoldOut reports whether the item tracks stock and has none left.
@@ -473,6 +490,9 @@ func Items(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]a
 		if m.Venue != "" {
 			it.Venue = str(r[m.Venue])
 		}
+		if m.VariantOf != "" {
+			it.VariantOf = str(r[m.VariantOf])
+		}
 		if m.ReadyIn != "" {
 			if n, ok := num(r[m.ReadyIn]); ok && n >= 1 && n <= 600 {
 				it.ReadyIn = int(n)
@@ -536,7 +556,42 @@ func Items(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]a
 	for i, s := range out {
 		items[i] = s.item
 	}
+	rollUpVariants(items)
 	return items, nil
+}
+
+// rollUpVariants gives a product with sizes and colours on sale their
+// number and, where they keep a count, their stock together: the product
+// row keeps none of its own.
+func rollUpVariants(items []Item) {
+	type sum struct {
+		n     int
+		stock *int64
+	}
+	of := map[string]*sum{}
+	for _, it := range items {
+		if it.VariantOf == "" || !it.Available {
+			continue
+		}
+		s := of[it.VariantOf]
+		if s == nil {
+			s = &sum{}
+			of[it.VariantOf] = s
+		}
+		s.n++
+		if it.Stock != nil {
+			if s.stock == nil {
+				s.stock = new(int64)
+			}
+			*s.stock += *it.Stock
+		}
+	}
+	for i := range items {
+		if s := of[items[i].ID]; s != nil && items[i].VariantOf == "" {
+			items[i].Variants = s.n
+			items[i].Stock = s.stock
+		}
+	}
 }
 
 // SyncCatalogue replaces the storefront's copy with items, and records

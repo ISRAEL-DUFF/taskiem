@@ -233,9 +233,11 @@ func findAction(list []storefront.PublicAction, ref string) (storefront.PublicAc
 }
 
 // orderable reports whether an item can be put in a basket: available,
-// priced and not sold out.
+// priced and not sold out. A product with sizes and colours is not, until
+// the page lets a customer pick one (phase 4 of the variants plan): an
+// order on the product itself would take stock from a row that keeps none.
 func orderable(it storefront.Item) bool {
-	return it.Available && it.PriceKobo != nil && it.ID != "" && !it.SoldOut()
+	return it.Available && it.PriceKobo != nil && it.ID != "" && !it.SoldOut() && it.Variants == 0
 }
 
 // most is how many of an item one order may take.

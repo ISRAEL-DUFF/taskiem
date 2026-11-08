@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/israel-duff/taskiem/engine/storefront"
+	"github.com/israel-duff/taskiem/engine/variants"
 )
 
 // Item is a catalogue row as stock sees it: the columns the mapping
@@ -32,6 +33,12 @@ type Item struct {
 	// Description is the item's words on the storefront, when mapped:
 	// search reads it.
 	Description string `json:"description,omitempty"`
+	// Sizes and colours (engine/variants): a variant's product row and its
+	// values; a product's choices. A product with variants keeps no stock
+	// of its own: its count is theirs together.
+	VariantOf string            `json:"variant_of,omitempty"`
+	Variant   map[string]string `json:"variant,omitempty"`
+	Choices   []variants.Choice `json:"choices,omitempty"`
 }
 
 // Low reports whether the item is at or below its reorder level.
@@ -112,6 +119,15 @@ func Items(rows []map[string]any, m storefront.Columns) []Item {
 		}
 		if m.Description != "" {
 			it.Description = str(r[m.Description])
+		}
+		if m.VariantOf != "" {
+			it.VariantOf = str(r[m.VariantOf])
+		}
+		if m.Variant != "" {
+			it.Variant = variants.ParseVariant(str(r[m.Variant]))
+		}
+		if m.Choices != "" {
+			it.Choices = variants.ParseChoices(str(r[m.Choices]))
 		}
 		it.PriceKobo = money(r, m.Price, m.PriceUnit)
 		it.CostKobo = money(r, m.CostPrice, m.PriceUnit)

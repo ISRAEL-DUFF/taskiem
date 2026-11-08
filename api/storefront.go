@@ -309,6 +309,8 @@ func (s *Server) SyncStorefront(ctx context.Context, tenant uuid.UUID) error {
 	if err != nil {
 		return err
 	}
+	// The page lists a product, not its sizes and colours one by one.
+	items = storefront.PublicItems(items)
 	// A live page's items are checked as they are copied (moderation.go),
 	// with no transaction open while the model answers.
 	checked, err := s.moderateItems(ctx, tenant, items)
