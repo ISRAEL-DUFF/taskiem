@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -91,7 +92,11 @@ func Flat(items []PriceItem) map[string]PriceItem {
 	out := make(map[string]PriceItem, len(items))
 	for _, it := range items {
 		if len(it.Sizes) == 0 {
-			out[it.ItemID] = it
+			// A product sold in sizes with none on sale now: nothing to
+			// order (it keeps no stock of its own).
+			if len(it.Choices) == 0 {
+				out[it.ItemID] = it
+			}
 			continue
 		}
 		for _, z := range it.Sizes {
@@ -132,7 +137,7 @@ type listSizes struct {
 // sizesJSON is a listed product's sizes as their column holds them; nil
 // for an item without.
 func sizesJSON(it PriceItem) any {
-	if len(it.Sizes) == 0 {
+	if len(it.Sizes) == 0 && len(it.Choices) == 0 {
 		return nil
 	}
 	b, _ := json.Marshal(listSizes{Choices: it.Choices, Sizes: it.Sizes})
@@ -754,14 +759,22 @@ func SetListSizesTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, product st
 		if err := scanSizes(h.raw, &was); err != nil {
 			return nil, err
 		}
-		own := map[string]int64{}
+		// What the list said of each size stays: its own price, and its
+		// being off this list.
+		kept := map[string]PriceSize{}
 		for _, z := range was.Sizes {
-			own[z.ItemID] = z.PriceKobo
+			kept[z.ItemID] = z
 		}
 		it := PriceItem{Choices: choices, Sizes: make([]PriceSize, len(sizes))}
 		for i, z := range sizes {
-			z.PriceKobo = own[z.ItemID]
+			if k, ok := kept[z.ItemID]; ok {
+				z.PriceKobo = k.PriceKobo
+				z.Available = z.Available && k.Available
+			}
 			it.Sizes[i] = z
+		}
+		if sameSizes(h.raw, it) {
+			continue // nothing new: the buyers are not told again
 		}
 		if _, err := tx.Exec(ctx, `UPDATE price_list_items SET sizes = $3 WHERE list_id = $1 AND item_id = $2`, h.list, product, sizesJSON(it)); err != nil {
 			return nil, err
@@ -773,6 +786,29 @@ func SetListSizesTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, product st
 		out = union(out, ls)
 	}
 	return out, nil
+}
+
+// sameSizes: the list's sizes as stored are those of it.
+func sameSizes(raw []byte, it PriceItem) bool {
+	var was, now PriceItem
+	if err := scanSizes(raw, &was); err != nil {
+		return false
+	}
+	b, _ := sizesJSON(it).([]byte)
+	if err := scanSizes(b, &now); err != nil {
+		return false
+	}
+	return reflect.DeepEqual(was.Choices, now.Choices) && reflect.DeepEqual(was.Sizes, now.Sizes)
+}
+
+// ListedSizedTx is the products the business's price lists hold with
+// sizes and colours.
+func ListedSizedTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]string, error) {
+	rows, err := tx.Query(ctx, `SELECT DISTINCT item_id FROM price_list_items WHERE tenant_id = $1 AND sizes IS NOT NULL`, tenant)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[string])
 }
 
 // SizeParentsTx is, for each size and colour on the business's price

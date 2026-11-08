@@ -19,6 +19,7 @@ import {
   quoteText,
   reorderQty,
   sizesTaken,
+  soldInSizes,
   stepQty,
   type OrderItem,
 } from "../lib/buyer";
@@ -181,7 +182,7 @@ export function OrderSheet({
       setQty(reorderQty(start.last, links.data.item_links, list.items));
     const it = list.items.find((x) => x.item_id === start.itemId);
     // A product sold in sizes opens on its sizes (grid, below) instead.
-    if (it && !it.sizes?.length && !qty[it.item_id])
+    if (it && !soldInSizes(it) && !qty[it.item_id])
       setQty({ ...qty, [it.item_id]: Math.max(1, it.min_quantity) });
     setSeeded(true);
   }
@@ -550,7 +551,10 @@ export function OrderSheet({
                         <span className="tk-row-words">
                           <span className="tk-row-name">{it.name}</span>
                           <span className="tk-row-sub">
-                            {it.available ? orderLine(it) : "Not available now"}
+                            {it.available &&
+                            !(soldInSizes(it) && !it.sizes?.length)
+                              ? orderLine(it)
+                              : "Not available now"}
                           </span>
                           {it.available && !!it.breaks?.length && (
                             <span className="tk-row-sub tk-breaks">
@@ -558,12 +562,12 @@ export function OrderSheet({
                             </span>
                           )}
                         </span>
-                        {it.sizes?.length ? (
+                        {soldInSizes(it) ? (
                           <button
                             type="button"
                             className="tk-btn soft"
                             aria-expanded={grid === it.item_id}
-                            disabled={!it.available}
+                            disabled={!it.available || !it.sizes?.length}
                             onClick={() =>
                               setGrid(
                                 grid === it.item_id ? undefined : it.item_id,
@@ -690,7 +694,7 @@ export function OrderSheet({
                   key={it.item_id}
                   label={it.name}
                   hint={
-                    it.sizes?.length
+                    soldInSizes(it)
                       ? "Its sizes and colours go into yours of the same size and colour; those it lacks are added to it."
                       : undefined
                   }

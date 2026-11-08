@@ -42,6 +42,9 @@ type Item struct {
 	// OwnPrice is, on a product, the Keys of its sizes and colours with a
 	// price of their own; the others follow the product's.
 	OwnPrice []string `json:"own_price,omitempty"`
+	// PhotoID is the first entry of its photo column (a media id), when
+	// the catalogue has one: a colour's photo on a size is read from it.
+	PhotoID string `json:"-"`
 }
 
 // HasSizes reports whether the item is a product sold in sizes and
@@ -143,6 +146,9 @@ func Items(rows []map[string]any, m storefront.Columns) []Item {
 		if m.Choices != "" {
 			st := variants.ParseSetup(str(r[m.Choices]))
 			it.Choices, it.OwnPrice = st.Choices, st.OwnPrice
+		}
+		if m.Photo != "" {
+			it.PhotoID = strings.TrimSpace(strings.Split(str(r[m.Photo]), ",")[0])
 		}
 		it.PriceKobo = money(r, m.Price, m.PriceUnit)
 		it.CostKobo = money(r, m.CostPrice, m.PriceUnit)

@@ -7,7 +7,7 @@ import {
   sendChoicePhoto,
   type PhotoPick,
 } from "../lib/photos";
-import { formatPrice, thumb, type Catalogue } from "../lib/storefront";
+import { formatPrice, thumb } from "../lib/storefront";
 import { nairaKobo } from "../lib/toolforms";
 import {
   allCells,
@@ -362,28 +362,29 @@ export function SizesEditor({
 }
 
 /** A photo for each colour, which the page shows when a customer picks it
- * (the product's photos show for the rest). Set at once, not with Save. */
+ * (the product's photos show for the rest). Set at once, not with Save.
+ * Only a colour some size has is offered; the photos are read from the
+ * stock, so a product not on the page shows them too. */
 function ColourPhotos({ item }: { item: StockItem }) {
   const colour = (item.choices ?? []).find((c) => /^colou?rs?$/i.test(c.name));
-  const cat = useLoad(
+  const sizes = useLoad(
     () =>
       colour
-        ? get<Catalogue>("/v1/storefront/catalogue").then(
-            (r) => r.items.find((x) => x.id === item.id),
-            () => undefined,
+        ? get<StockView>("/v1/stock").then((r) =>
+            sizesOf(r.items, item.id, true),
           )
-        : Promise.resolve(undefined),
+        : Promise.resolve<StockItem[]>([]),
     [item.id],
   );
   const [busy, setBusy] = useState<string>();
   const [error, setError] = useState<unknown>();
   const [said, setSaid] = useState("");
   if (!colour) return null;
+  const of = (value: string) =>
+    (sizes.data ?? []).filter((z) => z.variant?.[colour.name] === value);
+  const values = colour.values.filter((v) => of(v).length > 0);
   const photoOf = (value: string) =>
-    thumb(
-      cat.data?.sizes?.find((z) => z.variant[colour.name] === value && z.photo)
-        ?.photo,
-    );
+    thumb(of(value).find((z) => z.photo)?.photo);
   const run = async (
     value: string,
     f: () => Promise<unknown>,
@@ -394,7 +395,7 @@ function ColourPhotos({ item }: { item: StockItem }) {
     try {
       await f();
       setSaid(line);
-      cat.reload();
+      sizes.reload();
     } catch (e) {
       setError(e);
     } finally {
@@ -408,7 +409,7 @@ function ColourPhotos({ item }: { item: StockItem }) {
         Your page shows it when a customer picks that{" "}
         {colour.name.toLowerCase()}. Saved at once.
       </p>
-      {colour.values.map((value) => {
+      {values.map((value) => {
         const pic = photoOf(value);
         return (
           <div key={value} className="tk-colour-photo">

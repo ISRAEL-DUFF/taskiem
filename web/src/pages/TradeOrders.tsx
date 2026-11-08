@@ -16,7 +16,12 @@ import {
   type TradeLine,
   type TradeOrder,
 } from "../lib/tradeorders";
-import { linesWords, STATUS, type Purchase } from "../lib/purchases";
+import {
+  linesWords,
+  sizeParents,
+  STATUS,
+  type Purchase,
+} from "../lib/purchases";
 import type { LinksView } from "../lib/links";
 import { quantity, type StockItem, type StockView } from "../lib/stock";
 import {
@@ -79,7 +84,13 @@ export function TradeOrdersCard() {
   );
 }
 
-function TradeRow({ o }: { o: TradeOrder }) {
+function TradeRow({
+  o,
+  parents,
+}: {
+  o: TradeOrder;
+  parents?: Map<string, string>;
+}) {
   return (
     <Item
       to={`/trade-orders/${encodeURIComponent(o.id)}`}
@@ -87,7 +98,7 @@ function TradeRow({ o }: { o: TradeOrder }) {
       tone={tradeStatus(o.status).tone}
       title={o.buyer_name}
       side={naira(o.total_kobo)}
-      sub={`${o.reference} · ${linesWords(o.lines)}`}
+      sub={`${o.reference} · ${linesWords(o.lines, parents)}`}
       sideSub={<TradePill status={o.status} />}
       testid="trade-order"
     />
@@ -100,6 +111,8 @@ export function TradeOrdersPage() {
     () => get<{ orders: TradeOrder[] }>("/v1/trade-orders"),
     [],
   );
+  // A product's sizes are told together on a row (linesWords).
+  const parents = sizeParents(useOwnItems().data ?? []);
   const [drafting, setDrafting] = useState(false);
   const orders = list.data?.orders;
   return (
@@ -149,7 +162,7 @@ export function TradeOrdersPage() {
       ) : (
         <Items label="Orders from linked businesses">
           {orders.map((o) => (
-            <TradeRow key={o.id} o={o} />
+            <TradeRow key={o.id} o={o} parents={parents} />
           ))}
         </Items>
       )}

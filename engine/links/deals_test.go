@@ -1,6 +1,7 @@
 package links
 
 import (
+	"github.com/israel-duff/taskiem/engine/variants"
 	"strings"
 	"testing"
 )
@@ -104,5 +105,64 @@ func TestFlatSizes(t *testing.T) {
 	product.Overridden, product.PriceKobo = true, 3900000
 	if f := Flat([]PriceItem{product}); f["s46"].PriceKobo != 3900000 || !f["s46"].Overridden {
 		t.Fatalf("a link's own price is each size's: %+v", f["s46"])
+	}
+}
+
+// A product sold in sizes with none on sale now is not orderable itself
+// (it keeps no stock); a list's record of it still says it is sold in
+// sizes.
+func TestFlatNoSizeOnSale(t *testing.T) {
+	product := PriceItem{ItemID: "am90", Name: "Air Max 90", PriceKobo: 4000000, Available: true,
+		Choices: []variants.Choice{{Name: "Size"}}}
+	if _, ok := Flat([]PriceItem{product})["am90"]; ok {
+		t.Fatal("a product sold in sizes with none on sale was orderable")
+	}
+	if sizesJSON(product) == nil {
+		t.Fatal("the list forgot it is sold in sizes")
+	}
+	if _, ok := Flat([]PriceItem{{ItemID: "rice", PriceKobo: 1, Available: true}})["rice"]; !ok {
+		t.Fatal("a plain item is orderable")
+	}
+}
+
+// Matching a line by hand can bring a product's sizes together to a
+// quantity break: every line of the product then has it, not only the
+// one matched; an offer's lines keep their prices, and what they are
+// against follows.
+func TestRepriceTogether(t *testing.T) {
+	list := Flat([]PriceItem{{ItemID: "am90", PriceKobo: 4000000, Available: true,
+		Breaks: []Break{{MinQuantity: 50, PriceKobo: 3600000}},
+		Sizes:  []PriceSize{{ItemID: "s42", Available: true}, {ItemID: "s43", Available: true}, {ItemID: "s44", Available: true}}}})
+	lines := []OrderLine{
+		{ItemID: "s42", Quantity: 30, PriceKobo: 4000000, PricedBy: PricedByList},
+		{ItemID: "s43", Quantity: 20, PriceKobo: 3600000, PricedBy: PricedByList}, // just matched
+		{ItemID: "s44", Quantity: 5, PriceKobo: 3000000, PricedBy: PricedByOffer, ListKobo: 4000000},
+	}
+	if !repriceTogether(lines, list) {
+		t.Fatal("nothing changed")
+	}
+	if lines[0].PriceKobo != 3600000 || lines[1].PriceKobo != 3600000 {
+		t.Fatalf("55 pairs together: the 50-pair price on each: %+v", lines)
+	}
+	if lines[2].PriceKobo != 3000000 || lines[2].ListKobo != 3600000 {
+		t.Fatalf("the offer's price kept, against the new list price: %+v", lines[2])
+	}
+	if repriceTogether(lines, list) {
+		t.Fatal("a second time changed something")
+	}
+}
+
+// A list's sizes as stored are compared by what they say, not by their
+// bytes: refreshing with the same sizes is no change.
+func TestSameSizes(t *testing.T) {
+	it := PriceItem{Choices: []variants.Choice{{Name: "Size", Values: []string{"42"}}},
+		Sizes: []PriceSize{{ItemID: "s42", Name: "Air Max 90 – 42", Variant: map[string]string{"Size": "42"}, Available: true}}}
+	raw := []byte(`{"sizes": [{"item_id": "s42", "name": "Air Max 90 – 42", "variant": {"Size": "42"}, "available": true}], "choices": [{"name": "Size", "values": ["42"]}]}`)
+	if !sameSizes(raw, it) {
+		t.Fatal("the same sizes read as new")
+	}
+	it.Sizes[0].Available = false
+	if sameSizes(raw, it) {
+		t.Fatal("a size gone off the list read as no change")
 	}
 }

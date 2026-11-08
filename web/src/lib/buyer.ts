@@ -29,7 +29,8 @@ export function flatItems(items: PriceItem[]): OrderItem[] {
   const out: OrderItem[] = [];
   for (const it of items) {
     if (!it.sizes?.length) {
-      out.push(it);
+      // A product sold in sizes with none on sale now: nothing to order.
+      if (!it.choices?.length) out.push(it);
       continue;
     }
     for (const z of it.sizes) {
@@ -50,6 +51,11 @@ export function flatItems(items: PriceItem[]): OrderItem[] {
   }
   return out;
 }
+
+/** A listed product sold in sizes and colours: ordered by its sizes, never
+ * itself, even with none on sale now. */
+export const soldInSizes = (it: PriceItem) =>
+  !!it.choices?.length || !!it.sizes?.length;
 
 /** The item a line's quantity prices and minimum count toward: a size's
  * product, else the item itself. */
@@ -160,20 +166,23 @@ export function purchaseState(
 }
 
 /** The last order's lines again, as the price list has them now: those
- * still on it, by the item links between their items and ours. */
+ * still on it, by the item links between their items and ours, a
+ * product's sizes each by its own (the minimum of a product sold in sizes
+ * is its sizes' together: the review says when it is short). */
 export function reorderQty(
   last: Pick<Purchase, "lines">,
   links: ItemLink[],
   items: PriceItem[],
 ): Record<string, number> {
   const out: Record<string, number> = {};
+  const orderable = flatItems(items);
   for (const l of last.lines) {
     const seller =
       links.find((x) => x.item_id === l.item_id)?.seller_item_id ??
-      items.find((it) => it.name === l.item)?.item_id;
-    const it = items.find((x) => x.item_id === seller);
+      orderable.find((it) => it.name === l.item)?.item_id;
+    const it = orderable.find((x) => x.item_id === seller);
     if (it && it.available)
-      out[it.item_id] = Math.max(l.quantity, it.min_quantity);
+      out[it.item_id] = (out[it.item_id] ?? 0) + Math.max(l.quantity, it.min_quantity);
   }
   return out;
 }

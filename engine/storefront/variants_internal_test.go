@@ -25,3 +25,25 @@ func TestVariantsRollUp(t *testing.T) {
 		t.Fatalf("public: %+v", pub)
 	}
 }
+
+// A product is sold out only when every size on sale keeps a count and has
+// none left; one size that keeps no count makes its stock unknown.
+func TestVariantsRollUpUncounted(t *testing.T) {
+	n := func(v int64) *int64 { return &v }
+	items := []Item{
+		{ID: "1", Name: "Tee", Available: true},
+		{ID: "2", Name: "Tee – S", Available: true, Stock: n(0), VariantOf: "1"},
+		{ID: "3", Name: "Tee – M", Available: true, VariantOf: "1"}, // keeps no count
+		{ID: "4", Name: "Cap", Available: true},
+		{ID: "5", Name: "Cap – S", Available: true, Stock: n(0), VariantOf: "4"},
+		{ID: "6", Name: "Cap – M", Available: true, Stock: n(0), VariantOf: "4"},
+		{ID: "7", Name: "Cap – L", Available: false, VariantOf: "4"}, // off sale
+	}
+	rollUpVariants(items)
+	if items[0].Stock != nil || items[0].SoldOut() || items[0].Variants != 2 {
+		t.Fatalf("a product with an uncounted size: %+v", items[0])
+	}
+	if items[3].Stock == nil || *items[3].Stock != 0 || !items[3].SoldOut() {
+		t.Fatalf("a product with every size at none left: %+v", items[3])
+	}
+}

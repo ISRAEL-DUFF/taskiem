@@ -419,36 +419,68 @@ and the shared `choosesize` template, `engine/links` (`PriceSize`, `Flat`, `Prod
 `PriceLists.tsx`, `ChatLiveCard.tsx`, `StorefrontStock.tsx`.
 
 - **The public page.** The product is listed once and its page has a size and colour
-  pick (radios per choice, in every theme): what is off sale or has none left is struck
-  through, the price and the most that can be ordered follow the size picked, and a
-  colour's photo takes the main place. Without the script the pick still works: the
-  server turns the product's pick and quantity into the size's own line
-  (`takeSizePicks`) and prices it; a pick that is not sold is refused in words. The
-  public copy carries the sizes inside the product, and a sale updates the size's count
-  there (`CopySizeCount`). Page budgets and the CSP are unchanged.
+  pick (radios per choice, in every theme; every theme's list sends the product to its
+  page): a value with none left in any size is struck through; one that does not go
+  with another pick stays pickable and clears that pick. The price, the most that can
+  be ordered and the line (`q.<size>`, so adding to a bag that holds something keeps
+  it) follow the size picked, and a colour's photo takes the main place (the product's
+  for a colour without one). The sizes reach the script as JSON (`data-sizes`). Without
+  the script the pick still works: the server turns the product's pick and quantity
+  into the size's own line once (`takeSizePicks`) and prices it; a pick that is not
+  sold refuses the order in words, never leaving the line out. The public copy carries
+  the sizes inside the product (catalogue and front lists alike), and a sale updates
+  the size's count there, on the catalogue's table only (`CopySizeCount`). The product
+  is sold out only when every size on sale keeps a count and has none left. Sizes'
+  own prices and the choices' values are checked with the product before publishing.
+  Page budgets and the CSP are unchanged.
 - **A photo per colour:** *Photo for Black* in the sizes and colours form
   (`POST`/`DELETE /v1/stock/items/{id}/variants/photo?choice=Colour&value=Black`) sets
-  it on every size of that colour.
+  it on every size of that colour, those off sale too, in one write; a choice or value
+  the product does not have is refused. The form offers only colours some size has,
+  and shows the photos from the table (`photo` on a size in `GET /v1/stock`).
 - **Price lists list the product once.** A product with sizes is ticked as one row;
   its sizes on sale go with it (`sizes` on the list's row: the choices and each size,
-  at the product's price unless it is given its own under *Prices by size*). Setting up,
-  renaming or stopping sizes keeps the lists that hold the product current. A size
-  given alone is refused (400).
+  at the product's price unless it is given its own under *Prices by size*). The lists
+  that hold the product keep its sizes on sale as the catalogue has them after every
+  catalogue sync, however a size changed (its form, WhatsApp, the Tables tool, a
+  front's show and hide); a list already right is left alone and its buyers are not
+  told again. A size's own price and its being off one list stay through those
+  refreshes. With no size on sale the list still says the product comes in sizes, and
+  it cannot be ordered as an item of its own. A size given alone is refused (400).
 - **Ordering by grid.** The buyer's order sheet has *Choose sizes* on such a product: a
   box per size, "36 pairs, 7 sizes" as they fill. Quantity prices and the minimum
   count the product's sizes together, so 36 pairs are at the list price and 50 at the
-  50-pair price; each size is a line of its own in the order. Order words, the trade
-  orders page and the live card group sizes under their product ("Air Max 90: 36
-  pairs, 7 sizes"; the card's "Sizes on sale: 40 41 43…").
+  50-pair price; each size is a line of its own in the order. Everything is checked
+  before anything is written (`checkPriceLines`): an order that cannot be placed adds no
+  size to the buyer's product and links nothing. When the seller matches a line by hand,
+  every line of that product is priced again at the order's total, so the break reaches
+  them all. Order words, the trade orders page, the buyer's orders and the live card
+  group sizes under their product ("Air Max 90: 36 pairs, 7 sizes"; the card's "Sizes
+  on sale: 40 41 43…"), by each size's product, never by names that merely start alike
+  ("Indomie – Chicken" and "Indomie – Onion" stay apart).
+- **Other ways of ordering.** *Order again* gives each size its own box again. A product
+  whose sizes run low gets one card with a reorder of the supplier's sizes of the same
+  values, at least the supplier's minimum together, opening the grid filled in. The
+  chat tools' low list does the same per supplier, and their order action takes a size
+  by its full name ("Air Max 90 – 42, Black"), adding it to the buyer's product as the
+  order sheet does. Naming the product itself, on WhatsApp or to the chat tools, is
+  refused in words: it is ordered by its sizes in the chat on Taskiem.
 - **Lowest prices** are the product's: an offer is checked against the product's
-  lowest price for each of its sizes.
+  lowest price for each of its sizes, each size's product read from the catalogue
+  (so a size no list holds now is still held to it).
 - **The buyer's own items.** The buyer's item linked to the supplier's product is
   matched to sizes by their choices; a size the buyer does not have yet is added to
-  their product when the order is placed (with no stock), and linked. Where the
+  their product when the order is placed (with no stock), and linked; the buyer's
+  sizes with prices of their own keep them. The grid is built under the product's lock
+  from the catalogue as it is then, so two orders adding different sizes at once both
+  keep theirs. A line naming one of the buyer's sizes must be the same size as the
+  supplier's (their 42 never into the buyer's 44), and all the lines of one product
+  name one product of the buyer's. Where the
   buyer's product has different choices the order is refused (409 `sizes_differ`); a
   buyer's item with no sizes linked to a sized product must be set up first (409
   `sizes_first`).
-- **The desk Stock page** groups each product's sizes after it.
+- **The desk Stock page** groups each product's sizes after it; the briefing and the
+  handover count low stock by product as the cards do.
 - **Where it differs from the plan:** missing sizes are added when the order is placed,
   not when it is received; the desk supplier prices page sends a sized product to the
   chat to order it by grid; ordering sizes from WhatsApp and Telegram is phase 5.
@@ -456,7 +488,16 @@ and the shared `choosesize` template, `engine/links` (`PriceSize`, `Flat`, `Prod
   pick with and without the script, a sold-out size refused, the colour photo),
   `engine/links/deals_test.go` (`TestFlatSizes`, floors by product),
   `api/trade_sizes_test.go` (36 pairs in 7 sizes, the 50-pair price, links made and
-  matched, floors, `sizes_first` and `sizes_differ`). Web: `src/lib/buyer.test.ts`,
+  matched, floors, `sizes_first` and `sizes_differ`); after the review,
+  `api/trade_sizes_fixes_test.go` (a refused order adds and links nothing, own size
+  prices kept, the same size only, a size off sale leaving the list and the buyer's
+  copy, none on sale not orderable), `api/trade_sizes_internal_test.go` (order words,
+  the grid kept, low stock by product, the low sizes' reorder and top-up),
+  `engine/links/deals_test.go` (`TestRepriceTogether`, `TestFlatNoSizeOnSale`,
+  `TestSameSizes`), `engine/publicweb/sizes_test.go` and `api/storefront_sizes_test.go`
+  (a bad pick refusing a mixed bag, the home page's catalogue, a hidden or sold-out
+  product, the colour photo's refusals), `api/moderation_sizes_internal_test.go`. Web:
+  `src/lib/buyer.test.ts`,
   `src/lib/purchases.test.ts`; `e2e/trade-sizes.spec.ts` at 390 and 360 px with axe
   (the grid, the minimum, ₦1,456,000 for 36 pairs and ₦1,832,000 for 50, review and
   place) and `e2e/chat-sizes.spec.ts` (a price list ticking the product with a size's

@@ -14,6 +14,7 @@ import {
 } from "../lib/pricelists";
 import type { StockItem, StockView } from "../lib/stock";
 import { hasSizes, label, sizesOf, sizesWords } from "../lib/variants";
+import { soldInSizes } from "../lib/buyer";
 import { formatPrice } from "../lib/storefront";
 import {
   EmptyState,
@@ -844,7 +845,7 @@ export function SupplierPricesPage() {
                       </td>
                       <td>{priceWords(it)}</td>
                       <td>
-                        {it.sizes?.length ? (
+                        {soldInSizes(it) ? (
                           <Link to={`/chat?with=${encodeURIComponent(p.link)}`}>
                             Order its sizes in your chat with {p.business}
                           </Link>

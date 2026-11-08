@@ -644,8 +644,10 @@ func Items(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]a
 }
 
 // rollUpVariants gives a product with sizes and colours on sale their
-// number and, where they keep a count, their stock together (the product
-// row keeps none of its own), and the sizes themselves to pick from, with
+// number and their stock together (the product row keeps none of its
+// own): unknown (nil) when any size on sale keeps no count, so the
+// product is sold out only when every size on sale is counted and at
+// none left. It gives the sizes themselves to pick from, with
 // its choices narrowed to the values they have. A size whose values do
 // not fit its product's choices is left out of the pick.
 func rollUpVariants(items []Item) {
@@ -656,9 +658,10 @@ func rollUpVariants(items []Item) {
 		}
 	}
 	type sum struct {
-		n     int
-		stock *int64
-		sizes []Size
+		n         int
+		stock     int64
+		uncounted bool
+		sizes     []Size
 	}
 	of := map[string]*sum{}
 	for _, it := range items {
@@ -676,10 +679,9 @@ func rollUpVariants(items []Item) {
 		}
 		s.n++
 		if it.Stock != nil {
-			if s.stock == nil {
-				s.stock = new(int64)
-			}
-			*s.stock += *it.Stock
+			s.stock += *it.Stock
+		} else {
+			s.uncounted = true
 		}
 		if v, fits := variants.Fit(it.Variant, items[pi].Choices); fits {
 			z := Size{ID: it.ID, Variant: v, Stock: it.Stock, Photo: it.Photo}
@@ -699,7 +701,11 @@ func rollUpVariants(items []Item) {
 			it.Choices = nil
 			continue
 		}
-		it.Variants, it.Stock, it.Sizes = s.n, s.stock, s.sizes
+		it.Variants, it.Stock, it.Sizes = s.n, nil, s.sizes
+		if !s.uncounted {
+			n := s.stock
+			it.Stock = &n
+		}
 		it.Choices = usedChoices(it.Choices, s.sizes)
 	}
 }

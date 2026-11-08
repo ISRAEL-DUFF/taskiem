@@ -43,22 +43,29 @@ func (e errSizesFirst) Error() string {
 
 // resolveSizeLines gives each line of a supplier's size its buyer's own
 // size, making those the buyer's product lacks. Lines of other items are
-// left as they are. audit records the sizes made.
+// left as they are. Nothing is made for an order that cannot be placed:
+// the lines are checked first (checkPriceLines), and the supplier must be
+// one of the business's. audit records the sizes made.
 func (s *Server) resolveSizeLines(ctx context.Context, p *Principal, audit stockAudit, link uuid.UUID, in []orderLineIn, key string) ([]orderLineIn, error) {
 	var listed []links.PriceItem
+	var business string
 	var mine map[string]string
+	supplier := false
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
 		got, err := links.SupplierPricesTx(ctx, tx, p.TenantID, link)
 		if err != nil || len(got) == 0 {
 			return err
 		}
-		listed = got[0].Items
+		listed, business = got[0].Items, got[0].Business
 		ls, err := links.ItemLinksTx(ctx, tx, p.TenantID, link)
+		if err != nil {
+			return err
+		}
 		mine = map[string]string{}
 		for _, l := range ls {
 			mine[l.SellerItemID] = l.ItemID
 		}
-		return err
+		return tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM suppliers WHERE tenant_id = $1 AND link_id = $2 AND retired_at IS NULL)`, p.TenantID, link).Scan(&supplier)
 	})
 	if err != nil || len(listed) == 0 {
 		return in, err
@@ -84,23 +91,38 @@ func (s *Server) resolveSizeLines(ctx context.Context, p *Principal, audit stock
 	if len(order) == 0 {
 		return in, nil
 	}
+	if err := checkPriceLines(listed, in); err != nil {
+		return nil, err
+	}
+	if !supplier {
+		return nil, fmt.Errorf("%w: mark %s as a supplier on Taskiem on the Suppliers page first", links.ErrState, business)
+	}
 	out := append([]orderLineIn(nil), in...)
+	_, items, err := s.stockItems(ctx, p.TenantID)
+	if err != nil {
+		return nil, err
+	}
 	for _, product := range order {
-		_, items, err := s.stockItems(ctx, p.TenantID)
-		if err != nil {
-			return nil, err
-		}
 		own := map[string]stock.Item{}
 		for _, it := range items {
 			own[it.ID] = it
 		}
-		// The buyer's product: named on a line, else the linked one. A
-		// line naming one of the buyer's own sizes keeps it.
+		// The buyer's product: the one the lines name (it, or one of its
+		// sizes), else the one linked to the supplier's product.
 		bp := ""
 		for _, i := range groups[product] {
-			if x, ok := own[out[i].ItemID]; ok && x.VariantOf == "" {
-				bp = x.ID
+			x, ok := own[out[i].ItemID]
+			if !ok {
+				continue
 			}
+			named := x.ID
+			if x.VariantOf != "" {
+				named = x.VariantOf
+			}
+			if bp != "" && bp != named {
+				return nil, fmt.Errorf("%w: the lines of %s name two of your products: choose one", links.ErrInvalid, products[product].Name)
+			}
+			bp = named
 		}
 		if bp == "" {
 			bp = mine[product]
@@ -109,49 +131,38 @@ func (s *Server) resolveSizeLines(ctx context.Context, p *Principal, audit stock
 		if !ok || mineP.VariantOf != "" {
 			return nil, errUnlinkedItem{Item: products[product]}
 		}
-		// The sizes the lines want, and those the buyer's product has.
+		// A line naming one of the buyer's sizes is of the same values as
+		// the supplier's (their 42 into the buyer's 42, never its 44).
+		for _, i := range groups[product] {
+			x, ok := own[out[i].ItemID]
+			if !ok || x.VariantOf != bp {
+				continue
+			}
+			theirs := flat[out[i].SellerItemID]
+			if variants.Key(x.Variant) != variants.Key(theirs.Variant) {
+				return nil, fmt.Errorf("%w: your %s is not their %s: choose your size of the same values", links.ErrInvalid, x.Name, theirs.Name)
+			}
+		}
+		// The sizes the lines want: the buyer's product's own, made where
+		// it lacks them (built under the product's lock, from the
+		// catalogue as it is then, so two orders at once both keep theirs).
+		var want []map[string]string
+		for _, i := range groups[product] {
+			want = append(want, flat[out[i].SellerItemID].Variant)
+		}
+		theirChoices := products[product].Choices
+		if _, items, err = s.applySizesWith(ctx, p, audit, bp, func(prod stock.Item, items []stock.Item) ([]variants.Choice, []variants.Cell, error) {
+			return sizesWith(prod, items, theirChoices, want)
+		}, key+"-sizes-"+product); err != nil {
+			return nil, err
+		}
 		has := map[string]stock.Item{}
 		for _, v := range variantsOf(items, bp) {
-			if v.Variant != nil {
+			if v.Variant != nil && v.Available {
 				has[variants.Key(v.Variant)] = v
 			}
 		}
-		var missing []map[string]string
-		seen := map[string]bool{}
 		for _, i := range groups[product] {
-			if x, ok := own[out[i].ItemID]; ok && x.VariantOf == bp {
-				continue
-			}
-			v := flat[out[i].SellerItemID].Variant
-			k := variants.Key(v)
-			if x, ok := has[k]; ok && x.Available || seen[k] {
-				continue
-			}
-			seen[k] = true
-			missing = append(missing, v)
-		}
-		if len(missing) > 0 {
-			choices, cells, err := sizesWith(mineP, items, products[product].Choices, missing)
-			if err != nil {
-				return nil, err
-			}
-			if _, _, err := s.applySizes(ctx, p, audit, bp, choices, cells, key+"-sizes-"+product); err != nil {
-				return nil, err
-			}
-			if _, items, err = s.stockItems(ctx, p.TenantID); err != nil {
-				return nil, err
-			}
-			has = map[string]stock.Item{}
-			for _, v := range variantsOf(items, bp) {
-				if v.Variant != nil && v.Available {
-					has[variants.Key(v.Variant)] = v
-				}
-			}
-		}
-		for _, i := range groups[product] {
-			if x, ok := own[out[i].ItemID]; ok && x.VariantOf == bp {
-				continue
-			}
 			x, ok := has[variants.Key(flat[out[i].SellerItemID].Variant)]
 			if !ok {
 				return nil, errUnlinkedItem{Item: flat[out[i].SellerItemID]}
@@ -171,10 +182,30 @@ func (s *Server) resolveSizeLines(ctx context.Context, p *Principal, audit stock
 }
 
 // sizesWith is the buyer's product's choices and grid with the sizes an
-// order brings added: its sizes on sale as they are (counts left), each
-// new one at 0. A product with no sizes yet takes the supplier's choices;
-// one with other choices than the supplier's is refused.
-func sizesWith(product stock.Item, items []stock.Item, theirs []variants.Choice, add []map[string]string) ([]variants.Choice, []variants.Cell, error) {
+// order wants added: its sizes on sale as they are (counts left, and the
+// prices of those with their own kept), each new one at 0, one taken off
+// sale brought back. errNoSizesChange when it has them all. A product
+// with no sizes yet takes the supplier's choices; one with other choices
+// than the supplier's is refused.
+func sizesWith(product stock.Item, items []stock.Item, theirs []variants.Choice, want []map[string]string) ([]variants.Choice, []variants.Cell, error) {
+	onSale := map[string]bool{}
+	for _, v := range variantsOf(items, product.ID) {
+		if v.Available && v.Variant != nil {
+			onSale[variants.Key(v.Variant)] = true
+		}
+	}
+	var add []map[string]string
+	seen := map[string]bool{}
+	for _, v := range want {
+		k := variants.Key(v)
+		if !onSale[k] && !seen[k] {
+			seen[k] = true
+			add = append(add, v)
+		}
+	}
+	if len(add) == 0 {
+		return nil, nil, errNoSizesChange
+	}
 	var choices []variants.Choice
 	if !product.HasSizes() && product.Stock != nil && *product.Stock > 0 {
 		return nil, nil, errSizesFirst{mine: product.Name}
@@ -227,9 +258,19 @@ func sizesWith(product stock.Item, items []stock.Item, theirs []variants.Choice,
 		}
 		cells = append(cells, cell)
 	}
+	// Those on sale stay as they are: a size with a price of its own keeps
+	// it (and stays marked as having one).
+	own := map[string]bool{}
+	for _, k := range product.OwnPrice {
+		own[k] = true
+	}
 	for _, v := range variantsOf(items, product.ID) {
 		if v.Available && v.Variant != nil {
-			cells = append(cells, variants.Cell{ID: v.ID, Variant: v.Variant})
+			c := variants.Cell{ID: v.ID, Variant: v.Variant}
+			if own[variants.Key(v.Variant)] && v.PriceKobo != nil {
+				c.PriceKobo = v.PriceKobo
+			}
+			cells = append(cells, c)
 		}
 	}
 	return choices, cells, nil

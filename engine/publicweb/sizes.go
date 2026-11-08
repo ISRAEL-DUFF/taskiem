@@ -1,6 +1,7 @@
 package publicweb
 
 import (
+	"encoding/json"
 	"net/url"
 	"strconv"
 	"strings"
@@ -21,8 +22,10 @@ func pickField(product string, choice int) string {
 }
 
 // takeSizePicks turns each product's pick into its size's quantity, added
-// to any already in the bag, and takes the pick away; a message when a
-// pick names no size on sale, or one with none left.
+// to any already in the bag, and takes the pick away; a message when the
+// product is not on sale, or a pick names no size on sale, or one with
+// none left. It runs once per request (keepBasket): the pick is gone from
+// v after it.
 func (f *formData) takeSizePicks(v url.Values) string {
 	msg := ""
 	for _, p := range f.products {
@@ -44,6 +47,11 @@ func (f *formData) takeSizePicks(v url.Values) string {
 		}
 		z, ok := p.FindSize(picked)
 		switch {
+		case !p.Available || p.PriceKobo == nil:
+			if msg == "" {
+				msg = p.Name + " is not available right now. Please choose something else."
+			}
+			continue
 		case !ok:
 			if msg == "" {
 				msg = "Please choose a " + strings.ToLower(choiceWords(p)) + " for " + p.Name + "."
@@ -122,27 +130,25 @@ func sizePicks(p storefront.Item) []sizePick {
 	return out
 }
 
-// sizeData is the sizes as the page's script reads them, to grey out a
-// value with none left among the others picked and show a size's price:
-// "id|price|left|v1|v2…" per size, the values in the choices' order.
+// sizeData is the sizes as the page's script reads them, to name the
+// line of the size picked, show its price and hold its quantity to what
+// is left: JSON, [id, price or null, left or null, [values…]] per size,
+// the values in the choices' order (escaped as an attribute by the
+// template, so a value may hold any character).
 func sizeData(p storefront.Item) string {
-	lines := make([]string, 0, len(p.Sizes))
+	rows := make([][]any, 0, len(p.Sizes))
 	for _, z := range p.Sizes {
-		price := ""
-		if z.PriceKobo != nil {
-			price = strconv.FormatInt(*z.PriceKobo, 10)
-		}
-		left := ""
-		if z.Stock != nil {
-			left = strconv.FormatInt(*z.Stock, 10)
-		}
-		parts := []string{z.ID, price, left}
+		vals := make([]string, 0, len(p.Choices))
 		for _, c := range p.Choices {
-			parts = append(parts, z.Variant[c.Name])
+			vals = append(vals, z.Variant[c.Name])
 		}
-		lines = append(lines, strings.Join(parts, "|"))
+		rows = append(rows, []any{z.ID, z.PriceKobo, z.Stock, vals})
 	}
-	return strings.Join(lines, "\n")
+	raw, err := json.Marshal(rows)
+	if err != nil {
+		return "[]"
+	}
+	return string(raw)
 }
 
 // anyLeft reports whether a product has a size or colour with some left.

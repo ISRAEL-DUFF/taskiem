@@ -26631,6 +26631,11 @@ components:
               type: integer
             price_kobo:
               type: integer
+            sizes:
+              type: object
+              description: A product sold in sizes and colours (seller_item_id is the supplier's product) - how many of each of the supplier's sizes, by their item; at least the supplier's minimum together
+              additionalProperties:
+                type: integer
         approval:
           $ref: '#/components/schemas/Approval'
         who:

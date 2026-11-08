@@ -94,8 +94,38 @@ func TestSizesOnStorefront(t *testing.T) {
 	if photoOf("Black") == nil || photoOf("White") != nil {
 		t.Fatalf("Black's photo: %v / %v", photoOf("Black"), photoOf("White"))
 	}
+	// The owner sees it from the table, on the size.
+	stockPhoto := func(colour string) any {
+		t.Helper()
+		for _, x := range owner.must(200, "GET", "/v1/stock", nil)["items"].([]any) {
+			if v := x.(map[string]any); v["variant_of"] == id {
+				if c, _ := v["variant"].(map[string]any)["Colour"].(string); c == colour {
+					return v["photo"]
+				}
+			}
+		}
+		return nil
+	}
+	if stockPhoto("Black") == nil || stockPhoto("White") != nil {
+		t.Fatalf("the sizes' photos in the stock list: %v / %v", stockPhoto("Black"), stockPhoto("White"))
+	}
 	owner.must(204, "DELETE", base, nil)
 	if photoOf("Black") != nil {
 		t.Fatal("Black's photo taken out")
+	}
+
+	// Refused: a choice the product is not sold by, no value, a value of
+	// it that no size has (Red).
+	for _, q := range []string{"choice=Material&value=Black", "choice=Colour&value=", "choice=Colour&value=Red"} {
+		owner.must(400, "POST", "/v1/stock/items/"+id+"/variants/photo?"+q, map[string]any{"url": web.URL + "/b.jpg"})
+	}
+	// A colour off sale takes its photo too, and comes back with it.
+	owner.must(200, "PUT", "/v1/stock/items/"+id+"/variants", map[string]any{"choices": choices, "cells": []any{cell("Black", 1)}}, "Idempotency-Key", "v2")
+	if out := owner.must(200, "POST", "/v1/stock/items/"+id+"/variants/photo?choice=Colour&value=white", map[string]any{"url": web.URL + "/w.jpg"}); out["sizes"] != float64(1) {
+		t.Fatalf("set on White's size off sale: %v", out)
+	}
+	owner.must(200, "PUT", "/v1/stock/items/"+id+"/variants", map[string]any{"choices": choices, "cells": []any{cell("Black", 1), white}}, "Idempotency-Key", "v3")
+	if photoOf("White") == nil {
+		t.Fatal("White came back without its photo")
 	}
 }

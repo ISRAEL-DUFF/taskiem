@@ -185,6 +185,37 @@ func together(lines []OrderLine, list map[string]PriceItem) map[string]int64 {
 	return out
 }
 
+// repriceTogether prices again, at the order's totals, the lines priced
+// from the list: matching a line can bring a product's sizes together to
+// a quantity break, which every one of its lines then has, not only the
+// one matched. An offer's lines keep their prices; what they are against
+// follows. It reports whether a line changed.
+func repriceTogether(lines []OrderLine, list map[string]PriceItem) bool {
+	qty := together(lines, list)
+	changed := false
+	for i := range lines {
+		l := &lines[i]
+		if _, ok := list[l.ItemID]; !ok {
+			continue
+		}
+		switch l.PricedBy {
+		case PricedByList:
+			if priceLine(l, list, nil, qty) {
+				changed = true
+			}
+		case PricedByOffer:
+			tmp := *l
+			tmp.PriceKobo, tmp.PricedBy = 0, ""
+			priceLine(&tmp, list, nil, qty)
+			if tmp.PriceKobo > 0 && tmp.PriceKobo != l.ListKobo {
+				l.ListKobo = tmp.PriceKobo
+				changed = true
+			}
+		}
+	}
+	return changed
+}
+
 // priceLine prices a line matched to one of the seller's items: the
 // link's list first, else the catalogue's price; neither leaves it as it
 // was. It reports whether the line's price changed. qty is the order's
@@ -1796,6 +1827,9 @@ func MatchItemsTx(ctx context.Context, tx pgx.Tx, ref string, items []SellerItem
 		priceLine(&o.Lines[i], list, it.PriceKobo, qty)
 		changed = true
 	}
+	if repriceTogether(o.Lines, list) {
+		changed = true
+	}
 	if !changed {
 		return o, false, nil
 	}
@@ -1829,6 +1863,7 @@ func SetLineItemTx(ctx context.Context, tx pgx.Tx, ref string, line int, it Sell
 	l.ItemID, l.Matched = it.ID, "linked"
 	l.PriceKobo, l.PricedBy = 0, ""
 	priceLine(l, list, it.PriceKobo, together(o.Lines, list))
+	repriceTogether(o.Lines, list)
 	name := it.Name
 	if r := []rune(name); len(r) > 120 {
 		name = string(r[:120])

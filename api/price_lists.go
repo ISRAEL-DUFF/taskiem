@@ -640,23 +640,12 @@ func (s *Server) draftFromPricesTx(ctx context.Context, tx pgx.Tx, p *Principal,
 	if err != nil {
 		return stock.Purchase{}, err
 	}
-	if len(in) == 0 {
-		return stock.Purchase{}, fmt.Errorf("%w: an order has at least one line", links.ErrInvalid)
+	if err := checkPriceLines(got[0].Items, in); err != nil {
+		return stock.Purchase{}, err
 	}
 	lines := make([]stock.PurchaseLine, 0, len(in))
 	for _, l := range in {
-		it, ok := listed[l.SellerItemID]
-		switch {
-		case !ok:
-			return stock.Purchase{}, fmt.Errorf("%w: that is not on their price list", links.ErrInvalid)
-		case !it.Available:
-			return stock.Purchase{}, fmt.Errorf("%w: %s is not available now", links.ErrInvalid, it.Name)
-		case it.VariantOf == "" && l.Quantity < int64(it.MinQuantity):
-			return stock.Purchase{}, fmt.Errorf("%w: order at least %d of %s", links.ErrInvalid, it.MinQuantity, it.Name)
-		case it.VariantOf != "" && together[it.VariantOf] < int64(products[it.VariantOf].MinQuantity):
-			return stock.Purchase{}, fmt.Errorf("%w: order at least %d of %s, its sizes and colours together", links.ErrInvalid,
-				products[it.VariantOf].MinQuantity, products[it.VariantOf].Name)
-		}
+		it := listed[l.SellerItemID]
 		item := mine[it.ItemID]
 		if l.ItemID != "" && l.ItemID != item {
 			if _, ok := own[l.ItemID]; !ok {
@@ -714,6 +703,47 @@ func (s *Server) draftFromPricesTx(ctx context.Context, tx pgx.Tx, p *Principal,
 	_, err = tx.Exec(ctx, `UPDATE purchase_orders SET offer = true WHERE id = $1`, x.ID)
 	x.Offer = true
 	return x, err
+}
+
+// checkPriceLines is what an order's lines from a price list are short
+// of, before anything is written: each on the list and available now, a
+// whole number, and at least its minimum (a product's sizes counted
+// together).
+func checkPriceLines(items []links.PriceItem, in []orderLineIn) error {
+	if len(in) == 0 {
+		return fmt.Errorf("%w: an order has at least one line", links.ErrInvalid)
+	}
+	listed := links.Flat(items)
+	products := map[string]links.PriceItem{}
+	for _, it := range items {
+		products[it.ItemID] = it
+	}
+	together := map[string]int64{}
+	for _, l := range in {
+		if it, ok := listed[l.SellerItemID]; ok {
+			together[links.ProductOf(it)] += l.Quantity
+		}
+	}
+	for _, l := range in {
+		it, ok := listed[l.SellerItemID]
+		switch {
+		case !ok:
+			if p, ok := products[l.SellerItemID]; ok && len(p.Choices) > 0 {
+				return fmt.Errorf("%w: %s comes in sizes and colours: choose them in your chat with them on Taskiem, where each size has its box", links.ErrInvalid, p.Name)
+			}
+			return fmt.Errorf("%w: that is not on their price list", links.ErrInvalid)
+		case l.Quantity < 1:
+			return fmt.Errorf("%w: order a whole number of %s", links.ErrInvalid, it.Name)
+		case !it.Available:
+			return fmt.Errorf("%w: %s is not available now", links.ErrInvalid, it.Name)
+		case it.VariantOf == "" && l.Quantity < int64(it.MinQuantity):
+			return fmt.Errorf("%w: order at least %d of %s", links.ErrInvalid, it.MinQuantity, it.Name)
+		case it.VariantOf != "" && together[it.VariantOf] < int64(products[it.VariantOf].MinQuantity):
+			return fmt.Errorf("%w: order at least %d of %s, its sizes and colours together", links.ErrInvalid,
+				products[it.VariantOf].MinQuantity, products[it.VariantOf].Name)
+		}
+	}
+	return nil
 }
 
 // orderFromPrices is POST /v1/supplier-prices/{link}/order, with an

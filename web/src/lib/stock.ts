@@ -4,7 +4,7 @@
 
 import { whenLabel } from "./bookings";
 import { feeInput, feeKobo } from "./orders";
-import { formatPrice } from "./storefront";
+import { formatPrice, type Image } from "./storefront";
 
 export interface StockItem {
   id: string;
@@ -33,6 +33,8 @@ export interface StockItem {
   /** A product's sizes and colours with a price of their own (by their
    * values, lower case: "colour=black|size=42"); the rest follow its. */
   own_price?: string[];
+  /** A size's own photo (its colour's), read from the table. */
+  photo?: Image;
   low?: boolean;
   /** How many to order, when low. */
   suggest?: number;

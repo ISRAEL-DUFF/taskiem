@@ -608,6 +608,9 @@ type stockItemView struct {
 	// Waiting is how many of its movements are still on their way to
 	// the table.
 	Waiting int `json:"waiting,omitempty"`
+	// Photo is, on a size or colour, its own photo (a colour's), read
+	// from the table, so the owner sees it on a product not on the page.
+	Photo storefront.Image `json:"photo,omitempty"`
 }
 
 // getStock is GET /v1/stock: whether the catalogue keeps stock, and its
@@ -628,6 +631,7 @@ func (s *Server) getStock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	waiting := map[string]int{}
+	photos := map[string]storefront.Image{}
 	var stuck []stock.Movement
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		rows, err := tx.Query(r.Context(), `SELECT item_id, count(*) FROM stock_movements WHERE tenant_id = $1 AND status = 'pending' GROUP BY item_id`, p.TenantID)
@@ -645,6 +649,19 @@ func (s *Server) getStock(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Err(); err != nil {
 			return err
 		}
+		for _, it := range items {
+			if it.VariantOf == "" || it.PhotoID == "" {
+				continue
+			}
+			img, err := storefront.MediaImage(r.Context(), tx, p.TenantID, it.PhotoID)
+			if errors.Is(err, storefront.ErrInvalid) {
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			photos[it.ID] = img
+		}
 		list, err := stock.ListTx(r.Context(), tx, p.TenantID, stock.Filter{Limit: 50})
 		for _, m := range list {
 			if m.Status == "pending" && m.Error != "" {
@@ -659,7 +676,7 @@ func (s *Server) getStock(w http.ResponseWriter, r *http.Request) {
 	views := make([]stockItemView, len(items))
 	low := 0
 	for i, it := range items {
-		views[i] = stockItemView{Item: it, Low: it.Low(), Suggest: it.Suggest(), Waiting: waiting[it.ID]}
+		views[i] = stockItemView{Item: it, Low: it.Low(), Suggest: it.Suggest(), Waiting: waiting[it.ID], Photo: photos[it.ID]}
 		if it.Low() {
 			low++
 		}

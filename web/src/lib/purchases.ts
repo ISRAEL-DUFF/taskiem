@@ -136,11 +136,24 @@ export function supplierSub(s: Supplier): string {
   return parts.join(" · ");
 }
 
+/** Each size and colour's product, from the business's own items: what
+ * linesWords groups by. */
+export function sizeParents(
+  items: { id: string; variant_of?: string }[],
+): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const i of items) if (i.variant_of) out.set(i.id, i.variant_of);
+  return out;
+}
+
 /** Lines in words: "46 cartons Indomie, 17 bags Rice"; a product's sizes
  * and colours ("Air Max 90 – 42, Black") together: "36 pairs Air Max 90 in
- * 7 sizes and colours". */
+ * 7 sizes and colours". Only lines of one product's sizes are grouped
+ * (parents, sizeParents), never items that merely share the start of
+ * their names. */
 export function linesWords(
-  lines: { item: string; quantity: number; unit?: string }[],
+  lines: { item: string; quantity: number; unit?: string; item_id?: string }[],
+  parents?: Map<string, string>,
 ): string {
   const groups = new Map<
     string,
@@ -154,10 +167,11 @@ export function linesWords(
     }
   >();
   for (const l of lines) {
+    const product = l.item_id ? parents?.get(l.item_id) : undefined;
     const cut = l.item.indexOf(" – ");
-    const sized = cut > 0;
-    const name = sized ? l.item.slice(0, cut) : l.item;
-    const key = sized ? `\u0000${name}` : l.item;
+    const sized = !!product;
+    const name = sized && cut > 0 ? l.item.slice(0, cut) : l.item;
+    const key = sized ? `\u0000${product}` : `\u0001${l.item}`;
     const g = groups.get(key) ?? {
       name,
       full: l.item,
@@ -179,11 +193,15 @@ export function linesWords(
 }
 
 /** An order's items: "46 cartons Indomie, 17 bags Rice". */
-export const purchaseItems = (p: Purchase) => linesWords(p.lines);
+export const purchaseItems = (p: Purchase, parents?: Map<string, string>) =>
+  linesWords(p.lines, parents);
 
 /** An order underneath its title: its items, when, what the supplier said, what is owed. */
-export function purchaseSub(p: Purchase): string {
-  const parts = [purchaseItems(p)];
+export function purchaseSub(
+  p: Purchase,
+  parents?: Map<string, string>,
+): string {
+  const parts = [purchaseItems(p, parents)];
   const when = p.received_at ?? p.confirmed_at ?? p.sent_at ?? p.created_at;
   parts.push(whenLabel(when));
   if (p.status === "confirmed" || p.confirmed_how)

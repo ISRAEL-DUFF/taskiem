@@ -85,6 +85,10 @@ type formData struct {
 	// products are the page's products sold in sizes and colours, whose
 	// picks become their sizes' lines (sizes.go).
 	products []storefront.Item
+	// pickError is why a product's pick was not taken into the bag (a
+	// size sold out, or none of those values): kept so a submission is
+	// refused with it rather than sent without the line.
+	pickError string
 	pageData
 	Business string
 	Kind     string
@@ -593,9 +597,14 @@ func (f *formData) keep(v url.Values) {
 
 // keepBasket takes the quantities and the choices a form (or an address)
 // names: an item's first line under its id, its others under <id>~k.
+// A product's pick becomes its size's line first, once: what it could
+// not take is kept in pickError for check.
 func (f *formData) keepBasket(v url.Values) {
-	if msg := f.takeSizePicks(v); msg != "" && f.Error == "" {
-		f.Error = msg
+	if msg := f.takeSizePicks(v); msg != "" {
+		f.pickError = msg
+		if f.Error == "" {
+			f.Error = msg
+		}
 	}
 	for i := range f.Items {
 		it := &f.Items[i]
@@ -626,11 +635,19 @@ func (f *formData) keepBasket(v url.Values) {
 
 // keepLine takes one line's quantity and choices; false when it has none.
 // A choice the item no longer offers takes the line out, saying so,
-// rather than putting another choice in its place.
+// rather than putting another choice in its place. More than one order
+// may take is brought down to the most, saying so, rather than the line
+// left out.
 func (f *formData) keepLine(x *formItem, v url.Values) bool {
 	n, err := strconv.Atoi(strings.TrimSpace(v.Get(quantityField + x.Key)))
-	if err != nil || n <= 0 || n > x.Max || !x.Orderable {
+	if err != nil || n <= 0 || x.Max <= 0 || !x.Orderable {
 		return false
+	}
+	if n > x.Max {
+		if f.Error == "" {
+			f.Error = tooMany(x.Max, x.Name)
+		}
+		n = x.Max
 	}
 	for _, o := range x.Options {
 		picked := v.Get(o.Input)
@@ -684,8 +701,10 @@ func (f *formData) check(v url.Values, items []storefront.Item) (sub storefront.
 			f.Message = ""
 			return sub, "Please keep your message to 500 characters."
 		}
-		if msg := f.takeSizePicks(v); msg != "" {
-			return sub, msg
+		// keep took the picks into the bag; one it could not take
+		// refuses the order, never leaves the line out unsaid.
+		if f.pickError != "" {
+			return sub, f.pickError
 		}
 		if msg := f.basket(v, items, &sub); msg != "" {
 			return sub, msg
@@ -822,7 +841,7 @@ func (f *formData) basket(v url.Values, items []storefront.Item, sub *storefront
 				continue
 			}
 			n, err := strconv.Atoi(raw)
-			if err != nil || n < 0 || n > maxQuantity {
+			if err != nil || n < 0 {
 				f.clearQty(it.ID)
 				return fmt.Sprintf("Please choose from 0 to %d of %s.", maxQuantity, it.Name)
 			}
@@ -839,7 +858,7 @@ func (f *formData) basket(v url.Values, items []storefront.Item, sub *storefront
 			}
 			if taken += n; taken > most(it) {
 				f.clearQty(it.ID)
-				return fmt.Sprintf("Only %d of %s left. Please choose fewer.", most(it), it.Name)
+				return tooMany(most(it), it.Name)
 			}
 			if len(sub.Basket) == maxLines {
 				return fmt.Sprintf("An order can have up to %d different items.", maxLines)
@@ -867,6 +886,15 @@ func (f *formData) basket(v url.Values, items []storefront.Item, sub *storefront
 		return "Please choose at least one item."
 	}
 	return ""
+}
+
+// tooMany says an order asked more of an item than it may take: the
+// stock left, or the most one order takes.
+func tooMany(most int, name string) string {
+	if most < maxQuantity {
+		return fmt.Sprintf("Only %d of %s left. Please choose fewer.", most, name)
+	}
+	return fmt.Sprintf("Please choose from 0 to %d of %s.", maxQuantity, name)
 }
 
 // mapsPin reads a map pin: a link from a maps app, or "latitude,longitude"

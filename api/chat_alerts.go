@@ -71,6 +71,11 @@ type alertReorder struct {
 	SellerItemID string    `json:"seller_item_id"`
 	Quantity     int64     `json:"quantity"`
 	PriceKobo    int64     `json:"price_kobo"`
+	// Sizes is, for a product sold in sizes and colours, how many of each
+	// of the supplier's sizes (by their item) the low ones of ours come
+	// to, at least the supplier's minimum together; SellerItemID is then
+	// their product and Quantity the sizes' total.
+	Sizes map[string]int64 `json:"sizes,omitempty"`
 }
 
 // getChatAlerts is GET /v1/chat-alerts: the caller's alerts, oldest first.
@@ -247,6 +252,7 @@ func (s *Server) lowStockAlerts(ctx context.Context, p *Principal) ([]chatAlert,
 		item     links.PriceItem
 	}
 	from := map[string]sells{}
+	sized := map[string]sells{} // our product → their product sold in sizes
 	if p.Can(PermTableEdit) && p.Can(PermStorefrontManage) {
 		if err := db0(ctx, s, p.TenantID, func(tx pgx.Tx) error {
 			lists, err := links.SupplierPricesTx(ctx, tx, p.TenantID, uuid.Nil)
@@ -258,11 +264,17 @@ func (s *Server) lowStockAlerts(ctx context.Context, p *Principal) ([]chatAlert,
 				if err != nil {
 					return err
 				}
+				flat := links.Flat(l.Items)
 				for _, il := range ls {
+					if pi, ok := flat[il.SellerItemID]; ok && pi.Available {
+						if _, ok := from[il.ItemID]; !ok {
+							from[il.ItemID] = sells{supplier: l, item: pi}
+						}
+					}
 					for _, pi := range l.Items {
-						if pi.ItemID == il.SellerItemID && pi.Available {
-							if _, ok := from[il.ItemID]; !ok {
-								from[il.ItemID] = sells{supplier: l, item: pi}
+						if pi.ItemID == il.SellerItemID && len(pi.Sizes) > 0 && pi.Available {
+							if _, ok := sized[il.ItemID]; !ok {
+								sized[il.ItemID] = sells{supplier: l, item: pi}
 							}
 						}
 					}
@@ -307,10 +319,47 @@ func (s *Server) lowStockAlerts(ctx context.Context, p *Principal) ([]chatAlert,
 			labels = append(labels, variants.Label(c.Variant, prod.Choices))
 			ids = append(ids, c.ID)
 		}
-		out = append(out, chatAlert{Key: "low_stock:" + pid, Kind: "low_stock", At: now, ID: pid, Cells: ids,
-			Title: prod.Name + " is running low", Line: lowSizesLine(labels)})
+		a := chatAlert{Key: "low_stock:" + pid, Kind: "low_stock", At: now, ID: pid, Cells: ids,
+			Title: prod.Name + " is running low", Line: lowSizesLine(labels)}
+		if x, ok := sized[pid]; ok {
+			a.Reorder = sizesReorder(x.supplier, x.item, cells)
+		}
+		out = append(out, a)
 	}
 	return out, nil
+}
+
+// sizesReorder is what ordering the low sizes of one of ours from the
+// supplier's product sold in sizes comes to: each low size of ours as
+// their size of the same values (one they do not sell is left out), for
+// enough to reach its level, and at least their minimum together (what
+// is short on the first). Nil when they sell none of them.
+func sizesReorder(sup links.SupplierPrices, product links.PriceItem, low []stock.Item) *alertReorder {
+	flat := links.Flat([]links.PriceItem{product})
+	r := &alertReorder{Link: sup.LinkID, Supplier: sup.Business, SellerItemID: product.ItemID, Sizes: map[string]int64{}}
+	first := ""
+	for _, c := range low {
+		for _, z := range product.Sizes {
+			x := flat[z.ItemID]
+			if x.Available && variants.Key(x.Variant) == variants.Key(c.Variant) {
+				n := max(c.Suggest(), 1)
+				r.Sizes[z.ItemID] += n
+				r.Quantity += n
+				if first == "" {
+					first = z.ItemID
+				}
+			}
+		}
+	}
+	if first == "" {
+		return nil
+	}
+	if short := int64(product.MinQuantity) - r.Quantity; short > 0 {
+		r.Sizes[first] += short
+		r.Quantity += short
+	}
+	r.PriceKobo = links.PriceAt(product, r.Quantity)
+	return r
 }
 
 // lowSizesLine says which of a product's sizes and colours are low:

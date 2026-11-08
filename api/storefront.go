@@ -329,6 +329,9 @@ func (s *Server) SyncStorefront(ctx context.Context, tenant uuid.UUID) error {
 	if err := s.syncLists(ctx, tenant); err != nil {
 		return err
 	}
+	// The price lists holding a product sold in sizes keep its sizes on
+	// sale as the catalogue now has them, however they changed.
+	s.syncListSizes(ctx, tenant)
 	return s.syncServices(ctx, tenant, sf)
 }
 
@@ -372,6 +375,9 @@ func (s *Server) syncLists(ctx context.Context, tenant uuid.UUID) error {
 			errs = append(errs, fmt.Errorf("%s: %w", l.TableName, err))
 			continue
 		}
+		// As the catalogue's: a product, not its sizes and colours one by
+		// one.
+		items = storefront.PublicItems(items)
 		checked, err := s.moderateItems(ctx, tenant, items)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", l.TableName, err))

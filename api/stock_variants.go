@@ -177,6 +177,19 @@ func (s *Server) setStockVariants(w http.ResponseWriter, r *http.Request) {
 // order brings), each auditing in its own way. It answers the product and
 // its sizes and colours.
 func (s *Server) applySizes(ctx context.Context, p *Principal, audit stockAudit, id string, choices []variants.Choice, cells []variants.Cell, key string) (stock.Item, []stock.Item, error) {
+	return s.applySizesWith(ctx, p, audit, id, func(stock.Item, []stock.Item) ([]variants.Choice, []variants.Cell, error) {
+		return choices, cells, nil
+	}, key)
+}
+
+// errNoSizesChange: a grid built under the lock has nothing to change.
+var errNoSizesChange = errors.New("no change to the sizes and colours")
+
+// applySizesWith is applySizes with the choices and grid built from the
+// product and catalogue as they are once the product's lock is held, so
+// two saves at once cannot undo each other (an order adding size 43 while
+// another adds 44). errNoSizesChange from build: nothing is written.
+func (s *Server) applySizesWith(ctx context.Context, p *Principal, audit stockAudit, id string, build func(product stock.Item, items []stock.Item) ([]variants.Choice, []variants.Cell, error), key string) (stock.Item, []stock.Item, error) {
 	unlock, err := s.lockSizes(ctx, p.TenantID, id)
 	if err != nil {
 		return stock.Item{}, nil, err
@@ -197,6 +210,13 @@ func (s *Server) applySizes(ctx context.Context, p *Principal, audit stockAudit,
 		return stock.Item{}, nil, errNoItem
 	case product.VariantOf != "":
 		return stock.Item{}, nil, fmt.Errorf("%w: this is a size or colour of another product: open that product", errBadRequest)
+	}
+	choices, cells, err := build(*product, items)
+	if errors.Is(err, errNoSizesChange) {
+		return *product, items, nil
+	}
+	if err != nil {
+		return stock.Item{}, nil, err
 	}
 	before := variantsOf(items, id)
 	have := make([]variants.Existing, len(before))
@@ -618,11 +638,23 @@ func (s *Server) markOwnPrice(ctx context.Context, tenant uuid.UUID, sh stockSho
 	}
 }
 
-// sizesPhotoRows are the rows of a product's sizes and colours on sale
-// that have value for choice (a colour's: "Colour", "Black"), with the
-// catalogue's table and photo column, for setPhotoOfChoice and
-// clearPhotoOfChoice. ok is false when the answer has been written.
-func (s *Server) sizesPhotoRows(w http.ResponseWriter, r *http.Request) (t datatables.Table, col string, product stock.Item, rows []int64, ok bool) {
+// choicePhoto is a colour's photo asked for: the product, the choice and
+// value as the product names them, and its sizes' rows.
+type choicePhoto struct {
+	table         datatables.Table
+	col           string
+	product       stock.Item
+	choice, value string
+	rows          []any
+}
+
+// sizesPhotoRows are the rows of a product's sizes and colours that have
+// value for choice (a colour's: "Colour", "Black"), those off sale too so
+// they come back with it, with the catalogue's table and photo column,
+// for setPhotoOfChoice and clearPhotoOfChoice. The choice must be one of
+// the product's and the value one of its values. ok is false when the
+// answer has been written.
+func (s *Server) sizesPhotoRows(w http.ResponseWriter, r *http.Request) (cp choicePhoto, ok bool) {
 	tenant := principalFrom(r.Context()).TenantID
 	choice, value := strings.TrimSpace(r.URL.Query().Get("choice")), strings.TrimSpace(r.URL.Query().Get("value"))
 	sh, items, err := s.stockItems(r.Context(), tenant)
@@ -631,45 +663,96 @@ func (s *Server) sizesPhotoRows(w http.ResponseWriter, r *http.Request) (t datat
 		return
 	}
 	id := chi.URLParam(r, "id")
+	found := false
 	for _, it := range items {
 		if it.ID == id {
-			product = it
+			cp.product, found = it, true
 		}
 	}
-	if !product.HasSizes() {
+	if !found {
+		s.stockFail(w, r, errNoItem)
+		return
+	}
+	if !cp.product.HasSizes() {
 		s.fail(w, r, fmt.Errorf("%w: it is not sold in sizes and colours", errBadRequest))
 		return
 	}
-	m := sh.cols()
-	if m.Photo == "" {
+	cp.col = sh.cols().Photo
+	if cp.col == "" {
 		s.fail(w, r, fmt.Errorf("%w: the catalogue has no photo column", errBadRequest))
 		return
 	}
-	for _, c := range product.Choices {
-		if strings.EqualFold(c.Name, choice) {
-			choice = c.Name
-		}
-	}
-	for _, v := range variantsOf(items, id) {
-		if v.Available && strings.EqualFold(v.Variant[choice], value) {
-			if k, err := strconv.ParseInt(v.ID, 10, 64); err == nil {
-				rows = append(rows, k)
-			}
-		}
-	}
-	if len(rows) == 0 {
-		s.fail(w, r, fmt.Errorf("%w: %s has no %s %q on sale", errBadRequest, product.Name, strings.ToLower(choice), value))
+	if value == "" {
+		s.fail(w, r, fmt.Errorf("%w: say which %s the photo is for", errBadRequest, strings.ToLower(choice)))
 		return
 	}
-	return sh.table, m.Photo, product, rows, true
+	var values []string
+	for _, c := range cp.product.Choices {
+		if strings.EqualFold(c.Name, choice) {
+			cp.choice, values = c.Name, c.Values
+		}
+	}
+	if cp.choice == "" {
+		s.fail(w, r, fmt.Errorf("%w: %s is not sold by %q", errBadRequest, cp.product.Name, choice))
+		return
+	}
+	for _, v := range values {
+		if strings.EqualFold(v, value) {
+			cp.value = v
+		}
+	}
+	if cp.value == "" {
+		s.fail(w, r, fmt.Errorf("%w: %s has no %s %q", errBadRequest, cp.product.Name, strings.ToLower(cp.choice), value))
+		return
+	}
+	for _, v := range variantsOf(items, id) {
+		if strings.EqualFold(v.Variant[cp.choice], cp.value) {
+			k, err := strconv.ParseInt(v.ID, 10, 64)
+			if err != nil {
+				s.fail(w, r, fmt.Errorf("%w: a size of %s has no row number", errBadRequest, cp.product.Name))
+				return
+			}
+			cp.rows = append(cp.rows, k)
+		}
+	}
+	if len(cp.rows) == 0 {
+		s.fail(w, r, fmt.Errorf("%w: %s has no size in %s %q", errBadRequest, cp.product.Name, strings.ToLower(cp.choice), cp.value))
+		return
+	}
+	cp.table = sh.table
+	return cp, true
+}
+
+// setRowsPhoto sets the photo column of every one of the colour's sizes
+// to media ("" for none) in one write: all of them change, or none. A
+// size taken away since they were read is said, not passed over.
+func (s *Server) setRowsPhoto(ctx context.Context, tenant uuid.UUID, cp choicePhoto, media string) error {
+	tr, err := s.tableRowsFor(ctx, tenant, cp.table, storefrontPurpose)
+	if err != nil {
+		return err
+	}
+	var value any
+	if media != "" {
+		value = media
+	}
+	out, err := tr.call(ctx, s, "update_rows", map[string]any{"table": cp.table.Name, "set": map[string]any{cp.col: value}, "max_affected": len(cp.rows),
+		"return": "minimal", "filters": []any{map[string]any{"column": "id", "op": "in", "values": cp.rows}}}, "choice-photo:"+uuid.NewString())
+	if err != nil {
+		return err
+	}
+	if n := affectedOf(out); n != int64(len(cp.rows)) {
+		return fmt.Errorf("%w: %d of the %d sizes in %s changed: one was taken away meanwhile; look again and try again", errConflict, n, len(cp.rows), cp.value)
+	}
+	return nil
 }
 
 // setPhotoOfChoice is POST /v1/stock/items/{id}/variants/photo?choice=Colour&value=Black:
 // a picture (a file, or {"url"} as for a product's photo) stored once and
-// made the photo of each of the product's sizes of that colour, which the
-// page shows when a customer picks it. The product's photos stay its own.
+// made the photo of each of the product's sizes of that colour, those off
+// sale too, which the page shows when a customer picks it. The product's
+// photos stay its own.
 func (s *Server) setPhotoOfChoice(w http.ResponseWriter, r *http.Request) {
-	t, col, product, rows, ok := s.sizesPhotoRows(w, r)
+	cp, ok := s.sizesPhotoRows(w, r)
 	if !ok {
 		return
 	}
@@ -679,41 +762,35 @@ func (s *Server) setPhotoOfChoice(w http.ResponseWriter, r *http.Request) {
 		s.failImage(w, r, err)
 		return
 	}
-	for _, k := range rows {
-		if err := s.changePhotos(r.Context(), tenant, t, k, col, "choice-photo:"+m.ID.String()+":"+strconv.FormatInt(k, 10),
-			func([]string) ([]string, error) { return []string{m.ID.String()}, nil }); err != nil {
-			s.failPhotos(w, r, err)
-			return
-		}
+	if err := s.setRowsPhoto(r.Context(), tenant, cp, m.ID.String()); err != nil {
+		s.failPhotos(w, r, err)
+		return
 	}
-	s.choicePhotoChanged(r, product, "New photo for "+r.URL.Query().Get("value")+" of "+product.Name)
-	writeJSON(w, http.StatusOK, map[string]any{"photo": m, "sizes": len(rows)})
+	s.choicePhotoChanged(r, cp, "New photo for "+cp.value+" of "+cp.product.Name)
+	writeJSON(w, http.StatusOK, map[string]any{"photo": m, "sizes": len(cp.rows)})
 }
 
 // clearPhotoOfChoice is DELETE /v1/stock/items/{id}/variants/photo?choice=Colour&value=Black:
 // that colour's sizes show the product's photos again.
 func (s *Server) clearPhotoOfChoice(w http.ResponseWriter, r *http.Request) {
-	t, col, product, rows, ok := s.sizesPhotoRows(w, r)
+	cp, ok := s.sizesPhotoRows(w, r)
 	if !ok {
 		return
 	}
 	tenant := principalFrom(r.Context()).TenantID
-	for _, k := range rows {
-		if err := s.changePhotos(r.Context(), tenant, t, k, col, "choice-photo-clear:"+strconv.FormatInt(k, 10),
-			func([]string) ([]string, error) { return nil, nil }); err != nil {
-			s.failPhotos(w, r, err)
-			return
-		}
+	if err := s.setRowsPhoto(r.Context(), tenant, cp, ""); err != nil {
+		s.failPhotos(w, r, err)
+		return
 	}
-	s.choicePhotoChanged(r, product, "The photo for "+r.URL.Query().Get("value")+" of "+product.Name+" taken out")
+	s.choicePhotoChanged(r, cp, "The photo for "+cp.value+" of "+cp.product.Name+" taken out")
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *Server) choicePhotoChanged(r *http.Request, product stock.Item, line string) {
+func (s *Server) choicePhotoChanged(r *http.Request, cp choicePhoto, line string) {
 	p := principalFrom(r.Context())
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		return auditTx(r, tx, "stock.variants_photo", product.Name, map[string]any{"item_id": product.ID,
-			"choice": r.URL.Query().Get("choice"), "value": r.URL.Query().Get("value")})
+		return auditTx(r, tx, "stock.variants_photo", cp.product.Name, map[string]any{"item_id": cp.product.ID,
+			"choice": cp.choice, "value": cp.value, "sizes": len(cp.rows)})
 	}); err != nil {
 		s.Logger.Warn("stock: auditing a colour's photo", "tenant", p.TenantID, "err", err)
 	}
@@ -732,12 +809,14 @@ func listSizesOf(product stock.Item, items []stock.Item) ([]variants.Choice, []l
 			sizes = append(sizes, links.PriceSize{ItemID: v.ID, Name: v.Name, Variant: v.Variant, Available: true})
 		}
 	}
-	if len(sizes) == 0 {
+	if len(sizes) == 0 && !product.HasSizes() {
 		return nil, nil
 	}
+	// With none on sale the list still says it is sold in sizes, so it is
+	// not ordered as an item of its own (links.Flat).
 	choices := make([]variants.Choice, 0, len(product.Choices))
 	for _, c := range product.Choices {
-		var vals []string
+		vals := []string{}
 		for _, x := range c.Values {
 			for _, z := range sizes {
 				if z.Variant[c.Name] == x {
@@ -759,20 +838,5 @@ func (s *Server) refreshListSizes(ctx context.Context, tenant uuid.UUID, product
 		s.Logger.Warn("stock: a product's sizes on the price lists", "tenant", tenant, "err", err)
 		return
 	}
-	var it stock.Item
-	for _, x := range items {
-		if x.ID == product {
-			it = x
-		}
-	}
-	choices, sizes := listSizesOf(it, items)
-	var due []uuid.UUID
-	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		var err error
-		due, err = links.SetListSizesTx(ctx, tx, tenant, product, choices, sizes)
-		return err
-	}); err != nil {
-		s.Logger.Warn("stock: a product's sizes on the price lists", "tenant", tenant, "err", err)
-	}
-	s.mirrorPrices(ctx, tenant, due)
+	s.setListSizes(ctx, tenant, items, product)
 }
