@@ -1,9 +1,10 @@
 package links
 
 import (
-	"github.com/israel-duff/taskiem/engine/variants"
 	"strings"
 	"testing"
+
+	"github.com/israel-duff/taskiem/engine/variants"
 )
 
 func TestSpreadTotal(t *testing.T) {
