@@ -6,7 +6,8 @@ import { axe, describe } from "./a11y";
 // says so, not the browser's error; back online, the app opens again. The
 // worker is the real one, from the built app. bypassCSP lets axe run on the
 // offline page, whose own policy allows no script.
-test.use({ bypassCSP: true, viewport: { width: 390, height: 844 } });
+// serviceWorkers: the config blocks them for every other spec.
+test.use({ bypassCSP: true, viewport: { width: 390, height: 844 }, serviceWorkers: "allow" });
 
 async function workerInControl(page: Page) {
   await page.goto("/login");

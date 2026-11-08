@@ -50,6 +50,14 @@ fits a 360 px phone and passes axe in both themes.
   nothing sideways at 390 px), it opens itself once online, and Try again
   while still offline shows it again rather than the browser's error.
 
+- **Browser tests block the worker** (`web/playwright.config.ts`,
+  `serviceWorkers: "block"`), except the specs about it (`offline`,
+  `chat-push`). Once the worker controls a page, Chromium can send that page's
+  requests past `page.route`, so a test's stand-in for the server was skipped
+  about one run in ten under load (`link-chat-taskiem`, "a message that did not
+  go comes back to the box", reached the real server). People's browsers are
+  not affected: their requests still reach the server untouched.
+
 ## 5. Not built
 
 - **The app opening offline.** A copy of the app's files would open the app,

@@ -96,15 +96,20 @@ test("while an answer is being made there is a clock on the message and Taskiem 
 }) => {
   const page = await person(browser);
   await page.goto("/chat?with=taskiem");
+  // The answer is held until the clock and the typing have been seen: a
+  // fixed wait ran out first on a busy machine.
+  let answer = () => {};
+  const held = new Promise<void>((r) => (answer = r));
   await page.route("**/v1/taskiem-chat", async (route) => {
     if (route.request().method() !== "POST") return route.continue();
-    await new Promise((r) => setTimeout(r, 1500));
+    await held;
     return route.continue();
   });
   await pane(page).locator("#taskiem-text").fill("status");
   await pane(page).locator("#taskiem-text").press("Enter");
   await expect(pane(page).getByTestId("taskiem-typing")).toBeVisible();
   await expect(ours(page).getByRole("img", { name: "Sending" })).toBeVisible();
+  answer();
   await expect(theirs(page).last()).toBeVisible({ timeout: 8000 });
   await expect(pane(page).getByTestId("taskiem-typing")).toHaveCount(0);
   await expect(ours(page)).toHaveCount(1); // not twice

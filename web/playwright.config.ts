@@ -15,6 +15,11 @@ export default defineConfig({
     // The console's motion is off for people who ask for less: tests ask
     // too, so axe never checks a page mid-fade and nothing waits on it.
     reducedMotion: "reduce",
+    // The app starts a service worker for everyone (docs/spec/offline.md). A
+    // page it controls can send requests past page.route, so a test's stand-in
+    // for the server would be skipped now and then. Blocked here; the specs
+    // about the worker itself allow it (chat-push, offline).
+    serviceWorkers: "block",
     launchOptions: executablePath ? { executablePath } : {},
   },
   webServer: {

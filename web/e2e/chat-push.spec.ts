@@ -8,7 +8,8 @@ import { axe, describe } from "./a11y";
 // `PushManager` is a stand-in that hands out a subscription for an address on
 // a push service's host (the server keeps it as it would a real one); the
 // worker and the page are the real ones.
-test.use({ bypassCSP: true, viewport: { width: 1280, height: 900 } });
+// serviceWorkers: the config blocks them for every other spec.
+test.use({ bypassCSP: true, viewport: { width: 1280, height: 900 }, serviceWorkers: "allow" });
 
 const H = { "X-Taskiem-Request": "1" };
 const letters = () =>
