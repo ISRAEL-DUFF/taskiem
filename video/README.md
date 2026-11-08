@@ -75,6 +75,35 @@ piece works muted too: the shorts carry their words on screen. To lay other
 music under a cut, `--music track.wav` (it is cut to the length and faded
 out); `--silent` for none.
 
+## Recording the real app
+
+Beside the animated films, `recording/` records the real app: the demo
+world (`web/e2e/demo/`) driven on a phone-sized screen by a script, act by
+act, through Chrome's own screencast, so what you see is the app as it runs,
+in real time. A lime ring shows where each tap lands, and each action is
+timed from the tap to what it brings (`out/recording/timings.jsonl`).
+
+```sh
+bash web/e2e/demo/serve-demo.sh &       # a fresh demo world at localhost:18090
+node web/e2e/demo/seed.ts               # filled with the demo businesses
+node video/recording/tour.mjs           # every act: out/recording/<act>.mp4
+node video/recording/build.mjs          # title cards and acts: out/chat-app-recording.mp4
+```
+
+| File | What it is |
+| --- | --- |
+| `recording/lib.mjs` | Sign in off camera, record a page, show taps, time actions |
+| `recording/tour.mjs` | The chat's acts, one function each (`node video/recording/tour.mjs act3` for one) |
+| `recording/order.mjs` | The film's order: each title card and the acts under it |
+| `recording/build.mjs` | The title cards (the kit's) and the acts, joined at 1080 × 1920 |
+
+The acts change the world as they go (prices, orders, a deal), so a whole
+run wants a freshly seeded one. Two things are held to the clock: the morning
+briefing shows only from 8am Lagos time, so act 1 lets the server's real
+briefing through with its "ready" flag on at any hour; everything else is
+as the server says. To record another feature, write its acts in a tour of
+its own beside this one, with `lib.mjs`.
+
 ## Making a new explainer
 
 1. **Start the film:** `cp -r video/films/_template video/films/<film>`. It
