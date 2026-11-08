@@ -91,7 +91,7 @@ func TestOwnerTemplatesAndCanvas(t *testing.T) {
 	conns := owner.must(200, "GET", "/v1/connections", nil)["connections"].([]any)
 	for _, c := range conns {
 		if m := c.(map[string]any); m["connector"] == "whatsapp" {
-			owner.must(204, "PUT", "/v1/connections/"+m["id"].(string)+"/credentials", map[string]any{"credentials": map[string]string{"business_account_id": "1029384756"}})
+			owner.must(200, "PUT", "/v1/connections/"+m["id"].(string)+"/credentials", map[string]any{"credentials": map[string]string{"business_account_id": "1029384756"}})
 		}
 	}
 	ts := owner.must(200, "GET", "/v1/whatsapp/templates", nil)["templates"].([]any)
