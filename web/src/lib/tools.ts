@@ -112,12 +112,14 @@ function stockRows(data: unknown): ToolRow[] {
 export const categoryTag = (c: string) => `cat:${c.trim().toLowerCase()}`;
 
 /** The chips for the categories of a sheet's rows, after its own: the most
- * used first; a category of one item gets none. */
+ * used first; a category of one item gets none, unless it is the one shown
+ * (on: the chip that is on). */
 export function categoryChips(
   rows: { category?: string }[],
+  on?: string,
 ): { label: string; tag: string }[] {
   return categoriesOf(rows)
-    .filter((c) => c.count > 1)
+    .filter((c) => c.count > 1 || categoryTag(c.name) === on)
     .map((c) => ({ label: c.name, tag: categoryTag(c.name) }));
 }
 

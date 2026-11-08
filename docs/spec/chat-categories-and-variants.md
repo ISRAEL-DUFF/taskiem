@@ -1,7 +1,9 @@
 # Chat: product categories and variants
 
-Status: **plan**, for review (8 November 2026). Written with the founder; the live
-doc is [the shared plan](https://claude.ai/artifact/HA9Y7M1vLM4PprjoyRidaX), and this file is its copy beside the code.
+Status: **phase 1 (categories) built**; phases 2 to 4 are the plan (8 November 2026).
+Written with the founder; the live doc is [the shared plan](https://claude.ai/artifact/HA9Y7M1vLM4PprjoyRidaX),
+and this file is its copy beside the code. What phase 1 built, and where it differs
+from the plan, is in [As built: phase 1](#as-built-phase-1-categories).
 
 ## Summary
 
@@ -169,3 +171,47 @@ The plan assumes the answer in brackets; each changes a phase if it goes the oth
 - [ ] Barcodes or codes per size and colour, for shops that scan: now or later? (Later.)
 - [ ] Should a buyer see the supplier's category, or only their own? (The supplier's, in the supplier's price list.)
 - [ ] Clothing beyond size and colour (length, fit): is a third choice enough? (Yes: three choices.)
+
+## As built: phase 1 (categories)
+
+Migration `00408_item_categories.sql`; `api/stock.go`, `api/whatsapp_stock.go`,
+`engine/links/prices.go`; on the web `src/lib/mentions.ts`, `src/lib/tools.ts`,
+`ChatToolForms.tsx`, `ChatTools.tsx`, `ChatBuyer.tsx`, `ChatComposer.tsx`.
+
+- **The column.** `POST /v1/stock/items` and `PATCH /v1/stock/items/{id}` take
+  `category` (up to 60 characters, spaces tidied; `""` clears it). The first time
+  one is set, a text column named `category` already in the table is mapped, or
+  one is added (audited as `table.column.add`, the plan's column limit allowing).
+  A table Taskiem cannot change answers 409 `no_category_column`, saying how to
+  add one on the Tables page.
+- **The items.** `stock.Item` carries `category` and, when the catalogue maps one,
+  `description`, so search can read both. A change of category is a diary line
+  ("Category of Air Max 90: Sneakers"; "… is no longer in a category").
+- **Price lists.** `price_list_items` and the buyer's `supplier_prices` hold the
+  seller's category, copied when an item is put on a list; a category changed
+  later is written on every list holding the item and mirrored to the buyers
+  again (`links.SetItemCategoryTx`).
+- **Search.** The @ picker, the Products sheet and the order sheet match the name
+  first, then the category and a product's description ("@nike" finds a shoe
+  whose description says Nike).
+- **The picker.** Words that start a category's name offer it first, under
+  "Categories" ("Sneakers · 48 items", two at most). A tap opens Products filtered
+  to it, or, in a supplier's conversation, their list filtered to it; the words
+  typed for it go. Enter still tags an item (a category is not a tag). In the
+  Taskiem chat the categories offered are the business's own (from `/v1/stock`).
+- **Chips.** The Products sheet has a chip per category of two items or more,
+  most used first, after All, Low stock and Hidden; the order sheet the same after
+  All. The category being shown always has its chip.
+- **The order sheet** shows a supplier's list under its categories' headings, in
+  the list's order, "Other" last. The plan's chips "jumping to each" heading are
+  filters instead, as in Products, so both sheets work the same way.
+- **The product form** (add and change) has a Category field under the name,
+  with the categories already used offered as chips ("Sneakers · 14").
+- **WhatsApp and Telegram.** "sneakers", "show me sneakers" and "stock sneakers"
+  list the category's items with their counts and "(low)", 10 at a time, with
+  *more* for the rest; anything else lets the list go. A category's name alone is
+  only read as one when the catalogue has a category column, and an item called
+  the same as a category is still the item.
+- **Tests.** Go: `api/categories_test.go` (the column, the items, the price list
+  and its mirror, the chat words). Web: `src/lib/categories.test.ts`;
+  `e2e/chat-categories.spec.ts` at 390 and 360 px in both themes with axe.

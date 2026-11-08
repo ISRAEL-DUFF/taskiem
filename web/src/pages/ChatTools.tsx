@@ -459,7 +459,7 @@ export function ToolSheet({
   const list = Array.isArray(rows) ? inScope(rows, scope) : undefined;
   const shown = list ? filterRows(list, chip, search) : [];
   // The rows' categories, as chips after the tool's own.
-  const cats = list ? categoryChips(list) : [];
+  const cats = list ? categoryChips(list, chip) : [];
   const name = tool.title.toLowerCase();
   const done = (line: string | null) => {
     if (line) void onSaved?.(line);

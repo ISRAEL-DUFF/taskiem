@@ -215,7 +215,7 @@ export function OrderSheet({
     own.data?.find((x) => x.name.toLowerCase() === it.name.toLowerCase())?.id ??
     "new";
   // Their categories as chips; the list under their headings.
-  const cats = categoryChips(list?.items ?? []);
+  const cats = categoryChips(list?.items ?? [], chip);
   const shown = orderShown(list?.items ?? [], chip, search);
   const sections = orderSections(shown);
   const finish = (words: string) => {
