@@ -1,18 +1,20 @@
 # Chat: product categories and variants
 
-Status: **phase 1 (categories) built**; phases 2 to 4 are the plan (8 November 2026).
+Status: **phase 1 (categories) built**; phases 2 to 5 are the plan (8 November 2026;
+photos, Part C and phase 2, added the same day).
 Written with the founder; the live doc is [the shared plan](https://claude.ai/artifact/HA9Y7M1vLM4PprjoyRidaX),
 and this file is its copy beside the code. What phase 1 built, and where it differs
 from the plan, is in [As built: phase 1](#as-built-phase-1-categories).
 
 ## Summary
 
-We give products a category the chat can search and browse, and let one product carry sizes and colours, each with its own stock. Both ship in four phases, each usable on its own.
+We give products a category the chat can search and browse, photos taken or picked without leaving the chat, and let one product carry sizes and colours, each with its own stock. They ship in five phases, each usable on its own.
 
 A shoe shop has hundreds of items, and today each size and colour is a separate product: one trainer in 10 sizes and 3 colours is 30 near-identical rows. Finding the right one in the @ picker, the Products sheet or a supplier's price list means scrolling or guessing names.
 
 - **Categories** (Sneakers, Sandals, Bags) let people find things whose names don't say what they are, and browse a kind of thing. No typed path: search reads categories, and chips filter the sheets.
 - **Variants** (size 42, black) make the 30 rows one product with a grid. Stock, Sell, orders, price lists and deals pick the exact variant, and low stock is told per variant.
+- **Photos** come from the phone's camera, its pictures, or a link, wherever a product's photo is set in the chat, so nobody has to put a picture somewhere else first to get an address for it.
 
 Categories go first because they are small and help every business. Variants touch everything that holds an item, so they come in phases, each one usable on its own.
 
@@ -82,6 +84,45 @@ A product can have up to three choices (Size, Colour, Material), and each combin
 
 **Grouping existing items:** a shop that already has "Air Max 90 – 42 Black" as separate products selects them in the Products sheet and taps "Make one product with sizes and colours". Taskiem proposes the choices from the names ("42", "Black") for the owner to confirm. Their stock, history, prices and links stay with each row.
 
+## Part C: product photos from the chat
+
+**Today.** A product's photo can be set from the chat in one place only, and only one way:
+
+| Where | What it does today | What it lacks |
+| --- | --- | --- |
+| Product form (chat tools) | "+" picks a file from the device (`POST /v1/storefront/catalogue/rows/{row}/photo`) | No camera; no link; no way to remove a photo or choose the main one, though the API has both |
+| Add product (chat tools) | Name, price, unit, count, category | No photo at all: a new product gets one only after it is saved and opened again |
+| Tables tool, the products table | Every column is a text box, the photo column too | The owner is asked for the web address of a picture already somewhere else |
+| WhatsApp, Telegram | A photo with "add product" as its caption | Nothing missing; unchanged |
+
+**One photo picker, everywhere a product's photo is set in the chat.** Add product, the product form, and the Tables tool's photo columns all open the same sheet, with three ways in:
+
+1. **Take a photo:** the device's camera, through the camera sheet the composer already uses (`CameraSheet`): the back camera on a phone, the webcam on a computer. A device with no camera, or one the browser is not allowed to use, says so and offers the other two.
+2. **From your phone** (or computer): the device's pictures, several at once.
+3. **Paste a link:** the web address of a picture. Taskiem fetches it once and keeps its own copy, so the shop's page never shows a picture from someone else's site that could vanish or change later.
+
+**What happens to a picture:**
+
+- **Made small on the device first.** A camera photo is resized before it is sent (longest side 1600 px, JPEG), so a 12 MB photo is a few hundred KB on a slow connection. Progress is shown; a failed one says so with Try again.
+- **Checked like any upload:** JPEG, PNG or WebP, at most the upload limit (`media.MaxImageBytes`), checked and kept as the business's media, as the "+" does today.
+- **Shown before it is saved,** with Remove; the first is the main photo, and up to `storefront.MaxGallery` more follow it.
+- **In the product form,** each photo has *Make main* and *Remove* (the API's `PUT …/photo/main` and `DELETE …/photo`).
+
+**Add product with photos.** The photos chosen are held in the form until the product exists, then sent to it (the row's id comes back from `POST /v1/stock/items`). If a photo fails, the product is still added and the form says which photo did not go, with Try again.
+
+**The Tables tool.** A column the catalogue maps as its photo or gallery shows the product's pictures and the picker, not a text box; what is saved is what the storefront writes today. Every other column stays as it is.
+
+**A link, on the server.** A new `POST /v1/storefront/catalogue/rows/{row}/photo` body, `{"url": "https://…"}`, beside the file upload:
+
+- fetched through the egress guard (`engine/egress`): https or http only, public addresses only (a redirect to a private one is refused), a short timeout, the size limit enforced while reading;
+- the bytes must be a picture (checked by content, not by the address's ending);
+- kept as the business's media and set on the row exactly as an upload is; audited the same way, with the link;
+- a link that is not a picture answers 400, "That link is not a picture we can use"; one that cannot be reached, "We could not open that link".
+
+**Who may:** whoever may change the storefront (`storefront.manage`), as today.
+
+Out of scope: editing a picture (crop, rotate, filters), a photo per size and colour (phase 3, variants), and photos for services.
+
 ## Data model and engine
 
 Each variant is its own catalogue row, pointing at its product's row. Everything keyed by row id (stock movements, low stock, sales, price lists, lowest prices, order lines, storefront carts) keeps working unchanged for a variant, and the product row is what people see and search.
@@ -141,23 +182,25 @@ The model's request sorter (`api/chat_tool_requests.go`) learns that a category 
 
 ## Phases
 
-Four phases, each one a PR that ships on its own and leaves nothing half-built. Categories first because they are small and help every business; trade with variants last because it needs the rest.
+Five phases, each one a PR that ships on its own and leaves nothing half-built. Categories and photos first because they are small and help every business; trade with variants last because it needs the rest. Photos come before variants because a colour's own photo (phase 3) uses the same picker.
 
 1. **Categories.** The `category` column and field; `Category` on stock items, price list items and link-chat items; search over name, category and description; the picker's category chip; chips in the Products and order sheets; grouped order sheet; WhatsApp category requests.
    - Done when: a shop with 300 products finds "all sneakers" in two taps, in its own chat and in a buyer's.
-2. **Variants for the shop itself.** The columns and the `variants` package; the grid in the product form (choices, presets, counts, own prices, a photo per colour); the Products sheet's grouped rows; stock in and counts by grid; Sell's size and colour pick; low stock grouped per product; diary lines.
+2. **Photos from the chat** (Part C). The photo picker (camera, the device's pictures, a link) with resizing on the device; photos in Add product; Make main and Remove in the product form; the Tables tool's photo columns; the server's photo from a link.
+   - Done when: an owner adds a product with a photo from the camera, one from their pictures and one from a link, without leaving the chat, at 390 and 360 px; and a photo set in the Tables tool needs no web address.
+3. **Variants for the shop itself.** The columns and the `variants` package; the grid in the product form (choices, presets, counts, own prices, a photo per colour); the Products sheet's grouped rows; stock in and counts by grid; Sell's size and colour pick; low stock grouped per product; diary lines.
    - Done when: a shoe shop sets up one trainer in 10 sizes and 3 colours in under two minutes, sells size 42 black, and is told when 42 runs low.
-3. **Variants on the storefront and in trade.** The storefront pick; price lists listing the product once; ordering by grid; quantity prices counted across variants; lowest prices on the product; order lines and cards; buyer links matched by choices.
+4. **Variants on the storefront and in trade.** The storefront pick; price lists listing the product once; ordering by grid; quantity prices counted across variants; lowest prices on the product; order lines and cards; buyer links matched by choices.
    - Done when: a retailer orders 36 pairs in 7 sizes from a supplier in one sheet and gets the 50-pair price when the sizes add up to 50.
-4. **Chat apps, grouping, and the demo.** WhatsApp and Telegram words; the model's requests; "Make one product with sizes and colours" for existing items; Zuri Atelier (already in the demo world) seeded as a shoe and clothing seller; the recording's new act.
+5. **Chat apps, grouping, and the demo.** WhatsApp and Telegram words; the model's requests; "Make one product with sizes and colours" for existing items; Zuri Atelier (already in the demo world) seeded as a shoe and clothing seller; the recording's new act.
    - Done when: a variant can be sold and counted from WhatsApp, and existing look-alike items are grouped without losing their history.
 
 ## Tests and checks
 
 Each phase carries its own tests and passes the repo's checks before it ships.
 
-- **Go:** the `variants` package (make, rename, retire a grid; limits), stock totals and grouped low stock, `PriceAt` counting across variants, floors per variant, item links matching by choices, the WhatsApp words (including the one-question-at-a-time size pick). Database tests against Postgres like the rest.
-- **Browser (e2e):** per phase, at 390 and 360 px wide, in both themes with axe: set a category and filter by it; build a grid and sell a variant; order by grid from a price list and reach a quantity price; group existing items.
+- **Go:** a photo from a link (a picture; not a picture; too big; a private address, directly and by redirect; unreachable), kept as media and set on the row; the `variants` package (make, rename, retire a grid; limits), stock totals and grouped low stock, `PriceAt` counting across variants, floors per variant, item links matching by choices, the WhatsApp words (including the one-question-at-a-time size pick). Database tests against Postgres like the rest.
+- **Browser (e2e):** per phase, at 390 and 360 px wide, in both themes with axe: set a category and filter by it; add a product with a photo from each of the three ways (the camera with Chromium's fake camera), and a photo in the Tables tool; build a grid and sell a variant; order by grid from a price list and reach a quantity price; group existing items.
 - **Plain words:** every new owner-facing line through `src/lib/plainwords.test.ts`, with no technical words such as SKU or variant on owners' screens ("sizes and colours", "choices").
 - **The recording:** a new act in `video/recording/` for Zuri Atelier: a category chip, the grid, a sale of size 42, an order of 36 pairs. It doubles as a check that the whole flow runs on the real app, with timings.
 
@@ -171,6 +214,8 @@ The plan assumes the answer in brackets; each changes a phase if it goes the oth
 - [ ] Barcodes or codes per size and colour, for shops that scan: now or later? (Later.)
 - [ ] Should a buyer see the supplier's category, or only their own? (The supplier's, in the supplier's price list.)
 - [ ] Clothing beyond size and colour (length, fit): is a third choice enough? (Yes: three choices.)
+- [ ] Photos: should the picker also offer simple editing (crop to square, rotate) before saving? (Not now: the storefront already shows photos square, cropped to fit.)
+- [ ] A photo from a link: should Taskiem keep a note of where it came from, for the owner to see? (Yes, in the audit only.)
 
 ## As built: phase 1 (categories)
 
