@@ -1376,6 +1376,10 @@
       "text": "Send *more* make I show you the rest.",
       "reviewed": false
     },
+    "wa.stock.which_size": {
+      "text": "{name} get {count} sizes and colours. Talk which one, put the size and colour after the name, like *{example}*.",
+      "reviewed": false
+    },
     "wa.stock.low_tag": {
       "text": "(e don low)",
       "reviewed": false

@@ -13,6 +13,7 @@ import {
   type SupplierPrices,
 } from "../lib/pricelists";
 import type { StockItem, StockView } from "../lib/stock";
+import { hasSizes } from "../lib/variants";
 import { formatPrice } from "../lib/storefront";
 import {
   EmptyState,
@@ -246,11 +247,13 @@ function ListItemsModal({
   useEffect(() => {
     if (!stock.data) return;
     setRows(
-      stock.data.items.map((it) => {
+      // A size or colour no longer sold is not offered; a product sold in
+      // them heads them, and is never on a list itself.
+      stock.data.items.filter((it) => !it.variant_of || it.available).map((it) => {
         const on = list.items.find((x) => x.item_id === it.id);
         return {
           item: it,
-          on: !!on,
+          on: !!on && !hasSizes(it),
           price: feeInput(on?.price_kobo ?? it.price_kobo ?? 0),
           min: String(on?.min_quantity ?? 1),
           available: on?.available ?? true,
@@ -312,8 +315,23 @@ function ListItemsModal({
         </EmptyState>
       ) : (
         <div className="price-rows" data-testid="price-items">
-          {rows.map((r, i) => (
-            <fieldset key={r.item.id} className="price-row">
+          {rows.map((r, i) =>
+            hasSizes(r.item) ? (
+              <div
+                key={r.item.id}
+                className="price-row price-sizes-head"
+                data-testid="price-sizes-head"
+              >
+                <strong>{r.item.name}</strong>
+                <span className="hint">
+                  Sold in sizes and colours: tick each one you sell below.
+                </span>
+              </div>
+            ) : (
+            <fieldset
+              key={r.item.id}
+              className={r.item.variant_of ? "price-row price-size" : "price-row"}
+            >
               <legend className="sr-only">{r.item.name}</legend>
               <label className="inline">
                 <input
@@ -415,7 +433,8 @@ function ListItemsModal({
                 </div>
               )}
             </fieldset>
-          ))}
+            ),
+          )}
         </div>
       )}
       {bad && (

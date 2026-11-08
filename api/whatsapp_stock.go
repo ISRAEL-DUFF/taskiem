@@ -235,11 +235,79 @@ func matchStock(items []stock.Item, name string) []stock.Item {
 			}
 		}
 	}
+	return stockHolders(items, out)
+}
+
+// stockHolders narrows matches to the items that hold stock: a product
+// sold in sizes and colours keeps none of its own, so it stands for its
+// sizes and colours on sale; one taken off sale is offered nowhere.
+func stockHolders(items, match []stock.Item) []stock.Item {
+	out := make([]stock.Item, 0, len(match))
+	seen := map[string]bool{}
+	add := func(it stock.Item) {
+		if !seen[it.ID] && !it.Retired() {
+			seen[it.ID] = true
+			out = append(out, it)
+		}
+	}
+	for _, it := range match {
+		if !it.HasSizes() {
+			add(it)
+			continue
+		}
+		for _, v := range items {
+			if v.VariantOf == it.ID {
+				add(v)
+			}
+		}
+	}
 	return out
+}
+
+// sizesOfOne is the product whose sizes and colours all the matches are,
+// when they are several of one product's.
+func sizesOfOne(items, match []stock.Item) (stock.Item, bool) {
+	if len(match) < 2 || match[0].VariantOf == "" {
+		return stock.Item{}, false
+	}
+	for _, it := range match {
+		if it.VariantOf != match[0].VariantOf {
+			return stock.Item{}, false
+		}
+	}
+	for _, it := range items {
+		if it.ID == match[0].VariantOf {
+			return it, true
+		}
+	}
+	return stock.Item{}, false
+}
+
+// whichSize asks for the size and colour by name, when a product has more
+// than a list shows: "Air Max 90 comes in 33 sizes and colours. Say which,
+// like stock Air Max 90 – 42, Black".
+func whichSize(c *chat, product stock.Item, match []stock.Item) string {
+	return whichSizeOf(c, product.Name, len(match), match[0].Name)
+}
+
+func whichSizeOf(c *chat, product string, n int, example string) string {
+	return c.t("wa.stock.which_size", "name", whatsapp.SafeText(product), "count", strconv.Itoa(n), "example", whatsapp.SafeText(example))
 }
 
 // stockPick offers a numbered list when several items match.
 func (s *Server) stockPick(ctx context.Context, c *chat, sh *chatShop, match []stock.Item) error {
+	if len(match) > shopPickMax {
+		_, items, ok, err := s.stockChatItems(ctx, c)
+		if !ok || err != nil {
+			return err
+		}
+		if product, one := sizesOfOne(items, match); one {
+			if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
+				return err
+			}
+			return c.say(ctx, s, whichSize(c, product, match))
+		}
+	}
 	for _, it := range match[:min(shopPickMax, len(match))] {
 		sh.Pick = append(sh.Pick, shopChoice{Row: it.ID, Name: it.Name})
 	}
@@ -744,6 +812,9 @@ func (s *Server) waStockSale(ctx context.Context, c *chat, args string) error {
 			if len(exact) == 1 {
 				match = exact
 			}
+		}
+		if product, one := sizesOfOne(items, match); one && len(match) > shopPickMax {
+			return c.say(ctx, s, whichSize(c, product, match))
 		}
 		switch {
 		case len(match) == 0:

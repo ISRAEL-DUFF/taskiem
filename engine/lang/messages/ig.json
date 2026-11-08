@@ -1376,6 +1376,10 @@
       "text": "Ziga *more* maka ndị fọdụrụ.",
       "reviewed": false
     },
+    "wa.stock.which_size": {
+      "text": "{name} nwere nha na agba {count}. Kwuo nke ọ bụ, tinye nha na agba ya mgbe aha gachara, dị ka *{example}*.",
+      "reviewed": false
+    },
     "wa.stock.low_tag": {
       "text": "(ọ dịla ala)",
       "reviewed": false

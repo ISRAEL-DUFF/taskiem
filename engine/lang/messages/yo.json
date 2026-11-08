@@ -1376,6 +1376,10 @@
       "text": "Fi *more* ránṣẹ́ fún àwọn tó kù.",
       "reviewed": false
     },
+    "wa.stock.which_size": {
+      "text": "{name} ní ìwọ̀n àti àwọ̀ {count}. Sọ èwo, pẹ̀lú ìwọ̀n àti àwọ̀ rẹ̀ lẹ́yìn orúkọ, bí *{example}*.",
+      "reviewed": false
+    },
     "wa.stock.low_tag": {
       "text": "(ó ti dín)",
       "reviewed": false

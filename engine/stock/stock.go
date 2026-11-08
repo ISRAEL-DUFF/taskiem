@@ -46,6 +46,10 @@ const (
 	Adjustment = "adjustment"
 	Count      = "count"
 	Outside    = "outside"
+	// Moved is stock that went from one item to another of the business's
+	// own (a product's count shared out among its sizes and colours): out
+	// of one, into the other, neither received, sold nor lost.
+	Moved = "moved"
 )
 
 var (
@@ -132,9 +136,9 @@ const MaxDelta = 1_000_000
 
 func (m Move) check() error {
 	switch m.Reason {
-	case Order, Sale, Received, Adjustment, Count:
+	case Order, Sale, Received, Adjustment, Count, Moved:
 	default:
-		return fmt.Errorf("%w: a movement is for an order, a sale, goods received, an adjustment or a count", ErrInvalid)
+		return fmt.Errorf("%w: a movement is for an order, a sale, goods received, an adjustment, a count or stock moved", ErrInvalid)
 	}
 	if (m.Delta == nil) == (m.SetTo == nil) {
 		return fmt.Errorf("%w: a movement is a change or a count", ErrInvalid)

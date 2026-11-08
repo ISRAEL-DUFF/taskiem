@@ -39,13 +39,25 @@ type Item struct {
 	VariantOf string            `json:"variant_of,omitempty"`
 	Variant   map[string]string `json:"variant,omitempty"`
 	Choices   []variants.Choice `json:"choices,omitempty"`
+	// OwnPrice is, on a product, the Keys of its sizes and colours with a
+	// price of their own; the others follow the product's.
+	OwnPrice []string `json:"own_price,omitempty"`
 }
+
+// HasSizes reports whether the item is a product sold in sizes and
+// colours: it keeps no stock of its own, and is sold, counted and
+// received through them.
+func (it Item) HasSizes() bool { return len(it.Choices) > 0 }
+
+// Retired reports whether the item is a size or colour taken off sale: it
+// keeps its history, and is offered nowhere.
+func (it Item) Retired() bool { return it.VariantOf != "" && !it.Available }
 
 // Low reports whether the item is at or below its reorder level. A
 // product with sizes and colours is never low itself: it keeps no stock of
 // its own, and each of them is low or not.
 func (it Item) Low() bool {
-	return len(it.Choices) == 0 && it.Stock != nil && it.Reorder != nil && *it.Stock <= *it.Reorder
+	return !it.HasSizes() && it.Stock != nil && it.Reorder != nil && *it.Stock <= *it.Reorder
 }
 
 // Suggest is how many to order of a low item: up to its target level,
@@ -129,7 +141,8 @@ func Items(rows []map[string]any, m storefront.Columns) []Item {
 			it.Variant = variants.ParseVariant(str(r[m.Variant]))
 		}
 		if m.Choices != "" {
-			it.Choices = variants.ParseChoices(str(r[m.Choices]))
+			st := variants.ParseSetup(str(r[m.Choices]))
+			it.Choices, it.OwnPrice = st.Choices, st.OwnPrice
 		}
 		it.PriceKobo = money(r, m.Price, m.PriceUnit)
 		it.CostKobo = money(r, m.CostPrice, m.PriceUnit)

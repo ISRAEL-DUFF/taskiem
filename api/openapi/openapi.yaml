@@ -10303,7 +10303,7 @@ paths:
       tags:
       - Stock
       summary: Set a product's sizes and colours
-      description: 'Its choices (up to 3, 20 values each) and the grid of what it sells (up to 100). Each one sold is a catalogue row of its own, pointing at the product: made, renamed (a cell with its row id and new values), brought back, or retired (hidden, never deleted). A new one''s count comes in as goods received, a kept one''s as a count; one without its own price takes the product''s. The product''s own stock moves into them. No choices takes them all off sale. 409 no_variant_columns when the catalogue cannot take the three columns.'
+      description: 'Its choices (up to 3, 20 values each) and the grid of what it sells (up to 100). Each one sold is a catalogue row of its own, pointing at the product: made, renamed (a cell with its row id and new values), brought back, or retired (hidden, never deleted). A kept one''s count is a count. A new one''s count is stock moved from the product while the product holds some (reason moved: neither received nor lost), the rest goods received; what the product held beyond what they took is counted off it, so its own count ends at 0. One without its own price takes the product''s and follows it; the cells given a price are recorded as their own (own_price). On the price lists that hold the product itself, it is taken off sale. Everything is checked before anything is written; 409 while another save of the same product''s sizes and colours runs, and no_variant_columns when the catalogue has no room for the four columns it needs (variant_of, variant, choices, available).'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -10462,7 +10462,7 @@ paths:
         in: query
         schema:
           type: string
-          enum: [order, sale, received, adjustment, count, outside]
+          enum: [order, sale, received, adjustment, count, outside, moved]
       - name: since
         in: query
         schema:
@@ -32661,6 +32661,11 @@ components:
           description: A product's choices, when it has sizes and colours (it keeps no stock of its own then)
           items:
             $ref: '#/components/schemas/VariantChoice'
+        own_price:
+          type: array
+          description: On a product, its sizes and colours with a price of their own, each as its values in lower case ("colour=black|size=42"); the others follow the product's price
+          items:
+            type: string
         low:
           type: boolean
         suggest:
@@ -32682,7 +32687,7 @@ components:
           type: string
         reason:
           type: string
-          enum: [order, sale, received, adjustment, count, outside]
+          enum: [order, sale, received, adjustment, count, outside, moved]
         status:
           type: string
           enum: [pending, done, void]

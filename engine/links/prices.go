@@ -628,6 +628,31 @@ func KeepPricesTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, prices
 	return dueTx(ctx, tx, tenant, "prices", link, 0)
 }
 
+// SetItemOffTx takes an item off sale on the price lists that hold it (a
+// product now sold in sizes and colours, which keeps no stock of its own:
+// its buyers order the sizes) and puts the links those lists are shared
+// with on the list to mirror. It answers those links.
+func SetItemOffTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, item string) ([]uuid.UUID, error) {
+	rows, err := tx.Query(ctx, `UPDATE price_list_items SET available = false WHERE tenant_id = $1 AND item_id = $2 AND available RETURNING list_id`,
+		tenant, item)
+	if err != nil {
+		return nil, err
+	}
+	lists, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return nil, err
+	}
+	var out []uuid.UUID
+	for _, l := range lists {
+		ls, err := sharedDueTx(ctx, tx, tenant, l)
+		if err != nil {
+			return nil, err
+		}
+		out = union(out, ls)
+	}
+	return out, nil
+}
+
 // SetItemCategoryTx writes an item's new category on the price lists that
 // hold it and puts the links those lists are shared with on the list to
 // mirror, so buyers group it the new way. It answers those links.

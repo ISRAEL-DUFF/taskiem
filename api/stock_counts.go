@@ -39,7 +39,9 @@ func countLines(items []stock.Item, got map[string]int64) (lines []stock.CountLi
 	for _, it := range items {
 		n, ok := got[it.ID]
 		if !ok {
-			if it.Stock != nil {
+			// A product sold in sizes and colours is counted through them,
+			// and one taken off sale is not on the shelf to count.
+			if it.Stock != nil && !it.HasSizes() && !it.Retired() {
 				full = false
 			}
 			continue
@@ -211,6 +213,9 @@ func (s *Server) waStockCount(ctx context.Context, c *chat, args string) error {
 	got := map[string]int64{}
 	for _, x := range said {
 		match := matchStock(items, x.Name)
+		if product, one := sizesOfOne(items, match); one {
+			return c.say(ctx, s, whichSize(c, product, match))
+		}
 		if len(match) != 1 {
 			return c.say(ctx, s, c.t("wa.shop.no_item", "name", whatsapp.SafeText(x.Name)))
 		}

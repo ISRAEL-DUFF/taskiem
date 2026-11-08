@@ -90,3 +90,20 @@ func TestMakePlan(t *testing.T) {
 		t.Errorf("a value missing: %v", err)
 	}
 }
+
+// A product's choices column: the setup with its own prices, or the list
+// of choices alone that the first sizes and colours saved.
+func TestParseSetup(t *testing.T) {
+	cs := []Choice{{Name: "Size", Values: []string{"41", "42"}}}
+	st := Setup{Choices: cs, OwnPrice: []string{Key(map[string]string{"Size": "42"})}}
+	got := ParseSetup(JSON(st))
+	if len(got.Choices) != 1 || !got.Owns("size=42") || got.Owns("size=41") {
+		t.Fatalf("setup: %+v", got)
+	}
+	if old := ParseSetup(JSON(cs)); len(old.Choices) != 1 || len(old.OwnPrice) != 0 {
+		t.Fatalf("the list alone: %+v", old)
+	}
+	if len(ParseChoices(JSON(st))) != 1 || ParseChoices("") != nil || ParseChoices("{oops") != nil {
+		t.Fatal("ParseChoices reads both")
+	}
+}

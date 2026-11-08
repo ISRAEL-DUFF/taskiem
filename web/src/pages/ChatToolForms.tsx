@@ -232,7 +232,8 @@ export function ProductForm({
   // Its price on a price list, and who the list is shared with (the
   // DeskSeller board): for those who keep the storefront's prices.
   const { can } = useAuth();
-  const trade = can("storefront.manage");
+  // A product sold in sizes and colours is priced on the lists through them.
+  const trade = can("storefront.manage") && !hasSizes(item);
   const lists = useLoad(
     () =>
       trade

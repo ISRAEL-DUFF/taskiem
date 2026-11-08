@@ -331,20 +331,32 @@ the web `src/lib/photos.ts`, `PhotoAdd.tsx`, `ProductPhotos.tsx`, `CameraSheet.t
 
 - **Rows.** Each size and colour is a catalogue row of its own: `variant_of` (the
   product's row id) and `variant` (its values as JSON); the product holds `choices`.
-  The three text columns are added the first time a product has sizes and colours (409
-  `no_variant_columns` where they cannot be). A size's name is written out in full
+  The three text columns, and a true/false `available` column where the catalogue has
+  none, are added the first time a product has sizes and colours (409
+  `no_variant_columns` where there is no room); the product's `choices` also records
+  which of them have a price of their own (`own_price`). A size's name is written out in full
   ("Air Max 90 – 42, Black") so every place that shows only text reads right. Limits:
   3 choices, 20 values each, 100 sizes and colours per product, and the catalogue's 500
   rows in all.
 - **Setting them up:** `PUT /v1/stock/items/{id}/variants` takes the choices and the
   grid. `engine/variants` plans it: rows kept (renamed where a value was corrected in
   place, so 40 corrected to 43 keeps its row and history), brought back, made (one
-  insert), or retired (hidden, never deleted). A new one's count comes in as goods
-  received, a kept one's as a count. Each new row takes the product's unit, cost,
-  levels, supplier and category, and its price unless it has its own; a size that kept
-  the product's price follows it when the product's price changes. The product's own
-  stock, when it had some, moves into its sizes (a count to 0): **a product with sizes
-  and colours keeps no stock of its own and is never low itself**.
+  insert), or retired (hidden, never deleted). Everything asked is checked before
+  anything is written, and one save of a product's sizes and colours runs at a time
+  (409 for a second). A kept one's count is a count. While the product holds stock of
+  its own (the first time), a new one's count is **moved** from it (a movement of its
+  own, `moved`: neither received nor lost, so the month's losses and goods in are
+  untouched); beyond what the product held it is goods received, and what the product
+  held beyond what they took is counted off it as missing. The editor says so as the
+  boxes are filled ("Air Max 90 has 12 on the shelf now… 2 not counted into one will be
+  recorded as missing"). **A product with sizes and colours keeps no stock of its own and
+  is never low itself.**
+- **The product leads them.** Each new row takes the product's unit, cost, levels,
+  supplier and category, and its price unless it has its own; later changes of the
+  product (from its form, or *price* on WhatsApp) reach them: a new name in theirs ("Air
+  Max 95 – 42, Black"), its unit, cost, levels, supplier and category, and its price to
+  those without one of their own. A size given a price of its own, in the editor or on
+  its own, keeps it from then on, even one equal to the product's.
 - **Stock in and counts by grid:** `POST /v1/stock/movements/grid` (received or count)
   for several of one product's sizes, told as one diary line ("Stock in: Air Max 90, 7
   sizes and colours, +36"). A count by grid is made in the sizes and colours form (each
@@ -361,6 +373,17 @@ the web `src/lib/photos.ts`, `PhotoAdd.tsx`, `ProductPhotos.tsx`, `CameraSheet.t
   sold, and *Some cost more or less* for their own prices; *Stop selling it in sizes
   and colours* takes them off sale. The grid is groups of boxes that wrap, so nothing
   scrolls sideways at 360 px.
+- **WhatsApp and Telegram:** a sale, stock in, a change of stock, a count or a delivery
+  that names the product is about its sizes and colours: in a sale or stock change up
+  to 9 are offered as a numbered list; more, and those in a count or a delivery, are
+  asked for by name ("Air Max 90 comes in 33 sizes and colours. Say which…
+  like *Air Max 90 – 42, Black*"; typing "air max 90 42 black" finds it). A size taken
+  off sale is offered nowhere and takes no stock in. A full shelf count no longer waits
+  for the product itself, which keeps no count.
+- **Price lists:** a product sold in sizes heads them on the Price lists page and is
+  not itself one to tick; its sizes on sale are put on lists as items of their own. The
+  API refuses the product on a list (and a size no longer sold), and setting up sizes
+  takes the product off sale on the lists that held it, so a buyer orders a size.
 - **Sell:** a product with sizes has *Choose*: a row of buttons per choice, what is off
   sale or has none left greyed out; the size picked gets its own − n +, and those chosen
   are listed under the product. The sale's lines are the sizes' own rows.
@@ -375,7 +398,14 @@ the web `src/lib/photos.ts`, `PhotoAdd.tsx`, `ProductPhotos.tsx`, `CameraSheet.t
 - **Tests.** Go: `engine/variants` (choices, names, keys, the plan), `engine/storefront`
   (the roll-up and the public items), `api/stock_variants_test.go` (set up, a sale, one
   low card, stock in and a count as one line, a rename and a retirement, prices
-  following the product, the public page, taking them off sale). Web:
+  following the product, the public page, taking them off sale);
+  `api/stock_variants_fixes_test.go` (the product's 12 moved into two sizes with 2
+  counted missing and nothing received again, the `available` column mapped, the
+  product off its price list and refused on it, a rename and levels and price
+  following, a size's own price kept, WhatsApp asking which size and selling one,
+  nothing written for a count out of bounds, a size off sale refused stock in). Web:
   `src/lib/variants.test.ts`; `e2e/chat-sizes.spec.ts` at 390 and 360 px in both themes
   with axe (setting up 11 sizes × 3 colours with one not sold and one dearer; one row in
-  Products; Sell picking 42 then black with white greyed out; the low card's grid).
+  Products; Sell picking 42 then black with white greyed out; the low card's grid; the
+  shelf shared out as the boxes fill; own prices as recorded; a price list heading the
+  sizes with their product).

@@ -1719,6 +1719,11 @@
       "reviewed": true,
       "context": "After a page of a category's items, when there are more"
     },
+    "wa.stock.which_size": {
+      "text": "{name} comes in {count} sizes and colours. Say which, with its size and colour after the name, like *{example}*.",
+      "reviewed": true,
+      "context": "A product has more sizes and colours than a numbered list shows"
+    },
     "wa.stock.low_tag": {
       "text": "(low)",
       "reviewed": true,

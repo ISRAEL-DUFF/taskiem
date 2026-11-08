@@ -97,7 +97,10 @@ export function SizesEditor({
   // What the boxes hold, by the variant's key now; "" is not sold.
   const [counts, setCounts] = useState<Record<string, string>>({});
   const [prices, setPrices] = useState<Record<string, string>>({});
-  const [own, setOwn] = useState(false);
+  // Those with a price of their own, as the product records them (by the
+  // key they had): their boxes start with it, the rest follow the product.
+  const ownWas = new Set(item.own_price ?? []);
+  const [own, setOwn] = useState(ownWas.size > 0);
   const [fill, setFill] = useState("");
   const cs: Choice[] = drafts
     .map((d) => ({ name: d.name.trim(), values: parseValues(d.text) }))
@@ -119,11 +122,17 @@ export function SizesEditor({
     const k = keyOf(v);
     if (k in prices) return prices[k] ?? "";
     const o = old(v);
-    return o?.price_kobo !== undefined && o.price_kobo !== item.price_kobo
+    return o?.price_kobo !== undefined && ownWas.has(keyOf(asWas(v, cs, was)))
       ? String(o.price_kobo / 100)
       : "";
   };
   const sold = cells.filter((v) => countOf(v).trim() !== "");
+  // The product's own stock, while it has some, moves into its new sizes
+  // and colours: what they take, and what is left over or added.
+  const shelf = item.stock !== null && item.stock > 0 ? item.stock : 0;
+  const taken = sold
+    .filter((v) => !old(v))
+    .reduce((n, v) => n + (Number(countOf(v)) || 0), 0);
   const problem = drafts.some((d) => parseValues(d.text).length > MAX_VALUES)
     ? `A choice has up to ${MAX_VALUES} values.`
     : sold.length > MAX_SIZES
@@ -323,6 +332,16 @@ export function SizesEditor({
           <p className="tk-form-now" role="status">
             {sizesWords(sold.length)} on sale
           </p>
+          {shelf > 0 && (
+            <p className="tk-form-now" data-testid="sizes-share">
+              {item.name} has {shelf} on the shelf now: they move into its sizes
+              and colours, {taken > shelf ? shelf : taken} counted in so far.
+              {taken < shelf &&
+                ` ${shelf - taken} not counted into one will be recorded as missing.`}
+              {taken > shelf &&
+                ` ${taken - shelf} more than that will be recorded as new stock.`}
+            </p>
+          )}
         </>
       )}
       {problem && (

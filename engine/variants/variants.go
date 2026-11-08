@@ -134,14 +134,41 @@ func Fit(v map[string]string, cs []Choice) (map[string]string, bool) {
 	return out, true
 }
 
-// ParseChoices reads a product's choices column; nil when it holds none.
-func ParseChoices(s string) []Choice {
-	var cs []Choice
-	if strings.TrimSpace(s) == "" || json.Unmarshal([]byte(s), &cs) != nil {
-		return nil
-	}
-	return cs
+// Setup is what a product's choices column holds: its choices, and the
+// sizes and colours that have a price of their own (by Key), so that a
+// change of the product's price reaches the others only, even one whose
+// own price happens to be the product's.
+type Setup struct {
+	Choices  []Choice `json:"choices"`
+	OwnPrice []string `json:"own_price,omitempty"`
 }
+
+// ParseSetup reads a product's choices column: a Setup, or the list of
+// choices alone that the first sizes and colours saved.
+func ParseSetup(s string) Setup {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return Setup{}
+	}
+	if strings.HasPrefix(s, "[") {
+		var cs []Choice
+		if json.Unmarshal([]byte(s), &cs) != nil {
+			return Setup{}
+		}
+		return Setup{Choices: cs}
+	}
+	var st Setup
+	if json.Unmarshal([]byte(s), &st) != nil {
+		return Setup{}
+	}
+	return st
+}
+
+// ParseChoices reads a product's choices column; nil when it holds none.
+func ParseChoices(s string) []Choice { return ParseSetup(s).Choices }
+
+// Owns reports whether the variant (by Key) has a price of its own.
+func (st Setup) Owns(key string) bool { return slices.Contains(st.OwnPrice, key) }
 
 // ParseVariant reads a variant's column; nil when it holds none.
 func ParseVariant(s string) map[string]string {

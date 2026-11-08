@@ -436,6 +436,9 @@ func (s *Server) waAddSupplier(ctx context.Context, c *chat, m []string) error {
 					continue
 				}
 				match := matchStock(items, part)
+				if product, one := sizesOfOne(items, match); one {
+					return c.say(ctx, s, whichSize(c, product, match))
+				}
 				if len(match) != 1 {
 					return c.say(ctx, s, c.t("wa.shop.no_item", "name", whatsapp.SafeText(part)))
 				}

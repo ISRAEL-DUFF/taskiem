@@ -1376,6 +1376,10 @@
       "text": "Aika *more* don sauran.",
       "reviewed": false
     },
+    "wa.stock.which_size": {
+      "text": "{name} yana da girma da launi {count}. Faɗi wanne, da girmansa da launinsa bayan sunan, kamar *{example}*.",
+      "reviewed": false
+    },
     "wa.stock.low_tag": {
       "text": "(ya yi kaɗan)",
       "reviewed": false

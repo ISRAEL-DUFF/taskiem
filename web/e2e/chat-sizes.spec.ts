@@ -178,9 +178,18 @@ for (const viewport of [
     await expect(form.getByRole("status")).toHaveText(
       "33 sizes and colours on sale",
     );
+    // The 5 it has on the shelf move into its sizes: what is not counted
+    // into one is missing, what is counted beyond them is new stock.
+    const share = form.getByTestId("sizes-share");
+    await expect(share).toHaveText(
+      "Air Max 90 has 5 on the shelf now: they move into its sizes and colours, 0 counted in so far. 5 not counted into one will be recorded as missing.",
+    );
     // The same number for all, then one not sold and one with its own price.
     await form.getByRole("textbox", { name: /Same number for all/ }).fill("5");
     await form.getByRole("button", { name: "Fill" }).click();
+    await expect(share).toContainText(
+      "5 counted in so far. 160 more than that will be recorded as new stock.",
+    );
     await form.getByRole("textbox", { name: "46, Red: how many" }).fill("");
     await form
       .getByRole("checkbox", { name: /Some cost more or less/ })
@@ -338,4 +347,88 @@ test("one row per product, Sell picks 42 then black, and the low card opens the 
         { item_id: "v3", change: 6 },
       ],
     });
+});
+
+test("a size's own price kept in the editor, and a price list heads the sizes with their product", async ({
+  browser,
+}) => {
+  const page = await (
+    await browser.newContext({ viewport: { width: 390, height: 844 } })
+  ).newPage();
+  await owner(page);
+  const items = sized.map((it) =>
+    it.id === "k1"
+      ? { ...it, own_price: ["colour=white|size=43"] }
+      : it.id === "v5"
+        ? { ...it, price_kobo: 5_000_000 }
+        : it,
+  );
+  const sent = await answer(page, items);
+  await page.goto("/chat?with=taskiem");
+  await tool(page, "pro");
+  await page
+    .getByRole("dialog", { name: /Products/ })
+    .getByRole("button", { name: /Air Max 90/ })
+    .click();
+  const form = page.getByRole("dialog", { name: /Air Max 90/ });
+  await form.getByRole("button", { name: "Change sizes and colours" }).click();
+  // 43 White has its own price; 41 Black follows the product's, even had
+  // its price been the same: the product records which are their own.
+  await expect(
+    form.getByRole("checkbox", { name: /Some cost more or less/ }),
+  ).toBeChecked();
+  await expect(
+    form.getByRole("textbox", { name: "43, White: its own price in naira" }),
+  ).toHaveValue("50000");
+  await expect(
+    form.getByRole("textbox", { name: "41, Black: its own price in naira" }),
+  ).toHaveValue("");
+  // Sizes already set up: nothing on the shelf of the product to share.
+  await expect(form.getByTestId("sizes-share")).toHaveCount(0);
+  await form.getByRole("button", { name: "Save changes" }).click();
+  await expect.poll(() => sent.length).toBe(1);
+  const cells = (
+    sent[0]?.body as {
+      cells: { variant: Record<string, string>; price_kobo?: number }[];
+    }
+  ).cells;
+  expect(cells.filter((c) => c.price_kobo !== undefined)).toEqual([
+    expect.objectContaining({
+      variant: { Size: "43", Colour: "White" },
+      price_kobo: 5_000_000,
+    }),
+  ]);
+
+  // The price list: the product heads its sizes on sale and is not itself
+  // one to tick; a size no longer sold is not offered.
+  await page.route("**/v1/price-lists", (r) =>
+    r.fulfill(
+      json({
+        lists: [
+          {
+            id: "l1",
+            name: "Trade prices",
+            items: [],
+            links: [],
+            updated_at: "2026-11-08T10:00:00Z",
+          },
+        ],
+      }),
+    ),
+  );
+  await page.goto("/storefront/price-lists");
+  await page.getByRole("button", { name: "Items of Trade prices" }).click();
+  const list = page.getByRole("dialog", { name: "Items of Trade prices" });
+  await expect(list.getByTestId("price-sizes-head")).toHaveText(
+    /Air Max 90\s*Sold in sizes and colours: tick each one you sell below\./,
+  );
+  await expect(
+    list.getByRole("checkbox", { name: /^Air Max 90 \(pair\)$/ }),
+  ).toHaveCount(0);
+  await expect(
+    list.getByRole("checkbox", { name: "Air Max 90 – 42, Black (pair)" }),
+  ).toBeVisible();
+  await expect(list.getByText("Air Max 90 – 41, White")).toHaveCount(0);
+  await fits(page);
+  await axeBoth(page, "a price list's items with sizes");
 });

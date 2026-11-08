@@ -697,7 +697,7 @@ func (s *Server) listStockMovements(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if f.Reason != "" && !validReason(f.Reason) {
-		writeErr(w, http.StatusBadRequest, "reason is order, sale, received, adjustment, count or outside")
+		writeErr(w, http.StatusBadRequest, "reason is order, sale, received, adjustment, count, outside or moved")
 		return
 	}
 	var list []stock.Movement
@@ -717,7 +717,7 @@ func (s *Server) listStockMovements(w http.ResponseWriter, r *http.Request) {
 
 func validReason(r string) bool {
 	switch r {
-	case stock.Order, stock.Sale, stock.Received, stock.Adjustment, stock.Count, stock.Outside:
+	case stock.Order, stock.Sale, stock.Received, stock.Adjustment, stock.Count, stock.Outside, stock.Moved:
 		return true
 	}
 	return false
@@ -951,26 +951,28 @@ func (s *Server) patchStockItem(w http.ResponseWriter, r *http.Request) {
 	if err := s.SyncStorefront(r.Context(), p.TenantID); err != nil {
 		s.Logger.Warn("stock: refreshing the catalogue", "tenant", p.TenantID, "err", err)
 	}
-	// Its sizes and colours that kept its price take the new one; one
-	// with its own price keeps it.
-	if in.PriceKobo != nil && before.VariantOf == "" && before.PriceKobo != nil && *before.PriceKobo != *in.PriceKobo {
-		if _, items, err := s.stockItems(r.Context(), p.TenantID); err == nil {
-			for _, v := range variantsOf(items, id) {
-				if v.PriceKobo != nil && *v.PriceKobo == *before.PriceKobo {
-					if err := s.stockSetCells(r.Context(), p.TenantID, sh, v.ID, "", map[string]any{m.Price: priceCell(*in.PriceKobo, m)}); err != nil {
-						s.Logger.Warn("stock: a size's price", "tenant", p.TenantID, "item", v.ID, "err", err)
-					}
-				}
-			}
-		}
+	// Its sizes and colours follow it: name, details, and the price of
+	// those without their own.
+	newName := ""
+	if n, ok := set[m.Name].(string); ok {
+		newName = n
+	}
+	recategorised := s.sizesFollow(r.Context(), p.TenantID, sh, before, newName, key, set)
+	if in.PriceKobo != nil && before.VariantOf != "" {
+		s.markOwnPrice(r.Context(), p.TenantID, sh, before)
 	}
 	// Buyers see it under its new category too.
-	if in.Category != nil && *in.Category != before.Category {
+	if in.Category != nil && (*in.Category != before.Category || len(recategorised) > 0) {
 		var due []uuid.UUID
 		if err := s.tx(r, func(tx pgx.Tx) error {
-			var err error
-			due, err = links.SetItemCategoryTx(r.Context(), tx, p.TenantID, id, *in.Category)
-			return err
+			for _, item := range append([]string{id}, recategorised...) {
+				d, err := links.SetItemCategoryTx(r.Context(), tx, p.TenantID, item, *in.Category)
+				if err != nil {
+					return err
+				}
+				due = append(due, d...)
+			}
+			return nil
 		}); err != nil {
 			s.Logger.Warn("stock: a category on the price lists", "tenant", p.TenantID, "err", err)
 		}
@@ -1085,7 +1087,7 @@ func (s *Server) stockFail(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, errNoItem):
 		writeErr(w, http.StatusNotFound, "no such item")
 	case errors.Is(err, errNoVariantColumns):
-		writeJSON(w, http.StatusConflict, map[string]any{"error": "Your products table cannot take sizes and colours: it needs three more columns (variant_of, variant and choices). Remove columns you do not use on the Tables page, or add these as text columns.",
+		writeJSON(w, http.StatusConflict, map[string]any{"error": "Your products table has no room for sizes and colours. Remove a column you do not use on the Tables page, then try again.",
 			"code": "no_variant_columns"})
 	case errors.Is(err, errCategoryColumnLimit):
 		writeJSON(w, http.StatusConflict, map[string]any{"error": "Your products table has as many columns as your plan allows: remove one you do not use on the Tables page, then set the category again.",
