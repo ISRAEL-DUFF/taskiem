@@ -14,12 +14,13 @@ Everyone builds the same way. **Advanced** (Settings) adds the technical parts o
 | A payment comes in | `capability_event` | `payment.received`, from whichever payments account is connected |
 | An order comes in | `storefront` | Orders on the storefront |
 | Someone fills in a form | `form` | A form with one question, titled after the workflow |
-| A WhatsApp message comes in | `whatsapp` | |
 | An email comes in | `email` | Mail to the workflow's own address |
 | When you start it | `manual` | |
 | Another app tells it | `webhook` | Its own path, signed (`hmac`) |
 
 The workflow is saved at once as version 1 with no steps, and the builder opens on it. The same page offers a template, or **Describe it** (the [AI builder](ai.md)). **Settings → When it runs** changes the trigger later, with the same choices.
+
+There is no WhatsApp card: the old `whatsapp` trigger never started a run and is refused when saving (decision 0062). A workflow that starts on a WhatsApp message uses the WhatsApp connection's trigger (`connector_event` on `whatsapp@1`, events `message`). Old drafts with the old trigger still open and show it.
 
 A version with no steps can be saved but not published: wd/v1 needs at least one step.
 

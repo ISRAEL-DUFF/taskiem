@@ -62,13 +62,13 @@ Every POST is verified with `X-Hub-Signature-256: sha256=<hex>`, an HMAC-SHA256 
 | `status.sent`, `status.delivered`, `status.read`, `status.failed`, `status.played` | A message you sent changed status | `wamid:status` | the wamid, equal to a send's `message_id` output |
 | `error` | A system, app or account error | none: Meta gives no id | none |
 
-So a run that asks a question waits on `whatsapp@1:messages` with correlation `steps.ask.output.wa_id` and reads `trigger.body.entry[0].changes[0].value.messages[0]`. A run that must know a message arrived waits with correlation `steps.notify.output.message_id`. A `read` can arrive without a `delivered`; Meta notes that read implies delivered.
+Meta may batch many messages and statuses in one POST. The trigger splits a delivery into one event per message, status or error (`split` in the manifest), and each event has its own type, dedup key and correlation. A run gets that one event as `trigger.item`: `{kind, message | status | error, metadata}`, with `metadata.phone_number_id` and `display_phone_number`; `trigger.body` is still the whole delivery. So a run that asks a question waits on `whatsapp@1:messages` with correlation `steps.ask.output.wa_id` and reads `trigger.item.message`; a workflow that starts on messages reads the same. A run that must know a message arrived waits with correlation `steps.notify.output.message_id`. A `read` can arrive without a `delivered`; Meta notes that read implies delivered.
 
 Meta sends every field the app subscribes to (template status, account updates, ...) to the same URL. The trigger acknowledges the other fields and ignores them. Meta retries failed deliveries for up to 7 days and expects quick 200s.
 
 ## To confirm before go-live
 
-1. **Batching.** Meta may put up to 1000 updates in one POST ("batching cannot be guaranteed"). Taskiem evaluates one event per delivery, so the event type, dedup key and correlation describe the **first** message or status only. The others are in `trigger.body` but wake no waiting run. Check how often batching happens at your volume. Fanning out per item needs an engine change.
+1. **Batching.** Settled: each item of a batched delivery is its own event (see above). What is left to check is how often Meta batches at your volume, since every item of one delivery is handled in the same request.
 2. HTTP status codes for `130429` and the other throttles. The connector keys on `error.code`, so the status does not matter, but confirm that Meta attaches no `Retry-After` the engine should honour.
 3. Graph API version: the connector pins `v25.0`, the version Meta's examples use. Plan upgrades before Meta retires it.
 4. Group messaging (`recipient_type: group`) is not supported. Sends are always to individuals.

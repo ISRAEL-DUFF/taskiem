@@ -228,6 +228,8 @@ Milestones in order. Each lists what is built, its tests and docs. Nothing in a 
 
 ### V0. Decisions and clean-up
 
+**Built** (2026-11-08): [decision 0062](../decisions/0062-customer-assistant.md); `docs/integrations/whatsapp.md` describes the split events and `trigger.item`; `docs/operations.md` agrees with `docs/ai.md` that ai steps fail over budget; the `whatsapp` trigger is refused on save and publish (`checkRetiredTriggers`, kept in the schema so saved versions read), gone from the builder's cards and the evaluation suite's trigger list, and documented in the wd-v1 contract and the builder guide.
+
 - Record D1 to D13, all decided on 2026-11-08, as decision 0062 ("Customer assistant").
 - Fix stale docs: `docs/integrations/whatsapp.md` (one event per delivery, `entry[0]`), `docs/operations.md` vs `docs/ai.md` on AI over budget.
 - Remove the dead `whatsapp` trigger type from wd/v1, or define it (D1).

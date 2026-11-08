@@ -218,3 +218,16 @@ func TestRetentionIsAtLeastADay(t *testing.T) {
 		}
 	}
 }
+
+// The "whatsapp" trigger never started a run: saving one is refused with
+// the trigger to use instead, while the schema still reads old versions.
+func TestRetiredWhatsAppTrigger(t *testing.T) {
+	d := strings.Replace(string(doc(`{"id":"a","type":"transform","config":{"output":{}}}`)), `"type":"manual"`, `"type":"whatsapp"`, 1)
+	probs := Validate([]byte(d))
+	if len(probs) != 1 || probs[0].Path != "/trigger/type" || !strings.Contains(probs[0].Message, "whatsapp@1") {
+		t.Fatalf("want one refusal naming the connector trigger, got %v", probs)
+	}
+	if _, err := parse([]byte(d)); err != nil {
+		t.Fatalf("a saved version with the old trigger must still read: %v", err)
+	}
+}
