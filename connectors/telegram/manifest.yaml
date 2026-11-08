@@ -13,7 +13,7 @@ auth:
   type: api_key
   fields:
     - { key: bot_token, label: Bot token, secret: true, help: "In Telegram, message @BotFather, send /newbot (or /token for a bot you have), and paste the token it sends.", where: Telegram → @BotFather, link: "https://t.me/BotFather" }
-    - { key: webhook_secret, label: "Webhook secret token: 1-256 characters of A-Z, a-z, 0-9, _ and - (needed to receive updates)", secret: true, required: false }
+    - { key: webhook_secret, label: "Check value (only if you point the bot at Taskiem by hand; Taskiem uses its own otherwise)", help: "1 to 256 letters, digits, _ or -. Leave it empty: Taskiem connects the bot itself when a published workflow starts on its messages.", secret: true, required: false }
   test: { action: get_me }
 # Telegram's FAQ: about 30 messages a second across chats, one a second per chat.
 rate_limit: { requests: 30, per: 1s, scope: connection }
@@ -157,17 +157,19 @@ actions:
       properties:
         file_id: { type: string, description: "The update's file id (trigger.body.message.voice.file_id, .audio, .document, the last of .photo)" }
         name:    { type: string, description: A file name to keep it under }
+        sender:  { type: string, description: "Who sent it (trigger.body.message.chat.id or .from.id): erasing that id deletes the file too" }
     output:
       type: object
       properties:
         file: { type: object, description: "The run file's reference: file, name, type, size, sha256" }
     pii:
+      - { field: sender, category: other }
       - { field: output.file.name, category: other }
   send_voice:
     title: Send a voice message
     description: >-
       A run file's reference (uploaded with the message), a file_id or a
-      URL. OGG/Opus, MP3 or M4A, shown as a voice message. Not idempotent,
+      URL. OGG/Opus (Vorbis is refused), MP3 or M4A, shown as a voice message. Not idempotent,
       like send_message.
     class: unsafe_write
     # A duplicate is a duplicate chat message: a step may ask for a lost

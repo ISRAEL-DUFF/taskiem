@@ -10,6 +10,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/effects"
+	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/runfiles"
 )
 
@@ -76,8 +77,13 @@ func (c *client) getFile(ctx context.Context, req connector.Request) (connector.
 	if name == "" {
 		name = "telegram-" + path[strings.LastIndex(path, "/")+1:]
 	}
-	// What a customer sent: scanned and kept as personal data.
-	ref, err := req.Files.Put(ctx, name, data, true)
+	// What a customer sent: scanned, kept as personal data, and tied to
+	// the sender so erasing them deletes it.
+	var about []connector.FileSubject
+	if who := strings.TrimSpace(str(req.Input, "sender")); who != "" {
+		about = append(about, connector.FileSubject{Category: "other", Value: who})
+	}
+	ref, err := req.Files.Put(ctx, name, data, true, about...)
 	if err != nil {
 		return connector.Response{}, runfiles.ActionError(err)
 	}
@@ -119,6 +125,10 @@ func (c *client) sendSound(method, field string, types []string) func(context.Co
 			}
 			if !ok {
 				return connector.Response{}, fmt.Errorf("telegram: %s takes %s, not %s: %w", method, strings.Join(types, ", "), ctype, effects.ErrFatal)
+			}
+			// Telegram plays an Ogg voice message only if it holds Opus.
+			if method == "sendVoice" && strings.HasPrefix(ctype, "audio/ogg") && !media.IsOpus(data) {
+				return connector.Response{}, fmt.Errorf("telegram: a voice message in Ogg must be Opus audio: %w", effects.ErrFatal)
 			}
 			name, _ := ref["name"].(string)
 			part = &connector.FilePart{Field: field, Name: name, Type: ctype, Data: data}

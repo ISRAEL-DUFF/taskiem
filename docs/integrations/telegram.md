@@ -13,7 +13,7 @@ The connector is `connectors/telegram` (`telegram@1`). It uses the Telegram Bot 
 | Field | |
 | --- | --- |
 | `bot_token` | The token from BotFather. The connection test calls `get_me` |
-| `webhook_secret` | Needed to receive updates. Choose 1 to 256 characters from `A-Z a-z 0-9 _ -`. `set_webhook` sends it to Telegram as `secret_token`, and every delivery must carry it |
+| `webhook_secret` | Shown as "Check value". Optional: Taskiem sets the bot's webhook with its own secret while a published workflow starts on its messages. Needed only for a webhook set by hand. Choose 1 to 256 characters from `A-Z a-z 0-9 _ -`. `set_webhook` sends it to Telegram as `secret_token`, and every delivery must carry it |
 
 ## Actions
 
@@ -29,8 +29,8 @@ The connector is `connectors/telegram` (`telegram@1`). It uses the Telegram Bot 
 | `set_webhook` | `setWebhook` | idempotent write | Always sends `secret_token` = the connection's `webhook_secret` |
 | `delete_webhook` | `deleteWebhook` | idempotent write | |
 | `get_webhook_info` | `getWebhookInfo` | read | Shows `pending_update_count` and the last delivery error |
-| `get_file` | `getFile`, then the file | read | A file from an update kept as a person's run file (scanned, personal), up to a bot's 20 MB; the run gets its reference |
-| `send_voice` | `sendVoice` | unsafe write | A run file (uploaded with the message), or a `voice` file_id or URL. OGG/Opus, MP3 or M4A |
+| `get_file` | `getFile`, then the file | read | A file from an update kept as a person's run file (scanned, personal, under a neutral name), up to a bot's 20 MB; the run gets its reference. `sender` (the chat or user id) ties the file to that person, so erasing them deletes it |
+| `send_voice` | `sendVoice` | unsafe write | A run file (uploaded with the message), or a `voice` file_id or URL. OGG/Opus (an Ogg file that does not hold Opus, such as Vorbis, is refused: Telegram would not play it), MP3 or M4A |
 | `send_audio` | `sendAudio` | unsafe write | A run file, or an `audio` file_id or URL. MP3 or M4A |
 | `send_chat_action` | `sendChatAction` | idempotent write | `typing` (default) or `record_voice`, for up to 5 seconds or until the bot sends |
 

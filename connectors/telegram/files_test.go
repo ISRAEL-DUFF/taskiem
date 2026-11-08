@@ -9,9 +9,11 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/effects"
+	"github.com/israel-duff/taskiem/engine/media/mediatest"
 	"github.com/israel-duff/taskiem/engine/runfiles/runfilestest"
 )
 
@@ -90,11 +92,15 @@ func (b *botAPI) call(action string, in map[string]any, files connector.Files) (
 func TestGetFileKeepsTheVoiceNote(t *testing.T) {
 	b := newBot(t)
 	fs := runfilestest.NewFiles()
-	r, err := b.call("get_file", map[string]any{"file_id": "f1"}, fs)
+	r, err := b.call("get_file", map[string]any{"file_id": "f1", "sender": "42"}, fs)
 	if err != nil {
 		t.Fatal(err)
 	}
 	ref := r.Output.(map[string]any)["file"].(map[string]any)
+	// Tied to whoever sent it, so erasing them deletes it.
+	if who := fs.About(ref["file"].(string)); who.Category != "other" || who.Value != "42" {
+		t.Fatalf("about %v", who)
+	}
 	kept, personal := fs.Kept(ref["file"].(string))
 	if string(kept) != string(b.voice) || !personal || ref["name"] != "telegram-file_7.oga" {
 		t.Fatalf("kept %q personal %v ref %v", kept, personal, ref)
@@ -130,12 +136,13 @@ func TestGetFileRefusals(t *testing.T) {
 func TestSendVoiceFromARunFile(t *testing.T) {
 	b := newBot(t)
 	fs := runfilestest.NewFiles()
-	ref, _ := fs.Put(context.Background(), "reply.ogg", []byte("OggS spoken reply"), false)
+	spoken := mediatest.OggOpus(3 * time.Second)
+	ref, _ := fs.Put(context.Background(), "reply.ogg", spoken, false)
 	r, err := b.call("send_voice", map[string]any{"chat_id": 42, "file": ref, "reply_to_message_id": 5}, fs)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(b.upload) != "OggS spoken reply" || b.upName != "voice:reply.ogg" || b.form["chat_id"] != "42" {
+	if string(b.upload) != string(spoken) || b.upName != "voice:reply.ogg" || b.form["chat_id"] != "42" {
 		t.Fatalf("uploaded %q as %q with %v", b.upload, b.upName, b.form)
 	}
 	if r.Output.(map[string]any)["message_id"] == nil {
@@ -146,10 +153,12 @@ func TestSendVoiceFromARunFile(t *testing.T) {
 		t.Fatalf("by file_id: %v %v", err, b.lastJSON)
 	}
 	pdf, _ := fs.Put(context.Background(), "a.pdf", []byte("%PDF-1.4"), false)
+	vorbis, _ := fs.Put(context.Background(), "v.ogg", mediatest.OggVorbis(), false)
 	for name, in := range map[string]map[string]any{
-		"a PDF as voice": {"chat_id": 42, "file": pdf},
-		"two sources":    {"chat_id": 42, "file": ref, "voice": "x"},
-		"no source":      {"chat_id": 42},
+		"a PDF as voice":  {"chat_id": 42, "file": pdf},
+		"Vorbis as voice": {"chat_id": 42, "file": vorbis},
+		"two sources":     {"chat_id": 42, "file": ref, "voice": "x"},
+		"no source":       {"chat_id": 42},
 	} {
 		if _, err := b.call("send_voice", in, fs); !errors.Is(err, effects.ErrFatal) {
 			t.Errorf("%s: want a fatal refusal, got %v", name, err)

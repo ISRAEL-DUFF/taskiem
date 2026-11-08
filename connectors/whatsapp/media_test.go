@@ -1,8 +1,6 @@
 package whatsapp
 
 import (
-	"time"
-
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -13,11 +11,11 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"github.com/israel-duff/taskiem/engine/media/mediatest"
+	"time"
 
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/effects"
+	"github.com/israel-duff/taskiem/engine/media/mediatest"
 	"github.com/israel-duff/taskiem/engine/runfiles/runfilestest"
 )
 
