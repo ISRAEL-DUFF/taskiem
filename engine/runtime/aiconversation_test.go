@@ -108,6 +108,12 @@ func TestAIStepConversation(t *testing.T) {
 	if n := len(fake.Requests()[0].Messages); n != 51 {
 		t.Fatalf("%d messages sent, want 50 turns and the question", n)
 	}
+	// Only the last 50 are kept with the scheduled step, too.
+	for _, ev := range events(t, e, ref) {
+		if ev.Type == history.StepScheduled && ev.StepID == "reply" && strings.Count(string(ev.Payload), `"role"`) > 50 {
+			t.Fatalf("the whole conversation was kept: %d turns", strings.Count(string(ev.Payload), `"role"`))
+		}
+	}
 
 	// A history that is not a list of turns fails the step plainly.
 	e.AI = &ai.Fake{Script: []ai.Response{aiAnswer(`{"reply":"ok"}`)}}

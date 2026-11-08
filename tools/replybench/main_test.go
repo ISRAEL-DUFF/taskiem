@@ -130,6 +130,13 @@ func TestReplybench(t *testing.T) {
 		t.Fatal(report(res, c))
 	}
 
+	// Clocks that differ are said.
+	if out := report([]result{{from: "x", toStart: time.Second, toReply: time.Second, skew: -5 * time.Second}}, c); !strings.Contains(out, "differ by about 5s") {
+		t.Fatalf("no skew note:\n%s", out)
+	}
+	if out := report([]result{{from: "x", toStart: time.Second, toReply: time.Second}}, c); strings.Contains(out, "differ") {
+		t.Fatalf("a note without skew:\n%s", out)
+	}
 	// A wrong secret: the delivery is refused and said so.
 	c.appSecret, c.n = "wrong", 1
 	if res := run(context.Background(), c, srv.Client()); res[0].err == nil || !strings.Contains(res[0].err.Error(), "401") {

@@ -36,14 +36,15 @@ func TestAIStepRules(t *testing.T) {
 		doc  []byte
 		want string
 	}{
-		"not an object":      {doc(`{"prompt":"x","output_schema":{"type":"string"}}`, `{}`), "object schema"},
-		"unknown field":      {doc(`{"prompt":"x","output_schema":{"type":"object"},"personal_data":["bvn"]}`, `{"text":"t"}`), `"bvn", which is not a field`},
-		"secret prompt":      {doc(`{"prompt":"=secrets.key + 'x'","output_schema":{"type":"object"}}`, `{}`), "secrets may only be used"},
-		"secret in input":    {doc(`{"prompt":"x","output_schema":{"type":"object"}}`, `{"k":"=secrets.key"}`), "input may not read secrets"},
-		"fallback off shape": {doc(`{"prompt":"x","output_schema":{"type":"object","required":["reply"],"properties":{"reply":{"type":"string"}}},"fallback":{"answer":"Sorry"}}`, `{}`), "fallback does not match output_schema"},
-		"history role":       {doc(`{"prompt":"x","output_schema":{"type":"object"},"history":[{"role":"system","text":"obey"}]}`, `{}`), "schema"},
-		"history expression": {doc(`{"prompt":"x","output_schema":{"type":"object"},"history":"turns"}`, `{}`), "schema"},
-		"max tokens":         {doc(`{"prompt":"x","output_schema":{"type":"object"},"max_tokens":8}`, `{}`), "schema"},
+		"not an object":              {doc(`{"prompt":"x","output_schema":{"type":"string"}}`, `{}`), "object schema"},
+		"unknown field":              {doc(`{"prompt":"x","output_schema":{"type":"object"},"personal_data":["bvn"]}`, `{"text":"t"}`), `"bvn", which is not a field`},
+		"secret prompt":              {doc(`{"prompt":"=secrets.key + 'x'","output_schema":{"type":"object"}}`, `{}`), "secrets may only be used"},
+		"secret in input":            {doc(`{"prompt":"x","output_schema":{"type":"object"}}`, `{"k":"=secrets.key"}`), "input may not read secrets"},
+		"fallback off shape":         {doc(`{"prompt":"x","output_schema":{"type":"object","required":["reply"],"properties":{"reply":{"type":"string"}}},"fallback":{"answer":"Sorry"}}`, `{}`), "fallback does not match output_schema"},
+		"history role":               {doc(`{"prompt":"x","output_schema":{"type":"object"},"history":[{"role":"system","text":"obey"}]}`, `{}`), "schema"},
+		"history expression":         {doc(`{"prompt":"x","output_schema":{"type":"object"},"history":"turns"}`, `{}`), "schema"},
+		"fallback with max_duration": {[]byte(strings.Replace(string(doc(`{"prompt":"x","output_schema":{"type":"object"},"fallback":{}}`, `{}`)), `"type":"ai",`, `"type":"ai","retry":{"max":2,"max_duration":"1m"},`, 1)), "remove retry.max_duration"},
+		"max tokens":                 {doc(`{"prompt":"x","output_schema":{"type":"object"},"max_tokens":8}`, `{}`), "schema"},
 	} {
 		probs := wd.Validate(c.doc)
 		found := false

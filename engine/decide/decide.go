@@ -1347,6 +1347,11 @@ func (d *decider) taskPayload(s *wd.Step, inst string, act map[string]any) (hist
 				if err = json.Unmarshal(part.raw, &v); err == nil {
 					q[part.key], err = engine.Resolve(v, act, true)
 				}
+				// Only the last turns are sent: only they are kept with
+				// the scheduled step, however long the conversation.
+				if list, ok := q[part.key].([]any); ok && part.key == "history" && len(list) > wd.AIMaxHistory {
+					q[part.key] = list[len(list)-wd.AIMaxHistory:]
+				}
 			}
 		}
 		p.Input = q

@@ -174,7 +174,7 @@ function PlanLimits() {
   return (
     <section className="card">
       <h2 style={{ marginTop: 0 }}>Plan limits</h2>
-      <p className="hint">Set by your operator; 0 means no limit. Above the ingest rate deliveries are still accepted and their runs queued.</p>
+      <p className="hint">Set by your operator; 0 means no limit, except where a row says 0 turns something off. Above the ingest rate deliveries are still accepted and their runs queued.</p>
       <table>
         <thead>
           <tr>
@@ -665,7 +665,7 @@ function Governance() {
                 ai.data.retention ? `What the provider keeps: ${ai.data.retention}.` : "This deployment has not stated what the provider keeps; ask its operator."
               }`
             : "This deployment has no AI model, so AI steps cannot run."}
-          {ai.data.enabled && !ai.data.steps_plan && " Your plan does not include AI."}
+          {ai.data.enabled && !ai.data.steps_plan && " Your plan has no allowance for AI steps."}
         </p>
       )}
       <h2>Retention</h2>

@@ -347,6 +347,18 @@ V1 and V2 were reviewed for gaps before V3; 21 were found and all are fixed on t
 - Measure: time from webhook to reply, text and voice, on staging with real providers, and a capacity run with many conversations at once; record both in `docs/performance.md` (A10, R8, L9).
 - Each wd/v1 change through schema, Go, SDK, read-back, checks, builder rules and canvas, with replay tests (E1).
 
+
+#### Review of V4 (2026-11-08)
+
+| Found | Fix |
+| --- | --- |
+| A step with a fallback and `retry.max_duration` could give up before its last attempt, leaving the customer with nothing | Saving refuses the pair |
+| A long `history` was kept whole with the scheduled step, though only the last 50 turns are sent | The decider keeps only the last 50 |
+| Billing showed a plan with AI steps off (allowance 0) as unlimited | No meter for a limit whose 0 turns it off; Settings' plan-limits note says 0 can mean off |
+| Settings still said "Your plan does not include AI" for AI steps | "Your plan has no allowance for AI steps" |
+| `replybench` mixed this machine's clock with the server's | It estimates the difference from the server's `Date` header and says when it is over two seconds |
+| Turns read from a table (V5) are masked only where the run already knows the value as personal (A5) | For V5: the conversations table's columns are personal, so what they hold is sealed and known |
+
 ### V5. Memory and the conversations table
 
 - Known table `conversations`: conversation key, channel, sender, role, text (personal), language, created_at (M2, M5).

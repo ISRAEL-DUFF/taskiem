@@ -196,6 +196,8 @@ go run ./tools/replybench -url https://staging... -tenant <id> -app-secret "$MET
 
 The many-at-once run uses made-up senders, so many conversations are in flight, and replies Meta would refuse go to a fake. The two single runs use one test number, which Meta's test app may reply to, one message at a time (`-from`).
 
+"Delivery to run start" compares the measuring machine's clock with the server's. The tool estimates the difference from the server's `Date` header and says when it is over two seconds; "run start to reply" uses the server's clock only.
+
 For each run, record the date, the commit, the model and speech services, the workflow, and the three spans. The step timings in the run's page and `taskiem_step_duration_seconds`, `taskiem_speech_duration_seconds` and `taskiem_file_scan_seconds` say where the time went.
 
 **What the code already does for the wait:**

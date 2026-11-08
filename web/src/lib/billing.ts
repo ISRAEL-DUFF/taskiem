@@ -144,8 +144,11 @@ const meterDefs: [key: string, label: string, used: (u: BillingOverview["usage"]
 ];
 
 /** Usage against the plan's limits, one meter per counted limit. */
+/** Limits whose 0 turns the thing off rather than lifting the limit: no meter is shown for them then. */
+const zeroIsOff = new Set(["ai_step_monthly_tokens"]);
+
 export function meters(limits: Record<string, number>, usage: BillingOverview["usage"]): Meter[] {
-  return meterDefs.map(([key, label, used]) => {
+  return meterDefs.filter(([key]) => !(zeroIsOff.has(key) && (limits[key] ?? 0) === 0)).map(([key, label, used]) => {
     const limit = limits[key] ?? 0;
     const n = used(usage);
     const fraction = limit > 0 ? Math.min(n / limit, 1) : null;

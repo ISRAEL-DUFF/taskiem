@@ -66,6 +66,12 @@ func checkAI(d *Definition) []Problem {
 				add("history: %v", err)
 			}
 		}
+		if len(s.AI.Fallback) > 0 && s.Retry != nil && s.Retry.MaxDuration != "" {
+			// The fallback is used on the last attempt by count; a retry
+			// budget in time can give up before it, leaving the customer
+			// with nothing.
+			add("an ai step with a fallback counts its attempts (retry.max); remove retry.max_duration")
+		}
 		if len(s.AI.Fallback) > 0 {
 			var f any
 			_ = json.Unmarshal(s.AI.Fallback, &f)

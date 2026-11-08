@@ -96,6 +96,7 @@ type result struct {
 	from             string
 	sent             time.Time
 	toStart, toReply time.Duration
+	skew             time.Duration // the server's clock less this machine's, from its Date header
 	err              error
 }
 
@@ -145,6 +146,11 @@ func one(ctx context.Context, c config, hc *http.Client, from string, i int) res
 	}
 	_, _ = io.Copy(io.Discard, resp.Body)
 	_ = resp.Body.Close()
+	// Delivery to start compares this machine's clock with the server's
+	// (the run's started_at): say so when they differ.
+	if d, err := http.ParseTime(resp.Header.Get("Date")); err == nil {
+		r.skew = d.Sub(r.sent.Add(time.Since(r.sent) / 2)).Round(time.Second)
+	}
 	if resp.StatusCode/100 != 2 {
 		r.err = fmt.Errorf("the delivery was answered %s", resp.Status)
 		return r
@@ -267,6 +273,7 @@ func report(res []result, c config) string {
 	var start, reply, total []time.Duration
 	failed := 0
 	var b strings.Builder
+	var worst time.Duration
 	for _, r := range res {
 		if r.err != nil {
 			failed++
@@ -274,6 +281,7 @@ func report(res []result, c config) string {
 			continue
 		}
 		start, reply, total = append(start, r.toStart), append(reply, r.toReply), append(total, r.toStart+r.toReply)
+		worst = max(worst, r.skew, -r.skew)
 	}
 	head := fmt.Sprintf("%d %s messages, %d at once: %d answered, %d not\n", len(res), kind, c.concurrency, len(total), failed)
 	line := func(name string, ds []time.Duration) string {
@@ -283,7 +291,11 @@ func report(res []result, c config) string {
 		sort.Slice(ds, func(i, j int) bool { return ds[i] < ds[j] })
 		return fmt.Sprintf("  %-22s p50 %8s  p95 %8s  max %8s\n", name, pct(ds, 50), pct(ds, 95), ds[len(ds)-1].Round(time.Millisecond))
 	}
-	return head + line("delivery to run start", start) + line("run start to reply", reply) + line("delivery to reply", total) + b.String()
+	warn := ""
+	if worst > 2*time.Second {
+		warn = fmt.Sprintf("  note: this machine's clock and the server's differ by about %s, so \"delivery to run start\" and \"delivery to reply\" are off by as much; \"run start to reply\" is the server's own\n", worst)
+	}
+	return head + line("delivery to run start", start) + line("run start to reply", reply) + line("delivery to reply", total) + warn + b.String()
 }
 
 func pct(sorted []time.Duration, p int) time.Duration {
