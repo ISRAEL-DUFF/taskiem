@@ -99,7 +99,7 @@ for (const [size, viewport] of [
     await sheet.getByRole("button", { name: /Rice, 50kg bag/ }).click();
     await expect(sheet.getByRole("heading", { name: "Rice, 50kg bag" })).toBeVisible();
     await expect(sheet.getByRole("switch", { name: "Show on your storefront" })).toHaveAttribute("aria-checked", "true");
-    await expect(sheet.getByRole("button", { name: "Add a photo" })).toBeVisible();
+    await expect(sheet.getByRole("group", { name: "Add a photo" })).toBeVisible();
     await axeBoth(owner, "a product's form");
     // Esc steps back to the list, then closes.
     await owner.keyboard.press("Escape");

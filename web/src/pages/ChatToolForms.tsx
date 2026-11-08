@@ -1,15 +1,12 @@
-import { useRef, useState, type ReactNode } from "react";
-import { tileLetters, toneOf } from "../lib/tone";
+import { useState, type ReactNode } from "react";
+import { del, get, patch, post, postOnce, put, sendWith } from "../api";
 import {
-  del,
-  get,
-  patch,
-  post,
-  postOnce,
-  put,
-  sendWith,
-  uploadFile,
-} from "../api";
+  PendingPhotos,
+  PhotoFailures,
+  ProductPhotos,
+  sendAll,
+} from "./ProductPhotos";
+import type { PhotoPick } from "../lib/photos";
 import { useConfirm } from "./ConfirmSheet";
 import { KitEmpty, KitField, KitLoading, Pill } from "../kit";
 import { serviceRow } from "../lib/bookings";
@@ -26,12 +23,7 @@ import type { BusinessLink } from "../lib/links";
 import { useAuth } from "../auth";
 import { quantity, type StockItem, type StockView } from "../lib/stock";
 import { categoriesOf } from "../lib/mentions";
-import {
-  formatPrice,
-  imageProblem,
-  thumb,
-  type Catalogue,
-} from "../lib/storefront";
+import { formatPrice, type Storefront } from "../lib/storefront";
 import { cellText, cellValue, type Row, type Table } from "../lib/tables";
 import type { TradeOrder } from "../lib/tradeorders";
 import {
@@ -221,74 +213,6 @@ function Switch({
   );
 }
 
-/** A product's photos: the first, and one added. */
-function Photos({ item, canEdit }: { item: StockItem; canEdit: boolean }) {
-  const cat = useLoad(
-    () => get<Catalogue>("/v1/storefront/catalogue").catch(() => null),
-    [],
-  );
-  const pick = useRef<HTMLInputElement>(null);
-  const [error, setError] = useState<unknown>();
-  const [busy, setBusy] = useState(false);
-  const it = cat.data?.items.find((x) => x.id === item.id);
-  const shots = [it?.photo, ...(it?.gallery ?? [])].filter(Boolean).slice(0, 3);
-  return (
-    <div className="tk-photos">
-      {shots.map((p, i) => (
-        <img
-          key={i}
-          src={thumb(p)}
-          alt={i === 0 ? `${item.name}, its photo` : ""}
-        />
-      ))}
-      {shots.length === 0 && (
-        <span
-          className="tk-photo-none"
-          aria-hidden="true"
-          data-tone={toneOf(item.name)}
-        >
-          {tileLetters(item.name)}
-        </span>
-      )}
-      {canEdit && (
-        <>
-          <button
-            type="button"
-            className="tk-photo-add"
-            aria-label="Add a photo"
-            disabled={busy}
-            onClick={() => pick.current?.click()}
-          >
-            +
-          </button>
-          <input
-            ref={pick}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            hidden
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              e.target.value = "";
-              if (!file) return;
-              const bad = imageProblem(file);
-              if (bad) return setError(new Error(bad));
-              setBusy(true);
-              uploadFile(
-                `/v1/storefront/catalogue/rows/${encodeURIComponent(item.id)}/photo${shots.length ? "?add=1" : ""}`,
-                file,
-              )
-                .then(() => post("/v1/storefront/catalogue/refresh"))
-                .then(() => cat.reload(), setError)
-                .finally(() => setBusy(false));
-            }}
-          />
-        </>
-      )}
-      <ErrorBox error={error} />
-    </div>
-  );
-}
-
 /** A product's category (docs/spec/chat-categories-and-variants.md): any
  * word the owner types, with the categories already used offered as chips
  * ("Sneakers · 48"), so spellings don't drift. */
@@ -317,7 +241,10 @@ function CategoryField({
     .slice(0, 6);
   return (
     <div className="tk-category">
-      <KitField label="Category" hint="Sneakers, Soft drinks… Search and the chips use it.">
+      <KitField
+        label="Category"
+        hint="Sneakers, Soft drinks… Search and the chips use it."
+      >
         <input
           value={value}
           maxLength={60}
@@ -402,8 +329,7 @@ export function ProductForm({
       listFor(lists.data, item.id, link));
   const onList = chosen?.items.find((x) => x.item_id === item.id);
   const [tradePrice, setTradePrice] = useState<string | null>(null);
-  const tradeShown =
-    tradePrice ?? (onList ? nairaText(onList.price_kobo) : "");
+  const tradeShown = tradePrice ?? (onList ? nairaText(onList.price_kobo) : "");
   const tradeKobo = nairaKobo(tradeShown);
   const [share, setShare] = useState<string[] | null>(null);
   const sharing = share ?? chosen?.links ?? [];
@@ -428,7 +354,8 @@ export function ProductForm({
       change.price_kobo = kobo;
     if (name.trim() && name.trim() !== item.name) change.name = name.trim();
     if (shown !== item.available) change.available = shown;
-    if (category.trim() !== (item.category ?? "")) change.category = category.trim();
+    if (category.trim() !== (item.category ?? ""))
+      change.category = category.trim();
     if (Object.keys(change).length) {
       await patch(`/v1/stock/items/${encodeURIComponent(item.id)}`, change);
       said.push("Saved");
@@ -459,7 +386,10 @@ export function ProductForm({
       !Number.isNaN(floorKobo) &&
       floorKobo !== (floorWas ?? 0)
     ) {
-      await put("/v1/trade-floors", { item_id: item.id, floor_kobo: floorKobo });
+      await put("/v1/trade-floors", {
+        item_id: item.id,
+        floor_kobo: floorKobo,
+      });
       said.push("Lowest price set");
     }
     if (count !== null && count !== item.stock) {
@@ -486,9 +416,13 @@ export function ProductForm({
         !Number.isNaN(floorKobo)
       }
     >
-      <Photos item={item} canEdit={canEdit} />
+      <ProductPhotos row={item.id} name={item.name} canEdit={canEdit} />
       <KitField label="Name">
-        <input value={name} maxLength={120} onChange={(e) => setName(e.target.value)} />
+        <input
+          value={name}
+          maxLength={120}
+          onChange={(e) => setName(e.target.value)}
+        />
       </KitField>
       <CategoryField value={category} onChange={setCategory} />
       {chosen ? (
@@ -540,10 +474,13 @@ export function ProductForm({
           </div>
           {picking && (
             <fieldset className="tk-share-pick">
-              <legend className="sr-only">Who sees the {chosen.name} list</legend>
+              <legend className="sr-only">
+                Who sees the {chosen.name} list
+              </legend>
               {(linked.data ?? []).length === 0 ? (
                 <p className="tk-form-row-sub">
-                  No linked businesses yet. Link with a business to share a list.
+                  No linked businesses yet. Link with a business to share a
+                  list.
                 </p>
               ) : (
                 (linked.data ?? []).map((l) => (
@@ -619,40 +556,85 @@ export function ProductAdd({
   const [unit, setUnit] = useState("");
   const [category, setCategory] = useState("");
   const [count, setCount] = useState(0);
+  // Its photos (chat categories Part C): held until the product exists,
+  // then sent to it. One that does not go leaves the product added and
+  // the form open, to send it again.
+  const { can } = useAuth();
+  const photosOK = can("storefront.manage");
+  const [picks, setPicks] = useState<PhotoPick[]>([]);
+  const [added, setAdded] = useState<string>();
+  const [failed, setFailed] = useState<{ pick: PhotoPick; why: string }[]>([]);
   const kobo = nairaKobo(price);
   const save: Saver = async () => {
-    await postOnce("/v1/stock/items", key(), {
-      name: name.trim(),
-      price_kobo: kobo,
-      unit: unit.trim(),
-      quantity: count,
-      ...(category.trim() ? { category: category.trim() } : {}),
-    });
+    let id = added;
+    if (!id) {
+      const out = await postOnce<{ item: { id: string } }>(
+        "/v1/stock/items",
+        key(),
+        {
+          name: name.trim(),
+          price_kobo: kobo,
+          unit: unit.trim(),
+          quantity: count,
+          ...(category.trim() ? { category: category.trim() } : {}),
+        },
+      );
+      id = out.item.id;
+    }
+    const todo = added ? failed.map((f) => f.pick) : photosOK ? picks : [];
+    if (todo.length) {
+      const bad = await sendAll(
+        id,
+        todo,
+        added ? picks.length - failed.length : 0,
+      );
+      await post("/v1/storefront/catalogue/refresh").catch(() => undefined);
+      if (bad.length) {
+        setAdded(id);
+        setFailed(bad);
+        throw new Error(
+          `${name.trim()} is added, but ${bad.length === 1 ? "a photo" : `${bad.length} photos`} did not go. Press Send the photos again, or close: the product stays.`,
+        );
+      }
+    }
     return productLine(name.trim(), kobo, unit.trim() || undefined);
   };
   return (
     <FormFrame
       save={save}
       onSaved={onSaved}
-      saveWords="Add product"
+      saveWords={added ? "Send the photos again" : "Add product"}
       ready={name.trim() !== "" && kobo > 0}
     >
-      <KitField label="Name">
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Rice, 50kg bag"
-        />
-      </KitField>
-      <CategoryField value={category} onChange={setCategory} />
-      <Money label="Price" value={price} onChange={setPrice} />
-      <KitField label="Sold by the" hint="bag, carton, piece…">
-        <input value={unit} onChange={(e) => setUnit(e.target.value)} />
-      </KitField>
-      <div className="tk-form-row">
-        <span className="tk-form-row-title">In stock now</span>
-        <Stepper label="In stock now" value={count} onChange={setCount} />
-      </div>
+      {photosOK &&
+        (added ? (
+          <PhotoFailures failed={failed} onRetry={() => undefined} hideRetry />
+        ) : (
+          <PendingPhotos picks={picks} onChange={setPicks} />
+        ))}
+      {added ? (
+        // Added: what is left is its photos, said above; nothing else to change here.
+        <p className="tk-form-now">{name.trim()} is in your products.</p>
+      ) : (
+        <>
+          <KitField label="Name">
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Rice, 50kg bag"
+            />
+          </KitField>
+          <CategoryField value={category} onChange={setCategory} />
+          <Money label="Price" value={price} onChange={setPrice} />
+          <KitField label="Sold by the" hint="bag, carton, piece…">
+            <input value={unit} onChange={(e) => setUnit(e.target.value)} />
+          </KitField>
+          <div className="tk-form-row">
+            <span className="tk-form-row-title">In stock now</span>
+            <Stepper label="In stock now" value={count} onChange={setCount} />
+          </div>
+        </>
+      )}
     </FormFrame>
   );
 }
@@ -1026,13 +1008,34 @@ export function TableTool({
   );
   const [editing, setEditing] = useState<Row | "new">();
   const [values, setValues] = useState<Record<string, string>>({});
+  // The shop's products table: its photo column takes photos (the camera,
+  // the device, a link), not a web address typed as text (chat categories
+  // Part C). It is the storefront's to write, so it is left out of the row.
+  const { can } = useAuth();
+  const shop = useLoad(
+    () => get<Storefront>("/v1/storefront").catch(() => null),
+    [],
+  );
+  const photoCol =
+    shop.data?.catalogue_table === table.id
+      ? shop.data.catalogue_columns.photo
+      : undefined;
+  const nameCol =
+    shop.data?.catalogue_table === table.id
+      ? shop.data.catalogue_columns.name
+      : undefined;
+  const [picks, setPicks] = useState<PhotoPick[]>([]);
+  const [addedRow, setAddedRow] = useState<string>();
+  const [failed, setFailed] = useState<{ pick: PhotoPick; why: string }[]>([]);
   const cols = table.columns.slice(0, 3);
   const title = table.title || table.name;
   if (editing) {
     const row = editing === "new" ? undefined : editing;
+    const photosOK = !!photoCol && can("storefront.manage");
     const save: Saver = async () => {
       const set = Object.fromEntries(
         table.columns
+          .filter((c) => c.name !== photoCol)
           .filter(
             (c) =>
               (values[c.name] ?? "") !== (row ? cellText(row[c.name]) : ""),
@@ -1047,9 +1050,31 @@ export function TableTool({
         );
         return `${title}: a row changed`;
       }
-      await toolPost(`/v1/tables/${encodeURIComponent(table.id)}/rows`, {
-        row: set,
-      });
+      let id = addedRow;
+      if (!id) {
+        const out = await toolPost<{ rows?: Row[] }>(
+          `/v1/tables/${encodeURIComponent(table.id)}/rows`,
+          { row: set },
+        );
+        id =
+          out.rows?.[0]?.id !== undefined ? String(out.rows[0].id) : undefined;
+      }
+      const todo = addedRow ? failed.map((f) => f.pick) : photosOK ? picks : [];
+      if (id && todo.length) {
+        const bad = await sendAll(
+          id,
+          todo,
+          addedRow ? picks.length - failed.length : 0,
+        );
+        await post("/v1/storefront/catalogue/refresh").catch(() => undefined);
+        if (bad.length) {
+          setAddedRow(id);
+          setFailed(bad);
+          throw new Error(
+            `The row is added, but ${bad.length === 1 ? "a photo" : `${bad.length} photos`} did not go. Press Send the photos again, or close: the row stays.`,
+          );
+        }
+      }
       return `${title}: a row added`;
     };
     const missing =
@@ -1061,23 +1086,50 @@ export function TableTool({
       <FormFrame
         save={save}
         onSaved={onSaved}
-        saveWords={row ? "Save" : "Add the row"}
+        saveWords={
+          row ? "Save" : addedRow ? "Send the photos again" : "Add the row"
+        }
         ready={!missing}
         canEdit={canEdit}
       >
-        {table.columns.map((c) => (
-          <KitField
-            key={c.name}
-            label={`${c.title || c.name}${c.required ? "" : " (optional)"}`}
-          >
-            <input
-              value={values[c.name] ?? ""}
-              onChange={(e) =>
-                setValues({ ...values, [c.name]: e.target.value })
-              }
-            />
-          </KitField>
-        ))}
+        {table.columns.map((c) =>
+          c.name === photoCol ? (
+            <div key={c.name} className="tk-field">
+              <span className="tk-field-label">{c.title || c.name}</span>
+              {!photosOK ? (
+                <p className="hint">
+                  Photos are added by whoever looks after the shop&apos;s page.
+                </p>
+              ) : row ? (
+                <ProductPhotos
+                  row={String(row.id)}
+                  name={(nameCol && values[nameCol]) || "this product"}
+                  canEdit={canEdit}
+                />
+              ) : addedRow ? (
+                <PhotoFailures
+                  failed={failed}
+                  onRetry={() => undefined}
+                  hideRetry
+                />
+              ) : (
+                <PendingPhotos picks={picks} onChange={setPicks} />
+              )}
+            </div>
+          ) : (
+            <KitField
+              key={c.name}
+              label={`${c.title || c.name}${c.required ? "" : " (optional)"}`}
+            >
+              <input
+                value={values[c.name] ?? ""}
+                onChange={(e) =>
+                  setValues({ ...values, [c.name]: e.target.value })
+                }
+              />
+            </KitField>
+          ),
+        )}
       </FormFrame>
     );
   }
@@ -1089,6 +1141,9 @@ export function TableTool({
             table.columns.map((c) => [c.name, cellText(r[c.name])]),
           ),
     );
+    setPicks([]);
+    setAddedRow(undefined);
+    setFailed([]);
     setEditing(r);
   };
   return (

@@ -1,7 +1,7 @@
 # Chat: product categories and variants
 
-Status: **phase 1 (categories) built**; phases 2 to 5 are the plan (8 November 2026;
-photos, Part C and phase 2, added the same day).
+Status: **phases 1 (categories) and 2 (photos) built**; phases 3 to 5 are the plan
+(8 November 2026; photos, Part C and phase 2, added the same day).
 Written with the founder; the live doc is [the shared plan](https://claude.ai/artifact/HA9Y7M1vLM4PprjoyRidaX),
 and this file is its copy beside the code. What phase 1 built, and where it differs
 from the plan, is in [As built: phase 1](#as-built-phase-1-categories).
@@ -268,3 +268,43 @@ Migration `00408_item_categories.sql`; `api/stock.go`, `api/whatsapp_stock.go`,
   chat tool forms, sheets and order sheet in `plainwords.test.ts`;
   `e2e/chat-categories.spec.ts` at 390 and 360 px in both themes with axe,
   including staff who may not order.
+
+## As built: phase 2 (photos)
+
+`api/storefront_photo_link.go` and `storeStorefrontImage` in `api/storefront.go`; on
+the web `src/lib/photos.ts`, `PhotoAdd.tsx`, `ProductPhotos.tsx`, `CameraSheet.tsx`
+(a `facing` choice) and the product forms and Tables tool in `ChatToolForms.tsx`.
+
+- **A photo from a link.** `POST /v1/storefront/catalogue/rows/{row}/photo` also takes
+  `{"url": "…"}`. The picture is fetched once through the egress guard (purpose
+  `photo_link`: http or https, the link's own host only, never a private address, so no
+  redirect to one; 15 s; the upload limit enforced while reading), decided to be a
+  picture by its bytes, kept as the business's media like any upload, and the audit's
+  `storefront.media_add` says where it came from. Answers: "paste a link that starts
+  with https://", "that link is a page, not a picture: open the picture itself and copy
+  its address", "we could not open that link (it answered 404)", "that link is not a
+  picture we can use"; 409 where this deployment fetches nothing.
+- **"Add a photo"**, one group of three buttons wherever a product's photo is set in
+  the chat: *Take a photo* (the camera app on a phone, the webcam on a computer, the
+  back camera where there are two), *From your phone* (or computer; several at once)
+  and *Paste a link* (checked before it is held).
+- **Made small first.** A photo larger than 1600 px on its longest side, or over
+  1.5 MB, is drawn again as a JPEG at 1600 px before it is sent; one the browser cannot
+  draw goes as it is, for the server to check.
+- **Add product** holds the photos chosen, shown with Remove, and sends them once the
+  product exists, the first as its main photo. One that does not go leaves the product
+  added and the form open, listing which photo and why, with *Send the photos again*
+  (the product is never added twice).
+- **The product form** shows the photos with *Make main* and *Remove*, and the three
+  ways to add one, up to the storefront's limit (a main photo and 5 more).
+- **The Tables tool**, on the shop's products table, shows the photo column as the
+  product's photos and the three ways (a new row's photos sent once the row exists);
+  it is no longer a text box, and the row is never written with a photo as text.
+- **Who may:** changing photos needs `storefront.manage`, as on the storefront page;
+  someone without it is told who adds photos.
+- **Tests.** Go: `api/storefront_photo_link_test.go` (a picture, kept and audited; one
+  with no Content-Type; a page; a missing picture; not a picture; a private address; a
+  bad link; no fetching at all). Web: `src/lib/photos.test.ts`; `e2e/chat-photos.spec.ts`
+  at 390 and 360 px in both themes with axe (the three ways with Chromium's fake camera,
+  a large picture sent small, a photo that does not go, Make main and Remove, the Tables
+  tool's photo column).

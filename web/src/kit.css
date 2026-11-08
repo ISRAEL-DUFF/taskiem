@@ -728,3 +728,18 @@ input.tk-switch:disabled { cursor: default; opacity: 0.7; }
 /* A product's category and the ones already used (chat categories). */
 .tk-category { display: flex; flex-direction: column; gap: 8px; }
 .tk-field-chips { padding: 0; }
+/* Adding a product's photo (chat categories Part C): three ways, side by
+   side where they fit, one under the other on a narrow phone. */
+.tk-photo-ways { display: flex; flex-wrap: wrap; gap: 8px; }
+.tk-photo-ways .tk-btn { flex: 1 1 auto; min-height: 40px; padding: 0 14px; font-size: 14px; }
+.tk-photo-ways .tk-btn svg { width: 18px; height: 18px; }
+.tk-photo-link { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.tk-photo-link .tk-btn { align-self: flex-start; }
+.tk-photo-full { margin: 0; }
+.tk-product-photos { display: flex; flex-direction: column; gap: 12px; }
+.tk-product-photos .tk-photos { list-style: none; margin: 0; padding: 0; }
+.tk-photo { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.tk-photo-acts { display: flex; gap: 10px; font-size: 13px; }
+.tk-photo-linked { display: grid; place-items: center; width: 72px; height: 72px; border-radius: 14px; padding: 6px; background: var(--tk-soft); color: var(--text); font-size: 11px; font-weight: 600; text-align: center; overflow-wrap: anywhere; }
+.tk-photo-failed p { margin: 0 0 4px; }
+.tk-photo-failed ul { margin: 0 0 10px 18px; }
