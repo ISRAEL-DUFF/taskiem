@@ -105,6 +105,10 @@ export function useThread<T extends { id: string; created_at: string }>(o: {
   }, [flashId]);
 
   const hasItems = (items?.length ?? 0) > 0;
+  // Watched afresh once older ones are added: the observer tells only of a
+  // change, so a reader still at the top as a page lands (the mark never out
+  // of reach) would otherwise not be given the next.
+  const oldest = items?.[0]?.id;
   useEffect(() => {
     const mark = topMark.current;
     if (
@@ -120,7 +124,8 @@ export function useThread<T extends { id: string; created_at: string }>(o: {
     );
     io.observe(mark);
     return () => io.disconnect();
-  }, [hasOlder, hasItems, loadOlder]);
+    // The oldest is what changes when a page is added above.
+  }, [hasOlder, hasItems, loadOlder, oldest]);
 
   const onScroll = () => {
     const el = stream.current;
