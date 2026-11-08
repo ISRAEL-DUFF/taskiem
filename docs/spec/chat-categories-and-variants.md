@@ -1,7 +1,7 @@
 # Chat: product categories and variants
 
-Status: **phases 1 (categories), 2 (photos) and 3 (sizes and colours for the shop
-itself) built**; phases 4 and 5 are the plan (8 November 2026; photos, Part C and
+Status: **phases 1 (categories), 2 (photos), 3 (sizes and colours for the shop
+itself) and 4 (sizes on the storefront and in trade) built**; phase 5 is the plan (8 November 2026; photos, Part C and
 phase 2, added the same day).
 Written with the founder; the live doc is [the shared plan](https://claude.ai/artifact/HA9Y7M1vLM4PprjoyRidaX),
 and this file is its copy beside the code. What phase 1 built, and where it differs
@@ -409,3 +409,55 @@ the web `src/lib/photos.ts`, `PhotoAdd.tsx`, `ProductPhotos.tsx`, `CameraSheet.t
   Products; Sell picking 42 then black with white greyed out; the low card's grid; the
   shelf shared out as the boxes fill; own prices as recorded; a price list heading the
   sizes with their product).
+
+## As built: phase 4 (sizes on the storefront and in trade)
+
+`engine/storefront` (`Size`, `WithSizes`, `CopySizeCount`), `engine/publicweb/sizes.go`
+and the shared `choosesize` template, `engine/links` (`PriceSize`, `Flat`, `ProductOf`,
+`SizeParentsTx`, `SetListSizesTx`), migration `00410_price_list_sizes.sql`,
+`api/trade_sizes.go`; on the web `src/lib/buyer.ts`, `ChatBuyer.tsx` (`SizesQty`),
+`PriceLists.tsx`, `ChatLiveCard.tsx`, `StorefrontStock.tsx`.
+
+- **The public page.** The product is listed once and its page has a size and colour
+  pick (radios per choice, in every theme): what is off sale or has none left is struck
+  through, the price and the most that can be ordered follow the size picked, and a
+  colour's photo takes the main place. Without the script the pick still works: the
+  server turns the product's pick and quantity into the size's own line
+  (`takeSizePicks`) and prices it; a pick that is not sold is refused in words. The
+  public copy carries the sizes inside the product, and a sale updates the size's count
+  there (`CopySizeCount`). Page budgets and the CSP are unchanged.
+- **A photo per colour:** *Photo for Black* in the sizes and colours form
+  (`POST`/`DELETE /v1/stock/items/{id}/variants/photo?choice=Colour&value=Black`) sets
+  it on every size of that colour.
+- **Price lists list the product once.** A product with sizes is ticked as one row;
+  its sizes on sale go with it (`sizes` on the list's row: the choices and each size,
+  at the product's price unless it is given its own under *Prices by size*). Setting up,
+  renaming or stopping sizes keeps the lists that hold the product current. A size
+  given alone is refused (400).
+- **Ordering by grid.** The buyer's order sheet has *Choose sizes* on such a product: a
+  box per size, "36 pairs, 7 sizes" as they fill. Quantity prices and the minimum
+  count the product's sizes together, so 36 pairs are at the list price and 50 at the
+  50-pair price; each size is a line of its own in the order. Order words, the trade
+  orders page and the live card group sizes under their product ("Air Max 90: 36
+  pairs, 7 sizes"; the card's "Sizes on sale: 40 41 43…").
+- **Lowest prices** are the product's: an offer is checked against the product's
+  lowest price for each of its sizes.
+- **The buyer's own items.** The buyer's item linked to the supplier's product is
+  matched to sizes by their choices; a size the buyer does not have yet is added to
+  their product when the order is placed (with no stock), and linked. Where the
+  buyer's product has different choices the order is refused (409 `sizes_differ`); a
+  buyer's item with no sizes linked to a sized product must be set up first (409
+  `sizes_first`).
+- **The desk Stock page** groups each product's sizes after it.
+- **Where it differs from the plan:** missing sizes are added when the order is placed,
+  not when it is received; the desk supplier prices page sends a sized product to the
+  chat to order it by grid; ordering sizes from WhatsApp and Telegram is phase 5.
+- **Tests.** Go: `engine/publicweb/sizes_test.go`, `api/storefront_sizes_test.go` (the
+  pick with and without the script, a sold-out size refused, the colour photo),
+  `engine/links/deals_test.go` (`TestFlatSizes`, floors by product),
+  `api/trade_sizes_test.go` (36 pairs in 7 sizes, the 50-pair price, links made and
+  matched, floors, `sizes_first` and `sizes_differ`). Web: `src/lib/buyer.test.ts`,
+  `src/lib/purchases.test.ts`; `e2e/trade-sizes.spec.ts` at 390 and 360 px with axe
+  (the grid, the minimum, ₦1,456,000 for 36 pairs and ₦1,832,000 for 50, review and
+  place) and `e2e/chat-sizes.spec.ts` (a price list ticking the product with a size's
+  own price).

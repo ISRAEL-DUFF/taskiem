@@ -7890,7 +7890,7 @@ paths:
       tags:
       - Links
       summary: Order from a suppliers price list
-      description: 'A purchase order drafted at the lists prices (each line at least its minimum, while available), sent as any order is. Needs an Idempotency-Key. A line whose item you have not said is one of yours answers 422 with code item_unlinked and the item, unless item_id says which, which then links it.'
+      description: 'A purchase order drafted at the lists prices (each line at least its minimum, while available), sent as any order is. Needs an Idempotency-Key. A line whose item you have not said is one of yours answers 422 with code item_unlinked and the item, unless item_id says which, which then links it. A line is a size (seller_item_id is the size; item_id may be your product, whose matching size is used, or added when it has none yet). Quantity breaks and the minimum count a product''s sizes together. Your product with other choices answers 409 sizes_differ; your item without sizes linked to a sized product answers 409 sizes_first.'
       security:
       - sessionCookie: []
         csrfHeader: []
