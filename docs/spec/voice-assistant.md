@@ -1,6 +1,6 @@
 # Customer voice assistant on WhatsApp and Telegram: gaps and build plan
 
-Date: 2026-11-08 · Status: **for review; nothing built** · Owner: @EaziDeFi
+Date: 2026-11-08 · Status: **for review; decisions taken (section 4), nothing built** · Owner: @EaziDeFi
 
 *Reviewed on 2026-11-08: 32 gaps, 3 decisions and 2 people items added (marked ⊕), two sections added (3.10 knowledge, 3.11 engine, schema and rollout), milestones V2 to V8 extended and V10 added.*
 
@@ -185,8 +185,14 @@ Each gap says what is missing, the evidence, and how much it matters: **Blocker*
 | K1 ⊕ | Nothing gives the model the business's own facts: opening hours, address, prices, products, policies. The reference guide answers general questions only; a business assistant that cannot say when the shop opens is not useful | no retrieval in `engine/ai` or the `ai` step | Blocker |
 | K2 ⊕ | The facts already exist in Taskiem in several places (storefront card and hours, catalogue tables, fronts, the business's settings) but no step reads them as one "what the business is" summary | `engine/storefront`, data tables | Launch |
 | K3 ⊕ | No place for the owner to write answers to common questions (FAQ), returns policy, delivery areas | | Launch |
-| K4 ⊕ | The prompt is capped at 256 KB, and a large catalogue will not fit; no search over it to send only what matters | `maxAIQuestion` (`aistep.go:300`) | Later (a small business fits; search later) |
+| K4 ⊕ | The prompt is capped at 256 KB, and a website plus files plus a catalogue will not fit; no search to send only the passages that answer the question | `maxAIQuestion` (`aistep.go:300`) | Blocker once outside sources are in (D12): search moves into the first release |
 | K5 ⊕ | No "hand me to a person": the customer cannot ask for a human, and no member is told to take over | | Launch |
+| K6 ⊕ | No way to read the business's own website: no page fetcher for content (only verification fetches for embed sites), no HTML-to-text, no refresh. The site must be one the business has proven it owns (embed sites already verify origins by DNS or file) | `engine/embedsites` verifies origins only | Launch (D12) |
+| K7 ⊕ | No text extraction from files: `engine/pdf` writes PDFs and reads none; no DOCX or spreadsheet reading; a scanned menu needs OCR, and the `ai` step takes no images (A4) | `engine/pdf/pdf.go` | Launch (D12; OCR later) |
+| K8 ⊕ | Google Sheets can be read (`googlesheets@1` `get_values`); Google Docs and Drive files cannot (the Google connection asks only for `drive.file`, and there is no Drive or Docs connector) | `connectors/googlesheets/manifest.yaml:38` | Launch for Sheets; Drive and Docs need a connector |
+| K9 ⊕ | Connected systems: items and prices from books exist as the `books_items` capability (QuickBooks, Zoho Books); there is no connector for shop platforms (Shopify, WooCommerce, Jumia) | `schemas/capabilities-v1.json:603` | Launch for books; shop platforms later |
+| K10 ⊕ | No knowledge store: nowhere to keep what each source said as text, split into passages, with its source, when it was read, and a way to delete it; no owner review before a new or changed source is used | | Blocker (D12) |
+| K11 ⊕ | Text from outside (a website, a file) can carry instructions aimed at the model; it must be treated as quoted material, never as instructions, and checked like a customer's message | | Launch |
 
 ### 3.11 Engine, schema and rollout ⊕
 
@@ -203,17 +209,17 @@ Each gap says what is missing, the evidence, and how much it matters: **Blocker*
 | # | Decision | Options | Recommendation |
 | --- | --- | --- | --- |
 | D1 | **Which door customers come in by** (decided: own app and bot, Q2) | (a) the tenant's own `whatsapp@1`/`telegram@1` connection (own Meta app, own bot), as workflows; (b) extend Taskiem's own channel (own numbers already download media, transcribe, track the 24-hour window) with an "assistant" mode that starts a business's workflow; (c) both | (a) for the first release: it is the workflow product, it needs no Meta business verification by Taskiem (W1), and it keeps each business's number its own. Move the media, speech and window pieces out of `api/` into packages both paths use, so (b) can follow. Remove or define the dead `whatsapp` trigger (C12) |
-| D2 | **One recipe or several** | (a) a template bundle (new); (b) one entry workflow per channel, each a template, calling a callable assistant template; (c) one template per channel with the assistant inlined | (b): no new template concept, and the assistant logic is written once. Callable templates need run inputs (R2), which the shared assistant has |
-| D3 | **How a conversation continues** | (a) one run per message, memory in a table; (b) one long run per conversation waiting on the next message by `signal` | (a): a waiting run holds a `max_running_runs` slot (L2), and a run per message is simpler to see, retry and erase. Serialise per sender with `concurrency_key` |
-| D4 | **Tools** | (a) model tool calling (new in `engine/ai` and wd); (b) the model classifies the request into a fixed list, a `branch` runs the step for it, a second ai step words the reply | (b) for the first release: identity always comes from the trigger, never the model, and no step moves money because a model said so. Revisit (a) only with a design review |
-| D5 | **Speech provider** | OpenAI (transcription and speech), a self-hosted OpenAI-compatible server, others | Keep the `engine/voice` interface (OpenAI-compatible) and add speech to it; the provider is chosen with the DPA (P4, L5). Test Ogg/Opus first |
-| D6 | **What the model sees and says** | masked by default (names not caught) vs letting the message through by `personal_data` | Customers' own messages must reach the model to be answered: let `text` through by `personal_data` (audited), keep phones and ids as placeholders, never send a customer's record fields unless a tool step put them there. Add a short refusal policy to the prompt and a check on the reply (L6) |
-| D7 | **Whose budget** | share the tenant's AI budget; a separate assistant budget; per-message pricing | A separate monthly allowance for assistant runs (tokens plus speech seconds), so the builder is never starved (A7) |
-| D8 | **Money** | read-only tools first; writes later behind a non-member confirmation (I3) | Read-only only in this plan. Writes need their own plan |
-| D9 | **Who sets it up** | owners, field agents, Taskiem staff | Field agents, once phase 6 or a narrower permission exists (R4); owners with a guide meanwhile |
-| D11 ⊕ | **A lost answer to a reply send** (L7) | park for an operator (today); retry once and accept a rare duplicate; look the message up first | Retry once on a lost answer for chat replies only, marked in the step; never for money or templates |
-| D12 ⊕ | **Where the business's facts come from** (K1 to K3) | the storefront and catalogue only; a new "About my business" page with FAQ; both | Both: storefront card, hours and catalogue when the shop is on, plus a short FAQ the owner writes |
-| D13 ⊕ | **Hand-over to a person** (K5) | none; a word ("agent", "person") that pauses the assistant for that customer and tells members | The word, plus the model may suggest it when unsure; pausing is per customer, resumed from the conversations page |
+| D2 | **One recipe or several** (decided: three templates, one callable) | (a) a template bundle (new); (b) one entry workflow per channel, each a template, calling a callable assistant template; (c) one template per channel with the assistant inlined | (b): no new template concept, and the assistant logic is written once. Callable templates need run inputs (R2), which the shared assistant has |
+| D3 | **How a conversation continues** (decided: one run per message) | (a) one run per message, memory in a table; (b) one long run per conversation waiting on the next message by `signal` | (a): a waiting run holds a `max_running_runs` slot (L2), and a run per message is simpler to see, retry and erase. Serialise per sender with `concurrency_key` |
+| D4 | **Tools** (decided: fixed routing) | (a) model tool calling (new in `engine/ai` and wd); (b) the model classifies the request into a fixed list, a `branch` runs the step for it, a second ai step words the reply | (b) for the first release: identity always comes from the trigger, never the model, and no step moves money because a model said so. Revisit (a) only with a design review |
+| D5 | **Speech provider** (decided: OpenAI-compatible, account chosen with the DPA) | OpenAI (transcription and speech), a self-hosted OpenAI-compatible server, others | Keep the `engine/voice` interface (OpenAI-compatible) and add speech to it; the provider is chosen with the DPA (P4, L5). Test Ogg/Opus first |
+| D6 | **What the model sees and says** (decided: message through, ids masked, replies checked) | masked by default (names not caught) vs letting the message through by `personal_data` | Customers' own messages must reach the model to be answered: let `text` through by `personal_data` (audited), keep phones and ids as placeholders, never send a customer's record fields unless a tool step put them there. Add a short refusal policy to the prompt and a check on the reply (L6) |
+| D7 | **Whose budget** (decided: a separate assistant allowance) | share the tenant's AI budget; a separate assistant budget; per-message pricing | A separate monthly allowance for assistant runs (tokens plus speech seconds), so the builder is never starved (A7) |
+| D8 | **Money** (decided: never moves from a conversation in this plan) | read-only tools first; writes later behind a non-member confirmation (I3) | Read-only only in this plan. Writes need their own plan |
+| D9 | **Who sets it up** (decided: owners now, field agents later) | owners, field agents, Taskiem staff | Field agents, once phase 6 or a narrower permission exists (R4); owners with a guide meanwhile |
+| D11 ⊕ | **A lost answer to a reply send** (L7) (decided: retry once, chat replies only) | park for an operator (today); retry once and accept a rare duplicate; look the message up first | Retry once on a lost answer for chat replies only, marked in the step; never for money or templates |
+| D12 ⊕ | **Where the business's facts come from** (K1 to K3, K6 to K11) (decided: knowledge sources, inside Taskiem and outside it) | the storefront and catalogue only; a new "About my business" page with FAQ; both | **Knowledge sources** (answered: "the data can come from Taskiem or externally"). Inside Taskiem: the storefront card, hours and catalogue, data tables the owner picks, and an FAQ page. Outside: the business's own website, uploaded files (PDF, documents), Google Sheets and Drive, and other systems through connectors (books items, later shop platforms). Every source is read into one store the assistant searches, refreshed on a schedule, and shown to the owner before it is used |
+| D13 ⊕ | **Hand-over to a person** (K5) (decided: a word plus the model's offer) | none; a word ("agent", "person") that pauses the assistant for that customer and tells members | The word, plus the model may suggest it when unsure; pausing is per customer, resumed from the conversations page |
 | D10 | **Where it sits in What your business uses** (decided: plain workflows, Q3) | always on; a new area "Assistant" | Plain workflows, no area. Consent and cost are covered by the AI and voice switches, the beta flag, consent at first contact and the owner's pause |
 
 ## 5. Build plan
@@ -222,7 +228,7 @@ Milestones in order. Each lists what is built, its tests and docs. Nothing in a 
 
 ### V0. Decisions and clean-up
 
-- Record D1 to D10 as a decision (0062, "Customer assistant").
+- Record D1 to D13, all decided on 2026-11-08, as decision 0062 ("Customer assistant").
 - Fix stale docs: `docs/integrations/whatsapp.md` (one event per delivery, `entry[0]`), `docs/operations.md` vs `docs/ai.md` on AI over budget.
 - Remove the dead `whatsapp` trigger type from wd/v1, or define it (D1).
 
@@ -272,8 +278,22 @@ Milestones in order. Each lists what is built, its tests and docs. Nothing in a 
 - Row expiry for tables (days to keep, enforced by a sweep), set to 30 days for this table by default (M3, Q4).
 - History read as sealed values when the column is personal, so it is masked before the model like other personal data (A5).
 - One retention rule for a conversation: rows, transcripts, files and runs expire together, 30 days by default, changeable by the owner within the plan's limit (M6, Q4).
-- **About my business**: a short page for opening hours, address, FAQ and policies, plus the storefront card and catalogue when the shop is on, read by one platform action as a compact summary for the prompt (K1 to K3, D12).
 - Tests: last N turns per conversation in order; expiry; erasure of a customer's rows with their phone (P2).
+
+### V5b. Knowledge sources (D12)
+
+- A **knowledge store** per business: each source's text split into passages with the source, the time it was read and a link back; replaced whole on each refresh; deleted with the source (K10).
+- **Search** over the passages (Postgres full-text first, in Taskiem's database under forced row-level security), so a question sends only the passages that answer it (K4).
+- `knowledge@1` platform connector: `search` (question → passages with their sources) for the assistant, `refresh` for a source.
+- Sources inside Taskiem: the storefront card, hours and catalogue; data tables the owner picks; an **About my business** page with FAQ and policies the owner writes (K1 to K3).
+- Sources outside:
+  - **The business's website**, only an origin it has verified (embed-site verification), fetched through the egress guard, a page limit, HTML to text, refreshed daily (K6).
+  - **Files**: PDF and DOCX text extraction from files the owner uploads or sends by chat; scanned documents refused with a plain message until OCR exists (K7).
+  - **Google Sheets** through `googlesheets@1`; Drive and Docs once a Drive connector exists (K8).
+  - **Connected systems**: items and prices through the `books_items` capability (K9).
+- The owner sees what each source gave before it is used, and when it last changed; a source that fails to refresh keeps its last text and alerts once.
+- Passages from outside are quoted to the model as material, never as instructions, and the reply check applies to anything they lead to (K11).
+- Tests: each source kind against fixtures; refresh replaces; deletion removes; search finds the right passage; a page with injected instructions does not change what the assistant does.
 
 ### V6. Guard rails for customers
 
@@ -316,7 +336,8 @@ Milestones in order. Each lists what is built, its tests and docs. Nothing in a 
 
 - Quality-rating watch for WhatsApp numbers (C23).
 - The AI builder and evaluation suite learn assistants (A13).
-- Search over a large catalogue instead of sending all of it (K4).
+- OCR for scanned files and photos of menus (K7, A4); a Drive and Docs connector; shop-platform connectors (K8, K9).
+- Better search (embeddings) if full-text search is not good enough on real questions (K4).
 - Debounce several quick messages into one answer (L5).
 
 ### Not in this plan
@@ -349,6 +370,7 @@ Milestones in order. Each lists what is built, its tests and docs. Nothing in a 
 | Personal data in model prompts and in clear in history | Trigger `pii` (V2), personal table columns (V5), placeholders, retention, erase |
 | A customer talks the model into revealing another's data | No record reaches the model unless a step fetched it for the sender the trigger names (D4) |
 | Meta's rules (window, business verification, quality rating) | Window tracking (V6); the business's own app and number (D1) |
+| ⊕ Facts out of date (a price changed on the website but not yet re-read) | Daily refresh, "last read" shown to the owner, a refresh button, and the source named in the reply when it matters |
 | ⊕ The assistant promises what the business never said (a price, a refund) | Facts from "About my business" only; reply check; hand-over when unsure (D12, D13) |
 | ⊕ A customer gets silence (lost send, budget out, queue full) | Retry rule (D11), fall-back answer (A12), queue cap and alerts (L8, L10) |
 
