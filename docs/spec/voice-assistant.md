@@ -194,7 +194,7 @@ Each gap says what is missing, the evidence, and how much it matters: **Blocker*
 | --- | --- | --- | --- |
 | E1 ⊕ | Every new wd/v1 field (file references, ai `history`, `max_tokens`, `system`) must reach the JSON schema, the Go model and validator, the TypeScript SDK and its compiler, `wdtext` read-back, `wdcheck`, the AI builder's rules and the canvas; and stay deterministic for replay | `schemas/wd-v1.schema.json`, `engine/wd`, `sdk/src/wd.ts`, `engine/wdtext`, `engine/ai/builder` | Blocker (with each change) |
 | E2 ⊕ | Moving media download and transcription out of `api/` (D1) touches the members' voice-note path, which has its own tests and limits; it must keep working unchanged | `api/whatsapp_voice.go` | Launch |
-| E3 ⊕ | A new business area (D10) needs a migration, the server gate, `/v1/me`, the web switch and readiness messages, as the other areas did | `api/areas.go`, `engine/areas` | Launch |
+| E3 ⊕ | ~~A new business area (D10)~~: dropped, the assistant is plain workflows (Q3) | | Not needed |
 | E4 ⊕ | No staged rollout: no per-tenant beta flag for assistants and no platform-wide off switch for speech or assistant runs | | Launch |
 | E5 ⊕ | No metrics for assistants: round-trip time per channel, transcription and speech time, failures by kind, cost per conversation | `engine/telemetry` | Launch |
 
@@ -202,7 +202,7 @@ Each gap says what is missing, the evidence, and how much it matters: **Blocker*
 
 | # | Decision | Options | Recommendation |
 | --- | --- | --- | --- |
-| D1 | **Which door customers come in by** | (a) the tenant's own `whatsapp@1`/`telegram@1` connection (own Meta app, own bot), as workflows; (b) extend Taskiem's own channel (own numbers already download media, transcribe, track the 24-hour window) with an "assistant" mode that starts a business's workflow; (c) both | (a) for the first release: it is the workflow product, it needs no Meta business verification by Taskiem (W1), and it keeps each business's number its own. Move the media, speech and window pieces out of `api/` into packages both paths use, so (b) can follow. Remove or define the dead `whatsapp` trigger (C12) |
+| D1 | **Which door customers come in by** (decided: own app and bot, Q2) | (a) the tenant's own `whatsapp@1`/`telegram@1` connection (own Meta app, own bot), as workflows; (b) extend Taskiem's own channel (own numbers already download media, transcribe, track the 24-hour window) with an "assistant" mode that starts a business's workflow; (c) both | (a) for the first release: it is the workflow product, it needs no Meta business verification by Taskiem (W1), and it keeps each business's number its own. Move the media, speech and window pieces out of `api/` into packages both paths use, so (b) can follow. Remove or define the dead `whatsapp` trigger (C12) |
 | D2 | **One recipe or several** | (a) a template bundle (new); (b) one entry workflow per channel, each a template, calling a callable assistant template; (c) one template per channel with the assistant inlined | (b): no new template concept, and the assistant logic is written once. Callable templates need run inputs (R2), which the shared assistant has |
 | D3 | **How a conversation continues** | (a) one run per message, memory in a table; (b) one long run per conversation waiting on the next message by `signal` | (a): a waiting run holds a `max_running_runs` slot (L2), and a run per message is simpler to see, retry and erase. Serialise per sender with `concurrency_key` |
 | D4 | **Tools** | (a) model tool calling (new in `engine/ai` and wd); (b) the model classifies the request into a fixed list, a `branch` runs the step for it, a second ai step words the reply | (b) for the first release: identity always comes from the trigger, never the model, and no step moves money because a model said so. Revisit (a) only with a design review |
@@ -214,7 +214,7 @@ Each gap says what is missing, the evidence, and how much it matters: **Blocker*
 | D11 ⊕ | **A lost answer to a reply send** (L7) | park for an operator (today); retry once and accept a rare duplicate; look the message up first | Retry once on a lost answer for chat replies only, marked in the step; never for money or templates |
 | D12 ⊕ | **Where the business's facts come from** (K1 to K3) | the storefront and catalogue only; a new "About my business" page with FAQ; both | Both: storefront card, hours and catalogue when the shop is on, plus a short FAQ the owner writes |
 | D13 ⊕ | **Hand-over to a person** (K5) | none; a word ("agent", "person") that pauses the assistant for that customer and tells members | The word, plus the model may suggest it when unsure; pausing is per customer, resumed from the conversations page |
-| D10 | **Where it sits in What your business uses** | always on; a new area "Assistant" | A new switchable area, off by default, so a business turns it on knowingly (consent and cost) |
+| D10 | **Where it sits in What your business uses** (decided: plain workflows, Q3) | always on; a new area "Assistant" | Plain workflows, no area. Consent and cost are covered by the AI and voice switches, the beta flag, consent at first contact and the owner's pause |
 
 ## 5. Build plan
 
@@ -269,9 +269,9 @@ Milestones in order. Each lists what is built, its tests and docs. Nothing in a 
 ### V5. Memory and the conversations table
 
 - Known table `conversations`: conversation key, channel, sender, role, text (personal), language, created_at (M2, M5).
-- Row expiry for tables (days to keep, enforced by a sweep), set to 30 days for this table by default (M3).
+- Row expiry for tables (days to keep, enforced by a sweep), set to 30 days for this table by default (M3, Q4).
 - History read as sealed values when the column is personal, so it is masked before the model like other personal data (A5).
-- One retention rule for a conversation: rows, transcripts, files and runs expire together (M6).
+- One retention rule for a conversation: rows, transcripts, files and runs expire together, 30 days by default, changeable by the owner within the plan's limit (M6, Q4).
 - **About my business**: a short page for opening hours, address, FAQ and policies, plus the storefront card and catalogue when the shop is on, read by one platform action as a compact summary for the prompt (K1 to K3, D12).
 - Tests: last N turns per conversation in order; expiry; erasure of a customer's rows with their phone (P2).
 
@@ -304,9 +304,8 @@ Milestones in order. Each lists what is built, its tests and docs. Nothing in a 
 - Workflow tests for each: text in/text out, voice in/voice out, photo dropped, stranger blocked, over the limit, window closed, model failure answered politely and alerted.
 - Builder: catalogue entries and plain panels for transcribe, speak, send voice, typing (R5, R6).
 - Guides: "Answer your customers on WhatsApp and Telegram" for owners and field agents, with Meta and BotFather steps, coexistence with the WhatsApp Business app, and what customers must be told (R9, C22).
-- The new area wired end to end if D10 holds (E3).
 
-### V9. Read-only tools (after V8 is used by real businesses)
+### V9. Read-only tools (after launch: the first customer is a shop, Q1)
 
 - A `customers` link: phone or chat id → the business's customer record (I1).
 - Capabilities `customer_balance` and `customer_transactions` where a rail can answer them; invoices `find_by_phone` (I2).
@@ -353,9 +352,11 @@ Milestones in order. Each lists what is built, its tests and docs. Nothing in a 
 | ⊕ The assistant promises what the business never said (a price, a refund) | Facts from "About my business" only; reply check; hand-over when unsure (D12, D13) |
 | ⊕ A customer gets silence (lost send, budget out, queue full) | Retry rule (D11), fall-back answer (A12), queue cap and alerts (L8, L10) |
 
-## 8. Open questions for review
+## 8. Open questions, answered (2026-11-08)
 
-1. Is the first customer a fintech (balances and transactions) or a shop (orders, opening hours)? That decides whether V9 is in the first release.
-2. Should a business be able to run the assistant on Taskiem's own shared number (D1 option b), given W1 is not done?
-3. Is a separate assistant area (D10) right, or is it plain workflows?
-4. How long should conversations be kept by default: 30 days, the plan's run retention, or the business's choice?
+| # | Question | Answer | What it changes |
+| --- | --- | --- | --- |
+| Q1 | Is the first customer a fintech or a shop? | **A shop.** | The first release answers from the business's facts, hours, products, prices and FAQ (K1 to K3). V9 (read-only tools over records) stays after launch; I1, I2 and I4 are not in the first release |
+| Q2 | Should a business run its assistant on Taskiem's shared number (D1 option b)? | **Not now.** | D1 is decided as (a): the business's own WhatsApp app and Telegram bot. C11 and C12 stay out of the first release (the dead `whatsapp` trigger is still cleaned up in V0) |
+| Q3 | A separate assistant area (D10), or plain workflows? | **Plain workflows.** | No new area: E3 is dropped. What a switch would have given is kept by other means: the owner's AI switch, the "Voice in workflows" switch (T7), the per-tenant beta flag (E4), consent at first contact (P3) and the owner's pause (L11) |
+| Q4 | How long are conversations kept by default? | **30 days, the owner may change it** within the plan's limit. | One retention rule (M6) for messages, transcripts, audio and the runs behind them, 30 days by default, set per assistant in V5 |
