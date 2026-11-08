@@ -138,7 +138,12 @@ func (s *Server) waStockCategoryAsked(ctx context.Context, c *chat, name string)
 		return false, nil
 	}
 	sh, err := s.stockShopOf(s.waTablesCtx(ctx, c), c.tenant.ID)
-	if err != nil || sh.cols().Category == "" {
+	switch {
+	case errors.Is(err, errStockOff):
+		return false, nil // no stock kept: no categories either
+	case err != nil:
+		return false, err
+	case sh.cols().Category == "":
 		return false, nil
 	}
 	_, items, ok, err := s.stockChatItems(ctx, c)
