@@ -103,7 +103,7 @@ export function StorefrontStock() {
         }
       />
       <StorefrontTabs />
-      <ErrorBox error={view.error ?? act.error} />
+      <ErrorBox error={view.error} />
       {!v && !view.error && <Skeleton rows={4} label="Loading your stock…" />}
       {v && !v.keeps_stock && (
         <section className="card" aria-labelledby="stock-start">
@@ -132,6 +132,8 @@ export function StorefrontStock() {
               Keep my stock
             </button>
           </div>
+          {/* Beside the button that was pressed, where the person is looking. */}
+          <ErrorBox error={act.error} />
         </section>
       )}
       {v?.keeps_stock && (
