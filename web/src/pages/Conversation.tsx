@@ -1170,7 +1170,16 @@ export function ConversationPane({
           name: it.name,
           sub: priceWords(it),
           category: it.category,
+          words: it.description,
         })),
+      // A category opens where it can be seen: their list, to order from
+      // (supplies), or our own products (table.read); otherwise none is
+      // offered, as a tap would open nothing of theirs.
+      categories:
+        (priced.data?.whose === "theirs" && supplies) ||
+        (priced.data?.whose === "ours" && can("table.read"))
+          ? undefined
+          : [],
     },
     replyLine: (r) => previewLine(r, conv.name),
     closes: [infoOpen, !!forwarding],

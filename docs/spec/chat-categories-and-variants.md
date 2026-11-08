@@ -181,24 +181,28 @@ Migration `00408_item_categories.sql`; `api/stock.go`, `api/whatsapp_stock.go`,
 - **The column.** `POST /v1/stock/items` and `PATCH /v1/stock/items/{id}` take
   `category` (up to 60 characters, spaces tidied; `""` clears it). The first time
   one is set, a text column named `category` already in the table is mapped, or
-  one is added (audited as `table.column.add`, the plan's column limit allowing).
-  A table Taskiem cannot change answers 409 `no_category_column`, saying how to
-  add one on the Tables page.
+  one is added (audited as `table.column.add`). Where one cannot be added the
+  answer is 409 `no_category_column`, saying what to do: a table Taskiem may not
+  change (add the column on the Tables page), or one with as many columns as the
+  plan allows (remove one first).
 - **The items.** `stock.Item` carries `category` and, when the catalogue maps one,
   `description`, so search can read both. A change of category is a diary line
   ("Category of Air Max 90: Sneakers"; "… is no longer in a category").
 - **Price lists.** `price_list_items` and the buyer's `supplier_prices` hold the
-  seller's category, copied when an item is put on a list; a category changed
+  seller's category and description, copied when an item is put on a list; a category changed
   later is written on every list holding the item and mirrored to the buyers
   again (`links.SetItemCategoryTx`).
 - **Search.** The @ picker, the Products sheet and the order sheet match the name
   first, then the category and a product's description ("@nike" finds a shoe
-  whose description says Nike).
+  whose description says Nike). A description exists only where the catalogue
+  maps one (a catalogue made on the web); a table made from chat has none.
 - **The picker.** Words that start a category's name offer it first, under
   "Categories" ("Sneakers · 48 items", two at most). A tap opens Products filtered
   to it, or, in a supplier's conversation, their list filtered to it; the words
   typed for it go. Enter still tags an item (a category is not a tag). In the
   Taskiem chat the categories offered are the business's own (from `/v1/stock`).
+  A category is only offered where a tap can open it: a supplier's to someone
+  who may order from them, our own to someone who may see our products.
 - **Chips.** The Products sheet has a chip per category of two items or more,
   most used first, after All, Low stock and Hidden; the order sheet the same after
   All. The category being shown always has its chip.
@@ -212,6 +216,10 @@ Migration `00408_item_categories.sql`; `api/stock.go`, `api/whatsapp_stock.go`,
   *more* for the rest; anything else lets the list go. A category's name alone is
   only read as one when the catalogue has a category column, and an item called
   the same as a category is still the item.
-- **Tests.** Go: `api/categories_test.go` (the column, the items, the price list
-  and its mirror, the chat words). Web: `src/lib/categories.test.ts`;
-  `e2e/chat-categories.spec.ts` at 390 and 360 px in both themes with axe.
+- **The shop's page** shows the category set in chat (it groups items by it).
+- **Tests.** Go: `api/categories_test.go` (the column and no room for it, the
+  items and the shop's page, the price list and its mirror with descriptions,
+  the words on WhatsApp and Telegram). Web: `src/lib/categories.test.ts`, and the
+  chat tool forms, sheets and order sheet in `plainwords.test.ts`;
+  `e2e/chat-categories.spec.ts` at 390 and 360 px in both themes with axe,
+  including staff who may not order.

@@ -1,9 +1,17 @@
 package api_test
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/israel-duff/taskiem/connectors/xenibase"
+	"github.com/israel-duff/taskiem/connectors/xenibase/xenibasetest"
+	"github.com/israel-duff/taskiem/engine/datatables"
 )
 
 // Product categories (docs/spec/chat-categories-and-variants.md, Part A):
@@ -44,6 +52,13 @@ func TestCategories(t *testing.T) {
 		t.Fatalf("cleared: %v", it)
 	}
 	owner.must(200, "PATCH", "/v1/stock/items/"+id, map[string]any{"category": "Sandals"})
+	// The shop's page has them too: it shows its items by category.
+	for _, x := range owner.must(200, "GET", "/v1/storefront/catalogue", nil)["items"].([]any) {
+		it := x.(map[string]any)
+		if it["name"] == "Shoe polish" && it["category"] != "Sandals" || it["name"] == "Air Max 01" && it["category"] != "Sneakers" {
+			t.Fatalf("the page's items: %v", it)
+		}
+	}
 
 	// WhatsApp: the category by name, 10 at a time, then *more*.
 	r := w.say(t, on, "sneakers")
@@ -85,8 +100,18 @@ func TestCategoriesOnPriceLists(t *testing.T) {
 	withLinkedOrders(w.world)
 	seller, buyer, _, _ := linkedPair(t, w.waWorld)
 	seller.must(200, "POST", "/v1/stock/setup", nil)
+	// The seller's catalogue maps a description too, as one made on the web.
+	sf := seller.must(200, "GET", "/v1/storefront", nil)
+	table := sf["catalogue_table"].(string)
+	if s, out := seller.do("POST", "/v1/tables/"+table+"/columns", map[string]any{"name": "description", "type": "text"}); s != 200 && s != 201 {
+		t.Fatalf("a description column: %d %v", s, out)
+	}
+	cols := sf["catalogue_columns"].(map[string]any)
+	cols["description"] = "description"
+	seller.must(200, "PUT", "/v1/storefront", map[string]any{"slug": sf["slug"], "draft": sf["draft"], "catalogue_table": table, "catalogue_columns": cols})
 	rice := seller.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Rice, 50 kg", "quantity": 50, "unit": "bag", "price_kobo": 4500000, "category": "Grains"},
 		"Idempotency-Key", "sr")["item"].(map[string]any)["id"].(string)
+	seller.must(200, "PATCH", "/v1/tables/"+table+"/rows/"+rice, map[string]any{"set": map[string]any{"description": "Mama Gold, long grain"}}, "Idempotency-Key", "d1")
 	sellerLink := seller.must(200, "GET", "/v1/links", nil)["links"].([]any)[0].(map[string]any)["id"].(string)
 	list := seller.must(201, "POST", "/v1/price-lists", map[string]any{"name": "Trade prices"})["list"].(map[string]any)["id"].(string)
 	seller.must(200, "PUT", "/v1/price-lists/"+list+"/items", map[string]any{"items": []any{map[string]any{"item_id": rice, "price_kobo": 4200000}}})
@@ -102,11 +127,66 @@ func TestCategoriesOnPriceLists(t *testing.T) {
 	if c := category(); c != "Grains" {
 		t.Fatalf("the buyer sees the seller's category: %v", c)
 	}
+	// And its description, for search.
+	if d := buyer.must(200, "GET", "/v1/supplier-prices", nil)["suppliers"].([]any)[0].(map[string]any)["items"].([]any)[0].(map[string]any)["description"]; d != "Mama Gold, long grain" {
+		t.Fatalf("the buyer sees the seller's description: %v", d)
+	}
 	if l := seller.must(200, "GET", "/v1/price-lists", nil)["lists"].([]any)[0].(map[string]any)["items"].([]any)[0].(map[string]any); l["category"] != "Grains" {
 		t.Fatalf("the seller's list: %v", l)
 	}
 	seller.must(200, "PATCH", "/v1/stock/items/"+rice, map[string]any{"category": "Rice and grains"})
 	if c := category(); c != "Rice and grains" {
 		t.Fatalf("changed later: %v", c)
+	}
+}
+
+// A catalogue with as many columns as the plan allows gets no category
+// column: the answer says what to do, and nothing else changes.
+func TestCategoryWithNoRoomForTheColumn(t *testing.T) {
+	w := newTablesWorld(t)
+	withStock(w.world)
+	owner := w.tenant(t, "Zuri Atelier", "ada@zuri.test")
+	owner.must(200, "POST", "/v1/stock/setup", nil)
+	var tenant uuid.UUID
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT tenant_id FROM storefronts WHERE slug = 'zuri-atelier'`).Scan(&tenant); err != nil {
+		t.Fatal(err)
+	}
+	var columns int
+	for _, x := range owner.must(200, "GET", "/v1/tables", nil)["tables"].([]any) {
+		if tb := x.(map[string]any); tb["name"] == "products" {
+			columns = len(tb["columns"].([]any))
+		}
+	}
+	if err := w.env.Store.SetLimits(context.Background(), tenant, map[string]any{"max_data_table_columns": columns}, "operator"); err != nil {
+		t.Fatal(err)
+	}
+	out := owner.must(409, "POST", "/v1/stock/items", map[string]any{"name": "Slides", "quantity": 1, "category": "Sandals"}, "Idempotency-Key", "a")
+	if out["code"] != "no_category_column" || !strings.Contains(out["error"].(string), "as many columns as your plan allows") {
+		t.Fatalf("no room: %v", out)
+	}
+	it := owner.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Slides", "quantity": 1}, "Idempotency-Key", "b")["item"].(map[string]any)
+	owner.must(409, "PATCH", "/v1/stock/items/"+it["id"].(string), map[string]any{"category": "Sandals"})
+	// Clearing a category the catalogue cannot hold is nothing to do.
+	owner.must(200, "PATCH", "/v1/stock/items/"+it["id"].(string), map[string]any{"category": ""})
+}
+
+// On Telegram as on WhatsApp: a category asked for by name.
+func TestCategoriesOnTelegram(t *testing.T) {
+	w := newTGWorld(t)
+	pg := xenibasetest.New(t)
+	pg.AddToken(xenibasetest.Token{Secret: tablesPlatformToken, Name: "platform", Scopes: []string{"read", "write", "admin"}, ExpiresAt: time.Now().Add(365 * 24 * time.Hour)})
+	if err := w.env.Registry.Register(xenibase.New(xenibase.Options{BaseURL: pg.URL})); err != nil {
+		t.Fatal(err)
+	}
+	w.srv.Tables = &datatables.Service{Pool: w.env.DB.App, Vault: w.env.Vault, Egress: w.env.Egress, Logger: w.srv.Logger,
+		Platform: datatables.Platform{URL: pg.URL, Token: tablesPlatformToken, Org: pg.OrgID}, ConnectorURL: pg.URL, PollInterval: time.Millisecond}
+	withStock(w.world)
+	owner := w.tenant(t, "Zuri Atelier", "ada@zuri.test")
+	const acct = 70081
+	w.link(t, owner, acct, "zuri")
+	owner.must(200, "POST", "/v1/stock/setup", nil)
+	owner.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Slides", "quantity": 4, "unit": "pair", "category": "Sandals"}, "Idempotency-Key", "s")
+	if r := w.say(t, acct, "show me sandals"); !strings.Contains(r.Text, "Sandals") || !strings.Contains(r.Text, "Slides: 4 pairs") {
+		t.Fatalf("telegram: %+v", r)
 	}
 }

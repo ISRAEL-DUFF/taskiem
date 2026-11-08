@@ -56,9 +56,13 @@ const maxCategory = 60
 // is set on one of its items (docs/spec/chat-categories-and-variants.md).
 var categoryColumn = datatables.Column{Name: "category", Title: "Category", Type: "text"}
 
-// errNoCategoryColumn: the catalogue is a table the business keeps
-// elsewhere, so Taskiem cannot add the column itself.
-var errNoCategoryColumn = errors.New("stock: add a category column to use categories")
+// errNoCategoryColumn: the catalogue is a table Taskiem may not change, so
+// it cannot add the column itself; errCategoryColumnLimit: the table has as
+// many columns as the plan allows.
+var (
+	errNoCategoryColumn    = errors.New("stock: add a category column to use categories")
+	errCategoryColumnLimit = errors.New("stock: no room for a category column")
+)
 
 // stockCategories makes the catalogue hold categories, once: a text column
 // named category is mapped if the table has one, else added (the plan's
@@ -83,7 +87,7 @@ func (s *Server) stockCategories(ctx context.Context, tenant uuid.UUID, actor st
 			return sh, err
 		}
 		if lim.MaxDataTableColumns > 0 && len(t.Columns) >= lim.MaxDataTableColumns {
-			return sh, errNoCategoryColumn
+			return sh, errCategoryColumnLimit
 		}
 		if err := s.addOwnColumn(ctx, tenant, actor, audit, &t, categoryColumn); err != nil {
 			return sh, err
@@ -1067,6 +1071,9 @@ func (s *Server) stockFail(w http.ResponseWriter, r *http.Request, err error) {
 		writeJSON(w, http.StatusConflict, map[string]any{"error": "no catalogue keeps stock yet: press Keep my stock", "code": "stock_off"})
 	case errors.Is(err, errNoItem):
 		writeErr(w, http.StatusNotFound, "no such item")
+	case errors.Is(err, errCategoryColumnLimit):
+		writeJSON(w, http.StatusConflict, map[string]any{"error": "Your products table has as many columns as your plan allows: remove one you do not use on the Tables page, then set the category again.",
+			"code": "no_category_column"})
 	case errors.Is(err, errNoCategoryColumn):
 		writeJSON(w, http.StatusConflict, map[string]any{"error": "Add a category column to use categories: on the Tables page, open your products table and add a text column called category.", "code": "no_category_column"})
 	case errors.Is(err, stock.ErrInvalid):

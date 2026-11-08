@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { axe, describe } from "./a11y";
 
@@ -312,4 +313,81 @@ test("a supplier's list by its categories, from @ in their conversation", async 
   // Search reads the category too.
   await order.getByLabel("Search their price list").fill("sneak");
   await expect(order.getByTestId("order-row")).toHaveCount(2);
+});
+
+function sql(text: string): string {
+  const base = process.env.TASKIEM_TEST_DATABASE_URL;
+  if (!base) throw new Error("set TASKIEM_TEST_DATABASE_URL");
+  return execFileSync(
+    "psql",
+    [
+      base.replace(/\/[^/?]*(\?.*)?$/, "/taskiem_e2e$1"),
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-tAqc",
+      text,
+    ],
+    {
+      encoding: "utf8",
+    },
+  ).trim();
+}
+
+test("staff who may not order are not offered a supplier's categories", async ({
+  browser,
+}) => {
+  const viewport = { width: 390, height: 844 };
+  const { buyer, link } = await linked(browser, viewport);
+  // A shift manager of the buyer: they write to the supplier, but do not
+  // order (ordering needs the storefront's permission).
+  // The e2e server sends no email: the owners' addresses are marked confirmed.
+  sql(
+    `UPDATE users SET email_verified_at = now() WHERE email LIKE '%@cat.test' AND email_verified_at IS NULL`,
+  );
+  const email = `shift-${letters()}@cat.test`;
+  const added = await buyer.request.post("/v1/members", {
+    headers: H,
+    data: { email, password: "correct horse battery", roles: ["shift_manager"] },
+  });
+  expect(added.status(), await added.text()).toBe(201);
+  const staff = await (await browser.newContext({ viewport })).newPage();
+  expect(
+    (
+      await staff.request.post("/v1/auth/login", {
+        headers: H,
+        data: { email, password: "correct horse battery" },
+      })
+    ).status(),
+  ).toBe(200);
+  const prices = [
+    {
+      item_id: "b",
+      name: "Slides",
+      unit: "pair",
+      category: "Sandals",
+      price_kobo: 800_000,
+      min_quantity: 12,
+      available: true,
+    },
+    {
+      item_id: "c",
+      name: "Sandal cleaner",
+      unit: "tin",
+      price_kobo: 90_000,
+      min_quantity: 1,
+      available: true,
+    },
+  ];
+  await staff.route(`**/v1/link-chats/${link}/items`, (r) =>
+    r.fulfill(json({ items: prices, whose: "theirs" })),
+  );
+  await staff.goto(`/chat?with=${link}`);
+  await staff.getByTestId("chat-pane").getByLabel("Message").fill("@sand");
+  const picker = staff.getByRole("region", { name: "Tag something" });
+  await expect(
+    picker.getByRole("group", { name: "Products" }).getByRole("button"),
+  ).toHaveCount(2);
+  await expect(picker.getByRole("group", { name: "Categories" })).toHaveCount(
+    0,
+  );
 });

@@ -5,7 +5,11 @@
 -- +goose Up
 ALTER TABLE price_list_items ADD COLUMN category text NOT NULL DEFAULT '' CHECK (length(category) <= 60);
 ALTER TABLE supplier_prices ADD COLUMN category text NOT NULL DEFAULT '' CHECK (length(category) <= 60);
+ALTER TABLE price_list_items ADD COLUMN description text NOT NULL DEFAULT '' CHECK (length(description) <= 500);
+ALTER TABLE supplier_prices ADD COLUMN description text NOT NULL DEFAULT '' CHECK (length(description) <= 500);
 
 -- +goose Down
+ALTER TABLE supplier_prices DROP COLUMN description;
+ALTER TABLE price_list_items DROP COLUMN description;
 ALTER TABLE supplier_prices DROP COLUMN category;
 ALTER TABLE price_list_items DROP COLUMN category;

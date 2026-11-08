@@ -156,6 +156,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
             name: it.name,
             sub: `${p.business} · ${priceWords(it)}`,
             category: it.category,
+            words: it.description,
           })),
       ),
       categories: categoriesOf(ownStock.data ?? []),

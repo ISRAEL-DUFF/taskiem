@@ -62,5 +62,7 @@ describe("categories", () => {
     expect(orderSections(list.slice(1, 2))).toEqual([{ label: "", items: [list[1]] }]);
     expect(orderShown(list, categoryTag("Grains"), "").map((i) => i.item_id)).toEqual(["a", "c"]);
     expect(orderShown(list, undefined, "grain").map((i) => i.item_id)).toEqual(["a", "c"]);
+    // A supplier's words for an item are searched too.
+    expect(orderShown([...list, { item_id: "e", name: "Runner", description: "Nike", price_kobo: 1, min_quantity: 1, available: true }], undefined, "nike").map((i) => i.item_id)).toEqual(["e"]);
   });
 });

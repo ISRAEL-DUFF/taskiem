@@ -31967,6 +31967,9 @@ components:
         category:
           type: string
           description: The seller's category for it
+        description:
+          type: string
+          description: The seller's words for it (its storefront description), for search
         price_kobo:
           type: integer
         min_quantity:

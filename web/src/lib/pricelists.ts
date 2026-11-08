@@ -13,6 +13,8 @@ export interface PriceItem {
   unit?: string;
   /** The seller's category for it ("Sneakers"). */
   category?: string;
+  /** The seller's words for it (its storefront description), for search. */
+  description?: string;
   price_kobo: number;
   min_quantity: number;
   available: boolean;

@@ -54,7 +54,7 @@ export interface OrderStart {
 /** An order from a supplier's price list: pick, review, place (or ask them
  * to quote). Placing drafts the order at their prices and sends it. */
 /** The items of their list a chip and a search show: by name first, then
- * those whose category holds the words. */
+ * those whose category or description holds the words. */
 export function orderShown(
   items: PriceItem[],
   chip: string | undefined,
@@ -70,7 +70,9 @@ export function orderShown(
     ...picked.filter(
       (it) =>
         !it.name.toLowerCase().includes(q) &&
-        (it.category ?? "").toLowerCase().includes(q),
+        [it.category ?? "", it.description ?? ""].some((t) =>
+          t.toLowerCase().includes(q),
+        ),
     ),
   ];
 }
