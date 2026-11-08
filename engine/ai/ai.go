@@ -238,9 +238,14 @@ func Transient(err error) bool {
 
 // Defaults.
 const (
-	DefaultModel     = "claude-opus-5-5"
-	DefaultEffort    = "high"
-	DefaultMaxTokens = 32000
+	DefaultModel = "claude-opus-5-5"
+	// DefaultReplyModel is offered to ai steps alongside the default
+	// when TASKIEM_AI_STEP_MODELS is unset and the provider is Anthropic:
+	// a small, fast model for a customer's reply, where the building
+	// model is slow and costly (decision 0062 V4, A6).
+	DefaultReplyModel = "claude-haiku-5-5"
+	DefaultEffort     = "high"
+	DefaultMaxTokens  = 32000
 )
 
 // ConfigFromEnv reads TASKIEM_AI_* (and ANTHROPIC_API_KEY). Without
@@ -259,8 +264,9 @@ func ConfigFromEnv(lookup func(string) (string, bool)) (Config, error) {
 		ModerationModel: get("TASKIEM_AI_MODERATION_MODEL"),
 		Retention:       get("TASKIEM_AI_RETENTION"),
 	}
-	for _, m := range strings.Split(get("TASKIEM_AI_STEP_MODELS"), ",") {
-		if m = strings.TrimSpace(m); m != "" && !slices.Contains(c.StepModels, m) {
+	steps, set := lookup("TASKIEM_AI_STEP_MODELS")
+	for _, m := range strings.Split(steps, ",") {
+		if m = strings.TrimSpace(m); m != "" && m != "none" && !slices.Contains(c.StepModels, m) {
 			c.StepModels = append(c.StepModels, m)
 		}
 	}
@@ -279,6 +285,9 @@ func ConfigFromEnv(lookup func(string) (string, bool)) (Config, error) {
 		}
 		if c.Model == "" {
 			c.Model = DefaultModel
+		}
+		if !set && c.Model != DefaultReplyModel {
+			c.StepModels = append(c.StepModels, DefaultReplyModel)
 		}
 	case "selfhosted":
 		c.APIKey = get("TASKIEM_AI_API_KEY")

@@ -61,7 +61,7 @@ The rule (spec 12, gate G3): **the AI can never publish, approve, read secrets, 
 | `TASKIEM_AI_MAX_TOKENS` | 32000 | Per answer, thinking included (1024–128000); above 16000 requests stream |
 | `TASKIEM_AI_FALLBACKS` | on | `off` stops sending server-side refusal fallbacks |
 | `TASKIEM_DEFAULT_AI_MONTHLY_TOKENS` | 2,000,000 | Platform default budget ([plan limits](operations.md#plan-limits)) |
-| `TASKIEM_AI_STEP_MODELS` | — | Comma-separated models a workflow's [AI steps](#ai-steps) may name, besides the default |
+| `TASKIEM_AI_STEP_MODELS` | `claude-haiku-5-5` on Anthropic | Comma-separated models a workflow's [AI steps](#ai-steps) may name, besides the default. Unset on Anthropic, the small fast `claude-haiku-5-5` is offered for replies to customers (decision 0062 A6); `none` offers the default only |
 | `TASKIEM_AI_RETENTION` | — | What the provider keeps of what it is sent, shown to every business's admins ("Zero data retention under our agreement with Anthropic"). State it; without it, admins are told it is not stated |
 
 Set these on the `api` and `edge` roles alike, and on `worker` roles serving the `ai` queue. `TASKIEM_WORKER_QUEUES` includes `ai` by default, and so do the VPS installer, the Helm chart (`roles.worker.queues`, `workerPools[].queues`) and the plain Kubernetes manifest; a deployment that sets its own list must add `ai`, or AI steps stay queued until their runs time out. Staging: [runbook, section 11](runbooks/staging.md#11-ai-steps). The `edge` role answers WhatsApp, so `build` there uses the same model, effort, answer size and tenant budgets as the web app.

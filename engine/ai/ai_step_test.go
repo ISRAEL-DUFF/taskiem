@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -38,5 +39,21 @@ func TestTransientAndStepModels(t *testing.T) {
 	got, err := ConfigFromEnv(func(k string) (string, bool) { v, ok := env[k]; return v, ok })
 	if err != nil || len(got.StepModels) != 2 || got.Retention != "Zero retention" {
 		t.Errorf("from env: %+v %v", got, err)
+	}
+	// On Anthropic, a small fast model is offered for replies unless the
+	// operator lists the models (or says none).
+	for _, c := range []struct {
+		env  map[string]string
+		want string
+	}{
+		{map[string]string{"ANTHROPIC_API_KEY": "k"}, "claude-opus-5-5,claude-haiku-5-5"},
+		{map[string]string{"ANTHROPIC_API_KEY": "k", "TASKIEM_AI_STEP_MODELS": "none"}, "claude-opus-5-5"},
+		{map[string]string{"ANTHROPIC_API_KEY": "k", "TASKIEM_AI_STEP_MODELS": "claude-sonnet-5-5"}, "claude-opus-5-5,claude-sonnet-5-5"},
+		{map[string]string{"ANTHROPIC_API_KEY": "k", "TASKIEM_AI_MODEL": "claude-haiku-5-5"}, "claude-haiku-5-5"},
+	} {
+		got, err := ConfigFromEnv(func(k string) (string, bool) { v, ok := c.env[k]; return v, ok })
+		if off := strings.Join(got.OfferedStepModels(), ","); err != nil || off != c.want {
+			t.Errorf("%v: offered %s (%v), want %s", c.env, off, err, c.want)
+		}
 	}
 }
