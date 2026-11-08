@@ -152,6 +152,10 @@ The run started by a confirmation has `trigger.body` (the inputs), `trigger.call
 
 CEL with the standard library and cel-go's strings, math, lists and optional-types extensions, plus `sum(list)`: the total of a list of numbers (an int when every element is an int, a double otherwise, 0 for an empty list; integer overflow is an error). Code written with the SDK uses it as a CEL string (`"=sum(steps.pay.output.map(r, r.amount))"`).
 
+### Files
+
+A run never holds a file's bytes. A step that fetched or made a file answers its **reference**, `{"file": id, "name", "type", "size", "sha256"}`, and later steps pass it on as it is (`"=steps.fetch.output.file"`). The file is kept in the organisation's storage for 30 days at most (less when the plan keeps run history for less). `files@1` gives a short-lived link (`link`) or deletes one early (`delete`). See [Files in runs](../files.md).
+
 ### List blocks
 
 CEL can map, filter and test a list but cannot group one or match two lists on a key. Four more pure functions do (`engine/expr/lists.go`), so a `transform` step can total sales by area or pair each customer with their orders. A list may hold up to 10,000 rows, and a join up to 10,000 pairs, or the expression fails.

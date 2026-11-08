@@ -236,6 +236,8 @@ Milestones in order. Each lists what is built, its tests and docs. Nothing in a 
 
 ### V1. Files in runs
 
+**Built** (2026-11-08), see [Files in runs](../files.md): the reference `{file, name, type, size, sha256}` (plain JSON: no wd/v1 schema change was needed); `engine/runfiles` with `run_files` (migration 00313), checks on type, size, Ogg length and malware for what a person sent, 30 days capped by the plan, a sweep every 10 minutes; `connector.Request.Files` for every connector call in a run; `files@1` (`link`, `delete`). The file reference is not itself personal data (an id and a name); the content stays in storage and is marked personal. Erasing a customer's files with the rest of their data is V6.
+
 - A **file reference** kind in wd/v1: `{file: <id>, name, type, size, sha256}` in trigger bodies and step outputs, never the bytes (F1).
 - A **run files** store on `engine/media`: private bucket, per tenant, signed links on request, a retention per workflow capped by plan (F2, F6), sealed as personal data when it came from a person.
 - Type, size and (for Ogg) duration checks on store; ClamAV for anything a person sent (F5).

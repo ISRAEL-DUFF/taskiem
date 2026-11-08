@@ -1343,3 +1343,7 @@ worker_pool_workers.pool
 worker_pool_workers.queue
 worker_pool_workers.seen_at
 worker_pool_workers.worker_id
+run_files.expires_at
+run_files.id
+run_files.storage_key
+run_files.tenant_id

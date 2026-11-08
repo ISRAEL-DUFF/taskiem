@@ -28,6 +28,7 @@ import (
 	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/connectors/builtin"
 	emailconn "github.com/israel-duff/taskiem/connectors/email"
+	filesconn "github.com/israel-duff/taskiem/connectors/files"
 	formconn "github.com/israel-duff/taskiem/connectors/form"
 	invconn "github.com/israel-duff/taskiem/connectors/invoices"
 	linkconn "github.com/israel-duff/taskiem/connectors/link"
@@ -64,6 +65,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/riders"
+	"github.com/israel-duff/taskiem/engine/runfiles"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/sandbox"
 	"github.com/israel-duff/taskiem/engine/schools"
@@ -688,6 +690,8 @@ type engine struct {
 	schoolInboxKey []byte
 	// email is inbound email's api side (N10); nil without the public key.
 	email *inmail.Service
+	// runFiles keeps the files runs fetch or make (docs/files.md).
+	runFiles *runfiles.Service
 	// invoices are the business's invoices to its customers (decision
 	// 0045, T3).
 	invoices *invoicing.Invoices
@@ -753,6 +757,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	stockOps := &stockconn.Late{}
 	formOps := &formconn.Late{}
 	emailOps := &emailconn.Late{}
+	fileOps := &filesconn.Late{}
 	tell := &notify.Late{}
 	invoiceOps := &invconn.Late{}
 	linkOps := &linkconn.Late{}
@@ -768,6 +773,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	copts.Stock = stockOps
 	copts.Forms = formOps
 	copts.Email = emailOps
+	copts.Files = fileOps
 	copts.Notify = tell
 	if err := builtin.Register(reg, copts); err != nil {
 		pool.Close()
@@ -818,6 +824,8 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	if e.email != nil {
 		emailOps.Set(e.email)
 	}
+	e.runFiles = runFilesService(e, log)
+	fileOps.Set(e.runFiles)
 	if cfg.WhatsApp != nil {
 		// The templates' url buttons open the web app and the form host
 		// (docs/whatsapp.md#templates).
@@ -1268,6 +1276,7 @@ func serve(ctx context.Context, args []string) error {
 		if e.email != nil {
 			tasks = append(tasks, func(ctx context.Context) error { e.email.Run(ctx, emailDrainInterval); return nil })
 		}
+		tasks = append(tasks, func(ctx context.Context) error { sweepRunFiles(ctx, e.runFiles, log); return nil })
 		srv.Media = &media.Service{Credentials: srv.Tables.Credentials, Guard: &egress.Guard{Logger: log}, Logger: log}
 		if addr := strings.TrimSpace(os.Getenv("TASKIEM_CLAMD_ADDR")); addr != "" {
 			// Files sent in conversations are scanned as hosted forms' are;
@@ -1440,7 +1449,7 @@ func serve(ctx context.Context, args []string) error {
 			w := &runtime.Worker{Store: e.store, Registry: e.registry, Secrets: e.vault, Connections: e.vault,
 				Egress: &egress.Guard{Logger: log, Loopback: loopback}, ID: prefix + strings.TrimSpace(q) + "/" + strconv.Itoa(os.Getpid()),
 				Queue: strings.TrimSpace(q), Pool: cfg.Cloud.WorkerPool, Logger: log,
-				Drain: cfg.Shutdown.WorkerDrain}
+				Drain: cfg.Shutdown.WorkerDrain, RunFiles: e.runFiles}
 			if w.Queue == "container" {
 				// Container steps (spec 7.5): the sandbox runner and egress proxy.
 				more, err := containerSetup(ctx, w, log)

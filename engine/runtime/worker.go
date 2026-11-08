@@ -31,6 +31,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/expr"
 	"github.com/israel-duff/taskiem/engine/history"
 	"github.com/israel-duff/taskiem/engine/pii"
+	"github.com/israel-duff/taskiem/engine/runfiles"
 	"github.com/israel-duff/taskiem/engine/sandbox"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/telemetry"
@@ -157,6 +158,9 @@ type Worker struct {
 	// AI runs ai steps (the "ai" queue, decision 0050); nil: they fail as
 	// not set up.
 	AI *AISteps
+	// RunFiles keeps the files a run's connectors fetch or make
+	// (docs/files.md); nil gives connectors no file store.
+	RunFiles *runfiles.Service
 }
 
 func (w *Worker) defaults() {
@@ -457,6 +461,7 @@ const (
 type plan struct {
 	c        claim
 	env      string
+	workflow uuid.UUID
 	sched    history.ScheduledPayload
 	pins     map[string]string // connector versions the run started with
 	stepType string
@@ -652,6 +657,7 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 		if err := tx.QueryRow(ctx, `SELECT workflow_id, version, environment, COALESCE(idempotency_seed, ''), clock_timestamp(), expansion FROM runs WHERE id = $1`, c.run).Scan(&wfID, &version, &p.env, &runSeed, &dbNow, &digest); err != nil {
 			return err
 		}
+		p.workflow = wfID
 		def, err := w.Store.runDefinition(ctx, tx, wfID, version, digest)
 		if err != nil {
 			return err
@@ -1218,7 +1224,7 @@ func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 		}
 		var resp connector.Response
 		actx := connector.WithCaller(ctx, connector.Caller{Tenant: p.c.tenant, Run: p.c.run, Step: p.c.step, Environment: p.env})
-		resp, err = p.conn.Actions[p.action].Execute(actx, connector.Request{Input: input, Credentials: creds, IdempotencyKey: p.key, KeyFirstSent: p.keyFirst, Attempt: p.c.attempt, Logger: w.Logger, HTTP: hc, Dial: dial, Rotate: w.rotate(p)})
+		resp, err = p.conn.Actions[p.action].Execute(actx, connector.Request{Input: input, Credentials: creds, IdempotencyKey: p.key, KeyFirstSent: p.keyFirst, Attempt: p.c.attempt, Logger: w.Logger, HTTP: hc, Dial: dial, Rotate: w.rotate(p), Files: w.files(p)})
 		if err != nil {
 			w.expireRejected(ctx, p, err)
 			return w.classify(p, err)
@@ -1478,6 +1484,15 @@ func (w *Worker) dialer(ctx context.Context, p *plan, creds map[string]string) (
 		return nil, err
 	}
 	return d, nil
+}
+
+// files is the run's file store, as its connectors see it.
+func (w *Worker) files(p *plan) connector.Files {
+	if w.RunFiles == nil {
+		return nil
+	}
+	run, wf := p.c.run, p.workflow
+	return w.RunFiles.For(runfiles.Owner{Tenant: p.c.tenant, Environment: p.env, Workflow: &wf, Run: &run})
 }
 
 // heartbeat extends the lease while the task runs and cancels the task's

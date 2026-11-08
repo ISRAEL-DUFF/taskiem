@@ -35,6 +35,46 @@ type Request struct {
 	// one is used again): see RotateCredentials. Nil where the request's
 	// credentials are not a stored connection's.
 	Rotate func(ctx context.Context, fn RotateFunc) (map[string]string, error)
+	// Files keeps and reads the run's files (docs/files.md): a voice note
+	// a connector downloaded, audio a step made. Nil outside a workflow
+	// run, or where the deployment has no storage for them.
+	Files Files
+}
+
+// Files is a run's file store, as a connector sees it. A file in a run is
+// a reference, never its bytes: {"file": id, "name", "type", "size",
+// "sha256"} (IsFileRef).
+type Files interface {
+	// Put keeps data under name for the run and answers its reference.
+	// personal marks a file a person sent (a customer's voice note): it
+	// is scanned for malware before it is kept, and is personal data.
+	Put(ctx context.Context, name string, data []byte, personal bool) (map[string]any, error)
+	// Read answers a file's bytes and its reference, given the reference
+	// or its id; only the run's own organisation's files are found.
+	Read(ctx context.Context, ref any) ([]byte, map[string]any, error)
+}
+
+// FileID is the id in a file reference, or the id itself; "" when v is
+// neither.
+func FileID(v any) string {
+	switch x := v.(type) {
+	case string:
+		return x
+	case map[string]any:
+		id, _ := x["file"].(string)
+		return id
+	}
+	return ""
+}
+
+// IsFileRef reports whether v is a run file's reference.
+func IsFileRef(v any) bool {
+	m, ok := v.(map[string]any)
+	if !ok {
+		return false
+	}
+	id, _ := m["file"].(string)
+	return id != ""
 }
 
 // RotateFunc refreshes credentials. It is given the connection's stored

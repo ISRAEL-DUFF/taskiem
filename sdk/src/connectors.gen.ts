@@ -309,6 +309,23 @@ export const email = {
   file_url: (input: EmailFileUrlInput, extra?: ConnectorExtra): StepSpec => connector("email@1", "file_url", input, extra),
 };
 
+// Files in a run (files@1)
+export interface FilesDeleteInput {
+  /** The file's reference, or its id */
+  file: Value;
+}
+export interface FilesLinkInput {
+  /** The file's reference (steps.<id>.output.file), or its id */
+  file: Value;
+  ttl_minutes?: Val<number>;
+}
+export const files = {
+  /** Delete a file (idempotent_write) */
+  delete: (input: FilesDeleteInput, extra?: ConnectorExtra): StepSpec => connector("files@1", "delete", input, extra),
+  /** Get a link to a file (read) */
+  link: (input: FilesLinkInput, extra?: ConnectorExtra): StepSpec => connector("files@1", "link", input, extra),
+};
+
 // Flutterwave (flutterwave@1)
 export interface FlutterwaveCreateDynamicAccountInput {
   /** Kobo; sent to Flutterwave in naira */
@@ -3876,6 +3893,7 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "brevo@1": "brevo",
   "dojah@1": "dojah",
   "email@1": "email",
+  "files@1": "files",
   "flutterwave@1": "flutterwave",
   "form@1": "form",
   "gmail@1": "gmail",
@@ -3931,6 +3949,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "brevo@1": ["add_to_list", "create_or_update_contact", "get_account", "list_lists", "send_campaign", "send_email", "send_sms"],
   "dojah@1": ["check_balance", "lookup_bvn", "lookup_nin"],
   "email@1": ["file_url"],
+  "files@1": ["delete", "link"],
   "flutterwave@1": ["create_dynamic_account", "create_static_account", "get_balance", "get_transfer", "get_transfer_by_reference", "get_transfer_fee", "list_banks", "list_transactions", "resolve_account", "transfer", "verify_payment"],
   "form@1": ["file_url", "respond"],
   "gmail@1": ["create_draft", "get_message", "get_profile", "list_labels", "list_messages", "modify_labels", "send_message"],

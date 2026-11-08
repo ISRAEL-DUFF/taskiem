@@ -1,0 +1,46 @@
+# Files a workflow run fetched or made (docs/files.md, decision 0062): a
+# customer's voice note a connector downloaded, a reply a speech step
+# spoke. A run carries only a file's reference; these actions act on
+# Taskiem's own records, for the run's organisation only, and need no
+# connection.
+manifest: connector/v1
+id: files
+version: 1.0.0
+name: Files in a run
+category: storage
+regions: [NG]
+auth:
+  type: none
+actions:
+  link:
+    title: Get a link to a file
+    description: A short-lived download link for a file this organisation's runs keep (a reference {file, name, type, size, sha256}, or its id). The file's content never goes into the run.
+    class: read
+    input:
+      type: object
+      required: [file]
+      properties:
+        file:        { description: "The file's reference (steps.<id>.output.file), or its id" }
+        ttl_minutes: { type: integer, minimum: 1, maximum: 60, default: 15 }
+    output:
+      type: object
+      properties:
+        url:        { type: string }
+        expires_at: { type: string }
+        file:       { type: object, description: "The file's reference" }
+  delete:
+    title: Delete a file
+    description: Deletes a file now, before its time is up. Deleting a file that is already gone does nothing.
+    class: idempotent_write
+    # Deleting twice changes nothing, so a retry is safe; the key is unused.
+    idempotency: { field: "header:X-Taskiem-Idempotency-Key", encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [file]
+      properties:
+        file: { description: "The file's reference, or its id" }
+    output:
+      type: object
+      properties:
+        deleted: { type: boolean }

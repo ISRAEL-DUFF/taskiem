@@ -58,6 +58,7 @@ var internal = []struct{ pattern, why string }{
 	{"integrations/payrolla-reference/*", "Payrolla's own integration pack and reply (decision 0044 R0), for the team"},
 	{"integrations/payrolla-reference/api/*", "Payrolla's own API, webhook and embedding reference, for the team"},
 	{"media", "storage for storefronts and forms is built but idle until Phase 5 ships; publish it with storefronts"},
+	{"files", "files in runs are built for the customer assistant (decision 0062), which is not released; publish with it"},
 	{"embed-sites", "embedding storefronts and forms is built but off until Phase 5 ships; publish it with storefronts"},
 	{"storefronts", "storefronts are built but off until Phase 5 ships; publish with them"},
 	{"dispatch", "riders and deliveries ride on storefront orders, off until Phase 5 ships; publish them with storefronts"},

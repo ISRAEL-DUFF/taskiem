@@ -10,6 +10,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/brevo"
 	"github.com/israel-duff/taskiem/connectors/dojah"
 	"github.com/israel-duff/taskiem/connectors/email"
+	"github.com/israel-duff/taskiem/connectors/files"
 	"github.com/israel-duff/taskiem/connectors/flutterwave"
 	"github.com/israel-duff/taskiem/connectors/form"
 	"github.com/israel-duff/taskiem/connectors/gmail"
@@ -131,6 +132,9 @@ type Options struct {
 	// Email binds the inbound email platform connector (docs/email.md);
 	// nil: its actions fail plainly.
 	Email email.Ops
+	// Files binds the run files platform connector (docs/files.md); nil:
+	// its actions fail plainly.
+	Files files.Ops
 	// Notify delivers Tell me messages (notify@1) to the business's own
 	// people; nil: they fail plainly.
 	Notify notify.Teller
@@ -189,6 +193,7 @@ func Register(r *connector.Registry, o Options) error {
 		schools.New(o.Schools),
 		form.New(o.Forms),
 		email.New(o.Email),
+		files.New(o.Files),
 		notify.New(o.Notify),
 	} {
 		if err := r.Register(c); err != nil {
