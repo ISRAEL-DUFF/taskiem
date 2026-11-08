@@ -303,13 +303,9 @@ func sizesOfOne(items, match []stock.Item) (stock.Item, bool) {
 	return stock.Item{}, false
 }
 
-// whichSize asks for the size and colour by name, when a product has more
-// than a list shows: "Air Max 90 comes in 33 sizes and colours. Say which,
-// like stock Air Max 90 – 42, Black".
-func whichSize(c *chat, product stock.Item, match []stock.Item) string {
-	return whichSizeOf(c, product.Name, len(match), match[0].Name)
-}
-
+// whichSizeOf asks for the size and colour by name, when a product has
+// more than a list shows: "Air Max 90 comes in 33 sizes and colours. Say
+// which, like stock Air Max 90 – 42, Black".
 func whichSizeOf(c *chat, product string, n int, example string) string {
 	return c.t("wa.stock.which_size", "name", whatsapp.SafeText(product), "count", strconv.Itoa(n), "example", whatsapp.SafeText(example))
 }
