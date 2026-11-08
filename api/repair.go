@@ -696,10 +696,7 @@ func (s *Server) repairAction(ctx context.Context, ref runtime.RunRef, class rep
 			"connector": f.Connector, "connection": conn, "environment": env, "link": "/connections?environment=" + env}
 	case repair.UnknownOutcome:
 		out := map[string]any{"kind": "reconcile", "label": "Check with the provider, then resolve the step", "step": f.Step}
-		w := &runtime.Worker{Store: s.Store, Registry: s.Registry, Egress: s.Egress, Logger: s.Logger, ID: "repair"}
-		if s.Vault != nil {
-			w.Connections = s.Vault
-		}
+		w := s.repairWorker()
 		rep, err := w.CheckReconcile(ctx, ref, f.Step)
 		switch {
 		case errors.Is(err, runtime.ErrNoReconcile):
@@ -1516,4 +1513,15 @@ func (s *Server) putRepairSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.getRepairSettings(w, r)
+}
+
+// repairWorker is the worker repair runs a step's checks with: the
+// server's store, connectors, connections and run files, so a step whose
+// connector keeps or reads run files works as it does on a queue worker.
+func (s *Server) repairWorker() *runtime.Worker {
+	w := &runtime.Worker{Store: s.Store, Registry: s.Registry, Egress: s.Egress, Logger: s.Logger, ID: "repair", RunFiles: s.RunFiles}
+	if s.Vault != nil {
+		w.Connections = s.Vault
+	}
+	return w
 }
