@@ -74,3 +74,21 @@ func TestChunksUTF16(t *testing.T) {
 		t.Fatalf("a two-unit character with max 1: %q", got)
 	}
 }
+
+func TestLanguageInExpressions(t *testing.T) {
+	for src, want := range map[string]string{
+		"=language('Abeg wetin una get for shop?')": "pcm",
+		"=language('ok')":       "en",
+		"=language('ok', 'yo')": "yo",
+		"=language('Please, what is the price of rice?', 'yo')": "en",
+		"=language('Sannu, don Allah ina son taimako', 'en')":   "ha",
+	} {
+		got, err := e.Eval(src, nil)
+		if err != nil || got != want {
+			t.Errorf("%s = %v (%v), want %s", src, got, err, want)
+		}
+	}
+	if _, err := e.Eval("=language(5)", nil); err == nil {
+		t.Error("a number is not a text")
+	}
+}

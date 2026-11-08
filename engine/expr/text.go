@@ -8,6 +8,8 @@ import (
 	"cel.dev/cel-go/cel"
 	"cel.dev/cel-go/common/types"
 	"cel.dev/cel-go/common/types/ref"
+
+	"github.com/israel-duff/taskiem/engine/lang"
 )
 
 // chunks(text, max) splits a text into pieces of at most max characters,
@@ -118,4 +120,50 @@ func ChunksIn(text string, max int, unit string) []string {
 		out = []string{}
 	}
 	return out
+}
+
+// language(text) guesses which of Taskiem's languages a customer wrote in
+// (decision 0062 V4, A9): en, pcm, yo, ha or ig, from the words typical of
+// each and the letters only some use (lang.Detect, as Taskiem's own chat
+// does). It says en unless another language clearly leads.
+// language(text, otherwise) gives otherwise instead when it cannot tell:
+// the language the conversation was in, so one short "ok" does not switch
+// a Yoruba conversation to English.
+var languageFunction = cel.Function("language",
+	cel.Overload("language_string", []*cel.Type{cel.StringType}, cel.StringType,
+		cel.UnaryBinding(func(t ref.Val) ref.Val {
+			s, ok := t.(types.String)
+			if !ok {
+				return types.NewErr("language: takes a text")
+			}
+			tag, _ := DetectLanguage(string(s))
+			return types.String(tag)
+		})),
+	cel.Overload("language_string_string", []*cel.Type{cel.StringType, cel.StringType}, cel.StringType,
+		cel.BinaryBinding(func(t, o ref.Val) ref.Val {
+			s, ok1 := t.(types.String)
+			other, ok2 := o.(types.String)
+			if !ok1 || !ok2 {
+				return types.NewErr("language: takes a text and a language")
+			}
+			if tag, sure := DetectLanguage(string(s)); sure {
+				return types.String(tag)
+			}
+			return other
+		})))
+
+// DetectLanguage is language() in Go: the language and whether it is
+// more than a default (English is sure with three of its common words
+// and nothing of the others).
+func DetectLanguage(text string) (string, bool) {
+	if len(text) > 1<<16 {
+		text = text[:1<<16]
+	}
+	all := lang.All()
+	tags := make([]lang.Tag, len(all))
+	for i, l := range all {
+		tags[i] = l.Tag
+	}
+	t, sure := lang.DetectAny(text, tags)
+	return string(t), sure
 }

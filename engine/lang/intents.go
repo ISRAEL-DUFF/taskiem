@@ -308,10 +308,43 @@ func after(s string, n int) string {
 // English unless one other language clearly leads: the person then gets
 // that language until they choose one (docs/languages.md).
 func Detect(text string, tags []Tag) (Tag, bool) {
+	t, sure, _ := detect(text, tags)
+	return t, sure
+}
+
+// DetectAny is Detect that is also sure of English: when the text has at
+// least three of English's common words and nothing of the other
+// languages, for a conversation that moves back to English (a workflow's
+// language(), decision 0062 V4).
+func DetectAny(text string, tags []Tag) (Tag, bool) {
+	t, sure, others := detect(text, tags)
+	if sure || others > 0 || !slices.Contains(tags, EN) {
+		return t, sure
+	}
+	n := 0
+	for _, w := range strings.Fields(Fold(text)) {
+		if englishWords[strings.Trim(w, ".,!?;:'\"")] {
+			n++
+		}
+	}
+	return EN, n >= 3
+}
+
+// englishWords are common English words that Pidgin, Yoruba, Hausa and
+// Igbo messages rarely use whole (Pidgin's own markers count against).
+var englishWords = map[string]bool{
+	"the": true, "is": true, "are": true, "was": true, "were": true, "have": true, "has": true, "would": true,
+	"could": true, "please": true, "what": true, "when": true, "where": true, "which": true, "this": true,
+	"that": true, "there": true, "their": true, "with": true, "from": true, "about": true, "does": true,
+	"don't": true, "i'm": true, "it's": true, "much": true, "many": true, "today": true, "tomorrow": true,
+	"yes": true, "thanks": true, "thank": true, "want": true, "need": true, "price": true,
+}
+
+func detect(text string, tags []Tag) (Tag, bool, int) {
 	ws := mustWords()
 	f := " " + Fold(text) + " "
 	if strings.TrimSpace(f) == "" {
-		return EN, false
+		return EN, false, 0
 	}
 	score := map[Tag]int{}
 	for _, t := range tags {
@@ -346,10 +379,14 @@ func Detect(text string, tags []Tag) (Tag, bool) {
 			second = n
 		}
 	}
-	if top >= 2 && top > second {
-		return best, true
+	others := 0
+	for _, n := range score {
+		others += n
 	}
-	return EN, false
+	if top >= 2 && top > second {
+		return best, true, others
+	}
+	return EN, false, others
 }
 
 // letterHints are letters (precomposed) that point to one language.
