@@ -281,16 +281,23 @@ actions:
               name:     { type: string }
   new_messages:
     title: Read new mail
-    description: Emails that arrived in the inbox since a time (at most 200, newest first). What the new_mail trigger polls.
+    description: >-
+      Emails that arrived in the inbox since a time, oldest first, at most
+      200, never one listed in seen. When more arrived than one call
+      answers, until says how far it got: the next call starts there. What
+      the new_mail trigger polls.
     class: read
     input:
       type: object
       required: [since]
       properties:
         since: { type: string, format: date-time }
+        seen:  { type: array, maxItems: 2000, items: { type: string }, description: "Message ids already answered (the poller's), not answered again" }
     output:
       type: object
       properties:
+        keys:  { type: array, items: { type: string }, description: The ids of every message answered this time }
+        until: { type: string, description: "When more arrived than were answered: the time (RFC 3339) up to which every message was; empty otherwise" }
         messages: *messages
     pii:
       - { field: output.messages.*.subject, category: other }
@@ -311,7 +318,7 @@ triggers:
     dedup: =body.data.message_id
     # The thread: a run waiting on a reply wakes when one comes.
     correlation: '=has(body.data.thread_id) && body.data.thread_id != "" ? dyn(body.data.thread_id) : dyn(body.data.message_id)'
-    poll: { action: new_messages, since: since, items: =output.messages, event: '="message.received"', every: 5m }
+    poll: { action: new_messages, since: since, seen: seen, keys: =output.keys, until: =output.until, items: =output.messages, event: '="message.received"', every: 5m }
     pii:
       - { field: body.data.subject, category: other }
       - { field: body.data.from, category: email }

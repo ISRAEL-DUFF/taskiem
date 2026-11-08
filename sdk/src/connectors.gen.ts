@@ -3800,6 +3800,8 @@ export interface ZohoMailListMessagesInput {
   status?: Val<"all" | "read" | "unread">;
 }
 export interface ZohoMailNewMessagesInput {
+  /** Message ids already answered (the poller's), not answered again */
+  seen?: Value;
   since: Val<string>;
 }
 export interface ZohoMailReplyInput {

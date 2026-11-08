@@ -36,7 +36,7 @@ Tokens are refreshed and kept as for Books (`connectors/internal/zoho`, shared b
 | `get_message` | read | An email's headers and content, as HTML and as text |
 | `update_message` | idempotent write | Mark read or unread, move to a folder, add or remove a label |
 | `list_folders`, `list_labels` | read | Pickers |
-| `new_messages` | read | The inbox's emails since a time: what the trigger polls |
+| `new_messages` | read | The inbox's emails since a time, oldest first, at most 200, never one in `seen`; `keys` (every id answered) and `until` (how far it got, when more came): what the trigger polls |
 
 **Never twice.** Zoho Mail has no idempotency key, so sending and replying are unsafe writes: an unknown outcome is parked for a person rather than sent twice. Marking, moving and labelling leave an email the same when done twice.
 
@@ -58,6 +58,8 @@ Zoho Mail documents no webhook for new mail, so Taskiem asks the mailbox itself 
 
 - **What a run gets:** `body.data`, the email as `list_messages` lists it: `message_id`, `folder_id`, `thread_id`, `subject`, `from`, `to`, `summary`, `received_at`, `unread`, `has_attachment`. Read the whole email with `get_message`.
 - **Personal data:** the subject, addresses and summary are sealed in run history (rule 21's `pii`).
+- **What it reads:** the inbox, newest first, a page of 200 at a time, back to where the last poll got to (the first poll starts when the workflow is deployed; each later one looks back ten minutes). Emails an earlier poll answered are skipped: the poller keeps the last 2,000 ids and passes them as `seen`.
+- **A busy mailbox:** at most 200 emails a poll, the oldest first. When more came, the poll says how far it got (`until`, the newest it answered), and the next poll starts there on the poller's next tick (a minute later) until it has caught up: none is skipped, and none answered twice ([connector/v1](../contracts/connector-v1.md) rule 22). Only more than 2,000 emails since the last poll could not all be listed; that is logged.
 - **Once each:** by the email's id.
 - **Correlation:** the thread, so a run waiting on a reply wakes when one comes.
 

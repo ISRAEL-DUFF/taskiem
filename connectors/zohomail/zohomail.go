@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -475,23 +476,84 @@ func (c *client) getMessage(ctx context.Context, req connector.Request) (connect
 	return connector.Response{Output: out}, nil
 }
 
+// A busy inbox (the new_mail trigger, connector/v1 rule 22): Zoho Mail
+// lists newest first, a page at a time, so new_messages pages back to the
+// time asked, skips what was read before (seen), and answers the oldest
+// maxNew of the rest, oldest first, saying how far it got (until) when it
+// stopped short; the next poll goes on from there.
+const (
+	maxNew    = 200
+	pageSize  = 200
+	maxListed = 2000
+)
+
 func (c *client) newMessages(ctx context.Context, req connector.Request) (connector.Response, error) {
 	since, err := time.Parse(time.RFC3339, str(req.Input, "since"))
 	if err != nil {
 		return connector.Response{}, c.zoho.Fatalf("new_messages: since must be a date and time (RFC 3339)")
 	}
-	// The inbox, newest first: those received since.
-	_, rows, err := c.messages(ctx, c.zoho.Open(req), "new_messages", "/messages/view", url.Values{"limit": {"200"}, "sortorder": {"false"}})
-	if err != nil {
-		return connector.Response{}, err
+	seen := map[string]bool{}
+	for _, id := range list(req.Input, "seen") {
+		seen[id] = true
 	}
-	out := []map[string]any{}
-	for _, m := range rows {
-		if at, ok := m.received(); ok && !at.Before(since) {
-			out = append(out, m.out())
+	s := c.zoho.Open(req)
+	// The inbox, newest first, page by page back to since.
+	var fresh []message
+	listed, reached := 0, false
+	for start := 1; !reached; start += pageSize {
+		if listed >= maxListed {
+			// More than a listing holds since the time: the oldest of them
+			// cannot be reached. Said, not silently dropped.
+			if req.Logger != nil {
+				req.Logger.Warn("zoho mail: more messages since the last poll than one listing holds; the oldest of them are not read",
+					"listed", listed, "since", since)
+			}
+			break
+		}
+		_, rows, err := c.messages(ctx, s, "new_messages", "/messages/view", url.Values{"start": {strconv.Itoa(start)}, "limit": {strconv.Itoa(pageSize)}, "sortorder": {"false"}})
+		if err != nil {
+			return connector.Response{}, err
+		}
+		listed += len(rows)
+		for _, m := range rows {
+			at, ok := m.received()
+			if !ok {
+				continue
+			}
+			if at.Before(since) {
+				reached = true
+				continue
+			}
+			if m.ID != "" && !seen[string(m.ID)] {
+				fresh = append(fresh, m)
+			}
+		}
+		if len(rows) < pageSize {
+			reached = true
 		}
 	}
-	return connector.Response{Output: map[string]any{"messages": out}}, nil
+	// Oldest first: a run waiting on a thread hears its replies in order.
+	slices.SortStableFunc(fresh, func(a, b message) int {
+		x, _ := a.received()
+		y, _ := b.received()
+		if c := x.Compare(y); c != 0 {
+			return c
+		}
+		return strings.Compare(string(a.ID), string(b.ID))
+	})
+	until := ""
+	if len(fresh) > maxNew {
+		fresh = fresh[:maxNew]
+		at, _ := fresh[len(fresh)-1].received()
+		until = at.UTC().Format(time.RFC3339)
+	}
+	out := make([]map[string]any, 0, len(fresh))
+	keys := make([]any, 0, len(fresh))
+	for _, m := range fresh {
+		out = append(out, m.out())
+		keys = append(keys, string(m.ID))
+	}
+	return connector.Response{Output: map[string]any{"messages": out, "keys": keys, "until": until}}, nil
 }
 
 // --- changing ---
