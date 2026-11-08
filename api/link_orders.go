@@ -776,9 +776,9 @@ func linesWords(lines []links.OrderLine) string {
 	// A product's sizes and colours (named "Air Max 90 – 42, Black") are
 	// told together: "36 pairs Air Max 90 in 7 sizes and colours".
 	type group struct {
-		name, unit string
-		qty        int64
-		n          int
+		name, full, unit string
+		qty              int64
+		n                int
 	}
 	var order []string
 	byName := map[string]*group{}
@@ -793,7 +793,7 @@ func linesWords(lines []links.OrderLine) string {
 		}
 		g := byName[key]
 		if g == nil {
-			g = &group{name: l.Item, unit: l.Unit}
+			g = &group{name: l.Item, full: l.Item, unit: l.Unit}
 			if sized {
 				g.name = name
 			}
@@ -806,9 +806,9 @@ func linesWords(lines []links.OrderLine) string {
 	parts := make([]string, 0, len(order))
 	for _, k := range order {
 		g := byName[k]
-		w := (stock.Item{Unit: g.unit}).Quantity(g.qty) + " " + g.name
+		w := (stock.Item{Unit: g.unit}).Quantity(g.qty) + " " + g.full
 		if strings.HasPrefix(k, "\x00") && g.n > 1 {
-			w += " in " + strconv.Itoa(g.n) + " " + sizesWord(g.n)
+			w = (stock.Item{Unit: g.unit}).Quantity(g.qty) + " " + g.name + " in " + strconv.Itoa(g.n) + " " + sizesWord(g.n)
 		}
 		parts = append(parts, w)
 	}

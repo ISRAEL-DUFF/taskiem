@@ -13,7 +13,7 @@ import {
   type SupplierPrices,
 } from "../lib/pricelists";
 import type { StockItem, StockView } from "../lib/stock";
-import { hasSizes } from "../lib/variants";
+import { hasSizes, label, sizesOf, sizesWords } from "../lib/variants";
 import { formatPrice } from "../lib/storefront";
 import {
   EmptyState,
@@ -221,6 +221,9 @@ interface ItemRow {
   available: boolean;
   /** Lower prices from a quantity up, as typed. */
   breaks: { qty: string; price: string }[];
+  /** A product sold in sizes and colours: its sizes' own prices on the
+   * list, as typed ("" is the product's), by the size's item. */
+  sizePrices: Record<string, string>;
 }
 
 /** A row's breaks as the API takes them. */
@@ -247,13 +250,18 @@ function ListItemsModal({
   useEffect(() => {
     if (!stock.data) return;
     setRows(
-      // A size or colour no longer sold is not offered; a product sold in
-      // them heads them, and is never on a list itself.
-      stock.data.items.filter((it) => !it.variant_of || it.available).map((it) => {
+      // A product sold in sizes and colours is one row: its sizes go on
+      // the list with it, at its price unless one has its own.
+      stock.data.items.filter((it) => !it.variant_of).map((it) => {
         const on = list.items.find((x) => x.item_id === it.id);
         return {
           item: it,
-          on: !!on && !hasSizes(it),
+          on: !!on,
+          sizePrices: Object.fromEntries(
+            (on?.sizes ?? [])
+              .filter((z) => (z.price_kobo ?? 0) > 0)
+              .map((z) => [z.item_id, feeInput(z.price_kobo ?? 0)]),
+          ),
           price: feeInput(on?.price_kobo ?? it.price_kobo ?? 0),
           min: String(on?.min_quantity ?? 1),
           available: on?.available ?? true,
@@ -270,7 +278,12 @@ function ListItemsModal({
   const bad = (rows ?? []).find(
     (r) =>
       r.on &&
-      (!(feeKobo(r.price) > 0) || !/^\d+$/.test(r.min) || Number(r.min) < 1),
+      (!(feeKobo(r.price) > 0) ||
+        !/^\d+$/.test(r.min) ||
+        Number(r.min) < 1 ||
+        Object.values(r.sizePrices).some(
+          (p) => p.trim() !== "" && !(feeKobo(p) > 0),
+        )),
   );
   const badBreaks = (rows ?? [])
     .filter((r) => r.on && !bad)
@@ -291,6 +304,13 @@ function ListItemsModal({
               min_quantity: Number(r.min),
               available: r.available,
               breaks: rowBreaks(r),
+              ...(hasSizes(r.item)
+                ? {
+                    sizes: Object.entries(r.sizePrices)
+                      .filter(([, p]) => p.trim() !== "")
+                      .map(([id, p]) => ({ item_id: id, price_kobo: feeKobo(p) })),
+                  }
+                : {}),
             })),
         });
         onSaved();
@@ -315,22 +335,10 @@ function ListItemsModal({
         </EmptyState>
       ) : (
         <div className="price-rows" data-testid="price-items">
-          {rows.map((r, i) =>
-            hasSizes(r.item) ? (
-              <div
-                key={r.item.id}
-                className="price-row price-sizes-head"
-                data-testid="price-sizes-head"
-              >
-                <strong>{r.item.name}</strong>
-                <span className="hint">
-                  Sold in sizes and colours: tick each one you sell below.
-                </span>
-              </div>
-            ) : (
+          {rows.map((r, i) => (
             <fieldset
               key={r.item.id}
-              className={r.item.variant_of ? "price-row price-size" : "price-row"}
+              className="price-row"
             >
               <legend className="sr-only">{r.item.name}</legend>
               <label className="inline">
@@ -366,6 +374,38 @@ function ListItemsModal({
                     />
                     Available
                   </label>
+                  {hasSizes(r.item) && stock.data && (
+                    <details className="price-sizes">
+                      <summary>
+                        {sizesWords(sizesOf(stock.data.items, r.item.id).length)}
+                        : some cost more or less
+                      </summary>
+                      <p className="hint">
+                        Each goes on the list at the price above unless you
+                        give it its own.
+                      </p>
+                      {sizesOf(stock.data.items, r.item.id).map((z) => (
+                        <Field
+                          key={z.id}
+                          label={`${label(z.variant, r.item.choices)} (₦)`}
+                        >
+                          <input
+                            inputMode="decimal"
+                            placeholder={r.price}
+                            value={r.sizePrices[z.id] ?? ""}
+                            onChange={(e) =>
+                              set(i, {
+                                sizePrices: {
+                                  ...r.sizePrices,
+                                  [z.id]: e.target.value,
+                                },
+                              })
+                            }
+                          />
+                        </Field>
+                      ))}
+                    </details>
+                  )}
                   {r.breaks.map((b, k) => (
                     <div
                       key={k}
@@ -433,8 +473,7 @@ function ListItemsModal({
                 </div>
               )}
             </fieldset>
-            ),
-          )}
+          ))}
         </div>
       )}
       {bad && (
@@ -805,6 +844,11 @@ export function SupplierPricesPage() {
                       </td>
                       <td>{priceWords(it)}</td>
                       <td>
+                        {it.sizes?.length ? (
+                          <Link to={`/chat?with=${encodeURIComponent(p.link)}`}>
+                            Order its sizes in your chat with {p.business}
+                          </Link>
+                        ) : (
                         <input
                           aria-label={`How many ${it.name}`}
                           inputMode="numeric"
@@ -818,6 +862,7 @@ export function SupplierPricesPage() {
                             }))
                           }
                         />
+                        )}
                         {problem && (
                           <span className="block hint">{problem}</span>
                         )}

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  linesWords,
   limitInput,
   limitRequest,
   payProblem,
@@ -147,5 +148,18 @@ describe("purchase orders", () => {
     expect(payProblem("")).toContain("amount");
     expect(payProblem("0")).toContain("amount");
     expect(payProblem("425,000")).toBeNull();
+  });
+});
+
+describe("lines in words", () => {
+  it("tells a product's sizes and colours together", () => {
+    expect(
+      linesWords([
+        { item: "Air Max 90 – 42, Black", quantity: 20, unit: "pair" },
+        { item: "Rice", quantity: 2, unit: "bag" },
+        { item: "Air Max 90 – 43, Black", quantity: 16, unit: "pair" },
+      ]),
+    ).toBe("36 pairs Air Max 90 in 2 sizes and colours, 2 bags Rice");
+    expect(linesWords([{ item: "Air Max 90 – 42, Black", quantity: 1, unit: "pair" }])).toBe("1 pair Air Max 90 – 42, Black");
   });
 });

@@ -349,7 +349,7 @@ test("one row per product, Sell picks 42 then black, and the low card opens the 
     });
 });
 
-test("a size's own price kept in the editor, and a price list heads the sizes with their product", async ({
+test("a size's own price kept in the editor, and a price list takes the product with its sizes", async ({
   browser,
 }) => {
   const page = await (
@@ -399,8 +399,9 @@ test("a size's own price kept in the editor, and a price list heads the sizes wi
     }),
   ]);
 
-  // The price list: the product heads its sizes on sale and is not itself
-  // one to tick; a size no longer sold is not offered.
+  // The price list: the product is one row, its sizes going on with it at
+  // its price unless one has its own; no size is a row of its own.
+  const saved: unknown[] = [];
   await page.route("**/v1/price-lists", (r) =>
     r.fulfill(
       json({
@@ -416,19 +417,32 @@ test("a size's own price kept in the editor, and a price list heads the sizes wi
       }),
     ),
   );
+  await page.route("**/v1/price-lists/l1/items", (r) => {
+    saved.push(r.request().postDataJSON());
+    return r.fulfill(json({ list: {} }));
+  });
   await page.goto("/storefront/price-lists");
   await page.getByRole("button", { name: "Items of Trade prices" }).click();
   const list = page.getByRole("dialog", { name: "Items of Trade prices" });
-  await expect(list.getByTestId("price-sizes-head")).toHaveText(
-    /Air Max 90\s*Sold in sizes and colours: tick each one you sell below\./,
-  );
   await expect(
-    list.getByRole("checkbox", { name: /^Air Max 90 \(pair\)$/ }),
+    list.getByRole("checkbox", { name: /Air Max 90 – 42, Black/ }),
   ).toHaveCount(0);
+  await list.getByRole("checkbox", { name: "Air Max 90 (pair)" }).check();
+  await list.getByText(/sizes and colours: some cost more or less/).click();
+  await list.getByRole("textbox", { name: "43, White (₦)" }).fill("50,000");
   await expect(
-    list.getByRole("checkbox", { name: "Air Max 90 – 42, Black (pair)" }),
-  ).toBeVisible();
-  await expect(list.getByText("Air Max 90 – 41, White")).toHaveCount(0);
+    list.getByRole("textbox", { name: "41, White (₦)" }),
+  ).toHaveCount(0);
   await fits(page);
   await axeBoth(page, "a price list's items with sizes");
+  await list.getByRole("button", { name: "Save" }).click();
+  await expect.poll(() => saved.length).toBe(1);
+  expect(saved[0]).toMatchObject({
+    items: [
+      {
+        item_id: "k1",
+        sizes: [{ item_id: "v5", price_kobo: 5_000_000 }],
+      },
+    ],
+  });
 });

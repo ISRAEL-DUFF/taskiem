@@ -1732,9 +1732,9 @@ fieldset.path-set legend { font-size: 12.5px; font-weight: 600; padding: 0 4px; 
 /* A price list's items (business links L4): one per row, its fields below it. */
 .price-rows { display: flex; flex-direction: column; gap: 8px; max-height: 60vh; overflow-y: auto; }
 .price-row { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px; margin: 0; min-width: 0; }
-/* A product sold in sizes and colours heads them; they sit under it. */
-.price-row.price-sizes-head { display: flex; flex-direction: column; gap: 2px; background: var(--panel-2); }
-.price-row.price-size { margin-left: 16px; }
+/* A product sold in sizes and colours: its sizes' own prices on the list. */
+.price-row .price-sizes { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+.price-row .price-sizes summary, .price-row .price-sizes .hint { grid-column: 1 / -1; }
 .price-row .price-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; align-items: end; margin-top: 6px; }
 /* A quantity price (phase 7): From 10 at ₦39,500, on its own line. */
 .price-row .price-break { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: 8px; align-items: end; }

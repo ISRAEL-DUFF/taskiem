@@ -35,7 +35,11 @@ export async function sendChoicePhoto(
 }
 
 /** Where a colour's photo is set and taken out. */
-export const choicePhotoPath = (product: string, choice: string, value: string) =>
+export const choicePhotoPath = (
+  product: string,
+  choice: string,
+  value: string,
+) =>
   `/v1/stock/items/${encodeURIComponent(product)}/variants/photo?choice=${encodeURIComponent(choice)}&value=${encodeURIComponent(value)}`;
 
 /** A chosen photo, as a list of them names it: its file's name, or the

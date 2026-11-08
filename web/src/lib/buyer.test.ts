@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bagOf, orderLine, priceLine, purchaseState, quoteText, reorderQty, stepQty } from "./buyer";
+import { bagOf, flatItems, orderLine, priceLine, purchaseState, quoteText, reorderQty, sizesTaken, stepQty } from "./buyer";
 import type { PriceItem } from "./pricelists";
 
 const item = (id: string, name: string, price: number, min = 1, available = true): PriceItem => ({
@@ -45,5 +45,40 @@ describe("the buyer's tools", () => {
       ],
     };
     expect(reorderQty(last, links, items)).toEqual({ s1: 2 });
+  });
+});
+
+describe("a product ordered by its sizes and colours", () => {
+  const trainer: PriceItem = {
+    item_id: "am",
+    name: "Air Max 90",
+    unit: "pair",
+    price_kobo: 4_000_000,
+    min_quantity: 6,
+    available: true,
+    breaks: [{ min_quantity: 50, price_kobo: 3_600_000 }],
+    sizes: [
+      { item_id: "s42", name: "Air Max 90 – 42", variant: { Size: "42" }, available: true },
+      { item_id: "s46", name: "Air Max 90 – 46", variant: { Size: "46" }, price_kobo: 4_400_000, available: true },
+      { item_id: "s47", name: "Air Max 90 – 47", variant: { Size: "47" }, available: false },
+    ],
+  };
+  it("is its sizes: the product's price and breaks, a size's own price without", () => {
+    const flat = flatItems([trainer]);
+    expect(flat.map((x) => x.item_id)).toEqual(["s42", "s46", "s47"]);
+    expect(flat[0]).toMatchObject({ price_kobo: 4_000_000, variant_of: "am", unit: "pair", min_quantity: 1 });
+    expect(flat[1]).toMatchObject({ price_kobo: 4_400_000, breaks: undefined });
+    expect(flat[2]?.available).toBe(false);
+  });
+  it("prices its sizes at the product's quantity together", () => {
+    const bag = bagOf([trainer], { s42: 40, s46: 10 });
+    expect(bag.lines).toHaveLength(2);
+    expect(bag.total).toBe(40 * 3_600_000 + 10 * 4_400_000);
+    expect(bag.count).toBe("1 item in your order");
+    expect(bagOf([trainer], { s42: 30 }).total).toBe(30 * 4_000_000);
+  });
+  it("says what is taken", () => {
+    expect(sizesTaken(trainer, { s42: 30, s46: 6 })).toBe("36 pairs in 2 sizes and colours");
+    expect(sizesTaken(trainer, {})).toBe("");
   });
 });

@@ -18,11 +18,14 @@ import {
   purchaseState,
   quoteText,
   reorderQty,
+  sizesTaken,
   stepQty,
+  type OrderItem,
 } from "../lib/buyer";
+import { label } from "../lib/variants";
 import { ORDER_STEPS } from "../lib/cardframe";
 import { categoryChips, categoryTag } from "../lib/tools";
-import { breakWords, dealKobo, offWords, priceAt } from "../lib/deals";
+import { breakWords, dealKobo, offWords } from "../lib/deals";
 import { answersDelivery } from "../lib/purchases";
 import { buyerSteps, sameName } from "../lib/tradeorders";
 import type { ItemLink, PriceItem, SupplierPrices } from "../lib/pricelists";
@@ -177,7 +180,8 @@ export function OrderSheet({
     if (start.last)
       setQty(reorderQty(start.last, links.data.item_links, list.items));
     const it = list.items.find((x) => x.item_id === start.itemId);
-    if (it && !qty[it.item_id])
+    // A product sold in sizes opens on its sizes (grid, below) instead.
+    if (it && !it.sizes?.length && !qty[it.item_id])
       setQty({ ...qty, [it.item_id]: Math.max(1, it.min_quantity) });
     setSeeded(true);
   }
@@ -196,6 +200,11 @@ export function OrderSheet({
   const [done, setDone] = useState<string>();
   const [shut, setShut] = useState(false);
   const bag = bagOf(list?.items ?? [], qty);
+  // A product's sizes under its minimum, together.
+  const short = (list?.items ?? []).find((it) => {
+    const n = (it.sizes ?? []).reduce((a, z) => a + (qty[z.item_id] ?? 0), 0);
+    return n > 0 && n < it.min_quantity;
+  });
   const offerKobo = offering ? dealKobo(offerText) : NaN;
   const offerProblem = !offering
     ? ""
@@ -214,8 +223,26 @@ export function OrderSheet({
   const ownFor = (it: PriceItem) =>
     linkedTo(it.item_id) ??
     mine[it.item_id] ??
-    own.data?.find((x) => x.name.toLowerCase() === it.name.toLowerCase())?.id ??
+    own.data?.find(
+      (x) => !x.variant_of && x.name.toLowerCase() === it.name.toLowerCase(),
+    )?.id ??
     "new";
+  // A size's line is for the product: our product of theirs (its sizes
+  // matched by their values, those we lack added to it).
+  const lineProduct = (it: OrderItem): PriceItem =>
+    (it.variant_of && list?.items.find((x) => x.item_id === it.variant_of)) ||
+    it;
+  // The items the bag's lines are for, a product once for all its sizes.
+  const unlinkedProducts = [
+    ...new Map(
+      bag.lines.map((l) => {
+        const of = lineProduct(l.item);
+        return [of.item_id, of] as const;
+      }),
+    ).values(),
+  ].filter((it) => !linkedTo(it.item_id));
+  // Which product's sizes are open to choose (the one Order was tapped on).
+  const [grid, setGrid] = useState<string | undefined>(start?.itemId);
   // Their categories as chips; the list under their headings.
   const cats = categoryChips(list?.items ?? [], chip);
   const shown = orderShown(list?.items ?? [], chip, search);
@@ -267,19 +294,22 @@ export function OrderSheet({
       const lines = [];
       for (const l of bag.lines) {
         const seller = l.item.item_id;
-        let itemId = m.items[seller] ?? ownFor(l.item);
+        // A size: ours is the product's, linked or chosen once for all its
+        // sizes.
+        const of = lineProduct(l.item);
+        let itemId = m.items[of.item_id] ?? ownFor(of);
         if (itemId === "new") {
           const out = await postOnce<{ item: { id: string } }>(
             "/v1/stock/items",
-            keyOf(`item-${seller}`),
-            { name: l.item.name, unit: l.item.unit ?? "", quantity: 0 },
+            keyOf(`item-${of.item_id}`),
+            { name: of.name, unit: of.unit ?? "", quantity: 0 },
           );
-          itemId = m.items[seller] = out.item.id;
+          itemId = m.items[of.item_id] = out.item.id;
         }
         lines.push({
           seller_item_id: seller,
           quantity: l.quantity,
-          item_id: linkedTo(seller) ? undefined : itemId,
+          item_id: linkedTo(of.item_id) ? undefined : itemId,
         });
       }
       // The same bag, note and offer is the same order: drafted once.
@@ -366,13 +396,17 @@ export function OrderSheet({
         step === "pick" ? (
           <div className="tk-bag" data-testid="order-bag">
             <span>
-              <span className="tk-bag-count">{bag.count}</span>
+              <span className="tk-bag-count">
+                {short
+                  ? `${short.name}: at least ${short.min_quantity} in all`
+                  : bag.count}
+              </span>
               <span className="tk-bag-total">{formatPrice(bag.total)}</span>
             </span>
             <button
               type="button"
               className="tk-bag-go"
-              disabled={bag.lines.length === 0}
+              disabled={bag.lines.length === 0 || !!short}
               onClick={() => setStep("review")}
             >
               Review order <Icon name="arrow-right" />
@@ -524,39 +558,63 @@ export function OrderSheet({
                             </span>
                           )}
                         </span>
-                        <span
-                          className="tk-qty"
-                          role="group"
-                          aria-label={`How many ${it.name}`}
-                        >
+                        {it.sizes?.length ? (
                           <button
                             type="button"
-                            aria-label={`One fewer ${it.name}`}
-                            disabled={n === 0}
-                            onClick={() =>
-                              setQty({
-                                ...qty,
-                                [it.item_id]: stepQty(n, it.min_quantity, -1),
-                              })
-                            }
-                          >
-                            −
-                          </button>
-                          <span aria-live="polite">{n}</span>
-                          <button
-                            type="button"
-                            aria-label={`One more ${it.name}`}
+                            className="tk-btn soft"
+                            aria-expanded={grid === it.item_id}
                             disabled={!it.available}
                             onClick={() =>
-                              setQty({
-                                ...qty,
-                                [it.item_id]: stepQty(n, it.min_quantity, 1),
-                              })
+                              setGrid(
+                                grid === it.item_id ? undefined : it.item_id,
+                              )
                             }
                           >
-                            +
+                            {sizesTaken(it, qty) || "Choose sizes"}
+                            <span className="sr-only"> of {it.name}</span>
                           </button>
-                        </span>
+                        ) : (
+                          <span
+                            className="tk-qty"
+                            role="group"
+                            aria-label={`How many ${it.name}`}
+                          >
+                            <button
+                              type="button"
+                              aria-label={`One fewer ${it.name}`}
+                              disabled={n === 0}
+                              onClick={() =>
+                                setQty({
+                                  ...qty,
+                                  [it.item_id]: stepQty(n, it.min_quantity, -1),
+                                })
+                              }
+                            >
+                              −
+                            </button>
+                            <span aria-live="polite">{n}</span>
+                            <button
+                              type="button"
+                              aria-label={`One more ${it.name}`}
+                              disabled={!it.available}
+                              onClick={() =>
+                                setQty({
+                                  ...qty,
+                                  [it.item_id]: stepQty(n, it.min_quantity, 1),
+                                })
+                              }
+                            >
+                              +
+                            </button>
+                          </span>
+                        )}
+                        {grid === it.item_id && (
+                          <SizesQty
+                            product={it}
+                            qty={qty}
+                            onQty={(id, n) => setQty({ ...qty, [id]: n })}
+                          />
+                        )}
                       </li>
                     );
                   })}
@@ -610,44 +668,50 @@ export function OrderSheet({
               <li key={l.item.item_id}>
                 <span>
                   {l.quantity} × {l.item.name}
-                  {priceAt(l.item, l.quantity) < l.item.price_kobo && (
+                  {bag.unitPrice(l.item) < l.item.price_kobo && (
                     <span className="tk-row-sub">
                       {" "}
-                      at {formatPrice(priceAt(l.item, l.quantity))} for{" "}
-                      {l.quantity}
+                      at {formatPrice(bag.unitPrice(l.item))}
+                      {l.item.variant_of ? "" : ` for ${l.quantity}`}
                     </span>
                   )}
                 </span>
-                <b>{formatPrice(l.quantity * priceAt(l.item, l.quantity))}</b>
+                <b>{formatPrice(l.quantity * bag.unitPrice(l.item))}</b>
               </li>
             ))}
           </ul>
-          {bag.lines.some((l) => !linkedTo(l.item.item_id)) && (
+          {unlinkedProducts.length > 0 && (
             <>
               <p className="tk-form-now">
                 Which of your items is each? It is remembered for next time.
               </p>
-              {bag.lines
-                .filter((l) => !linkedTo(l.item.item_id))
-                .map((l) => (
-                  <KitField key={l.item.item_id} label={l.item.name}>
-                    <select
-                      value={ownFor(l.item)}
-                      onChange={(e) =>
-                        setMine({ ...mine, [l.item.item_id]: e.target.value })
-                      }
-                    >
-                      <option value="new">
-                        A new item of mine: {l.item.name}
-                      </option>
-                      {(own.data ?? []).map((x) => (
+              {unlinkedProducts.map((it) => (
+                <KitField
+                  key={it.item_id}
+                  label={it.name}
+                  hint={
+                    it.sizes?.length
+                      ? "Its sizes and colours go into yours of the same size and colour; those it lacks are added to it."
+                      : undefined
+                  }
+                >
+                  <select
+                    value={ownFor(it)}
+                    onChange={(e) =>
+                      setMine({ ...mine, [it.item_id]: e.target.value })
+                    }
+                  >
+                    <option value="new">A new item of mine: {it.name}</option>
+                    {(own.data ?? [])
+                      .filter((x) => !x.variant_of)
+                      .map((x) => (
                         <option key={x.id} value={x.id}>
                           {x.name}
                         </option>
                       ))}
-                    </select>
-                  </KitField>
-                ))}
+                  </select>
+                </KitField>
+              ))}
             </>
           )}
           <div className="tk-offer" data-testid="make-offer">
@@ -1244,5 +1308,58 @@ export function BillView({
         )}
       </div>
     </>
+  );
+}
+
+/** A product's sizes and colours to order by: a box each (how many), those
+ * off sale greyed; its minimum and quantity prices count them together. */
+function SizesQty({
+  product,
+  qty,
+  onQty,
+}: {
+  product: PriceItem;
+  qty: Record<string, number>;
+  onQty: (item: string, n: number) => void;
+}) {
+  const sizes = product.sizes ?? [];
+  const taken = sizes.reduce((a, z) => a + (qty[z.item_id] ?? 0), 0);
+  return (
+    <div className="tk-order-sizes" data-testid="order-sizes">
+      <p className="tk-row-sub">
+        {product.min_quantity > 1 &&
+          `At least ${product.min_quantity} in all. `}
+        {taken > 0 && `${taken} so far.`}
+      </p>
+      <div className="tk-grid-cells">
+        {sizes.map((z) => (
+          <label
+            key={z.item_id}
+            className={`tk-grid-cell${z.available ? "" : " off"}`}
+          >
+            <span>
+              {label(z.variant, product.choices)}
+              {(z.price_kobo ?? 0) > 0 && (
+                <span className="tk-row-sub">
+                  {" "}
+                  {formatPrice(z.price_kobo ?? 0)}
+                </span>
+              )}
+            </span>
+            <input
+              inputMode="numeric"
+              aria-label={`${label(z.variant, product.choices)}: how many`}
+              disabled={!z.available}
+              placeholder="0"
+              value={qty[z.item_id] ? String(qty[z.item_id]) : ""}
+              onChange={(e) => {
+                const n = Number(e.target.value.replace(/\D/g, ""));
+                onQty(z.item_id, Number.isFinite(n) ? Math.min(n, 100000) : 0);
+              }}
+            />
+          </label>
+        ))}
+      </div>
+    </div>
   );
 }

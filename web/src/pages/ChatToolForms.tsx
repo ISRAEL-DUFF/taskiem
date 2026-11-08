@@ -21,6 +21,7 @@ import {
   itemsWithPrice,
   listFor,
   listLabel,
+  ownSizePrices,
   sharedWords,
   type PriceList,
 } from "../lib/pricelists";
@@ -232,8 +233,9 @@ export function ProductForm({
   // Its price on a price list, and who the list is shared with (the
   // DeskSeller board): for those who keep the storefront's prices.
   const { can } = useAuth();
-  // A product sold in sizes and colours is priced on the lists through them.
-  const trade = can("storefront.manage") && !hasSizes(item);
+  // A product sold in sizes and colours is listed once: its trade price is
+  // each size's (unless one has its own), its lowest price too.
+  const trade = can("storefront.manage");
   const lists = useLoad(
     () =>
       trade
@@ -826,6 +828,7 @@ export function PriceListForm({
         price_kobo: to,
         min_quantity: it.min_quantity,
         available: it.available,
+        ...ownSizePrices(it),
       };
     });
     if (changed === 0) return null;

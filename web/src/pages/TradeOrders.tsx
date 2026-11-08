@@ -16,7 +16,7 @@ import {
   type TradeLine,
   type TradeOrder,
 } from "../lib/tradeorders";
-import { STATUS, type Purchase } from "../lib/purchases";
+import { linesWords, STATUS, type Purchase } from "../lib/purchases";
 import type { LinksView } from "../lib/links";
 import { quantity, type StockItem, type StockView } from "../lib/stock";
 import {
@@ -87,7 +87,7 @@ function TradeRow({ o }: { o: TradeOrder }) {
       tone={tradeStatus(o.status).tone}
       title={o.buyer_name}
       side={naira(o.total_kobo)}
-      sub={`${o.reference} · ${o.lines.map((l) => `${quantity(l.quantity, l.unit)} ${l.item}`).join(", ")}`}
+      sub={`${o.reference} · ${linesWords(o.lines)}`}
       sideSub={<TradePill status={o.status} />}
       testid="trade-order"
     />
