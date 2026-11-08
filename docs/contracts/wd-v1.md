@@ -152,6 +152,10 @@ The run started by a confirmation has `trigger.body` (the inputs), `trigger.call
 
 CEL with the standard library and cel-go's strings, math, lists and optional-types extensions, plus `sum(list)`: the total of a list of numbers (an int when every element is an int, a double otherwise, 0 for an empty list; integer overflow is an error). Code written with the SDK uses it as a CEL string (`"=sum(steps.pay.output.map(r, r.amount))"`).
 
+### Long messages
+
+`chunks(text, max)` splits a text into pieces of at most `max` characters, breaking after a sentence (`.`, `!`, `?` or a line break) where it can, else between words, and inside a word only when one word is longer than `max`. WhatsApp and Telegram refuse a message over 4,096 characters, so a long reply is sent as a `foreach` over `chunks(reply, 4000)`, one send step per piece, each with its own key and retry ([decision 0062](../decisions/0062-customer-assistant.md) C20). `max` is 1 to 100,000; the text at most 1 MB.
+
 ### Files
 
 A run never holds a file's bytes. A step that fetched or made a file answers its **reference**, `{"file": id, "name", "type", "size", "sha256"}`, and later steps pass it on as it is (`"=steps.fetch.output.file"`). The file is kept in the organisation's storage for 30 days at most (less when the plan keeps run history for less). `files@1` gives a short-lived link (`link`) or deletes one early (`delete`). See [Files in runs](../files.md).
