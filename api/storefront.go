@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"slices"
 	"strconv"
@@ -522,14 +523,40 @@ func (s *Server) storeStorefrontImage(r *http.Request) (storefront.Media, error)
 	if s.Media == nil {
 		return storefront.Media{}, fmt.Errorf("%w: storage for photos is not configured", errConflict)
 	}
-	data, err := io.ReadAll(http.MaxBytesReader(nil, r.Body, media.MaxImageBytes+1))
-	if err != nil || len(data) > media.MaxImageBytes {
-		return storefront.Media{}, fmt.Errorf("%w: an image is at most %d MB", errBadRequest, media.MaxImageBytes>>20)
+	// A picture's bytes, or {"url": "https://…"}: a picture on the web,
+	// fetched once and kept as the business's own copy
+	// (docs/spec/chat-categories-and-variants.md, Part C).
+	var data []byte
+	var link string
+	if ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); ct == "application/json" {
+		var in struct {
+			URL string `json:"url"`
+		}
+		if err := decodeBody(r, &in); err != nil {
+			return storefront.Media{}, err
+		}
+		link = strings.TrimSpace(in.URL)
+		var err error
+		if data, err = s.imageFromLink(r.Context(), principalFrom(r.Context()).TenantID, link); err != nil {
+			return storefront.Media{}, err
+		}
+	} else {
+		var err error
+		data, err = io.ReadAll(http.MaxBytesReader(nil, r.Body, media.MaxImageBytes+1))
+		if err != nil || len(data) > media.MaxImageBytes {
+			return storefront.Media{}, fmt.Errorf("%w: an image is at most %d MB", errBadRequest, media.MaxImageBytes>>20)
+		}
 	}
 	m, err := s.putStorefrontImage(r.Context(), principalFrom(r.Context()), data, func(tx pgx.Tx, m storefront.Media) error {
-		return auditTx(r, tx, "storefront.media_add", m.ID.String(), map[string]any{"moderation": m.Moderation})
+		detail := map[string]any{"moderation": m.Moderation}
+		if link != "" {
+			detail["from"] = link
+		}
+		return auditTx(r, tx, "storefront.media_add", m.ID.String(), detail)
 	})
 	switch {
+	case errors.Is(err, media.ErrImage) && link != "":
+		return m, fmt.Errorf("%w: that link is not a picture we can use", errBadRequest)
 	case errors.Is(err, media.ErrImage):
 		return m, fmt.Errorf("%w: %s", errBadRequest, plainError(err))
 	case errors.Is(err, errImageRejected):

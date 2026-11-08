@@ -620,6 +620,15 @@ paths:
             schema:
               type: string
               format: binary
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [url]
+              properties:
+                url:
+                  type: string
+                  description: A picture on the web (http or https). Taskiem fetches it once, through the egress guard (its own host, no private address), checks it as an upload and keeps its own copy; 400 when it cannot be opened or is not a picture.
       responses:
         '200':
           description: Stored, and the row updated
