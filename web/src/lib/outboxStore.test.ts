@@ -134,24 +134,36 @@ describe("the outbox store", () => {
   });
 
   it("waits and tries again by itself when it is refused as too fast, a few times", async () => {
-    api.post
-      .mockRejectedValueOnce(error(429))
-      .mockRejectedValueOnce(error(429))
-      .mockResolvedValue(sent("m1"));
-    sendOutgoing("A", out("c1"));
-    await settle();
-    await new Promise((r) => setTimeout(r, 5));
-    await settle();
-    expect(api.post).toHaveBeenCalledTimes(3);
-    expect(outboxOf("A")).toHaveLength(0);
-    // Too fast every time: it gives up and says so.
-    api.post.mockReset();
-    api.post.mockRejectedValue(error(429));
-    sendOutgoing("A", out("c2"));
-    await new Promise((r) => setTimeout(r, 10));
-    await settle();
-    expect(api.post).toHaveBeenCalledTimes(3);
-    expect(outboxOf("A")[0]?.error).toMatch(/too fast/i);
+    // Fake timers: the waits between tries run in a fixed order, however
+    // busy the machine is (real 0 ms timers raced the test's own wait).
+    vi.useFakeTimers();
+    try {
+      pacing.waitMs = 1000;
+      api.post
+        .mockRejectedValueOnce(error(429))
+        .mockRejectedValueOnce(error(429))
+        .mockResolvedValue(sent("m1"));
+      sendOutgoing("A", out("c1"));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(api.post).toHaveBeenCalledTimes(1);
+      // It waits before trying again, not at once.
+      await vi.advanceTimersByTimeAsync(999);
+      expect(api.post).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(api.post).toHaveBeenCalledTimes(2);
+      await vi.runAllTimersAsync();
+      expect(api.post).toHaveBeenCalledTimes(3);
+      expect(outboxOf("A")).toHaveLength(0);
+      // Too fast every time: it gives up after its tries and says so.
+      api.post.mockReset();
+      api.post.mockRejectedValue(error(429));
+      sendOutgoing("A", out("c2"));
+      await vi.runAllTimersAsync();
+      expect(api.post).toHaveBeenCalledTimes(3);
+      expect(outboxOf("A")[0]?.error).toMatch(/too fast/i);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("skips a message deleted before its turn, and forgets all on sign-out", async () => {
