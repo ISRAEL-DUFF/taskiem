@@ -1,0 +1,85 @@
+# Speech in workflows (docs/speech.md, decision 0062 D5, plan V3): hear a
+# customer's voice note and speak a reply, through the speech service this
+# Taskiem is set up with. Acts for the run's organisation, needs no
+# connection, and works only while the owner has "Voice in workflows" on;
+# seconds heard and spoken count against the plan's monthly allowance
+# (speech_seconds_monthly). Audio travels as run files (docs/files.md),
+# never in the run.
+manifest: connector/v1
+id: speech
+version: 1.0.0
+name: Speech
+category: other
+regions: [NG]
+auth:
+  type: none
+actions:
+  transcribe:
+    title: Hear a voice note
+    description: >-
+      Turns a voice note (a run file: whatsapp@1 get_media, telegram@1
+      get_file) into text. A note that cannot be heard (no words, too long,
+      not audio this hears) does not fail the step: heard is false, reason
+      says why, and reply is a fixed answer to send the customer in their
+      language. The speech service being down fails the step after its
+      retries; send cannot_hear's answer from on_error.
+    class: read
+    input:
+      type: object
+      required: [file]
+      properties:
+        file:     { description: "The voice note's run file reference (steps.<id>.output.file), or its id" }
+        language: { type: string, enum: ["", en, pcm, yo, ha, ig], description: "The customer's language, as a hint and for reply; empty lets the service detect it" }
+    output:
+      type: object
+      properties:
+        heard:    { type: boolean, description: Whether words were heard }
+        text:     { type: string, description: What was said }
+        language: { type: string, description: The language the service heard, when it says }
+        reason:   { type: string, enum: [empty, too_long, unreadable], description: "When not heard: why" }
+        reply:    { type: string, description: "When not heard: the fixed answer to send, in the customer's language" }
+        seconds:  { type: integer, description: Seconds counted against the allowance }
+    # What a customer said is personal: sealed in run history.
+    pii:
+      - { field: output.text, category: other }
+  speak:
+    title: Speak a reply
+    description: >-
+      Speaks text as a voice note (Ogg/Opus, which WhatsApp and Telegram
+      play as one) or as MP3, kept as a run file: send it with whatsapp@1
+      send_media (voice true) or telegram@1 send_voice. At most 4,096
+      characters; split a longer reply with chunks().
+    class: read
+    input:
+      type: object
+      required: [text]
+      properties:
+        text:   { type: string, maxLength: 4096 }
+        voice:  { type: string, description: "One of the voices this Taskiem offers (the first is the default); empty for the default" }
+        format: { type: string, enum: ["", ogg, mp3], default: ogg }
+        how:    { type: string, maxLength: 500, description: "How to speak, for services that take it (\"warm and unhurried, Nigerian English\")" }
+    output:
+      type: object
+      properties:
+        file:       { type: object, description: "The spoken reply's run file reference: file, name, type, size, sha256" }
+        seconds:    { type: integer, description: How long it plays, counted against the allowance }
+        characters: { type: integer }
+    pii:
+      - { field: text, category: other }
+  cannot_hear:
+    title: The answer for a voice note that was not heard
+    description: >-
+      The fixed answer for a reason, in the customer's language, for an
+      on_error path when the speech service is down (reason unavailable).
+      Needs no speech service and spends nothing.
+    class: read
+    input:
+      type: object
+      required: [reason]
+      properties:
+        reason:   { type: string, enum: [empty, too_long, unreadable, unavailable] }
+        language: { type: string, enum: ["", en, pcm, yo, ha, ig] }
+    output:
+      type: object
+      properties:
+        reply: { type: string }

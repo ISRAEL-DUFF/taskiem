@@ -448,6 +448,22 @@
       "text": "Ẹ so {service} pọ̀.",
       "reviewed": false
     },
+    "speech.cannot_hear.empty": {
+      "text": "Ẹ jọ̀ọ́ má bínú, mi ò gbọ́ nǹkan kankan nínú ohùn tí ẹ fi ránṣẹ́. Ẹ jọ̀ọ́ ẹ gbà á sílẹ̀ lẹ́ẹ̀kan sí i tàbí kí ẹ tẹ ọ̀rọ̀ yín.",
+      "reviewed": false
+    },
+    "speech.cannot_hear.too_long": {
+      "text": "Ẹ jọ̀ọ́ má bínú, ohùn tí ẹ fi ránṣẹ́ ti gùn jù fún mi. Ẹ jọ̀ọ́ ẹ fi èyí tó kúrú ránṣẹ́ tàbí kí ẹ tẹ ọ̀rọ̀ yín.",
+      "reviewed": false
+    },
+    "speech.cannot_hear.unreadable": {
+      "text": "Ẹ jọ̀ọ́ má bínú, mi ò lè ṣí ohùn tí ẹ fi ránṣẹ́. Ẹ jọ̀ọ́ ẹ gbà á sílẹ̀ lẹ́ẹ̀kan sí i tàbí kí ẹ tẹ ọ̀rọ̀ yín.",
+      "reviewed": false
+    },
+    "speech.cannot_hear.unavailable": {
+      "text": "Ẹ jọ̀ọ́ má bínú, mi ò lè gbọ́ ohùn lásìkò yìí. Ẹ jọ̀ọ́ ẹ tẹ ọ̀rọ̀ yín, màá sì fèsì.",
+      "reviewed": false
+    },
     "ready.file_scanner": {
       "text": "This Taskiem cannot check files customers send for viruses yet, so it refuses them, and this workflow fetches them. Ask whoever runs your Taskiem to turn file checking on.",
       "reviewed": false

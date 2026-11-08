@@ -67,6 +67,17 @@ var (
 	RunFilesKept = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "taskiem_run_files_total", Help: "Run files offered for keeping, by origin and outcome.",
 	}, []string{"origin", "outcome"})
+	// SpeechRequests counts speech@1's calls (docs/speech.md), by kind
+	// (hear, speak) and outcome (done, not_heard, refused, failed).
+	SpeechRequests = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "taskiem_speech_requests_total", Help: "Speech requests from workflows, by kind and outcome.",
+	}, []string{"kind", "outcome"})
+	// SpeechSeconds is how long the speech service took, by kind: part of
+	// every voice reply's wait.
+	SpeechSeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name: "taskiem_speech_duration_seconds", Help: "Time the speech service took to hear a voice note or speak a reply.",
+		Buckets: []float64{0.25, 0.5, 1, 2, 3, 5, 8, 13, 20, 30},
+	}, []string{"kind"})
 	ChatStreamPollSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
 		Name: "taskiem_chat_stream_poll_duration_seconds", Help: "Time one chat stream look took (its database transaction).",
 		Buckets: []float64{.001, .0025, .005, .01, .025, .05, .1, .25, .5, 1},

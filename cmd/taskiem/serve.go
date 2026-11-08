@@ -29,6 +29,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/builtin"
 	emailconn "github.com/israel-duff/taskiem/connectors/email"
 	filesconn "github.com/israel-duff/taskiem/connectors/files"
+	speechconn "github.com/israel-duff/taskiem/connectors/speech"
 	formconn "github.com/israel-duff/taskiem/connectors/form"
 	invconn "github.com/israel-duff/taskiem/connectors/invoices"
 	linkconn "github.com/israel-duff/taskiem/connectors/link"
@@ -66,6 +67,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/riders"
 	"github.com/israel-duff/taskiem/engine/runfiles"
+	"github.com/israel-duff/taskiem/engine/speech"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/sandbox"
 	"github.com/israel-duff/taskiem/engine/schools"
@@ -147,6 +149,8 @@ type config struct {
 	// Languages are languages beyond English and voice notes on WhatsApp,
 	// USSD and SMS (TASKIEM_LANGUAGES, TASKIEM_TRANSCRIBE_*; languages.go).
 	Languages LanguagesConfig
+	// Speech is speech in workflows (docs/speech.md).
+	Speech SpeechConfig
 	// Billing turns plans, subscriptions and payments on (TASKIEM_BILLING=on,
 	// docs/billing.md); off, every tenant is on the internal plan.
 	Billing BillingConfig
@@ -590,6 +594,9 @@ func loadConfig() (config, error) {
 	if c.Languages, err = languagesConfig(); err != nil {
 		return c, err
 	}
+	if c.Speech, err = speechConfig(); err != nil {
+		return c, err
+	}
 	if c.Canary, err = canaryConfig(); err != nil {
 		return c, err
 	}
@@ -692,6 +699,8 @@ type engine struct {
 	email *inmail.Service
 	// runFiles keeps the files runs fetch or make (docs/files.md).
 	runFiles *runfiles.Service
+	// speech hears and speaks for workflows (docs/speech.md).
+	speech *speech.Service
 	// invoices are the business's invoices to its customers (decision
 	// 0045, T3).
 	invoices *invoicing.Invoices
@@ -758,6 +767,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	formOps := &formconn.Late{}
 	emailOps := &emailconn.Late{}
 	fileOps := &filesconn.Late{}
+	speechOps := &speechconn.Late{}
 	tell := &notify.Late{}
 	invoiceOps := &invconn.Late{}
 	linkOps := &linkconn.Late{}
@@ -774,6 +784,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	copts.Forms = formOps
 	copts.Email = emailOps
 	copts.Files = fileOps
+	copts.Speech = speechOps
 	copts.Notify = tell
 	if err := builtin.Register(reg, copts); err != nil {
 		pool.Close()
@@ -826,6 +837,8 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	}
 	e.runFiles = runFilesService(e, log)
 	fileOps.Set(e.runFiles)
+	e.speech = speechService(e, cfg.Languages.Voice, cfg.Speech, log)
+	speechOps.Set(e.speech)
 	if cfg.WhatsApp != nil {
 		// The templates' url buttons open the web app and the form host
 		// (docs/whatsapp.md#templates).

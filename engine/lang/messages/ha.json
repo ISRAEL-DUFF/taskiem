@@ -448,6 +448,22 @@
       "text": "Haɗa {service}.",
       "reviewed": false
     },
+    "speech.cannot_hear.empty": {
+      "text": "Yi haƙuri, ban ji komai a cikin saƙon muryar ba. Don Allah a sake nadawa ko a rubuta saƙon.",
+      "reviewed": false
+    },
+    "speech.cannot_hear.too_long": {
+      "text": "Yi haƙuri, saƙon muryar ya yi tsawo sosai. Don Allah a aiko da gajere ko a rubuta saƙon.",
+      "reviewed": false
+    },
+    "speech.cannot_hear.unreadable": {
+      "text": "Yi haƙuri, ban iya kunna saƙon muryar ba. Don Allah a sake nadawa ko a rubuta saƙon.",
+      "reviewed": false
+    },
+    "speech.cannot_hear.unavailable": {
+      "text": "Yi haƙuri, ba zan iya sauraron saƙon murya yanzu ba. Don Allah a rubuta saƙon, zan amsa.",
+      "reviewed": false
+    },
     "ready.file_scanner": {
       "text": "This Taskiem cannot check files customers send for viruses yet, so it refuses them, and this workflow fetches them. Ask whoever runs your Taskiem to turn file checking on.",
       "reviewed": false

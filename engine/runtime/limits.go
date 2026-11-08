@@ -60,6 +60,11 @@ type Limits struct {
 	// overage for pass-through billing; only marketing templates are held
 	// back (docs/whatsapp.md#template-costs).
 	WhatsAppTemplatesMonthly int64 `json:"whatsapp_templates_monthly"`
+	// SpeechSecondsMonthly: seconds of speech, heard and spoken, a tenant's
+	// workflows may use per UTC month (decision 0062 D7, docs/speech.md),
+	// separate from AI building's tokens. Beyond it speech@1 refuses and
+	// a workflow answers in text.
+	SpeechSecondsMonthly int64 `json:"speech_seconds_monthly"`
 	// ContainerMinutesMonthly: container-step minutes per UTC month (spec
 	// 7.5). Unlike the other limits, 0 means off: container steps are
 	// enabled per plan. Beyond it container steps fail (limit_exceeded).
@@ -180,6 +185,7 @@ var LimitKeys = []struct{ Key, Help string }{
 	{"max_connections", "active connections (0: no limit)"},
 	{"ai_monthly_tokens", "tokens AI building may use per UTC month; beyond it, build by hand (0: no limit)"},
 	{"whatsapp_templates_monthly", "WhatsApp template messages included per UTC month; beyond it they are counted as overage, and only marketing ones are held back (0: no limit)"},
+	{"speech_seconds_monthly", "seconds of speech (voice notes heard and replies spoken) workflows may use per UTC month; beyond it speech steps are refused (0: no limit)"},
 	{"container_minutes_monthly", "container-step minutes per UTC month; beyond it container steps fail (0: container steps are off)"},
 	{"container_concurrency", "container steps running at once (0: the platform default)"},
 	{"max_retention_days", "days an ended run's history is kept at most, whatever a workflow asks (0: no cap)"},
@@ -205,6 +211,10 @@ const DefaultContainerConcurrency = 2
 // allowance of WhatsApp template messages.
 const DefaultWhatsAppTemplatesMonthly = 1000
 
+// DefaultSpeechSecondsMonthly is the platform's default monthly speech
+// allowance: 100 minutes heard and spoken (prices are people item VP7).
+const DefaultSpeechSecondsMonthly = 6000
+
 // DefaultAIMonthlyTokens is the platform's default monthly AI budget: a
 // few dozen builds with self-correction on a frontier model.
 const DefaultAIMonthlyTokens = 2_000_000
@@ -229,6 +239,8 @@ func DefaultLimits() Limits {
 		WorkerConcurrency: 32,
 		MaxPayloadBytes:   1 << 20,
 		AIMonthlyTokens:   DefaultAIMonthlyTokens,
+
+		SpeechSecondsMonthly:     DefaultSpeechSecondsMonthly,
 
 		WhatsAppTemplatesMonthly: DefaultWhatsAppTemplatesMonthly,
 		ContainerConcurrency:     DefaultContainerConcurrency,
@@ -287,7 +299,7 @@ func ParseLimit(key, s string) (any, error) {
 		return f, nil
 	}
 	n, err := strconv.ParseInt(s, 10, 64)
-	if err != nil || n < 0 || (key != "runs_per_day" && key != "runs_per_month" && key != "ai_monthly_tokens" && key != "whatsapp_templates_monthly" && key != "container_minutes_monthly" && n > math.MaxInt32) {
+	if err != nil || n < 0 || (key != "runs_per_day" && key != "runs_per_month" && key != "ai_monthly_tokens" && key != "whatsapp_templates_monthly" && key != "container_minutes_monthly" && key != "speech_seconds_monthly" && n > math.MaxInt32) {
 		return nil, fmt.Errorf("%s: %q is not a non-negative whole number", key, s)
 	}
 	if key == "max_payload_bytes" && n > MaxPayload {
@@ -514,6 +526,9 @@ type Usage struct {
 	WhatsAppTemplates WhatsAppTemplateUsage `json:"whatsapp_templates_this_month"`
 	// Container-step time this UTC month, in seconds (spec 7.5).
 	ContainerSeconds int64 `json:"container_seconds_this_month"`
+	// Speech heard and spoken by workflows this UTC month, in seconds
+	// (speech_seconds_monthly, docs/speech.md).
+	SpeechSeconds int64 `json:"speech_seconds_this_month"`
 }
 
 // WhatsAppTemplateUsage is a month's WhatsApp template messages: sent by
@@ -591,6 +606,10 @@ func (s *Store) ViewLimits(ctx context.Context, tenant uuid.UUID) (LimitsView, e
 			return err
 		}
 		if u.ContainerSeconds, err = ContainerSecondsThisMonth(ctx, tx, tenant); err != nil {
+			return err
+		}
+		if err := tx.QueryRow(ctx, `SELECT COALESCE(sum(seconds_heard + seconds_spoken), 0)::bigint FROM speech_usage
+			WHERE tenant_id = $1 AND month = date_trunc('month', now() AT TIME ZONE 'UTC')::date`, tenant).Scan(&u.SpeechSeconds); err != nil {
 			return err
 		}
 		u.TasksInFlight = map[string]int{}

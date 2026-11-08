@@ -44,6 +44,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/schools"
 	"github.com/israel-duff/taskiem/connectors/sftp"
 	"github.com/israel-duff/taskiem/connectors/slack"
+	"github.com/israel-duff/taskiem/connectors/speech"
 	"github.com/israel-duff/taskiem/connectors/stock"
 	"github.com/israel-duff/taskiem/connectors/storefront"
 	"github.com/israel-duff/taskiem/connectors/telegram"
@@ -135,6 +136,9 @@ type Options struct {
 	// Files binds the run files platform connector (docs/files.md); nil:
 	// its actions fail plainly.
 	Files files.Ops
+	// Speech binds the speech platform connector (docs/speech.md); nil:
+	// hearing and speaking fail plainly.
+	Speech speech.Ops
 	// Notify delivers Tell me messages (notify@1) to the business's own
 	// people; nil: they fail plainly.
 	Notify notify.Teller
@@ -194,6 +198,7 @@ func Register(r *connector.Registry, o Options) error {
 		form.New(o.Forms),
 		email.New(o.Email),
 		files.New(o.Files),
+		speech.New(o.Speech),
 		notify.New(o.Notify),
 	} {
 		if err := r.Register(c); err != nil {

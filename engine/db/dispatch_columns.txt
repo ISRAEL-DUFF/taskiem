@@ -1221,6 +1221,7 @@ tenant_limits.max_workflows
 tenant_limits.runs_per_day
 tenant_limits.runs_per_month
 tenant_limits.sms_monthly
+tenant_limits.speech_seconds_monthly
 tenant_limits.storefront_bookings_monthly
 tenant_limits.storefront_items
 tenant_limits.storefront_orders_monthly

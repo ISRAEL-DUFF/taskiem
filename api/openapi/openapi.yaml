@@ -32964,6 +32964,7 @@ components:
       - tasks_in_flight
       - whatsapp_templates_this_month
       - container_seconds_this_month
+      - speech_seconds_this_month
       properties:
         runs_today:
           type: integer
@@ -33011,6 +33012,9 @@ components:
           additionalProperties: false
         container_seconds_this_month:
           type: integer
+        speech_seconds_this_month:
+          type: integer
+          description: Seconds of speech heard and spoken by workflows this UTC month.
       additionalProperties: false
     UsageDay:
       type: object

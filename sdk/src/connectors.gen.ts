@@ -3012,6 +3012,34 @@ export const slack = {
   upload_file: (input: SlackUploadFileInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "upload_file", input, extra),
 };
 
+// Speech (speech@1)
+export interface SpeechCannotHearInput {
+  language?: Val<"" | "en" | "pcm" | "yo" | "ha" | "ig">;
+  reason: Val<"empty" | "too_long" | "unreadable" | "unavailable">;
+}
+export interface SpeechSpeakInput {
+  format?: Val<"" | "ogg" | "mp3">;
+  /** How to speak, for services that take it ("warm and unhurried, Nigerian English") */
+  how?: Val<string>;
+  text: Val<string>;
+  /** One of the voices this Taskiem offers (the first is the default); empty for the default */
+  voice?: Val<string>;
+}
+export interface SpeechTranscribeInput {
+  /** The voice note's run file reference (steps.<id>.output.file), or its id */
+  file: Value;
+  /** The customer's language, as a hint and for reply; empty lets the service detect it */
+  language?: Val<"" | "en" | "pcm" | "yo" | "ha" | "ig">;
+}
+export const speech = {
+  /** The answer for a voice note that was not heard (read) */
+  cannot_hear: (input: SpeechCannotHearInput, extra?: ConnectorExtra): StepSpec => connector("speech@1", "cannot_hear", input, extra),
+  /** Speak a reply (read) */
+  speak: (input: SpeechSpeakInput, extra?: ConnectorExtra): StepSpec => connector("speech@1", "speak", input, extra),
+  /** Hear a voice note (read) */
+  transcribe: (input: SpeechTranscribeInput, extra?: ConnectorExtra): StepSpec => connector("speech@1", "transcribe", input, extra),
+};
+
 // Stock (stock@1)
 export interface StockAdjustInput {
   change: Val<number>;
@@ -4002,6 +4030,7 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "schools@1": "schools",
   "sftp@1": "sftp",
   "slack@1": "slack",
+  "speech@1": "speech",
   "stock@1": "stock",
   "storefront@1": "storefront",
   "telegram@1": "telegram",
@@ -4058,6 +4087,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "schools@1": ["clearance", "clearance_list", "current_term", "daily_close", "family_link", "get_student", "invoice_term", "issue_account", "list_classes", "list_debtors", "list_fee_items", "list_students", "plan_decisions", "send_account_number", "send_receipt", "send_reminders", "tell_plan_decision", "term_invoices"],
   "sftp@1": ["delete", "download_file", "list_directory", "mkdir", "rename", "stat", "upload_file"],
   "slack@1": ["add_reaction", "auth_test", "get_conversation", "get_user", "list_conversations", "list_users", "lookup_user_by_email", "open_conversation", "post_ephemeral", "post_message", "schedule_message", "update_message", "upload_file"],
+  "speech@1": ["cannot_hear", "speak", "transcribe"],
   "stock@1": ["adjust", "count", "draft_purchase", "get_item", "list_items", "list_purchases", "low_items", "movements", "receive", "record_sale", "sales_day", "send_purchase"],
   "storefront@1": ["decide", "get_booking", "issue_tickets", "mark_returned", "notify_customer", "offer_place", "payment_link", "refund"],
   "telegram@1": ["answer_callback_query", "delete_webhook", "edit_message_text", "get_chat", "get_file", "get_me", "get_webhook_info", "send_audio", "send_chat_action", "send_document", "send_message", "send_photo", "send_voice", "set_webhook"],

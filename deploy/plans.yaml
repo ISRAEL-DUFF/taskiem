@@ -59,6 +59,7 @@ plans:
       ai_monthly_tokens: 0
       whatsapp_templates_monthly: 300
       container_minutes_monthly: 0
+      speech_seconds_monthly: 1800   # PLACEHOLDER (VP7): voice notes heard and replies spoken
       max_data_tables: 3
       storefront_items: 50
       storefront_orders_monthly: 300
@@ -90,6 +91,7 @@ plans:
       ai_monthly_tokens: 0
       whatsapp_templates_monthly: 500
       container_minutes_monthly: 0
+      speech_seconds_monthly: 3600   # PLACEHOLDER (VP7): voice notes heard and replies spoken
       max_data_tables: 5
       storefront_items: 500
       storefront_orders_monthly: 1500
@@ -120,6 +122,7 @@ plans:
       ai_monthly_tokens: 500000
       whatsapp_templates_monthly: 500
       container_minutes_monthly: 0   # PLACEHOLDER (CS3): 0 = container steps off
+      speech_seconds_monthly: 3600   # PLACEHOLDER (VP7): voice notes heard and replies spoken
       max_data_tables: 10
       storefront_items: 2000
       sms_monthly: 1000
@@ -148,6 +151,7 @@ plans:
       ai_monthly_tokens: 2000000
       whatsapp_templates_monthly: 2000
       container_minutes_monthly: 0   # PLACEHOLDER (CS3): 0 = container steps off
+      speech_seconds_monthly: 18000   # PLACEHOLDER (VP7): voice notes heard and replies spoken
       max_data_tables: 50
       storefront_items: 2000
       sms_monthly: 1000
@@ -176,6 +180,7 @@ plans:
       ai_monthly_tokens: 10000000
       whatsapp_templates_monthly: 10000
       container_minutes_monthly: 600   # PLACEHOLDER (CS3): 0 = container steps off
+      speech_seconds_monthly: 36000   # PLACEHOLDER (VP7): voice notes heard and replies spoken
       max_data_tables: 0
       storefront_items: 2000
       sms_monthly: 1000
@@ -206,6 +211,7 @@ plans:
       ai_monthly_tokens: 50000000
       whatsapp_templates_monthly: 100000
       container_minutes_monthly: 3000   # PLACEHOLDER (CS3): 0 = container steps off
+      speech_seconds_monthly: 0   # PLACEHOLDER (VP7): voice notes heard and replies spoken (0: no limit)
     features: {receive_money: true, storefront_pay_on_order: true, ai: true, git: true, sso: true, scim: true, custom_roles: true, white_label: true, byok: true, embedded: true}
     partner:
       max_subtenants: 0

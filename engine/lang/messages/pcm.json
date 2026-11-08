@@ -448,6 +448,22 @@
       "text": "Connect {service}.",
       "reviewed": false
     },
+    "speech.cannot_hear.empty": {
+      "text": "Abeg no vex, I no hear anything for that voice note. Abeg record am again or type your message.",
+      "reviewed": false
+    },
+    "speech.cannot_hear.too_long": {
+      "text": "Abeg no vex, that voice note too long for me. Abeg send short one or type your message.",
+      "reviewed": false
+    },
+    "speech.cannot_hear.unreadable": {
+      "text": "Abeg no vex, I no fit play that voice note. Abeg record am again or type your message.",
+      "reviewed": false
+    },
+    "speech.cannot_hear.unavailable": {
+      "text": "Abeg no vex, I no fit listen to voice note now. Abeg type your message, I go reply you.",
+      "reviewed": false
+    },
     "ready.file_scanner": {
       "text": "This Taskiem cannot check files customers send for viruses yet, so it refuses them, and this workflow fetches them. Ask whoever runs your Taskiem to turn file checking on.",
       "reviewed": false

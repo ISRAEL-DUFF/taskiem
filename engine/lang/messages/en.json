@@ -559,6 +559,26 @@
       "reviewed": true,
       "context": "Readiness: a step needs a service the business has not connected"
     },
+    "speech.cannot_hear.empty": {
+      "text": "Sorry, I couldn't hear anything in that voice note. Please record it again or type your message.",
+      "reviewed": true,
+      "context": "Speech in workflows: a customer's voice note had no words in it; sent to the customer"
+    },
+    "speech.cannot_hear.too_long": {
+      "text": "Sorry, that voice note is too long for me. Please send a shorter one or type your message.",
+      "reviewed": true,
+      "context": "Speech in workflows: a customer's voice note was longer than this Taskiem hears; sent to the customer"
+    },
+    "speech.cannot_hear.unreadable": {
+      "text": "Sorry, I couldn't play that voice note. Please record it again or type your message.",
+      "reviewed": true,
+      "context": "Speech in workflows: a customer's voice note could not be played; sent to the customer"
+    },
+    "speech.cannot_hear.unavailable": {
+      "text": "Sorry, I can't listen to voice notes right now. Please type your message and I'll reply.",
+      "reviewed": true,
+      "context": "Speech in workflows: the speech service is down or this month's allowance is used up; sent to the customer"
+    },
     "ready.file_scanner": {
       "text": "This Taskiem cannot check files customers send for viruses yet, so it refuses them, and this workflow fetches them. Ask whoever runs your Taskiem to turn file checking on.",
       "reviewed": true,
