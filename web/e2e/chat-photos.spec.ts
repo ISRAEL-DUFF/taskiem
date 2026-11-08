@@ -191,6 +191,11 @@ for (const viewport of [
     await page.goto("/chat?with=taskiem");
     const box = page.getByTestId("taskiem-pane").getByLabel("Message");
     await box.fill("/pro");
+    // The tools come once the page knows they are on: Enter before then
+    // sends "/pro" as a message.
+    await expect(
+      page.getByRole("region", { name: "Tools" }).getByRole("button"),
+    ).toHaveCount(1);
     await box.press("Enter");
     await page.keyboard.press("Enter");
     const sheet = page.getByRole("dialog", { name: /Products/ });
@@ -281,6 +286,11 @@ test("a photo that does not go leaves the product added, to send again", async (
   await page.goto("/chat?with=taskiem");
   const box = page.getByTestId("taskiem-pane").getByLabel("Message");
   await box.fill("/pro");
+  // The tools come once the page knows they are on: Enter before then
+  // sends "/pro" as a message.
+  await expect(
+    page.getByRole("region", { name: "Tools" }).getByRole("button"),
+  ).toHaveCount(1);
   await box.press("Enter");
   await page.keyboard.press("Enter");
   await page
@@ -356,6 +366,11 @@ test("a product's photos: make one the main photo, remove one, add one", async (
   await page.goto("/chat?with=taskiem");
   const box = page.getByTestId("taskiem-pane").getByLabel("Message");
   await box.fill("/pro");
+  // The tools come once the page knows they are on: Enter before then
+  // sends "/pro" as a message.
+  await expect(
+    page.getByRole("region", { name: "Tools" }).getByRole("button"),
+  ).toHaveCount(1);
   await box.press("Enter");
   await page.keyboard.press("Enter");
   await page
