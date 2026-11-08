@@ -2,8 +2,11 @@ package api
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"slices"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -76,10 +79,87 @@ func (s *Server) putTableReaders(w http.ResponseWriter, r *http.Request) {
 	s.setTableReaders(w, r, readers)
 }
 
+// getTableReaders answers a table's readers and the business's roles,
+// for the Tables page to offer them to pick from.
+func (s *Server) getTableReaders(w http.ResponseWriter, r *http.Request) {
+	t, err := s.loadTable(r)
+	if err != nil {
+		s.failTables(w, r, err)
+		return
+	}
+	var roles []string
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		roles, err = businessRolesTx(r.Context(), tx)
+		return err
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"readers": readersOf(t), "roles": roles})
+}
+
 // deleteTableReaders clears a table's readers: every table.read holder
 // reads it again.
 func (s *Server) deleteTableReaders(w http.ResponseWriter, r *http.Request) {
 	s.setTableReaders(w, r, nil)
+}
+
+// readersRefused is a readers list refused for whom it names (422): a
+// role the business does not have, or one that would leave the person
+// setting it out of the table.
+type readersRefused struct {
+	code, msg string
+	unknown   []string
+	roles     []string
+}
+
+func (e *readersRefused) Error() string { return e.msg }
+
+// businessRolesTx are the roles a business has: the built-in ones, its
+// custom roles, and any role a member holds (a business role such as
+// dispatch or hr), sorted.
+func businessRolesTx(ctx context.Context, tx pgx.Tx) ([]string, error) {
+	rows, err := tx.Query(ctx, `SELECT name FROM roles UNION SELECT DISTINCT role FROM memberships`)
+	if err != nil {
+		return nil, err
+	}
+	have, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return nil, err
+	}
+	for n := range rolePermissions {
+		have = append(have, n)
+	}
+	slices.Sort(have)
+	return slices.Compact(have), nil
+}
+
+// checkReadersFor refuses readers a person sets that name a role the
+// business does not have (a typo, hr_led, would lock everyone but the
+// owner out), or that hold none of the person's own roles, so they would
+// lock themselves out; the owner reads every table and may.
+func checkReadersFor(ctx context.Context, tx pgx.Tx, p *Principal, readers []string) error {
+	known, err := businessRolesTx(ctx, tx)
+	if err != nil {
+		return err
+	}
+	var unknown []string
+	for _, r := range readers {
+		if !slices.Contains(known, r) {
+			unknown = append(unknown, r)
+		}
+	}
+	if len(unknown) > 0 {
+		return &readersRefused{code: "unknown_roles", unknown: unknown, roles: known,
+			msg: fmt.Sprintf("%s: no such role in this business (none built in, none of its own roles, and no member holds it); its roles are %s",
+				strings.Join(unknown, ", "), strings.Join(known, ", "))}
+	}
+	mine := p.tableRoles()
+	if !slices.Contains(mine, datatables.Owner) && !slices.ContainsFunc(mine, func(r string) bool { return slices.Contains(readers, r) }) {
+		return &readersRefused{code: "readers_lock_out", roles: known,
+			msg: fmt.Sprintf("these readers would lock you out of the table: name one of your roles (%s) among them, or ask the owner", strings.Join(mine, ", "))}
+	}
+	return nil
 }
 
 func (s *Server) setTableReaders(w http.ResponseWriter, r *http.Request, readers []string) {
@@ -96,6 +176,11 @@ func (s *Server) setTableReaders(w http.ResponseWriter, r *http.Request, readers
 	}
 	before := t.Readers
 	err = s.tx(r, func(tx pgx.Tx) error {
+		if readers != nil {
+			if err := checkReadersFor(r.Context(), tx, principalFrom(r.Context()), readers); err != nil {
+				return err
+			}
+		}
 		if err := datatables.SetReaders(r.Context(), tx, t.ID, readers); err != nil {
 			return err
 		}
@@ -109,6 +194,14 @@ func (s *Server) setTableReaders(w http.ResponseWriter, r *http.Request, readers
 		t, err = datatables.GetTable(r.Context(), tx, t.ID)
 		return err
 	})
+	if rr := (*readersRefused)(nil); errors.As(err, &rr) {
+		body := map[string]any{"error": rr.msg, "code": rr.code, "roles": rr.roles}
+		if rr.unknown != nil {
+			body["unknown"] = rr.unknown
+		}
+		writeJSON(w, http.StatusUnprocessableEntity, body)
+		return
+	}
 	if err != nil {
 		s.failTables(w, r, err)
 		return

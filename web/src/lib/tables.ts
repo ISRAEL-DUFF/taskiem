@@ -261,6 +261,21 @@ export function tableControls(table: Pick<Table, "kept_by" | "can_read">, canEdi
 /** Whether the table's rows are for some roles only (decision 0065). */
 export const isRestricted = (table: Pick<Table, "readers">) => !!table.readers && table.readers.length > 0;
 
+/**
+ * The roles a table's readers can be picked from (GET /v1/tables/{id}/readers): the business's roles, and any reader already set
+ * that is no longer one (so it can be unticked), without the owner, who sees every table.
+ */
+export function readerChoices(roles: string[], current: string[] | null | undefined): string[] {
+  return [...new Set([...roles, ...(current ?? [])])].filter((r) => r !== "owner").sort();
+}
+
+/** The readers with role ticked or unticked, sorted. */
+export function toggleReader(chosen: string[], role: string, on: boolean): string[] {
+  const out = chosen.filter((r) => r !== role);
+  if (on) out.push(role);
+  return out.sort();
+}
+
 /** The roles as words: "hr", "hr or hr_lead", "a, b or c". */
 export function rolesText(roles: string[]): string {
   if (roles.length <= 1) return roles.join("");

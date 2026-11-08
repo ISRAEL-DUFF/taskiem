@@ -452,6 +452,10 @@
       "text": "Paystack must on Pay with Transfer for this business: ask Paystack support. Until then customers no fit pay by transfer into the account numbers wey e open.",
       "reviewed": false
     },
+    "ready.reader": {
+      "text": "Nobody get the role {role} yet, so na only owners fit read the table {table}: give the role to the people wey suppose see am.",
+      "reviewed": false
+    },
     "ready.role": {
       "text": "Nobody get the role {role} yet, so na owners we go ask; give am to person if na dem suppose decide.",
       "reviewed": false

@@ -564,6 +564,11 @@
       "reviewed": true,
       "context": "Readiness: a workflow collects payments by transfer on Paystack, which turns the feature on per business, and none has been collected yet"
     },
+    "ready.reader": {
+      "text": "Nobody has the role {role} yet, so only owners can read the table {table}: give the role to the people who should.",
+      "reviewed": true,
+      "context": "Readiness: a data table the workflow uses names readers (roles) that no member holds yet"
+    },
     "ready.role": {
       "text": "Nobody has the role {role} yet, so owners will be asked; give it to someone if they should decide.",
       "reviewed": true,

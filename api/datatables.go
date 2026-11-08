@@ -45,6 +45,7 @@ func (s *Server) tablesRoutes(r chi.Router) {
 	r.With(s.need(PermTableEdit)).Delete("/tables/{id}", s.deleteTable)
 	r.With(s.need(PermTableEdit)).Post("/tables/{id}/columns", s.addTableColumn)
 	r.With(s.need(PermTableEdit)).Delete("/tables/{id}/columns/{name}", s.dropTableColumn)
+	r.With(s.need(PermTableRead), s.need(PermRoleManage)).Get("/tables/{id}/readers", s.getTableReaders)
 	r.With(s.need(PermTableRead), s.need(PermRoleManage)).Put("/tables/{id}/readers", s.putTableReaders)
 	r.With(s.need(PermTableRead), s.need(PermRoleManage)).Delete("/tables/{id}/readers", s.deleteTableReaders)
 	r.With(s.need(PermTableRead)).Get("/tables/{id}/rows", s.listTableRows)

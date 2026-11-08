@@ -159,12 +159,42 @@ func TestTableReaders(t *testing.T) {
 		t.Fatalf("cleared %v", cleared)
 	}
 	viewer.must(200, "GET", rows, nil)
-	// An admin who reads the table may restrict it.
-	admin.must(200, "PUT", readers, map[string]any{"readers": []string{"hr"}})
+	// A role the business does not have (a typo) is refused, naming it
+	// and the business's roles, so nobody is locked out by mistake.
+	s, out := owner.do("PUT", readers, map[string]any{"readers": []string{"hr", "hr_led"}})
+	if s != 422 || out["code"] != "unknown_roles" || toJSON(out["unknown"]) != `["hr_led"]` || !strings.Contains(out["error"].(string), "hr_led") {
+		t.Fatalf("an unknown role: %d %v", s, out)
+	}
+	roles := toJSON(out["roles"])
+	for _, r := range []string{`"hr"`, `"hr_lead"`, `"owner"`, `"viewer"`, `"approver"`} {
+		if !strings.Contains(roles, r) {
+			t.Errorf("the business's roles %s lack %s", roles, r)
+		}
+	}
+	// The Tables page offers the same roles to pick from.
+	if got := owner.must(200, "GET", readers, nil); toJSON(got["roles"]) != roles || got["readers"] != nil {
+		t.Errorf("readers and roles: %v, want roles %s", got, roles)
+	}
+	if s, _ := viewer.do("GET", readers, nil); s != 403 {
+		t.Errorf("a viewer listed the roles to pick from: %d", s)
+	}
+	// A built-in role nobody holds yet is a role of the business.
+	owner.must(200, "PUT", readers, map[string]any{"readers": []string{"approver"}})
+	owner.must(200, "DELETE", readers, nil)
+	// An admin who reads the table may not restrict it to roles they do
+	// not hold: they would lock themselves out. One holding the role may;
+	// the owner always may.
+	if s, out := admin.do("PUT", readers, map[string]any{"readers": []string{"hr"}}); s != 422 || out["code"] != "readers_lock_out" {
+		t.Fatalf("an admin locking themselves out: %d %v", s, out)
+	}
+	if s, _ := admin.do("GET", rows, nil); s != 200 {
+		t.Errorf("the refused change took effect: %d", s)
+	}
+	hrAdmin.must(200, "PUT", readers, map[string]any{"readers": []string{"hr"}})
 	if s, _ := admin.do("GET", rows, nil); s != 403 {
 		t.Errorf("an admin without hr read it: %d", s)
 	}
-	if a := w.auditActions(t, "Acme"); a["table.readers.set"] != 2 || a["table.readers.clear"] != 1 {
+	if a := w.auditActions(t, "Acme"); a["table.readers.set"] != 3 || a["table.readers.clear"] != 2 {
 		t.Errorf("audit %v", a)
 	}
 }
@@ -204,6 +234,29 @@ func TestHRDeskTablesHaveReaders(t *testing.T) {
 					t.Errorf("%s: a viewer read its rows: %d", m["name"], s)
 				}
 			}
+		}
+	}
+	// Nobody holds hr or hr_lead yet: readiness says so, naming a table
+	// they read, and it does not stop publishing.
+	wf := out["id"].(string)
+	needs := owner.must(200, "GET", "/v1/workflows/"+wf+"/versions/1/readiness", nil)["needs"].([]any)
+	said := map[string]map[string]any{}
+	for _, x := range needs {
+		if n := x.(map[string]any); n["kind"] == "role" {
+			said[n["name"].(string)] = n
+		}
+	}
+	for _, role := range []string{"hr", "hr_lead"} {
+		n := said[role]
+		if n == nil || n["problem"] != "nobody" || n["blocking"] != false || !strings.Contains(n["message"].(string), "only owners can read the table") {
+			t.Errorf("readiness on %s: %v", role, n)
+		}
+	}
+	addMember(t, w.world, owner, "hana", "viewer", "hr")
+	needs = owner.must(200, "GET", "/v1/workflows/"+wf+"/versions/1/readiness", nil)["needs"].([]any)
+	for _, x := range needs {
+		if n := x.(map[string]any); n["kind"] == "role" && n["name"] == "hr" {
+			t.Errorf("hr is held now: %v", n)
 		}
 	}
 }

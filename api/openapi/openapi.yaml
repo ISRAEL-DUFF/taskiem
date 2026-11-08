@@ -25446,13 +25446,67 @@ paths:
         default:
           $ref: '#/components/responses/Error'
   /v1/tables/{id}/readers:
+    get:
+      operationId: getTableReaders
+      tags:
+      - Data tables
+      summary: A table's readers, and the roles to choose them from
+      description: >-
+        The table's readers (null for every `table.read` holder) and the business's roles: built in, its custom roles, and every role a member holds, sorted. The Tables page offers these to pick from when it sets readers. The same permissions as setting them.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.read,role.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The table's id
+      responses:
+        '200':
+          description: The readers and the roles
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [readers, roles]
+                properties:
+                  readers:
+                    type: [array, 'null']
+                    items:
+                      type: string
+                  roles:
+                    type: array
+                    items:
+                      type: string
+        '403':
+          description: >-
+            The permission is missing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: >-
+            No such table.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
     put:
       operationId: setTableReaders
       tags:
       - Data tables
       summary: Restrict a table's rows to some roles
       description: >-
-        Sets the table's readers (decision 0065): the membership roles (built-in, custom or business roles, which need not be held by anyone yet) whose holders, and the owner, may read and change its rows, on top of `table.read` and `table.edit`, everywhere a person reaches rows (this API, the Tables page, exports and imports, chat and its questions). Needs `role.manage`, since readers say what a role grants, and `table.read`; only someone who may read the table now may change its readers, so it never lets the caller into rows they could not read. An empty list (nobody) is refused: clear the readers with DELETE instead. Audited as `table.readers.set` with the roles before and after. Workflows still reach the rows through the `data_tables` connection.
+        Sets the table's readers (decision 0065): the membership roles whose holders, and the owner, may read and change its rows, on top of `table.read` and `table.edit`, everywhere a person reaches rows (this API, the Tables page, exports and imports, chat and its questions). Each must be a role of the business: built in, one of its custom roles, or held by a member (a business role such as `hr`); a built-in or custom role need not be held by anyone yet. Anything else (a typo, which would lock everyone but the owner out) is refused with 422 `unknown_roles`, naming the unknown roles and listing the business's. Readers that hold none of the caller's own roles are refused with 422 `readers_lock_out`, unless the caller is the owner, who reads every table. Needs `role.manage`, since readers say what a role grants, and `table.read`; only someone who may read the table now may change its readers, so it never lets the caller into rows they could not read. An empty list (nobody) is refused: clear the readers with DELETE instead. Audited as `table.readers.set` with the roles before and after. Workflows still reach the rows through the `data_tables` connection.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -25508,6 +25562,31 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '422':
+          description: >-
+            `unknown_roles`: a reader is no role of the business (`unknown` names them); or `readers_lock_out`: the readers hold none of the caller's roles and the caller is not the owner. Both list the business's roles (`roles`) to choose from.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [error, code, roles]
+                properties:
+                  error:
+                    type: string
+                  code:
+                    type: string
+                    enum: [unknown_roles, readers_lock_out]
+                  unknown:
+                    type: array
+                    items:
+                      type: string
+                    description: The readers that are no role of the business (unknown_roles).
+                  roles:
+                    type: array
+                    items:
+                      type: string
+                    description: The business's roles, built in, custom and held by members, sorted.
         default:
           $ref: '#/components/responses/Error'
     delete:

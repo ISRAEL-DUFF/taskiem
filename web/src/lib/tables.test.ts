@@ -16,6 +16,8 @@ import {
   newColumn,
   parseCSV,
   parseReaders,
+  readerChoices,
+  toggleReader,
   personalByDefault,
   readersText,
   rolesText,
@@ -169,5 +171,12 @@ describe("data tables", () => {
     expect(parseReaders("hr_lead, hr  hr")).toEqual({ roles: ["hr", "hr_lead"] });
     expect("error" in parseReaders(" , ")).toBe(true);
     expect("error" in parseReaders("HR people!")).toBe(true);
+  });
+
+  it("offers the business's roles as readers, keeping one set before and leaving out the owner", () => {
+    expect(readerChoices(["admin", "hr", "owner", "viewer"], ["hr_led"])).toEqual(["admin", "hr", "hr_led", "viewer"]);
+    expect(readerChoices(["hr"], null)).toEqual(["hr"]);
+    expect(toggleReader(["hr_lead"], "hr", true)).toEqual(["hr", "hr_lead"]);
+    expect(toggleReader(["hr", "hr_lead"], "hr", false)).toEqual(["hr_lead"]);
   });
 });

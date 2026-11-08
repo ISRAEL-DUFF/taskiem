@@ -16,11 +16,12 @@ import {
   isKept,
   isRestricted,
   keptNotice,
-  parseReaders,
+  readerChoices,
   readersText,
   rolesText,
   tableActions,
   tableControls,
+  toggleReader,
   matchHeaders,
   tableFromCSV,
   nameError,
@@ -397,26 +398,36 @@ function Readers({ table, manage, onChanged }: { table: Table; manage: boolean; 
 }
 
 function ReadersForm({ table, onClose, onDone }: { table: Table; onClose: () => void; onDone: () => void }) {
-  const [text, setText] = useState((table.readers ?? []).join(", "));
+  const [chosen, setChosen] = useState<string[]>([...(table.readers ?? [])].sort());
+  const roles = useLoad(() => get<{ readers: string[] | null; roles: string[] }>(`/v1/tables/${table.id}/readers`), [table.id]);
   const act = useAction();
-  const parsed = parseReaders(text);
-  const error = text.trim() === "" ? null : "error" in parsed ? parsed.error : null;
+  const choices = readerChoices(roles.data?.roles ?? [], table.readers);
   return (
     <Modal title="Who can see the rows" onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          if (!("roles" in parsed)) return;
-          void act.run(async () => (await put(`/v1/tables/${table.id}/readers`, { readers: parsed.roles }), onDone()), "Saved");
+          if (chosen.length === 0) return;
+          void act.run(async () => (await put(`/v1/tables/${table.id}/readers`, { readers: chosen }), onDone()), "Saved");
         }}
       >
         <p className="hint">Only members with one of these roles, and the owner, will see and change its rows, here and in chat. Give the roles to people under Members.</p>
-        <Field label="Roles" hint={error ?? "Separated by commas, such as hr, hr_lead"}>
-          <input value={text} onChange={(e) => setText(e.target.value)} required autoFocus />
-        </Field>
+        <ErrorBox error={roles.error} />
+        {!roles.data && !roles.error && <Skeleton />}
+        {roles.data && (
+          <fieldset>
+            <legend>Roles</legend>
+            {choices.map((r) => (
+              <label key={r} className="inline">
+                <input type="checkbox" checked={chosen.includes(r)} onChange={(e) => setChosen(toggleReader(chosen, r, e.target.checked))} /> {r}
+              </label>
+            ))}
+            <p className="hint">{chosen.length === 0 ? "Choose at least one role: with none, nobody but the owner could see the rows." : `Chosen: ${rolesText(chosen)}.`}</p>
+          </fieldset>
+        )}
         <ErrorBox error={act.error} />
         <div className="toolbar">
-          <button type="submit" className="primary" disabled={act.busy || !("roles" in parsed)}>
+          <button type="submit" className="primary" disabled={act.busy || chosen.length === 0}>
             Save
           </button>
           {isRestricted(table) && (
