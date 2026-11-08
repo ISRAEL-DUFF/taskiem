@@ -397,12 +397,12 @@ func TestPollerCatchesUpABusyGmail(t *testing.T) {
 	reads := map[string]int{}
 	fake := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		rw.Header().Set("Content-Type", "application/json")
-		switch p := r.URL.Path; {
-		case p == "/token":
+		switch r.URL.Path {
+		case "/token":
 			_, _ = rw.Write([]byte(`{"access_token":"ya29.t","expires_in":3600}`))
-		case p == "/users/me/profile":
+		case "/users/me/profile":
 			_, _ = rw.Write([]byte(`{"emailAddress":"help@adacakes.ng"}`))
-		case p == "/users/me/messages":
+		case "/users/me/messages":
 			// Newest first, after: and before: in seconds, in pages.
 			var after, before int64 = 0, 1 << 62
 			for _, f := range strings.Fields(r.URL.Query().Get("q")) {
@@ -422,7 +422,7 @@ func TestPollerCatchesUpABusyGmail(t *testing.T) {
 			b, _ := json.Marshal(map[string]any{"messages": refs})
 			_, _ = rw.Write(b)
 		default:
-			id := strings.TrimPrefix(p, "/users/me/messages/")
+			id := strings.TrimPrefix(r.URL.Path, "/users/me/messages/")
 			mu.Lock()
 			reads[id]++
 			mu.Unlock()
