@@ -29,9 +29,12 @@ A message's `to` is taken as people write it: spaces, dashes and brackets are dr
 | `list_templates` | `GET /{waba-id}/message_templates?status=APPROVED` | read | The approved templates' `name`, `language`, `category`, body words and how many values the body takes. Needs `business_account_id`. The web app's template picker (`GET /v1/whatsapp/templates`) uses it |
 | `send_text` | `POST /{id}/messages`, `type: text` | unsafe write | Only within the 24-hour customer service window. `preview_url`, `reply_to` (a wamid to quote) |
 | `send_template` | `type: template` | unsafe write | `name`, `language` (`en_US`), `components` as Meta documents them, for example `[{type: body, parameters: [{type: text, parameter_name: first_name, text: Ada}]}]`. The only message allowed outside the window |
-| `send_media` | `type: image/document/audio/video/sticker` | unsafe write | `link` (Meta fetches it and caches it for 10 minutes) or `media_id`. `caption` for image, document and video. `filename` for documents |
+| `send_media` | `type: image/document/audio/video/sticker` | unsafe write | `link` (Meta fetches it and caches it for 10 minutes), `media_id`, or `file`, a run file uploaded first ([Files in runs](../files.md)). `voice: true` sends audio as a voice note (Ogg/Opus; plays inline up to 512 KB). `caption` for image, document and video. `filename` for documents |
 | `send_interactive` | `type: interactive` | unsafe write | Meta's `interactive` object, passed through: up to three reply `button`s, or a `list` (up to 10 sections and 10 rows) |
 | `mark_as_read` | `status: read` | idempotent write | A wamid from an inbound message (within 30 days). Also marks earlier messages read |
+| `get_media` | `GET /{media-id}`, then its URL | read | The media of an inbound message, fetched only from Meta's media host (`lookaside.fbsbx.com`), checked against its sha256, and kept as a person's run file (scanned, personal); the run gets its reference. An expired URL is retried with a fresh lookup |
+| `upload_media` | `POST /{phone-number-id}/media` | idempotent write | A run file to a media id; `voice: true` checks it is Ogg/Opus. A repeat only makes a second id |
+| `send_typing` | `status: read` with `typing_indicator` | idempotent write | Marks the message read and shows "typing…" until the reply is sent, at most 25 seconds |
 
 Every send can carry `biz_opaque_callback_data`, which Meta returns in that message's status events. A send's output has `message_id` (the wamid), `wa_id` (the user's WhatsApp ID), `input` and, for paced templates, `message_status`.
 
@@ -63,6 +66,8 @@ Every POST is verified with `X-Hub-Signature-256: sha256=<hex>`, an HMAC-SHA256 
 | `error` | A system, app or account error | none: Meta gives no id | none |
 
 Meta may batch many messages and statuses in one POST. The trigger splits a delivery into one event per message, status or error (`split` in the manifest), and each event has its own type, dedup key and correlation. A run gets that one event as `trigger.item`: `{kind, message | status | error, metadata}`, with `metadata.phone_number_id` and `display_phone_number`; `trigger.body` is still the whole delivery. So a run that asks a question waits on `whatsapp@1:messages` with correlation `steps.ask.output.wa_id` and reads `trigger.item.message`; a workflow that starts on messages reads the same. A run that must know a message arrived waits with correlation `steps.notify.output.message_id`. A `read` can arrive without a `delivered`; Meta notes that read implies delivered.
+
+**What a customer sends** (decision 0062, P1): the sender's number and profile name, and what they wrote (text, captions, locations, contacts, button and list replies), are declared personal data, sealed in run history and readable by the run's steps.
 
 Meta sends every field the app subscribes to (template status, account updates, ...) to the same URL. The trigger acknowledges the other fields and ignores them. Meta retries failed deliveries for up to 7 days and expects quick 200s.
 

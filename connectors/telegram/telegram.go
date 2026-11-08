@@ -60,7 +60,7 @@ func New(o Options) *connector.Connector {
 		"send_voice":            connector.ActionFunc(c.sendSound("sendVoice", "voice", []string{"audio/ogg", "audio/mpeg", "audio/mp4"})),
 		"send_audio":            connector.ActionFunc(c.sendSound("sendAudio", "audio", []string{"audio/mpeg", "audio/mp4"})),
 		"send_chat_action":      connector.ActionFunc(c.sendChatAction),
-	}}
+	}, Registrars: map[string]connector.Registrar{"update": webhook{c: c}}}
 }
 
 type client struct{ base string }
