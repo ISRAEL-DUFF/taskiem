@@ -1,185 +1,153 @@
 # Chat: dispatch riders as participants
 
-Status: **plan**, for review (8 November 2026). Written with the founder. Decision: [0065](../decisions/0065-riders-are-organisations.md) (proposed). Amends [dispatch.md](dispatch.md) (D1 to D6, built) and builds on [chat tools](chat-tools.md), [business links](business-links.md) ([0061](../decisions/0061-business-links.md)), [paying people](chat-pay-people.md) (plan) and [the five flows](chat-five-more-flows.md) (plan).
+Status: **plan**, for review (8 November 2026). Written with the founder. Decision: [0065](../decisions/0065-riders-are-organisations.md) (proposed). Amends [dispatch.md](dispatch.md) (D1 to D6, built) and builds on [chat tools](chat-tools.md), [business links](business-links.md) ([0061](../decisions/0061-business-links.md)), [fronts: services](fronts.md), [paying people](chat-pay-people.md) (plan) and [the five flows](chat-five-more-flows.md) (plan).
 
 ## Summary
 
-The chat has two participants today: a business and the businesses it trades with. Every order, bill, payment and deal between them is a card in a conversation, and each side has tools in the chat for its half of the trade. The third participant in most of those trades is the person who carries the goods, and that person has no place in Taskiem at all: a rider is a row inside one business, a sealed name and phone, reached on WhatsApp with signed buttons, who can answer an offer and tap three steps and nothing else.
+The chat has two participants today: a business and the businesses it trades with. The third participant in most trades is the person who carries the goods, and that person has no place in Taskiem: a rider is a row inside one business, a sealed name and phone, reached on WhatsApp with signed buttons, who answers an offer and taps three steps and nothing else. They cannot see their deliveries across the businesses they work for, say once that they are off, hold their own bank, or be found by a business that needs them.
 
-This plan makes the rider a participant:
+The first draft of this plan gave the rider a sign-up of their own, a kind, a profile, a link role, tools, roles, mirror tables and a module. Every one of those was a business concept with "rider" written on it, a seam to keep in step forever. The plan now says what a rider is in Taskiem's own terms, and almost nothing new is needed:
 
-- **A rider is an organisation on Taskiem**, as a person alone already is: they sign up as a rider, have a profile (name, photo, vehicle, areas, hours), a Taskiem conversation, and can be found in Explore under Dispatch.
-- **A business adds a rider by linking with them**, the same link that joins a buyer and a seller, with the rider as a third kind of link. Both sides say yes. The business keeps its own settings for that rider (the fee it pays, the areas it uses them for); the rider keeps their own identity, availability and bank, once, for every business.
-- **The delivery is a document in the conversation between them**, a card with its steps (Offered, Accepted, Picked up, Arrived, Delivered), on both sides, with diary lines as it moves, as orders and bills are between businesses.
-- **The rider has tools in their chat**: Deliveries, Availability, Earnings, Pay (their bank), Businesses. The offer is an alert with Accept and Can't; a remittance due and a payout received are alerts too; the morning briefing takes their shape.
-- **The rider is paid in the app**: a business's payout to a rider lands in the rider's own money log as income and as a card in their conversation, and cash a rider collected at the door is remitted from the rider's side and matched on both.
-- **A dispatch company is an organisation with riders of its own**, linked by a business as one rider is, dispatching inside itself with the same tools. The fleet connector the dispatch plan deferred falls out of the model.
+**A rider is a service business whose service is delivery. A delivery is an order for that service.**
 
-Everything a rider does today on WhatsApp or Telegram keeps working, word for word and button for button. A rider without a smartphone works as before; the tools are the same work reached from the web when they have it, the pattern already set for staff.
+- A rider **signs up as any business does** and answers "I deliver for businesses" to the one question the sign-up already asks. They have the business profile, a Taskiem conversation, chat tools, and a service, "Delivery", on their services table with their price and areas.
+- A business **finds a rider in Explore** by searching for delivery, and **adds them by linking**, as it links with any supplier. The rider shares a price list with that business, which is how a supplier gives one buyer their price.
+- A delivery is **a link order the business places with the rider**, of kind `delivery`: it carries the pickup, the drop, the fee and the customer's details while held, and it is one card in the conversation between them with the steps the order card already has, plus Arrived.
+- The rider's tools are **the seller's tools that exist**: Orders (their deliveries), Invoices and Bills (their earnings and the cash they owe), the bank on their business, Linked businesses. Their alerts are a seller's alerts. Their briefing is a seller's briefing in their numbers.
+- The rider is **paid as a supplier is paid**: they invoice the business for delivered orders, the business pays the bill, paid once and matched twice. Cash held at the door is a bill the other way.
+- A dispatch company is **a service business with staff** who hold `order.handle` and work the orders, which is what that permission is for.
+
+Three things are rider-specific and stay: the content of a delivery order (pickup, drop, Arrived, the proof photo, the door payment tied to the business's own storefront order), availability (a supplier who is on, off or busy, offered to first when free), and the offer with a window (an order placed to several suppliers in turn, the first to accept holding it). Each is a small addition to what exists, not a module.
+
+Everything a rider does today on WhatsApp or Telegram keeps working, word for word and button for button. A rider with no smartphone and no sign-up works as before, exactly as a supplier not on Taskiem receives a purchase order by message today.
 
 ## What exists today
 
-| Part | What it does today | What this plan changes |
+| Part | What it does today | What this plan does with it |
 | --- | --- | --- |
-| `riders` (per business, migration 00242) | A sealed name and phone, zones, a fee, active or retired; keyed by the phone's hash; the same person added by two businesses is two rows | Stays as the business's record of the rider (its fee, its zones, its rating). Gains the link to the rider's organisation when there is one |
-| `rider_presence` (platform, by phone hash) | `off`, `on`, `busy till`, inferred busy from open deliveries; read by businesses through a definer that answers a state | Becomes what the rider's own Availability tool writes; the definer and its answers unchanged |
-| `deliveries` (the business's) | One row from offer to delivered, with the rider's taps; the offer and the steps on WhatsApp and Telegram with signed `dl1.` buttons | Unchanged on the business's side. Mirrored to the rider's organisation as a job, the way an invoice is mirrored as a bill |
-| Assignment (D2) | Offer by hand or by rotation among the business's active riders in the zone, using presence | Offers linked riders and legacy riders alike; presence from the rider's account where there is one |
-| Pay at the door, cash and remittances (D4) | A one-time number on Arrived; cash as the exception with a remittance due per rider | Unchanged. The rider sees what they hold and owe in Earnings and can remit from the app |
-| Fees and payouts (D5) | Fees accrue per delivery; `pay-riders-weekly` pays each rider by `pay_bank`, net of cash owed; the bank set on the rider under step-up | The rider's bank lives on the rider's organisation, set once; the payout reaches the rider as income and a card |
-| Business links (0061) | Two businesses linked as supplier, customer or both; documents mirrored through `taskiem_link_enter`; a conversation per link; Explore | A third role, rider; the conversation carries deliveries; Explore lists riders under Dispatch |
-| Chat tools (phases 1 to 7) | Tools, sheets, cards, diary lines, alerts, staff roles, the briefing, for businesses | The rider's tools, alerts and briefing, in the same frame |
-| The Assign rider alert (phase 4) | Riders on duty or the next in turn | Linked riders with their own presence |
-| Paying people (plan) | `payees` with kind rider; a payment to a rider from Tools or a card | A payee that is a linked rider organisation; the payment as a card on both sides |
-| Sign-up | `kinds`: shop, service, school, or just workflows | A fourth: rider (and dispatch, for a company) |
+| `riders`, `rider_presence`, `deliveries` (dispatch, D1 to D5) | A rider as a contact of one business; presence by phone hash; a delivery as the business's row driven by signed buttons; door payment; cash and remittances; fees and payouts | Stays as the path for a rider not on Taskiem. For a linked rider, the delivery is a link order instead (§ The delivery), and the rest of dispatch reads it |
+| Sign-up `kinds` (shop, service, school, workflows) | One question, four answers | A fifth answer, "I deliver for businesses", which is kind `service` with the Delivery service made |
+| Business profile and Explore | Name, tagline, area, about, logo, gallery; found by name, kind, area and what is sold | Unchanged. A rider is found by their Delivery service's words and area |
+| Services (the fronts' services table, a known table) | A service with a price and a duration, shown on the storefront, tagged in chat | The rider's service: "Delivery", with their areas and vehicle as its words, their price |
+| Business links (0061): roles supplier, customer, both; price lists; link orders with steps; conversations; paid once matched twice | Trade between two businesses | The rider is a supplier; the delivery is a link order of a new kind; the fee is a shared price list; earnings are invoices |
+| Chat tools, phases 1 to 7: tools, cards, diary lines, alerts, staff roles, the briefing, deals | For businesses | Used as they are by the rider's business; the delivery card gains its fields |
+| `order.handle` (phase 5) | Working the orders without the storefront's settings | A dispatch company's riders |
+| Paying people (plan) | A payee of kind rider | A linked rider is a supplier with a bill; the payee kind stays for riders not on Taskiem |
 
-## The rider as an organisation
+## The rider's business
 
-**Signing up.** The sign-up asks what the business does; **I deliver for businesses** is a new answer. It makes an organisation of kind `rider`: the Riders area on, the shop, service and school areas off, and the chat tools switch on from the start, since the chat is the rider's whole app. The sign-up is the chat sign-up where it exists (a rider on WhatsApp says "I'm a rider" and is walked through it), or the web's. A rider's organisation has one member, the rider, as owner. A phone number is required and proven, because every business that has them today knows them by it.
+**Signing up.** The sign-up (web or chat) asks what the business does; **I deliver for businesses** is a new answer. It is kind `service` with one thing added: a service named Delivery on the business's services table, with the areas and vehicle typed in the chat that follows ("Where do you deliver?", "Bike, car, van?") and a price per delivery. The chat tools switch is on from the start, as the chat is the rider's app. The phone is proven, as the chat sign-up proves it, because every business that has the rider today knows them by it. Nothing else is different from any other service business.
 
-**The profile.** The business profile that exists (name, tagline, area, about, logo, gallery) with rider fields beside it: **vehicle** (bike, car, van, tricycle, on foot), **areas covered** (the same area labels businesses use for zones), **hours** ("Mon to Sat, 8am to 8pm"), and whether they take **cash at the door**. The photo is the rider's own face when they choose, since a business wants to know who is coming.
+**The profile** is the business profile. The rider's photo is the logo, their areas the area field, their vehicle and hours in the tagline or the service's description. Explore shows the card as it shows any business's.
 
-**Found in Explore.** A rider who turns on **Be found in Explore** is listed under **Dispatch**, apart from businesses: the card shows the name, photo, vehicle, areas, hours, "free now" or "busy" from their availability, how many deliveries they have done on Taskiem and their rating across businesses (§ Ratings). A business searching "dispatch Yaba" or "rider" sees riders first. The rules of Explore hold: nothing is shown that the rider did not choose to show, and a phone number never finds anyone.
-
-**The rider's own conversation with Taskiem** is where their alerts, briefing and diary lines live, as it is for a business owner. On WhatsApp and Telegram it is the platform number, as today; what changes is that the rider is now a signed-in organisation there, not a contact of someone else's.
+**Found in Explore.** A business searching "delivery", "rider", "dispatch" or an area finds businesses whose services say so, as a search for "catering" finds caterers today. The result card shows the Delivery service with its price, the areas, and availability (§ Availability) as "free now", "busy" or "off". No separate list; a chip **Delivery** at the top of Explore filters to them, the way the categories plan filters products.
 
 ## The link
 
-**Adding a rider is linking with them.** Three ways, each ending in a request the rider accepts:
+**Adding a rider is linking with them**, role supplier, the three ways business links already has: Connect in Explore, the picker or the Chat page's search; `add rider Musa 0803…` by phone, which sends a link request to the business behind that number if there is one and otherwise adds a legacy rider exactly as today, the invitation now saying "On Taskiem? Link instead"; and a request from the rider's side.
 
-1. **From Explore**, Connect on a rider's card, in the picker, in Explore or from the Assign rider alert's "Find a rider".
-2. **By phone**, as `add rider Musa 0803…` works today. If a rider organisation owns that number, the request goes to it and is answered there. If none does, the rider is added as a legacy rider exactly as today (a contact, the tap-in link by SMS), and the invitation now also says "Sign up as a rider on Taskiem to see your deliveries and earnings in one place": tapping it starts the rider sign-up with the phone proven, and finishing it turns that business's row into a link (§ Claiming).
-3. **From the rider's side**: a rider may ask a business to link ("I can deliver for you"), from its Explore card. The business's owner answers.
+**The price.** The rider shares a price list with the business, as suppliers do, with the Delivery service on it at the price for that business, and per area where it differs ("Yaba ₦1,500, Lekki ₦2,500" as separate lines, or quantity breaks as the deals work added). The business's per-link settings that exist apply: accept their orders automatically or ask, pay their bills automatically up to an amount, tell me when.
 
-**The link record** is a `business_links` row with role `rider` on the business's side and `client` on the rider's. Each side's settings:
+**Claiming.** A business's legacy rider whose proven phone belongs to a business on Taskiem with a Delivery service is offered to both sides as a link, from the Riders tool and from the rider's chat; on acceptance the `riders` row gains the link and is read-only, past deliveries stay the business's record and show in the conversation as cards from before the link. A legacy rider who never signs up keeps working as today.
 
-| Setting | Side | Default |
-| --- | --- | --- |
-| Fee per delivery, and per area where it differs | business | the business's default rider fee |
-| Areas I use this rider for | business | the rider's areas that match the business's zones |
-| Proof photo required | business | the business's setting |
-| May collect cash at the door | business | the rider's profile says, else no |
-| Offer them first, or in rotation | business | rotation |
-| Take this business's offers while I am on | rider | yes |
-| Tell me when: an offer comes, a payout lands, a remittance is due | rider | all on |
+## The delivery
 
-**One rider, many businesses.** The rider's identity, availability, vehicle, bank and rating are theirs, kept once on their organisation. What is particular to a pair is on the link and on the business's `riders` row: the fee, the areas, that business's rating of them, how many deliveries they did for it. Nothing of one business's deliveries is visible to another, as today; the rider sees all of their own.
+A delivery for a linked rider is **a link order the business places with the rider**, kind `delivery`, the way a purchase order placed with a linked supplier becomes an order in the supplier's business. The business is the buyer; the rider is the seller; both sides have the order under their own tenancy and the conversation shows one card.
 
-**Claiming.** A business's legacy rider whose phone hash matches a rider organisation's proven phone is offered to both sides to become a link: the business sees "Musa is on Taskiem as a rider: link?" on the Riders tool, the rider sees "Ada Stores has you as a rider: accept?" in their chat. Either may start it; both say yes. On acceptance the `riders` row gains the link, past deliveries stay the business's record and are mirrored to the rider as past jobs so their history is whole, and the rider's bank on that row (if set) is retired in favour of the rider organisation's own. A legacy rider who never signs up keeps working as today for as long as they like.
+**What the order carries**, beyond an order's lines (one line: the Delivery service, the fee): the storefront order it is for (its reference, the business's side only), the pickup (the business's address and directions link), the drop's area, and, sealed and present only from Accepted to Delivered, the customer's name and phone, the address, the landmark and the pin; whether a proof photo is required; whether the customer pays at the door.
 
-**Ending a link** stops offers; jobs already held run to their end; history stays on both sides. A business may still **retire** a rider as today; a rider may **leave** a business.
+**The steps** are the order card's, with Arrived added for this kind: Placed, Accepted, Picked up, Arrived, Delivered. The rider moves them from the card, from the Orders tool, or with the WhatsApp and Telegram buttons and words that exist (the `dl1.` payloads become this order's steps). Delivered with the photo when required; the photo is stored on both sides as link attachments are. Each step tells the customer as today and is a diary line on both sides.
 
-## The delivery as a document
+**The offer.** The business's order workflow places the delivery order as the dispatch module offers today: by hand to one rider, or by rotation among its linked riders who are free in the area, one at a time, each with the offer window; the first to accept holds it and the order to any other is withdrawn. On the order this is a `proposed` order with an expiry, which link orders already have as a status; a rider's Can't declines it. A business with no linked rider free falls back to its legacy riders, then to the owner's "Who takes it?".
 
-A delivery today is the business's row, driven by the rider's taps. It stays that: the business's `deliveries` row is the truth for the order it belongs to. What is added is the rider's copy, a **job**, mirrored into the rider's organisation the way an invoice is mirrored as a bill (`taskiem_link_enter`, audited on both sides, the rider's own rows under their own row-level security), and the conversation between the two in which the delivery is a card.
+**The door, cash and proof** are unchanged: the one-time account number is issued on Arrived against the business's storefront order as today, Paid reaches the rider's card, Cash received records the cash and the rider's debt (§ Getting paid). Quiet riders raise the alerts dispatch has, now reading the order's step times.
 
-**The card**, on both sides: the business's name (on the rider's side) or the rider's (on the business's), the order's reference, the pickup, the drop's area, the fee, the state as a pill, the four steps (Accepted, Picked up, Arrived, Delivered), and the next step as a filled button for whoever holds it: **Accept** and **Can't** on an offer, **Picked up**, **Arrived**, **Delivered** (with the photo when asked) for the rider, **Release** for the business while the rider has not picked up. A card that arrives while the conversation is open slides in. The customer's name, phone, address, landmark and pin come onto the rider's card with Accept and leave it on Delivered, as the offer does today.
-
-**Diary lines**, on each side in its own words: "Offered AK-7QX4KD to Musa", "Musa accepted AK-7QX4KD", "Picked up AK-7QX4KD from Ada Stores", "Delivered AK-7QX4KD · ₦1,500 earned", "Cash received ₦8,500 for AK-7QX4KD: you owe Ada Stores ₦8,500", "Paid Musa ₦12,000 for 8 deliveries". The customer's status page and messages are unchanged.
-
-**The offer** is the same offer as today, delivered three ways at once to a linked rider: the card in the conversation, the alert in the rider's Taskiem chat, and the WhatsApp or Telegram message with its signed buttons. Whichever is tapped first answers it; the others follow. The offer window, rotation, Can't, not answering and release work as D2 built them.
-
-**Multi-drop.** Out of scope in the dispatch plan and still out of scope here: one job is one order. A rider holding several jobs sees them as a list ordered by the time accepted.
+**Dispatch shrinks.** For linked riders, the dispatch module's rows are no longer written: `deliveries` is the legacy path. Rotation, the window, presence, the door payment, quiet riders and the customer's messages stay in `engine/dispatch` and act on the delivery order. Nothing is rewritten for a rider not on Taskiem.
 
 ## The rider's tools
 
-With chat tools on (always, for a rider organisation), the tools button in the rider's Taskiem conversation opens their tools. A business's conversation shows the same tools filtered to that business.
+The rider's business has chat tools on, so it has the seller's tools. They show in the rider's shape because of what the business is, not because of a role:
 
-| Tool | What it shows | What it does in place |
-| --- | --- | --- |
-| **Deliveries** | Today's jobs: offered (with the window counting down), held (in step order), done; then earlier days. Each a card | Accept, Can't, Picked up, Arrived, Delivered with the photo; the drop's map link; call the customer (their phone, while holding) |
-| **Availability** | On or off; busy till; the areas covered today; hours | `on`, `off`, `busy till 3pm`, areas on and off for the day. Writes `rider_presence`, so every linked business sees the state as today |
-| **Earnings** | Per business and in all: fees earned since the last payout, cash held and owed, payouts received, with the deliveries behind each number; the week's bars | **Remit** cash owed to a business (§ Getting paid); open a payout's card |
-| **Pay** | The rider's bank account (sealed; set and changed under a passkey or code), the name the bank gave, and the payments received to it | Set or change the account; see a payout's state (sent, received by the bank, failed) |
-| **Businesses** | Linked businesses with the fee each pays, requests waiting, and Explore | Accept or decline a request; leave a business; ask a business to link |
+| Tool | For a rider |
+| --- | --- |
+| **Orders** | Their deliveries: offered (with the window counting down), held in step order, done; each the delivery card with Accept, Can't, Picked up, Arrived, Delivered. In a business's conversation, only that business's. "Deliveries" is the tile's name when the business's only service is Delivery |
+| **Invoices** | What they have earned: a weekly invoice per business drafted from delivered orders (§ Getting paid), sent with a tap; its state as it is paid |
+| **Bills** | Cash they hold for a business, as that business's bill to them, paid from the app or by transfer |
+| **Availability** | On, off, busy till, areas today. New, small; writes presence (§ Availability) |
+| **Linked businesses** | As any business's: who they deliver for, requests, Explore |
 
-**Alerts** in the rider's Taskiem conversation, in the same card frame as a business's: an **offer** (Accept, Can't, the countdown), a **remittance due** over the business's limit ("You hold ₦23,500 of Ada Stores' cash: Remit"), a **payout received** ("Ada Stores paid you ₦12,000: Received by the bank"), a **rating** when a customer rated them, and a **link request** from a business. A new offer makes the sound.
+**Alerts** are a seller's: a new order (the offer, with Accept and Can't and the countdown), a bill arrived (cash to remit), a payment landed (a payout), a link request, a rating. **The briefing** is a seller's with their numbers: deliveries yesterday against last week, what they are owed by whom, cash held. **"How did I do?"** answers as "how did we do" does.
 
-**The briefing**, at the rider's start of day (their hours' start, 8am by default): yesterday's deliveries and what they earned, against the same day last week; what they are owed by whom; cash they hold; today's businesses on. **"How did I do?"** answers in words and a chart, as a business's "how did we do" does.
+**Permissions.** A rider alone is the owner of their business and holds everything. A dispatch company's riders hold `order.handle`, which lets them see, accept and move orders and nothing else, exactly as a cashier works a shop's orders today.
 
-**Permissions.** A rider organisation's owner holds `rider.work` (the jobs and availability), `rider.money` (earnings, bank, remit), `link.manage`. A dispatch company's staff rider holds `rider.work` for the jobs offered to them and sees their own earnings only.
+## Availability
 
-## The business's side
-
-Little changes on the business's screens, and what changes is for the better:
-
-- **The Riders tool** (Storefront > Riders and the chat tool) lists linked riders and legacy riders together, each with their state from presence, their fee and areas for this business, how many deliveries, their rating here, and for a linked rider their vehicle and photo and **Message** (the conversation). A legacy rider on Taskiem shows the claim prompt.
-- **Assign rider** (the alert and `order X to Musa`) offers linked riders by rotation as today, with their presence from their own Availability, and **Find a rider** opens Explore's Dispatch list for a business with nobody free.
-- **The conversation with a rider** is where the business's staff see the delivery's cards and lines and can message the rider ("Customer says the gate is blue"). `order.handle` holders may work it, as they work orders.
-- **Pay riders** (Riders > Pay and `pay-riders-weekly`) pays a linked rider to the bank on the rider's organisation, never a bank held on the business's row. The payment is a card in the conversation and a diary line on both sides; a failed payout is told to both.
+A supplier of a time-bound service is free, busy or off. Dispatch has this as `rider_presence` by phone hash; it becomes the business's **availability**: on, off, busy till a time, and the areas on today, kept on the rider's business and written from the Availability tool or the words `on`, `off`, `busy till 3` that exist. Businesses read it through the definer that exists, which answers a state and never a business or an order: "free", "busy, 2 deliveries", "off today". Busy from held orders is inferred as today, across every business the rider delivers for. Explore shows it on the card. For a dispatch company, availability is per rider member and the company is free while any rider is.
 
 ## Getting paid
 
-Money between a business and a rider goes two ways: fees the business owes the rider, and cash the rider collected at the door and owes the business. Both already exist as records on the business's side (D4, D5). This plan gives each a mirror on the rider's side and a way for the rider to act.
+Money between a business and a rider goes two ways, and both are what business links already carry.
 
-**Fees and payouts.** A payout made by `pay-riders-weekly`, by Riders > Pay, or by the paying-people plan's Pay sheet to a payee that is a linked rider, is written on the business's side as today and mirrored to the rider's organisation through the link as a **payout received**: a money-log entry of kind income from that business, with the deliveries it covers, and a card in the conversation on both sides. The bank account comes from the rider's organisation (`rider.money`, set under step-up); the business's workflow reads it through a definer that answers a bank code and an account number for a linked rider and nothing else, the shape `taskiem_link_payout_token` already has. The first-payment warning applies as to any payee.
+**Fees.** Each delivered order is a sale of the rider's Delivery service to the business. The rider **invoices** the business for them: a draft invoice per business gathers the week's delivered orders (one line per delivery, with the reference and the fee), drafted on a day the rider chooses or at any time from Invoices, sent with a tap, arriving as a **bill** in the business as any linked supplier's invoice does. The business pays it as it pays bills: `pay-riders-weekly` becomes paying the rider's bill, under the business's approval policy, to the bank on the rider's business, paid once and matched twice with the pairing token. The rider sees the payment land as a card and a diary line and in their money log as income. A business that prefers to pay per delivery pays each bill as it comes.
 
-**Cash and remittances.** A rider who tapped Cash received owes the business (`rider_remittances`). The rider's Earnings shows it per business; **Remit** pays it from the rider's own payments connection where they have one (their wallet on the platform rail, or a bank they connected), through the same pay path as a bill, with a pairing token in the narration so the business's side matches it to the remittance exactly, as bills are matched twice (business-links §6.3). A rider with no connection remits by transfer to the business's own number as today, and the match is as today; or hands the notes in and the business records it, which closes the rider's side through the mirror.
+**Cash.** A rider who tapped Cash received owes the business. The business's remittance due becomes **the business's invoice to the rider**, drafted by Taskiem when the cash is recorded (or the day's cash in one), arriving as a bill in the rider's business: the rider pays it from the app through their own payments connection, or by transfer with the token, or hands the notes in and the business marks it paid, each closing both sides. The rider's Bills tool shows what they hold; the business's debtor book shows what each rider owes, with the leak that exists.
 
-**One truth per record.** The business's `deliveries`, `rider_payouts` and `rider_remittances` are the truth; the rider's `rider_jobs`, `rider_payouts_received` and `rider_remittances_owed` are mirrors, written through `taskiem_link_enter` and compared by the hourly link reconciler through the digest definer, as every mirrored document is.
+**Nothing new moves money.** The bank is the one on the rider's business; the paths are bill pay and matching; Taskiem holds nothing. A rider not on Taskiem is paid as today, and the paying-people plan's payee of kind rider stays for them.
 
 ## A dispatch company
 
-A company with ten riders is an organisation of kind `dispatch`: it links with businesses as a rider does (role `rider` on the business's side), and inside it its riders are members with a built-in role `rider` (the staff-roles pattern of chat tools phase 5), each with their own phone, availability and earnings, paid by the company. An offer from a business reaches the company and the company dispatches it to one of its riders by the same rotation the dispatch plan built (the company is the "business" of its own `deliveries`), so the business sees the company accept and the rider's taps, and the customer sees "on its way with Musa from Swift Dispatch". The company's owner sees every job, every rider's state and the money; each rider sees their own. Fees are the company's; what it pays its riders is its own affair, through the same payouts.
-
-This is the fleet connector the dispatch plan deferred, without a connector: a fleet is an organisation. Platforms with their own apps (Kwik, Glovo, GIG) remain a later connector behind `offer`, if ever.
+A company with ten riders is a service business with staff: the riders are members with `order.handle`. It links with businesses as one rider does and shares its price list. A business's delivery order reaches the company, and the company's own order workflow offers it to its riders by the rotation dispatch has, inside the company; the business and the customer see the company accept and the rider's steps ("on its way with Musa from Swift Dispatch"). The company invoices the businesses and pays its riders as staff, through the paying-people plan's payroll or however it likes; each rider's Orders shows their own, the owner's shows all. This is the fleet connector the dispatch plan deferred, without a connector.
 
 ## Data model, engine and API
 
-The core rule (the core cleanup plan, PR 172): the new tables are records with rules and engine state in the riders module's schema, each named here, none a table a rider could keep in a sheet.
+Under the core rule (the core cleanup plan, PR 172), nothing here adds a business-record table to the core, because every record is one that exists.
 
-| New or changed | Holds | Kind |
-| --- | --- | --- |
-| `tenants.kind` gains `rider` and `dispatch`; `signup` takes `rider` in `kinds` | What the organisation is | platform |
-| `rider_profile` (the rider's organisation) | vehicle, areas, hours, takes cash, found in Explore; beside `business_profile` | record |
-| `business_links.role` gains `rider` and `client`; link settings gain the rider pair's (fee, areas, proof, cash, offer first; take offers, tell me) | The link | platform, as today |
-| `riders.link_id` (the business's) | Which link, when the rider is an organisation; null for a legacy rider | record, as today |
-| `rider_jobs` (the rider's) | The mirror of a delivery: link, the business's name, order reference, pickup, drop's area, fee, status, the steps' times, the customer's details sealed while held, the photo's path (the rider's copy) | record (mirror) |
-| `rider_payouts_received`, `rider_remittances_owed` (the rider's) | Mirrors of the business's payouts and remittances | record (mirror) |
-| `rider_bank` (the rider's) | Bank code, account sealed, the bank's name; set under step-up | record |
-| `rider_presence` | Unchanged; written by the Availability tool as well as by words | engine state |
-| `rider_ratings` (the rider's) | The mirror of each rating, by business, never the customer | record (mirror) |
+| Changed | What |
+| --- | --- |
+| Sign-up | `kinds` accepts `delivery`, which is `service` plus the Delivery service made and chat tools on |
+| Services table (known table) | A service may carry `areas` (labels) and `vehicle`; shown in Explore |
+| `storefront_orders` / link orders | `kind` gains `delivery`; delivery fields on the order: `for_order` (the business's storefront order), `pickup`, `drop_area`, the sealed customer details while held, `proof_required`, `door_payment`; `arrived_at` as a step; `expires_at` for a proposed order, which exists |
+| `riders` | `link_id`, set on claiming; a row with a link is read-only and the legacy path does not use it |
+| `rider_presence` | Keyed by the business (tenant) as well as the phone hash; written by the Availability tool; the definer unchanged |
+| `price_list_items` | Unchanged: the Delivery service on a list, per area as lines |
+| Invoices and bills | Unchanged: an invoice drafted from delivered orders; the cash invoice drafted by dispatch |
 
-Kept copies (the core cleanup plan) are not made for any of these until a rider or a business asks to read them in a workflow.
+**Engine.** `engine/dispatch` learns to place a link order instead of a `deliveries` row when the rider is linked, keeps rotation, the window, the door, cash, quiet riders and the customer's messages, and drafts the cash invoice. `engine/links` learns the `delivery` kind's fields and the Arrived step on an order. `engine/invoicing` gains the weekly draft from delivered orders (a template, `invoice-deliveries-weekly`, the rider's). Explore indexes services' areas and availability. No new module.
 
-**Engine.** `engine/dispatch` (the business's side, as built) learns a linked rider: offers reach the link's rider organisation as well as the phone; the taps arriving from the rider's tools or the rider's WhatsApp are the same `dl1.` payloads, now also accepted from the rider's signed-in session for their own job. A new `engine/rider` is the rider's side: jobs, availability, earnings, the bank, remittances, mirrored through `taskiem_link_enter` from the dispatch module's writes; `riders@1` gains `list_linked`, `link`, `unlink`. The link reconciler covers the three mirrors. Explore indexes rider profiles under Dispatch. The dispatch company is `engine/dispatch` running inside a `dispatch` organisation whose riders are members, with the rotation it has.
-
-**API.** `/v1/rider/jobs` (list, and the steps as `POST /v1/rider/jobs/{id}/{step}` with the photo), `/v1/rider/availability`, `/v1/rider/earnings`, `/v1/rider/bank` (step-up), `/v1/rider/remit`, `/v1/rider/profile`; `/v1/riders` (the business's) lists linked and legacy riders; `/v1/links` takes role `rider`; `/v1/explore?kind=dispatch`. The chat tools endpoints (`/v1/chat-alerts`, `/v1/chat-briefing`, `/v1/chat-diary`) answer for a rider organisation with the rider's kinds.
+**API.** Nothing rider-named. `/v1/trade-orders` and the link order routes take kind `delivery` and its fields and the `arrived` step; `/v1/availability` (the business's on, off, busy, areas); `/v1/explore?service=delivery`; `/v1/riders` lists linked suppliers with a Delivery service beside legacy riders; `/v1/links` unchanged.
 
 ## WhatsApp, Telegram and Slack
 
-Every word and button a rider uses today stays. Added, on the platform number, for a signed-in rider: **"my earnings"** (per business and in all, cash held), **"remit Ada Stores"** (a link to Earnings, confirmed in the app or by the one-time code the paying-people plan allows), **"link Ada Stores"** and **"businesses"**, **"on"**, **"off"** and **"busy till 3"** as today, **"my deliveries"** as today. An offer on WhatsApp carries the business's name and a link to the card. A rider who is not signed up and says "I'm a rider" is walked into the rider sign-up.
+Every word and button a rider uses today stays and acts on the delivery order. A signed-in rider has, as any business owner has, "orders", "invoices", "bills", "tools", "how did we do", and "on", "off", "busy till 3" as today. "I'm a rider" from someone not on Taskiem starts the chat sign-up with the delivery answer. An offer on WhatsApp is the link order's message with Accept and Can't, as a supplier's order arrives today.
 
 ## Safety and privacy
 
-- **A rider sees a customer's details only while holding the job**, as today; the mirror seals them and clears them on Delivered, and the business's copy keeps them under its own retention.
-- **A business sees of a rider only what the rider shows**: profile, vehicle, areas, availability state, the rating across businesses as a number, and what the rider did for that business. Never the rider's other businesses or their earnings elsewhere.
-- **Money moves only through the payment paths that exist** (`pay_bank` under approval, the pairing token), never a balance Taskiem holds; a rider's bank changes only under step-up; the first-payment warning holds.
-- **Explore shows nothing a rider did not turn on**, and a phone number finds nobody.
-- **Every mirror is one `taskiem_link_enter` call** per event, audited on both sides, and the isolation test's list of allowed definers gains only the rider bank definer.
-- **Plain words:** "Rider", "Deliveries", "Earnings", "Remit", "Available"; never "fleet", "dispatcher", "payout" or "tenant" on a rider's screen.
+- **A rider sees a customer's details only while holding the order**: the fields are sealed on the order and cleared on Delivered on the rider's side; the business's copy keeps them under its retention.
+- **A business sees of a rider what any linked supplier shows**: the profile, the service, the price list shared with it, availability as a state, and the orders between them. Never another business's orders.
+- **Money moves only through bill pay and matching**, under the business's approval policy, to the bank on the rider's business; the first-payment warning holds; Taskiem holds nothing.
+- **Explore shows nothing a business did not turn on**; a phone finds nobody.
+- **No new way across tenants**: the link definers that exist carry the order, the invoice and the payment; the isolation test's list is unchanged.
+- **Plain words:** "Rider", "Deliveries", "Available", "Earned", "Cash you hold"; never "fleet", "dispatcher", "payout" or "tenant" on a rider's screen.
 
 ## Phases
 
-Six phases, each a PR that ships on its own and leaves nothing half-built. The rider's own account comes first because every other phase stands on it; the dispatch company last because it needs all the rest.
+Five phases, each a PR that ships on its own. The delivery order first, because it is the one real change and everything else is wiring.
 
-1. **The rider's organisation.** Sign-up kind `rider` (web and chat), the rider profile, Explore's Dispatch list, the rider's Taskiem conversation with chat tools on; a rider's presence written from Availability.
-   - Done when: a rider signs up from WhatsApp, is found in Explore under Dispatch by a business in their area, and their on and off is seen by that business's Riders page.
-2. **The link and the claim.** Role `rider`, the pair's settings, Connect from Explore and the picker, `add rider` by phone finding a rider organisation, the claim of a legacy rider on both sides, the Riders tool showing both kinds, Assign rider offering linked riders.
-   - Done when: a business that had Musa as a legacy rider links with Musa's organisation in two taps, keeps its fee and his deliveries, and his next offer reaches him as before.
-3. **The delivery as a document.** `rider_jobs` mirrored through the link, the card and the diary lines on both sides, the offer as a card and an alert, the steps from the rider's tools, the conversation between business and rider.
-   - Done when: an order offered to a linked rider is accepted from the card, run to Delivered with the photo from the Deliveries tool, told to the customer at each step, and both conversations show the same card at the same step.
-4. **Earnings and getting paid.** Earnings and Pay tools, `rider_bank` under step-up, payouts mirrored as income and cards, the business's payout reading the rider's bank through the definer, the payout and remittance alerts, the rider's briefing and "how did I do".
-   - Done when: `pay-riders-weekly` pays a linked rider to the bank on their organisation, the rider sees it land in Earnings and as a card, and the business's row holds no bank.
-5. **Cash remitted from the app.** Remit from Earnings through the rider's own connection with the pairing token; matched on the business's side exactly; hand-in and plain transfer still closing the rider's side.
-   - Done when: a rider who collected ₦8,500 cash remits it from Earnings and both sides show the remittance settled with nothing in To match.
-6. **The dispatch company.** Kind `dispatch`, the built-in `rider` staff role, the company's own dispatch of a business's offer, each rider's own jobs and earnings, the company's view of all.
-   - Done when: a business offers an order to Swift Dispatch, Swift's rotation gives it to Musa, the business and the customer see Musa's steps, and Swift's owner sees the week's jobs and money per rider.
+1. **The delivery as a link order.** Kind `delivery` with its fields and Arrived; dispatch placing it for a linked supplier with a Delivery service, by hand and by rotation with the window; the card on both sides; the steps from the card, the tool and the WhatsApp buttons; the door payment, cash and quiet riders reading the order; the legacy path untouched.
+   - Done when: a business linked with a service business that sells Delivery offers an order to it, the rider accepts from the card, runs it to Delivered with a photo, the customer is told at each step, and both conversations show the same card.
+2. **The rider's sign-up and Explore.** The "I deliver for businesses" answer on the web and in chat; the Delivery service with areas and vehicle; the Delivery chip and availability in Explore; `add rider` by phone finding a business; the claim of a legacy rider.
+   - Done when: a rider signs up from WhatsApp in under three minutes, is found by a business searching "delivery Yaba", and a business's legacy rider becomes a link in two taps with history kept.
+3. **Availability.** The tool and the words writing the business's availability; rotation reading it; Explore showing it; a dispatch company's per-member state.
+   - Done when: a rider who says "off" from the tool is offered nothing by two businesses until they say "on", and Explore shows them as off.
+4. **Earnings and cash.** The weekly invoice drafted from delivered orders and sent; `pay-riders-weekly` paying the rider's bill; the cash invoice drafted on Cash received and paid from the rider's Bills; the rider's briefing and "how did I do".
+   - Done when: a rider's week of deliveries is one invoice paid by the business under approval to the bank on the rider's business, and cash the rider held is a bill they pay from the app, both matched on both sides.
+5. **The dispatch company.** Staff with `order.handle` working delivery orders; the company's own rotation inside itself; the company's and each rider's view.
+   - Done when: a business offers an order to a company, the company's rotation gives it to a member, the business and the customer see that member's steps, and the company's owner sees the week's orders and money.
 
 ## Tests and checks
 
-- **Go:** the link with role `rider` and its settings; the claim of a legacy rider in both directions and the row's history kept; each mirror written once through `taskiem_link_enter` and the reconciler finding a planted difference; the offer answered from the card, the alert and WhatsApp with the first answer winning; the steps from the rider's session accepted only for their own job; the bank definer answering a linked rider's bank and nothing for anyone else; payouts and remittances paired by token; the isolation test's definer list; a rider seeing nothing of another business; the dispatch company's rotation inside itself.
-- **Browser (e2e):** at 390 and 360 px in both themes with axe: a rider's sign-up from the chat, Explore's Dispatch card and Connect, the claim, the Deliveries tool through the three taps with a photo, Availability seen on the business's Riders page, Earnings and Remit, Pay with a passkey, the briefing; the business's conversation with the rider; the company's dispatch.
+- **Go:** a delivery order placed, offered in turn with the window and held by the first to accept; the steps accepted only from the rider's side and only for their own order; customer details present only while held; the door payment and cash on the storefront order as before; the legacy path unchanged by every test dispatch has; the claim; availability read as a state only; the weekly invoice's lines; the cash invoice; paid once matched twice with the token; `order.handle` in a company; the isolation test's definer list unchanged.
+- **Browser (e2e):** at 390 and 360 px in both themes with axe: the rider's chat sign-up; Explore's Delivery chip and Connect; the delivery card through the steps with a photo on a phone; Availability; the invoice sent and the bill paid; the company's dispatch.
 - **WhatsApp:** the fake Graph API the e2e tests run: an offer reaching the rider on WhatsApp and the card at once, answered on either.
 - **Plain words:** every new rider-facing line through `src/lib/plainwords.test.ts`.
 - **The recording:** a new act in `video/recording/`: a rider found in Explore, linked, a delivery from offer to delivered on their phone, paid on Friday.
@@ -188,10 +156,10 @@ Six phases, each a PR that ships on its own and leaves nothing half-built. The r
 
 The plan assumes the answer in brackets.
 
-- [ ] Ratings across businesses on the Explore card: shown as a number from the first rating, or only after ten? (After five.)
-- [ ] A rider's areas: the business's zone labels, or free text matched by name? (The same labels, with free text allowed and matched by name.)
-- [ ] Should a rider see the customer's phone, or call through Taskiem? (The phone, while holding, as today; calling through Taskiem is a later addition.)
-- [ ] A legacy rider's bank on the business's row: retired on claim, or kept until the rider sets their own? (Kept and used until the rider sets their own, then retired.)
-- [ ] Can a business set a rider's fee per delivery at offer time, as the offer allows today? (Yes; the link's fee is the default.)
-- [ ] A dispatch company's riders: members with a role, or each a rider organisation linked to the company? (Members: one sign-in, the company's phone numbers, the company pays them.)
-- [ ] Remit from a rider's wallet on the platform rail: needs decision 0052's wallet for individuals. (Phase 5 waits on it where no bank is connected.)
+- [ ] Should every service business be able to receive orders with a window and rotation, or only those with a Delivery service? (Any time-bound service; Delivery is the first.)
+- [ ] The weekly invoice: drafted by Taskiem and sent by the rider, or sent by Taskiem on the rider's day? (Drafted, sent by the rider; a setting to send on its own.)
+- [ ] The cash invoice: one per cash delivery, or one per day? (Per day, at the business's close.)
+- [ ] A rider's rating across businesses on the Explore card: from the first, or after five? (After five.)
+- [ ] A rider's areas: the business's zone labels, or free text? (Labels, with free text matched by name.)
+- [ ] Should a rider see the customer's phone, or call through Taskiem? (The phone, while holding, as today.)
+- [ ] A rider with no bank connected paying a cash bill from the app: needs decision 0052's wallet for individuals. (Phase 4 uses transfer or hand-in until then.)
