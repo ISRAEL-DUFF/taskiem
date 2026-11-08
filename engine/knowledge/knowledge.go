@@ -50,7 +50,9 @@ var Kinds = []string{About, Storefront, Table, Website, File, Sheet, Books}
 // Outside reports whether a kind's text comes from outside Taskiem (K11):
 // such text is material for the model, never instructions, and the owner
 // reviews it before it is used.
-func Outside(kind string) bool { return kind == Website || kind == File || kind == Sheet || kind == Books }
+func Outside(kind string) bool {
+	return kind == Website || kind == File || kind == Sheet || kind == Books
+}
 
 // Statuses.
 const (
