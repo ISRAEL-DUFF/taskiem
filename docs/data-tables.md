@@ -95,13 +95,52 @@ A workflow can start when a row of a table is added, changed or deleted: the `xe
 {"type": "connector_event", "config": {"connector": "xenibase@1", "trigger": "row_changed", "connection": "data_tables", "events": ["INSERT"], "options": {"tables": ["orders"]}}}
 ```
 
+### A conversation's memory
+
+The known table **`conversations`** is where an assistant answering customers keeps what was said ([decision 0062](decisions/0062-customer-assistant.md) V5). It has one row per message:
+
+| Column | Holds | Personal |
+| --- | --- | --- |
+| `conversation` | `whatsapp:2348031234567`, the channel and the customer | yes |
+| `channel` | `whatsapp` or `telegram` | no |
+| `sender` | the customer's number, or their Telegram chat id | yes |
+| `role` | `user` (the customer) or `assistant` (the reply) | no |
+| `text` | what was said | yes |
+| `language` | `en`, `pcm`, `yo`, `ha` or `ig` | no |
+| `kind` | `text` or `voice` | no |
+
+It is kept as long as the business keeps its conversations (below). It is made with the assistant's recipe, so chat does not offer it as a list.
+
+A workflow keeps each message with `insert_rows` and reads the last turns back for the [ai step's](contracts/wd-v1.md#ai-steps) `history`:
+
+```json
+{"id": "memory", "type": "connector", "connector": "xenibase@1", "action": "read_rows", "connection": "data_tables",
+ "input": {"table": "conversations", "filters": [{"column": "conversation", "op": "eq", "value": "='whatsapp:' + trigger.item.message.from"}],
+           "order": [{"column": "id", "desc": true}], "limit": 20}},
+{"id": "reply", "type": "ai", "needs": ["memory"],
+ "config": {"history": "=steps.memory.output.rows.reverse().map(r, {'role': r.role, 'text': r.text})", "personal_data": ["history"], "...": "..."}}
+```
+
+`personal_data: ["history"]` lets the model read the turns' words, with numbers, emails, names and ids still hidden behind placeholders. Without it, each turn reaches the model as a placeholder.
+
+## How long rows are kept
+
+A table keeps its rows until someone deletes them, unless it says otherwise. It can say so when it is made (`keep_days`, `keep_with_conversations` in `POST /v1/tables`) or later on its page under **How long rows are kept** (`PATCH /v1/tables/{id}`, audited as `table.keep`):
+
+- **so many days** (`keep_days`, 1 to 3,650): a row goes that many days after it was added;
+- **as long as conversations with customers are kept** (`keep_with_conversations`): the business's `conversation_days`, set by the owner under Secrets & settings, Voice in workflows (`PUT /v1/languages`, `conversation_days`). It defaults to 30 days and cannot be longer than the plan keeps runs (`max_retention_days`).
+
+**The sweep.** Every hour the `api` role deletes older rows through the table's own connection, as the rows API does. It reads only row ids (oldest first, up to 1,000 at a time) and deletes exactly those, so the data API's `max_affected` never refuses it. A project that cannot be reached is tried at the next sweep. Kept tables are never swept.
+
+**One rule for a conversation** (M6). A workflow whose `settings.retention` is `"conversations"` keeps its runs as long as the business keeps its conversations. Its runs' files go with them ([files in runs](files.md)), and so do the transcripts in their history. So a conversation's rows, runs, voice notes and transcripts go together.
+
 ## On WhatsApp
 
 A person whose number is linked can send `tables` for the list, `add to <table>` to add one row (a form where Flows are set up, else column by column; the row is shown with personal values masked and added only after **yes**) and `find <table> <text>` for up to five matching rows. The same permissions apply, the values are checked by the same code, the connection reads are recorded under the purpose `tables.chat`, and the insert carries an idempotency key from the conversation. `new table` makes a table (a known shape, or one from the owner's words), `add column … to …` adds a column and `rename … to …` changes a title, and `change 2` and `delete 2` correct or remove a row `find` showed, each after **yes** and only if the row still has the values shown, and a CSV or `.xlsx` sent in chat (or a Google Sheet, with `copy my sheet`) becomes a new table or rows of one through the same import as here ([WhatsApp: data tables](whatsapp.md#data-tables)); dropping a column and deleting a table stay here. Questions are answered from the rows too: `how many customers`, `total balance`, or any question in the person's words, which the model turns into a checked, read-only query from the tables' names and columns, never a row. Telegram is the same. See [WhatsApp: data tables](whatsapp.md#data-tables), and for owners [Keep your records in chat](guide/keep-your-records-in-chat.md).
 
 ## Personal data
 
-Columns of type `phone` and `email`, and any column flagged `personal`, are personal data. The table page and the rows API return them as they are to people with `table.read` (the page is the record), and the connector declares rows as personal data, so they are masked in run outputs, in chat and in logs; they never appear in audit details, and the AI builder sees names and types, never rows. Keep the `table.read` permission to the people who should see the records.
+Columns of type `phone` and `email`, and any column flagged `personal`, are personal data. The table page and the rows API return them as they are to people with `table.read` (the page is the record). In a run, a step that writes or reads a data table (`xenibase@1`'s row actions) has those columns sealed cell by cell in the run's history ([decision 0062](decisions/0062-customer-assistant.md) V5): in rows written and read, a row's `set`, and every filter value on such a table. Read back, they are known as personal for the rest of the run and masked before an AI model sees them. The connector also declares whole rows personal, so they are masked in run outputs, in chat and in logs; they never appear in audit details, and the AI builder sees names and types, never rows. Keep the `table.read` permission to the people who should see the records.
 
 ## Limits
 

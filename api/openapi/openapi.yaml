@@ -32651,14 +32651,19 @@ components:
           type: string
         erased:
           type: boolean
-          enum:
-          - true
+          description: The person's key was destroyed; false only when nothing of theirs was ever sealed but their conversation rows were deleted.
         files_deleted:
           type: integer
           description: Run files about the person deleted with them (files they sent a workflow).
         files_pending:
           type: boolean
           description: Their files could not all be deleted now; they are deleted at the latest when they expire.
+        conversation_rows_deleted:
+          type: integer
+          description: Rows of the business's conversations tables (kept with conversations, with a sender column) whose sender is the person, deleted with them; only when the person is named by category and value (a number or chat id), not by subject id.
+        conversation_rows_pending:
+          type: boolean
+          description: Their conversation rows could not all be deleted now; they go at the latest when the conversation's time is up.
       additionalProperties: false
     BillingInterval:
       type: string

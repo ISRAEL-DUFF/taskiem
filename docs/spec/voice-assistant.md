@@ -361,6 +361,15 @@ V1 and V2 were reviewed for gaps before V3; 21 were found and all are fixed on t
 
 ### V5. Memory and the conversations table
 
+**Built** (2026-11-08):
+- **A5, personal columns sealed cell by cell:** a run that writes or reads a data table has the table's personal columns (and its phone and email columns) sealed one cell at a time, in rows, `set` and filter values. Before, the manifest could only declare whole rows, which are never sealed.
+- **D6, the customer's words through:** an ai step may name `history` in `personal_data`. The turns' words then reach the model with identifiers still placeholders (`MaskKeepingWords`). The call's record redacts known values before patterns, which also fixed the record of answers and fields let through.
+- **The known table `conversations`** (M2, M5): its words and who said them are personal. It is kept with the business's conversations and is not offered as a list in chat.
+- **Row expiry** (M3): `keep_days` or `keep_with_conversations` on any table, set when it is made or on its page. An hourly sweep in the api role reads only ids and deletes exactly those (migration 00317).
+- **One rule** (M6, Q4): the owner's `conversation_days`, 30 by default and capped by the plan, kept on the Voice in workflows card. The conversations table follows it, runs with `settings.retention: "conversations"` follow it, and a run's files now end with their run.
+- **Erasure** (P2, in part): erasing by number or chat id deletes the person's conversation rows in every form the number takes, even with no sealed key. Their messages sealed in run histories still need P2's full erase action (V6).
+- **Tests:** turns sealed in history and heard with their words; the last N turns in order (`reverse()`); expiry by days and with conversations, within the plan; erasure.
+
 - Known table `conversations`: conversation key, channel, sender, role, text (personal), language, created_at (M2, M5).
 - Row expiry for tables (days to keep, enforced by a sweep), set to 30 days for this table by default (M3, Q4).
 - History read as sealed values when the column is personal, so it is masked before the model like other personal data (A5).

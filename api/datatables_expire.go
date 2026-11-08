@@ -3,11 +3,14 @@ package api
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/datatables"
+	"github.com/israel-duff/taskiem/engine/db"
 )
 
 // Row expiry (decision 0062 V5, M3 and M6): a table that keeps its rows
@@ -127,4 +130,96 @@ func (s *Server) expireTable(ctx context.Context, tenant uuid.UUID, name string,
 		}
 	}
 	return total, nil
+}
+
+// eraseConversationRows deletes what a customer said and was answered in
+// every table kept with the business's conversations that has a sender
+// column (decision 0062 V5, P2): the rows whose sender is the person
+// erased, by their number in the forms it may be written in, or by their
+// chat id. It answers how many rows went.
+func (s *Server) eraseConversationRows(ctx context.Context, tenant uuid.UUID, category string, value any) (int, error) {
+	who := strings.TrimSpace(fmt.Sprint(value))
+	if who == "" || s.Tables == nil {
+		return 0, nil
+	}
+	var names []string
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT t.name FROM data_tables t JOIN data_table_columns c ON c.table_id = t.id AND c.name = 'sender'
+			WHERE t.keep_with_conversations AND t.kept_by IS NULL ORDER BY t.name`)
+		if err != nil {
+			return err
+		}
+		names, err = pgx.CollectRows(rows, pgx.RowTo[string])
+		return err
+	}); err != nil || len(names) == 0 {
+		return 0, err
+	}
+	forms := senderForms(category, who)
+	total := 0
+	for _, name := range names {
+		tr, err := s.tableRowsFor(ctx, tenant, datatables.Table{Name: name}, "tables.erase")
+		if err != nil {
+			return total, err
+		}
+		for range 100 {
+			page, err := tr.call(ctx, s, "read_rows", map[string]any{"table": name, "select": "id",
+				"filters": []any{map[string]any{"column": "sender", "op": "in", "values": forms}}, "limit": rowExpiryBatch}, "")
+			if err != nil {
+				return total, err
+			}
+			got, _ := page["rows"].([]any)
+			ids := make([]any, 0, len(got))
+			for _, r := range got {
+				if m, ok := r.(map[string]any); ok && m["id"] != nil {
+					ids = append(ids, m["id"])
+				}
+			}
+			if len(ids) == 0 {
+				break
+			}
+			if _, err := tr.call(ctx, s, "delete_rows", map[string]any{"table": name,
+				"filters": []any{map[string]any{"column": "id", "op": "in", "values": ids}}, "max_affected": len(ids)},
+				fmt.Sprintf("erase-%s-%v-%d", name, ids[0], len(ids))); err != nil {
+				return total, err
+			}
+			total += len(ids)
+			if len(ids) < rowExpiryBatch {
+				break
+			}
+		}
+	}
+	return total, nil
+}
+
+// senderForms are the ways a sender may be written: as given, and for a
+// phone number its digits, with +, and a Nigerian 0... number as 234....
+func senderForms(category, who string) []any {
+	forms := []any{who}
+	add := func(v string) {
+		for _, f := range forms {
+			if f == v {
+				return
+			}
+		}
+		forms = append(forms, v)
+	}
+	if category != "phone" {
+		return forms
+	}
+	digits := strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' {
+			return r
+		}
+		return -1
+	}, who)
+	if digits == "" {
+		return forms
+	}
+	if strings.HasPrefix(digits, "0") && len(digits) == 11 {
+		digits = "234" + digits[1:]
+	}
+	add(digits)
+	add("+" + digits)
+	add("0" + strings.TrimPrefix(digits, "234"))
+	return forms
 }

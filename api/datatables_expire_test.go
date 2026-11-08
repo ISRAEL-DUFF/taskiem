@@ -28,7 +28,9 @@ func TestRowExpiry(t *testing.T) {
 	owner.must(400, "PATCH", "/v1/tables/"+notes["id"].(string), map[string]any{"keep_days": 0})
 
 	project := w.pg.Projects()[0]
-	day := func(n int) string { return time.Now().Add(-time.Duration(n) * 24 * time.Hour).UTC().Format(time.RFC3339) }
+	day := func(n int) string {
+		return time.Now().Add(-time.Duration(n) * 24 * time.Hour).UTC().Format(time.RFC3339)
+	}
 	tx := w.pg.Begin(project)
 	for i, age := range []int{40, 20, 12, 5, 1} {
 		tx.Insert("notes", map[string]any{"id": int64(i + 1), "text": fmt.Sprint("note ", age), "created_at": day(age), "updated_at": day(age)})
@@ -65,5 +67,31 @@ func TestRowExpiry(t *testing.T) {
 	tx.Commit()
 	if n, _ := w.srv.ExpireRows(context.Background()); n != 0 {
 		t.Fatalf("a table kept until deleted lost %d rows", n)
+	}
+}
+
+// Erasing a customer by their number deletes what they said to the
+// business's assistant, in whichever form the number was written, and
+// leaves other customers' conversations (decision 0062 V5, P2).
+func TestErasingACustomerDeletesTheirConversation(t *testing.T) {
+	w := newTablesWorld(t)
+	owner := w.tenant(t, "Mama Put", "owner@mamaput.test")
+	owner.must(201, "POST", "/v1/tables", map[string]any{"name": "conversations", "keep_with_conversations": true,
+		"columns": []map[string]any{{"name": "sender", "type": "text", "personal": true}, {"name": "text", "type": "text", "personal": true}}})
+	project := w.pg.Projects()[0]
+	now := time.Now().UTC().Format(time.RFC3339)
+	tx := w.pg.Begin(project)
+	for i, who := range []string{"2348031234567", "2348031234567", "+2348031234567", "2348099999999"} {
+		tx.Insert("conversations", map[string]any{"id": int64(i + 1), "sender": who, "text": "hello", "created_at": now, "updated_at": now})
+	}
+	tx.Commit()
+	secret := enrol(t, owner)
+	out := owner.must(200, "POST", "/v1/pii/erase", map[string]any{"category": "phone", "value": "08031234567", "totp": codeAfter(secret, 1)})
+	if out["conversation_rows_deleted"] != float64(3) || out["conversation_rows_pending"] != nil || out["erased"] != false {
+		t.Fatalf("erased: %v", out)
+	}
+	left := w.pg.Rows(project, "conversations")
+	if len(left) != 1 || left[0]["sender"] != "2348099999999" {
+		t.Fatalf("left %v", left)
 	}
 }

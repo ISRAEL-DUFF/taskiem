@@ -34,6 +34,8 @@ Each organisation may keep at most **1 GB of new files in any 24 hours** (`runfi
 
 30 days from when the file was kept, or less when the plan keeps run history for less (`max_retention_days`: 7 days on Starter). An expired file cannot be read or linked at once; a sweep in the api role deletes the stored object and then the row every 10 minutes. A tenant whose storage cannot be reached keeps its expired files until a later sweep succeeds. A per-assistant retention (30 days by default, changeable by the owner) comes with [plan V5](spec/voice-assistant.md#v5-memory-and-the-conversations-table).
 
+A run's files go no later than the run itself: when a run ends, its files' time is cut to the run's retention if that is shorter. For a run kept `"conversations"` long ([data tables](data-tables.md#how-long-rows-are-kept)), its files are kept exactly as long as the run, so a conversation's voice notes go with its rows and runs.
+
 ## For connectors
 
 A connector call in a run gets `connector.Request.Files` (nil outside a run, or where the deployment keeps no files):

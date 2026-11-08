@@ -587,14 +587,35 @@ func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.personStepUp(w, r, req.stepUpProof, "pii.erase", subject, "erasures", "erasing personal data"); !ok {
 		return
 	}
-	if err := s.Vault.Erase(r.Context(), p.TenantID, subject, p.Actor()); err != nil {
-		if errors.Is(err, secrets.ErrNotFound) {
-			err = fmt.Errorf("%w: no such subject, or already erased", secrets.ErrNotFound)
+	// What they said to the business's assistant goes too, where they are
+	// named by their number or chat id (decision 0062 V5): a subject id
+	// alone cannot be matched to rows. Their rows go even when nothing of
+	// theirs was ever sealed (no key to erase).
+	rowsOut := map[string]any{}
+	rowsGone := 0
+	if req.Category != "" && req.Value != nil {
+		n, err := s.eraseConversationRows(r.Context(), p.TenantID, req.Category, req.Value)
+		if err != nil {
+			s.Logger.Warn("erase: conversation rows not all deleted", "err", err)
+			rowsOut["conversation_rows_pending"] = true
 		}
-		s.fail(w, r, err)
-		return
+		rowsOut["conversation_rows_deleted"], rowsGone = n, n
 	}
-	out := map[string]any{"subject": subject, "erased": true}
+	erased := true
+	if err := s.Vault.Erase(r.Context(), p.TenantID, subject, p.Actor()); err != nil {
+		if !errors.Is(err, secrets.ErrNotFound) || rowsGone == 0 {
+			if errors.Is(err, secrets.ErrNotFound) {
+				err = fmt.Errorf("%w: no such subject, or already erased", secrets.ErrNotFound)
+			}
+			s.fail(w, r, err)
+			return
+		}
+		erased = false // no key, but their conversation rows went
+	}
+	out := map[string]any{"subject": subject, "erased": erased}
+	for k, v := range rowsOut {
+		out[k] = v
+	}
 	// Files a person sent go with them (decision 0062): their key is gone,
 	// and the files themselves are deleted now, not at their expiry.
 	if s.EraseFiles != nil {
