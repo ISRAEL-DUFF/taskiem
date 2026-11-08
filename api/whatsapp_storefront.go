@@ -58,6 +58,10 @@ type chatShop struct {
 	// ReopenAt: closed for today, the page opens again by itself then.
 	ReopenAt  *time.Time `json:"reopen_at,omitempty"`
 	Reference string     `json:"reference,omitempty"` // ready, delivered
+	// Category and From: a category's items being shown 10 at a time
+	// (stock_category), and where the next page starts.
+	Category string `json:"category,omitempty"`
+	From     int    `json:"from,omitempty"`
 	// Pick are the items offered for a numbered pick, when a name matched
 	// several.
 	Pick []shopChoice `json:"pick,omitempty"`

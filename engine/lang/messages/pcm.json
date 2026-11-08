@@ -1368,6 +1368,18 @@
       "text": "Your table {table} never get {columns} column, wey e dey use. Add am for the app{link}, or those steps go fail.",
       "reviewed": false
     },
+    "wa.stock.category": {
+      "text": "*{category}* ({count}):\n{list}",
+      "reviewed": false
+    },
+    "wa.stock.category_more": {
+      "text": "Send *more* make I show you the rest.",
+      "reviewed": false
+    },
+    "wa.stock.low_tag": {
+      "text": "(e don low)",
+      "reviewed": false
+    },
     "wa.tablemake.denied": {
       "text": "You no fit make or change tables for {org} (e need table.edit).",
       "reviewed": false

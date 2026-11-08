@@ -10203,6 +10203,10 @@ paths:
                 supplier:
                   type: string
                   maxLength: 120
+                category:
+                  type: string
+                  maxLength: 60
+                  description: The kind of thing it is ("Sneakers"). The catalogue gets a category column the first time one is set
       responses:
         '201':
           description: The item, and the movement of its quantity
@@ -10264,6 +10268,10 @@ paths:
                   type: integer
                 supplier:
                   type: string
+                category:
+                  type: string
+                  maxLength: 60
+                  description: The kind of thing it is ("Sneakers"); empty for none. The catalogue gets a category column the first time one is set
                 available:
                   type: boolean
                   description: Shown on the storefront and the price lists it is on
@@ -31956,6 +31964,9 @@ components:
           type: string
         unit:
           type: string
+        category:
+          type: string
+          description: The seller's category for it
         price_kobo:
           type: integer
         min_quantity:
@@ -32452,6 +32463,12 @@ components:
           type: integer
         supplier:
           type: string
+        category:
+          type: string
+          description: The kind of thing it is ("Sneakers"), when the catalogue has a category column
+        description:
+          type: string
+          description: Its words on the storefront, when the catalogue maps them
         low:
           type: boolean
         suggest:

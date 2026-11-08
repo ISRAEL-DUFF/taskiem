@@ -37,9 +37,12 @@ type PriceList struct {
 // PriceItem is an item on a price list, as the seller sets it and the
 // buyer sees it.
 type PriceItem struct {
-	ItemID      string `json:"item_id"`
-	Name        string `json:"name"`
-	Unit        string `json:"unit,omitempty"`
+	ItemID string `json:"item_id"`
+	Name   string `json:"name"`
+	Unit   string `json:"unit,omitempty"`
+	// Category is the seller's ("Sneakers"), as it was when the item was
+	// put on the list or last changed.
+	Category    string `json:"category,omitempty"`
 	PriceKobo   int64  `json:"price_kobo"`
 	MinQuantity int    `json:"min_quantity"`
 	Available   bool   `json:"available"`
@@ -143,14 +146,14 @@ func ListsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]PriceList, err
 }
 
 func listItemsTx(ctx context.Context, tx pgx.Tx, list uuid.UUID) ([]PriceItem, error) {
-	rows, err := tx.Query(ctx, `SELECT item_id, name, unit, price_kobo, min_quantity, available, breaks FROM price_list_items WHERE list_id = $1 ORDER BY position, lower(name)`, list)
+	rows, err := tx.Query(ctx, `SELECT item_id, name, unit, category, price_kobo, min_quantity, available, breaks FROM price_list_items WHERE list_id = $1 ORDER BY position, lower(name)`, list)
 	if err != nil {
 		return nil, err
 	}
 	out, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (PriceItem, error) {
 		var it PriceItem
 		var raw []byte
-		if err := r.Scan(&it.ItemID, &it.Name, &it.Unit, &it.PriceKobo, &it.MinQuantity, &it.Available, &raw); err != nil {
+		if err := r.Scan(&it.ItemID, &it.Name, &it.Unit, &it.Category, &it.PriceKobo, &it.MinQuantity, &it.Available, &raw); err != nil {
 			return it, err
 		}
 		return it, scanBreaks(raw, &it)
@@ -203,9 +206,9 @@ func SetListItemsTx(ctx context.Context, tx pgx.Tx, tenant, list uuid.UUID, item
 		return nil, err
 	}
 	for i, it := range items {
-		if _, err := tx.Exec(ctx, `INSERT INTO price_list_items (tenant_id, list_id, item_id, name, unit, price_kobo, min_quantity, available, position, breaks)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`, tenant, list, it.ItemID, cutRunes(it.Name, 120), cutRunes(it.Unit, 40), it.PriceKobo, it.MinQuantity, it.Available, i,
-			breaksJSON(it.Breaks)); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO price_list_items (tenant_id, list_id, item_id, name, unit, price_kobo, min_quantity, available, position, breaks, category)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, tenant, list, it.ItemID, cutRunes(it.Name, 120), cutRunes(it.Unit, 40), it.PriceKobo, it.MinQuantity, it.Available, i,
+			breaksJSON(it.Breaks), cutRunes(it.Category, 60)); err != nil {
 			return nil, err
 		}
 	}
@@ -426,8 +429,8 @@ func MirrorPricesTx(ctx context.Context, tx pgx.Tx, seller, link uuid.UUID) erro
 		if it.Overridden {
 			breaks = nil
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO supplier_prices (tenant_id, link_id, item_id, name, unit, price_kobo, min_quantity, available, position, breaks)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`, buyer, link, it.ItemID, it.Name, it.Unit, it.PriceKobo, it.MinQuantity, it.Available, i, breaksJSON(breaks)); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO supplier_prices (tenant_id, link_id, item_id, name, unit, price_kobo, min_quantity, available, position, breaks, category)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, buyer, link, it.ItemID, it.Name, it.Unit, it.PriceKobo, it.MinQuantity, it.Available, i, breaksJSON(breaks), cutRunes(it.Category, 60)); err != nil {
 			return err
 		}
 	}
@@ -475,7 +478,7 @@ func SupplierPricesTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID) ([
 			continue // a link no longer active: its prices are not offered
 		}
 		p.Business = n
-		rows, err := tx.Query(ctx, `SELECT item_id, name, unit, price_kobo, min_quantity, available, breaks FROM supplier_prices WHERE tenant_id = $1 AND link_id = $2
+		rows, err := tx.Query(ctx, `SELECT item_id, name, unit, category, price_kobo, min_quantity, available, breaks FROM supplier_prices WHERE tenant_id = $1 AND link_id = $2
 			ORDER BY position, lower(name)`, tenant, p.LinkID)
 		if err != nil {
 			return nil, err
@@ -483,7 +486,7 @@ func SupplierPricesTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID) ([
 		if p.Items, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (PriceItem, error) {
 			var it PriceItem
 			var raw []byte
-			if err := r.Scan(&it.ItemID, &it.Name, &it.Unit, &it.PriceKobo, &it.MinQuantity, &it.Available, &raw); err != nil {
+			if err := r.Scan(&it.ItemID, &it.Name, &it.Unit, &it.Category, &it.PriceKobo, &it.MinQuantity, &it.Available, &raw); err != nil {
 				return it, err
 			}
 			return it, scanBreaks(raw, &it)
@@ -619,4 +622,28 @@ func KeepPricesTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, prices
 	}
 	// The buyer sees it now; the mirror comes back when it ends.
 	return dueTx(ctx, tx, tenant, "prices", link, 0)
+}
+
+// SetItemCategoryTx writes an item's new category on the price lists that
+// hold it and puts the links those lists are shared with on the list to
+// mirror, so buyers group it the new way. It answers those links.
+func SetItemCategoryTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, item, category string) ([]uuid.UUID, error) {
+	rows, err := tx.Query(ctx, `UPDATE price_list_items SET category = $3 WHERE tenant_id = $1 AND item_id = $2 AND category <> $3 RETURNING list_id`,
+		tenant, item, cutRunes(category, 60))
+	if err != nil {
+		return nil, err
+	}
+	lists, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return nil, err
+	}
+	var out []uuid.UUID
+	for _, l := range lists {
+		ls, err := sharedDueTx(ctx, tx, tenant, l)
+		if err != nil {
+			return nil, err
+		}
+		out = union(out, ls)
+	}
+	return out, nil
 }

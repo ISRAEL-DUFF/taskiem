@@ -85,8 +85,116 @@ func (s *Server) waStockCommand(ctx context.Context, c *chat, text, cmd string) 
 		return true, s.waStockShow(ctx, c, strings.Join(strings.Fields(text)[1:], " "))
 	case words[0] == "adjust":
 		return true, s.waStockAdjust(ctx, c, strings.Join(strings.Fields(text)[1:], " "))
+	case len(words) > 2 && words[0] == "show" && words[1] == "me":
+		// "show me sneakers": a category; anything else is not this.
+		return s.waStockCategoryAsked(ctx, c, strings.Join(strings.Fields(text)[2:], " "))
+	case len(words) <= 3:
+		// A category's name alone: "sneakers", "soft drinks".
+		return s.waStockCategoryAsked(ctx, c, text)
 	}
 	return false, nil
+}
+
+// categoryPage is how many of a category's items one message lists.
+const categoryPage = 10
+
+// stockCategory is the category a name asks for, as the items spell it,
+// a plural or singular alike; "" when none matches.
+func stockCategory(items []stock.Item, name string) string {
+	want := matchKey(name)
+	if want == "" {
+		return ""
+	}
+	for _, it := range items {
+		if it.Category == "" {
+			continue
+		}
+		k := matchKey(it.Category)
+		if k == want || matchKey(stock.Singular(it.Category)) == matchKey(stock.Singular(name)) {
+			return it.Category
+		}
+	}
+	return ""
+}
+
+// inCategory is a category's items, by name.
+func inCategory(items []stock.Item, category string) []stock.Item {
+	var out []stock.Item
+	for _, it := range items {
+		if it.Category != "" && matchKey(it.Category) == matchKey(category) {
+			out = append(out, it)
+		}
+	}
+	return out
+}
+
+// waStockCategoryAsked lists a category's items when the words name one;
+// false when they do not (or the catalogue keeps no categories), so the
+// other words answer. Nothing is read unless the catalogue has a category
+// column.
+func (s *Server) waStockCategoryAsked(ctx context.Context, c *chat, name string) (bool, error) {
+	name = strings.Trim(strings.TrimSpace(name), "?!.")
+	if name == "" || !c.p.Can(PermTableRead) {
+		return false, nil
+	}
+	sh, err := s.stockShopOf(s.waTablesCtx(ctx, c), c.tenant.ID)
+	if err != nil || sh.cols().Category == "" {
+		return false, nil
+	}
+	_, items, ok, err := s.stockChatItems(ctx, c)
+	if !ok || err != nil {
+		return true, err
+	}
+	cat := stockCategory(items, name)
+	if cat == "" {
+		return false, nil
+	}
+	return true, s.waStockCategoryPage(ctx, c, items, cat, 0)
+}
+
+// waStockCategoryPage says a page of a category's items, each with its
+// count and whether it is low, and keeps the place for *more*.
+func (s *Server) waStockCategoryPage(ctx context.Context, c *chat, items []stock.Item, category string, from int) error {
+	in := inCategory(items, category)
+	from = min(from, len(in))
+	end := min(from+categoryPage, len(in))
+	lines := make([]string, 0, end-from)
+	for _, it := range in[from:end] {
+		line := "• " + whatsapp.SafeText(it.Name)
+		if it.Stock != nil {
+			line += ": " + whatsapp.SafeText(it.Quantity(*it.Stock))
+			if it.Low() {
+				line += " " + c.t("wa.stock.low_tag")
+			}
+		}
+		lines = append(lines, line)
+	}
+	msg := c.t("wa.stock.category", "category", whatsapp.SafeText(category), "count", strconv.Itoa(len(in)), "list", strings.Join(lines, "\n"))
+	if end < len(in) {
+		if err := s.saveSession(ctx, c, stateCollecting, chatData{Shop: &chatShop{Action: "stock_category", Category: category, From: end}}, waPendingTTL); err != nil {
+			return err
+		}
+		msg += "\n\n" + c.t("wa.stock.category_more")
+	} else if c.state != stateIdle {
+		if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
+			return err
+		}
+	}
+	return c.say(ctx, s, msg)
+}
+
+// waStockCategoryReply takes a message while a category's list is kept:
+// *more* is the next page; anything else lets the list go (false).
+func (s *Server) waStockCategoryReply(ctx context.Context, c *chat, cmd string) (bool, error) {
+	sh := c.data.Shop
+	if cmd == "more" || cmd == "next" {
+		_, items, ok, err := s.stockChatItems(ctx, c)
+		if !ok || err != nil {
+			return true, err
+		}
+		return true, s.waStockCategoryPage(ctx, c, items, sh.Category, sh.From)
+	}
+	return false, s.saveSession(ctx, c, stateIdle, chatData{}, 0)
 }
 
 // stockChatItems reads the business's items for a chat, or says why it
@@ -181,6 +289,10 @@ func (s *Server) waStockShow(ctx context.Context, c *chat, name string) error {
 		return err
 	}
 	match := matchStock(items, name)
+	// "stock sneakers": a category's items, unless an item is called that.
+	if cat := stockCategory(items, name); cat != "" && (len(match) != 1 || matchKey(match[0].Name) != matchKey(name)) {
+		return s.waStockCategoryPage(ctx, c, items, cat, 0)
+	}
 	switch {
 	case len(match) == 0:
 		return c.say(ctx, s, c.t("wa.shop.no_item", "name", whatsapp.SafeText(name)))

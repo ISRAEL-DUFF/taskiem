@@ -15,6 +15,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
@@ -46,6 +47,68 @@ var stockColumns = []struct {
 	{func(m *storefront.Columns) *string { return &m.ReorderLevel }, datatables.Column{Name: "reorder_level", Title: "Reorder at", Type: "integer"}},
 	{func(m *storefront.Columns) *string { return &m.TargetLevel }, datatables.Column{Name: "target_level", Title: "Order up to", Type: "integer"}},
 	{func(m *storefront.Columns) *string { return &m.Supplier }, datatables.Column{Name: "supplier", Title: "Supplier", Type: "text"}},
+}
+
+// maxCategory is how long a category may be, in characters.
+const maxCategory = 60
+
+// categoryColumn is the column a catalogue gets the first time a category
+// is set on one of its items (docs/spec/chat-categories-and-variants.md).
+var categoryColumn = datatables.Column{Name: "category", Title: "Category", Type: "text"}
+
+// errNoCategoryColumn: the catalogue is a table the business keeps
+// elsewhere, so Taskiem cannot add the column itself.
+var errNoCategoryColumn = errors.New("stock: add a category column to use categories")
+
+// stockCategories makes the catalogue hold categories, once: a text column
+// named category is mapped if the table has one, else added (the plan's
+// column limit allowing). The shop is answered as it now is.
+func (s *Server) stockCategories(ctx context.Context, tenant uuid.UUID, actor string, audit stockAudit, sh stockShop) (stockShop, error) {
+	if sh.cols().Category != "" {
+		return sh, nil
+	}
+	t := sh.table
+	m := sh.cols()
+	for _, c := range t.Columns {
+		if c.Name == categoryColumn.Name && c.Type == "text" {
+			m.Category = c.Name
+		}
+	}
+	if m.Category == "" {
+		if datatables.Writable(t) != nil {
+			return sh, errNoCategoryColumn
+		}
+		lim, err := s.Store.LimitsFor(ctx, tenant)
+		if err != nil {
+			return sh, err
+		}
+		if lim.MaxDataTableColumns > 0 && len(t.Columns) >= lim.MaxDataTableColumns {
+			return sh, errNoCategoryColumn
+		}
+		if err := s.addOwnColumn(ctx, tenant, actor, audit, &t, categoryColumn); err != nil {
+			return sh, err
+		}
+		m.Category = categoryColumn.Name
+	}
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		if err := m.Check(tableColumns(t)); err != nil {
+			return err
+		}
+		_, err := storefront.Save(ctx, tx, tenant, sh.sf.Slug, sh.sf.Draft, &t.ID, m, actor)
+		return err
+	}); err != nil {
+		return sh, err
+	}
+	return s.stockShopOf(ctx, tenant)
+}
+
+// checkCategory trims a category and checks its length.
+func checkCategory(c string) (string, error) {
+	c = strings.Join(strings.Fields(c), " ")
+	if len([]rune(c)) > maxCategory {
+		return c, fmt.Errorf("%w: a category is up to %d characters", errBadRequest, maxCategory)
+	}
+	return c, nil
 }
 
 // stockShop is a business's catalogue keeping stock: its storefront (a
@@ -329,9 +392,14 @@ type stockNew struct {
 	Reorder   *int64 `json:"reorder_level"`
 	Target    *int64 `json:"target_level"`
 	Supplier  string `json:"supplier"`
+	Category  string `json:"category"`
 }
 
 func (in *stockNew) check() error {
+	var err error
+	if in.Category, err = checkCategory(in.Category); err != nil {
+		return err
+	}
 	in.Name, in.Unit, in.Supplier = strings.TrimSpace(in.Name), strings.TrimSpace(in.Unit), strings.TrimSpace(in.Supplier)
 	switch {
 	case in.Name == "" || len([]rune(in.Name)) > 120:
@@ -395,9 +463,17 @@ func (s *Server) stockAdd(ctx context.Context, tenant uuid.UUID, actor, key stri
 	if len(items) >= storefront.MaxItems {
 		return stock.Item{}, stock.Movement{}, fmt.Errorf("%w: the catalogue holds at most %d items", errConflict, storefront.MaxItems)
 	}
+	if in.Category != "" {
+		if sh, err = s.stockCategories(ctx, tenant, actor, audit, sh); err != nil {
+			return stock.Item{}, stock.Movement{}, err
+		}
+	}
 	m := sh.cols()
 	row := stockCells(m, in.Unit, in.CostKobo, in.Reorder, in.Target, in.Supplier)
 	row[m.Name], row[m.Stock] = in.Name, 0
+	if in.Category != "" {
+		row[m.Category] = in.Category
+	}
 	if m.Price != "" && in.PriceKobo != nil {
 		row[m.Price] = priceCell(*in.PriceKobo, m)
 	}
@@ -720,6 +796,9 @@ func (s *Server) patchStockItem(w http.ResponseWriter, r *http.Request) {
 		Reorder   *int64  `json:"reorder_level"`
 		Target    *int64  `json:"target_level"`
 		Supplier  *string `json:"supplier"`
+		// Category is the kind of thing it is ("Sneakers"; "" for none):
+		// the catalogue gets a category column the first time one is set.
+		Category *string `json:"category"`
 		// Available shows or hides it on the storefront and the price
 		// lists it is on (chat tools' product form).
 		Available *bool `json:"available"`
@@ -742,6 +821,25 @@ func (s *Server) patchStockItem(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.stockFail(w, r, err)
 		return
+	}
+	if in.Category != nil {
+		c, err := checkCategory(*in.Category)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		in.Category = &c
+		if c != "" {
+			audit := func(tx pgx.Tx, action, target string, detail map[string]any) error {
+				return auditTx(r, tx, action, target, detail)
+			}
+			if sh, err = s.stockCategories(r.Context(), p.TenantID, p.Actor(), audit, sh); err != nil {
+				s.stockFail(w, r, err)
+				return
+			}
+		} else if sh.cols().Category == "" {
+			in.Category = nil // none to clear
+		}
 	}
 	m := sh.cols()
 	set := map[string]any{}
@@ -809,6 +907,12 @@ func (s *Server) patchStockItem(w http.ResponseWriter, r *http.Request) {
 			}
 			return put(m.Available, "available", *in.Available)
 		},
+		func() error {
+			if in.Category == nil {
+				return nil
+			}
+			return put(m.Category, "category", *in.Category)
+		},
 	} {
 		if perr = f(); perr != nil {
 			break
@@ -843,6 +947,18 @@ func (s *Server) patchStockItem(w http.ResponseWriter, r *http.Request) {
 	if err := s.SyncStorefront(r.Context(), p.TenantID); err != nil {
 		s.Logger.Warn("stock: refreshing the catalogue", "tenant", p.TenantID, "err", err)
 	}
+	// Buyers see it under its new category too.
+	if in.Category != nil && *in.Category != before.Category {
+		var due []uuid.UUID
+		if err := s.tx(r, func(tx pgx.Tx) error {
+			var err error
+			due, err = links.SetItemCategoryTx(r.Context(), tx, p.TenantID, id, *in.Category)
+			return err
+		}); err != nil {
+			s.Logger.Warn("stock: a category on the price lists", "tenant", p.TenantID, "err", err)
+		}
+		s.mirrorPrices(r.Context(), p.TenantID, due)
+	}
 	it, err := s.stockItem(r.Context(), p.TenantID, sh, id)
 	if err != nil {
 		s.stockFail(w, r, err)
@@ -854,6 +970,13 @@ func (s *Server) patchStockItem(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.PriceKobo != nil && (before.PriceKobo == nil || *before.PriceKobo != *in.PriceKobo) {
 		lines = append(lines, priceChangeWords(it.Name, before.PriceKobo, *in.PriceKobo))
+	}
+	if in.Category != nil && before.Category != it.Category {
+		if it.Category == "" {
+			lines = append(lines, it.Name+" is no longer in a category")
+		} else {
+			lines = append(lines, "Category of "+it.Name+": "+it.Category)
+		}
 	}
 	if in.Available != nil && before.Available != *in.Available {
 		if *in.Available {
@@ -944,6 +1067,8 @@ func (s *Server) stockFail(w http.ResponseWriter, r *http.Request, err error) {
 		writeJSON(w, http.StatusConflict, map[string]any{"error": "no catalogue keeps stock yet: press Keep my stock", "code": "stock_off"})
 	case errors.Is(err, errNoItem):
 		writeErr(w, http.StatusNotFound, "no such item")
+	case errors.Is(err, errNoCategoryColumn):
+		writeJSON(w, http.StatusConflict, map[string]any{"error": "Add a category column to use categories", "code": "no_category_column"})
 	case errors.Is(err, stock.ErrInvalid):
 		s.fail(w, r, fmt.Errorf("%w: %s", errBadRequest, strings.TrimPrefix(err.Error(), "stock: invalid: ")))
 	case errors.Is(err, stock.ErrSaleInvalid):

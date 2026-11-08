@@ -1368,6 +1368,18 @@
       "text": "Teburinka {table} bai da ginshiƙin {columns} tukuna, wanda yake amfani da shi. Ƙara shi a manhajar{link}, ko waɗannan matakan za su gaza.",
       "reviewed": false
     },
+    "wa.stock.category": {
+      "text": "*{category}* ({count}):\n{list}",
+      "reviewed": false
+    },
+    "wa.stock.category_more": {
+      "text": "Aika *more* don sauran.",
+      "reviewed": false
+    },
+    "wa.stock.low_tag": {
+      "text": "(ya yi kaɗan)",
+      "reviewed": false
+    },
     "wa.tablemake.denied": {
       "text": "Ba za ka iya yin tebur ko canza shi a {org} ba (yana buƙatar table.edit).",
       "reviewed": false

@@ -185,7 +185,7 @@ func (s *Server) putPriceListItems(w http.ResponseWriter, r *http.Request) {
 			s.fail(w, r, fmt.Errorf("%w: %q is not one of your items", errBadRequest, x.ItemID))
 			return
 		}
-		pi := links.PriceItem{ItemID: it.ID, Name: it.Name, Unit: it.Unit, PriceKobo: x.PriceKobo, MinQuantity: max(1, x.MinQuantity), Available: true, Breaks: x.Breaks}
+		pi := links.PriceItem{ItemID: it.ID, Name: it.Name, Unit: it.Unit, Category: it.Category, PriceKobo: x.PriceKobo, MinQuantity: max(1, x.MinQuantity), Available: true, Breaks: x.Breaks}
 		if x.Available != nil {
 			pi.Available = *x.Available
 		}

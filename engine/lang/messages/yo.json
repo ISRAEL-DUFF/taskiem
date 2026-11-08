@@ -1368,6 +1368,18 @@
       "text": "Tábìlì rẹ {table} kò tíì ní ọ̀wọ̀n {columns}, tí ó ń lò. Fi kún un nínú áàpù{link}, bí bẹ́ẹ̀ kọ́ àwọn ìgbésẹ̀ yẹn yóò kùnà.",
       "reviewed": false
     },
+    "wa.stock.category": {
+      "text": "*{category}* ({count}):\n{list}",
+      "reviewed": false
+    },
+    "wa.stock.category_more": {
+      "text": "Fi *more* ránṣẹ́ fún àwọn tó kù.",
+      "reviewed": false
+    },
+    "wa.stock.low_tag": {
+      "text": "(ó ti dín)",
+      "reviewed": false
+    },
     "wa.tablemake.denied": {
       "text": "O kò lè ṣe tàbí yí tábìlì padà ní {org} (ó nílò table.edit).",
       "reviewed": false

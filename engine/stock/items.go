@@ -26,6 +26,12 @@ type Item struct {
 	Reorder  *int64 `json:"reorder_level,omitempty"`
 	Target   *int64 `json:"target_level,omitempty"`
 	Supplier string `json:"supplier,omitempty"`
+	// Category is the owner's label for the kind of thing it is
+	// ("Sneakers"), when the catalogue has a category column.
+	Category string `json:"category,omitempty"`
+	// Description is the item's words on the storefront, when mapped:
+	// search reads it.
+	Description string `json:"description,omitempty"`
 }
 
 // Low reports whether the item is at or below its reorder level.
@@ -100,6 +106,12 @@ func Items(rows []map[string]any, m storefront.Columns) []Item {
 		}
 		if m.Supplier != "" {
 			it.Supplier = str(r[m.Supplier])
+		}
+		if m.Category != "" {
+			it.Category = str(r[m.Category])
+		}
+		if m.Description != "" {
+			it.Description = str(r[m.Description])
 		}
 		it.PriceKobo = money(r, m.Price, m.PriceUnit)
 		it.CostKobo = money(r, m.CostPrice, m.PriceUnit)

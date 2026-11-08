@@ -1368,6 +1368,18 @@
       "text": "Tebụl gị {table} enweghị kọlụm {columns} ugbu a, nke ọ na-eji. Tinye ya na ngwa ahụ{link}, ma ọ bụghị ya, nzọụkwụ ndị ahụ ga-ada.",
       "reviewed": false
     },
+    "wa.stock.category": {
+      "text": "*{category}* ({count}):\n{list}",
+      "reviewed": false
+    },
+    "wa.stock.category_more": {
+      "text": "Ziga *more* maka ndị fọdụrụ.",
+      "reviewed": false
+    },
+    "wa.stock.low_tag": {
+      "text": "(ọ dịla ala)",
+      "reviewed": false
+    },
     "wa.tablemake.denied": {
       "text": "Ị nweghị ike ịme ma ọ bụ ịgbanwe tebụl na {org} (ọ chọrọ table.edit).",
       "reviewed": false
