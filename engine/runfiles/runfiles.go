@@ -28,9 +28,11 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/effects"
 	"github.com/israel-duff/taskiem/engine/media"
+	"github.com/israel-duff/taskiem/engine/telemetry"
 	"github.com/israel-duff/taskiem/engine/voice"
 )
 
@@ -72,8 +74,25 @@ type Service struct {
 	Retention func(ctx context.Context, tenant uuid.UUID) (time.Duration, error)
 	// MaxAudio caps an Ogg recording's length; 0 is DefaultMaxAudio.
 	MaxAudio time.Duration
-	Now      func() time.Time
-	Logger   *slog.Logger
+	// DailyBytes caps what one organisation's runs may keep in 24 hours,
+	// so one busy or abusive sender cannot fill its storage; 0 is
+	// DefaultDailyBytes.
+	DailyBytes int64
+	// Subject finds the vault's subject id for a person (category and
+	// value), as erasure names them (secrets.Vault.SubjectFor); nil keeps
+	// files without one, so they are not erased with the person.
+	Subject func(ctx context.Context, tenant uuid.UUID, category, value string) (string, error)
+	Now     func() time.Time
+	Logger  *slog.Logger
+}
+
+// DefaultDailyBytes is what one organisation's runs may keep in 24 hours.
+const DefaultDailyBytes = 1 << 30
+
+// About is whom a file is about: a category (phone, email, other) and the
+// value, as erasure names a person.
+type About struct {
+	Category, Value string
 }
 
 // Owner is the run a file is kept for.
@@ -138,9 +157,49 @@ func Name(raw string) string {
 	return out
 }
 
+// neutralName is the name a person's file is kept under: its kind and
+// extension, never what they called it (a document's name can be personal
+// data, and the name is kept in the clear in run_files).
+func neutralName(name, ctype string) string {
+	ext := ""
+	if i := strings.LastIndex(name, "."); i > 0 && i >= len(name)-6 {
+		ext = strings.ToLower(name[i:])
+	}
+	switch {
+	case strings.HasPrefix(ctype, "audio/"):
+		return "voice-note" + ext
+	case strings.HasPrefix(ctype, "image/"):
+		return "photo" + ext
+	}
+	return "document" + ext
+}
+
 // Put checks data and keeps it for the run. A person's file is scanned
-// first; an Ogg recording longer than MaxAudio is refused.
-func (s *Service) Put(ctx context.Context, o Owner, name string, data []byte, personal bool) (Ref, error) {
+// first, kept under a neutral name, and tied to whom it is about, so
+// erasing them deletes it; an Ogg recording longer than MaxAudio, or a file
+// past the organisation's daily allowance, is refused.
+func (s *Service) Put(ctx context.Context, o Owner, name string, data []byte, personal bool, about ...About) (Ref, error) {
+	origin := "made"
+	if personal {
+		origin = "person"
+	}
+	ref, err := s.put(ctx, o, name, data, personal, about)
+	switch {
+	case err == nil:
+		telemetry.RunFilesKept.WithLabelValues(origin, "kept").Inc()
+	case errors.Is(err, ErrOverAllowance):
+		telemetry.RunFilesKept.WithLabelValues(origin, "over_allowance").Inc()
+	case errors.Is(err, ErrRefused):
+		telemetry.RunFilesKept.WithLabelValues(origin, "refused").Inc()
+	}
+	return ref, err
+}
+
+// ErrOverAllowance is a file past the organisation's daily allowance; it
+// wraps ErrRefused.
+var ErrOverAllowance = fmt.Errorf("%w: today's allowance for files is used up", ErrRefused)
+
+func (s *Service) put(ctx context.Context, o Owner, name string, data []byte, personal bool, about []About) (Ref, error) {
 	if s == nil || s.Store == nil || s.Pool == nil {
 		return Ref{}, ErrUnavailable
 	}
@@ -159,9 +218,39 @@ func (s *Service) Put(ctx context.Context, o Owner, name string, data []byte, pe
 			return Ref{}, fmt.Errorf("%w: a recording of %s, longer than %s", ErrRefused, d.Round(time.Second), max)
 		}
 	}
+	daily := s.DailyBytes
+	if daily <= 0 {
+		daily = DefaultDailyBytes
+	}
+	var used int64
+	if err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{o.Tenant}, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT COALESCE(sum(size), 0) FROM run_files WHERE tenant_id = $1 AND created_at > now() - interval '24 hours'`, o.Tenant).Scan(&used)
+	}); err != nil {
+		return Ref{}, err
+	}
+	if used+int64(len(data)) > daily {
+		return Ref{}, fmt.Errorf("%w (%d MB a day)", ErrOverAllowance, daily>>20)
+	}
 	if personal {
-		if err := s.Store.ScanChatFile(ctx, data); err != nil {
+		start := time.Now()
+		err := s.Store.ScanChatFile(ctx, data)
+		telemetry.FileScanSeconds.Observe(time.Since(start).Seconds())
+		if err != nil {
 			return Ref{}, fmt.Errorf("%w: %w", ErrRefused, err)
+		}
+	}
+	var subject *string
+	if personal && s.Subject != nil {
+		for _, a := range about {
+			if strings.TrimSpace(a.Value) == "" {
+				continue
+			}
+			id, err := s.Subject(ctx, o.Tenant, a.Category, strings.TrimSpace(a.Value))
+			if err != nil {
+				return Ref{}, err
+			}
+			subject = &id
+			break
 		}
 	}
 	keep := DefaultRetention
@@ -190,11 +279,15 @@ func (s *Service) Put(ctx context.Context, o Owner, name string, data []byte, pe
 		}
 	}
 	sum := sha256.Sum256(stored)
-	ref := Ref{ID: uuid.Must(uuid.NewV7()), Name: Name(name), Type: f.Type, Size: int64(len(stored)), SHA256: hex.EncodeToString(sum[:])}
+	kept := Name(name)
+	if personal {
+		kept = neutralName(kept, f.Type)
+	}
+	ref := Ref{ID: uuid.Must(uuid.NewV7()), Name: kept, Type: f.Type, Size: int64(len(stored)), SHA256: hex.EncodeToString(sum[:])}
 	err = db.InTenantTx(ctx, s.Pool, []uuid.UUID{o.Tenant}, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `INSERT INTO run_files (id, tenant_id, environment, workflow_id, run_id, name, type, size, sha256, storage_key, personal, expires_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-			ref.ID, o.Tenant, o.Environment, o.Workflow, o.Run, ref.Name, ref.Type, ref.Size, sum[:], f.Path, personal, s.now().Add(keep))
+		_, err := tx.Exec(ctx, `INSERT INTO run_files (id, tenant_id, environment, workflow_id, run_id, name, type, size, sha256, storage_key, personal, expires_at, subject)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+			ref.ID, o.Tenant, o.Environment, o.Workflow, o.Run, ref.Name, ref.Type, ref.Size, sum[:], f.Path, personal, s.now().Add(keep), subject)
 		return err
 	})
 	if err != nil {
@@ -292,6 +385,39 @@ func (s *Service) remove(ctx context.Context, tenant uuid.UUID, ids []uuid.UUID,
 	})
 }
 
+// EraseSubject deletes every file about a person, now (the subject the
+// vault erased: erasure, spec 9.4). It answers how many it deleted.
+func (s *Service) EraseSubject(ctx context.Context, tenant uuid.UUID, subject string) (int, error) {
+	if s == nil || s.Store == nil || s.Pool == nil || subject == "" {
+		return 0, nil
+	}
+	var ids []uuid.UUID
+	var keys []string
+	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT id, storage_key FROM run_files WHERE subject = $1`, subject)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var id uuid.UUID
+			var key string
+			if err := rows.Scan(&id, &key); err != nil {
+				return err
+			}
+			ids, keys = append(ids, id), append(keys, key)
+		}
+		return rows.Err()
+	})
+	if err != nil || len(ids) == 0 {
+		return 0, err
+	}
+	if err := s.remove(ctx, tenant, ids, keys); err != nil {
+		return 0, err
+	}
+	return len(ids), nil
+}
+
 // Sweep deletes expired files, a batch at a time, in each tenant's own
 // storage; it answers how many it deleted. A tenant whose storage cannot
 // be reached keeps its files until the next sweep.
@@ -352,8 +478,12 @@ type RunFiles struct {
 }
 
 // Put keeps data for the run.
-func (f *RunFiles) Put(ctx context.Context, name string, data []byte, personal bool) (map[string]any, error) {
-	ref, err := f.s.Put(ctx, f.o, name, data, personal)
+func (f *RunFiles) Put(ctx context.Context, name string, data []byte, personal bool, about ...connector.FileSubject) (map[string]any, error) {
+	ab := make([]About, len(about))
+	for i, a := range about {
+		ab[i] = About{Category: a.Category, Value: a.Value}
+	}
+	ref, err := f.s.Put(ctx, f.o, name, data, personal, ab...)
 	if err != nil {
 		return nil, err
 	}

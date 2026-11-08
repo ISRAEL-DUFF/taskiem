@@ -28,6 +28,10 @@ actions:
         url:        { type: string }
         expires_at: { type: string }
         file:       { type: object, description: "The file's reference" }
+    # The link opens the file to whoever holds it until it expires: sealed
+    # in run history, readable by the run's own steps.
+    pii:
+      - { field: output.url, category: other }
   delete:
     title: Delete a file
     description: Deletes a file now, before its time is up. Deleting a file that is already gone does nothing.

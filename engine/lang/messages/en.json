@@ -559,6 +559,11 @@
       "reviewed": true,
       "context": "Readiness: a step needs a service the business has not connected"
     },
+    "ready.file_scanner": {
+      "text": "This Taskiem cannot check files customers send for viruses yet, so it refuses them, and this workflow fetches them. Ask whoever runs your Taskiem to turn file checking on.",
+      "reviewed": true,
+      "context": "Readiness: a workflow fetches files customers send, and the deployment has no malware scanner, so every such file would be refused"
+    },
     "ready.paystack_transfer": {
       "text": "Paystack must turn on Pay with Transfer for this business: ask Paystack support. Until then customers cannot pay by transfer into the account numbers it opens.",
       "reviewed": true,

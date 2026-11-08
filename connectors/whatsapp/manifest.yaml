@@ -19,7 +19,7 @@ auth:
   fields:
     - { key: access_token, label: System user access token, secret: true }
     - { key: phone_number_id, label: Business phone number ID (not the phone number) }
-    - { key: app_secret, label: App secret (verifies webhook signatures), secret: true, required: false }
+    - { key: app_secret, label: "App secret (proves messages really come from Meta; needed to receive them)", secret: true, required: false }
     - { key: verify_token, label: Verify token (any string; enter the same in the App Dashboard), secret: true, required: false }
     - { key: business_account_id, label: WhatsApp Business Account ID (to choose your message templates by name), required: false }
   test: { action: get_phone_number }
@@ -27,7 +27,8 @@ auth:
 rate_limit: { requests: 80, per: 1s, scope: connection }
 base_url: https://graph.facebook.com/v25.0
 # Media is downloaded from Meta's media host (Retrieve and Download media).
-egress_hosts: [graph.facebook.com, lookaside.fbsbx.com]
+# A media URL may redirect to Meta's CDN: only its hosts are followed.
+egress_hosts: [graph.facebook.com, lookaside.fbsbx.com, "*.fbcdn.net", "*.whatsapp.net"]
 actions:
   get_phone_number:
     title: Get the business phone number
@@ -214,12 +215,14 @@ actions:
       properties:
         media_id: { type: string, description: "The inbound message's media id (trigger.item.message.audio.id, .image.id, .document.id)" }
         name:     { type: string, description: A file name to keep it under }
+        sender:   { type: string, description: "Who sent it (trigger.item.message.from): erasing that number deletes the file too" }
     output:
       type: object
       properties:
         file:      { type: object, description: "The run file's reference: file, name, type, size, sha256" }
         mime_type: { type: string, description: What Meta said the media was }
     pii:
+      - { field: sender, category: phone }
       - { field: output.file.name, category: other }
   upload_media:
     title: Upload a file to send
@@ -244,8 +247,9 @@ actions:
     title: Show that a reply is being written
     description: >-
       Marks the customer's message read and shows "typing…" in their chat
-      until the reply is sent, for at most 25 seconds. Showing it twice
-      changes nothing, so a retry is safe.
+      until the reply is sent, for at most 25 seconds. Where Meta refuses
+      the typing indicator, the read receipt alone is sent (typing false).
+      Showing it twice changes nothing, so a retry is safe.
     class: idempotent_write
     idempotency: { field: "header:X-Taskiem-Idempotency-Key", encoding: base32_lower, length: 32 }
     compensate: null
@@ -258,6 +262,7 @@ actions:
       type: object
       properties:
         success: { type: boolean }
+        typing:  { type: boolean, description: False when only the read receipt could be sent }
 triggers:
   # Meta sends every subscribed field of the app to its one callback URL and
   # may batch many messages, statuses and errors in one delivery: split

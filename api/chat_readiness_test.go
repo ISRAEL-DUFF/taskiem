@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/israel-duff/taskiem/connectors/whatsapp"
+	"github.com/israel-duff/taskiem/engine/media"
 )
 
 // A workflow that starts on WhatsApp messages needs its connection like a
@@ -47,5 +48,26 @@ func TestWhatsAppTriggerReadiness(t *testing.T) {
 	owner.must(204, "PUT", "/v1/connections/"+conn["id"].(string)+"/credentials", map[string]any{"credentials": map[string]string{"app_secret": "s3cret"}})
 	if chk := owner.must(200, "POST", "/v1/connections/"+conn["id"].(string)+"/check", nil); chk["warnings"] != nil {
 		t.Fatalf("warned with the secret set: %v", chk["warnings"])
+	}
+}
+
+// A workflow that fetches files customers send cannot run on a Taskiem
+// with no malware scanner: readiness says so, blocking, in plain words.
+func TestFileScannerReadiness(t *testing.T) {
+	w := newWorld(t)
+	if err := w.env.Registry.Register(whatsapp.New(whatsapp.Options{})); err != nil {
+		t.Fatal(err)
+	}
+	owner := w.tenant(t, "Mama Put", "owner@mamaput.test")
+	doc := `{"schema":"wd/v1","id":"wf_wa","version":1,"name":"wa","trigger":{"type":"manual"},
+	  "steps":[{"id":"fetch","type":"connector","connector":"whatsapp@1","action":"get_media","input":{"media_id":"m1"}}]}`
+	w.srv.Media = nil
+	need := needsOf(t, owner.must(200, "POST", "/v1/readiness", map[string]any{"definition": json.RawMessage(doc)})["needs"])["setup/file_scanner/prod"]
+	if need == nil || need["blocking"] != true || !strings.Contains(need["message"].(string), "cannot check files customers send") {
+		t.Fatalf("no scanner: %v", need)
+	}
+	w.srv.Media = &media.Service{Scanner: okScanner{}}
+	if need := needsOf(t, owner.must(200, "POST", "/v1/readiness", map[string]any{"definition": json.RawMessage(doc)})["needs"])["setup/file_scanner/prod"]; need != nil {
+		t.Fatalf("with a scanner: %v", need)
 	}
 }

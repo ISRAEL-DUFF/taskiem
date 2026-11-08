@@ -29,6 +29,9 @@ func runFilesService(e *engine, log *slog.Logger) *runfiles.Service {
 		m.Scanner = &forms.ClamdScanner{Addr: addr}
 	}
 	return &runfiles.Service{Pool: e.pool, Store: m, Logger: log.With("component", "runfiles"),
+		Subject: func(ctx context.Context, tenant uuid.UUID, category, value string) (string, error) {
+			return e.vault.SubjectFor(ctx, tenant, category, value)
+		},
 		Retention: func(ctx context.Context, tenant uuid.UUID) (time.Duration, error) {
 			lim, err := e.store.LimitsFor(ctx, tenant)
 			if err != nil {

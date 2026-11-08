@@ -48,14 +48,15 @@ func TestPutReadLinkDelete(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ref.Name != "note.ogg" || ref.Type != "audio/ogg" || ref.Size != int64(len(data)) || len(ref.SHA256) != 64 {
+	// A person's file is kept under a neutral name, never what they called it.
+	if ref.Name != "voice-note.ogg" || ref.Type != "audio/ogg" || ref.Size != int64(len(data)) || len(ref.SHA256) != 64 {
 		t.Fatalf("ref %+v", ref)
 	}
 	if st.Scanned() != 1 {
 		t.Fatalf("a person's file was scanned %d times", st.Scanned())
 	}
 	m := ref.Map()
-	if m["file"] != ref.ID.String() || m["name"] != "note.ogg" {
+	if m["file"] != ref.ID.String() || m["name"] != "voice-note.ogg" {
 		t.Fatalf("map %v", m)
 	}
 	got, back, err := s.For(o).Read(ctx, m)
@@ -185,5 +186,58 @@ func TestName(t *testing.T) {
 		if got := runfiles.Name(in); got != want {
 			t.Errorf("runfiles.Name(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestDailyAllowance(t *testing.T) {
+	s, st, o, _ := setup(t)
+	ctx := context.Background()
+	one := ogg(time.Second)
+	s.DailyBytes = int64(len(one)*2 + 1)
+	for i := 0; i < 2; i++ {
+		if _, err := s.Put(ctx, o, "a.ogg", one, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, err := s.Put(ctx, o, "a.ogg", one, false)
+	if !errors.Is(err, runfiles.ErrOverAllowance) || !errors.Is(err, runfiles.ErrRefused) {
+		t.Fatalf("the third file: %v", err)
+	}
+	if st.Count() != 2 {
+		t.Fatalf("%d kept", st.Count())
+	}
+}
+
+func TestErasingAPersonDeletesTheirFiles(t *testing.T) {
+	s, st, o, _ := setup(t)
+	ctx := context.Background()
+	subjects := map[string]string{}
+	s.Subject = func(_ context.Context, _ uuid.UUID, category, value string) (string, error) {
+		subjects[category+":"+value] = "subj-" + value
+		return "subj-" + value, nil
+	}
+	ada, err := s.Put(ctx, o, "a.ogg", ogg(time.Second), true, runfiles.About{Category: "phone", Value: "2348031234567"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bola, err := s.Put(ctx, o, "b.ogg", ogg(time.Second), true, runfiles.About{Category: "phone", Value: "2348030000004"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if subjects["phone:2348031234567"] == "" {
+		t.Fatal("the subject was not asked for")
+	}
+	n, err := s.EraseSubject(ctx, o.Tenant, "subj-2348031234567")
+	if err != nil || n != 1 {
+		t.Fatalf("erased %d, %v", n, err)
+	}
+	if _, _, err := s.Read(ctx, o.Tenant, ada.ID.String()); !errors.Is(err, runfiles.ErrNotFound) {
+		t.Fatalf("Ada's file outlived her erasure: %v", err)
+	}
+	if _, _, err := s.Read(ctx, o.Tenant, bola.ID.String()); err != nil {
+		t.Fatalf("Bola's file went too: %v", err)
+	}
+	if st.Count() != 1 {
+		t.Fatalf("%d objects left", st.Count())
 	}
 }

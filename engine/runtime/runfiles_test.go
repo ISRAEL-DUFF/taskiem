@@ -62,7 +62,8 @@ func TestConnectorsKeepAndReadRunFiles(t *testing.T) {
 	}
 	wf := e.Publish(t, wfDoc(`{"id":"fetch","type":"connector","connector":"fetcher@1","action":"fetch","input":{}},
 		{"id":"size","type":"connector","connector":"fetcher@1","action":"size","needs":["fetch"],"input":{"file":"=steps.fetch.output.file"}},
-		{"id":"link","type":"connector","connector":"files@1","action":"link","needs":["fetch"],"input":{"file":"=steps.fetch.output.file","ttl_minutes":5}}`, ""))
+		{"id":"link","type":"connector","connector":"files@1","action":"link","needs":["fetch"],"input":{"file":"=steps.fetch.output.file","ttl_minutes":5}},
+		{"id":"uses","type":"transform","needs":["link"],"config":{"output":"=steps.link.output.url.startsWith('https://storage.test/')"}}`, ""))
 	ref := e.Start(t, wf, map[string]any{})
 	e.Drain(t)
 	if st := e.Status(t, ref); st != "completed" {
@@ -88,7 +89,16 @@ func TestConnectorsKeepAndReadRunFiles(t *testing.T) {
 	if err := e.DB.Admin.QueryRow(context.Background(), `SELECT payload::text FROM run_events WHERE run_id = $1 AND step_id = 'link' AND type = 'StepCompleted'`, ref.ID).Scan(&link); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(link, "https://storage.test/") {
-		t.Fatalf("link step gave %s", link)
+	// The link opens a customer's file: sealed in history, still read by
+	// the run's own steps.
+	if strings.Contains(link, "https://storage.test/") || !strings.Contains(link, `"$pii"`) {
+		t.Fatalf("the link is in history in the clear: %s", link)
+	}
+	var uses string
+	if err := e.DB.Admin.QueryRow(context.Background(), `SELECT payload::text FROM run_events WHERE run_id = $1 AND step_id = 'uses' AND type = 'StepCompleted'`, ref.ID).Scan(&uses); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(uses, "true") {
+		t.Fatalf("a later step could not read the link: %s", uses)
 	}
 }

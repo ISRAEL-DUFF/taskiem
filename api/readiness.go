@@ -284,6 +284,16 @@ func (s *Server) readinessWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 				return nil, err
 			}
 		}
+		// Files customers send are scanned before a run keeps them; with no
+		// scanner on this Taskiem every one is refused (decision 0062 gap 7).
+		if s.Media == nil || s.Media.Scanner == nil {
+			for _, c := range conns {
+				if c.step != nil && personFileAction[c.connector+"/"+c.step.Action] {
+					add(key{"setup", "file_scanner", "taskiem", env}, readyNeed{Service: "Taskiem", Problem: "setup", Blocking: true,
+						Message: tr(l, "ready.file_scanner")}, c.step)
+				}
+			}
+		}
 		if d.Trigger.Type == "connector_event" {
 			// Meta sends WhatsApp messages only to a callback URL set by
 			// hand in its App Dashboard (decision 0062 C8): say exactly
@@ -452,6 +462,10 @@ func walkExpressions(v any, fn func(string)) {
 		}
 	}
 }
+
+// personFileAction are the connector actions that keep a file a person
+// sent (scanned before it is kept).
+var personFileAction = map[string]bool{"whatsapp/get_media": true, "telegram/get_file": true}
 
 // needMessage says a need in plain words.
 func needMessage(l lang.Tag, kind, problem, service, name string) string {

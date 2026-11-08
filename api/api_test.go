@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"github.com/israel-duff/taskiem/api"
 	rt "github.com/israel-duff/taskiem/engine/runtime/runtimetest"
 )
@@ -411,9 +413,18 @@ func TestAdminAndErasure(t *testing.T) {
 		t.Fatalf("erasure without step-up: %d %v", st, body)
 	}
 	secret := enrol(t, owner)
-	owner.must(200, "POST", "/v1/pii/erase", map[string]any{"category": "bvn", "value": "22299999999", "totp": codeAfter(secret, 1)})
+	// Files about the person are deleted with them (decision 0062).
+	var erasedFiles string
+	w.srv.EraseFiles = func(_ context.Context, _ uuid.UUID, subject string) (int, error) {
+		erasedFiles = subject
+		return 2, nil
+	}
+	out := owner.must(200, "POST", "/v1/pii/erase", map[string]any{"category": "bvn", "value": "22299999999", "totp": codeAfter(secret, 1)})
 	if s := toJSON(owner.must(200, "GET", "/v1/runs/"+run+"?reveal=true", nil)); strings.Contains(s, "22299999999") {
 		t.Error("erased BVN still readable")
+	}
+	if erasedFiles == "" || erasedFiles != out["subject"] || out["files_deleted"] != float64(2) {
+		t.Errorf("the person's files: hook got %q, answer %v", erasedFiles, out)
 	}
 }
 

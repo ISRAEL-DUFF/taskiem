@@ -448,6 +448,10 @@
       "text": "Ẹ so {service} pọ̀.",
       "reviewed": false
     },
+    "ready.file_scanner": {
+      "text": "This Taskiem cannot check files customers send for viruses yet, so it refuses them, and this workflow fetches them. Ask whoever runs your Taskiem to turn file checking on.",
+      "reviewed": false
+    },
     "ready.paystack_transfer": {
       "text": "Paystack gbọ́dọ̀ tan Pay with Transfer fún iṣẹ́ yìí: béèrè lọ́wọ́ àwọn olùrànlọ́wọ́ Paystack. Títí di ìgbà náà, àwọn oníbàárà kò lè san owó nípa ìgbéranṣẹ́ sí àwọn nọ́mbà àkọ́ọ́lẹ̀ tí ó ṣí.",
       "reviewed": false

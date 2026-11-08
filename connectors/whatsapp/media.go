@@ -19,6 +19,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/effects"
+	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/runfiles"
 )
 
@@ -33,9 +34,18 @@ import (
 // mediaHost is where Meta serves media from (engine/whatsapp.MediaHosts).
 const mediaHost = "lookaside.fbsbx.com"
 
-// maxMedia is the largest file Meta accepts for any message type (100 MB
-// for documents); the run file store refuses anything above its own caps.
-const maxMedia = 100 << 20
+// metaMediaHost reports whether a host is one Meta serves media from: its
+// media host, or its CDN (*.fbcdn.net, *.whatsapp.net) should the media
+// URL redirect there. Nothing else is followed.
+func metaMediaHost(h string) bool {
+	h = strings.ToLower(h)
+	return h == mediaHost || strings.HasSuffix(h, ".fbcdn.net") || strings.HasSuffix(h, ".whatsapp.net")
+}
+
+// maxMedia is the largest file a run keeps (media.MaxFileBytes); a voice
+// note may be at most media.MaxVoiceBytes. A larger download is refused
+// before it is read into memory.
+const maxMedia = media.MaxFileBytes
 
 func noFiles() error {
 	return fmt.Errorf("whatsapp: this run cannot keep files (no file store on this deployment): %w", effects.ErrFatal)
@@ -55,7 +65,13 @@ func (c *client) getMedia(ctx context.Context, req connector.Request) (connector
 		SHA256   string `json:"sha256"`
 		FileSize any    `json:"file_size"`
 	}
-	if err := c.do(ctx, req, http.MethodGet, "/"+url.PathEscape(id), nil, &info); err != nil {
+	// Asked on the connection's own number: Meta answers only for media
+	// sent to that number, so another business's media id is not fetched.
+	pid, err := phoneNumberID(req)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	if err := c.do(ctx, req, http.MethodGet, "/"+url.PathEscape(id)+"?phone_number_id="+pid, nil, &info); err != nil {
 		return connector.Response{}, err
 	}
 	var size int64
@@ -65,12 +81,16 @@ func (c *client) getMedia(ctx context.Context, req connector.Request) (connector
 	case string:
 		size, _ = strconv.ParseInt(v, 10, 64)
 	}
-	if size > maxMedia {
+	limit := int64(maxMedia)
+	if strings.HasPrefix(strings.ToLower(info.MimeType), "audio/") {
+		limit = media.MaxVoiceBytes
+	}
+	if size > limit {
 		return connector.Response{}, fmt.Errorf("whatsapp: the media file is %d bytes, too large to keep: %w", size, effects.ErrFatal)
 	}
 	u, err := url.Parse(info.URL)
 	base, _ := url.Parse(c.base)
-	fromMeta := err == nil && u.Scheme == "https" && strings.EqualFold(u.Hostname(), mediaHost)
+	fromMeta := err == nil && u.Scheme == "https" && metaMediaHost(u.Hostname())
 	fromGraph := err == nil && base != nil && u.Scheme == base.Scheme && strings.EqualFold(u.Host, base.Host) // test fakes
 	if !fromMeta && !fromGraph {
 		return connector.Response{}, fmt.Errorf("whatsapp: the media URL is not on Meta's media host: %w", effects.ErrFatal)
@@ -80,7 +100,20 @@ func (c *client) getMedia(ctx context.Context, req connector.Request) (connector
 		return connector.Response{}, fmt.Errorf("whatsapp: %w: %w", err, effects.ErrFatal)
 	}
 	hreq.Header.Set("Authorization", "Bearer "+strings.TrimSpace(req.Credentials["access_token"]))
-	resp, err := req.HTTP.Do(hreq)
+	// A redirect is followed only to Meta's own hosts (the egress guard
+	// still checks each one against the manifest's hosts).
+	hc := *req.HTTP
+	hc.CheckRedirect = func(r *http.Request, via []*http.Request) error {
+		if len(via) >= 3 || r.URL.Scheme != "https" || !metaMediaHost(r.URL.Hostname()) {
+			return fmt.Errorf("whatsapp: media redirected to %s, not one of Meta's hosts", r.URL.Hostname())
+		}
+		r.Header.Set("Authorization", "Bearer "+strings.TrimSpace(req.Credentials["access_token"]))
+		return nil
+	}
+	if fromGraph {
+		hc.CheckRedirect = nil
+	}
+	resp, err := hc.Do(hreq)
 	if err != nil {
 		return connector.Response{}, fmt.Errorf("whatsapp: media download: %w: %w", err, effects.ErrRetryable)
 	}
@@ -90,11 +123,11 @@ func (c *client) getMedia(ctx context.Context, req connector.Request) (connector
 		// which looks the media id up afresh.
 		return connector.Response{}, fmt.Errorf("whatsapp: media download answered %s: %w", resp.Status, effects.ErrRetryable)
 	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxMedia+1))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 	if err != nil {
 		return connector.Response{}, fmt.Errorf("whatsapp: media download: %w: %w", err, effects.ErrRetryable)
 	}
-	if len(data) > maxMedia {
+	if int64(len(data)) > limit {
 		return connector.Response{}, fmt.Errorf("whatsapp: the media file is too large to keep: %w", effects.ErrFatal)
 	}
 	if want := strings.TrimSpace(info.SHA256); want != "" {
@@ -107,8 +140,13 @@ func (c *client) getMedia(ctx context.Context, req connector.Request) (connector
 	if name == "" {
 		name = "whatsapp-" + id + extFor(info.MimeType)
 	}
-	// What a customer sent: scanned and kept as personal data.
-	ref, err := req.Files.Put(ctx, name, data, true)
+	// What a customer sent: scanned, kept as personal data, and tied to
+	// the sender so erasing them deletes it.
+	var about []connector.FileSubject
+	if from := strings.TrimSpace(str(req.Input, "sender")); from != "" {
+		about = append(about, connector.FileSubject{Category: "phone", Value: from})
+	}
+	ref, err := req.Files.Put(ctx, name, data, true, about...)
 	if err != nil {
 		return connector.Response{}, runfiles.ActionError(err)
 	}
@@ -154,13 +192,11 @@ func (c *client) upload(ctx context.Context, req connector.Request, file any, vo
 		return "", runfiles.ActionError(err)
 	}
 	ctype, _ := ref["type"].(string)
-	if voice {
-		// A voice note is Ogg with the Opus codec (Meta's audio docs);
-		// plain audio/ogg is not accepted for one.
-		if !strings.HasPrefix(ctype, "audio/ogg") {
-			return "", fmt.Errorf("whatsapp: a voice note must be Ogg/Opus audio, not %s: %w", ctype, effects.ErrFatal)
-		}
-		ctype = "audio/ogg; codecs=opus"
+	if voice && (!strings.HasPrefix(ctype, "audio/ogg") || !media.IsOpus(data)) {
+		// Meta takes Ogg with the Opus codec only for a voice note (and
+		// lists audio/ogg as "OPUS codecs only"): Vorbis is refused here,
+		// not by Meta after the upload.
+		return "", fmt.Errorf("whatsapp: a voice note must be Ogg/Opus audio, not %s: %w", ctype, effects.ErrFatal)
 	}
 	name, _ := ref["name"].(string)
 	var body bytes.Buffer
@@ -225,13 +261,22 @@ func (c *client) sendTyping(ctx context.Context, req connector.Request) (connect
 		Success bool `json:"success"`
 	}
 	body := map[string]any{"messaging_product": "whatsapp", "status": "read", "message_id": msg, "typing_indicator": map[string]any{"type": "text"}}
-	if err := c.do(ctx, req, http.MethodPost, "/"+id+"/messages", body, &r); err != nil {
+	typing := true
+	err = c.do(ctx, req, http.MethodPost, "/"+id+"/messages", body, &r)
+	if err != nil && errors.Is(err, effects.ErrFatal) && strings.Contains(strings.ToLower(err.Error()), "typing") {
+		// A Graph version or account without typing indicators refuses the
+		// field: the read receipt alone is still worth sending.
+		delete(body, "typing_indicator")
+		typing = false
+		err = c.do(ctx, req, http.MethodPost, "/"+id+"/messages", body, &r)
+	}
+	if err != nil {
 		return connector.Response{}, err
 	}
 	if !r.Success {
 		return connector.Response{}, fmt.Errorf("whatsapp: typing indicator returned success false: %w", effects.ErrRetryable)
 	}
-	return connector.Response{Output: map[string]any{"success": true}}, nil
+	return connector.Response{Output: map[string]any{"success": true, "typing": typing}}, nil
 }
 
 // errNoMedia is a send_media without exactly one source.

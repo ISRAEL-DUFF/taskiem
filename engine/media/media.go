@@ -59,7 +59,7 @@ var wantBuckets = []bucketInfo{
 	{ID: PublicBucket, Public: true, FileSizeLimit: ptr(int64(MaxImageBytes)), AllowedMIMETypes: []string{"image/jpeg", "image/png"},
 		CacheSeconds: ptr(int64(365 * 24 * 3600))},
 	{ID: PrivateBucket, Public: false, FileSizeLimit: ptr(int64(MaxFileBytes)), AllowedMIMETypes: []string{"image/jpeg", "image/png", "application/pdf",
-		"audio/ogg", "audio/webm", "audio/mpeg", "audio/mp4"},
+		"audio/ogg", "audio/webm", "audio/mpeg", "audio/mp4", "audio/aac", "audio/amr"},
 		CacheSeconds: ptr(int64(0))},
 }
 
@@ -261,7 +261,7 @@ func (s *Service) PutPrivate(ctx context.Context, tenant uuid.UUID, prefix strin
 	if err != nil {
 		return File{}, err
 	}
-	ext := map[string]string{"audio/ogg": ".ogg", "audio/webm": ".webm", "audio/mpeg": ".mp3", "audio/mp4": ".m4a"}[ctype]
+	ext := map[string]string{"audio/ogg": ".ogg", "audio/webm": ".webm", "audio/mpeg": ".mp3", "audio/mp4": ".m4a", "audio/aac": ".aac", "audio/amr": ".amr"}[ctype]
 	path := prefix + uuid.Must(uuid.NewV7()).String() + ext
 	o, err := c.put(ctx, PrivateBucket, path, ctype, data)
 	if err != nil {

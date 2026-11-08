@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/runfiles"
 )
@@ -107,18 +108,19 @@ type Files struct {
 	data     map[string][]byte
 	refs     map[string]map[string]any
 	personal map[string]bool
+	about    map[string]connector.FileSubject
 	// Refuse makes Put refuse every file (malware, too long).
 	Refuse bool
 }
 
 // NewFiles returns an empty store.
 func NewFiles() *Files {
-	return &Files{data: map[string][]byte{}, refs: map[string]map[string]any{}, personal: map[string]bool{}}
+	return &Files{data: map[string][]byte{}, refs: map[string]map[string]any{}, personal: map[string]bool{}, about: map[string]connector.FileSubject{}}
 }
 
 // Put keeps data; Ogg is audio/ogg, MP3 (ID3) audio/mpeg, PDF
 // application/pdf.
-func (f *Files) Put(_ context.Context, name string, data []byte, personal bool) (map[string]any, error) {
+func (f *Files) Put(_ context.Context, name string, data []byte, personal bool, about ...connector.FileSubject) (map[string]any, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.Refuse {
@@ -137,6 +139,9 @@ func (f *Files) Put(_ context.Context, name string, data []byte, personal bool) 
 	sum := sha256.Sum256(data)
 	ref := map[string]any{"file": id, "name": name, "type": typ, "size": int64(len(data)), "sha256": hex.EncodeToString(sum[:])}
 	f.data[id], f.refs[id], f.personal[id] = append([]byte(nil), data...), ref, personal
+	if len(about) > 0 {
+		f.about[id] = about[0]
+	}
 	return ref, nil
 }
 
@@ -163,6 +168,13 @@ func (f *Files) Kept(id string) ([]byte, bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.data[id], f.personal[id]
+}
+
+// About is whom a kept file was said to be about.
+func (f *Files) About(id string) connector.FileSubject {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.about[id]
 }
 
 // Len is how many files are kept.

@@ -166,6 +166,9 @@ type Server struct {
 	// linked supplier's bill (bills.go); nil asks the connection.
 	BillBanks func(ctx context.Context, tenant uuid.UUID, connection string) ([]map[string]any, error)
 	PublicURL string
+	// EraseFiles deletes the run files about a person when they are erased
+	// (POST /v1/pii/erase; docs/files.md): runfiles.Service.EraseSubject.
+	EraseFiles func(ctx context.Context, tenant uuid.UUID, subject string) (int, error)
 	// HooksURL is where providers reach /hooks (TASKIEM_HOOKS_URL); the
 	// addresses on the Connections page are built from it, or from
 	// PublicURL + /hooks when it is empty.

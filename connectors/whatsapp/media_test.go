@@ -1,6 +1,8 @@
 package whatsapp
 
 import (
+	"time"
+
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -11,6 +13,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/israel-duff/taskiem/engine/media/mediatest"
 
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/effects"
@@ -26,10 +30,11 @@ type graph struct {
 	upType   string
 	sent     []map[string]any
 	expired  bool
+	noTyping bool
 }
 
 func newGraph(t *testing.T) *graph {
-	g := &graph{voice: []byte("OggS voice note bytes")}
+	g := &graph{voice: mediatest.OggOpus(2 * time.Second)}
 	sum := sha256.Sum256(g.voice)
 	g.digest = hex.EncodeToString(sum[:])
 	g.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -38,6 +43,10 @@ func newGraph(t *testing.T) *graph {
 			return
 		}
 		switch {
+		case r.Method == "GET" && r.URL.Path == "/media-1" && r.URL.Query().Get("phone_number_id") != "106540352242922":
+			// Meta answers only for media sent to the number asked about.
+			w.WriteHeader(400)
+			_, _ = w.Write([]byte(`{"error":{"message":"(#100) Media does not belong to this number","type":"OAuthException","code":100}}`))
 		case r.Method == "GET" && r.URL.Path == "/media-1":
 			_ = json.NewEncoder(w).Encode(map[string]any{"url": g.srv.URL + "/download/media-1", "mime_type": "audio/ogg; codecs=opus", "sha256": g.digest, "file_size": len(g.voice), "id": "media-1"})
 		case r.Method == "GET" && r.URL.Path == "/media-elsewhere":
@@ -65,6 +74,11 @@ func newGraph(t *testing.T) *graph {
 			var b map[string]any
 			_ = json.NewDecoder(r.Body).Decode(&b)
 			g.sent = append(g.sent, b)
+			if b["status"] == "read" && b["typing_indicator"] != nil && g.noTyping {
+				w.WriteHeader(400)
+				_, _ = w.Write([]byte(`{"error":{"message":"(#100) Param typing_indicator is not supported","type":"OAuthException","code":100}}`))
+				return
+			}
 			if b["status"] == "read" {
 				_ = json.NewEncoder(w).Encode(map[string]any{"success": true})
 				return
@@ -143,12 +157,13 @@ func TestGetMediaRefusals(t *testing.T) {
 func TestSendAVoiceNoteFromARunFile(t *testing.T) {
 	g := newGraph(t)
 	fs := runfilestest.NewFiles()
-	ref, _ := fs.Put(context.Background(), "reply.ogg", []byte("OggS spoken reply"), false)
+	spoken := mediatest.OggOpus(3 * time.Second)
+	ref, _ := fs.Put(context.Background(), "reply.ogg", spoken, false)
 	r, err := g.call("send_media", map[string]any{"to": "2348031234567", "media_type": "audio", "file": ref, "voice": true}, fs)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(g.uploaded) != "OggS spoken reply" || g.upType != "audio/ogg; codecs=opus|audio/ogg; codecs=opus" {
+	if string(g.uploaded) != string(spoken) || g.upType != "audio/ogg|audio/ogg" {
 		t.Fatalf("uploaded %q as %q", g.uploaded, g.upType)
 	}
 	audio := g.sent[0]["audio"].(map[string]any)
@@ -157,12 +172,14 @@ func TestSendAVoiceNoteFromARunFile(t *testing.T) {
 	}
 	// A voice note must be Ogg/Opus; voice is for audio only; one source.
 	mp3, _ := fs.Put(context.Background(), "a.mp3", []byte("ID3 mp3"), false)
+	vorbis, _ := fs.Put(context.Background(), "v.ogg", mediatest.OggVorbis(), false)
 	for name, in := range map[string]map[string]any{
-		"mp3 as voice":   {"to": "234", "media_type": "audio", "file": mp3, "voice": true},
-		"image as voice": {"to": "234", "media_type": "image", "link": "https://x.test/a.jpg", "voice": true},
-		"two sources":    {"to": "234", "media_type": "audio", "file": ref, "media_id": "m"},
-		"no source":      {"to": "234", "media_type": "audio"},
-		"unknown file":   {"to": "234", "media_type": "audio", "file": map[string]any{"file": "nope"}},
+		"mp3 as voice":    {"to": "234", "media_type": "audio", "file": mp3, "voice": true},
+		"vorbis as voice": {"to": "234", "media_type": "audio", "file": vorbis, "voice": true},
+		"image as voice":  {"to": "234", "media_type": "image", "link": "https://x.test/a.jpg", "voice": true},
+		"two sources":     {"to": "234", "media_type": "audio", "file": ref, "media_id": "m"},
+		"no source":       {"to": "234", "media_type": "audio"},
+		"unknown file":    {"to": "234", "media_type": "audio", "file": map[string]any{"file": "nope"}},
 	} {
 		if _, err := g.call("send_media", in, fs); !errors.Is(err, effects.ErrFatal) {
 			t.Errorf("%s: want a fatal refusal, got %v", name, err)
@@ -188,5 +205,27 @@ func TestUploadMediaAndTyping(t *testing.T) {
 	}
 	if _, err := g.call("send_typing", map[string]any{}, nil); !errors.Is(err, effects.ErrFatal) {
 		t.Fatalf("typing without a message: %v", err)
+	}
+}
+
+func TestTypingFallsBackToAReadReceipt(t *testing.T) {
+	g := newGraph(t)
+	g.noTyping = true
+	r, err := g.call("send_typing", map[string]any{"message_id": wamid}, nil)
+	if err != nil || out(r)["typing"] != false || out(r)["success"] != true {
+		t.Fatalf("%v %v", r, err)
+	}
+	last := g.sent[len(g.sent)-1]
+	if last["status"] != "read" || last["typing_indicator"] != nil {
+		t.Fatalf("the fallback sent %v", last)
+	}
+}
+
+func TestOnlyMetaHostsAreFollowed(t *testing.T) {
+	for h, ok := range map[string]bool{"lookaside.fbsbx.com": true, "scontent.xx.fbcdn.net": true, "mmg.whatsapp.net": true,
+		"evil.example": false, "fbcdn.net.evil.example": false, "lookaside.fbsbx.com.evil.example": false} {
+		if metaMediaHost(h) != ok {
+			t.Errorf("%s: want %v", h, ok)
+		}
 	}
 }

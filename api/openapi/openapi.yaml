@@ -32589,6 +32589,12 @@ components:
           type: boolean
           enum:
           - true
+        files_deleted:
+          type: integer
+          description: Run files about the person deleted with them (files they sent a workflow).
+        files_pending:
+          type: boolean
+          description: Their files could not all be deleted now; they are deleted at the latest when they expire.
       additionalProperties: false
     BillingInterval:
       type: string

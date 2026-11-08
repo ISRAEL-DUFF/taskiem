@@ -588,7 +588,18 @@ func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"subject": subject, "erased": true})
+	out := map[string]any{"subject": subject, "erased": true}
+	// Files a person sent go with them (decision 0062): their key is gone,
+	// and the files themselves are deleted now, not at their expiry.
+	if s.EraseFiles != nil {
+		n, err := s.EraseFiles(r.Context(), p.TenantID, subject)
+		if err != nil {
+			s.Logger.Warn("erase: files about the subject not deleted yet", "err", err)
+			out["files_pending"] = true
+		}
+		out["files_deleted"] = n
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // listAnchors returns the tenant's signed audit-chain anchors and the key

@@ -55,6 +55,18 @@ var (
 	ChatStreamPolls = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "taskiem_chat_stream_polls_total", Help: "Looks the open chat streams made at what changed (about one a second each).",
 	})
+	// FileScanSeconds is how long the malware check of a file a person
+	// sent takes (run files, decision 0062): it is part of every voice
+	// reply's wait.
+	FileScanSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name: "taskiem_file_scan_seconds", Help: "Time to scan a file a person sent before a run keeps it.",
+		Buckets: []float64{0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10},
+	})
+	// RunFilesKept counts run files kept, by whether a person sent them and
+	// by outcome (kept, refused, over_allowance).
+	RunFilesKept = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "taskiem_run_files_total", Help: "Run files offered for keeping, by origin and outcome.",
+	}, []string{"origin", "outcome"})
 	ChatStreamPollSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
 		Name: "taskiem_chat_stream_poll_duration_seconds", Help: "Time one chat stream look took (its database transaction).",
 		Buckets: []float64{.001, .0025, .005, .01, .025, .05, .1, .25, .5, 1},

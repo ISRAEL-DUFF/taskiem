@@ -48,10 +48,18 @@ type Files interface {
 	// Put keeps data under name for the run and answers its reference.
 	// personal marks a file a person sent (a customer's voice note): it
 	// is scanned for malware before it is kept, and is personal data.
-	Put(ctx context.Context, name string, data []byte, personal bool) (map[string]any, error)
+	// about names whom it is about (the sender's number), so erasing that
+	// person deletes it too.
+	Put(ctx context.Context, name string, data []byte, personal bool, about ...FileSubject) (map[string]any, error)
 	// Read answers a file's bytes and its reference, given the reference
 	// or its id; only the run's own organisation's files are found.
 	Read(ctx context.Context, ref any) ([]byte, map[string]any, error)
+}
+
+// FileSubject is whom a file is about, as erasure names a person: a
+// category (phone, email, other) and the value.
+type FileSubject struct {
+	Category, Value string
 }
 
 // FileID is the id in a file reference, or the id itself; "" when v is

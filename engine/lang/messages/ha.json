@@ -448,6 +448,10 @@
       "text": "Haɗa {service}.",
       "reviewed": false
     },
+    "ready.file_scanner": {
+      "text": "This Taskiem cannot check files customers send for viruses yet, so it refuses them, and this workflow fetches them. Ask whoever runs your Taskiem to turn file checking on.",
+      "reviewed": false
+    },
     "ready.paystack_transfer": {
       "text": "Dole Paystack ya kunna Pay with Transfer wa wannan kasuwancin: tambayi masu taimakon Paystack. Har sai lokacin, abokan ciniki ba za su iya biya ta hanyar tura kuɗi zuwa lambobin asusun da yake buɗewa ba.",
       "reviewed": false
