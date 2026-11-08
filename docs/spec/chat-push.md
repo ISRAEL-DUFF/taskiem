@@ -204,9 +204,10 @@ One file, `/sw.js`, served from the root with `Service-Worker-Allowed: /`,
 `Cache-Control: no-cache` and `Content-Type: text/javascript`; the app's
 content policy (`default-src 'self'`, with no `script-src`) already covers a
 worker, so it is not changed; `api/static_test.go` pins how `/sw.js` is
-served. It is registered only when the
-person turns push on (a person who never does runs no worker). It has no
-fetch handler (no offline mode is promised or built here).
+served. It was first registered only when the person turned push on, with
+no fetch handler; [offline](offline.md) now registers it for everyone and
+gives it a fetch handler for one case only, a page of the app opened with no
+network. It still keeps no cache.
 
 ### 6.2 `push`
 
@@ -361,7 +362,7 @@ Three changes, each with its tests, in this order:
 ## 12. As built (step 1, the server)
 
 The server half: nothing is visible to a person yet, because no browser
-subscribes until step 2. Migration 00402.
+subscribes until step 2. Migration 00408 (00402 when written; renumbered after main took 00402 to 00407).
 
 - **The package** `engine/push`: `Config` (the keys; with none the feature is
   off), `ValidEndpoint` (the allow-list of §8: `https`, the host a push
@@ -422,7 +423,8 @@ browser which device it is (`added`) and `/sw.js` being served with
 (`api/static.go`, `api/static_test.go`). Everything else is in the web app.
 
 - **The worker** `web/public/sw.js` is a plain script, copied to `/sw.js` by
-  the build, registered only when a person turns notifications on. Its logic is
+  the build, registered only when a person turns notifications on (for
+  everyone since [offline](offline.md)). Its logic is
   four functions run by a test without a browser: `safeLink` (a notification
   opens only `/chat` or `/chat?with=<link>`), `parsePayload` (anything
   unreadable is "New message"), `notificationOf` (one notification per
