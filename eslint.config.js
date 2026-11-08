@@ -28,6 +28,18 @@ export default tseslint.config(
       globals: { window: "readonly", document: "readonly", location: "readonly", addEventListener: "readonly", performance: "readonly", requestAnimationFrame: "readonly", URLSearchParams: "readonly" },
     },
   },
+  // The service worker of chat push (docs/spec/chat-push.md): a plain script a
+  // browser runs apart from the page; its functions are also run by a test.
+  {
+    files: ["web/public/sw.js"],
+    languageOptions: {
+      sourceType: "script",
+      globals: {
+        self: "readonly", module: "writable", fetch: "readonly", URL: "readonly", JSON: "readonly", ServiceWorkerGlobalScope: "readonly",
+        btoa: "readonly", AbortController: "readonly", setTimeout: "readonly", clearTimeout: "readonly",
+      },
+    },
+  },
   // The card maker's Node script, whose callbacks also run in the browser (docs/strategy/marketing/cards).
   {
     files: ["docs/strategy/marketing/cards/*.mjs"],

@@ -61,6 +61,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/moneylog"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/publicweb"
+	"github.com/israel-duff/taskiem/engine/push"
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/riders"
@@ -102,11 +103,15 @@ type config struct {
 	HooksURL string
 	// SMTPURL and AlertFrom let alerts go out by email.
 	SMTPURL, AlertFrom string
-	Queues             []string
-	Cloud              cloudConfig
-	Connectors         builtin.Options
-	PoolSize           int32
-	LoginBurst         int
+	// Push is the VAPID key pair for chat push (TASKIEM_VAPID_PUBLIC_KEY,
+	// TASKIEM_VAPID_PRIVATE_KEY, TASKIEM_VAPID_SUBJECT): with none, no push is
+	// sent (docs/spec/chat-push.md).
+	Push       push.Config
+	Queues     []string
+	Cloud      cloudConfig
+	Connectors builtin.Options
+	PoolSize   int32
+	LoginBurst int
 	// Signup settings (docs/onboarding.md): signups per address a day
 	// (TASKIEM_SIGNUP_PER_ADDRESS), extra blocked email domains
 	// (TASKIEM_SIGNUP_BLOCKED_DOMAINS) and the help links' docs site
@@ -572,6 +577,14 @@ func loadConfig() (config, error) {
 		}
 		c.ChatTokenKey = key
 	}
+	c.Push = push.Config{
+		PublicKey:  strings.TrimSpace(os.Getenv("TASKIEM_VAPID_PUBLIC_KEY")),
+		PrivateKey: strings.TrimSpace(os.Getenv("TASKIEM_VAPID_PRIVATE_KEY")),
+		Subject:    strings.TrimSpace(os.Getenv("TASKIEM_VAPID_SUBJECT")),
+	}
+	if err := c.Push.Validate(); err != nil {
+		return c, err
+	}
 	if c.AI, err = ai.ConfigFromEnv(os.LookupEnv); err != nil {
 		return c, err
 	}
@@ -677,6 +690,9 @@ func afterConnect(dbRole string) func(context.Context, *pgx.Conn) error {
 
 // engine is everything the roles share.
 type engine struct {
+	// push sends a chat message's notification to the browsers a member
+	// allowed (nil with no VAPID keys).
+	push *push.Sender
 	// orders are the storefront's orders (S3); nil without the public
 	// host's key.
 	orders *storefront.Orders
@@ -819,6 +835,9 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	}
 	if e.email != nil {
 		emailOps.Set(e.email)
+	}
+	if cfg.Push.Enabled() {
+		e.push = &push.Sender{Config: cfg.Push, Guard: &egress.Guard{Logger: log}}
 	}
 	if cfg.WhatsApp != nil {
 		// The templates' url buttons open the web app and the form host
@@ -1709,6 +1728,7 @@ func (c config) relyingParty() (webauthn.Config, error) {
 // that signs approval buttons when WhatsApp is off.
 func (e *engine) chat(srv *api.Server) {
 	srv.Telegram = e.tg
+	srv.Push = e.push
 	if e.cfg.SlackSigningSecret != "" {
 		srv.Slack = &api.SlackApp{SigningSecret: e.cfg.SlackSigningSecret}
 	}

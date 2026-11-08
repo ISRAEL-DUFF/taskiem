@@ -465,7 +465,7 @@ func (s *Server) sendLinkAs(ctx context.Context, p *Principal, link uuid.UUID, t
 	if err != nil {
 		return m, err
 	}
-	s.tellLinkMessage(ctx, other, link, from, m)
+	s.tellLinkMessage(ctx, other, link, p.TenantID, from, m)
 	return m, nil
 }
 
@@ -476,10 +476,31 @@ func firstWord(s string) string {
 	return ""
 }
 
+// linkMessageLine is a message as one line for a phone or a notification:
+// the member's name, what a file is, and the words; a reply to a document
+// begins "about INV-0001" when withRef (a push carries no references).
+func linkMessageLine(l lang.Tag, m links.Message, withRef bool) string {
+	body := m.Body
+	if a := m.Attachment; a != nil {
+		what := tr(l, "chat.link."+a.Kind)
+		if a.Kind == "file" && a.Name != "" {
+			what = a.Name
+		}
+		body = strings.TrimSpace("(" + what + ") " + body)
+	}
+	if m.SenderName != "" {
+		body = m.SenderName + ": " + body
+	}
+	if withRef && m.Reply != nil && m.Reply.Card != nil {
+		body = tr(l, "chat.link.about", "reference", m.Reply.Card.Reference) + " " + body
+	}
+	return body
+}
+
 // tellLinkMessage tells the people of the business a message went to who
 // write in its conversations, on their phones, unless it muted the
 // conversation: "[Dangote Stores] Musa: …".
-func (s *Server) tellLinkMessage(ctx context.Context, to, link uuid.UUID, from string, m links.Message) {
+func (s *Server) tellLinkMessage(ctx context.Context, to, link, fromTenant uuid.UUID, from string, m links.Message) {
 	s.background(ctx, "link message", func(ctx context.Context) {
 		var muted bool
 		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{to}, func(tx pgx.Tx) error {
@@ -489,23 +510,12 @@ func (s *Server) tellLinkMessage(ctx context.Context, to, link uuid.UUID, from s
 		}); err != nil || muted {
 			return
 		}
-		s.tellHoldersSent(ctx, to, []string{PermChatTrade}, "msg:"+m.PairID.String(), "/chat?with="+link.String(), func(l lang.Tag) (string, string) {
-			body := m.Body
-			if a := m.Attachment; a != nil {
-				what := tr(l, "chat.link."+a.Kind)
-				if a.Kind == "file" && a.Name != "" {
-					what = a.Name
-				}
-				body = strings.TrimSpace("(" + what + ") " + body)
-			}
-			if m.SenderName != "" {
-				body = m.SenderName + ": " + body
-			}
-			if m.Reply != nil && m.Reply.Card != nil {
-				body = tr(l, "chat.link.about", "reference", m.Reply.Card.Reference) + " " + body
-			}
-			return "[" + whatsapp.SafeText(from) + "]", whatsapp.SafeText(body)
-		}, nil, s.keepSent(ctx, to, link, m.PairID))
+		words := func(l lang.Tag) (string, string) {
+			return "[" + whatsapp.SafeText(from) + "]", whatsapp.SafeText(linkMessageLine(l, m, true))
+		}
+		// A push first (it is quick and goes to each browser at once), then the phones.
+		s.pushMessage(ctx, to, link, fromTenant, from, m)
+		s.tellHoldersSent(ctx, to, []string{PermChatTrade}, "msg:"+m.PairID.String(), "/chat?with="+link.String(), words, nil, s.keepSent(ctx, to, link, m.PairID))
 	})
 }
 

@@ -10,6 +10,15 @@ Taskiem works in your phone's browser, and you can put it on your home screen so
 
 Taskiem's icon, a lime "t" on dark green, is now on your home screen. You stay signed in the same way as in the browser.
 
+## Notifications when Taskiem is closed
+
+When a business you are linked with writes to you, your phone can show a notification even if Taskiem is closed. Turn it on under **Settings, Notifications, Chat when Taskiem is closed**, with **Notify me on this device when a business writes**. Your browser asks once; say yes.
+
+- **On an iPhone**, add Taskiem to your Home Screen first (Share, then Add to Home Screen) and open it from there: the switch appears once you have.
+- **Show what the message says** is its own switch for each device. Off, the notification says only that a business wrote, which suits a phone others can see.
+- **Your other devices** are listed under the switch, each with Remove. Signing out takes the device you are on off the list.
+- Only people who write in chats are notified, and not for a chat you muted.
+
 ## Getting around
 
 - **The bar at the bottom** takes you to Home, Money, Orders and Workflows (the ones your role can see). **Menu** opens everything else.

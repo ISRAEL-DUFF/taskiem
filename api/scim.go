@@ -16,6 +16,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+
+	"github.com/israel-duff/taskiem/engine/push"
 )
 
 // SCIM 2.0 provisioning (spec 13.2; RFC 7643, RFC 7644). The identity
@@ -849,6 +851,9 @@ func (s *Server) scimSync(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID
 		// request anyway.
 		if _, err := tx.Exec(ctx, `UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND tenant_id = $2 AND revoked_at IS NULL
 			AND NOT EXISTS (SELECT 1 FROM memberships WHERE user_id = $1 AND tenant_id = $2)`, user, tenant); err != nil {
+			return ch, err
+		}
+		if err := push.DropOrphansTx(ctx, tx, user); err != nil {
 			return ch, err
 		}
 	}

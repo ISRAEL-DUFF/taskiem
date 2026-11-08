@@ -20,6 +20,7 @@ One binary runs every role (spec 2.1, 15.4). A small install runs `taskiem serve
 | `taskiem status show\|list\|open\|maintenance\|update\|resolve\|token` | Declares incidents and maintenance on the public status page, recorded with the operator's name; `token NAME` makes an operator token for the admin API. See [reliability](reliability.md#status-page). |
 | `taskiem canary setup\|probe\|run` | Sets up the synthetic end-to-end probe in an internal tenant, runs probes now, or probes forever from outside the cluster. See [reliability](reliability.md#synthetic-canary). |
 | `taskiem media check TENANT_ID` | A round trip through a tenant's Xenibase storage: makes its buckets, stores and downloads a photo and a private PDF, then deletes them. See [media](media.md#checking-a-tenants-storage). |
+| `taskiem push keys [--subject ADDRESS]` | Makes the VAPID key pair for chat push and prints it as `TASKIEM_VAPID_*` settings. Make one pair for a deployment: changing it ends every browser's notifications until each person turns them on again. See [chat push](spec/chat-push.md). |
 | `taskiem healthcheck [ADDR]` | Probes the local API's `/readyz`, or that of `ADDR` (`:9090` for the public role, whose readiness is on its metrics port), for images without a shell. |
 
 ## Roles
@@ -77,6 +78,8 @@ Switches take `true` or `false`, `1` or `0`, `yes` or `no`, `on` or `off`, in an
 | `TASKIEM_ANCHOR_DIR` | — | Where the scheduler role appends each tenant's anchors (`<tenant>.jsonl`). Point it at write-once storage (an object-lock bucket, an append-only volume): anchors are only worth as much as their copy outside the database. |
 | `TASKIEM_SMTP_URL` | — | Mail server for alert emails and password-reset links: `smtp://user:pass@host:587` (STARTTLS, required when a password is given) or `smtps://user:pass@host:465`. Without it, email alert deliveries fail with a reason ([alerts](alerts.md)), and "Forgot password?" sends nothing (it still answers, and logs a warning; [passwords](governance.md#passwords)) |
 | `TASKIEM_ALERT_FROM` | — | Sender address of alert and password emails; required with `TASKIEM_SMTP_URL` |
+| `TASKIEM_VAPID_PUBLIC_KEY`, `TASKIEM_VAPID_PRIVATE_KEY` | — | The key pair for chat push ([spec](spec/chat-push.md)), from `taskiem push keys`. Both or neither: with neither, no push is sent and the app says nothing about it; with one, the process stops naming it. Keep the private key secret. The server must reach the push services (`fcm.googleapis.com`, `updates.push.services.mozilla.com`, `*.push.apple.com`, `*.notify.windows.com`) on 443 |
+| `TASKIEM_VAPID_SUBJECT` | — | A `mailto:` or `https:` address the push services may reach (RFC 8292); required with the keys |
 | `TASKIEM_ALERT_INTERVAL` | `30s` | How often the scheduler evaluates alert rules and tells people how runs ended ([notifications](alerts.md#notifications-with-nothing-set-up)); 1s to 1h |
 | `TASKIEM_WASM_CACHE` | the user cache directory | Where workers keep compiled WebAssembly (the Python interpreter takes seconds to compile the first time). Point it at a writable directory that survives restarts |
 | `TASKIEM_LOGIN_BURST` | 10 | Sign-in attempts one address may make at once, then one every six seconds |
@@ -173,6 +176,7 @@ Run `taskiem migrate` as the schema owner, and `taskiem serve` as `taskiem`. Or 
 | `taskiem_steps_total`, `taskiem_step_duration_seconds` | queue, target (connector or step type), outcome |
 | `taskiem_queue_ready`, `taskiem_queue_leased`, `taskiem_queue_oldest_ready_seconds` | queue. These, the `taskiem_pool_*` and the `taskiem_queued_*` series are read from the database when scraped (every role reports them, so they hold with any one role down; aggregate with `max`, without the pod label): a scrape whose queries take over 2 seconds, or that overlaps another on the same pod, has none of them, rather than holding a connection the API needs |
 | `taskiem_pool_ready`, `taskiem_pool_leased`, `taskiem_pool_oldest_ready_seconds` | pool, queue ([worker pools](cloud.md#dedicated-worker-pools)) |
+| `taskiem_push_total`, `taskiem_push_seconds` | result (`sent`, `gone`, `failed`); how long a push service took to answer ([chat push](spec/chat-push.md)) |
 | `taskiem_db_retries_total` | outcome (`retried`, `recovered`, `gave_up`): transactions retried through a failover ([cloud](cloud.md#what-happens-during-a-failover)) |
 | `taskiem_db_replica_lag_seconds`, `taskiem_db_replica_in_use`, `taskiem_db_reads_total` | `taskiem_db_reads_total`: target (`replica`, `fallback`, `no_replica`) ([read replica](cloud.md#read-replica)) |
 | `taskiem_timers_fired_total`, `taskiem_lease_expiries_total`, `taskiem_runs_swept_total` | — |
