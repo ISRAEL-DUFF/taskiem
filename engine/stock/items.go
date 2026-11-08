@@ -41,9 +41,11 @@ type Item struct {
 	Choices   []variants.Choice `json:"choices,omitempty"`
 }
 
-// Low reports whether the item is at or below its reorder level.
+// Low reports whether the item is at or below its reorder level. A
+// product with sizes and colours is never low itself: it keeps no stock of
+// its own, and each of them is low or not.
 func (it Item) Low() bool {
-	return it.Stock != nil && it.Reorder != nil && *it.Stock <= *it.Reorder
+	return len(it.Choices) == 0 && it.Stock != nil && it.Reorder != nil && *it.Stock <= *it.Reorder
 }
 
 // Suggest is how many to order of a low item: up to its target level,

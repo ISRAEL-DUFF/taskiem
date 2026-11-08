@@ -10297,6 +10297,150 @@ paths:
                     $ref: '#/components/schemas/StockItem'
         default:
           $ref: '#/components/responses/Error'
+  /v1/stock/items/{id}/variants:
+    put:
+      operationId: setStockVariants
+      tags:
+      - Stock
+      summary: Set a product's sizes and colours
+      description: 'Its choices (up to 3, 20 values each) and the grid of what it sells (up to 100). Each one sold is a catalogue row of its own, pointing at the product: made, renamed (a cell with its row id and new values), brought back, or retired (hidden, never deleted). A new one''s count comes in as goods received, a kept one''s as a count; one without its own price takes the product''s. The product''s own stock moves into them. No choices takes them all off sale. 409 no_variant_columns when the catalogue cannot take the three columns.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit
+      x-taskiem-all-environments: true
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Makes the request safe to retry: the same key is the same change'
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                choices:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/VariantChoice'
+                cells:
+                  type: array
+                  maxItems: 100
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [variant]
+                    properties:
+                      id:
+                        type: string
+                        description: Its row, when it has one
+                      variant:
+                        type: object
+                        additionalProperties:
+                          type: string
+                      count:
+                        type: integer
+                        minimum: 0
+                      price_kobo:
+                        type: integer
+                        minimum: 0
+                        description: Its own price; absent takes the product's
+      responses:
+        '200':
+          description: The product and its sizes and colours (retired ones too)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  item:
+                    $ref: '#/components/schemas/StockItem'
+                  variants:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StockItem'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/stock/movements/grid:
+    post:
+      operationId: moveStockGrid
+      tags:
+      - Stock
+      summary: Goods received, or a count, for several of a product's sizes and colours
+      description: 'One movement each, told as one diary line ("Stock in: Air Max 90, 7 sizes and colours, +36").'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit
+      x-taskiem-all-environments: true
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Makes the request safe to retry: the same key is the same change'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [reason, lines]
+              properties:
+                reason:
+                  type: string
+                  enum: [received, count]
+                note:
+                  type: string
+                lines:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [item_id]
+                    properties:
+                      item_id:
+                        type: string
+                      change:
+                        type: integer
+                        minimum: 1
+                      count:
+                        type: integer
+                        minimum: 0
+      responses:
+        '200':
+          description: The movements
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  movements:
+                    type: array
+                    items:
+                      type: object
+        default:
+          $ref: '#/components/responses/Error'
   /v1/stock/movements:
     get:
       operationId: listStockMovements
@@ -30919,6 +31063,15 @@ components:
           type: string
         supplier:
           type: string
+        variant_of:
+          type: string
+          description: A size or colour's product row (sizes and colours)
+        variant:
+          type: string
+          description: A size or colour's values, as JSON
+        choices:
+          type: string
+          description: A product's choices and their values, as JSON
         sort:
           type: string
         duration:
@@ -32450,6 +32603,20 @@ components:
         updated_at:
           type: string
           format: date-time
+    VariantChoice:
+      type: object
+      additionalProperties: false
+      required: [name, values]
+      properties:
+        name:
+          type: string
+          maxLength: 30
+        values:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            maxLength: 30
     StockItem:
       type: object
       required: [id, name, available, stock]
@@ -32481,6 +32648,19 @@ components:
         description:
           type: string
           description: Its words on the storefront, when the catalogue maps them
+        variant_of:
+          type: string
+          description: The product this is a size or colour of
+        variant:
+          type: object
+          additionalProperties:
+            type: string
+          description: 'Its values: {"Size": "42", "Colour": "Black"}'
+        choices:
+          type: array
+          description: A product's choices, when it has sizes and colours (it keeps no stock of its own then)
+          items:
+            $ref: '#/components/schemas/VariantChoice'
         low:
           type: boolean
         suggest:

@@ -21,6 +21,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/matching"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/stock"
+	"github.com/israel-duff/taskiem/engine/variants"
 )
 
 // Chat tools phase 4 (docs/spec/chat-tools.md §6): alerts you can act on,
@@ -59,6 +60,9 @@ type chatAlert struct {
 	// Who asked for it ("Tunde (cashier)").
 	Approval *approvalItem `json:"approval,omitempty"`
 	Who      string        `json:"who,omitempty"`
+	// Cells are a product's sizes and colours that are low, when the card
+	// is about a product that has them: its stock form opens on them.
+	Cells []string `json:"cells,omitempty"`
 }
 
 type alertReorder struct {
@@ -217,12 +221,24 @@ func (s *Server) lowStockAlerts(ctx context.Context, p *Principal) ([]chatAlert,
 		return nil, err
 	}
 	var low []stock.Item
+	// A product's sizes and colours are told as one card: "Air Max 90 is
+	// running low: 42, Black and 43, Black".
+	byProduct := map[string][]stock.Item{}
+	var products []string
 	for _, it := range items {
-		if it.Low() && !onOrder[it.ID] {
-			low = append(low, it)
+		if !it.Low() || onOrder[it.ID] || !it.Available && it.VariantOf != "" {
+			continue
 		}
+		if it.VariantOf != "" {
+			if byProduct[it.VariantOf] == nil {
+				products = append(products, it.VariantOf)
+			}
+			byProduct[it.VariantOf] = append(byProduct[it.VariantOf], it)
+			continue
+		}
+		low = append(low, it)
 	}
-	if len(low) == 0 {
+	if len(low) == 0 && len(products) == 0 {
 		return nil, nil
 	}
 	// Which linked supplier sells each of ours, and at what.
@@ -275,7 +291,39 @@ func (s *Server) lowStockAlerts(ctx context.Context, p *Principal) ([]chatAlert,
 		}
 		out = append(out, a)
 	}
+	named := map[string]stock.Item{}
+	for _, it := range items {
+		named[it.ID] = it
+	}
+	for _, pid := range products {
+		prod, ok := named[pid]
+		if !ok {
+			continue
+		}
+		cells := byProduct[pid]
+		labels := make([]string, 0, len(cells))
+		ids := make([]string, 0, len(cells))
+		for _, c := range cells {
+			labels = append(labels, variants.Label(c.Variant, prod.Choices))
+			ids = append(ids, c.ID)
+		}
+		out = append(out, chatAlert{Key: "low_stock:" + pid, Kind: "low_stock", At: now, ID: pid, Cells: ids,
+			Title: prod.Name + " is running low", Line: lowSizesLine(labels)})
+	}
 	return out, nil
+}
+
+// lowSizesLine says which of a product's sizes and colours are low:
+// "42, Black is low", "42 and 43 are low", "40, 41, 42 and 3 more are low".
+func lowSizesLine(labels []string) string {
+	switch n := len(labels); {
+	case n == 1:
+		return labels[0] + " is low"
+	case n <= 3:
+		return strings.Join(labels[:n-1], "; ") + " and " + labels[n-1] + " are low"
+	default:
+		return strings.Join(labels[:3], "; ") + fmt.Sprintf(" and %d more are low", n-3)
+	}
 }
 
 // alertStock keeps each business's stock items for a little while: the

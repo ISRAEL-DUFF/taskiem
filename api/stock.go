@@ -951,6 +951,19 @@ func (s *Server) patchStockItem(w http.ResponseWriter, r *http.Request) {
 	if err := s.SyncStorefront(r.Context(), p.TenantID); err != nil {
 		s.Logger.Warn("stock: refreshing the catalogue", "tenant", p.TenantID, "err", err)
 	}
+	// Its sizes and colours that kept its price take the new one; one
+	// with its own price keeps it.
+	if in.PriceKobo != nil && before.VariantOf == "" && before.PriceKobo != nil && *before.PriceKobo != *in.PriceKobo {
+		if _, items, err := s.stockItems(r.Context(), p.TenantID); err == nil {
+			for _, v := range variantsOf(items, id) {
+				if v.PriceKobo != nil && *v.PriceKobo == *before.PriceKobo {
+					if err := s.stockSetCells(r.Context(), p.TenantID, sh, v.ID, "", map[string]any{m.Price: priceCell(*in.PriceKobo, m)}); err != nil {
+						s.Logger.Warn("stock: a size's price", "tenant", p.TenantID, "item", v.ID, "err", err)
+					}
+				}
+			}
+		}
+	}
 	// Buyers see it under its new category too.
 	if in.Category != nil && *in.Category != before.Category {
 		var due []uuid.UUID
@@ -1071,6 +1084,9 @@ func (s *Server) stockFail(w http.ResponseWriter, r *http.Request, err error) {
 		writeJSON(w, http.StatusConflict, map[string]any{"error": "no catalogue keeps stock yet: press Keep my stock", "code": "stock_off"})
 	case errors.Is(err, errNoItem):
 		writeErr(w, http.StatusNotFound, "no such item")
+	case errors.Is(err, errNoVariantColumns):
+		writeJSON(w, http.StatusConflict, map[string]any{"error": "Your products table cannot take sizes and colours: it needs three more columns (variant_of, variant and choices). Remove columns you do not use on the Tables page, or add these as text columns.",
+			"code": "no_variant_columns"})
 	case errors.Is(err, errCategoryColumnLimit):
 		writeJSON(w, http.StatusConflict, map[string]any{"error": "Your products table has as many columns as your plan allows: remove one you do not use on the Tables page, then set the category again.",
 			"code": "no_category_column"})
