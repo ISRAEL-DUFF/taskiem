@@ -18,13 +18,17 @@ The reference is ordinary JSON: nothing in wd/v1 changed for it, and a run's his
 
 | Kind | Types | Largest |
 | --- | --- | --- |
-| Voice notes and audio | Ogg (Opus, Vorbis), WebM, MP3, MP4 audio; tags stripped; a container with a video track is refused | 16 MB, and an Ogg recording at most 5 minutes long |
+| Voice notes and audio | Ogg (Opus, Vorbis), WebM, MP3, MP4 audio, AAC (ADTS) and AMR (narrow and wide band, as older phones record); tags stripped; a container with a video track is refused | 16 MB, and an Ogg recording at most 5 minutes long |
 | Documents | PDF, refused if it carries scripts or actions | 25 MB |
 | Photos | JPEG, PNG, WebP, re-encoded without metadata | 25 MB |
 
 Anything else is refused (`runfiles.ErrRefused`), and so is an empty file.
 
-**What a person sent is scanned** for malware before it is kept, by the clamd the operator runs (`TASKIEM_CLAMD_ADDR`). Without one, such files are refused, as hosted forms' files are. Files a step made itself (a reply a speech step spoke) are not scanned. A person's file is marked personal (`run_files.personal`).
+**What a person sent is scanned** for malware before it is kept, by the clamd the operator runs (`TASKIEM_CLAMD_ADDR`). Without one, such files are refused, as hosted forms' files are. Files a step made itself (a reply a speech step spoke) are not scanned. A person's file is marked personal (`run_files.personal`) and kept under a neutral name (`voice-note.ogg`, `photo.jpg`, `document.pdf`), never the name it was sent with, which can carry a person's name or number. The time each scan takes is measured (`taskiem_file_scan_seconds`), and so is every file kept or refused (`taskiem_run_files_kept_total{origin="person"|"step", outcome="kept"|"refused"|"over_allowance"}`), for [operations](operations.md).
+
+## How much can be kept
+
+Each organisation may keep at most **1 GB of new files in any 24 hours** (`runfiles.Service.DailyBytes`, `DefaultDailyBytes`). Past that a file is refused (`ErrOverAllowance`, fatal for the step), so a flood of large voice notes cannot fill the organisation's storage or run up the scanner.
 
 ## How long files are kept
 
@@ -34,7 +38,7 @@ Anything else is refused (`runfiles.ErrRefused`), and so is an empty file.
 
 A connector call in a run gets `connector.Request.Files` (nil outside a run, or where the deployment keeps no files):
 
-- `Put(ctx, name, data, personal)` keeps bytes and answers the reference. A connector that downloads a customer's media puts it with `personal: true`.
+- `Put(ctx, name, data, personal, about...)` keeps bytes and answers the reference. A connector that downloads a customer's media puts it with `personal: true` and says whom it is about (`connector.FileSubject{Category: "phone", Value: from}`): the file is tied to that person's key (`run_files.subject`, migration 00314), and erasing the person deletes it.
 - `Read(ctx, ref)` answers the bytes and the reference, given the reference or its id. Only the run's own organisation's files are found.
 
 The worker binds the store to the run (organisation, environment, workflow and run), so a connector never names an organisation.
@@ -45,19 +49,22 @@ A platform connector that needs no connection. It acts for the organisation of t
 
 | Action | Class | |
 | --- | --- | --- |
-| `link` | read | A download link for a file (`file`: the reference or its id; `ttl_minutes` 1 to 60, default 15). Output: `url`, `expires_at`, `file` (the reference) |
+| `link` | read | A download link for a file (`file`: the reference or its id; `ttl_minutes` 1 to 60, default 15). Output: `url`, `expires_at`, `file` (the reference). The link opens the file for anyone who has it, so it is sealed in the run's history (`pii`) like a customer's number; the run's own later steps read it as usual |
 | `delete` | idempotent write | Deletes a file now. Deleting one that is already gone does nothing |
 
 An id the organisation does not have, or a file that has expired, fails the step (fatal: retrying cannot help).
 
 ## Storage and records
 
-- `run_files` (migration 00313): id, tenant, environment, workflow, run, name, type, size, sha256, storage key, personal, expires_at; forced row-level security.
+- `run_files` (migrations 00313, 00314): id, tenant, environment, workflow, run, name, type, size, sha256, storage key, personal, subject (the person's key, when a connector named them), expires_at; forced row-level security. Indexes by subject (for erasure) and by organisation and time (for the daily allowance).
 - The sweep reads expired files through `taskiem_run_files_expired(limit)`, which shows only ids, tenants and storage keys, never names or content.
 - Objects are stored under `runs/` in the private bucket (`files/` for PDFs and photos, as forms keep them).
 
+## Erasure
+
+Erasing a person (`POST /v1/pii/erase`, [admin](contracts/api.md)) deletes their key and then every run file tied to them, at once rather than at expiry. The answer says how many were deleted (`files_deleted`); `files_pending: true` means storage could not be reached and the files are deleted by a later sweep (their key is already gone either way).
+
 ## Not yet
 
-- Erasing every file of one customer with their other data ([plan V6](spec/voice-assistant.md#v6-guard-rails-for-customers)).
 - Where Xenibase stores the objects (region) is a people item (VP8).
 - Converting audio between formats (plan F7, decided by a spike before speech replies).

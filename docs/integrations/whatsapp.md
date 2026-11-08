@@ -15,7 +15,7 @@ The connector is `connectors/whatsapp` (`whatsapp@1`), used by tenants inside wo
 | --- | --- |
 | `access_token` | System user access token. The connection test calls `get_phone_number` |
 | `phone_number_id` | The business phone number's ID |
-| `app_secret` | Verifies webhook signatures. Required to receive events |
+| `app_secret` | Proves deliveries really come from Meta (signature check). Required to receive messages: without it the connection check and readiness warn that messages will be refused |
 | `verify_token` | Any string you choose. Enter the same value as the **Verify token** in the dashboard |
 | `business_account_id` | Optional: the WhatsApp Business Account ID, so templates can be chosen by what they say (`list_templates`) |
 
@@ -32,11 +32,13 @@ A message's `to` is taken as people write it: spaces, dashes and brackets are dr
 | `send_media` | `type: image/document/audio/video/sticker` | unsafe write | `link` (Meta fetches it and caches it for 10 minutes), `media_id`, or `file`, a run file uploaded first ([Files in runs](../files.md)). `voice: true` sends audio as a voice note (Ogg/Opus; plays inline up to 512 KB). `caption` for image, document and video. `filename` for documents |
 | `send_interactive` | `type: interactive` | unsafe write | Meta's `interactive` object, passed through: up to three reply `button`s, or a `list` (up to 10 sections and 10 rows) |
 | `mark_as_read` | `status: read` | idempotent write | A wamid from an inbound message (within 30 days). Also marks earlier messages read |
-| `get_media` | `GET /{media-id}`, then its URL | read | The media of an inbound message, fetched only from Meta's media host (`lookaside.fbsbx.com`), checked against its sha256, and kept as a person's run file (scanned, personal); the run gets its reference. An expired URL is retried with a fresh lookup |
-| `upload_media` | `POST /{phone-number-id}/media` | idempotent write | A run file to a media id; `voice: true` checks it is Ogg/Opus. A repeat only makes a second id |
-| `send_typing` | `status: read` with `typing_indicator` | idempotent write | Marks the message read and shows "typing…" until the reply is sent, at most 25 seconds |
+| `get_media` | `GET /{media-id}?phone_number_id={id}`, then its URL | read | The media of an inbound message, looked up on the connection's own number (Meta refuses media sent to another), fetched only from Meta's media hosts (`lookaside.fbsbx.com`, and redirects only to `*.fbcdn.net` or `*.whatsapp.net`, all in the manifest's egress list), checked against its sha256, and kept as a person's run file (scanned, personal, under a neutral name). At most 25 MB, and 16 MB for audio, checked before the download is read. `sender` (the message's `from`) ties the file to that person, so erasing their number deletes it. An expired URL is retried with a fresh lookup |
+| `upload_media` | `POST /{phone-number-id}/media` | idempotent write | A run file to a media id; `voice: true` checks the Ogg really holds Opus (Vorbis is refused) and uploads it as `audio/ogg`, the type Meta lists. A repeat only makes a second id |
+| `send_typing` | `status: read` with `typing_indicator` | idempotent write | Marks the message read and shows "typing…" until the reply is sent, at most 25 seconds. Where Meta refuses the typing field (an older API version or account), it marks the message read only; the output's `typing` says which |
 
 Every send can carry `biz_opaque_callback_data`, which Meta returns in that message's status events. A send's output has `message_id` (the wamid), `wa_id` (the user's WhatsApp ID), `input` and, for paced templates, `message_status`.
+
+`send_text`, `send_media` and `send_interactive` are marked `resend_if_lost` ([action classes](../contracts/action-classes.md)): a workflow step may ask that a send whose answer was lost be sent once more instead of parked (decision 0062 D11), accepting a possible duplicate message.
 
 A 200 only means Meta **accepted** the message. Delivery comes as status events.
 

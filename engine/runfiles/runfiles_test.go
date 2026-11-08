@@ -240,4 +240,17 @@ func TestErasingAPersonDeletesTheirFiles(t *testing.T) {
 	if st.Count() != 1 {
 		t.Fatalf("%d objects left", st.Count())
 	}
+	// Storage down: the file can no longer be read, and the sweep deletes
+	// it once storage is back.
+	st.FailDelete = true
+	if _, err := s.EraseSubject(ctx, o.Tenant, "subj-2348030000004"); err == nil {
+		t.Fatal("want the storage error")
+	}
+	if _, _, err := s.Read(ctx, o.Tenant, bola.ID.String()); err == nil {
+		t.Fatal("Bola's file is still readable after her erasure failed half way")
+	}
+	st.FailDelete = false
+	if n, err := s.Sweep(ctx); err != nil || n != 1 || st.Count() != 0 {
+		t.Fatalf("swept %d (%v), %d objects left", n, err, st.Count())
+	}
 }

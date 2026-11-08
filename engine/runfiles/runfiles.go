@@ -386,7 +386,9 @@ func (s *Service) remove(ctx context.Context, tenant uuid.UUID, ids []uuid.UUID,
 }
 
 // EraseSubject deletes every file about a person, now (the subject the
-// vault erased: erasure, spec 9.4). It answers how many it deleted.
+// vault erased: erasure, spec 9.4). It answers how many it deleted. The
+// files are expired before storage is asked, so on an error they can no
+// longer be read and the next sweep deletes them.
 func (s *Service) EraseSubject(ctx context.Context, tenant uuid.UUID, subject string) (int, error) {
 	if s == nil || s.Store == nil || s.Pool == nil || subject == "" {
 		return 0, nil
@@ -394,7 +396,9 @@ func (s *Service) EraseSubject(ctx context.Context, tenant uuid.UUID, subject st
 	var ids []uuid.UUID
 	var keys []string
 	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT id, storage_key FROM run_files WHERE subject = $1`, subject)
+		// Expired first: unreadable at once, and the sweep deletes them if
+		// storage cannot be reached now.
+		rows, err := tx.Query(ctx, `UPDATE run_files SET expires_at = least(expires_at, now()) WHERE subject = $1 RETURNING id, storage_key`, subject)
 		if err != nil {
 			return err
 		}
