@@ -1081,8 +1081,15 @@ func (s *Server) waShopChange(ctx context.Context, c *chat, action, args string)
 		return err
 	}
 	match := shopHolders(items, matchItems(items, name), action == "stock")
-	if product, n := shopSizesOfOne(items, match); n > shopPickMax {
-		return c.say(ctx, s, whichSizeOf(c, product, n, match[0].Name))
+	// A product sold in sizes and colours named without one size: by the
+	// values said in any order, the rest asked one choice at a time.
+	if _, n := shopSizesOfOne(items, match); n > 1 || len(match) == 0 {
+		if done, err := s.shopSized(ctx, c, sh, name); done || err != nil {
+			return err
+		}
+		if product, n := shopSizesOfOne(items, match); n > shopPickMax {
+			return c.say(ctx, s, whichSizeOf(c, product, n, match[0].Name))
+		}
 	}
 	switch {
 	case len(match) == 0:

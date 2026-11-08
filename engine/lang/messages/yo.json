@@ -1396,6 +1396,18 @@
       "text": "{name} kò ní èyíkéyìí fún títà ní {said}. Ó wà ní {sizes}.",
       "reviewed": false
     },
+    "wa.size.say": {
+      "text": "{choice} wo ni ti {name}? Sọ ọ́: {list}",
+      "reviewed": false
+    },
+    "wa.size.say_again": {
+      "text": "Sọ {choice} náà: {list}",
+      "reviewed": false
+    },
+    "wa.order.no_size": {
+      "text": "{name} láti ọ̀dọ̀ {business} kò sí ní {said}. Ó wà ní {sizes}.",
+      "reviewed": false
+    },
     "wa.stock.sizes": {
       "text": "{name}: ìwọ̀n àti àwọ̀ {count}, {total} lápapọ̀.\n{lines}",
       "reviewed": false

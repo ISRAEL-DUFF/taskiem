@@ -119,7 +119,12 @@ func (s *Server) waOrderItem(ctx context.Context, c *chat, m []string) error {
 		}
 		return c.say(ctx, s, c.t("wa.prices.none", "name", whatsapp.SafeText(m[3])))
 	}
-	hits, sized := pricedSizes(p.Items, m[2])
+	hits, sized, notSold := pricedSizes(p.Items, m[2])
+	if sized != nil && notSold != "" {
+		// A size it does not come in: what it does, never another size.
+		return c.say(ctx, s, c.t("wa.order.no_size", "name", whatsapp.SafeText(sized.Name), "business", whatsapp.SafeText(p.Business),
+			"said", whatsapp.SafeText(notSold), "sizes", whatsapp.SafeText(pricedSummary(*sized))))
+	}
 	if sized != nil {
 		// A product sold in sizes and colours, its size not said: by
 		// name here, or many at once in the chat on Taskiem.

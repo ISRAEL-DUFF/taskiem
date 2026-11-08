@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -127,5 +128,78 @@ func TestGroupStockItems(t *testing.T) {
 	// Grouped items are not grouped again.
 	if code, out := group("g2", map[string]any{"name": "Kaftan Two", "items": []any{item(sBlue, "S", "Blue"), item(rice, "M", "Blue")}}); code != 400 || !strings.Contains(fmt.Sprint(out), "already a size") {
 		t.Fatalf("grouped again: %d %v", code, out)
+	}
+}
+
+// A grouping that stopped part way (its product made, its items pointing
+// at it, its sizes not yet saved) is finished by asking again, never
+// refused for its own product; the product takes the first item's photo
+// and shows only when one of the items was on sale; the diary says what
+// was done.
+func TestGroupFinishesWhatStopped(t *testing.T) {
+	w := shopWorld(t)
+	withStock(w.world)
+	owner := w.tenant(t, "Zuri Atelier", "ada@zuri.test")
+	owner.must(200, "PUT", "/v1/settings/chat-tools", map[string]any{"chat_tools": true})
+	owner.must(200, "POST", "/v1/stock/setup", nil)
+	// A product in sizes first, so the catalogue has their columns.
+	k := owner.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Kaftan", "quantity": 0, "unit": "piece", "price_kobo": 100000},
+		"Idempotency-Key", "k")["item"].(map[string]any)["id"].(string)
+	owner.must(200, "PUT", "/v1/stock/items/"+k+"/variants", map[string]any{"choices": []any{map[string]any{"name": "Size", "values": []string{"S", "M"}}},
+		"cells": []any{map[string]any{"variant": map[string]any{"Size": "S"}, "count": 1}, map[string]any{"variant": map[string]any{"Size": "M"}, "count": 1}}},
+		"Idempotency-Key", "kv")
+	sf := owner.must(200, "GET", "/v1/storefront", nil)
+	table, cols := sf["catalogue_table"].(string), sf["catalogue_columns"].(map[string]any)
+	add := func(name string) string {
+		return owner.must(201, "POST", "/v1/stock/items", map[string]any{"name": name, "quantity": 2, "unit": "piece", "price_kobo": 500000},
+			"Idempotency-Key", "add-"+strings.ReplaceAll(name, " ", "-"))["item"].(map[string]any)["id"].(string)
+	}
+	red, blue := add("Apron Red"), add("Apron Blue")
+	set := func(row string, cells map[string]any) {
+		owner.must(200, "PATCH", "/v1/tables/"+table+"/rows/"+row, map[string]any{"set": cells}, "Idempotency-Key", "set-"+row+fmt.Sprint(len(cells)))
+	}
+	photo := cols["photo"].(string)
+	set(red, map[string]any{photo: "media-red"})
+	// Blue is not on sale; red is.
+	set(blue, map[string]any{cols["available"].(string): false})
+
+	// Stopped part way: the product made, the items pointing at it.
+	apron := add("Apron")
+	set(red, map[string]any{cols["variant_of"].(string): apron, cols["variant"].(string): `{"Colour":"Red"}`})
+	set(blue, map[string]any{cols["variant_of"].(string): apron, cols["variant"].(string): `{"Colour":"Blue"}`})
+
+	body := map[string]any{"name": "Apron", "items": []any{
+		map[string]any{"item_id": red, "variant": map[string]any{"Colour": "Red"}},
+		map[string]any{"item_id": blue, "variant": map[string]any{"Colour": "Blue"}}}}
+	code, out := owner.do("POST", "/v1/stock/group", body, "Idempotency-Key", "again")
+	if code != 200 || out["item"].(map[string]any)["id"] != apron {
+		t.Fatalf("finished on its own product: %d %v", code, out)
+	}
+	items := itemsByName(t, owner.must(200, "GET", "/v1/stock", nil))
+	if items["Apron – Red"]["variant_of"] != apron || items["Apron – Blue"]["variant_of"] != apron || items["Apron"]["choices"] == nil {
+		t.Fatalf("its sizes: %v", items)
+	}
+	if items["Apron"]["available"] != true {
+		t.Fatalf("on sale, as red was: %v", items["Apron"])
+	}
+	var row map[string]any
+	for _, r := range owner.must(200, "GET", "/v1/tables/"+table+"/rows?limit=100", nil)["rows"].([]any) {
+		if fmt.Sprint(r.(map[string]any)["id"]) == apron {
+			row = r.(map[string]any)
+		}
+	}
+	if row == nil || row[photo] != "media-red" {
+		t.Fatalf("the product's photo, red's: %v", row)
+	}
+	var diary []string
+	for _, x := range owner.must(200, "GET", "/v1/taskiem-chat", nil)["messages"].([]any) {
+		if m := x.(map[string]any); m["kind"] == "diary" {
+			diary = append(diary, m["text"].(string))
+		}
+	}
+	if !slices.Contains(diary, "Made one product of 2 items: Apron") || slices.ContainsFunc(diary, func(l string) bool {
+		return strings.HasPrefix(l, "Apron now comes in")
+	}) {
+		t.Fatalf("the diary: %q", diary)
 	}
 }

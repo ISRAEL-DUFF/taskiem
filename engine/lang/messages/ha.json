@@ -1396,6 +1396,18 @@
       "text": "{name} ba shi da wanda ake sayarwa a {said}. Yana zuwa a {sizes}.",
       "reviewed": false
     },
+    "wa.size.say": {
+      "text": "Wanne {choice} na {name}? Faɗi shi: {list}",
+      "reviewed": false
+    },
+    "wa.size.say_again": {
+      "text": "Faɗi {choice} ɗin: {list}",
+      "reviewed": false
+    },
+    "wa.order.no_size": {
+      "text": "{name} daga {business} ba ya zuwa a {said}. Yana zuwa a {sizes}.",
+      "reviewed": false
+    },
     "wa.stock.sizes": {
       "text": "{name}: girma da launi {count}, {total} gaba ɗaya.\n{lines}",
       "reviewed": false

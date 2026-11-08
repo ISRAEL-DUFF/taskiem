@@ -1744,6 +1744,21 @@
       "reviewed": true,
       "context": "The size and colour said is not one on sale; what the product comes in follows"
     },
+    "wa.size.say": {
+      "text": "Which {choice} of {name}? Say it: {list}",
+      "reviewed": true,
+      "context": "A product's sizes are numbers (shoe sizes 3 to 12): the size is asked by its value, not a numbered list"
+    },
+    "wa.size.say_again": {
+      "text": "Say the {choice}: {list}",
+      "reviewed": true,
+      "context": "The answer to a size question whose values are numbers was none of them"
+    },
+    "wa.order.no_size": {
+      "text": "{name} from {business} doesn't come in {said}. It comes in {sizes}.",
+      "reviewed": true,
+      "context": "A buyer ordered a supplier's product in a size or colour it is not sold in; nothing is ordered"
+    },
     "wa.stock.sizes": {
       "text": "{name}: {count} sizes and colours, {total} in all.\n{lines}",
       "reviewed": true,

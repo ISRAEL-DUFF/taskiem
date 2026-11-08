@@ -1396,6 +1396,18 @@
       "text": "{name} enweghị nke a na-ere na {said}. Ọ na-abịa na {sizes}.",
       "reviewed": false
     },
+    "wa.size.say": {
+      "text": "Kedu {choice} nke {name}? Kwuo ya: {list}",
+      "reviewed": false
+    },
+    "wa.size.say_again": {
+      "text": "Kwuo {choice} ahụ: {list}",
+      "reviewed": false
+    },
+    "wa.order.no_size": {
+      "text": "{name} sitere na {business} anaghị abịa na {said}. Ọ na-abịa na {sizes}.",
+      "reviewed": false
+    },
     "wa.stock.sizes": {
       "text": "{name}: nha na agba {count}, {total} n'ozuzu.\n{lines}",
       "reviewed": false

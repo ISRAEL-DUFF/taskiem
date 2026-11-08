@@ -1,6 +1,10 @@
 package storefront
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/israel-duff/taskiem/engine/variants"
+)
 
 // A product with sizes and colours: its stock is theirs together (on sale
 // only), and the public page lists the product, not them.
@@ -45,5 +49,24 @@ func TestVariantsRollUpUncounted(t *testing.T) {
 	}
 	if items[3].Stock == nil || *items[3].Stock != 0 || !items[3].SoldOut() {
 		t.Fatalf("a product with every size at none left: %+v", items[3])
+	}
+}
+
+// A product set up in sizes and colours with none of them on sale is no
+// plain item to put in a bag: it is not on sale either. A product with no
+// choices stays as it is.
+func TestVariantsRollUpNoneOnSale(t *testing.T) {
+	cs := []variants.Choice{{Name: "Colour", Values: []string{"Red"}}}
+	items := []Item{
+		{ID: "1", Name: "Apron", Available: true, Choices: cs},
+		{ID: "2", Name: "Apron – Red", Available: false, VariantOf: "1", Variant: map[string]string{"Colour": "Red"}},
+		{ID: "3", Name: "Slides", Available: true},
+	}
+	rollUpVariants(items)
+	if items[0].Available || items[0].Choices != nil {
+		t.Fatalf("the product with none on sale: %+v", items[0])
+	}
+	if !items[2].Available {
+		t.Fatalf("a plain item: %+v", items[2])
 	}
 }

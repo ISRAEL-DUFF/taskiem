@@ -130,3 +130,23 @@ func TestLowSizesReorder(t *testing.T) {
 		t.Fatalf("10 together: the 10-pair price on each: %v", lines)
 	}
 }
+
+// The model's requests: a choice heard that the product does not have
+// ("XL" of a kaftan in S and M) gives the product itself, never the one
+// size the other choices leave; the choices it has give their size.
+func TestMatchStockThingNeverGuessesASize(t *testing.T) {
+	cs := []variants.Choice{{Name: "Size", Values: []string{"S", "M"}}, {Name: "Colour", Values: []string{"Blue", "Red"}}}
+	items := []stock.Item{
+		{ID: "k", Name: "Ankara Kaftan", Available: true, Choices: cs},
+		{ID: "sb", Name: "Ankara Kaftan – S, Blue", VariantOf: "k", Variant: map[string]string{"Size": "S", "Colour": "Blue"}, Available: true},
+		{ID: "mr", Name: "Ankara Kaftan – M, Red", VariantOf: "k", Variant: map[string]string{"Size": "M", "Colour": "Red"}, Available: true},
+	}
+	got, ok := matchStockThing(items, toolAnswer{Thing: "ankara kaftan", Choices: []toolChoice{{Choice: "size", Value: "XL"}, {Choice: "colour", Value: "red"}}})
+	if !ok || got.id != "k" {
+		t.Fatalf("XL red: %+v %v", got, ok)
+	}
+	got, ok = matchStockThing(items, toolAnswer{Thing: "ankara kaftan", Choices: []toolChoice{{Choice: "colour", Value: "red"}}})
+	if !ok || got.id != "mr" {
+		t.Fatalf("red: %+v %v", got, ok)
+	}
+}

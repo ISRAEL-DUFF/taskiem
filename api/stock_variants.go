@@ -397,14 +397,29 @@ func (s *Server) applySizesWith(ctx context.Context, p *Principal, audit stockAu
 			n++
 		}
 	}
-	if n == 0 {
+	switch {
+	case quietSized(ctx):
+	case n == 0:
 		if onSale > 0 {
 			s.diaryChange(ctx, p, product.Name+" no longer comes in sizes and colours")
 		}
-	} else {
+	default:
 		s.diaryChange(ctx, p, fmt.Sprintf("%s now comes in %d %s", product.Name, n, sizesWord(n)))
 	}
 	return prod, vs, nil
+}
+
+type quietSizesKey struct{}
+
+// quietSizes: the caller writes the diary's line itself (a grouping says
+// it made one product of its items).
+func quietSizes(ctx context.Context) context.Context {
+	return context.WithValue(ctx, quietSizesKey{}, true)
+}
+
+func quietSized(ctx context.Context) bool {
+	q, _ := ctx.Value(quietSizesKey{}).(bool)
+	return q
 }
 
 // maxVariantPriceKobo bounds a size's or colour's own price: ₦10m.

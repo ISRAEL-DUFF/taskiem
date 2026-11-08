@@ -698,6 +698,11 @@ func rollUpVariants(items []Item) {
 		}
 		s := of[it.ID]
 		if s == nil {
+			// Set up in sizes and colours with none of them on sale: not a
+			// plain item to put in a bag (it keeps no stock of its own).
+			if len(it.Choices) > 0 {
+				it.Available = false
+			}
 			it.Choices = nil
 			continue
 		}

@@ -70,6 +70,15 @@ describe("proposing one product of look-alike items", () => {
     expect(got.values.b).toEqual({ Size: "43", Style: "Suede" });
   });
 
+  it("keeps a word with a hyphen whole, and splits at a dash", () => {
+    const got = proposeGroup([
+      { id: "a", name: "Coca-Cola – 35cl" },
+      { id: "b", name: "Coca-Cola – 50cl" },
+    ]);
+    expect(got.name).toBe("Coca-Cola");
+    expect(got.values.a).toEqual({ Size: "35cl" });
+  });
+
   it("never takes a whole name as the product's", () => {
     const got = proposeGroup([
       { id: "a", name: "Kaftan" },

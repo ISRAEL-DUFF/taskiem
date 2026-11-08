@@ -621,13 +621,23 @@ export function GroupForm({
   const [choices, setChoices] = useState<string[]>(
     first.choices.length ? first.choices : ["Size"],
   );
-  const [values, setValues] = useState<Record<string, Variant>>(first.values);
+  // Each item's values by the choice's place, so renaming a choice (or
+  // two named alike while typing) never loses one.
+  const [values, setValues] = useState<Record<string, string[]>>(() =>
+    Object.fromEntries(
+      items.map((it) => [
+        it.id,
+        (first.choices.length ? first.choices : ["Size"]).map(
+          (c) => first.values[it.id]?.[c] ?? "",
+        ),
+      ]),
+    ),
+  );
   // One key for this grouping: a retry makes nothing twice.
   const [saveKey] = useState(formKey);
   const named = choices.map((c) => c.trim());
-  const valueOf = (id: string, i: number) =>
-    values[id]?.[choices[i] ?? ""] ?? values[id]?.[named[i] ?? ""] ?? "";
-  const filled = items.map((it) =>
+  const valueOf = (id: string, i: number) => values[id]?.[i] ?? "";
+  const filled: Variant[] = items.map((it) =>
     Object.fromEntries(named.map((c, i) => [c, valueOf(it.id, i).trim()])),
   );
   const keys = filled.map((v) => keyOf(v));
@@ -642,21 +652,13 @@ export function GroupForm({
           : new Set(keys).size !== keys.length
             ? "Two items have the same size and colour: change one."
             : "";
-  const setChoice = (i: number, next: string) => {
-    const was = choices[i] ?? "";
+  const setChoice = (i: number, next: string) =>
     setChoices(choices.map((c, j) => (j === i ? next : c)));
-    // Each item's value stays with the renamed choice.
-    setValues(
-      Object.fromEntries(
-        Object.entries(values).map(([id, v]) => {
-          const { [was]: x, ...rest } = v;
-          return [id, { ...rest, [next]: x ?? "" }];
-        }),
-      ),
-    );
-  };
   const setValue = (id: string, i: number, x: string) =>
-    setValues({ ...values, [id]: { ...values[id], [choices[i] ?? ""]: x } });
+    setValues({
+      ...values,
+      [id]: choices.map((_, j) => (j === i ? x : (values[id]?.[j] ?? ""))),
+    });
   const save: Saver = async () => {
     await postKeyed("/v1/stock/group", saveKey, {
       name: name.trim(),
@@ -703,7 +705,14 @@ export function GroupForm({
           <button
             type="button"
             className="tk-btn soft"
-            onClick={() => setChoices([...choices, ""])}
+            onClick={() => {
+              setChoices([...choices, ""]);
+              setValues(
+                Object.fromEntries(
+                  Object.entries(values).map(([id, v]) => [id, [...v, ""]]),
+                ),
+              );
+            }}
           >
             Add a choice
           </button>
@@ -712,7 +721,17 @@ export function GroupForm({
           <button
             type="button"
             className="tk-btn soft"
-            onClick={() => setChoices(choices.slice(0, -1))}
+            onClick={() => {
+              setChoices(choices.slice(0, -1));
+              setValues(
+                Object.fromEntries(
+                  Object.entries(values).map(([id, v]) => [
+                    id,
+                    v.slice(0, choices.length - 1),
+                  ]),
+                ),
+              );
+            }}
           >
             Take away {choices[choices.length - 1] || "the last choice"}
           </button>

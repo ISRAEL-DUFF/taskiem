@@ -523,8 +523,10 @@ and the shared `choosesize` template, `engine/links` (`PriceSize`, `Flat`, `Prod
     not have is said with what it comes in.
   - A size's number is not taken for a sale's amount ("sold 1 air max 90 42"), and a
     size's full name with its comma is one item.
-  - Counts and deliveries still ask for the size by name (they take several items at
-    once); the words above find it.
+  - Counts (*count air max 90 7*), goods received (*received 12 air max 90*) and the
+    catalogue's own words (*price*, *hide*, *show*, *stock* with a number) ask the same
+    way; a size received is received against its supplier's open order. A supplier added
+    *for air max 90* supplies the product and all its sizes.
 - **Buyers on WhatsApp.** *order 6 air max 90 43 black from Zuri* orders that size; it
   is added to the buyer's product as the order sheet does. The product alone is asked
   for by name, with the chat on Taskiem to choose many sizes at once.
@@ -570,3 +572,34 @@ and the shared `choosesize` template, `engine/links` (`PriceSize`, `Flat`, `Prod
   `src/lib/variants.test.ts` (`proposeGroup`); `e2e/chat-group.spec.ts` at 390 and 360
   px with axe in both themes (ticking, the proposal, two the same refused, what is sent).
 
+### Phase 5: fixes after review
+
+- **A size or colour the product does not have is never taken for another size.**
+  "sold 1 ankara kaftan xl red", where M is the only red, used to offer M Red: the
+  unknown "xl" was dropped and the one size left was taken. Now it is said with what the
+  product comes in, and nothing is sold, added, counted or shown, in every stock word,
+  in a buyer's order ("Air Max 90 from Zuri doesn't come in 45 Black") and in the
+  model's requests (the product itself, its form or grid, never a size).
+- **Sizes that are numbers are asked by value.** With UK sizes 3 to 12 the question
+  lists "3, 4, 5 …" without numbers, and "8" is size 8, not the eighth on the list. A
+  value said is always taken before a place on a list.
+- **Grouping runs one at a time in a business, and finishes what stopped part way.**
+  It is several writes (the product, each item pointing at it, the grid); asked again
+  after one failed, it carries on with the product it made (pointed at by its items, or
+  made by the same key) instead of refusing it. The product takes the first item's photo
+  and is on sale when one of its items was; the diary says "Made one product of 3 items:
+  Ankara Kaftan".
+- **The public page:** a product set up in sizes and colours with none of them on sale is
+  not on sale itself, never a plain item to put in a bag.
+- **The grouping form** keeps each item's values by the choice's place, so renaming a
+  choice, or two named alike while typing, loses none; the proposed name keeps a word's
+  hyphen ("Coca-Cola – 35cl" gives "Coca-Cola").
+- **Checked and left as it is:** a buyer's size ordered on WhatsApp is added to their
+  product when the order is drafted, after the same checks the order sheet makes
+  (`resolveSizeLines`), as the order sheet does; a draft discarded keeps the size, at no
+  stock.
+- **Tests.** `api/whatsapp_sizes_fixes_test.go` (values not sold in each word, number
+  sizes, a count, a price by values and the product's own, a supplier for all sizes, a
+  delivery against its open order, a buyer's size not sold, the same words on Telegram);
+  `TestGroupFinishesWhatStopped`; `TestMatchStockThingNeverGuessesASize`;
+  `TestVariantsRollUpNoneOnSale`; `proposeGroup` keeping a hyphen.

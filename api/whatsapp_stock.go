@@ -47,6 +47,11 @@ type stockChat struct {
 	Count *countChat `json:"count,omitempty"`
 	// SaleAsk is a sale waiting on a size (whatsapp_sizes.go).
 	SaleAsk *saleAsk `json:"sale_ask,omitempty"`
+	// CountAsk is a count waiting on a size (whatsapp_sizes.go).
+	CountAsk *countSizeAsk `json:"count_ask,omitempty"`
+	// Received: goods that came in ("received 12 air max 90"), received
+	// against the item's supplier's open order once it is chosen.
+	Received bool `json:"received,omitempty"`
 }
 
 // waStockCommand acts on a stock command; false when cmd is not one (or
@@ -242,6 +247,11 @@ func matchStock(items []stock.Item, name string) []stock.Item {
 	// named with values said after it.
 	if len(held) == 0 {
 		if product, have, ok := findSized(items, name); ok {
+			// A value it does not have ("air max 90 45 black"): none, never
+			// the one size the rest of the words leave.
+			if unknownWords(product, name) != "" {
+				return nil
+			}
 			return narrowSizes(items, product.ID, have)
 		}
 	}
@@ -341,7 +351,7 @@ func (s *Server) waStockPick(ctx context.Context, c *chat, text string) error {
 				}
 				return s.stockSay(ctx, c, it)
 			case "stock_add":
-				return s.stockAskAdd(ctx, c, sh, &it)
+				return s.stockAddChosen(ctx, c, sh, it)
 			case "stock_adjust":
 				return s.stockAskAdjust(ctx, c, sh, it)
 			}
@@ -377,6 +387,9 @@ func (s *Server) waStockShow(ctx context.Context, c *chat, name string) error {
 	}
 	switch {
 	case len(match) == 0:
+		if done, err := s.sizeNotSold(ctx, c, items, name); done || err != nil {
+			return err
+		}
 		return c.say(ctx, s, c.t("wa.shop.no_item", "name", whatsapp.SafeText(name)))
 	case len(match) > 1:
 		return s.stockPick(ctx, c, &chatShop{Action: "stock_show", Name: name}, match)
@@ -480,11 +493,17 @@ func (s *Server) waStockLow(ctx context.Context, c *chat) error {
 // waStockAdd answers "add 50 cartons of Indomie at 8,500": an item added,
 // or goods received on one there, shown first.
 func (s *Server) waStockAdd(ctx context.Context, c *chat, a stock.Added) error {
+	return s.waStockAddFrom(ctx, c, a, false)
+}
+
+// waStockAddFrom is waStockAdd; received, the goods came from a supplier
+// ("received …"): the item chosen is received against its open order.
+func (s *Server) waStockAddFrom(ctx context.Context, c *chat, a stock.Added, received bool) error {
 	if !c.p.Can(PermTableEdit) {
 		return c.say(ctx, s, c.t("wa.stock.denied", "org", c.tenant.Name))
 	}
 	sh := &chatShop{Action: "stock_add", Name: a.Name, Stock: &a.Quantity, Old: a.Unit}
-	sh.StockChat = &stockChat{Quantity: a.Quantity, Unit: a.Unit, CostKobo: a.CostKobo}
+	sh.StockChat = &stockChat{Quantity: a.Quantity, Unit: a.Unit, CostKobo: a.CostKobo, Received: received}
 	_, items, err := s.stockItems(s.waTablesCtx(ctx, c), c.tenant.ID)
 	if errors.Is(err, errStockOff) {
 		if !c.p.Can(PermStorefrontManage) {
@@ -511,6 +530,9 @@ func (s *Server) waStockAdd(ctx context.Context, c *chat, a stock.Added) error {
 		return s.stockAskAdd(ctx, c, sh, &match[0])
 	case len(match) > 1:
 		return s.stockPick(ctx, c, sh, match)
+	}
+	if done, err := s.sizeNotSold(ctx, c, items, a.Name); done || err != nil {
+		return err
 	}
 	return s.stockAskAdd(ctx, c, sh, nil)
 }
@@ -565,6 +587,9 @@ func (s *Server) waStockAdjust(ctx context.Context, c *chat, args string) error 
 	match := matchStock(items, a.Name)
 	switch {
 	case len(match) == 0:
+		if done, err := s.sizeNotSold(ctx, c, items, a.Name); done || err != nil {
+			return err
+		}
 		return c.say(ctx, s, c.t("wa.shop.no_item", "name", whatsapp.SafeText(a.Name)))
 	case len(match) > 1:
 		return s.stockPick(ctx, c, sh, match)
@@ -899,6 +924,9 @@ func (s *Server) saleFrom(ctx context.Context, c *chat, ask *saleAsk) error {
 		}
 		switch {
 		case len(match) == 0:
+			if done, err := s.sizeNotSold(ctx, c, items, x.Name); done || err != nil {
+				return err
+			}
 			return c.say(ctx, s, c.t("wa.shop.no_item", "name", whatsapp.SafeText(x.Name)))
 		case len(match) > 1:
 			names := make([]string, 0, min(shopPickMax, len(match)))
@@ -1063,4 +1091,17 @@ func (s *Server) creditSale(ctx context.Context, tx pgx.Tx, c *chat, sale *saleC
 		d.Lines, d.AmountKobo, d.Description = nil, amount, stock.SaleWords(lines)
 	}
 	return s.Invoices.RecordCredit(ctx, tx, c.tenant.ID, key, cust, d, c.p.Actor())
+}
+
+// stockAddChosen goes on with goods in once their item is chosen: against
+// its supplier's open order when they were received from one, else as
+// stock in.
+func (s *Server) stockAddChosen(ctx context.Context, c *chat, sh *chatShop, it stock.Item) error {
+	if sc := sh.StockChat; sc != nil && sc.Received {
+		a := stock.Added{Name: it.Name, Quantity: sc.Quantity, Unit: sc.Unit, CostKobo: sc.CostKobo}
+		if done, err := s.receivedItem(ctx, c, a, it); done || err != nil {
+			return err
+		}
+	}
+	return s.stockAskAdd(ctx, c, sh, &it)
 }

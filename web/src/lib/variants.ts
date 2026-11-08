@@ -151,8 +151,10 @@ export function proposeGroup(items: { id: string; name: string }[]): {
   choices: string[];
   values: Record<string, Variant>;
 } {
+  // Words split at spaces, commas, dashes and bars ("Kaftan – S"); a
+  // hyphen inside a word keeps it whole ("Coca-Cola", "T-shirt").
   const words = items.map((it) =>
-    it.name.split(/[\s,–—/|-]+/).filter(Boolean),
+    it.name.split(/[\s,–—|]+/).filter((w) => w && !/^[-/]+$/.test(w)),
   );
   const head = words[0] ?? [];
   // The words all share at the start, leaving each at least one of its own.

@@ -1396,6 +1396,18 @@
       "text": "{name} no get any for sale for {said}. E dey come for {sizes}.",
       "reviewed": false
     },
+    "wa.size.say": {
+      "text": "Which {choice} of {name}? Talk am: {list}",
+      "reviewed": false
+    },
+    "wa.size.say_again": {
+      "text": "Talk the {choice}: {list}",
+      "reviewed": false
+    },
+    "wa.order.no_size": {
+      "text": "{name} from {business} no dey come for {said}. E dey come for {sizes}.",
+      "reviewed": false
+    },
     "wa.stock.sizes": {
       "text": "{name}: {count} sizes and colours, {total} for all.\n{lines}",
       "reviewed": false

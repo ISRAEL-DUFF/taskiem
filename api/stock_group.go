@@ -71,8 +71,10 @@ type groupPlan struct {
 	price   *int64
 }
 
-// planGroup checks a grouping before anything is written.
-func planGroup(name string, order []string, in []groupIn, items []stock.Item) (groupPlan, error) {
+// planGroup checks a grouping before anything is written. resume is the
+// product a grouping that stopped part way made (groupResume), or "": its
+// name is not a clash, and items already pointing at it are taken.
+func planGroup(name string, order []string, in []groupIn, items []stock.Item, resume string) (groupPlan, error) {
 	g := groupPlan{name: strings.Join(strings.Fields(name), " ")}
 	switch {
 	case g.name == "":
@@ -87,7 +89,7 @@ func planGroup(name string, order []string, in []groupIn, items []stock.Item) (g
 	byID := map[string]stock.Item{}
 	for _, it := range items {
 		byID[it.ID] = it
-		if it.VariantOf == "" && strings.EqualFold(it.Name, g.name) {
+		if it.VariantOf == "" && it.ID != resume && strings.EqualFold(it.Name, g.name) {
 			return g, fmt.Errorf("%w: %s is already the name of one of your items: give the product another", errBadRequest, it.Name)
 		}
 	}
@@ -99,9 +101,9 @@ func planGroup(name string, order []string, in []groupIn, items []stock.Item) (g
 	for i, x := range in {
 		it, ok := byID[x.ItemID]
 		switch {
-		case !ok:
+		case !ok || (resume != "" && it.ID == resume):
 			return g, fmt.Errorf("%w: %q is not one of your items", errBadRequest, x.ItemID)
-		case it.VariantOf != "":
+		case it.VariantOf != "" && it.VariantOf != resume:
 			return g, fmt.Errorf("%w: %s is already a size or colour of another product", errBadRequest, it.Name)
 		case it.HasSizes():
 			return g, fmt.Errorf("%w: %s is already sold in sizes and colours", errBadRequest, it.Name)
@@ -207,23 +209,41 @@ func planGroup(name string, order []string, in []groupIn, items []stock.Item) (g
 // that differ as their own). Price lists that held the items one by one
 // hold the product instead.
 func (s *Server) groupSizes(ctx context.Context, p *Principal, audit stockAudit, name string, order []string, in []groupIn, key string) (stock.Item, []stock.Item, error) {
+	// One grouping at a time in a business: two at once over the same
+	// items would each make a product and take the items from the other.
+	unlock, err := s.lockSizes(ctx, p.TenantID, "grouping")
+	if err != nil {
+		return stock.Item{}, nil, err
+	}
+	defer unlock()
 	_, items, err := s.stockItems(ctx, p.TenantID)
 	if err != nil {
 		return stock.Item{}, nil, err
 	}
-	// A retry after the product was added: the items already point at it.
+	// A retry after the grouping was done: the items already point at it.
 	if prod, vs, ok := groupedBefore(items, in); ok {
 		return prod, vs, nil
 	}
-	g, err := planGroup(name, order, in, items)
+	resume, err := s.groupResume(ctx, p.TenantID, items, name, in, key)
+	if err != nil {
+		return stock.Item{}, nil, err
+	}
+	g, err := planGroup(name, order, in, items, resume)
 	if err != nil {
 		return stock.Item{}, nil, err
 	}
 	first := g.items[0]
-	prod, _, err := s.stockAdd(ctx, p.TenantID, p.Actor(), key+"-product", stockNew{Name: g.name, Unit: first.Unit, PriceKobo: g.price,
-		Category: first.Category, Supplier: first.Supplier, CostKobo: first.CostKobo}, audit)
-	if err != nil {
-		return stock.Item{}, nil, err
+	var prod stock.Item
+	for _, it := range items {
+		if it.ID == resume {
+			prod = it
+		}
+	}
+	if prod.ID == "" {
+		if prod, _, err = s.stockAdd(ctx, p.TenantID, p.Actor(), key+"-product", stockNew{Name: g.name, Unit: first.Unit, PriceKobo: g.price,
+			Category: first.Category, Supplier: first.Supplier, CostKobo: first.CostKobo}, audit); err != nil {
+			return stock.Item{}, nil, err
+		}
 	}
 	sh, _, err := s.stockItems(ctx, p.TenantID)
 	if err != nil {
@@ -233,6 +253,22 @@ func (s *Server) groupSizes(ctx context.Context, p *Principal, audit stockAudit,
 		return stock.Item{}, nil, err
 	}
 	m := sh.cols()
+	// The product shows as its items did: on sale when one of them was,
+	// with the first one's photo (each item keeps its own).
+	set := map[string]any{}
+	if m.Available != "" {
+		set[m.Available] = slices.ContainsFunc(g.items, func(it stock.Item) bool { return it.Available })
+	}
+	if m.Photo != "" && prod.PhotoID == "" {
+		if at := slices.IndexFunc(g.items, func(it stock.Item) bool { return it.PhotoID != "" }); at >= 0 {
+			set[m.Photo] = g.items[at].PhotoID
+		}
+	}
+	if len(set) > 0 {
+		if err := s.stockSetCells(ctx, p.TenantID, sh, prod.ID, "api-"+key+"-product-shown", set); err != nil {
+			return stock.Item{}, nil, err
+		}
+	}
 	cells := make([]variants.Cell, len(g.items))
 	for i, it := range g.items {
 		if err := s.stockSetCells(ctx, p.TenantID, sh, it.ID, "api-"+key+"-into-"+it.ID,
@@ -244,7 +280,7 @@ func (s *Server) groupSizes(ctx context.Context, p *Principal, audit stockAudit,
 			cells[i].PriceKobo = it.PriceKobo
 		}
 	}
-	pr, vs, err := s.applySizes(ctx, p, audit, prod.ID, g.choices, cells, key+"-sizes")
+	pr, vs, err := s.applySizes(quietSizes(ctx), p, audit, prod.ID, g.choices, cells, key+"-sizes")
 	if err != nil {
 		return stock.Item{}, nil, err
 	}
@@ -257,8 +293,42 @@ func (s *Server) groupSizes(ctx context.Context, p *Principal, audit stockAudit,
 	}); err != nil {
 		return stock.Item{}, nil, err
 	}
+	s.diaryChange(ctx, p, fmt.Sprintf("Made one product of %d items: %s", len(ids), pr.Name))
 	s.foldListsInto(ctx, p.TenantID, pr.ID, ids)
 	return pr, vs, nil
+}
+
+// groupResume is the product a grouping that stopped part way made, so a
+// retry finishes it rather than refuse its own product: the one the
+// chosen items already point at, still without its sizes and named as
+// asked; or, before any item pointed at it, the one this key was adding.
+// "" when there is none.
+func (s *Server) groupResume(ctx context.Context, tenant uuid.UUID, items []stock.Item, name string, in []groupIn, key string) (string, error) {
+	byID := map[string]stock.Item{}
+	for _, it := range items {
+		byID[it.ID] = it
+	}
+	same := func(it stock.Item) bool {
+		return it.ID != "" && it.VariantOf == "" && !it.HasSizes() && matchKey(it.Name) == matchKey(name)
+	}
+	for _, x := range in {
+		if it, ok := byID[x.ItemID]; ok && it.VariantOf != "" {
+			if prod := byID[it.VariantOf]; same(prod) {
+				return prod.ID, nil
+			}
+			return "", nil
+		}
+	}
+	for _, it := range items {
+		if same(it) {
+			mine, err := s.stockAdding(ctx, tenant, key+"-product", name)
+			if err != nil || !mine {
+				return "", err
+			}
+			return it.ID, nil
+		}
+	}
+	return "", nil
 }
 
 // groupedBefore: every item already points at one product, by this

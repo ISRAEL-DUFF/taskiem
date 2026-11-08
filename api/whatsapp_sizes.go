@@ -9,6 +9,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/stock"
+	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/variants"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
@@ -43,6 +44,16 @@ type saleAsk struct {
 	CustomerID  string         `json:"customer_id,omitempty"`
 	Chosen      map[int]string `json:"chosen,omitempty"`
 	At          int            `json:"at"`
+}
+
+// countSizeAsk is a count waiting on a size: the count as said, the sizes
+// chosen for its items so far (by the item's place in it), and the item
+// asked about now.
+type countSizeAsk struct {
+	Said   []stock.Counted `json:"said"`
+	Reason string          `json:"reason,omitempty"`
+	Chosen map[int]string  `json:"chosen,omitempty"`
+	At     int             `json:"at"`
 }
 
 // sizeWords are words said with values that are none ("size 42", "in
@@ -138,8 +149,14 @@ func findSized(items []stock.Item, phrase string) (stock.Item, map[string]string
 // unknownWords are the words said after a product's name that are none
 // of its values ("xl" of a kaftan sold in S and M), filler words aside.
 func unknownWords(product stock.Item, phrase string) string {
-	rest := " " + strings.TrimPrefix(matchKey(phrase), matchKey(product.Name)) + " "
-	for _, v := range valuesSaid(product, rest) {
+	return unknownIn(product.Choices, strings.TrimPrefix(matchKey(phrase), matchKey(product.Name)))
+}
+
+// unknownIn are the words that are none of the choices' values, filler
+// words aside.
+func unknownIn(choices []variants.Choice, words string) string {
+	rest := " " + matchKey(words) + " "
+	for _, v := range valuesIn(choices, rest) {
 		rest = strings.Replace(rest, " "+matchKey(v)+" ", " ", 1)
 	}
 	var left []string
@@ -206,8 +223,22 @@ func (s *Server) askSize(ctx context.Context, c *chat, sh *chatShop, product sto
 	if err := s.saveSession(ctx, c, stateCollecting, chatData{Shop: sh}, waPendingTTL); err != nil {
 		return err
 	}
+	if numberValues(vals) {
+		return c.say(ctx, s, c.t("wa.size.say", "choice", whatsapp.SafeText(strings.ToLower(choice)), "name", whatsapp.SafeText(product.Name),
+			"list", whatsapp.SafeText(strings.Join(vals, ", "))))
+	}
 	return c.say(ctx, s, c.t("wa.size.which", "choice", whatsapp.SafeText(strings.ToLower(choice)), "name", whatsapp.SafeText(product.Name),
 		"list", numberedValues(vals)))
+}
+
+// numberValues: some of a choice's values are numbers (shoe sizes 3 to
+// 12), so a number said is the value, never its place on a list; the
+// values are listed without numbers.
+func numberValues(vals []string) bool {
+	return slices.ContainsFunc(vals, func(v string) bool {
+		_, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
+		return err == nil
+	})
 }
 
 func numberedValues(vals []string) string {
@@ -223,17 +254,23 @@ func (s *Server) waSizeAnswer(ctx context.Context, c *chat, text string) error {
 	sh := c.data.Shop
 	ask := sh.Size
 	text = strings.TrimSpace(text)
+	// The value said; else, when the values are not numbers, its number
+	// on the list.
 	chosen := ""
-	if n, err := strconv.Atoi(text); err == nil && n >= 1 && n <= len(ask.Values) {
-		chosen = ask.Values[n-1]
-	} else {
-		for _, v := range ask.Values {
-			if matchKey(v) == matchKey(text) {
-				chosen = v
-			}
+	for _, v := range ask.Values {
+		if matchKey(v) == matchKey(text) {
+			chosen = v
 		}
 	}
+	numbers := numberValues(ask.Values)
+	if n, err := strconv.Atoi(text); chosen == "" && !numbers && err == nil && n >= 1 && n <= len(ask.Values) {
+		chosen = ask.Values[n-1]
+	}
 	if chosen == "" {
+		if numbers {
+			return c.say(ctx, s, c.t("wa.size.say_again", "choice", whatsapp.SafeText(strings.ToLower(ask.Choice)),
+				"list", whatsapp.SafeText(strings.Join(ask.Values, ", "))))
+		}
 		return c.say(ctx, s, c.t("wa.size.again", "choice", whatsapp.SafeText(strings.ToLower(ask.Choice)), "list", numberedValues(ask.Values)))
 	}
 	_, items, ok, err := s.stockChatItems(ctx, c)
@@ -264,7 +301,7 @@ func (s *Server) waSizeAnswer(ctx context.Context, c *chat, text string) error {
 func (s *Server) sizeChosen(ctx context.Context, c *chat, sh *chatShop, it stock.Item) error {
 	switch sh.Action {
 	case "stock_add":
-		return s.stockAskAdd(ctx, c, sh, &it)
+		return s.stockAddChosen(ctx, c, sh, it)
 	case "stock_adjust":
 		return s.stockAskAdjust(ctx, c, sh, it)
 	case "stock_sale_size":
@@ -274,6 +311,18 @@ func (s *Server) sizeChosen(ctx context.Context, c *chat, sh *chatShop, it stock
 		}
 		ask.Chosen[ask.At] = it.ID
 		return s.saleFrom(ctx, c, ask)
+	case "price", "hide", "show", "stock":
+		// The catalogue's own words (waShopChange): the change for yes,
+		// on the size's own row.
+		sh.Pick, sh.Size = nil, nil
+		return s.shopAskChange(ctx, c, sh, catalogueRow(it))
+	case "stock_count_size":
+		ask := sh.StockChat.CountAsk
+		if ask.Chosen == nil {
+			ask.Chosen = map[int]string{}
+		}
+		ask.Chosen[ask.At] = it.ID
+		return s.countFrom(ctx, c, ask)
 	}
 	if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
 		return err
@@ -384,13 +433,15 @@ func sizesGrid(c *chat, product stock.Item, on []stock.Item) string {
 // product sold in sizes and colours by its sizes: one size by its full
 // name, or by the product's name and its values in any order ("air max
 // 90 42 black"); several sizes of one product when the values say too
-// little (the product given, to ask by). Other items as before.
-func pricedSizes(listed []links.PriceItem, words string) ([]links.PriceItem, *links.PriceItem) {
+// little (the product given, to ask by). A word after the product's name
+// that is none of its values ("air max 90 45 black") is given back as not
+// sold, with the product and no size. Other items as before.
+func pricedSizes(listed []links.PriceItem, words string) ([]links.PriceItem, *links.PriceItem, string) {
 	all := orderable(listed)
 	key := matchKey(words)
 	for _, it := range all {
 		if matchKey(it.Name) == key {
-			return []links.PriceItem{it}, nil
+			return []links.PriceItem{it}, nil, ""
 		}
 	}
 	var product *links.PriceItem
@@ -407,9 +458,13 @@ func pricedSizes(listed []links.PriceItem, words string) ([]links.PriceItem, *li
 				hits = append(hits, it)
 			}
 		}
-		return hits, nil
+		return hits, nil, ""
 	}
-	have := valuesIn(product.Choices, strings.TrimPrefix(key, matchKey(product.Name)))
+	rest := strings.TrimPrefix(key, matchKey(product.Name))
+	have := valuesIn(product.Choices, rest)
+	if unknown := unknownIn(product.Choices, rest); unknown != "" {
+		return nil, product, strings.TrimSpace(unknown + " " + variants.Label(have, product.Choices))
+	}
 	var left []links.PriceItem
 	for _, it := range all {
 		if it.VariantOf != product.ItemID || !it.Available {
@@ -426,9 +481,9 @@ func pricedSizes(listed []links.PriceItem, words string) ([]links.PriceItem, *li
 		}
 	}
 	if len(left) == 1 {
-		return left, nil
+		return left, nil, ""
 	}
-	return left, product
+	return left, product, ""
 }
 
 // inChoiceOrder are sizes in the product's order: by its last choice's
@@ -447,4 +502,56 @@ func inChoiceOrder(product stock.Item, sizes []stock.Item) []stock.Item {
 		return 0
 	})
 	return out
+}
+
+// sizeNotSold says so when the words name a product sold in sizes and
+// colours with a value it does not have ("air max 90 45 black"): what it
+// comes in, never another size or a new item. False when they do not.
+func (s *Server) sizeNotSold(ctx context.Context, c *chat, items []stock.Item, name string) (bool, error) {
+	product, have, ok := findSized(items, name)
+	if !ok {
+		return false, nil
+	}
+	unknown := unknownWords(product, name)
+	if unknown == "" {
+		return false, nil
+	}
+	if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
+		return true, err
+	}
+	told := strings.TrimSpace(unknown + " " + variants.Label(have, product.Choices))
+	return true, c.say(ctx, s, c.t("wa.size.none", "name", whatsapp.SafeText(product.Name), "said", whatsapp.SafeText(told),
+		"sizes", whatsapp.SafeText(sizesSummary(product, sizesOnSale(items, product.ID)))))
+}
+
+// shopSized finds the size the catalogue's words name ("price ankara
+// kaftan red s 30000"): the one size its values leave, else asked one
+// choice at a time; a value it does not have is said. False when the words
+// name no product sold in sizes, or the shop keeps no stock (sizes are
+// stock's).
+func (s *Server) shopSized(ctx context.Context, c *chat, sh *chatShop, name string) (bool, error) {
+	_, items, err := s.stockItems(s.waTablesCtx(ctx, c), c.tenant.ID)
+	if err != nil {
+		return false, nil //nolint:nilerr // no stock: the catalogue's words as before
+	}
+	if done, err := s.sizeNotSold(ctx, c, items, name); done || err != nil {
+		return true, err
+	}
+	product, have, ok := findSized(items, name)
+	if !ok {
+		return false, nil
+	}
+	left := narrowSizes(items, product.ID, have)
+	if len(left) == 1 {
+		return true, s.shopAskChange(ctx, c, sh, catalogueRow(left[0]))
+	}
+	sh.Name = name
+	return true, s.askSize(ctx, c, sh, product, have)
+}
+
+// catalogueRow is a size as the catalogue's words change it: its own row
+// (the catalogue's copy lists the product, not its sizes).
+func catalogueRow(it stock.Item) storefront.Item {
+	return storefront.Item{ID: it.ID, Name: it.Name, PriceKobo: it.PriceKobo, Stock: it.Stock, Available: it.Available,
+		VariantOf: it.VariantOf, Variant: it.Variant}
 }

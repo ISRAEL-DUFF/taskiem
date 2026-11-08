@@ -456,6 +456,11 @@ func matchStockThing(items []stock.Item, a toolAnswer) (namedThing, bool) {
 				}
 			}
 		}
+		// A choice heard that it does not have ("XL" of a kaftan in S and
+		// M): the product itself, never the one size the rest leave.
+		if unknownWords(product, said) != "" {
+			return namedThing{id: product.ID, name: product.Name}, true
+		}
 		left := narrowSizes(items, product.ID, have)
 		if len(left) == 1 {
 			return namedThing{id: left[0].ID, name: left[0].Name}, true
