@@ -640,6 +640,12 @@ func (m *Manifest) check() []string {
 			if v := m.Triggers[name].Verify; v == nil || (v.Scheme != "hmac_sha256" && v.Scheme != "hmac_sha512") {
 				add("/triggers/%s/poll: only a trigger verified by plain HMAC can be polled", name)
 			}
+			if a, ok := m.Actions[pl.Action]; ok && pl.Seen != "" && !schemaHasPath(a.Input, []string{pl.Seen, "*"}) {
+				add("/triggers/%s/poll/seen: %q must be a list input of %s", name, pl.Seen, pl.Action)
+			}
+			if (pl.Seen == "") != (pl.Keys == "") {
+				add("/triggers/%s/poll: seen and keys go together: the keys an action reads are what it is given back as seen", name)
+			}
 		}
 		if v := m.Triggers[name].Verify; v != nil && v.Scheme == "body_token" && v.Field == "" {
 			add("/triggers/%s/verify/field: body_token names the body field carrying the token", name)

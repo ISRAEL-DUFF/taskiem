@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -51,8 +52,13 @@ type Poller struct {
 }
 
 // overlap is how far back each poll looks before where the last one got
-// to, for records the provider lists a little late; dedup drops repeats.
-const overlap = 10 * time.Minute
+// to, for records the provider lists a little late; dedup drops repeats,
+// and an action that reports its keys (poll.keys) is told which it read
+// already (poll.seen), at most maxSeen of the newest.
+const (
+	overlap = 10 * time.Minute
+	maxSeen = 2000
+)
 
 var pollExprs = expr.MustNewWithRoots("output", "item")
 
@@ -149,10 +155,11 @@ func (p *Poller) poll(ctx context.Context, t pollTarget, conn *connector.Connect
 	now := p.now()
 	var since time.Time
 	var polled *time.Time
+	var seen []string
 	first := false
 	err := db.InTenantTx(ctx, p.Store.Pool, []uuid.UUID{t.tenant}, func(tx pgx.Tx) error {
-		err := tx.QueryRow(ctx, `SELECT since, polled_at FROM trigger_polls WHERE connector = $1 AND trigger_name = $2 AND connection = $3`,
-			t.connector, t.trigger, t.connection).Scan(&since, &polled)
+		err := tx.QueryRow(ctx, `SELECT since, polled_at, seen FROM trigger_polls WHERE connector = $1 AND trigger_name = $2 AND connection = $3`,
+			t.connector, t.trigger, t.connection).Scan(&since, &polled, &seen)
 		if errors.Is(err, pgx.ErrNoRows) {
 			// The first look starts now: nothing from before the workflow
 			// was deployed is replayed.
@@ -168,21 +175,55 @@ func (p *Poller) poll(ctx context.Context, t pollTarget, conn *connector.Connect
 	if polled != nil && now.Sub(*polled) < spec.Poll.Interval() {
 		return 0, nil
 	}
-	n, pollErr := p.fetchAndDeliver(ctx, t, conn, spec, since.Add(-overlap))
+	got, pollErr := p.fetchAndDeliver(ctx, t, conn, spec, since.Add(-overlap), seen)
+	n := got.delivered
+	// Where the next poll starts: now, or, when the action stopped short
+	// (a cap), where it got to, polled again on the next tick so a busy
+	// provider is caught up without skipping what it had not answered.
+	next, polledAt := now, &now
+	if got.until != nil {
+		next, polledAt = *got.until, nil
+		p.log().Info("poller: more remain", "tenant", t.tenant, "connector", t.connector, "trigger", t.trigger, "until", next)
+	}
 	err = db.InTenantTx(ctx, p.Store.Pool, []uuid.UUID{t.tenant}, func(tx pgx.Tx) error {
 		if pollErr != nil {
 			_, err := tx.Exec(ctx, `UPDATE trigger_polls SET polled_at = $4, last_error = $5 WHERE connector = $1 AND trigger_name = $2 AND connection = $3`,
 				t.connector, t.trigger, t.connection, now, clip(pollErr.Error()))
 			return err
 		}
-		_, err := tx.Exec(ctx, `UPDATE trigger_polls SET since = $4, polled_at = $4, last_error = NULL WHERE connector = $1 AND trigger_name = $2 AND connection = $3`,
-			t.connector, t.trigger, t.connection, now)
+		_, err := tx.Exec(ctx, `UPDATE trigger_polls SET since = $4, polled_at = $5, seen = $6, last_error = NULL WHERE connector = $1 AND trigger_name = $2 AND connection = $3`,
+			t.connector, t.trigger, t.connection, next, polledAt, keepSeen(seen, got.keys))
 		return err
 	})
 	if pollErr != nil {
 		return n, pollErr
 	}
 	return n, err
+}
+
+// keepSeen is seen with keys added, each once where it was last added,
+// the newest maxSeen kept.
+func keepSeen(seen, keys []string) []string {
+	all := slices.Concat(seen, keys)
+	out := make([]string, 0, min(len(all), maxSeen))
+	have := map[string]bool{}
+	for i := len(all) - 1; i >= 0 && len(out) < maxSeen; i-- {
+		if k := all[i]; k != "" && !have[k] {
+			have[k] = true
+			out = append(out, k)
+		}
+	}
+	slices.Reverse(out)
+	return out
+}
+
+// pollResult is what one poll came to: how many events it delivered, the
+// keys the action read (poll.keys), and, when it stopped short, the time
+// it answered everything up to (poll.until).
+type pollResult struct {
+	delivered int
+	keys      []string
+	until     *time.Time
 }
 
 func clip(s string) string {
@@ -194,18 +235,18 @@ func clip(s string) string {
 
 // fetchAndDeliver runs the poll action from since and delivers each
 // record as the provider's webhook would.
-func (p *Poller) fetchAndDeliver(ctx context.Context, t pollTarget, conn *connector.Connector, spec connector.TriggerSpec, since time.Time) (int, error) {
+func (p *Poller) fetchAndDeliver(ctx context.Context, t pollTarget, conn *connector.Connector, spec connector.TriggerSpec, since time.Time, seen []string) (pollResult, error) {
 	action, ok := conn.Actions[spec.Poll.Action]
 	if !ok {
-		return 0, fmt.Errorf("no action %s", spec.Poll.Action)
+		return pollResult{}, fmt.Errorf("no action %s", spec.Poll.Action)
 	}
 	use := secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindConnection, Purpose: "ingest.poll"})
 	creds, err := p.Connections.Credentials(use, t.tenant, ScheduleEnvironment, conn.Manifest.ID, t.connection)
 	if errors.Is(err, secrets.ErrNotFound) || errors.Is(err, secrets.ErrAmbiguous) {
-		return 0, nil // nothing to ask with: readiness says so to the business
+		return pollResult{}, nil // nothing to ask with: readiness says so to the business
 	}
 	if err != nil {
-		return 0, err
+		return pollResult{}, err
 	}
 	secret := creds[spec.Verify.SecretField]
 	g := p.Egress
@@ -214,6 +255,13 @@ func (p *Poller) fetchAndDeliver(ctx context.Context, t pollTarget, conn *connec
 	}
 	hc := g.Client(egress.Policy{Tenant: t.tenant.String(), Hosts: conn.Manifest.HostsFor(creds), Purpose: "connector:" + conn.Manifest.ID}, 30*time.Second)
 	req := connector.Request{Input: map[string]any{spec.Poll.Since: since.UTC().Format(time.RFC3339)}, Credentials: creds, HTTP: hc, Logger: p.Logger, Attempt: 1}
+	if spec.Poll.Seen != "" {
+		list := make([]any, 0, len(seen))
+		for _, k := range seen {
+			list = append(list, k)
+		}
+		req.Input[spec.Poll.Seen] = list
+	}
 	// A connector that refreshes its own tokens (Zoho Books) stores them.
 	if r, ok := p.Connections.(interface {
 		RotateCredentials(ctx context.Context, tenant uuid.UUID, env, connector, name string, fn func(map[string]string) (map[string]string, error)) (map[string]string, error)
@@ -226,13 +274,48 @@ func (p *Poller) fetchAndDeliver(ctx context.Context, t pollTarget, conn *connec
 	resp, err := action.Execute(actx, req)
 	cancel()
 	if err != nil {
-		return 0, err
+		return pollResult{}, err
 	}
 	v, err := pollExprs.Eval(spec.Poll.Items, map[string]any{"output": resp.Output})
 	if err != nil {
-		return 0, fmt.Errorf("items: %w", err)
+		return pollResult{}, fmt.Errorf("items: %w", err)
 	}
 	items, _ := v.([]any)
+	var out pollResult
+	if spec.Poll.Keys != "" {
+		v, err := pollExprs.Eval(spec.Poll.Keys, map[string]any{"output": resp.Output})
+		if err != nil {
+			return pollResult{}, fmt.Errorf("keys: %w", err)
+		}
+		list, _ := v.([]any)
+		for _, k := range list {
+			if s, ok := k.(string); ok {
+				out.keys = append(out.keys, s)
+			}
+		}
+	}
+	if spec.Poll.Until != "" {
+		v, err := pollExprs.Eval(spec.Poll.Until, map[string]any{"output": resp.Output})
+		if err != nil {
+			return pollResult{}, fmt.Errorf("until: %w", err)
+		}
+		if s, _ := v.(string); s != "" {
+			at, err := time.Parse(time.RFC3339, s)
+			if err != nil {
+				return pollResult{}, fmt.Errorf("until: %q is not a time", s)
+			}
+			// Never before where this poll started, so a poll always
+			// moves on (the keys it read are skipped next time); never
+			// past now.
+			if at.Before(since) {
+				at = since
+			}
+			if now := p.now(); at.After(now) {
+				at = now
+			}
+			out.until = &at
+		}
+	}
 	n := 0
 	for _, item := range items {
 		ev, err := pollExprs.Eval(spec.Poll.Event, map[string]any{"item": item})
@@ -242,11 +325,11 @@ func (p *Poller) fetchAndDeliver(ctx context.Context, t pollTarget, conn *connec
 		}
 		body, err := json.Marshal(map[string]any{"event": event, "data": item})
 		if err != nil {
-			return n, err
+			return pollResult{delivered: n}, err
 		}
 		header, sig, err := connector.SignBody(spec.Verify, secret, body)
 		if err != nil {
-			return n, err
+			return pollResult{delivered: n}, err
 		}
 		path := "/" + t.tenant.String() + "/connectors/" + t.connector + "/" + t.trigger + "?env=" + ScheduleEnvironment
 		if t.connection != "" {
@@ -258,11 +341,12 @@ func (p *Poller) fetchAndDeliver(ctx context.Context, t pollTarget, conn *connec
 		rec := httptest.NewRecorder()
 		p.Hooks.ServeHTTP(rec, req)
 		if rec.Code >= 300 {
-			return n, fmt.Errorf("delivering a polled %s: %d %s", event, rec.Code, clip(rec.Body.String()))
+			return pollResult{delivered: n}, fmt.Errorf("delivering a polled %s: %d %s", event, rec.Code, clip(rec.Body.String()))
 		}
 		n++
 	}
-	return n, nil
+	out.delivered = n
+	return out, nil
 }
 
 // moneyTargets adds to targets each active prod connection's polled

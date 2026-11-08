@@ -24,10 +24,14 @@ import (
 // does Zoho Mail's.
 
 const (
-	// maxNew bounds one poll: two pages of message ids, each message then
-	// read on its own.
-	maxNew   = 200
-	pageSize = 100
+	// maxNew bounds one poll's reads: each message is read on its own.
+	// More than that since the time are read by the next polls, oldest
+	// first (until).
+	maxNew = 200
+	// maxListed bounds one listing: past it, the window is halved until
+	// it fits, so the oldest messages are always listed.
+	maxListed = 2000
+	pageSize  = 500
 	// fetchers read that many messages at once, so a full poll fits the
 	// poller's 30 seconds without spending the mailbox's quota in a burst.
 	fetchers = 4
@@ -143,38 +147,69 @@ func (c *client) newMessages(ctx context.Context, req connector.Request) (connec
 	}
 	self := strings.ToLower(strings.TrimSpace(profile.EmailAddress))
 
-	// after: takes seconds since the epoch; it is read to the second, and
-	// each message's own time is checked again below.
-	q := url.Values{"q": {"after:" + strconv.FormatInt(since.Unix()-1, 10) + " -in:sent"}, "maxResults": {strconv.Itoa(pageSize)}}
+	seen := map[string]bool{}
+	for _, id := range strs(req.Input, "seen") {
+		seen[id] = true
+	}
+	// Everything listed since the time, in a window halved until the
+	// listing fits, so nothing old is cut off a busy mailbox's listing.
+	var end time.Time // zero: up to now
 	var refs []msgRef
-	for len(refs) < maxNew {
-		var page struct {
-			Messages      []msgRef `json:"messages"`
-			NextPageToken string   `json:"nextPageToken"`
-		}
-		if err := c.do(ctx, req, http.MethodGet, "/messages", q, nil, &page); err != nil {
+	for {
+		var full bool
+		if refs, full, err = c.listSince(ctx, req, since, end); err != nil {
 			return connector.Response{}, err
 		}
-		refs = append(refs, page.Messages...)
-		if page.NextPageToken == "" {
+		if !full {
 			break
 		}
-		q.Set("pageToken", page.NextPageToken)
+		upTo := end
+		if upTo.IsZero() {
+			upTo = time.Now()
+		}
+		if upTo.Sub(since) < 2*time.Second {
+			// More than maxListed in a second: the oldest of them cannot be
+			// listed. Said, not silently dropped.
+			if req.Logger != nil {
+				req.Logger.Warn("gmail: more messages within a second than one listing holds; the oldest of them are not read",
+					"listed", len(refs), "since", since)
+			}
+			break
+		}
+		end = since.Add(upTo.Sub(since) / 2).Truncate(time.Second)
 	}
-	if len(refs) > maxNew {
-		refs = refs[:maxNew]
+	// Gmail lists newest first: what was read before is skipped, and of
+	// the rest the oldest maxNew are read now.
+	var unread []msgRef
+	for _, r := range refs {
+		if r.ID != "" && !seen[r.ID] {
+			unread = append(unread, r)
+		}
+	}
+	capped := len(unread) > maxNew
+	if capped {
+		unread = unread[len(unread)-maxNew:]
 	}
 
-	msgs, err := c.fetchAll(ctx, req, refs)
+	msgs, err := c.fetchAll(ctx, req, unread)
 	if err != nil {
 		return connector.Response{}, err
 	}
+	keys := make([]any, 0, len(unread))
+	for _, r := range unread {
+		keys = append(keys, r.ID)
+	}
 	var keep []fullMessage
+	var newest time.Time
 	for _, m := range msgs {
+		at, ok := m.received()
+		if ok && at.After(newest) {
+			newest = at
+		}
 		if m.ID == "" || own(m, self) {
 			continue
 		}
-		if at, ok := m.received(); !ok || at.Before(since) {
+		if !ok || at.Before(since) {
 			continue
 		}
 		keep = append(keep, m)
@@ -192,7 +227,49 @@ func (c *client) newMessages(ctx context.Context, req connector.Request) (connec
 	for _, m := range keep {
 		out = append(out, m.item())
 	}
-	return connector.Response{Output: map[string]any{"messages": out}}, nil
+	// How far every message was read, when not up to now: to the newest
+	// read when there were more than maxNew (the rest are newer), else to
+	// the window's end.
+	until := ""
+	switch {
+	case capped && !newest.IsZero():
+		until = newest.UTC().Format(time.RFC3339)
+	case capped:
+		until = since.UTC().Format(time.RFC3339)
+	case !end.IsZero():
+		until = end.UTC().Format(time.RFC3339)
+	}
+	return connector.Response{Output: map[string]any{"messages": out, "keys": keys, "until": until}}, nil
+}
+
+// listSince lists the ids of mail since a time, and before end when it
+// is set, at most maxListed; full reports that there were more.
+func (c *client) listSince(ctx context.Context, req connector.Request, since, end time.Time) ([]msgRef, bool, error) {
+	// after: and before: take seconds since the epoch; they are read to
+	// the second, and each message's own time is checked again.
+	q := "after:" + strconv.FormatInt(since.Unix()-1, 10)
+	if !end.IsZero() {
+		q += " before:" + strconv.FormatInt(end.Unix(), 10)
+	}
+	v := url.Values{"q": {q + " -in:sent"}, "maxResults": {strconv.Itoa(pageSize)}}
+	var refs []msgRef
+	for {
+		var page struct {
+			Messages      []msgRef `json:"messages"`
+			NextPageToken string   `json:"nextPageToken"`
+		}
+		if err := c.do(ctx, req, http.MethodGet, "/messages", v, nil, &page); err != nil {
+			return nil, false, err
+		}
+		refs = append(refs, page.Messages...)
+		if page.NextPageToken == "" {
+			return refs, false, nil
+		}
+		if len(refs) >= maxListed {
+			return refs, true, nil
+		}
+		v.Set("pageToken", page.NextPageToken)
+	}
 }
 
 // fetchAll reads each listed message in full, a few at a time, in the

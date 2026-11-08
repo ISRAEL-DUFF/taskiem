@@ -96,12 +96,22 @@ func (t TriggerSpec) AppDelivered() bool { return t.Delivery == "app" || t.Deliv
 // records; Items (over output) lists them; Event (over item) names each
 // one's event. Each becomes the body {event, data: item}, signed as the
 // provider signs, and is delivered through the webhook path.
+//
+// Optionally (connector/v1 rule 22), so a busy provider's records are
+// neither skipped nor read twice: Seen (an input field) is given the
+// keys the action reported lately; Keys (over output) lists the keys it
+// read this time, delivered or not; and Until (over output) is the time
+// up to which it answered everything, when it stopped short of now (a
+// cap): the next poll then starts there, on the next tick, instead of now.
 type PollSpec struct {
 	Action string `json:"action"`
 	Since  string `json:"since"`
 	Items  string `json:"items"`
 	Event  string `json:"event"`
 	Every  string `json:"every"`
+	Seen   string `json:"seen,omitempty"`
+	Keys   string `json:"keys,omitempty"`
+	Until  string `json:"until,omitempty"`
 }
 
 // Interval is how often to poll (default five minutes).

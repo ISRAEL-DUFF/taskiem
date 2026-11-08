@@ -4,8 +4,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -40,6 +42,48 @@ type fakeGmail struct {
 	pages    [][]string
 	messages map[string]map[string]any
 	gets     int
+	read     map[string]int
+}
+
+// search answers a listing as Gmail does when no pages are set: the
+// messages whose time is after: and before: the query's seconds, newest
+// first, in pages of maxResults.
+func (f *fakeGmail) search(q, max string) [][]string {
+	var after, before int64 = 0, 1 << 62
+	for _, w := range strings.Fields(q) {
+		if v, ok := strings.CutPrefix(w, "after:"); ok {
+			after, _ = strconv.ParseInt(v, 10, 64)
+		}
+		if v, ok := strings.CutPrefix(w, "before:"); ok {
+			before, _ = strconv.ParseInt(v, 10, 64)
+		}
+	}
+	type at struct {
+		id string
+		ms int64
+	}
+	var list []at
+	for id, m := range f.messages {
+		ms, _ := strconv.ParseInt(m["internalDate"].(string), 10, 64)
+		if ms/1000 > after && ms/1000 < before {
+			list = append(list, at{id, ms})
+		}
+	}
+	sort.Slice(list, func(i, j int) bool {
+		if list[i].ms != list[j].ms {
+			return list[i].ms > list[j].ms
+		}
+		return list[i].id > list[j].id
+	})
+	size, _ := strconv.Atoi(max)
+	var pages [][]string
+	for i, x := range list {
+		if i%size == 0 {
+			pages = append(pages, nil)
+		}
+		pages[len(pages)-1] = append(pages[len(pages)-1], x.id)
+	}
+	return pages
 }
 
 func newFakeGmail(t *testing.T, self string) *fakeGmail {
@@ -57,23 +101,31 @@ func newFakeGmail(t *testing.T, self string) *fakeGmail {
 			_ = json.NewEncoder(w).Encode(map[string]any{"emailAddress": self})
 		case p == "/users/me/messages":
 			f.queries = append(f.queries, r.URL.Query().Get("q"))
+			pages := f.pages
+			if pages == nil {
+				pages = f.search(r.URL.Query().Get("q"), r.URL.Query().Get("maxResults"))
+			}
 			page := 0
 			if tok := r.URL.Query().Get("pageToken"); tok != "" {
-				page = int(tok[0] - '0')
+				page, _ = strconv.Atoi(tok)
 			}
 			var refs []any
-			if page < len(f.pages) {
-				for _, id := range f.pages[page] {
+			if page < len(pages) {
+				for _, id := range pages[page] {
 					refs = append(refs, map[string]any{"id": id, "threadId": "t"})
 				}
 			}
 			out := map[string]any{"messages": refs}
-			if page+1 < len(f.pages) {
-				out["nextPageToken"] = string(rune('0' + page + 1))
+			if page+1 < len(pages) {
+				out["nextPageToken"] = strconv.Itoa(page + 1)
 			}
 			_ = json.NewEncoder(w).Encode(out)
 		case strings.HasPrefix(p, "/users/me/messages/"):
 			f.gets++
+			if f.read == nil {
+				f.read = map[string]int{}
+			}
+			f.read[strings.TrimPrefix(p, "/users/me/messages/")]++
 			m, ok := f.messages[strings.TrimPrefix(p, "/users/me/messages/")]
 			if !ok || r.URL.Query().Get("format") != "full" {
 				w.WriteHeader(http.StatusNotFound)
@@ -158,27 +210,128 @@ func TestNewMessages(t *testing.T) {
 	}
 }
 
-// A poll reads at most 200 messages, and cuts a long text.
+func newMailSeen(t *testing.T, f *fakeGmail, since time.Time, seen []string) (map[string]any, error) {
+	t.Helper()
+	ts := newTokenServer(t)
+	list := []any{}
+	for _, id := range seen {
+		list = append(list, id)
+	}
+	return execute(t, f.URL, ts.URL, f.Client(), "new_messages", nil, map[string]any{"since": since.Format(time.RFC3339), "seen": list})
+}
+
+// A poll reads at most 200 messages, the oldest, and says how far it
+// got; the next one, told what was read, reads the rest and nothing
+// twice. A long text is cut.
 func TestNewMessagesBounds(t *testing.T) {
 	since := time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC)
 	f := newFakeGmail(t, "help@adacakes.ng")
-	var page []string
-	for i := range 3 * pageSize {
-		id := "m" + itoa(int64(i))
-		page = append(page, id)
+	const total = maxNew + 50
+	for i := range total {
+		id := fmt.Sprintf("m%03d", i)
 		f.add(id, id, since.Add(time.Duration(i)*time.Second), []string{"INBOX"}, map[string]string{"From": "x@example.com"}, "text/plain", "hi")
 	}
-	f.pages = [][]string{page[:pageSize], page[pageSize : 2*pageSize], page[2*pageSize:]}
-	f.messages["m0"] = fakeMessage("m0", "m0", since, []string{"INBOX"}, map[string]string{"From": "x@example.com"}, "text/plain", strings.Repeat("é", maxLatest))
-	got, err := newMail(t, f, since)
+	f.messages["m000"] = fakeMessage("m000", "m000", since, []string{"INBOX"}, map[string]string{"From": "x@example.com"}, "text/plain", strings.Repeat("é", maxLatest))
+
+	var got []string
+	var seen []string
+	from := since
+	for poll := 0; poll < 3; poll++ {
+		out, err := newMailSeen(t, f, from, seen)
+		if err != nil {
+			t.Fatal(err)
+		}
+		msgs := out["messages"].([]any)
+		for _, m := range msgs {
+			got = append(got, m.(map[string]any)["id"].(string))
+		}
+		for _, k := range out["keys"].([]any) {
+			seen = append(seen, k.(string))
+		}
+		if poll == 0 {
+			if len(msgs) != maxNew || f.gets != maxNew {
+				t.Fatalf("first poll: %d messages, %d reads", len(msgs), f.gets)
+			}
+			if l := msgs[0].(map[string]any)["latest"].(string); msgs[0].(map[string]any)["truncated"] != true || len(l) > maxLatest || !strings.HasSuffix(l, "é") {
+				t.Errorf("long text: %d bytes, truncated %v", len(l), msgs[0].(map[string]any)["truncated"])
+			}
+			// It got to the newest it read: the next poll starts there.
+			if out["until"] != since.Add((maxNew-1)*time.Second).Format(time.RFC3339) {
+				t.Fatalf("until %v", out["until"])
+			}
+		}
+		if out["until"] == "" {
+			break
+		}
+		// The poller looks back over the overlap, which seen covers.
+		at, _ := time.Parse(time.RFC3339, out["until"].(string))
+		from = at.Add(-10 * time.Minute)
+	}
+	if len(got) != total {
+		t.Fatalf("%d messages over the polls, want %d", len(got), total)
+	}
+	for i, id := range got {
+		if id != fmt.Sprintf("m%03d", i) {
+			t.Fatalf("message %d is %s: not each once, oldest first", i, id)
+		}
+	}
+	for id, n := range f.read {
+		if n != 1 {
+			t.Errorf("%s read %d times", id, n)
+		}
+	}
+}
+
+// A poll looking back over mail it read already reads none of it again.
+func TestNewMessagesSkipsSeen(t *testing.T) {
+	since := time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC)
+	f := newFakeGmail(t, "help@adacakes.ng")
+	for i := range 5 {
+		id := fmt.Sprintf("m%d", i)
+		f.add(id, id, since.Add(time.Duration(i)*time.Minute), []string{"INBOX"}, map[string]string{"From": "x@example.com"}, "text/plain", "hi")
+	}
+	f.add("own", "own", since.Add(time.Minute), []string{"INBOX"}, map[string]string{"From": "help@adacakes.ng"}, "text/plain", "note")
+	first, err := newMailSeen(t, f, since, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != maxNew || len(f.queries) != 2 || f.gets != maxNew {
-		t.Fatalf("%d messages, %d searches, %d reads", len(got), len(f.queries), f.gets)
+	var seen []string
+	for _, k := range first["keys"].([]any) {
+		seen = append(seen, k.(string))
 	}
-	if l := got[0]["latest"].(string); got[0]["truncated"] != true || len(l) > maxLatest || !strings.HasSuffix(l, "é") {
-		t.Errorf("long text: %d bytes, truncated %v", len(l), got[0]["truncated"])
+	if len(first["messages"].([]any)) != 5 || len(seen) != 6 || first["until"] != "" {
+		t.Fatalf("first poll: %v", first)
+	}
+	f.add("m5", "m5", since.Add(6*time.Minute), []string{"INBOX"}, map[string]string{"From": "x@example.com"}, "text/plain", "new")
+	reads := f.gets
+	second, err := newMailSeen(t, f, since, seen)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if msgs := second["messages"].([]any); len(msgs) != 1 || msgs[0].(map[string]any)["id"] != "m5" || f.gets-reads != 1 || f.read["m0"] != 1 || f.read["own"] != 1 {
+		t.Fatalf("the overlapping poll read %d messages again: %v (reads %v)", f.gets-reads, msgs, f.read)
+	}
+}
+
+// A listing too long for one call is narrowed until it fits, so the
+// oldest messages are still read first.
+func TestNewMessagesNarrowsABusyWindow(t *testing.T) {
+	since := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
+	f := newFakeGmail(t, "help@adacakes.ng")
+	for i := range maxListed + 100 {
+		id := fmt.Sprintf("m%04d", i)
+		f.add(id, id, since.Add(time.Duration(i)*time.Second), []string{"INBOX"}, map[string]string{"From": "x@example.com"}, "text/plain", "hi")
+	}
+	out, err := newMailSeen(t, f, since, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	msgs := out["messages"].([]any)
+	if len(msgs) != maxNew || msgs[0].(map[string]any)["id"] != "m0000" || msgs[maxNew-1].(map[string]any)["id"] != fmt.Sprintf("m%04d", maxNew-1) {
+		t.Fatalf("%d messages, from %v", len(msgs), msgs[0])
+	}
+	if !strings.Contains(f.queries[len(f.queries)-1], " before:") {
+		t.Errorf("searches %q", f.queries)
 	}
 }
 
