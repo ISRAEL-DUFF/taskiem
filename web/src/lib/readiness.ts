@@ -11,7 +11,8 @@ export interface ReadyNeed {
     | "table"
     | "role"
     | "field"
-    | "setup";
+    | "setup"
+    | "setting";
   /** "" for a connection a step does not name. */
   name: string;
   connector?: string;
@@ -26,7 +27,8 @@ export interface ReadyNeed {
     | "chat_id"
     | "cannot"
     | "support"
-    | "setup";
+    | "setup"
+    | "off";
   environment: string;
   steps: { id: string; name: string }[];
   /** Publishing waits for it: a run would fail at once. */
@@ -68,7 +70,9 @@ export type Fix =
   | { kind: "ask_phone"; field: string }
   | { kind: "ask_support"; service: string }
   /** Something to do outside Taskiem (a provider's dashboard): the message says what. */
-  | { kind: "outside"; service: string };
+  | { kind: "outside"; service: string }
+  /** A switch the owner turns on in Settings (Voice in workflows). */
+  | { kind: "turn_on"; setting: string };
 
 /** The connection name a new connection takes for a need. */
 export const DEFAULT_CONNECTION = "main";
@@ -118,6 +122,8 @@ export function fixFor(n: ReadyNeed): Fix {
       return { kind: "ask_phone", field: n.name };
     case "setup":
       return { kind: "outside", service: n.service ?? n.connector ?? "" };
+    case "setting":
+      return { kind: "turn_on", setting: n.name };
   }
 }
 

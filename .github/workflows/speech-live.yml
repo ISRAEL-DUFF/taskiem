@@ -1,0 +1,54 @@
+name: speech-live
+
+# The speech service against the real provider (decision 0062 D5, plan V3
+# T4, docs/speech.md): nightly and on demand, with TASKIEM_SPEECH_LIVE_KEY
+# (an OpenAI-compatible key under the account chosen with its data-processing
+# terms) as a repository secret. It speaks a sentence as Ogg/Opus, checks it
+# really is Opus (no transcoder needed, plan F7), and hears it back from that
+# Ogg/Opus, the format WhatsApp and Telegram send voice notes in. Without the
+# secret nothing is checked: the nightly run says so in a warning, and a run
+# started by hand fails.
+
+on:
+  schedule:
+    - cron: "43 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: speech-live
+  cancel-in-progress: false
+
+jobs:
+  real-provider:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TASKIEM_SPEECH_LIVE_KEY: ${{ secrets.TASKIEM_SPEECH_LIVE_KEY }}
+      TASKIEM_SPEECH_LIVE_URL: ${{ vars.TASKIEM_SPEECH_LIVE_URL }}
+      TASKIEM_SPEECH_LIVE_MODEL: ${{ vars.TASKIEM_SPEECH_LIVE_MODEL }}
+      TASKIEM_TRANSCRIBE_LIVE_MODEL: ${{ vars.TASKIEM_TRANSCRIBE_LIVE_MODEL }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+      - name: Is the key configured?
+        id: key
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ -n "$TASKIEM_SPEECH_LIVE_KEY" ]; then echo "present=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          echo "present=false" >> "$GITHUB_OUTPUT"
+          msg="TASKIEM_SPEECH_LIVE_KEY is not configured as a repository secret, so the speech service was not checked against the real provider (needs-people VP1)."
+          { echo "## Live speech check not run"; echo; echo "$msg"; } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$EVENT" = workflow_dispatch ]; then
+            echo "::error title=Live speech check not run::$msg"
+            exit 1
+          fi
+          echo "::warning title=Live speech check not run::$msg"
+      - name: Speak and hear back Ogg/Opus
+        if: steps.key.outputs.present == 'true'
+        run: go test ./engine/voice/ -run TestLiveSpeechRoundTrip -count=1 -v

@@ -122,7 +122,7 @@ func limitsMap(l runtime.Limits) map[string]any {
 		"max_running_runs": l.MaxRunningRuns, "max_queued_runs": l.MaxQueuedRuns, "runs_per_day": l.RunsPerDay, "runs_per_month": l.RunsPerMonth,
 		"max_workflows": l.MaxWorkflows, "max_steps_per_run": l.MaxStepsPerRun, "worker_concurrency": l.WorkerConcurrency,
 		"max_payload_bytes": l.MaxPayloadBytes, "max_secrets": l.MaxSecrets, "max_connections": l.MaxConnections,
-		"ai_monthly_tokens": l.AIMonthlyTokens, "whatsapp_templates_monthly": l.WhatsAppTemplatesMonthly,
+		"ai_monthly_tokens": l.AIMonthlyTokens, "whatsapp_templates_monthly": l.WhatsAppTemplatesMonthly, "speech_seconds_monthly": l.SpeechSecondsMonthly,
 		"container_minutes_monthly": l.ContainerMinutesMonthly, "container_concurrency": l.ContainerConcurrency,
 		"max_data_tables": l.MaxDataTables, "max_data_table_columns": l.MaxDataTableColumns,
 		"storefront_items": l.StorefrontItems, "storefront_orders_monthly": l.StorefrontOrdersMonthly,

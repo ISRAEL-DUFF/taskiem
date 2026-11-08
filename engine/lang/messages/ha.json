@@ -464,6 +464,18 @@
       "text": "Yi haƙuri, ba zan iya sauraron saƙon murya yanzu ba. Don Allah a rubuta saƙon, zan amsa.",
       "reviewed": false
     },
+    "ready.speech_hear": {
+      "text": "This Taskiem cannot hear voice notes yet, and this workflow listens to them. Ask whoever runs your Taskiem to set up hearing voice notes.",
+      "reviewed": false
+    },
+    "ready.speech_speak": {
+      "text": "This Taskiem cannot answer by voice yet, and this workflow speaks its replies. Ask whoever runs your Taskiem to set up spoken replies.",
+      "reviewed": false
+    },
+    "ready.voice_in_workflows": {
+      "text": "Voice in workflows is off, so this workflow cannot hear voice notes or answer by voice. Turn it on in Settings.",
+      "reviewed": false
+    },
     "ready.file_scanner": {
       "text": "This Taskiem cannot check files customers send for viruses yet, so it refuses them, and this workflow fetches them. Ask whoever runs your Taskiem to turn file checking on.",
       "reviewed": false

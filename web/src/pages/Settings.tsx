@@ -46,6 +46,63 @@ function AdvancedSwitch() {
   );
 }
 
+interface LanguagesView {
+  languages: string[];
+  default_language: string;
+  voice_notes: boolean;
+  voice_in_workflows: boolean;
+  speech_hear: boolean;
+  speech_speak: boolean;
+  voices: string[];
+}
+
+/** Voice in workflows: the owner's switch for workflows that hear customers' voice notes and answer by voice (speech, decision 0062 T7). */
+function VoiceSwitch() {
+  const { data, error, reload } = useLoad(() => get<LanguagesView>("/v1/languages"), []);
+  const act = useAction();
+  if (!data) return error ? <ErrorBox error={error} /> : null;
+  const can = data.speech_hear || data.speech_speak;
+  const what = data.speech_hear && data.speech_speak
+    ? "hear voice notes and answer by voice"
+    : data.speech_hear
+      ? "hear voice notes (answering by voice is not set up yet)"
+      : "answer by voice (hearing voice notes is not set up yet)";
+  return (
+    <section className="card" id="voice">
+      <h2 style={{ marginTop: 0 }}>Voice in workflows</h2>
+      <label>
+        <input
+          type="checkbox"
+          checked={data.voice_in_workflows}
+          disabled={act.busy || (!can && !data.voice_in_workflows)}
+          data-testid="voice-in-workflows"
+          onChange={(e) =>
+            void act.run(
+              async () => (
+                await put("/v1/languages", {
+                  languages: data.languages,
+                  default_language: data.default_language,
+                  voice_notes: data.voice_notes,
+                  voice_in_workflows: e.target.checked,
+                }),
+                reload()
+              ),
+              "Saved",
+            )
+          }
+        />{" "}
+        Let workflows {can ? what : "hear voice notes and answer by voice"}
+      </label>
+      <p className="hint">
+        {can
+          ? "Your customers' voice notes are turned into text and your replies spoken back. Each second heard or spoken counts against your plan's monthly voice allowance."
+          : "Not available yet: whoever runs your Taskiem has not set up a speech service."}
+      </p>
+      <ErrorBox error={act.error} />
+    </section>
+  );
+}
+
 export function Settings() {
   const { can, me } = useAuth();
   const advanced = useAdvanced();
@@ -59,6 +116,7 @@ export function Settings() {
       />
       {can("member.manage") && <AdvancedSwitch />}
       {me?.roles.includes("owner") && <SchoolsSwitch />}
+      {can("secret.manage") && <VoiceSwitch />}
       {advanced && <Environments editable={can("secret.manage")} />}
       {can("secret.manage") && <Secrets env={env} />}
       <Variables env={env} editable={can("secret.manage")} />

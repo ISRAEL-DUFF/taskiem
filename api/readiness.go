@@ -141,6 +141,7 @@ func (s *Server) readinessWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 	vars, secs := map[string][]*wd.Step{}, map[string][]*wd.Step{}
 	var tables, roles []use
 	var caps []*wd.Step // capability steps: their connection is any rail that can
+	var speechSteps []*wd.Step
 	var policies []use
 	readExprs := func(st *wd.Step, v any) {
 		walkExpressions(v, func(src string) {
@@ -186,6 +187,9 @@ func (s *Server) readinessWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 		}
 		if st.Connector == "" {
 			return
+		}
+		if strings.HasPrefix(st.Connector, "speech@") {
+			speechSteps = append(speechSteps, st)
 		}
 		c, ok := reg.Get(st.Connector)
 		if !ok || c.Manifest.Auth.Type == "" || c.Manifest.Auth.Type == "none" {
@@ -293,6 +297,9 @@ func (s *Server) readinessWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 						Message: tr(l, "ready.file_scanner")}, c.step)
 				}
 			}
+		}
+		if err := s.speechNeeds(ctx, tx, tenant, env, l, speechSteps, add); err != nil {
+			return nil, err
 		}
 		if d.Trigger.Type == "connector_event" {
 			// Meta sends WhatsApp messages only to a callback URL set by
@@ -819,4 +826,47 @@ func railsFor(reg connector.Lookup, uses string) []string {
 	}
 	slices.Sort(out)
 	return out
+}
+
+// speechNeeds: a workflow that hears or speaks (speech@1, docs/speech.md)
+// needs the service on this Taskiem and the owner's "Voice in workflows"
+// switch on; without either every such step fails at once.
+func (s *Server) speechNeeds(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env string, l lang.Tag, steps []*wd.Step, add func(readyKey, readyNeed, *wd.Step)) error {
+	if len(steps) == 0 {
+		return nil
+	}
+	uses := false
+	for _, st := range steps {
+		switch st.Action {
+		case "transcribe":
+			uses = true
+			if !s.Speech.CanHear() {
+				add(readyKey{"setup", "speech_hear", "taskiem", env}, readyNeed{Service: "Taskiem", Problem: "setup", Blocking: true,
+					Message: tr(l, "ready.speech_hear")}, st)
+			}
+		case "speak":
+			uses = true
+			if !s.Speech.CanSpeak() {
+				add(readyKey{"setup", "speech_speak", "taskiem", env}, readyNeed{Service: "Taskiem", Problem: "setup", Blocking: true,
+					Message: tr(l, "ready.speech_speak")}, st)
+			}
+		}
+	}
+	if !uses {
+		return nil // cannot_hear needs neither
+	}
+	on := false
+	err := tx.QueryRow(ctx, `SELECT workflow_voice FROM tenant_channel_settings WHERE tenant_id = $1`, tenant).Scan(&on)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	if !on {
+		for _, st := range steps {
+			if st.Action == "transcribe" || st.Action == "speak" {
+				add(readyKey{"setting", "voice_in_workflows", "", env}, readyNeed{Service: "Taskiem", Problem: "off", Blocking: true,
+					Message: tr(l, "ready.voice_in_workflows")}, st)
+			}
+		}
+	}
+	return nil
 }

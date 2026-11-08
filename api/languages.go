@@ -53,7 +53,10 @@ type tenantChannel struct {
 	Languages []lang.Tag
 	Default   lang.Tag
 	Voice     bool
-	at        time.Time
+	// WorkflowVoice is the owner's "Voice in workflows" switch
+	// (speech@1, docs/speech.md), separate from Voice.
+	WorkflowVoice bool
+	at            time.Time
 }
 
 const tenantChannelTTL = 30 * time.Second
@@ -81,7 +84,7 @@ func (s *Server) tenantChannel(ctx context.Context, tenant uuid.UUID) (tenantCha
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		var langs []string
 		var def string
-		err := tx.QueryRow(ctx, `SELECT languages, default_language, voice_notes FROM tenant_channel_settings WHERE tenant_id = $1`, tenant).Scan(&langs, &def, &tc.Voice)
+		err := tx.QueryRow(ctx, `SELECT languages, default_language, voice_notes, workflow_voice FROM tenant_channel_settings WHERE tenant_id = $1`, tenant).Scan(&langs, &def, &tc.Voice, &tc.WorkflowVoice)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}
@@ -292,11 +295,22 @@ type languagesView struct {
 	VoiceNotes      bool            `json:"voice_notes"`
 	VoiceAvailable  bool            `json:"voice_available"`
 	Catalogues      []lang.Progress `json:"catalogues"`
+	// VoiceInWorkflows is the owner's switch for speech@1; SpeechHear and
+	// SpeechSpeak say what this Taskiem can do, and Voices which voices
+	// it offers (the first the default).
+	VoiceInWorkflows bool     `json:"voice_in_workflows"`
+	SpeechHear       bool     `json:"speech_hear"`
+	SpeechSpeak      bool     `json:"speech_speak"`
+	Voices           []string `json:"voices"`
 }
 
 func (s *Server) languagesView(tc tenantChannel) languagesView {
 	v := languagesView{Operator: s.operatorLangs(), Languages: tc.Languages, On: s.langsOn(tc), DefaultLanguage: tc.Default,
-		VoiceNotes: tc.Voice, VoiceAvailable: s.Voice != nil && s.Voice.Provider != nil, Catalogues: lang.Default().Progress()}
+		VoiceNotes: tc.Voice, VoiceAvailable: s.Voice != nil && s.Voice.Provider != nil, Catalogues: lang.Default().Progress(),
+		VoiceInWorkflows: tc.WorkflowVoice, SpeechHear: s.Speech.CanHear(), SpeechSpeak: s.Speech.CanSpeak(), Voices: []string{}}
+	if s.Speech.CanSpeak() {
+		v.Voices = s.Speech.VoiceList()
+	}
 	if v.Languages == nil {
 		v.Languages = []lang.Tag{}
 	}
@@ -323,12 +337,28 @@ func (s *Server) putLanguages(w http.ResponseWriter, r *http.Request) {
 		Languages       []string `json:"languages"`
 		DefaultLanguage string   `json:"default_language"`
 		VoiceNotes      bool     `json:"voice_notes"`
+		// VoiceInWorkflows, when given, turns speech@1 on or off; left
+		// out, it stays as it is.
+		VoiceInWorkflows *bool `json:"voice_in_workflows"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	tc := tenantChannel{Default: lang.EN, Voice: req.VoiceNotes, Languages: []lang.Tag{}}
+	s.chanSettings.Delete(p.TenantID)
+	was, err := s.tenantChannel(r.Context(), p.TenantID)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	tc := tenantChannel{Default: lang.EN, Voice: req.VoiceNotes, Languages: []lang.Tag{}, WorkflowVoice: was.WorkflowVoice}
+	if req.VoiceInWorkflows != nil {
+		tc.WorkflowVoice = *req.VoiceInWorkflows
+	}
+	if tc.WorkflowVoice && !was.WorkflowVoice && !s.Speech.CanHear() && !s.Speech.CanSpeak() {
+		writeErr(w, http.StatusConflict, "voice in workflows needs a speech service set up on this Taskiem (TASKIEM_TRANSCRIBE_PROVIDER or TASKIEM_SPEECH_PROVIDER)")
+		return
+	}
 	for _, l := range req.Languages {
 		t := lang.Tag(strings.ToLower(strings.TrimSpace(l)))
 		if t == lang.EN {
@@ -357,15 +387,16 @@ func (s *Server) putLanguages(w http.ResponseWriter, r *http.Request) {
 	for i, t := range tc.Languages {
 		langs[i] = string(t)
 	}
-	err := s.tx(r, func(tx pgx.Tx) error {
-		_, err := tx.Exec(r.Context(), `INSERT INTO tenant_channel_settings (tenant_id, languages, default_language, voice_notes, updated_by)
-			VALUES ($1, $2, $3, $4, $5) ON CONFLICT (tenant_id) DO UPDATE SET languages = EXCLUDED.languages,
-			default_language = EXCLUDED.default_language, voice_notes = EXCLUDED.voice_notes, updated_by = EXCLUDED.updated_by, updated_at = now()`,
-			p.TenantID, langs, string(tc.Default), tc.Voice, p.Actor())
+	err = s.tx(r, func(tx pgx.Tx) error {
+		_, err := tx.Exec(r.Context(), `INSERT INTO tenant_channel_settings (tenant_id, languages, default_language, voice_notes, workflow_voice, updated_by)
+			VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (tenant_id) DO UPDATE SET languages = EXCLUDED.languages,
+			default_language = EXCLUDED.default_language, voice_notes = EXCLUDED.voice_notes, workflow_voice = EXCLUDED.workflow_voice,
+			updated_by = EXCLUDED.updated_by, updated_at = now()`,
+			p.TenantID, langs, string(tc.Default), tc.Voice, tc.WorkflowVoice, p.Actor())
 		if err != nil {
 			return err
 		}
-		return auditTx(r, tx, "channel.languages.update", p.TenantID.String(), map[string]any{"languages": langs, "default_language": tc.Default, "voice_notes": tc.Voice})
+		return auditTx(r, tx, "channel.languages.update", p.TenantID.String(), map[string]any{"languages": langs, "default_language": tc.Default, "voice_notes": tc.Voice, "voice_in_workflows": tc.WorkflowVoice})
 	})
 	if err != nil {
 		s.fail(w, r, err)

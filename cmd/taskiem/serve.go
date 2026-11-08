@@ -29,13 +29,13 @@ import (
 	"github.com/israel-duff/taskiem/connectors/builtin"
 	emailconn "github.com/israel-duff/taskiem/connectors/email"
 	filesconn "github.com/israel-duff/taskiem/connectors/files"
-	speechconn "github.com/israel-duff/taskiem/connectors/speech"
 	formconn "github.com/israel-duff/taskiem/connectors/form"
 	invconn "github.com/israel-duff/taskiem/connectors/invoices"
 	linkconn "github.com/israel-duff/taskiem/connectors/link"
 	"github.com/israel-duff/taskiem/connectors/notify"
 	ridersconn "github.com/israel-duff/taskiem/connectors/riders"
 	schconn "github.com/israel-duff/taskiem/connectors/schools"
+	speechconn "github.com/israel-duff/taskiem/connectors/speech"
 	stockconn "github.com/israel-duff/taskiem/connectors/stock"
 	sfconn "github.com/israel-duff/taskiem/connectors/storefront"
 	"github.com/israel-duff/taskiem/engine/ai"
@@ -67,12 +67,12 @@ import (
 	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/riders"
 	"github.com/israel-duff/taskiem/engine/runfiles"
-	"github.com/israel-duff/taskiem/engine/speech"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/sandbox"
 	"github.com/israel-duff/taskiem/engine/schools"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/sender"
+	"github.com/israel-duff/taskiem/engine/speech"
 	"github.com/israel-duff/taskiem/engine/status"
 	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
@@ -1103,6 +1103,7 @@ func edgeServer(e *engine, cfg config, log *slog.Logger) (*api.Server, error) {
 	if srv.Languages, srv.Voice, err = channelLanguages(cfg.Languages, cfg.AI, log); err != nil {
 		return nil, err
 	}
+	srv.Speech = e.speech
 	return srv, nil
 }
 
@@ -1252,6 +1253,7 @@ func serve(ctx context.Context, args []string) error {
 		if srv.Languages, srv.Voice, err = channelLanguages(cfg.Languages, cfg.AI, log); err != nil {
 			return err
 		}
+		srv.Speech = e.speech
 		srv.Billing = bill
 		srv.Tables = e.tables()
 		srv.PublicHosts = cfg.Public.Domains

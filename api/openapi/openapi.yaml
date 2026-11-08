@@ -24927,7 +24927,7 @@ components:
       properties:
         kind:
           type: string
-          enum: [connection, variable, secret, table, role, field, setup]
+          enum: [connection, variable, secret, table, role, field, setup, setting]
         name:
           type: string
           description: The connection's, variable's, secret's, table's or role's name; empty for a connection a step does not name.
@@ -24939,7 +24939,7 @@ components:
           description: The connector's display name.
         problem:
           type: string
-          enum: [missing, expired, disabled, ambiguous, nobody, chat_id, cannot, support, setup]
+          enum: [missing, expired, disabled, ambiguous, nobody, chat_id, cannot, support, setup, "off"]
           description: "cannot, for a capability step whose connection's rail cannot do it; support, for a connection whose service must turn a feature on for the business (Paystack's Pay with Transfer), never blocking."
         capability:
           type: string
@@ -25695,6 +25695,10 @@ components:
       - voice_notes
       - voice_available
       - catalogues
+      - voice_in_workflows
+      - speech_hear
+      - speech_speak
+      - voices
       properties:
         operator:
           type:
@@ -25730,6 +25734,22 @@ components:
           - 'null'
           items:
             $ref: '#/components/schemas/CatalogueProgress'
+        voice_in_workflows:
+          type: boolean
+          description: The owner's "Voice in workflows" switch for speech@1 (docs/speech.md), separate from voice_notes.
+        speech_hear:
+          type: boolean
+          description: This Taskiem can hear voice notes for workflows (a transcription service is set up).
+        speech_speak:
+          type: boolean
+          description: This Taskiem can speak replies (a speech service is set up).
+        voices:
+          type:
+          - array
+          - 'null'
+          items:
+            type: string
+          description: The voices speech@1 speak offers, the first the default.
       additionalProperties: false
     LanguagesUpdate:
       type: object
@@ -25748,6 +25768,9 @@ components:
           description: '`en` or a language that is on.'
         voice_notes:
           type: boolean
+        voice_in_workflows:
+          type: boolean
+          description: Turns speech@1 on or off; left out, it stays as it is. Turning it on needs a speech service on this Taskiem (409 otherwise).
     Transcript:
       type: object
       required:
@@ -32926,6 +32949,9 @@ components:
           type: integer
         whatsapp_templates_monthly:
           type: integer
+        speech_seconds_monthly:
+          type: integer
+          description: Seconds of speech workflows may hear and speak per UTC month (0 means no limit).
         container_minutes_monthly:
           type: integer
         container_concurrency:

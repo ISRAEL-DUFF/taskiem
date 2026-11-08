@@ -73,10 +73,10 @@ func TestErrorsAreSorted(t *testing.T) {
 	ref, _ := fs.Put(context.Background(), "voice.ogg", voice.TestOgg(1, 8), true)
 	for err, want := range map[error]error{
 		fmt.Errorf("%w: 503", speech.ErrService): effects.ErrRetryable,
-		speech.ErrOff:           effects.ErrFatal,
-		speech.ErrOverAllowance: effects.ErrFatal,
-		speech.ErrUnavailable:   effects.ErrFatal,
-		speech.ErrRefused:       effects.ErrFatal,
+		speech.ErrOff:                            effects.ErrFatal,
+		speech.ErrOverAllowance:                  effects.ErrFatal,
+		speech.ErrUnavailable:                    effects.ErrFatal,
+		speech.ErrRefused:                        effects.ErrFatal,
 	} {
 		ops := &fakeOps{err: err}
 		if _, got := call(New(ops), "transcribe", map[string]any{"file": ref}, fs); !errors.Is(got, want) || !errors.Is(got, err) {

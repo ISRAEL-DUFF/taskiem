@@ -148,6 +148,14 @@ function NeedItem({
           This is done in {fix.service}'s own settings, not here.
         </p>
       )}
+      {fix.kind === "turn_on" &&
+        (can("secret.manage") ? (
+          <p className="hint">
+            Turn it on in <Link to="/settings#voice">Settings</Link>.
+          </p>
+        ) : (
+          <AskOwner />
+        ))}
       {fix.kind === "ask_support" && (
         <p className="hint">
           Nothing to set up here: once {fix.service} has turned it on and a

@@ -48,6 +48,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/runfiles"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
+	"github.com/israel-duff/taskiem/engine/speech"
 	"github.com/israel-duff/taskiem/engine/sender"
 	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
@@ -242,6 +243,9 @@ type Server struct {
 	// Voice transcribes WhatsApp voice notes (a beta; whatsapp_voice.go);
 	// nil: people are asked to type.
 	Voice *VoiceSettings
+	// Speech hears and speaks for workflows (speech@1, docs/speech.md):
+	// the owner's switch and readiness ask it what this Taskiem can do.
+	Speech *speech.Service
 	// Billing is plans, subscriptions and payments (billing.go); nil or
 	// not enabled is billing off: the internal plan, every feature.
 	Billing *billing.Service

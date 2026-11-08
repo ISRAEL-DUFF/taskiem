@@ -579,6 +579,21 @@
       "reviewed": true,
       "context": "Speech in workflows: the speech service is down or this month's allowance is used up; sent to the customer"
     },
+    "ready.speech_hear": {
+      "text": "This Taskiem cannot hear voice notes yet, and this workflow listens to them. Ask whoever runs your Taskiem to set up hearing voice notes.",
+      "reviewed": true,
+      "context": "Readiness: a workflow hears customers' voice notes (speech@1 transcribe) and the deployment has no transcription service"
+    },
+    "ready.speech_speak": {
+      "text": "This Taskiem cannot answer by voice yet, and this workflow speaks its replies. Ask whoever runs your Taskiem to set up spoken replies.",
+      "reviewed": true,
+      "context": "Readiness: a workflow speaks replies (speech@1 speak) and the deployment has no speech service"
+    },
+    "ready.voice_in_workflows": {
+      "text": "Voice in workflows is off, so this workflow cannot hear voice notes or answer by voice. Turn it on in Settings.",
+      "reviewed": true,
+      "context": "Readiness: a workflow hears or speaks and the owner's Voice in workflows switch is off"
+    },
     "ready.file_scanner": {
       "text": "This Taskiem cannot check files customers send for viruses yet, so it refuses them, and this workflow fetches them. Ask whoever runs your Taskiem to turn file checking on.",
       "reviewed": true,

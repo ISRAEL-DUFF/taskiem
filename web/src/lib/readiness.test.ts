@@ -176,3 +176,20 @@ describe("a step to take outside Taskiem", () => {
     ).toEqual({ kind: "outside", service: "WhatsApp" });
   });
 });
+
+describe("a switch the owner turns on", () => {
+  it("points to Settings", () => {
+    expect(
+      fixFor({
+        kind: "setting",
+        name: "voice_in_workflows",
+        service: "Taskiem",
+        environment: "prod",
+        problem: "off",
+        blocking: true,
+        message: "Voice in workflows is off",
+        steps: [],
+      }),
+    ).toEqual({ kind: "turn_on", setting: "voice_in_workflows" });
+  });
+});

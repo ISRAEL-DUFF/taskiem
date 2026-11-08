@@ -55,46 +55,8 @@ func TestWhatsAppVoiceRoundTrip(t *testing.T) {
 
 	heard := mediatest.OggOpus(2 * time.Second)
 	spoken := mediatest.OggOpus(3 * time.Second)
-	var mu sync.Mutex
-	var uploaded []byte
-	var sent []map[string]any
-	var srv *httptest.Server
-	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "Bearer EAAtest" {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-		mu.Lock()
-		defer mu.Unlock()
-		switch {
-		case r.Method == "GET" && r.URL.Path == "/media-7" && r.URL.Query().Get("phone_number_id") == "106540352242922":
-			_ = json.NewEncoder(w).Encode(map[string]any{"url": srv.URL + "/download/media-7", "mime_type": "audio/ogg; codecs=opus", "file_size": len(heard), "id": "media-7"})
-		case r.Method == "GET" && r.URL.Path == "/download/media-7":
-			_, _ = w.Write(heard)
-		case r.Method == "POST" && r.URL.Path == "/106540352242922/media":
-			f, _, err := r.FormFile("file")
-			if err != nil {
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-			uploaded, _ = io.ReadAll(f)
-			_ = json.NewEncoder(w).Encode(map[string]any{"id": "uploaded-1"})
-		case r.Method == "POST" && r.URL.Path == "/106540352242922/messages":
-			var b map[string]any
-			_ = json.NewDecoder(r.Body).Decode(&b)
-			sent = append(sent, b)
-			_ = json.NewEncoder(w).Encode(map[string]any{"messaging_product": "whatsapp", "contacts": []any{map[string]any{"input": b["to"], "wa_id": b["to"]}}, "messages": []any{map[string]any{"id": "wamid.reply"}}})
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
-	}))
-	defer srv.Close()
-
-	wa := whatsapp.New(whatsapp.Options{BaseURL: srv.URL})
-	wa.Manifest.Egress = append(wa.Manifest.Egress, "127.0.0.1")
-	if err := e.Registry.Register(wa); err != nil {
-		t.Fatal(err)
-	}
+	meta := newMetaFake(t, heard)
+	registerWhatsApp(t, e, meta)
 	speech := &connector.Connector{Manifest: connector.MustParse([]byte(speechManifest)), Actions: map[string]connector.Action{
 		"transcribe": connector.ActionFunc(func(ctx context.Context, req connector.Request) (connector.Response, error) {
 			b, ref, err := req.Files.Read(ctx, req.Input["file"])
@@ -114,10 +76,6 @@ func TestWhatsAppVoiceRoundTrip(t *testing.T) {
 	if err := e.Registry.Register(speech); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.Vault.CreateConnection(ctx, e.Tenant, "prod", "whatsapp", "main", "api_key",
-		map[string]string{"access_token": "EAAtest", "phone_number_id": "106540352242922", "app_secret": "app-secret-1", "verify_token": "vt-1"}, "admin"); err != nil {
-		t.Fatal(err)
-	}
 
 	wf := e.Publish(t, wfDoc(`{"id":"fetch","type":"connector","connector":"whatsapp@1","action":"get_media","input":{"media_id":"=trigger.media_id","sender":"=trigger.from"}},
 		{"id":"hear","type":"connector","connector":"speech@1","action":"transcribe","needs":["fetch"],"input":{"file":"=steps.fetch.output.file"}},
@@ -133,17 +91,17 @@ func TestWhatsAppVoiceRoundTrip(t *testing.T) {
 		t.Fatalf("status %s: %s", st, types(events(t, e, ref)))
 	}
 
-	mu.Lock()
-	defer mu.Unlock()
-	if string(uploaded) != string(spoken) {
-		t.Fatalf("Meta got %d bytes, not the spoken reply", len(uploaded))
+	meta.mu.Lock()
+	defer meta.mu.Unlock()
+	if string(meta.uploaded) != string(spoken) {
+		t.Fatalf("Meta got %d bytes, not the spoken reply", len(meta.uploaded))
 	}
-	if len(sent) != 1 {
-		t.Fatalf("%d messages sent, want one", len(sent))
+	if len(meta.sent) != 1 {
+		t.Fatalf("%d messages sent, want one", len(meta.sent))
 	}
-	audio, _ := sent[0]["audio"].(map[string]any)
-	if sent[0]["to"] != "2348031234567" || audio["id"] != "uploaded-1" || audio["voice"] != true {
-		t.Fatalf("sent %v", sent[0])
+	audio, _ := meta.sent[0]["audio"].(map[string]any)
+	if meta.sent[0]["to"] != "2348031234567" || audio["id"] != "uploaded-1" || audio["voice"] != true {
+		t.Fatalf("sent %v", meta.sent[0])
 	}
 	// Both files kept; only the customer's scanned and tied to them.
 	if store.Count() != 2 || store.Scanned() != 1 {
@@ -166,5 +124,64 @@ func TestWhatsAppVoiceRoundTrip(t *testing.T) {
 	}
 	if strings.Contains(history, "OpusHead") || strings.Contains(history, "OggS") {
 		t.Fatal("audio reached the run's history")
+	}
+}
+
+// metaFake is a fake Graph API for one inbound voice note (media-7) and
+// the uploads and sends that answer it.
+type metaFake struct {
+	srv      *httptest.Server
+	mu       sync.Mutex
+	uploaded []byte
+	sent     []map[string]any
+}
+
+func newMetaFake(t *testing.T, heard []byte) *metaFake {
+	f := &metaFake{}
+	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer EAAtest" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/media-7" && r.URL.Query().Get("phone_number_id") == "106540352242922":
+			_ = json.NewEncoder(w).Encode(map[string]any{"url": f.srv.URL + "/download/media-7", "mime_type": "audio/ogg; codecs=opus", "file_size": len(heard), "id": "media-7"})
+		case r.Method == "GET" && r.URL.Path == "/download/media-7":
+			_, _ = w.Write(heard)
+		case r.Method == "POST" && r.URL.Path == "/106540352242922/media":
+			file, _, err := r.FormFile("file")
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			f.uploaded, _ = io.ReadAll(file)
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "uploaded-1"})
+		case r.Method == "POST" && r.URL.Path == "/106540352242922/messages":
+			var b map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&b)
+			f.sent = append(f.sent, b)
+			_ = json.NewEncoder(w).Encode(map[string]any{"messaging_product": "whatsapp", "contacts": []any{map[string]any{"input": b["to"], "wa_id": b["to"]}}, "messages": []any{map[string]any{"id": "wamid.reply"}}})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(f.srv.Close)
+	return f
+}
+
+// registerWhatsApp registers whatsapp@1 against the fake, with a
+// connection.
+func registerWhatsApp(t *testing.T, e *rt.Env, f *metaFake) {
+	t.Helper()
+	wa := whatsapp.New(whatsapp.Options{BaseURL: f.srv.URL})
+	wa.Manifest.Egress = append(wa.Manifest.Egress, "127.0.0.1")
+	if err := e.Registry.Register(wa); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Vault.CreateConnection(ctx, e.Tenant, "prod", "whatsapp", "main", "api_key",
+		map[string]string{"access_token": "EAAtest", "phone_number_id": "106540352242922", "app_secret": "app-secret-1", "verify_token": "vt-1"}, "admin"); err != nil {
+		t.Fatal(err)
 	}
 }

@@ -240,7 +240,7 @@ func DefaultLimits() Limits {
 		MaxPayloadBytes:   1 << 20,
 		AIMonthlyTokens:   DefaultAIMonthlyTokens,
 
-		SpeechSecondsMonthly:     DefaultSpeechSecondsMonthly,
+		SpeechSecondsMonthly: DefaultSpeechSecondsMonthly,
 
 		WhatsAppTemplatesMonthly: DefaultWhatsAppTemplatesMonthly,
 		ContainerConcurrency:     DefaultContainerConcurrency,
