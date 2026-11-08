@@ -275,3 +275,29 @@ func TestBodyClips(t *testing.T) {
 		t.Errorf("clip = %q", s)
 	}
 }
+
+// Parse keeps the first <id> of a Message-ID header that send_in_thread
+// can write back, or nothing.
+func TestParseMessageID(t *testing.T) {
+	long := "<" + strings.Repeat("a", 260) + "@x.example>"
+	for header, want := range map[string]string{
+		"<a1@x.example>":                    "a1@x.example",
+		"<a1@x.example> (sent by Mailer 2)": "a1@x.example",
+		"(comment) <a1@x.example>":          "a1@x.example",
+		"a1@x.example":                      "a1@x.example",
+		`<"john doe"@x.example>`:            "",
+		`<"quoted"@x.example>`:              "",
+		long:                                "",
+		"<no-at-sign>":                      "",
+		"":                                  "",
+		"<a1@x.example> <second@x.example>": "a1@x.example",
+	} {
+		m, err := Parse(crlf("From: a@x.example\nTo: b@y.example\nSubject: Hi\nMessage-ID: " + header + "\n\nHello.\n"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if m.MessageID != want {
+			t.Errorf("Message-ID: %s: kept %q, want %q", header, m.MessageID, want)
+		}
+	}
+}

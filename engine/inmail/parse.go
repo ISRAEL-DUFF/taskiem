@@ -96,7 +96,12 @@ func Parse(raw []byte) (*Message, error) {
 	}
 	h := textproto.MIMEHeader(m.Header)
 	out := &Message{Header: h}
-	out.MessageID = strings.Trim(strings.TrimSpace(h.Get("Message-Id")), "<>")
+	// The first <id> of the header, or nothing: a comment after it, a
+	// quoted local part or an id too long is not kept, since a reply
+	// could not name it in In-Reply-To (send_in_thread).
+	if ids := MessageIDs(h.Get("Message-Id")); len(ids) > 0 {
+		out.MessageID = ids[0]
+	}
 	out.Subject = decodeWords(h.Get("Subject"))
 	if d, err := mail.ParseDate(h.Get("Date")); err == nil {
 		out.Date = d

@@ -16,7 +16,6 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/effects"
-	"github.com/israel-duff/taskiem/engine/mailtext"
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/sender"
@@ -241,18 +240,23 @@ func (s *Service) SendInThread(ctx context.Context, e ThreadEmail) (map[string]a
 	if err != nil {
 		return nil, fatalf("to: %q is not an email address", e.To)
 	}
-	clean := func(id string) string { return strings.Trim(strings.TrimSpace(id), "<>") }
-	inReplyTo := clean(e.InReplyTo)
-	if inReplyTo != "" && !mailtext.ValidMessageID(inReplyTo) {
-		return nil, fatalf("in_reply_to %q is not a Message-ID", e.InReplyTo)
+	// The customer's Message-IDs come from their mail app: one that is
+	// not a Message-ID Taskiem can write in a header (a stray comment, a
+	// quoted local part, one too long) is left out, not the customer's
+	// email; the thread's own earlier emails still thread it.
+	var inReplyTo string
+	if ids := MessageIDs(e.InReplyTo); len(ids) > 0 {
+		inReplyTo = ids[0]
+	} else if strings.TrimSpace(e.InReplyTo) != "" {
+		s.log().Warn("email: send_in_thread left out an in_reply_to that is not a Message-ID", "thread", thread, "run", e.Run)
 	}
 	var given []string
 	for _, r := range e.References {
-		r = clean(r)
-		if !mailtext.ValidMessageID(r) {
-			return nil, fatalf("references: %q is not a Message-ID", r)
+		ids := MessageIDs(r)
+		if len(ids) == 0 && strings.TrimSpace(r) != "" {
+			s.log().Warn("email: send_in_thread left out a reference that is not a Message-ID", "thread", thread, "run", e.Run)
 		}
-		given = append(given, r)
+		given = append(given, ids...)
 	}
 	var out map[string]any
 	err = db.InTenantTx(ctx, s.Pool, []uuid.UUID{e.Tenant}, func(tx pgx.Tx) error {

@@ -34,7 +34,7 @@ The web app shows both guides, step by step, under **Forward mail here from your
 | `to`, `cc`, `reply_to` | Lists of `{address, name}` |
 | `subject` | The subject |
 | `date` | When it was sent (RFC 3339), when the message says |
-| `message_id` | Its Message-ID |
+| `message_id` | Its Message-ID (the first `<…>` of the header), or `""` when it has none Taskiem could name in a reply (one with spaces or quotes, or longer than 250 characters) |
 | `in_reply_to` | The Message-ID it answers (`In-Reply-To`), or `""` |
 | `references` | The thread's earlier Message-IDs (`References`), oldest first, at most 20 |
 | `text` | The plain text; for mail with only HTML, the HTML's words |
@@ -57,7 +57,7 @@ A workflow can carry an email conversation per ticket or order: it emails the cu
 
 1. Tick **Replies continue the conversation** in the **When it runs** tab (`threads: true` in the email trigger's `config`).
 2. Give each conversation a key, such as `T-1042`: letters, digits and single hyphens, up to 24 characters.
-3. Email the customer with the `email` connector's **Email a customer in a conversation** (`email@1 send_in_thread`): `to`, `subject`, `message`, `thread`, and optionally `in_reply_to` (the customer's `message_id`), `references` and `address` (below).
+3. Email the customer with the `email` connector's **Email a customer in a conversation** (`email@1 send_in_thread`): `to`, `subject`, `message`, `thread`, and optionally `in_reply_to` (the customer's `message_id`), `references` and `address` (below). An `in_reply_to` or reference that is not a Message-ID is left out (and logged), never the email.
 4. Wait for the answer with a `signal` step on event `email.reply`, correlated by the key (`=steps.ack.output.thread`). Its output is the reply: `body` is shaped as `trigger.body` (so `body.latest` is what they wrote), and `email` as `trigger.email`.
 
 The email comes from Taskiem's sending address in the business's name ("Ada's Kitchen via Taskiem"), like every message Taskiem sends a customer, and is counted and limited the same way. It carries:

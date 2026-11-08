@@ -37,7 +37,7 @@ The email:
 - comes from `<Business> via Taskiem <the platform's sending address>`;
 - has `Reply-To:` the thread's reply address;
 - has a Message-ID Taskiem makes (`<tk-…@<mail domain>>`), the same on a retry of the step;
-- has `In-Reply-To:` and `References:` so mail apps thread it: `in_reply_to` when given (the customer's message), else the last email Taskiem sent in the thread; `references` as given, then the earlier ones Taskiem sent, at most 20;
+- has `In-Reply-To:` and `References:` so mail apps thread it: `in_reply_to` when given (the customer's message), else the last email Taskiem sent in the thread; `references` as given, then the earlier ones Taskiem sent, at most 20; a given id that is not a Message-ID (a mail app's comment, a quoted local part, one over 250 characters) is left out and logged, and the email still goes;
 - has the subject tagged `[#T-1042]` once (a subject that carries it already is left as it is).
 
 Its output is `{message_id, thread, reply_to, subject, queued}`. A step retried with the same idempotency key queues nothing new and answers the same.

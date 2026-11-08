@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -446,12 +447,34 @@ func TestSendInThreadIdempotentAndChecked(t *testing.T) {
 		t.Errorf("in_reply_to %v", a["in_reply_to"])
 	}
 
-	// Refused, for good: a key that is not one, a bad Message-ID, and a
-	// workflow without threads.
+	// A customer's Message-ID that cannot be written in a header is left
+	// out, not the email: the thread's own last email threads it, and the
+	// valid references stay.
+	odd := send
+	odd.Key = "tsk_odd_ids"
+	odd.InReplyTo = "<x>\r\nBcc: e@x"
+	odd.References = []string{`<"john doe"@customer.example>`, "<" + strings.Repeat("a", 260) + "@customer.example>", "<c0@customer.example> (first)"}
+	c, err := w.svc.SendInThread(ctx, odd)
+	if err != nil {
+		t.Fatalf("odd Message-IDs failed the email: %v", err)
+	}
+	if c["in_reply_to"] != a["message_id"] {
+		t.Errorf("in_reply_to %v, want the thread's last email %v", c["in_reply_to"], a["message_id"])
+	}
+	if refs := c["references"].([]any); len(refs) == 0 || refs[0] != "c0@customer.example" || strings.Contains(fmt.Sprint(refs), "john") {
+		t.Errorf("references %v", refs)
+	}
+	for _, m := range w.sent() {
+		if strings.Contains(m, "Bcc") || strings.Contains(m, "john doe") {
+			t.Errorf("an odd Message-ID reached the email:\n%s", m)
+		}
+	}
+
+	// Refused, for good: a key that is not one, and a workflow without
+	// threads.
 	for name, mut := range map[string]func(*inmail.ThreadEmail){
-		"thread":      func(e *inmail.ThreadEmail) { e.Thread = "T 1042" },
-		"in_reply_to": func(e *inmail.ThreadEmail) { e.InReplyTo = "<x>\r\nBcc: e@x" },
-		"to":          func(e *inmail.ThreadEmail) { e.To = "not an address" },
+		"thread": func(e *inmail.ThreadEmail) { e.Thread = "T 1042" },
+		"to":     func(e *inmail.ThreadEmail) { e.To = "not an address" },
 	} {
 		e := send
 		e.Key = "tsk_" + name

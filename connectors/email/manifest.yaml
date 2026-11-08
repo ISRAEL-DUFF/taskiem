@@ -59,8 +59,8 @@ actions:
         subject:     { type: string, minLength: 1, maxLength: 180, description: "The subject; [#<thread>] is put before it unless it carries it already" }
         message:     { type: string, minLength: 1, maxLength: 20000, description: The email, in plain text }
         thread:      { type: string, minLength: 1, maxLength: 24, description: "The ticket key (T-1042): letters, digits and single hyphens" }
-        in_reply_to: { type: string, description: "The customer's message this answers (trigger.body.message_id); default: the last email sent in the thread" }
-        references:  { type: array, maxItems: 20, items: { type: string }, description: "The thread's earlier Message-IDs (trigger.body.references)" }
+        in_reply_to: { type: string, description: "The customer's message this answers (trigger.body.message_id); default: the last email sent in the thread. One that is not a Message-ID is left out" }
+        references:  { type: array, maxItems: 20, items: { type: string }, description: "The thread's earlier Message-IDs (trigger.body.references); any that is not a Message-ID is left out" }
         address:     { type: string, maxLength: 200, description: "Send from another email workflow's address, whose run gets the replies: its Taskiem email address (trigger.email.address) or its workflow id. It must have threads on and be of this business and environment. Default: this workflow's own address" }
     output:
       type: object
