@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+
+	"github.com/israel-duff/taskiem/engine/mailtext"
 )
 
 func TestThreadKey(t *testing.T) {
@@ -78,7 +80,7 @@ func TestThreadMessageID(t *testing.T) {
 	key := bytes.Repeat([]byte{7}, 32)
 	ep := uuid.New()
 	a := ThreadMessageID(key, ep, "tsk_aaaa", "in.taskiem.test")
-	if a != ThreadMessageID(key, ep, "tsk_aaaa", "in.taskiem.test") || !strings.HasPrefix(a, "tk-") || !strings.HasSuffix(a, "@in.taskiem.test") || !ValidMessageID(a) {
+	if a != ThreadMessageID(key, ep, "tsk_aaaa", "in.taskiem.test") || !strings.HasPrefix(a, "tk-") || !strings.HasSuffix(a, "@in.taskiem.test") || !mailtext.ValidMessageID(a) {
 		t.Fatalf("%q", a)
 	}
 	if a == ThreadMessageID(key, ep, "tsk_bbbb", "in.taskiem.test") || a == ThreadMessageID(bytes.Repeat([]byte{8}, 32), ep, "tsk_aaaa", "in.taskiem.test") {

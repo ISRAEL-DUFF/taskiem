@@ -136,3 +136,24 @@ func Latest(text string) string {
 	}
 	return out
 }
+
+// MaxMessageID is the longest Message-ID kept or written.
+const MaxMessageID = 250
+
+// ValidMessageID reports whether id, without its brackets, is a
+// Message-ID Taskiem keeps and can write in a Message-ID, In-Reply-To or
+// References header as <id>: printable ASCII with an @, without brackets,
+// spaces, quotes, backslashes or commas, at most MaxMessageID characters.
+// Inbound email (engine/inmail) and the outbox (engine/sender) both use
+// it, so what one keeps the other can send.
+func ValidMessageID(id string) bool {
+	if id == "" || len(id) > MaxMessageID || !strings.Contains(id, "@") {
+		return false
+	}
+	for i := 0; i < len(id); i++ {
+		if c := id[i]; c <= ' ' || c > '~' || strings.IndexByte("<>\"\\,", c) >= 0 {
+			return false
+		}
+	}
+	return true
+}

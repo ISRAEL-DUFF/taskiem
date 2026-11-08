@@ -16,6 +16,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/effects"
+	"github.com/israel-duff/taskiem/engine/mailtext"
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/sender"
@@ -242,13 +243,13 @@ func (s *Service) SendInThread(ctx context.Context, e ThreadEmail) (map[string]a
 	}
 	clean := func(id string) string { return strings.Trim(strings.TrimSpace(id), "<>") }
 	inReplyTo := clean(e.InReplyTo)
-	if inReplyTo != "" && !ValidMessageID(inReplyTo) {
+	if inReplyTo != "" && !mailtext.ValidMessageID(inReplyTo) {
 		return nil, fatalf("in_reply_to %q is not a Message-ID", e.InReplyTo)
 	}
 	var given []string
 	for _, r := range e.References {
 		r = clean(r)
-		if !ValidMessageID(r) {
+		if !mailtext.ValidMessageID(r) {
 			return nil, fatalf("references: %q is not a Message-ID", r)
 		}
 		given = append(given, r)

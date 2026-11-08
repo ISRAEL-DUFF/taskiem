@@ -25,6 +25,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/mailtext"
 	"github.com/israel-duff/taskiem/engine/secrets"
 )
 
@@ -266,7 +267,7 @@ func (q *Queue) check(m *Message) (to, category string, err error) {
 			return "", "", fmt.Errorf("%w: at most 20 references", ErrInvalid)
 		}
 		for _, id := range append([]string{m.MessageID, m.InReplyTo}, m.References...) {
-			if id != "" && !messageID(id) {
+			if id != "" && !mailtext.ValidMessageID(id) {
 				return "", "", fmt.Errorf("%w: %q is not a Message-ID", ErrInvalid, id)
 			}
 		}
@@ -344,21 +345,6 @@ func CleanName(s string) string {
 		s = strings.TrimSpace(string(r[:60]))
 	}
 	return s
-}
-
-// messageID reports whether id can be written in a Message-ID,
-// In-Reply-To or References header as <id>: printable ASCII with an @,
-// without brackets, spaces or quotes, at most 250 characters.
-func messageID(id string) bool {
-	if len(id) > 250 || !strings.Contains(id, "@") {
-		return false
-	}
-	for i := 0; i < len(id); i++ {
-		if c := id[i]; c <= ' ' || c > '~' || strings.IndexByte("<>\"\\,", c) >= 0 {
-			return false
-		}
-	}
-	return true
 }
 
 func dropControl(r rune) rune {

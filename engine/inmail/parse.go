@@ -22,6 +22,8 @@ import (
 
 	"golang.org/x/text/encoding/htmlindex"
 	"golang.org/x/text/transform"
+
+	"github.com/israel-duff/taskiem/engine/mailtext"
 )
 
 // MaxMessageBytes is the largest message taken (SMTP SIZE).
@@ -267,13 +269,12 @@ func validUTF8(s string) string {
 // trigger without end.
 const (
 	maxReferences = 20
-	maxMessageID  = 250
 	maxIDHeader   = 16 << 10
 )
 
 // MessageIDs reads the Message-IDs in an In-Reply-To or References
 // header, in order and without brackets: each <…> of printable characters
-// at most maxMessageID long, or, in a header with no brackets at all,
+// at most mailtext.MaxMessageID long, or, in a header with no brackets at all,
 // each word with an @. Anything else (comments, a phrase some old mailers
 // put in In-Reply-To) is skipped. Repeats are kept once.
 func MessageIDs(v string) []string {
@@ -300,29 +301,13 @@ func MessageIDs(v string) []string {
 	out := []string{}
 	seen := map[string]bool{}
 	for _, id := range raw {
-		if !ValidMessageID(id) || seen[id] {
+		if !mailtext.ValidMessageID(id) || seen[id] {
 			continue
 		}
 		seen[id] = true
 		out = append(out, id)
 	}
 	return out
-}
-
-// ValidMessageID reports whether id is a Message-ID Taskiem keeps and
-// writes in a header: printable ASCII without brackets or spaces, an @,
-// at most maxMessageID characters.
-func ValidMessageID(id string) bool {
-	if id == "" || len(id) > maxMessageID || !strings.Contains(id, "@") {
-		return false
-	}
-	for i := 0; i < len(id); i++ {
-		c := id[i]
-		if c <= ' ' || c > '~' || c == '<' || c == '>' || c == '"' || c == '\\' || c == ',' {
-			return false
-		}
-	}
-	return true
 }
 
 // Domain is an address's domain, lower-cased.
