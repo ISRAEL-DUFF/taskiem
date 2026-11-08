@@ -1,5 +1,8 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { del, get, patch, post, postOnce, put, sendWith } from "../api";
+import { FormFrame, formKey as key, type Saver } from "./FormFrame";
+import { GridStockIn, SizesEditor } from "./SizesForms";
+import { hasSizes, sizesLine, sizesWords } from "../lib/variants";
 import {
   PendingPhotos,
   PhotoFailures,
@@ -46,78 +49,12 @@ import type { Prefill } from "../lib/intents";
 // sees it, with no Save.
 
 /** What a form does on Save: words for what changed, or null for nothing. */
-export type Saver = () => Promise<string | null>;
-
-const key = () => `chat-${crypto.randomUUID()}`;
 
 /** A chat tool's write, marked so a table row added is told as a change. */
 const toolPost = <T,>(path: string, body: unknown) =>
   sendWith<T>("POST", path, body, { "X-Taskiem-Diary": "1" });
 const toolPatch = <T,>(path: string, body: unknown) =>
   sendWith<T>("PATCH", path, body, { "X-Taskiem-Diary": "1" });
-
-/** The scrolling body and the Save at the foot, as every form has them. */
-function FormFrame({
-  children,
-  save,
-  saveWords = "Save",
-  onSaved,
-  ready = true,
-  canEdit = true,
-  onCancel,
-}: {
-  /** With it, the foot is Cancel | Save changes (the DeskSeller board). */
-  onCancel?: () => void;
-  children: ReactNode;
-  save: Saver;
-  saveWords?: string;
-  onSaved: (line: string | null) => void;
-  ready?: boolean;
-  canEdit?: boolean;
-}) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<unknown>();
-  return (
-    <form
-      className="tk-form"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (busy || !ready || !canEdit) return;
-        setBusy(true);
-        setError(undefined);
-        save().then(
-          (line) => onSaved(line),
-          (err: unknown) => (setError(err), setBusy(false)),
-        );
-      }}
-    >
-      <fieldset className="tk-sheet-list tk-form-body" disabled={!canEdit}>
-        {children}
-        <ErrorBox error={error} />
-      </fieldset>
-      <div className="tk-sheet-foot">
-        {canEdit && onCancel ? (
-          <div className="tk-form-foot-two">
-            <button type="button" className="tk-btn soft" onClick={onCancel}>
-              Cancel
-            </button>
-            <button type="submit" className="tk-cta" disabled={busy || !ready}>
-              {busy ? "Saving…" : "Save changes"}
-            </button>
-          </div>
-        ) : canEdit ? (
-          <button type="submit" className="tk-cta" disabled={busy || !ready}>
-            {busy ? "Saving…" : saveWords}
-          </button>
-        ) : (
-          <p className="tk-form-readonly">
-            You can see this. Changing it needs someone who may edit it.
-          </p>
-        )}
-      </div>
-    </form>
-  );
-}
 
 /** − n + for a count. */
 function Stepper({
@@ -288,6 +225,9 @@ export function ProductForm({
   /** The business whose conversation it was opened from (its list first). */
   link?: string;
 }) {
+  // Its sizes and colours, set up in place of the form (chat categories
+  // Part B).
+  const [sizesOpen, setSizesOpen] = useState(false);
   const [name, setName] = useState(item.name);
   // Its price on a price list, and who the list is shared with (the
   // DeskSeller board): for those who keep the storefront's prices.
@@ -405,6 +345,14 @@ export function ProductForm({
     }
     return said.length ? `${name.trim() || item.name}: saved` : null;
   };
+  if (sizesOpen)
+    return (
+      <SizesEditor
+        item={item}
+        onSaved={onSaved}
+        onCancel={() => setSizesOpen(false)}
+      />
+    );
   return (
     <FormFrame
       save={save}
@@ -520,17 +468,24 @@ export function ProductForm({
       ) : (
         <Money label="Price" value={price} onChange={setPrice} />
       )}
-      <div className="tk-form-row">
-        <span>
-          <span className="tk-form-row-title">In stock</span>
-          <span className="tk-form-row-sub">
-            {count === null
-              ? "No count yet: set one"
-              : "Counts down as orders are accepted"}
+      {hasSizes(item) ? null : (
+        <div className="tk-form-row">
+          <span>
+            <span className="tk-form-row-title">In stock</span>
+            <span className="tk-form-row-sub">
+              {count === null
+                ? "No count yet: set one"
+                : "Counts down as orders are accepted"}
+            </span>
           </span>
-        </span>
-        <Stepper label="In stock" value={count ?? 0} onChange={setCount} />
-      </div>
+          <Stepper label="In stock" value={count ?? 0} onChange={setCount} />
+        </div>
+      )}
+      <SizesRow
+        item={item}
+        canEdit={canEdit}
+        onOpen={() => setSizesOpen(true)}
+      />
       <Switch
         label="Show on your storefront"
         hint="And on price lists you share"
@@ -544,6 +499,48 @@ export function ProductForm({
         </p>
       )}
     </FormFrame>
+  );
+}
+
+/** A product's sizes and colours, in its form: how many, and the way to
+ * set them up or change them. */
+function SizesRow({
+  item,
+  canEdit,
+  onOpen,
+}: {
+  item: StockItem;
+  canEdit: boolean;
+  onOpen: () => void;
+}) {
+  const all = useLoad(
+    () =>
+      hasSizes(item)
+        ? get<StockView>("/v1/stock").then((r) => r.items)
+        : Promise.resolve([] as StockItem[]),
+    [item.id],
+  );
+  const line =
+    hasSizes(item) && all.data ? sizesLine(all.data, item.id) : undefined;
+  return (
+    <div className="tk-form-row">
+      <span>
+        <span className="tk-form-row-title">Sizes and colours</span>
+        <span className="tk-form-row-sub">
+          {!hasSizes(item)
+            ? "A count for each size and colour"
+            : line
+              ? `${sizesWords(line.count)}${line.stock !== null ? ` · ${line.stock} in stock` : ""}${line.low ? ` · ${line.low} low` : ""}`
+              : "Loading…"}
+        </span>
+      </span>
+      {canEdit && (
+        <button type="button" className="tk-btn soft" onClick={onOpen}>
+          {hasSizes(item) ? "Change" : "Set up"}
+          <span className="sr-only"> sizes and colours</span>
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -659,6 +656,9 @@ export function StockInForm({
 }) {
   const [n, setN] = useState(prefill?.count ?? 1);
   const [note, setNote] = useState("");
+  // A product with sizes and colours: goods received by its grid.
+  if (hasSizes(item))
+    return <GridStockIn item={item} onSaved={onSaved} canEdit={canEdit} />;
   const save: Saver = async () => {
     await postOnce("/v1/stock/movements", key(), {
       item_id: item.id,

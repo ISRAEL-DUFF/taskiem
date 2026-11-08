@@ -3,6 +3,7 @@
 // the sheet frame, with "Open full page"; phase 2 makes them work in place.
 
 import { categoriesOf } from "./mentions";
+import { hasSizes, sizesLine, sizesWords } from "./variants";
 import { formatPrice } from "./storefront";
 import type { StockItem, StockView } from "./stock";
 import type { Service } from "./bookings";
@@ -88,24 +89,38 @@ function stockPill(it: StockItem): ToolRow["pill"] {
 
 function stockRows(data: unknown): ToolRow[] {
   const v = data as StockView | undefined;
-  return (v?.items ?? []).map((it) => ({
-    id: it.id,
-    name: it.name,
-    sub:
-      it.price_kobo !== undefined
-        ? `${formatPrice(it.price_kobo)}${it.unit ? ` a ${it.unit}` : ""}`
-        : "No price yet",
-    pill: stockPill(it),
-    href: "/storefront/stock",
-    tags: [
-      ...(it.low ? ["low"] : []),
-      ...(!it.available ? ["hidden"] : []),
-      ...(it.category ? [categoryTag(it.category)] : []),
-    ],
-    category: it.category,
-    words: it.description,
-    data: it,
-  }));
+  const all = v?.items ?? [];
+  // A product's sizes and colours are not rows of their own: the product
+  // says how many it has and how many are low, and its stock is theirs.
+  return all
+    .filter((it) => !it.variant_of)
+    .map((it) => {
+      const sizes = hasSizes(it) ? sizesLine(all, it.id) : undefined;
+      const shown: StockItem = sizes
+        ? { ...it, stock: sizes.stock, low: sizes.low > 0 }
+        : it;
+      const price =
+        it.price_kobo !== undefined
+          ? `${formatPrice(it.price_kobo)}${it.unit ? ` a ${it.unit}` : ""}`
+          : "No price yet";
+      return {
+        id: it.id,
+        name: it.name,
+        sub: sizes
+          ? `${sizesWords(sizes.count)}${sizes.low ? ` · ${sizes.low} low` : ""} · ${price}`
+          : price,
+        pill: stockPill(shown),
+        href: "/storefront/stock",
+        tags: [
+          ...(shown.low ? ["low"] : []),
+          ...(!it.available ? ["hidden"] : []),
+          ...(it.category ? [categoryTag(it.category)] : []),
+        ],
+        category: it.category,
+        words: it.description,
+        data: it,
+      };
+    });
 }
 
 /** A category as a chip's tag. */

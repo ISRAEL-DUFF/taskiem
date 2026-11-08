@@ -24,6 +24,12 @@ export interface StockItem {
   category?: string;
   /** Its words on the storefront, when the catalogue maps them. */
   description?: string;
+  /** Sizes and colours: the product this is one of, and its values. */
+  variant_of?: string;
+  variant?: Record<string, string>;
+  /** A product's choices, when it has sizes and colours (it then keeps no
+   * stock of its own: theirs is its). */
+  choices?: { name: string; values: string[] }[];
   low?: boolean;
   /** How many to order, when low. */
   suggest?: number;

@@ -1,7 +1,8 @@
 # Chat: product categories and variants
 
-Status: **phases 1 (categories) and 2 (photos) built**; phases 3 to 5 are the plan
-(8 November 2026; photos, Part C and phase 2, added the same day).
+Status: **phases 1 (categories), 2 (photos) and 3 (sizes and colours for the shop
+itself) built**; phases 4 and 5 are the plan (8 November 2026; photos, Part C and
+phase 2, added the same day).
 Written with the founder; the live doc is [the shared plan](https://claude.ai/artifact/HA9Y7M1vLM4PprjoyRidaX),
 and this file is its copy beside the code. What phase 1 built, and where it differs
 from the plan, is in [As built: phase 1](#as-built-phase-1-categories).
@@ -320,3 +321,61 @@ the web `src/lib/photos.ts`, `PhotoAdd.tsx`, `ProductPhotos.tsx`, `CameraSheet.t
   at 390 and 360 px in both themes with axe (the three ways with Chromium's fake camera,
   a picture over 10 MB sent small, "Sending photo 2 of 3…", a photo that does not go, Make main and Remove, the Tables
   tool's photo column and its "2 photos" in the list).
+
+## As built: phase 3 (sizes and colours for the shop itself)
+
+`engine/variants`; the mapping and items in `engine/storefront` and `engine/stock`;
+`api/stock_variants.go`, `api/chat_alerts.go`; on the web `src/lib/variants.ts`,
+`SizesForms.tsx`, the product and stock forms in `ChatToolForms.tsx`, Sell in
+`ChatStaff.tsx`, the lists in `src/lib/tools.ts`.
+
+- **Rows.** Each size and colour is a catalogue row of its own: `variant_of` (the
+  product's row id) and `variant` (its values as JSON); the product holds `choices`.
+  The three text columns are added the first time a product has sizes and colours (409
+  `no_variant_columns` where they cannot be). A size's name is written out in full
+  ("Air Max 90 – 42, Black") so every place that shows only text reads right. Limits:
+  3 choices, 20 values each, 100 sizes and colours per product, and the catalogue's 500
+  rows in all.
+- **Setting them up:** `PUT /v1/stock/items/{id}/variants` takes the choices and the
+  grid. `engine/variants` plans it: rows kept (renamed where a value was corrected in
+  place, so 40 corrected to 43 keeps its row and history), brought back, made (one
+  insert), or retired (hidden, never deleted). A new one's count comes in as goods
+  received, a kept one's as a count. Each new row takes the product's unit, cost,
+  levels, supplier and category, and its price unless it has its own; a size that kept
+  the product's price follows it when the product's price changes. The product's own
+  stock, when it had some, moves into its sizes (a count to 0): **a product with sizes
+  and colours keeps no stock of its own and is never low itself**.
+- **Stock in and counts by grid:** `POST /v1/stock/movements/grid` (received or count)
+  for several of one product's sizes, told as one diary line ("Stock in: Air Max 90, 7
+  sizes and colours, +36"). A count by grid is made in the sizes and colours form (each
+  box is the count), which sends the changed ones as counts.
+- **Low stock:** one card per product ("Air Max 90 is running low": "42, Black and 42,
+  White are low"), carrying their ids; *Record stock in* opens the grid with the low
+  ones marked.
+- **In the chat tools:** the Products and Stock sheets show the product once ("5 sizes
+  and colours · 2 low", its stock theirs together), never each size; its form shows
+  *Sizes and colours* with *Set up* or *Change*, and no count of its own. The editor:
+  each choice's name and values (typed with commas, or ready-made: shoe sizes EU and
+  UK, clothing, small/medium/large, children's ages, bottles, bags, colours), every
+  combination on sale at 0 to start, *Same number for all*, a box emptied for one not
+  sold, and *Some cost more or less* for their own prices; *Stop selling it in sizes
+  and colours* takes them off sale. The grid is groups of boxes that wrap, so nothing
+  scrolls sideways at 360 px.
+- **Sell:** a product with sizes has *Choose*: a row of buttons per choice, what is off
+  sale or has none left greyed out; the size picked gets its own − n +, and those chosen
+  are listed under the product. The sale's lines are the sizes' own rows.
+- **The public page (until phase 4):** it lists the product, not each size, with its
+  stock theirs together, and does not take it in a basket: an order on the product
+  itself would take stock it does not keep. Phase 4 lets the customer pick a size.
+- **Where it differs from the plan:** a photo per colour is left to phase 4, where the
+  public page's size pick needs it; the desk Stock page (outside the chat) still lists
+  each size as a row of its own, by its full name.
+- **Words:** "sizes and colours" and "choices" on owners' screens; "variant" is in the
+  plain-words test's list, so it cannot reach one.
+- **Tests.** Go: `engine/variants` (choices, names, keys, the plan), `engine/storefront`
+  (the roll-up and the public items), `api/stock_variants_test.go` (set up, a sale, one
+  low card, stock in and a count as one line, a rename and a retirement, prices
+  following the product, the public page, taking them off sale). Web:
+  `src/lib/variants.test.ts`; `e2e/chat-sizes.spec.ts` at 390 and 360 px in both themes
+  with axe (setting up 11 sizes × 3 colours with one not sold and one dearer; one row in
+  Products; Sell picking 42 then black with white greyed out; the low card's grid).
