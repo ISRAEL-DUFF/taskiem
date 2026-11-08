@@ -376,6 +376,19 @@ V1 and V2 were reviewed for gaps before V3; 21 were found and all are fixed on t
 - One retention rule for a conversation: rows, transcripts, files and runs expire together, 30 days by default, changeable by the owner within the plan's limit (M6, Q4).
 - Tests: last N turns per conversation in order; expiry; erasure of a customer's rows with their phone (P2).
 
+
+#### Review of V5 (2026-11-08)
+
+| Found | Fix |
+| --- | --- |
+| A filter written as a list (`in` with `values`) on a personal column was not sealed | Its values are sealed like a single filter value |
+| The sweep read the first 1,000 tables due and never reached the rest | It reads them a page at a time (migration 00318) |
+| Changing how long conversations are kept left runs already ended (and their files) at the old date, so they no longer went with the rows | The change moves them too |
+| Settings showed the owner's days where the plan caps them lower (a Shop plan keeps runs 7 days) | It shows the days in effect |
+| Ending a run updated its files by run alone, missing the index | By tenant and run |
+| The read-back said a step "sees history as they are" | "the conversation's words (its numbers, emails and names stay hidden)" |
+| The AI builder's rule did not let a conversation's words through, so its drafts would hand the model placeholders | Rule 21 names `personal_data: ["history"]` and how to read the table |
+
 ### V5b. Knowledge sources (D12)
 
 - A **knowledge store** per business: each source's text split into passages with the source, the time it was read and a link back; replaced whole on each refresh; deleted with the source (K10).

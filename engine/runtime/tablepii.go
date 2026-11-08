@@ -57,7 +57,8 @@ func tablePIIPaths(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, connectorRe
 		// A filter on a personal column carries a personal value; which
 		// filter is on which column cannot be told by place, so every
 		// filter value of such a table is sealed.
-		out = append(out, pii.Path{Segments: []string{"input", "filters", "*", "value"}, Category: "other"})
+		out = append(out, pii.Path{Segments: []string{"input", "filters", "*", "value"}, Category: "other"},
+			pii.Path{Segments: []string{"input", "filters", "*", "values"}, Category: "other"})
 	}
 	return out, nil
 }

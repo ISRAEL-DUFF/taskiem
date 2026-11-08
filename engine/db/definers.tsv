@@ -316,4 +316,4 @@ taskiem_wa_waba_tenant(text)	@ISRAEL-DUFF (messaging)	The tenant whose active ow
 taskiem_worker_seen(text,text,text)	@ISRAEL-DUFF (engine)	A worker reports itself (00120)
 taskiem_bill_payments_tenants()	@ISRAEL-DUFF (business links)	Businesses with a bill payment still pending, or a payout sent three days ago and unpaired, for the api's tick; tenant ids only (docs/spec/business-links.md §16.2) (00300)
 taskiem_run_files_expired(integer)	@ISRAEL-DUFF (customer assistant)	Which run files have expired, for the sweep to delete their stored objects and rows: ids, tenants and storage keys only (00313)
-taskiem_tables_to_expire(integer)	@ISRAEL-DUFF (customer assistant)	Which data tables keep their rows for a time, for the sweep to delete older rows: tenants, table ids, names and days only, never rows (00317)
+taskiem_tables_to_expire(uuid,uuid,integer)	@ISRAEL-DUFF (customer assistant)	Which data tables keep their rows for a time, for the sweep to delete older rows: tenants, table ids, names and days only, never rows (00317, paged by 00318)

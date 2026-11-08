@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // A table that keeps its rows for a time (decision 0062 V5): set when it
@@ -94,4 +96,42 @@ func TestErasingACustomerDeletesTheirConversation(t *testing.T) {
 	if len(left) != 1 || left[0]["sender"] != "2348099999999" {
 		t.Fatalf("left %v", left)
 	}
+}
+
+// Changing how long conversations are kept moves the runs already ended
+// that are kept with conversations, and their files, and the plan caps
+// what Settings shows.
+func TestConversationDaysMoveEndedRuns(t *testing.T) {
+	w := newWorld(t)
+	owner := w.tenant(t, "Mama Put", "owner@mamaput.test")
+	tenant := owner.must(200, "GET", "/v1/me", nil)["tenant_id"].(string)
+	wf := owner.must(201, "POST", "/v1/workflows", map[string]any{"name": "Reply", "definition": map[string]any{"schema": "wd/v1", "id": "wf_reply", "version": 1, "name": "Reply",
+		"trigger": map[string]any{"type": "manual"}, "settings": map[string]any{"retention": "conversations"},
+		"steps": []any{map[string]any{"id": "a", "type": "transform", "config": map[string]any{"output": 1}}}}})["id"].(string)
+	owner.must(200, "POST", "/v1/workflows/"+wf+"/versions/1/publish", nil)
+	run := owner.must(201, "POST", "/v1/workflows/"+wf+"/runs", map[string]any{"input": map[string]any{}})["run_id"].(string)
+	w.env.Drain(t)
+	keep := func() time.Duration {
+		var until time.Time
+		if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT retain_until FROM runs WHERE id = $1`, run).Scan(&until); err != nil {
+			t.Fatal(err)
+		}
+		return time.Until(until)
+	}
+	if d := keep(); d < 29*24*time.Hour || d > 31*24*time.Hour {
+		t.Fatalf("kept %v, want 30 days", d)
+	}
+	owner.must(200, "PUT", "/v1/languages", map[string]any{"languages": []string{}, "default_language": "en", "voice_notes": false, "conversation_days": 7})
+	if d := keep(); d < 6*24*time.Hour || d > 8*24*time.Hour {
+		t.Fatalf("after 7 days was chosen: kept %v", d)
+	}
+	// A plan that keeps runs 3 days: Settings says 3, and so do the runs.
+	if err := w.env.Store.SetLimits(context.Background(), uuid.MustParse(tenant), map[string]any{"max_retention_days": 3}, "operator"); err != nil {
+		t.Fatal(err)
+	}
+	w.env.Store.ForgetLimits(uuid.MustParse(tenant))
+	if v := owner.must(200, "GET", "/v1/languages", nil); v["conversation_days"] != float64(3) || v["max_conversation_days"] != float64(3) {
+		t.Fatalf("on a 3-day plan: %v", v)
+	}
+	owner.must(400, "PUT", "/v1/languages", map[string]any{"languages": []string{}, "default_language": "en", "voice_notes": false, "conversation_days": 5})
 }

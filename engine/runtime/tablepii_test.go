@@ -79,7 +79,7 @@ func TestConversationTableIsSealedAndHeard(t *testing.T) {
 	    {"id":"save","type":"connector","connector":"xenibase@1","action":"insert_rows",
 	     "input":{"table":"conversations","rows":[{"conversation":"='whatsapp:' + trigger.body.from","sender":"=trigger.body.from","role":"user","text":"=trigger.body.text"}]}},
 	    {"id":"read","type":"connector","connector":"xenibase@1","action":"read_rows","needs":["save"],
-	     "input":{"table":"conversations","filters":[{"column":"sender","op":"eq","value":"=trigger.body.from"}],"order":[{"column":"created_at","desc":true}],"limit":20}},
+	     "input":{"table":"conversations","filters":[{"column":"sender","op":"eq","value":"=trigger.body.from"},{"column":"conversation","op":"in","values":["='whatsapp:' + trigger.body.from"]}],"order":[{"column":"created_at","desc":true}],"limit":20}},
 	    {"id":"reply","type":"ai","needs":["read"],
 	     "config":{"prompt":"Answer the customer's last message.","output_schema":{"type":"object","required":["reply"],"properties":{"reply":{"type":"string"}}},
 	       "history":"=steps.read.output.rows.reverse().map(r, {'role': r.role, 'text': r.text})","personal_data":["history"]},
@@ -91,7 +91,7 @@ func TestConversationTableIsSealedAndHeard(t *testing.T) {
 	}
 	for _, ev := range events(t, e, ref) {
 		raw := string(ev.Payload)
-		if (ev.StepID == "save" && ev.Type == history.StepScheduled) || (ev.StepID == "read" && ev.Type == history.StepCompleted) {
+		if (ev.StepID == "save" || ev.StepID == "read") && (ev.Type == history.StepScheduled || ev.Type == history.StepCompleted) {
 			for _, clear := range []string{"Una get rice today?", "Good morning! We have rice", "Morning o", "2348031234567", "whatsapp:2348"} {
 				if strings.Contains(raw, clear) {
 					t.Errorf("%s(%s) keeps %q in the clear: %s", ev.Type, ev.StepID, clear, raw)

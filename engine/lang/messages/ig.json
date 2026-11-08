@@ -4240,6 +4240,10 @@
       "text": "Answer in the conversation with the AI model, which sees {fields} as they are; other personal data is hidden from it",
       "reviewed": false
     },
+    "wd.ai.history_words": {
+      "text": "the conversation's words (its numbers, emails and names stay hidden)",
+      "reviewed": false
+    },
     "wd.ai.fallback": {
       "text": "If the AI model cannot answer, it answers with a set reply instead",
       "reviewed": false

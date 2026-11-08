@@ -314,6 +314,26 @@ type languagesView struct {
 	MaxConversationDays int `json:"max_conversation_days"`
 }
 
+// reKeepConversations moves the end of the runs already ended that are
+// kept as long as conversations (settings.retention "conversations"),
+// and of their files, to the business's new number of days, so a
+// conversation's runs and files still go with its rows (decision 0062
+// V5). Runs still going take it up when they end.
+func reKeepConversations(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, days int) error {
+	keep := fmt.Sprintf("%d days", days)
+	if _, err := tx.Exec(ctx, `UPDATE runs r SET retain_until = r.ended_at + $2::interval
+		WHERE r.tenant_id = $1 AND r.ended_at IS NOT NULL
+		  AND EXISTS (SELECT 1 FROM workflow_versions v WHERE v.workflow_id = r.workflow_id AND v.version = r.version
+		              AND v.definition->'settings'->>'retention' = 'conversations')`, tenant, keep); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx, `UPDATE run_files f SET expires_at = r.retain_until FROM runs r
+		WHERE f.tenant_id = $1 AND r.tenant_id = $1 AND f.run_id = r.id AND r.ended_at IS NOT NULL
+		  AND EXISTS (SELECT 1 FROM workflow_versions v WHERE v.workflow_id = r.workflow_id AND v.version = r.version
+		              AND v.definition->'settings'->>'retention' = 'conversations')`, tenant)
+	return err
+}
+
 // maxConversationDays is the longest a business may keep its
 // conversations: the plan's longest retention, else the longest a table
 // keeps rows.
@@ -350,6 +370,8 @@ func (s *Server) getLanguages(w http.ResponseWriter, r *http.Request) {
 	}
 	v := s.languagesView(tc)
 	v.MaxConversationDays = s.maxConversationDays(r.Context(), p.TenantID)
+	// What is kept in effect: the plan caps the owner's choice.
+	v.ConversationDays = min(v.ConversationDays, v.MaxConversationDays)
 	writeJSON(w, http.StatusOK, v)
 }
 
@@ -431,6 +453,11 @@ func (s *Server) putLanguages(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
+		if tc.ConversationDays != was.ConversationDays {
+			if err := reKeepConversations(r.Context(), tx, p.TenantID, min(tc.ConversationDays, s.maxConversationDays(r.Context(), p.TenantID))); err != nil {
+				return err
+			}
+		}
 		return auditTx(r, tx, "channel.languages.update", p.TenantID.String(), map[string]any{"languages": langs, "default_language": tc.Default, "voice_notes": tc.Voice, "voice_in_workflows": tc.WorkflowVoice, "conversation_days": tc.ConversationDays})
 	})
 	if err != nil {
@@ -440,6 +467,8 @@ func (s *Server) putLanguages(w http.ResponseWriter, r *http.Request) {
 	s.chanSettings.Delete(p.TenantID)
 	v := s.languagesView(tc)
 	v.MaxConversationDays = s.maxConversationDays(r.Context(), p.TenantID)
+	// What is kept in effect: the plan caps the owner's choice.
+	v.ConversationDays = min(v.ConversationDays, v.MaxConversationDays)
 	writeJSON(w, http.StatusOK, v)
 }
 

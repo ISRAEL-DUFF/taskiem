@@ -311,7 +311,14 @@ func (d describer) what(st *wd.Step) string {
 			if len(st.AI.History) > 0 {
 				through = "wd.ai.conversation_through"
 			}
-			text = d.t(through, "fields", strings.Join(st.AI.PersonalData, ", "))
+			fields := make([]string, 0, len(st.AI.PersonalData))
+			for _, f := range st.AI.PersonalData {
+				if f == "history" && len(st.AI.History) > 0 {
+					f = d.t("wd.ai.history_words")
+				}
+				fields = append(fields, f)
+			}
+			text = d.t(through, "fields", strings.Join(fields, ", "))
 		} else {
 			text = d.t(key)
 		}

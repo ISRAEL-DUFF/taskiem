@@ -130,9 +130,9 @@ A table keeps its rows until someone deletes them, unless it says otherwise. It 
 - **so many days** (`keep_days`, 1 to 3,650): a row goes that many days after it was added;
 - **as long as conversations with customers are kept** (`keep_with_conversations`): the business's `conversation_days`, set by the owner under Secrets & settings, Voice in workflows (`PUT /v1/languages`, `conversation_days`). It defaults to 30 days and cannot be longer than the plan keeps runs (`max_retention_days`).
 
-**The sweep.** Every hour the `api` role deletes older rows through the table's own connection, as the rows API does. It reads only row ids (oldest first, up to 1,000 at a time) and deletes exactly those, so the data API's `max_affected` never refuses it. A project that cannot be reached is tried at the next sweep. Kept tables are never swept.
+**The sweep.** Every hour the `api` role deletes older rows through the table's own connection, as the rows API does. It reads only row ids (oldest first, up to 1,000 at a time) and deletes exactly those, so the data API's `max_affected` never refuses it. It goes through every table due, a page of 500 at a time. A project that cannot be reached is tried at the next sweep. Kept tables are never swept.
 
-**One rule for a conversation** (M6). A workflow whose `settings.retention` is `"conversations"` keeps its runs as long as the business keeps its conversations. Its runs' files go with them ([files in runs](files.md)), and so do the transcripts in their history. So a conversation's rows, runs, voice notes and transcripts go together.
+**One rule for a conversation** (M6). A workflow whose `settings.retention` is `"conversations"` keeps its runs as long as the business keeps its conversations. Its runs' files go with them ([files in runs](files.md)), and so do the transcripts in their history. So a conversation's rows, runs, voice notes and transcripts go together. When the owner changes the number of days, runs already ended that are kept this way, and their files, move to the new end date too. Settings shows the days in effect, which the plan may cap below what was chosen.
 
 ## On WhatsApp
 

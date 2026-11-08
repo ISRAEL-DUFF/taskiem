@@ -911,7 +911,7 @@ func (s *Store) endRun(ctx context.Context, tx pgx.Tx, r runRow, def *wd.Definit
 	if conversations {
 		fileExpiry = `now() + $2::interval`
 	}
-	if _, err := tx.Exec(ctx, `UPDATE run_files SET expires_at = `+fileExpiry+` WHERE run_id = $1`, run, fmt.Sprintf("%d seconds", int64(retention.Seconds()))); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE run_files SET expires_at = `+fileExpiry+` WHERE tenant_id = $3 AND run_id = $1`, run, fmt.Sprintf("%d seconds", int64(retention.Seconds())), r.ref.TenantID); err != nil {
 		return err
 	}
 	if status == "completed" {

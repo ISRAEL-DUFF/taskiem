@@ -54,22 +54,33 @@ func (s *Server) ExpireRows(ctx context.Context) (int, error) {
 		days          int
 		conversations bool
 	}
-	rows, err := s.Store.Pool.Query(ctx, `SELECT tenant_id, table_id, name, keep_days, conversations FROM taskiem_tables_to_expire(1000)`)
-	if err != nil {
-		return 0, err
-	}
+	// Every table due, a page at a time after the last one seen.
 	var list []due
-	for rows.Next() {
-		var d due
-		if err := rows.Scan(&d.tenant, &d.table, &d.name, &d.days, &d.conversations); err != nil {
-			rows.Close()
+	var afterTenant, afterTable *uuid.UUID
+	for {
+		rows, err := s.Store.Pool.Query(ctx, `SELECT tenant_id, table_id, name, keep_days, conversations FROM taskiem_tables_to_expire($1, $2, 500)`, afterTenant, afterTable)
+		if err != nil {
 			return 0, err
 		}
-		list = append(list, d)
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return 0, err
+		n := 0
+		for rows.Next() {
+			var d due
+			if err := rows.Scan(&d.tenant, &d.table, &d.name, &d.days, &d.conversations); err != nil {
+				rows.Close()
+				return 0, err
+			}
+			list = append(list, d)
+			n++
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return 0, err
+		}
+		if n < 500 {
+			break
+		}
+		last := list[len(list)-1]
+		afterTenant, afterTable = &last.tenant, &last.table
 	}
 	total := 0
 	var firstErr error

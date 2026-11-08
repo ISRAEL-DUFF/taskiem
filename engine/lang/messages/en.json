@@ -5299,6 +5299,11 @@
       "reviewed": true,
       "context": "Read-back: an ai step given the conversation so far that lets some input fields reach the model unmasked; {fields} is a comma-separated list of field names"
     },
+    "wd.ai.history_words": {
+      "text": "the conversation's words (its numbers, emails and names stay hidden)",
+      "reviewed": true,
+      "context": "Read-back: in the list of what an ai step's model sees as it is, the conversation's history let through (identifiers still hidden)"
+    },
     "wd.ai.fallback": {
       "text": "If the AI model cannot answer, it answers with a set reply instead",
       "reviewed": true,
