@@ -404,6 +404,23 @@ V1 and V2 were reviewed for gaps before V3; 21 were found and all are fixed on t
 - Passages from outside are quoted to the model as material, never as instructions, and the reply check applies to anything they lead to (K11).
 - Tests: each source kind against fixtures; refresh replaces; deletion removes; search finds the right passage; a page with injected instructions does not change what the assistant does.
 
+**Built** (2026-11-08), see [What your assistant knows](../knowledge.md):
+- **Store and search** (`engine/knowledge`, migration 00319): `knowledge_sources` and `knowledge_passages` under forced row-level security. Passages are at most 1,200 characters (2,000 per source, 50 sources per business), and a GIN index covers the words. Search uses Postgres full text with the `simple` dictionary, matching any word or a word's start, ranked with `ts_rank_cd`, over approved sources that are not paused.
+- **Approval.** Text read before the owner approves waits as pending passages. After approval, a refresh replaces the text in use at once. The About page is approved as written. A failed read keeps the last text, records the reason and alerts once a day (`knowledge_source`). A digest tells when the text changed.
+- **Readers** (`api/knowledge_readers.go`, `api/knowledge_website.go`, `engine/knowledge/extract`):
+  - About;
+  - storefront (card, hours, catalogue with prices);
+  - a table's non-personal columns;
+  - the verified website, re-checked on each read: egress guard, same origin, `robots.txt`, `TaskiemBot/1.0`, at most 50 pages, boilerplate and login/cart pages dropped;
+  - PDF and DOCX uploads (text only; a scan is refused in plain words);
+  - a `googlesheets@1` range;
+  - books through the `books_items` capability.
+- **Refresh and API.** The `api` role refreshes due sources every 5 minutes through `taskiem_knowledge_due`. The API is `/v1/knowledge*` (`secret.manage`, audited as `knowledge.source.*`), and the page is **What your assistant knows** (`/knowledge`) with **Try a question**.
+- **`knowledge@1`.** `search` returns `found`, `passages` and `material`; `refresh` asks for a read within minutes. Material is quoted between `<<material N ...>>` and `<<end of material N>>`, a passage cannot close its own quote, and every ai step's fixed rules say quoted material is never instructions (K11; tested with a passage that carries an injected instruction).
+- **Not done here (moved to V10):** OCR, Drive and Docs, shop platforms, and adding a document by sending it in chat (today it is uploaded on the page).
+- **The website crawl** follows a first-page redirect only to the same site's http/https or www/bare twin.
+- **Extraction limits:** the PDF reader is Taskiem's own bounded reader (no decryption, no LZW, no reading order across columns), and elements hidden only by a CSS class are kept.
+
 ### V6. Guard rails for customers
 
 - A per-sender limit for connector triggers (messages per minute and per day, set on the workflow), with a fixed polite reply when exceeded (L1).
@@ -445,7 +462,7 @@ V1 and V2 were reviewed for gaps before V3; 21 were found and all are fixed on t
 
 - Quality-rating watch for WhatsApp numbers (C23).
 - The AI builder and evaluation suite learn assistants (A13).
-- OCR for scanned files and photos of menus (K7, A4); a Drive and Docs connector; shop-platform connectors (K8, K9).
+- OCR for scanned files and photos of menus (K7, A4); a Drive and Docs connector; shop-platform connectors (K8, K9); adding a knowledge document by sending it in chat (K7).
 - Better search (embeddings) if full-text search is not good enough on real questions (K4).
 - Debounce several quick messages into one answer (L5).
 

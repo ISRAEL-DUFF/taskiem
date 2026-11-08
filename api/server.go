@@ -38,6 +38,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/httpsec"
 	"github.com/israel-duff/taskiem/engine/inmail"
 	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/knowledge"
 	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/lru"
 	"github.com/israel-duff/taskiem/engine/matching"
@@ -246,6 +247,12 @@ type Server struct {
 	// Speech hears and speaks for workflows (speech@1, docs/speech.md):
 	// the owner's switch and readiness ask it what this Taskiem can do.
 	Speech *speech.Service
+	// Knowledge is what the business's assistant knows (docs/knowledge.md);
+	// KnowledgeService builds it with this server's readers.
+	Knowledge *knowledge.Service
+	// KnowledgeWebClient, when set, reads businesses' websites instead of
+	// the egress guard's client (tests).
+	KnowledgeWebClient *http.Client
 	// Billing is plans, subscriptions and payments (billing.go); nil or
 	// not enabled is billing off: the internal plan, every feature.
 	Billing *billing.Service
@@ -414,6 +421,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermApprovalDecide)).Get("/whatsapp/handoff/{token}", s.getHandoff)
 			r.With(s.need(PermApprovalDecide)).Post("/whatsapp/handoff/{token}", s.completeHandoff)
 			r.With(s.need(PermSecretManage)).Get("/ussd", s.getUSSD)
+			r.With(s.need(PermSecretManage), s.tenantWide).Route("/knowledge", s.knowledgeRoutes) // what the assistant knows (knowledge.go)
 			r.With(s.need(PermSecretManage)).Get("/languages", s.getLanguages)
 			r.With(s.need(PermSecretManage), s.tenantWide).Put("/languages", s.putLanguages)
 			r.With(s.need(PermPIIReveal)).Get("/languages/transcripts", s.getTranscripts)

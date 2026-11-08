@@ -154,6 +154,9 @@ tags:
 - name: USSD
   description: USSD channels.
   x-taskiem-guide: ussd
+- name: Knowledge
+  description: What the business's assistant knows, from its own words, storefront, tables, website, documents, sheets and books.
+  x-taskiem-guide: knowledge
 - name: Languages
   description: Languages beyond English and voice notes on WhatsApp, USSD and SMS (drafts until reviewed by native speakers).
   x-taskiem-guide: languages
@@ -15708,6 +15711,317 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/StepUpProof'
+  /v1/knowledge:
+    get:
+      operationId: listKnowledge
+      tags:
+      - Knowledge
+      summary: What the business's assistant knows
+      description: The business's knowledge sources (docs/knowledge.md, decision 0062 D12), oldest first, with their state and how many passages each has in use and waiting for approval.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      x-taskiem-all-environments: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeList'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createKnowledge
+      tags:
+      - Knowledge
+      summary: Add a knowledge source and read it
+      description: 'A source of a kind (about, storefront, table, website, sheet, books; a file is added with POST /v1/knowledge/files) with its config, read at once. The answer shows what it gave (shown); a source from outside Taskiem waits for approval. A read that fails is answered too (status failed, error). Audited (knowledge.source.create).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeRequest'
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeSource'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/knowledge/files:
+    post:
+      operationId: createKnowledgeFile
+      tags:
+      - Knowledge
+      summary: Add a document as a knowledge source
+      description: A PDF or Word (.docx) document, at most 25 MB, as the file field (and an optional title). Only its text is kept, never the file. A scan with no text is refused with 422 in plain words. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                title:
+                  type: string
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeSource'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/knowledge/search:
+    post:
+      operationId: searchKnowledge
+      tags:
+      - Knowledge
+      summary: What the assistant would find for a question
+      description: The passages of the approved sources that best answer a question, as knowledge@1 search finds them.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              properties:
+                question:
+                  type: string
+                limit:
+                  type: integer
+              additionalProperties: false
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeSearch'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/knowledge/{id}:
+    get:
+      operationId: getKnowledge
+      tags:
+      - Knowledge
+      summary: A knowledge source and its passages
+      description: The source, and in shown its passages waiting for approval (when there are) or else those in use; pending=true or false picks.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: pending
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeSource'
+        default:
+          $ref: '#/components/responses/Error'
+    patch:
+      operationId: patchKnowledge
+      tags:
+      - Knowledge
+      summary: Change a knowledge source
+      description: Its title, or its config (then it is read again). Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeSource'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteKnowledge
+      tags:
+      - Knowledge
+      summary: Delete a knowledge source and its passages
+      description: Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          $ref: '#/components/responses/NoContent'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/knowledge/{id}/refresh:
+    post:
+      operationId: refreshKnowledge
+      tags:
+      - Knowledge
+      summary: Read a knowledge source again now
+      description: Before the owner's first approval its text waits; after it, it replaces what is used at once.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeSource'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/knowledge/{id}/approve:
+    post:
+      operationId: approveKnowledge
+      tags:
+      - Knowledge
+      summary: Use what a knowledge source gave
+      description: Its passages waiting for approval replace those in use, and later refreshes are used at once. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeSource'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/knowledge/{id}/pause:
+    post:
+      operationId: pauseKnowledge
+      tags:
+      - Knowledge
+      summary: Pause or resume a knowledge source
+      description: A paused source is not used or refreshed. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [paused]
+              properties:
+                paused:
+                  type: boolean
+              additionalProperties: false
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeSource'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/languages:
     get:
       operationId: getLanguages
@@ -25684,6 +25998,119 @@ components:
           type: integer
         reviewed_entries:
           type: integer
+      additionalProperties: false
+    KnowledgeRequest:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum: [about, storefront, table, website, sheet, books]
+        title:
+          type: string
+          maxLength: 120
+        config:
+          type: object
+          description: 'about: {text}; table: {table, columns?}; website: {site (a verified website of the business), start?, max_pages? (1 to 50)}; sheet: {connection?, spreadsheet_id, range}; books: {connector, connection?}; storefront: {}.'
+      additionalProperties: false
+    KnowledgePassage:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        source_id:
+          type: string
+          format: uuid
+        source:
+          type: string
+        kind:
+          type: string
+        title:
+          type: string
+        text:
+          type: string
+        link:
+          type: string
+        read_at:
+          $ref: '#/components/schemas/Timestamp'
+        pending:
+          type: boolean
+        rank:
+          type: number
+      additionalProperties: false
+    KnowledgeSource:
+      type: object
+      required: [id, kind, title, config, status, outside, passages, pending]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [about, storefront, table, website, file, sheet, books]
+        title:
+          type: string
+        config:
+          type: object
+          description: The source's settings (a file's text is left out).
+        status:
+          type: string
+          enum: [new, review, active, failed, paused]
+          description: new (never read), review (read, waiting for the owner's approval), active (used), failed (the last read failed; the last text is still used), paused.
+        outside:
+          type: boolean
+          description: Its text comes from outside Taskiem (a website, a document, a sheet, books).
+        approved_at:
+          type: [string, 'null']
+        approved_by:
+          type: [string, 'null']
+        read_at:
+          type: [string, 'null']
+        changed_at:
+          type: [string, 'null']
+          description: The last time its text changed.
+        error:
+          type: [string, 'null']
+          description: Why the last read failed, in plain words.
+        created_by:
+          type: string
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        passages:
+          type: integer
+          description: Passages in use.
+        pending:
+          type: integer
+          description: Passages waiting for approval.
+        shown:
+          type: array
+          items:
+            $ref: '#/components/schemas/KnowledgePassage'
+          description: What it gave (waiting for approval) or what is in use.
+      additionalProperties: false
+    KnowledgeList:
+      type: object
+      required: [sources, kinds]
+      properties:
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/KnowledgeSource'
+        kinds:
+          type: array
+          items:
+            type: string
+      additionalProperties: false
+    KnowledgeSearch:
+      type: object
+      required: [found, passages]
+      properties:
+        found:
+          type: boolean
+        passages:
+          type: array
+          items:
+            $ref: '#/components/schemas/KnowledgePassage'
       additionalProperties: false
     Languages:
       type: object

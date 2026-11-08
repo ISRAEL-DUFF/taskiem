@@ -31,6 +31,7 @@ import (
 	filesconn "github.com/israel-duff/taskiem/connectors/files"
 	formconn "github.com/israel-duff/taskiem/connectors/form"
 	invconn "github.com/israel-duff/taskiem/connectors/invoices"
+	knowledgeconn "github.com/israel-duff/taskiem/connectors/knowledge"
 	linkconn "github.com/israel-duff/taskiem/connectors/link"
 	"github.com/israel-duff/taskiem/connectors/notify"
 	ridersconn "github.com/israel-duff/taskiem/connectors/riders"
@@ -57,6 +58,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/ingest"
 	"github.com/israel-duff/taskiem/engine/inmail"
 	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/knowledge"
 	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/moneydigest"
@@ -768,6 +770,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	emailOps := &emailconn.Late{}
 	fileOps := &filesconn.Late{}
 	speechOps := &speechconn.Late{}
+	knowledgeOps := &knowledgeconn.Late{}
 	tell := &notify.Late{}
 	invoiceOps := &invconn.Late{}
 	linkOps := &linkconn.Late{}
@@ -785,6 +788,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	copts.Email = emailOps
 	copts.Files = fileOps
 	copts.Speech = speechOps
+	copts.Knowledge = knowledgeOps
 	copts.Notify = tell
 	if err := builtin.Register(reg, copts); err != nil {
 		pool.Close()
@@ -839,6 +843,9 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	fileOps.Set(e.runFiles)
 	e.speech = speechService(e, cfg.Languages.Voice, cfg.Speech, log)
 	speechOps.Set(e.speech)
+	// Workflows search what the assistant knows wherever they run; reading
+	// sources is the api role's (it holds the readers).
+	knowledgeOps.Set(&knowledge.Service{Pool: e.pool})
 	if cfg.WhatsApp != nil {
 		// The templates' url buttons open the web app and the form host
 		// (docs/whatsapp.md#templates).
@@ -1226,6 +1233,9 @@ func serve(ctx context.Context, args []string) error {
 		// Tables that keep rows for a time (decision 0062 V5) lose their
 		// older rows every hour.
 		tasks = append(tasks, func(ctx context.Context) error { srv.RunRowExpiry(ctx); return nil })
+		// What the assistant knows is read daily, or when asked (V5b).
+		srv.Knowledge = srv.KnowledgeService(e.pool)
+		tasks = append(tasks, func(ctx context.Context) error { srv.RunKnowledgeRefresh(ctx); return nil })
 		// Checking a Python step compiles CPython first (seconds): do it now.
 		go func() { _ = sandbox.InitPython() }()
 		srv.Done = runCtx.Done()
