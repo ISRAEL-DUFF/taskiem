@@ -51,8 +51,8 @@
       "name": "sent_by",
       "type": "string",
       "title": "How it went",
-      "description": "email (in the conversation), mailbox (left for the business's own mailbox or WhatsApp number to send), member (told as a member of the business), message (WhatsApp, Telegram, text or email), none (no way to reach the customer) or missing (no such ticket).",
-      "value": "=steps.how.output.how"
+      "description": "email (in the conversation), mailbox (left for the business's own mailbox or WhatsApp number to send), member (told as a member of the business), message (WhatsApp, Telegram, text or email), none (no way to reach the customer), missing (no such ticket) or failed (the email could not be sent: the answer is saved unsent, with a note saying why, and the ticket is marked all the same).",
+      "value": "=steps.how.output.how == 'email' && !steps.send.output.steps.?email.hasValue() ? 'failed' : steps.how.output.how"
     }
   ],
   "definition": {
@@ -183,6 +183,30 @@
                     "message": "=trigger.body.message",
                     "thread": "=steps.find.output.rows[0].?thread.orValue('') != '' ? steps.find.output.rows[0].thread : steps.find.output.rows[0].reference",
                     "address": "=steps.find.output.rows[0].mailbox"
+                  },
+                  "on_error": {
+                    "steps": [
+                      {
+                        "id": "email_failed",
+                        "type": "connector",
+                        "name": "Note on the ticket that the email could not go",
+                        "connector": "xenibase@1",
+                        "action": "insert_rows",
+                        "connection": "data_tables",
+                        "input": {
+                          "table": "=steps.tables.output.messages",
+                          "row": {
+                            "reference": "=steps.find.output.rows[0].reference",
+                            "direction": "note",
+                            "author": "Taskiem",
+                            "body": "='Taskiem could not email this answer to the customer: ' + steps.email.error.message",
+                            "at": "=run.started_at",
+                            "channel": "email",
+                            "mail": "taskiem"
+                          }
+                        }
+                      }
+                    ]
                   }
                 }
               ]
@@ -250,8 +274,8 @@
             "at": "=run.started_at",
             "channel": "=steps.how.output.how == 'message' ? steps.find.output.rows[0].?channel.orValue('') : steps.how.output.how == 'member' ? steps.find.output.rows[0].?channel.orValue('staff') : steps.how.output.how == 'mailbox' && steps.find.output.rows[0].?mail.orValue('') == 'whatsapp' ? 'whatsapp' : 'email'",
             "mail": "=steps.how.output.how in ['email', 'mailbox', 'member'] ? steps.find.output.rows[0].mail : ''",
-            "message_id": "=steps.how.output.how == 'email' ? steps.send.output.steps.email.message_id : ''",
-            "sent_at": "=steps.how.output.how in ['mailbox', 'none'] ? null : run.started_at"
+            "message_id": "=steps.how.output.how == 'email' ? steps.send.output.steps.?email.?message_id.orValue('') : ''",
+            "sent_at": "=steps.how.output.how in ['mailbox', 'none'] || (steps.how.output.how == 'email' && !steps.send.output.steps.?email.hasValue()) ? null : run.started_at"
           }
         }
       },

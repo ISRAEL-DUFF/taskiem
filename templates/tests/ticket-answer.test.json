@@ -104,6 +104,126 @@
       }
     },
     {
+      "name": "an answer the outbox refuses is saved unsent with a note, and the ticket is still marked",
+      "trigger": {
+        "body": {
+          "reference": "t-1042",
+          "message": "Your order left this morning.",
+          "author": "Bola",
+          "status": "waiting_on_customer",
+          "assign_to": "bola@adacakes.ng"
+        }
+      },
+      "mocks": {
+        "record": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "update": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "find": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "T-1042",
+                "subject": "Order 42 is late",
+                "customer_name": "Ada Obi",
+                "customer_email": "ada@example.com",
+                "customer_phone": "",
+                "channel": "email",
+                "status": "open",
+                "assigned_to": "",
+                "thread": "T-1042",
+                "mail": "taskiem",
+                "mailbox": "k3x9q2m7a1bz@in.taskiem.app"
+              }
+            ]
+          }
+        },
+        "email": {
+          "error": {
+            "kind": "fatal",
+            "message": "sender: too many messages to this recipient"
+          }
+        },
+        "email_failed": {
+          "output": {
+            "affected": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "find": {
+            "filters": [
+              {
+                "column": "reference",
+                "op": "eq",
+                "value": "T-1042"
+              }
+            ]
+          },
+          "email": {
+            "to": "ada@example.com",
+            "subject": "Order 42 is late",
+            "message": "Your order left this morning.",
+            "thread": "T-1042",
+            "address": "k3x9q2m7a1bz@in.taskiem.app"
+          },
+          "record": {
+            "table": "ticket_messages",
+            "row": {
+              "reference": "T-1042",
+              "direction": "out",
+              "author": "Bola",
+              "body": "Your order left this morning.",
+              "channel": "email",
+              "mail": "taskiem",
+              "message_id": "",
+              "sent_at": null
+            }
+          },
+          "update": {
+            "table": "tickets",
+            "key": 42,
+            "set": {
+              "status": "waiting_on_customer",
+              "assigned_to": "bola@adacakes.ng"
+            }
+          },
+          "email_failed": {
+            "table": "ticket_messages",
+            "row": {
+              "reference": "T-1042",
+              "direction": "note",
+              "author": "Taskiem",
+              "body": "Taskiem could not email this answer to the customer: sender: too many messages to this recipient",
+              "mail": "taskiem"
+            }
+          }
+        },
+        "steps": {
+          "message": "not_run",
+          "email": "failed",
+          "email_failed": "completed",
+          "record": "completed",
+          "update": "completed"
+        },
+        "outputs": {
+          "how": {
+            "found": true,
+            "how": "email"
+          }
+        }
+      }
+    },
+    {
       "name": "a Gmail ticket's answer is left for the mailbox's sending workflow, and resolving it is recorded",
       "trigger": {
         "body": {

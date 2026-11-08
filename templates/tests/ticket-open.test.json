@@ -166,6 +166,178 @@
       }
     },
     {
+      "name": "an acknowledgement the outbox refuses leaves the ticket open, with a note saying why",
+      "params": {
+        "routing": "ai"
+      },
+      "env": {
+        "ticket_reply_form": "https://app.taskiem.app/f/replyform"
+      },
+      "trigger": {
+        "body": {
+          "channel": "email",
+          "subject": "Order 42 has not arrived",
+          "message": "I paid on Monday and the rider has not come.",
+          "customer_name": "Ada Obi",
+          "customer_email": "ada@example.com",
+          "mail": "taskiem",
+          "mailbox": "k3x9q2m7a1bz@in.taskiem.app",
+          "message_id": "c0@mail.example.com",
+          "received_at": "2026-11-07T09:00:00Z"
+        }
+      },
+      "mocks": {
+        "number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_noted": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "ack_message": {
+          "output": {
+            "via": "whatsapp"
+          }
+        },
+        "route__classify": {
+          "output": {
+            "department": "Delivery",
+            "priority": "high",
+            "summary": "Paid order not delivered"
+          }
+        },
+        "ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 42,
+                "status": "new"
+              }
+            ]
+          }
+        },
+        "ack_email": {
+          "error": {
+            "kind": "fatal",
+            "message": "sender: too many messages to this recipient"
+          }
+        },
+        "ack_failed": {
+          "output": {
+            "affected": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "ticket": {
+            "table": "tickets",
+            "row": {
+              "subject": "Order 42 has not arrived",
+              "customer_name": "Ada Obi",
+              "customer_email": "ada@example.com",
+              "customer_phone": "",
+              "channel": "email",
+              "department": "Delivery",
+              "role": "dispatch",
+              "priority": "high",
+              "summary": "Paid order not delivered",
+              "status": "new",
+              "last_customer_at": "2026-11-07T09:00:00Z",
+              "mail": "taskiem",
+              "mailbox": "k3x9q2m7a1bz@in.taskiem.app",
+              "last_message_id": "c0@mail.example.com",
+              "previous_reference": ""
+            }
+          },
+          "number": {
+            "table": "tickets",
+            "key": 42,
+            "set": {
+              "reference": "T-1042",
+              "thread": "T-1042"
+            }
+          },
+          "first": {
+            "table": "ticket_messages",
+            "row": {
+              "reference": "T-1042",
+              "direction": "in",
+              "author": "Ada Obi",
+              "body": "I paid on Monday and the rider has not come.",
+              "message_id": "c0@mail.example.com",
+              "channel": "email",
+              "mail": "taskiem"
+            }
+          },
+          "tell": {
+            "to": "role",
+            "role": "dispatch",
+            "title": "New ticket T-1042 (high)",
+            "message": "T-1042 for Delivery, high priority: Order 42 has not arrived\nPaid order not delivered\nAnswer it: https://app.taskiem.app/f/replyform?ticket=T-1042"
+          },
+          "ack_email": {
+            "to": "ada@example.com",
+            "subject": "Order 42 has not arrived",
+            "thread": "T-1042",
+            "in_reply_to": "c0@mail.example.com",
+            "address": "k3x9q2m7a1bz@in.taskiem.app",
+            "message": "Thank you for getting in touch. We have your message and will answer you soon.\n\nYour ticket is T-1042."
+          },
+          "ack_failed": {
+            "table": "ticket_messages",
+            "row": {
+              "reference": "T-1042",
+              "direction": "note",
+              "author": "Taskiem",
+              "body": "Taskiem could not email the customer their ticket number: sender: too many messages to this recipient",
+              "mail": "taskiem"
+            }
+          }
+        },
+        "steps": {
+          "ack_email": "failed",
+          "ack_sent": "skipped",
+          "ack_failed": "completed",
+          "ack_message": "not_run",
+          "first": "completed",
+          "number": "completed",
+          "tell": "completed"
+        },
+        "outputs": {
+          "ref": {
+            "reference": "T-1042",
+            "how": "email"
+          }
+        }
+      }
+    },
+    {
       "name": "a WhatsApp customer is answered on their phone",
       "trigger": {
         "body": {

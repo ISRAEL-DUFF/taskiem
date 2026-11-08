@@ -140,8 +140,8 @@
       "name": "told_by",
       "type": "string",
       "title": "How the customer was told",
-      "description": "email (in the conversation), mailbox (left for the business's own mailbox or WhatsApp number to send, by its sending workflow), member (told as a member of the business), message (WhatsApp, Telegram, text or email) or none.",
-      "value": "=steps.ref.output.how"
+      "description": "email (in the conversation), mailbox (left for the business's own mailbox or WhatsApp number to send, by its sending workflow), member (told as a member of the business), message (WhatsApp, Telegram, text or email) or none, or failed (the email could not be sent; a note on the ticket says why, and the ticket is open all the same).",
+      "value": "=steps.ref.output.how == 'email' && !steps.tell_customer.output.steps.?ack_email.hasValue() ? 'failed' : steps.ref.output.how"
     }
   ],
   "definition": {
@@ -438,6 +438,30 @@
                     "thread": "=steps.ref.output.reference",
                     "in_reply_to": "=trigger.body.?message_id.orValue('')",
                     "address": "=trigger.body.mailbox"
+                  },
+                  "on_error": {
+                    "steps": [
+                      {
+                        "id": "ack_failed",
+                        "type": "connector",
+                        "name": "Note on the ticket that the email could not go",
+                        "connector": "xenibase@1",
+                        "action": "insert_rows",
+                        "connection": "data_tables",
+                        "input": {
+                          "table": "=steps.desk.output.messages",
+                          "row": {
+                            "reference": "=steps.ref.output.reference",
+                            "direction": "note",
+                            "author": "Taskiem",
+                            "body": "='Taskiem could not email the customer their ticket number: ' + steps.ack_email.error.message",
+                            "at": "=trigger.body.?received_at.orValue(run.started_at)",
+                            "channel": "email",
+                            "mail": "taskiem"
+                          }
+                        }
+                      }
+                    ]
                   }
                 },
                 {

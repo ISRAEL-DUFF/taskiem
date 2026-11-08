@@ -483,6 +483,16 @@ func TestSendInThreadIdempotentAndChecked(t *testing.T) {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
+	// Too many emails to one person: refused for good, as the outbox
+	// refuses it every time, not retried until the step's retries run out.
+	w.svc.Messages.PerHour = 1
+	busy := send
+	busy.Key = "tsk_over_the_limit"
+	if _, err := w.svc.SendInThread(ctx, busy); !errors.Is(err, effects.ErrFatal) || !errors.Is(err, sender.ErrRecipientLimit) {
+		t.Errorf("over the recipient's limit: %v", err)
+	}
+	w.svc.Messages.PerHour = 50
+
 	plain := w.deploy(alerts)
 	other := w.env.Start(t, plain, map[string]any{"type": "manual"})
 	e := send

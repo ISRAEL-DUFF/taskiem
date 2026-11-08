@@ -64,6 +64,8 @@ Open **Answer customers' tickets** from the link in the message about the ticket
 
 The first person to answer a ticket is the one it is assigned to; from then on, they are the one told when the customer replies.
 
+If Taskiem cannot email the customer (for example, they have had too many emails from Taskiem in the last hour), your answer is still saved with the ticket, marked as not sent, with a note saying why: you can reach the customer another way.
+
 **Put the link in every message.** After you publish **Answer customers' tickets**, copy its form's link and save it in **Settings**, under **Settings your workflows read**, as `ticket_reply_form`. Every message about a new ticket then has a link that opens the form with the ticket's number filled in.
 
 ## Follow-ups
@@ -102,7 +104,7 @@ The first person to answer a ticket is the one it is assigned to; from then on, 
 
 - Under **Endpoints**, make the workflow's key. Each call is a `POST` of JSON, signed with it: the header `X-Taskiem-Signature: sha256=` and the HMAC-SHA256 of the body. Keep the key on your server; never put it in a web page or an app people download.
 - The body: `subject` and `message` (both needed), and `name`, `email`, `phone`, `department` (used when you chose **chosen**) and `external_id` (your own id for the message), as far as you have them.
-- The answer is the ticket: `201` with `{"reference": "T-1042", "department": "Billing", "priority": "normal", "told_by": "email", "external_id": "…"}`. If the ticket takes more than 30 seconds (Taskiem's AI was slow), the answer is `202` with the run's id; the ticket is still made and the customer still gets its number.
+- The answer is the ticket: `201` with `{"reference": "T-1042", "department": "Billing", "priority": "normal", "told_by": "email", "external_id": "…"}` (`told_by` is `failed` when the email to the customer could not be sent; the ticket is made all the same, with a note saying why). If the ticket takes more than 30 seconds (Taskiem's AI was slow), the answer is `202` with the run's id; the ticket is still made and the customer still gets its number.
 - A call sent again with the same body (a retry) does not make a second ticket.
 - **Your helpdesk's Taskiem email address** (optional) works as for the contact form.
 

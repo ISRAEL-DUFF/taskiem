@@ -321,7 +321,9 @@ func (s *Service) SendInThread(ctx context.Context, e ThreadEmail) (map[string]a
 	switch {
 	case errors.Is(err, effects.ErrFatal):
 		return nil, err
-	case errors.Is(err, sender.ErrInvalid):
+	case errors.Is(err, sender.ErrInvalid), errors.Is(err, sender.ErrRecipientLimit), errors.Is(err, sender.ErrAllowance):
+		// The outbox refused this email for good (as invoices, storefront
+		// and forms treat it): asking again would only be refused again.
 		return nil, fmt.Errorf("%w: %w", effects.ErrFatal, err)
 	case err != nil:
 		return nil, fmt.Errorf("%w: %w", effects.ErrRetryable, err)
