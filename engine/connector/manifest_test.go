@@ -85,6 +85,10 @@ func TestInvalid(t *testing.T) {
     class: idempotent_write
     idempotency: { field: ref, encoding: base64url, length: 22, limits: { charset: "a-z0-9" } }
     input: { type: object }`, "alphabet"},
+		"call timeout on a write": {`
+  send: { title: Send, class: unsafe_write, call_timeout: 120, input: { type: object } }`, "only a read action may set its own call timeout"},
+		"call timeout too long": {`
+  get: { title: Get, class: read, call_timeout: 301, input: { type: object } }`, "schema:"},
 		"pii field missing": {`
   get: { title: Get, class: read, input: { type: object, properties: { a: { type: string } } }, pii: [b] }`, `"b" is not in the input schema`},
 		"nested pii field missing": {`

@@ -304,7 +304,7 @@ V1 and V2 were reviewed for gaps before V3; 21 were found and all are fixed on t
 - Tests: a WhatsApp voice note heard, answered, spoken and sent back as a voice note through the engine, with fakes. A nightly live check (`speech-live.yml`) speaks Ogg/Opus with the real provider and hears it back, which answers T4's Ogg question once the secret is set (VP1).
 - **F7, decided:** no transcoder. The provider is asked for Opus, and `speak` refuses an answer that is not mono Ogg/Opus rather than send a note neither app plays. AMR voice notes are kept as files but not heard until a transcoder exists.
 - **Deviations:**
-  - The transcript's retention is the run's (sealed in history, erased with the person), not a separate transcript store.
+  - The transcript's retention is the run's (sealed in run history like the customer's messages), not a separate transcript store. Like their messages, it is sealed under a key of its own and is not yet erased with the customer: that is P2, in V6.
   - A voice per business (T6) waits for VP4's recordings: workflows pick from the voices this Taskiem offers.
 
 - `engine/voice` gains a speech (text-to-speech) interface and an OpenAI-compatible provider; configuration `TASKIEM_SPEECH_*` (T2).
@@ -314,6 +314,17 @@ V1 and V2 were reviewed for gaps before V3; 21 were found and all are fixed on t
 - Output OGG/Opus mono from the provider where it can; otherwise a transcoder (a vetted static encoder run in the container step runner, or a provider that emits Opus), decided by a spike before V3 (F7).
 - Fixed answers for audio that cannot be heard, in five languages (T8, R11).
 - Tests with the fake provider; a recorded Ogg/Opus sample through the real provider in a nightly check (T4).
+
+
+#### Review of V3 (2026-11-08)
+
+| Found | Fix |
+| --- | --- |
+| Every connector call is cut at 30 s, so hearing a long voice note or speaking a long reply would be cut short, retried and billed again on each attempt, never finishing | A read action may declare `call_timeout` (1 to 300 s, [connector/v1](../contracts/connector-v1.md) rule 22); `transcribe` and `speak` declare 180 s, and the services' clients allow 175 s |
+| The allowance was read, then counted after the call: calls at the same moment could all pass the last seconds | Seconds are reserved in one statement before the service is asked and settled after (given back when it fails); a concurrency test |
+| A spoken reply outlived the customer's erasure until its expiry | `speak` takes `customer` (and `customer_kind`); a run file a step made can now be tied to a person too, so erasing them deletes it |
+| The plan said transcripts are erased with the customer | They are sealed under keys of their own, like the customer's messages: P2, in V6. The plan and the guide now say so |
+| AAC voice notes are sent to the service as M4A | Untested until recordings exist (VP4); listed under "Not yet" in the guide |
 
 ### V4. The model step, made fit for conversation
 

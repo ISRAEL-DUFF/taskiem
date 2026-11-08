@@ -1200,7 +1200,7 @@ func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 		// Its own timeout per call; the heartbeat keeps the lease.
 		return w.aiEvent(ctx, p, in)
 	}
-	deadline := time.Now().Add(w.CallTimeout)
+	deadline := time.Now().Add(w.readTimeout(p))
 	if p.class.IsWrite() {
 		deadline = p.intentAt.Add(w.CallTimeout)
 		if !time.Now().Before(deadline) {
@@ -1223,7 +1223,7 @@ func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 		if err != nil {
 			return w.secretFailure(p, err)
 		}
-		hc, err := w.client(ctx, p, w.CallTimeout)
+		hc, err := w.client(ctx, p, time.Until(deadline))
 		if err != nil {
 			return w.secretFailure(p, err)
 		}
@@ -1473,6 +1473,20 @@ func (w *Worker) policy(ctx context.Context, p *plan, creds map[string]string) (
 	}
 	pol.Hosts, pol.Purpose = hosts, p.stepType+"_step"
 	return pol, nil
+}
+
+// readTimeout bounds a call: CallTimeout, or longer for a read action
+// that declares its own call_timeout (hearing a long voice note). The
+// heartbeat keeps the lease meanwhile.
+func (w *Worker) readTimeout(p *plan) time.Duration {
+	if p.conn != nil && !p.class.IsWrite() {
+		if a, ok := p.conn.Manifest.Actions[p.action]; ok {
+			if d := time.Duration(a.CallTimeout) * time.Second; d > w.CallTimeout {
+				return d
+			}
+		}
+	}
+	return w.CallTimeout
 }
 
 // client returns an egress-guarded HTTP client for this task.

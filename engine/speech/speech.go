@@ -200,55 +200,93 @@ func (s *Service) ready(ctx context.Context, tenant uuid.UUID, have bool) error 
 	return nil
 }
 
-// spend checks that n more seconds fit this month's allowance.
-func (s *Service) spend(ctx context.Context, tenant uuid.UUID, n int64) error {
-	if s.Allowance == nil {
+// Kinds of seconds, the speech_usage columns they count in.
+const (
+	heardCol  = "seconds_heard"
+	spokenCol = "seconds_spoken"
+)
+
+// reserve takes n seconds of this month's allowance before the service
+// is asked, in one statement, so two calls at once cannot both pass the
+// last seconds; settle corrects it once the real length is known, or
+// gives it back when the service failed.
+func (s *Service) reserve(ctx context.Context, tenant uuid.UUID, col string, n int64) error {
+	var allowed int64
+	if s.Allowance != nil {
+		var err error
+		if allowed, err = s.Allowance(ctx, tenant); err != nil {
+			return fmt.Errorf("%w: %w", ErrService, err)
+		}
+	}
+	if s.Pool == nil {
 		return nil
 	}
-	allowed, err := s.Allowance(ctx, tenant)
+	var limit *int64 // nil: no limit
+	if allowed > 0 {
+		limit = &allowed
+		if n > allowed {
+			return s.over(ctx, tenant, 0, allowed)
+		}
+	}
+	took := false
+	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx, `INSERT INTO speech_usage AS u (tenant_id, month, `+col+`)
+			VALUES ($1, date_trunc('month', now() AT TIME ZONE 'UTC')::date, $2)
+			ON CONFLICT (tenant_id, month) DO UPDATE SET `+col+` = u.`+col+` + EXCLUDED.`+col+`, updated_at = now()
+			WHERE $3::bigint IS NULL OR u.seconds_heard + u.seconds_spoken + EXCLUDED.`+col+` <= $3::bigint
+			RETURNING true`, tenant, n, limit).Scan(&took)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		return err
+	})
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrService, err)
 	}
-	if allowed <= 0 {
-		return nil
-	}
-	var used Usage
-	if err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		var err error
-		used, err = UsageThisMonth(ctx, tx, tenant)
-		return err
-	}); err != nil {
-		return fmt.Errorf("%w: %w", ErrService, err)
-	}
-	if used.Seconds()+n > allowed {
-		if s.LimitHit != nil {
-			s.LimitHit(ctx, tenant, "speech_seconds_monthly")
-		}
-		return fmt.Errorf("%w (%d of %d seconds used; it renews next month or when the plan's allowance is raised)", ErrOverAllowance, used.Seconds(), allowed)
+	if !took {
+		var used Usage
+		_ = db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			var err error
+			used, err = UsageThisMonth(ctx, tx, tenant)
+			return err
+		})
+		return s.over(ctx, tenant, used.Seconds(), allowed)
 	}
 	return nil
 }
 
-// count adds to the tenant's month; a failure to count is logged by the
-// caller's metrics only, never fails the reply.
-func (s *Service) count(ctx context.Context, tenant uuid.UUID, heard, spoken, chars int64, refused bool) {
+// over refuses a request past the allowance, and records the refusal.
+func (s *Service) over(ctx context.Context, tenant uuid.UUID, used, allowed int64) error {
+	if s.LimitHit != nil {
+		s.LimitHit(ctx, tenant, "speech_seconds_monthly")
+	}
+	s.settle(ctx, tenant, heardCol, 0, 0, false, true)
+	return fmt.Errorf("%w (%d of %d seconds used; it renews next month or when the plan's allowance is raised)", ErrOverAllowance, used, allowed)
+}
+
+// settle adds delta seconds (negative gives reserved seconds back), the
+// characters spoken, and a request or a refusal. A failure to count never
+// fails the reply.
+func (s *Service) settle(ctx context.Context, tenant uuid.UUID, col string, delta, chars int64, request, refused bool) {
 	if s.Pool == nil {
 		return
 	}
-	req, ref := int64(1), int64(0)
+	req, ref := int64(0), int64(0)
+	if request {
+		req = 1
+	}
 	if refused {
-		req, ref = 0, 1
+		ref = 1
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
 	_ = db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `INSERT INTO speech_usage (tenant_id, month, seconds_heard, seconds_spoken, characters_spoken, requests, refused)
-			VALUES ($1, date_trunc('month', now() AT TIME ZONE 'UTC')::date, $2, $3, $4, $5, $6)
-			ON CONFLICT (tenant_id, month) DO UPDATE SET seconds_heard = speech_usage.seconds_heard + EXCLUDED.seconds_heard,
-			  seconds_spoken = speech_usage.seconds_spoken + EXCLUDED.seconds_spoken,
-			  characters_spoken = speech_usage.characters_spoken + EXCLUDED.characters_spoken,
-			  requests = speech_usage.requests + EXCLUDED.requests, refused = speech_usage.refused + EXCLUDED.refused, updated_at = now()`,
-			tenant, heard, spoken, chars, req, ref)
+		_, err := tx.Exec(ctx, `INSERT INTO speech_usage AS u (tenant_id, month, `+col+`, characters_spoken, requests, refused)
+			VALUES ($1, date_trunc('month', now() AT TIME ZONE 'UTC')::date, GREATEST($2::bigint, 0), $3, $4, $5)
+			ON CONFLICT (tenant_id, month) DO UPDATE SET `+col+` = GREATEST(u.`+col+` + $2::bigint, 0),
+			  characters_spoken = u.characters_spoken + EXCLUDED.characters_spoken,
+			  requests = u.requests + EXCLUDED.requests, refused = u.refused + EXCLUDED.refused, updated_at = now()`,
+			tenant, delta, chars, req, ref)
 		return err
 	})
 }
@@ -272,7 +310,7 @@ func (s *Service) Transcribe(ctx context.Context, tenant uuid.UUID, data []byte,
 	if err := s.ready(ctx, tenant, s.CanHear()); err != nil {
 		s.outcome("hear", err)
 		if errors.Is(err, ErrOff) {
-			s.count(ctx, tenant, 0, 0, 0, true)
+			s.settle(ctx, tenant, heardCol, 0, 0, false, true)
 		}
 		return Heard{}, err
 	}
@@ -307,9 +345,8 @@ func (s *Service) Transcribe(ctx context.Context, tenant uuid.UUID, data []byte,
 		}
 	}
 	secs = max(secs, 1)
-	if err := s.spend(ctx, tenant, secs); err != nil {
+	if err := s.reserve(ctx, tenant, heardCol, secs); err != nil {
 		s.outcome("hear", err)
-		s.count(ctx, tenant, 0, 0, 0, true)
 		return Heard{}, err
 	}
 	hint := ""
@@ -322,16 +359,18 @@ func (s *Service) Transcribe(ctx context.Context, tenant uuid.UUID, data []byte,
 	switch {
 	case errors.Is(err, voice.ErrEmpty):
 		// The service listened: the seconds count.
-		s.count(ctx, tenant, secs, 0, 0, false)
+		s.settle(ctx, tenant, heardCol, 0, 0, true, false)
 		return notHeard(ReasonEmpty, secs)
 	case errors.Is(err, voice.ErrUnsupported):
+		s.settle(ctx, tenant, heardCol, -secs, 0, false, false)
 		return notHeard(ReasonUnreadable, 0)
 	case err != nil:
+		s.settle(ctx, tenant, heardCol, -secs, 0, false, false)
 		err = serviceErr(err)
 		s.outcome("hear", err)
 		return Heard{}, err
 	}
-	s.count(ctx, tenant, secs, 0, 0, false)
+	s.settle(ctx, tenant, heardCol, 0, 0, true, false)
 	telemetry.SpeechRequests.WithLabelValues("hear", "done").Inc()
 	return Heard{OK: true, Text: t.Text, Language: t.Language, Seconds: secs}, nil
 }
@@ -342,7 +381,7 @@ func (s *Service) Speak(ctx context.Context, tenant uuid.UUID, text, voiceName, 
 	if err := s.ready(ctx, tenant, s.CanSpeak()); err != nil {
 		s.outcome("speak", err)
 		if errors.Is(err, ErrOff) {
-			s.count(ctx, tenant, 0, 0, 0, true)
+			s.settle(ctx, tenant, spokenCol, 0, 0, false, true)
 		}
 		return Spoken{}, err
 	}
@@ -366,15 +405,15 @@ func (s *Service) Speak(ctx context.Context, tenant uuid.UUID, text, voiceName, 
 	// About 15 characters a second of speech; the real length is counted
 	// once the audio is back.
 	guess := max(1, int64(chars/15))
-	if err := s.spend(ctx, tenant, guess); err != nil {
+	if err := s.reserve(ctx, tenant, spokenCol, guess); err != nil {
 		s.outcome("speak", err)
-		s.count(ctx, tenant, 0, 0, 0, true)
 		return Spoken{}, err
 	}
 	start := time.Now()
 	sp, err := s.Say.Speak(ctx, r)
 	telemetry.SpeechSeconds.WithLabelValues("speak").Observe(time.Since(start).Seconds())
 	if err != nil {
+		s.settle(ctx, tenant, spokenCol, -guess, 0, false, false)
 		err = serviceErr(err)
 		s.outcome("speak", err)
 		return Spoken{}, err
@@ -385,12 +424,14 @@ func (s *Service) Speak(ctx context.Context, tenant uuid.UUID, text, voiceName, 
 		// a service that answers anything else is set up wrongly.
 		if !media.IsOpus(sp.Data) {
 			err := fmt.Errorf("%w: the speech service did not answer Ogg/Opus audio; it cannot be sent as a voice note", ErrRefused)
+			s.settle(ctx, tenant, spokenCol, -guess, 0, false, false)
 			s.outcome("speak", err)
 			return Spoken{}, err
 		}
 		// WhatsApp takes mono voice notes only.
 		if n := opusChannels(sp.Data); n != 1 {
 			err := fmt.Errorf("%w: the speech service answered %d-channel audio; a voice note must be mono", ErrRefused, n)
+			s.settle(ctx, tenant, spokenCol, -guess, 0, false, false)
 			s.outcome("speak", err)
 			return Spoken{}, err
 		}
@@ -398,7 +439,7 @@ func (s *Service) Speak(ctx context.Context, tenant uuid.UUID, text, voiceName, 
 			secs = max(1, int64(math.Ceil(d.Seconds())))
 		}
 	}
-	s.count(ctx, tenant, 0, secs, int64(chars), false)
+	s.settle(ctx, tenant, spokenCol, secs-guess, int64(chars), true, false)
 	telemetry.SpeechRequests.WithLabelValues("speak", "done").Inc()
 	return Spoken{Data: sp.Data, Type: sp.MimeType, Seconds: secs, Characters: chars}, nil
 }

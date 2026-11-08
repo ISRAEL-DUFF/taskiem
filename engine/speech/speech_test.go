@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/google/uuid"
@@ -184,5 +186,41 @@ func TestAllowance(t *testing.T) {
 	}
 	if _, _, _, _, refused := usage(t, d, tenant); refused != 2 {
 		t.Fatalf("refused %d", refused)
+	}
+}
+
+// Calls at the same moment cannot both take the last seconds, and a call
+// the service failed gives its seconds back.
+func TestAllowanceHoldsUnderConcurrency(t *testing.T) {
+	s, _, _, tenant, d := setup(t, 10)
+	turnOn(t, d, tenant, true)
+	ctx := context.Background()
+	note := voice.TestOgg(3, 8)
+	var wg sync.WaitGroup
+	var ok atomic.Int32
+	for range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if h, err := s.Transcribe(ctx, tenant, note, "audio/ogg", ""); err == nil && h.OK {
+				ok.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
+	if heard, _, _, _, _ := usage(t, d, tenant); ok.Load() != 3 || heard != 9 {
+		t.Fatalf("%d heard, %d seconds counted: want 3 and 9 of a 10-second allowance", ok.Load(), heard)
+	}
+
+	s2, hear2, _, tenant2, d2 := setup(t, 0)
+	turnOn(t, d2, tenant2, true)
+	hear2.Respond = func(voice.Audio) (voice.Transcript, error) {
+		return voice.Transcript{}, &voice.ServiceError{Service: "transcription", Status: 503}
+	}
+	if _, err := s2.Transcribe(ctx, tenant2, note, "audio/ogg", ""); !errors.Is(err, speech.ErrService) {
+		t.Fatal(err)
+	}
+	if heard, _, _, req, _ := usage(t, d2, tenant2); heard != 0 || req != 0 {
+		t.Fatalf("a failed call kept %d seconds, %d requests", heard, req)
 	}
 }

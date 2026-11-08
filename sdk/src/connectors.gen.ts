@@ -3018,6 +3018,10 @@ export interface SpeechCannotHearInput {
   reason: Val<"empty" | "too_long" | "unreadable" | "unavailable">;
 }
 export interface SpeechSpeakInput {
+  /** Whom the reply is for (the WhatsApp number, or the Telegram chat id): erasing them deletes the spoken reply too */
+  customer?: Val<string>;
+  /** phone for a WhatsApp number, chat for a Telegram chat id */
+  customer_kind?: Val<"phone" | "chat">;
   format?: Val<"" | "ogg" | "mp3">;
   /** How to speak, for services that take it ("warm and unhurried, Nigerian English") */
   how?: Val<string>;

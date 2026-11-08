@@ -16,7 +16,7 @@ Two things must be true, and readiness checks both before a workflow that hears 
 | Action | Class | What it does |
 | --- | --- | --- |
 | `transcribe` | read | Turns a voice note (`file`: a run file reference, from `whatsapp@1 get_media` or `telegram@1 get_file`) into `text`. `language` (`en`, `pcm`, `yo`, `ha`, `ig`) is a hint for the service and the language of `reply`. Pidgin has no code, so the service detects it. Output: `heard`, `text` (sealed in run history), `language`, `seconds`. |
-| `speak` | read | Speaks `text` (at most 4,096 characters; split longer replies with `chunks()`) as a voice note (`format` `ogg`, the default) or as MP3. `voice` is one of the voices this Taskiem offers (the first is the default). `how` says how to speak, for services that take it ("warm and unhurried"). Output: `file` (a run file reference, kept like any file a step made), `seconds`, `characters`, and `plays_inline`: WhatsApp plays a voice note in the chat only up to 512 KB (about two minutes); a longer one arrives as a file to download, so keep spoken replies short. |
+| `speak` | read | Speaks `text` (at most 4,096 characters; split longer replies with `chunks()`) as a voice note (`format` `ogg`, the default) or as MP3. `voice` is one of the voices this Taskiem offers (the first is the default). `how` says how to speak, for services that take it ("warm and unhurried"). `customer` (with `customer_kind` `phone`, the default, or `chat` for a Telegram chat id) ties the reply to whom it answers, so erasing them deletes it. Output: `file` (a run file reference, kept like any file a step made), `seconds`, `characters`, and `plays_inline`: WhatsApp plays a voice note in the chat only up to 512 KB (about two minutes); a longer one arrives as a file to download, so keep spoken replies short. |
 | `cannot_hear` | read | The fixed answer for a `reason` (`empty`, `too_long`, `unreadable`, `unavailable`) in a `language`. It needs no service and spends nothing. |
 
 **A voice note that cannot be heard is not a failure.** The step completes with `heard: false`, a `reason`, and a `reply`: a fixed answer in the customer's language, ready to send. The reasons are:
@@ -45,13 +45,16 @@ A reply in steps, for a WhatsApp voice note:
  "on_error": {"steps": [{"id": "sorry", "type": "connector", "connector": "speech@1", "action": "cannot_hear",
    "input": {"reason": "unavailable", "language": "pcm"}}]}},
 {"id": "say", "type": "connector", "connector": "speech@1", "action": "speak", "needs": ["hear"],
- "input": {"text": "=steps.hear.output.heard ? 'Yes, we have rice today.' : steps.hear.output.reply"}},
+ "input": {"customer": "=trigger.item.message.from",
+           "text": "=steps.hear.output.heard ? 'Yes, we have rice today.' : steps.hear.output.reply"}},
 {"id": "reply", "type": "connector", "connector": "whatsapp@1", "action": "send_media", "needs": ["say"],
  "effect": {"resend_if_lost": true},
  "input": {"to": "=trigger.item.message.from", "media_type": "audio", "file": "=steps.say.output.file", "voice": true}}
 ```
 
 On Telegram, use `get_file` and `send_voice` instead. The model step that writes the answer comes with plan V4, and the recipe with V8.
+
+**Time.** Both `transcribe` and `speak` may take up to three minutes per call (`call_timeout: 180` in the manifest), instead of the 30 seconds every other connector call gets: hearing a five-minute voice note, or speaking a 4,096-character reply, can take longer than 30 seconds. Without that, the step would be cut short, retried and billed again each time.
 
 ## Voice notes and Opus
 
@@ -73,6 +76,7 @@ The default when a plan names none is 100 minutes. The prices are placeholders u
 How seconds are counted:
 - **Seconds heard:** an Ogg voice note's length is read from the stream. Other formats are estimated from their size, at 128 kbit/s (AMR at 12.2 kbit/s), which never counts a long note as short.
 - **Seconds spoken:** the reply's real length. Before the service is asked, about 15 characters a second is assumed.
+- **Taken before the service is asked:** the seconds are reserved from the allowance in one step, so two calls at the same moment cannot both pass the last seconds. A call the service fails gives them back.
 - **Rounding:** each request counts at least one second.
 
 A request that would go past the allowance is refused, and the refusal is recorded. Settings and Billing show the seconds used this month (`speech_seconds_this_month` in `GET /v1/limits`).
@@ -86,8 +90,9 @@ A request that would go past the allowance is refused, and the refusal is record
 ## Privacy
 
 - **What a customer said** (`transcribe`'s `text`) is personal data, sealed in run history like their messages. The run's own steps read it.
-- **Spoken text** is sealed in the `speak` step's input.
+- **Spoken text** is sealed in the `speak` step's input, and so is `customer`.
 - **Audio** is held in memory only while the service is called. Its file lives in the organisation's storage for the run files' retention.
+- **Erasing a customer** (`POST /v1/pii/erase`) deletes their voice notes (`get_media`/`get_file` with `sender`) and the replies spoken to them (`speak` with `customer`) at once. Their transcripts and messages, sealed as free text, are each sealed under a key of their own and are not yet erased with them. That is P2, due in [plan V6](spec/voice-assistant.md#v6-guard-rails-for-customers).
 - **The service** gets the audio or text and nothing else: no number, no name.
 - **Its account** is chosen with its data-processing terms (no training on the audio, a stated retention, transfer out of Nigeria), people item VP1. A self-hosted OpenAI-compatible server avoids the third party.
 
@@ -116,3 +121,4 @@ Metrics:
 - **Voices and quality in Pidgin, Yoruba, Hausa and Igbo:** recordings from consenting speakers (VP4) decide which voices and models are good enough.
 - **A transcoder for AMR**, and for a service that cannot emit Opus (F7).
 - **A voice per business** (T6): today a workflow picks from the voices this Taskiem offers.
+- **AAC voice notes** (ADTS, from some older phones) are sent to the service as M4A. Whether it hears them is untested until recordings exist (VP4).

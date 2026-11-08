@@ -51,6 +51,10 @@ func speechConfig() (SpeechConfig, error) {
 	return c, nil
 }
 
+// speechCallTimeout bounds one call to a speech service: speech@1's
+// call_timeout, within which the worker waits for it.
+const speechCallTimeout = 175 * time.Second
+
 // speechService builds speech for workflows: each provider through the
 // egress guard, to its one host.
 func speechService(e *engine, hear voice.Config, c SpeechConfig, log *slog.Logger) *speech.Service {
@@ -62,12 +66,12 @@ func speechService(e *engine, hear voice.Config, c SpeechConfig, log *slog.Logge
 		LimitHit: e.store.LimitHit}
 	if hear.Provider == "openai" {
 		o := &voice.OpenAI{BaseURL: hear.BaseURL, APIKey: hear.APIKey, Model: hear.Model}
-		o.HTTP = (&egress.Guard{Logger: log}).Client(egress.Policy{Tenant: "platform", Hosts: []string{o.Host()}, Purpose: "speech_hear"}, 90*time.Second)
+		o.HTTP = (&egress.Guard{Logger: log}).Client(egress.Policy{Tenant: "platform", Hosts: []string{o.Host()}, Purpose: "speech_hear"}, speechCallTimeout)
 		s.Hear = o
 	}
 	if c.Say.Provider == "openai" {
 		o := &voice.OpenAISpeech{BaseURL: c.Say.BaseURL, APIKey: c.Say.APIKey, Model: c.Say.Model}
-		o.HTTP = (&egress.Guard{Logger: log}).Client(egress.Policy{Tenant: "platform", Hosts: []string{o.Host()}, Purpose: "speech_say"}, 90*time.Second)
+		o.HTTP = (&egress.Guard{Logger: log}).Client(egress.Policy{Tenant: "platform", Hosts: []string{o.Host()}, Purpose: "speech_say"}, speechCallTimeout)
 		s.Say = o
 	}
 	if s.Hear != nil || s.Say != nil {

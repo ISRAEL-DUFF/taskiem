@@ -115,6 +115,16 @@ func TestSpeakKeepsTheReply(t *testing.T) {
 	if out, err := call(New(&fakeOps{}), "speak", map[string]any{"text": "Yes", "format": "mp3"}, fs); err != nil || out["file"].(map[string]any)["name"] != "reply.mp3" {
 		t.Fatalf("mp3: %v %v", out, err)
 	}
+	// Tied to the customer it answers: a number, or a Telegram chat.
+	for kind, cat := range map[string]string{"": "phone", "phone": "phone", "chat": "other"} {
+		out, err := call(New(&fakeOps{}), "speak", map[string]any{"text": "Yes", "customer": "42", "customer_kind": kind}, fs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if who := fs.About(out["file"].(map[string]any)["file"].(string)); who.Category != cat || who.Value != "42" {
+			t.Errorf("%q: about %v", kind, who)
+		}
+	}
 }
 
 func TestCannotHearNeedsNoService(t *testing.T) {

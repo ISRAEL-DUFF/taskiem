@@ -107,8 +107,17 @@ func (a *actions) speak(ctx context.Context, req connector.Request) (connector.R
 	if sp.Type == "audio/mpeg" {
 		name = "reply.mp3"
 	}
-	// Made by the step, not sent by a person: kept, not scanned.
-	ref, err := req.Files.Put(ctx, name, sp.Data, false)
+	// Made by the step, not sent by a person: kept, not scanned; tied to
+	// the customer it answers, so erasing them deletes it.
+	var about []connector.FileSubject
+	if who := str(req.Input, "customer"); who != "" {
+		cat := "phone"
+		if str(req.Input, "customer_kind") == "chat" {
+			cat = "other"
+		}
+		about = append(about, connector.FileSubject{Category: cat, Value: who})
+	}
+	ref, err := req.Files.Put(ctx, name, sp.Data, false, about...)
 	if err != nil {
 		return connector.Response{}, runfiles.ActionError(err)
 	}

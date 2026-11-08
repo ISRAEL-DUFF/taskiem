@@ -239,8 +239,10 @@ func (s *Service) put(ctx context.Context, o Owner, name string, data []byte, pe
 			return Ref{}, fmt.Errorf("%w: %w", ErrRefused, err)
 		}
 	}
+	// Whom it is about, whether they sent it or a step made it for them
+	// (a spoken reply): erasing them deletes it.
 	var subject *string
-	if personal && s.Subject != nil {
+	if s.Subject != nil {
 		for _, a := range about {
 			if strings.TrimSpace(a.Value) == "" {
 				continue

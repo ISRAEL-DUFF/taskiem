@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	speechconn "github.com/israel-duff/taskiem/connectors/speech"
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/media/mediatest"
@@ -22,7 +24,10 @@ import (
 // references travel between steps.
 func TestWhatsAppVoiceReplyThroughSpeech(t *testing.T) {
 	e := rt.New(t)
-	e.RunFiles = &runfiles.Service{Pool: e.DB.App, Store: runfilestest.New()}
+	e.RunFiles = &runfiles.Service{Pool: e.DB.App, Store: runfilestest.New(),
+		Subject: func(_ context.Context, _ uuid.UUID, category, value string) (string, error) {
+			return category + ":" + value, nil
+		}}
 	meta := newMetaFake(t, mediatest.OggOpus(4*time.Second))
 	registerWhatsApp(t, e, meta)
 	hear, say := &voice.Fake{Text: "Abeg, una get rice?"}, &voice.FakeSpeaker{}
@@ -37,7 +42,7 @@ func TestWhatsAppVoiceReplyThroughSpeech(t *testing.T) {
 
 	wf := e.Publish(t, wfDoc(`{"id":"fetch","type":"connector","connector":"whatsapp@1","action":"get_media","input":{"media_id":"=trigger.media_id","sender":"=trigger.from"}},
 		{"id":"hear","type":"connector","connector":"speech@1","action":"transcribe","needs":["fetch"],"input":{"file":"=steps.fetch.output.file","language":"pcm"}},
-		{"id":"say","type":"connector","connector":"speech@1","action":"speak","needs":["hear"],"input":{"text":"=steps.hear.output.heard ? 'Yes o, we get rice. You talk say: ' + steps.hear.output.text : steps.hear.output.reply"}},
+		{"id":"say","type":"connector","connector":"speech@1","action":"speak","needs":["hear"],"input":{"customer":"=trigger.from","text":"=steps.hear.output.heard ? 'Yes o, we get rice. You talk say: ' + steps.hear.output.text : steps.hear.output.reply"}},
 		{"id":"reply","type":"connector","connector":"whatsapp@1","action":"send_media","needs":["say"],"input":{"to":"=trigger.from","media_type":"audio","file":"=steps.say.output.file","voice":true}}`, ""))
 	ref := e.Start(t, wf, map[string]any{"media_id": "media-7", "from": "2348031234567"})
 	rt.WaitFor(t, 20*time.Second, "run to end", func() bool {
@@ -73,6 +78,14 @@ func TestWhatsAppVoiceReplyThroughSpeech(t *testing.T) {
 	}
 	if heard != 4 || spoken < 1 {
 		t.Fatalf("counted %d heard, %d spoken", heard, spoken)
+	}
+	// The voice note and the reply both go when the customer is erased.
+	var subjects string
+	if err := e.DB.Admin.QueryRow(context.Background(), `SELECT string_agg(DISTINCT coalesce(subject, '-'), ',') || '/' || count(*) FROM run_files WHERE tenant_id = $1`, e.Tenant).Scan(&subjects); err != nil {
+		t.Fatal(err)
+	}
+	if subjects != "phone:2348031234567/2" {
+		t.Fatalf("files tied to %s", subjects)
 	}
 }
 

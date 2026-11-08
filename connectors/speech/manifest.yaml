@@ -24,6 +24,8 @@ actions:
       language. The speech service being down fails the step after its
       retries; send cannot_hear's answer from on_error.
     class: read
+    # A five-minute voice note can take longer to hear than the usual 30 s.
+    call_timeout: 180
     input:
       type: object
       required: [file]
@@ -50,6 +52,8 @@ actions:
       send_media (voice true) or telegram@1 send_voice. At most 4,096
       characters; split a longer reply with chunks().
     class: read
+    # A 4,096-character reply can take longer to speak than the usual 30 s.
+    call_timeout: 180
     input:
       type: object
       required: [text]
@@ -58,6 +62,8 @@ actions:
         voice:  { type: string, description: "One of the voices this Taskiem offers (the first is the default); empty for the default" }
         format: { type: string, enum: ["", ogg, mp3], default: ogg }
         how:    { type: string, maxLength: 500, description: "How to speak, for services that take it (\"warm and unhurried, Nigerian English\")" }
+        customer:      { type: string, description: "Whom the reply is for (the WhatsApp number, or the Telegram chat id): erasing them deletes the spoken reply too" }
+        customer_kind: { type: string, enum: [phone, chat], default: phone, description: "phone for a WhatsApp number, chat for a Telegram chat id" }
     output:
       type: object
       properties:
@@ -67,6 +73,7 @@ actions:
         plays_inline: { type: boolean, description: "A voice note at most 512 KB, which WhatsApp plays in the chat; a larger one arrives as a file to download (about two minutes of speech)" }
     pii:
       - { field: text, category: other }
+      - { field: customer, category: other }
   cannot_hear:
     title: The answer for a voice note that was not heard
     description: >-

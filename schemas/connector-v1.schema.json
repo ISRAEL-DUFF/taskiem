@@ -803,6 +803,12 @@
         "reconcile": {
           "$ref": "#/$defs/name"
         },
+        "call_timeout": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300,
+          "description": "Read actions only: seconds one call may take when the worker's usual bound (30 s) is too short, such as hearing a long voice note (decision 0062)."
+        },
         "resend_if_lost": {
           "type": "boolean",
           "description": "An unsafe write whose duplicate is only a duplicate chat message: a step may ask for it to be sent once more when its answer is lost (decision 0062 D11)."

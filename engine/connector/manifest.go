@@ -24,6 +24,9 @@ import (
 
 var schema = schemacheck.New("https://schemas.taskiem.dev/connector/v1.json", schemas.ConnectorV1)
 
+// MaxCallTimeout is the longest call_timeout an action may declare.
+const MaxCallTimeout = 300
+
 // Manifest is the subset of a connector/v1 manifest the engine reads.
 type Manifest struct {
 	ID       string `json:"id"`
@@ -396,10 +399,16 @@ type ActionSpec struct {
 	// chat message and nothing worse, so a step may ask for it to be sent
 	// once more when its answer is lost (decision 0062 D11). Never for an
 	// action that moves money or costs per message.
-	ResendIfLost bool            `json:"resend_if_lost,omitempty"`
-	Input        json.RawMessage `json:"input"`
-	Output       json.RawMessage `json:"output"`
-	PII          []PIIField      `json:"pii"`
+	ResendIfLost bool `json:"resend_if_lost,omitempty"`
+	// CallTimeout is how long one call to a read action may take, in
+	// seconds, when the worker's usual bound (30 s) is too short: hearing
+	// a five-minute voice note or speaking a long reply (decision 0062).
+	// Reads only: a write's deadline also decides when reconciling may
+	// conclude it was never sent. At most MaxCallTimeout.
+	CallTimeout int             `json:"call_timeout,omitempty"`
+	Input       json.RawMessage `json:"input"`
+	Output      json.RawMessage `json:"output"`
+	PII         []PIIField      `json:"pii"`
 }
 
 // PIIField accepts either "field" or {field, category}.
@@ -536,6 +545,9 @@ func (m *Manifest) check() []string {
 		p := "/actions/" + name
 		if a.Class == effects.Read && a.Compensate != nil {
 			add("%s: read actions cannot declare compensate", p)
+		}
+		if a.CallTimeout != 0 && (a.Class != effects.Read || a.CallTimeout < 1 || a.CallTimeout > MaxCallTimeout) {
+			add("%s/call_timeout: only a read action may set its own call timeout, of 1 to %d seconds", p, MaxCallTimeout)
 		}
 		if a.ResendIfLost && a.Class != effects.UnsafeWrite {
 			add("%s/resend_if_lost: only an unsafe write can be resent; other classes retry or reconcile already", p)
