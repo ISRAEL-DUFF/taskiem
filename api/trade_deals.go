@@ -139,7 +139,11 @@ func dealCheck(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, lines []links.O
 	if err != nil {
 		return nil, err
 	}
-	return links.BelowFloor(lines, floors, set), nil
+	parents, err := links.SizeParentsTx(ctx, tx, tenant)
+	if err != nil {
+		return nil, err
+	}
+	return links.BelowFloor(lines, floors, parents, set), nil
 }
 
 // errOwnerAsked: an accept below the floor, waiting for the owner.

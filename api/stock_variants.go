@@ -161,22 +161,30 @@ func (s *Server) setStockVariants(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	p := principalFrom(r.Context())
-	ctx := r.Context()
-	id := chi.URLParam(r, "id")
-	unlock, err := s.lockSizes(ctx, p.TenantID, id)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer unlock()
 	audit := func(tx pgx.Tx, action, target string, detail map[string]any) error {
 		return auditTx(r, tx, action, target, detail)
 	}
-	sh, items, err := s.stockItems(ctx, p.TenantID)
+	prod, vs, err := s.applySizes(r.Context(), principalFrom(r.Context()), audit, chi.URLParam(r, "id"), choices, in.Cells, key)
 	if err != nil {
 		s.stockFail(w, r, err)
 		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"item": prod, "variants": vs})
+}
+
+// applySizes sets a product's sizes and colours (setStockVariants), for
+// the API and for Taskiem itself (a buyer's product given the sizes an
+// order brings), each auditing in its own way. It answers the product and
+// its sizes and colours.
+func (s *Server) applySizes(ctx context.Context, p *Principal, audit stockAudit, id string, choices []variants.Choice, cells []variants.Cell, key string) (stock.Item, []stock.Item, error) {
+	unlock, err := s.lockSizes(ctx, p.TenantID, id)
+	if err != nil {
+		return stock.Item{}, nil, err
+	}
+	defer unlock()
+	sh, items, err := s.stockItems(ctx, p.TenantID)
+	if err != nil {
+		return stock.Item{}, nil, err
 	}
 	var product *stock.Item
 	for i := range items {
@@ -186,11 +194,9 @@ func (s *Server) setStockVariants(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case product == nil:
-		s.stockFail(w, r, errNoItem)
-		return
+		return stock.Item{}, nil, errNoItem
 	case product.VariantOf != "":
-		s.fail(w, r, fmt.Errorf("%w: this is a size or colour of another product: open that product", errBadRequest))
-		return
+		return stock.Item{}, nil, fmt.Errorf("%w: this is a size or colour of another product: open that product", errBadRequest)
 	}
 	before := variantsOf(items, id)
 	have := make([]variants.Existing, len(before))
@@ -201,19 +207,16 @@ func (s *Server) setStockVariants(w http.ResponseWriter, r *http.Request) {
 			onSale++
 		}
 	}
-	plan, err := variants.MakePlan(product.Name, choices, in.Cells, have)
+	plan, err := variants.MakePlan(product.Name, choices, cells, have)
 	if err != nil {
-		s.fail(w, r, fmt.Errorf("%w: %s", errBadRequest, strings.TrimPrefix(err.Error(), "variants: invalid: ")))
-		return
+		return stock.Item{}, nil, fmt.Errorf("%w: %s", errBadRequest, strings.TrimPrefix(err.Error(), "variants: invalid: "))
 	}
 	// The catalogue holds at most MaxItems rows, sizes and colours too.
 	if len(items)+len(plan.Create) > storefront.MaxItems {
-		s.fail(w, r, fmt.Errorf("%w: the catalogue holds at most %d items, each size and colour counted", errConflict, storefront.MaxItems))
-		return
+		return stock.Item{}, nil, fmt.Errorf("%w: the catalogue holds at most %d items, each size and colour counted", errConflict, storefront.MaxItems)
 	}
 	if sh, err = s.stockVariantColumns(ctx, p.TenantID, p.Actor(), audit, sh); err != nil {
-		s.stockFail(w, r, err)
-		return
+		return stock.Item{}, nil, err
 	}
 	m := sh.cols()
 	// The rows to make, checked by the table before any is written.
@@ -242,26 +245,23 @@ func (s *Server) setStockVariants(w http.ResponseWriter, r *http.Request) {
 		}
 		checked, err := datatables.CheckRow(sh.table.Columns, row, true, false)
 		if err != nil {
-			s.fail(w, r, fmt.Errorf("%w: %s", errBadRequest, strings.TrimPrefix(err.Error(), "invalid: ")))
-			return
+			return stock.Item{}, nil, fmt.Errorf("%w: %s", errBadRequest, strings.TrimPrefix(err.Error(), "invalid: "))
 		}
 		rows = append(rows, checked)
 	}
 	tr, err := s.tableRowsFor(ctx, p.TenantID, sh.table, storefrontPurpose)
 	if err != nil {
-		s.stockFail(w, r, err)
-		return
+		return stock.Item{}, nil, err
 	}
 	// The product: its choices, and which have a price of their own.
 	setup := variants.Setup{Choices: choices}
-	for _, c := range in.Cells {
+	for _, c := range cells {
 		if v, ok := variants.Fit(c.Variant, choices); ok && c.PriceKobo != nil {
 			setup.OwnPrice = append(setup.OwnPrice, variants.Key(v))
 		}
 	}
 	if err := s.stockSetCells(ctx, p.TenantID, sh, id, "api-"+key+"-product", map[string]any{m.Choices: setupCell(setup)}); err != nil {
-		s.stockFail(w, r, err)
-		return
+		return stock.Item{}, nil, err
 	}
 	// What the product holds is shared out to the new rows, as far as it
 	// goes; the rest of their counts came in.
@@ -273,8 +273,7 @@ func (s *Server) setStockVariants(w http.ResponseWriter, r *http.Request) {
 	if len(plan.Create) > 0 {
 		out, err := tr.call(ctx, s, "insert_rows", map[string]any{"table": sh.table.Name, "rows": rows}, "api-"+key+"-rows")
 		if err != nil {
-			s.stockFail(w, r, err)
-			return
+			return stock.Item{}, nil, err
 		}
 		made := rowsOf(out)
 		for i, c := range plan.Create {
@@ -291,16 +290,14 @@ func (s *Server) setStockVariants(w http.ResponseWriter, r *http.Request) {
 			if from > 0 {
 				if _, err := s.stockMove(ctx, p.TenantID, stock.Move{ItemID: rid, Item: name, Reason: stock.Moved, Delta: &from,
 					Note: "From " + product.Name, Actor: p.Actor(), Key: "api-" + key + "-from-" + strconv.Itoa(i), CostKobo: product.CostKobo}, audit); err != nil {
-					s.stockFail(w, r, err)
-					return
+					return stock.Item{}, nil, err
 				}
 				moved += from
 			}
 			if rest := *c.Count - from; rest > 0 {
 				if _, err := s.stockMove(ctx, p.TenantID, stock.Move{ItemID: rid, Item: name, Reason: stock.Received,
 					Delta: &rest, Note: "Sizes and colours set up", Actor: p.Actor(), Key: "api-" + key + "-in-" + strconv.Itoa(i), CostKobo: product.CostKobo}, audit); err != nil {
-					s.stockFail(w, r, err)
-					return
+					return stock.Item{}, nil, err
 				}
 			}
 		}
@@ -309,8 +306,7 @@ func (s *Server) setStockVariants(w http.ResponseWriter, r *http.Request) {
 		out := -moved
 		if _, err := s.stockMove(ctx, p.TenantID, stock.Move{ItemID: id, Item: product.Name, Reason: stock.Moved, Delta: &out,
 			Note: "Into its sizes and colours", Actor: p.Actor(), Key: "api-" + key + "-product-out", CostKobo: product.CostKobo}, audit); err != nil {
-			s.stockFail(w, r, err)
-			return
+			return stock.Item{}, nil, err
 		}
 	}
 	if share > moved {
@@ -319,8 +315,7 @@ func (s *Server) setStockVariants(w http.ResponseWriter, r *http.Request) {
 		zero := int64(0)
 		if _, err := s.stockMove(ctx, p.TenantID, stock.Move{ItemID: id, Item: product.Name, Reason: stock.Count, SetTo: &zero,
 			Note: "Not among its sizes and colours", Actor: p.Actor(), Key: "api-" + key + "-product-stock", CostKobo: product.CostKobo}, audit); err != nil {
-			s.stockFail(w, r, err)
-			return
+			return stock.Item{}, nil, err
 		}
 	}
 	// Rows kept: their names, values and prices as the grid has them; a
@@ -338,52 +333,36 @@ func (s *Server) setStockVariants(w http.ResponseWriter, r *http.Request) {
 			set[m.Available] = true
 		}
 		if err := s.stockSetCells(ctx, p.TenantID, sh, k.ID, "api-"+key+"-keep-"+k.ID, set); err != nil {
-			s.stockFail(w, r, err)
-			return
+			return stock.Item{}, nil, err
 		}
 		old := was[k.ID]
 		if k.Cell.Count != nil && (old.Stock == nil || *old.Stock != *k.Cell.Count) {
 			if _, err := s.stockMove(ctx, p.TenantID, stock.Move{ItemID: k.ID, Item: k.Name, Reason: stock.Count, SetTo: k.Cell.Count,
 				Note: "Counted in its sizes and colours", Actor: p.Actor(), Key: "api-" + key + "-count-" + k.ID, CostKobo: old.CostKobo}, audit); err != nil {
-				s.stockFail(w, r, err)
-				return
+				return stock.Item{}, nil, err
 			}
 		}
 	}
 	// Rows the grid no longer has: off sale, kept for their history.
 	for _, rid := range plan.Retire {
 		if err := s.stockSetCells(ctx, p.TenantID, sh, rid, "api-"+key+"-retire-"+rid, map[string]any{m.Available: false}); err != nil {
-			s.stockFail(w, r, err)
-			return
+			return stock.Item{}, nil, err
 		}
 	}
-	if err := s.tx(r, func(tx pgx.Tx) error {
-		return auditTx(r, tx, "stock.variants", product.Name, map[string]any{"item_id": id, "choices": choices,
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+		return audit(tx, "stock.variants", product.Name, map[string]any{"item_id": id, "choices": choices,
 			"made": len(plan.Create), "kept": len(plan.Keep), "retired": len(plan.Retire), "moved": moved})
 	}); err != nil {
-		s.fail(w, r, err)
-		return
+		return stock.Item{}, nil, err
 	}
 	if err := s.SyncStorefront(ctx, p.TenantID); err != nil {
 		s.Logger.Warn("stock: refreshing the catalogue", "tenant", p.TenantID, "err", err)
 	}
-	// On the price lists that hold the product itself, it is off sale:
-	// buyers order its sizes and colours, put on the lists as they are.
-	if len(choices) > 0 {
-		var due []uuid.UUID
-		if err := s.tx(r, func(tx pgx.Tx) error {
-			var err error
-			due, err = links.SetItemOffTx(ctx, tx, p.TenantID, id)
-			return err
-		}); err != nil {
-			s.Logger.Warn("stock: a product with sizes on the price lists", "tenant", p.TenantID, "err", err)
-		}
-		s.mirrorPrices(ctx, p.TenantID, due)
-	}
+	// The price lists that hold the product list its sizes on sale.
+	s.refreshListSizes(ctx, p.TenantID, id)
 	_, after, err := s.stockItems(ctx, p.TenantID)
 	if err != nil {
-		s.stockFail(w, r, err)
-		return
+		return stock.Item{}, nil, err
 	}
 	var prod stock.Item
 	for _, it := range after {
@@ -405,7 +384,7 @@ func (s *Server) setStockVariants(w http.ResponseWriter, r *http.Request) {
 	} else {
 		s.diaryChange(ctx, p, fmt.Sprintf("%s now comes in %d %s", product.Name, n, sizesWord(n)))
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"item": prod, "variants": vs})
+	return prod, vs, nil
 }
 
 // maxVariantPriceKobo bounds a size's or colour's own price: ₦10m.
@@ -742,4 +721,58 @@ func (s *Server) choicePhotoChanged(r *http.Request, product stock.Item, line st
 		s.Logger.Warn("stock: refreshing the catalogue", "tenant", p.TenantID, "err", err)
 	}
 	s.diaryChange(r.Context(), p, line)
+}
+
+// listSizesOf is a product's sizes and colours on sale as a price list
+// carries them, and its choices with only the values they have.
+func listSizesOf(product stock.Item, items []stock.Item) ([]variants.Choice, []links.PriceSize) {
+	var sizes []links.PriceSize
+	for _, v := range variantsOf(items, product.ID) {
+		if v.Available && v.Variant != nil {
+			sizes = append(sizes, links.PriceSize{ItemID: v.ID, Name: v.Name, Variant: v.Variant, Available: true})
+		}
+	}
+	if len(sizes) == 0 {
+		return nil, nil
+	}
+	choices := make([]variants.Choice, 0, len(product.Choices))
+	for _, c := range product.Choices {
+		var vals []string
+		for _, x := range c.Values {
+			for _, z := range sizes {
+				if z.Variant[c.Name] == x {
+					vals = append(vals, x)
+					break
+				}
+			}
+		}
+		choices = append(choices, variants.Choice{Name: c.Name, Values: vals})
+	}
+	return choices, sizes
+}
+
+// refreshListSizes gives the price lists that hold a product its sizes
+// and colours on sale now, and tells the buyers they are shared with.
+func (s *Server) refreshListSizes(ctx context.Context, tenant uuid.UUID, product string) {
+	_, items, err := s.stockItems(ctx, tenant)
+	if err != nil {
+		s.Logger.Warn("stock: a product's sizes on the price lists", "tenant", tenant, "err", err)
+		return
+	}
+	var it stock.Item
+	for _, x := range items {
+		if x.ID == product {
+			it = x
+		}
+	}
+	choices, sizes := listSizesOf(it, items)
+	var due []uuid.UUID
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		var err error
+		due, err = links.SetListSizesTx(ctx, tx, tenant, product, choices, sizes)
+		return err
+	}); err != nil {
+		s.Logger.Warn("stock: a product's sizes on the price lists", "tenant", tenant, "err", err)
+	}
+	s.mirrorPrices(ctx, tenant, due)
 }

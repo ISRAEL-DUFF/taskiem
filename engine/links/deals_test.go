@@ -53,19 +53,56 @@ func TestBelowFloor(t *testing.T) {
 		{Item: "Rice, 25kg", ItemID: "r", Quantity: 20, PriceKobo: 3800000, ListKobo: 4100000},
 		{Item: "Beans", ItemID: "b", Quantity: 10, PriceKobo: 2000000, ListKobo: 2000000},
 	}
-	if why := BelowFloor(lines, map[string]int64{"r": 3700000}, DealSettings{}); len(why) != 0 {
+	if why := BelowFloor(lines, map[string]int64{"r": 3700000}, nil, DealSettings{}); len(why) != 0 {
 		t.Fatalf("at or above the floor: %v", why)
 	}
-	why := BelowFloor(lines, map[string]int64{"r": 3900000}, DealSettings{})
+	why := BelowFloor(lines, map[string]int64{"r": 3900000}, nil, DealSettings{})
 	if len(why) != 1 || !strings.Contains(why[0], "Rice, 25kg at ₦38,000 is under its lowest price, ₦39,000") {
 		t.Fatalf("under the floor: %v", why)
 	}
 	// ₦960,000 against ₦1,020,000 is about 5.9% off.
 	five, ten := 5, 10
-	if why := BelowFloor(lines, nil, DealSettings{MaxDiscountPct: &five}); len(why) != 1 || !strings.Contains(why[0], "more than 5% off") {
+	if why := BelowFloor(lines, nil, nil, DealSettings{MaxDiscountPct: &five}); len(why) != 1 || !strings.Contains(why[0], "more than 5% off") {
 		t.Fatalf("past the largest discount: %v", why)
 	}
-	if why := BelowFloor(lines, nil, DealSettings{MaxDiscountPct: &ten}); len(why) != 0 {
+	if why := BelowFloor(lines, nil, nil, DealSettings{MaxDiscountPct: &ten}); len(why) != 0 {
 		t.Fatalf("within the largest discount: %v", why)
+	}
+	// A size: its own floor, else its product's.
+	sized := []OrderLine{{Item: "Air Max 90 – 42, Black", ItemID: "s42", Quantity: 6, PriceKobo: 3000000}}
+	if why := BelowFloor(sized, map[string]int64{"am90": 3500000}, map[string]string{"s42": "am90"}, DealSettings{}); len(why) != 1 {
+		t.Fatalf("under the product's floor: %v", why)
+	}
+	if why := BelowFloor(sized, map[string]int64{"am90": 3500000, "s42": 2500000}, map[string]string{"s42": "am90"}, DealSettings{}); len(why) != 0 {
+		t.Fatalf("the size's own floor stands: %v", why)
+	}
+}
+
+// A product listed with its sizes: each size an item of its own, at the
+// product's price unless it has its own (then without the product's
+// breaks); a link's own price for the product is every size's.
+func TestFlatSizes(t *testing.T) {
+	product := PriceItem{ItemID: "am90", Name: "Air Max 90", Unit: "pair", PriceKobo: 4000000, MinQuantity: 1, Available: true,
+		Breaks: []Break{{MinQuantity: 50, PriceKobo: 3600000}},
+		Sizes: []PriceSize{{ItemID: "s42", Name: "Air Max 90 – 42", Variant: map[string]string{"Size": "42"}, Available: true},
+			{ItemID: "s46", Name: "Air Max 90 – 46", Variant: map[string]string{"Size": "46"}, PriceKobo: 4500000, Available: true},
+			{ItemID: "s47", Name: "Air Max 90 – 47", Variant: map[string]string{"Size": "47"}}}}
+	flat := Flat([]PriceItem{product, {ItemID: "rice", Name: "Rice", PriceKobo: 100}})
+	if _, ok := flat["am90"]; ok || flat["rice"].Name != "Rice" {
+		t.Fatalf("the product itself is not orderable; a plain item is: %v", flat)
+	}
+	s42, s46 := flat["s42"], flat["s46"]
+	if s42.PriceKobo != 4000000 || PriceAt(s42, 50) != 3600000 || ProductOf(s42) != "am90" || s42.Unit != "pair" {
+		t.Fatalf("a size at the product's price and breaks: %+v", s42)
+	}
+	if s46.PriceKobo != 4500000 || PriceAt(s46, 50) != 4500000 {
+		t.Fatalf("a size's own price, no breaks: %+v", s46)
+	}
+	if flat["s47"].Available {
+		t.Fatal("a size off sale")
+	}
+	product.Overridden, product.PriceKobo = true, 3900000
+	if f := Flat([]PriceItem{product}); f["s46"].PriceKobo != 3900000 || !f["s46"].Overridden {
+		t.Fatalf("a link's own price is each size's: %+v", f["s46"])
 	}
 }

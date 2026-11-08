@@ -10,7 +10,7 @@ import (
 // gets an "available" column to take one off sale with; the product's
 // name, details and price reach its sizes, a size's own price staying;
 // nothing is written when a count is out of bounds; a size taken off sale
-// takes no stock in; price lists take the sizes, not the product; and
+// takes no stock in; price lists take the product with its sizes; and
 // WhatsApp sells a size, never the product itself.
 func TestStockVariantsFixes(t *testing.T) {
 	w := shopWorld(t)
@@ -72,14 +72,15 @@ func TestStockVariantsFixes(t *testing.T) {
 		t.Fatalf("moved out of the product, into each size: %s", moved)
 	}
 
-	// The price list: the product is off sale on it, and cannot go back on.
+	// The price list: the product stays on it, listed once with its sizes
+	// on sale (phase 4); a size cannot go on alone.
 	lists := toJSON(owner.must(200, "GET", "/v1/price-lists", nil))
-	if !strings.Contains(lists, `"available":false`) {
-		t.Fatalf("the product off sale on its price list: %s", lists)
+	if !strings.Contains(lists, `"name":"Air Max 90 – 41, Black"`) || !strings.Contains(lists, `"item_id":"`+id+`"`) {
+		t.Fatalf("the product listed with its sizes: %s", lists)
 	}
-	owner.must(400, "PUT", "/v1/price-lists/"+list+"/items", map[string]any{"items": []any{map[string]any{"item_id": id, "price_kobo": 4000000}}})
+	owner.must(400, "PUT", "/v1/price-lists/"+list+"/items", map[string]any{"items": []any{map[string]any{"item_id": b41["id"], "price_kobo": 4000000}}})
 	owner.must(200, "PUT", "/v1/price-lists/"+list+"/items", map[string]any{"items": []any{
-		map[string]any{"item_id": id, "price_kobo": 4000000, "available": false}, map[string]any{"item_id": b41["id"], "price_kobo": 4000000}}})
+		map[string]any{"item_id": id, "price_kobo": 4000000, "sizes": []any{map[string]any{"item_id": b42["id"], "price_kobo": 4200000}}}}})
 
 	// The product's changes reach its sizes: name, reorder level, and the
 	// price of those without their own.

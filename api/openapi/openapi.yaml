@@ -7671,6 +7671,23 @@ paths:
                             price_kobo:
                               type: integer
                               minimum: 1
+                      sizes:
+                        type: array
+                        maxItems: 100
+                        description: A product sold in sizes and colours goes on the list with all its sizes on sale; these are the ones with a price of their own, or taken off this list. A size or colour given as an item alone is refused (400).
+                        items:
+                          type: object
+                          additionalProperties: false
+                          required: [item_id]
+                          properties:
+                            item_id:
+                              type: string
+                            price_kobo:
+                              type: integer
+                              minimum: 0
+                              description: Its own price on the list; 0, the product's
+                            available:
+                              type: boolean
       responses:
         '200':
           description: Done
@@ -32266,6 +32283,41 @@ components:
               price_kobo:
                 type: integer
                 minimum: 1
+        choices:
+          type: array
+          description: A product sold in sizes and colours, listed once - its choices, with only the values its sizes on sale have
+          items:
+            $ref: '#/components/schemas/VariantChoice'
+        sizes:
+          type: array
+          maxItems: 100
+          description: Its sizes and colours on sale, each ordered on its own row (an order line names the size's item_id), at the product's price unless it has its own; the product's breaks and minimum count its sizes together
+          items:
+            type: object
+            additionalProperties: false
+            required: [item_id, name, variant, available]
+            properties:
+              item_id:
+                type: string
+              name:
+                type: string
+                description: Written out in full - Air Max 90 – 42, Black
+              variant:
+                type: object
+                additionalProperties:
+                  type: string
+              price_kobo:
+                type: integer
+                description: Its own price on the list; absent, the product's
+              available:
+                type: boolean
+        variant_of:
+          type: string
+          description: On a size as an order line prices it, its product's item
+        variant:
+          type: object
+          additionalProperties:
+            type: string
     PriceList:
       type: object
       additionalProperties: false

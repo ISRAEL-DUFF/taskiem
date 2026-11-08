@@ -773,9 +773,44 @@ func linesKobo(lines []links.OrderLine) int64 {
 
 // linesWords says an order's lines: "10 bags Rice, 5 cartons Indomie".
 func linesWords(lines []links.OrderLine) string {
-	parts := make([]string, len(lines))
-	for i, l := range lines {
-		parts[i] = (stock.Item{Unit: l.Unit}).Quantity(l.Quantity) + " " + l.Item
+	// A product's sizes and colours (named "Air Max 90 – 42, Black") are
+	// told together: "36 pairs Air Max 90 in 7 sizes and colours".
+	type group struct {
+		name, unit string
+		qty        int64
+		n          int
+	}
+	var order []string
+	byName := map[string]*group{}
+	for _, l := range lines {
+		name, sized := l.Item, false
+		if i := strings.Index(l.Item, " – "); i > 0 {
+			name, sized = l.Item[:i], true
+		}
+		key := l.Item
+		if sized {
+			key = "\x00" + name
+		}
+		g := byName[key]
+		if g == nil {
+			g = &group{name: l.Item, unit: l.Unit}
+			if sized {
+				g.name = name
+			}
+			byName[key] = g
+			order = append(order, key)
+		}
+		g.qty += l.Quantity
+		g.n++
+	}
+	parts := make([]string, 0, len(order))
+	for _, k := range order {
+		g := byName[k]
+		w := (stock.Item{Unit: g.unit}).Quantity(g.qty) + " " + g.name
+		if strings.HasPrefix(k, "\x00") && g.n > 1 {
+			w += " in " + strconv.Itoa(g.n) + " " + sizesWord(g.n)
+		}
+		parts = append(parts, w)
 	}
 	return strings.Join(parts, ", ")
 }

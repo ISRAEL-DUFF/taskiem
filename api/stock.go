@@ -958,6 +958,9 @@ func (s *Server) patchStockItem(w http.ResponseWriter, r *http.Request) {
 		newName = n
 	}
 	recategorised := s.sizesFollow(r.Context(), p.TenantID, sh, before, newName, key, set)
+	if before.HasSizes() && newName != "" && newName != before.Name {
+		s.refreshListSizes(r.Context(), p.TenantID, id)
+	}
 	if in.PriceKobo != nil && before.VariantOf != "" {
 		s.markOwnPrice(r.Context(), p.TenantID, sh, before)
 	}
