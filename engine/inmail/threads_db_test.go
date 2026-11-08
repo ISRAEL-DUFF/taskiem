@@ -708,3 +708,99 @@ func TestSendInThreadStepWithAddress(t *testing.T) {
 		t.Fatalf("sent: %q", emails)
 	}
 }
+
+// A reply's message and files are recorded with the wake: a failure
+// after the run would have been woken leaves nothing woken, and the
+// retry wakes it with files that are recorded, once, and nothing stored
+// that is not.
+func TestEmailReplyFilesRecordedWithTheWake(t *testing.T) {
+	w := newThreadWorld(t)
+	ctx := context.Background()
+	doc := strings.Replace(tickets, `"config":{"threads":true}`, `"config":{"threads":true,"attachments":"keep"}`, 1)
+	wf := w.deploy(doc)
+	var public string
+	_ = w.env.DB.Admin.QueryRow(ctx, `SELECT public_id FROM email_endpoints WHERE workflow_id = $1`, wf).Scan(&public)
+	proven := inmail.Auth{SPF: "pass", DKIM: []string{"customer.example"}, Aligned: true}
+	const ada = "ada@customer.example"
+	w.receiveTo(public, "", customerMail("c0@customer.example", ada, "Help", "", "Hi."), proven, ada)
+	w.drain()
+	run := w.runs(wf)[0]
+	reply := w.event(run, history.StepCompleted, "ack")["output"].(map[string]any)["reply_to"].(string)
+	tag := strings.TrimSuffix(strings.TrimPrefix(reply, public+"+"), "@in.taskiem.test")
+
+	// The first insert of a reply's file fails, after the wake's own
+	// statements ran.
+	for _, q := range []string{
+		`CREATE SEQUENCE inject_email_files`,
+		`CREATE FUNCTION inject_email_files() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
+		 BEGIN IF nextval('inject_email_files') = 1 THEN RAISE EXCEPTION 'injected failure'; END IF; RETURN NEW; END $$`,
+		`CREATE TRIGGER inject_email_files BEFORE INSERT ON email_files FOR EACH ROW EXECUTE FUNCTION inject_email_files()`,
+	} {
+		if _, err := w.env.DB.Admin.Exec(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	withFile := []byte(strings.ReplaceAll(`From: Ada <`+ada+`>
+To: help@ada-kitchen.example
+Subject: Re: [#T-1042] Help
+Message-ID: <r1@customer.example>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="b"
+
+--b
+Content-Type: text/plain; charset=utf-8
+
+The receipt.
+--b
+Content-Type: application/pdf; name="receipt.pdf"
+Content-Disposition: attachment; filename="receipt.pdf"
+Content-Transfer-Encoding: base64
+
+JVBERi0xLjQKJSBhIHJlY2VpcHQK
+--b--
+`, "\n", "\r\n"))
+	w.receiveTo(public, tag, withFile, proven, ada)
+	if err := w.svc.Drain(ctx); err == nil || !strings.Contains(err.Error(), "injected failure") {
+		t.Fatalf("the injected failure: %v", err)
+	}
+	if o := w.event(run, history.SignalReceived, ""); o != nil {
+		t.Fatalf("the run was woken though the reply was not recorded: %v", o)
+	}
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE email_inbox SET claimed_until = NULL`); err != nil {
+		t.Fatal(err)
+	}
+	w.drain()
+
+	o := w.event(run, history.StepCompleted, "answer")
+	if o == nil {
+		t.Fatal("the reply was not delivered on the retry")
+	}
+	atts := o["output"].(map[string]any)["body"].(map[string]any)["attachments"].([]any)
+	if len(atts) != 1 {
+		t.Fatalf("attachments %v", atts)
+	}
+	id := atts[0].(map[string]any)["id"].(string)
+	var keys []string
+	rows, err := w.env.DB.Admin.Query(ctx, `SELECT storage_key FROM email_files f JOIN email_messages m ON m.id = f.message_id
+		WHERE m.workflow_id = $1 ORDER BY f.id`, wf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if keys, err = pgx.CollectRows(rows, pgx.RowTo[string]); err != nil {
+		t.Fatal(err)
+	}
+	var recorded int
+	_ = w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM email_files WHERE id = $1`, id).Scan(&recorded)
+	if recorded != 1 || len(keys) != 1 {
+		t.Fatalf("the woken run's file %s is recorded %d times; files recorded: %v", id, recorded, keys)
+	}
+	files := w.svc.Files.(*memFiles)
+	files.mu.Lock()
+	defer files.mu.Unlock()
+	if _, ok := files.files[keys[0]]; !ok || len(files.files) != 1 {
+		t.Errorf("stored files %d, recorded %v", len(files.files), keys)
+	}
+	if got := w.messageStatus(t, wf); len(got) != 2 || !strings.HasPrefix(got[1], "replied:"+run.String()) {
+		t.Errorf("messages %q", got)
+	}
+}

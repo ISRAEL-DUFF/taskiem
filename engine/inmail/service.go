@@ -54,7 +54,8 @@ type Service struct {
 	PII Vault
 	// Wake delivers a reply to the runs of its workflow waiting for it
 	// (runtime.Store.WakeWorkflow); nil: threads start runs only.
-	Wake func(ctx context.Context, tenant uuid.UUID, env string, workflow uuid.UUID, event, correlation, dedupKey string, payload any) ([]uuid.UUID, bool, error)
+	Wake func(ctx context.Context, tenant uuid.UUID, env string, workflow uuid.UUID, event, correlation, dedupKey string, payload any,
+		then func(ctx context.Context, tx pgx.Tx, woke []uuid.UUID) error) ([]uuid.UUID, bool, error)
 	// Messages sends email in a thread (email@1 send_in_thread) through
 	// the platform outbox; nil: it cannot.
 	Messages *sender.Queue
@@ -183,6 +184,8 @@ type record struct {
 	note        string
 	run         *uuid.UUID
 	attachments int
+	// recorded: saved already, with the delivery it records.
+	recorded bool
 }
 
 func (s *Service) process(ctx context.Context, x inboxRow) error {
@@ -229,6 +232,11 @@ func (s *Service) handle(ctx context.Context, x inboxRow, meta Meta, raw []byte)
 		return err
 	}
 	msg, perr := Parse(raw)
+	domain := ""
+	if msg != nil {
+		domain = Domain(msg.From.Address)
+	}
+	save := saverFor(x, ep, meta, len(raw), domain)
 	rec := record{status: "refused"}
 	var files []keptFile
 	var conf Confirmation
@@ -253,7 +261,7 @@ func (s *Service) handle(ctx context.Context, x inboxRow, meta Meta, raw []byte)
 			}
 			rec.note += "."
 		} else if cfg.Threads && !sample(meta) {
-			rec, files, err = s.threaded(ctx, x, meta, msg, ep, cfg)
+			rec, files, err = s.threaded(ctx, x, meta, msg, ep, cfg, save)
 			if err != nil {
 				return err
 			}
@@ -265,12 +273,31 @@ func (s *Service) handle(ctx context.Context, x inboxRow, meta Meta, raw []byte)
 		}
 	}
 	telemetry.Ingest.WithLabelValues("email", rec.status).Inc()
-	size := len(raw)
-	domain := ""
-	if msg != nil {
-		domain = Domain(msg.From.Address)
+	if rec.recorded {
+		return nil
 	}
 	return db.InTenantTx(ctx, s.Pool, []uuid.UUID{x.tenant}, func(tx pgx.Tx) error {
+		if err := save(ctx, tx, rec, files); err != nil {
+			return err
+		}
+		if rec.status != "confirmation" {
+			return nil
+		}
+		c, _ := json.Marshal(conf)
+		if _, err := tx.Exec(ctx, `UPDATE email_endpoints SET confirmation = $2, updated_at = now() WHERE id = $1`, x.endpoint, c); err != nil {
+			return err
+		}
+		return s.tellConfirmation(ctx, tx, x.tenant, ep, conf)
+	})
+}
+
+// saver records what came of a message: its email_messages row and the
+// files kept, in tx.
+type saver func(ctx context.Context, tx pgx.Tx, rec record, files []keptFile) error
+
+// saverFor is the saver of an inbox message.
+func saverFor(x inboxRow, ep endpoint, meta Meta, size int, domain string) saver {
+	return func(ctx context.Context, tx pgx.Tx, rec record, files []keptFile) error {
 		if _, err := tx.Exec(ctx, `INSERT INTO email_messages (id, tenant_id, endpoint_id, workflow_id, environment, idem, sender_domain, size, attachments, status, note, run_id, received_at)
 			VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), $8, $9, $10, NULLIF($11, ''), $12, $13) ON CONFLICT (endpoint_id, idem) DO NOTHING`,
 			x.id, x.tenant, x.endpoint, ep.workflow, ep.env, x.idem, domain, size, rec.attachments, rec.status, rec.note, rec.run, meta.ReceivedAt); err != nil {
@@ -284,15 +311,8 @@ func (s *Service) handle(ctx context.Context, x inboxRow, meta Meta, raw []byte)
 				return err
 			}
 		}
-		if rec.status != "confirmation" {
-			return nil
-		}
-		c, _ := json.Marshal(conf)
-		if _, err := tx.Exec(ctx, `UPDATE email_endpoints SET confirmation = $2, updated_at = now() WHERE id = $1`, x.endpoint, c); err != nil {
-			return err
-		}
-		return s.tellConfirmation(ctx, tx, x.tenant, ep, conf)
-	})
+		return nil
+	}
 }
 
 // tellConfirmation tells the owners, in chat, what their mail provider

@@ -1133,7 +1133,11 @@ func (s *Store) deliverSignal(ctx context.Context, tenant uuid.UUID, env, event,
 // Nothing is buffered: with no run waiting it returns no runs and records
 // nothing, so the caller decides what else to do. A dedupKey already
 // delivered for the event in the environment is ignored (fresh false).
-func (s *Store) WakeWorkflow(ctx context.Context, tenant uuid.UUID, env string, workflow uuid.UUID, event, correlation, dedupKey string, payload any) ([]uuid.UUID, bool, error) {
+// then, when given, runs in the same transaction once runs were woken,
+// so what the caller records about the delivery (an email reply's
+// message and files) commits with it or not at all.
+func (s *Store) WakeWorkflow(ctx context.Context, tenant uuid.UUID, env string, workflow uuid.UUID, event, correlation, dedupKey string, payload any,
+	then func(ctx context.Context, tx pgx.Tx, woke []uuid.UUID) error) ([]uuid.UUID, bool, error) {
 	if env == "" || dedupKey == "" {
 		return nil, false, errors.New("signal: an environment and a dedup key are required")
 	}
@@ -1191,6 +1195,9 @@ func (s *Store) WakeWorkflow(ctx context.Context, tenant uuid.UUID, env string, 
 				}
 			}
 			woke = append(woke, w.run)
+		}
+		if then != nil {
+			return then(ctx, tx, woke)
 		}
 		return nil
 	})

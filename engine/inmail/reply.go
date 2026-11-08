@@ -116,7 +116,7 @@ func (s *Service) findThread(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, e
 // thread goes to the workflow's run waiting for it, waits in the inbox
 // while the thread's run is going but not waiting, and otherwise starts a
 // run, with the thread when one was found.
-func (s *Service) threaded(ctx context.Context, x inboxRow, meta Meta, msg *Message, ep endpoint, cfg Config) (record, []keptFile, error) {
+func (s *Service) threaded(ctx context.Context, x inboxRow, meta Meta, msg *Message, ep endpoint, cfg Config, save saver) (record, []keptFile, error) {
 	var th threadMatch
 	var waiting, live bool
 	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{x.tenant}, func(tx pgx.Tx) error {
@@ -176,14 +176,22 @@ func (s *Service) threaded(ctx context.Context, x inboxRow, meta Meta, msg *Mess
 			return record{}, nil, err
 		}
 	}
-	woke, fresh, err := s.Wake(ctx, x.tenant, ep.env, ep.workflow, ReplyEvent, th.thread, hex.EncodeToString(x.idem), payload)
+	// The reply's message and files are recorded in the transaction that
+	// wakes the run: a woken run's file ids are always recorded, once,
+	// and a failure leaves nothing woken, so the retry starts afresh.
+	var rec record
+	woke, fresh, err := s.Wake(ctx, x.tenant, ep.env, ep.workflow, ReplyEvent, th.thread, hex.EncodeToString(x.idem), payload,
+		func(ctx context.Context, tx pgx.Tx, woke []uuid.UUID) error {
+			rec = record{status: "replied", run: &woke[0], attachments: len(files), recorded: true}
+			return save(ctx, tx, rec, files)
+		})
 	if err != nil {
 		discard()
 		return record{}, nil, err
 	}
 	switch {
 	case !fresh:
-		// Delivered before, and not recorded: recorded now.
+		// Delivered, and recorded with it, by an earlier try.
 		discard()
 		return record{status: "replied", note: "Delivered to the run waiting for " + th.thread + "."}, nil, nil
 	case len(woke) == 0:
@@ -191,7 +199,7 @@ func (s *Service) threaded(ctx context.Context, x inboxRow, meta Meta, msg *Mess
 		discard()
 		return record{}, nil, errHeld
 	}
-	return record{status: "replied", run: &woke[0], attachments: len(files)}, files, nil
+	return rec, files, nil
 }
 
 // ThreadEmail is one email to a customer in a thread (email@1
