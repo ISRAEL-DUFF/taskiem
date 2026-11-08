@@ -112,7 +112,13 @@ func check(doc []byte, reg connector.Lookup, find expansion.Templates) []Problem
 				if st.Capability != nil {
 					out = append(out, pr(path+"/capability", "set when a capability step is expanded; write a capability step instead"))
 				}
+				if ok && st.Effect != nil && st.Effect.ResendIfLost && hasAction(c, st.Action) && !c.Manifest.Actions[st.Action].ResendIfLost {
+					out = append(out, pr(path+"/effect/resend_if_lost", fmt.Sprintf("%s %s cannot be sent again when its answer is lost: only chat replies can (decision 0062)", st.Connector, st.Action)))
+				}
 			case "capability":
+				if st.Effect != nil && st.Effect.ResendIfLost {
+					out = append(out, pr(path+"/effect/resend_if_lost", "a payment step is never sent again when its answer is lost: it is checked or parked (decision 0062)"))
+				}
 				if !wd.IsWait(st.Uses) && !anyRail(reg, st.Uses) {
 					out = append(out, pr(path, fmt.Sprintf("no rail Taskiem connects to can %s yet", st.Uses)))
 				}

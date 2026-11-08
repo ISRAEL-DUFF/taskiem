@@ -247,6 +247,15 @@ Milestones in order. Each lists what is built, its tests and docs. Nothing in a 
 
 ### V2. Channel actions
 
+**Built** (2026-11-08), in seven commits:
+1. `whatsapp@1`: `get_media` (Meta's media host only, digest-checked, kept as a person's run file), `upload_media`, `send_typing`, and `send_media` with a run `file` and `voice: true` (C1, C2, C3, C6).
+2. `telegram@1`: `get_file` (up to a bot's 20 MB; the token never in errors), `send_voice`, `send_audio` (a run file uploaded with the message), `send_chat_action` (C4, C5, C6). `connector.DoMultipart` shares the JSON calls' error rules.
+3. Both triggers declare their personal data; a test sends a signed delivery on each channel and finds nothing in the clear (P1).
+4. The Telegram bot's webhook is set when the connection is saved (registration per connection: a bot has one webhook), with a derived secret so re-applying keeps it; removed with the connection (C7).
+5. Readiness covers a trigger's own connection (C9) and gives the exact Meta callback address (a new non-blocking `setup` need) (C8); a connection's check warns when a trigger cannot be received for want of its signing secret (C17). Deviation: readiness never decrypts credentials, so a missing app secret is a warning on the connection's check, not a publish refusal.
+6. `chunks(text, max)` splits a long reply at sentence ends; a recipe sends each piece in a `foreach` (C20). Deviation: no splitting inside a send, which would make one write several.
+7. `effect.resend_if_lost` with the action's `resend_if_lost` sends a lost chat reply once more; a second loss parks; publishing refuses it elsewhere (L7, D11). This answers action-classes' Phase 1 open question for chat replies.
+
 - `whatsapp@1`: `get_media` (id → file reference: URL lookup then download from Meta's host only, size-capped, sha256 checked; reuses `engine/whatsapp/media.go`), `upload_media` (file reference → media id), `send_media` gains `voice: true` for OGG/Opus audio, `send_typing` (C1, C2, C3, C6).
 - `telegram@1`: `get_file` (file id → file reference), `send_voice` and `send_audio` by file reference (multipart), `send_chat_action` (C4, C5, C6).
 - `telegram@1` `update` trigger registered on publish (decision 0021's remote registration) (C7).

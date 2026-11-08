@@ -66,6 +66,11 @@ type SubFlow struct {
 
 type Effect struct {
 	IdempotencySeed string `json:"idempotency_seed,omitempty"`
+	// ResendIfLost sends the step once more when its answer was lost,
+	// for an action whose manifest allows it (a chat reply), instead of
+	// parking it for a person (decision 0062 D11). A rare duplicate
+	// message is the price; a second loss parks as before.
+	ResendIfLost bool `json:"resend_if_lost,omitempty"`
 }
 
 // Expanded is the rail's mapping a capability step was expanded with

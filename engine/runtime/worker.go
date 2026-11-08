@@ -482,6 +482,9 @@ type plan struct {
 	scrub    []string          // secret values used by this attempt; never written to history
 	secrets  map[string]string // secrets read by this attempt, by name
 	creds    map[string]string // the connection's credentials, once read
+	// sentBefore is how many earlier attempts of the step recorded an
+	// EffectIntent: how often it may already have been sent.
+	sentBefore int
 }
 
 // execute runs one claimed task: prepare (and record intent), call, record
@@ -775,6 +778,7 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 				return err
 			}
 		}
+		p.sentBefore = len(intents)
 		if n := len(intents); n > 0 {
 			last, lastAttempt := intents[n-1], intentAttempts[n-1]
 			p.group = last.AttemptGroup
@@ -783,10 +787,18 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 			}
 			p.intentAt = intentTimes[n-1]
 			var next effects.Next
+			lost := false
 			if prev, ok := outcomes[lastAttempt]; ok && lastAttempt != c.attempt {
 				next = effects.AfterError(p.class, kindOf(prev.Kind))
+				lost = kindOf(prev.Kind) == effects.KindUnknownOutcome
 			} else {
 				next = effects.OnOpenIntent(p.class) // the attempt that wrote it never reported back
+				lost = true
+			}
+			// A chat reply whose one send was lost is sent once more
+			// (decision 0062 D11); a second loss parks as before.
+			if next == effects.Park && lost && n == 1 && resendIfLost(p) {
+				next = effects.Retry
 			}
 			switch next {
 			case effects.Reconcile:
@@ -1302,7 +1314,15 @@ func (w *Worker) classify(p *plan, err error) history.Event {
 		return ev // code and container steps read their secrets before running
 	}
 	kind := effects.Classify(err)
-	next := map[effects.Next]string{effects.Retry: "retry", effects.Reconcile: "reconcile", effects.Park: "park", effects.Fail: "fail"}[effects.AfterError(p.class, kind)]
+	after := effects.AfterError(p.class, kind)
+	if after == effects.Park && kind == effects.KindUnknownOutcome && p.sentBefore == 0 && resendIfLost(p) {
+		// The first send of a chat reply whose answer was lost: send it
+		// once more rather than leave the customer waiting on a person
+		// (decision 0062 D11). It stays marked as maybe applied, so a
+		// later failure still parks.
+		after = effects.Retry
+	}
+	next := map[effects.Next]string{effects.Retry: "retry", effects.Reconcile: "reconcile", effects.Park: "park", effects.Fail: "fail"}[after]
 	e := history.Error{Kind: kind.String(), Message: err.Error(), Next: next, MaybeApplied: p.class.MayHaveApplied(kind)}
 	// A provider that said when to come back (Retry-After) is not asked sooner.
 	var ra interface{ RetryAfterDelay() time.Duration }
@@ -1484,6 +1504,17 @@ func (w *Worker) dialer(ctx context.Context, p *plan, creds map[string]string) (
 		return nil, err
 	}
 	return d, nil
+}
+
+// resendIfLost reports whether the step asked for a lost send to be sent
+// once more and its action allows it (decision 0062 D11): both must say
+// so, and only an unsafe write qualifies.
+func resendIfLost(p *plan) bool {
+	if p.conn == nil || p.class != effects.UnsafeWrite || p.step == nil || p.step.Effect == nil || !p.step.Effect.ResendIfLost {
+		return false
+	}
+	a, ok := p.conn.Manifest.Actions[p.action]
+	return ok && a.ResendIfLost
 }
 
 // files is the run's file store, as its connectors see it.

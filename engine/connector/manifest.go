@@ -386,15 +386,20 @@ func (a Auth) Modes() []KeyPrefix {
 }
 
 type ActionSpec struct {
-	Title       string          `json:"title"`
-	Description string          `json:"description"`
-	Class       effects.Class   `json:"class"`
-	Idempotency *effects.Spec   `json:"idempotency"`
-	Reconcile   string          `json:"reconcile"`
-	Compensate  *string         `json:"compensate"`
-	Input       json.RawMessage `json:"input"`
-	Output      json.RawMessage `json:"output"`
-	PII         []PIIField      `json:"pii"`
+	Title       string        `json:"title"`
+	Description string        `json:"description"`
+	Class       effects.Class `json:"class"`
+	Idempotency *effects.Spec `json:"idempotency"`
+	Reconcile   string        `json:"reconcile"`
+	Compensate  *string       `json:"compensate"`
+	// ResendIfLost says a duplicate of this unsafe write is a duplicate
+	// chat message and nothing worse, so a step may ask for it to be sent
+	// once more when its answer is lost (decision 0062 D11). Never for an
+	// action that moves money or costs per message.
+	ResendIfLost bool            `json:"resend_if_lost,omitempty"`
+	Input        json.RawMessage `json:"input"`
+	Output       json.RawMessage `json:"output"`
+	PII          []PIIField      `json:"pii"`
 }
 
 // PIIField accepts either "field" or {field, category}.
@@ -531,6 +536,9 @@ func (m *Manifest) check() []string {
 		p := "/actions/" + name
 		if a.Class == effects.Read && a.Compensate != nil {
 			add("%s: read actions cannot declare compensate", p)
+		}
+		if a.ResendIfLost && a.Class != effects.UnsafeWrite {
+			add("%s/resend_if_lost: only an unsafe write can be resent; other classes retry or reconcile already", p)
 		}
 		if a.Reconcile != "" {
 			if r, ok := m.Actions[a.Reconcile]; !ok {

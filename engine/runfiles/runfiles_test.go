@@ -1,4 +1,4 @@
-package runfiles
+package runfiles_test
 
 import (
 	"bytes"
@@ -13,6 +13,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db/dbtest"
 	"github.com/israel-duff/taskiem/engine/media"
+	"github.com/israel-duff/taskiem/engine/runfiles"
 	"github.com/israel-duff/taskiem/engine/runfiles/runfilestest"
 )
 
@@ -31,12 +32,12 @@ func ogg(d time.Duration) []byte {
 	return append(out, page(uint64(d.Seconds()*48000)+312, []byte("audio"))...)
 }
 
-func setup(t *testing.T) (*Service, *runfilestest.Store, Owner, *dbtest.DB) {
+func setup(t *testing.T) (*runfiles.Service, *runfilestest.Store, runfiles.Owner, *dbtest.DB) {
 	t.Helper()
 	d := dbtest.New(t)
 	tn := d.SeedTenant(t, nil)
 	st := runfilestest.New()
-	return &Service{Pool: d.App, Store: st}, st, Owner{Tenant: tn.ID, Environment: "prod"}, d
+	return &runfiles.Service{Pool: d.App, Store: st}, st, runfiles.Owner{Tenant: tn.ID, Environment: "prod"}, d
 }
 
 func TestPutReadLinkDelete(t *testing.T) {
@@ -71,7 +72,7 @@ func TestPutReadLinkDelete(t *testing.T) {
 	if st.Count() != 0 {
 		t.Fatal("the stored object outlived its file")
 	}
-	if _, _, err := s.Read(ctx, o.Tenant, ref.ID.String()); !errors.Is(err, ErrNotFound) {
+	if _, _, err := s.Read(ctx, o.Tenant, ref.ID.String()); !errors.Is(err, runfiles.ErrNotFound) {
 		t.Fatalf("read after delete: %v", err)
 	}
 	if err := s.Delete(ctx, o.Tenant, ref.ID.String()); err != nil {
@@ -97,7 +98,7 @@ func TestRefusals(t *testing.T) {
 		if c.prep != nil {
 			c.prep()
 		}
-		if _, err := s.Put(ctx, o, "f", c.data, c.personal); !errors.Is(err, ErrRefused) {
+		if _, err := s.Put(ctx, o, "f", c.data, c.personal); !errors.Is(err, runfiles.ErrRefused) {
 			t.Errorf("%s: want a refusal, got %v", name, err)
 		}
 	}
@@ -119,13 +120,13 @@ func TestOtherTenantsFilesAreNotFound(t *testing.T) {
 		t.Fatal(err)
 	}
 	other := d.SeedTenant(t, nil)
-	if _, _, err := s.Read(ctx, other.ID, ref.ID.String()); !errors.Is(err, ErrNotFound) {
+	if _, _, err := s.Read(ctx, other.ID, ref.ID.String()); !errors.Is(err, runfiles.ErrNotFound) {
 		t.Fatalf("another tenant read the file: %v", err)
 	}
-	if _, _, _, err := s.Link(ctx, other.ID, ref.ID.String(), time.Minute); !errors.Is(err, ErrNotFound) {
+	if _, _, _, err := s.Link(ctx, other.ID, ref.ID.String(), time.Minute); !errors.Is(err, runfiles.ErrNotFound) {
 		t.Fatalf("another tenant got a link: %v", err)
 	}
-	if _, _, err := s.Read(ctx, o.Tenant, "not-an-id"); !errors.Is(err, ErrNotFound) {
+	if _, _, err := s.Read(ctx, o.Tenant, "not-an-id"); !errors.Is(err, runfiles.ErrNotFound) {
 		t.Fatalf("a bad id: %v", err)
 	}
 }
@@ -156,7 +157,7 @@ func TestRetentionAndSweep(t *testing.T) {
 		t.Fatal(err)
 	}
 	// An expired file is gone at once, before the sweep runs.
-	if _, _, err := s.Read(ctx, o.Tenant, ref.ID.String()); !errors.Is(err, ErrNotFound) {
+	if _, _, err := s.Read(ctx, o.Tenant, ref.ID.String()); !errors.Is(err, runfiles.ErrNotFound) {
 		t.Fatalf("an expired file was read: %v", err)
 	}
 	// Storage down: the file waits for the next sweep.
@@ -181,8 +182,8 @@ func TestName(t *testing.T) {
 		"note.ogg": "note.ogg", "a/b/c.pdf": "c.pdf", `C:\x\y.pdf`: "y.pdf", "": "file", "..": "file",
 		"bad\x00\nname\".pdf": "badname.pdf", strings.Repeat("é", 300): strings.Repeat("é", 200),
 	} {
-		if got := Name(in); got != want {
-			t.Errorf("Name(%q) = %q, want %q", in, got, want)
+		if got := runfiles.Name(in); got != want {
+			t.Errorf("runfiles.Name(%q) = %q, want %q", in, got, want)
 		}
 	}
 }

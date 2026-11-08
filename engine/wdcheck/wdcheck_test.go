@@ -96,3 +96,33 @@ func TestConnectorInputChecks(t *testing.T) {
 		}
 	}
 }
+
+// Only an action that allows it is sent again when its answer is lost
+// (decision 0062 D11).
+func TestResendIfLostOnlyWhereAllowed(t *testing.T) {
+	reg := registry(t)
+	step := func(conn, action string) []byte {
+		return doc(`{"type":"manual"}`, `[{"id":"s","type":"connector","connector":"`+conn+`","action":"`+action+`","effect":{"resend_if_lost":true},"input":{}}]`)
+	}
+	has := func(probs []wdcheck.Problem) bool {
+		for _, p := range probs {
+			if p.Path == "/steps/s/effect/resend_if_lost" {
+				return true
+			}
+		}
+		return false
+	}
+	if probs := wdcheck.Check(step("whatsapp@1", "send_text"), reg); has(probs) {
+		t.Errorf("a chat reply: %v", probs)
+	}
+	if probs := wdcheck.Check(step("whatsapp@1", "send_template"), reg); !has(probs) {
+		t.Errorf("a template must not be resent: %v", probs)
+	}
+	if probs := wdcheck.Check(step("paystack@1", "transfer"), reg); !has(probs) {
+		t.Errorf("a transfer must not be resent: %v", probs)
+	}
+	capStep := doc(`{"type":"manual"}`, `[{"id":"s","type":"capability","uses":"pay_bank","effect":{"resend_if_lost":true},"input":{"account_name":"Ada","account_number":"0123456789","amount_kobo":100,"bank_code":"058","narration":"x"}}]`)
+	if probs := wdcheck.Check(capStep, reg); !has(probs) {
+		t.Errorf("a payment: %v", probs)
+	}
+}

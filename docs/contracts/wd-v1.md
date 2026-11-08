@@ -152,6 +152,10 @@ The run started by a confirmation has `trigger.body` (the inputs), `trigger.call
 
 CEL with the standard library and cel-go's strings, math, lists and optional-types extensions, plus `sum(list)`: the total of a list of numbers (an int when every element is an int, a double otherwise, 0 for an empty list; integer overflow is an error). Code written with the SDK uses it as a CEL string (`"=sum(steps.pay.output.map(r, r.amount))"`).
 
+### A lost chat reply
+
+`"effect": {"resend_if_lost": true}` on a step whose action allows it (a chat reply) sends it once more when its answer is lost, instead of parking it for a person; a second loss parks. See [action classes](action-classes.md#sending-a-lost-chat-reply-once-more).
+
 ### Long messages
 
 `chunks(text, max)` splits a text into pieces of at most `max` characters, breaking after a sentence (`.`, `!`, `?` or a line break) where it can, else between words, and inside a word only when one word is longer than `max`. WhatsApp and Telegram refuse a message over 4,096 characters, so a long reply is sent as a `foreach` over `chunks(reply, 4000)`, one send step per piece, each with its own key and retry ([decision 0062](../decisions/0062-customer-assistant.md) C20). `max` is 1 to 100,000; the text at most 1 MB.

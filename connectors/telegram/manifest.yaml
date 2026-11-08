@@ -62,6 +62,9 @@ actions:
       parked for a person, never repeated. A 429 (flood control) proves the
       message was not sent and is retried.
     class: unsafe_write
+    # A duplicate is a duplicate chat message: a step may ask for a lost
+    # send to be sent once more (decision 0062 D11).
+    resend_if_lost: true
     compensate: null
     input:
       type: object
@@ -85,6 +88,9 @@ actions:
     title: Send a photo
     description: By URL (Telegram fetches it; 5 MB) or by a file_id Telegram gave the bot. Not idempotent, like send_message.
     class: unsafe_write
+    # A duplicate is a duplicate chat message: a step may ask for a lost
+    # send to be sent once more (decision 0062 D11).
+    resend_if_lost: true
     compensate: null
     input:
       type: object
@@ -115,6 +121,9 @@ actions:
       By URL (Telegram fetches it; only .PDF and .ZIP by URL, 20 MB) or by a
       file_id. Not idempotent, like send_message.
     class: unsafe_write
+    # A duplicate is a duplicate chat message: a step may ask for a lost
+    # send to be sent once more (decision 0062 D11).
+    resend_if_lost: true
     compensate: null
     input:
       type: object
@@ -161,6 +170,9 @@ actions:
       URL. OGG/Opus, MP3 or M4A, shown as a voice message. Not idempotent,
       like send_message.
     class: unsafe_write
+    # A duplicate is a duplicate chat message: a step may ask for a lost
+    # send to be sent once more (decision 0062 D11).
+    resend_if_lost: true
     compensate: null
     input:
       type: object
@@ -185,6 +197,9 @@ actions:
       A run file's reference, a file_id or a URL; MP3 or M4A, shown in the
       music player. Not idempotent, like send_message.
     class: unsafe_write
+    # A duplicate is a duplicate chat message: a step may ask for a lost
+    # send to be sent once more (decision 0062 D11).
+    resend_if_lost: true
     compensate: null
     input:
       type: object

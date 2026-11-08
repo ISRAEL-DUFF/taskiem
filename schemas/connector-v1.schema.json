@@ -803,6 +803,10 @@
         "reconcile": {
           "$ref": "#/$defs/name"
         },
+        "resend_if_lost": {
+          "type": "boolean",
+          "description": "An unsafe write whose duplicate is only a duplicate chat message: a step may ask for it to be sent once more when its answer is lost (decision 0062 D11)."
+        },
         "compensate": {
           "oneOf": [
             {

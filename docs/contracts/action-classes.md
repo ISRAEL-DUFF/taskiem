@@ -28,6 +28,11 @@ A reconcile action returns `found` (with the provider's record, which becomes th
 
 A write's provider call must start before `EffectIntent.recorded_at + call_timeout` and is cancelled at that deadline. Reconcile treats `not_found` as trustworthy only after the deadline of the intent it is reconciling; before then the task is requeued for the deadline without spending a retry. Without this, a worker that stalls past its lease (a GC pause, a frozen VM) could send a reconcilable write after another worker reconciled `not_found` and re-sent it: the crash suite reproduces exactly that duplicate when the guard is removed (decision 0009). The guard assumes worker clocks agree with the database clock within a small skew; production `call_timeout` should include that margin.
 
-## Open question for Phase 1
+## Sending a lost chat reply once more
 
-Notifications (SMS, Slack) are `unsafe_write`, but for them a duplicate is harmless and a missing message is not (found while drafting the dogfood ops alert). Candidate: a per-step opt-in `effect.duplicates: tolerable` that lets an `unsafe_write` retry an unknown outcome, refused by policy on any step a tenant marks as moving money. Decide before Phase 1 week 6.
+The Phase 1 open question (notifications are `unsafe_write`, yet a duplicate is harmless and a missing message is not) is answered for chat replies by [decision 0062](../decisions/0062-customer-assistant.md) D11, with two opt-ins that must both hold:
+
+- **The action** declares `resend_if_lost: true` in its manifest: only an `unsafe_write` may, and only one whose duplicate is a duplicate chat message (`whatsapp@1` `send_text`, `send_media`, `send_interactive`; `telegram@1` `send_message`, `send_photo`, `send_document`, `send_voice`, `send_audio`). Never a template (billed per message, sent outside the chat window) or anything that moves money.
+- **The step** asks for it: `"effect": {"resend_if_lost": true}`. Publishing refuses it on any other action and on every capability step.
+
+Then a send whose answer was lost (an unknown outcome, or an open intent left by a worker that died) is sent **once** more: only while the step has recorded a single send. A second loss parks in `needs_reconciliation` as before, and a later failure still parks, since the first send may have arrived. The decision is recorded in the history (`next: retry`), so a replay makes the same one. Notifications through `notify@1` keep their own outbox and are not covered here.

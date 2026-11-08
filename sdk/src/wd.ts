@@ -41,7 +41,7 @@ export interface ConnectorStep extends StepBase {
   action: string;
   connection?: string;
   input?: Values;
-  effect?: { idempotency_seed?: Expression };
+  effect?: { idempotency_seed?: Expression; resend_if_lost?: boolean };
   compensate?: { action: string; input?: Values };
 }
 
@@ -51,7 +51,7 @@ export interface CapabilityStep extends StepBase {
   uses: string;
   connection?: string;
   input?: Values;
-  effect?: { idempotency_seed?: Expression };
+  effect?: { idempotency_seed?: Expression; resend_if_lost?: boolean };
 }
 
 /**
@@ -101,7 +101,7 @@ export interface ContainerLimits {
 export interface ContainerStep extends StepBase {
   type: "container";
   input?: Values;
-  effect?: { idempotency_seed?: Expression };
+  effect?: { idempotency_seed?: Expression; resend_if_lost?: boolean };
   config: {
     /** registry/repository@sha256:<64 hex>; tags are refused. */
     image: `${string}@sha256:${string}`;
@@ -118,7 +118,7 @@ export interface ContainerStep extends StepBase {
 
 export interface HttpStep extends StepBase {
   type: "http";
-  effect?: { idempotency_seed?: Expression };
+  effect?: { idempotency_seed?: Expression; resend_if_lost?: boolean };
   config:
     | { method: "GET" | "HEAD"; url: string; headers?: Values; query?: Values; body?: unknown; class?: ActionClass; idempotency_header?: string }
     | { method: "POST" | "PUT" | "PATCH" | "DELETE"; url: string; headers?: Values; query?: Values; body?: unknown; class: Exclude<ActionClass, "read">; idempotency_header?: string };
