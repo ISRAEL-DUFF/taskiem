@@ -307,11 +307,11 @@ export interface EmailFileUrlInput {
 export interface EmailSendInThreadInput {
   /** Send from another email workflow's address, whose run gets the replies: its Taskiem email address (trigger.email.address) or its workflow id. It must have threads on and be of this business and environment. Default: this workflow's own address */
   address?: Val<string>;
-  /** The customer's message this answers (trigger.body.message_id); default: the last email sent in the thread */
+  /** The customer's message this answers (trigger.body.message_id); default: the last email sent in the thread. One that is not a Message-ID is left out */
   in_reply_to?: Val<string>;
   /** The email */
   message: Val<string>;
-  /** The thread's earlier Message-IDs (trigger.body.references) */
+  /** The thread's earlier Message-IDs (trigger.body.references); any that is not a Message-ID is left out */
   references?: Value;
   /** The subject; [#<thread>] is put before it unless it carries it already */
   subject: Val<string>;
@@ -482,6 +482,8 @@ export interface GmailModifyLabelsInput {
   request_key?: Val<string>;
 }
 export interface GmailNewMessagesInput {
+  /** Message ids already read (the poller's), not read again */
+  seen?: Value;
   since: Val<string>;
 }
 export interface GmailSendMessageInput {
