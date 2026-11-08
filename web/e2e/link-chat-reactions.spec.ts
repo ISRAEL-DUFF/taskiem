@@ -186,6 +186,52 @@ test("a reaction that cannot be given is taken off again, with the reason", asyn
   ).toHaveCount(0);
 });
 
+test("a star stays on when a copy read before it was saved arrives after", async ({
+  browser,
+}) => {
+  const { seller, buyer, link } = await linked(browser);
+  for (const t of ["Rice is back in stock", "The price is 45000"])
+    await seller.request.post(`/v1/link-chats/${link}/messages`, {
+      headers: H,
+      data: { text: t },
+    });
+  // The live stream is held: opening the conversation marks it read, and
+  // the stream's next look carries those messages as they were then.
+  let stream: ((body: string) => Promise<void>) | undefined;
+  await buyer.route("**/v1/chat/stream", (route) => {
+    if (stream) return route.continue();
+    stream = (body) => route.fulfill({ status: 200, headers: { "Content-Type": "text/event-stream" }, body });
+  });
+  await buyer.goto(`/chat?with=${link}`);
+  await expect(bubble(buyer, "The price is 45000")).toBeVisible();
+  const before = (await (await buyer.request.get(`/v1/link-chats/${link}/messages`, { headers: H })).json()) as {
+    messages: { body?: string; starred?: boolean }[];
+  };
+  const stale = before.messages.find((m) => m.body === "The price is 45000");
+  expect(stale?.starred ?? false).toBe(false);
+
+  await bubble(buyer, "The price is 45000").getByRole("button", { name: /^More/ }).click();
+  await buyer.getByTestId("chat-more").getByRole("button", { name: "Star" }).click();
+  const star = bubble(buyer, "The price is 45000").getByRole("img", { name: "Starred" });
+  await expect(star).toBeVisible();
+  await expect
+    .poll(async () => {
+      const r = await buyer.request.get(`/v1/link-chats/${link}/messages`, { headers: H });
+      return ((await r.json()) as { messages: { body?: string; starred?: boolean }[] }).messages.find((m) => m.body === "The price is 45000")?.starred;
+    })
+    .toBe(true);
+  // Now the stream's copy, read before the star was saved, arrives.
+  await expect.poll(() => !!stream).toBe(true);
+  await stream?.(`event: ready\ndata: {}\n\nid: 1\nevent: message\ndata: ${JSON.stringify({ message: stale })}\n\n`);
+  // It stays on throughout, not taken off until a later reload puts it back.
+  const counts: number[] = [];
+  for (let i = 0; i < 30; i++) {
+    counts.push(await star.count());
+    await buyer.waitForTimeout(100);
+  }
+  expect(counts).not.toContain(0);
+});
+
 test("a star is yours alone: marked in the thread, listed under Starred, opened at the message", async ({
   browser,
 }) => {

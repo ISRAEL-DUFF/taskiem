@@ -98,6 +98,8 @@ import { ErrorBox, fmtTime, Modal, useAction, useLoad } from "../ui";
 // the clock, as WhatsApp's does, with the time in words on hover.
 
 const EVERY_MS = 3000;
+/** How long a saved star is held against copies read before it. */
+const STAR_HOLD_MS = 15_000;
 /** The six reactions, in words (for the screen reader and the tooltip). */
 const REACTION_NAMES: Record<string, string> = {
   "👍": "thumbs up",
@@ -1008,6 +1010,27 @@ export function ConversationPane({
   const { can } = useAuth();
   const write = can("chat.trade") && conv.state === "active";
   const [messages, setMessages] = useState<LinkMessage[]>();
+  // Stars being saved: a copy of a message read before the star was saved
+  // (the live stream's look after a read mark, a refresh on its way) must
+  // not take the star back off. Held until the server's copy agrees, and
+  // for at most STAR_HOLD_MS once saved (a change from elsewhere then wins).
+  const starring = useRef(new Map<string, { on: boolean; savedAt?: number }>());
+  const keepStars = useCallback((list: LinkMessage[]) => {
+    if (starring.current.size === 0) return list;
+    return list.map((m) => {
+      const s = starring.current.get(m.id);
+      if (!s) return m;
+      const agrees = !!m.starred === s.on;
+      if (
+        s.savedAt !== undefined &&
+        (agrees || Date.now() - s.savedAt > STAR_HOLD_MS)
+      ) {
+        starring.current.delete(m.id);
+        return m;
+      }
+      return agrees ? m : { ...m, starred: s.on };
+    });
+  }, []);
   const [typing, setTyping] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const logo = conv.logo ? logoSrc(conv.business) : undefined;
@@ -1225,14 +1248,14 @@ export function ConversationPane({
       );
       setTyping(!!out.typing);
       if (after && out.messages.length === 0) return;
-      setMessages((cur) => merge(cur ?? [], out.messages));
+      setMessages((cur) => merge(cur ?? [], keepStars(out.messages)));
       await markRead(out.messages);
       // A full page: there may be more after it (the reader was away).
       const newest = out.messages[out.messages.length - 1];
       if (after && out.messages.length >= PAGE && newest)
         await pull(newest.created_at);
     },
-    [path, markRead],
+    [path, markRead, keepStars],
   );
   afterDiary.current = () => void pull(last).catch(setError);
 
@@ -1247,9 +1270,9 @@ export function ConversationPane({
     setDetached(false);
     setHasOlder(out.messages.length >= PAGE);
     setUnread(firstUnread(out.messages));
-    setMessages(out.messages);
+    setMessages(keepStars(out.messages));
     await markRead(out.messages);
-  }, [path, markRead]);
+  }, [path, markRead, keepStars]);
   const openAt = useCallback(
     async (id: string) => {
       const out = await get<{ messages: LinkMessage[] }>(
@@ -1264,7 +1287,7 @@ export function ConversationPane({
       setDetached(at >= 0 && out.messages.length - at - 1 >= PAGE - half);
       setHasOlder(at >= half);
       setUnread(undefined);
-      setMessages(out.messages);
+      setMessages(keepStars(out.messages));
     },
     [path],
   );
@@ -1286,7 +1309,7 @@ export function ConversationPane({
       if (out.messages.length < PAGE) setHasOlder(false);
       if (out.messages.length > 0) {
         thread.keepPlace();
-        setMessages((cur) => merge(cur ?? [], out.messages));
+        setMessages((cur) => merge(cur ?? [], keepStars(out.messages)));
       }
     } catch (e) {
       setError(e);
@@ -1345,7 +1368,7 @@ export function ConversationPane({
           const m = e.message;
           // Not into a window away from the newest page: it would leave a gap.
           if (!detachedNow.current)
-            setMessages((cur) => (cur ? merge(cur, [m]) : cur));
+            setMessages((cur) => (cur ? merge(cur, keepStars([m])) : cur));
           // Read (once for a burst of them: a conversation of hundreds arriving
           // together asks once, not hundreds of times).
           if (
@@ -1382,7 +1405,8 @@ export function ConversationPane({
         // The newest page again: our ticks, and the other side's reactions.
         if (document.visibilityState !== "visible" || detached) return;
         get<{ messages: LinkMessage[] }>(`${path}/messages`).then(
-          (out) => setMessages((cur) => merge(cur ?? [], out.messages)),
+          (out) =>
+            setMessages((cur) => merge(cur ?? [], keepStars(out.messages))),
           () => undefined,
         );
       },
@@ -1398,7 +1422,8 @@ export function ConversationPane({
   useEffect(
     () =>
       onSent((link, m) => {
-        if (link === conv.link) setMessages((cur) => merge(cur ?? [], [m]));
+        if (link === conv.link)
+          setMessages((cur) => merge(cur ?? [], keepStars([m])));
         onChanged();
       }),
     [conv.link, onChanged],
@@ -1463,13 +1488,20 @@ export function ConversationPane({
       setMessages((cur) =>
         cur?.map((x) => (x.id === m.id ? { ...x, starred } : x)),
       );
+    starring.current.set(m.id, { on });
     mark(on);
     (on
       ? put(`${path}/messages/${m.id}/star`)
       : del(`${path}/messages/${m.id}/star`)
     ).then(
-      () => undefined,
+      () => {
+        // Saved: what arrives from now on agrees, and ends the hold.
+        if (starring.current.get(m.id)?.on === on)
+          starring.current.set(m.id, { on, savedAt: Date.now() });
+        mark(on);
+      },
       (e: unknown) => {
+        starring.current.delete(m.id);
         mark(!on);
         setError(actionError(e));
       },
