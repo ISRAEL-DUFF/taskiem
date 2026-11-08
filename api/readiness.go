@@ -198,6 +198,11 @@ func (s *Server) readinessWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 		if c.Manifest.ID == "xenibase" && st.Connection == "data_tables" {
 			if name, ok := st.Input["table"].(string); ok && name != "" && !expr.IsExpr(name) {
 				tables = append(tables, use{st, name})
+			} else if ok && expr.IsExpr(name) {
+				// A table chosen by expression: each it can be.
+				for _, n := range tablesOf(readyExpr, d, st, name) {
+					tables = append(tables, use{st, n})
+				}
 			}
 		}
 	})
