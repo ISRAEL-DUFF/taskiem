@@ -36,7 +36,7 @@ export default tseslint.config(
       sourceType: "script",
       globals: {
         self: "readonly", module: "writable", fetch: "readonly", URL: "readonly", JSON: "readonly", ServiceWorkerGlobalScope: "readonly",
-        btoa: "readonly", AbortController: "readonly", setTimeout: "readonly", clearTimeout: "readonly",
+        btoa: "readonly", AbortController: "readonly", setTimeout: "readonly", clearTimeout: "readonly", Response: "readonly",
       },
     },
   },

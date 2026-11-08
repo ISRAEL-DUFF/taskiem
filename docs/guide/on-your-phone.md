@@ -19,6 +19,10 @@ When a business you are linked with writes to you, your phone can show a notific
 - **Your other devices** are listed under the switch, each with Remove. Signing out takes the device you are on off the list.
 - Only people who write in chats are notified, and not for a chat you muted.
 
+## When you are offline
+
+If your phone has no internet when you open Taskiem, or a page of it, you see a page that says **You're offline** instead of your browser's error. It opens what you asked for by itself when you are back online, or press **Try again**. Taskiem does not keep a copy of your business on the phone: what you see always comes fresh from Taskiem, so nothing is left behind on a shared or lost phone.
+
 ## Getting around
 
 - **The bar at the bottom** takes you to Home, Money, Orders and Workflows (the ones your role can see). **Menu** opens everything else.

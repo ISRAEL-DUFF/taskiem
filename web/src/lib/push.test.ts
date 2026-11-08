@@ -1,5 +1,6 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   deviceLabel,
   isApple,
@@ -41,6 +42,20 @@ const sw = mod.exports as {
     ua: string,
     brands?: { brand: string }[],
   ) => boolean;
+  handlesRequest: (
+    method: string,
+    mode: string,
+    url: string,
+    origin: string,
+  ) => boolean;
+  offlinePage: () => string;
+  OFFLINE_SCRIPT: string;
+  OFFLINE_SCRIPT_HASH: string;
+  offlineResponse: () => Response;
+  pageFor: (
+    preload: Promise<Response | undefined> | undefined,
+    doFetch: () => Promise<Response>,
+  ) => Promise<Response>;
 };
 
 const CHROME_ANDROID =
@@ -314,5 +329,68 @@ describe("the sender's logo as the icon", () => {
       sw.notificationOf(p, "data:image/png;base64,AAAA").options.icon,
     ).toBe("data:image/png;base64,AAAA");
     expect(sw.notificationOf(p).options.icon).toBe("/brand/relay/icon-192.png");
+  });
+});
+
+describe("the worker offline (docs/spec/offline.md)", () => {
+  const origin = "https://app.taskiem.test";
+
+  it("answers only for a page of the app being opened", () => {
+    expect(sw.handlesRequest("GET", "navigate", `${origin}/chat`, origin)).toBe(true);
+    expect(sw.handlesRequest("GET", "navigate", `${origin}/`, origin)).toBe(true);
+    // The API, files, pictures and the page's own requests go to the network untouched.
+    expect(sw.handlesRequest("GET", "cors", `${origin}/v1/me`, origin)).toBe(false);
+    expect(sw.handlesRequest("GET", "no-cors", `${origin}/assets/a.js`, origin)).toBe(false);
+    expect(sw.handlesRequest("GET", "same-origin", `${origin}/chat`, origin)).toBe(false);
+    // A form sent (a sign-in provider posting back) and another site's page.
+    expect(sw.handlesRequest("POST", "navigate", `${origin}/v1/auth/sso/saml/acs`, origin)).toBe(false);
+    expect(sw.handlesRequest("GET", "navigate", "https://paystack.com/pay", origin)).toBe(false);
+    expect(sw.handlesRequest("GET", "navigate", "not a url", origin)).toBe(false);
+  });
+
+  it("gives the network's answer, whatever it is, and the offline page only when there is no network", async () => {
+    const ok = new Response("app", { status: 200 });
+    expect(await sw.pageFor(undefined, () => Promise.resolve(ok))).toBe(ok);
+    const down = new Response("down", { status: 502 });
+    expect(await sw.pageFor(undefined, () => Promise.resolve(down))).toBe(down);
+    const early = new Response("early");
+    const never = vi.fn(() => Promise.resolve(ok));
+    expect(await sw.pageFor(Promise.resolve(early), never)).toBe(early);
+    expect(never).not.toHaveBeenCalled();
+    // No preload (the browser has none, or gave none): fetched.
+    expect(await sw.pageFor(Promise.resolve(undefined), () => Promise.resolve(ok))).toBe(ok);
+    const off = await sw.pageFor(undefined, () => Promise.reject(new TypeError("Failed to fetch")));
+    expect(off.status).toBe(503);
+    expect(await off.text()).toContain("You\u2019re offline");
+    const offEarly = await sw.pageFor(Promise.reject(new TypeError("Failed to fetch")), () =>
+      Promise.reject(new TypeError("Failed to fetch")),
+    );
+    expect(offEarly.status).toBe(503);
+  });
+
+  it("is a page of its own: never kept, one script allowed by its hash, nothing loaded, in plain words", async () => {
+    const r = sw.offlineResponse();
+    expect(r.headers.get("Content-Type")).toBe("text/html; charset=utf-8");
+    expect(r.headers.get("Cache-Control")).toBe("no-store");
+    expect(r.headers.get("Content-Security-Policy")).toBe(
+      `default-src 'none'; style-src 'unsafe-inline'; script-src '${sw.OFFLINE_SCRIPT_HASH}'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
+    );
+    const html = sw.offlinePage();
+    // The one script is the one its hash allows; nothing is loaded from anywhere.
+    expect(html.match(/<script>([\s\S]*?)<\/script>/g)).toEqual([`<script>${sw.OFFLINE_SCRIPT}</script>`]);
+    expect(sw.OFFLINE_SCRIPT_HASH).toBe(`sha256-${createHash("sha256").update(sw.OFFLINE_SCRIPT).digest("base64")}`);
+    expect(html).not.toMatch(/src=|url\(|http-equiv="refresh"/i);
+    expect(html).toContain('<a href="">Try again</a>');
+    expect(html).toContain('<html lang="en">');
+    const words = html.replace(/<style>[\s\S]*?<\/style>/, "").replace(/<script>[\s\S]*?<\/script>/, "").replace(/<[^>]+>/g, " ");
+    for (const w of [/\bserver\b/i, /\bservice worker\b/i, /\bcache\b/i, /\bnetwork\b/i, /\b(status|HTTP) [1-5]\d\d\b/])
+      expect(words).not.toMatch(w);
+  });
+
+  it("draws the mark exactly as the brand's own file does", () => {
+    const mark = readFileSync(new URL("../../public/brand/relay/favicon.svg", import.meta.url), "utf8");
+    const inner = (svg: string) => svg.replace(/^[\s\S]*?<svg[^>]*>/, "").replace(/<\/svg>[\s\S]*$/, "").replace(/#ffffff/g, "#fff").trim();
+    const page = sw.offlinePage().match(/<svg[\s\S]*?<\/svg>/)?.[0] ?? "";
+    expect(inner(page)).toBe(inner(mark));
   });
 });
