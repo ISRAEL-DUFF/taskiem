@@ -13651,6 +13651,11 @@ paths:
                 properties:
                   ok:
                     type: boolean
+                  warnings:
+                    type: array
+                    description: In plain words, events these details cannot receive (a signing value is missing).
+                    items:
+                      type: string
         default:
           $ref: '#/components/responses/Error'
   /v1/connections/oauth/start:
@@ -14016,8 +14021,20 @@ paths:
               $ref: '#/components/schemas/ConnectionCredentialsMerge'
         required: true
       responses:
-        '204':
-          $ref: '#/components/responses/NoContent'
+        '200':
+          description: Saved. warnings lists, in plain words, events this connection still cannot receive.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+                  warnings:
+                    type: array
+                    items:
+                      type: string
         '400':
           description: A field the connector does not take, or a required one cleared.
           content:
@@ -34958,6 +34975,11 @@ components:
           type: string
         name:
           type: string
+        warnings:
+          type: array
+          description: In plain words, events this connection cannot receive yet (a signing value is missing).
+          items:
+            type: string
       additionalProperties: false
     OAuthStartRequest:
       type: object

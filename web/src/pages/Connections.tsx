@@ -27,6 +27,7 @@ import {
   type MoneyLogWebhook,
 } from "../lib/connections";
 import { Help } from "../onboarding";
+import { toast } from "../toast";
 import {
   Badge,
   EmptyState,
@@ -78,6 +79,16 @@ interface Conn {
 }
 
 /** The worst state of a connection's remote subscriptions, with what is wrong. */
+
+/** What saving a connection answers: events it still cannot receive. */
+type Saved = { warnings?: string[] } | undefined;
+
+/** Says each warning a save answered, so a connection that cannot
+ * receive its events is noticed now, not after a silent day. */
+function warnAbout(saved: Saved) {
+  for (const w of saved?.warnings ?? []) toast(w, "info");
+}
+
 function Remote({ remote }: { remote: Conn["remote"] }) {
   if (!remote) return <span className="hint">—</span>;
   const why = remote.problems
@@ -434,9 +445,11 @@ function CompleteConnection({
           e.preventDefault();
           void act.run(
             async () => (
-              await put(`/v1/connections/${conn.id}/credentials`, {
-                credentials: given,
-              }),
+              warnAbout(
+                await put<Saved>(`/v1/connections/${conn.id}/credentials`, {
+                  credentials: given,
+                }),
+              ),
               onDone()
             ),
             "Credentials saved",
@@ -1074,14 +1087,16 @@ export function NewConnection({
           e.preventDefault();
           void act.run(
             async () => (
-              await post("/v1/connections", {
-                connector: ref,
-                environment: env,
-                name: name || undefined,
-                credentials: creds,
-                mode: chosen || undefined,
-                check: true,
-              }),
+              warnAbout(
+                await post<Saved>("/v1/connections", {
+                  connector: ref,
+                  environment: env,
+                  name: name || undefined,
+                  credentials: creds,
+                  mode: chosen || undefined,
+                  check: true,
+                }),
+              ),
               onDone()
             ),
             "Connected",

@@ -218,7 +218,7 @@ func TestOAuthConnection(t *testing.T) {
 	w.fake.AddSecretKey(oauthProject, "xb_sec_shop")
 	owner.must(400, "PUT", "/v1/connections/"+id+"/credentials", map[string]any{"credentials": map[string]string{"nope": "x"}})
 	owner.must(400, "PUT", "/v1/connections/"+id+"/credentials", map[string]any{"credentials": map[string]string{"token": ""}})
-	owner.must(204, "PUT", "/v1/connections/"+id+"/credentials", map[string]any{"credentials": map[string]string{"secret_key": "xb_sec_shop", "api_url": w.fake.APIURL(oauthProject)}})
+	owner.must(200, "PUT", "/v1/connections/"+id+"/credentials", map[string]any{"credentials": map[string]string{"secret_key": "xb_sec_shop", "api_url": w.fake.APIURL(oauthProject)}})
 	owner.must(404, "PUT", "/v1/connections/"+uuid.Must(uuid.NewV7()).String()+"/credentials", map[string]any{"credentials": map[string]string{"secret_key": "x"}})
 	creds, err = w.env.Vault.Credentials(context.Background(), tenant, "prod", "xenibase", "shop")
 	if err != nil {

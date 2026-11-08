@@ -36,6 +36,11 @@ func TestWhatsAppTriggerReadiness(t *testing.T) {
 	// received; with it, nothing is said.
 	conn := owner.must(201, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "whatsapp@1", "name": "main",
 		"credentials": map[string]string{"access_token": "EAA1", "phone_number_id": "1065"}})
+	// Said when it is saved, in plain words: the field's name, not its
+	// explanation (review gaps 6, 15).
+	if saved, _ := conn["warnings"].([]any); len(saved) != 1 || !strings.Contains(saved[0].(string), `"App secret"`) || strings.Contains(strings.ToLower(saved[0].(string)), "webhook") {
+		t.Fatalf("saving warned %v", conn["warnings"])
+	}
 	r = owner.must(200, "POST", "/v1/readiness", map[string]any{"definition": json.RawMessage(doc)})
 	if c := needsOf(t, r["needs"])["connection//prod"]; c != nil {
 		t.Fatalf("still asks for the connection: %v", c)
@@ -45,7 +50,9 @@ func TestWhatsAppTriggerReadiness(t *testing.T) {
 	if len(warn) != 1 || !strings.Contains(warn[0].(string), "Messages from customers cannot be received yet") || !strings.Contains(warn[0].(string), "App secret") {
 		t.Fatalf("warnings %v", chk)
 	}
-	owner.must(204, "PUT", "/v1/connections/"+conn["id"].(string)+"/credentials", map[string]any{"credentials": map[string]string{"app_secret": "s3cret"}})
+	if put := owner.must(200, "PUT", "/v1/connections/"+conn["id"].(string)+"/credentials", map[string]any{"credentials": map[string]string{"app_secret": "s3cret"}}); put["ok"] != true || put["warnings"] != nil {
+		t.Fatalf("adding the secret answered %v", put)
+	}
 	if chk := owner.must(200, "POST", "/v1/connections/"+conn["id"].(string)+"/check", nil); chk["warnings"] != nil {
 		t.Fatalf("warned with the secret set: %v", chk["warnings"])
 	}

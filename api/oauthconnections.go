@@ -749,6 +749,7 @@ func (s *Server) mergeConnectionCredentials(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	ctx := secrets.WithUse(r.Context(), secrets.Use{Kind: secrets.KindConnection, Purpose: "connection.credentials_merge", Actor: p.Actor()})
+	var warn []string
 	err = s.tx(r, func(tx pgx.Tx) error {
 		var connID, env, status string
 		var managed *string
@@ -793,13 +794,18 @@ func (s *Server) mergeConnectionCredentials(w http.ResponseWriter, r *http.Reque
 		if err := s.Vault.ReplaceCredentialsTx(ctx, tx, p.TenantID, id, merged, p.Actor()); err != nil {
 			return err
 		}
+		warn = unsignedTriggers(c, merged)
 		return secrets.SetRouteKeysTx(ctx, tx, p.TenantID, id, c.Manifest.RouteKeys(merged))
 	})
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	w.WriteHeader(http.StatusNoContent)
+	out := map[string]any{"ok": true}
+	if len(warn) > 0 {
+		out["warnings"] = warn
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // connectionUse is a deployed workflow whose steps name a connection.

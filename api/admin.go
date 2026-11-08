@@ -212,7 +212,13 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Name = name
-	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "environment": env, "connector": c.Manifest.ID, "name": req.Name})
+	out := map[string]any{"id": id, "environment": env, "connector": c.Manifest.ID, "name": req.Name}
+	// Saved, but a trigger it cannot receive is said now, not at the
+	// first silent day (decision 0062 C17, review gap 6).
+	if warn := unsignedTriggers(c, req.Credentials); len(warn) > 0 {
+		out["warnings"] = warn
+	}
+	writeJSON(w, http.StatusCreated, out)
 }
 
 // saveKeyConnection checks a connection's keys (their starts, the mode
@@ -724,7 +730,8 @@ func unsignedTriggers(c *connector.Connector, creds map[string]string) []string 
 		label := t.Verify.SecretField
 		for _, f := range c.Manifest.Auth.Fields {
 			if f.Key == t.Verify.SecretField && f.Label != "" {
-				label = f.Label
+				// The label's name, without its explanation in brackets.
+				label, _, _ = strings.Cut(f.Label, " (")
 			}
 		}
 		what := t.Title
@@ -772,7 +779,11 @@ func (s *Server) checkConnection(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	out := map[string]any{"ok": true}
+	if warn := unsignedTriggers(c, req.Credentials); len(warn) > 0 {
+		out["warnings"] = warn
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // checkSavedConnection answers POST /v1/connections/{id}/check: the
