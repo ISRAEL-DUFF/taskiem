@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/ingest"
 	"github.com/israel-duff/taskiem/engine/remote"
 )
 
@@ -27,8 +28,9 @@ import (
 const remoteWait = 15 * time.Second
 
 // applyRemote applies wf's pending subscriptions now and returns them all,
-// so the answer to a publish or undeploy shows whether the provider took
-// them. The scheduler retries whatever is left.
+// with the connections' subscriptions its trigger uses, so the answer to a
+// publish or undeploy shows whether the provider took them. The scheduler
+// retries whatever is left.
 func (s *Server) applyRemote(r *http.Request, wf uuid.UUID) []remote.Status {
 	p := principalFrom(r.Context())
 	if s.Remote != nil {
@@ -41,7 +43,10 @@ func (s *Server) applyRemote(r *http.Request, wf uuid.UUID) []remote.Status {
 	var out []remote.Status
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
-		out, err = remote.List(r.Context(), tx, `workflow_id = $1`, wf)
+		out, err = remote.List(r.Context(), tx, `workflow_id = $1 OR workflow_id IS NULL AND desired = 'present' AND EXISTS (SELECT 1 FROM triggers t
+			WHERE t.workflow_id = $1 AND t.type = 'connector_event' AND t.environment = remote_subscriptions.environment
+			  AND t.connector = remote_subscriptions.connector AND t.trigger_name = remote_subscriptions.trigger_name
+			  AND (t.connection IS NULL OR t.connection = remote_subscriptions.connection))`, wf)
 		return err
 	}); err != nil {
 		s.Logger.Warn("remote subscriptions: listing", "workflow", wf, "err", err)
@@ -54,6 +59,10 @@ func (s *Server) applyRemote(r *http.Request, wf uuid.UUID) []remote.Status {
 // connection), for every event each such trigger sends. A connection
 // whose key is a shared client's (decision 0031) holds none: its events
 // come through the subscription of the partner that holds the client.
+// One held only while a deployed workflow uses it (connection_when_used:
+// a Telegram bot's webhook) is never declared here, so a connection used
+// only to send leaves the provider as it was; one a deployment declared
+// is applied again (repaired).
 func declareConnectionSubscriptions(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env string, c *connector.Connector, name string, creds map[string]string) (bool, error) {
 	if creds["shared_client"] == "true" {
 		return false, nil
@@ -62,6 +71,14 @@ func declareConnectionSubscriptions(ctx context.Context, tx pgx.Tx, tenant uuid.
 	for _, trig := range slices.Sorted(maps.Keys(c.Manifest.Triggers)) {
 		t := c.Manifest.Triggers[trig]
 		if !t.PerConnection() {
+			continue
+		}
+		if t.WhenUsed() {
+			held, err := remote.RepairConnection(ctx, tx, env, c.Ref(), trig, name)
+			if err != nil {
+				return declared, err
+			}
+			declared = declared || held
 			continue
 		}
 		if _, err := remote.DeclareConnection(ctx, tx, tenant, env, c.Ref(), trig, name, t.Events); err != nil {
@@ -113,6 +130,13 @@ func (s *Server) releaseConnectionSubscriptions(r *http.Request, reg connector.L
 			}
 		}
 		released = true
+		for trig, t := range c.Manifest.Triggers {
+			if t.WhenUsed() {
+				if err := remote.ReleaseUnnamed(r.Context(), tx, env, c.Ref(), trig, name); err != nil {
+					return err
+				}
+			}
+		}
 		return remote.ReleaseConnection(r.Context(), tx, env, c.Ref(), name)
 	})
 	if err == nil && released {
@@ -160,7 +184,7 @@ func summarise(conns []connectionInfo, subs []remote.Status) {
 // its form and email addresses, its remote subscriptions (released for
 // deletion at the provider) and its deployment.
 func undeployTx(ctx context.Context, tx pgx.Tx, wf uuid.UUID, env string) error {
-	if _, err := tx.Exec(ctx, `DELETE FROM triggers WHERE workflow_id = $1 AND environment = $2`, wf, env); err != nil {
+	if err := ingest.DeleteTriggers(ctx, tx, wf, []string{env}); err != nil {
 		return err
 	}
 	// Nothing runs there now: its form and email address stop taking

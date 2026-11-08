@@ -42,6 +42,8 @@ type TriggerSpec struct {
 	// Registration remote: Taskiem creates, updates and deletes the
 	// provider's subscription itself (decision 0021), and verifies
 	// deliveries with the secret the provider returned, kept in the vault.
+	// connection: one subscription per connection; connection_when_used:
+	// the same, held only while a deployed workflow uses it.
 	Registration string `json:"registration"`
 	// Options is the JSON Schema of the workflow trigger's options
 	// (tables, columns...), given to the registrar and the enricher.
@@ -156,8 +158,20 @@ type RouteSpec struct {
 func (t TriggerSpec) Remote() bool { return t.Registration == "remote" }
 
 // PerConnection reports whether Taskiem registers this trigger at the
-// provider once for each connection, whichever workflows use it.
-func (t TriggerSpec) PerConnection() bool { return t.Registration == "connection" }
+// provider once for each connection, whichever workflows use it: from
+// when the connection is saved (registration: connection), or only while
+// a deployed workflow uses it (connection_when_used).
+func (t TriggerSpec) PerConnection() bool {
+	return t.Registration == "connection" || t.Registration == "connection_when_used"
+}
+
+// WhenUsed reports whether a connection's subscription to this trigger is
+// held only while a workflow deployed in its environment starts on it
+// (registration: connection_when_used): declared when such a workflow is
+// deployed and released when the last one leaves, never when the
+// connection is saved, so a connection used only by steps leaves the
+// provider as it found it (a Telegram bot's one webhook).
+func (t TriggerSpec) WhenUsed() bool { return t.Registration == "connection_when_used" }
 
 // Registered reports whether Taskiem registers this trigger at the
 // provider at all, so the connector supplies a registrar for it.

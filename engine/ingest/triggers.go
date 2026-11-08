@@ -122,6 +122,11 @@ type eventConfig struct {
 	events                         []string
 	options                        map[string]any
 	remote                         bool
+	// whenUsed: the connection's subscription is held while a workflow
+	// deployed with this trigger uses it (connection_when_used), for every
+	// event the trigger sends (sends).
+	whenUsed bool
+	sends    []string
 }
 
 type scheduleConfig struct {
@@ -173,6 +178,7 @@ func parseEvent(c map[string]any, reg connector.Lookup) (eventConfig, error) {
 		}
 	}
 	e.remote = spec.Remote()
+	e.whenUsed, e.sends = spec.WhenUsed(), spec.Events
 	opts, given := c["options"]
 	if given {
 		if e.options, ok = opts.(map[string]any); !ok {
@@ -290,10 +296,40 @@ func Sync(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, version int, def
 	return SyncEnvironments(ctx, tx, tenant, wf, envs, version, def, reg, now)
 }
 
+// DeleteTriggers removes wf's registered triggers from envs, in the
+// transaction that undeploys or redeploys it. The connections'
+// subscriptions its connector triggers used are checked afterwards: one
+// held only while used (connection_when_used) is released by the
+// reconciler once no deployed workflow uses it.
+func DeleteTriggers(ctx context.Context, tx pgx.Tx, wf uuid.UUID, envs []string) error {
+	rows, err := tx.Query(ctx, `DELETE FROM triggers WHERE workflow_id = $1 AND environment = ANY ($2)
+		RETURNING environment, COALESCE(connector, ''), COALESCE(trigger_name, '')`, wf, envs)
+	if err != nil {
+		return err
+	}
+	type used struct{ env, connector, trigger string }
+	gone, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (used, error) {
+		var u used
+		return u, r.Scan(&u.env, &u.connector, &u.trigger)
+	})
+	if err != nil {
+		return err
+	}
+	for _, u := range gone {
+		if u.connector == "" || u.trigger == "" {
+			continue
+		}
+		if err := remote.CheckUse(ctx, tx, u.env, u.connector, u.trigger); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // SyncEnvironments replaces a workflow's triggers in the given environments
 // only, with those of the version deployed there.
 func SyncEnvironments(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, envs []string, version int, def *wd.Definition, reg connector.Lookup, now time.Time) error {
-	if _, err := tx.Exec(ctx, `DELETE FROM triggers WHERE workflow_id = $1 AND environment = ANY ($2)`, wf, envs); err != nil {
+	if err := DeleteTriggers(ctx, tx, wf, envs); err != nil {
 		return err
 	}
 	if err := Check(def, reg); err != nil {
@@ -345,6 +381,12 @@ func SyncEnvironments(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, envs
 			if err == nil && e.remote {
 				_, err = remote.Declare(ctx, tx, tenant, wf, env, version, remote.Declaration{
 					Connector: e.connector, Trigger: e.trigger, Connection: e.connection, Events: e.events, Options: e.options})
+			}
+			// A connection's subscription held while used (a Telegram
+			// bot's webhook) is declared, or repaired, by each workflow
+			// deployed on it; the workflows on one connection share it.
+			if err == nil && e.whenUsed {
+				_, err = remote.DeclareInUse(ctx, tx, tenant, env, e.connector, e.trigger, e.connection, e.sends)
 			}
 		case "capability_event":
 			err = registerCapabilityEvent(ctx, tx, tenant, wf, version, env, c, reg)
