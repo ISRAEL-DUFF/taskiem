@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/datatables"
+	"github.com/israel-duff/taskiem/templates"
 )
 
 // Per-table readers (decision 0065, docs/data-tables.md#who-may-read-a-table).
@@ -116,10 +117,12 @@ type readersRefused struct {
 func (e *readersRefused) Error() string { return e.msg }
 
 // businessRolesTx are the roles a business has: the built-in ones, its
-// custom roles, and any role a member holds (a business role such as
-// dispatch or hr), sorted.
+// custom roles, any role a member holds (a business role such as
+// dispatch or hr), and any role one of its tables or the template
+// catalogue's known tables names as a reader (the HR desk's hr and
+// hr_lead, before anyone holds them: readiness says so), sorted.
 func businessRolesTx(ctx context.Context, tx pgx.Tx) ([]string, error) {
-	rows, err := tx.Query(ctx, `SELECT name FROM roles UNION SELECT DISTINCT role FROM memberships`)
+	rows, err := tx.Query(ctx, `SELECT name FROM roles UNION SELECT role FROM memberships UNION SELECT unnest(readers) FROM data_tables`)
 	if err != nil {
 		return nil, err
 	}
@@ -129,6 +132,9 @@ func businessRolesTx(ctx context.Context, tx pgx.Tx) ([]string, error) {
 	}
 	for n := range rolePermissions {
 		have = append(have, n)
+	}
+	for _, kt := range templates.KnownTables() {
+		have = append(have, kt.Readers...)
 	}
 	slices.Sort(have)
 	return slices.Compact(have), nil

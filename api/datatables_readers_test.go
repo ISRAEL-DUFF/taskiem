@@ -223,8 +223,10 @@ func TestHRDeskTablesHaveReaders(t *testing.T) {
 		}
 	}
 	want := map[string]string{"hr_tickets": `["hr","hr_lead"]`, "hr_confidential_tickets": `["hr_lead"]`, "hr_confidential_messages": `["hr_lead"]`, "hr_ticket_messages": `null`}
+	ids := map[string]string{}
 	for _, x := range viewer.must(200, "GET", "/v1/tables", nil)["tables"].([]any) {
 		m := x.(map[string]any)
+		ids[m["name"].(string)] = m["id"].(string)
 		if r, ok := want[m["name"].(string)]; ok {
 			if toJSON(m["readers"]) != r {
 				t.Errorf("%s: readers %v, want %s", m["name"], m["readers"], r)
@@ -252,6 +254,14 @@ func TestHRDeskTablesHaveReaders(t *testing.T) {
 			t.Errorf("readiness on %s: %v", role, n)
 		}
 	}
+	// The owner may narrow a table to roles it already names, though nobody
+	// holds them yet; a typo beside them is still refused.
+	readers := "/v1/tables/" + ids["hr_tickets"] + "/readers"
+	if s, out := owner.do("PUT", readers, map[string]any{"readers": []string{"hr_lead", "hr_led"}}); s != 422 || toJSON(out["unknown"]) != `["hr_led"]` {
+		t.Errorf("a typo beside the table's own roles: %d %v", s, out)
+	}
+	owner.must(200, "PUT", readers, map[string]any{"readers": []string{"hr_lead"}})
+	owner.must(200, "PUT", readers, map[string]any{"readers": []string{"hr", "hr_lead"}})
 	addMember(t, w.world, owner, "hana", "viewer", "hr")
 	needs = owner.must(200, "GET", "/v1/workflows/"+wf+"/versions/1/readiness", nil)["needs"].([]any)
 	for _, x := range needs {
