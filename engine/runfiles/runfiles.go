@@ -29,6 +29,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/effects"
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/voice"
 )
@@ -373,4 +374,18 @@ func (f *RunFiles) Read(ctx context.Context, ref any) ([]byte, map[string]any, e
 		return nil, nil, err
 	}
 	return b, r.Map(), nil
+}
+
+// ActionError says what a connector should report when keeping or reading
+// a file failed: a file that cannot be kept or does not exist, or a
+// deployment without files, is fatal (retrying cannot help); anything
+// else (storage unreachable) is retryable.
+func ActionError(err error) error {
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, ErrRefused), errors.Is(err, ErrNotFound), errors.Is(err, ErrUnavailable):
+		return fmt.Errorf("%w: %w", err, effects.ErrFatal)
+	}
+	return fmt.Errorf("%w: %w", err, effects.ErrRetryable)
 }

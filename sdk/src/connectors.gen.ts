@@ -3288,6 +3288,12 @@ export const termii = {
 };
 
 // WhatsApp (whatsapp@1)
+export interface WhatsappGetMediaInput {
+  /** The inbound message's media id (trigger.item.message.audio.id, .image.id, .document.id) */
+  media_id: Val<string>;
+  /** A file name to keep it under */
+  name?: Val<string>;
+}
 export interface WhatsappGetPhoneNumberInput {
   [key: string]: Value;
 }
@@ -3308,14 +3314,18 @@ export interface WhatsappSendMediaInput {
   biz_opaque_callback_data?: Val<string>;
   /** Image */
   caption?: Val<string>;
+  /** A run file's reference (docs/files.md): uploaded to Meta, then sent */
+  file?: Value;
   /** Document only */
   filename?: Val<string>;
-  /** HTTPS URL of the file; or media_id */
+  /** HTTPS URL of the file; or media_id, or file */
   link?: Val<string>;
   media_id?: Val<string>;
   media_type: Val<"image" | "document" | "audio" | "video" | "sticker">;
   reply_to?: Val<string>;
   to: Val<string>;
+  /** Audio only: send as a voice note (needs Ogg/Opus audio; plays inline up to 512 KB) */
+  voice?: Val<boolean>;
 }
 export interface WhatsappSendTemplateInput {
   biz_opaque_callback_data?: Val<string>;
@@ -3338,7 +3348,18 @@ export interface WhatsappSendTextInput {
   /** Recipient's number with + and country code, e.g. +2348012345678 */
   to: Val<string>;
 }
+export interface WhatsappSendTypingInput {
+  /** The wamid of the message being answered */
+  message_id: Val<string>;
+}
+export interface WhatsappUploadMediaInput {
+  /** A run file's reference, or its id */
+  file: Value;
+  voice?: Val<boolean>;
+}
 export const whatsapp = {
+  /** Get a file a customer sent (read) */
+  get_media: (input: WhatsappGetMediaInput, extra?: ConnectorExtra): StepSpec => connector("whatsapp@1", "get_media", input, extra),
   /** Get the business phone number (read) */
   get_phone_number: (input?: WhatsappGetPhoneNumberInput, extra?: ConnectorExtra): StepSpec => connector("whatsapp@1", "get_phone_number", input, extra),
   /** List approved message templates (read) */
@@ -3353,6 +3374,10 @@ export const whatsapp = {
   send_template: (input: WhatsappSendTemplateInput, extra?: ConnectorExtra): StepSpec => connector("whatsapp@1", "send_template", input, extra),
   /** Send a text message (unsafe_write) */
   send_text: (input: WhatsappSendTextInput, extra?: ConnectorExtra): StepSpec => connector("whatsapp@1", "send_text", input, extra),
+  /** Show that a reply is being written (idempotent_write) */
+  send_typing: (input: WhatsappSendTypingInput, extra?: ConnectorExtra): StepSpec => connector("whatsapp@1", "send_typing", input, extra),
+  /** Upload a file to send (idempotent_write) */
+  upload_media: (input: WhatsappUploadMediaInput, extra?: ConnectorExtra): StepSpec => connector("whatsapp@1", "upload_media", input, extra),
 };
 
 // Xenibase (xenibase@1)
@@ -3988,7 +4013,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "storefront@1": ["decide", "get_booking", "issue_tickets", "mark_returned", "notify_customer", "offer_place", "payment_link", "refund"],
   "telegram@1": ["answer_callback_query", "delete_webhook", "edit_message_text", "get_chat", "get_me", "get_webhook_info", "send_document", "send_message", "send_photo", "set_webhook"],
   "termii@1": ["check_balance", "send_sms"],
-  "whatsapp@1": ["get_phone_number", "list_templates", "mark_as_read", "send_interactive", "send_media", "send_template", "send_text"],
+  "whatsapp@1": ["get_media", "get_phone_number", "list_templates", "mark_as_read", "send_interactive", "send_media", "send_template", "send_text", "send_typing", "upload_media"],
   "xenibase@1": ["call_function", "delete_rows", "get_row", "insert_rows", "query_rows", "read_rows", "test_connection", "update_rows", "upsert_rows"],
   "youverify@1": ["compare_faces", "create_address_candidate", "get_address_verification", "get_aml_check", "get_business_details", "request_address_verification", "resolve_bank_account", "screen_aml", "search_businesses", "search_phone", "verify_business", "verify_bvn", "verify_drivers_license", "verify_nin", "verify_phone"],
   "zoho_books@1": ["changes_since", "create_bill", "create_contact", "create_expense", "create_invoice", "create_sales_receipt", "find_contact", "find_invoices", "get_invoice", "list_accounts", "list_items", "list_organizations", "list_taxes", "record_payment"],

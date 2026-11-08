@@ -47,7 +47,7 @@ func TestRegisters(t *testing.T) {
 	if !ok {
 		t.Fatal("whatsapp@1 not registered")
 	}
-	if h := c.Manifest.Hosts(); len(h) != 1 || h[0] != "graph.facebook.com" {
+	if h := c.Manifest.Hosts(); len(h) != 2 || h[0] != "graph.facebook.com" || h[1] != "lookaside.fbsbx.com" {
 		t.Errorf("hosts %v", h)
 	}
 	if c.Manifest.BaseURL != "https://graph.facebook.com/v25.0" {

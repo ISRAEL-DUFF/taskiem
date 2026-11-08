@@ -56,6 +56,9 @@ func New(o Options) *connector.Connector {
 		"send_media":       connector.ActionFunc(c.sendMedia),
 		"send_interactive": connector.ActionFunc(c.sendInteractive),
 		"mark_as_read":     connector.ActionFunc(c.markAsRead),
+		"get_media":        connector.ActionFunc(c.getMedia),
+		"upload_media":     connector.ActionFunc(c.uploadMedia),
+		"send_typing":      connector.ActionFunc(c.sendTyping),
 	}}
 }
 
@@ -255,14 +258,36 @@ func (c *client) sendMedia(ctx context.Context, req connector.Request) (connecto
 		return connector.Response{}, fmt.Errorf("whatsapp: media_type must be image, document, audio, video or sticker, got %q: %w", kind, effects.ErrFatal)
 	}
 	link, mediaID := strings.TrimSpace(str(in, "link")), strings.TrimSpace(str(in, "media_id"))
-	if (link == "") == (mediaID == "") {
-		return connector.Response{}, fmt.Errorf("whatsapp: give exactly one of link and media_id: %w", effects.ErrFatal)
+	file := in["file"]
+	given := 0
+	for _, set := range []bool{link != "", mediaID != "", file != nil} {
+		if set {
+			given++
+		}
+	}
+	if given != 1 {
+		return connector.Response{}, fmt.Errorf("%w: %w", errNoMedia, effects.ErrFatal)
+	}
+	voice, _ := in["voice"].(bool)
+	if voice && kind != "audio" {
+		return connector.Response{}, fmt.Errorf("whatsapp: only audio can be sent as a voice note: %w", effects.ErrFatal)
+	}
+	if file != nil {
+		// A run file: uploaded first, then sent by its media id.
+		id, err := c.upload(ctx, req, file, voice)
+		if err != nil {
+			return connector.Response{}, err
+		}
+		mediaID = id
 	}
 	media := map[string]any{}
 	if link != "" {
 		media["link"] = link
 	} else {
 		media["id"] = mediaID
+	}
+	if voice {
+		media["voice"] = true
 	}
 	if cp := str(in, "caption"); cp != "" {
 		if kind == "audio" || kind == "sticker" {

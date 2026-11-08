@@ -26,7 +26,8 @@ auth:
 # Meta: 80 messages a second per business phone number by default.
 rate_limit: { requests: 80, per: 1s, scope: connection }
 base_url: https://graph.facebook.com/v25.0
-egress_hosts: [graph.facebook.com]
+# Media is downloaded from Meta's media host (Retrieve and Download media).
+egress_hosts: [graph.facebook.com, lookaside.fbsbx.com]
 actions:
   get_phone_number:
     title: Get the business phone number
@@ -120,8 +121,10 @@ actions:
   send_media:
     title: Send an image, document, audio, video or sticker
     description: >-
-      By public link (Meta fetches and caches it for 10 minutes) or by the id
-      of uploaded media. Not idempotent, like send_text.
+      By public link (Meta fetches and caches it for 10 minutes), by the id
+      of uploaded media, or by a run file's reference (uploaded first).
+      Audio with voice true is sent as a voice note. Not idempotent, like
+      send_text.
     class: unsafe_write
     compensate: null
     input:
@@ -130,8 +133,10 @@ actions:
       properties:
         to:         { type: string }
         media_type: { type: string, enum: [image, document, audio, video, sticker] }
-        link:       { type: string, description: HTTPS URL of the file; or media_id }
+        link:       { type: string, description: "HTTPS URL of the file; or media_id, or file" }
         media_id:   { type: string }
+        file:       { description: "A run file's reference (docs/files.md): uploaded to Meta, then sent" }
+        voice:      { type: boolean, description: "Audio only: send as a voice note (needs Ogg/Opus audio; plays inline up to 512 KB)" }
         caption:    { type: string, maxLength: 1024, description: Image, document and video only }
         filename:   { type: string, description: Document only, with extension }
         reply_to:   { type: string }
@@ -181,6 +186,65 @@ actions:
       required: [message_id]
       properties:
         message_id: { type: string, description: The wamid from an inbound message event }
+    output:
+      type: object
+      properties:
+        success: { type: boolean }
+  get_media:
+    title: Get a file a customer sent
+    description: >-
+      Downloads the media of an inbound message (a voice note, a photo, a
+      document) by its media id, within Meta's time for it, and keeps it as
+      a run file (docs/files.md): the run gets the file's reference, never
+      its bytes. What a customer sent is scanned for malware and kept as
+      personal data.
+    class: read
+    input:
+      type: object
+      required: [media_id]
+      properties:
+        media_id: { type: string, description: "The inbound message's media id (trigger.item.message.audio.id, .image.id, .document.id)" }
+        name:     { type: string, description: A file name to keep it under }
+    output:
+      type: object
+      properties:
+        file:      { type: object, description: "The run file's reference: file, name, type, size, sha256" }
+        mime_type: { type: string, description: What Meta said the media was }
+    pii:
+      - { field: output.file.name, category: other }
+  upload_media:
+    title: Upload a file to send
+    description: >-
+      Uploads a run file to Meta and answers its media id, for send_media.
+      voice true checks it is Ogg/Opus audio and uploads it as a voice note.
+      Uploading twice only makes a second id, so a retry is safe.
+    class: idempotent_write
+    idempotency: { field: "header:X-Taskiem-Idempotency-Key", encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [file]
+      properties:
+        file:  { description: "A run file's reference, or its id" }
+        voice: { type: boolean }
+    output:
+      type: object
+      properties:
+        media_id: { type: string }
+  send_typing:
+    title: Show that a reply is being written
+    description: >-
+      Marks the customer's message read and shows "typing…" in their chat
+      until the reply is sent, for at most 25 seconds. Showing it twice
+      changes nothing, so a retry is safe.
+    class: idempotent_write
+    idempotency: { field: "header:X-Taskiem-Idempotency-Key", encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [message_id]
+      properties:
+        message_id: { type: string, description: The wamid of the message being answered }
     output:
       type: object
       properties:
