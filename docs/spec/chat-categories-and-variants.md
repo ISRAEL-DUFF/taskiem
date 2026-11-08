@@ -277,10 +277,13 @@ the web `src/lib/photos.ts`, `PhotoAdd.tsx`, `ProductPhotos.tsx`, `CameraSheet.t
 
 - **A photo from a link.** `POST /v1/storefront/catalogue/rows/{row}/photo` also takes
   `{"url": "…"}`. The picture is fetched once through the egress guard (purpose
-  `photo_link`: http or https, the link's own host only, never a private address, so no
-  redirect to one; 15 s; the upload limit enforced while reading), decided to be a
-  picture by its bytes, kept as the business's media like any upload, and the audit's
-  `storefront.media_add` says where it came from. Answers: "paste a link that starts
+  `photo_link`: http or https, never a private address; 15 s; the upload limit enforced
+  while reading), decided to be a picture by its bytes, kept as the business's media
+  like any upload, and the audit's `storefront.media_add` says where it came from.
+  A redirect (a short link, a shared file, a shop's image host) is followed, up to
+  three hops, each to its own host and checked again, so a redirect to a private
+  address is still refused. One person fetches at most 20 pictures from links a minute
+  (429). Answers: "paste a link that starts
   with https://", "that link is a page, not a picture: open the picture itself and copy
   its address", "we could not open that link (it answered 404)", "that link is not a
   picture we can use"; 409 where this deployment fetches nothing.
@@ -289,22 +292,31 @@ the web `src/lib/photos.ts`, `PhotoAdd.tsx`, `ProductPhotos.tsx`, `CameraSheet.t
   back camera where there are two), *From your phone* (or computer; several at once)
   and *Paste a link* (checked before it is held).
 - **Made small first.** A photo larger than 1600 px on its longest side, or over
-  1.5 MB, is drawn again as a JPEG at 1600 px before it is sent; one the browser cannot
-  draw goes as it is, for the server to check.
+  1.5 MB, is drawn again as a JPEG at 1600 px before it is sent, and only then held to
+  the 10 MB upload limit, so a phone's 12 MB photo goes; one the browser cannot draw
+  goes as it is if it is within the limit, for the server to check.
+- **The same photo again** is no change; one taken out can be added back (each change to
+  a row's photos is keyed by its own request, not by the photo).
 - **Add product** holds the photos chosen, shown with Remove, and sends them once the
   product exists, the first as its main photo. One that does not go leaves the product
   added and the form open, listing which photo and why, with *Send the photos again*
-  (the product is never added twice).
+  (the product is never added twice). While they go, the form says "Sending photo 2 of
+  3…".
 - **The product form** shows the photos with *Make main* and *Remove*, and the three
   ways to add one, up to the storefront's limit (a main photo and 5 more).
 - **The Tables tool**, on the shop's products table, shows the photo column as the
   product's photos and the three ways (a new row's photos sent once the row exists);
-  it is no longer a text box, and the row is never written with a photo as text.
+  it is no longer a text box, and the row is never written with a photo as text. Its
+  list of rows says the photos as a count ("2 photos"), not their references.
+- **The diary:** a photo added, taken out or made main is a line in it ("New photo of
+  Air Max 90"), as a price or a category is.
 - **Who may:** changing photos needs `storefront.manage`, as on the storefront page;
   someone without it is told who adds photos.
 - **Tests.** Go: `api/storefront_photo_link_test.go` (a picture, kept and audited; one
-  with no Content-Type; a page; a missing picture; not a picture; a private address; a
-  bad link; no fetching at all). Web: `src/lib/photos.test.ts`; `e2e/chat-photos.spec.ts`
+  with no Content-Type; a page; a missing picture; not a picture; a private address,
+  directly and by redirect; a short link to another host; a link that goes round; a bad
+  link; no fetching at all; the same picture again, and one taken out and added back;
+  the diary lines; the limit a minute). Web: `src/lib/photos.test.ts`; `e2e/chat-photos.spec.ts`
   at 390 and 360 px in both themes with axe (the three ways with Chromium's fake camera,
-  a large picture sent small, a photo that does not go, Make main and Remove, the Tables
-  tool's photo column).
+  a picture over 10 MB sent small, "Sending photo 2 of 3…", a photo that does not go, Make main and Remove, the Tables
+  tool's photo column and its "2 photos" in the list).

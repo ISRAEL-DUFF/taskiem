@@ -5,8 +5,10 @@ import {
   PhotoFailures,
   ProductPhotos,
   sendAll,
+  SendingLine,
+  type Sending,
 } from "./ProductPhotos";
-import type { PhotoPick } from "../lib/photos";
+import { photoCount, type PhotoPick } from "../lib/photos";
 import { useConfirm } from "./ConfirmSheet";
 import { KitEmpty, KitField, KitLoading, Pill } from "../kit";
 import { serviceRow } from "../lib/bookings";
@@ -564,6 +566,7 @@ export function ProductAdd({
   const [picks, setPicks] = useState<PhotoPick[]>([]);
   const [added, setAdded] = useState<string>();
   const [failed, setFailed] = useState<{ pick: PhotoPick; why: string }[]>([]);
+  const [sending, setSending] = useState<Sending>();
   const kobo = nairaKobo(price);
   const save: Saver = async () => {
     let id = added;
@@ -583,11 +586,13 @@ export function ProductAdd({
     }
     const todo = added ? failed.map((f) => f.pick) : photosOK ? picks : [];
     if (todo.length) {
+      setSending({ done: 0, of: todo.length });
       const bad = await sendAll(
         id,
         todo,
         added ? picks.length - failed.length : 0,
-      );
+        () => setSending((x) => x && { ...x, done: x.done + 1 }),
+      ).finally(() => setSending(undefined));
       await post("/v1/storefront/catalogue/refresh").catch(() => undefined);
       if (bad.length) {
         setAdded(id);
@@ -606,6 +611,7 @@ export function ProductAdd({
       saveWords={added ? "Send the photos again" : "Add product"}
       ready={name.trim() !== "" && kobo > 0}
     >
+      <SendingLine sending={sending} />
       {photosOK &&
         (added ? (
           <PhotoFailures failed={failed} onRetry={() => undefined} hideRetry />
@@ -1027,6 +1033,7 @@ export function TableTool({
   const [picks, setPicks] = useState<PhotoPick[]>([]);
   const [addedRow, setAddedRow] = useState<string>();
   const [failed, setFailed] = useState<{ pick: PhotoPick; why: string }[]>([]);
+  const [sending, setSending] = useState<Sending>();
   const cols = table.columns.slice(0, 3);
   const title = table.title || table.name;
   if (editing) {
@@ -1061,11 +1068,13 @@ export function TableTool({
       }
       const todo = addedRow ? failed.map((f) => f.pick) : photosOK ? picks : [];
       if (id && todo.length) {
+        setSending({ done: 0, of: todo.length });
         const bad = await sendAll(
           id,
           todo,
           addedRow ? picks.length - failed.length : 0,
-        );
+          () => setSending((x) => x && { ...x, done: x.done + 1 }),
+        ).finally(() => setSending(undefined));
         await post("/v1/storefront/catalogue/refresh").catch(() => undefined);
         if (bad.length) {
           setAddedRow(id);
@@ -1113,7 +1122,10 @@ export function TableTool({
                   hideRetry
                 />
               ) : (
-                <PendingPhotos picks={picks} onChange={setPicks} />
+                <>
+                  <SendingLine sending={sending} />
+                  <PendingPhotos picks={picks} onChange={setPicks} />
+                </>
               )}
             </div>
           ) : (
@@ -1170,7 +1182,9 @@ export function TableTool({
                   {cols.map((c) => (
                     <span key={c.name}>
                       <span className="tk-cell-name">{c.title || c.name}</span>{" "}
-                      {cellText(r[c.name])}
+                      {c.name === photoCol
+                        ? photoCount(r[c.name])
+                        : cellText(r[c.name])}
                     </span>
                   ))}
                 </button>

@@ -34,6 +34,20 @@ export async function sendAll(
   return failed;
 }
 
+/** Photos being sent: which of how many, as they go. */
+export type Sending = { done: number; of: number };
+
+export function SendingLine({ sending }: { sending?: Sending }) {
+  if (!sending) return null;
+  return (
+    <p className="hint" role="status">
+      {sending.of === 1
+        ? "Sending the photo…"
+        : `Sending photo ${Math.min(sending.done + 1, sending.of)} of ${sending.of}…`}
+    </p>
+  );
+}
+
 /** What did not go, and Try again. */
 export function PhotoFailures({
   failed,
@@ -97,7 +111,7 @@ export function ProductPhotos({
     (p): p is Image => !!p,
   );
   const ids = it?.photo_ids ?? [];
-  const [sending, setSending] = useState<{ done: number; of: number }>();
+  const [sending, setSending] = useState<Sending>();
   const [failed, setFailed] = useState<{ pick: PhotoPick; why: string }[]>([]);
   const [error, setError] = useState<unknown>();
   // What the page shows changes with the photos: read again.
@@ -199,15 +213,7 @@ export function ProductPhotos({
           onPick={(picks) => void send(picks)}
         />
       )}
-      {sending && (
-        <p className="hint" role="status">
-          Sending{" "}
-          {sending.of === 1
-            ? "the photo"
-            : `photo ${Math.min(sending.done + 1, sending.of)} of ${sending.of}`}
-          …
-        </p>
-      )}
+      <SendingLine sending={sending} />
       <PhotoFailures
         failed={failed}
         busy={!!sending}

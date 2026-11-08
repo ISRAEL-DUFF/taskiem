@@ -65,25 +65,31 @@ const fits = async (page: Page) =>
     ),
   ).toBe(true);
 
-/** A large picture made in the page (3000 × 2000), as a camera's would be. */
+/** A camera-sized picture made in the page, over the 10 MB upload limit
+ * as it is (noise does not compress), as a phone's photo can be. */
 async function bigPicture(page: Page): Promise<Buffer> {
   const b64 = await page.evaluate(async () => {
     const c = document.createElement("canvas");
-    c.width = 3000;
-    c.height = 2000;
+    c.width = 2600;
+    c.height = 1700;
     const g = c.getContext("2d");
     if (!g) throw new Error("no canvas");
-    for (let i = 0; i < 200; i++) {
-      g.fillStyle = `hsl(${i * 7}, 70%, 50%)`;
-      g.fillRect((i * 37) % 3000, (i * 53) % 2000, 400, 300);
+    const img = g.createImageData(c.width, c.height);
+    for (let i = 0; i < img.data.length; i += 4) {
+      img.data[i] = (Math.random() * 256) | 0;
+      img.data[i + 1] = (Math.random() * 256) | 0;
+      img.data[i + 2] = (Math.random() * 256) | 0;
+      img.data[i + 3] = 255;
     }
+    g.putImageData(img, 0, 0);
     const blob = await new Promise<Blob | null>((r) =>
       c.toBlob(r, "image/png"),
     );
     if (!blob) throw new Error("no picture");
     const bytes = new Uint8Array(await blob.arrayBuffer());
     let s = "";
-    for (const x of bytes) s += String.fromCharCode(x);
+    for (let i = 0; i < bytes.length; i += 0x8000)
+      s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
     return btoa(s);
   });
   return Buffer.from(b64, "base64");
@@ -98,7 +104,10 @@ type Sent = {
 };
 
 /** The stock and the photo calls, answered and remembered. */
-async function answer(page: Page, opts: { linkFails?: () => boolean } = {}) {
+async function answer(
+  page: Page,
+  opts: { linkFails?: () => boolean; slow?: boolean } = {},
+) {
   const sent: Sent[] = [];
   const remember = (r: Route) => {
     const q = r.request();
@@ -146,8 +155,10 @@ async function answer(page: Page, opts: { linkFails?: () => boolean } = {}) {
   await page.route("**/v1/storefront/catalogue/refresh", (r) =>
     r.fulfill(json({ items: [] })),
   );
-  await page.route("**/v1/storefront/catalogue/rows/**", (r) => {
+  await page.route("**/v1/storefront/catalogue/rows/**", async (r) => {
     remember(r);
+    // A slow line, so what is shown while photos go can be seen.
+    if (opts.slow) await new Promise((x) => setTimeout(x, 600));
     const last = sent[sent.length - 1];
     if (
       opts.linkFails?.() &&
@@ -176,7 +187,7 @@ for (const viewport of [
   }) => {
     const page = await (await browser.newContext({ viewport })).newPage();
     await signUp(page);
-    const sent = await answer(page);
+    const sent = await answer(page, { slow: true });
     await page.goto("/chat?with=taskiem");
     const box = page.getByTestId("taskiem-pane").getByLabel("Message");
     await box.fill("/pro");
@@ -199,11 +210,14 @@ for (const viewport of [
     const cam = page.getByRole("dialog", { name: "Take a photo" });
     await cam.getByRole("button", { name: /Take photo/ }).click();
     await expect(cam).toHaveCount(0);
-    // The computer's pictures: a large one.
+    // The computer's pictures: one over the 10 MB limit as it is, which
+    // goes because it is made small first.
+    const big = await bigPicture(page);
+    expect(big.length).toBeGreaterThan(10 << 20);
     await form.getByTestId("photo-files").setInputFiles({
       name: "slides.png",
       mimeType: "image/png",
-      buffer: await bigPicture(page),
+      buffer: big,
     });
     // A link: checked before it is held.
     await ways.getByRole("button", { name: "Paste a link" }).click();
@@ -234,6 +248,10 @@ for (const viewport of [
     await form.getByRole("textbox", { name: "Name" }).fill("Slides");
     await form.getByRole("textbox", { name: /Price/ }).fill("15000");
     await form.getByRole("button", { name: "Add product" }).click();
+    // While they go, the form says which of how many.
+    await expect(form.getByRole("status")).toContainText(
+      /Sending photo [12] of 3/,
+    );
     await expect(form).toHaveCount(0, { timeout: 10_000 });
     const photos = sent.filter((x) => x.path.includes("/photo"));
     expect(photos.map((p) => p.path)).toEqual([
@@ -244,7 +262,7 @@ for (const viewport of [
     expect(photos[0]?.type).toBe("image/jpeg");
     // The large one went made small, as a JPEG.
     expect(photos[1]?.type).toBe("image/jpeg");
-    expect(photos[1]?.size).toBeLessThan(1_000_000);
+    expect(photos[1]?.size).toBeLessThan(10 << 20);
     expect(photos[2]?.body).toEqual({
       url: "https://supplier.test/slides.jpg",
     });
@@ -390,7 +408,11 @@ test("the Tables tool's photo column takes photos, not a web address", async ({
   };
   await page.route("**/v1/tables", (r) => r.fulfill(json({ tables: [table] })));
   await page.route("**/v1/tables/t-products/rows?**", (r) =>
-    r.fulfill(json({ rows: [] })),
+    r.fulfill(
+      json({
+        rows: [{ id: 3, name: "Air Max 90", photo: "m1,m2", price: 45000 }],
+      }),
+    ),
   );
   await page.route("**/v1/tables/t-products/rows", (r) => {
     const q = r.request();
@@ -424,6 +446,13 @@ test("the Tables tool's photo column takes photos, not a web address", async ({
     .getByRole("button", { name: /Products/ })
     .click();
   const sheet = page.getByRole("dialog", { name: /Products/ });
+  // The list says a row's photos as a count, not their references.
+  await expect(sheet.getByRole("button", { name: /Air Max 90/ })).toContainText(
+    "2 photos",
+  );
+  await expect(
+    sheet.getByRole("button", { name: /Air Max 90/ }),
+  ).not.toContainText("m1,m2");
   await sheet.getByRole("button", { name: "Add a row" }).click();
   await expect(sheet.getByRole("textbox", { name: /photo/i })).toHaveCount(0);
   await expect(sheet.getByRole("group", { name: "Add a photo" })).toBeVisible();
