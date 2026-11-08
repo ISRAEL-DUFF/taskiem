@@ -46,9 +46,12 @@ type saleAsk struct {
 }
 
 // sizeWords are words said with values that are none ("size 42", "in
-// black").
-var sizeWords = map[string]bool{"size": true, "sizes": true, "colour": true, "color": true, "colours": true, "colors": true,
-	"in": true, "of": true, "the": true, "and": true, "number": true, "no": true}
+// black"), as people type them, American spellings too.
+var sizeWords = map[string]bool{
+	"size": true, "sizes": true, "colour": true, "colours": true, "color": true,
+	"in": true, "of": true, "the": true, "and": true, "number": true, "no": true,
+	"colors": true, //nolint:misspell // what people type
+}
 
 // sizesOnSale are a product's sizes and colours on sale.
 func sizesOnSale(items []stock.Item, product string) []stock.Item {
