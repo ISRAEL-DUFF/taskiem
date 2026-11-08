@@ -4232,6 +4232,18 @@
       "text": "Tambayi samfurin AI, wanda zai ga {fields} yadda suke; an ɓoye masa sauran bayanan sirri",
       "reviewed": false
     },
+    "wd.ai.conversation": {
+      "text": "Answer in the conversation with the AI model, with personal data hidden from it",
+      "reviewed": false
+    },
+    "wd.ai.conversation_through": {
+      "text": "Answer in the conversation with the AI model, which sees {fields} as they are; other personal data is hidden from it",
+      "reviewed": false
+    },
+    "wd.ai.fallback": {
+      "text": "If the AI model cannot answer, it answers with a set reply instead",
+      "reviewed": false
+    },
     "wd.alongside": {
       "text": "A lokaci guda: {name}",
       "reviewed": false

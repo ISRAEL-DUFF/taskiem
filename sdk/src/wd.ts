@@ -208,11 +208,33 @@ export interface TransformStep extends StepBase {
   config: { output: unknown };
 }
 
-/** Asks the deployment's AI model at run time (docs/contracts/wd-v1.md, AI steps): personal data in the prompt and input is hidden behind placeholders, except the input fields listed in personal_data; the output is the answer, matching output_schema. */
+/** One turn of an ai step's conversation: user is the customer, assistant the replies. */
+export interface AiTurn {
+  role: "user" | "assistant";
+  text: string;
+}
+
+/** An ai step's configuration (docs/contracts/wd-v1.md, AI steps). */
+export interface AiConfig {
+  prompt: string;
+  output_schema: object | boolean;
+  model?: string;
+  personal_data?: string[];
+  /** The business's standing instruction (who it is, how it speaks), after Taskiem's own rules. */
+  system?: string;
+  /** The conversation so far, or an expression giving it; the last 50 turns are sent. */
+  history?: AiTurn[] | string;
+  /** The longest answer, in tokens (16 to 8192). */
+  max_tokens?: number;
+  /** The output when the model cannot answer, matching output_schema, or an expression giving it. */
+  fallback?: Record<string, unknown> | string;
+}
+
+/** Asks the deployment's AI model at run time (docs/contracts/wd-v1.md, AI steps): personal data in the prompt, input, history and instruction is hidden behind placeholders, except the input fields listed in personal_data; the output is the answer, matching output_schema, or the fallback when the model cannot answer. */
 export interface AiStep extends StepBase {
   type: "ai";
   input?: Values;
-  config: { prompt: string; output_schema: object | boolean; model?: string; personal_data?: string[] };
+  config: AiConfig;
 }
 
 export type Step =

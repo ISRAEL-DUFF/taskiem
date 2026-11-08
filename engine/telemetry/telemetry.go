@@ -67,6 +67,11 @@ var (
 	RunFilesKept = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "taskiem_run_files_total", Help: "Run files offered for keeping, by origin and outcome.",
 	}, []string{"origin", "outcome"})
+	// AIStepFallbacks counts ai steps that answered with their fallback
+	// because the model could not, by the failure's kind.
+	AIStepFallbacks = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "taskiem_ai_step_fallbacks_total", Help: "AI steps answered with their fallback, by why the model could not answer.",
+	}, []string{"kind"})
 	// SpeechRequests counts speech@1's calls (docs/speech.md), by kind
 	// (hear, speak) and outcome (done, not_heard, refused, failed).
 	SpeechRequests = promauto.NewCounterVec(prometheus.CounterOpts{

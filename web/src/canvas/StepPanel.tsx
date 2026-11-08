@@ -581,6 +581,24 @@ function AIConfig({ step, set, advanced }: { step: Extract<Step, { type: "ai" }>
       <Field label="What to ask" hint="Say what you want in plain words: sort the message, pull out the address, write a short reply.">
         <textarea rows={5} value={cfg.prompt} onChange={(e) => setCfg({ prompt: e.target.value })} />
       </Field>
+      <Field label="How it should answer" hint="Who your business is and how to speak: warm, short, in the customer's language. Taskiem's own rules still come first.">
+        <textarea
+          rows={3}
+          value={cfg.system ?? ""}
+          data-testid="ai-system"
+          onChange={(e) => setCfg({ system: e.target.value || undefined })}
+        />
+      </Field>
+      {typeof fallbackReply(cfg) === "string" && (
+        <Field label="If the AI cannot answer, reply with" hint="Sent when the AI is off, its budget is used up or it is down, so a customer is never left without an answer.">
+          <textarea
+            rows={2}
+            value={fallbackReply(cfg) ?? ""}
+            data-testid="ai-fallback"
+            onChange={(e) => setCfg({ fallback: e.target.value ? { ...(typeof cfg.fallback === "object" ? cfg.fallback : {}), reply: e.target.value } : undefined })}
+          />
+        </Field>
+      )}
       {!advanced && (
         <>
           <p className="hint">It reads: {Object.keys(input).join(", ") || "nothing yet"}.</p>
@@ -591,6 +609,26 @@ function AIConfig({ step, set, advanced }: { step: Extract<Step, { type: "ai" }>
         <div data-technical>
           <Field label="What it reads (JSON)" hint="The data the model reads, by name; values may be expressions such as =trigger.body.message.">
             <JsonInput value={input} onChange={(v) => set({ input: (v as object | undefined) ?? {} })} rows={6} />
+          </Field>
+          <Field label="The conversation so far" hint="An expression giving the turns before this message, [{role: user or assistant, text}], e.g. =steps.memory.output.turns. The last 50 are sent.">
+            <input
+              type="text"
+              value={typeof cfg.history === "string" ? cfg.history : ""}
+              placeholder="=steps.memory.output.turns"
+              onChange={(e) => setCfg({ history: e.target.value || undefined })}
+            />
+          </Field>
+          <Field label="Longest answer (tokens)" hint="Keeps a spoken reply short: about 300 for a few sentences. Empty: the deployment's bound.">
+            <input
+              type="number"
+              min={16}
+              max={8192}
+              value={cfg.max_tokens ?? ""}
+              onChange={(e) => setCfg({ max_tokens: e.target.value ? Number(e.target.value) : undefined })}
+            />
+          </Field>
+          <Field label="If the AI cannot answer (JSON)" hint="The output to use instead, matching the answer's shape, or an expression giving it.">
+            <JsonInput value={cfg.fallback} onChange={(v) => setCfg({ fallback: (v as Record<string, unknown> | string | undefined) ?? undefined })} rows={3} />
           </Field>
           <Field label="The answer's shape (JSON Schema)" hint={'An object schema, e.g. {"type": "object", "properties": {"urgent": {"type": "boolean"}}, "required": ["urgent"]}. The step\'s output is the answer.'}>
             <JsonInput value={cfg.output_schema} onChange={(v) => v !== undefined && setCfg({ output_schema: v as object })} rows={8} />
@@ -633,6 +671,14 @@ function AIConfig({ step, set, advanced }: { step: Extract<Step, { type: "ai" }>
 }
 
 /** The names of the fields an answer's shape gives. */
+/** The fallback's reply text, when the answer has a reply field to fill: "" when none is set yet, undefined when the answer has no such field. */
+function fallbackReply(cfg: { output_schema: object | boolean; fallback?: Record<string, unknown> | string }): string | undefined {
+  if (!answerFields(cfg.output_schema).includes("reply")) return undefined;
+  const f = cfg.fallback;
+  if (typeof f === "object" && typeof f.reply === "string") return f.reply;
+  return "";
+}
+
 function answerFields(shape: unknown): string[] {
   const props = (shape as { properties?: Record<string, unknown> } | undefined)?.properties;
   return props ? Object.keys(props) : [];

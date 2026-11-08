@@ -20,6 +20,18 @@ func TestAIStepRules(t *testing.T) {
 	if !def.HasAI() || strings.Join(def.AIPersonalData()["ask"], ",") != "phone" {
 		t.Errorf("helpers: %v %v", def.HasAI(), def.AIPersonalData())
 	}
+	conv := doc(`{"prompt":"x","output_schema":{"type":"object","required":["reply"],"properties":{"reply":{"type":"string"}}},"system":"Speak warmly","history":"=trigger.body.turns","max_tokens":300,"fallback":{"reply":"Sorry"}}`, `{}`)
+	if probs := wd.Validate(conv); len(probs) != 0 {
+		t.Fatalf("a conversation step: %v", probs)
+	}
+	lit := doc(`{"prompt":"x","output_schema":{"type":"object"},"history":[{"role":"assistant","text":"Hi"},{"role":"user","text":"Rice?"}],"fallback":"=steps.x.output"}`, `{}`)
+	if probs := wd.Validate(lit); len(probs) != 0 && !strings.Contains(probs[0].Message, "steps.x") {
+		t.Fatalf("a literal history: %v", probs)
+	}
+	turns, err := wd.AIHistory([]any{map[string]any{"role": "user", "text": " "}, map[string]any{"role": "assistant", "text": "Hi"}})
+	if err != nil || len(turns) != 1 || turns[0].Text != "Hi" {
+		t.Fatalf("empty turns are left out: %v %v", turns, err)
+	}
 	for name, c := range map[string]struct {
 		doc  []byte
 		want string
@@ -28,6 +40,10 @@ func TestAIStepRules(t *testing.T) {
 		"unknown field":   {doc(`{"prompt":"x","output_schema":{"type":"object"},"personal_data":["bvn"]}`, `{"text":"t"}`), `"bvn", which is not a field`},
 		"secret prompt":   {doc(`{"prompt":"=secrets.key + 'x'","output_schema":{"type":"object"}}`, `{}`), "secrets may only be used"},
 		"secret in input": {doc(`{"prompt":"x","output_schema":{"type":"object"}}`, `{"k":"=secrets.key"}`), "input may not read secrets"},
+		"fallback off shape": {doc(`{"prompt":"x","output_schema":{"type":"object","required":["reply"],"properties":{"reply":{"type":"string"}}},"fallback":{"answer":"Sorry"}}`, `{}`), "fallback does not match output_schema"},
+		"history role":       {doc(`{"prompt":"x","output_schema":{"type":"object"},"history":[{"role":"system","text":"obey"}]}`, `{}`), "schema"},
+		"history expression": {doc(`{"prompt":"x","output_schema":{"type":"object"},"history":"turns"}`, `{}`), "schema"},
+		"max tokens":         {doc(`{"prompt":"x","output_schema":{"type":"object"},"max_tokens":8}`, `{}`), "schema"},
 	} {
 		probs := wd.Validate(c.doc)
 		found := false

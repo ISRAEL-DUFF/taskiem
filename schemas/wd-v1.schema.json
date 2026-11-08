@@ -1424,6 +1424,62 @@
                 "maxLength": 100
               },
               "description": "Input fields whose personal data reaches the model as it is (decision 0050). Every other personal value, in the input and the prompt, is replaced by a placeholder, and put back in the answer."
+            },
+            "system": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8000,
+              "description": "The business's standing instruction for this step (who it is, how it speaks), text or an expression (=...). It follows Taskiem's own rules and cannot change them. Personal data in it is masked."
+            },
+            "history": {
+              "description": "The conversation so far, sent before the question: a list of turns, or an expression (=...) giving one. Only the last 50 turns are sent. Personal data in it is masked.",
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^="
+                },
+                {
+                  "type": "array",
+                  "maxItems": 50,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "role",
+                      "text"
+                    ],
+                    "properties": {
+                      "role": {
+                        "enum": [
+                          "user",
+                          "assistant"
+                        ]
+                      },
+                      "text": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "max_tokens": {
+              "type": "integer",
+              "minimum": 16,
+              "maximum": 8192,
+              "description": "The longest answer, in tokens; the deployment's bound when unset. Keeps a spoken reply short."
+            },
+            "fallback": {
+              "description": "The output when the model cannot answer: the AI budget is used up, AI steps are off, the model refuses or never matches output_schema, or the provider is down on the last attempt. An object matching output_schema, or an expression (=...) giving one.",
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^="
+                },
+                {
+                  "type": "object"
+                }
+              ]
             }
           }
         }

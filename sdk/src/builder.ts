@@ -319,9 +319,24 @@ export function subflow(config: { workflow: string; version?: number; wait?: boo
 /**
  * Asks the deployment's AI model at run time. Personal data in the prompt
  * and input reaches the model as placeholders, put back in the answer;
- * personal_data lists the input fields it may read as they are.
+ * personal_data lists the input fields it may read as they are. For a
+ * conversation, history gives the turns so far, system the business's
+ * instruction, max_tokens a short answer, and fallback the output when the
+ * model cannot answer.
  */
-export function ai(config: { prompt: Expr<string> | string; output_schema: object | boolean; model?: string; personal_data?: string[] }, input?: Values): StepSpec {
+export function ai(
+  config: {
+    prompt: Expr<string> | string;
+    output_schema: object | boolean;
+    model?: string;
+    personal_data?: string[];
+    system?: Expr<string> | string;
+    history?: { role: "user" | "assistant"; text: string }[] | Expr<unknown> | string;
+    max_tokens?: number;
+    fallback?: Record<string, unknown> | Expr<unknown> | string;
+  },
+  input?: Values,
+): StepSpec {
   return { type: "ai", ...(input === undefined ? {} : { input }), config };
 }
 

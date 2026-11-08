@@ -5289,6 +5289,21 @@
       "reviewed": true,
       "context": "Read-back: an ai step that lets some input fields reach the model unmasked; {fields} is a comma-separated list of field names"
     },
+    "wd.ai.conversation": {
+      "text": "Answer in the conversation with the AI model, with personal data hidden from it",
+      "reviewed": true,
+      "context": "Read-back: an ai step that is given the conversation so far (history) before its question"
+    },
+    "wd.ai.conversation_through": {
+      "text": "Answer in the conversation with the AI model, which sees {fields} as they are; other personal data is hidden from it",
+      "reviewed": true,
+      "context": "Read-back: an ai step given the conversation so far that lets some input fields reach the model unmasked; {fields} is a comma-separated list of field names"
+    },
+    "wd.ai.fallback": {
+      "text": "If the AI model cannot answer, it answers with a set reply instead",
+      "reviewed": true,
+      "context": "Read-back: added after an ai step that has a fallback answer"
+    },
     "wd.alongside": {
       "text": "Alongside: {name}",
       "reviewed": true,

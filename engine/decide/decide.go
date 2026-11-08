@@ -1329,7 +1329,27 @@ func (d *decider) taskPayload(s *wd.Step, inst string, act map[string]any) (hist
 		if err == nil {
 			in, err = engine.Resolve(orEmpty(s.Input), act, true)
 		}
-		p.Input = map[string]any{"prompt": prompt, "input": in}
+		q := map[string]any{"prompt": prompt, "input": in}
+		// The conversation parts (decision 0062 V4), only when the step
+		// has them, so a step without them schedules as it always did.
+		if err == nil && s.AI != nil {
+			if s.AI.System != "" {
+				q["system"], err = engine.Resolve(s.AI.System, act, true)
+			}
+			for _, part := range []struct {
+				key string
+				raw []byte
+			}{{"history", s.AI.History}, {"fallback", s.AI.Fallback}} {
+				if err != nil || len(part.raw) == 0 {
+					continue
+				}
+				var v any
+				if err = json.Unmarshal(part.raw, &v); err == nil {
+					q[part.key], err = engine.Resolve(v, act, true)
+				}
+			}
+		}
+		p.Input = q
 	default:
 		p.Input, err = engine.Resolve(orEmpty(s.Input), act, true)
 	}

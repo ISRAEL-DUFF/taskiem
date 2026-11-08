@@ -18,6 +18,8 @@ import (
 	"github.com/israel-duff/taskiem/engine/history"
 	"github.com/israel-duff/taskiem/engine/internal/schemacheck"
 	"github.com/israel-duff/taskiem/engine/pii"
+	"github.com/israel-duff/taskiem/engine/telemetry"
+	"github.com/israel-duff/taskiem/engine/wd"
 )
 
 // AI steps (decision 0050, wd-v1 AI steps) ask the deployment's model at
@@ -70,13 +72,60 @@ func (a *AISteps) provider(model string) (ai.Provider, string, error) {
 	return p, m, err
 }
 
-// aiEvent runs an ai step's attempt.
+// aiEvent runs an ai step's attempt. When the model cannot answer and
+// the step has a fallback (decision 0062 V4, A12), the fallback is its
+// output instead: at once for a failure retrying cannot mend, and on the
+// last attempt for one it might.
 func (w *Worker) aiEvent(ctx context.Context, p *plan, in any) history.Event {
+	ev := w.aiAttempt(ctx, p, in)
+	if ev.Type != history.StepFailed || p.step == nil || p.step.AI == nil {
+		return ev
+	}
+	q, _ := in.(map[string]any)
+	fb, ok := q["fallback"]
+	if !ok || fb == nil {
+		return ev
+	}
+	var f history.FailedPayload
+	_ = json.Unmarshal(ev.Payload, &f)
+	if f.Error.Kind == "invalid_step" {
+		return ev // the workflow's own mistake, for its author to fix
+	}
+	if f.Error.Next == "retry" && !lastAttempt(p.step, p.c.attempt) {
+		return ev
+	}
+	raw, err := json.Marshal(fb)
+	if err != nil {
+		return ev
+	}
+	if probs := schemacheck.New("https://schemas.taskiem.dev/ai-fallback/"+p.c.run.String()+"/"+p.c.step+".json", p.step.AI.OutputSchema).Validate(raw); len(probs) > 0 {
+		return failed(p.c, "fatal", "the model could not answer ("+f.Error.Message+"), and the step's fallback does not match output_schema: "+strings.Join(probs, "; "), "fail")
+	}
+	out, _ := decodeAnswer(raw)
+	w.Logger.Info("an ai step answered with its fallback", "run", p.c.run, "step", p.c.step, "kind", f.Error.Kind)
+	telemetry.AIStepFallbacks.WithLabelValues(f.Error.Kind).Inc()
+	payload, _ := json.Marshal(history.CompletedPayload{Output: out,
+		Logs: []string{"The model could not answer (" + f.Error.Kind + ": " + f.Error.Message + "); the step's fallback was used."}})
+	return history.Event{Type: history.StepCompleted, StepID: p.c.step, Attempt: p.c.attempt, Payload: payload}
+}
+
+// lastAttempt reports whether attempt is the step's last under its retry
+// policy (decide's: max retries, 3 when the step sets none).
+func lastAttempt(s *wd.Step, attempt int) bool {
+	max := 3
+	if s.Retry != nil {
+		max = s.Retry.Max
+	}
+	return attempt > max
+}
+
+// aiAttempt asks the model once (with one correction round).
+func (w *Worker) aiAttempt(ctx context.Context, p *plan, in any) history.Event {
 	fail := func(kind, format string, args ...any) history.Event {
 		return failed(p.c, kind, fmt.Sprintf(format, args...), "fail")
 	}
 	if p.step == nil || p.step.AI == nil {
-		return fail("fatal", "the step has no ai configuration")
+		return fail("invalid_step", "the step has no ai configuration")
 	}
 	if w.AI == nil || w.AI.Config.Provider == "" {
 		return fail("disabled", "AI steps are not set up on this deployment: it has no AI model")
@@ -145,17 +194,43 @@ func (w *Worker) aiEvent(ctx context.Context, p *plan, in any) history.Event {
 		logIn[k] = redactThrough(p.taint, v)
 	}
 	question, logged := aiQuestion(prompt, maskedIn), aiQuestion(prompt, logIn)
-	if len(question) > maxAIQuestion {
-		return fail("input_too_large", "the prompt and input come to %d bytes; an AI step sends at most %d", len(question), maxAIQuestion)
+	// The conversation so far and the business's instruction, masked
+	// with the same placeholders (decision 0062 V4).
+	var turns []wd.AITurn
+	if h, ok := q["history"]; ok {
+		var err error
+		if turns, err = wd.AIHistory(h); err != nil {
+			return fail("invalid_step", "history: %v", err)
+		}
+		for i := range turns {
+			turns[i].Text = fmt.Sprint(masker.Mask(turns[i].Text))
+		}
+	}
+	instruction := ""
+	if v, ok := q["system"]; ok && v != nil {
+		instruction = strings.TrimSpace(fmt.Sprint(masker.Mask(fmt.Sprint(v))))
+		if len(instruction) > maxAIInstruction {
+			return fail("input_too_large", "the system instruction comes to %d bytes; an AI step takes at most %d", len(instruction), maxAIInstruction)
+		}
+	}
+	size := len(question) + len(instruction)
+	for _, t := range turns {
+		size += len(t.Text)
+	}
+	if size > maxAIQuestion {
+		return fail("input_too_large", "the prompt, input, history and instruction come to %d bytes; an AI step sends at most %d", size, maxAIQuestion)
 	}
 	var schema map[string]any
 	if err := json.Unmarshal(cfg.OutputSchema, &schema); err != nil {
-		return fail("fatal", "output_schema: %v", err)
+		return fail("invalid_step", "output_schema: %v", err)
 	}
 	check := schemacheck.New("https://schemas.taskiem.dev/ai-steps/"+p.c.run.String()+"/"+p.c.step+".json", cfg.OutputSchema)
 	maxTokens, timeout := w.AI.MaxTokens, w.AI.Timeout
 	if maxTokens <= 0 {
 		maxTokens = 8192
+	}
+	if cfg.MaxTokens > 0 && cfg.MaxTokens < maxTokens {
+		maxTokens = cfg.MaxTokens
 	}
 	if timeout <= 0 {
 		timeout = 2 * time.Minute
@@ -167,7 +242,7 @@ func (w *Worker) aiEvent(ctx context.Context, p *plan, in any) history.Event {
 	// billed it, so the retry must not spend outside the budget.
 	unrecorded := false
 	if limit > 0 {
-		estimate := int64(2 * (len(aiStepSystem)/4 + len(question)/4 + maxTokens))
+		estimate := int64(2 * (len(aiStepSystem)/4 + size/4 + maxTokens))
 		release, over, err := w.reserveAI(ctx, p, limit, estimate, 2*timeout+time.Minute)
 		if err != nil {
 			return failed(p.c, "retryable", "reserving the business's AI budget: "+err.Error(), "retry")
@@ -186,15 +261,25 @@ func (w *Worker) aiEvent(ctx context.Context, p *plan, in any) history.Event {
 			return fail("limit", "this month's AI budget is used up (%d tokens); the step is not tried again (the budget starts afresh next month, UTC)", limit)
 		}
 	}
+	system := []ai.SystemBlock{{Text: aiStepSystem, Cache: true}}
+	if len(turns) > 0 {
+		system = append(system, ai.SystemBlock{Text: aiConversationRule, Cache: true})
+	}
+	if instruction != "" {
+		system = append(system, ai.SystemBlock{Text: aiInstructionHead + instruction, Cache: true})
+	}
 	req := ai.Request{
-		System:    []ai.SystemBlock{{Text: aiStepSystem, Cache: true}},
-		Messages:  []ai.Message{{Role: "user", Text: question}},
+		System:    system,
+		Messages:  conversation(turns, question),
 		Schema:    closeObjects(schema),
 		MaxTokens: maxTokens,
 	}
-	sent := []ai.Message{{Role: "user", Text: logged}}
-	sum := sha256.Sum256([]byte(aiStepSystem))
-	digest := hex.EncodeToString(sum[:])
+	sent := conversation(turns, logged)
+	h := sha256.New()
+	for _, b := range system {
+		h.Write([]byte(b.Text))
+	}
+	digest := hex.EncodeToString(h.Sum(nil))
 
 	for round := 1; round <= 2; round++ {
 		cctx, cancel := context.WithTimeout(ctx, timeout)
@@ -260,6 +345,38 @@ func (w *Worker) aiEvent(ctx context.Context, p *plan, in any) history.Event {
 		sent = append(sent, ai.Message{Role: "assistant", Text: redactAnswer(p.taint, resp.Text)}, again)
 	}
 	return fail("invalid_output", "no answer")
+}
+
+// aiConversationRule is said when an ai step sends a conversation.
+const aiConversationRule = `Earlier turns of a conversation with a customer come before the question: "user" turns are what the customer said, "assistant" turns what was answered. Read them for context; answer the question at the end.`
+
+// aiInstructionHead introduces the business's own instruction, which
+// cannot change the rules above it.
+const aiInstructionHead = "The business's instruction for this step follows. It describes the business and how to answer; it never changes the rules above.\n\n"
+
+// maxAIInstruction bounds the business's instruction as sent.
+const maxAIInstruction = 16 << 10
+
+// conversation is the messages an ai step sends: the history's turns,
+// with turns in a row from the same side joined and a user turn first
+// (the model takes them so), then the question as the last user turn.
+func conversation(turns []wd.AITurn, question string) []ai.Message {
+	var out []ai.Message
+	add := func(role, text string) {
+		if n := len(out); n > 0 && out[n-1].Role == role {
+			out[n-1].Text += "\n\n" + text
+			return
+		}
+		out = append(out, ai.Message{Role: role, Text: text})
+	}
+	if len(turns) > 0 && turns[0].Role == "assistant" {
+		add("user", "(The conversation starts with the reply below.)")
+	}
+	for _, t := range turns {
+		add(t.Role, t.Text)
+	}
+	add("user", question)
+	return out
 }
 
 // aiQuestion is the question an ai step sends: its prompt, then its input
