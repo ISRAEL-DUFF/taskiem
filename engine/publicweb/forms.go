@@ -82,6 +82,9 @@ func (s *Server) ipHashKey() []byte {
 
 // formData is the form template's input.
 type formData struct {
+	// products are the page's products sold in sizes and colours, whose
+	// picks become their sizes' lines (sizes.go).
+	products []storefront.Item
 	pageData
 	Business string
 	Kind     string
@@ -146,6 +149,11 @@ type zoneItem struct {
 type formItem struct {
 	N  int
 	ID string
+	// Size is a line of a product's size or colour, shown once it is in
+	// the bag; Choose is, on a product sold in sizes and colours, its own
+	// page, where they are picked.
+	Size   bool
+	Choose string
 	// Key names the line's fields: the item's id for its first line in a
 	// bag, <id>~2 to ~9 for the same item with other choices.
 	Key       string
@@ -393,7 +401,17 @@ func formView(p StorefrontPage, act storefront.PublicAction, site Site, embed bo
 			f.Fulfilment = "delivery"
 		}
 		if storefront.HasWidget(form, "basket") {
-			f.Items = basketItems(p.Items)
+			f.Items = basketItems(storefront.WithSizes(p.Items))
+			for _, it := range p.Items {
+				if len(it.Sizes) > 0 {
+					f.products = append(f.products, it)
+				}
+			}
+			for i := range f.Items {
+				if f.Items[i].Choose != "" {
+					f.Items[i].Choose = base + "/i/" + f.Items[i].ID
+				}
+			}
 		}
 	}
 	return f
@@ -457,7 +475,7 @@ func (s *Server) submitForm(w http.ResponseWriter, r *http.Request, site Site, p
 		s.showForm(w, r, http.StatusBadRequest, f, "")
 		return
 	}
-	sub, msg := f.check(v, p.Items)
+	sub, msg := f.check(v, storefront.WithSizes(p.Items))
 	switch {
 	case msg != "":
 	case act.Kind == "hire":
@@ -576,6 +594,9 @@ func (f *formData) keep(v url.Values) {
 // keepBasket takes the quantities and the choices a form (or an address)
 // names: an item's first line under its id, its others under <id>~k.
 func (f *formData) keepBasket(v url.Values) {
+	if msg := f.takeSizePicks(v); msg != "" && f.Error == "" {
+		f.Error = msg
+	}
 	for i := range f.Items {
 		it := &f.Items[i]
 		base := *it
@@ -662,6 +683,9 @@ func (f *formData) check(v url.Values, items []storefront.Item) (sub storefront.
 		if c.Message, bad = text(v.Get("message"), maxOrderNote, true); bad {
 			f.Message = ""
 			return sub, "Please keep your message to 500 characters."
+		}
+		if msg := f.takeSizePicks(v); msg != "" {
+			return sub, msg
 		}
 		if msg := f.basket(v, items, &sub); msg != "" {
 			return sub, msg
@@ -946,7 +970,11 @@ func basketItems(items []storefront.Item) []formItem {
 			continue
 		}
 		seen[it.ID] = true
-		x := formItem{N: len(out), ID: it.ID, Key: it.ID, Name: it.Name, Max: most(it), Orderable: orderable(it), SoldOut: it.SoldOut(), Options: formOptions(it, it.ID), Small: it.Photo["320"]}
+		x := formItem{N: len(out), ID: it.ID, Key: it.ID, Name: it.Name, Max: most(it), Orderable: orderable(it), SoldOut: it.SoldOut(), Options: formOptions(it, it.ID), Small: it.Photo["320"],
+			Size: it.VariantOf != ""}
+		if len(it.Sizes) > 0 && it.Available && !it.SoldOut() {
+			x.Choose = it.ID
+		}
 		if it.PriceKobo != nil {
 			x.PriceKobo, x.Price = *it.PriceKobo, storefront.FormatNaira(*it.PriceKobo)
 		}

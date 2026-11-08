@@ -768,3 +768,8 @@ input.tk-switch:disabled { cursor: default; opacity: 0.7; }
 .tk-sized-pick { display: flex; flex-direction: column; gap: 8px; }
 .tk-sized-pick .tk-chips { flex-wrap: wrap; }
 .tk-sized-pick .tk-chips button:disabled { opacity: 0.45; text-decoration: line-through; }
+/* A photo for each colour (phase 4): its picture, its name, the picker. */
+.tk-colour-photo { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 6px 12px; align-items: center; padding: 8px 0; border-top: 1px solid var(--border); }
+.tk-colour-photo img, .tk-colour-photo-none { width: 48px; height: 48px; border-radius: 10px; object-fit: cover; background: var(--panel-2); }
+.tk-colour-photo-name { font-weight: 600; }
+.tk-colour-photo > :nth-child(n + 3) { grid-column: 1 / -1; }

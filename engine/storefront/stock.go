@@ -362,8 +362,24 @@ func (o *Orders) copyStock(ctx context.Context, tenant, sf uuid.UUID, row string
 		// Stock is kept on the catalogue's table only (fronts §5.2).
 		_, err := tx.Exec(ctx, `UPDATE storefront_catalogue c SET item = jsonb_set(item, '{stock}', to_jsonb($4::bigint))
 			WHERE c.tenant_id = $1 AND c.storefront_id = $2 AND c.row_id = $3 AND c.table_name = `+catalogueTableSQL, tenant, sf, row, n)
-		return err
+		if err != nil {
+			return err
+		}
+		return CopySizeCount(ctx, tx, tenant, row, n)
 	})
+}
+
+// CopySizeCount puts a size's or colour's new count into its product's
+// entry in the catalogue copy (the sizes are carried on the product, not
+// as entries of their own), and the product's count, theirs together.
+func CopySizeCount(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, row string, n int64) error {
+	_, err := tx.Exec(ctx, `UPDATE storefront_catalogue c SET item = jsonb_set(x.item, '{stock}',
+			COALESCE((SELECT to_jsonb(sum((z->>'stock')::bigint)) FROM jsonb_array_elements(x.item->'sizes') z WHERE z ? 'stock'), 'null'::jsonb))
+		FROM (SELECT c2.storefront_id, c2.table_name, c2.row_id, jsonb_set(c2.item, '{sizes}', (SELECT jsonb_agg(CASE WHEN z->>'id' = $2 THEN jsonb_set(z, '{stock}', to_jsonb(GREATEST($3::bigint, 0))) ELSE z END ORDER BY o)
+				FROM jsonb_array_elements(c2.item->'sizes') WITH ORDINALITY AS a(z, o))) AS item
+			FROM storefront_catalogue c2 WHERE c2.tenant_id = $1 AND c2.item->'sizes' @> jsonb_build_array(jsonb_build_object('id', $2::text))) x
+		WHERE c.storefront_id = x.storefront_id AND c.table_name = x.table_name AND c.row_id = x.row_id`, tenant, row, n)
+	return err
 }
 
 // stockKey is the Idempotency-Key of one change: the order, the row and

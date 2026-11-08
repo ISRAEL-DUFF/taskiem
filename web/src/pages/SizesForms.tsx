@@ -1,8 +1,13 @@
 import { useState } from "react";
-import { get, sendWith } from "../api";
+import { del, get, sendWith } from "../api";
 import { KitField, KitLoading } from "../kit";
 import type { StockItem, StockView } from "../lib/stock";
-import { formatPrice } from "../lib/storefront";
+import {
+  choicePhotoPath,
+  sendChoicePhoto,
+  type PhotoPick,
+} from "../lib/photos";
+import { formatPrice, thumb, type Catalogue } from "../lib/storefront";
 import { nairaKobo } from "../lib/toolforms";
 import {
   allCells,
@@ -20,6 +25,7 @@ import {
 } from "../lib/variants";
 import { ErrorBox, useLoad } from "../ui";
 import { FormFrame, formKey, type Saver } from "./FormFrame";
+import { PhotoAdd } from "./PhotoAdd";
 
 // Sizes and colours in the chat tools (docs/spec/chat-categories-and-
 // variants.md, Part B): a product's choices and the grid of what it sells,
@@ -349,8 +355,113 @@ export function SizesEditor({
           {problem}
         </p>
       )}
+      {was.length > 0 && <ColourPhotos item={item} />}
       {was.length > 0 && <StopSizes item={item} onSaved={onSaved} />}
     </FormFrame>
+  );
+}
+
+/** A photo for each colour, which the page shows when a customer picks it
+ * (the product's photos show for the rest). Set at once, not with Save. */
+function ColourPhotos({ item }: { item: StockItem }) {
+  const colour = (item.choices ?? []).find((c) => /^colou?rs?$/i.test(c.name));
+  const cat = useLoad(
+    () =>
+      colour
+        ? get<Catalogue>("/v1/storefront/catalogue").then(
+            (r) => r.items.find((x) => x.id === item.id),
+            () => undefined,
+          )
+        : Promise.resolve(undefined),
+    [item.id],
+  );
+  const [busy, setBusy] = useState<string>();
+  const [error, setError] = useState<unknown>();
+  const [said, setSaid] = useState("");
+  if (!colour) return null;
+  const photoOf = (value: string) =>
+    thumb(
+      cat.data?.sizes?.find((z) => z.variant[colour.name] === value && z.photo)
+        ?.photo,
+    );
+  const run = async (
+    value: string,
+    f: () => Promise<unknown>,
+    line: string,
+  ) => {
+    setBusy(value);
+    setError(undefined);
+    try {
+      await f();
+      setSaid(line);
+      cat.reload();
+    } catch (e) {
+      setError(e);
+    } finally {
+      setBusy(undefined);
+    }
+  };
+  return (
+    <fieldset className="tk-grid-group" aria-describedby="colour-photos-hint">
+      <legend>A photo for each {colour.name.toLowerCase()}</legend>
+      <p className="hint" id="colour-photos-hint">
+        Your page shows it when a customer picks that{" "}
+        {colour.name.toLowerCase()}. Saved at once.
+      </p>
+      {colour.values.map((value) => {
+        const pic = photoOf(value);
+        return (
+          <div key={value} className="tk-colour-photo">
+            {pic ? (
+              <img
+                src={pic}
+                alt={`${value} ${item.name}`}
+                width={48}
+                height={48}
+              />
+            ) : (
+              <span className="tk-colour-photo-none" aria-hidden="true" />
+            )}
+            <span className="tk-colour-photo-name">{value}</span>
+            <PhotoAdd
+              room={1}
+              busy={busy === value}
+              onPick={(picks: PhotoPick[]) => {
+                const first = picks[0];
+                if (first)
+                  void run(
+                    value,
+                    () => sendChoicePhoto(item.id, colour.name, value, first),
+                    `Photo for ${value} saved`,
+                  );
+              }}
+            />
+            {pic && (
+              <button
+                type="button"
+                className="link"
+                disabled={busy === value}
+                onClick={() =>
+                  void run(
+                    value,
+                    () => del(choicePhotoPath(item.id, colour.name, value)),
+                    `Photo for ${value} taken out`,
+                  )
+                }
+              >
+                Remove<span className="sr-only"> the photo for {value}</span>
+              </button>
+            )}
+          </div>
+        );
+      })}
+      <ErrorBox error={error} />
+      {said && (
+        <p className="tk-form-now" role="status">
+          {said}
+        </p>
+      )}
+    </fieldset>
   );
 }
 

@@ -638,3 +638,108 @@ func (s *Server) markOwnPrice(ctx context.Context, tenant uuid.UUID, sh stockSho
 		return
 	}
 }
+
+// sizesPhotoRows are the rows of a product's sizes and colours on sale
+// that have value for choice (a colour's: "Colour", "Black"), with the
+// catalogue's table and photo column, for setPhotoOfChoice and
+// clearPhotoOfChoice. ok is false when the answer has been written.
+func (s *Server) sizesPhotoRows(w http.ResponseWriter, r *http.Request) (t datatables.Table, col string, product stock.Item, rows []int64, ok bool) {
+	tenant := principalFrom(r.Context()).TenantID
+	choice, value := strings.TrimSpace(r.URL.Query().Get("choice")), strings.TrimSpace(r.URL.Query().Get("value"))
+	sh, items, err := s.stockItems(r.Context(), tenant)
+	if err != nil {
+		s.stockFail(w, r, err)
+		return
+	}
+	id := chi.URLParam(r, "id")
+	for _, it := range items {
+		if it.ID == id {
+			product = it
+		}
+	}
+	if !product.HasSizes() {
+		s.fail(w, r, fmt.Errorf("%w: it is not sold in sizes and colours", errBadRequest))
+		return
+	}
+	m := sh.cols()
+	if m.Photo == "" {
+		s.fail(w, r, fmt.Errorf("%w: the catalogue has no photo column", errBadRequest))
+		return
+	}
+	for _, c := range product.Choices {
+		if strings.EqualFold(c.Name, choice) {
+			choice = c.Name
+		}
+	}
+	for _, v := range variantsOf(items, id) {
+		if v.Available && strings.EqualFold(v.Variant[choice], value) {
+			if k, err := strconv.ParseInt(v.ID, 10, 64); err == nil {
+				rows = append(rows, k)
+			}
+		}
+	}
+	if len(rows) == 0 {
+		s.fail(w, r, fmt.Errorf("%w: %s has no %s %q on sale", errBadRequest, product.Name, strings.ToLower(choice), value))
+		return
+	}
+	return sh.table, m.Photo, product, rows, true
+}
+
+// setPhotoOfChoice is POST /v1/stock/items/{id}/variants/photo?choice=Colour&value=Black:
+// a picture (a file, or {"url"} as for a product's photo) stored once and
+// made the photo of each of the product's sizes of that colour, which the
+// page shows when a customer picks it. The product's photos stay its own.
+func (s *Server) setPhotoOfChoice(w http.ResponseWriter, r *http.Request) {
+	t, col, product, rows, ok := s.sizesPhotoRows(w, r)
+	if !ok {
+		return
+	}
+	tenant := principalFrom(r.Context()).TenantID
+	m, err := s.storeStorefrontImage(r)
+	if err != nil {
+		s.failImage(w, r, err)
+		return
+	}
+	for _, k := range rows {
+		if err := s.changePhotos(r.Context(), tenant, t, k, col, "choice-photo:"+m.ID.String()+":"+strconv.FormatInt(k, 10),
+			func([]string) ([]string, error) { return []string{m.ID.String()}, nil }); err != nil {
+			s.failPhotos(w, r, err)
+			return
+		}
+	}
+	s.choicePhotoChanged(r, product, "New photo for "+r.URL.Query().Get("value")+" of "+product.Name)
+	writeJSON(w, http.StatusOK, map[string]any{"photo": m, "sizes": len(rows)})
+}
+
+// clearPhotoOfChoice is DELETE /v1/stock/items/{id}/variants/photo?choice=Colour&value=Black:
+// that colour's sizes show the product's photos again.
+func (s *Server) clearPhotoOfChoice(w http.ResponseWriter, r *http.Request) {
+	t, col, product, rows, ok := s.sizesPhotoRows(w, r)
+	if !ok {
+		return
+	}
+	tenant := principalFrom(r.Context()).TenantID
+	for _, k := range rows {
+		if err := s.changePhotos(r.Context(), tenant, t, k, col, "choice-photo-clear:"+strconv.FormatInt(k, 10),
+			func([]string) ([]string, error) { return nil, nil }); err != nil {
+			s.failPhotos(w, r, err)
+			return
+		}
+	}
+	s.choicePhotoChanged(r, product, "The photo for "+r.URL.Query().Get("value")+" of "+product.Name+" taken out")
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) choicePhotoChanged(r *http.Request, product stock.Item, line string) {
+	p := principalFrom(r.Context())
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		return auditTx(r, tx, "stock.variants_photo", product.Name, map[string]any{"item_id": product.ID,
+			"choice": r.URL.Query().Get("choice"), "value": r.URL.Query().Get("value")})
+	}); err != nil {
+		s.Logger.Warn("stock: auditing a colour's photo", "tenant", p.TenantID, "err", err)
+	}
+	if err := s.SyncStorefront(r.Context(), p.TenantID); err != nil {
+		s.Logger.Warn("stock: refreshing the catalogue", "tenant", p.TenantID, "err", err)
+	}
+	s.diaryChange(r.Context(), p, line)
+}

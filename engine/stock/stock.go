@@ -36,6 +36,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/moneylog"
+	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
 // Reasons a movement is made for.
@@ -356,7 +357,10 @@ func copyCount(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, item string, n 
 	// list from another table may share a row's id.
 	_, err := tx.Exec(ctx, `UPDATE storefront_catalogue c SET item = jsonb_set(item, '{stock}', to_jsonb(GREATEST($3::bigint, 0)))
 		WHERE c.tenant_id = $1 AND c.row_id = $2 AND c.item ? 'stock' AND c.table_name = COALESCE((SELECT d.name FROM storefronts s JOIN data_tables d ON d.id = s.catalogue_table WHERE s.id = c.storefront_id), '')`, tenant, item, n)
-	return err
+	if err != nil {
+		return err
+	}
+	return storefront.CopySizeCount(ctx, tx, tenant, item, n)
 }
 
 func (s *Stock) failed(ctx context.Context, tenant, id uuid.UUID, cause error) {

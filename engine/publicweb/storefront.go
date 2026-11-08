@@ -445,7 +445,7 @@ func storefrontView(p StorefrontPage, now time.Time) storefrontData {
 	}
 	byTitle := map[string]int{}
 	for _, it := range p.Items {
-		x := item{Item: it, Small: it.Photo["320"], Large: it.Photo["800"], Orderable: orderable(it)}
+		x := item{Item: it, Small: it.Photo["320"], Large: it.Photo["800"], Orderable: orderable(it) || pickable(it)}
 		if x.Large == "" {
 			x.Large = it.Photo["2000"]
 		}

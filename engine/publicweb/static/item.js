@@ -15,6 +15,7 @@
   }
   for (i = 0; i < pics.length; i++) pics[i].addEventListener("click", show);
   var form = d.querySelector("form[data-run]"), out = form && form.querySelector("[data-run-total]");
+  if (form && form.hasAttribute("data-sizes")) sizes(form);
   if (!out) return;
   var btn = form.querySelector("[data-price]"), qty = form.querySelector("input.qty");
   function naira(k) {
@@ -29,4 +30,39 @@
   }
   form.addEventListener("input", sum);
   form.addEventListener("change", sum);
+
+  // Sizes: a value with none left among the others picked is out; the
+  // size picked gives its price and most; a colour's photo shows.
+  function sizes(f) {
+    var L = f.getAttribute("data-sizes").split("\n").map(function (r) {
+      var p = r.split("|");
+      return { p: p[1], n: p[2] === "" ? 1e9 : +p[2], v: p.slice(3) };
+    });
+    var S = f.querySelectorAll("fieldset[data-size-choice]"), b = f.querySelector("[data-price]"), q = f.querySelector("input.qty"), base = b && b.getAttribute("data-price"), max = q && q.max;
+    function pk() {
+      return [].map.call(S, function (s) { var c = s.querySelector("input:checked"); return c ? c.value : null; });
+    }
+    function fit(z, at, p) {
+      return p.every(function (x, j) { return j === at || x === null || z.v[j] === x; });
+    }
+    function up(ev) {
+      var p = pk(), z = null;
+      [].forEach.call(S, function (s, j) {
+        [].forEach.call(s.querySelectorAll("input"), function (i) {
+          var ok = L.some(function (y) { return y.v[j] === i.value && y.n > 0 && fit(y, j, p); });
+          i.disabled = !ok;
+          i.parentNode.classList.toggle("is-out", !ok);
+          if (!ok) i.checked = false;
+        });
+      });
+      p = pk();
+      if (p.indexOf(null) < 0) L.forEach(function (y) { if (fit(y, -1, p)) z = y; });
+      if (b) b.setAttribute("data-price", z && z.p ? z.p : base);
+      if (q) q.max = z && z.n < 1e9 ? z.n : max;
+      var t = ev && ev.target.getAttribute("data-photo");
+      if (main && t) { main.removeAttribute("srcset"); main.src = t; }
+    }
+    f.addEventListener("change", up);
+    up();
+  }
 })();

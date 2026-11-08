@@ -6,6 +6,10 @@ the form's own fields. */}}
 
 {{/* An item's page: its photo, words, price, its choices and a quantity,
      and Add to bag (or why there is nothing to press). */}}
+{{/* A product sold in sizes and colours in the one-page order form: they
+     are picked on its own page; a size already in the bag is a line. */}}
+{{define "choosesize"}}<div class="line"><span class="line-name">{{.Name}}</span> <a href="{{.Choose}}">Choose<span class="sr"> {{.Name}}</span></a></div>{{end}}
+
 {{define "itempage"}}<article class="pdp">
   <div class="pdp-media">{{template "itemimg" .}}</div>
   <div class="pdp-main">
@@ -29,9 +33,12 @@ the form's own fields. */}}
     {{with .It.Price}}<p class="pdp-price">{{.}}</p>{{end}}
     {{with .It.Description}}<p class="pdp-desc">{{.}}</p>{{end}}
     {{if .Book}}<div class="pdp-cta"><a class="btn btn-primary btn-brand btn-block pdp-go" href="{{.Book}}">Choose a time</a>{{with .DepositNote}}<p class="pdp-meta">{{.}}</p>{{end}}</div>
-    {{else if .Add}}<form method="get" action="{{.Action}}" class="pdp-form" data-merge data-run>
+    {{else if .Add}}<form method="get" action="{{.Action}}" class="pdp-form" data-merge data-run{{with .SizeData}} data-sizes="{{.}}"{{end}}>
       <input type="hidden" name="step" value="bag">
-      {{range .Options}}{{$in := .Input}}{{$k := optkind .Name}}<fieldset class="pdp-opt pdp-opt-{{$k}}"><legend>{{.Name}}</legend>
+      {{range .Sizes}}{{$in := .Input}}{{$k := .Kind}}<fieldset class="pdp-opt pdp-opt-{{$k}} pdp-size" data-size-choice="{{.Name}}"><legend>{{.Name}}</legend>
+      {{range .Values}}<label class="pdp-choice{{if .Out}} is-out{{end}}"><input type="radio" name="{{$in}}" value="{{.Value}}" required{{if .Out}} disabled{{end}}{{with .Large}} data-photo="{{.}}"{{end}}>{{if .Photo}}<img class="sw" src="{{.Photo}}" alt="" width="36" height="36" loading="lazy">{{else if eq $k "colour"}}<i class="sw {{swatch .Value}}" aria-hidden="true"></i>{{end}}<span>{{.Value}}</span>{{if .Out}}<span class="sr"> (none left)</span>{{end}}</label>
+      {{end}}</fieldset>
+      {{end}}      {{range .Options}}{{$in := .Input}}{{$k := optkind .Name}}<fieldset class="pdp-opt pdp-opt-{{$k}}"><legend>{{.Name}}</legend>
       {{range .Choices}}<label class="pdp-choice"><input type="radio" name="{{$in}}" value="{{.Value}}" data-add="{{.PriceKobo}}"{{if .Selected}} checked{{end}}>{{if eq $k "colour"}}<i class="sw {{swatch .Name}}" aria-hidden="true"></i>{{end}}<span>{{if eq $k "size"}}{{.Name}}{{else}}{{.Label}}{{end}}</span></label>
       {{end}}</fieldset>
       {{end}}<div class="pdp-qty"><label for="pdp-qty">Quantity</label>

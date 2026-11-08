@@ -21,6 +21,23 @@ export async function sendPhoto(
   return uploadFile(path, await shrinkPhoto(p.file));
 }
 
+/** Sends a colour's photo (choice "Colour", value "Black"): it shows on
+ * each of the product's sizes of that colour. */
+export async function sendChoicePhoto(
+  product: string,
+  choice: string,
+  value: string,
+  p: PhotoPick,
+): Promise<unknown> {
+  const path = choicePhotoPath(product, choice, value);
+  if ("url" in p) return post(path, { url: p.url.trim() });
+  return uploadFile(path, await shrinkPhoto(p.file));
+}
+
+/** Where a colour's photo is set and taken out. */
+export const choicePhotoPath = (product: string, choice: string, value: string) =>
+  `/v1/stock/items/${encodeURIComponent(product)}/variants/photo?choice=${encodeURIComponent(choice)}&value=${encodeURIComponent(value)}`;
+
 /** A chosen photo, as a list of them names it: its file's name, or the
  * link's host. */
 export function pickName(p: PhotoPick): string {

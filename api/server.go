@@ -544,6 +544,8 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/movements", s.moveStock)
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/movements/grid", s.moveStockGrid)
 			r.With(s.need(PermTableEdit), s.tenantWide).Put("/stock/items/{id}/variants", s.setStockVariants)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/stock/items/{id}/variants/photo", s.setPhotoOfChoice)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Delete("/stock/items/{id}/variants/photo", s.clearPhotoOfChoice)
 			r.With(s.need(PermTableRead)).Get("/stock/sales", s.getSales)
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/sales", s.recordSale)
 			// Counts and shrinkage (stock_counts.go, K4).

@@ -103,6 +103,9 @@ export interface Item {
   category?: string;
   /** How many are left, when the catalogue tracks stock. */
   stock?: number;
+  /** A product sold in sizes and colours: those on sale, each with its
+   * values and its own photo (a colour's) when it has one. */
+  sizes?: { id: string; variant: Record<string, string>; photo?: Image }[];
 }
 
 export interface Catalogue {
