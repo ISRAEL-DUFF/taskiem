@@ -62,7 +62,7 @@ An id the organisation does not have, or a file that has expired, fails the step
 
 ## Erasure
 
-Erasing a person (`POST /v1/pii/erase`, [admin](contracts/api.md)) deletes their key and then every run file tied to them, at once rather than at expiry. The answer says how many were deleted (`files_deleted`); `files_pending: true` means storage could not be reached and the files are deleted by a later sweep (their key is already gone either way).
+Erasing a person (`POST /v1/pii/erase`, [privacy](privacy.md)) deletes their key and then every run file tied to them, at once rather than at expiry. The answer says how many were deleted (`files_deleted`); `files_pending: true` means storage could not be reached and the files are deleted by a later sweep (their key is already gone either way).
 
 ## Not yet
 
