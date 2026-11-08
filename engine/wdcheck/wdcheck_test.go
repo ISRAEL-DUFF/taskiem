@@ -121,6 +121,14 @@ func TestResendIfLostOnlyWhereAllowed(t *testing.T) {
 	if probs := wdcheck.Check(step("paystack@1", "transfer"), reg); !has(probs) {
 		t.Errorf("a transfer must not be resent: %v", probs)
 	}
+	noRetry := doc(`{"type":"manual"}`, `[{"id":"s","type":"connector","connector":"whatsapp@1","action":"send_text","effect":{"resend_if_lost":true},"retry":{"max":0},"input":{}}]`)
+	if probs := wdcheck.Check(noRetry, reg); !has(probs) {
+		t.Errorf("a resend with no retry budget would never happen: %v", probs)
+	}
+	oneRetry := doc(`{"type":"manual"}`, `[{"id":"s","type":"connector","connector":"whatsapp@1","action":"send_text","effect":{"resend_if_lost":true},"retry":{"max":1},"input":{}}]`)
+	if probs := wdcheck.Check(oneRetry, reg); has(probs) {
+		t.Errorf("one retry is enough to resend: %v", probs)
+	}
 	capStep := doc(`{"type":"manual"}`, `[{"id":"s","type":"capability","uses":"pay_bank","effect":{"resend_if_lost":true},"input":{"account_name":"Ada","account_number":"0123456789","amount_kobo":100,"bank_code":"058","narration":"x"}}]`)
 	if probs := wdcheck.Check(capStep, reg); !has(probs) {
 		t.Errorf("a payment: %v", probs)

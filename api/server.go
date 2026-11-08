@@ -45,6 +45,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/riders"
+	"github.com/israel-duff/taskiem/engine/runfiles"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/sender"
@@ -117,6 +118,10 @@ type Server struct {
 	// Media stores storefront photos in tenants' Xenibase storage
 	// (docs/media.md); nil refuses uploads.
 	Media *media.Service
+	// RunFiles keeps the files runs fetch or make (docs/files.md), for
+	// the workers the api builds (repair's reconcile check): a step whose
+	// connector keeps or reads run files needs it. nil gives them none.
+	RunFiles *runfiles.Service
 	// Moderator checks storefront images before they may be shown (S8);
 	// nil records them as unreviewed.
 	Moderator storefront.Moderator

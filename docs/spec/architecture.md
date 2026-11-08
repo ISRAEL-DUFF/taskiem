@@ -301,7 +301,7 @@ A step may declare a `compensate` action, for example `reverse_transfer` for `tr
 
 ### 4.8 Concurrency control
 
-- `concurrency_key` serialises runs that share a key, for example one active disbursement per borrower. Implemented with a `concurrency_slots` table, not advisory locks, so state survives restarts.
+- `concurrency_key` serialises runs that share a key, for example one active disbursement per borrower. Implemented with a `concurrency_slots` table, not advisory locks, so state survives restarts. The evaluated key is often personal data (a customer's phone), so `runs.concurrency_key` and `concurrency_slots.key` store only a keyed hash of it under the tenant's pseudonymisation key (category `concurrency`), never the value; the same value in the same tenant gives the same hash, so runs still queue on it.
 - Per-workflow and per-tenant concurrency caps enforce plan limits (section 16).
 - `foreach` and `parallel` carry their own caps so one run cannot flood a provider's rate limit.
 
@@ -392,7 +392,7 @@ CREATE TABLE runs (
   environment     text NOT NULL,
   status          text NOT NULL,              -- running | waiting | needs_reconciliation | completed | failed | cancelled
   correlation_key text,
-  concurrency_key text,
+  concurrency_key text,                       -- keyed hash of settings.concurrency_key, never the value
   parent_run_id   uuid,                       -- subflows and forks
   forked_from_seq bigint,
   last_seq        bigint NOT NULL DEFAULT 0,

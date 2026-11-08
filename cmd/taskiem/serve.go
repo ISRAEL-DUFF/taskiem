@@ -1278,6 +1278,7 @@ func serve(ctx context.Context, args []string) error {
 		}
 		tasks = append(tasks, func(ctx context.Context) error { sweepRunFiles(ctx, e.runFiles, log); return nil })
 		srv.EraseFiles = e.runFiles.EraseSubject
+		srv.RunFiles = e.runFiles
 		srv.Media = &media.Service{Credentials: srv.Tables.Credentials, Guard: &egress.Guard{Logger: log}, Logger: log}
 		if addr := strings.TrimSpace(os.Getenv("TASKIEM_CLAMD_ADDR")); addr != "" {
 			// Files sent in conversations are scanned as hosted forms' are;
