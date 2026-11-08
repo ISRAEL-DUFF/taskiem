@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"slices"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/ai/intent"
 	"github.com/israel-duff/taskiem/engine/billing"
+	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/pii"
@@ -56,7 +58,11 @@ type tenantChannel struct {
 	// WorkflowVoice is the owner's "Voice in workflows" switch
 	// (speech@1, docs/speech.md), separate from Voice.
 	WorkflowVoice bool
-	at            time.Time
+	// ConversationDays is how long conversations with customers are kept
+	// (decision 0062 V5, Q4): the conversations table's rows, and runs
+	// kept "conversations" long with their files.
+	ConversationDays int
+	at               time.Time
 }
 
 const tenantChannelTTL = 30 * time.Second
@@ -74,7 +80,7 @@ func (s *Server) operatorLangs() []lang.Tag {
 // tenantChannel reads a tenant's settings, cached briefly (the USSD fast
 // path reads them within its budget); uuid.Nil has none.
 func (s *Server) tenantChannel(ctx context.Context, tenant uuid.UUID) (tenantChannel, error) {
-	tc := tenantChannel{Default: lang.EN}
+	tc := tenantChannel{Default: lang.EN, ConversationDays: 30}
 	if tenant == uuid.Nil {
 		return tc, nil
 	}
@@ -84,7 +90,7 @@ func (s *Server) tenantChannel(ctx context.Context, tenant uuid.UUID) (tenantCha
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		var langs []string
 		var def string
-		err := tx.QueryRow(ctx, `SELECT languages, default_language, voice_notes, workflow_voice FROM tenant_channel_settings WHERE tenant_id = $1`, tenant).Scan(&langs, &def, &tc.Voice, &tc.WorkflowVoice)
+		err := tx.QueryRow(ctx, `SELECT languages, default_language, voice_notes, workflow_voice, conversation_days FROM tenant_channel_settings WHERE tenant_id = $1`, tenant).Scan(&langs, &def, &tc.Voice, &tc.WorkflowVoice, &tc.ConversationDays)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}
@@ -302,12 +308,28 @@ type languagesView struct {
 	SpeechHear       bool     `json:"speech_hear"`
 	SpeechSpeak      bool     `json:"speech_speak"`
 	Voices           []string `json:"voices"`
+	// ConversationDays is how long conversations with customers are kept;
+	// MaxConversationDays the most the plan allows.
+	ConversationDays    int `json:"conversation_days"`
+	MaxConversationDays int `json:"max_conversation_days"`
+}
+
+// maxConversationDays is the longest a business may keep its
+// conversations: the plan's longest retention, else the longest a table
+// keeps rows.
+func (s *Server) maxConversationDays(ctx context.Context, tenant uuid.UUID) int {
+	most := datatables.MaxKeepDays
+	if lim, err := s.Store.LimitsFor(ctx, tenant); err == nil && lim.MaxRetentionDays > 0 && lim.MaxRetentionDays < most {
+		most = lim.MaxRetentionDays
+	}
+	return most
 }
 
 func (s *Server) languagesView(tc tenantChannel) languagesView {
 	v := languagesView{Operator: s.operatorLangs(), Languages: tc.Languages, On: s.langsOn(tc), DefaultLanguage: tc.Default,
 		VoiceNotes: tc.Voice, VoiceAvailable: s.Voice != nil && s.Voice.Provider != nil, Catalogues: lang.Default().Progress(),
-		VoiceInWorkflows: tc.WorkflowVoice, SpeechHear: s.Speech.CanHear(), SpeechSpeak: s.Speech.CanSpeak(), Voices: []string{}}
+		VoiceInWorkflows: tc.WorkflowVoice, SpeechHear: s.Speech.CanHear(), SpeechSpeak: s.Speech.CanSpeak(), Voices: []string{},
+		ConversationDays: tc.ConversationDays, MaxConversationDays: datatables.MaxKeepDays}
 	if s.Speech.CanSpeak() {
 		v.Voices = s.Speech.VoiceList()
 	}
@@ -326,7 +348,9 @@ func (s *Server) getLanguages(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.languagesView(tc))
+	v := s.languagesView(tc)
+	v.MaxConversationDays = s.maxConversationDays(r.Context(), p.TenantID)
+	writeJSON(w, http.StatusOK, v)
 }
 
 // putLanguages turns draft languages and voice notes on or off for the
@@ -340,6 +364,9 @@ func (s *Server) putLanguages(w http.ResponseWriter, r *http.Request) {
 		// VoiceInWorkflows, when given, turns speech@1 on or off; left
 		// out, it stays as it is.
 		VoiceInWorkflows *bool `json:"voice_in_workflows"`
+		// ConversationDays, when given, is how long conversations with
+		// customers are kept (1 to the plan's longest retention).
+		ConversationDays *int `json:"conversation_days"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
@@ -351,7 +378,15 @@ func (s *Server) putLanguages(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	tc := tenantChannel{Default: lang.EN, Voice: req.VoiceNotes, Languages: []lang.Tag{}, WorkflowVoice: was.WorkflowVoice}
+	tc := tenantChannel{Default: lang.EN, Voice: req.VoiceNotes, Languages: []lang.Tag{}, WorkflowVoice: was.WorkflowVoice, ConversationDays: was.ConversationDays}
+	if req.ConversationDays != nil {
+		most := s.maxConversationDays(r.Context(), p.TenantID)
+		if d := *req.ConversationDays; d < 1 || d > most {
+			writeErr(w, http.StatusBadRequest, fmt.Sprintf("conversations are kept 1 to %d days on this plan", most))
+			return
+		}
+		tc.ConversationDays = *req.ConversationDays
+	}
 	if req.VoiceInWorkflows != nil {
 		tc.WorkflowVoice = *req.VoiceInWorkflows
 	}
@@ -388,22 +423,24 @@ func (s *Server) putLanguages(w http.ResponseWriter, r *http.Request) {
 		langs[i] = string(t)
 	}
 	err = s.tx(r, func(tx pgx.Tx) error {
-		_, err := tx.Exec(r.Context(), `INSERT INTO tenant_channel_settings (tenant_id, languages, default_language, voice_notes, workflow_voice, updated_by)
-			VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (tenant_id) DO UPDATE SET languages = EXCLUDED.languages,
+		_, err := tx.Exec(r.Context(), `INSERT INTO tenant_channel_settings (tenant_id, languages, default_language, voice_notes, workflow_voice, conversation_days, updated_by)
+			VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (tenant_id) DO UPDATE SET languages = EXCLUDED.languages,
 			default_language = EXCLUDED.default_language, voice_notes = EXCLUDED.voice_notes, workflow_voice = EXCLUDED.workflow_voice,
-			updated_by = EXCLUDED.updated_by, updated_at = now()`,
-			p.TenantID, langs, string(tc.Default), tc.Voice, tc.WorkflowVoice, p.Actor())
+			conversation_days = EXCLUDED.conversation_days, updated_by = EXCLUDED.updated_by, updated_at = now()`,
+			p.TenantID, langs, string(tc.Default), tc.Voice, tc.WorkflowVoice, tc.ConversationDays, p.Actor())
 		if err != nil {
 			return err
 		}
-		return auditTx(r, tx, "channel.languages.update", p.TenantID.String(), map[string]any{"languages": langs, "default_language": tc.Default, "voice_notes": tc.Voice, "voice_in_workflows": tc.WorkflowVoice})
+		return auditTx(r, tx, "channel.languages.update", p.TenantID.String(), map[string]any{"languages": langs, "default_language": tc.Default, "voice_notes": tc.Voice, "voice_in_workflows": tc.WorkflowVoice, "conversation_days": tc.ConversationDays})
 	})
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	s.chanSettings.Delete(p.TenantID)
-	writeJSON(w, http.StatusOK, s.languagesView(tc))
+	v := s.languagesView(tc)
+	v.MaxConversationDays = s.maxConversationDays(r.Context(), p.TenantID)
+	writeJSON(w, http.StatusOK, v)
 }
 
 type transcriptView struct {

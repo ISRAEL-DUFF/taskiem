@@ -1223,6 +1223,9 @@ func serve(ctx context.Context, args []string) error {
 			// Self-repair works its queue where a model is configured (docs/ai.md).
 			tasks = append(tasks, func(ctx context.Context) error { srv.RunRepairs(ctx, 5*time.Second); return nil })
 		}
+		// Tables that keep rows for a time (decision 0062 V5) lose their
+		// older rows every hour.
+		tasks = append(tasks, func(ctx context.Context) error { srv.RunRowExpiry(ctx); return nil })
 		// Checking a Python step compiles CPython first (seconds): do it now.
 		go func() { _ = sandbox.InitPython() }()
 		srv.Done = runCtx.Done()

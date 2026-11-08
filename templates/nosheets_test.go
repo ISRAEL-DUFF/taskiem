@@ -137,7 +137,7 @@ func TestKnownTables(t *testing.T) {
 	for _, kt := range templates.KnownTables() {
 		names = append(names, kt.Name)
 	}
-	if !reflect.DeepEqual(names, []string{"classes", "customers", "events", "hire_items", "menu", "products", "spaces", "staff", "subscribers"}) {
+	if !reflect.DeepEqual(names, []string{"classes", "conversations", "customers", "events", "hire_items", "menu", "products", "spaces", "staff", "subscribers"}) {
 		t.Errorf("known tables: %v", names)
 	}
 	staff, _ := templates.KnownTable("staff")
@@ -153,6 +153,17 @@ func TestKnownTables(t *testing.T) {
 	}
 	if p := tb[0].Columns[0].Personal; tb[0].Columns[0].Name != "name" || p == nil || !*p {
 		t.Error("a customer's name is personal")
+	}
+	// The conversations table keeps its rows as long as the business keeps
+	// conversations, and its words are personal (decision 0062 V5).
+	conv, _ := templates.KnownTable("conversations")
+	if !conv.KeepWithConversations || conv.KeepDays != nil {
+		t.Errorf("conversations keeps rows with conversations: %+v", conv)
+	}
+	for _, c := range conv.Columns {
+		if (c.Name == "text" || c.Name == "sender" || c.Name == "conversation") && (c.Personal == nil || !*c.Personal) {
+			t.Errorf("conversations.%s is personal", c.Name)
+		}
 	}
 	if _, err := templates.Parse([]byte(`{"id": "x", "title": "x", "summary": "x", "description": "x", "category": "x", "connectors": [], "params": [],
 		"tables": [{"known": "nope", "name": "t"}], "definition": {"schema": "wd/v1"}}`)); err == nil {

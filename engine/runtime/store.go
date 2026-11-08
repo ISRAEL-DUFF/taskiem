@@ -881,7 +881,16 @@ func (s *Store) endRun(ctx context.Context, tx pgx.Tx, r runRow, def *wd.Definit
 	if d, err := wd.ParseDuration(tenantDefault); err == nil && d > 0 {
 		retention = d
 	}
-	if d, err := wd.ParseDuration(def.Settings.Retention); err == nil && d > 0 {
+	conversations := def.Settings.Retention == wd.RetentionConversations
+	if conversations {
+		// As long as the business keeps its conversations (decision 0062
+		// V5): the run goes with the conversation's rows.
+		days := 30
+		if err := tx.QueryRow(ctx, `SELECT conversation_days FROM tenant_channel_settings WHERE tenant_id = $1`, r.ref.TenantID).Scan(&days); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		retention = time.Duration(days) * 24 * time.Hour
+	} else if d, err := wd.ParseDuration(def.Settings.Retention); err == nil && d > 0 {
 		retention = d
 	}
 	// The plan caps retention (spec 16.2).
@@ -894,6 +903,15 @@ func (s *Store) endRun(ctx context.Context, tx pgx.Tx, r runRow, def *wd.Definit
 	}
 	if _, err := tx.Exec(ctx, `UPDATE runs SET status = $2, ended_at = now(), retain_until = now() + $3::interval WHERE id = $1`,
 		run, status, fmt.Sprintf("%d seconds", int64(retention.Seconds()))); err != nil {
+		return err
+	}
+	// The run's files go no later than the run itself; a conversation's
+	// files go with it exactly (decision 0062 V5).
+	fileExpiry := `least(expires_at, now() + $2::interval)`
+	if conversations {
+		fileExpiry = `now() + $2::interval`
+	}
+	if _, err := tx.Exec(ctx, `UPDATE run_files SET expires_at = `+fileExpiry+` WHERE run_id = $1`, run, fmt.Sprintf("%d seconds", int64(retention.Seconds()))); err != nil {
 		return err
 	}
 	if status == "completed" {

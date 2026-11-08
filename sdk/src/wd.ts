@@ -340,6 +340,6 @@ export interface WorkflowDefinition {
   inputs?: { schema?: object | boolean };
   steps: Step[];
   types?: Record<string, object | boolean>;
-  settings?: { timeout?: Duration; concurrency_key?: Expression; max_concurrency?: number; retention?: Duration };
+  settings?: { timeout?: Duration; concurrency_key?: Expression; max_concurrency?: number; retention?: Duration | "conversations" };
   outputs?: Output[];
 }

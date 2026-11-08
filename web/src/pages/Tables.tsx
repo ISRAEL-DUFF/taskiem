@@ -354,6 +354,7 @@ export function TablePage() {
           </tbody>
         </table>
       </section>
+      {!isKept(t) && <KeepRows table={t} edit={can("table.edit")} onChanged={table.reload} />}
       <UseInWorkflow table={t} />
       {adding && <AddColumn table={t} onClose={() => setAdding(false)} onDone={() => (setAdding(false), table.reload())} />}
       {deleting && (
@@ -666,6 +667,55 @@ function RowForm({ table, row, onClose, onDone }: { table: Table; row: Row | nul
 }
 
 /** How a workflow reaches the table. */
+/** How long the table keeps its rows (decision 0062 V5): until deleted, so many days, or with the business's conversations. */
+function KeepRows({ table, edit, onChanged }: { table: Table; edit: boolean; onChanged: () => void }) {
+  const act = useAction();
+  const mode = table.keep_with_conversations ? "conversations" : table.keep_days ? "days" : "forever";
+  const [days, setDays] = useState(String(table.keep_days ?? 30));
+  const save = (body: { keep_days?: number | null; keep_with_conversations?: boolean }) =>
+    void act.run(async () => (await patch(`/v1/tables/${table.id}`, body), onChanged()), "Saved");
+  return (
+    <section className="card" style={{ marginTop: 24 }} data-testid="keep-rows">
+      <h2>How long rows are kept</h2>
+      {!edit ? (
+        <p className="hint">
+          {mode === "conversations"
+            ? "As long as your conversations with customers are kept (Secrets & settings)."
+            : mode === "days"
+              ? `Rows are deleted ${table.keep_days} days after they were added.`
+              : "Until someone deletes them."}
+        </p>
+      ) : (
+        <>
+          <label style={{ display: "block" }}>
+            <input type="radio" name="keep" checked={mode === "forever"} disabled={act.busy} onChange={() => save({ keep_days: null, keep_with_conversations: false })} /> Until someone
+            deletes them
+          </label>
+          <label style={{ display: "block" }}>
+            <input type="radio" name="keep" checked={mode === "days"} disabled={act.busy} onChange={() => save({ keep_days: Number(days) || 30 })} /> Delete rows{" "}
+            <input
+              type="number"
+              min={1}
+              max={3650}
+              value={days}
+              aria-label="Days to keep rows"
+              style={{ width: 80 }}
+              onChange={(e) => setDays(e.target.value)}
+              onBlur={() => mode === "days" && Number(days) >= 1 && Number(days) !== table.keep_days && save({ keep_days: Number(days) })}
+            />{" "}
+            days after they were added
+          </label>
+          <label style={{ display: "block" }}>
+            <input type="radio" name="keep" checked={mode === "conversations"} disabled={act.busy} onChange={() => save({ keep_with_conversations: true })} /> As long as
+            conversations with customers are kept
+          </label>
+        </>
+      )}
+      <ErrorBox error={act.error} />
+    </section>
+  );
+}
+
 function UseInWorkflow({ table }: { table: Table }) {
   return (
     <section className="card" style={{ marginTop: 24 }}>

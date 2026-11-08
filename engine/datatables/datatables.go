@@ -474,18 +474,47 @@ type Table struct {
 	// KeptBy names the feature that keeps the table (kept.go), empty for
 	// an ordinary table.
 	KeptBy string `json:"kept_by,omitempty"`
+	// KeepDays keeps rows so many days after they were added, then the
+	// sweep deletes them; nil keeps them until deleted.
+	KeepDays *int `json:"keep_days,omitempty"`
+	// KeepWithConversations keeps rows as long as the business keeps its
+	// conversations with customers (conversation_days, decision 0062 V5):
+	// the conversations table's memory goes with its runs and files.
+	KeepWithConversations bool `json:"keep_with_conversations,omitempty"`
+}
+
+// MaxKeepDays is the longest a table may keep its rows by keep_days.
+const MaxKeepDays = 3650
+
+// SetKeep changes how long a table keeps its rows: days (nil: until
+// deleted) or with the business's conversations.
+func SetKeep(ctx context.Context, tx pgx.Tx, id uuid.UUID, days *int, withConversations bool) error {
+	if days != nil && (*days < 1 || *days > MaxKeepDays) {
+		return fmt.Errorf("rows are kept 1 to %d days", MaxKeepDays)
+	}
+	if withConversations {
+		days = nil
+	}
+	tag, err := tx.Exec(ctx, `UPDATE data_tables SET keep_days = $2, keep_with_conversations = $3, updated_at = now() WHERE id = $1 AND kept_by IS NULL`, id, days, withConversations)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("table %s: %w", id, ErrNotFound)
+	}
+	return nil
 }
 
 // ListTables reads the tenant's tables with their columns. tx must have
 // the tenant in scope.
 func ListTables(ctx context.Context, tx pgx.Tx) ([]Table, error) {
-	rows, err := tx.Query(ctx, `SELECT id, name, title, description, created_by, created_at, updated_at, COALESCE(kept_by, '') FROM data_tables ORDER BY name`)
+	rows, err := tx.Query(ctx, `SELECT id, name, title, description, created_by, created_at, updated_at, COALESCE(kept_by, ''), keep_days, keep_with_conversations FROM data_tables ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
 	tables, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (Table, error) {
 		var t Table
-		return t, r.Scan(&t.ID, &t.Name, &t.Title, &t.Description, &t.CreatedBy, &t.CreatedAt, &t.UpdatedAt, &t.KeptBy)
+		return t, r.Scan(&t.ID, &t.Name, &t.Title, &t.Description, &t.CreatedBy, &t.CreatedAt, &t.UpdatedAt, &t.KeptBy, &t.KeepDays, &t.KeepWithConversations)
 	})
 	if err != nil {
 		return nil, err
@@ -516,8 +545,8 @@ func ListTables(ctx context.Context, tx pgx.Tx) ([]Table, error) {
 // GetTable reads one table with its columns.
 func GetTable(ctx context.Context, tx pgx.Tx, id uuid.UUID) (Table, error) {
 	var t Table
-	err := tx.QueryRow(ctx, `SELECT id, name, title, description, created_by, created_at, updated_at, COALESCE(kept_by, '') FROM data_tables WHERE id = $1`, id).
-		Scan(&t.ID, &t.Name, &t.Title, &t.Description, &t.CreatedBy, &t.CreatedAt, &t.UpdatedAt, &t.KeptBy)
+	err := tx.QueryRow(ctx, `SELECT id, name, title, description, created_by, created_at, updated_at, COALESCE(kept_by, ''), keep_days, keep_with_conversations FROM data_tables WHERE id = $1`, id).
+		Scan(&t.ID, &t.Name, &t.Title, &t.Description, &t.CreatedBy, &t.CreatedAt, &t.UpdatedAt, &t.KeptBy, &t.KeepDays, &t.KeepWithConversations)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return t, fmt.Errorf("table %s: %w", id, ErrNotFound)
 	}
@@ -543,8 +572,11 @@ func InsertTable(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, t *Table) err
 	if t.ID == uuid.Nil {
 		t.ID = uuid.Must(uuid.NewV7())
 	}
-	err := tx.QueryRow(ctx, `INSERT INTO data_tables (id, tenant_id, name, title, description, created_by) VALUES ($1, $2, $3, $4, $5, $6) RETURNING created_at, updated_at`,
-		t.ID, tenant, t.Name, t.Title, t.Description, t.CreatedBy).Scan(&t.CreatedAt, &t.UpdatedAt)
+	if t.KeepWithConversations {
+		t.KeepDays = nil
+	}
+	err := tx.QueryRow(ctx, `INSERT INTO data_tables (id, tenant_id, name, title, description, created_by, keep_days, keep_with_conversations) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING created_at, updated_at`,
+		t.ID, tenant, t.Name, t.Title, t.Description, t.CreatedBy, t.KeepDays, t.KeepWithConversations).Scan(&t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
 		return err
 	}

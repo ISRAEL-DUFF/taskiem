@@ -54,14 +54,25 @@ interface LanguagesView {
   speech_hear: boolean;
   speech_speak: boolean;
   voices: string[];
+  conversation_days: number;
+  max_conversation_days: number;
 }
 
 /** Voice in workflows: the owner's switch for workflows that hear customers' voice notes and answer by voice (speech, decision 0062 T7). */
 function VoiceSwitch() {
   const { data, error, reload } = useLoad(() => get<LanguagesView>("/v1/languages"), []);
   const act = useAction();
+  const [days, setDays] = useState<string>();
   if (!data) return error ? <ErrorBox error={error} /> : null;
   const can = data.speech_hear || data.speech_speak;
+  const save = (patch: { voice_in_workflows?: boolean; conversation_days?: number }) =>
+    act.run(
+      async () => (
+        await put("/v1/languages", { languages: data.languages, default_language: data.default_language, voice_notes: data.voice_notes, ...patch }),
+        reload()
+      ),
+      "Saved",
+    );
   const what = data.speech_hear && data.speech_speak
     ? "hear voice notes and answer by voice"
     : data.speech_hear
@@ -76,20 +87,7 @@ function VoiceSwitch() {
           checked={data.voice_in_workflows}
           disabled={act.busy || (!can && !data.voice_in_workflows)}
           data-testid="voice-in-workflows"
-          onChange={(e) =>
-            void act.run(
-              async () => (
-                await put("/v1/languages", {
-                  languages: data.languages,
-                  default_language: data.default_language,
-                  voice_notes: data.voice_notes,
-                  voice_in_workflows: e.target.checked,
-                }),
-                reload()
-              ),
-              "Saved",
-            )
-          }
+          onChange={(e) => void save({ voice_in_workflows: e.target.checked })}
         />{" "}
         Let workflows {can ? what : "hear voice notes and answer by voice"}
       </label>
@@ -98,6 +96,29 @@ function VoiceSwitch() {
           ? "Your customers' voice notes are turned into text and your replies spoken back. Each second heard or spoken counts against your plan's monthly voice allowance."
           : "Not available yet: whoever runs your Taskiem has not set up a speech service."}
       </p>
+      <Field label="Keep conversations with customers for (days)" hint={`What customers said and what your assistant answered, with its voice notes, are deleted after this many days (at most ${data.max_conversation_days} on your plan).`}>
+        <form
+          className="toolbar"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const n = Number(days);
+            if (n >= 1) void save({ conversation_days: n }).then((ok) => ok && setDays(undefined));
+          }}
+        >
+          <input
+            type="number"
+            min={1}
+            max={data.max_conversation_days}
+            value={days ?? String(data.conversation_days)}
+            data-testid="conversation-days"
+            onChange={(e) => setDays(e.target.value)}
+            style={{ maxWidth: 120 }}
+          />
+          <button type="submit" disabled={act.busy || days === undefined}>
+            Save
+          </button>
+        </form>
+      </Field>
       <ErrorBox error={act.error} />
     </section>
   );

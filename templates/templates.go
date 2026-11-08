@@ -115,6 +115,11 @@ type Table struct {
 	Title       string   `json:"title,omitempty"`
 	Description string   `json:"description,omitempty"`
 	Columns     []Column `json:"columns"`
+	// KeepDays and KeepWithConversations say how long the table keeps its
+	// rows (data tables' row expiry, decision 0062 V5); neither keeps them
+	// until deleted.
+	KeepDays              *int `json:"keep_days,omitempty"`
+	KeepWithConversations bool `json:"keep_with_conversations,omitempty"`
 }
 
 // Column is a column of a template's table, as the Tables page takes one.
@@ -1100,6 +1105,9 @@ func (t *Template) resolveKnown() error {
 		}
 		if len(tb.Columns) == 0 {
 			tb.Columns = append([]Column(nil), kt.Columns...)
+		}
+		if tb.KeepDays == nil && !tb.KeepWithConversations {
+			tb.KeepDays, tb.KeepWithConversations = kt.KeepDays, kt.KeepWithConversations
 		}
 		tb.Known = ""
 	}

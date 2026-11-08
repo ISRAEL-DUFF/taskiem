@@ -334,6 +334,8 @@ data_tables.created_by
 data_tables.description
 data_tables.id
 data_tables.kept_by
+data_tables.keep_days
+data_tables.keep_with_conversations
 data_tables.name
 data_tables.tenant_id
 data_tables.title
@@ -1192,6 +1194,8 @@ telegram_link_codes.user_id
 telegram_link_codes.window_start
 tenant_byok_keys.status
 tenant_byok_keys.tenant_id
+tenant_channel_settings.conversation_days
+tenant_channel_settings.tenant_id
 tenant_connectors.connector_id
 tenant_connectors.digest
 tenant_connectors.disabled_at

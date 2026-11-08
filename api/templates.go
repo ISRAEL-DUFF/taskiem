@@ -239,7 +239,7 @@ func (s *Server) templateTables(r *http.Request, p *Principal, t *templates.Temp
 	out := make([]aiTableResult, 0, len(tables))
 	for _, tb := range tables {
 		res := aiTableResult{Name: tb.Name, Status: "created"}
-		req := tableReq{Name: tb.Name, Title: tb.Title, Description: tb.Description}
+		req := tableReq{Name: tb.Name, Title: tb.Title, Description: tb.Description, KeepDays: tb.KeepDays, KeepWithConversations: tb.KeepWithConversations}
 		for _, c := range tb.Columns {
 			req.Columns = append(req.Columns, columnReq{Name: c.Name, Title: c.Title, Type: c.Type, Required: c.Required, Personal: c.Personal})
 		}

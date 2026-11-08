@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -303,6 +304,7 @@ func tableView(t datatables.Table) map[string]any {
 	}
 	return map[string]any{"id": t.ID, "name": t.Name, "title": t.Title, "description": t.Description, "columns": cols,
 		"postgres_table": "public." + t.Name, "connection": datatables.ConnectionName, "created_by": t.CreatedBy, "kept_by": kept,
+		"keep_days": t.KeepDays, "keep_with_conversations": t.KeepWithConversations,
 		"created_at": t.CreatedAt.UTC().Format(time.RFC3339), "updated_at": t.UpdatedAt.UTC().Format(time.RFC3339)}
 }
 
@@ -382,6 +384,10 @@ type tableReq struct {
 	Title       string      `json:"title"`
 	Description string      `json:"description"`
 	Columns     []columnReq `json:"columns"`
+	// How long rows are kept (decision 0062 V5): days, or as long as the
+	// business keeps its conversations; neither keeps them until deleted.
+	KeepDays              *int `json:"keep_days,omitempty"`
+	KeepWithConversations bool `json:"keep_with_conversations,omitempty"`
 }
 
 // columnReq is a column as the API takes it: personal left out means
@@ -474,7 +480,11 @@ func (s *Server) newDataTable(r *http.Request, p *Principal, req tableReq) (data
 	if !proj.Ready() {
 		return datatables.Table{}, datatables.ErrProvisioning
 	}
-	t := datatables.Table{Name: req.Name, Title: req.Title, Description: req.Description, Columns: cols, CreatedBy: p.Actor()}
+	if req.KeepDays != nil && (*req.KeepDays < 1 || *req.KeepDays > datatables.MaxKeepDays) {
+		return datatables.Table{}, fmt.Errorf("%w: rows are kept 1 to %d days", errBadRequest, datatables.MaxKeepDays)
+	}
+	t := datatables.Table{Name: req.Name, Title: req.Title, Description: req.Description, Columns: cols, CreatedBy: p.Actor(),
+		KeepDays: req.KeepDays, KeepWithConversations: req.KeepWithConversations}
 	err = s.tx(r, func(tx pgx.Tx) error {
 		if err := s.checkCount(r.Context(), tx, p.TenantID, "max_data_tables"); err != nil {
 			return err
@@ -544,6 +554,10 @@ func (s *Server) patchTable(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Title       *string `json:"title"`
 		Description *string `json:"description"`
+		// KeepDays given as a number keeps rows that many days, as null
+		// until deleted; left out it stays as it is.
+		KeepDays              json.RawMessage `json:"keep_days"`
+		KeepWithConversations *bool           `json:"keep_with_conversations"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
@@ -561,9 +575,34 @@ func (s *Server) patchTable(w http.ResponseWriter, r *http.Request) {
 		s.failTables(w, r, err)
 		return
 	}
+	keepDays, withConv, keepChanged := t.KeepDays, t.KeepWithConversations, false
+	if len(req.KeepDays) > 0 {
+		keepChanged = true
+		if string(req.KeepDays) == "null" {
+			keepDays = nil
+		} else {
+			var n int
+			if err := json.Unmarshal(req.KeepDays, &n); err != nil || n < 1 || n > datatables.MaxKeepDays {
+				writeErr(w, http.StatusBadRequest, fmt.Sprintf("keep_days is 1 to %d, or null to keep rows until deleted", datatables.MaxKeepDays))
+				return
+			}
+			keepDays, withConv = &n, false
+		}
+	}
+	if req.KeepWithConversations != nil {
+		keepChanged, withConv = true, *req.KeepWithConversations
+	}
 	err = s.tx(r, func(tx pgx.Tx) error {
 		if err := datatables.UpdateTable(r.Context(), tx, t.ID, req.Title, req.Description); err != nil {
 			return err
+		}
+		if keepChanged {
+			if err := datatables.SetKeep(r.Context(), tx, t.ID, keepDays, withConv); err != nil {
+				return err
+			}
+			if err := auditTx(r, tx, "table.keep", t.ID.String(), map[string]any{"table": t.Name, "keep_days": keepDays, "keep_with_conversations": withConv}); err != nil {
+				return err
+			}
 		}
 		t, err = datatables.GetTable(r.Context(), tx, t.ID)
 		return err

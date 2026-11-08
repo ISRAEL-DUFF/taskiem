@@ -43,6 +43,9 @@ type chatTableMake struct {
 	Name    string              `json:"name,omitempty"`
 	Title   string              `json:"title,omitempty"`
 	Columns []datatables.Column `json:"columns,omitempty"`
+	// How long a known table keeps its rows (decision 0062 V5).
+	KeepDays              *int `json:"keep_days,omitempty"`
+	KeepWithConversations bool `json:"keep_with_conversations,omitempty"`
 	// Known are the known tables offered, in the order listed.
 	Known []string `json:"known,omitempty"`
 	// Table and Column are a column being added.
@@ -76,8 +79,9 @@ func (s *Server) waNewTable(ctx context.Context, c *chat, arg string) error {
 	}
 	m := &chatTableMake{Kind: "new"}
 	for _, kt := range templates.KnownTables() {
-		// A front's table is made with its front, not from chat.
-		if !have[kt.Name] && !kt.Front {
+		// A front's table is made with its front, and the assistant's
+		// memory (conversations) with its recipe, not from chat.
+		if !have[kt.Name] && !kt.Front && !kt.KeepWithConversations {
 			m.Known = append(m.Known, kt.Name)
 		}
 	}
@@ -128,6 +132,7 @@ func knownByWords(words string, offered []string) (templates.Table, bool) {
 // waTableMakeKnown reads a known table back for yes.
 func (s *Server) waTableMakeKnown(ctx context.Context, c *chat, m *chatTableMake, kt templates.Table) error {
 	m.Name, m.Title, m.Columns = kt.Name, kt.Title, nil
+	m.KeepDays, m.KeepWithConversations = kt.KeepDays, kt.KeepWithConversations
 	for _, col := range kt.Columns {
 		dc := datatables.Column{Name: col.Name, Title: col.Title, Type: col.Type, Required: col.Required}
 		if col.Personal != nil {
@@ -282,7 +287,7 @@ func (s *Server) waTableMakeNow(ctx context.Context, c *chat, m *chatTableMake) 
 			return err
 		}
 	}
-	t := datatables.Table{Name: m.Name, Title: m.Title, Columns: m.Columns}
+	t := datatables.Table{Name: m.Name, Title: m.Title, Columns: m.Columns, KeepDays: m.KeepDays, KeepWithConversations: m.KeepWithConversations}
 	err := s.chatMakeTable(ctx, c, &t, m.Name)
 	switch {
 	case err == nil:

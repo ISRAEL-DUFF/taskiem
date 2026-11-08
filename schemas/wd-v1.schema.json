@@ -161,7 +161,15 @@
           "minimum": 1
         },
         "retention": {
-          "$ref": "#/$defs/duration"
+          "description": "How long a run is kept after it ends: a duration, or \"conversations\" for as long as the business keeps its conversations with customers (30 days unless the owner changes it), so a conversation's runs, transcripts and files go with its rows (decision 0062 V5).",
+          "oneOf": [
+            {
+              "$ref": "#/$defs/duration"
+            },
+            {
+              "const": "conversations"
+            }
+          ]
         }
       }
     },

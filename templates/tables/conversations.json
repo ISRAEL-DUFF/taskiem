@@ -1,0 +1,51 @@
+{
+  "name": "conversations",
+  "title": "Conversations",
+  "description": "What customers said to the business's assistant on WhatsApp or Telegram, and what it answered, one row per message: the assistant reads the last few to remember the conversation. Kept as long as the business keeps conversations (30 days unless the owner changes it).",
+  "keep_with_conversations": true,
+  "columns": [
+    {
+      "name": "conversation",
+      "title": "Conversation",
+      "type": "text",
+      "required": true,
+      "personal": true
+    },
+    {
+      "name": "channel",
+      "title": "Channel",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "sender",
+      "title": "Customer",
+      "type": "text",
+      "required": true,
+      "personal": true
+    },
+    {
+      "name": "role",
+      "title": "Who",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "text",
+      "title": "Message",
+      "type": "text",
+      "required": true,
+      "personal": true
+    },
+    {
+      "name": "language",
+      "title": "Language",
+      "type": "text"
+    },
+    {
+      "name": "kind",
+      "title": "Text or voice",
+      "type": "text"
+    }
+  ]
+}

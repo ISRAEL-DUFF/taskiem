@@ -25699,6 +25699,8 @@ components:
       - speech_hear
       - speech_speak
       - voices
+      - conversation_days
+      - max_conversation_days
       properties:
         operator:
           type:
@@ -25750,6 +25752,12 @@ components:
           items:
             type: string
           description: The voices speech@1 speak offers, the first the default.
+        conversation_days:
+          type: integer
+          description: How long conversations with customers are kept (the conversations table's rows, and runs kept "conversations" long with their files); 30 by default.
+        max_conversation_days:
+          type: integer
+          description: The longest the plan lets conversations be kept.
       additionalProperties: false
     LanguagesUpdate:
       type: object
@@ -25771,6 +25779,10 @@ components:
         voice_in_workflows:
           type: boolean
           description: Turns speech@1 on or off; left out, it stays as it is. Turning it on needs a speech service on this Taskiem (409 otherwise).
+        conversation_days:
+          type: integer
+          minimum: 1
+          description: How long conversations with customers are kept, up to the plan's longest retention; left out, unchanged.
     Transcript:
       type: object
       required:
@@ -39349,6 +39361,14 @@ components:
           minItems: 1
           items:
             $ref: '#/components/schemas/ColumnRequest'
+        keep_days:
+          type: integer
+          minimum: 1
+          maximum: 3650
+          description: Delete rows this many days after they were added; left out, rows are kept until deleted.
+        keep_with_conversations:
+          type: boolean
+          description: Keep rows as long as the business keeps its conversations with customers (conversation_days); the conversations table does.
       additionalProperties: false
     TablePatch:
       type: object
@@ -39357,6 +39377,13 @@ components:
           type: string
         description:
           type: string
+        keep_days:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 3650
+          description: Delete rows this many days after they were added, or null to keep them until deleted; left out, unchanged.
+        keep_with_conversations:
+          type: boolean
       additionalProperties: false
     Table:
       type: object
@@ -39370,6 +39397,8 @@ components:
       - connection
       - created_by
       - kept_by
+      - keep_days
+      - keep_with_conversations
       - created_at
       - updated_at
       properties:
@@ -39382,6 +39411,12 @@ components:
           type: string
         description:
           type: string
+        keep_days:
+          type: [integer, 'null']
+          description: Rows are deleted this many days after they were added; null keeps them until deleted.
+        keep_with_conversations:
+          type: boolean
+          description: Rows are kept as long as the business keeps its conversations with customers.
         columns:
           type: array
           items:
