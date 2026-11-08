@@ -361,3 +361,60 @@ triggers:
       : has(body.chat_join_request) ? string(body.chat_join_request.chat.id)
       : has(body.message_reaction) ? string(body.message_reaction.chat.id)
       : ""
+    # Who wrote and what they wrote is personal data (decision 0062, P1):
+    # sealed in run history, readable by the run's steps.
+    pii:
+      - { field: body.message.from.id, category: other }
+      - { field: body.message.from.first_name, category: name }
+      - { field: body.message.from.last_name, category: name }
+      - { field: body.message.from.username, category: other }
+      - { field: body.message.chat.id, category: other }
+      - { field: body.message.chat.first_name, category: name }
+      - { field: body.message.chat.last_name, category: name }
+      - { field: body.message.chat.username, category: other }
+      - { field: body.message.text, category: other }
+      - { field: body.message.caption, category: other }
+      - { field: body.message.contact, category: other }
+      - { field: body.message.location, category: other }
+      - { field: body.edited_message.from.id, category: other }
+      - { field: body.edited_message.from.first_name, category: name }
+      - { field: body.edited_message.from.last_name, category: name }
+      - { field: body.edited_message.from.username, category: other }
+      - { field: body.edited_message.chat.id, category: other }
+      - { field: body.edited_message.chat.first_name, category: name }
+      - { field: body.edited_message.chat.last_name, category: name }
+      - { field: body.edited_message.chat.username, category: other }
+      - { field: body.edited_message.text, category: other }
+      - { field: body.edited_message.caption, category: other }
+      - { field: body.edited_message.contact, category: other }
+      - { field: body.edited_message.location, category: other }
+      - { field: body.business_message.from.id, category: other }
+      - { field: body.business_message.from.first_name, category: name }
+      - { field: body.business_message.from.last_name, category: name }
+      - { field: body.business_message.from.username, category: other }
+      - { field: body.business_message.chat.id, category: other }
+      - { field: body.business_message.chat.first_name, category: name }
+      - { field: body.business_message.chat.last_name, category: name }
+      - { field: body.business_message.chat.username, category: other }
+      - { field: body.business_message.text, category: other }
+      - { field: body.business_message.caption, category: other }
+      - { field: body.business_message.contact, category: other }
+      - { field: body.business_message.location, category: other }
+      - { field: body.edited_business_message.from.id, category: other }
+      - { field: body.edited_business_message.from.first_name, category: name }
+      - { field: body.edited_business_message.from.last_name, category: name }
+      - { field: body.edited_business_message.from.username, category: other }
+      - { field: body.edited_business_message.chat.id, category: other }
+      - { field: body.edited_business_message.chat.first_name, category: name }
+      - { field: body.edited_business_message.chat.last_name, category: name }
+      - { field: body.edited_business_message.chat.username, category: other }
+      - { field: body.edited_business_message.text, category: other }
+      - { field: body.edited_business_message.caption, category: other }
+      - { field: body.edited_business_message.contact, category: other }
+      - { field: body.edited_business_message.location, category: other }
+      - { field: body.callback_query.from.id, category: other }
+      - { field: body.callback_query.from.first_name, category: name }
+      - { field: body.callback_query.from.last_name, category: name }
+      - { field: body.callback_query.from.username, category: other }
+      - { field: body.callback_query.data, category: other }
+      - { field: body.callback_query.message.chat.id, category: other }

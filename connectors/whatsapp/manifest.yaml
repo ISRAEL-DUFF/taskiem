@@ -273,3 +273,30 @@ triggers:
     # wait for the user's reply or button press. Status: the wamid (send_*
     # output message_id), so a run can wait for delivered, read or failed.
     correlation: '=item.kind == "message" ? item.message.from : item.kind == "status" ? item.status.id : ""'
+    # What a customer wrote and who they are is personal data (decision
+    # 0062, P1): sealed in run history, readable by the run's steps.
+    pii:
+      - { field: body.entry.*.changes.*.value.contacts.*.wa_id, category: phone }
+      - { field: body.entry.*.changes.*.value.contacts.*.profile.name, category: name }
+      - { field: body.entry.*.changes.*.value.messages.*.from, category: phone }
+      - { field: body.entry.*.changes.*.value.messages.*.text.body, category: other }
+      - { field: body.entry.*.changes.*.value.messages.*.image.caption, category: other }
+      - { field: body.entry.*.changes.*.value.messages.*.video.caption, category: other }
+      - { field: body.entry.*.changes.*.value.messages.*.document.caption, category: other }
+      - { field: body.entry.*.changes.*.value.messages.*.document.filename, category: other }
+      - { field: body.entry.*.changes.*.value.messages.*.location, category: other }
+      - { field: body.entry.*.changes.*.value.messages.*.contacts, category: other }
+      - { field: body.entry.*.changes.*.value.messages.*.interactive, category: other }
+      - { field: body.entry.*.changes.*.value.messages.*.button.text, category: other }
+      - { field: body.entry.*.changes.*.value.statuses.*.recipient_id, category: phone }
+      - { field: item.message.from, category: phone }
+      - { field: item.message.text.body, category: other }
+      - { field: item.message.image.caption, category: other }
+      - { field: item.message.video.caption, category: other }
+      - { field: item.message.document.caption, category: other }
+      - { field: item.message.document.filename, category: other }
+      - { field: item.message.location, category: other }
+      - { field: item.message.contacts, category: other }
+      - { field: item.message.interactive, category: other }
+      - { field: item.message.button.text, category: other }
+      - { field: item.status.recipient_id, category: phone }
