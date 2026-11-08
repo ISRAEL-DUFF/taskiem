@@ -79,6 +79,8 @@ The audio is held in memory only and wiped after the call. The transcript is per
 
 Then turn voice notes on for each tenant with `PUT /v1/languages` and `"voice_notes": true` (409 when no provider is configured).
 
+Workflows that hear customers' voice notes and answer by voice use the same transcription service, with their own switch, limits and allowance: see [Speech in workflows](speech.md).
+
 The provider is reached through the egress guard, to the configured host only. Before production, the operator needs a provider account and a data-processing agreement that covers voice recordings of Nigerian data subjects, with no training on the audio and a stated retention ([needs people](needs-people.md#phase-3), L5). OpenAI's guide lists mp3, mp4, mpeg, mpga, m4a, wav and webm, not Ogg; whether its endpoint takes WhatsApp's Ogg/Opus voice notes is untested (L5). A self-hosted server that takes Ogg avoids both the question and the third party.
 
 The client was built from OpenAI's public speech-to-text guide and API reference (developers.openai.com: "Speech to text" and "Create transcription", read 8 October 2026), and the WhatsApp side from Meta's public Cloud API media documentation ("Retrieve media URL", "Download media"), under the [clean-room policy](clean-room-policy.md).

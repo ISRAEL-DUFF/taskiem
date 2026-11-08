@@ -112,7 +112,7 @@ func (a *actions) speak(ctx context.Context, req connector.Request) (connector.R
 	if err != nil {
 		return connector.Response{}, runfiles.ActionError(err)
 	}
-	return connector.Response{Output: map[string]any{"file": ref, "seconds": sp.Seconds, "characters": sp.Characters}}, nil
+	return connector.Response{Output: map[string]any{"file": ref, "seconds": sp.Seconds, "characters": sp.Characters, "plays_inline": sp.PlaysInline()}}, nil
 }
 
 func (a *actions) cannotHear(_ context.Context, req connector.Request) (connector.Response, error) {

@@ -64,6 +64,7 @@ actions:
         file:       { type: object, description: "The spoken reply's run file reference: file, name, type, size, sha256" }
         seconds:    { type: integer, description: How long it plays, counted against the allowance }
         characters: { type: integer }
+        plays_inline: { type: boolean, description: "A voice note at most 512 KB, which WhatsApp plays in the chat; a larger one arrives as a file to download (about two minutes of speech)" }
     pii:
       - { field: text, category: other }
   cannot_hear:

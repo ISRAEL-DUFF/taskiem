@@ -102,6 +102,24 @@ type Spoken struct {
 	Characters int
 }
 
+// InlineBytes is the largest voice note WhatsApp plays inline; a larger
+// one is still sent, as a file to download.
+const InlineBytes = 512 << 10
+
+// PlaysInline reports whether a voice note plays in the chat itself.
+func (sp Spoken) PlaysInline() bool { return sp.Type == "audio/ogg" && len(sp.Data) <= InlineBytes }
+
+// opusChannels reads the channel count from an Ogg/Opus identification
+// header (RFC 7845 5.1: "OpusHead", version, channel count); 0 when there
+// is none.
+func opusChannels(data []byte) int {
+	i := strings.Index(string(data[:min(len(data), 512)]), "OpusHead")
+	if i < 0 || i+10 > len(data) {
+		return 0
+	}
+	return int(data[i+9])
+}
+
 // Usage is a tenant's month.
 type Usage struct {
 	SecondsHeard, SecondsSpoken, CharactersSpoken, Requests, Refused int64
@@ -367,6 +385,12 @@ func (s *Service) Speak(ctx context.Context, tenant uuid.UUID, text, voiceName, 
 		// a service that answers anything else is set up wrongly.
 		if !media.IsOpus(sp.Data) {
 			err := fmt.Errorf("%w: the speech service did not answer Ogg/Opus audio; it cannot be sent as a voice note", ErrRefused)
+			s.outcome("speak", err)
+			return Spoken{}, err
+		}
+		// WhatsApp takes mono voice notes only.
+		if n := opusChannels(sp.Data); n != 1 {
+			err := fmt.Errorf("%w: the speech service answered %d-channel audio; a voice note must be mono", ErrRefused, n)
 			s.outcome("speak", err)
 			return Spoken{}, err
 		}

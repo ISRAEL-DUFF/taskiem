@@ -80,7 +80,7 @@ Each gap says what is missing, the evidence, and how much it matters: **Blocker*
 | F4 | The `http` step sends JSON only and reads at most 256 KB as text; no multipart, no binary, so it cannot call a speech API as a fall-back | `engine/runtime/httpstep.go:39-80` | Not needed if T1 and T2 are built |
 | F5 | No scanning, type or duration check for audio a workflow stores (ClamAV is wired for forms and email; Ogg duration is checked only in the chat path) | `cmd/taskiem/forms.go:17-30`; `engine/voice` | Launch |
 | F6 | No retention for files a workflow stores (voice notes are personal data) | | Launch |
-| F7 ⊕ | No audio conversion. Speech providers return MP3 or Opus in various containers; a WhatsApp voice note must be OGG/Opus mono (and plays inline only under 512 KB), a Telegram voice note OGG/Opus. Taskiem has no transcoder (no ffmpeg; the sandbox runs JavaScript and Python in WebAssembly) | `engine/sandbox`; no `ffmpeg`/`opus` code | Blocker for voice replies unless the provider emits OGG/Opus mono |
+| F7 ⊕ | (Decided in V3: the provider emits Opus; `speak` checks it is mono Ogg/Opus; AMR is not heard until a transcoder exists.) No audio conversion. Speech providers return MP3 or Opus in various containers; a WhatsApp voice note must be OGG/Opus mono (and plays inline only under 512 KB), a Telegram voice note OGG/Opus. Taskiem has no transcoder (no ffmpeg; the sandbox runs JavaScript and Python in WebAssembly) | `engine/sandbox`; no `ffmpeg`/`opus` code | Blocker for voice replies unless the provider emits OGG/Opus mono |
 | F8 ⊕ | Where stored audio lives (Xenibase storage region) is not stated; voice is personal data of Nigerian subjects | `docs/media.md` | Launch (people + docs) |
 
 ### 3.3 Speech
@@ -294,6 +294,18 @@ V1 and V2 were reviewed for gaps before V3; 21 were found and all are fixed on t
 | 21 | No measure of scanning or of files kept | `taskiem_file_scan_seconds`, `taskiem_run_files_total` |
 
 ### V3. Speech steps
+
+**Built** (2026-11-08), see [Speech in workflows](../speech.md):
+- `engine/voice` speaks through the OpenAI-compatible speech API (`TASKIEM_SPEECH_*`, a short list of voices) (T2).
+- `engine/speech` sits behind the owner's **Voice in workflows** switch (Settings; `tenant_channel_settings.workflow_voice`, separate from chat voice notes) (T7). It has a monthly allowance of seconds heard and spoken (`speech_seconds_monthly`, separate from AI tokens; placeholders per plan until VP7) and counts usage per month (`speech_usage`, migration 00315) and in metrics (T3, D7).
+- `speech@1` offers `transcribe`, `speak` and `cannot_hear` (T1, T2).
+- A voice note that cannot be heard completes the step with a fixed answer in the customer's language, drafted in all five (T8).
+- Readiness blocks a workflow that hears or speaks while the switch is off or the service is missing.
+- Tests: a WhatsApp voice note heard, answered, spoken and sent back as a voice note through the engine, with fakes. A nightly live check (`speech-live.yml`) speaks Ogg/Opus with the real provider and hears it back, which answers T4's Ogg question once the secret is set (VP1).
+- **F7, decided:** no transcoder. The provider is asked for Opus, and `speak` refuses an answer that is not mono Ogg/Opus rather than send a note neither app plays. AMR voice notes are kept as files but not heard until a transcoder exists.
+- **Deviations:**
+  - The transcript's retention is the run's (sealed in history, erased with the person), not a separate transcript store.
+  - A voice per business (T6) waits for VP4's recordings: workflows pick from the voices this Taskiem offers.
 
 - `engine/voice` gains a speech (text-to-speech) interface and an OpenAI-compatible provider; configuration `TASKIEM_SPEECH_*` (T2).
 - `speech@1` platform connector: `transcribe` (file reference → text, language guess; caps on length and size; sealed transcript; retention) and `speak` (text → file reference, OGG/Opus or MP3, voice from a short allowed list) (T1, T2, T6, L3).
