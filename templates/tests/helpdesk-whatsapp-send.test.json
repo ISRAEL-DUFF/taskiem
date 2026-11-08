@@ -668,6 +668,201 @@
           "plain_email": "not_run"
         }
       }
+    },
+    {
+      "name": "an email-only late answer the outbox refuses is noted and stays unsent",
+      "params": {
+        "late_answers": "email",
+        "helpdesk_address": "k3x9q2m7a1bz@in.taskiem.app"
+      },
+      "mocks": {
+        "chat": {
+          "output": {
+            "message_id": "wamid.R1",
+            "wa_id": "2348030000001"
+          }
+        },
+        "message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "mark": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ticket": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "T-1042",
+                "customer_phone": "+2348030000001",
+                "channel": "whatsapp",
+                "mail": "whatsapp",
+                "last_customer_at": "2020-01-01T00:00:00Z",
+                "customer_email": "ada@example.com"
+              }
+            ]
+          }
+        },
+        "plain_email": {
+          "output": {
+            "via": "email"
+          }
+        },
+        "thread_email": {
+          "error": {
+            "kind": "fatal",
+            "message": "sender: too many messages to this recipient"
+          }
+        },
+        "thread_email_failed": {
+          "output": {
+            "affected": 1
+          }
+        }
+      },
+      "trigger": {
+        "event": "INSERT",
+        "body": {
+          "type": "INSERT",
+          "record": {
+            "id": 501,
+            "reference": "T-1042",
+            "direction": "out",
+            "author": "Bola",
+            "body": "Your rider is 10 minutes away.",
+            "channel": "whatsapp",
+            "mail": "whatsapp",
+            "sent_at": null
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "thread_email_failed": {
+            "table": "ticket_messages",
+            "row": {
+              "reference": "T-1042",
+              "direction": "note",
+              "author": "Taskiem",
+              "body": "Taskiem could not email this answer to the customer: sender: too many messages to this recipient",
+              "channel": "email",
+              "mail": "taskiem"
+            }
+          }
+        },
+        "steps": {
+          "chat": "not_run",
+          "message": "not_run",
+          "plain_email": "not_run",
+          "thread_email": "failed",
+          "thread_email_failed": "completed",
+          "mark": "skipped"
+        }
+      }
+    },
+    {
+      "name": "a late answer by text and email whose email is refused is noted and still marked sent",
+      "params": {
+        "late_answers": "sms_and_email",
+        "helpdesk_address": "k3x9q2m7a1bz@in.taskiem.app"
+      },
+      "mocks": {
+        "chat": {
+          "output": {
+            "message_id": "wamid.R1",
+            "wa_id": "2348030000001"
+          }
+        },
+        "message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "mark": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ticket": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "T-1042",
+                "customer_phone": "+2348030000001",
+                "channel": "whatsapp",
+                "mail": "whatsapp",
+                "last_customer_at": "2020-01-01T00:00:00Z",
+                "customer_email": "ada@example.com"
+              }
+            ]
+          }
+        },
+        "plain_email": {
+          "output": {
+            "via": "email"
+          }
+        },
+        "thread_email": {
+          "error": {
+            "kind": "fatal",
+            "message": "sender: too many messages to this recipient"
+          }
+        },
+        "thread_email_failed": {
+          "output": {
+            "affected": 1
+          }
+        }
+      },
+      "trigger": {
+        "event": "INSERT",
+        "body": {
+          "type": "INSERT",
+          "record": {
+            "id": 501,
+            "reference": "T-1042",
+            "direction": "out",
+            "author": "Bola",
+            "body": "Your rider is 10 minutes away.",
+            "channel": "whatsapp",
+            "mail": "whatsapp",
+            "sent_at": null
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "thread_email_failed": {
+            "table": "ticket_messages",
+            "row": {
+              "reference": "T-1042",
+              "direction": "note",
+              "author": "Taskiem",
+              "body": "Taskiem could not email this answer to the customer: sender: too many messages to this recipient",
+              "channel": "email",
+              "mail": "taskiem"
+            }
+          },
+          "mark": {
+            "key": 501
+          }
+        },
+        "steps": {
+          "chat": "not_run",
+          "message": "completed",
+          "plain_email": "not_run",
+          "thread_email": "failed",
+          "thread_email_failed": "completed",
+          "mark": "completed"
+        }
+      }
     }
   ]
 }

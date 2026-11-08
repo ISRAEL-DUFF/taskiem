@@ -255,6 +255,30 @@
                     "message": "=trigger.body.record.body",
                     "thread": "=steps.ticket.output.rows[0].?thread.orValue('') != '' ? steps.ticket.output.rows[0].thread : steps.ticket.output.rows[0].reference",
                     "address": "=steps.how.output.address"
+                  },
+                  "on_error": {
+                    "steps": [
+                      {
+                        "id": "thread_email_failed",
+                        "type": "connector",
+                        "name": "Note on the ticket that the email could not go",
+                        "connector": "xenibase@1",
+                        "action": "insert_rows",
+                        "connection": "data_tables",
+                        "input": {
+                          "table": "ticket_messages",
+                          "row": {
+                            "reference": "=steps.ticket.output.rows[0].reference",
+                            "direction": "note",
+                            "author": "Taskiem",
+                            "body": "='Taskiem could not email this answer to the customer: ' + steps.thread_email.error.message",
+                            "at": "=run.started_at",
+                            "channel": "email",
+                            "mail": "taskiem"
+                          }
+                        }
+                      }
+                    ]
                   }
                 }
               ]
@@ -292,7 +316,7 @@
           "send",
           "late_email"
         ],
-        "when": "=steps.how.output.how != 'none'",
+        "when": "=steps.how.output.how != 'none' && !(steps.how.output.how == 'message' && steps.how.output.email && steps.how.output.mode == 'email' && steps.how.output.address != '' && !steps.late_email.output.steps.?thread_email.hasValue())",
         "input": {
           "table": "ticket_messages",
           "key": "=trigger.body.record.id",
