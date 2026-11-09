@@ -131,6 +131,7 @@ import { PaymentsSettings } from "./pages/ReceiveMoney";
 import { brandFile } from "./brand";
 import { ChatLiveProvider, NotifyBanner, useChatLive } from "./pages/ChatLive";
 import { PasskeyNudge } from "./pages/PasskeyNudge";
+import { useCustomerUnread } from "./pages/CustomerChat";
 import { useTaskiemUnread } from "./lib/taskiemSeen";
 import { standalone, useInstall } from "./install";
 import { BusinessProfilePage } from "./pages/BusinessProfile";
@@ -942,9 +943,14 @@ function SignedIn() {
 
 /** The unread count on the Chat tab (conversations and Taskiem's own). */
 function ChatTabCount() {
+  const { me, can } = useAuth();
   const { unread } = useChatLive();
   const taskiem = useTaskiemUnread();
-  const n = unread + taskiem;
+  // Customers waiting for an answer (customers' conversations).
+  const customers = useCustomerUnread(
+    can("storefront.manage|order.handle") && areaOn(me?.areas, "orders"),
+  );
+  const n = unread + taskiem + customers;
   if (n <= 0) return null;
   return (
     <span className="tab-count">

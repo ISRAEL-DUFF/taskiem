@@ -529,6 +529,16 @@
       "reviewed": true,
       "context": "Someone sent STOP: the business that messaged them last stops"
     },
+    "customer.resumed": {
+      "text": "You can write to {business} here again, and they can reply.",
+      "reviewed": true,
+      "context": "A customer who had sent STOP sent START to the business's own WhatsApp number"
+    },
+    "customer.stopped": {
+      "text": "You will no longer get messages from {business} here, and what you wrote to them is deleted. Send START to write to them again.",
+      "reviewed": true,
+      "context": "A customer of a business sent STOP to its own WhatsApp number: their conversation with it is deleted and nothing more is sent"
+    },
     "reach.stopped_none": {
       "text": "You are not getting updates from anyone here.",
       "reviewed": true,
