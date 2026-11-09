@@ -264,6 +264,10 @@ func TestChatAlertRider(t *testing.T) {
 	if riderAlert(unpaid) != nil {
 		t.Fatal("a rider alert for an order not paid yet")
 	}
+	// Paid at the door: ready for a rider as dispatch has it.
+	if door := w.order(t, "on_delivery"); riderAlert(door) == nil {
+		t.Fatal("no rider alert for an order paid at the door")
+	}
 	out := ada.must(200, "POST", "/v1/storefront/orders/"+ref+"/offer", map[string]any{})
 	if riderAlert(ref) != nil {
 		t.Fatal("offered, still waiting for a rider")

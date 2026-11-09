@@ -5926,6 +5926,54 @@
     "customer.hire_late": {
       "text": "{reference} come back {days} days late, so we add late fee of {late_fee}. Wetin remain to pay: {balance}.",
       "reviewed": false
+    },
+    "customer.chat_order": {
+      "text": "Your order {reference}:",
+      "reviewed": false
+    },
+    "customer.chat_delivery": {
+      "text": "Delivery",
+      "reviewed": false
+    },
+    "customer.chat_total": {
+      "text": "Total",
+      "reviewed": false
+    },
+    "customer.chat_pay_link": {
+      "text": "Pay by bank transfer for here: {link}",
+      "reviewed": false
+    },
+    "customer.chat_pay_door": {
+      "text": "You go pay when e reach you.",
+      "reviewed": false
+    },
+    "customer.chat_paid": {
+      "text": "We don receive your payment, thank you: {reference}. We dey prepare am.",
+      "reviewed": false
+    },
+    "customer.order_ask": {
+      "text": "Make we get your order correct:",
+      "reviewed": false
+    },
+    "customer.order_which": {
+      "text": "{said}: {choices}?",
+      "reviewed": false
+    },
+    "customer.order_size": {
+      "text": "Which {product}? {choices}",
+      "reviewed": false
+    },
+    "customer.order_how_many": {
+      "text": "How many {item}?",
+      "reviewed": false
+    },
+    "customer.order_or": {
+      "text": "or",
+      "reviewed": false
+    },
+    "customer.chat_expired": {
+      "text": "You no pay for your order {reference} on time, so we don cancel am. Write us make you order again.",
+      "reviewed": false
     }
   }
 }

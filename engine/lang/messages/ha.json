@@ -5926,6 +5926,54 @@
     "customer.hire_late": {
       "text": "{reference} ya dawo bayan kwana {days} da lokaci, don haka an ƙara kuɗin jinkiri na {late_fee}. Saura biya: {balance}.",
       "reviewed": false
+    },
+    "customer.chat_order": {
+      "text": "Odar ka {reference}:",
+      "reviewed": false
+    },
+    "customer.chat_delivery": {
+      "text": "Kai kaya",
+      "reviewed": false
+    },
+    "customer.chat_total": {
+      "text": "Jimilla",
+      "reviewed": false
+    },
+    "customer.chat_pay_link": {
+      "text": "Biya ta transfer na banki a nan: {link}",
+      "reviewed": false
+    },
+    "customer.chat_pay_door": {
+      "text": "Za ka biya idan ya iso.",
+      "reviewed": false
+    },
+    "customer.chat_paid": {
+      "text": "An karɓi kuɗinka, na gode: {reference}. Muna shirya shi.",
+      "reviewed": false
+    },
+    "customer.order_ask": {
+      "text": "Domin mu samu odar ka daidai:",
+      "reviewed": false
+    },
+    "customer.order_which": {
+      "text": "{said}: {choices}?",
+      "reviewed": false
+    },
+    "customer.order_size": {
+      "text": "Wanne {product}? {choices}",
+      "reviewed": false
+    },
+    "customer.order_how_many": {
+      "text": "Guda nawa na {item}?",
+      "reviewed": false
+    },
+    "customer.order_or": {
+      "text": "ko",
+      "reviewed": false
+    },
+    "customer.chat_expired": {
+      "text": "Ba ka biya odar ka {reference} a kan lokaci ba, don haka an soke ta. Rubuto mana don sake yin oda.",
+      "reviewed": false
     }
   }
 }

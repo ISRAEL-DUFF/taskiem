@@ -28,6 +28,7 @@ import { ChatAvatar } from "./ChatAvatar";
 import { ChatHead } from "./ChatHead";
 import { ChatRow } from "./ChatRow";
 import { ChatStream } from "./ChatStream";
+import { CustomerOrders } from "./CustomerOrders";
 
 // Customers' conversations in the Chat page (docs/spec/chat-five-more-flows.md,
 // phase 1): the list's Customers section and a customer's thread. A reply
@@ -458,6 +459,7 @@ export function CustomerPane({
           </BubbleShell>
         )}
       />
+      {c && <CustomerOrders chatId={c.id} canSend={canSend} />}
       {note && (
         <p
           className={`customer-note ${note.tone}`}

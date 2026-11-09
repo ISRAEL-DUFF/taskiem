@@ -10,6 +10,7 @@ import {
   changeWords,
   firstName,
   saleOf,
+  SHOW_BRIEFING,
   type Briefing,
   type Handover,
   type PaidHow,
@@ -28,6 +29,7 @@ import {
 } from "../lib/variants";
 import { formatPrice } from "../lib/storefront";
 import { ErrorBox, useLoad } from "../ui";
+import { toast } from "../toast";
 
 // Staff who work from chat (docs/spec/chat-tools.md §7): a cashier's Sell,
 // a counter sale as the Order sheet looks (the items with steppers, the pine
@@ -515,26 +517,53 @@ export function BriefingCard({
   const [b, setB] = useState<Briefing>();
   const [gone, setGone] = useState<string>();
   const [error, setError] = useState<unknown>();
+  const card = useRef<HTMLElement>(null);
+  const asked = useRef(false);
   // Read again when the page comes back, and every ten minutes: the card
-  // appears at 8am and a new day's card replaces yesterday's.
+  // appears at 8am and a new day's card replaces yesterday's. Asked for
+  // (the tools menu's Briefing, or "briefing"), today's comes back, put
+  // away or not.
   useEffect(() => {
     let live = true;
     const load = () => {
       if (document.visibilityState === "hidden") return;
       get<Briefing>("/v1/chat-briefing").then(
-        (x) => live && setB(x),
+        (x) => live && !asked.current && setB(x),
         (e: unknown) => console.warn("the morning briefing", e),
+      );
+    };
+    const show = () => {
+      asked.current = true;
+      get<Briefing>("/v1/chat-briefing?show=1").then(
+        (x) => {
+          asked.current = false;
+          if (!live) return;
+          setB(x);
+          setGone(undefined);
+          setError(undefined);
+          requestAnimationFrame(() => {
+            card.current?.scrollIntoView({ block: "nearest" });
+            card.current?.focus();
+          });
+        },
+        (e: unknown) => {
+          asked.current = false;
+          console.warn("the morning briefing", e);
+          toast("The briefing didn't load. Try again.", "error");
+        },
       );
     };
     load();
     const every = window.setInterval(load, 10 * 60_000);
     document.addEventListener("visibilitychange", load);
     window.addEventListener("focus", load);
+    window.addEventListener(SHOW_BRIEFING, show);
     return () => {
       live = false;
       window.clearInterval(every);
       document.removeEventListener("visibilitychange", load);
       window.removeEventListener("focus", load);
+      window.removeEventListener(SHOW_BRIEFING, show);
     };
   }, []);
   if (!b || !b.ready || b.put_off || gone === b.key) return null;
@@ -549,23 +578,32 @@ export function BriefingCard({
       },
     );
   };
-  const day = new Date(`${b.day}T08:00:00`);
+  const day = new Date(`${b.day}T12:00:00`);
+  const hello =
+    b.part === "afternoon"
+      ? "Good afternoon"
+      : b.part === "evening"
+        ? "Good evening"
+        : "Good morning";
   const change =
     b.sales && changeWords(b.sales.change_pct, `last ${b.sales.weekday}`);
   const heights = b.sales ? barHeights(b.sales.week) : [];
   return (
     <article
+      ref={card}
+      tabIndex={-1}
       className="tk-brief"
-      aria-label="Morning briefing"
+      aria-label="Today's briefing"
       data-testid="briefing-card"
     >
       <span className="tk-brief-head">
         <span>
           <span className="tk-kicker">
-            Good morning, {firstName(me?.user?.name, me?.user?.email)}
+            {hello}, {firstName(me?.user?.name, me?.user?.email)}
           </span>
           <span className="tk-brief-day">
-            {day.toLocaleDateString("en-GB", { weekday: "long" })} · 8:00
+            {day.toLocaleDateString("en-GB", { weekday: "long" })}
+            {b.now ? ` · ${b.now}` : ""}
           </span>
         </span>
         {/* Live: today's numbers (the Alerts board's dot). */}

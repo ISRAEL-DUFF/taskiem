@@ -5926,6 +5926,54 @@
     "customer.hire_late": {
       "text": "{reference} padà dé ní ọjọ́ {days} lẹ́yìn àkókò, nítorí náà a fi owó ìjìyà {late_fee} kún un. Ohun tí ó kù láti san: {balance}.",
       "reviewed": false
+    },
+    "customer.chat_order": {
+      "text": "Ọjà tí o béèrè {reference}:",
+      "reviewed": false
+    },
+    "customer.chat_delivery": {
+      "text": "Ìfijíṣẹ́",
+      "reviewed": false
+    },
+    "customer.chat_total": {
+      "text": "Àpapọ̀",
+      "reviewed": false
+    },
+    "customer.chat_pay_link": {
+      "text": "Sanwó nípa transfer sí báǹkì níbí: {link}",
+      "reviewed": false
+    },
+    "customer.chat_pay_door": {
+      "text": "O máa sanwó nígbà tí ó bá dé.",
+      "reviewed": false
+    },
+    "customer.chat_paid": {
+      "text": "A ti gba owó rẹ, o ṣé: {reference}. A ń pèsè rẹ̀.",
+      "reviewed": false
+    },
+    "customer.order_ask": {
+      "text": "Kí a lè ṣe ohun tí o béèrè dáadáa:",
+      "reviewed": false
+    },
+    "customer.order_which": {
+      "text": "{said}: {choices}?",
+      "reviewed": false
+    },
+    "customer.order_size": {
+      "text": "Èwo nínú {product}? {choices}",
+      "reviewed": false
+    },
+    "customer.order_how_many": {
+      "text": "Mélòó ni {item}?",
+      "reviewed": false
+    },
+    "customer.order_or": {
+      "text": "tàbí",
+      "reviewed": false
+    },
+    "customer.chat_expired": {
+      "text": "O kò sanwó fún {reference} lásìkò, nítorí náà a ti fagilé e. Kọ sí wa láti béèrè lẹ́ẹ̀kan sí i.",
+      "reviewed": false
     }
   }
 }

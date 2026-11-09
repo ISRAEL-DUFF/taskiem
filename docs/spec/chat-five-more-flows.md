@@ -1,6 +1,6 @@
 # Chat: five more flows
 
-Status: **plan**, for review (8 November 2026; phase 0 added 9 November, from the founder's checks on a phone). Phase 0 is built; phase 1 is built (see As built under each). Written with the founder; the live
+Status: **plan**, for review (8 November 2026; phase 0 added 9 November, from the founder's checks on a phone). Phases 0, 1 and 2 are built (see As built under each). Written with the founder; the live
 doc is [the shared plan](https://claude.ai/artifact/FycMX9CLMjjE6oMBiGCumm), and this file is its copy beside the code.
 
 ## Summary
@@ -252,6 +252,72 @@ Built 9 November 2026. `TestCustomerConversations` and `TestCustomerConversation
   - **The customer's name** comes from the business's own book of customers, else the name they gave WhatsApp (kept sealed), else their number.
   - **Late replies in the browser test:** the e2e test can't wait a day, so the 24-hour rule and the 900-character limit are checked in the Go tests and the helpers' unit tests.
 
+### As built: phase 2, orders from customers' messages
+
+Built 9 November 2026. `TestOrdersFromCustomersMessages` (`api/order_drafts_test.go`) checks the server end to end with a fake model, fake WhatsApp and a real catalogue; `engine/orders/read/read_test.go` checks the reader against a corpus (misspellings, pidgin, quantities in words, two that fit, sizes, two orders in one message, nothing orderable, a name the model made up). `web/e2e/whatsapp.spec.ts` checks the card at 390 and 360 px in both themes with axe.
+
+- **The reader** (`engine/orders/read`): the model reads the customer's words, given the catalogue's names, into lines (their words, the catalogue name it clearly means, how many, any size or colour), delivery or pickup, where and when. Code then matches that to the catalogue, and never guesses:
+  - the model's name is taken only when it is exactly a catalogue name; otherwise the customer's words are matched (a word of four letters or more may be one letter off, so "jolof" finds both jollof dishes);
+  - words that fit two items, or a product in sizes with no size said, are a question with the answers and their prices ("2 jolof: Jollof rice plate (₦4,500) or Jollof rice cooler (₦38,000)?");
+  - no quantity is a question; a name that matches nothing is kept as written, for staff to pick;
+  - prices are only the catalogue's; out of stock and no price are shown.
+- **When it reads:** after the webhook has answered WhatsApp, when Orders is on, a model is set up, the plan has AI and the month's budget is not spent, and the message names something sold (a cheap check first, so "good morning" never reaches the model). A thread is read up to six times at once, then once a minute.
+- **Drafts:** migration 00412 adds `order_drafts`, sealed under the customer's subject. A thread works on one order at a time; the customer's next message is read onto it (their answers, and anything more they ask for). STOP deletes the thread's drafts; one goes with the message it was read from after a year.
+- **The card** (the customer's pane, above the reply box): the lines with what they wrote, each question with the answers to tap, how many, a price where the catalogue has none, items added from the catalogue, delivered or picked up, where and the fee (a delivery area's fee when the business has areas), and how they pay. Staff change it one step at a time, on the version they see. **Ask them** sends its questions as one message; the answer is read onto it. **Confirm** and **Drop** are a person's taps; why Confirm waits is said under it. **Start an order** begins one by hand.
+- **Confirmed:** a storefront order of the kind `chat`, decided when placed, so payment matching, stock and dispatch work on it as on an order from the page. The customer is sent the order, the delivery fee, the total and how to pay, in their thread:
+  - **pay now:** the order's page, where they pay by bank transfer into an account number for the order, matched to it exactly (no card checkout is made for these orders, so the page offers a transfer only). Only for a business with a storefront whose payment rail gives account numbers for orders; otherwise it is not offered, and refused. The order waits 48 hours for the payment, and its stock goes when it is paid; unpaid, it lapses, the customer is told, and Needs you says so;
+  - **pay when it arrives:** at the door, as dispatch does today; its stock goes at once;
+  - **arranged by staff:** money that comes in is matched to it as to any order waiting for payment; its stock goes at once.
+- **The customer told:** "Paid, thank you" when the payment is matched, and dispatch's on its way, arrived and delivered, all in their thread from the business's number, not by SMS. Outside the 24 hours these go as the customer reply template.
+- **Needs you** has a card for each order waiting for staff, opening the customer's thread.
+- **Voice notes:** where the business has voice notes on (Settings, Languages), a customer's voice note is transcribed after the webhook, the recording not kept; its words replace "Voice note" in the thread and are read for an order.
+- **API:** `/v1/customer-chats/{id}/orders` (list, with the business's delivery areas, whether it has a page to pay on, and what may be picked; start one) and `/v1/order-drafts/{id}` (change; ask, confirm, tell again, drop), for those who handle orders, in the Orders area.
+- **Where it differs from the plan:**
+  - **The card** is in the customer's thread; Needs you opens it rather than holding the card itself.
+  - **Their own account number** is not used for an order: money into it is counted to their invoices. An order is paid on its page, at the door, or as staff arrange.
+  - **Templates:** no order templates were added. Outside the 24 hours, the order, its questions and its updates go as the customer reply template.
+  - **Who confirms:** anyone who handles orders; a setting for which roles may is not built.
+  - **Pay on delivery** is chosen per order; a business default is not built (the open question stands).
+  - **Photos of written lists** wait for phase 4's image reading.
+  - **Food options** (a dish's choices, "with chicken") are not read; staff note them.
+  - **The business's order workflow is not started** for a chat order. The shop's order workflow begins by asking the owner to accept and tells the customer by its own steps; a chat order is accepted when a person confirms it and is told in its thread, so running it would ask again and tell twice. Workflows that should follow chat orders need a trigger of their own (not built).
+  - **The browser test** puts an order together on the card against a stand-in for the order endpoints, since those tests run without a catalogue table or a model; reading, confirming and sending are tested in Go.
+
+**Review fixes, 9 November 2026** (the review of phase 2 found 17 bugs and 6 gaps; all are fixed or decided):
+
+- **Privacy:** the customer's address, when and note are sealed with their details; an order's zone is only one of the business's delivery areas. The reader's prompts pass through `ai.Redacted`; the call's record keeps no words. `docs/privacy.md` and `docs/ai.md` say what reaches the model.
+- **Reading:** lines have ids, and an answer goes to the line its question was asked about, never to one staff changed meanwhile; an answer is not added again as a line; a new address or delivery choice replaces the old; an order sent in two quick messages is one order; a customer who sent STOP is not read; questions go in the business's language for customers.
+- **The card:** staff settling what the customer was asked bring the order back to them; Confirm waits on lines out of stock or no longer on sale, and the order says why it waits (the server's own reason); a line's typed quantity or price stays on its line.
+- **Paying:** see pay now above. Assign rider shows for orders paid at the door.
+- **Load:** the catalogue is read from its table at most once a minute per business; reads run eight at a time on a server, with a pace per business.
+- **Kept:** drafts started by hand go after a year with the purge. The briefing counts chat orders; rate your delivery is offered on them.
+- **Tests added:** the storefront engine places chat orders, lowers their stock once, takes a payment, lets one lapse and tells the customer, and checks their page is transfer only (`engine/storefront/chat_db_test.go`); the status page reads a chat order (`engine/publicweb`); the API covers STOP, staff answering, pay refused, at the door, a lapsed order on Needs you and the purge; the rider card covers orders paid at the door; the browser test drives the real order endpoints as far as they go without a catalogue.
+
+**Additions, 9 November 2026** (asked for after phase 2, built into it):
+
+- **Invoices and Money in the chat's tools** (`web/src/pages/ChatMoney.tsx`, `web/src/lib/chatmoney.ts`), worked on as orders and stock are:
+  - **Invoices** lists the business's invoices, searched by number, customer and what they are for, with chips for owed, overdue and drafts. An invoice opens to send it (or send a reminder), record a payment (entered in the money log as cash or a transfer and counted towards it, once per form), or cancel it with a reason. **New invoice** makes one from a name, a phone number, what it is for and an amount, and sends it or keeps it as a draft.
+  - **Money** lists the money log, newest first, with chips for in, out and to match. An entry shows where it moved, what it counts towards and what is left; money in with something left is matched to an owed invoice from the sheet. **Add cash or expense** adds cash in or out, or an expense.
+  - `GET /v1/money/entries` is new (invoice.read): the log with what each entry counts towards, what is left of it and whether matching left it for a person. A payer's details are never listed. Making an invoice, cancelling one and adding to the money log are now told as diary lines; sending and matching already were.
+- **"/" to tag:** `/invoice`, `/product`, `/order` or `/customer` and a space (or `/`) opens a picker of those things, searched by the words after; a pick is written `#INV-0104`, as an item is. `/invoice` alone still opens the tools panel at Invoices.
+  - **In the Taskiem chat** it offers the business's invoices, its orders (shop, chat and trade), the customers who write to it and its own products, each only to those who may see them. A `#reference` in a message is a chip: an invoice or a product opens in its tool, an order opens its page.
+  - **In a business's conversation** it offers only what is between the two businesses: invoices we sent them and bills they sent us, orders they placed with us and orders we sent them (`GET /v1/link-chats/{link}/refs`). The message carries them as mentions of kind `invoice` or `order`, checked against the same list, with the total and the status when named; the other side's copy has no id of ours. A customer is never named to another business. `/product` there is the conversation's price list, as `#` is.
+  - **Customers** cannot tag yet: their WhatsApp has no picker. The reader already finds the catalogue's items in their words (above).
+- **Rows and cards** (asked for next, the same day):
+  - **The rows** say who each thing is with (a business in full, a person masked), when, the total and where it stands, with a badge for what it is. There are five kinds: invoice (we sent it), bill (sent to us), order (placed with us), purchase (an order we placed with a supplier) and customer. `/invoice` offers invoices and bills, `/order` orders and purchases; `/bill` and `/purchase` narrow to those.
+  - **Where it is typed:** the Taskiem chat offers everything the person may see (`GET /v1/chat-refs`); a business's conversation only what is between the two businesses.
+  - **Cards:** a message naming an invoice, bill, order, purchase or customer shows each as a card, read when shown, so a payment made since shows as paid. Each side of a business's conversation sees its own card of the same thing (`GET /v1/link-chats/{link}/card` by number: our invoice is their bill); the Taskiem chat's are `GET /v1/chat-card` by kind and id.
+    - An invoice's, bill's, order's or purchase's card has who and when, a status pill, the amount to pay with a bar of what is paid and the due date, and the first three lines.
+    - A customer's card has their number (masked), their orders, what they owe (for those who see invoices) and their latest order.
+    - **Open** shows it where it is worked on (its tool, the order's page, the customer's thread), beside the one action it offers to those who may: **Send it** (a draft), **Send a reminder** (owed), **Pay** (a bill owed), **Message them** (a customer who has not sent STOP).
+  - **Tests:** `TestLinkChatRefs` (both sides' rows and cards, paid read live, someone else's refused, the Taskiem chat's rows, masking), the customer's and the order's cards in `TestOrdersFromCustomersMessages`, `refs.test.ts`, and the rows and cards in `web/e2e/chat-money.spec.ts` at 390 and 360 px with axe in both themes.
+- **"#" in the Taskiem chat** now offers the business's own products first, then what its suppliers sell.
+- **The briefing:**
+  - It greeted "Good morning" and showed "8:00" whatever the hour. The server now sends the part of the day in Lagos (`part`: morning to noon, afternoon to five, evening after) and the time its numbers were read (`now`), and the card greets and shows those.
+  - Got it put the card away until the next 8am with no way back, so a card put away on a busy morning was gone all day; it does come back each day from 8am (a test now moves the clock a day and checks). It can now be brought back at any time: the tools menu has a **Briefing** tile, and typing "briefing" (or "show the briefing") in the Taskiem chat brings today's back without sending a message (`GET /v1/chat-briefing?show=1`, which also undoes Got it).
+  - **Sales** in the briefing and in "how did we do" were counter sales only. They now count shop, chat and trade orders decided that day (not those declined, cancelled, lapsed or refunded), and invoices sent that day, each for those who may see them; a trade order's own invoice is not counted twice. The handover still counts the till only.
+- **Tests:** `TestChatInvoicesAndMoney` and `TestLinkChatRefs` (`api/chat_money_test.go`); the briefing's hours, show, the next day and the new sales in `TestCashierShift`; unit tests for the helpers (`chatmoney.test.ts`, `refs.test.ts`, `staff.test.ts`); `web/e2e/chat-money.spec.ts` (the two tools and the picker, at 390 and 360 px, axe in both themes) and the briefing coming back in `web/e2e/chat-staff.spec.ts`.
+
 ## Phases
 
 Seven phases, each a PR that ships on its own. Phase 0 puts the chat's tools, motion and tables right first, since every flow adds sheets and cards on top of them. Customer conversations go next because flows 1 and 4 stand on them; tasks and restocking are small and can run beside the larger ones.
@@ -260,7 +326,7 @@ Seven phases, each a PR that ships on its own. Phase 0 puts the chat's tools, mo
    - Done when: the checks above pass at 360 × 640 and 390 × 844, in both themes.
 1. **Customer conversations** (built; above). The Customers list and threads; a stranger on the business's own number lands there instead of "link your account"; staff reply within the 24-hour window, templates outside it; STOP honoured.
    - Done when: a customer's WhatsApp message to the business's number appears as a thread in the web chat, and a staff reply reaches their WhatsApp.
-2. **Orders from customers' messages.** The reader for text; the draft order card with questions; confirm; the total and how to pay sent back; paid matched; on to stock, dispatch and "On the way". Then voice notes for customers (the transcription that exists) and photos of written lists (after phase 4's image reading).
+2. **Orders from customers' messages** (built; above). The reader for text; the draft order card with questions; confirm; the total and how to pay sent back; paid matched; on to stock, dispatch and "On the way". Then voice notes for customers (the transcription that exists) and photos of written lists (after phase 4's image reading).
    - Done when: "2 jollof and 1 chapman, deliver to Yaba by 1" becomes a confirmed, paid, dispatched order without retyping.
 3. **Tasks for staff.** Tasks from words, cards and Tools; WhatsApp delivery and DONE; photo proof; nudges and late lines; the briefing line; repeats.
    - Done when: "@Tunde count the float every day at 7am" makes a repeating task Tunde closes from WhatsApp, and a late one reaches the owner.

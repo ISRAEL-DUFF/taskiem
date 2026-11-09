@@ -717,3 +717,23 @@ func TestQuoteOnTheStatusPage(t *testing.T) {
 		t.Fatalf("declined: %s", body)
 	}
 }
+
+// An order confirmed from a customer's WhatsApp message (kind chat) reads
+// on its status page as an order from the page does: waiting for its
+// payment, then on its way and complete.
+func TestChatOrderOnTheStatusPage(t *testing.T) {
+	e, _ := bookingEnv(t, "after_accept", 0)
+	loc := bookOne(t, e, at(20, 10, 0))
+	ref := refOf(loc)
+	for status, want := range map[string]string{
+		"accepted":   "Your order was accepted",
+		"on_the_way": "Your order is on its way",
+		"completed":  "Your order is complete",
+		"expired":    "Your order expired",
+	} {
+		e.inbox.states[ref] = OrderState{Status: status, Kind: "chat", TotalKobo: 1200000, Payment: "at_order"}
+		if body := get(e.h, "GET", sfHost, loc).Body.String(); !strings.Contains(body, want) {
+			t.Errorf("%s: no %q", status, want)
+		}
+	}
+}

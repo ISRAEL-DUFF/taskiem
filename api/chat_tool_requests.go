@@ -51,6 +51,9 @@ var chatTools = []chatTool{
 	// A buyer's (phase 3): the orders sent to suppliers, and their bills.
 	{"purchases", "Your orders", PermTableRead},
 	{"bills", "Bills", PermInvoiceRead},
+	// The money a business is owed and has: its invoices, and the money log.
+	{"invoices", "Invoices", PermInvoiceRead},
+	{"money", "Money", PermInvoiceRead},
 }
 
 // toolRequest is a typed request: the tool, the row it is about (or a new

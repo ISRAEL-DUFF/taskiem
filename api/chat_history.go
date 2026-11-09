@@ -494,6 +494,8 @@ func (w *webChannel) Send(ctx context.Context, addr string, m whatsapp.Message) 
 
 func (s *Server) taskiemChatRoutes(r chi.Router) {
 	r.Get("/taskiem-chat", s.taskiemHistory)
+	r.Get("/chat-refs", s.chatRefs)
+	r.Get("/chat-card", s.chatCardGet)
 	r.Post("/taskiem-chat", s.taskiemSay)
 	r.Post("/taskiem-chat/files", s.taskiemSend)
 }

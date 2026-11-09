@@ -37,18 +37,75 @@ type daySales struct {
 	Kobo  int64  `json:"kobo"`
 }
 
-// salesDays are the sales of the n days up to and including last, read
-// in one go (a day's total is its sales' amounts, as stock.DayTx).
-func salesDays(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, last time.Time, n int) ([]daySales, error) {
+// salesFrom are what a business's sales are counted from, as far as the
+// person may see them: counter sales, the orders it accepted (from its
+// page, a customer's message or a linked business), and the invoices it
+// sent.
+type salesFrom struct{ counter, orders, invoices bool }
+
+// salesFor is what p may see of the sales.
+func (s *Server) salesFor(p *Principal) salesFrom {
+	return salesFrom{counter: p.Can(PermTableRead), orders: p.Can(PermOrders), invoices: p.Can(PermInvoiceRead)}
+}
+
+func (f salesFrom) any() bool { return f.counter || f.orders || f.invoices }
+
+// salesDays are the sales of the n days up to and including last, read in
+// one go, by Lagos day:
+//   - counter sales, as stock.DayTx counts them;
+//   - orders accepted that day (decided), from the page, a customer's
+//     message or a linked business, unless declined, cancelled, lapsed or
+//     refunded;
+//   - invoices sent (or recorded) that day, but not a linked order's
+//     (counted as the order) nor a debt noted for a sale (kind credit:
+//     the counter sale counts it).
+func salesDays(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, last time.Time, n int, f salesFrom) ([]daySales, error) {
 	end := time.Date(last.Year(), last.Month(), last.Day(), 0, 0, 0, 0, storefront.Lagos).AddDate(0, 0, 1)
 	from := end.AddDate(0, 0, -n)
-	sales, err := stock.SalesTx(ctx, tx, tenant, from, end)
-	if err != nil {
-		return nil, err
-	}
 	by := map[string]int64{}
-	for _, x := range sales {
-		by[x.SoldAt.In(storefront.Lagos).Format("2006-01-02")] += x.AmountKobo
+	if f.counter {
+		sales, err := stock.SalesTx(ctx, tx, tenant, from, end)
+		if err != nil {
+			return nil, err
+		}
+		for _, x := range sales {
+			by[x.SoldAt.In(storefront.Lagos).Format("2006-01-02")] += x.AmountKobo
+		}
+	}
+	add := func(q string) error {
+		rows, err := tx.Query(ctx, q, tenant, from, end)
+		if err != nil {
+			return err
+		}
+		type day struct {
+			d string
+			k int64
+		}
+		list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (day, error) {
+			var x day
+			return x, r.Scan(&x.d, &x.k)
+		})
+		for _, x := range list {
+			by[x.d] += x.k
+		}
+		return err
+	}
+	if f.orders {
+		if err := add(`SELECT to_char(decided_at AT TIME ZONE 'Africa/Lagos', 'YYYY-MM-DD'), sum(total_kobo)::bigint FROM storefront_orders
+			WHERE tenant_id = $1 AND kind IN ('order', 'chat', 'trade') AND decided_at >= $2 AND decided_at < $3
+			  AND status NOT IN ('declined', 'cancelled', 'expired', 'refunded', 'refund_due', 'proposed', 'changed', 'price_changed', 'received')
+			GROUP BY 1`); err != nil {
+			return nil, err
+		}
+	}
+	if f.invoices {
+		if err := add(`SELECT to_char(COALESCE(sent_at, recorded_at) AT TIME ZONE 'Africa/Lagos', 'YYYY-MM-DD'), sum(total_kobo)::bigint FROM customer_invoices
+			WHERE tenant_id = $1 AND kind = 'invoice' AND status NOT IN ('draft', 'void')
+			  AND COALESCE(sent_at, recorded_at) >= $2 AND COALESCE(sent_at, recorded_at) < $3
+			  AND (created_key IS NULL OR created_key NOT LIKE 'link-order:%')
+			GROUP BY 1`); err != nil {
+			return nil, err
+		}
 	}
 	out := make([]daySales, 0, n)
 	for d := from; d.Before(end); d = d.AddDate(0, 0, 1) {
@@ -56,6 +113,15 @@ func salesDays(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, last time.Time,
 		out = append(out, daySales{Day: k, Label: d.Format("Mon"), Kobo: by[k]})
 	}
 	return out, nil
+}
+
+// dayTotal is one day's sales (salesDays).
+func dayTotal(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, day time.Time, f salesFrom) (int64, error) {
+	d, err := salesDays(ctx, tx, tenant, day, 1, f)
+	if err != nil {
+		return 0, err
+	}
+	return d[0].Kobo, nil
 }
 
 // lagosToday is the start of today in Lagos.
@@ -82,6 +148,10 @@ type briefing struct {
 	Key   string `json:"key"`
 	// PutOff: the person has seen today's (Got it).
 	PutOff bool `json:"put_off"`
+	// Part is the part of the day it is now in Lagos (morning, afternoon,
+	// evening), for the greeting; Now the time its numbers are read at.
+	Part string `json:"part"`
+	Now  string `json:"now"`
 	// Sales yesterday, the same day a week before, and the week's bars
 	// (yesterday last); with stock to read.
 	Sales *briefingSales `json:"sales,omitempty"`
@@ -100,6 +170,19 @@ type briefingSales struct {
 	ChangePct     *int       `json:"change_pct"`
 	Weekday       string     `json:"weekday"` // "Wednesday": what it is compared with
 	Week          []daySales `json:"week"`
+}
+
+// partOfDay is the part of the day t is in: morning to noon, afternoon to
+// five, evening after.
+func partOfDay(t time.Time) string {
+	switch h := t.Hour(); {
+	case h < 12:
+		return "morning"
+	case h < 17:
+		return "afternoon"
+	default:
+		return "evening"
+	}
 }
 
 // mayBrief is who gets the morning briefing: those who run the business
@@ -126,29 +209,41 @@ func (s *Server) getChatBriefing(w http.ResponseWriter, r *http.Request) {
 		now = s.BriefingClock()
 	}
 	today := lagosToday(now)
-	out := briefing{Day: today.Format("2006-01-02"), Ready: now.In(storefront.Lagos).Hour() >= briefingHour}
+	lagos := now.In(storefront.Lagos)
+	out := briefing{Day: today.Format("2006-01-02"), Ready: lagos.Hour() >= briefingHour, Part: partOfDay(lagos), Now: lagos.Format("15:04")}
 	out.Key = "briefing:" + out.Day
+	// Asked for again (the tools menu's Briefing, or "briefing"): today's,
+	// whatever the hour and though Got it put it away.
+	asked := r.URL.Query().Get("show") == "1"
+	if asked {
+		out.Ready = true
+	}
 	var on bool
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
 		if on, err = chatToolsOn(ctx, tx, p.TenantID); err != nil || !on {
 			return err
 		}
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM chat_alerts_later WHERE tenant_id = $1 AND user_id = $2 AND alert_key = $3 AND until > now())`,
-			p.TenantID, p.UserID, out.Key).Scan(&out.PutOff); err != nil {
-			return err
-		}
-		if p.Can(PermTableRead) && s.Stock.Ready() {
-			week, err := salesDays(ctx, tx, p.TenantID, today.AddDate(0, 0, -1), 7)
+		if asked {
+			_, err := tx.Exec(ctx, `DELETE FROM chat_alerts_later WHERE tenant_id = $1 AND user_id = $2 AND alert_key = $3`, p.TenantID, p.UserID, out.Key)
 			if err != nil {
 				return err
 			}
-			before, err := stock.DayTx(ctx, tx, p.TenantID, today.AddDate(0, 0, -8))
+		} else if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM chat_alerts_later WHERE tenant_id = $1 AND user_id = $2 AND alert_key = $3 AND until > now())`,
+			p.TenantID, p.UserID, out.Key).Scan(&out.PutOff); err != nil {
+			return err
+		}
+		if f := s.salesFor(p); f.any() {
+			week, err := salesDays(ctx, tx, p.TenantID, today.AddDate(0, 0, -1), 7, f)
+			if err != nil {
+				return err
+			}
+			before, err := dayTotal(ctx, tx, p.TenantID, today.AddDate(0, 0, -8), f)
 			if err != nil {
 				return err
 			}
 			y := week[len(week)-1].Kobo
-			out.Sales = &briefingSales{YesterdayKobo: y, ChangePct: changePct(y, before.TotalKobo), Weekday: today.AddDate(0, 0, -1).Format("Monday"), Week: week}
+			out.Sales = &briefingSales{YesterdayKobo: y, ChangePct: changePct(y, before), Weekday: today.AddDate(0, 0, -1).Format("Monday"), Week: week}
 		}
 		if p.Can(PermInvoiceRead) {
 			var owed int64
@@ -239,9 +334,10 @@ func (s *Server) handoverOf(ctx context.Context, p *Principal) (handover, error)
 					n++
 				}
 			}
-			// And the storefront's own customers' orders not done yet.
+			// And the storefront's own customers' orders not done yet, those
+			// confirmed from their WhatsApp messages too.
 			var shop int
-			if err := tx.QueryRow(ctx, `SELECT count(*) FROM storefront_orders WHERE tenant_id = $1 AND kind = 'order'
+			if err := tx.QueryRow(ctx, `SELECT count(*) FROM storefront_orders WHERE tenant_id = $1 AND kind IN ('order', 'chat')
 				AND status IN ('received', 'awaiting_payment', 'paid', 'accepted')`, p.TenantID).Scan(&shop); err != nil {
 				return err
 			}
@@ -432,18 +528,18 @@ type salesChart struct {
 }
 
 // chartFor is the chart a period asks for, ending on today.
-func chartFor(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, period string, today time.Time) (salesChart, error) {
+func chartFor(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, period string, today time.Time, f salesFrom) (salesChart, error) {
 	switch period {
 	case "today", "yesterday":
 		last := today
 		if period == "yesterday" {
 			last = today.AddDate(0, 0, -1)
 		}
-		bars, err := salesDays(ctx, tx, tenant, last, 7)
+		bars, err := salesDays(ctx, tx, tenant, last, 7, f)
 		if err != nil {
 			return salesChart{}, err
 		}
-		before, err := stock.DayTx(ctx, tx, tenant, last.AddDate(0, 0, -7))
+		before, err := dayTotal(ctx, tx, tenant, last.AddDate(0, 0, -7), f)
 		if err != nil {
 			return salesChart{}, err
 		}
@@ -452,10 +548,10 @@ func chartFor(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, period string, t
 		if period == "yesterday" {
 			title = "Sales yesterday"
 		}
-		return salesChart{Title: title, TotalKobo: v, ChangePct: changePct(v, before.TotalKobo), Than: "last " + last.Format("Monday"), Bars: bars, Highlight: len(bars) - 1}, nil
+		return salesChart{Title: title, TotalKobo: v, ChangePct: changePct(v, before), Than: "last " + last.Format("Monday"), Bars: bars, Highlight: len(bars) - 1}, nil
 	case "this month":
 		n := today.Day()
-		bars, err := salesDays(ctx, tx, tenant, today, n)
+		bars, err := salesDays(ctx, tx, tenant, today, n, f)
 		if err != nil {
 			return salesChart{}, err
 		}
@@ -465,7 +561,7 @@ func chartFor(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, period string, t
 		}
 		// The same days of last month, to its last day at most.
 		lastMonth := time.Date(today.Year(), today.Month(), 0, 0, 0, 0, 0, today.Location())
-		before, err := salesDays(ctx, tx, tenant, lastMonth.AddDate(0, 0, min(n, lastMonth.Day())-lastMonth.Day()), min(n, lastMonth.Day()))
+		before, err := salesDays(ctx, tx, tenant, lastMonth.AddDate(0, 0, min(n, lastMonth.Day())-lastMonth.Day()), min(n, lastMonth.Day()), f)
 		if err != nil {
 			return salesChart{}, err
 		}
@@ -484,11 +580,11 @@ func chartFor(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, period string, t
 		last = today.AddDate(0, 0, -7)
 		title = "Sales, the 7 days before"
 	}
-	bars, err := salesDays(ctx, tx, tenant, last, 7)
+	bars, err := salesDays(ctx, tx, tenant, last, 7, f)
 	if err != nil {
 		return salesChart{}, err
 	}
-	before, err := salesDays(ctx, tx, tenant, last.AddDate(0, 0, -7), 7)
+	before, err := salesDays(ctx, tx, tenant, last.AddDate(0, 0, -7), 7, f)
 	if err != nil {
 		return salesChart{}, err
 	}
@@ -528,7 +624,7 @@ func chartWords(c salesChart) string {
 // channel, and a chart card in the Taskiem conversation.
 func (s *Server) waHowDidWeDo(ctx context.Context, c *chat, cmd string) (bool, error) {
 	m := howDidWeDo.FindStringSubmatch(cmd)
-	if m == nil || c.p == nil || c.state != stateIdle || !c.p.Can(PermTableRead) || !s.Stock.Ready() {
+	if m == nil || c.p == nil || c.state != stateIdle || !s.salesFor(c.p).any() {
 		return false, nil
 	}
 	period := m[1]
@@ -538,7 +634,7 @@ func (s *Server) waHowDidWeDo(ctx context.Context, c *chat, cmd string) (bool, e
 	var chart salesChart
 	if err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
 		var err error
-		chart, err = chartFor(ctx, tx, c.tenant.ID, period, lagosToday(time.Now()))
+		chart, err = chartFor(ctx, tx, c.tenant.ID, period, lagosToday(time.Now()), s.salesFor(c.p))
 		return err
 	}); err != nil {
 		return true, err

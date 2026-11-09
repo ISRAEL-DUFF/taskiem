@@ -30,6 +30,10 @@ Names and addresses cannot be recognised reliably; declare them.
 
 Workflows keep working on the plain values: the orchestrator and workers open sealed values inside the transaction that uses them.
 
+## Customers' orders read by the model
+
+When a business has Orders on and its plan has AI, what a customer writes to its own WhatsApp number is sent to the configured model provider to read an order from it ([ai](ai.md#data-handling)). Their numbers and emails are masked first; their words and the address they wrote are not, since an order cannot be read without them. Nothing of it is kept by the call's record; the message and the order read from it are kept sealed under the customer (`customer_messages`, `order_drafts`) for a year, deleted when they send STOP, and erased with them. A voice note is sent to the transcription provider the same way, where the business has voice notes on, and its recording is not kept.
+
 ## Erasure
 
 Subject ids are keyed by the value's canonical form (a phone in E.164, so `0803 123 4567` and `+2348031234567` are one subject; an email trimmed and in lower case; a BVN, NIN, account or card number by its digits; names as they are) and by the organisation's pseudonymisation key, which is kept under its tenant key and re-wrapped when that key rotates, so ids stay the same across rotations. Subject keys are re-wrapped too. With [bring your own key](byok.md), every subject key is ultimately under the organisation's own key: revoking it makes all personal data unreadable at once, and runs that need it pause until it returns.

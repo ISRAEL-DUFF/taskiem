@@ -175,7 +175,7 @@ func (s *Server) statusPage(ctx context.Context, site Site, ref, key string, o O
 	if o.Status == "awaiting_payment" || step {
 		s.payByTransfer(&d, ref, key, prefix)
 	}
-	if o.Kind == "order" && o.Status == "completed" {
+	if (o.Kind == "order" || o.Kind == "chat") && o.Status == "completed" {
 		if err := s.rateDelivery(ctx, &d, ref, key, prefix); err != nil {
 			return d, err
 		}

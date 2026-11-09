@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { saleOf } from "./staff";
+import { asksBriefing, saleOf } from "./staff";
 import type { StockItem } from "./stock";
 
 describe("staff", () => {
@@ -38,5 +38,14 @@ describe("the briefing and the chart", () => {
     expect(cashWords(500, 500, n)).toBe("As sold");
     expect(cashWords(400, 500, n)).toBe("₦1 short");
     expect(cashWords(600, 500, n)).toBe("₦1 over");
+  });
+});
+
+describe("asksBriefing", () => {
+  it("is the briefing asked for, not a question about it", () => {
+    for (const w of ["briefing", "Briefing", "show briefing", "show me the briefing", "today's briefing", "morning briefing!"])
+      expect(asksBriefing(w)).toBe(true);
+    for (const w of ["what is in the briefing", "briefings", "how did we do"])
+      expect(asksBriefing(w)).toBe(false);
   });
 });
