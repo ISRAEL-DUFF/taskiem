@@ -708,6 +708,12 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermMemberManage)).Get("/invitations", s.listInvitations)
 			r.With(s.need(PermMemberManage), s.tenantWide).Delete("/invitations/{user}", s.cancelInvitation)
 			r.With(s.need(PermMemberManage), s.tenantWide).Delete("/members/{user}/roles/{role}", s.revokeRole)
+			// Staff by phone (staff.go).
+			r.With(s.need(PermMemberManage)).Get("/staff", s.listStaff)
+			r.With(s.need(PermMemberManage), s.tenantWide).Post("/staff/invites", s.inviteStaff)
+			r.With(s.need(PermMemberManage), s.tenantWide).Post("/staff/invites/{id}/send", s.resendStaffInvite)
+			r.With(s.need(PermMemberManage), s.tenantWide).Delete("/staff/invites/{id}", s.cancelStaffInvite)
+			r.With(s.need(PermMemberManage), s.tenantWide).Post("/staff/{user}/remove", s.removeStaff)
 			r.Get("/permissions", s.listPermissions)
 			r.Get("/limits", s.getLimits) // read-only: operators set limits from the CLI
 			r.With(s.need(PermMemberManage)).Get("/roles", s.listRoles)

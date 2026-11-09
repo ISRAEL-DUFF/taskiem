@@ -177,7 +177,9 @@ chat_invites.id
 chat_invites.invited_by
 chat_invites.inviter
 chat_invites.joined_user
+chat_invites.name
 chat_invites.roles
+chat_invites.sent_at
 chat_invites.state
 chat_invites.tenant_id
 chat_invites.token_hash

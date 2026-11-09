@@ -950,8 +950,10 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		case "email", "my email", "add email", "add my email":
 			return s.waEmail(ctx, c, "")
 		}
-		// Bringing someone in (chat_invites.go).
-		if strings.HasPrefix(cmd, "invite ") {
+		// Bringing someone in (chat_invites.go): "invite +234… as cashier",
+		// or "add Tunde 0803 123 4567 as cashier" (a number and a role).
+		if strings.HasPrefix(cmd, "invite ") ||
+			(strings.HasPrefix(cmd, "add ") && strings.Contains(cmd, " as ") && phoneInRe.MatchString(cmd)) {
 			return s.waInvite(ctx, c, text)
 		}
 		// Other businesses on Taskiem (chat_links.go).

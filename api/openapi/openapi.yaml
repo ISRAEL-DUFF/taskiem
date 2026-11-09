@@ -19469,6 +19469,223 @@ paths:
                 $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
+  /v1/staff:
+    get:
+      operationId: listStaff
+      tags:
+      - Account
+      summary: The people of the business, and invitations by phone waiting
+      description: Each person with their roles, their chat number (masked without pii.reveal) and whether their chat is linked; email only when they have a real one. Invitations by phone not yet answered or expired.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: member.manage
+      responses:
+        '200':
+          description: The staff
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [people, invites]
+                properties:
+                  people:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [user_id, name, roles, chat]
+                      properties:
+                        user_id:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        email:
+                          type: string
+                        phone:
+                          type: string
+                        roles:
+                          type: array
+                          items:
+                            type: string
+                        chat:
+                          type: boolean
+                        you:
+                          type: boolean
+                  invites:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [id, phone, roles, inviter, expires_at, created_at]
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        phone:
+                          type: string
+                        roles:
+                          type: array
+                          items:
+                            type: string
+                        inviter:
+                          type: string
+                        sent_at:
+                          type: string
+                          format: date-time
+                        expires_at:
+                          type: string
+                          format: date-time
+                        created_at:
+                          type: string
+                          format: date-time
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/staff/invites:
+    post:
+      operationId: inviteStaff
+      tags:
+      - Account
+      summary: Add someone by phone
+      description: Their WhatsApp gets the taskiem_invite template; Join makes their account (no email needed), links their chat and grants the roles. One still waiting for the same number is renewed, not doubled. sent is false when it could not go out (send it again later).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: member.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, phone, roles]
+              properties:
+                name:
+                  type: string
+                  maxLength: 80
+                phone:
+                  type: string
+                roles:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: string
+      responses:
+        '201':
+          description: Invited
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [id, sent]
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  sent:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/staff/invites/{id}/send:
+    post:
+      operationId: resendStaffInvite
+      tags:
+      - Account
+      summary: Send an invitation by phone again
+      description: Seven more days; not within five minutes of the last send (409).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: member.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Sent again
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [id, sent]
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  sent:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/staff/invites/{id}:
+    delete:
+      operationId: cancelStaffInvite
+      tags:
+      - Account
+      summary: Cancel an invitation by phone
+      description: Join no longer works.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: member.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Cancelled
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/staff/{user}/remove:
+    post:
+      operationId: removeStaff
+      tags:
+      - Account
+      summary: Remove someone from the business
+      description: Every role they hold goes, so neither their chat nor the web reaches the business; their history stays. Not oneself, an owner only by an owner, never the last owner.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: member.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: user
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Removed
+        default:
+          $ref: '#/components/responses/Error'
   /v1/members:
     get:
       operationId: listMembers
