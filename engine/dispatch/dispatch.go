@@ -487,7 +487,13 @@ func (d *Dispatch) offerTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, ref
 	case err != nil && !errors.Is(err, ErrNoDelivery):
 		return out, nil, err
 	}
-	if why := ReadyReason(ord); why != "" {
+	// A delivery order from a business (a dispatch company's, phase 5) is
+	// offered on inside the company before the company accepts it.
+	inner, err := innerOrderTx(ctx, tx, ord)
+	if err != nil {
+		return out, nil, err
+	}
+	if why := ReadyReason(ord); why != "" && !inner {
 		return out, nil, fmt.Errorf("%w: %s %s", ErrNotReady, ord.Reference, why)
 	}
 	s, err := GetSettings(ctx, tx, tenant)
@@ -551,6 +557,18 @@ func (d *Dispatch) offerTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, ref
 	}
 	out.Status, out.Delivery, out.Rider = "offered", &x, rider.Name
 	return out, after, nil
+}
+
+// innerOrderTx reports whether an order is a business's delivery order in
+// a rider's business (a dispatch company's, docs/spec/chat-riders.md
+// phase 5): a trade order with a delivery behind it.
+func innerOrderTx(ctx context.Context, tx pgx.Tx, ord storefront.Order) (bool, error) {
+	if ord.Kind != "trade" {
+		return false, nil
+	}
+	var inner bool
+	err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM link_orders WHERE order_id = $1 AND delivery_id IS NOT NULL)`, ord.ID).Scan(&inner)
+	return inner, err
 }
 
 // covers reports whether a rider covers an order's area: one with no
@@ -745,6 +763,13 @@ func (d *Dispatch) press(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x Del
 	}
 	already := func(states ...string) bool { return slices.Contains(states, x.Status) }
 	unpaid := ord.Payment == "on_delivery" && ord.PaidAt == nil
+	// A dispatch company's delivery (phase 5): the order is a business's
+	// delivery order in the company; the company's rider's steps are the
+	// company's steps on it, through the link.
+	inner, err := innerOrderTx(ctx, tx, ord)
+	if err != nil {
+		return t, nil, err
+	}
 	switch action {
 	case Accept:
 		if already("accepted", "picked_up", "arrived", "delivered") {
@@ -753,7 +778,7 @@ func (d *Dispatch) press(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x Del
 		if x.Status != "offered" {
 			return t, nil, fmt.Errorf("%w: the offer for %s has passed", ErrMove, ord.Reference)
 		}
-		if why := ReadyReason(ord); why != "" && ord.Status != "dispatched" {
+		if why := ReadyReason(ord); why != "" && ord.Status != "dispatched" && !inner {
 			return t, nil, fmt.Errorf("%w: %s %s", ErrMove, ord.Reference, why)
 		}
 		if err := set("accepted", "accepted_at", "dispatched"); err != nil {
@@ -861,7 +886,11 @@ func (d *Dispatch) press(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x Del
 		if err := d.queue(ctx, tx, tenant, x.ID, x.RiderID, StageDone, ""); err != nil {
 			return t, nil, err
 		}
-		after = append(after, func() error { return d.complete(ctx, tenant, x, ord) })
+		if !inner {
+			// Inside a company the business's own side completes its
+			// order and tells the customer (below).
+			after = append(after, func() error { return d.complete(ctx, tenant, x, ord) })
+		}
 	default:
 		return t, nil, fmt.Errorf("%w: %q", ErrMove, action)
 	}
@@ -869,6 +898,20 @@ func (d *Dispatch) press(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x Del
 		if err := d.mirrorPress(ctx, tx, tenant, x, moved, opt); err != nil {
 			return t, nil, err
 		}
+	}
+	if inner && opt == nil && moved != "" && moved != Cant && moved != "declined" {
+		// The company's rider's step is the company's step on the
+		// business's delivery: through the door, as the company's own
+		// Orders tool would take it, named after the rider.
+		r, err := d.Riders.GetTx(ctx, tx, tenant, x.RiderID)
+		if err != nil {
+			return t, nil, err
+		}
+		_, _, more, err := d.riderStepTx(ctx, tx, tenant, ord.ID.String(), action, r.Name)
+		if err != nil {
+			return t, nil, err
+		}
+		after = append(after, more...)
 	}
 	if moved == Cant {
 		// On to the next rider, once this one's order says they passed.
@@ -897,6 +940,10 @@ func (d *Dispatch) mirrorPress(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 	r, err := d.Riders.GetTx(ctx, tx, tenant, x.RiderID)
 	if err != nil || r.LinkID == nil {
 		return err
+	}
+	if opt.member != "" {
+		// A dispatch company's rider took the step: named on our card.
+		x.Rider = opt.member + " (" + x.Rider + ")"
 	}
 	return d.ourCard(ctx, tx, tenant, *r.LinkID, opt.pair, x, stage, false)
 }

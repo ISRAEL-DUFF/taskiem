@@ -66,6 +66,20 @@ func (d *Dispatch) ViewTx(ctx context.Context, tx pgx.Tx, tenant, delivery uuid.
 	if sf, err := storefront.Get(ctx, tx, tenant); err == nil {
 		v.Pickup, v.PickupLink = strings.TrimSpace(sf.Draft.Address), sf.Draft.MapLink()
 	}
+	// A dispatch company's delivery (phase 5) is picked up at the business
+	// that placed it, as its order says.
+	if inner, err := innerOrderTx(ctx, tx, ord); err == nil && inner {
+		var pickup, link *string
+		if err := tx.QueryRow(ctx, `SELECT pickup, pickup_link FROM link_orders WHERE order_id = $1`, ord.ID).Scan(&pickup, &link); err == nil {
+			v.Pickup, v.PickupLink = "", ""
+			if pickup != nil {
+				v.Pickup = *pickup
+			}
+			if link != nil {
+				v.PickupLink = *link
+			}
+		}
+	}
 	if v.Held() {
 		v.Address, v.CustomerPhone = ord.Customer.Address, ord.Customer.Phone
 	}

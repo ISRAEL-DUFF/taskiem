@@ -67,8 +67,57 @@ func (d *Dispatch) placeLinked(ctx context.Context, tx pgx.Tx, tenant, delivery 
 	if err != nil {
 		return err
 	}
-	return links.CardTx(ctx, tx, tenant, *r.LinkID, pair, true, links.DocCard{Doc: links.DocDispatch, Event: StageOffer + "ed", Reference: ord.Reference,
-		ID: delivery.String(), AmountKobo: &fee, Note: r.Name})
+	if err := links.CardTx(ctx, tx, tenant, *r.LinkID, pair, true, links.DocCard{Doc: links.DocDispatch, Event: StageOffer + "ed", Reference: ord.Reference,
+		ID: delivery.String(), AmountKobo: &fee, Note: r.Name}); err != nil {
+		return err
+	}
+	// A dispatch company (phase 5): the order is offered on inside the
+	// company to its own riders, by its rotation, in the company's scope.
+	return d.companyOfferTx(ctx, tx, tenant, *r.LinkID, order)
+}
+
+// companyOfferTx offers a delivery order just placed in a rider's business
+// to that business's own riders by rotation (a dispatch company, phase 5),
+// when it has any. Through the door, in the company's scope, under a
+// savepoint: what goes wrong inside the company is logged, never the
+// business's problem.
+func (d *Dispatch) companyOfferTx(ctx context.Context, tx pgx.Tx, tenant, link, order uuid.UUID) error {
+	var company uuid.UUID
+	if err := tx.QueryRow(ctx, `SELECT business FROM taskiem_links_of() WHERE id = $1`, link).Scan(&company); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		return err
+	}
+	if _, err := links.EnterTx(ctx, tx, link, "link.delivery.offered", nil, linkActor); err != nil {
+		if back := links.ReturnTx(ctx, tx, tenant); back != nil {
+			return back
+		}
+		return nil // their links are off, or the link ended: the business's offer stands alone
+	}
+	err := func() error {
+		var has bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM riders WHERE tenant_id = $1 AND retired_at IS NULL AND active)`, company).Scan(&has); err != nil || !has {
+			return err
+		}
+		var ref string
+		if err := tx.QueryRow(ctx, `SELECT reference FROM storefront_orders WHERE id = $1`, order).Scan(&ref); err != nil {
+			return err
+		}
+		sp, err := tx.Begin(ctx)
+		if err != nil {
+			return err
+		}
+		if _, _, err := d.offerTx(ctx, sp, company, ref, OfferIn{By: "rotation"}, nil); err != nil {
+			d.log().Warn("dispatch: a company's own offer", "company", company, "order", order, "err", err)
+			return sp.Rollback(ctx)
+		}
+		return sp.Commit(ctx)
+	}()
+	if back := links.ReturnTx(ctx, tx, tenant); back != nil {
+		return back
+	}
+	return err
 }
 
 // mirrorStep records a delivery's step on the linked rider's order, when
@@ -154,41 +203,50 @@ func (d *Dispatch) RiderStep(ctx context.Context, rider uuid.UUID, orderRef, act
 	var after []func() error
 	err := d.tx(ctx, rider, func(tx pgx.Tx) error {
 		var err error
-		if ref, err = links.DeliveryOfTx(ctx, tx, orderRef); err != nil {
-			return err
-		}
-		pair := uuid.Must(uuid.NewV7())
-		if _, err := links.EnterTx(ctx, tx, ref.Link, "link.delivery."+action, nil, linkActor); err != nil {
-			return err
-		}
-		x, err := scanDelivery(tx.QueryRow(ctx, `SELECT `+deliveryCols+` FROM deliveries d JOIN storefront_orders o ON o.id = d.order_id
-			WHERE d.tenant_id = $1 AND d.id = $2 FOR UPDATE OF d`, ref.Business, ref.DeliveryID))
-		if err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `UPDATE riders SET not_answering_since = NULL, missed = 0 WHERE id = $1 AND not_answering_since IS NOT NULL`, x.RiderID); err != nil {
-			return err
-		}
-		ord, err := d.Orders.GetOrder(ctx, tx, ref.Business, x.Reference)
-		if err != nil {
-			return err
-		}
-		t, after, err = d.press(ctx, tx, ref.Business, x, ord, action, &pressOpt{pair: pair})
-		if err != nil {
-			return err
-		}
-		if back := links.ReturnTx(ctx, tx, rider); back != nil {
-			return back
-		}
-		if !t.Moved {
-			return nil
-		}
-		return links.DeliveryStepTx(ctx, tx, d.Vault, rider, ref.OrderID, stageOf(action), pair, true)
+		t, ref, after, err = d.riderStepTx(ctx, tx, rider, orderRef, action, "")
+		return err
 	})
 	if err != nil {
 		return t, ref, err
 	}
 	return t, ref, run(after)
+}
+
+// riderStepTx is RiderStep in tx, the rider's scope: member names the
+// company's rider who took the step, for the business's card (phase 5).
+func (d *Dispatch) riderStepTx(ctx context.Context, tx pgx.Tx, rider uuid.UUID, orderRef, action, member string) (Tap, links.DeliveryRef, []func() error, error) {
+	var t Tap
+	ref, err := links.DeliveryOfTx(ctx, tx, orderRef)
+	if err != nil {
+		return t, ref, nil, err
+	}
+	pair := uuid.Must(uuid.NewV7())
+	if _, err := links.EnterTx(ctx, tx, ref.Link, "link.delivery."+action, nil, linkActor); err != nil {
+		return t, ref, nil, err
+	}
+	x, err := scanDelivery(tx.QueryRow(ctx, `SELECT `+deliveryCols+` FROM deliveries d JOIN storefront_orders o ON o.id = d.order_id
+		WHERE d.tenant_id = $1 AND d.id = $2 FOR UPDATE OF d`, ref.Business, ref.DeliveryID))
+	if err != nil {
+		return t, ref, nil, err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE riders SET not_answering_since = NULL, missed = 0 WHERE id = $1 AND not_answering_since IS NOT NULL`, x.RiderID); err != nil {
+		return t, ref, nil, err
+	}
+	ord, err := d.Orders.GetOrder(ctx, tx, ref.Business, x.Reference)
+	if err != nil {
+		return t, ref, nil, err
+	}
+	t, after, err := d.press(ctx, tx, ref.Business, x, ord, action, &pressOpt{pair: pair, member: member})
+	if err != nil {
+		return t, ref, nil, err
+	}
+	if back := links.ReturnTx(ctx, tx, rider); back != nil {
+		return t, ref, nil, back
+	}
+	if !t.Moved {
+		return t, ref, after, nil
+	}
+	return t, ref, after, links.DeliveryStepTx(ctx, tx, d.Vault, rider, ref.OrderID, stageOf(action), pair, true)
 }
 
 // DeliveryOf is the business's delivery a rider's order is for, read from
@@ -219,4 +277,7 @@ func stageOf(action string) string {
 // nil, from their button or word.
 type pressOpt struct {
 	pair uuid.UUID
+	// member is the dispatch company's rider who took the step, named on
+	// the business's card (phase 5).
+	member string
 }

@@ -521,3 +521,117 @@ func TestConfirmPaysPerDelivery(t *testing.T) {
 		t.Fatalf("confirm in cash from WhatsApp: %+v", got)
 	}
 }
+
+// TestDispatchCompany (docs/spec/chat-riders.md, phase 5): a dispatch
+// company is a rider business with riders of its own. A business's offer
+// reaches the company as a delivery order and is offered on inside the
+// company by its own rotation; the company's rider's steps from their
+// WhatsApp move the company's order and the business's delivery alike,
+// named after the rider on the business's cards; the company confirms its
+// own delivery to pay its rider, as any business does.
+func TestDispatchCompany(t *testing.T) {
+	w, ada := newDispatchWorld(t, "Ada Stores")
+	swift := w.tenant(t, "Swift Dispatch", "swift@dispatch.test")
+	swiftID := tenantOf(t, swift)
+	swift.must(200, "PUT", "/v1/link-settings", map[string]any{"findable": true})
+	ada.must(201, "POST", "/v1/links", map[string]any{"business": swiftID, "role": "supplier"})
+	l := swift.must(200, "GET", "/v1/links", nil)["links"].([]any)[0].(map[string]any)
+	swift.must(200, "POST", "/v1/links/"+l["id"].(string)+"/accept", nil)
+	w.srv.WaitBackground()
+	link := l["id"].(string)
+	// Ada's rider is the company (named by hand; the company's own number
+	// is reached by SMS, so Ada offers to it by name).
+	const swiftPhone = "+2348031110061"
+	m := ada.must(201, "POST", "/v1/riders", map[string]any{"name": "Swift Dispatch", "phone": swiftPhone, "zones": []string{"Lekki"}, "fee_kobo": 150000})["rider"].(map[string]any)
+	ada.must(200, "PATCH", "/v1/riders/"+m["id"].(string), map[string]any{"link_id": link})
+	// The company's own rider, Musa, on WhatsApp through the company's tap-in link.
+	const musa = "+2348031110062"
+	path := strings.TrimPrefix(swift.must(200, "GET", "/v1/riders", nil)["tap_in_url"].(string), "https://"+reachFormHost)
+	loc, _ := url.Parse(w.page(t, path+"/whatsapp", nil).Header().Get("Location"))
+	w.whatsapp(t, musa, loc.Query().Get("text"))
+	swift.must(201, "POST", "/v1/riders", map[string]any{"name": "Musa Bello", "phone": musa, "fee_kobo": 80000})
+
+	// Ada offers the order to the company: the company's order, and inside
+	// the company an offer to Musa, picked up at Ada's.
+	ref := w.order(t, "none")
+	out := ada.must(200, "POST", "/v1/storefront/orders/"+ref+"/offer", map[string]any{"rider_id": m["id"]})
+	if out["status"] != "offered" || out["rider"] != "Swift Dispatch" {
+		t.Fatalf("offer %v", out)
+	}
+	w.tick(t)
+	orders := swift.must(200, "GET", "/v1/trade-orders", nil)["orders"].([]any)
+	if len(orders) != 1 || orders[0].(map[string]any)["status"] != "received" {
+		t.Fatalf("the company's orders: %v", orders)
+	}
+	sref := orders[0].(map[string]any)["order_reference"].(string)
+	inner := swift.must(200, "GET", "/v1/storefront/orders/"+sref+"/deliveries", nil)["deliveries"].([]any)
+	if len(inner) != 1 || inner[0].(map[string]any)["status"] != "offered" || inner[0].(map[string]any)["rider"] != "Musa Bello" {
+		t.Fatalf("the company's own offer: %v", inner)
+	}
+	offer := w.graph.Last(t, musa)
+	if !strings.Contains(offer.Text, "A delivery for you: "+sref) || len(offer.Buttons) != 2 {
+		t.Fatalf("Musa's offer: %+v", offer)
+	}
+
+	// Musa accepts: the company's order is accepted and Ada's delivery
+	// too, her card naming Musa; then on to delivered, step by step.
+	w.press(t, musa, offer.Buttons[0].ID)
+	if got := swift.must(200, "GET", "/v1/trade-orders", nil)["orders"].([]any)[0].(map[string]any)["status"]; got != "accepted" {
+		t.Fatalf("the company's order after Musa accepted: %v", got)
+	}
+	ds := ada.must(200, "GET", "/v1/storefront/orders/"+ref+"/deliveries", nil)["deliveries"].([]any)
+	if ds[0].(map[string]any)["status"] != "accepted" {
+		t.Fatalf("Ada's delivery: %v", ds)
+	}
+	cards := func(c *client) []map[string]any {
+		t.Helper()
+		var out []map[string]any
+		for _, x := range c.must(200, "GET", "/v1/link-chats/"+link+"/messages", nil)["messages"].([]any) {
+			if msg := x.(map[string]any); msg["kind"] == "card" {
+				out = append(out, msg["card"].(map[string]any))
+			}
+		}
+		return out
+	}
+	ac := cards(ada)
+	if last := ac[len(ac)-1]; last["event"] != "accepted" || !strings.Contains(fmt.Sprint(last["note"]), "Musa Bello") {
+		t.Fatalf("Ada's card after Musa accepted: %v", last)
+	}
+	w.tick(t)
+	for _, want := range []string{"Picked up", "Arrived", "Delivered"} {
+		msg := w.graph.Last(t, musa)
+		var id string
+		for _, b := range msg.Buttons {
+			if b.Title == want {
+				id = b.ID
+			}
+		}
+		if id == "" {
+			t.Fatalf("no %s button: %+v", want, msg)
+		}
+		w.press(t, musa, id)
+		w.tick(t)
+	}
+	order := ada.must(200, "GET", "/v1/storefront/orders/"+ref, nil)
+	if v, ok := order["order"].(map[string]any); ok {
+		order = v
+	}
+	if order["status"] != "completed" {
+		t.Fatalf("Ada's order: %v", order["status"])
+	}
+	// The company's order, as a rider's delivery order reads once done.
+	if got := swift.must(200, "GET", "/v1/trade-orders", nil)["orders"].([]any)[0].(map[string]any)["status"]; got != "delivered" {
+		t.Fatalf("the company's order at the end: %v", got)
+	}
+	var events []string
+	for _, c := range cards(swift) {
+		events = append(events, c["event"].(string))
+	}
+	if got := strings.Join(events, " "); got != "offered accepted picked_up arrived delivered" {
+		t.Fatalf("the company's cards: %s", got)
+	}
+	// The company pays Musa for its own delivery as any business does.
+	if got := swift.must(200, "POST", "/v1/storefront/orders/"+sref+"/confirm", map[string]any{"how": "cash"}); got["delivery"].(map[string]any)["fee_paid"] != "cash" {
+		t.Fatalf("the company paying its rider: %v", got)
+	}
+}
