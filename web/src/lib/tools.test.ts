@@ -98,8 +98,11 @@ describe("the chat's tools", () => {
   });
   it("words a rider's availability and shows it on the tile", () => {
     const avail = tool("availability");
-    const soon = new Date(Date.now() + 90 * 60_000);
-    const hhmm = `${String(soon.getHours()).padStart(2, "0")}:${String(soon.getMinutes()).padStart(2, "0")}`;
+    // A time today (not "now plus an hour", which after 23:00 is tomorrow
+    // and would be worded with its date).
+    const soon = new Date();
+    soon.setHours(12, 30, 0, 0);
+    const hhmm = "12:30";
     expect(availabilityWord({ state: "free", businesses: 1 })).toBe("Free");
     expect(availabilityWord({ state: "off", businesses: 1 })).toBe("Off today");
     expect(
