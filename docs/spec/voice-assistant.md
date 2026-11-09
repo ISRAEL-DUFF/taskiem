@@ -418,8 +418,58 @@ V1 and V2 were reviewed for gaps before V3; 21 were found and all are fixed on t
 - **Refresh and API.** The `api` role refreshes due sources every 5 minutes through `taskiem_knowledge_due`. The API is `/v1/knowledge*` (`secret.manage`, audited as `knowledge.source.*`), and the page is **What your assistant knows** (`/knowledge`) with **Try a question**.
 - **`knowledge@1`.** `search` returns `found`, `passages` and `material`; `refresh` asks for a read within minutes. Material is quoted between `<<material N ...>>` and `<<end of material N>>`, a passage cannot close its own quote, and every ai step's fixed rules say quoted material is never instructions (K11; tested with a passage that carries an injected instruction).
 - **Not done here (moved to V10):** OCR, Drive and Docs, shop platforms, and adding a document by sending it in chat (today it is uploaded on the page).
-- **The website crawl** follows a first-page redirect only to the same site's http/https or www/bare twin.
+- **The website crawl** follows a first-page redirect to the site's www/bare twin only when the business has verified the twin too (changed by the review below).
 - **Extraction limits:** the PDF reader is Taskiem's own bounded reader (no decryption, no LZW, no reading order across columns), and elements hidden only by a CSS class are kept.
+
+**Review of V5b** (2026-11-08). These were found and fixed:
+- **Documents could stop the server.**
+  - A PDF under 1 KB with a crafted width table looped about 2^64 times, and a Go out-of-memory error cannot be recovered from.
+  - Character maps could multiply the text a hundredfold, broken objects were rescanned in quadratic time, and repeated or unfiltered streams escaped the decode budget.
+  - Now: character codes are checked before conversion and character-map entries are capped; bytes scanned are counted; streams are charged for every use and cached; content parsing has document-wide limits and a 30-second clock; two documents are read at once per server.
+  - Invisible PDF text and hidden Word text are left out, unless invisible text is all there is (a scan's OCR layer).
+- **Races.**
+  - A pause during a read was undone.
+  - An approval during a read either approved text the owner never saw, or left stale passages that a later approval brought back.
+  - Now: approval is decided under the source's row lock; an approved read replaces every passage; **Use this** names the reading the owner looked at (`read_at`) and is refused (409) if the source was read again since.
+  - One read per source at a time, across replicas (an advisory lock); the refresh loop rechecks that a source is still due, reads four at a time, and gives each read 5 minutes.
+  - A refresh asked for during a read is kept.
+  - Adding sources is serialised per business, so the limit of 50 holds.
+- **Failures went unrecorded.**
+  - The failure write used the request's expired context, and a 500-byte cut could split a character (Postgres rejected the write). The source then stayed "Not read yet", was retried every 5 minutes, and no one was alerted.
+  - Now: the write uses its own context; messages are cut on characters, in plain words ("it took too long to read", "the storefront is not published yet").
+  - The owners are alerted once when a source starts failing, not daily.
+  - A source whose table, website verification or storefront is gone stops being used, rather than serving its last text for ever.
+- **Outside text unreviewed.**
+  - After the first approval, new settings (another sheet, table, page, or a new document) went into use unseen.
+  - Now: a changed config waits for **Use this** again (`reapprove`), and the approved text stays in use until then.
+  - A page's title or a source's name could close the material quote, and look-alike markers (`＜＜`, `≪`, `«`) are now written safe too.
+- **Readers.**
+  - A table source read only its first 500 rows (`next` for `next_cursor`).
+  - The storefront source read the unpublished, unmoderated draft; it now reads the published card and is not used while suspended.
+  - A verified bare domain that redirects to `www.` could never be read through the egress guard; the twin is now allowed when it is verified too.
+  - A table is bound by id and rechecked for being kept; its columns are fixed when the source is saved.
+  - A sheet's contact-detail columns are left out and phone numbers, emails and identity numbers are masked; the sheet's link is accepted and escaped.
+  - Erasing a customer asks table and sheet sources to be read again.
+- **Search.** Yoruba tone marks and Indic vowel signs split words: marks are now part of a word, and text is normalised to one Unicode form. `max_chars` counts characters.
+- **API and page.**
+  - Audit runs in the change's own transaction, with resume, refresh and the approved reading recorded.
+  - Secret reads name the owner who pressed a button.
+  - A read while the owner waits fits the server's timeouts (90 s, with the write deadline extended); an upload has 10 minutes to arrive.
+  - A patch to a paused source no longer answers 400 after saving.
+  - **Read it again** works at most once a minute.
+  - A document gets a new version on its page instead of a second source.
+  - The page:
+    - picks tables and websites from the knowledge list itself (a member with `secret.manage` alone could not see websites);
+    - offers **Use this** whenever something waits (also after a failed read);
+    - asks before deleting;
+    - takes a sheet's link and an optional connection.
+  - `List` no longer loads every document's text.
+  - The crawler's `robots.txt` groups and percent-encoding follow RFC 9309.
+  - The user agent no longer names a page that does not exist.
+
+Left as they are:
+- Text hidden by a site's style sheets or a Word character style is still read: the owner's review is what catches it.
+- A source over 2,000 passages keeps its first 2,000, as docs/knowledge.md says; the page does not point it out.
 
 ### V6. Guard rails for customers
 

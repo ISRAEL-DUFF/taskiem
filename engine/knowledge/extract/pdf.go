@@ -2,6 +2,7 @@ package extract
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -26,7 +27,24 @@ const minCharsPerPage = 20
 // password), LZW-compressed streams, text in images (scans need OCR, which
 // gives ErrScanned), annotations or form fields, and it does not reorder
 // text into columns: most producers draw text in reading order.
-func PDFText(data []byte) (text string, err error) {
+//
+// Text drawn invisibly (text render mode 3, or 7, which only clips) is
+// gathered apart from visible text. The rule is per document: if the PDF
+// has any visible text, the invisible text is left out, as a reader of the
+// page never sees it (hidden keywords, white-on-nothing tricks). If it has
+// no visible text at all, the invisible text is the hidden layer an OCR
+// tool puts over a scan, and it is returned instead of ErrScanned.
+//
+// It gives up after ExtractTimeout; see PDFTextContext.
+func PDFText(data []byte) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), ExtractTimeout)
+	defer cancel()
+	return PDFTextContext(ctx, data)
+}
+
+// PDFTextContext is PDFText, stopping when ctx is done: it then returns no
+// text and an error that wraps both ErrUnreadable and ctx.Err().
+func PDFTextContext(ctx context.Context, data []byte) (text string, err error) {
 	if len(data) > MaxFileBytes {
 		return "", fmt.Errorf("%w: %d bytes, over the %d MB limit", ErrTooLarge, len(data), MaxFileBytes>>20)
 	}
@@ -40,7 +58,13 @@ func PDFText(data []byte) (text string, err error) {
 			text, err = "", fmt.Errorf("%w: the PDF is damaged (%v)", ErrUnreadable, r)
 		}
 	}()
-	doc, err := parsePDF(data)
+	if err := ctx.Err(); err != nil {
+		return "", timedOut("PDF", err)
+	}
+	doc, err := parsePDF(ctx, data)
+	if errors.Is(err, errPDFTimeout) {
+		return "", timedOut("PDF", ctx.Err())
+	}
 	if err != nil {
 		return "", fmt.Errorf("%w: %w", ErrUnreadable, err)
 	}
@@ -53,31 +77,53 @@ func PDFText(data []byte) (text string, err error) {
 		return "", fmt.Errorf("%w: the PDF has no pages", ErrUnreadable)
 	}
 
-	var out []string
-	var size, chars, shown, decoded, broken int
+	// vis and inv gather the visible and the invisible text of every page.
+	type gathered struct {
+		out            []string
+		size, chars    int
+		shown, decoded int
+	}
+	var vis, inv gathered
+	add := func(g *gathered, l *textLayer) {
+		g.shown += l.shown
+		g.decoded += l.decoded
+		if g.size > MaxText {
+			return
+		}
+		pageText := cleanLines(l.out.String())
+		for _, r := range pageText {
+			if !unicode.IsSpace(r) {
+				g.chars++
+			}
+		}
+		if pageText != "" {
+			g.out = append(g.out, pageText)
+			g.size += len(pageText) + 2
+		}
+	}
+	var broken int
 	for _, pg := range pages {
-		if size > MaxText {
+		// Enough visible text, or (with none) enough invisible text.
+		if vis.size > MaxText || vis.chars == 0 && inv.size > MaxText {
 			break
 		}
 		t := &textRun{doc: doc, fonts: map[string]*pdfFont{}}
 		t.page(pg)
-		shown += t.shown
-		decoded += t.decoded
 		broken += t.broken
-		pageText := cleanLines(t.out.String())
-		for _, r := range pageText {
-			if !unicode.IsSpace(r) {
-				chars++
-			}
-		}
-		if pageText != "" {
-			out = append(out, pageText)
-			size += len(pageText) + 2
-		}
-		if doc.ops > maxContentOps {
+		add(&vis, &t.vis)
+		add(&inv, &t.inv)
+		if doc.ops > maxContentOps || doc.stopped || doc.expired {
 			break
 		}
 	}
+	if doc.expired {
+		return "", timedOut("PDF", ctx.Err())
+	}
+	g := vis
+	if vis.chars == 0 && inv.chars > 0 {
+		g = inv // an OCR layer over a scan
+	}
+	out, chars, shown, decoded := g.out, g.chars, g.shown, g.decoded
 	if chars < minCharsPerPage*len(pages) {
 		if broken > 0 {
 			return "", fmt.Errorf("%w: the PDF's pages are damaged or compressed in a way this reader does not support", ErrUnreadable)
@@ -201,6 +247,28 @@ func (m matrix) mul(n matrix) matrix {
 
 func translate(x, y float64) matrix { return matrix{1, 0, 0, 1, x, y} }
 
+// gstate is the graphics state q saves and Q restores, as far as text
+// needs it.
+type gstate struct {
+	ctm matrix
+	tr  int64
+}
+
+// textLayer is the text of one kind (visible or invisible) on a page, and
+// where its last piece ended, to judge spaces and line breaks.
+type textLayer struct {
+	out      strings.Builder
+	newLine  bool // T*, ' or " asked for a new line
+	hasLast  bool
+	lastX    float64 // where the last text ended, in device space
+	lastY    float64
+	lastSize float64
+	shown    int // character codes drawn
+	decoded  int // codes that gave text
+}
+
+func (l *textLayer) full() bool { return l.out.Len() > MaxText+1024 }
+
 // textRun interprets one page's content, writing its text with line
 // breaks and spaces judged from where each piece of text is placed.
 type textRun struct {
@@ -210,7 +278,8 @@ type textRun struct {
 	res   pdfDict
 
 	ctm      matrix
-	stack    []matrix
+	tr       int64 // text render mode; 3 and 7 draw nothing
+	stack    []gstate
 	tm, tlm  matrix
 	font     *pdfFont
 	size     float64 // Tf size
@@ -218,14 +287,8 @@ type textRun struct {
 	th       float64 // horizontal scaling, 1 = 100%
 	tl       float64 // leading
 	rise     float64
-	newLine  bool // T*, ' or " asked for a new line
-	hasLast  bool
-	lastX    float64 // where the last text ended, in device space
-	lastY    float64
-	lastSize float64
-	shown    int // character codes drawn
-	decoded  int // codes that gave text
-	broken   int // content streams that could not be decoded
+	vis, inv textLayer // visible and invisible (render mode 3 or 7) text
+	broken   int       // content streams that could not be decoded
 	forms    []int64
 }
 
@@ -236,12 +299,17 @@ func (t *textRun) page(p pdfPage) {
 	t.run(data, 0)
 }
 
-// contents returns a page's content: one stream, or several joined.
+// contents returns a page's content: one stream, or several joined. An
+// array that names the same stream twice is refused as broken: it is no
+// way to draw a page, only to make one stream cost many times its size.
 func (t *textRun) contents(v any) []byte {
 	decode := func(s *pdfStream) []byte {
 		b, err := t.doc.decode(s)
 		if err != nil {
 			t.broken++
+			if errors.Is(err, errPDFLimit) {
+				t.doc.stopped = true
+			}
 		}
 		return b
 	}
@@ -250,8 +318,14 @@ func (t *textRun) contents(v any) []byte {
 		return decode(c)
 	case pdfArray:
 		var all [][]byte
+		seen := map[*pdfStream]bool{}
 		for _, x := range c {
 			if s, ok := t.doc.resolve(x).(*pdfStream); ok {
+				if seen[s] {
+					t.broken++
+					return nil
+				}
+				seen[s] = true
 				all = append(all, decode(s))
 			}
 		}
@@ -260,13 +334,28 @@ func (t *textRun) contents(v any) []byte {
 	return nil
 }
 
-// run interprets a content stream.
+// run interprets a content stream. Its bytes, values and operators all
+// count against the document's limits, every time a stream is run, and
+// reaching one stops the document's reading.
 func (t *textRun) run(data []byte, depth int) {
-	p := &pdfParser{b: data}
+	d := t.doc
+	if len(data) > maxContentBytes-d.contentBytes {
+		d.stopped = true
+		return
+	}
+	d.contentBytes += len(data)
+	p := &pdfParser{b: data, elems: &d.contentElems, limit: maxContentElems}
 	var args []any
 	for {
+		if d.tick() {
+			return
+		}
 		v, err := p.object()
-		if errors.Is(err, errPDFEOF) || errors.Is(err, errPDFLimit) {
+		if errors.Is(err, errPDFLimit) {
+			d.stopped = true
+			return
+		}
+		if errors.Is(err, errPDFEOF) {
 			return
 		}
 		if err != nil {
@@ -281,7 +370,7 @@ func (t *textRun) run(data []byte, depth int) {
 			continue
 		}
 		t.doc.ops++
-		if t.doc.ops > maxContentOps || t.out.Len() > MaxText+1024 {
+		if t.doc.ops > maxContentOps || t.vis.full() {
 			return
 		}
 		if op == "ID" {
@@ -328,11 +417,18 @@ func (t *textRun) op(op string, args []any, depth int) {
 	switch op {
 	case "q":
 		if len(t.stack) < maxGraphicsStates {
-			t.stack = append(t.stack, t.ctm)
+			t.stack = append(t.stack, gstate{t.ctm, t.tr})
 		}
 	case "Q":
 		if n := len(t.stack); n > 0 {
-			t.ctm, t.stack = t.stack[n-1], t.stack[:n-1]
+			g := t.stack[n-1]
+			t.ctm, t.tr, t.stack = g.ctm, g.tr, t.stack[:n-1]
+		}
+	case "Tr":
+		if len(args) >= 1 {
+			if v, ok := args[len(args)-1].(int64); ok {
+				t.tr = v
+			}
 		}
 	case "cm":
 		if v, ok := nums(args, 6); ok {
@@ -429,7 +525,7 @@ func (t *textRun) op(op string, args []any, depth int) {
 func (t *textRun) nextLine() {
 	t.tlm = translate(0, -t.tl).mul(t.tlm)
 	t.tm = t.tlm
-	t.newLine = true
+	t.vis.newLine, t.inv.newLine = true, true
 }
 
 // kern applies a TJ adjustment, in thousandths of an em; a large one is
@@ -439,11 +535,18 @@ func (t *textRun) kern(n float64) {
 }
 
 // show writes a string's text, after a line break or space if where it
-// is drawn calls for one, and advances the text matrix past it.
+// is drawn calls for one, and advances the text matrix past it. Invisible
+// text (render mode 3, or 7, which only clips) goes to its own layer, with
+// its own spacing. Once a layer has more text than PDFText could return,
+// the rest of the string is passed over.
 func (t *textRun) show(s pdfString) {
 	if t.font == nil {
 		t.font = &pdfFont{}
 		t.font.simpleDefaults()
+	}
+	l := &t.vis
+	if t.tr == 3 || t.tr == 7 {
+		l = &t.inv
 	}
 	m := t.tm.mul(t.ctm)
 	x, y := m[4], m[5]
@@ -451,22 +554,24 @@ func (t *textRun) show(s pdfString) {
 	if vs == 0 {
 		vs = 1
 	}
-	if t.hasLast {
-		ref := max(vs, t.lastSize)
-		switch gap := x - t.lastX; {
-		case t.newLine || math.Abs(y-t.lastY) > 0.5*ref:
-			t.out.WriteByte('\n')
+	if l.hasLast && !l.full() {
+		ref := max(vs, l.lastSize)
+		switch gap := x - l.lastX; {
+		case l.newLine || math.Abs(y-l.lastY) > 0.5*ref:
+			l.out.WriteByte('\n')
 		case gap > 0.18*ref || gap < -0.5*ref:
-			t.out.WriteByte(' ')
+			l.out.WriteByte(' ')
 		}
 	}
-	t.newLine = false
-	for _, c := range t.font.codes(string(s)) {
-		t.shown++
+	l.newLine = false
+	for str := string(s); str != "" && !l.full(); {
+		c := t.font.next(str)
+		str = str[c.n:]
+		l.shown++
 		if c.text != "" {
-			t.decoded++
+			l.decoded++
 		}
-		t.out.WriteString(c.text)
+		l.out.WriteString(c.text)
 		w := t.font.width(c.code)/1000*t.size + t.tc
 		if c.code == 32 && c.n == 1 {
 			w += t.tw
@@ -474,7 +579,7 @@ func (t *textRun) show(s pdfString) {
 		t.tm = translate(w*t.th, 0).mul(t.tm)
 	}
 	m = t.tm.mul(t.ctm)
-	t.lastX, t.lastY, t.lastSize, t.hasLast = m[4], m[5], vs, true
+	l.lastX, l.lastY, l.lastSize, l.hasLast = m[4], m[5], vs, true
 }
 
 // form runs a form XObject's content, with its own resources and matrix.
@@ -501,7 +606,7 @@ func (t *textRun) form(name string, depth int) {
 	if err != nil {
 		return
 	}
-	saveCTM, saveRes, saveFonts := t.ctm, t.res, t.fonts
+	saveCTM, saveTr, saveRes, saveFonts := t.ctm, t.tr, t.res, t.fonts
 	saveStack := len(t.stack)
 	if v, ok := t.doc.resolve(s.dict["Matrix"]).(pdfArray); ok {
 		if mv, ok := nums(t.resolveAll(v), 6); ok {
@@ -512,7 +617,7 @@ func (t *textRun) form(name string, depth int) {
 		t.res, t.fonts = r, map[string]*pdfFont{}
 	}
 	t.run(data, depth+1)
-	t.ctm, t.res, t.fonts = saveCTM, saveRes, saveFonts
+	t.ctm, t.tr, t.res, t.fonts = saveCTM, saveTr, saveRes, saveFonts
 	t.stack = t.stack[:min(saveStack, len(t.stack))]
 }
 
@@ -528,7 +633,20 @@ func (t *textRun) loadFont(name string) *pdfFont {
 	if f, ok := t.fonts[name]; ok {
 		return f
 	}
-	f := newFont(t.doc, t.doc.dict(t.doc.dict(t.res["Font"])[name]))
+	// A font that is its own object is read once for the document, not
+	// once per page.
+	raw := t.doc.dict(t.res["Font"])[name]
+	r, isRef := raw.(pdfRef)
+	if isRef {
+		if f, ok := t.doc.fonts[r.num]; ok {
+			t.fonts[name] = f
+			return f
+		}
+	}
+	f := newFont(t.doc, t.doc.dict(raw))
 	t.fonts[name] = f
+	if isRef && t.doc.fonts != nil {
+		t.doc.fonts[r.num] = f
+	}
 	return f
 }

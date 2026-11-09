@@ -15766,7 +15766,7 @@ paths:
       tags:
       - Knowledge
       summary: Add a document as a knowledge source
-      description: A PDF or Word (.docx) document, at most 25 MB, as the file field (and an optional title). Only its text is kept, never the file. A scan with no text is refused with 422 in plain words. Audited.
+      description: A PDF or Word (.docx) document, at most 25 MB (413 when larger), as the file field (and an optional title). Only its text is kept, never the file. A scan with no text is refused with 422 in plain words. Audited.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -15786,7 +15786,17 @@ paths:
                   format: binary
                 title:
                   type: string
+                source:
+                  type: string
+                  format: uuid
+                  description: A document source to give a new version of the document; what it gives waits for approval again (answered 200).
       responses:
+        '200':
+          description: A document source's new version, read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeSource'
         '201':
           description: OK
           content:
@@ -15868,7 +15878,7 @@ paths:
       tags:
       - Knowledge
       summary: Change a knowledge source
-      description: Its title, or its config (then it is read again). Audited.
+      description: Its title, or its config (then it is read again, unless paused, and what it gives waits for approval again; a document is changed by uploading it again). Audited.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -15928,7 +15938,7 @@ paths:
       tags:
       - Knowledge
       summary: Read a knowledge source again now
-      description: Before the owner's first approval its text waits; after it, it replaces what is used at once.
+      description: Before the owner's first approval (or after its settings changed) its text waits; after it, it replaces what is used at once. Refused (429) within a minute of a read, and (400) while paused. Audited (knowledge.source.refresh).
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -15958,7 +15968,7 @@ paths:
       tags:
       - Knowledge
       summary: Use what a knowledge source gave
-      description: Its passages waiting for approval replace those in use, and later refreshes are used at once. Audited.
+      description: Its passages waiting for approval replace those in use, and later refreshes are used at once (until its settings change). Refused with 409 when it was read again since the read the owner looked at. Audited.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -15973,6 +15983,18 @@ paths:
         schema:
           type: string
           format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [read_at]
+              properties:
+                read_at:
+                  type: string
+                  format: date-time
+                  description: The read the owner looked at (the source's read_at). When it was read again since, nothing is approved (409).
+              additionalProperties: false
       responses:
         '200':
           description: OK
@@ -15988,7 +16010,7 @@ paths:
       tags:
       - Knowledge
       summary: Pause or resume a knowledge source
-      description: A paused source is not used or refreshed. Audited.
+      description: A paused source is not used or refreshed. Audited (knowledge.source.pause, knowledge.source.resume).
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -26010,7 +26032,7 @@ components:
           maxLength: 120
         config:
           type: object
-          description: 'about: {text}; table: {table, columns?}; website: {site (a verified website of the business), start?, max_pages? (1 to 50)}; sheet: {connection?, spreadsheet_id, range}; books: {connector, connection?}; storefront: {}.'
+          description: 'about: {text}; table: {table, columns? (fixed when saved: none means its current columns that are not personal)}; website: {site (a verified website of the business), start?, max_pages? (1 to 50)}; sheet: {connection?, spreadsheet_id (the id or the sheet''s link), range}; books: {connector, connection?}; storefront: {}.'
       additionalProperties: false
     KnowledgePassage:
       type: object
@@ -26087,10 +26109,13 @@ components:
           items:
             $ref: '#/components/schemas/KnowledgePassage'
           description: What it gave (waiting for approval) or what is in use.
+        reading:
+          type: boolean
+          description: It is being read right now (by the daily refresh or another click); what is shown is from before.
       additionalProperties: false
     KnowledgeList:
       type: object
-      required: [sources, kinds]
+      required: [sources, kinds, sites, tables]
       properties:
         sources:
           type: array
@@ -26100,6 +26125,27 @@ components:
           type: array
           items:
             type: string
+        sites:
+          type: array
+          description: The business's verified websites, to pick for a website source.
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              origin:
+                type: string
+        tables:
+          type: array
+          description: The data tables that can be read (not those kept by Taskiem).
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              title:
+                type: string
       additionalProperties: false
     KnowledgeSearch:
       type: object

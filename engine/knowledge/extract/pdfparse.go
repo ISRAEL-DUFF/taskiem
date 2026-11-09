@@ -18,10 +18,12 @@ import (
 	"bytes"
 	"compress/flate"
 	"compress/zlib"
+	"context"
 	"encoding/ascii85"
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"sort"
 	"strconv"
 )
@@ -37,6 +39,10 @@ const (
 	maxObjStmEntries  = 100000    // objects in one object stream
 	maxPDFPages       = 2000      // pages read
 	maxContentOps     = 20 << 20  // content-stream operators, all pages
+	maxContentElems   = 8 << 20   // content-stream values (operands too), all pages
+	maxContentBytes   = 128 << 20 // content-stream bytes run, all pages, reuse counted each time
+	maxStreamCache    = 32 << 20  // decoded bytes kept for streams used more than once
+	maxScanFactor     = 4         // bytes the object scan may parse, as a multiple of the file
 	maxFormDepth      = 8         // form XObjects inside form XObjects
 	maxGraphicsStates = 64        // q without Q
 )
@@ -76,7 +82,8 @@ type pdfParser struct {
 	pos   int
 	refs  bool // "N G R" is a reference (not in content streams)
 	depth int
-	elems *int // shared count of values parsed, against maxPDFElements
+	elems *int // shared count of values parsed, against limit
+	limit int  // the most values elems may count; 0 is maxPDFElements
 }
 
 func (p *pdfParser) skipSpace() {
@@ -107,7 +114,11 @@ func (p *pdfParser) token() (any, error) {
 	}
 	if p.elems != nil {
 		*p.elems++
-		if *p.elems > maxPDFElements {
+		limit := p.limit
+		if limit == 0 {
+			limit = maxPDFElements
+		}
+		if *p.elems > limit {
 			return nil, errPDFLimit
 		}
 	}
@@ -146,7 +157,10 @@ func (p *pdfParser) token() (any, error) {
 		if n, err := strconv.ParseInt(word, 10, 64); err == nil {
 			return n, nil
 		}
-		if f, err := strconv.ParseFloat(word, 64); err == nil {
+		// ParseFloat also reads "+Inf" and "1e999"; a PDF number is
+		// always finite, and an infinite one would only reach a float to
+		// int conversion somewhere.
+		if f, err := strconv.ParseFloat(word, 64); err == nil && !math.IsInf(f, 0) && !math.IsNaN(f) {
 			return f, nil
 		}
 		// Producers write oddities such as "--5" or "1.2.3"; a reader
@@ -390,20 +404,63 @@ type pdfDoc struct {
 	elems    int
 	decoded  int // bytes decoded so far, against maxDecodedBytes
 	ops      int // content operators run so far, against maxContentOps
+
+	contentElems int  // content-stream and CMap values parsed, against maxContentElems
+	contentBytes int  // content-stream bytes run, against maxContentBytes
+	stopped      bool // a content limit was reached: read no more pages
+
+	// ctx bounds the wall-clock time spent; expired is set, and every loop
+	// stops, once it is done.
+	ctx     context.Context
+	ticks   int
+	expired bool
+
+	streams     map[*pdfStream]decodedStream // decoded streams, for reuse
+	cachedBytes int                          // bytes held in streams, against maxStreamCache
+	cmaps       map[*pdfStream]*cmap         // parsed ToUnicode CMaps
+	fonts       map[int64]*pdfFont           // fonts by object number
 }
+
+type decodedStream struct {
+	data []byte
+	err  error
+}
+
+// tick reports whether the time allowed has run out. Loops call it once
+// per step; the context is looked at only every 256 calls.
+func (d *pdfDoc) tick() bool {
+	if d.expired {
+		return true
+	}
+	d.ticks++
+	if d.ticks&255 == 0 && d.ctx != nil && d.ctx.Err() != nil {
+		d.expired = true
+	}
+	return d.expired
+}
+
+// errPDFTimeout ends a parse when the time allowed has run out.
+var errPDFTimeout = errors.New("reading the PDF took longer than allowed")
 
 type pdfEntry struct {
 	pos int // where it was defined, to let later definitions win
 	val any
 }
 
-// parsePDF scans data for object definitions and trailers.
-func parsePDF(data []byte) (*pdfDoc, error) {
-	d := &pdfDoc{data: data, objs: map[int64]pdfEntry{}}
+// parsePDF scans data for object definitions and trailers, stopping
+// with errPDFTimeout once ctx is done.
+func parsePDF(ctx context.Context, data []byte) (*pdfDoc, error) {
+	d := &pdfDoc{
+		data: data, objs: map[int64]pdfEntry{}, ctx: ctx,
+		streams: map[*pdfStream]decodedStream{}, cmaps: map[*pdfStream]*cmap{}, fonts: map[int64]*pdfFont{},
+	}
 	if err := d.scan(); err != nil {
 		return nil, err
 	}
 	d.readObjectStreams()
+	if d.expired {
+		return nil, errPDFTimeout
+	}
 	return d, nil
 }
 
@@ -427,7 +484,17 @@ func (d *pdfDoc) scan() error {
 		return c.at
 	}
 	objC, trailerC := &cursor{at: -2}, &cursor{at: -2}
+	// After an object fails to parse, the scan goes on just past its
+	// "obj", as a repairing reader must: the failure may be one bad value
+	// in an otherwise good file. But a value that runs on (an unclosed
+	// string or array) reads to the end of the file each time, so the
+	// bytes parsed are counted, and once they pass a few times the file's
+	// size a failure skips to where its parse stopped instead.
+	budget, used := maxScanFactor*len(data)+(1<<20), 0
 	for i := 0; i < len(data); {
+		if d.tick() {
+			return errPDFTimeout
+		}
 		k := nextOf(objC, "obj", i)
 		tk := nextOf(trailerC, "trailer", i)
 		if k < 0 && tk < 0 {
@@ -443,13 +510,17 @@ func (d *pdfDoc) scan() error {
 			at := i + tk
 			i = at + len("trailer")
 			p := &pdfParser{b: data, pos: i, refs: true, elems: &d.elems}
-			if v, err := p.object(); err == nil {
+			v, err := p.object()
+			used += p.pos - i
+			if err == nil {
 				if td, ok := v.(pdfDict); ok {
 					d.trailers = append(d.trailers, pdfEntry{at, td})
 					i = p.pos
 				}
 			} else if errors.Is(err, errPDFLimit) {
 				return err
+			} else if used > budget {
+				i = max(i, p.pos)
 			}
 			continue
 		}
@@ -475,10 +546,14 @@ func (d *pdfDoc) scan() error {
 			continue
 		}
 		v, err := p.object()
+		used += p.pos - start
 		if errors.Is(err, errPDFLimit) {
 			return err
 		}
 		if err != nil {
+			if used > budget {
+				i = max(i, p.pos)
+			}
 			continue
 		}
 		if dict, ok := v.(pdfDict); ok {
@@ -579,6 +654,9 @@ func (d *pdfDoc) readObjectStreams() {
 	}
 	sort.Slice(streams, func(i, j int) bool { return streams[i].pos < streams[j].pos })
 	for _, os := range streams {
+		if d.tick() {
+			return
+		}
 		data, err := d.decode(os.s)
 		if err != nil {
 			continue
@@ -590,11 +668,16 @@ func (d *pdfDoc) readObjectStreams() {
 		}
 		hdr := &pdfParser{b: data[:first], elems: &d.elems}
 		for range n {
+			if d.tick() {
+				return
+			}
 			num, err1 := hdr.token()
 			off, err2 := hdr.token()
 			on, ok1 := num.(int64)
 			oo, ok2 := off.(int64)
-			if err1 != nil || err2 != nil || !ok1 || !ok2 || oo < 0 || first+oo >= int64(len(data)) {
+			// oo is compared against what is left, not added to first,
+			// which a huge offset would overflow.
+			if err1 != nil || err2 != nil || !ok1 || !ok2 || oo < 0 || oo >= int64(len(data))-first {
 				break
 			}
 			if prev, ok := d.objs[on]; ok && prev.pos > os.pos {
@@ -658,8 +741,38 @@ func (d *pdfDoc) name(v any) string {
 }
 
 // decode returns a stream's data with its filters undone, up to
-// maxStreamBytes and within the document's budget.
+// maxStreamBytes and within the document's budget. Every use is charged
+// to the budget, unfiltered streams and reuses of the same stream (a
+// form drawn on every page) included; a stream decoded once is kept, up
+// to maxStreamCache bytes in all, so that reuse costs no new inflating.
 func (d *pdfDoc) decode(s *pdfStream) ([]byte, error) {
+	if c, ok := d.streams[s]; ok {
+		if c.err != nil {
+			return nil, c.err
+		}
+		if err := d.charge(len(c.data)); err != nil {
+			return nil, err
+		}
+		return c.data, nil
+	}
+	data, err := d.decodeOnce(s)
+	if d.streams != nil && (err != nil || d.cachedBytes+len(data) <= maxStreamCache) {
+		d.streams[s] = decodedStream{data, err}
+		d.cachedBytes += len(data)
+	}
+	return data, err
+}
+
+// charge counts n decoded bytes against the document's budget.
+func (d *pdfDoc) charge(n int) error {
+	if n > maxDecodedBytes-d.decoded {
+		return errPDFLimit
+	}
+	d.decoded += n
+	return nil
+}
+
+func (d *pdfDoc) decodeOnce(s *pdfStream) ([]byte, error) {
 	var filters []string
 	var parms []pdfDict
 	switch f := d.resolve(s.dict["Filter"]).(type) {
@@ -678,6 +791,15 @@ func (d *pdfDoc) decode(s *pdfStream) ([]byte, error) {
 		}
 	}
 	data := s.raw
+	if len(filters) == 0 {
+		if len(data) > maxStreamBytes {
+			return nil, errPDFLimit
+		}
+		if err := d.charge(len(data)); err != nil {
+			return nil, err
+		}
+		return data, nil
+	}
 	for i, f := range filters {
 		limit := min(maxStreamBytes, maxDecodedBytes-d.decoded)
 		if limit <= 0 {
@@ -703,7 +825,9 @@ func (d *pdfDoc) decode(s *pdfStream) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		d.decoded += len(data)
+		if err := d.charge(len(data)); err != nil {
+			return nil, err
+		}
 	}
 	return data, nil
 }
@@ -765,11 +889,15 @@ func unpredict(data []byte, parms pdfDict, d *pdfDoc) ([]byte, error) {
 	if !ok || bpc < 1 {
 		bpc = 8
 	}
-	if cols > 1<<20 || colours > 32 || bpc > 16 {
+	// Written so that NaN fails too, before any float becomes an int.
+	if !(cols <= 1<<20 && colours <= 32 && bpc <= 16) {
 		return nil, errors.New("bad predictor parameters")
 	}
 	bpp := max(1, int(colours*bpc+7)/8)
 	row := int(cols*colours*bpc+7) / 8
+	if row+1 > len(data) {
+		return nil, nil // not even one row: nothing to undo
+	}
 	var out []byte
 	prev := make([]byte, row)
 	for len(data) >= row+1 {

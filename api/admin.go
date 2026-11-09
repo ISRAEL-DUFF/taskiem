@@ -23,6 +23,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/effects"
 	"github.com/israel-duff/taskiem/engine/egress"
+	"github.com/israel-duff/taskiem/engine/knowledge"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/secrets"
@@ -625,6 +626,15 @@ func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 			out["files_pending"] = true
 		}
 		out["files_deleted"] = n
+	}
+	// What the assistant knows from tables and sheets is read again within
+	// minutes, so it holds what they hold now (docs/knowledge.md).
+	if s.Knowledge != nil {
+		if n, err := s.Knowledge.RequestRefreshKinds(r.Context(), p.TenantID, knowledge.Table, knowledge.Sheet); err != nil {
+			s.Logger.Warn("erase: knowledge sources not asked to be read again", "err", err)
+		} else {
+			out["knowledge_rereads"] = n
+		}
 	}
 	writeJSON(w, http.StatusOK, out)
 }

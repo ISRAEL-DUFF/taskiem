@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net"
@@ -56,7 +57,9 @@ func TestKnowledgeSources(t *testing.T) {
 		t.Fatalf("searched before approval: %v", found)
 	}
 	id := tbl["id"].(string)
-	owner.must(200, "POST", "/v1/knowledge/"+id+"/approve", nil)
+	owner.must(400, "POST", "/v1/knowledge/"+id+"/approve", nil)
+	owner.must(409, "POST", "/v1/knowledge/"+id+"/approve", map[string]any{"read_at": time.Now().Add(-time.Hour)})
+	owner.must(200, "POST", "/v1/knowledge/"+id+"/approve", map[string]any{"read_at": tbl["read_at"]})
 	if found := owner.must(200, "POST", "/v1/knowledge/search", map[string]any{"question": "price of ofada rice"}); found["found"] != true {
 		t.Fatalf("after approval: %v", found)
 	}
@@ -64,6 +67,9 @@ func TestKnowledgeSources(t *testing.T) {
 	tx = w.pg.Begin(project)
 	tx.Update("products", map[string]any{"id": int64(1)}, map[string]any{"name": "Ofada rice (10kg)"})
 	tx.Commit()
+	// Asking to read it again within a minute of a read is refused.
+	owner.must(429, "POST", "/v1/knowledge/"+id+"/refresh", nil)
+	w.srv.KnowledgeRereadAfter = -1
 	if got := owner.must(200, "POST", "/v1/knowledge/"+id+"/refresh", nil); !strings.Contains(toJSON(got["shown"]), "10kg") || got["changed_at"] == nil {
 		t.Fatalf("refresh: %v", got)
 	}
@@ -81,9 +87,61 @@ func TestKnowledgeSources(t *testing.T) {
 	owner.must(400, "POST", "/v1/knowledge", map[string]any{"kind": "website", "config": map[string]any{"site": uuid.NewString()}})
 	owner.must(400, "POST", "/v1/knowledge", map[string]any{"kind": "gossip"})
 	// A storefront source with no storefront is recorded, not read.
-	if sf := owner.must(201, "POST", "/v1/knowledge", map[string]any{"kind": "storefront"}); sf["status"] != "failed" || !strings.Contains(sf["error"].(string), "no storefront") {
+	sf := owner.must(201, "POST", "/v1/knowledge", map[string]any{"kind": "storefront"})
+	if sf["status"] != "failed" || !strings.Contains(sf["error"].(string), "no storefront") {
 		t.Fatalf("storefront: %v", sf)
 	}
+	// A storefront is read as customers see it: published, not the draft.
+	sfID := sf["id"].(string)
+	owner.must(200, "PUT", "/v1/storefront", map[string]any{"slug": "mama-put", "draft": map[string]any{"name": "Mama Put", "tagline": "Jollof every day", "phone": "0803 123 4567"}})
+	if got := owner.must(200, "POST", "/v1/knowledge/"+sfID+"/refresh", nil); got["status"] != "failed" || !strings.Contains(got["error"].(string), "not published yet") {
+		t.Fatalf("an unpublished storefront: %v", got)
+	}
+	verifyPhone(t, w.world, owner, "phone", "business")
+	w.srv.PublicHosts = []string{shopDomain}
+	owner.must(200, "POST", "/v1/storefront/publish", nil)
+	owner.must(200, "PUT", "/v1/storefront", map[string]any{"slug": "mama-put", "draft": map[string]any{"name": "Mama Put", "tagline": "Draft words not yet published", "phone": "0803 123 4567"}})
+	if got := owner.must(200, "POST", "/v1/knowledge/"+sfID+"/refresh", nil); !strings.Contains(toJSON(got["shown"]), "Jollof every day") || strings.Contains(toJSON(got["shown"]), "Draft words") {
+		t.Fatalf("storefront read: %v", got)
+	}
+
+	// A big table is read past its first page of rows; its columns are
+	// fixed when it is added, and changing them waits for approval again.
+	tx = w.pg.Begin(project)
+	for i := 3; i < 603; i++ {
+		tx.Insert("products", map[string]any{"id": int64(i), "name": fmt.Sprintf("Item %d", i), "price": i})
+	}
+	tx.Commit()
+	all := owner.must(201, "POST", "/v1/knowledge", map[string]any{"kind": "table", "title": "All items", "config": map[string]any{"table": "products", "columns": []string{"name"}}})
+	if all["pending"].(float64) < 24 || !strings.Contains(toJSON(all["config"]), `"columns":["name"]`) {
+		t.Fatalf("a big table: %v pending, config %v", all["pending"], all["config"])
+	}
+	allID := all["id"].(string)
+	owner.must(200, "POST", "/v1/knowledge/"+allID+"/approve", map[string]any{"read_at": all["read_at"]})
+	if found := owner.must(200, "POST", "/v1/knowledge/search", map[string]any{"question": "Item 602"}); found["found"] != true {
+		t.Fatalf("the last rows were not read: %v", found)
+	}
+	changed := owner.must(200, "PATCH", "/v1/knowledge/"+allID, map[string]any{"config": map[string]any{"table": "products", "columns": []string{"name", "price"}}})
+	if changed["status"] != "review" || changed["pending"].(float64) == 0 || changed["passages"].(float64) == 0 {
+		t.Fatalf("new settings were used unseen: %v", changed)
+	}
+	// Paused, new settings are kept and read when it is resumed.
+	owner.must(200, "POST", "/v1/knowledge/"+allID+"/pause", map[string]any{"paused": true})
+	if p := owner.must(200, "PATCH", "/v1/knowledge/"+allID, map[string]any{"config": map[string]any{"table": "products"}}); p["status"] != "paused" {
+		t.Fatalf("patch while paused: %v", p)
+	}
+	owner.must(200, "POST", "/v1/knowledge/"+allID+"/pause", map[string]any{"paused": false})
+	var actions []string
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT array_agg(action ORDER BY chain_seq) FROM audit_log WHERE target = $1`, allID).Scan(&actions); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(actions, ",") != "knowledge.source.create,knowledge.source.approve,knowledge.source.update,knowledge.source.pause,knowledge.source.update,knowledge.source.resume" {
+		t.Fatalf("audit: %v", actions)
+	}
+	// Only people who manage secrets manage it.
+	viewer := addMember(t, w.world, owner, "vic", "viewer")
+	viewer.must(403, "GET", "/v1/knowledge", nil)
+	viewer.must(403, "POST", "/v1/knowledge/search", map[string]any{"question": "rice"})
 
 	// Another business sees none of it.
 	other := w.tenant(t, "Iya Basira", "owner@basira.test")
@@ -154,7 +212,7 @@ func TestKnowledgeWebsite(t *testing.T) {
 	if strings.Contains(shown, "Home | Menu") || strings.Contains(shown, `"link":"https://example.com/private`) || strings.Contains(shown, "elsewhere.example") || strings.Contains(shown, "© 2026") {
 		t.Fatalf("read boilerplate, a disallowed page or another site: %s", shown)
 	}
-	owner.must(200, "POST", "/v1/knowledge/"+got["id"].(string)+"/approve", nil)
+	owner.must(200, "POST", "/v1/knowledge/"+got["id"].(string)+"/approve", map[string]any{"read_at": got["read_at"]})
 	found := owner.must(200, "POST", "/v1/knowledge/search", map[string]any{"question": "Is food free today?"})
 	if found["found"] != true {
 		t.Fatalf("the page's words were not found: %v", found)
@@ -182,12 +240,35 @@ func TestKnowledgeFile(t *testing.T) {
 	if st, body := owner.uploadKnowledge(t, "photo.jpg", []byte("\xff\xd8\xff not a document")); st != 422 {
 		t.Fatalf("not a document: %d %v", st, body)
 	}
+	// Uploading it again replaces the document; what it gives waits for
+	// approval again, and the old text is used until then.
+	id := body["id"].(string)
+	owner.must(200, "POST", "/v1/knowledge/"+id+"/approve", map[string]any{"read_at": body["read_at"]})
+	var doc2 bytes.Buffer
+	zw = zip.NewWriter(&doc2)
+	f, _ = zw.Create("word/document.xml")
+	_, _ = io.WriteString(f, `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+		<w:p><w:r><w:t>Jollof rice with chicken: 4,000 naira</w:t></w:r></w:p></w:body></w:document>`)
+	_ = zw.Close()
+	st, again := owner.uploadKnowledge(t, "menu-2.docx", doc2.Bytes(), "source", id)
+	if st != 200 || again["id"] != id || again["status"] != "review" || !strings.Contains(toJSON(again["shown"]), "4,000") {
+		t.Fatalf("replace: %d %v", st, again)
+	}
+	if found := owner.must(200, "POST", "/v1/knowledge/search", map[string]any{"question": "jollof"}); !strings.Contains(toJSON(found), "3,500") {
+		t.Fatalf("the approved text stopped being used: %v", found)
+	}
+	if list := owner.must(200, "GET", "/v1/knowledge", nil); len(list["sources"].([]any)) != 1 {
+		t.Fatalf("replacing added a source: %v", list)
+	}
 }
 
-func (c *client) uploadKnowledge(t *testing.T, name string, data []byte) (int, map[string]any) {
+func (c *client) uploadKnowledge(t *testing.T, name string, data []byte, fields ...string) (int, map[string]any) {
 	t.Helper()
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
+	for i := 0; i+1 < len(fields); i += 2 {
+		_ = mw.WriteField(fields[i], fields[i+1])
+	}
 	fw, _ := mw.CreateFormFile("file", name)
 	_, _ = fw.Write(data)
 	_ = mw.Close()
@@ -237,8 +318,8 @@ actions:
 	if _, err := w.env.Vault.CreateConnection(context.Background(), tenant, "prod", "googlesheets", "main", "api_key", map[string]string{"token": "t"}, "admin"); err != nil {
 		t.Fatal(err)
 	}
-	got := owner.must(201, "POST", "/v1/knowledge", map[string]any{"kind": "sheet", "title": "Drinks", "config": map[string]any{"spreadsheet_id": "abc", "range": "Drinks!A1:B50"}})
-	if !strings.Contains(toJSON(got["shown"]), "Item: Zobo (50cl); Price: 500") || !strings.Contains(toJSON(got["shown"]), "docs.google.com/spreadsheets/d/abc") {
+	got := owner.must(201, "POST", "/v1/knowledge", map[string]any{"kind": "sheet", "title": "Drinks", "config": map[string]any{"spreadsheet_id": "https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOp_qrs-tu/edit#gid=0", "range": "Drinks!A1:B50"}})
+	if !strings.Contains(toJSON(got["shown"]), "Item: Zobo (50cl); Price: 500") || !strings.Contains(toJSON(got["shown"]), "docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOp_qrs-tu") {
 		t.Fatalf("sheet: %v", got)
 	}
 	// Books that list their items (the books_items capability, as

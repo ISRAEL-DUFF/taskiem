@@ -20,6 +20,7 @@ CREATE TABLE knowledge_sources (
   status       text NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'review', 'active', 'failed', 'paused')),
   approved_at  timestamptz,
   approved_by  text,
+  reapprove    boolean NOT NULL DEFAULT false, -- its config changed since approval: the next read waits for approval again
   read_at      timestamptz,               -- the last read that succeeded
   changed_at   timestamptz,               -- the last time the text changed
   digest       bytea,                     -- of the text read last, to tell a change

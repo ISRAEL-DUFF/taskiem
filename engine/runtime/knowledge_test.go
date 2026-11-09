@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -31,7 +32,7 @@ func TestAnswerFromKnowledge(t *testing.T) {
 	if _, err := svc.Refresh(ctx, e.Tenant, src.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.Approve(ctx, e.Tenant, src.ID, "user:owner"); err != nil {
+	if err := svc.Approve(ctx, e.Tenant, src.ID, readAt(t, svc, e.Tenant, src.ID), "user:owner"); err != nil {
 		t.Fatal(err)
 	}
 	if err := e.Registry.Register(knowledgeconn.New(svc)); err != nil {
@@ -59,4 +60,13 @@ func TestAnswerFromKnowledge(t *testing.T) {
 	if !strings.Contains(q, knowledge.MaterialHead) || !strings.Contains(q, "<<material 1: Our website, Delivery") || !strings.Contains(q, "<<end of material 1>>") || !strings.Contains(q, "Lekki and Ajah") {
 		t.Fatalf("the question:\n%s", q)
 	}
+}
+
+func readAt(t *testing.T, s *knowledge.Service, tenant, id uuid.UUID) time.Time {
+	t.Helper()
+	src, err := s.Get(context.Background(), tenant, id)
+	if err != nil || src.ReadAt == nil {
+		t.Fatalf("read_at: %+v %v", src, err)
+	}
+	return *src.ReadAt
 }

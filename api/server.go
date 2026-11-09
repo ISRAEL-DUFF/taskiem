@@ -253,6 +253,9 @@ type Server struct {
 	// KnowledgeWebClient, when set, reads businesses' websites instead of
 	// the egress guard's client (tests).
 	KnowledgeWebClient *http.Client
+	// KnowledgeRereadAfter is how soon the owner can ask to read a source
+	// again (a minute when zero; negative: at once, for tests).
+	KnowledgeRereadAfter time.Duration
 	// Billing is plans, subscriptions and payments (billing.go); nil or
 	// not enabled is billing off: the internal plan, every feature.
 	Billing *billing.Service

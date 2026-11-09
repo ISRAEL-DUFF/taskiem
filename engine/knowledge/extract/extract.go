@@ -16,9 +16,11 @@ package extract
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 )
@@ -43,21 +45,44 @@ const (
 	// MaxText is the most text returned for one file or page, in bytes.
 	// Longer text is cut at a paragraph.
 	MaxText = 2 << 20
+	// ExtractTimeout is the wall-clock time FileText, PDFText and DOCXText
+	// spend on one file before giving up. The work limits keep a file well
+	// inside it; this is the backstop for whatever they miss.
+	ExtractTimeout = 30 * time.Second
 )
 
 // FileText returns the text of a PDF or Word (DOCX) file. It goes by the
 // content, not the file's name or declared type, which an uploader controls.
+// It gives up after ExtractTimeout; see FileTextContext.
 func FileText(data []byte) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), ExtractTimeout)
+	defer cancel()
+	return FileTextContext(ctx, data)
+}
+
+// FileTextContext is FileText, stopping when ctx is done. A file not read
+// in time gives no text and an error that wraps both ErrUnreadable and
+// ctx.Err() (context.DeadlineExceeded for a timeout): partial text is not
+// returned, as it would be stored as if it were the whole file.
+func FileTextContext(ctx context.Context, data []byte) (string, error) {
 	if len(data) > MaxFileBytes {
 		return "", fmt.Errorf("%w: %d bytes, over the %d MB limit", ErrTooLarge, len(data), MaxFileBytes>>20)
 	}
 	if isPDF(data) {
-		return PDFText(data)
+		return PDFTextContext(ctx, data)
 	}
 	if isDOCX(data) {
-		return DOCXText(data)
+		return DOCXTextContext(ctx, data)
 	}
 	return "", fmt.Errorf("%w: not a PDF or Word (.docx) document", ErrUnreadable)
+}
+
+// timedOut is the error for a file whose reading ran out of time.
+func timedOut(kind string, cause error) error {
+	if cause == nil {
+		cause = context.DeadlineExceeded
+	}
+	return fmt.Errorf("%w: reading the %s took longer than allowed: %w", ErrUnreadable, kind, cause)
 }
 
 // isPDF reports whether data starts like a PDF. Readers accept the header

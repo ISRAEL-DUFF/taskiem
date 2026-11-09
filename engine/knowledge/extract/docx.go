@@ -3,6 +3,7 @@ package extract
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -30,8 +31,24 @@ var wordNamespaces = map[string]bool{
 // included) as a line, a tab as a tab, a line break as a new line, and each
 // table row as a line with its cells joined by " | ". Only the main body
 // (word/document.xml) is read: headers, footers, footnotes and comments
-// are left out, as is deleted text from tracked changes.
+// are left out, as is deleted text from tracked changes and text in runs
+// marked hidden (<w:vanish/>), which Word does not show or print. Text
+// hidden through a character style rather than the run's own properties
+// is still read.
+//
+// It gives up after ExtractTimeout; see DOCXTextContext.
 func DOCXText(data []byte) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), ExtractTimeout)
+	defer cancel()
+	return DOCXTextContext(ctx, data)
+}
+
+// DOCXTextContext is DOCXText, stopping when ctx is done: it then returns
+// no text and an error that wraps both ErrUnreadable and ctx.Err().
+func DOCXTextContext(ctx context.Context, data []byte) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", timedOut("Word document", err)
+	}
 	if len(data) > MaxFileBytes {
 		return "", fmt.Errorf("%w: %d bytes, over the %d MB limit", ErrTooLarge, len(data), MaxFileBytes>>20)
 	}
@@ -55,7 +72,10 @@ func DOCXText(data []byte) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	text, err := documentXMLText(xmlData)
+	text, err := documentXMLText(ctx, xmlData)
+	if ctx.Err() != nil {
+		return "", timedOut("Word document", ctx.Err())
+	}
 	if err != nil {
 		return "", fmt.Errorf("%w: the Word document is damaged: %w", ErrUnreadable, err)
 	}
@@ -96,8 +116,10 @@ type docxTable struct {
 
 // documentXMLText walks word/document.xml as a token stream. Paragraphs
 // inside a table cell are joined with spaces into the cell's text; a table
-// inside a cell becomes part of that cell's text.
-func documentXMLText(data []byte) (string, error) {
+// inside a cell becomes part of that cell's text. A run whose own
+// properties carry w:vanish is hidden, and so is everything inside it
+// (a text box anchored in a hidden run).
+func documentXMLText(ctx context.Context, data []byte) (string, error) {
 	dec := xml.NewDecoder(bytes.NewReader(data))
 	var (
 		w      = lineWriter{tabs: true}
@@ -105,7 +127,12 @@ func documentXMLText(data []byte) (string, error) {
 		inText bool
 		tables []*docxTable
 		sawDoc bool
+		elems  []xml.Name // the open elements
+		runs   []bool     // for each open w:r, whether it is hidden
+		hidden int        // open w:r elements that are hidden
+		tokens int
 	)
+	isWord := func(n xml.Name, local string) bool { return wordNamespaces[n.Space] && n.Local == local }
 	// emit sends a finished line to the innermost open cell, or to the
 	// output when no table is open.
 	emit := func(s string) {
@@ -124,6 +151,9 @@ func documentXMLText(data []byte) (string, error) {
 		}
 	}
 	for !w.full() {
+		if tokens++; tokens&1023 == 0 && ctx.Err() != nil {
+			return "", ctx.Err()
+		}
 		tok, err := dec.Token()
 		if errors.Is(err, io.EOF) {
 			break
@@ -133,18 +163,33 @@ func documentXMLText(data []byte) (string, error) {
 		}
 		switch t := tok.(type) {
 		case xml.StartElement:
+			n := len(elems)
+			elems = append(elems, t.Name)
 			if !wordNamespaces[t.Name.Space] {
 				continue
 			}
 			switch t.Name.Local {
 			case "document":
 				sawDoc = true
+			case "r":
+				runs = append(runs, false)
+			case "vanish":
+				// Only the run's own properties: w:vanish in a paragraph
+				// mark's properties hides the mark, not the text.
+				if n >= 2 && isWord(elems[n-1], "rPr") && isWord(elems[n-2], "r") && len(runs) > 0 && !runs[len(runs)-1] && onOff(t) {
+					runs[len(runs)-1] = true
+					hidden++
+				}
 			case "t":
-				inText = true
+				inText = hidden == 0
 			case "tab":
-				para.WriteByte('\t')
+				if hidden == 0 {
+					para.WriteByte('\t')
+				}
 			case "br", "cr":
-				para.WriteByte('\n')
+				if hidden == 0 {
+					para.WriteByte('\n')
+				}
 			case "p":
 				para.Reset()
 			case "tbl":
@@ -159,10 +204,20 @@ func documentXMLText(data []byte) (string, error) {
 				}
 			}
 		case xml.EndElement:
+			if len(elems) > 0 {
+				elems = elems[:len(elems)-1]
+			}
 			if !wordNamespaces[t.Name.Space] {
 				continue
 			}
 			switch t.Name.Local {
+			case "r":
+				if n := len(runs); n > 0 {
+					if runs[n-1] {
+						hidden--
+					}
+					runs = runs[:n-1]
+				}
 			case "t":
 				inText = false
 			case "p":
@@ -203,4 +258,18 @@ func documentXMLText(data []byte) (string, error) {
 		return "", errors.New("no w:document element")
 	}
 	return w.String(), nil
+}
+
+// onOff reads a WordprocessingML on/off property such as w:vanish: on
+// unless its w:val says otherwise.
+func onOff(t xml.StartElement) bool {
+	for _, a := range t.Attr {
+		if a.Name.Local == "val" {
+			switch strings.ToLower(a.Value) {
+			case "false", "0", "off":
+				return false
+			}
+		}
+	}
+	return true
 }

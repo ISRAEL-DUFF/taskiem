@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -17,14 +19,19 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/knowledge"
+	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
 // The readers of what a business's assistant knows (decision 0062 D12,
 // docs/knowledge.md): each kind of knowledge source read as titled text.
-// Personal data never goes in: a data table's personal columns are left
-// out, and the storefront gives its card and catalogue only.
+// Personal data is kept out: a data table's personal columns (and its
+// phone and email columns) are never read; a sheet's columns headed as
+// contact details are left out and phone numbers, emails and identity
+// numbers in the rest are masked; the storefront gives its published card
+// and catalogue only. Erasing a customer asks every table and sheet
+// source to be read again (eraseKnowledge).
 
 // knowledgePurpose is the recorded purpose of the connection reads.
 const knowledgePurpose = "knowledge.read"
@@ -107,24 +114,43 @@ func headedSections(text, title, link string) []knowledge.Section {
 // readStorefront is the business's storefront: its card (what it does,
 // where, how to reach it, its hours) and its catalogue with prices.
 func (s *Server) readStorefront(ctx context.Context, tenant uuid.UUID, src knowledge.Source) ([]knowledge.Section, error) {
+	// What customers see: the published card (checked and moderated), not
+	// the draft being edited.
 	var sf storefront.Storefront
 	var items []storefront.Item
+	var model storefront.Model
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		var err error
 		if sf, err = storefront.Get(ctx, tx, tenant); err != nil {
+			return err
+		}
+		if sf.Status == "suspended" || sf.PublishedVersion == 0 {
+			return nil
+		}
+		var raw []byte
+		if err := tx.QueryRow(ctx, `SELECT model FROM storefront_snapshots WHERE storefront_id = $1 AND version = $2`, sf.ID, sf.PublishedVersion).Scan(&raw); err != nil {
+			return err
+		}
+		if err := json.Unmarshal(raw, &model); err != nil {
 			return err
 		}
 		items, err = storefront.Catalogue(ctx, tx, tenant)
 		return err
 	})
 	if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, storefront.ErrNotFound) {
-		return nil, errors.New("the business has no storefront yet")
+		return nil, knowledge.Plainly(knowledge.ErrGone, "the business has no storefront yet")
 	}
 	if err != nil {
 		return nil, err
 	}
+	if sf.Status == "suspended" {
+		return nil, knowledge.Plainly(knowledge.ErrGone, "the storefront is suspended")
+	}
+	if sf.PublishedVersion == 0 {
+		return nil, knowledge.Plainly(nil, "the storefront is not published yet")
+	}
 	link := sf.URL(s.previewDomain())
-	c := sf.Draft
+	c := model.Card
 	var about []string
 	add := func(label, v string) {
 		if v = strings.TrimSpace(v); v != "" {
@@ -138,6 +164,9 @@ func (s *Server) readStorefront(ctx context.Context, tenant uuid.UUID, src knowl
 	add("Address", c.Address)
 	add("Phone", c.Phone)
 	add("WhatsApp", c.WhatsApp)
+	if sf.ClosedMessage != nil && strings.TrimSpace(*sf.ClosedMessage) != "" {
+		about = append(about, "Closed now: "+strings.TrimSpace(*sf.ClosedMessage))
+	}
 	out := []knowledge.Section{{Title: "About " + c.Name, Text: strings.Join(about, "\n"), Link: link}}
 	if hours := hoursText(c.Hours); hours != "" {
 		out = append(out, knowledge.Section{Title: "Opening hours", Text: hours, Link: link})
@@ -203,31 +232,33 @@ func hoursText(h storefront.Hours) string {
 // read, whatever was chosen.
 func (s *Server) readTable(ctx context.Context, tenant uuid.UUID, src knowledge.Source) ([]knowledge.Section, error) {
 	var cfg struct {
-		Table   string   `json:"table"`
-		Columns []string `json:"columns"`
+		Table   string    `json:"table"`
+		TableID uuid.UUID `json:"table_id"`
+		Columns []string  `json:"columns"`
 	}
 	if err := knowledgeConfig(src, &cfg); err != nil {
 		return nil, err
 	}
+	// The table the owner picked, by its id: a table made later under the
+	// same name is not it.
 	var t datatables.Table
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		var id uuid.UUID
-		if err := tx.QueryRow(ctx, `SELECT id FROM data_tables WHERE name = $1`, cfg.Table).Scan(&id); err != nil {
-			return err
-		}
 		var err error
-		t, err = datatables.GetTable(ctx, tx, id)
+		t, err = datatables.GetTable(ctx, tx, cfg.TableID)
 		return err
 	})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, fmt.Errorf("the table %q no longer exists", cfg.Table)
+	if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, datatables.ErrNotFound) || (err == nil && t.ID != cfg.TableID) {
+		return nil, knowledge.Plainly(knowledge.ErrGone, "the table %q no longer exists", cfg.Table)
 	}
 	if err != nil {
 		return nil, err
 	}
+	if t.KeptBy != "" {
+		return nil, knowledge.Plainly(knowledge.ErrGone, "the table %q is kept by Taskiem and is not read", t.Name)
+	}
 	cols := knowledgeColumns(t, cfg.Columns)
 	if len(cols) == 0 {
-		return nil, errors.New("the table has no column to read that is not personal")
+		return nil, knowledge.Plainly(nil, "the table has no column to read that is not personal")
 	}
 	names := make([]string, len(cols))
 	for i, c := range cols {
@@ -275,7 +306,7 @@ func (s *Server) readTable(ctx context.Context, tenant uuid.UUID, src knowledge.
 			}
 		}
 		read += len(rows)
-		next, _ := page["next"].(string)
+		next, _ := page["next_cursor"].(string)
 		if next == "" || len(rows) == 0 {
 			break
 		}
@@ -324,14 +355,14 @@ func (s *Server) connectionFor(ctx context.Context, tenant uuid.UUID, ref, name,
 	}
 	conn, ok := reg.Get(ref)
 	if !ok {
-		return nil, nil, nil, fmt.Errorf("the %s connector is not available", ref)
+		return nil, nil, nil, knowledge.Plainly(nil, "the %s connector is not available", strings.TrimSuffix(ref, "@1"))
 	}
 	if name == "" {
 		name = "main"
 	}
-	creds, err := s.Vault.Credentials(secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindConnection, Purpose: purpose, Actor: "system"}), tenant, "prod", conn.Manifest.ID, name)
+	creds, err := s.Vault.Credentials(secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindConnection, Purpose: purpose, Actor: knowledgeActor(ctx)}), tenant, "prod", conn.Manifest.ID, name)
 	if errors.Is(err, secrets.ErrNotFound) {
-		return nil, nil, nil, fmt.Errorf("the %s connection %q is missing", conn.Manifest.Name, name)
+		return nil, nil, nil, knowledge.Plainly(err, "the %s connection %q is missing: connect it again in Connections", conn.Manifest.Name, name)
 	}
 	if err != nil {
 		return nil, nil, nil, err
@@ -342,6 +373,17 @@ func (s *Server) connectionFor(ctx context.Context, tenant uuid.UUID, ref, name,
 	}
 	hc := g.Client(egress.Policy{Tenant: tenant.String(), Hosts: conn.Manifest.HostsFor(creds), Purpose: "connector:" + conn.Manifest.ID}, 60*time.Second)
 	return conn, creds, hc, nil
+}
+
+type knowledgeActorKey struct{}
+
+// knowledgeActor is who a read is for, as recorded in the secret reads:
+// the owner who pressed a button, else Taskiem's daily refresh.
+func knowledgeActor(ctx context.Context) string {
+	if a, ok := ctx.Value(knowledgeActorKey{}).(string); ok && a != "" {
+		return a
+	}
+	return "system"
 }
 
 // readSheet is a Google Sheet range: its first row as the headings, each
@@ -366,12 +408,19 @@ func (s *Server) readSheet(ctx context.Context, tenant uuid.UUID, src knowledge.
 	}
 	out, _ := resp.Output.(map[string]any)
 	values, _ := out["values"].([]any)
-	link := "https://docs.google.com/spreadsheets/d/" + cfg.SpreadsheetID
-	return gridSections(values, src.Title, link, maxSheetRows), nil
+	link := "https://docs.google.com/spreadsheets/d/" + url.PathEscape(cfg.SpreadsheetID)
+	return gridSections(values, src.Title, link, maxSheetRows, true), nil
 }
 
+// personalHeading is a sheet column whose heading says it holds personal
+// contact details: it is left out, as a table's personal columns are.
+var personalHeading = regexp.MustCompile(`(?i)\b(phone|mobile|tel|telephone|whatsapp|e-?mail|bvn|nin|account (no|number)|date of birth|dob)\b`)
+
 // gridSections are rows of cells as lines, labelled by the first row.
-func gridSections(values []any, title, link string, max int) []knowledge.Section {
+// guard leaves out columns headed as personal contact details and masks
+// phone numbers, emails and identity numbers in the rest (a sheet has no
+// personal columns marked, as a table has).
+func gridSections(values []any, title, link string, max int, guard bool) []knowledge.Section {
 	if len(values) == 0 {
 		return nil
 	}
@@ -394,6 +443,12 @@ func gridSections(values []any, title, link string, max int) []knowledge.Section
 		for j, c := range cells(r) {
 			if c == "" {
 				continue
+			}
+			if guard {
+				if j < len(head) && personalHeading.MatchString(head[j]) {
+					continue
+				}
+				c = pii.Redact(c)
 			}
 			if j < len(head) && head[j] != "" {
 				parts = append(parts, head[j]+": "+c)
@@ -434,7 +489,7 @@ func (s *Server) readBooks(ctx context.Context, tenant uuid.UUID, src knowledge.
 		return nil, err
 	}
 	if _, ok := conn.Manifest.Capabilities["books_items"]; !ok {
-		return nil, fmt.Errorf("%s does not list its items for Taskiem", conn.Manifest.Name)
+		return nil, knowledge.Plainly(nil, "%s does not list its items for Taskiem", conn.Manifest.Name)
 	}
 	out, err := connector.CallCapability(ctx, conn, "books_items", map[string]any{},
 		connector.Request{Credentials: creds, HTTP: hc, Logger: s.Logger, Attempt: 1}, func(string) (string, error) { return "", nil })

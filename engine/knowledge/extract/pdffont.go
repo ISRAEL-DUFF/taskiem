@@ -2,15 +2,19 @@ package extract
 
 import (
 	"errors"
+	"math"
 	"strconv"
 	"strings"
 	"unicode/utf16"
 )
 
-// Limits on a ToUnicode CMap, so that one cannot make every lookup slow.
+// Limits on a ToUnicode CMap, so that one cannot make every lookup slow
+// or turn one character code into a page of text.
 const (
 	maxCMapChars  = 1 << 16
 	maxCMapRanges = 10000
+	maxCMapDest   = 32         // characters one code maps to; real ligatures are a few
+	maxCharCode   = 0xFFFFFFFF // codes are at most 4 bytes
 )
 
 // pdfFont maps a font's character codes to text and widths.
@@ -48,8 +52,14 @@ func newFont(d *pdfDoc, fd pdfDict) *pdfFont {
 		return f
 	}
 	if s, ok := d.resolve(fd["ToUnicode"]).(*pdfStream); ok {
-		if data, err := d.decode(s); err == nil {
-			f.toUni = parseCMap(data)
+		// Fonts are shared between pages: a CMap is parsed once.
+		if m, ok := d.cmaps[s]; ok {
+			f.toUni = m
+		} else if data, err := d.decode(s); err == nil {
+			f.toUni = parseCMap(d, data)
+			if d.cmaps != nil {
+				d.cmaps[s] = f.toUni
+			}
 		}
 	}
 	if d.name(fd["Subtype"]) == "Type0" {
@@ -88,18 +98,34 @@ func newFont(d *pdfDoc, fd pdfDict) *pdfFont {
 	return f
 }
 
-// cidWidths reads a /W array: "c [w1 w2 ...]" or "c1 c2 w" entries.
+// charCode reads a character code from a PDF number. It refuses, before
+// converting, anything that is not a whole number from 0 to maxCharCode:
+// converting a float out of int64's range gives an arbitrary int.
+func charCode(d *pdfDoc, v any) (int64, bool) {
+	f, ok := d.num(v)
+	if !ok || math.IsNaN(f) || f < 0 || f > maxCharCode {
+		return 0, false
+	}
+	return int64(f), true
+}
+
+// cidWidths reads a /W array: "c [w1 w2 ...]" or "c1 c2 w" entries. It
+// keeps at most maxCMapChars widths.
 func cidWidths(d *pdfDoc, w pdfArray) map[int]float64 {
 	out := map[int]float64{}
 	for i := 0; i < len(w) && len(out) < maxCMapChars; {
-		c, ok := d.num(w[i])
+		c, ok := charCode(d, w[i])
 		if !ok || i+1 >= len(w) {
 			break
 		}
 		if list, ok := d.resolve(w[i+1]).(pdfArray); ok {
 			for j, x := range list {
+				k := c + int64(j)
+				if k > maxCharCode || len(out) >= maxCMapChars {
+					break
+				}
 				if v, ok := d.num(x); ok {
-					out[int(c)+j] = v
+					out[int(k)] = v
 				}
 			}
 			i += 2
@@ -108,13 +134,13 @@ func cidWidths(d *pdfDoc, w pdfArray) map[int]float64 {
 		if i+2 >= len(w) {
 			break
 		}
-		c2, ok1 := d.num(w[i+1])
+		c2, ok1 := charCode(d, w[i+1])
 		v, ok2 := d.num(w[i+2])
 		if !ok1 || !ok2 || c2-c > maxCMapChars {
 			break
 		}
-		for k := int(c); k <= int(c2); k++ {
-			out[k] = v
+		for k := c; k <= c2 && len(out) < maxCMapChars; k++ {
+			out[int(k)] = v
 		}
 		i += 3
 	}
@@ -142,53 +168,56 @@ func simpleEncoding(d *pdfDoc, fd pdfDict) [256]string {
 		base(d.name(e["BaseEncoding"]))
 		code := 0
 		for _, x := range d.array(e["Differences"]) {
-			switch v := d.resolve(x).(type) {
-			case int64:
-				code = int(v)
-			case float64:
-				code = int(v)
-			case pdfName:
-				if code >= 0 && code < 256 {
-					enc[code] = glyphText(string(v))
+			switch d.resolve(x).(type) {
+			case int64, float64:
+				// Anything outside 0 to 255 names no code; clamping first
+				// keeps the conversion and the count after it in range.
+				if c, ok := charCode(d, x); ok && c < 256 {
+					code = int(c)
+				} else {
+					code = 256
 				}
-				code++
+			case pdfName:
+				v := d.name(x)
+				if code >= 0 && code < 256 {
+					enc[code] = glyphText(v)
+					code++
+				}
 			}
 		}
 	}
 	return enc
 }
 
-// codes splits a string into character codes and their text.
-func (f *pdfFont) codes(s string) []glyph {
-	var out []glyph
-	for i := 0; i < len(s); {
-		n := 1
-		if f.toUni != nil {
-			n = f.toUni.codeLen(s[i:], f.cid)
-		} else if f.cid {
-			n = 2
-		}
-		n = min(n, len(s)-i)
-		code := 0
-		for _, b := range []byte(s[i : i+n]) {
-			code = code<<8 | int(b)
-		}
-		g := glyph{code: code, n: n}
-		if f.toUni != nil {
-			if t, ok := f.toUni.lookup(code, n); ok {
-				g.text = t
-			}
-		}
-		if g.text == "" && !f.cid {
-			g.text = f.enc[code&0xff]
-		}
-		if g.text == "" && f.cid && f.utf16 {
-			g.text = string(rune(code))
-		}
-		out = append(out, g)
-		i += n
+// next reads the character code at the start of s, which must not be
+// empty, and its text; g.n is how many bytes it took. Callers step through
+// a string with it rather than splitting the whole string up front, so
+// that they can stop as soon as they have enough text.
+func (f *pdfFont) next(s string) glyph {
+	n := 1
+	if f.toUni != nil {
+		n = f.toUni.codeLen(s, f.cid)
+	} else if f.cid {
+		n = 2
 	}
-	return out
+	n = max(1, min(n, len(s)))
+	code := 0
+	for _, b := range []byte(s[:n]) {
+		code = code<<8 | int(b)
+	}
+	g := glyph{code: code, n: n}
+	if f.toUni != nil {
+		if t, ok := f.toUni.lookup(code, n); ok {
+			g.text = t
+		}
+	}
+	if g.text == "" && !f.cid {
+		g.text = f.enc[code&0xff]
+	}
+	if g.text == "" && f.cid && f.utf16 {
+		g.text = string(rune(code))
+	}
+	return g
 }
 
 // width is a code's advance in thousandths of an em.
@@ -277,11 +306,15 @@ func (m *cmap) lookup(code, n int) (string, bool) {
 
 // parseCMap reads the codespace ranges, bfchar and bfrange sections of a
 // CMap; everything else in it is PostScript this package does not need.
-func parseCMap(data []byte) *cmap {
+// Its values count against the document's content limit.
+func parseCMap(d *pdfDoc, data []byte) *cmap {
 	m := &cmap{chars: map[uint64]string{}}
-	p := &pdfParser{b: data}
+	p := &pdfParser{b: data, elems: &d.contentElems, limit: maxContentElems}
 	var prev []any // operands since the last keyword
 	for {
+		if d.tick() {
+			return m
+		}
 		v, err := p.object()
 		if err != nil {
 			if errors.Is(err, errPDFEOF) || errors.Is(err, errPDFLimit) {
@@ -325,11 +358,11 @@ func parseCMap(data []byte) *cmap {
 				if r.hi < r.lo {
 					continue
 				}
-				switch d := e[2].(type) {
+				switch dst := e[2].(type) {
 				case pdfString:
-					r.dst = []byte(d)
+					r.dst = []byte(dst[:min(len(dst), 2*maxCMapDest)])
 				case pdfArray:
-					for _, x := range d {
+					for _, x := range dst {
 						if len(r.list) >= maxCMapChars {
 							break
 						}
@@ -365,14 +398,23 @@ func readUntil(p *pdfParser, end string, n int) [][]any {
 }
 
 // cmapDest is a bfchar or bfrange destination: UTF-16BE, or a glyph name.
+// It keeps at most maxCMapDest characters.
 func cmapDest(v any) string {
+	var s string
 	switch d := v.(type) {
 	case pdfString:
-		return utf16BE([]byte(d))
+		s = utf16BE([]byte(d[:min(len(d), 4*maxCMapDest)]))
 	case pdfName:
-		return glyphText(string(d))
+		s = glyphText(string(d[:min(len(d), 8*maxCMapDest)]))
 	}
-	return ""
+	n := 0
+	for i := range s {
+		if n == maxCMapDest {
+			return s[:i]
+		}
+		n++
+	}
+	return s
 }
 
 func beUint(s pdfString) uint32 {
