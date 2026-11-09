@@ -1083,10 +1083,14 @@ func (w *Worker) finish(ctx context.Context, p *plan, result *history.Event) err
 					paths = append(paths, tp...)
 				}
 			}
-			if v, err = pii.Seal(ctx, w.Store.PII, tx, p.c.tenant, v, paths, p.taint); err != nil {
+			cipher, err := w.Store.runCipher(ctx, tx, p.c.run)
+			if err != nil {
 				return err
 			}
-			if payload, err = pii.SealDetected(ctx, w.Store.PII, tx, p.c.tenant, v, p.taint); err != nil {
+			if v, err = pii.Seal(ctx, cipher, tx, p.c.tenant, v, paths, p.taint); err != nil {
+				return err
+			}
+			if payload, err = pii.SealDetected(ctx, cipher, tx, p.c.tenant, v, p.taint); err != nil {
 				return err
 			}
 		}
@@ -1335,6 +1339,10 @@ func (w *Worker) classify(p *plan, err error) history.Event {
 	var ra interface{ RetryAfterDelay() time.Duration }
 	if errors.As(err, &ra) && kind == effects.KindRetryable {
 		e.RetryAfterMS = ra.RetryAfterDelay().Milliseconds()
+	}
+	var coded *connector.CodedError
+	if errors.As(err, &coded) {
+		e.Code = coded.Code
 	}
 	raw, _ := json.Marshal(history.FailedPayload{Error: e})
 	return history.Event{Type: history.StepFailed, StepID: p.c.step, Attempt: p.c.attempt, Payload: raw}

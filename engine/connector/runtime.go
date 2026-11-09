@@ -435,3 +435,18 @@ func (r *Registry) Pins() map[string]string {
 	}
 	return out
 }
+
+// CodedError gives an action's error a code a workflow can branch on in
+// on_error (steps.<id>.error.code), besides its kind: window_closed when
+// WhatsApp refuses a message outside the customer's 24-hour window
+// (decision 0062 C13).
+type CodedError struct {
+	Code string
+	Err  error
+}
+
+func (e *CodedError) Error() string { return e.Err.Error() }
+func (e *CodedError) Unwrap() error { return e.Err }
+
+// WithCode gives err a code.
+func WithCode(code string, err error) error { return &CodedError{Code: code, Err: err} }

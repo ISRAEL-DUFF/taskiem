@@ -485,6 +485,30 @@ Left as they are:
 - Alerts at 80 % and 100 % of the assistant allowance; a cap on queued runs per assistant so it cannot fill the tenant's backlog (L8, L10).
 - Threat model entries for customer chat (P7, A11).
 
+**Built** (2026-11-09), see [keeping a customer assistant safe](../assistant-guard.md):
+- **The customer guard** (`engine/assistant`, `engine/ingest/guard.go`, migration 00320). A chat trigger takes `guard` (wd/v1, SDK, read-back, builder rule 21). The channel's manifest reads each event as a customer's message: connector/v1 rule 23 `conversation`, declared by `whatsapp@1` `messages` and `telegram@1` `update`. The guard decides before a run is recorded, in this order:
+  - Only new messages in private chats start a run (C18).
+  - Taskiem's `TASKIEM_ASSISTANTS` (on, beta, off), and per business a beta flag and a stop written only from the operators' console (E4, L11).
+  - STOP and START in the five languages, each confirmed once (P3).
+  - Per-customer limits a minute and a day, the customer told once (L1).
+  - The owner's pause: messages kept, nothing answered (L11).
+  - Asking for a person ("agent", "person", "talk to someone" and the equivalents): the customer is told, the owners alerted, and the assistant quiet for them for 24 hours (K5, D13).
+  - The kinds of message: answer, a fixed answer, or drop (C19).
+  - A cap on the workflow's queue, with an alert (L8).
+- **What a run reads.** `trigger.guard` gives the outcome (`answer`, `reply`, `quiet`), the fixed reply, the notice for a new customer (P3), the customer's language, the sender, the text, the channel, and a voice note or audio fetched when it arrived (C21). The fixed answers are drafts in Pidgin, Yoruba, Hausa and Igbo.
+- **`assistant@1`**:
+  - `check_reply` (L6, A11): placeholders, prices, links, contact details, secrets and internal values the material did not give hold the reply, and "Let me check that with the team" goes instead.
+  - `hand_over` and `resume` (D13).
+  - `window` (C13). A WhatsApp send outside the window fails with `steps.<id>.error.code` `window_closed`, which `on_error` branches on (new: a connector error's code).
+- **One erase (P2).** A run started by a customer's message seals its free text and names under that customer's key (`pii.Under`, `runs.customer_subject`), and child and resumed runs inherit it. So erasing the customer erases their words, transcripts and the replies in every run's history and archive, along with their conversation rows, files and the guard's record.
+  - Erasure stays one way: a customer erased who writes again gets their key's next generation (`<subject>~2`), and erasing them again destroys every generation.
+  - Before this, an erased number writing again failed its delivery on every retry.
+- **Allowance alerts** at 80 % and 100 % of AI steps and voice, once a month each (L10).
+- **The owner's page.** Settings has **Your assistant**: pause for everyone, and the customers waiting for a person with **Let the assistant answer them now** (`/v1/assistant`).
+- **Threat model.** Boundary B21 and its threats (P7, A11).
+- **Tests:** the guard over signed WhatsApp and Telegram deliveries (STOP, START, limits, notice, kinds, a person, the owner's pause, Taskiem's stop and beta, groups and edits, the queue); erasure and a customer coming back; `assistant@1` in a run; the reply check; the switches through the API and the operators' console, which members cannot change even through the database role.
+- **Not done here:** a debounce of quick messages (L5, V10); the conversations page and answering by hand (V7). The counsel's wording of the notice, and native speakers' review of the words and answers, are people items.
+
 ### V7. Conversations page
 
 - A page per assistant: conversations by customer (masked until revealed with `pii.reveal`, audited), each with its turns, transcripts and the run behind each reply; links to the run inspector (P5).

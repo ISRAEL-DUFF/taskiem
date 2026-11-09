@@ -5754,6 +5754,38 @@
     "customer.hire_late": {
       "text": "{reference} padà dé ní ọjọ́ {days} lẹ́yìn àkókò, nítorí náà a fi owó ìjìyà {late_fee} kún un. Ohun tí ó kù láti san: {balance}.",
       "reviewed": false
+    },
+    "assistant.notice": {
+      "text": "Ẹ n lẹ́! Olùrànlọ́wọ́ aládàáṣe {business} ni ẹ ń bá sọ̀rọ̀. Ó ń ka ọ̀rọ̀ yín, ó sì ń gbọ́ ohùn tí ẹ fi ránṣẹ́ láti dá yín lóhùn. Ẹ kọ PERSON láti bá ẹnìkan ní {business} sọ̀rọ̀, tàbí STOP láti dá olùrànlọ́wọ́ dúró.",
+      "reviewed": false
+    },
+    "assistant.limited": {
+      "text": "Ẹ ti fi ọ̀pọ̀ ọ̀rọ̀ ránṣẹ́ láàárín àkókò kúkúrú. Ẹ jọ̀ọ́ ẹ dúró díẹ̀, màá tún dá yín lóhùn.",
+      "reviewed": false
+    },
+    "assistant.stopped": {
+      "text": "Ó dáa. Olùrànlọ́wọ́ náà kò ní dá yín lóhùn mọ́. Ẹ kọ START láti tún un tàn.",
+      "reviewed": false
+    },
+    "assistant.started": {
+      "text": "Ẹ kú àbọ̀! Olùrànlọ́wọ́ náà yóò máa dá yín lóhùn padà. Báwo ni mo ṣe lè ràn yín lọ́wọ́?",
+      "reviewed": false
+    },
+    "assistant.handover": {
+      "text": "Ó dáa, mo ti sọ fún ẹnìkan ní {business} láti dá yín lóhùn. Wọn yóò fèsì níbí ní kété tí wọ́n bá lè ṣe é.",
+      "reviewed": false
+    },
+    "assistant.kind": {
+      "text": "Ẹ jọ̀ọ́ má bínú, ọ̀rọ̀ tí a tẹ̀ àti ohùn nìkan ni mo lè kà àti gbọ́. Ẹ jọ̀ọ́ ẹ tẹ ọ̀rọ̀ yín tàbí kí ẹ fi ohùn ránṣẹ́.",
+      "reviewed": false
+    },
+    "assistant.held": {
+      "text": "Ẹ jẹ́ kí n bá àwọn ẹgbẹ́ wa ṣàyẹ̀wò rẹ̀, màá padà wá bá yín.",
+      "reviewed": false
+    },
+    "wd.trigger.guard": {
+      "text": ", from customers' new messages in private chats only (at most {per_minute} a minute and {per_day} a day each; STOP and asking for a person are honoured)",
+      "reviewed": false
     }
   }
 }

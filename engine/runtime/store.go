@@ -140,6 +140,17 @@ type StartRequest struct {
 	// schema does not name, as paths under it (a connector trigger's
 	// declared pii: a message's sender and text), sealed with the rest.
 	TriggerPII []pii.Path
+	// Customer is the person whose message started the run (a customer
+	// guard's sender, decision 0062 P2): the run's free text and names are
+	// sealed under their subject, so erasing them erases the run's record
+	// of what they said. A child or fork run inherits its parent's.
+	Customer *Customer
+}
+
+// Customer names a person as erasure does: a category and a value.
+type Customer struct {
+	Category string
+	Value    string
 }
 
 // ParentRun is the subflow step a child run was started by.
@@ -291,6 +302,9 @@ func (s *Store) startIn(ctx context.Context, tx pgx.Tx, req StartRequest, ref *R
 				return err
 			}
 		}
+		if err := s.setCustomer(ctx, tx, req, ref.ID); err != nil {
+			return err
+		}
 		if req.Env == nil {
 			if req.Env, err = variables(ctx, tx, req.TenantID, req.Environment); err != nil {
 				return err
@@ -327,7 +341,11 @@ func (s *Store) startIn(ctx context.Context, tx pgx.Tx, req StartRequest, ref *R
 			payload.Run.CallbackKey = newCallbackKey()
 			paths = append(paths, callbackKeyPath)
 		}
-		sealed, err := s.sealPayload(ctx, tx, req.TenantID, payload, paths, pii.Taint{})
+		cipher, err := s.runCipher(ctx, tx, ref.ID)
+		if err != nil {
+			return err
+		}
+		sealed, err := s.sealPayload(ctx, tx, cipher, req.TenantID, payload, paths, pii.Taint{})
 		if err != nil {
 			return err
 		}
@@ -564,6 +582,10 @@ func (s *Store) decideInline(ctx context.Context, tx pgx.Tx, ref RunRef) error {
 		// Events that effects cause (a buffered signal delivered to a new
 		// wait) are appended after decide's batch, so the batch stays
 		// contiguous and replayable.
+		cipher, err := s.runCipher(ctx, tx, ref.ID)
+		if err != nil {
+			return err
+		}
 		var deferred []func() error
 		for _, ev := range evs {
 			if ev.Type == history.StepScheduled {
@@ -581,7 +603,7 @@ func (s *Store) decideInline(ctx context.Context, tx pgx.Tx, ref RunRef) error {
 				paths = append(paths, tp...)
 				paths = append(paths, aiTextPaths(p, taint)...)
 			}
-			sealed, err := s.sealPayload(ctx, tx, ref.TenantID, ev.Payload, paths, taint)
+			sealed, err := s.sealPayload(ctx, tx, cipher, ref.TenantID, ev.Payload, paths, taint)
 			if err != nil {
 				return err
 			}
@@ -1287,4 +1309,36 @@ func (s *Store) HistoryAfter(ctx context.Context, ref RunRef, after int64, limit
 
 func dbTx(ctx context.Context, s *Store, tenant uuid.UUID, fn func(pgx.Tx) error) error {
 	return db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, fn)
+}
+
+// setCustomer records whose message started the run (Customer), or
+// inherits it from the run it is a child or fork of. The customer's key
+// is made (or made again, for a person erased who came back) before
+// anything is sealed under it.
+func (s *Store) setCustomer(ctx context.Context, tx pgx.Tx, req StartRequest, run uuid.UUID) error {
+	from := uuid.Nil
+	switch {
+	case req.Customer != nil && req.Customer.Value != "":
+		ss, ok := s.PII.(pii.SubjectSealer)
+		if !ok {
+			return nil
+		}
+		subject, err := ss.SubjectForTx(ctx, tx, req.TenantID, req.Customer.Category, req.Customer.Value)
+		if err != nil {
+			return err
+		}
+		if _, err := s.PII.SealTx(ctx, tx, req.TenantID, req.Customer.Category, req.Customer.Value); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `UPDATE runs SET customer_subject = $2 WHERE id = $1`, run, subject)
+		return err
+	case req.Parent != nil:
+		from = req.Parent.Run
+	case req.Fork != nil:
+		from = req.Fork.Parent
+	default:
+		return nil
+	}
+	_, err := tx.Exec(ctx, `UPDATE runs SET customer_subject = (SELECT customer_subject FROM runs WHERE id = $2) WHERE id = $1`, run, from)
+	return err
 }

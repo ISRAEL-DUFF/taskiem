@@ -92,7 +92,18 @@ export function webhook(
 export function schedule(config: { cron: string; timezone?: string } & Values): Trigger {
   return { type: "schedule", config };
 }
-export function connectorEvent(config: { connector: string; trigger: string; events?: string[] } & Values): Trigger {
+/** A chat trigger's customer guard (decision 0062 V6): true for the defaults, or its settings. */
+export type CustomerGuard =
+  | true
+  | {
+      per_minute?: number;
+      per_day?: number;
+      max_queued?: number;
+      notice?: boolean;
+      handover_hours?: number;
+      kinds?: Partial<Record<"text" | "voice" | "audio" | "image" | "video" | "document" | "sticker" | "location" | "contact" | "reaction" | "button" | "other", "answer" | "reply" | "drop">>;
+    };
+export function connectorEvent(config: { connector: string; trigger: string; events?: string[]; connection?: string; guard?: CustomerGuard } & Values): Trigger {
   return { type: "connector_event", config };
 }
 /** Starts on a payment event from whichever rail is connected (decision 0044). */

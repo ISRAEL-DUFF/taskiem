@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -29,6 +30,42 @@ func (v *Vault) subjectID(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, cate
 		return "", err
 	}
 	return subjectIDWith(key, category, value), nil
+}
+
+// liveSubject is the subject a value is sealed under now: its own, or,
+// once that was erased and the person came back (a customer who writes
+// again), the next generation of it: <subject>~2, ~3... Erasure is one
+// way (a shredded key is never restored); a person who returns gets a
+// new key, and erasing them again (Erase, by their subject) shreds every
+// generation.
+func (v *Vault) liveSubject(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, category string, value any) (string, error) {
+	base, err := v.subjectID(ctx, tx, tenant, category, value)
+	if err != nil {
+		return "", err
+	}
+	rows, err := tx.Query(ctx, `SELECT subject_id, shredded_at IS NOT NULL FROM subject_keys
+		WHERE tenant_id = $1 AND (subject_id = $2 OR left(subject_id, length($2) + 1) = $2 || '~')`, tenant, base)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+	shredded := map[string]bool{}
+	for rows.Next() {
+		var id string
+		var gone bool
+		if err := rows.Scan(&id, &gone); err != nil {
+			return "", err
+		}
+		shredded[id] = gone
+	}
+	if err := rows.Err(); err != nil {
+		return "", err
+	}
+	id := base
+	for g := 2; shredded[id]; g++ {
+		id = base + "~" + strconv.Itoa(g)
+	}
+	return id, nil
 }
 
 func subjectIDWith(key []byte, category string, value any) string {
@@ -79,7 +116,7 @@ func (v *Vault) subjectKey(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, sub
 
 // SealTx encrypts one personal value under its subject's key.
 func (v *Vault) SealTx(ctx context.Context, tx pgx.Tx, t uuid.UUID, category string, value any) (map[string]any, error) {
-	subject, err := v.subjectID(ctx, tx, t, category, value)
+	subject, err := v.liveSubject(ctx, tx, t, category, value)
 	if err != nil {
 		return nil, err
 	}
@@ -143,16 +180,19 @@ func (v *Vault) SubjectFor(ctx context.Context, tenant uuid.UUID, category strin
 	return s, err
 }
 
-// SubjectForTx is SubjectFor in the caller's transaction: the subject a
-// value would be sealed under, without sealing anything.
+// SubjectForTx is the subject a value would be sealed under now, in the
+// caller's transaction, without sealing anything: after an erasure, the
+// person's next generation (liveSubject).
 func (v *Vault) SubjectForTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, category string, value any) (string, error) {
-	return v.subjectID(ctx, tx, tenant, category, value)
+	return v.liveSubject(ctx, tx, tenant, category, value)
 }
 
-// Erase destroys a subject's key (NDPA erasure, spec 9.4). It is one-way.
+// Erase destroys a subject's key (NDPA erasure, spec 9.4), and the keys of
+// its later generations (a person erased who came back). It is one-way.
 func (v *Vault) Erase(ctx context.Context, tenant uuid.UUID, subject, by string) error {
 	return db.InTenantTx(ctx, v.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx, `UPDATE subject_keys SET wrapped_key = NULL, shredded_at = now() WHERE tenant_id = $1 AND subject_id = $2 AND shredded_at IS NULL`, tenant, subject)
+		tag, err := tx.Exec(ctx, `UPDATE subject_keys SET wrapped_key = NULL, shredded_at = now()
+			WHERE tenant_id = $1 AND (subject_id = $2 OR left(subject_id, length($2) + 1) = $2 || '~') AND shredded_at IS NULL`, tenant, subject)
 		if err != nil {
 			return err
 		}

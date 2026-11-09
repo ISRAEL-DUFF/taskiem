@@ -53,6 +53,13 @@ Rules stay for everything else: other channels (Slack, a webhook, a shared inbox
 
 Some alerts need no rule. **`domain_unverified`**: the business's own domain, or a website that embeds its page, stopped proving it is theirs and is no longer served ([storefronts](storefronts.md#your-own-domain), [embed sites](embed-sites.md)). It goes to every enabled channel and to each owner on the chat they linked (WhatsApp, else Telegram), saying which record or file to check.
 
+A business's customer assistant ([keeping it safe](assistant-guard.md)) raises three more, with no rule:
+- **`assistant_handover`**: a customer asked for a person (or a workflow handed them over). Also sent to each owner on WhatsApp or Telegram, with the number's last four digits only.
+- **`assistant_busy`**: the assistant's queue is full and new messages are not answered; once a day per workflow.
+- **`allowance`**: this month's allowance for AI steps or for voice is 80 % used, and again when it is used up; once a month each.
+
+What the assistant knows raises **`knowledge_source`** when a source starts failing to read ([knowledge](knowledge.md)).
+
 Run, approval and repair rules can be limited to one environment or workflow. A rule watches from when it was created (or switched back on), so it does not replay history. Thresholds are durations such as `30m`, `4h` or `72h`.
 
 ## Emailed audit anchors

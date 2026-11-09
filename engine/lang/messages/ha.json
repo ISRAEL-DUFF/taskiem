@@ -5754,6 +5754,38 @@
     "customer.hire_late": {
       "text": "{reference} ya dawo bayan kwana {days} da lokaci, don haka an ƙara kuɗin jinkiri na {late_fee}. Saura biya: {balance}.",
       "reviewed": false
+    },
+    "assistant.notice": {
+      "text": "Sannu! Kana magana da mataimakin {business} na atomatik. Yana karanta sakonninka kuma yana sauraron sakon muryarka don ya amsa maka. Rubuta PERSON don yin magana da wani a {business}, ko STOP don dakatar da mataimakin.",
+      "reviewed": false
+    },
+    "assistant.limited": {
+      "text": "Ka aiko sakonni da yawa cikin ɗan lokaci. Don Allah ka jira kaɗan, zan sake amsa maka.",
+      "reviewed": false
+    },
+    "assistant.stopped": {
+      "text": "To. Mataimakin ba zai ƙara amsa maka ba. Rubuta START don sake kunna shi.",
+      "reviewed": false
+    },
+    "assistant.started": {
+      "text": "Barka da dawowa! Mataimakin zai sake amsa maka. Yaya zan taimake ka?",
+      "reviewed": false
+    },
+    "assistant.handover": {
+      "text": "To, na roƙi wani a {business} ya amsa maka. Za su amsa a nan da zarar sun samu dama.",
+      "reviewed": false
+    },
+    "assistant.kind": {
+      "text": "Yi haƙuri, sakon rubutu da sakon murya kawai zan iya karantawa da saurara. Don Allah ka rubuta sakonka ko ka aiko da sakon murya.",
+      "reviewed": false
+    },
+    "assistant.held": {
+      "text": "Bari in duba da ƙungiyar mu, zan dawo maka.",
+      "reviewed": false
+    },
+    "wd.trigger.guard": {
+      "text": ", from customers' new messages in private chats only (at most {per_minute} a minute and {per_day} a day each; STOP and asking for a person are honoured)",
+      "reviewed": false
     }
   }
 }

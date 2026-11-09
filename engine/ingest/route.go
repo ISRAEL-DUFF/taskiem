@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/alerts"
+	"github.com/israel-duff/taskiem/engine/assistant"
 	"github.com/israel-duff/taskiem/engine/capability"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
@@ -29,13 +30,14 @@ type subscriber struct {
 	events     []string
 	connection *string
 	options    map[string]any
+	guard      *assistant.Config
 }
 
 // loadSubscribers reads the workflows subscribed to a connector trigger in
 // the tenant tx is scoped to; owner, when set, keeps only that workflow (a
 // remotely registered trigger).
 func loadSubscribers(ctx context.Context, tx pgx.Tx, env, ref, name string, owner uuid.UUID) ([]subscriber, error) {
-	rows, err := tx.Query(ctx, `SELECT workflow_id, version, COALESCE(events, '{}'), connection, options FROM triggers
+	rows, err := tx.Query(ctx, `SELECT workflow_id, version, COALESCE(events, '{}'), connection, options, guard FROM triggers
 		WHERE type = 'connector_event' AND environment = $1 AND connector = $2 AND trigger_name = $3 AND ($4::uuid IS NULL OR workflow_id = $4)`,
 		env, ref, name, nullUUID(owner))
 	if err != nil {
@@ -45,12 +47,20 @@ func loadSubscribers(ctx context.Context, tx pgx.Tx, env, ref, name string, owne
 	var subs []subscriber
 	for rows.Next() {
 		var s subscriber
-		var opts []byte
-		if err := rows.Scan(&s.workflow, &s.version, &s.events, &s.connection, &opts); err != nil {
+		var opts, guard []byte
+		if err := rows.Scan(&s.workflow, &s.version, &s.events, &s.connection, &opts, &guard); err != nil {
 			return nil, err
 		}
 		if len(opts) > 0 {
 			_ = json.Unmarshal(opts, &s.options)
+		}
+		if len(guard) > 0 {
+			var raw map[string]any
+			if json.Unmarshal(guard, &raw) == nil {
+				if cfg, err := assistant.ParseConfig(raw); err == nil {
+					s.guard = &cfg
+				}
+			}
 		}
 		subs = append(subs, s)
 	}
@@ -73,6 +83,7 @@ type eventItem struct {
 	event, dedup, correlation string
 	body, item                any
 	split, test               bool
+	conv                      *conversation // a customer's message, for a customer guard
 }
 
 // deliverInto delivers an event into one tenant: the signal to runs
@@ -122,13 +133,30 @@ func (h *Handler) deliverInto(ctx context.Context, w http.ResponseWriter, r *htt
 			runTrig = maps.Clone(trig)
 			runTrig["body"] = body
 		}
+		var customer *runtime.Customer
+		triggerPII := triggerPII(ev)
+		if s.guard != nil {
+			g, err := h.guardEvent(ctx, t, ev, s)
+			if err != nil {
+				h.unavailable(w, r, fmt.Errorf("guarding the conversation: %w", err))
+				return nil, false
+			}
+			out["guard"] = guardSummary(g)
+			if !g.start {
+				continue
+			}
+			runTrig = maps.Clone(runTrig)
+			runTrig["guard"] = g.trigger
+			customer = g.customer
+			triggerPII = append(slices.Clone(triggerPII), g.pii...)
+		}
 		// Signals above were delivered whatever the tenant's limits; a
 		// refused start fails the delivery so the provider retries, and
 		// the retry's signal is recognised as a duplicate.
 		run, _, err := h.Store.StartRun(ctx, runtime.StartRequest{
 			TenantID: t.tenant, WorkflowID: s.workflow, Version: s.version, Environment: ev.env,
 			Trigger: runTrig, StartedBy: "connector:" + ev.ref, TriggerID: "event/" + s.workflow.String() + "/" + ev.env, DedupKey: ev.dedup,
-			Throttled: t.throttled, TriggerPII: triggerPII(ev),
+			Throttled: t.throttled, TriggerPII: triggerPII, Customer: customer,
 		})
 		if le, ok := runtime.IsLimit(err); ok {
 			limited(w, le)

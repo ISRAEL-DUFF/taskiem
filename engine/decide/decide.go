@@ -1235,7 +1235,11 @@ func (d *decider) activation(sc scope, _ map[string]any) map[string]any {
 		case f.completed:
 			steps[id] = map[string]any{"output": f.output}
 		case f.finalFailure != nil:
-			steps[id] = map[string]any{"error": map[string]any{"kind": f.finalFailure.Kind, "message": f.finalFailure.Message}}
+			e := map[string]any{"kind": f.finalFailure.Kind, "message": f.finalFailure.Message}
+			if f.finalFailure.Code != "" {
+				e["code"] = f.finalFailure.Code
+			}
+			steps[id] = map[string]any{"error": e}
 		default:
 			continue
 		}

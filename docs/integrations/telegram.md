@@ -68,6 +68,10 @@ Telegram only delivers to ports 443, 80, 88 and 8443, over HTTPS with a valid ce
 
 Telegram keeps undelivered updates for 24 hours and retries failed deliveries. Delivery stops after "a reasonable amount of attempts", which Telegram does not quantify. `get_webhook_info` shows the backlog and the last error.
 
+### Answering customers: the guard
+
+A workflow that answers the business's customers puts `"guard": true` (or its settings) in the trigger's config. The trigger reads each event as a customer's message (its `conversation` block), and the guard decides before a run starts: STOP and START, limits per customer, asking for a person, the kinds of message, the owner's pause. Only new messages in one-to-one chats start a run: a bot added to a group answers no one there, and edits, channel posts and button presses on old messages start nothing. A voice note or audio is fetched when it arrives. The run reads `trigger.guard` (`outcome`, `reply`, `notice`, `sender`, `text`, `channel`, `file`). See [keeping a customer assistant safe](../assistant-guard.md).
+
 ## To confirm before go-live
 
 1. Telegram documents that it retries failed deliveries but not how often or for how long. Check `get_webhook_info` after a planned outage.

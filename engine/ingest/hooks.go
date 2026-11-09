@@ -26,6 +26,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"golang.org/x/time/rate"
 
+	"github.com/israel-duff/taskiem/engine/assistant"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/egress"
@@ -34,6 +35,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/httpsec"
 	"github.com/israel-duff/taskiem/engine/moneylog"
 	"github.com/israel-duff/taskiem/engine/remote"
+	"github.com/israel-duff/taskiem/engine/runfiles"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/telemetry"
@@ -89,6 +91,13 @@ type Handler struct {
 	// Platform is Taskiem's own clients by connector id (decision 0052),
 	// for deliveries to /hooks/platform/{connector}.
 	Platform map[string]Platform
+	// Guard is the customer guard of chat triggers that have one
+	// (decision 0062 V6); Vault keys their customers; RunFiles keeps a
+	// customer's voice note fetched before the run. A guard with no Vault
+	// refuses the delivery (503), so nothing starts unguarded.
+	Guard    *assistant.Guard
+	Vault    assistant.Sealer
+	RunFiles *runfiles.Service
 
 	apps    appGate
 	once    sync.Once
@@ -929,7 +938,7 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		ev := eventItem{conn: conn, ref: ref, name: name, env: env, event: it.event, dedup: it.dedup, correlation: it.correlation,
-			body: p.body, item: it.item, split: spec.Split != "", test: test}
+			body: p.body, item: it.item, split: spec.Split != "", test: test, conv: it.conv}
 		out, ok := h.deliverInto(ctx, w, r, here, ev)
 		if !ok {
 			return
@@ -974,6 +983,40 @@ type deliveryItem struct {
 	act                       map[string]any // body, headers, query, and item
 	event, dedup, correlation string
 	ignored                   bool // an event the trigger does not send
+	conv                      *conversation
+}
+
+// conversation is an event read as a customer's message (the trigger's
+// conversation block), for a customer guard. nil when it is not one.
+type conversation struct {
+	sender, category, kind, text, media string
+	private                             bool
+}
+
+// conversationOf reads an event as a customer's message. An expression
+// that fails, or an empty sender, makes it not one: the guard starts
+// nothing for it, and the delivery is still accepted.
+func (h *Handler) conversationOf(spec *connector.ConversationSpec, act map[string]any) *conversation {
+	if spec == nil {
+		return nil
+	}
+	c := &conversation{category: spec.SenderCategory}
+	var err error
+	if c.sender, err = evalString(h.exprs, spec.Sender, act); err != nil || strings.TrimSpace(c.sender) == "" {
+		return nil
+	}
+	if v, err := h.exprs.Eval(spec.Private, act); err == nil {
+		c.private, _ = v.(bool)
+	}
+	c.kind, _ = evalString(h.exprs, spec.Kind, act)
+	if !slices.Contains(connector.ConversationKinds, c.kind) {
+		c.kind = "other"
+	}
+	c.text, _ = evalString(h.exprs, spec.Text, act)
+	if spec.Media != "" {
+		c.media, _ = evalString(h.exprs, spec.Media, act)
+	}
+	return c
 }
 
 // itemsOf reads a verified delivery's events: one, or one per element of
@@ -1018,6 +1061,7 @@ func (h *Handler) itemsOf(spec connector.TriggerSpec, name string, act map[strin
 		if it.dedup == "" {
 			it.dedup = fallback
 		}
+		it.conv = h.conversationOf(spec.Conversation, it.act)
 		it.ignored = len(spec.Events) > 0 && !slices.Contains(spec.Events, it.event)
 		out = append(out, it)
 	}

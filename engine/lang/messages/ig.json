@@ -5754,6 +5754,38 @@
     "customer.hire_late": {
       "text": "{reference} lọghachiri ụbọchị {days} n'azụ oge, ya mere etinyere ụgwọ ịbịa n'azụ oge {late_fee}. Ihe fọdụrụ ịkwụ: {balance}.",
       "reviewed": false
+    },
+    "assistant.notice": {
+      "text": "Ndeewo! Ị na-akparịta ụka na onye enyemaka akpaaka nke {business}. Ọ na-agụ ozi gị ma na-ege ozi olu gị iji zaa gị. Zaghachi PERSON ka gị na mmadụ na {business} kwurịta, ma ọ bụ STOP ka onye enyemaka kwụsị.",
+      "reviewed": false
+    },
+    "assistant.limited": {
+      "text": "Ị zitela ọtụtụ ozi n'oge dị mkpirikpi. Biko chere ntakịrị, aga m azaghachi gị ọzọ.",
+      "reviewed": false
+    },
+    "assistant.stopped": {
+      "text": "Ọ dị mma. Onye enyemaka agaghị azaghachi gị ọzọ. Zaghachi START ka ịmalite ya ọzọ.",
+      "reviewed": false
+    },
+    "assistant.started": {
+      "text": "Nnọọ ọzọ! Onye enyemaka ga-azaghachi gị ọzọ. Kedu ka m ga-esi nyere gị aka?",
+      "reviewed": false
+    },
+    "assistant.handover": {
+      "text": "Ọ dị mma, agwala m mmadụ na {business} ka ọ zaa gị. Ha ga-aza gị ebe a ozugbo ha nwere ike.",
+      "reviewed": false
+    },
+    "assistant.kind": {
+      "text": "Ndo, ọ bụ naanị ozi ederede ka m nwere ike ịgụ na ozi olu ka m nwere ike ige. Biko dee ozi gị ma ọ bụ zite ozi olu.",
+      "reviewed": false
+    },
+    "assistant.held": {
+      "text": "Ka m lelee ya na ndị otu anyị, aga m alọghachikwute gị.",
+      "reviewed": false
+    },
+    "wd.trigger.guard": {
+      "text": ", from customers' new messages in private chats only (at most {per_minute} a minute and {per_day} a day each; STOP and asking for a person are honoured)",
+      "reviewed": false
     }
   }
 }

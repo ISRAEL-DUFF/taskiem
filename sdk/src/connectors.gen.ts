@@ -104,6 +104,49 @@ export const anchor = {
   verify_account: (input: AnchorVerifyAccountInput, extra?: ConnectorExtra): StepSpec => connector("anchor@1", "verify_account", input, extra),
 };
 
+// Customer assistant (assistant@1)
+export interface AssistantCheckReplyInput {
+  /** What the customer wrote or said (trigger.guard.text, or the transcript) */
+  customer?: Val<string>;
+  /** The language of the held answer (trigger.guard.language) */
+  language?: Val<string>;
+  /** Links the business allows besides those in the material (its storefront, its website) */
+  links?: Value;
+  /** What the model answered from (knowledge@1 search's material) */
+  material?: Val<string>;
+  /** The longest reply in characters */
+  max?: Val<number>;
+  /** Values never said to a customer (cost prices, staff numbers) */
+  never?: Value;
+  /** The reply */
+  text: Val<string>;
+}
+export interface AssistantHandOverInput {
+  /** trigger.guard.channel */
+  channel: Val<string>;
+  hours?: Val<number>;
+  /** trigger.guard.sender */
+  sender: Val<string>;
+}
+export interface AssistantResumeInput {
+  channel: Val<string>;
+  sender: Val<string>;
+}
+export interface AssistantWindowInput {
+  channel: Val<string>;
+  sender: Val<string>;
+}
+export const assistant = {
+  /** Check a reply before it is sent (read) */
+  check_reply: (input: AssistantCheckReplyInput, extra?: ConnectorExtra): StepSpec => connector("assistant@1", "check_reply", input, extra),
+  /** Hand a customer to a person (idempotent_write) */
+  hand_over: (input: AssistantHandOverInput, extra?: ConnectorExtra): StepSpec => connector("assistant@1", "hand_over", input, extra),
+  /** Answer a customer again (idempotent_write) */
+  resume: (input: AssistantResumeInput, extra?: ConnectorExtra): StepSpec => connector("assistant@1", "resume", input, extra),
+  /** Can the business still write to them (read) */
+  window: (input: AssistantWindowInput, extra?: ConnectorExtra): StepSpec => connector("assistant@1", "window", input, extra),
+};
+
 // Bills (bills@1)
 export interface BillsFinishBillPaymentInput {
   /** The bank's name for the account */
@@ -4013,6 +4056,7 @@ export const zoho_mail = {
 export const CONNECTOR_HELPERS: Record<string, string> = {
   "africastalking@1": "africastalking",
   "anchor@1": "anchor",
+  "assistant@1": "assistant",
   "bills@1": "bills",
   "breet@1": "breet",
   "brevo@1": "brevo",
@@ -4071,6 +4115,7 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
 export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "africastalking@1": ["fetch_messages", "get_airtime_status", "get_balance", "send_airtime", "send_sms"],
   "anchor@1": ["book_transfer", "get_balance", "get_transfer", "get_transfer_by_reference", "list_banks", "transfer", "verify_account"],
+  "assistant@1": ["check_reply", "hand_over", "resume", "window"],
   "bills@1": ["finish_bill_payment"],
   "breet@1": ["add_bank", "generate_address", "get_balances", "get_deposit", "get_withdrawal", "list_assets", "list_banks", "verify_bank_account", "withdraw_crypto", "withdraw_to_bank"],
   "brevo@1": ["add_to_list", "create_or_update_contact", "get_account", "list_lists", "send_campaign", "send_email", "send_sms"],

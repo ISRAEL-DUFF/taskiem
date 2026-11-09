@@ -5754,6 +5754,38 @@
     "customer.hire_late": {
       "text": "{reference} come back {days} days late, so we add late fee of {late_fee}. Wetin remain to pay: {balance}.",
       "reviewed": false
+    },
+    "assistant.notice": {
+      "text": "Hello! Na {business} automatic assistant you dey chat with. E dey read your message and listen to your voice note to answer you. Reply PERSON if you wan talk to person for {business}, or STOP make the assistant stop.",
+      "reviewed": false
+    },
+    "assistant.limited": {
+      "text": "You don send plenty message for short time. Abeg wait small, I go answer you again.",
+      "reviewed": false
+    },
+    "assistant.stopped": {
+      "text": "OK. The assistant no go answer you again. Reply START if you wan make e start again.",
+      "reviewed": false
+    },
+    "assistant.started": {
+      "text": "Welcome back! The assistant go dey answer you again. Wetin I fit do for you?",
+      "reviewed": false
+    },
+    "assistant.handover": {
+      "text": "OK, I don tell person for {business} make dem answer you. Dem go reply you for here as dem fit.",
+      "reviewed": false
+    },
+    "assistant.kind": {
+      "text": "Sorry, na only text message I fit read and voice note I fit listen. Abeg type your message or send voice note.",
+      "reviewed": false
+    },
+    "assistant.held": {
+      "text": "Make I check am with the team, I go come back to you.",
+      "reviewed": false
+    },
+    "wd.trigger.guard": {
+      "text": ", from customers' new messages in private chats only (at most {per_minute} a minute and {per_day} a day each; STOP and asking for a person are honoured)",
+      "reviewed": false
     }
   }
 }

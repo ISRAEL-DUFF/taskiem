@@ -5,6 +5,7 @@ package builtin
 import (
 	"github.com/israel-duff/taskiem/connectors/africastalking"
 	"github.com/israel-duff/taskiem/connectors/anchor"
+	assistantconn "github.com/israel-duff/taskiem/connectors/assistant"
 	"github.com/israel-duff/taskiem/connectors/bills"
 	"github.com/israel-duff/taskiem/connectors/breet"
 	"github.com/israel-duff/taskiem/connectors/brevo"
@@ -143,6 +144,9 @@ type Options struct {
 	// Knowledge binds what the assistant knows (docs/knowledge.md); nil:
 	// its actions fail plainly.
 	Knowledge knowledge.Ops
+	// Assistant binds the customer assistant's actions
+	// (docs/assistant-guard.md); nil: all but check_reply fail plainly.
+	Assistant assistantconn.Ops
 	// Notify delivers Tell me messages (notify@1) to the business's own
 	// people; nil: they fail plainly.
 	Notify notify.Teller
@@ -204,6 +208,7 @@ func Register(r *connector.Registry, o Options) error {
 		files.New(o.Files),
 		speech.New(o.Speech),
 		knowledge.New(o.Knowledge),
+		assistantconn.New(o.Assistant),
 		notify.New(o.Notify),
 	} {
 		if err := r.Register(c); err != nil {

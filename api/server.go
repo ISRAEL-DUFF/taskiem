@@ -26,6 +26,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/israel-duff/taskiem/engine/alerts"
+	"github.com/israel-duff/taskiem/engine/assistant"
 	"github.com/israel-duff/taskiem/engine/billing"
 	"github.com/israel-duff/taskiem/engine/catalogue"
 	"github.com/israel-duff/taskiem/engine/connector"
@@ -250,6 +251,9 @@ type Server struct {
 	// Knowledge is what the business's assistant knows (docs/knowledge.md);
 	// KnowledgeService builds it with this server's readers.
 	Knowledge *knowledge.Service
+	// AssistantMode is Taskiem's switch for customer assistants
+	// (TASKIEM_ASSISTANTS), shown to owners.
+	AssistantMode assistant.Mode
 	// KnowledgeWebClient, when set, reads businesses' websites instead of
 	// the egress guard's client (tests).
 	KnowledgeWebClient *http.Client
@@ -425,6 +429,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermApprovalDecide)).Post("/whatsapp/handoff/{token}", s.completeHandoff)
 			r.With(s.need(PermSecretManage)).Get("/ussd", s.getUSSD)
 			r.With(s.need(PermSecretManage), s.tenantWide).Route("/knowledge", s.knowledgeRoutes) // what the assistant knows (knowledge.go)
+			r.With(s.need(PermSecretManage), s.tenantWide).Route("/assistant", s.assistantRoutes) // the customer assistant's pause and hand-overs (assistant.go)
 			r.With(s.need(PermSecretManage)).Get("/languages", s.getLanguages)
 			r.With(s.need(PermSecretManage), s.tenantWide).Put("/languages", s.putLanguages)
 			r.With(s.need(PermPIIReveal)).Get("/languages/transcripts", s.getTranscripts)

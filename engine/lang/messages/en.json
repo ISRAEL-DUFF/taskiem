@@ -7193,6 +7193,46 @@
       "text": "{reference} came back {days} days late, so a late fee of {late_fee} is added. Left to pay: {balance}.",
       "reviewed": true,
       "context": "SMS to a customer: a hire returned late, with the fee and what is left (fronts F5)"
+    },
+    "assistant.notice": {
+      "text": "Hello! You're chatting with {business}'s automatic assistant. It reads your messages and listens to your voice notes to answer you. Reply PERSON to talk to someone at {business}, or STOP to stop the assistant.",
+      "reviewed": true,
+      "context": "Customer assistant (decision 0062 P3): the first answer to a new customer of a business's assistant on WhatsApp or Telegram, before its answer; sent to the customer"
+    },
+    "assistant.limited": {
+      "text": "You've sent a lot of messages in a short time. Please wait a little and I'll answer again.",
+      "reviewed": true,
+      "context": "Customer assistant (L1): a customer sent more messages than the workflow allows a minute or a day; sent once, then the assistant is quiet until the minute or day is over"
+    },
+    "assistant.stopped": {
+      "text": "OK. The assistant won't answer you any more. Reply START to turn it back on.",
+      "reviewed": true,
+      "context": "Customer assistant (P3): a customer wrote STOP; the assistant answers nothing more from them until they write START"
+    },
+    "assistant.started": {
+      "text": "Welcome back! The assistant will answer you again. How can I help?",
+      "reviewed": true,
+      "context": "Customer assistant (P3): a customer who had written STOP wrote START"
+    },
+    "assistant.handover": {
+      "text": "OK, I've asked someone at {business} to answer you. They'll reply here as soon as they can.",
+      "reviewed": true,
+      "context": "Customer assistant (D13): a customer asked for a person; the members are told and the assistant stays quiet for them"
+    },
+    "assistant.kind": {
+      "text": "Sorry, I can only read text messages and listen to voice notes. Please type your message or send a voice note.",
+      "reviewed": true,
+      "context": "Customer assistant (C19): a customer sent a picture, video, document, place or contact, which the assistant does not read"
+    },
+    "assistant.held": {
+      "text": "Let me check that with the team and get back to you.",
+      "reviewed": true,
+      "context": "Customer assistant (L6, A11): a reply failed the check before sending (a price or link not in what the business gave, a placeholder left in); sent instead"
+    },
+    "wd.trigger.guard": {
+      "text": ", from customers' new messages in private chats only (at most {per_minute} a minute and {per_day} a day each; STOP and asking for a person are honoured)",
+      "reviewed": true,
+      "context": "Read-back: a chat trigger's customer guard (decision 0062 V6), after the trigger's own sentence"
     }
   }
 }

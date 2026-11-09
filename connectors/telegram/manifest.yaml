@@ -386,6 +386,31 @@ triggers:
       : has(body.chat_join_request) ? string(body.chat_join_request.chat.id)
       : has(body.message_reaction) ? string(body.message_reaction.chat.id)
       : ""
+    # A customer's new message, for a workflow's customer guard (decision
+    # 0062 V6, connector/v1 rule 23): a new message only (not an edit, a
+    # channel post or a button press), and private only in a one-to-one
+    # chat, so a bot added to a group answers no one there. A voice note or
+    # audio is fetched before the run can wait in a queue.
+    conversation:
+      sender: '=has(body.message) ? string(body.message.chat.id) : ""'
+      sender_category: other
+      private: '=has(body.message) && body.message.chat.type == "private"'
+      kind: >-
+        =!has(body.message) ? "other"
+        : has(body.message.voice) ? "voice"
+        : has(body.message.audio) ? "audio"
+        : has(body.message.photo) ? "image"
+        : has(body.message.video) || has(body.message.video_note) || has(body.message.animation) ? "video"
+        : has(body.message.document) ? "document"
+        : has(body.message.sticker) ? "sticker"
+        : has(body.message.location) || has(body.message.venue) ? "location"
+        : has(body.message.contact) ? "contact"
+        : has(body.message.text) ? "text"
+        : "other"
+      text: '=!has(body.message) ? "" : has(body.message.text) ? body.message.text : has(body.message.caption) ? body.message.caption : ""'
+      media: '=!has(body.message) ? "" : has(body.message.voice) ? body.message.voice.file_id : has(body.message.audio) ? body.message.audio.file_id : ""'
+      fetch: get_file
+      fetch_input: file_id
     # Who wrote and what they wrote is personal data (decision 0062, P1):
     # sealed in run history, readable by the run's steps.
     pii:

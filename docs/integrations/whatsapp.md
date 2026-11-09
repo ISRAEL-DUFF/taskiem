@@ -73,6 +73,10 @@ Meta may batch many messages and statuses in one POST. The trigger splits a deli
 
 Meta sends every field the app subscribes to (template status, account updates, ...) to the same URL. The trigger acknowledges the other fields and ignores them. Meta retries failed deliveries for up to 7 days and expects quick 200s.
 
+### Answering customers: the guard
+
+A workflow that answers the business's customers puts `"guard": true` (or its settings) in the trigger's config. The trigger reads each event as a customer's message (its `conversation` block), and the guard decides before a run starts: STOP and START, limits per customer, asking for a person, the kinds of message, the owner's pause. Statuses and errors start nothing, and a voice note or audio is fetched when it arrives, while Meta's link still works. The run reads `trigger.guard` (`outcome`, `reply`, `notice`, `sender`, `text`, `channel`, `file`). See [keeping a customer assistant safe](../assistant-guard.md).
+
 ## To confirm before go-live
 
 1. **Batching.** Settled: each item of a batched delivery is its own event (see above). What is left to check is how often Meta batches at your volume, since every item of one delivery is handled in the same request.

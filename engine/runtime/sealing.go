@@ -73,19 +73,38 @@ var emailPaths = func() []pii.Path {
 	return out
 }()
 
-// sealPayload marshals payload with declared paths and tainted values sealed.
-func (s *Store) sealPayload(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, payload any, paths []pii.Path, taint pii.Taint) (any, error) {
-	if s.PII == nil || payload == nil {
+// sealPayload marshals payload with declared paths and tainted values
+// sealed, with the run's cipher (runCipher).
+func (s *Store) sealPayload(ctx context.Context, tx pgx.Tx, c pii.Cipher, tenant uuid.UUID, payload any, paths []pii.Path, taint pii.Taint) (any, error) {
+	if c == nil || payload == nil {
 		return payload, nil
 	}
 	v, err := jsonRoundTrip(payload)
 	if err != nil {
 		return nil, err
 	}
-	if v, err = pii.Seal(ctx, s.PII, tx, tenant, v, paths, taint); err != nil {
+	if v, err = pii.Seal(ctx, c, tx, tenant, v, paths, taint); err != nil {
 		return nil, err
 	}
-	return pii.SealDetected(ctx, s.PII, tx, tenant, v, taint)
+	return pii.SealDetected(ctx, c, tx, tenant, v, taint)
+}
+
+// runCipher is the cipher a run seals with: in a run started by a
+// customer's message (StartRequest.Customer), free text and names are
+// sealed under that customer, so erasing them erases what they said and
+// what was made from it (decision 0062 P2).
+func (s *Store) runCipher(ctx context.Context, tx pgx.Tx, run uuid.UUID) (pii.Cipher, error) {
+	if s.PII == nil {
+		return nil, nil
+	}
+	var subject *string
+	if err := tx.QueryRow(ctx, `SELECT customer_subject FROM runs WHERE id = $1`, run).Scan(&subject); err != nil {
+		return nil, err
+	}
+	if subject == nil {
+		return s.PII, nil
+	}
+	return pii.Under(s.PII, *subject), nil
 }
 
 // redactText masks personal data in the free text of a worker result:

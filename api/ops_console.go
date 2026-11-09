@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -526,8 +527,12 @@ func (s *Server) opsTenants(w http.ResponseWriter, r *http.Request) {
 func (s *Server) opsTenantAction(w http.ResponseWriter, r *http.Request) {
 	tenant, err := uuid.Parse(chi.URLParam(r, "id"))
 	action := chi.URLParam(r, "action")
+	if err == nil && strings.HasPrefix(action, "assistants-") && slices.Contains([]string{"assistants-stop", "assistants-start", "assistants-beta-on", "assistants-beta-off"}, action) {
+		s.opsAssistantAction(w, r, tenant, action)
+		return
+	}
 	if err != nil || (action != "suspend" && action != "resume") {
-		writeErr(w, http.StatusNotFound, "the action is suspend or resume")
+		writeErr(w, http.StatusNotFound, "the action is suspend, resume, assistants-stop, assistants-start, assistants-beta-on or assistants-beta-off")
 		return
 	}
 	var req struct {

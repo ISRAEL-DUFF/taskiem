@@ -1716,6 +1716,29 @@
                   "options": {
                     "type": "object",
                     "description": "Settings of the connector trigger, checked against its manifest's options schema (for a remotely registered trigger: what to subscribe to at the provider)."
+                  },
+                  "guard": {
+                    "description": "The customer guard of a chat trigger whose manifest reads its events as customers' messages (whatsapp@1 messages, telegram@1 update; decision 0062 V6, docs/assistant-guard.md): true for the defaults, or its settings. Only new messages in private chats start a run, after STOP, the per-customer limits, the owner's pause, a hand-over to a person, the kind of message and the workflow's queue are checked; the run reads trigger.guard (outcome answer, reply or quiet; reply, notice, language, sender, text, kind, channel, file).",
+                    "oneOf": [
+                      { "const": true },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "per_minute": { "type": "integer", "minimum": 1, "maximum": 60, "description": "Messages a customer may send a minute (default 6); over it they are told once and the rest dropped." },
+                          "per_day": { "type": "integer", "minimum": 1, "maximum": 5000, "description": "Messages a customer may send a day (default 200)." },
+                          "max_queued": { "type": "integer", "minimum": 1, "maximum": 1000, "description": "This workflow's runs waiting in its queue (default 20); over it new messages are dropped and the owners alerted." },
+                          "notice": { "type": "boolean", "description": "Answer a new customer's first message with the notice first (default true)." },
+                          "handover_hours": { "type": "integer", "minimum": 1, "maximum": 168, "description": "How long the assistant stays quiet for a customer who asked for a person (default 24)." },
+                          "kinds": {
+                            "type": "object",
+                            "description": "What to do with each kind of message: answer, reply (a fixed answer) or drop. Defaults: text, voice, audio and button answered; image, video, document, location and contact replied to; sticker, reaction and other dropped.",
+                            "propertyNames": { "enum": ["text", "voice", "audio", "image", "video", "document", "sticker", "location", "contact", "reaction", "button", "other"] },
+                            "additionalProperties": { "enum": ["answer", "reply", "drop"] }
+                          }
+                        }
+                      }
+                    ]
                   }
                 }
               }

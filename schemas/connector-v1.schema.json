@@ -1121,6 +1121,22 @@
           ],
           "description": "connection (default): deliveries come to each connection's own URL under a tenant's hooks. both: either, so a business may bring its own app (its connection's secret_field verifies) or connect through Taskiem's (Slack). app: the provider sends every business's events to the one URL of Taskiem's platform app, /hooks/apps/<connector>/<trigger>; they are verified with the app's secret (TASKIEM_OAUTH_<CLIENT>_WEBHOOK_SECRET) and delivered to the connections whose account_field holds account_key (rule 18)."
         },
+        "conversation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sender", "sender_category", "private", "kind", "text"],
+          "description": "A chat channel's trigger: how to read an event as a customer's new message, for a workflow's customer guard (rule 23). Expressions over the event like the trigger's others; an empty sender means it is not a customer's new message.",
+          "properties": {
+            "sender": { "$ref": "#/$defs/expr" },
+            "sender_category": { "type": "string", "enum": ["phone", "email", "other"] },
+            "private": { "$ref": "#/$defs/expr" },
+            "kind": { "$ref": "#/$defs/expr" },
+            "text": { "$ref": "#/$defs/expr" },
+            "media": { "$ref": "#/$defs/expr" },
+            "fetch": { "type": "string", "description": "A read action of this connector that downloads media into a run file (input: fetch_input and sender; output: file)." },
+            "fetch_input": { "type": "string" }
+          }
+        },
         "example": {
           "type": "object",
           "additionalProperties": false,

@@ -26,6 +26,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/israel-duff/taskiem/api"
+	assistantconn "github.com/israel-duff/taskiem/connectors/assistant"
 	"github.com/israel-duff/taskiem/connectors/builtin"
 	emailconn "github.com/israel-duff/taskiem/connectors/email"
 	filesconn "github.com/israel-duff/taskiem/connectors/files"
@@ -41,6 +42,7 @@ import (
 	sfconn "github.com/israel-duff/taskiem/connectors/storefront"
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/alerts"
+	"github.com/israel-duff/taskiem/engine/assistant"
 	"github.com/israel-duff/taskiem/engine/audit"
 	"github.com/israel-duff/taskiem/engine/billing"
 	"github.com/israel-duff/taskiem/engine/byok"
@@ -153,6 +155,9 @@ type config struct {
 	Languages LanguagesConfig
 	// Speech is speech in workflows (docs/speech.md).
 	Speech SpeechConfig
+	// Assistants is Taskiem's switch for every business's customer
+	// assistants (TASKIEM_ASSISTANTS: on, beta or off; docs/assistant-guard.md).
+	Assistants assistant.Mode
 	// Billing turns plans, subscriptions and payments on (TASKIEM_BILLING=on,
 	// docs/billing.md); off, every tenant is on the internal plan.
 	Billing BillingConfig
@@ -596,6 +601,9 @@ func loadConfig() (config, error) {
 	if c.Languages, err = languagesConfig(); err != nil {
 		return c, err
 	}
+	if c.Assistants, err = assistant.ParseMode(os.Getenv("TASKIEM_ASSISTANTS")); err != nil {
+		return c, err
+	}
 	if c.Speech, err = speechConfig(); err != nil {
 		return c, err
 	}
@@ -771,6 +779,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	fileOps := &filesconn.Late{}
 	speechOps := &speechconn.Late{}
 	knowledgeOps := &knowledgeconn.Late{}
+	assistantOps := &assistantconn.Late{}
 	tell := &notify.Late{}
 	invoiceOps := &invconn.Late{}
 	linkOps := &linkconn.Late{}
@@ -789,6 +798,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	copts.Files = fileOps
 	copts.Speech = speechOps
 	copts.Knowledge = knowledgeOps
+	copts.Assistant = assistantOps
 	copts.Notify = tell
 	if err := builtin.Register(reg, copts); err != nil {
 		pool.Close()
@@ -846,6 +856,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	// Workflows search what the assistant knows wherever they run; reading
 	// sources is the api role's (it holds the readers).
 	knowledgeOps.Set(&knowledge.Service{Pool: e.pool})
+	assistantOps.Set(&assistant.Service{Pool: e.pool, Vault: e.vault})
 	if cfg.WhatsApp != nil {
 		// The templates' url buttons open the web app and the form host
 		// (docs/whatsapp.md#templates).
@@ -1001,7 +1012,8 @@ func modeURLs(m *connector.Manifest) []string {
 func (e *engine) hooks() *ingest.Handler {
 	return &ingest.Handler{Store: e.store, Secrets: e.vault, Connections: e.vault, Registry: e.registry, Logger: e.log, MoneyLog: e.moneyLog(),
 		Egress: &egress.Guard{Logger: e.log}, Apps: platformApps(e.registry),
-		Platform: map[string]ingest.Platform{"iswallet": {WebhookSecrets: e.cfg.ISWallet.WebhookSecrets}}}
+		Platform: map[string]ingest.Platform{"iswallet": {WebhookSecrets: e.cfg.ISWallet.WebhookSecrets}},
+		Guard:    &assistant.Guard{Mode: e.cfg.Assistants}, Vault: e.vault, RunFiles: e.runFiles}
 }
 
 // platformClient is Taskiem's own client at a provider (decision 0052),
@@ -1111,6 +1123,7 @@ func edgeServer(e *engine, cfg config, log *slog.Logger) (*api.Server, error) {
 		return nil, err
 	}
 	srv.Speech = e.speech
+	srv.AssistantMode = cfg.Assistants
 	return srv, nil
 }
 
@@ -1267,6 +1280,7 @@ func serve(ctx context.Context, args []string) error {
 			return err
 		}
 		srv.Speech = e.speech
+		srv.AssistantMode = cfg.Assistants
 		srv.Billing = bill
 		srv.Tables = e.tables()
 		srv.PublicHosts = cfg.Public.Domains

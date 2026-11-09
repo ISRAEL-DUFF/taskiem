@@ -157,6 +157,13 @@ func TestErrorClassification(t *testing.T) {
 			t.Errorf("%s: %v", f, err)
 		}
 	}
+	// Outside the 24-hour window: a code a workflow branches on (C13).
+	if _, err := call(t, "send_text", in, "error_window_closed"); func() bool {
+		var ce *connector.CodedError
+		return !errors.As(err, &ce) || ce.Code != "window_closed"
+	}() {
+		t.Errorf("window closed: %v", err)
+	}
 	// Meta may have accepted the message: a send parks.
 	for _, f := range []string{"error_unknown", "error_server_plain", "accepted_without_id"} {
 		_, err := call(t, "send_text", in, f)

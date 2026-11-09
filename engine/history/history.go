@@ -220,6 +220,10 @@ type Error struct {
 	// RetryAfterMS is how long the provider asked to wait (Retry-After) on
 	// a refusal; the next attempt waits at least this long.
 	RetryAfterMS int64 `json:"retry_after_ms,omitempty"`
+	// Code is a provider's reason a workflow can branch on in on_error
+	// (steps.<id>.error.code): window_closed when WhatsApp refuses a message
+	// outside the customer's 24-hour window (decision 0062 C13).
+	Code string `json:"code,omitempty"`
 	// Reissue is set by an operator's retry of a parked step: the next
 	// attempt sends under a new key, the next attempt group (contract:
 	// idempotency.md), not the key the provider may have cached a failure for.

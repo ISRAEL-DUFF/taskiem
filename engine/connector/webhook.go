@@ -80,7 +80,40 @@ type TriggerSpec struct {
 	// Example is a delivery as a run sees it ({body, item}), for dry runs
 	// and the docs: a split trigger's item cannot be guessed.
 	Example *TriggerExample `json:"example,omitempty"`
+	// Conversation, on a chat channel's trigger, says how to read an event
+	// as a customer's message, for a workflow's customer guard (decision
+	// 0062 V6; rule 23).
+	Conversation *ConversationSpec `json:"conversation,omitempty"`
 }
+
+// ConversationSpec reads an event as a customer's message: expressions
+// over the event (body, item) like the trigger's others. An event whose
+// Sender is empty is not a customer's new message.
+type ConversationSpec struct {
+	// Sender is who wrote: a stable id on the channel (a WhatsApp number,
+	// a Telegram chat id), the same value send actions reply to.
+	Sender string `json:"sender"`
+	// SenderCategory is the sender's personal-data category (phone,
+	// other), as erasure names a person.
+	SenderCategory string `json:"sender_category"`
+	// Private is true for a one-to-one chat with the business.
+	Private string `json:"private"`
+	// Kind is the message's kind: text, voice, audio, image, video,
+	// document, sticker, location, contact, reaction, button, or other.
+	Kind string `json:"kind"`
+	// Text is what it says (a text, a caption, a button's words), for the
+	// guard's words (STOP, a person) and the language of its answers.
+	Text string `json:"text"`
+	// Media is the id of a voice note or audio the guard fetches before
+	// the run can wait in a queue, with Fetch, a read action taking it as
+	// FetchInput (and sender) and answering {file}.
+	Media      string `json:"media,omitempty"`
+	Fetch      string `json:"fetch,omitempty"`
+	FetchInput string `json:"fetch_input,omitempty"`
+}
+
+// ConversationKinds are the kinds of message a conversation reads.
+var ConversationKinds = []string{"text", "voice", "audio", "image", "video", "document", "sticker", "location", "contact", "reaction", "button", "other"}
 
 // TriggerExample is an example delivery: its body and, for a split
 // trigger, one item.

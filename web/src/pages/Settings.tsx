@@ -3,7 +3,7 @@ import { useState } from "react";
 import { del, get, post, put, type GitConnection, type GitSync } from "../api";
 import { useAdvanced, useAuth } from "../auth";
 import { EnvSelect, useEnvironments } from "../environments";
-import { ErrorBox, Field, JsonInput, PageHeader, fmtTime, useAction, useLoad } from "../ui";
+import { ErrorBox, Field, Items, JsonInput, PageHeader, Row, fmtTime, useAction, useLoad } from "../ui";
 import { WhatsAppNumber } from "./WhatsAppNumber";
 import { PeopleYouMessage } from "./PeopleYouMessage";
 import { USSDChannels } from "./USSDChannels";
@@ -124,6 +124,76 @@ function VoiceSwitch() {
   );
 }
 
+interface AssistantView {
+  paused: boolean;
+  paused_at: string | null;
+  taskiem: { on: boolean; mode: string; beta: boolean; stopped: boolean };
+  handovers: { channel: string; customer: string; where: string; hint: string; at: string; until: string }[];
+}
+
+/** Your assistant (decision 0062 V6): the owner's pause for every customer, and the customers waiting for a person. */
+function AssistantCard() {
+  const { data, error, reload } = useLoad(() => get<AssistantView>("/v1/assistant"), []);
+  const act = useAction();
+  if (!data) return error ? <ErrorBox error={error} /> : null;
+  const run = (fn: () => Promise<unknown>, done: string) => void act.run(async () => (await fn(), reload()), done);
+  return (
+    <section className="card" id="assistant">
+      <h2 style={{ marginTop: 0 }}>Your assistant</h2>
+      {!data.taskiem.on && (
+        <div className="notice" role="note">
+          <p>
+            {data.taskiem.stopped
+              ? "Taskiem has turned your assistant off. Contact Taskiem to find out why."
+              : "The assistant is not open to every business yet. Ask Taskiem to join."}
+          </p>
+        </div>
+      )}
+      <label>
+        <input
+          type="checkbox"
+          checked={data.paused}
+          disabled={act.busy}
+          data-testid="assistant-paused"
+          onChange={(e) => run(() => post("/v1/assistant/pause", { paused: e.target.checked }), e.target.checked ? "Paused" : "Answering again")}
+        />{" "}
+        Pause your assistant for every customer
+      </label>
+      <p className="hint">
+        {data.paused && data.paused_at
+          ? `Paused since ${fmtTime(data.paused_at)}. Customers' messages are kept, and nobody gets an automatic answer: answer them yourself.`
+          : "Paused, it answers nobody: customers' messages are kept for you to answer yourself."}
+      </p>
+      <h3>Customers waiting for a person</h3>
+      {data.handovers.length === 0 ? (
+        <p className="hint">None. When a customer asks for a person, you are told, and your assistant stays quiet for them while you answer.</p>
+      ) : (
+        <Items label="Customers waiting for a person">
+          {data.handovers.map((h) => (
+            <Row
+              key={h.channel + h.customer}
+              icon="chat"
+              tone="warn"
+              title={h.hint}
+              sub={
+                <span className="sub">
+                  {h.where} · asked {fmtTime(h.at)} · your assistant answers them again {fmtTime(h.until)}
+                </span>
+              }
+              testid="assistant-handover"
+            >
+              <button disabled={act.busy} onClick={() => run(() => post("/v1/assistant/handovers/resume", { channel: h.channel, customer: h.customer }), "Answering them again")}>
+                Let the assistant answer them now
+              </button>
+            </Row>
+          ))}
+        </Items>
+      )}
+      <ErrorBox error={act.error} />
+    </section>
+  );
+}
+
 export function Settings() {
   const { can, me } = useAuth();
   const advanced = useAdvanced();
@@ -138,6 +208,7 @@ export function Settings() {
       {can("member.manage") && <AdvancedSwitch />}
       {me?.roles.includes("owner") && <SchoolsSwitch />}
       {can("secret.manage") && <VoiceSwitch />}
+      {can("secret.manage") && <AssistantCard />}
       {advanced && <Environments editable={can("secret.manage")} />}
       {can("secret.manage") && <Secrets env={env} />}
       <Variables env={env} editable={can("secret.manage")} />

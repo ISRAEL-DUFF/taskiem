@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/israel-duff/taskiem/engine/assistant"
 	"github.com/israel-duff/taskiem/engine/capability"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/expansion"
@@ -211,10 +212,16 @@ func (d describer) trigger(t wd.Trigger) string {
 				}
 			}
 		}
+		text := d.t("wd.trigger.event", "connector", name, "trigger", strings.ReplaceAll(str("trigger"), "_", " "))
 		if len(evs) > 0 {
-			return d.t("wd.trigger.event_reports", "connector", name, "events", strings.Join(evs, d.t("wd.or")))
+			text = d.t("wd.trigger.event_reports", "connector", name, "events", strings.Join(evs, d.t("wd.or")))
 		}
-		return d.t("wd.trigger.event", "connector", name, "trigger", strings.ReplaceAll(str("trigger"), "_", " "))
+		if g, ok := cfg["guard"]; ok {
+			if c, err := assistant.ParseConfig(g); err == nil {
+				text += d.t("wd.trigger.guard", "per_minute", strconv.Itoa(c.PerMinute), "per_day", strconv.Itoa(c.PerDay))
+			}
+		}
+		return text
 	case "capability_event":
 		var evs []string
 		if list, ok := cfg["events"].([]any); ok {

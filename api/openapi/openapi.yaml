@@ -154,6 +154,9 @@ tags:
 - name: USSD
   description: USSD channels.
   x-taskiem-guide: ussd
+- name: Assistant
+  description: "A business's customer assistant on its own WhatsApp number or Telegram bot: the owner's pause and the customers handed to a person."
+  x-taskiem-guide: assistant-guard
 - name: Knowledge
   description: What the business's assistant knows, from its own words, storefront, tables, website, documents, sheets and books.
   x-taskiem-guide: knowledge
@@ -15711,6 +15714,96 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/StepUpProof'
+  /v1/assistant:
+    get:
+      operationId: getAssistant
+      tags:
+      - Assistant
+      summary: The customer assistant's state
+      description: 'Whether the owner has paused the business''s assistant for every customer, what Taskiem allows (TASKIEM_ASSISTANTS, the business''s beta flag, a stop by Taskiem), and the customers waiting for a person (decision 0062 V6, docs/assistant-guard.md).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      x-taskiem-all-environments: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Assistant'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/assistant/pause:
+    post:
+      operationId: pauseAssistant
+      tags:
+      - Assistant
+      summary: Pause or resume the assistant for every customer
+      description: Paused, customers' messages are kept and nothing is answered (trigger.guard.outcome quiet, reason paused). Audited (assistant.pause, assistant.resume).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [paused]
+              properties:
+                paused:
+                  type: boolean
+              additionalProperties: false
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Assistant'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/assistant/handovers/resume:
+    post:
+      operationId: resumeAssistantHandover
+      tags:
+      - Assistant
+      summary: Answer a customer handed to a person with the assistant again
+      description: Ends a customer's hand-over before it runs out. Audited (assistant.handover.resume).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channel, customer]
+              properties:
+                channel:
+                  type: string
+                customer:
+                  type: string
+              additionalProperties: false
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Assistant'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/knowledge:
     get:
       operationId: listKnowledge
@@ -26021,6 +26114,51 @@ components:
         reviewed_entries:
           type: integer
       additionalProperties: false
+    Assistant:
+      type: object
+      required: [paused, handovers]
+      properties:
+        paused:
+          type: boolean
+        paused_at:
+          type: [string, 'null']
+        paused_by:
+          type: [string, 'null']
+        taskiem:
+          type: object
+          description: What Taskiem allows for this business's assistants.
+          properties:
+            'on':
+              type: boolean
+            mode:
+              type: string
+              enum: ['on', beta, 'off']
+            beta:
+              type: boolean
+            stopped:
+              type: boolean
+            stopped_reason:
+              type: [string, 'null']
+        handovers:
+          type: array
+          items:
+            type: object
+            properties:
+              channel:
+                type: string
+              customer:
+                type: string
+                description: The customer's pseudonymous id, never their number.
+              where:
+                type: string
+              hint:
+                type: string
+                description: Their number's last four digits, or the kind of chat.
+              at:
+                $ref: '#/components/schemas/Timestamp'
+              until:
+                $ref: '#/components/schemas/Timestamp'
+      additionalProperties: false
     KnowledgeRequest:
       type: object
       properties:
@@ -33137,6 +33275,18 @@ components:
         conversation_rows_pending:
           type: boolean
           description: Their conversation rows could not all be deleted now; they go at the latest when the conversation's time is up.
+        assistant_contacts_deleted:
+          type: integer
+          description: The customer guard's records of the person (their counts, STOP, a hand-over), one per channel, deleted (decision 0062 P2).
+        assistant_contacts_pending:
+          type: boolean
+          description: The guard's records could not be deleted now.
+        customer_runs:
+          type: integer
+          description: Runs started by the person's messages, whose record of what they said (sealed under their key) is erased with it.
+        knowledge_rereads:
+          type: integer
+          description: Table and sheet knowledge sources asked to be read again within minutes.
       additionalProperties: false
     BillingInterval:
       type: string

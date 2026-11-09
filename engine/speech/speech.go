@@ -20,6 +20,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/israel-duff/taskiem/engine/alerts"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/media"
@@ -260,6 +261,11 @@ func (s *Service) over(ctx context.Context, tenant uuid.UUID, used, allowed int6
 	if s.LimitHit != nil {
 		s.LimitHit(ctx, tenant, "speech_seconds_monthly")
 	}
+	if s.Pool != nil && allowed > 0 {
+		_ = db.InTenantTx(context.WithoutCancel(ctx), s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			return alerts.Allowance(ctx, tx, tenant, "speech", allowed, allowed, time.Now())
+		})
+	}
 	s.settle(ctx, tenant, heardCol, 0, 0, false, true)
 	return fmt.Errorf("%w (%d of %d seconds used; it renews next month or when the plan's allowance is raised)", ErrOverAllowance, used, allowed)
 }
@@ -287,7 +293,19 @@ func (s *Service) settle(ctx context.Context, tenant uuid.UUID, col string, delt
 			  characters_spoken = u.characters_spoken + EXCLUDED.characters_spoken,
 			  requests = u.requests + EXCLUDED.requests, refused = u.refused + EXCLUDED.refused, updated_at = now()`,
 			tenant, delta, chars, req, ref)
-		return err
+		if err != nil || !request || s.Allowance == nil {
+			return err
+		}
+		// 80 % and 100 % of the month's seconds (decision 0062 L10).
+		allowed, err := s.Allowance(ctx, tenant)
+		if err != nil || allowed <= 0 {
+			return err
+		}
+		used, err := UsageThisMonth(ctx, tx, tenant)
+		if err != nil {
+			return err
+		}
+		return alerts.Allowance(ctx, tx, tenant, "speech", used.Seconds(), allowed, time.Now())
 	})
 }
 

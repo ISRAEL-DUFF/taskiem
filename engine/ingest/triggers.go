@@ -19,6 +19,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/robfig/cron/v3"
 
+	"github.com/israel-duff/taskiem/engine/assistant"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/internal/schemacheck"
 	"github.com/israel-duff/taskiem/engine/remote"
@@ -127,6 +128,9 @@ type eventConfig struct {
 	// event the trigger sends (sends).
 	whenUsed bool
 	sends    []string
+	// guard is the customer guard (decision 0062 V6), on a trigger whose
+	// manifest reads its events as customers' messages.
+	guard *assistant.Config
 }
 
 type scheduleConfig struct {
@@ -179,6 +183,16 @@ func parseEvent(c map[string]any, reg connector.Lookup) (eventConfig, error) {
 	}
 	e.remote = spec.Remote()
 	e.whenUsed, e.sends = spec.WhenUsed(), spec.Events
+	if g, ok := c["guard"]; ok {
+		if spec.Conversation == nil {
+			return e, fmt.Errorf("trigger %q of %s does not carry customers' messages, so it takes no guard", e.trigger, e.connector)
+		}
+		cfg, err := assistant.ParseConfig(g)
+		if err != nil {
+			return e, err
+		}
+		e.guard = &cfg
+	}
 	opts, given := c["options"]
 	if given {
 		if e.options, ok = opts.(map[string]any); !ok {
@@ -372,12 +386,15 @@ func SyncEnvironments(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, envs
 				VALUES ($1, $2, $3, $4, $5, 'webhook', $6, $7, NULLIF($8, ''), $9, $10)`, id, tenant, wf, version, env, w.path, w.auth, w.dedup, WebhookSecret(def), w.options.stored())
 		case "connector_event":
 			e := ev
-			var opts []byte
+			var opts, guard []byte
 			if e.options != nil {
 				opts, _ = json.Marshal(e.options)
 			}
-			_, err = tx.Exec(ctx, `INSERT INTO triggers (id, tenant_id, workflow_id, version, environment, type, connector, trigger_name, events, connection, options)
-				VALUES ($1, $2, $3, $4, $5, 'connector_event', $6, $7, $8, NULLIF($9, ''), $10)`, id, tenant, wf, version, env, e.connector, e.trigger, e.events, e.connection, opts)
+			if e.guard != nil {
+				guard, _ = json.Marshal(e.guard.Map())
+			}
+			_, err = tx.Exec(ctx, `INSERT INTO triggers (id, tenant_id, workflow_id, version, environment, type, connector, trigger_name, events, connection, options, guard)
+				VALUES ($1, $2, $3, $4, $5, 'connector_event', $6, $7, $8, NULLIF($9, ''), $10, $11)`, id, tenant, wf, version, env, e.connector, e.trigger, e.events, e.connection, opts, guard)
 			if err == nil && e.remote {
 				_, err = remote.Declare(ctx, tx, tenant, wf, env, version, remote.Declaration{
 					Connector: e.connector, Trigger: e.trigger, Connection: e.connection, Events: e.events, Options: e.options})

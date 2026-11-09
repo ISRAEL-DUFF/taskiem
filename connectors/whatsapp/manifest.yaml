@@ -290,6 +290,35 @@ triggers:
     correlation: '=item.kind == "message" ? item.message.from : item.kind == "status" ? item.status.id : ""'
     # What a customer wrote and who they are is personal data (decision
     # 0062, P1): sealed in run history, readable by the run's steps.
+    # A customer's new message, for a workflow's customer guard (decision
+    # 0062 V6, connector/v1 rule 23). The Cloud API has no groups: every
+    # chat is one to one. A voice note or audio is fetched before the run
+    # can wait in a queue (Meta's media links last minutes).
+    conversation:
+      sender: '=item.kind == "message" ? item.message.from : ""'
+      sender_category: phone
+      private: '=true'
+      kind: >-
+        =item.kind != "message" ? "other"
+        : item.message.type == "text" ? "text"
+        : item.message.type == "audio" ? (has(item.message.audio.voice) && item.message.audio.voice ? "voice" : "audio")
+        : item.message.type in ["image", "video", "document", "sticker", "location", "reaction"] ? item.message.type
+        : item.message.type == "contacts" ? "contact"
+        : item.message.type in ["button", "interactive"] ? "button"
+        : "other"
+      text: >-
+        =item.kind != "message" ? ""
+        : item.message.type == "text" ? item.message.text.body
+        : item.message.type == "button" ? item.message.button.text
+        : item.message.type == "interactive" && has(item.message.interactive.button_reply) ? item.message.interactive.button_reply.title
+        : item.message.type == "interactive" && has(item.message.interactive.list_reply) ? item.message.interactive.list_reply.title
+        : item.message.type == "image" && has(item.message.image.caption) ? item.message.image.caption
+        : item.message.type == "video" && has(item.message.video.caption) ? item.message.video.caption
+        : item.message.type == "document" && has(item.message.document.caption) ? item.message.document.caption
+        : ""
+      media: '=item.kind == "message" && item.message.type == "audio" ? item.message.audio.id : ""'
+      fetch: get_media
+      fetch_input: media_id
     pii:
       - { field: body.entry.*.changes.*.value.contacts.*.wa_id, category: phone }
       - { field: body.entry.*.changes.*.value.contacts.*.profile.name, category: name }

@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/assistant"
 	"github.com/israel-duff/taskiem/engine/audit"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
@@ -626,6 +627,26 @@ func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 			out["files_pending"] = true
 		}
 		out["files_deleted"] = n
+	}
+	// The customer guard's record of them (their counts, STOP, a hand-over)
+	// goes; what they said in the runs their messages started was sealed
+	// under them, and is erased with their key (decision 0062 P2).
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		n, err := assistant.EraseContacts(r.Context(), tx, p.TenantID, subject)
+		if err != nil {
+			return err
+		}
+		out["assistant_contacts_deleted"] = n
+		var runs int
+		if err := tx.QueryRow(r.Context(), `SELECT count(*) FROM runs WHERE tenant_id = $1 AND (customer_subject = $2 OR left(customer_subject, length($2) + 1) = $2 || '~')`,
+			p.TenantID, subject).Scan(&runs); err != nil {
+			return err
+		}
+		out["customer_runs"] = runs
+		return nil
+	}); err != nil {
+		s.Logger.Warn("erase: the assistant's record of the customer not deleted yet", "err", err)
+		out["assistant_contacts_pending"] = true
 	}
 	// What the assistant knows from tables and sheets is read again within
 	// minutes, so it holds what they hold now (docs/knowledge.md).
