@@ -40,15 +40,35 @@ CREATE TABLE assistant_contacts (
   stopped_at       timestamptz,                   -- they wrote STOP
   handover_at      timestamptz,                   -- they asked for a person (or a workflow handed them over)
   handover_until   timestamptz,
+  noticed_at       timestamptz,                   -- the notice was sent with an answer
   PRIMARY KEY (tenant_id, channel, subject)
 );
-CREATE INDEX assistant_contacts_handover ON assistant_contacts (tenant_id, handover_at) WHERE handover_at IS NOT NULL;
+CREATE INDEX assistant_contacts_handover ON assistant_contacts (tenant_id, handover_until) WHERE handover_until IS NOT NULL;
 CREATE INDEX assistant_contacts_subject ON assistant_contacts (tenant_id, subject);
 ALTER TABLE assistant_contacts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE assistant_contacts FORCE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON assistant_contacts TO taskiem_app
   USING (tenant_id = ANY (taskiem_tenant_scope())) WITH CHECK (tenant_id = ANY (taskiem_tenant_scope()));
 GRANT SELECT, INSERT, UPDATE, DELETE ON assistant_contacts TO taskiem_app;
+
+-- What the guard decided for each message (by the delivery's dedup key):
+-- a provider's retry, or a run that could not start, replays it instead of
+-- counting the message again or losing its answer. Kept three days; no
+-- personal data (the fixed answers and the outcome).
+CREATE TABLE assistant_decisions (
+  tenant_id   uuid NOT NULL REFERENCES tenants(id),
+  channel     text NOT NULL,
+  dedup       text NOT NULL,
+  decision    jsonb NOT NULL,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id, channel, dedup)
+);
+CREATE INDEX assistant_decisions_age ON assistant_decisions (tenant_id, created_at);
+ALTER TABLE assistant_decisions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE assistant_decisions FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON assistant_decisions TO taskiem_app
+  USING (tenant_id = ANY (taskiem_tenant_scope())) WITH CHECK (tenant_id = ANY (taskiem_tenant_scope()));
+GRANT SELECT, INSERT, UPDATE, DELETE ON assistant_decisions TO taskiem_app;
 
 ALTER TABLE tenant_channel_settings
   ADD COLUMN assistant_paused_at timestamptz,
@@ -77,6 +97,7 @@ GRANT SELECT, INSERT, UPDATE ON assistant_controls TO taskiem_app;
 -- +goose Down
 DROP TABLE assistant_controls;
 ALTER TABLE tenant_channel_settings DROP COLUMN assistant_paused_at, DROP COLUMN assistant_paused_by;
+DROP TABLE assistant_decisions;
 DROP TABLE assistant_contacts;
 DROP INDEX runs_customer;
 ALTER TABLE runs DROP COLUMN customer_subject;

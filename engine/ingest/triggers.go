@@ -392,6 +392,20 @@ func SyncEnvironments(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, envs
 			}
 			if e.guard != nil {
 				guard, _ = json.Marshal(e.guard.Map())
+				// One assistant per channel: two guarded workflows on one
+				// number or bot would each count, notice and answer every
+				// customer.
+				var other string
+				err := tx.QueryRow(ctx, `SELECT w.name FROM triggers t JOIN workflows w ON w.id = t.workflow_id
+					WHERE t.tenant_id = $1 AND t.environment = $2 AND t.type = 'connector_event' AND t.connector = $3 AND t.trigger_name = $4
+					AND t.guard IS NOT NULL AND t.workflow_id <> $5 AND COALESCE(t.connection, '') = $6 LIMIT 1`,
+					tenant, env, e.connector, e.trigger, wf, e.connection).Scan(&other)
+				if err == nil {
+					return fmt.Errorf("%q already answers customers on this %s connection in %s; a channel has one assistant: unpublish it first", other, e.connector, env)
+				}
+				if !errors.Is(err, pgx.ErrNoRows) {
+					return err
+				}
 			}
 			_, err = tx.Exec(ctx, `INSERT INTO triggers (id, tenant_id, workflow_id, version, environment, type, connector, trigger_name, events, connection, options, guard)
 				VALUES ($1, $2, $3, $4, $5, 'connector_event', $6, $7, $8, NULLIF($9, ''), $10, $11)`, id, tenant, wf, version, env, e.connector, e.trigger, e.events, e.connection, opts, guard)

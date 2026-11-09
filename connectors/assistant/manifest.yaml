@@ -15,10 +15,13 @@ actions:
     title: Check a reply before it is sent
     description: >-
       Checks what the model wrote before it reaches a customer: nothing
-      left of a mask or a marker ([phone], {{...}}, the material's quotes),
-      no price, link, phone number or email that the material (or the
-      customer) did not give, nothing shaped like a key, none of the values
-      never to say, and not too long. ok false answers, as text, a fixed
+      left of a mask or a marker ([[phone_1]], {{...}}, the material's
+      quotes); no price, link, or promise (free, a discount, a refund) that
+      the material does not state (what the customer asked for never counts);
+      no phone number or email that neither the material nor the customer
+      gave; nothing shaped like a key; none of the values never to say; and
+      not too long. Amounts spelled out in words and other customers' names
+      are not seen: offer a person when unsure. ok false answers, as text, a fixed
       answer in the customer's language ("Let me check that with the team
       and get back to you") to send instead, with the problems found.
     class: read
@@ -43,7 +46,7 @@ actions:
           items:
             type: object
             properties:
-              kind:   { type: string, enum: [empty, placeholder, too_long, price, link, contact, secret, internal] }
+              kind:   { type: string, enum: [empty, placeholder, too_long, price, promise, link, contact, secret, internal] }
               detail: { type: string }
     pii:
       - { field: text, category: other }
@@ -98,7 +101,8 @@ actions:
       WhatsApp lets a business answer freely within 24 hours of the
       customer's last message, and only with an approved template after.
       open says whether that window is open now (for a message sent later
-      than the answer: a follow-up, a member's reply).
+      than the answer: a follow-up, a member's reply). Telegram has no
+      window: open is always true there.
     class: read
     input:
       type: object

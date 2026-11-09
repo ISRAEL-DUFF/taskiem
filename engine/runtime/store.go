@@ -159,6 +159,9 @@ type ParentRun struct {
 	Step  string // the step instance
 	Waits bool   // the step waits for the child to end
 	Seed  string // the child's idempotency seed: the parent's and the step
+	// taint is what the parent's decision holds as personal data: the
+	// child's trigger seals it where the parent passed it on.
+	taint pii.Taint
 }
 
 // ErrNotFound is returned when a run, step, or workflow is not visible.
@@ -345,7 +348,21 @@ func (s *Store) startIn(ctx context.Context, tx pgx.Tx, req StartRequest, ref *R
 		if err != nil {
 			return err
 		}
-		sealed, err := s.sealPayload(ctx, tx, cipher, req.TenantID, payload, paths, pii.Taint{})
+		taint := pii.Taint{}
+		if p := req.Parent; p != nil {
+			// A child run seals what its parent held as personal data
+			// wherever the parent passed it on; in a customer's run, every
+			// text it was given, under the customer.
+			for k, c := range p.taint {
+				taint[k] = c
+			}
+			if pii.CustomerOf(cipher) != "" {
+				if t, ok := req.Trigger.(map[string]any); ok {
+					paths = append(paths, stringPaths(t["body"], []string{"trigger", "body"}, "other")...)
+				}
+			}
+		}
+		sealed, err := s.sealPayload(ctx, tx, cipher, req.TenantID, payload, paths, taint)
 		if err != nil {
 			return err
 		}
@@ -610,7 +627,7 @@ func (s *Store) decideInline(ctx context.Context, tx pgx.Tx, ref RunRef) error {
 			if _, err := appendEvent(ctx, tx, ref.ID, ev.Type, ev.StepID, ev.Attempt, sealed, history.OriginDecide); err != nil {
 				return err
 			}
-			then, err := s.applyEffects(ctx, tx, run, def, ev, sealed)
+			then, err := s.applyEffects(ctx, tx, run, def, ev, sealed, taint)
 			if err != nil {
 				return fmt.Errorf("apply %s(%s): %w", ev.Type, ev.StepID, err)
 			}
@@ -669,7 +686,7 @@ func (s *Store) countSteps(ctx context.Context, tx pgx.Tx, run runRow, def *wd.D
 // applyEffects performs the side effects an event implies: tasks, timers,
 // signal waits, run status. It may return a follow-up that appends further
 // events once decide's batch is written.
-func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd.Definition, ev decide.NewEvent, sealed any) (func() error, error) {
+func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd.Definition, ev decide.NewEvent, sealed any, taint pii.Taint) (func() error, error) {
 	tenant := run.ref.TenantID
 	switch ev.Type {
 	case history.StepScheduled:
@@ -730,7 +747,7 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 					return then, err
 				}
 			}
-			return s.startSubflow(ctx, tx, run, ev, p)
+			return s.startSubflow(ctx, tx, run, ev, p, taint)
 		}
 	case history.ApprovalRequested:
 		p := ev.Payload.(history.ApprovalRequestedPayload)
@@ -1056,7 +1073,11 @@ func (s *Store) registerWait(ctx context.Context, tx pgx.Tx, ref RunRef, env, st
 		return nil, err
 	}
 	return func() error {
-		_, err := appendEvent(ctx, tx, ref.ID, history.SignalReceived, step, 0, signalPayload(event, payload), history.OriginSignal)
+		sealed, err := s.resealSignal(ctx, tx, ref, event, payload)
+		if err != nil {
+			return err
+		}
+		_, err = appendEvent(ctx, tx, ref.ID, history.SignalReceived, step, 0, sealed, history.OriginSignal)
 		return err
 	}, nil
 }
@@ -1073,9 +1094,11 @@ func signalPayload(event string, payload []byte) map[string]any {
 const SignalTTL = 7 * 24 * time.Hour
 
 // DeliverSignal hands an external event to every run in the environment
-// waiting for it, or buffers it there. It returns the runs it woke.
+// waiting for it, or buffers it there. It returns the runs it woke. The
+// personal values the detectors recognise in payload are sealed wherever
+// it is kept (sealSignal).
 func (s *Store) DeliverSignal(ctx context.Context, tenant uuid.UUID, env, event, correlation string, payload any) ([]uuid.UUID, error) {
-	woke, _, err := s.deliverSignal(ctx, tenant, env, event, correlation, "", payload)
+	woke, _, err := s.deliverSignal(ctx, tenant, env, event, correlation, "", payload, nil)
 	return woke, err
 }
 
@@ -1084,10 +1107,18 @@ func (s *Store) DeliverSignal(ctx context.Context, tenant uuid.UUID, env, event,
 // is ignored, in the same transaction that delivers it. It reports whether
 // it was new.
 func (s *Store) DeliverSignalOnce(ctx context.Context, tenant uuid.UUID, env, event, correlation, dedupKey string, payload any) ([]uuid.UUID, bool, error) {
-	return s.deliverSignal(ctx, tenant, env, event, correlation, dedupKey, payload)
+	return s.deliverSignal(ctx, tenant, env, event, correlation, dedupKey, payload, nil)
 }
 
-func (s *Store) deliverSignal(ctx context.Context, tenant uuid.UUID, env, event, correlation, dedupKey string, payload any) ([]uuid.UUID, bool, error) {
+// DeliverSignalPII is DeliverSignalOnce for a payload whose personal
+// fields are known (a connector trigger's declared pii: a message's sender
+// and text): paths are places in payload, as StartRequest.TriggerPII are
+// in a trigger, sealed with what the detectors recognise.
+func (s *Store) DeliverSignalPII(ctx context.Context, tenant uuid.UUID, env, event, correlation, dedupKey string, payload any, paths []pii.Path) ([]uuid.UUID, bool, error) {
+	return s.deliverSignal(ctx, tenant, env, event, correlation, dedupKey, payload, paths)
+}
+
+func (s *Store) deliverSignal(ctx context.Context, tenant uuid.UUID, env, event, correlation, dedupKey string, payload any, paths []pii.Path) ([]uuid.UUID, bool, error) {
 	if env == "" {
 		return nil, false, errors.New("signal: no environment")
 	}
@@ -1112,7 +1143,7 @@ func (s *Store) deliverSignal(ctx context.Context, tenant uuid.UUID, env, event,
 			}
 		}
 		var err error
-		woke, err = s.deliverSignalTx(ctx, tx, tenant, env, event, correlation, raw, true)
+		woke, err = s.deliverSignalTx(ctx, tx, tenant, env, event, correlation, raw, paths, true)
 		return err
 	})
 	return woke, fresh, err
@@ -1123,7 +1154,9 @@ func (s *Store) deliverSignal(ctx context.Context, tenant uuid.UUID, env, event,
 // parent that no longer waits). A run being decided in this very call
 // (a child that ended inside its parent's decision) is not decided
 // again here: the decision under way reads the event in its next round.
-func (s *Store) deliverSignalTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env, event, correlation string, raw []byte, buffer bool) ([]uuid.UUID, error) {
+// paths are the payload's personal places (DeliverSignalPII); it is
+// sealed with each run's cipher, or, buffered, as received (sealSignal).
+func (s *Store) deliverSignalTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env, event, correlation string, raw []byte, paths []pii.Path, buffer bool) ([]uuid.UUID, error) {
 	if err := signalLock(ctx, tx, tenant, env, event, correlation); err != nil {
 		return nil, err
 	}
@@ -1151,8 +1184,12 @@ func (s *Store) deliverSignalTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 		if !buffer {
 			return nil, nil
 		}
-		_, err := tx.Exec(ctx, `INSERT INTO signals (id, tenant_id, environment, event, correlation, payload, expires_at) VALUES ($1, $2, $3, $4, $5, $6, now() + $7::interval)`,
-			uuid.Must(uuid.NewV7()), tenant, env, event, correlation, raw, SignalTTL.String())
+		kept, err := s.sealSignal(ctx, tx, pii.Received(s.PII), tenant, raw, paths)
+		if err != nil {
+			return nil, err
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO signals (id, tenant_id, environment, event, correlation, payload, expires_at) VALUES ($1, $2, $3, $4, $5, $6, now() + $7::interval)`,
+			uuid.Must(uuid.NewV7()), tenant, env, event, correlation, kept, SignalTTL.String())
 		return nil, err
 	}
 	var woke []uuid.UUID
@@ -1160,7 +1197,15 @@ func (s *Store) deliverSignalTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 		if _, err := lockRun(ctx, tx, w.run); err != nil {
 			return nil, err
 		}
-		if _, err := appendEvent(ctx, tx, w.run, history.SignalReceived, w.step, 0, signalPayload(event, raw), history.OriginSignal); err != nil {
+		cipher, err := s.signalCipher(ctx, tx, w.run)
+		if err != nil {
+			return nil, err
+		}
+		sealed, err := s.sealSignal(ctx, tx, cipher, tenant, raw, paths)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := appendEvent(ctx, tx, w.run, history.SignalReceived, w.step, 0, signalPayload(event, sealed), history.OriginSignal); err != nil {
 			return nil, err
 		}
 		if !deciding(ctx, w.run) {
@@ -1311,6 +1356,13 @@ func dbTx(ctx context.Context, s *Store, tenant uuid.UUID, fn func(pgx.Tx) error
 	return db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, fn)
 }
 
+// SubjectRenewer gives a person who writes again after their erasure a
+// new key (secrets.Vault.RenewSubjectTx): only a run their message starts
+// asks for it.
+type SubjectRenewer interface {
+	RenewSubjectTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, category string, value any) (string, error)
+}
+
 // setCustomer records whose message started the run (Customer), or
 // inherits it from the run it is a child or fork of. The customer's key
 // is made (or made again, for a person erased who came back) before
@@ -1319,15 +1371,12 @@ func (s *Store) setCustomer(ctx context.Context, tx pgx.Tx, req StartRequest, ru
 	from := uuid.Nil
 	switch {
 	case req.Customer != nil && req.Customer.Value != "":
-		ss, ok := s.PII.(pii.SubjectSealer)
+		r, ok := s.PII.(SubjectRenewer)
 		if !ok {
 			return nil
 		}
-		subject, err := ss.SubjectForTx(ctx, tx, req.TenantID, req.Customer.Category, req.Customer.Value)
+		subject, err := r.RenewSubjectTx(ctx, tx, req.TenantID, req.Customer.Category, req.Customer.Value)
 		if err != nil {
-			return err
-		}
-		if _, err := s.PII.SealTx(ctx, tx, req.TenantID, req.Customer.Category, req.Customer.Value); err != nil {
 			return err
 		}
 		_, err = tx.Exec(ctx, `UPDATE runs SET customer_subject = $2 WHERE id = $1`, run, subject)

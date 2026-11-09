@@ -133,10 +133,14 @@ func classify(he *connector.HTTPError) error {
 		// An undocumented code with a server error: Meta may have acted.
 		return fmt.Errorf("%w: %w", me, effects.ErrUnknownOutcome)
 	}
-	if me.Code == 131047 {
-		// Outside the customer's 24-hour window: only an approved template
-		// may be sent now (decision 0062 C13). A workflow branches on the
-		// code in on_error and sends one, or tells a member.
+	if me.Code == 131047 || me.Code == 470 {
+		// Outside the customer's 24-hour window (470 is its older code):
+		// only an approved template may be sent now (decision 0062 C13). A
+		// workflow branches on the code in on_error and sends one, or tells
+		// a member. Meta often accepts such a send and reports 131047
+		// later, as a failed status: a run that must know waits for the
+		// status (docs/assistant-guard.md), and checks assistant@1 window
+		// before sending late.
 		return connector.WithCode("window_closed", fmt.Errorf("%w: %w", me, effects.ErrFatal))
 	}
 	return fmt.Errorf("%w: %w", me, effects.ErrFatal)

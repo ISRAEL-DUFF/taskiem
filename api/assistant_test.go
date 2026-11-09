@@ -39,8 +39,8 @@ func TestAssistantSwitches(t *testing.T) {
 	const channel, number = "whatsapp@1/main", "2348031234567"
 	if err := db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		g := &assistant.Guard{}
-		d, err := g.Decide(ctx, tx, w.env.Vault, tenant, uuid.New(), assistant.Defaults(),
-			assistant.Message{Channel: channel, Sender: number, SenderCategory: "phone", Private: true, Kind: "text", Text: "agent"})
+		d, err := g.Decide(ctx, tx, w.env.Vault, tenant, assistant.Defaults(),
+			assistant.Message{Channel: channel, Dedup: "wamid.T1", Sender: number, SenderCategory: "phone", Private: true, Kind: "text", Text: "agent"})
 		if err == nil && d.Reason != assistant.ReasonHandover {
 			t.Errorf("decision %+v", d)
 		}

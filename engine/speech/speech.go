@@ -261,11 +261,7 @@ func (s *Service) over(ctx context.Context, tenant uuid.UUID, used, allowed int6
 	if s.LimitHit != nil {
 		s.LimitHit(ctx, tenant, "speech_seconds_monthly")
 	}
-	if s.Pool != nil && allowed > 0 {
-		_ = db.InTenantTx(context.WithoutCancel(ctx), s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-			return alerts.Allowance(ctx, tx, tenant, "speech", allowed, allowed, time.Now())
-		})
-	}
+	s.allowanceAlert(ctx, tenant)
 	s.settle(ctx, tenant, heardCol, 0, 0, false, true)
 	return fmt.Errorf("%w (%d of %d seconds used; it renews next month or when the plan's allowance is raised)", ErrOverAllowance, used, allowed)
 }
@@ -293,20 +289,11 @@ func (s *Service) settle(ctx context.Context, tenant uuid.UUID, col string, delt
 			  characters_spoken = u.characters_spoken + EXCLUDED.characters_spoken,
 			  requests = u.requests + EXCLUDED.requests, refused = u.refused + EXCLUDED.refused, updated_at = now()`,
 			tenant, delta, chars, req, ref)
-		if err != nil || !request || s.Allowance == nil {
-			return err
-		}
-		// 80 % and 100 % of the month's seconds (decision 0062 L10).
-		allowed, err := s.Allowance(ctx, tenant)
-		if err != nil || allowed <= 0 {
-			return err
-		}
-		used, err := UsageThisMonth(ctx, tx, tenant)
-		if err != nil {
-			return err
-		}
-		return alerts.Allowance(ctx, tx, tenant, "speech", used.Seconds(), allowed, time.Now())
+		return err
 	})
+	if request && !refused {
+		s.allowanceAlert(ctx, tenant)
+	}
 }
 
 // estimate is a recording's length when its container does not say: AMR
@@ -478,4 +465,27 @@ func (s *Service) outcome(kind string, err error) {
 		o = "refused"
 	}
 	telemetry.SpeechRequests.WithLabelValues(kind, o).Inc()
+}
+
+// allowanceAlert tells the owners at 80 % and 100 % of this month's voice
+// seconds (decision 0062 L10), from what is really used, after it is
+// counted and in a transaction of its own: a failed alert never loses the
+// count. The allowance is read before the transaction, never inside it.
+func (s *Service) allowanceAlert(ctx context.Context, tenant uuid.UUID) {
+	if s.Pool == nil || s.Allowance == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	allowed, err := s.Allowance(ctx, tenant)
+	if err != nil || allowed <= 0 {
+		return
+	}
+	_ = db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		used, err := UsageThisMonth(ctx, tx, tenant)
+		if err != nil {
+			return err
+		}
+		return alerts.Allowance(ctx, tx, tenant, "speech", used.Seconds(), allowed, false, time.Now())
+	})
 }

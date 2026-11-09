@@ -71,7 +71,11 @@ func (s *Service) ResumeSender(ctx context.Context, tenant uuid.UUID, channel, s
 
 // Window answers whether a customer's 24-hour window is open on a channel,
 // and when they last wrote.
+// Telegram has no such window: it is always open there.
 func (s *Service) Window(ctx context.Context, tenant uuid.UUID, channel, sender string) (bool, *time.Time, error) {
+	if !strings.HasPrefix(channel, "whatsapp@") {
+		return true, nil, nil
+	}
 	var open bool
 	var last *time.Time
 	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {

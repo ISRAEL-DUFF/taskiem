@@ -278,9 +278,9 @@ func (w *Worker) aiAttempt(ctx context.Context, p *plan, in any) history.Event {
 			}
 		}
 		if over {
-			_ = db.InTenantTx(context.WithoutCancel(ctx), w.Store.Pool, []uuid.UUID{p.c.tenant}, func(tx pgx.Tx) error {
-				return alerts.Allowance(ctx, tx, p.c.tenant, "ai_steps", limit, limit, time.Now())
-			})
+			// What is really used: the reservation that refused it also
+			// counts other steps' calls in flight.
+			w.allowanceAlert(ctx, p.c.tenant)
 			return fail("limit", "this month's allowance for AI steps is used up (%d tokens); the step is not tried again (it starts afresh next month, UTC)", limit)
 		}
 	}
@@ -579,29 +579,45 @@ func (w *Worker) recordAIStep(ctx context.Context, p *plan, model, provider, dig
 	if round > 1 {
 		kind = "step_correct"
 	}
-	return db.InTenantTx(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, func(tx pgx.Tx) error {
+	err := db.InTenantTx(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `INSERT INTO ai_interactions (id, tenant_id, run_id, step_id, round, kind, actor, provider, model, system_digest, messages,
 			response, stop_reason, outcome, error, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, total_tokens)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NULLIF($13, ''), $14, NULLIF($15, ''), $16, $17, $18, $19, $20)`,
 			uuid.Must(uuid.NewV7()), p.c.tenant, p.c.run, p.c.step, round, kind, "run:"+p.c.run.String(), provider, model, digest, rawMsgs,
 			text, stop, outcome, errText, u.InputTokens, u.OutputTokens, u.CacheCreationTokens, u.CacheReadTokens, u.Total())
-		if err != nil || u.Total() == 0 {
-			return err
-		}
-		return w.allowanceAlert(ctx, tx, p.c.tenant)
+		return err
 	})
+	if err == nil && u.Total() > 0 {
+		w.allowanceAlert(ctx, p.c.tenant)
+	}
+	return err
 }
 
 // allowanceAlert tells the owners at 80 % and 100 % of this month's AI
-// step allowance (decision 0062 L10).
-func (w *Worker) allowanceAlert(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) error {
-	lim, err := w.Store.limitsTx(ctx, tx, tenant)
-	if err != nil || lim.AIStepMonthlyTokens <= 0 {
-		return err
+// step allowance (decision 0062 L10), after the call is recorded, in a
+// transaction of its own: an alert that fails is logged, and never loses
+// the record of a call that was paid for.
+func (w *Worker) allowanceAlert(ctx context.Context, tenant uuid.UUID) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	overage := false
+	if w.AI != nil && w.AI.Overage != nil {
+		if rate, err := w.AI.Overage(ctx, tenant); err == nil && rate > 0 {
+			overage = true
+		}
 	}
-	used, err := AIStepTokensThisMonth(ctx, tx, tenant)
-	if err != nil {
-		return err
+	err := db.InTenantTx(ctx, w.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		lim, err := w.Store.limitsTx(ctx, tx, tenant)
+		if err != nil || lim.AIStepMonthlyTokens <= 0 {
+			return err
+		}
+		used, err := AIStepTokensThisMonth(ctx, tx, tenant)
+		if err != nil {
+			return err
+		}
+		return alerts.Allowance(ctx, tx, tenant, "ai_steps", used, lim.AIStepMonthlyTokens, overage, time.Now())
+	})
+	if err != nil && w.Logger != nil {
+		w.Logger.Warn("ai step: the allowance alert was not checked", "tenant", tenant, "err", err)
 	}
-	return alerts.Allowance(ctx, tx, tenant, "ai_steps", used, lim.AIStepMonthlyTokens, time.Now())
 }

@@ -26116,7 +26116,7 @@ components:
       additionalProperties: false
     Assistant:
       type: object
-      required: [paused, handovers]
+      required: [paused, taskiem, handovers]
       properties:
         paused:
           type: boolean
@@ -26153,7 +26153,7 @@ components:
                 type: string
               hint:
                 type: string
-                description: Their number's last four digits, or the kind of chat.
+                description: Their number's last four digits (WhatsApp), or a short mark of their pseudonymous id (Telegram).
               at:
                 $ref: '#/components/schemas/Timestamp'
               until:

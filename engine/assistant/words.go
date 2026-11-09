@@ -15,10 +15,13 @@ import (
 // (docs/languages.md).
 var (
 	stopWords = []string{
-		"stop", "unsubscribe", "stop messages", "stop all", "opt out", "optout",
+		"stop", "unsubscribe", "stop messages", "stop all", "opt out", "optout", "stop promotions",
 		"stop am", "make una stop", // Pidgin
-		"duro", "e duro", // Yoruba
-		"tsaya", "dakata", // Hausa
+		// Yoruba's and Hausa's everyday words for stop also mean wait or
+		// stand ("duro", "tsaya"), so only phrases that cannot be a
+		// customer asking to wait, until native speakers review them.
+		"e ma fi ranse mo", // Yoruba: don't send any more
+		"kada ku kara turo min", // Hausa: don't send me any more
 		"kwusi", "kwusi ya", // Igbo
 	}
 	startWords = []string{

@@ -77,6 +77,9 @@ type Mock struct {
 type MockError struct {
 	Kind    string `json:"kind"` // retryable | fatal | unknown_outcome | not_sent | indeterminate
 	Message string `json:"message,omitempty"`
+	// Code is the connector's reason a workflow branches on in on_error
+	// (steps.<id>.error.code), such as window_closed.
+	Code string `json:"code,omitempty"`
 }
 
 // Mocks is one Mock or a list of them, per attempt.
@@ -627,7 +630,7 @@ func (r *runner) execute(s *inst, p history.ScheduledPayload) {
 		msg = "mocked " + kind.String()
 	}
 	r.append(history.StepFailed, s.id, s.last, history.FailedPayload{Error: history.Error{
-		Kind: kind.String(), Message: msg, Next: next, MaybeApplied: class.MayHaveApplied(kind),
+		Kind: kind.String(), Message: msg, Next: next, MaybeApplied: class.MayHaveApplied(kind), Code: m.Error.Code,
 	}}, history.OriginWorker)
 }
 

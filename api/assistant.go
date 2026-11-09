@@ -48,7 +48,7 @@ func (s *Server) getAssistant(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		var at *time.Time
 		var by *string
-		if err := tx.QueryRow(ctx, `SELECT assistant_paused_at, assistant_paused_by FROM tenant_channel_settings`).Scan(&at, &by); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		if err := tx.QueryRow(ctx, `SELECT assistant_paused_at, assistant_paused_by FROM tenant_channel_settings WHERE tenant_id = $1`, p.TenantID).Scan(&at, &by); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
 		out["paused"], out["paused_at"], out["paused_by"] = at != nil, at, by
@@ -63,7 +63,7 @@ func (s *Server) getAssistant(w http.ResponseWriter, r *http.Request) {
 		on := mode == assistant.ModeOn || mode == assistant.ModeBeta && beta
 		out["taskiem"] = map[string]any{"on": on && stopped == nil, "mode": mode, "beta": beta, "stopped": stopped != nil, "stopped_reason": reason}
 		rows, err := tx.Query(ctx, `SELECT channel, subject, sender, handover_at, handover_until FROM assistant_contacts
-			WHERE handover_until > now() ORDER BY handover_at DESC LIMIT 200`)
+			WHERE tenant_id = $1 AND handover_until > now() ORDER BY handover_at DESC LIMIT 200`, p.TenantID)
 		if err != nil {
 			return err
 		}
@@ -87,7 +87,9 @@ func (s *Server) getAssistant(w http.ResponseWriter, r *http.Request) {
 		views := make([]handoverView, 0, len(list))
 		for _, x := range list {
 			x.h.Where = channelWhere(x.h.Channel)
-			x.h.Hint = x.h.Where + " chat"
+			// A Telegram chat has no number to show: a short mark of the
+			// customer tells two of them apart (never their chat id).
+			x.h.Hint = x.h.Where + " customer " + shortMark(x.h.Customer)
 			if s.Vault != nil && strings.HasPrefix(x.h.Channel, "whatsapp@") {
 				if v, err := s.Vault.OpenTx(ctx, tx, p.TenantID, x.sealed); err == nil {
 					if n, ok := v.(string); ok && len(n) > 4 {
@@ -243,4 +245,16 @@ func (s *Server) opsAssistantAction(w http.ResponseWriter, r *http.Request, tena
 	default:
 		writeJSON(w, http.StatusOK, map[string]any{"id": tenant, "action": action})
 	}
+}
+
+// shortMark is a few characters of a customer's pseudonymous subject, to
+// tell customers apart without showing who they are.
+func shortMark(subject string) string {
+	if i := strings.LastIndex(subject, ":"); i >= 0 {
+		subject = subject[i+1:]
+	}
+	if len(subject) > 4 {
+		subject = subject[:4]
+	}
+	return strings.ToUpper(subject)
 }

@@ -144,8 +144,10 @@ function AssistantCard() {
         <div className="notice" role="note">
           <p>
             {data.taskiem.stopped
-              ? "Taskiem has turned your assistant off. Contact Taskiem to find out why."
-              : "The assistant is not open to every business yet. Ask Taskiem to join."}
+              ? "Taskiem has turned your assistant off for now. Contact Taskiem support to find out why."
+              : data.taskiem.mode === "off"
+                ? "Assistants are turned off on this Taskiem for now. Your customers' messages are not answered."
+                : "Assistants are open to some businesses only for now. Contact Taskiem support to join."}
           </p>
         </div>
       )}
@@ -162,7 +164,7 @@ function AssistantCard() {
       <p className="hint">
         {data.paused && data.paused_at
           ? `Paused since ${fmtTime(data.paused_at)}. Customers' messages are kept, and nobody gets an automatic answer: answer them yourself.`
-          : "Paused, it answers nobody: customers' messages are kept for you to answer yourself."}
+          : "When you pause it, it answers nobody, and customers' messages are kept for you to answer yourself."}
       </p>
       <h3>Customers waiting for a person</h3>
       {data.handovers.length === 0 ? (

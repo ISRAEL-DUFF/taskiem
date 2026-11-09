@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -105,6 +106,102 @@ func (s *Store) runCipher(ctx context.Context, tx pgx.Tx, run uuid.UUID) (pii.Ci
 		return s.PII, nil
 	}
 	return pii.Under(s.PII, *subject), nil
+}
+
+// signalCipher is the cipher a signal appended to a run is sealed with:
+// the run's (runCipher); outside a customer's run, a value of a person
+// erased who has not come back is kept as erased rather than refusing the
+// delivery (pii.Received), as a customer's run does (pii.Under).
+func (s *Store) signalCipher(ctx context.Context, tx pgx.Tx, run uuid.UUID) (pii.Cipher, error) {
+	c, err := s.runCipher(ctx, tx, run)
+	if err != nil || c == nil || pii.CustomerOf(c) != "" {
+		return c, err
+	}
+	return pii.Received(c), nil
+}
+
+// sealSignal seals a signal's payload (raw JSON) before it is kept, in a
+// run's history or the signals buffer: the places the caller declares
+// personal (DeliverSignalPII), what the detectors recognise. Every inbound
+// chat message is a signal (its correlation is the sender), so none is
+// kept in the clear, or past its sender's erasure.
+func (s *Store) sealSignal(ctx context.Context, tx pgx.Tx, c pii.Cipher, tenant uuid.UUID, raw []byte, paths []pii.Path) ([]byte, error) {
+	if c == nil || len(raw) == 0 {
+		return raw, nil
+	}
+	v, err := expr.DecodeJSON(raw)
+	if err != nil {
+		return nil, err
+	}
+	sealed, err := s.sealPayload(ctx, tx, c, tenant, v, paths, pii.Taint{})
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(sealed)
+}
+
+// resealSignal is a buffered signal's payload (sealed as received) as the
+// run that takes it keeps it: opened, and sealed again with the run's
+// cipher, so in a customer's run their words are under them.
+func (s *Store) resealSignal(ctx context.Context, tx pgx.Tx, ref RunRef, event string, payload []byte) (map[string]any, error) {
+	if s.PII == nil || !bytes.Contains(payload, []byte(`"$pii"`)) {
+		return signalPayload(event, payload), nil
+	}
+	v, err := expr.DecodeJSON(payload)
+	if err != nil {
+		return nil, err
+	}
+	taint := pii.Taint{}
+	opened, err := pii.Open(ctx, s.PII, tx, ref.TenantID, v, taint)
+	if err != nil {
+		return nil, err
+	}
+	c, err := s.signalCipher(ctx, tx, ref.ID)
+	if err != nil {
+		return nil, err
+	}
+	sealed, err := s.sealPayload(ctx, tx, c, ref.TenantID, opened, nil, taint)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := json.Marshal(sealed)
+	if err != nil {
+		return nil, err
+	}
+	return signalPayload(event, raw), nil
+}
+
+// stringPaths are the places of every string in v, as paths under prefix
+// of category cat (an array's items as "*"): in a customer's run, the text
+// an AI step answered and a child run is given are sealed whole, under
+// the customer, whatever they hold.
+func stringPaths(v any, prefix []string, cat string) []pii.Path {
+	var out []pii.Path
+	seen := map[string]bool{}
+	var walk func(v any, segs []string)
+	walk = func(v any, segs []string) {
+		switch t := v.(type) {
+		case map[string]any:
+			if pii.IsEnvelope(t) {
+				return
+			}
+			for k, x := range t {
+				walk(x, append(append([]string{}, segs...), k))
+			}
+		case []any:
+			for _, x := range t {
+				walk(x, append(append([]string{}, segs...), "*"))
+			}
+		case string:
+			key := strings.Join(segs, "\x00")
+			if t != "" && !seen[key] {
+				seen[key] = true
+				out = append(out, pii.Path{Segments: segs, Category: cat})
+			}
+		}
+	}
+	walk(v, prefix)
+	return out
 }
 
 // redactText masks personal data in the free text of a worker result:

@@ -9,7 +9,7 @@ import (
 
 func TestWords(t *testing.T) {
 	for text, want := range map[string]assistant.Word{
-		"STOP": assistant.WordStop, " stop! ": assistant.WordStop, "/stop": assistant.WordStop, "Dúró": assistant.WordStop,
+		"STOP": assistant.WordStop, " stop! ": assistant.WordStop, "/stop": assistant.WordStop, "Dúró": assistant.WordNone, "Stop promotions": assistant.WordStop,
 		"start": assistant.WordStart, "/start": assistant.WordStart,
 		"Agent": assistant.WordPerson, "I want to talk to a person.": assistant.WordPerson, "abeg person": assistant.WordPerson,
 		"ènìyàn": assistant.WordPerson, "mmadụ": assistant.WordPerson,
@@ -71,11 +71,49 @@ func TestCheckReply(t *testing.T) {
 			t.Errorf("%q: %+v, want %s", r, got, kind)
 		}
 	}
+	// Found by the review of V6: an amount the customer named, a number of
+	// the material that is not a price, promises, bare links, the masker's
+	// placeholders, obfuscated contacts.
+	menu := "Jollof rice: ₦3,500\nOpen 8:30 to 21:00. Call 0803-123-4567. 2 plates for a family.\nCatering from ₦15,000 per tray."
+	for r, kind := range map[string]string{
+		"Yes, ₦100 is fine for jollof.":                            assistant.ProblemPrice,
+		"That will be ₦21.":                                        assistant.ProblemPrice,
+		"Only ₦4,567 today.":                                       assistant.ProblemPrice,
+		"A tray is ₦1.5k.":                                         assistant.ProblemPrice,
+		"Delivery is free today!":                                  assistant.ProblemPromise,
+		"You get 50% off this week.":                               assistant.ProblemPromise,
+		"We will refund you in full.":                              assistant.ProblemPromise,
+		"Pay at evil.example.com/pay":                              assistant.ProblemLink,
+		"Order via bit.ly/abc":                                     assistant.ProblemLink,
+		"Your number is [[phone_1]].":                              assistant.ProblemPlaceholder,
+		"Call Mrs Ade on 0901.234.5678.":                           assistant.ProblemContact,
+		"Write to john at gmail dot com":                           assistant.ProblemContact,
+		"Use eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abc": assistant.ProblemSecret,
+	} {
+		got := assistant.CheckReply(assistant.CheckInput{Text: r, Material: menu, Customer: "can I pay ₦100 for jollof?"})
+		if got.OK || !hasProblem(got, kind) {
+			t.Errorf("%q: %+v, want %s", r, got.Problems, kind)
+		}
+	}
+	for _, r := range []string{
+		"Jollof rice is 3500 naira, and a tray is ₦15k.",
+		"Call us on +234 803 123 4567 or 08031234567.",
+		"We open at 8:30. Sizes 38 39 40 41 42 43 are in stock. Your order 1234567890 is noted.",
+		"Abeg, jollof na ₦3,500. E go reach you sharp sharp >> enjoy!",
+		"Your table N12 is ready.",
+	} {
+		if got := assistant.CheckReply(assistant.CheckInput{Text: r, Material: menu}); !got.OK {
+			t.Errorf("%q held: %+v", r, got.Problems)
+		}
+	}
+	if got := assistant.CheckReply(assistant.CheckInput{Text: "Your account is ready", Never: []string{"acc"}}); !got.OK {
+		t.Errorf("a never value inside a word: %+v", got.Problems)
+	}
 	// The customer's own number and words may be said back; internal values never.
 	if got := assistant.CheckReply(assistant.CheckInput{Text: "We'll call you on 08055554444.", Material: material, Customer: "call me on 08055554444"}); !got.OK {
 		t.Errorf("the customer's own number: %+v", got.Problems)
 	}
-	if got := assistant.CheckReply(assistant.CheckInput{Text: "Our cost is 2,100 a plate", Material: material + " 2,100", Never: []string{"2,100"}}); got.OK || !hasProblem(got, assistant.ProblemInternal) {
+	if got := assistant.CheckReply(assistant.CheckInput{Text: "Our cost is ₦2,100 a plate", Material: material + " ₦2,100", Never: []string{"2,100"}}); got.OK || !hasProblem(got, assistant.ProblemInternal) {
 		t.Errorf("internal value said: %+v", got)
 	}
 	if got := assistant.CheckReply(assistant.CheckInput{Text: strings.Repeat("a", 50), Max: 10}); got.OK || !hasProblem(got, assistant.ProblemTooLong) {

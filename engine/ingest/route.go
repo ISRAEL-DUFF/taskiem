@@ -55,12 +55,16 @@ func loadSubscribers(ctx context.Context, tx pgx.Tx, env, ref, name string, owne
 			_ = json.Unmarshal(opts, &s.options)
 		}
 		if len(guard) > 0 {
+			// A stored guard that no longer reads (a setting since
+			// tightened) guards with the defaults: never unguarded.
+			cfg := assistant.Defaults()
 			var raw map[string]any
 			if json.Unmarshal(guard, &raw) == nil {
-				if cfg, err := assistant.ParseConfig(raw); err == nil {
-					s.guard = &cfg
+				if c, err := assistant.ParseConfig(raw); err == nil {
+					cfg = c
 				}
 			}
+			s.guard = &cfg
 		}
 		subs = append(subs, s)
 	}

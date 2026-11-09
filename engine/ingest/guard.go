@@ -53,13 +53,33 @@ func (h *Handler) guardEvent(ctx context.Context, t target, ev eventItem, s subs
 	if vault == nil {
 		return guarded{}, errors.New("no vault: a customer guard cannot key its customers")
 	}
-	msg := assistant.Message{Channel: ev.ref + "/" + t.connection, Sender: ev.conv.sender, SenderCategory: ev.conv.category,
-		Private: ev.conv.private, Kind: ev.conv.kind, Text: ev.conv.text}
 	var d assistant.Decision
+	var msg assistant.Message
 	err := db.InTenantTx(ctx, h.Store.Pool, []uuid.UUID{t.tenant}, func(tx pgx.Tx) error {
-		var err error
-		d, err = h.Guard.Decide(ctx, tx, vault, t.tenant, s.workflow, *s.guard, msg)
-		return err
+		// A customer is keyed on the connection the delivery is for, by
+		// name, and its environment: not on how the webhook address was
+		// written (with or without ?connection=).
+		name, err := connectionName(ctx, tx, t.tenant, ev.env, ev.conn.Manifest.ID, t.connection)
+		if err != nil {
+			return err
+		}
+		msg = assistant.Message{Channel: ev.ref + "/" + name + "/" + ev.env, Dedup: ev.dedup, Sender: ev.conv.sender, SenderCategory: ev.conv.category,
+			Private: ev.conv.private, Kind: ev.conv.kind, Text: ev.conv.text}
+		if d, err = h.Guard.Decide(ctx, tx, vault, t.tenant, *s.guard, msg); err != nil {
+			return err
+		}
+		// The workflow's queue holds back what it would answer, never a
+		// fixed answer the guard owes the customer (a STOP's, a hand-over's).
+		if d.Start && d.Outcome != assistant.OutcomeReply {
+			full, err := assistant.QueueFull(ctx, tx, t.tenant, s.workflow, *s.guard, time.Now())
+			if err != nil {
+				return err
+			}
+			if full {
+				d = assistant.Decision{Dropped: assistant.DropBusy}
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return guarded{}, err
@@ -69,11 +89,24 @@ func (h *Handler) guardEvent(ctx context.Context, t target, ev eventItem, s subs
 	}
 	g := d.Map(msg, ev.conv.kind)
 	if d.Outcome == assistant.OutcomeAnswer && ev.conv.media != "" {
-		if file, err := h.fetchMedia(ctx, t, ev, s); err != nil {
-			h.Logger.Warn("guard: a voice note could not be fetched before the run", "tenant", t.tenant, "workflow", s.workflow, "err", err)
-			g["file_error"] = "the voice note could not be fetched when it arrived: fetch it in the run"
-		} else {
+		file := d.File
+		if file == nil {
+			var ferr error
+			if file, ferr = h.fetchMedia(ctx, t, ev, s); ferr != nil {
+				h.Logger.Warn("guard: a voice note could not be fetched before the run", "tenant", t.tenant, "workflow", s.workflow, "err", ferr)
+			} else {
+				// Kept with the decision: a retry of this delivery uses it,
+				// and does not fetch the note again.
+				d.File = file
+				_ = db.InTenantTx(context.WithoutCancel(ctx), h.Store.Pool, []uuid.UUID{t.tenant}, func(tx pgx.Tx) error {
+					return assistant.Keep(ctx, tx, t.tenant, msg.Channel, msg.Dedup, d)
+				})
+			}
+		}
+		if file != nil {
 			g["file"] = file
+		} else {
+			g["file_error"] = "the voice note could not be fetched when it arrived: fetch it in the run"
 		}
 	}
 	cat := ev.conv.category
@@ -98,7 +131,16 @@ func (h *Handler) fetchMedia(ctx context.Context, t target, ev eventItem, s subs
 	if h.RunFiles == nil || h.Egress == nil {
 		return nil, errors.New("no run file store or egress guard on this edge")
 	}
-	ctx, cancel := context.WithTimeout(ctx, fetchTimeout)
+	// Within what is left of the delivery's time, keeping a second for the
+	// run to start.
+	budget := fetchTimeout
+	if dl, ok := ctx.Deadline(); ok {
+		budget = min(budget, time.Until(dl)-time.Second)
+	}
+	if budget < 500*time.Millisecond {
+		return nil, errors.New("no time left in the delivery to fetch the voice note")
+	}
+	ctx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
 	use := secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindConnection, Purpose: secrets.PurposeIngestEnrich})
 	creds, err := h.Connections.Credentials(use, t.tenant, ev.env, ev.conn.Manifest.ID, t.connection)
@@ -130,4 +172,33 @@ func guardSummary(g guarded) map[string]any {
 		return map[string]any{"outcome": g.outcome}
 	}
 	return map[string]any{"dropped": g.dropped}
+}
+
+// connectionName is the connection a delivery is for: the one it names, or
+// the business's only active connection to the connector in the
+// environment.
+func connectionName(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env, connectorID, named string) (string, error) {
+	if named != "" {
+		return named, nil
+	}
+	rows, err := tx.Query(ctx, `SELECT name FROM connections WHERE tenant_id = $1 AND environment = $2 AND connector = $3 AND status = 'active' LIMIT 2`, tenant, env, connectorID)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+	var names []string
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			return "", err
+		}
+		names = append(names, n)
+	}
+	if err := rows.Err(); err != nil {
+		return "", err
+	}
+	if len(names) == 1 {
+		return names[0], nil
+	}
+	return "", nil
 }

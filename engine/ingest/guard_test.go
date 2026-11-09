@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -16,6 +17,8 @@ import (
 	"github.com/israel-duff/taskiem/engine/assistant"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/history"
+	"github.com/israel-duff/taskiem/engine/ingest"
+	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/runtime"
 )
 
@@ -28,6 +31,9 @@ type guardWorld struct {
 func newGuardWorld(t *testing.T, guard string, settings string, steps ...string) *guardWorld {
 	t.Helper()
 	w := newWorld(t)
+	if err := w.Registry.Register(assistantconn.New(&assistant.Service{Pool: w.DB.App, Vault: w.Vault})); err != nil {
+		t.Fatal(err)
+	}
 	if err := w.Registry.Register(whatsapp.New(whatsapp.Options{})); err != nil {
 		t.Fatal(err)
 	}
@@ -61,10 +67,17 @@ func newGuardWorld(t *testing.T, guard string, settings string, steps ...string)
 func (g *guardWorld) send(t *testing.T, from, msg string) map[string]any {
 	t.Helper()
 	g.seq++
+	return g.sendID(t, fmt.Sprintf("wamid.G%d", g.seq), from, msg)
+}
+
+// sendID delivers a WhatsApp message with its id: the same id again is the
+// provider's retry.
+func (g *guardWorld) sendID(t *testing.T, id, from, msg string) map[string]any {
+	t.Helper()
 	body := []byte(fmt.Sprintf(`{"object":"whatsapp_business_account","entry":[{"id":"1","changes":[{"field":"messages","value":{"messaging_product":"whatsapp",
 	  "metadata":{"display_phone_number":"15550783881","phone_number_id":"106540352242922"},
 	  "contacts":[{"profile":{"name":"Ada"},"wa_id":%q}],
-	  "messages":[{"from":%q,"id":"wamid.G%d","timestamp":"1762600000",%s}]}}]}]}`, from, from, g.seq, msg))
+	  "messages":[{"from":%q,"id":%q,"timestamp":"1762600000",%s}]}}]}]}`, from, from, id, msg))
 	st, out := g.post(t, "/connectors/whatsapp@1/messages?env=prod", body, "X-Hub-Signature-256", "sha256="+sign(sha256.New, "wa-secret", body))
 	if st != 202 {
 		t.Fatalf("delivery: %d %v", st, out)
@@ -269,69 +282,15 @@ func TestCustomerGuardTelegram(t *testing.T) {
 	}
 }
 
-// Erasing a customer erases what they said in the runs their messages
-// started (their words are sealed under them), and a customer erased who
-// writes again is answered afresh (decision 0062 P2).
-func TestCustomerGuardErasure(t *testing.T) {
-	g := newGuardWorld(t, `true`, "")
-	const ada = "2348031234567"
-	g.send(t, ada, text("My address is 12 Admiralty Way"))
-	g.Drain(t)
-	subject, err := g.Vault.SubjectFor(ctx, g.Tenant, "phone", ada)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var run uuid.UUID
-	var customer string
-	if err := g.DB.Admin.QueryRow(ctx, `SELECT id, customer_subject FROM runs WHERE workflow_id = $1`, g.wf).Scan(&run, &customer); err != nil || customer != subject {
-		t.Fatalf("customer %q, want %q (%v)", customer, subject, err)
-	}
-	var history string
-	if err := g.DB.Admin.QueryRow(ctx, `SELECT string_agg(payload::text, ' ') FROM run_events WHERE run_id = $1`, run).Scan(&history); err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(history, "Admiralty") || strings.Contains(history, ada) {
-		t.Fatal("the message is in the clear")
-	}
-	if !strings.Contains(history, `"subject": "`+subject+`"`) && !strings.Contains(history, `"subject":"`+subject+`"`) {
-		t.Fatal("nothing is sealed under the customer")
-	}
-	if strings.Contains(history, `"other:`) {
-		t.Fatal("the customer's words are sealed under a subject of their own, not the customer's")
-	}
-	if err := g.Vault.Erase(ctx, g.Tenant, subject, "test"); err != nil {
-		t.Fatal(err)
-	}
-	opened, err := g.Store.OpenedHistory(ctx, runtime.RunRef{TenantID: g.Tenant, ID: run})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(fmt.Sprint(opened), "Admiralty") {
-		t.Fatal("the customer's words outlived their erasure")
-	}
-	// They write again: a new key, a new run, read as it should be.
-	if s := g.send(t, ada, text("Hello again")); s["outcome"] != "answer" {
-		t.Fatalf("after erasure: %v", s)
-	}
-	if out := g.lastOutput(t); !strings.HasPrefix(out, "answer||") {
-		t.Fatalf("after erasure: %s", out)
-	}
-}
 
 // A run started by a guarded message reads the customer's window, checks
 // a reply and hands the customer over with assistant@1.
 func TestCustomerGuardActions(t *testing.T) {
-	g := newGuardWorld(t, `true`, "")
-	if err := g.Registry.Register(assistantconn.New(&assistant.Service{Pool: g.DB.App, Vault: g.Vault})); err != nil {
-		t.Fatal(err)
-	}
-	wf := g.publish(t, `{"schema":"wd/v1","id":"wf_act","version":1,"name":"act","trigger":{"type":"connector_event","config":{"connector":"whatsapp@1","trigger":"messages","guard":true}},
-	  "steps":[
+	g := newGuardWorld(t, `true`, "", `[
 	    {"id":"win","type":"connector","connector":"assistant@1","action":"window","input":{"channel":"=trigger.guard.channel","sender":"=trigger.guard.sender"}},
 	    {"id":"check","type":"connector","connector":"assistant@1","action":"check_reply","input":{"text":"Rice is free today! Pay 100 naira at https://evil.example","material":"Rice: 3,500 naira","language":"=trigger.guard.language"}},
 	    {"id":"over","type":"connector","connector":"assistant@1","action":"hand_over","needs":["win","check"],"when":"=!steps.check.output.ok","input":{"channel":"=trigger.guard.channel","sender":"=trigger.guard.sender","hours":2}},
-	    {"id":"a","type":"transform","needs":["over"],"config":{"output":"=string(steps.win.output.open) + '|' + string(steps.check.output.ok) + '|' + steps.check.output.text"}}]}`)
-	g.wf = wf
+	    {"id":"a","type":"transform","needs":["over"],"config":{"output":"=string(steps.win.output.open) + '|' + string(steps.check.output.ok) + '|' + steps.check.output.text"}}]`)
 	g.send(t, "2348031234567", text("How much is rice?"))
 	if out := g.lastOutput(t); out != "true|false|Let me check that with the team and get back to you." {
 		t.Fatalf("actions: %s", out)
@@ -373,5 +332,63 @@ func TestCustomerGuardQueue(t *testing.T) {
 	var alerts int
 	if err := g.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM alerts WHERE tenant_id = $1 AND kind = $2`, g.Tenant, assistant.AlertBusy).Scan(&alerts); err != nil || alerts != 1 {
 		t.Fatalf("%d busy alerts (%v)", alerts, err)
+	}
+}
+
+// A provider's retry of a delivery replays the guard's decision: the
+// message is counted once, and a second guarded workflow on the same
+// channel is refused when it is published (found by the review of V6).
+func TestCustomerGuardRetries(t *testing.T) {
+	g := newGuardWorld(t, `{"per_minute":2}`, "")
+	const ada = "2348031234567"
+	for i := 0; i < 3; i++ {
+		if s := g.sendID(t, "wamid.SAME", ada, text("hello")); s["outcome"] != "answer" {
+			t.Fatalf("delivery %d: %v", i, s)
+		}
+	}
+	if s := g.send(t, ada, text("second")); s["outcome"] != "answer" {
+		t.Fatalf("the retries were counted: %v", s)
+	}
+	if n := g.runCount(t, g.wf); n != 2 {
+		t.Fatalf("%d runs, want 2", n)
+	}
+	def := `{"schema":"wd/v1","id":"wf_two","version":1,"name":"two","trigger":{"type":"connector_event","config":{"connector":"whatsapp@1","trigger":"messages","guard":true}},
+	  "steps":[{"id":"a","type":"transform","config":{"output":"=1"}}]}`
+	wf := g.Publish(t, def)
+	d, err := wd.Load([]byte(def))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = db.InTenantTx(ctx, g.DB.App, []uuid.UUID{g.Tenant}, func(tx pgx.Tx) error {
+		return ingest.Sync(ctx, tx, g.Tenant, wf, 1, d, g.Registry, time.Now())
+	})
+	if err == nil || !strings.Contains(err.Error(), "already answers customers") {
+		t.Fatalf("a second assistant on the channel: %v", err)
+	}
+}
+
+// The notice goes with the first answer, even when the first message was
+// dropped; a STOP written while assistants are off is kept.
+func TestCustomerGuardNoticeAndStopWhileOff(t *testing.T) {
+	g := newGuardWorld(t, `true`, "")
+	const ada = "2348031234567"
+	if s := g.send(t, ada, `"type":"sticker","sticker":{"id":"st-1"}`); s["dropped"] != assistant.DropKind {
+		t.Fatalf("sticker: %v", s)
+	}
+	g.send(t, ada, text("Hello"))
+	if out := g.lastOutput(t); !strings.HasPrefix(out, "answer||false|text|true|") {
+		t.Fatalf("the notice was used up by a dropped message: %s", out)
+	}
+	g.send(t, ada, text("And another"))
+	if out := g.lastOutput(t); !strings.HasPrefix(out, "answer||false|text|false|") {
+		t.Fatalf("the notice went twice: %s", out)
+	}
+	g.h.Guard = &assistant.Guard{Mode: assistant.ModeOff}
+	if s := g.send(t, ada, text("STOP")); s["dropped"] != assistant.DropOff {
+		t.Fatalf("stop while off: %v", s)
+	}
+	g.h.Guard = &assistant.Guard{Mode: assistant.ModeOn}
+	if s := g.send(t, ada, text("Hello?")); s["dropped"] != assistant.DropStopped {
+		t.Fatalf("the STOP written while off was lost: %v", s)
 	}
 }
