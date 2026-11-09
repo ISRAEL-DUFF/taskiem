@@ -284,6 +284,29 @@ func TestOrdersFromCustomersMessages(t *testing.T) {
 		t.Fatalf("voice order: %s", toJSON(v))
 	}
 
+	// Their card (a tag in the chat): their orders, the latest, and Message
+	// them; the order's card has its lines.
+	card := alpha.must(200, "GET", "/v1/chat-card?kind=customer&id="+chat, nil)
+	if card["orders"] != float64(1) || card["last_order"].(map[string]any)["reference"] != ref || card["action"] != "message" || card["owes_kobo"] == nil {
+		t.Fatalf("the customer's card: %s", toJSON(card))
+	}
+	var oid string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT id::text FROM storefront_orders WHERE reference = $1`, ref).Scan(&oid); err != nil {
+		t.Fatal(err)
+	}
+	if oc := alpha.must(200, "GET", "/v1/chat-card?kind=order&id="+oid, nil); oc["name"] != ref || len(oc["lines"].([]any)) == 0 {
+		t.Fatalf("the order's card: %s", toJSON(oc))
+	}
+	var refs []any
+	for _, x := range alpha.must(200, "GET", "/v1/chat-refs", nil)["refs"].([]any) {
+		if m := x.(map[string]any); m["kind"] == "customer" || m["kind"] == "order" {
+			refs = append(refs, m)
+		}
+	}
+	if len(refs) != 2 {
+		t.Fatalf("the Taskiem chat's refs: %s", toJSON(refs))
+	}
+
 	// STOP: the thread's orders being read go; the order stays.
 	say("STOP")
 	var drafts, kept int
