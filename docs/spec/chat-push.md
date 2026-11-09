@@ -361,7 +361,7 @@ Three changes, each with its tests, in this order:
 ## 12. As built (step 1, the server)
 
 The server half: nothing is visible to a person yet, because no browser
-subscribes until step 2. Migration 00402.
+subscribes until step 2. Migration 00412.
 
 - **The package** `engine/push`: `Config` (the keys; with none the feature is
   off), `ValidEndpoint` (the allow-list of §8: `https`, the host a push
