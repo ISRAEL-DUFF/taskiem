@@ -129,8 +129,14 @@ func TestBusinessLinksByChat(t *testing.T) {
 	if l := dangote.must(200, "GET", "/v1/links", nil)["links"].([]any)[0].(map[string]any); l["state"] != "asked_us" {
 		t.Fatalf("after a forged button: %v", l)
 	}
-	// A token altered is refused.
-	if r := w.press(t, dangoteOn, accept[:len(accept)-2]+"zz"); len(r) != 1 || !strings.Contains(r[0].Text, "not valid") {
+	// A token altered is refused: a character of its signature changed
+	// (inside it, where every bit counts).
+	at := len(accept) - 10
+	other := "A"
+	if accept[at] == 'A' {
+		other = "B"
+	}
+	if r := w.press(t, dangoteOn, accept[:at]+other+accept[at+1:]); len(r) != 1 || !strings.Contains(r[0].Text, "not valid") {
 		t.Errorf("an altered token: %+v", r)
 	}
 

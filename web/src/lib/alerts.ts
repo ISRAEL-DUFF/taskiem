@@ -29,6 +29,9 @@ export interface ChatAlert {
     seller_item_id: string;
     quantity: number;
     price_kobo: number;
+    /** A product sold in sizes and colours: how many of each of the
+     * supplier's sizes (seller_item_id is then their product). */
+    sizes?: Record<string, number>;
   };
   approval?: Approval;
   who?: string;

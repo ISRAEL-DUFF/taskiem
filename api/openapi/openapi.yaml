@@ -620,6 +620,15 @@ paths:
             schema:
               type: string
               format: binary
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [url]
+              properties:
+                url:
+                  type: string
+                  description: A picture on the web (http or https). Taskiem fetches it once, through the egress guard (its own host, no private address), checks it as an upload and keeps its own copy; 400 when it cannot be opened or is not a picture.
       responses:
         '200':
           description: Stored, and the row updated
@@ -7662,6 +7671,23 @@ paths:
                             price_kobo:
                               type: integer
                               minimum: 1
+                      sizes:
+                        type: array
+                        maxItems: 100
+                        description: A product sold in sizes and colours goes on the list with all its sizes on sale; these are the ones with a price of their own, or taken off this list. A size or colour given as an item alone is refused (400).
+                        items:
+                          type: object
+                          additionalProperties: false
+                          required: [item_id]
+                          properties:
+                            item_id:
+                              type: string
+                            price_kobo:
+                              type: integer
+                              minimum: 0
+                              description: Its own price on the list; 0, the product's
+                            available:
+                              type: boolean
       responses:
         '200':
           description: Done
@@ -7864,7 +7890,7 @@ paths:
       tags:
       - Links
       summary: Order from a suppliers price list
-      description: 'A purchase order drafted at the lists prices (each line at least its minimum, while available), sent as any order is. Needs an Idempotency-Key. A line whose item you have not said is one of yours answers 422 with code item_unlinked and the item, unless item_id says which, which then links it.'
+      description: 'A purchase order drafted at the lists prices (each line at least its minimum, while available), sent as any order is. Needs an Idempotency-Key. A line whose item you have not said is one of yours answers 422 with code item_unlinked and the item, unless item_id says which, which then links it. A line is a size (seller_item_id is the size; item_id may be your product, whose matching size is used, or added when it has none yet). Quantity breaks and the minimum count a product''s sizes together. Your product with other choices answers 409 sizes_differ; your item without sizes linked to a sized product answers 409 sizes_first.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -10203,6 +10229,10 @@ paths:
                 supplier:
                   type: string
                   maxLength: 120
+                category:
+                  type: string
+                  maxLength: 60
+                  description: The kind of thing it is ("Sneakers"). The catalogue gets a category column the first time one is set
       responses:
         '201':
           description: The item, and the movement of its quantity
@@ -10264,6 +10294,10 @@ paths:
                   type: integer
                 supplier:
                   type: string
+                category:
+                  type: string
+                  maxLength: 60
+                  description: The kind of thing it is ("Sneakers"); empty for none. The catalogue gets a category column the first time one is set
                 available:
                   type: boolean
                   description: Shown on the storefront and the price lists it is on
@@ -10278,6 +10312,331 @@ paths:
                 properties:
                   item:
                     $ref: '#/components/schemas/StockItem'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/stock/group:
+    post:
+      operationId: groupStockItems
+      tags:
+      - Stock
+      summary: Make existing items one product with sizes and colours
+      description: 'Items sold as separate products ("Ankara Kaftan S Blue", "Ankara Kaftan M Blue") become one product''s sizes and colours. Each keeps its row, so its stock, history, sales, prices and links stay with it; it gains its product and its values, and its name is written out in full ("Ankara Kaftan – S, Blue"). The product is a new row with the first item''s unit, category and supplier, and the price most of the items have (those at another price keep it as their own). A price list that held some of the items one by one holds the product in their place. At least two items, all plain products with the same choices and no two of the same values; everything is checked before anything is written. The product takes the first item''s photo and is on sale when one of the items was. One grouping runs at a time in a business (409 while another does); asked again after one stopped part way, it finishes with the product it made rather than refuse it.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit
+      x-taskiem-all-environments: true
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Makes the request safe to retry: the same key is the same change'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, items]
+              properties:
+                name:
+                  type: string
+                  description: The product's name ("Ankara Kaftan")
+                choices:
+                  type: array
+                  description: The choices' order ("Size", then "Colour")
+                  items:
+                    type: string
+                items:
+                  type: array
+                  minItems: 2
+                  maxItems: 100
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [item_id, variant]
+                    properties:
+                      item_id:
+                        type: string
+                      variant:
+                        type: object
+                        description: 'Its values: {"Size": "M", "Colour": "Blue"}'
+                        additionalProperties:
+                          type: string
+      responses:
+        '200':
+          description: The product and its sizes and colours
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  item:
+                    $ref: '#/components/schemas/StockItem'
+                  variants:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StockItem'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/stock/items/{id}/variants:
+    put:
+      operationId: setStockVariants
+      tags:
+      - Stock
+      summary: Set a product's sizes and colours
+      description: 'Its choices (up to 3, 20 values each) and the grid of what it sells (up to 100). Each one sold is a catalogue row of its own, pointing at the product: made, renamed (a cell with its row id and new values), brought back, or retired (hidden, never deleted). A kept one''s count is a count. A new one''s count is stock moved from the product while the product holds some (reason moved: neither received nor lost), the rest goods received; what the product held beyond what they took is counted off it, so its own count ends at 0. One without its own price takes the product''s and follows it; the cells given a price are recorded as their own (own_price). On the price lists that hold the product itself, it is taken off sale. Everything is checked before anything is written; 409 while another save of the same product''s sizes and colours runs, and no_variant_columns when the catalogue has no room for the four columns it needs (variant_of, variant, choices, available).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit
+      x-taskiem-all-environments: true
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Makes the request safe to retry: the same key is the same change'
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                choices:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/VariantChoice'
+                cells:
+                  type: array
+                  maxItems: 100
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [variant]
+                    properties:
+                      id:
+                        type: string
+                        description: Its row, when it has one
+                      variant:
+                        type: object
+                        additionalProperties:
+                          type: string
+                      count:
+                        type: integer
+                        minimum: 0
+                      price_kobo:
+                        type: integer
+                        minimum: 0
+                        description: Its own price; absent takes the product's
+      responses:
+        '200':
+          description: The product and its sizes and colours (retired ones too)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  item:
+                    $ref: '#/components/schemas/StockItem'
+                  variants:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StockItem'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/stock/items/{id}/variants/photo:
+    post:
+      operationId: setPhotoOfChoice
+      tags:
+      - Stock
+      summary: Set a colour's photo on a product's sizes
+      description: The picture (a file, or a link as for a product's photo) is stored once and made the photo of each of the product's sizes and colours on sale with that value, which the public page shows when a customer picks it; the product's own photos stay. A diary line and an audit entry.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The product's row id
+      - name: choice
+        in: query
+        required: true
+        schema:
+          type: string
+        description: The choice the photo is for, as the product names it (Colour); any case
+      - name: value
+        in: query
+        required: true
+        schema:
+          type: string
+        description: Its value (Black); 400 when no size or colour of it is on sale
+      requestBody:
+        required: true
+        content:
+          image/jpeg:
+            schema:
+              type: string
+              format: binary
+          image/png:
+            schema:
+              type: string
+              format: binary
+          image/webp:
+            schema:
+              type: string
+              format: binary
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [url]
+              properties:
+                url:
+                  type: string
+                  description: A picture on the web, fetched once as for a product's photo
+      responses:
+        '200':
+          description: Stored, and set on that colour's sizes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [photo, sizes]
+                properties:
+                  photo:
+                    $ref: '#/components/schemas/StorefrontMedia'
+                  sizes:
+                    type: integer
+                    description: How many sizes now show it
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: clearPhotoOfChoice
+      tags:
+      - Stock
+      summary: Take a colour's photo off a product's sizes
+      description: That colour's sizes show the product's photos again.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The product's row id
+      - name: choice
+        in: query
+        required: true
+        schema:
+          type: string
+        description: The choice the photo is for, as the product names it (Colour); any case
+      - name: value
+        in: query
+        required: true
+        schema:
+          type: string
+        description: Its value (Black); 400 when no size or colour of it is on sale
+      responses:
+        '204':
+          description: Taken out
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/stock/movements/grid:
+    post:
+      operationId: moveStockGrid
+      tags:
+      - Stock
+      summary: Goods received, or a count, for several of a product's sizes and colours
+      description: 'One movement each, told as one diary line ("Stock in: Air Max 90, 7 sizes and colours, +36").'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit
+      x-taskiem-all-environments: true
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Makes the request safe to retry: the same key is the same change'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [reason, lines]
+              properties:
+                reason:
+                  type: string
+                  enum: [received, count]
+                note:
+                  type: string
+                lines:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [item_id]
+                    properties:
+                      item_id:
+                        type: string
+                      change:
+                        type: integer
+                        minimum: 1
+                      count:
+                        type: integer
+                        minimum: 0
+      responses:
+        '200':
+          description: The movements
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  movements:
+                    type: array
+                    items:
+                      type: object
         default:
           $ref: '#/components/responses/Error'
   /v1/stock/movements:
@@ -10301,7 +10660,7 @@ paths:
         in: query
         schema:
           type: string
-          enum: [order, sale, received, adjustment, count, outside]
+          enum: [order, sale, received, adjustment, count, outside, moved]
       - name: since
         in: query
         schema:
@@ -26615,6 +26974,11 @@ components:
               type: integer
             price_kobo:
               type: integer
+            sizes:
+              type: object
+              description: A product sold in sizes and colours (seller_item_id is the supplier's product) - how many of each of the supplier's sizes, by their item; at least the supplier's minimum together
+              additionalProperties:
+                type: integer
         approval:
           $ref: '#/components/schemas/Approval'
         who:
@@ -31179,6 +31543,15 @@ components:
           type: string
         supplier:
           type: string
+        variant_of:
+          type: string
+          description: A size or colour's product row (sizes and colours)
+        variant:
+          type: string
+          description: A size or colour's values, as JSON
+        choices:
+          type: string
+          description: A product's choices and their values, as JSON
         sort:
           type: string
         duration:
@@ -32233,6 +32606,12 @@ components:
           type: string
         unit:
           type: string
+        category:
+          type: string
+          description: The seller's category for it
+        description:
+          type: string
+          description: The seller's words for it (its storefront description), for search
         price_kobo:
           type: integer
         min_quantity:
@@ -32257,6 +32636,41 @@ components:
               price_kobo:
                 type: integer
                 minimum: 1
+        choices:
+          type: array
+          description: A product sold in sizes and colours, listed once - its choices, with only the values its sizes on sale have
+          items:
+            $ref: '#/components/schemas/VariantChoice'
+        sizes:
+          type: array
+          maxItems: 100
+          description: Its sizes and colours on sale, each ordered on its own row (an order line names the size's item_id), at the product's price unless it has its own; the product's breaks and minimum count its sizes together
+          items:
+            type: object
+            additionalProperties: false
+            required: [item_id, name, variant, available]
+            properties:
+              item_id:
+                type: string
+              name:
+                type: string
+                description: Written out in full - Air Max 90 – 42, Black
+              variant:
+                type: object
+                additionalProperties:
+                  type: string
+              price_kobo:
+                type: integer
+                description: Its own price on the list; absent, the product's
+              available:
+                type: boolean
+        variant_of:
+          type: string
+          description: On a size as an order line prices it, its product's item
+        variant:
+          type: object
+          additionalProperties:
+            type: string
     PriceList:
       type: object
       additionalProperties: false
@@ -32704,6 +33118,20 @@ components:
         updated_at:
           type: string
           format: date-time
+    VariantChoice:
+      type: object
+      additionalProperties: false
+      required: [name, values]
+      properties:
+        name:
+          type: string
+          maxLength: 30
+        values:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            maxLength: 30
     StockItem:
       type: object
       required: [id, name, available, stock]
@@ -32729,6 +33157,30 @@ components:
           type: integer
         supplier:
           type: string
+        category:
+          type: string
+          description: The kind of thing it is ("Sneakers"), when the catalogue has a category column
+        description:
+          type: string
+          description: Its words on the storefront, when the catalogue maps them
+        variant_of:
+          type: string
+          description: The product this is a size or colour of
+        variant:
+          type: object
+          additionalProperties:
+            type: string
+          description: 'Its values: {"Size": "42", "Colour": "Black"}'
+        choices:
+          type: array
+          description: A product's choices, when it has sizes and colours (it keeps no stock of its own then)
+          items:
+            $ref: '#/components/schemas/VariantChoice'
+        own_price:
+          type: array
+          description: On a product, its sizes and colours with a price of their own, each as its values in lower case ("colour=black|size=42"); the others follow the product's price
+          items:
+            type: string
         low:
           type: boolean
         suggest:
@@ -32750,7 +33202,7 @@ components:
           type: string
         reason:
           type: string
-          enum: [order, sale, received, adjustment, count, outside]
+          enum: [order, sale, received, adjustment, count, outside, moved]
         status:
           type: string
           enum: [pending, done, void]

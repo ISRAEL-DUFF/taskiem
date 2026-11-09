@@ -194,6 +194,33 @@ test("a tool that cannot load says so, and tries again", async ({ browser }) => 
   await expect(sheet.getByRole("listitem")).toHaveCount(3);
 });
 
+test("an order's card shows where the order is now, after it moves on", async ({ browser }) => {
+  const { buyer: seller, link } = await linked(browser);
+  await seller.request.put("/v1/settings/chat-tools", { headers: H, data: { chat_tools: true } });
+  const at = (s: number) => new Date(Date.now() - 60_000 + s * 1000).toISOString();
+  // Their order arrived; we accepted it (our line), then sent it on its way.
+  await seller.route(`**/v1/link-chats/${link}/messages**`, (r) =>
+    r.request().method() === "GET"
+      ? r.fulfill(
+          json({
+            messages: [
+              { id: "m1", link, mine: false, kind: "card", card: { doc: "order", event: "ordered", reference: "P-7K8YED", amount_kobo: 26_000_000 }, created_at: at(0) },
+              { id: "m2", link, mine: true, kind: "card", card: { doc: "order", event: "accept", reference: "P-7K8YED", amount_kobo: 26_000_000 }, created_at: at(10) },
+              { id: "m3", link, mine: true, kind: "card", card: { doc: "order", event: "dispatched", reference: "P-7K8YED", amount_kobo: 26_000_000 }, created_at: at(20) },
+            ],
+          }),
+        )
+      : r.continue(),
+  );
+  await seller.goto(`/chat?with=${link}`);
+  const card = seller.getByTestId("chat-pane").getByRole("article", { name: "Order · P-7K8YED" });
+  // Still the card of their order, but no longer "New": on the way, with no buttons left.
+  await expect(card).toContainText("sent order P-7K8YED");
+  await expect(card).not.toContainText("New");
+  await expect(card.getByRole("img", { name: "On the way: step 3 of 4" })).toBeVisible();
+  await expect(card.getByRole("button", { name: /^Accept/ })).toHaveCount(0);
+});
+
 test("our own changes are diary lines; theirs are cards with their progress", async ({ browser }) => {
   const { buyer, link } = await linked(browser);
   await buyer.request.put("/v1/settings/chat-tools", { headers: H, data: { chat_tools: true } });

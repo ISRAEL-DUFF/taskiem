@@ -15,18 +15,95 @@ export function stepQty(qty: number, min: number, dir: 1 | -1): number {
   return qty - 1 < m ? 0 : qty - 1;
 }
 
-/** The bag: its lines, how many and the total. */
+/** An item an order line names: one of a list's, or one size of a
+ * product listed with its sizes and colours (variant_of its product). */
+export type OrderItem = PriceItem & {
+  variant_of?: string;
+  variant?: Record<string, string>;
+};
+
+/** A list's items as order lines name them: a product sold in sizes and
+ * colours as each size (at its own price, else the product's with its
+ * quantity prices; on sale when both are), every other item as it is. */
+export function flatItems(items: PriceItem[]): OrderItem[] {
+  const out: OrderItem[] = [];
+  for (const it of items) {
+    if (!it.sizes?.length) {
+      // A product sold in sizes with none on sale now: nothing to order.
+      if (!it.choices?.length) out.push(it);
+      continue;
+    }
+    for (const z of it.sizes) {
+      const own = (z.price_kobo ?? 0) > 0 && !it.overridden;
+      out.push({
+        item_id: z.item_id,
+        name: z.name,
+        unit: it.unit,
+        category: it.category,
+        price_kobo: own ? (z.price_kobo ?? 0) : it.price_kobo,
+        min_quantity: 1,
+        available: it.available && z.available,
+        breaks: own ? undefined : it.breaks,
+        variant_of: it.item_id,
+        variant: z.variant,
+      });
+    }
+  }
+  return out;
+}
+
+/** A listed product sold in sizes and colours: ordered by its sizes, never
+ * itself, even with none on sale now. */
+export const soldInSizes = (it: PriceItem) =>
+  !!it.choices?.length || !!it.sizes?.length;
+
+/** The item a line's quantity prices and minimum count toward: a size's
+ * product, else the item itself. */
+export const productOf = (it: OrderItem) => it.variant_of ?? it.item_id;
+
+/** How many of each product the quantities take, its sizes together. */
+export function together(
+  items: OrderItem[],
+  qty: Record<string, number>,
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const it of items) {
+    const n = qty[it.item_id] ?? 0;
+    if (n > 0) out[productOf(it)] = (out[productOf(it)] ?? 0) + n;
+  }
+  return out;
+}
+
+/** "36 pairs in 7 sizes and colours": a product's sizes in the bag. */
+export function sizesTaken(
+  product: PriceItem,
+  qty: Record<string, number>,
+): string {
+  const taken = (product.sizes ?? []).filter((z) => (qty[z.item_id] ?? 0) > 0);
+  if (taken.length === 0) return "";
+  const n = taken.reduce((a, z) => a + (qty[z.item_id] ?? 0), 0);
+  const unit = product.unit ? (n === 1 ? product.unit : `${product.unit}s`) : "";
+  const sizes = taken.length === 1 ? "1 size or colour" : `${taken.length} sizes and colours`;
+  return `${n}${unit ? ` ${unit}` : ""} in ${sizes}`;
+}
+
+/** The bag: its lines, how many and the total. A product's sizes are
+ * lines of their own, priced at the product's quantity together. */
 export function bagOf(items: PriceItem[], qty: Record<string, number>) {
-  const lines = items
+  const flat = flatItems(items);
+  const lines = flat
     .filter((it) => (qty[it.item_id] ?? 0) > 0)
     .map((it) => ({ item: it, quantity: qty[it.item_id] ?? 0 }));
+  const sum = together(flat, qty);
+  const unitPrice = (it: OrderItem) => priceAt(it, sum[productOf(it)] ?? 0);
   // Each at its price for that quantity (a quantity break).
-  const total = lines.reduce((n, l) => n + l.quantity * priceAt(l.item, l.quantity), 0);
+  const total = lines.reduce((n, l) => n + l.quantity * unitPrice(l.item), 0);
+  const products = new Set(lines.map((l) => productOf(l.item))).size;
   const count =
-    lines.length === 0
+    products === 0
       ? "Nothing yet"
-      : `${lines.length} ${lines.length === 1 ? "item" : "items"} in your order`;
-  return { lines, total, count };
+      : `${products} ${products === 1 ? "item" : "items"} in your order`;
+  return { lines, total, count, unitPrice };
 }
 
 /** A message asking the supplier to quote for the bag. */
@@ -89,20 +166,23 @@ export function purchaseState(
 }
 
 /** The last order's lines again, as the price list has them now: those
- * still on it, by the item links between their items and ours. */
+ * still on it, by the item links between their items and ours, a
+ * product's sizes each by its own (the minimum of a product sold in sizes
+ * is its sizes' together: the review says when it is short). */
 export function reorderQty(
   last: Pick<Purchase, "lines">,
   links: ItemLink[],
   items: PriceItem[],
 ): Record<string, number> {
   const out: Record<string, number> = {};
+  const orderable = flatItems(items);
   for (const l of last.lines) {
     const seller =
       links.find((x) => x.item_id === l.item_id)?.seller_item_id ??
-      items.find((it) => it.name === l.item)?.item_id;
-    const it = items.find((x) => x.item_id === seller);
+      orderable.find((it) => it.name === l.item)?.item_id;
+    const it = orderable.find((x) => x.item_id === seller);
     if (it && it.available)
-      out[it.item_id] = Math.max(l.quantity, it.min_quantity);
+      out[it.item_id] = (out[it.item_id] ?? 0) + Math.max(l.quantity, it.min_quantity);
   }
   return out;
 }

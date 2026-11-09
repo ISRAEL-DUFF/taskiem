@@ -21,6 +21,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/matching"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/stock"
+	"github.com/israel-duff/taskiem/engine/variants"
 )
 
 // Chat tools phase 4 (docs/spec/chat-tools.md §6): alerts you can act on,
@@ -59,6 +60,9 @@ type chatAlert struct {
 	// Who asked for it ("Tunde (cashier)").
 	Approval *approvalItem `json:"approval,omitempty"`
 	Who      string        `json:"who,omitempty"`
+	// Cells are a product's sizes and colours that are low, when the card
+	// is about a product that has them: its stock form opens on them.
+	Cells []string `json:"cells,omitempty"`
 }
 
 type alertReorder struct {
@@ -67,6 +71,11 @@ type alertReorder struct {
 	SellerItemID string    `json:"seller_item_id"`
 	Quantity     int64     `json:"quantity"`
 	PriceKobo    int64     `json:"price_kobo"`
+	// Sizes is, for a product sold in sizes and colours, how many of each
+	// of the supplier's sizes (by their item) the low ones of ours come
+	// to, at least the supplier's minimum together; SellerItemID is then
+	// their product and Quantity the sizes' total.
+	Sizes map[string]int64 `json:"sizes,omitempty"`
 }
 
 // getChatAlerts is GET /v1/chat-alerts: the caller's alerts, oldest first.
@@ -217,12 +226,24 @@ func (s *Server) lowStockAlerts(ctx context.Context, p *Principal) ([]chatAlert,
 		return nil, err
 	}
 	var low []stock.Item
+	// A product's sizes and colours are told as one card: "Air Max 90 is
+	// running low: 42, Black and 43, Black".
+	byProduct := map[string][]stock.Item{}
+	var products []string
 	for _, it := range items {
-		if it.Low() && !onOrder[it.ID] {
-			low = append(low, it)
+		if !it.Low() || onOrder[it.ID] || !it.Available && it.VariantOf != "" {
+			continue
 		}
+		if it.VariantOf != "" {
+			if byProduct[it.VariantOf] == nil {
+				products = append(products, it.VariantOf)
+			}
+			byProduct[it.VariantOf] = append(byProduct[it.VariantOf], it)
+			continue
+		}
+		low = append(low, it)
 	}
-	if len(low) == 0 {
+	if len(low) == 0 && len(products) == 0 {
 		return nil, nil
 	}
 	// Which linked supplier sells each of ours, and at what.
@@ -231,6 +252,7 @@ func (s *Server) lowStockAlerts(ctx context.Context, p *Principal) ([]chatAlert,
 		item     links.PriceItem
 	}
 	from := map[string]sells{}
+	sized := map[string]sells{} // our product → their product sold in sizes
 	if p.Can(PermTableEdit) && p.Can(PermStorefrontManage) {
 		if err := db0(ctx, s, p.TenantID, func(tx pgx.Tx) error {
 			lists, err := links.SupplierPricesTx(ctx, tx, p.TenantID, uuid.Nil)
@@ -242,11 +264,17 @@ func (s *Server) lowStockAlerts(ctx context.Context, p *Principal) ([]chatAlert,
 				if err != nil {
 					return err
 				}
+				flat := links.Flat(l.Items)
 				for _, il := range ls {
+					if pi, ok := flat[il.SellerItemID]; ok && pi.Available {
+						if _, ok := from[il.ItemID]; !ok {
+							from[il.ItemID] = sells{supplier: l, item: pi}
+						}
+					}
 					for _, pi := range l.Items {
-						if pi.ItemID == il.SellerItemID && pi.Available {
-							if _, ok := from[il.ItemID]; !ok {
-								from[il.ItemID] = sells{supplier: l, item: pi}
+						if pi.ItemID == il.SellerItemID && len(pi.Sizes) > 0 && pi.Available {
+							if _, ok := sized[il.ItemID]; !ok {
+								sized[il.ItemID] = sells{supplier: l, item: pi}
 							}
 						}
 					}
@@ -275,7 +303,76 @@ func (s *Server) lowStockAlerts(ctx context.Context, p *Principal) ([]chatAlert,
 		}
 		out = append(out, a)
 	}
+	named := map[string]stock.Item{}
+	for _, it := range items {
+		named[it.ID] = it
+	}
+	for _, pid := range products {
+		prod, ok := named[pid]
+		if !ok {
+			continue
+		}
+		cells := byProduct[pid]
+		labels := make([]string, 0, len(cells))
+		ids := make([]string, 0, len(cells))
+		for _, c := range cells {
+			labels = append(labels, variants.Label(c.Variant, prod.Choices))
+			ids = append(ids, c.ID)
+		}
+		a := chatAlert{Key: "low_stock:" + pid, Kind: "low_stock", At: now, ID: pid, Cells: ids,
+			Title: prod.Name + " is running low", Line: lowSizesLine(labels)}
+		if x, ok := sized[pid]; ok {
+			a.Reorder = sizesReorder(x.supplier, x.item, cells)
+		}
+		out = append(out, a)
+	}
 	return out, nil
+}
+
+// sizesReorder is what ordering the low sizes of one of ours from the
+// supplier's product sold in sizes comes to: each low size of ours as
+// their size of the same values (one they do not sell is left out), for
+// enough to reach its level, and at least their minimum together (what
+// is short on the first). Nil when they sell none of them.
+func sizesReorder(sup links.SupplierPrices, product links.PriceItem, low []stock.Item) *alertReorder {
+	flat := links.Flat([]links.PriceItem{product})
+	r := &alertReorder{Link: sup.LinkID, Supplier: sup.Business, SellerItemID: product.ItemID, Sizes: map[string]int64{}}
+	first := ""
+	for _, c := range low {
+		for _, z := range product.Sizes {
+			x := flat[z.ItemID]
+			if x.Available && variants.Key(x.Variant) == variants.Key(c.Variant) {
+				n := max(c.Suggest(), 1)
+				r.Sizes[z.ItemID] += n
+				r.Quantity += n
+				if first == "" {
+					first = z.ItemID
+				}
+			}
+		}
+	}
+	if first == "" {
+		return nil
+	}
+	if short := int64(product.MinQuantity) - r.Quantity; short > 0 {
+		r.Sizes[first] += short
+		r.Quantity += short
+	}
+	r.PriceKobo = links.PriceAt(product, r.Quantity)
+	return r
+}
+
+// lowSizesLine says which of a product's sizes and colours are low:
+// "42, Black is low", "42 and 43 are low", "40, 41, 42 and 3 more are low".
+func lowSizesLine(labels []string) string {
+	switch n := len(labels); {
+	case n == 1:
+		return labels[0] + " is low"
+	case n <= 3:
+		return strings.Join(labels[:n-1], "; ") + " and " + labels[n-1] + " are low"
+	default:
+		return strings.Join(labels[:3], "; ") + fmt.Sprintf(" and %d more are low", n-3)
+	}
 }
 
 // alertStock keeps each business's stock items for a little while: the

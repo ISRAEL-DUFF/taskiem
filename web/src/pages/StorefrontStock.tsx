@@ -50,6 +50,13 @@ import {
   type StockView,
 } from "../lib/stock";
 import { formatPrice } from "../lib/storefront";
+import {
+  hasSizes,
+  label,
+  sizesLine,
+  sizesOf,
+  sizesWords,
+} from "../lib/variants";
 import { CountsCard } from "./StockCounts";
 import { PurchasesCard } from "./StockPurchases";
 import { StorefrontTabs } from "./Storefront";
@@ -103,7 +110,7 @@ export function StorefrontStock() {
         }
       />
       <StorefrontTabs />
-      <ErrorBox error={view.error ?? act.error} />
+      <ErrorBox error={view.error} />
       {!v && !view.error && <Skeleton rows={4} label="Loading your stock…" />}
       {v && !v.keeps_stock && (
         <section className="card" aria-labelledby="stock-start">
@@ -132,6 +139,8 @@ export function StorefrontStock() {
               Keep my stock
             </button>
           </div>
+          {/* Beside the button that was pressed, where the person is looking. */}
+          <ErrorBox error={act.error} />
         </section>
       )}
       {v?.keeps_stock && (
@@ -196,35 +205,46 @@ export function StorefrontStock() {
               </EmptyState>
             ) : (
               <Items label="Your items">
-                {v.items.map((it) => (
+                {deskRows(v.items).map(({ it, size, sizes }) => (
                   <Row
                     key={it.id}
-                    letter={it.name}
-                    title={it.name}
+                    letter={size ? undefined : it.name}
+                    title={size ? label(it.variant, size.choices) : it.name}
                     side={
                       <span
-                        className={`badge ${it.low ? "warn" : it.stock === null ? "muted" : "ok"}`}
+                        className={`badge ${it.low || (sizes && sizes.low > 0) ? "warn" : it.stock === null && !sizes ? "muted" : "ok"}`}
                       >
-                        {stockLine(it)}
+                        {sizes
+                          ? `${sizesWords(sizes.count)}${sizes.stock !== null ? ` · ${sizes.stock} in stock` : ""}${sizes.low ? ` · ${sizes.low} low` : ""}`
+                          : stockLine(it)}
                       </span>
                     }
-                    sub={<span className="sub">{itemSub(it)}</span>}
-                    testid="stock-item"
+                    sub={
+                      <span className="sub">
+                        {size ? `Of ${size.name}` : itemSub(it)}
+                      </span>
+                    }
+                    testid={size ? "stock-size" : "stock-item"}
                   >
-                    <button
-                      type="button"
-                      className="small"
-                      onClick={() => setMoving(it)}
-                    >
-                      Record stock<span className="sr-only"> of {it.name}</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="small"
-                      onClick={() => setEditing(it)}
-                    >
-                      Change<span className="sr-only"> {it.name}</span>
-                    </button>
+                    {!sizes && (
+                      <button
+                        type="button"
+                        className="small"
+                        onClick={() => setMoving(it)}
+                      >
+                        Record stock
+                        <span className="sr-only"> of {it.name}</span>
+                      </button>
+                    )}
+                    {!size && (
+                      <button
+                        type="button"
+                        className="small"
+                        onClick={() => setEditing(it)}
+                      >
+                        Change<span className="sr-only"> {it.name}</span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="small"
@@ -928,4 +948,25 @@ export function StockOffer() {
       </ul>
     </section>
   );
+}
+
+/** The desk's list: each product once; one sold in sizes and colours with
+ * their count together, and its sizes on sale after it, each named by its
+ * values ("42, Black") with its own stock and history. */
+function deskRows(items: StockItem[]) {
+  const out: {
+    it: StockItem;
+    size?: StockItem;
+    sizes?: ReturnType<typeof sizesLine>;
+  }[] = [];
+  for (const it of items) {
+    if (it.variant_of) continue;
+    if (!hasSizes(it)) {
+      out.push({ it });
+      continue;
+    }
+    out.push({ it, sizes: sizesLine(items, it.id) });
+    for (const z of sizesOf(items, it.id)) out.push({ it: z, size: it });
+  }
+  return out;
 }

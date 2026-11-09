@@ -1372,6 +1372,54 @@
       "text": "Tábìlì rẹ {table} kò tíì ní ọ̀wọ̀n {columns}, tí ó ń lò. Fi kún un nínú áàpù{link}, bí bẹ́ẹ̀ kọ́ àwọn ìgbésẹ̀ yẹn yóò kùnà.",
       "reviewed": false
     },
+    "wa.stock.category": {
+      "text": "*{category}* ({count}):\n{list}",
+      "reviewed": false
+    },
+    "wa.stock.category_more": {
+      "text": "Fi *more* ránṣẹ́ fún àwọn tó kù.",
+      "reviewed": false
+    },
+    "wa.stock.which_size": {
+      "text": "{name} ní ìwọ̀n àti àwọ̀ {count}. Sọ èwo, pẹ̀lú ìwọ̀n àti àwọ̀ rẹ̀ lẹ́yìn orúkọ, bí *{example}*.",
+      "reviewed": false
+    },
+    "wa.order.which_size": {
+      "text": "{name} láti {business} wà ní ìwọ̀n àti àwọ̀: {sizes}. Sọ èwo, bí *{example}*, tàbí yan ọ̀pọ̀ lẹ́ẹ̀kan nínú ìbánisọ̀rọ̀ rẹ pẹ̀lú wọn lórí Taskiem.",
+      "reviewed": false
+    },
+    "wa.size.which": {
+      "text": "{choice} wo ni ti {name}? Fèsì pẹ̀lú nọ́mbà rẹ̀, tàbí sọ ọ́:\n{list}",
+      "reviewed": false
+    },
+    "wa.size.again": {
+      "text": "Fèsì pẹ̀lú nọ́mbà {choice} náà, tàbí sọ ọ́:\n{list}",
+      "reviewed": false
+    },
+    "wa.size.none": {
+      "text": "{name} kò ní èyíkéyìí fún títà ní {said}. Ó wà ní {sizes}.",
+      "reviewed": false
+    },
+    "wa.size.say": {
+      "text": "{choice} wo ni ti {name}? Sọ ọ́: {list}",
+      "reviewed": false
+    },
+    "wa.size.say_again": {
+      "text": "Sọ {choice} náà: {list}",
+      "reviewed": false
+    },
+    "wa.order.no_size": {
+      "text": "{name} láti ọ̀dọ̀ {business} kò sí ní {said}. Ó wà ní {sizes}.",
+      "reviewed": false
+    },
+    "wa.stock.sizes": {
+      "text": "{name}: ìwọ̀n àti àwọ̀ {count}, {total} lápapọ̀.\n{lines}",
+      "reviewed": false
+    },
+    "wa.stock.low_tag": {
+      "text": "(ó ti dín)",
+      "reviewed": false
+    },
     "wa.tablemake.denied": {
       "text": "O kò lè ṣe tàbí yí tábìlì padà ní {org} (ó nílò table.edit).",
       "reviewed": false

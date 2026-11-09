@@ -61,6 +61,7 @@ const paths: Record<string, string> = {
   package: "M4 8h16v11a2 2 0 01-2 2H6a2 2 0 01-2-2zM3 4h18v4H3zM10 12h4",
   star: "M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z",
   image: "M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4M15 9h.01",
+  link: "M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1",
   pin: "M9 3h6l-1 6 3 3H7l3-3zM12 12v9",
   mute: "M6 16V11a6 6 0 019-5.2M18 11v5l2 2H8M4 4l16 16",
   // The workflow builder's.

@@ -15,20 +15,21 @@ export interface Violation {
 /** Runs axe (WCAG 2.1 A and AA, and its best practices) on the page and
  * returns the violations, each with up to five offending elements. */
 export async function axe(page: Page): Promise<Violation[]> {
-  // A theme just switched fades its colours (0.12 s on a button): on a slow
-  // runner axe could read one half way, light words on a white button. Wait
-  // for the transitions running now (not the looping animations), 2 s at most.
-  await page.evaluate(() =>
-    Promise.race([
-      Promise.all(
-        document
-          .getAnimations()
-          .filter((a) => a instanceof CSSTransition)
-          .map((a) => a.finished.catch(() => undefined)),
-      ),
+  // A theme just switched fades its colours (0.12 s on a button's ground,
+  // while its words change at once): on a slow runner axe could read one half
+  // way, light words on a white button. Wait for the transitions running now
+  // (not the looping animations), 2 s at most. A page that has drawn no frame
+  // meanwhile still holds them at their start (CI once read a dark theme's
+  // words on the light #ffffff ground of a button), so whatever is left is
+  // then taken to its end: axe checks the colours a person sees once settled.
+  await page.evaluate(async () => {
+    const fading = () => document.getAnimations().filter((a) => a instanceof CSSTransition);
+    await Promise.race([
+      Promise.all(fading().map((a) => a.finished.catch(() => undefined))),
       new Promise((r) => setTimeout(r, 2000)),
-    ]),
-  );
+    ]);
+    for (const a of fading()) a.finish();
+  });
   if (!(await page.evaluate(() => "axe" in window))) await page.addScriptTag({ path: axeSource });
   return page.evaluate(async () => {
     const w = window as unknown as {

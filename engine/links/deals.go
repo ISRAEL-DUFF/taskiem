@@ -199,15 +199,20 @@ func SetDealSettingsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, s DealS
 }
 
 // BelowFloor says why an order's prices are past what staff may agree:
-// a line under its item's lowest price, or the whole order further off
-// the seller's prices than the largest discount. Nothing: within.
-func BelowFloor(lines []OrderLine, floors map[string]int64, s DealSettings) []string {
+// a line under its item's lowest price (a size's own, else its product's:
+// parents), or the whole order further off the seller's prices than the
+// largest discount. Nothing: within.
+func BelowFloor(lines []OrderLine, floors map[string]int64, parents map[string]string, s DealSettings) []string {
 	var why []string
 	for _, l := range lines {
 		if l.Quantity == 0 || l.ItemID == "" {
 			continue
 		}
-		if f := floors[l.ItemID]; f > 0 && l.PriceKobo < f {
+		f := floors[l.ItemID]
+		if f == 0 && parents[l.ItemID] != "" {
+			f = floors[parents[l.ItemID]]
+		}
+		if f > 0 && l.PriceKobo < f {
 			why = append(why, fmt.Sprintf("%s at %s is under its lowest price, %s", l.Item, naira(l.PriceKobo), naira(f)))
 		}
 	}

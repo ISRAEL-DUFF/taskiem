@@ -436,6 +436,28 @@ func (s *Server) waAddSupplier(ctx context.Context, c *chat, m []string) error {
 					continue
 				}
 				match := matchStock(items, part)
+				// A product sold in sizes and colours: it and its sizes
+				// (those its values name, when said), one supplier for all.
+				if product, one := sizesOfOne(items, match); one {
+					if _, have, found := findSized(items, part); !found || len(have) == 0 {
+						pc.Items = append(pc.Items, product.ID)
+						for _, z := range variantsOf(items, product.ID) {
+							pc.Items = append(pc.Items, z.ID)
+						}
+						names = append(names, product.Name)
+						continue
+					}
+					for _, z := range match {
+						pc.Items = append(pc.Items, z.ID)
+						names = append(names, z.Name)
+					}
+					continue
+				}
+				if len(match) == 0 {
+					if done, err := s.sizeNotSold(ctx, c, items, part); done || err != nil {
+						return err
+					}
+				}
 				if len(match) != 1 {
 					return c.say(ctx, s, c.t("wa.shop.no_item", "name", whatsapp.SafeText(part)))
 				}
@@ -511,8 +533,20 @@ func (s *Server) waReceived(ctx context.Context, c *chat, rest string) (bool, er
 		return true, err
 	}
 	match := matchStock(items, a.Name)
-	if len(match) == 1 && match[0].Supplier != "" {
-		it := match[0]
+	if len(match) == 1 {
+		if done, err := s.receivedItem(ctx, c, a, match[0]); done || err != nil {
+			return true, err
+		}
+	}
+	// Several sizes of one product: the size asked, then received the
+	// same way (receivedItem), against its supplier's open order.
+	return true, s.waStockAddFrom(ctx, c, a, true)
+}
+
+// receivedItem receives goods of one item against the open order from its
+// supplier; false when there is none (a plain receipt, as add does).
+func (s *Server) receivedItem(ctx context.Context, c *chat, a stock.Added, it stock.Item) (bool, error) {
+	if it.Supplier != "" {
 		var x stock.Purchase
 		err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
 			var err error
@@ -539,7 +573,7 @@ func (s *Server) waReceived(ctx context.Context, c *chat, rest string) (bool, er
 			return true, err
 		}
 	}
-	return true, s.waStockAdd(ctx, c, a)
+	return false, nil
 }
 
 // waPaidSupplier answers "paid Dangote 425,000 transfer": the oldest
