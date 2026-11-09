@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 )
 
 // A rider that is a business on Taskiem, through the API (docs/spec/
@@ -287,8 +288,18 @@ func TestRiderAvailability(t *testing.T) {
 	if out := ada.must(200, "POST", "/v1/storefront/orders/"+ref+"/offer", map[string]any{}); out["status"] != "no_rider" {
 		t.Errorf("offered to a rider who is off: %v", out)
 	}
-	// Busy till a time, then free again; a bad time is refused.
+	// Busy till a time, then free again; a bad time and a time already
+	// past today are refused (the words would take it as tomorrow's).
 	musaBiz.must(400, "PUT", "/v1/availability", map[string]any{"state": "busy", "until": "soon"})
+	if lagos, _ := time.LoadLocation("Africa/Lagos"); time.Now().In(lagos).Hour() >= 1 {
+		musaBiz.must(400, "PUT", "/v1/availability", map[string]any{"state": "busy", "until": "00:30"})
+	}
+	// A plain Busy lasts an hour at least, whatever the clock says.
+	if got := musaBiz.must(200, "PUT", "/v1/availability", map[string]any{"state": "busy"}); got["state"] != "busy" {
+		t.Fatalf("plain busy: %v", got)
+	} else if until, _ := time.Parse(time.RFC3339, got["until"].(string)); time.Until(until) < 59*time.Minute {
+		t.Fatalf("plain busy ends too soon: %v", got["until"])
+	}
 	if got := musaBiz.must(200, "PUT", "/v1/availability", map[string]any{"state": "busy", "until": "11:59pm"}); got["state"] != "busy" || got["until"] == nil {
 		t.Fatalf("busy: %v", got)
 	}

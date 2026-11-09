@@ -31,8 +31,14 @@ func (s *Server) getAvailability(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
+// minBusy is the least a plain Busy lasts: a tap late at night does not
+// end at midnight two minutes later.
+const minBusy = time.Hour
+
 // putAvailability is PUT /v1/availability {"state": "on" | "off" | "busy",
-// "until": "15:30" (busy; a clock time today, Lagos) }.
+// "until": "15:30" (busy; a clock time today, Lagos; left out, the rest of
+// the day, an hour at least) }. A time already past today is refused: the
+// words would take it as tomorrow's.
 func (s *Server) putAvailability(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		State string `json:"state"`
@@ -47,14 +53,24 @@ func (s *Server) putAvailability(w http.ResponseWriter, r *http.Request) {
 		said.State = "on"
 	}
 	if said.State == "busy" {
+		now := time.Now()
 		word := "busy"
 		if req.Until != "" {
 			word = "busy till " + req.Until
 		}
 		var ok bool
-		if said, ok = riders.ParseWord(word, time.Now()); !ok {
+		if said, ok = riders.ParseWord(word, now); !ok {
 			s.fail(w, r, fmt.Errorf("%w: a time like 3pm or 15:30", errBadRequest))
 			return
+		}
+		if req.Until != "" && !riders.SameDay(said.Until, now) {
+			// The words take a time already past as tomorrow's; here, today
+			// is what was asked.
+			s.fail(w, r, fmt.Errorf("%w: %s has passed today; a later time, or Busy for the rest of the day", errBadRequest, riders.Clock(said.Until)))
+			return
+		}
+		if said.Until.Sub(now) < minBusy {
+			said.Until = now.Add(minBusy)
 		}
 	}
 	p := principalFrom(r.Context())

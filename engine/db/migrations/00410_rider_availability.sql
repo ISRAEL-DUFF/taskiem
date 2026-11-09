@@ -57,13 +57,20 @@ $$;
 CREATE FUNCTION taskiem_rider_availability()
 RETURNS TABLE (said text, until timestamptz, said_at timestamptz, open int, open_since timestamptz, businesses int)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
-  WITH mine AS (SELECT taskiem_rider_own_hashes(taskiem_link_self()) AS h)
-  SELECT (SELECT p.said FROM rider_presence p WHERE p.phone_hash IN (SELECT h FROM mine) AND (p.said = 'off' OR p.until > now()) ORDER BY p.said_at DESC LIMIT 1),
-         (SELECT p.until FROM rider_presence p WHERE p.phone_hash IN (SELECT h FROM mine) AND (p.said = 'off' OR p.until > now()) ORDER BY p.said_at DESC LIMIT 1),
-         (SELECT p.said_at FROM rider_presence p WHERE p.phone_hash IN (SELECT h FROM mine) AND (p.said = 'off' OR p.until > now()) ORDER BY p.said_at DESC LIMIT 1),
-         (SELECT count(*)::int FROM deliveries d JOIN riders r ON r.id = d.rider_id WHERE r.phone_hash IN (SELECT h FROM mine) AND d.status IN ('accepted', 'picked_up', 'arrived')),
-         (SELECT min(d.accepted_at) FROM deliveries d JOIN riders r ON r.id = d.rider_id WHERE r.phone_hash IN (SELECT h FROM mine) AND d.status IN ('accepted', 'picked_up', 'arrived')),
-         (SELECT count(DISTINCT r.tenant_id)::int FROM riders r WHERE r.retired_at IS NULL AND r.phone_hash IN (SELECT h FROM mine))
+  WITH mine AS (SELECT taskiem_rider_own_hashes(taskiem_link_self()) AS h),
+  said AS (
+    SELECT p.said, p.until, p.said_at FROM rider_presence p
+     WHERE p.phone_hash IN (SELECT h FROM mine) AND (p.said = 'off' OR p.until > now())
+     ORDER BY p.said_at DESC LIMIT 1
+  ),
+  held AS (
+    SELECT count(*)::int AS n, min(d.accepted_at) AS since
+      FROM deliveries d JOIN riders r ON r.id = d.rider_id
+     WHERE r.phone_hash IN (SELECT h FROM mine) AND d.status IN ('accepted', 'picked_up', 'arrived')
+  ),
+  uses AS (SELECT count(DISTINCT r.tenant_id)::int AS n FROM riders r WHERE r.retired_at IS NULL AND r.phone_hash IN (SELECT h FROM mine))
+  SELECT s.said, s.until, s.said_at, held.n, held.since, uses.n
+    FROM held, uses LEFT JOIN said s ON true
 $$;
 -- +goose StatementEnd
 

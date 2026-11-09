@@ -19,13 +19,14 @@ export function AvailabilitySheet({
   onClose: () => void;
   onChanged?: () => void;
 }) {
-  const [n, setN] = useState(0);
-  const now = useLoad(() => get<Availability>("/v1/availability"), [n]);
+  const now = useLoad(() => get<Availability>("/v1/availability"), []);
+  // What the last change answered, over what was loaded.
+  const [changed, setChanged] = useState<Availability>();
   const [until, setUntil] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
   const [saved, setSaved] = useState<string>();
-  const a = now.data;
+  const a = changed ?? now.data;
   const say = async (state: "on" | "off" | "busy") => {
     setBusy(true);
     setError(undefined);
@@ -34,8 +35,8 @@ export function AvailabilitySheet({
         state,
         ...(state === "busy" && until.trim() && { until: until.trim() }),
       });
+      setChanged(next);
       setSaved(availabilityWord(next));
-      setN((x) => x + 1);
       onChanged?.();
       window.setTimeout(() => setSaved(undefined), 1300);
     } catch (e) {
@@ -105,10 +106,10 @@ export function AvailabilitySheet({
             </button>
           </div>
           <label className="tk-p-field">
-            Busy till (a time today, like 3pm)
+            Busy till (a time later today, like 3pm or 15:30)
             <input
               value={until}
-              placeholder="Leave empty for the rest of the day"
+              placeholder="Leave empty for the rest of the day (an hour at least)"
               disabled={busy}
               onChange={(e) => setUntil(e.target.value)}
               data-testid="availability-until"

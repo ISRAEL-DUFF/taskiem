@@ -149,6 +149,13 @@ func (p Presence) Line() string {
 // Clock is a time as riders and owners read it: 15:04, Lagos time.
 func Clock(t time.Time) string { return t.In(lagos).Format("15:04") }
 
+// SameDay reports whether two moments fall on the same day in Lagos.
+func SameDay(a, b time.Time) bool {
+	ya, ma, da := a.In(lagos).Date()
+	yb, mb, db := b.In(lagos).Date()
+	return ya == yb && ma == mb && da == db
+}
+
 var lagos = func() *time.Location {
 	l, err := time.LoadLocation("Africa/Lagos")
 	if err != nil {

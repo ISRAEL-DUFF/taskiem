@@ -2,6 +2,7 @@
 // panel and what each one's sheet lists. Phase 1 shows each tool's list in
 // the sheet frame, with "Open full page"; phase 2 makes them work in place.
 
+import { shortWhen } from "./time";
 import { formatPrice } from "./storefront";
 import type { StockItem, StockView } from "./stock";
 import type { Service } from "./bookings";
@@ -38,14 +39,13 @@ export interface Availability {
   businesses: number;
 }
 
-/** "Free", "Busy till 3:30pm", "Busy, 2 deliveries", "Off today". */
+/** "Free", "Busy till 15:30", "Busy, 2 deliveries", "Off today". */
 export function availabilityWord(a: Availability): string {
   switch (a.state) {
     case "off":
       return "Off today";
     case "busy":
-      if (a.until)
-        return `Busy till ${new Date(a.until).toLocaleTimeString("en-NG", { hour: "numeric", minute: "2-digit", timeZone: "Africa/Lagos" })}`;
+      if (a.until) return `Busy till ${shortWhen(new Date(a.until))}`;
       if (a.open)
         return `Busy, ${a.open} ${a.open === 1 ? "delivery" : "deliveries"}`;
       return "Busy";
