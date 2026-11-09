@@ -297,7 +297,8 @@ func (s *Server) customerReadable(ctx context.Context, tenant uuid.UUID) (ai.Pro
 	if err != nil || (limit > 0 && used >= limit) {
 		return nil, false
 	}
-	return model, true
+	// A customer's words leave with their numbers and emails masked.
+	return ai.Redacted(model), true
 }
 
 func (s *Server) readCustomerOrderNow(ctx context.Context, tenant, chat, message uuid.UUID, text string) error {

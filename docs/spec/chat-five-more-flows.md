@@ -265,7 +265,7 @@ Built 9 November 2026. `TestOrdersFromCustomersMessages` (`api/order_drafts_test
 - **Drafts:** migration 00412 adds `order_drafts`, sealed under the customer's subject. A thread works on one order at a time; the customer's next message is read onto it (their answers, and anything more they ask for). STOP deletes the thread's drafts; one goes with the message it was read from after a year.
 - **The card** (the customer's pane, above the reply box): the lines with what they wrote, each question with the answers to tap, how many, a price where the catalogue has none, items added from the catalogue, delivered or picked up, where and the fee (a delivery area's fee when the business has areas), and how they pay. Staff change it one step at a time, on the version they see. **Ask them** sends its questions as one message; the answer is read onto it. **Confirm** and **Drop** are a person's taps; why Confirm waits is said under it. **Start an order** begins one by hand.
 - **Confirmed:** a storefront order of the kind `chat`, decided when placed, so payment matching, stock and dispatch work on it as on an order from the page. The customer is sent the order, the delivery fee, the total and how to pay, in their thread:
-  - **pay now:** the order's page, where they pay by transfer (an account number for the order, matched to it exactly) or card. Only for a business with a storefront; the order waits 48 hours for the payment, and its stock goes when it is paid;
+  - **pay now:** the order's page, where they pay by bank transfer into an account number for the order, matched to it exactly (no card checkout is made for these orders, so the page offers a transfer only). Only for a business with a storefront whose payment rail gives account numbers for orders; otherwise it is not offered, and refused. The order waits 48 hours for the payment, and its stock goes when it is paid; unpaid, it lapses, the customer is told, and Needs you says so;
   - **pay when it arrives:** at the door, as dispatch does today; its stock goes at once;
   - **arranged by staff:** money that comes in is matched to it as to any order waiting for payment; its stock goes at once.
 - **The customer told:** "Paid, thank you" when the payment is matched, and dispatch's on its way, arrived and delivered, all in their thread from the business's number, not by SMS. Outside the 24 hours these go as the customer reply template.
@@ -280,7 +280,18 @@ Built 9 November 2026. `TestOrdersFromCustomersMessages` (`api/order_drafts_test
   - **Pay on delivery** is chosen per order; a business default is not built (the open question stands).
   - **Photos of written lists** wait for phase 4's image reading.
   - **Food options** (a dish's choices, "with chicken") are not read; staff note them.
+  - **The business's order workflow is not started** for a chat order. The shop's order workflow begins by asking the owner to accept and tells the customer by its own steps; a chat order is accepted when a person confirms it and is told in its thread, so running it would ask again and tell twice. Workflows that should follow chat orders need a trigger of their own (not built).
   - **The browser test** puts an order together on the card against a stand-in for the order endpoints, since those tests run without a catalogue table or a model; reading, confirming and sending are tested in Go.
+
+**Review fixes, 9 November 2026** (the review of phase 2 found 17 bugs and 6 gaps; all are fixed or decided):
+
+- **Privacy:** the customer's address, when and note are sealed with their details; an order's zone is only one of the business's delivery areas. The reader's prompts pass through `ai.Redacted`; the call's record keeps no words. `docs/privacy.md` and `docs/ai.md` say what reaches the model.
+- **Reading:** lines have ids, and an answer goes to the line its question was asked about, never to one staff changed meanwhile; an answer is not added again as a line; a new address or delivery choice replaces the old; an order sent in two quick messages is one order; a customer who sent STOP is not read; questions go in the business's language for customers.
+- **The card:** staff settling what the customer was asked bring the order back to them; Confirm waits on lines out of stock or no longer on sale, and the order says why it waits (the server's own reason); a line's typed quantity or price stays on its line.
+- **Paying:** see pay now above. Assign rider shows for orders paid at the door.
+- **Load:** the catalogue is read from its table at most once a minute per business; reads run eight at a time on a server, with a pace per business.
+- **Kept:** drafts started by hand go after a year with the purge. The briefing counts chat orders; rate your delivery is offered on them.
+- **Tests added:** the storefront engine places chat orders, lowers their stock once, takes a payment, lets one lapse and tells the customer, and checks their page is transfer only (`engine/storefront/chat_db_test.go`); the status page reads a chat order (`engine/publicweb`); the API covers STOP, staff answering, pay refused, at the door, a lapsed order on Needs you and the purge; the rider card covers orders paid at the door; the browser test drives the real order endpoints as far as they go without a catalogue.
 
 ## Phases
 
