@@ -2469,6 +2469,8 @@
             "get_payment",
             "virtual_account",
             "list_credits",
+            "customer_balance",
+            "customer_transactions",
             "refund",
             "books_customer",
             "books_invoice",

@@ -342,6 +342,65 @@
         }
       }
     },
+    "customer_balance": {
+      "title": "Check a customer's balance",
+      "description": "What one customer has in their own wallet or account at the rail (decision 0062 V9). Who the customer is (account) comes from the business's own records, never from what the customer or a model says.",
+      "classes": ["read"],
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["account"],
+        "properties": {
+          "account": { "type": "string", "minLength": 1, "description": "The customer's own wallet or account at the rail" },
+          "currency": { "type": "string", "default": "NGN" }
+        }
+      },
+      "output": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["available_kobo", "currency"],
+        "properties": {
+          "available_kobo": { "type": "integer", "description": "What the customer can spend now, in minor units" },
+          "currency": { "type": "string" }
+        }
+      }
+    },
+    "customer_transactions": {
+      "title": "List a customer's recent transactions",
+      "description": "The money in and out of one customer's own wallet or account at the rail since a time (decision 0062 V9). truncated is true when the rail had more than was read: read a shorter window.",
+      "classes": ["read"],
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["account", "since"],
+        "properties": {
+          "account": { "type": "string", "minLength": 1, "description": "The customer's own wallet or account at the rail" },
+          "since": { "type": "string", "description": "From when, RFC 3339" }
+        }
+      },
+      "output": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["transactions"],
+        "properties": {
+          "transactions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["at", "direction", "amount_kobo"],
+              "properties": {
+                "at": { "type": "string", "description": "When, RFC 3339" },
+                "direction": { "type": "string", "enum": ["in", "out"] },
+                "amount_kobo": { "type": "integer" },
+                "narration": { "type": "string", "x-pii": "other", "description": "What the bank or wallet says it was" }
+              }
+            }
+          },
+          "truncated": { "type": "boolean", "description": "The rail had more than was read" }
+        }
+      }
+    },
     "refund": {
       "title": "Refund a payment",
       "classes": ["idempotent_write", "reconcilable_write"],

@@ -779,3 +779,26 @@ triggers:
       : body.?event.orValue("").startsWith("events.mandates.") ? body.data.id
       : body.?event.orValue("").startsWith("mono.events.") ? (body.?data.?account.hasValue() ? (type(body.data.account) == string ? body.data.account : body.data.account.?_id.orValue(body.data.account.?id.orValue(""))) : body.?data.?id.orValue(""))
       : body.?data.?data.?reference.orValue("")
+# A customer's own bank account, linked to the business through Mono
+# Connect (decision 0062 V9): its balance and its recent transactions, by
+# its Mono account id (connector/v1 rule 16).
+capabilities:
+  customer_balance:
+    action: get_balance
+    input: { account_id: "=input.account" }
+    output:
+      available_kobo: "=output.balance"
+      currency: "=has(output.currency) && output.currency != '' ? output.currency : input.currency"
+  customer_transactions:
+    # Mono takes days (DD-MM-YYYY) and a page, newest first: the newest
+    # 50 are read and those before since left out; truncated when Mono had
+    # more and all 50 were since then.
+    action: list_transactions
+    input: { account_id: "=input.account", limit: "=50" }
+    output:
+      transactions: >-
+        =output.transactions.filter(t, has(t.date) && t.date >= input.since)
+        .map(t, {'at': t.date, 'direction': t.type == 'credit' ? 'in' : 'out', 'amount_kobo': int(t.amount),
+        'narration': has(t.narration) ? t.narration : ''})
+      truncated: "=has(output.has_more) && output.has_more && output.transactions.all(t, has(t.date) && t.date >= input.since)"
+    ignores: [since]

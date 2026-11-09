@@ -38,6 +38,7 @@ type Ops interface {
 	ListCustomersOverdue(ctx context.Context, tenant uuid.UUID, limit int) ([]invoicing.ListedCustomer, error)
 	GiveAccount(ctx context.Context, tenant uuid.UUID, in invoicing.AccountRequest, by string) (invoicing.CustomerAccount, error)
 	CustomerLinkFor(ctx context.Context, tenant uuid.UUID, number, by string) (string, int64, error)
+	FindByPhone(ctx context.Context, tenant uuid.UUID, phone string) (invoicing.PhoneSummary, error)
 }
 
 // New returns the connector; ops nil makes every action fail plainly.
@@ -53,6 +54,7 @@ func New(ops Ops) *connector.Connector {
 		"list":             connector.ActionFunc(a.list),
 		"register_account": connector.ActionFunc(a.registerAccount),
 		"customer_link":    connector.ActionFunc(a.customerLink),
+		"find_by_phone":    connector.ActionFunc(a.findByPhone),
 	}}
 }
 
@@ -320,6 +322,35 @@ func classify(err error) error {
 	return err
 }
 
+func (a *actions) findByPhone(ctx context.Context, req connector.Request) (connector.Response, error) {
+	c, err := a.caller(ctx)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	phone, _ := req.Input["phone"].(string)
+	sum, err := a.ops.FindByPhone(ctx, c.Tenant, phone)
+	if err != nil {
+		return connector.Response{}, classify(err)
+	}
+	open := make([]any, 0, len(sum.Open))
+	for _, x := range sum.Open {
+		o := map[string]any{"number": x.Number, "status": x.Status, "due_kobo": x.DueKobo, "due": invoicing.Naira(x.DueKobo)}
+		if x.DueOn != "" {
+			o["due_on"] = x.DueOn
+		}
+		open = append(open, o)
+	}
+	out := map[string]any{"found": sum.Found, "customer_name": sum.CustomerName, "due_kobo": sum.DueKobo, "due": invoicing.Naira(sum.DueKobo), "open": open}
+	if p := sum.LastPaid; p != nil {
+		lp := map[string]any{"number": p.Number, "total": invoicing.Naira(p.TotalKobo)}
+		if p.PaidAt != nil {
+			lp["paid_on"] = p.PaidAt.In(lagos).Format("2006-01-02")
+		}
+		out["last_paid"] = lp
+	}
+	return connector.Response{Output: out}, nil
+}
+
 // Late is Ops set after the connector is registered: the registry is built
 // before the vault and the database the invoices need.
 type Late struct {
@@ -402,6 +433,15 @@ func (l *Late) NotifyCustomer(ctx context.Context, t uuid.UUID, number, text, su
 	return o.NotifyCustomer(ctx, t, number, text, subject, key)
 }
 
+// FindByPhone implements Ops.
+func (l *Late) FindByPhone(ctx context.Context, t uuid.UUID, phone string) (invoicing.PhoneSummary, error) {
+	o, err := l.get()
+	if err != nil {
+		return invoicing.PhoneSummary{}, err
+	}
+	return o.FindByPhone(ctx, t, phone)
+}
+
 // CustomerLinkFor implements Ops.
 func (l *Late) CustomerLinkFor(ctx context.Context, t uuid.UUID, number, by string) (string, int64, error) {
 	o, err := l.get()
@@ -419,3 +459,10 @@ func (l *Late) GiveAccount(ctx context.Context, t uuid.UUID, in invoicing.Accoun
 	}
 	return o.GiveAccount(ctx, t, in, by)
 }
+
+var lagos = func() *time.Location {
+	if l, err := time.LoadLocation("Africa/Lagos"); err == nil {
+		return l
+	}
+	return time.FixedZone("WAT", 3600)
+}()

@@ -446,3 +446,9 @@ func TestTriggerExpressions(t *testing.T) {
 		}
 	}
 }
+
+// customer_balance and customer_transactions on a customer's own bank
+// account linked through Mono (decision 0062 V9).
+func TestCapabilities(t *testing.T) {
+	fixture.Capabilities(t, func(base string) *connector.Connector { return New(Options{BaseURL: base}) })
+}

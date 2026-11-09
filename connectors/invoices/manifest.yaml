@@ -206,6 +206,48 @@ actions:
         link: { type: string }
         due_kobo: { type: integer, description: What the customer owes on all their open invoices }
         due: { type: string }
+  find_by_phone:
+    title: What a customer owes, by their phone number
+    description: >-
+      The invoices of the customer with this phone number (written as given,
+      +234…, 234… or 0…, each tried): what they owe on their open invoices
+      and notebook debts, up to ten of them oldest due first, and their last
+      paid invoice. found is false for a number with none. For a customer
+      assistant: the number comes from the trigger (trigger.guard.sender),
+      never from what the customer or a model says, so it only ever tells
+      a person their own invoices (decision 0062 D4).
+    class: read
+    input:
+      type: object
+      required: [phone]
+      properties:
+        phone: { type: string, minLength: 1, maxLength: 32 }
+    output:
+      type: object
+      properties:
+        found:         { type: boolean }
+        customer_name: { type: string }
+        due_kobo:      { type: integer, description: What they owe on all their open invoices }
+        due:           { type: string }
+        open:
+          type: array
+          items:
+            type: object
+            properties:
+              number:   { type: string }
+              status:   { type: string }
+              due_kobo: { type: integer }
+              due:      { type: string }
+              due_on:   { type: string }
+        last_paid:
+          type: object
+          properties:
+            number:  { type: string }
+            total:   { type: string }
+            paid_on: { type: string }
+    pii:
+      - { field: phone, category: phone }
+      - { field: output.customer_name, category: name }
   register_account:
     title: Give a customer their own account number
     description: "A permanent account number of the customer's own: money paid into it is matched to their open invoices, oldest first, and the rest kept as their credit. Either issue one (issue true) on a connection that can issue account numbers, or register one the business already has for them (account_number and reference). The same customer and connection again answers the account already issued. One per customer, never one per invoice: an invoice's page offers its own. The customer is as their invoices have them: by key when given, else phone, else email."

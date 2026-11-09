@@ -65,7 +65,38 @@ func (o *ops) CustomerLinkFor(_ context.Context, _ uuid.UUID, number, _ string) 
 	return "https://forms.test/c/abc", 650000, nil
 }
 
+func (o *ops) FindByPhone(_ context.Context, _ uuid.UUID, phone string) (invoicing.PhoneSummary, error) {
+	if phone != "2348031234567" {
+		return invoicing.PhoneSummary{}, nil
+	}
+	paidAt := time.Date(2026, 10, 31, 23, 30, 0, 0, time.UTC)
+	return invoicing.PhoneSummary{Found: true, CustomerName: "Ada Obi", DueKobo: 500000,
+		Open:     []invoicing.Invoice{{Number: "INV-0002", Status: "overdue", DueKobo: 200000, DueOn: "2026-11-01"}, {Number: "INV-0003", Status: "sent", DueKobo: 300000}},
+		LastPaid: &invoicing.Invoice{Number: "INV-0001", TotalKobo: 100000, PaidAt: &paidAt}}, nil
+}
+
 var _ invoices.Ops = invoicing.Service{}
+
+// find_by_phone: what the customer owes in all, their open invoices and
+// the last they paid (its day in Lagos); a stranger is not found.
+func TestFindByPhone(t *testing.T) {
+	c := invoices.New(&ops{})
+	ctx := connector.WithCaller(context.Background(), connector.Caller{Tenant: uuid.New(), Run: uuid.New(), Step: "owed"})
+	r, err := c.Actions["find_by_phone"].Execute(ctx, connector.Request{Input: map[string]any{"phone": "2348031234567"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := r.Output.(map[string]any)
+	open := out["open"].([]any)
+	if out["found"] != true || out["due"] != "₦5,000" || len(open) != 2 || open[0].(map[string]any)["due_on"] != "2026-11-01" ||
+		out["last_paid"].(map[string]any)["paid_on"] != "2026-11-01" || out["customer_name"] != "Ada Obi" {
+		t.Fatalf("found: %v", out)
+	}
+	r, err = c.Actions["find_by_phone"].Execute(ctx, connector.Request{Input: map[string]any{"phone": "2348000000000"}})
+	if err != nil || r.Output.(map[string]any)["found"] != false || r.Output.(map[string]any)["last_paid"] != nil {
+		t.Fatalf("a stranger: %v %v", r.Output, err)
+	}
+}
 
 // customer_link: the customer's link and what they owe in all; a
 // customer who owes nothing fails the step.

@@ -1,0 +1,62 @@
+{
+  "capability": "customer_transactions",
+  "credentials": {
+    "api_key": "isw_test_key"
+  },
+  "input": {
+    "account": "c-ada",
+    "since": "2026-10-01T00:00:00Z"
+  },
+  "exchanges": [
+    {
+      "name": "transactions",
+      "request": {
+        "method": "GET",
+        "path": "/v1/wallets/c-ada/transactions",
+        "query": {
+          "from": "2026-10-01T00:00:00Z",
+          "limit": "100"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "wallet_id": "c-ada",
+          "currency": "NGN",
+          "total": 2,
+          "transactions": [
+            {
+              "txn_id": "t-1",
+              "type": "credit",
+              "direction": "in",
+              "status": "confirmed",
+              "amount": 5000000,
+              "amount_credited": 4930000,
+              "fee_charged": 70000,
+              "currency": "NGN",
+              "narration": "SALARY OCTOBER",
+              "occurred_at": "2026-10-25T09:14:02Z"
+            },
+            {
+              "txn_id": "t-2",
+              "type": "debit",
+              "direction": "out",
+              "status": "confirmed",
+              "amount": 1200000,
+              "fee": 5350,
+              "currency": "NGN",
+              "occurred_at": "2026-10-28T08:00:00Z"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "expect": {
+    "transactions": [
+      {"at": "2026-10-25T09:14:02Z", "direction": "in", "amount_kobo": 4930000, "narration": "SALARY OCTOBER"},
+      {"at": "2026-10-28T08:00:00Z", "direction": "out", "amount_kobo": 1200000, "narration": ""}
+    ],
+    "truncated": false
+  }
+}

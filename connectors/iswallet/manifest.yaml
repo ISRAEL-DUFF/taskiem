@@ -544,6 +544,26 @@ capabilities:
       expiry is advisory: it refuses neither a late transfer nor a second one, so the window
       is Taskiem's and a late transfer is credited. Every call opens another account: an
       unknown outcome parks for a person.
+  customer_balance:
+    # A customer's own wallet (one iswallet keeps for the business's
+    # customer, owner_type client_end_user), by its id (decision 0062 V9).
+    action: get_balance
+    input: { wallet_id: "=input.account" }
+    output:
+      available_kobo: "=sum(output.balances.filter(b, b.currency == input.currency).map(b, b.available))"
+      currency: "=input.currency"
+  customer_transactions:
+    # A customer's wallet's transactions since a time; amount_credited is
+    # what landed on a credit, amount the ledger movement otherwise.
+    action: list_transactions
+    input: { wallet_id: "=input.account", from: "=input.since" }
+    output:
+      transactions: >-
+        =output.transactions.filter(t, has(t.occurred_at) && has(t.direction) && t.direction in ['in', 'out'])
+        .map(t, {'at': t.occurred_at, 'direction': t.direction,
+        'amount_kobo': int(t.direction == 'in' && has(t.amount_credited) ? t.amount_credited : t.amount),
+        'narration': has(t.narration) ? t.narration : ''})
+      truncated: "=has(output.truncated) && output.truncated"
   list_credits:
     # Credits into customers' numbers, from the wallet's transactions:
     # those that name a virtual account. amount (on this route the ledger

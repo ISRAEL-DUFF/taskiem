@@ -763,6 +763,9 @@ export interface InvoicesCustomerLinkInput {
   /** Any open invoice or notebook debt of the customer's */
   number: Val<string>;
 }
+export interface InvoicesFindByPhoneInput {
+  phone: Val<string>;
+}
 export interface InvoicesGetInput {
   number: Val<string>;
 }
@@ -813,6 +816,8 @@ export const invoices = {
   create: (input: InvoicesCreateInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "create", input, extra),
   /** The customer's payment link (read) */
   customer_link: (input: InvoicesCustomerLinkInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "customer_link", input, extra),
+  /** What a customer owes, by their phone number (read) */
+  find_by_phone: (input: InvoicesFindByPhoneInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "find_by_phone", input, extra),
   /** Read an invoice (read) */
   get: (input: InvoicesGetInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "get", input, extra),
   /** List overdue or paid invoices (read) */
@@ -4128,7 +4133,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "googlesheets@1": ["add_sheet", "append_rows", "batch_get_values", "clear_values", "create_spreadsheet", "get_spreadsheet", "get_values", "update_values"],
   "instagram@1": ["get_account", "get_conversation", "get_profile", "mark_seen", "send_message", "send_typing"],
   "interswitch@1": ["get_payment", "get_transfer", "list_banks", "resolve_account", "transfer"],
-  "invoices@1": ["create", "customer_link", "get", "list", "notify_customer", "register_account", "send", "void"],
+  "invoices@1": ["create", "customer_link", "find_by_phone", "get", "list", "notify_customer", "register_account", "send", "void"],
   "iswallet@1": ["create_dynamic_account", "create_wallet", "get_balance", "get_payout", "issue_virtual_account", "issue_virtual_accounts", "list_banks", "list_providers", "list_transactions", "name_enquiry", "payout", "transfer"],
   "knowledge@1": ["refresh", "search"],
   "lenco@1": ["create_virtual_account", "get_balance", "get_transfer", "list_accounts", "list_banks", "resolve_account", "transfer"],
@@ -4359,6 +4364,34 @@ export type CapabilityCollectTransferOutput = {
   expires_at: string;
   payment_id: string;
 };
+/** Check a customer's balance: input */
+export interface CapabilityCustomerBalanceInput {
+  /** The customer's own wallet or account at the rail */
+  account: Val<string>;
+  currency?: Val<string>;
+}
+/** Check a customer's balance: output */
+export type CapabilityCustomerBalanceOutput = {
+  available_kobo: number;
+  currency: string;
+};
+/** List a customer's recent transactions: input */
+export interface CapabilityCustomerTransactionsInput {
+  /** The customer's own wallet or account at the rail */
+  account: Val<string>;
+  /** From when, RFC 3339 */
+  since: Val<string>;
+}
+/** List a customer's recent transactions: output */
+export type CapabilityCustomerTransactionsOutput = {
+  transactions: Array<{
+    amount_kobo: number;
+    at: string;
+    direction: "in" | "out";
+    narration?: string;
+  }>;
+  truncated?: boolean;
+};
 /** Look a payment up: input */
 export interface CapabilityGetPaymentInput {
   /** As collect_link or collect_transfer answered it, or the reference a payment event carried */
@@ -4581,6 +4614,10 @@ export const rail = {
   books_sale: (input: CapabilityBooksSaleInput, extra?: CapabilityExtra): StepSpec => capability("books_sale", input, extra),
   /** List the books' taxes */
   books_taxes: (input: CapabilityBooksTaxesInput, extra?: CapabilityExtra): StepSpec => capability("books_taxes", input, extra),
+  /** Check a customer's balance */
+  customer_balance: (input: CapabilityCustomerBalanceInput, extra?: CapabilityExtra): StepSpec => capability("customer_balance", input, extra),
+  /** List a customer's recent transactions */
+  customer_transactions: (input: CapabilityCustomerTransactionsInput, extra?: CapabilityExtra): StepSpec => capability("customer_transactions", input, extra),
   /** Look a payment up */
   get_payment: (input: CapabilityGetPaymentInput, extra?: CapabilityExtra): StepSpec => capability("get_payment", input, extra),
   /** Look a payout up */
@@ -4624,6 +4661,8 @@ export const CAPABILITY_HELPERS: Record<string, string> = {
   collect_link: "collect.link",
   collect_push: "collect.push",
   collect_transfer: "collect.transfer",
+  customer_balance: "rail.customer_balance",
+  customer_transactions: "rail.customer_transactions",
   get_payment: "rail.get_payment",
   get_payout: "rail.get_payout",
   list_banks: "rail.list_banks",
@@ -4652,6 +4691,8 @@ export const CAPABILITY_RAILS: Record<string, readonly string[]> = {
   collect_link: ["moniepoint@1", "paystack@1"],
   collect_push: [],
   collect_transfer: ["flutterwave@1", "iswallet@1", "opay@1", "paystack@1"],
+  customer_balance: ["iswallet@1", "mono@1"],
+  customer_transactions: ["iswallet@1", "mono@1"],
   get_payment: ["flutterwave@1", "moniepoint@1", "opay@1", "paystack@1"],
   get_payout: ["anchor@1", "flutterwave@1", "iswallet@1", "moniepoint@1", "paystack@1"],
   list_banks: ["anchor@1", "flutterwave@1", "moniepoint@1", "paystack@1"],
