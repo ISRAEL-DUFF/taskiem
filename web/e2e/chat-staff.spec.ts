@@ -82,7 +82,8 @@ async function answer(page: Page) {
       : remember(r, { handover: {}, words: "" }),
   );
   const brief = { ready: true, day: day(0), key: `briefing:${day(0)}`, put_off: false, part: "morning", now: "08:05",
-    sales: { yesterday_kobo: 48_650_000, change_pct: 12, weekday: "Wednesday", week: WEEK }, owed_kobo: 21_200_000, low: 3, deliveries: 4, bookings: 0 };
+    sales: { yesterday_kobo: 48_650_000, change_pct: 12, weekday: "Wednesday", week: WEEK }, owed_kobo: 21_200_000, low: 3, deliveries: 4, bookings: 0,
+    tasks: { today: 2, late: 1 } };
   await page.route("**/v1/chat-briefing", (r) => r.fulfill(json(brief)));
   // Asked for again (the tools menu's Briefing, or "briefing"): back in
   // the afternoon, with the time it was read.
@@ -176,6 +177,7 @@ for (const [size, viewport] of [
     await expect(card).toContainText("₦212,000");
     await expect(card).toContainText("3 items");
     await expect(card).toContainText("4 today");
+    await expect(card.getByRole("link", { name: /Tasks/ })).toContainText("2 due today · 1 late");
     const chart = owner.getByTestId("chart-card");
     await expect(chart).toContainText("₦2,966,500");
     await expect(chart).toContainText("Up 8% on the week before");

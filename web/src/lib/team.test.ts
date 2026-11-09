@@ -112,5 +112,6 @@ describe("clocking in", () => {
       ["Orders worked", "None"],
       ["Tasks", "None"],
     ]);
+    expect(figureRows({ ...f, handovers: [{ at: "2026-11-09T16:00:00Z" }] }, money)).toContainEqual(["Handovers", "1"]);
   });
 });

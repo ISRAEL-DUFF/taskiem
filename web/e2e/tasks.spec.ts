@@ -105,3 +105,37 @@ for (const width of [390, 360]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 }
+
+test("the chat's Tasks tile lists my tasks, and Done works there; a photo task takes only a photo", async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await owner(page);
+  const me = await (await page.request.get("/v1/me", { headers: H })).json();
+  const chatTools = await page.request.put("/v1/settings/chat-tools", { headers: H, data: { chat_tools: true } });
+  expect(chatTools.status(), await chatTools.text()).toBe(200);
+  for (const data of [
+    { what: "Check the fridge", to_user: me.user.id },
+    { what: "Photograph the shelf", to_user: me.user.id, photo: true },
+  ]) {
+    const r = await page.request.post("/v1/staff/tasks", { headers: H, data });
+    expect(r.status(), await r.text()).toBe(201);
+  }
+  await page.goto("/chat?with=taskiem");
+  const pane = page.getByTestId("taskiem-pane");
+  await pane.getByRole("button", { name: "Open tools" }).click();
+  await page.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Tasks/ }).click();
+  const sheet = page.getByTestId("tasks-sheet");
+  const rows = sheet.getByTestId("task");
+  await expect(rows.filter({ hasText: "Check the fridge" })).toBeVisible();
+  await axeBoth(page, "the chat's Tasks sheet");
+  await rows.filter({ hasText: "Check the fridge" }).getByRole("button", { name: /^Done/ }).click();
+  await expect(rows.filter({ hasText: "Check the fridge" })).toContainText("Done");
+  // Not a photo: refused before anything is kept.
+  await rows
+    .filter({ hasText: "Photograph the shelf" })
+    .locator('input[type="file"]')
+    .setInputFiles({ name: "notes.txt", mimeType: "text/plain", buffer: Buffer.from("not a picture") });
+  await expect(sheet.getByText("That is not a photo")).toBeVisible();
+  await expect(rows.filter({ hasText: "Photograph the shelf" }).locator(".badge")).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});

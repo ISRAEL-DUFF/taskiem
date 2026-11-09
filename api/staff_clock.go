@@ -200,15 +200,29 @@ func (s *Server) waClock(ctx context.Context, c *chat, in bool, where string) er
 	return c.say(ctx, s, reply)
 }
 
-// clockPlace takes a location a person of a business shared: today's
-// clock-in carries it, or it clocks them in. false when it is not theirs
-// to take (no business, or they cannot be clocked).
+// clockPlace takes a location a person shared just after clocking in
+// (within 30 minutes, and only once): that clock-in carries it. Any other
+// location is not for clocking (an address, a delivery): false, and it
+// goes where it always went. Sharing a location never clocks anyone in.
 func (s *Server) clockPlace(ctx context.Context, c *chat) (bool, error) {
 	if c.in.Location == "" || c.tenant.ID == uuid.Nil || c.p == nil || c.p.UserID == uuid.Nil {
 		return false, nil
 	}
-	return true, s.waClock(ctx, c, true, clip(c.in.Location, 200))
+	now := s.staffNow()
+	taken := false
+	if err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `UPDATE staff_clock SET in_where = $3 WHERE tenant_id = $1 AND user_id = $2 AND out_at IS NULL
+			AND in_where IS NULL AND in_at > $4`, c.tenant.ID, c.p.UserID, clip(c.in.Location, 200), now.Add(-clockPlaceWait))
+		taken = err == nil && tag.RowsAffected() == 1
+		return err
+	}); err != nil || !taken {
+		return false, err
+	}
+	return true, c.say(ctx, s, "Your location is with today's clock-in.")
 }
+
+// clockPlaceWait is how long after "in" a shared location goes with it.
+const clockPlaceWait = 30 * time.Minute
 
 // waWhoIsIn is "who is in": for those who run the business.
 func (s *Server) waWhoIsIn(ctx context.Context, c *chat) error {
@@ -435,7 +449,8 @@ func (s *Server) staffTickTenant(ctx context.Context, tenant uuid.UUID, now time
 				late = append(late, l)
 			}
 		}
-		_, err = tx.Exec(ctx, `DELETE FROM staff_notices WHERE tenant_id = $1 AND sent_at < now() - interval '30 days'`, tenant)
+		_, err = tx.Exec(ctx, `DELETE FROM staff_notices n WHERE n.tenant_id = $1 AND n.sent_at < now() - interval '30 days'
+			AND NOT EXISTS (SELECT 1 FROM staff_tasks t WHERE t.tenant_id = $1 AND t.state = 'open' AND n.key IN ('task-late:' || t.id, 'task-nudge:' || t.id))`, tenant)
 		return err
 	})
 	if err != nil {

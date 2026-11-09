@@ -51,7 +51,7 @@ export function Tasks() {
           )
         }
       />
-      <TasksPanel key={tick} view={mine} />
+      <TasksPanel tick={tick} view={mine} />
       {giving && mine.data && (
         <GiveTask
           people={mine.data.people}
@@ -64,9 +64,10 @@ export function Tasks() {
 }
 
 /** The person's tasks and, for those who give them, everyone's. */
-export function TasksPanel({ view, onGive }: { view: ReturnType<typeof useLoad<View>>; onGive?: () => void }) {
+export function TasksPanel({ view, tick = 0, onGive }: { view: ReturnType<typeof useLoad<View>>; tick?: number; onGive?: () => void }) {
   const [all, setAll] = useState(false);
-  const everyone = useLoad(() => (all ? get<View>("/v1/staff/tasks?all=true") : Promise.resolve(undefined)), [all]);
+  // A task given reloads both lists; Mine or Everyone's stays as chosen.
+  const everyone = useLoad(() => (all ? get<View>("/v1/staff/tasks?all=true") : Promise.resolve(undefined)), [all, tick]);
   const act = useAction();
   const [cant, setCant] = useState<StaffTask>();
   const [pass, setPass] = useState<StaffTask>();
@@ -415,7 +416,7 @@ export function TasksSheet({ onClose }: { onClose: () => void }) {
         )
       }
     >
-      <TasksPanel key={tick} view={view} onGive={() => setGiving(true)} />
+      <TasksPanel tick={tick} view={view} onGive={() => setGiving(true)} />
       {giving && view.data && (
         <GiveTask people={view.data.people} onClose={() => setGiving(false)} onDone={() => (setGiving(false), setTick((n) => n + 1))} />
       )}

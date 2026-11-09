@@ -304,3 +304,24 @@ test("the Taskiem row says how many things need you", async ({ browser }) => {
   await page.goto("/chat");
   await expect(page.getByTestId("taskiem-waiting")).toHaveText("7 things need you");
 });
+
+test("Give this to… on a low stock card makes a task about the item", async ({ browser }) => {
+  const page = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
+  await owner(page);
+  await answer(page);
+  const given: unknown[] = [];
+  await page.route("**/v1/staff/tasks", (r) =>
+    r.request().method() === "POST"
+      ? (given.push(r.request().postDataJSON()), r.fulfill(json({ task: null, repeat_id: null }, 201)))
+      : r.fulfill(json({ tasks: [], repeats: [], give: true, people: [{ id: "u2", name: "Tunde Bakare", roles: ["cashier"] }] })),
+  );
+  await page.goto("/chat?with=taskiem");
+  const garri = page.getByTestId("chat-alerts").getByRole("article", { name: "Garri, Ijebu is running low" });
+  await garri.getByRole("button", { name: /^Give this to/ }).click();
+  const form = page.getByRole("dialog", { name: "Give this to someone" });
+  await expect(form.getByLabel("What is to be done")).toHaveValue("Restock Garri, Ijebu");
+  await form.getByLabel("Who it is for").selectOption({ label: "Tunde Bakare" });
+  await form.getByRole("button", { name: "Give the task" }).click();
+  await expect(form).toHaveCount(0);
+  expect(given).toEqual([{ what: "Restock Garri, Ijebu", photo: false, to_user: "u2", link: { kind: "stock", id: "s3", name: "Garri, Ijebu" } }]);
+});

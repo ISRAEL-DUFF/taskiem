@@ -286,9 +286,11 @@ export function figureRows(f: StaffFigures, money: (kobo: number) => string): [s
     rows.push(["Sales", `${money(f.sales.total_kobo)} in ${count(f.sales.count, "sale")} (${how.join(", ")})`]);
   } else rows.push(["Sales", "None recorded"]);
   if (f.handovers.length > 0) {
-    const diff = f.handovers.reduce((t, h) => t + (h.diff_kobo ?? 0), 0);
-    const cash = diff < 0 ? `${money(-diff)} short` : diff > 0 ? `${money(diff)} over` : "the cash right";
-    rows.push(["Handovers", `${f.handovers.length}, ${cash}`]);
+    // Handovers from before the cash sold was kept have no difference to show.
+    const known = f.handovers.filter((h) => h.diff_kobo !== undefined);
+    const diff = known.reduce((t, h) => t + (h.diff_kobo ?? 0), 0);
+    const cash = known.length === 0 ? "" : diff < 0 ? `, ${money(-diff)} short` : diff > 0 ? `, ${money(diff)} over` : ", the cash right";
+    rows.push(["Handovers", `${f.handovers.length}${cash}`]);
   }
   rows.push(["Orders worked", f.orders === 0 ? "None" : String(f.orders)]);
   const t = f.tasks;

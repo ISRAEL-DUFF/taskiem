@@ -277,18 +277,20 @@ func newTaskTx(ctx context.Context, tx pgx.Tx, tenant, giver uuid.UUID, in staff
 	if r := in.Repeat; r != nil {
 		id := uuid.Must(uuid.NewV7())
 		repeat = &id
-		var made *string
+		// Today counts as made either way: today's task now when its time
+		// is still to come, else the first one on its next day.
+		today := now.In(storefront.Lagos).Format("2006-01-02")
+		made := &today
+		start := false
 		if at, ok := repeatDue(r.Every, r.Day, r.At, now); ok && at.After(now) {
-			due = &at
-			d := now.In(storefront.Lagos).Format("2006-01-02")
-			made = &d
+			due, start = &at, true
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO staff_task_repeats (id, tenant_id, what, given_by, to_user, to_role, photo, every, weekday, at, made_on)
 			VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), $7, $8, NULLIF($9, ''), $10, $11::date)`,
 			id, tenant, in.What, giver, in.ToUser, in.ToRole, in.Photo, r.Every, r.Day, r.At, made); err != nil {
 			return nil, nil, err
 		}
-		if made == nil {
+		if !start {
 			return nil, repeat, nil
 		}
 	}
@@ -373,7 +375,14 @@ func (s *Server) tellAbout(ctx context.Context, tenant uuid.UUID, users []uuid.U
 			m.Template, m.Vars = &tpl, map[string]string{"tenant": business, "giver": task.Giver, "task": clip(task.line(s.staffNow()), 300)}
 			m.Payloads = []string{taskPrefix + "done:" + task.ID.String(), taskPrefix + "cant:" + task.ID.String()}
 		}
-		if _, err := ch.Send(ctx, t.addr, m); err != nil {
+		_, err = ch.Send(ctx, t.addr, m)
+		if task != nil && errors.Is(err, whatsapp.ErrTemplateNotApproved) {
+			// The staff task template is not approved yet on this number:
+			// the business message template, which is, without the buttons'
+			// payloads (DONE and CAN'T still work as words).
+			_, err = ch.Send(ctx, t.addr, linkPhoneMessage(tenant, ch.Prefix(""), title, body, buttons))
+		}
+		if err != nil {
 			s.Logger.Warn("tasks: a chat message", "tenant", tenant, "err", err)
 		}
 	}
@@ -399,9 +408,19 @@ func (s *Server) tellNewTask(ctx context.Context, tenant uuid.UUID, t staffTask,
 		s.tellAbout(ctx, tenant, []uuid.UUID{*h}, "task:"+t.ID.String(), ask+": "+t.line(now), how+", or CAN'T and why.", doButtons(t), &t)
 		return
 	}
+	s.tellAbout(ctx, tenant, s.roleUsers(ctx, tenant, t.ToRole, t.GivenBy), "task:"+t.ID.String(), t.Giver+" asked "+t.who()+": "+t.line(now),
+		"The first to take it has it.", takeButton(t), nil)
+}
+
+func takeButton(t staffTask) []whatsapp.Button {
+	return []whatsapp.Button{{ID: taskPrefix + "take:" + t.ID.String(), Title: "I'll do it"}}
+}
+
+// roleUsers is everyone in the business with role, but except.
+func (s *Server) roleUsers(ctx context.Context, tenant uuid.UUID, role string, except uuid.UUID) []uuid.UUID {
 	var users []uuid.UUID
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT DISTINCT user_id FROM memberships WHERE tenant_id = $1 AND role = $2 AND user_id <> $3`, tenant, t.ToRole, t.GivenBy)
+		rows, err := tx.Query(ctx, `SELECT DISTINCT user_id FROM memberships WHERE tenant_id = $1 AND role = $2 AND user_id <> $3`, tenant, role, except)
 		if err != nil {
 			return err
 		}
@@ -409,10 +428,8 @@ func (s *Server) tellNewTask(ctx context.Context, tenant uuid.UUID, t staffTask,
 		return err
 	}); err != nil {
 		s.Logger.Warn("tasks: the role's people", "err", err)
-		return
 	}
-	s.tellAbout(ctx, tenant, users, "task:"+t.ID.String(), t.Giver+" asked "+t.who()+": "+t.line(now),
-		"The first to take it has it.", []whatsapp.Button{{ID: taskPrefix + "take:" + t.ID.String(), Title: "I'll do it"}}, nil)
+	return users
 }
 
 // tellGiver tells whoever gave the task what became of it.
@@ -652,7 +669,8 @@ func (s *Server) giveTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if t != nil {
-		s.tellNewTask(r.Context(), p.TenantID, *t, false)
+		task := *t
+		s.background(r.Context(), "tasks", func(ctx context.Context) { s.tellNewTask(ctx, p.TenantID, task, false) })
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"task": t, "repeat_id": repeat})
 }
@@ -717,7 +735,32 @@ func (s *Server) doneTask(w http.ResponseWriter, r *http.Request) {
 	}
 	path := ""
 	if len(data) > 0 {
-		var err error
+		if ct := http.DetectContentType(data); !slices.Contains([]string{"image/jpeg", "image/png", "image/webp", "image/gif"}, ct) {
+			s.fail(w, r, fmt.Errorf("%w: that is not a photo (a JPEG, PNG or WebP)", errBadRequest))
+			return
+		}
+		// The task is checked before the photo is kept, so a refusal keeps nothing.
+		id, err := uuid.Parse(chi.URLParam(r, "id"))
+		if err != nil {
+			s.fail(w, r, pgx.ErrNoRows)
+			return
+		}
+		if err := s.tx(r, func(tx pgx.Tx) error {
+			t, err := taskTx(r.Context(), tx, id, s.staffNow())
+			if err != nil {
+				return err
+			}
+			if !t.mayDo(p.UserID, p.Roles) {
+				return fmt.Errorf("%w: that task is for %s", errForbidden, t.who())
+			}
+			if t.State != "open" {
+				return fmt.Errorf("%w: that task is %s", errConflict, taskStateWords(t.State))
+			}
+			return nil
+		}); err != nil {
+			s.fail(w, r, err)
+			return
+		}
 		if path, err = s.storeProof(r.Context(), p.TenantID, data); err != nil {
 			s.Logger.Warn("tasks: keeping a photo", "err", err)
 			s.fail(w, r, fmt.Errorf("%w: the photo could not be kept; try again", errConflict))
@@ -725,7 +768,9 @@ func (s *Server) doneTask(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.taskAct(w, r, func(tx pgx.Tx, t *staffTask) error { return doneTaskTx(r.Context(), tx, t, p.UserID, p.Roles, path) },
-		func(t staffTask) { s.afterDone(context.WithoutCancel(r.Context()), p.TenantID, t, p.UserID) })
+		func(t staffTask) {
+			s.background(r.Context(), "tasks", func(ctx context.Context) { s.afterDone(ctx, p.TenantID, t, p.UserID) })
+		})
 }
 
 // cantTask is POST /v1/staff/tasks/{id}/cant {why}.
@@ -739,7 +784,9 @@ func (s *Server) cantTask(w http.ResponseWriter, r *http.Request) {
 	}
 	p := principalFrom(r.Context())
 	s.taskAct(w, r, func(tx pgx.Tx, t *staffTask) error { return cantTaskTx(r.Context(), tx, t, p.UserID, p.Roles, in.Why) },
-		func(t staffTask) { s.afterCant(context.WithoutCancel(r.Context()), p.TenantID, t, p.UserID) })
+		func(t staffTask) {
+			s.background(r.Context(), "tasks", func(ctx context.Context) { s.afterCant(ctx, p.TenantID, t, p.UserID) })
+		})
 }
 
 // remindTask is POST /v1/staff/tasks/{id}/remind: the person is told again.
@@ -754,7 +801,9 @@ func (s *Server) remindTask(w http.ResponseWriter, r *http.Request) {
 			return fmt.Errorf("%w: that task is %s", errConflict, taskStateWords(t.State))
 		}
 		return nil
-	}, func(t staffTask) { s.tellNewTask(context.WithoutCancel(r.Context()), p.TenantID, t, true) })
+	}, func(t staffTask) {
+		s.background(r.Context(), "tasks", func(ctx context.Context) { s.tellNewTask(ctx, p.TenantID, t, true) })
+	})
 }
 
 // passTask is POST /v1/staff/tasks/{id}/give {to_user | to_role}: given
@@ -771,7 +820,9 @@ func (s *Server) passTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := principalFrom(r.Context())
+	var had *uuid.UUID
 	s.taskAct(w, r, func(tx pgx.Tx, t *staffTask) error {
+		had = t.holder()
 		if t.State == "done" || t.State == "cancelled" {
 			return fmt.Errorf("%w: that task is %s", errConflict, taskStateWords(t.State))
 		}
@@ -785,11 +836,20 @@ func (s *Server) passTask(w http.ResponseWriter, r *http.Request) {
 		n, err := taskTx(r.Context(), tx, t.ID, s.staffNow())
 		*t = n
 		return err
-	}, func(t staffTask) { s.tellNewTask(context.WithoutCancel(r.Context()), p.TenantID, t, false) })
+	}, func(t staffTask) {
+		s.background(r.Context(), "tasks", func(ctx context.Context) {
+			if had != nil && *had != p.UserID && (t.holder() == nil || *t.holder() != *had) {
+				s.tellAbout(ctx, p.TenantID, []uuid.UUID{*had}, "task:"+t.ID.String(), "Given to someone else: "+t.What, "You need not do it now.", nil, nil)
+			}
+			s.tellNewTask(ctx, p.TenantID, t, false)
+		})
+	})
 }
 
-// cancelTask is DELETE /v1/staff/tasks/{id}: called off.
+// cancelTask is DELETE /v1/staff/tasks/{id}: called off, and the person
+// who had it told.
 func (s *Server) cancelTask(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r.Context())
 	s.taskAct(w, r, func(tx pgx.Tx, t *staffTask) error {
 		if t.State != "open" && t.State != "cant" {
 			return fmt.Errorf("%w: that task is %s", errConflict, taskStateWords(t.State))
@@ -797,7 +857,15 @@ func (s *Server) cancelTask(w http.ResponseWriter, r *http.Request) {
 		_, err := tx.Exec(r.Context(), `UPDATE staff_tasks SET state = 'cancelled', photo_asked = NULL, updated_at = now() WHERE id = $1`, t.ID)
 		t.State = "cancelled"
 		return err
-	}, nil)
+	}, func(t staffTask) {
+		h := t.holder()
+		if h == nil || *h == p.UserID {
+			return
+		}
+		s.background(r.Context(), "tasks", func(ctx context.Context) {
+			s.tellAbout(ctx, p.TenantID, []uuid.UUID{*h}, "task:"+t.ID.String(), "Called off: "+t.What, "Nothing more to do.", nil, nil)
+		})
+	})
 }
 
 // stopRepeat is DELETE /v1/staff/task-repeats/{id}: no more tasks from it.
@@ -825,7 +893,7 @@ func (s *Server) stopRepeat(w http.ResponseWriter, r *http.Request) {
 
 // returnTasksTx gives a removed person's open tasks back to whoever gave
 // them; the givers and the tasks, to tell.
-func returnTasksTx(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID) ([]staffTask, error) {
+func returnTasksTx(ctx context.Context, tx pgx.Tx, tenant, user, by uuid.UUID) ([]staffTask, error) {
 	rows, err := tx.Query(ctx, `UPDATE staff_tasks SET to_user = given_by, to_role = NULL, taken_by = NULL, updated_at = now()
 		WHERE tenant_id = $1 AND state IN ('open', 'cant') AND COALESCE(taken_by, to_user) = $2 AND given_by <> $2 RETURNING id`, tenant, user)
 	if err != nil {
@@ -840,6 +908,14 @@ func returnTasksTx(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID) ([]st
 		return nil, err
 	}
 	if _, err := tx.Exec(ctx, `UPDATE staff_task_repeats SET stopped_at = now() WHERE tenant_id = $1 AND to_user = $2 AND stopped_at IS NULL`, tenant, user); err != nil {
+		return nil, err
+	}
+	// Tasks and repeats they gave are now those of whoever removed them,
+	// who hears when one is late; the person who left hears nothing more.
+	if _, err := tx.Exec(ctx, `UPDATE staff_tasks SET given_by = $3, updated_at = now() WHERE tenant_id = $1 AND state IN ('open', 'cant') AND given_by = $2`, tenant, user, by); err != nil {
+		return nil, err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE staff_task_repeats SET given_by = $3 WHERE tenant_id = $1 AND given_by = $2 AND stopped_at IS NULL`, tenant, user, by); err != nil {
 		return nil, err
 	}
 	var out []staffTask
@@ -902,6 +978,27 @@ func (s *Server) staffTaskTick(ctx context.Context, tenant uuid.UUID, now time.T
 				return err
 			}
 		}
+		// A task about an order closes when the order is ready or completed;
+		// one about an invoice when it is paid; either is called off when
+		// the thing is (the order declined or cancelled, the invoice void).
+		if _, err := tx.Exec(ctx, `UPDATE staff_tasks t SET
+			state = CASE WHEN o.status = 'completed' OR x.ready_at IS NOT NULL THEN 'done' ELSE 'cancelled' END,
+			done_at = CASE WHEN o.status = 'completed' OR x.ready_at IS NOT NULL THEN $2::timestamptz END,
+			photo_asked = NULL, updated_at = now()
+			FROM storefront_orders o LEFT JOIN link_orders x ON x.order_id = o.id
+			WHERE t.tenant_id = $1 AND t.state = 'open' AND t.link_kind = 'order' AND t.link_id = o.id::text AND o.tenant_id = $1
+			  AND (o.status IN ('completed', 'declined', 'expired', 'cancelled', 'refunded') OR x.ready_at IS NOT NULL)`, tenant, now); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE staff_tasks t SET
+			state = CASE WHEN i.status = 'paid' THEN 'done' ELSE 'cancelled' END,
+			done_at = CASE WHEN i.status = 'paid' THEN $2::timestamptz END,
+			photo_asked = NULL, updated_at = now()
+			FROM customer_invoices i
+			WHERE t.tenant_id = $1 AND t.state = 'open' AND t.link_kind = 'invoice' AND t.link_id = i.id::text AND i.tenant_id = $1
+			  AND i.status IN ('paid', 'void')`, tenant, now); err != nil {
+			return err
+		}
 		// Due within 30 minutes: a nudge; past due: the giver is told. Each once.
 		rows, err = tx.Query(ctx, `SELECT `+taskCols+` WHERE t.tenant_id = $1 AND t.state = 'open' AND t.due_at IS NOT NULL AND t.due_at <= $2`, tenant, now.Add(taskNudge))
 		if err != nil {
@@ -933,10 +1030,12 @@ func (s *Server) staffTaskTick(ctx context.Context, tenant uuid.UUID, now time.T
 		s.tellNewTask(ctx, tenant, t, false)
 	}
 	for _, t := range nudge {
-		if t.holder() == nil {
+		if h := t.holder(); h != nil {
+			s.tellAbout(ctx, tenant, []uuid.UUID{*h}, "task:"+t.ID.String(), "Soon: "+t.line(now), "Reply DONE when it is done.", doButtons(t), nil)
 			continue
 		}
-		s.tellAbout(ctx, tenant, []uuid.UUID{*t.holder()}, "task:"+t.ID.String(), "Soon: "+t.line(now), "Reply DONE when it is done.", doButtons(t), nil)
+		s.tellAbout(ctx, tenant, s.roleUsers(ctx, tenant, t.ToRole, t.GivenBy), "task:"+t.ID.String(), "Soon, for "+t.who()+": "+t.line(now),
+			"No one has taken it yet.", takeButton(t), nil)
 	}
 	for _, t := range late {
 		who := t.who()
@@ -959,7 +1058,8 @@ func taskTitle(what string) string {
 	return strings.ToUpper(string(r)) + what[n:]
 }
 
-// taskCounts is the briefing's tasks: due today, and late.
+// taskCounts is the briefing's tasks: still due today, and late (each
+// counted once).
 type taskCounts struct {
 	Today int `json:"today"`
 	Late  int `json:"late"`
@@ -967,10 +1067,10 @@ type taskCounts struct {
 
 func taskCountsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, now time.Time) (taskCounts, error) {
 	d := now.In(storefront.Lagos)
-	from := time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, storefront.Lagos)
+	tomorrow := time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, storefront.Lagos).AddDate(0, 0, 1)
 	var c taskCounts
-	err := tx.QueryRow(ctx, `SELECT count(*) FILTER (WHERE due_at >= $3 AND due_at < $4), count(*) FILTER (WHERE due_at < $2)
-		FROM staff_tasks WHERE tenant_id = $1 AND state = 'open' AND due_at IS NOT NULL`, tenant, now, from, from.AddDate(0, 0, 1)).Scan(&c.Today, &c.Late)
+	err := tx.QueryRow(ctx, `SELECT count(*) FILTER (WHERE due_at >= $2 AND due_at < $3), count(*) FILTER (WHERE due_at < $2)
+		FROM staff_tasks WHERE tenant_id = $1 AND state = 'open' AND due_at IS NOT NULL`, tenant, now, tomorrow).Scan(&c.Today, &c.Late)
 	return c, err
 }
 
@@ -995,6 +1095,9 @@ func (s *Server) waTaskPress(ctx context.Context, c *chat, text string) error {
 	id, err := uuid.Parse(rest)
 	if err != nil || c.p == nil || c.tenant.ID == uuid.Nil {
 		return c.say(ctx, s, "That task is no longer here.")
+	}
+	if err := s.taskHome(ctx, c, id); err != nil {
+		return err
 	}
 	switch verb {
 	case "done":
@@ -1045,6 +1148,41 @@ func (s *Server) waTaskPress(ctx context.Context, c *chat, text string) error {
 		return c.say(ctx, s, "Reminded "+t.who()+".")
 	}
 	return c.say(ctx, s, "That task is no longer here.")
+}
+
+// taskHome turns the chat to the business a task is in, for a button on a
+// task from another of the person's businesses (the chat stays on its
+// business for what comes after).
+func (s *Server) taskHome(ctx context.Context, c *chat, id uuid.UUID) error {
+	in := func(tenant uuid.UUID) (bool, error) {
+		var ok bool
+		err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			return tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM staff_tasks WHERE id = $1 AND tenant_id = $2)`, id, tenant).Scan(&ok)
+		})
+		return ok, err
+	}
+	if ok, err := in(c.tenant.ID); ok || err != nil {
+		return err
+	}
+	for _, t := range c.tenants {
+		if t.ID == c.tenant.ID {
+			continue
+		}
+		ok, err := in(t.ID)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			continue
+		}
+		p, err := s.principalOf(ctx, t.ID, c.p.UserID)
+		if err != nil {
+			return err
+		}
+		c.tenant, c.p = t, p
+		return nil
+	}
+	return nil
 }
 
 // taskRefusal is a plain answer for a refusal, true when err is one.
@@ -1283,7 +1421,9 @@ func (s *Server) taskPhoto(ctx context.Context, c *chat) (bool, error) {
 var (
 	taskByRe    = regexp.MustCompile(`(?i)\s+(?:by|at|before)\s+(today\s+|tomorrow\s+)?(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)?\s*(today|tomorrow)?\s*\.?$`)
 	taskEveryRe = regexp.MustCompile(`(?i)^every\s+(day|monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)\s+at\s+(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)?\s*[:,-]?\s*`)
-	taskPhotoRe = regexp.MustCompile(`(?i)[,.]?\s*(?:with|send)\s+a\s+photo\.?$`)
+	// "count the float every day at 7am": the repeat said at the end.
+	taskEveryEndRe = regexp.MustCompile(`(?i)[,;]?\s+every\s+(day|monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)\s+at\s+(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)?\s*\.?$`)
+	taskPhotoRe    = regexp.MustCompile(`(?i)[,.]?\s*(?:with|send)\s+a\s+photo\.?$`)
 )
 
 // clockOf is "3pm", "15:00", "7.30am" as hours and minutes; false if not a time.
@@ -1315,16 +1455,30 @@ func parseTaskWords(words string, now time.Time) (staffTaskIn, bool) {
 	if m := taskPhotoRe.FindStringIndex(words); m != nil {
 		in.Photo, words = true, strings.TrimSpace(words[:m[0]])
 	}
-	if m := taskEveryRe.FindStringSubmatch(words); m != nil {
+	repeat := func(m []string) (*taskRepeatIn, bool) {
 		h, mi, ok := clockOf(m[2], m[3], m[4])
 		if !ok {
-			return in, false
+			return nil, false
 		}
 		r := &taskRepeatIn{Every: "day", At: fmt.Sprintf("%02d:%02d", h, mi)}
 		if d := strings.ToLower(m[1]); d != "day" {
 			r.Every, r.Day = "week", d[:3]
 		}
+		return r, true
+	}
+	if m := taskEveryRe.FindStringSubmatch(words); m != nil {
+		r, ok := repeat(m)
+		if !ok {
+			return in, false
+		}
 		in.Repeat, words = r, strings.TrimSpace(words[len(m[0]):])
+	} else if i := taskEveryEndRe.FindStringSubmatchIndex(words); i != nil {
+		m := taskEveryEndRe.FindStringSubmatch(words)
+		r, ok := repeat(m)
+		if !ok {
+			return in, false
+		}
+		in.Repeat, words = r, strings.TrimSpace(words[:i[0]])
 	} else if m := taskByRe.FindStringSubmatchIndex(words); m != nil {
 		sub := func(i int) string {
 			if m[2*i] < 0 {
@@ -1337,8 +1491,14 @@ func parseTaskWords(words string, now time.Time) (staffTaskIn, bool) {
 		if ok && (sub(3) != "" || sub(4) != "") {
 			d := now.In(storefront.Lagos)
 			due := time.Date(d.Year(), d.Month(), d.Day(), h, mi, 0, 0, storefront.Lagos)
-			if strings.TrimSpace(strings.ToLower(sub(1)+sub(5))) == "tomorrow" {
+			switch strings.TrimSpace(strings.ToLower(sub(1) + sub(5))) {
+			case "tomorrow":
 				due = due.AddDate(0, 0, 1)
+			case "":
+				// "by 7am" said at 9am is tomorrow's 7am, not one already late.
+				if !due.After(now) {
+					due = due.AddDate(0, 0, 1)
+				}
 			}
 			in.DueAt = &due
 			words = strings.TrimSpace(words[:m[0]])
@@ -1387,13 +1547,22 @@ func (s *Server) waTaskSaid(ctx context.Context, c *chat, text string) (bool, er
 	var in staffTaskIn
 	var who string
 	var n int
+	var same []string // others whose name fits as well: which one is meant
 	// The longest name that starts the words: "Tunde Bakare" before "Tunde".
 	for _, p := range people {
+		best := 0
 		for _, name := range []string{p.name, strings.Fields(p.name)[0]} {
-			if starts(name) && len(name) > n {
-				id := p.id
-				in.ToUser, in.ToRole, who, n = &id, "", p.name, len(name)
+			if starts(name) && len(name) > best {
+				best = len(name)
 			}
+		}
+		switch {
+		case best == 0:
+		case best > n:
+			id := p.id
+			in.ToUser, in.ToRole, who, n, same = &id, "", p.name, best, nil
+		case best == n && in.ToUser != nil && *in.ToUser != p.id:
+			same = append(same, p.name)
 		}
 	}
 	for _, r := range roles {
@@ -1405,6 +1574,24 @@ func (s *Server) waTaskSaid(ctx context.Context, c *chat, text string) (bool, er
 	}
 	if n == 0 {
 		return false, nil
+	}
+	// "@Ada Foods …" names a linked business when the business's name is
+	// longer than the person's: it is a message to them, not a task.
+	if to, _, which, err := s.mentionedLinks(ctx, c, strings.TrimSpace(text)); err != nil {
+		return true, err
+	} else {
+		for _, l := range to {
+			if len(l.Name) > n && strings.HasPrefix(low, strings.ToLower(l.Name)) {
+				return false, nil
+			}
+		}
+		if which != nil && len(which.Typed) > n {
+			return false, nil
+		}
+	}
+	if len(same) > 0 {
+		names := append([]string{who}, same...)
+		return true, c.say(ctx, s, "Which one: "+strings.Join(names, " or ")+"? Say the whole name, like @"+names[0]+" "+strings.TrimSpace(rest[n:])+".")
 	}
 	said, ok := parseTaskWords(rest[n:], s.staffNow())
 	if !ok {

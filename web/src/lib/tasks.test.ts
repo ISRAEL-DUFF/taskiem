@@ -72,7 +72,7 @@ describe("tasks", () => {
   it("starts a linked task's words, and the briefing tile", () => {
     expect(linkedWhat({ kind: "order", id: "x", name: "P-7K8YED" })).toBe("Pack order P-7K8YED");
     expect(linkedWhat({ kind: "stock", id: "s1", name: "Rice, 50kg bag" })).toBe("Restock Rice, 50kg bag");
-    expect(tasksTile({ today: 3, late: 1 })).toBe("3 today · 1 late");
+    expect(tasksTile({ today: 3, late: 1 })).toBe("3 due today · 1 late");
     expect(tasksTile({ today: 0, late: 2 })).toBe("2 late");
   });
 });

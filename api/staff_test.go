@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"slices"
@@ -10,6 +11,8 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/sender"
 	"github.com/israel-duff/taskiem/engine/whatsapp/whatsapptest"
 )
 
@@ -316,6 +319,7 @@ func TestStaffTasks(t *testing.T) {
 	since := func(number string) func() []string {
 		n := len(w.graph.Sent(number))
 		return func() []string {
+			w.srv.WaitBackground()
 			var out []string
 			for _, s := range w.graph.Sent(number)[n:] {
 				out = append(out, s.Text)
@@ -397,6 +401,7 @@ func TestStaffTasks(t *testing.T) {
 	// CAN'T, with why; Ada gives it to herself again.
 	toAda = since(ownerNumber)
 	fuel := owner.must(201, "POST", "/v1/staff/tasks", map[string]any{"what": "buy diesel", "to_user": cashID})["task"].(map[string]any)
+	w.srv.WaitBackground()
 	if got := w.say(t, cashNumber, "can't no fuel station open"); !strings.Contains(got, "Sent back to Ada: buy diesel") {
 		t.Fatalf("can't: %q", got)
 	}
@@ -404,6 +409,7 @@ func TestStaffTasks(t *testing.T) {
 		t.Fatalf("Ada told of can't: %q", got)
 	}
 	back := owner.must(200, "POST", "/v1/staff/tasks/"+fuel["id"].(string)+"/give", map[string]any{"to_user": ownerID})
+	w.srv.WaitBackground()
 	if back["state"] != "open" || back["to_user"] != ownerID {
 		t.Fatalf("given again: %v", back)
 	}
@@ -462,5 +468,158 @@ func TestStaffTasks(t *testing.T) {
 	var back2 int
 	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM staff_tasks WHERE to_user = $1 AND state = 'open' AND what IN ('clean the freezer', 'open the shop')`, ownerID).Scan(&back2); err != nil || back2 != 2 {
 		t.Fatalf("given back: %d %v", back2, err)
+	}
+}
+
+// TestStaffTasksFixes: the review's fixes. A repeat said at the end of
+// the words; one set after today's time starts tomorrow; "by 7am" said at
+// 9am is tomorrow's; two people with one first name are asked about; a
+// weekly repeat for a role, nudged to everyone in it; giving to someone
+// else and calling off tell the one who had it; a task about an invoice
+// closes with it; tasks given by someone removed are their remover's; a
+// location shared without clocking in clocks no one in.
+func TestStaffTasksFixes(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	w.srv.Invoices = &invoicing.Invoices{Pool: w.env.DB.App, Vault: w.env.Vault, PageBase: "https://forms.taskiem.test",
+		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}, Signal: w.env.Store.DeliverSignalOnce}
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	owner.must(200, "PUT", "/v1/settings/chat-tools", map[string]any{"chat_tools": true})
+	const ownerOn, adeOn, okonOn, samOn = "+2348031239521", "+2348031239522", "+2348031239523", "+2348031239524"
+	w.bind(t, owner, ownerOn)
+	ade := w.member(t, owner, "ade@acme.test", "cashier")
+	okon := w.member(t, owner, "okon@acme.test", "cashier")
+	sam := w.member(t, owner, "sam@acme.test", "shift_manager")
+	w.bind(t, ade, adeOn)
+	w.bind(t, okon, okonOn)
+	w.bind(t, sam, samOn)
+	id := func(c *client) string {
+		return c.must(200, "GET", "/v1/me", nil)["user"].(map[string]any)["id"].(string)
+	}
+	ownerID, adeID, okonID, samID := id(owner), id(ade), id(okon), id(sam)
+	for u, name := range map[string]string{ownerID: "Ada", adeID: "Bisi Ade", okonID: "Bisi Okon", samID: "Sam"} {
+		if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE users SET name = $2 WHERE id = $1`, u, name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	lagos, _ := time.LoadLocation("Africa/Lagos")
+	base := time.Now().In(lagos)
+	at := func(day, hour, minute int) time.Time {
+		return time.Date(base.Year(), base.Month(), base.Day()+day, hour, minute, 0, 0, lagos)
+	}
+	clock := func(day, h, m int) { w.srv.BriefingClock = func() time.Time { return at(day, h, m) } }
+	tick := func() {
+		t.Helper()
+		if err := w.srv.StaffTick(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	since := func(number string) func() []string {
+		n := len(w.graph.Sent(number))
+		return func() []string {
+			w.srv.WaitBackground()
+			var out []string
+			for _, x := range w.graph.Sent(number)[n:] {
+				out = append(out, x.Text)
+			}
+			return out
+		}
+	}
+	has := func(got []string, want string) bool {
+		return slices.ContainsFunc(got, func(s string) bool { return strings.Contains(s, want) })
+	}
+	tasksNamed := func(what string) int {
+		var n int
+		if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM staff_tasks WHERE what = $1`, what).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+
+	// "every day at 7am" at the end, said at 9am: a repeat from tomorrow.
+	clock(0, 9, 0)
+	if got := w.say(t, ownerOn, "@Bisi Ade count the float every day at 7am"); !strings.Contains(got, "Make it a task for Bisi Ade: count the float, every day at 07:00?") {
+		t.Fatalf("said: %q", got)
+	}
+	if got := w.say(t, ownerOn, "yes"); !strings.Contains(got, "Each time it falls due") {
+		t.Fatalf("yes: %q", got)
+	}
+	clock(0, 9, 1)
+	tick()
+	if n := tasksNamed("count the float"); n != 0 {
+		t.Fatalf("today's made late: %d", n)
+	}
+	clock(1, 0, 5)
+	tick()
+	if n := tasksNamed("count the float"); n != 1 {
+		t.Fatalf("tomorrow's: %d", n)
+	}
+
+	// Two people called Bisi: which one. "by 7am" said at 9am: tomorrow's.
+	clock(0, 9, 2)
+	if got := w.say(t, ownerOn, "@Bisi clean up"); !strings.Contains(got, "Which one:") || !strings.Contains(got, "Bisi Ade") || !strings.Contains(got, "Bisi Okon") {
+		t.Fatalf("which: %q", got)
+	}
+	if got := w.say(t, ownerOn, "@Bisi Okon open the gate by 7am"); !strings.Contains(got, "open the gate, by tomorrow 07:00") {
+		t.Fatalf("by 7am: %q", got)
+	}
+	w.say(t, ownerOn, "no")
+
+	// Every week on today's day at 10:00, for any cashier: today's made; at
+	// 09:35 both cashiers are nudged.
+	rep := owner.must(201, "POST", "/v1/staff/tasks", map[string]any{"what": "clean the freezer", "to_role": "cashier",
+		"repeat": map[string]any{"every": "week", "day": rotaDayName(at(0, 12, 0)), "at": "10:00"}})
+	if rep["task"] == nil {
+		t.Fatalf("this week's: %v", rep)
+	}
+	toAde, toOkon := since(adeOn), since(okonOn)
+	clock(0, 9, 35)
+	tick()
+	if !has(toAde(), "Soon, for any cashier: clean the freezer") || !has(toOkon(), "Soon, for any cashier: clean the freezer") {
+		t.Fatalf("the role nudged: %q %q", toAde(), toOkon())
+	}
+
+	// Given to someone else, then called off: the one who had it is told.
+	diesel := owner.must(201, "POST", "/v1/staff/tasks", map[string]any{"what": "buy diesel", "to_user": adeID})["task"].(map[string]any)
+	toAde, toOkon = since(adeOn), since(okonOn)
+	owner.must(200, "POST", "/v1/staff/tasks/"+diesel["id"].(string)+"/give", map[string]any{"to_user": okonID})
+	if !has(toAde(), "Given to someone else: buy diesel") || !has(toOkon(), "asked you: buy diesel") {
+		t.Fatalf("given: %q %q", toAde(), toOkon())
+	}
+	toOkon = since(okonOn)
+	owner.must(200, "DELETE", "/v1/staff/tasks/"+diesel["id"].(string), nil)
+	if !has(toOkon(), "Called off: buy diesel") {
+		t.Fatalf("called off: %q", toOkon())
+	}
+
+	// About an invoice: done when it is paid, called off when it is void.
+	inv := owner.must(201, "POST", "/v1/invoices", map[string]any{"customer": map[string]any{"name": "Bola", "email": "bola@example.com"},
+		"lines": []map[string]any{{"description": "Rice", "quantity": 1, "unit_kobo": 100000}}}, "Idempotency-Key", "inv-t")
+	owner.must(200, "POST", "/v1/invoices/"+inv["id"].(string)+"/send", nil)
+	chase := owner.must(201, "POST", "/v1/staff/tasks", map[string]any{"what": "follow up the invoice", "to_user": adeID,
+		"link": map[string]any{"kind": "invoice", "id": inv["id"], "name": inv["number"]}})["task"].(map[string]any)
+	owner.must(200, "POST", "/v1/invoices/"+inv["id"].(string)+"/void", map[string]any{"reason": "Wrong price"})
+	tick()
+	var state string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT state FROM staff_tasks WHERE id = $1`, chase["id"]).Scan(&state); err != nil || state != "cancelled" {
+		t.Fatalf("closed with the invoice: %q %v", state, err)
+	}
+
+	// Sam gives a task and is removed: it is Ada's now, and only Ada hears it is late.
+	clock(0, 9, 40)
+	sam.must(201, "POST", "/v1/staff/tasks", map[string]any{"what": "sweep the yard", "to_user": adeID, "due_at": at(0, 9, 50)})
+	owner.must(204, "POST", "/v1/staff/"+samID+"/remove", nil)
+	toAda, toSam := since(ownerOn), since(samOn)
+	clock(0, 9, 55)
+	tick()
+	if !has(toAda(), "Sweep the yard is 5 minutes late (Bisi Ade)") || len(toSam()) != 0 {
+		t.Fatalf("late, after removal: Ada %q, Sam %q", toAda(), toSam())
+	}
+
+	// A location shared with no clock-in clocks no one in.
+	w.send(t, ownerOn, map[string]any{"type": "location", "location": map[string]any{"latitude": 6.45, "longitude": 3.39}})
+	var shifts int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM staff_clock WHERE user_id = $1`, ownerID).Scan(&shifts); err != nil || shifts != 0 {
+		t.Fatalf("clocked in by a location: %d %v", shifts, err)
 	}
 }

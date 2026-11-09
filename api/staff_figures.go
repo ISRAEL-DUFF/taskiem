@@ -128,7 +128,24 @@ func staffFiguresTx(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID, peri
 	if err := json.Unmarshal(raw, &rota); err != nil {
 		return f, err
 	}
+	// Not before they joined, or the day they started when that is later.
+	var joined time.Time
+	var started *time.Time
+	if err := tx.QueryRow(ctx, `SELECT min(m.created_at), (SELECT started_on::timestamp FROM staff_profiles WHERE tenant_id = $1 AND user_id = $2)
+		FROM memberships m WHERE m.tenant_id = $1 AND m.user_id = $2`, tenant, user).Scan(&joined, &started); err != nil {
+		return f, err
+	}
+	first := joined.In(storefront.Lagos)
+	first = time.Date(first.Year(), first.Month(), first.Day(), 0, 0, 0, 0, storefront.Lagos)
+	if started != nil {
+		if st := time.Date(started.Year(), started.Month(), started.Day(), 0, 0, 0, 0, storefront.Lagos); st.After(first) {
+			first = st
+		}
+	}
 	for day := from; day.Before(end); day = day.AddDate(0, 0, 1) {
+		if day.Before(first) {
+			continue
+		}
 		r, ok := rotaShiftOn(rota, day)
 		if !ok {
 			continue
@@ -266,13 +283,16 @@ func figuresWords(f staffFigures) string {
 	}
 	if n := len(f.Handovers); n > 0 {
 		var diff int64
+		known := false
 		for _, h := range f.Handovers {
 			if h.Diff != nil {
-				diff += *h.Diff
+				diff, known = diff+*h.Diff, true
 			}
 		}
 		l := "Handovers: " + fmt.Sprint(n)
 		switch {
+		case !known:
+			// Handed over before the cash sold was kept with it.
 		case diff < 0:
 			l += ", " + naira(-diff) + " short"
 		case diff > 0:

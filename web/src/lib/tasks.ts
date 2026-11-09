@@ -165,10 +165,10 @@ export function linkedWhat(link: TaskLink): string {
   }
 }
 
-/** The briefing's tasks tile: "3 today · 1 late". */
+/** The briefing's tasks tile: "3 due today · 1 late" (each counted once). */
 export function tasksTile(n: { today: number; late: number }): string {
   const parts: string[] = [];
-  if (n.today > 0) parts.push(`${n.today} today`);
+  if (n.today > 0) parts.push(`${n.today} due today`);
   if (n.late > 0) parts.push(`${n.late} late`);
   return parts.join(" · ") || "None due";
 }

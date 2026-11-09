@@ -383,7 +383,7 @@ func (s *Server) removeStaff(w http.ResponseWriter, r *http.Request) {
 		}
 		// Their open tasks go back to whoever gave them (staff_tasks.go).
 		var err error
-		if returned, err = returnTasksTx(r.Context(), tx, p.TenantID, user); err != nil {
+		if returned, err = returnTasksTx(r.Context(), tx, p.TenantID, user, p.UserID); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(r.Context(), `DELETE FROM member_invitations WHERE tenant_id = $1 AND user_id = $2`, p.TenantID, user); err != nil {
@@ -395,12 +395,14 @@ func (s *Server) removeStaff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.diaryChange(r.Context(), p, "Removed "+name+" from the business")
-	for _, t := range returned {
-		if t.GivenBy == p.UserID {
-			continue
+	s.background(r.Context(), "tasks", func(ctx context.Context) {
+		for _, t := range returned {
+			if t.GivenBy == p.UserID {
+				continue
+			}
+			s.tellAbout(ctx, p.TenantID, []uuid.UUID{t.GivenBy}, "task:"+t.ID.String(), "Back to you: "+t.What,
+				name+" left the business, so the task is yours again. Give it to someone else in Tasks.", nil, nil)
 		}
-		s.tellAbout(r.Context(), p.TenantID, []uuid.UUID{t.GivenBy}, "task:"+t.ID.String(), "Back to you: "+t.What,
-			name+" left the business, so the task is yours again. Give it to someone else in Tasks.", nil, nil)
-	}
+	})
 	w.WriteHeader(http.StatusNoContent)
 }
