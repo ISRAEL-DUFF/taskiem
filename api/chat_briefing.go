@@ -239,9 +239,10 @@ func (s *Server) handoverOf(ctx context.Context, p *Principal) (handover, error)
 					n++
 				}
 			}
-			// And the storefront's own customers' orders not done yet.
+			// And the storefront's own customers' orders not done yet, those
+			// confirmed from their WhatsApp messages too.
 			var shop int
-			if err := tx.QueryRow(ctx, `SELECT count(*) FROM storefront_orders WHERE tenant_id = $1 AND kind = 'order'
+			if err := tx.QueryRow(ctx, `SELECT count(*) FROM storefront_orders WHERE tenant_id = $1 AND kind IN ('order', 'chat')
 				AND status IN ('received', 'awaiting_payment', 'paid', 'accepted')`, p.TenantID).Scan(&shop); err != nil {
 				return err
 			}

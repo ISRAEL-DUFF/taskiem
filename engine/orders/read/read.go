@@ -8,6 +8,8 @@
 package read
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -82,6 +84,9 @@ type Draft struct {
 
 // Line is one line of a draft: matched to an item, or kept as written.
 type Line struct {
+	// ID names the line for as long as the order lives (a card's row; the
+	// question it waits on).
+	ID string `json:"id,omitempty"`
 	Said      string `json:"said,omitempty"`
 	ItemID    string `json:"item_id,omitempty"`
 	Name      string `json:"name,omitempty"`
@@ -105,8 +110,11 @@ const (
 
 // Question is one thing the order waits on, with the answers to tap.
 type Question struct {
-	Kind    string   `json:"kind"`
-	Text    string   `json:"text"`
+	Kind string `json:"kind"`
+	Text string `json:"text"`
+	// About is what it asks about, for wording it in another language:
+	// the customer's words (which), the product (size), the item (how many).
+	About   string   `json:"about,omitempty"`
 	Choices []Choice `json:"choices,omitempty"`
 }
 
@@ -196,7 +204,9 @@ Customers write briefly, misspell names ("jolof" for "Jollof rice"), use Nigeria
 Leave item empty when the words could mean more than one catalogue name, or none: never pick one of two, and never name something not in the list.
 Leave quantity 0 when no number is said; never assume one.
 A greeting, a thank-you or a question ("how much is rice?", "are you open?") orders nothing: orderable is false and lines is empty.
-Give where to deliver, when, and any other request about the order only as the words say them. Never invent anything the words do not say.`
+Give where to deliver, when, and any other request about the order only as the words say them. Never invent anything the words do not say.
+When questions the business asked are given, the customer's answers to them go in answers only: never list again as a line a thing the questions already ask about. Lines are only for something more they ask for.
+A new address, or a change between delivery and pickup, is given as they now say it.`
 
 // Request is the model request reading text against the catalogue, with
 // the questions asked before (numbered from 1), when the text may answer
@@ -341,7 +351,44 @@ func Match(s Said, items []storefront.Item) Draft {
 		}
 		d.Lines = append(d.Lines, matchLine(sl, es, items))
 	}
+	EnsureIDs(&d)
 	return d
+}
+
+// EnsureIDs gives each line without one its id.
+func EnsureIDs(d *Draft) {
+	for i := range d.Lines {
+		if d.Lines[i].ID == "" {
+			d.Lines[i].ID = newLineID()
+		}
+	}
+}
+
+func newLineID() string {
+	b := make([]byte, 6)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+// LineAt is the index of the line with id, or -1.
+func (d Draft) LineAt(id string) int {
+	for i, l := range d.Lines {
+		if l.ID == id {
+			return i
+		}
+	}
+	return -1
+}
+
+// AskedIDs are the lines whose questions are open, in the order the
+// questions are numbered (Request, Questions): what an answer's number
+// means, kept from before the model is asked.
+func (d Draft) AskedIDs() []string {
+	var out []string
+	for _, i := range d.Open() {
+		out = append(out, d.Lines[i].ID)
+	}
+	return out
 }
 
 func clip(s string, n int) string {
@@ -386,7 +433,7 @@ func matchLine(sl SaidLine, es []entry, items []storefront.Item) Line {
 		l.Ask = which(l.Said, found)
 	}
 	if l.Ask == nil && l.ItemID != "" && l.Quantity < 1 {
-		l.Ask = &Question{Kind: AskHowMany, Text: fmt.Sprintf("How many %s?", l.Name)}
+		l.Ask = &Question{Kind: AskHowMany, Text: fmt.Sprintf("How many %s?", l.Name), About: l.Name}
 	}
 	return l
 }
@@ -430,7 +477,7 @@ func sameProduct(es []entry) bool {
 
 // sizeQuestion asks which of a product's sizes, at most MaxChoices.
 func sizeQuestion(product storefront.Item, sizes []entry) *Question {
-	q := &Question{Kind: AskSize, Text: fmt.Sprintf("Which %s?", product.Name)}
+	q := &Question{Kind: AskSize, Text: fmt.Sprintf("Which %s?", product.Name), About: product.Name}
 	for _, z := range sizes {
 		if len(q.Choices) >= MaxChoices {
 			break
@@ -477,7 +524,7 @@ func put(l Line, it storefront.Item) Line {
 // which is the question for words that fit several entries: their
 // products (a size's product, once), at most MaxChoices.
 func which(said string, found []entry) *Question {
-	q := &Question{Kind: AskWhich, Text: fmt.Sprintf("Which one: %s?", said)}
+	q := &Question{Kind: AskWhich, Text: fmt.Sprintf("Which one: %s?", said), About: said}
 	seen := map[string]bool{}
 	for _, e := range found {
 		it := e.item
@@ -654,7 +701,7 @@ func Choose(d *Draft, line int, itemID string, items []storefront.Item) bool {
 		l.Ask = nil
 		l = sized(l, e, nil, items)
 		if l.Ask == nil && l.Quantity < 1 {
-			l.Ask = &Question{Kind: AskHowMany, Text: fmt.Sprintf("How many %s?", l.Name)}
+			l.Ask = &Question{Kind: AskHowMany, Text: fmt.Sprintf("How many %s?", l.Name), About: l.Name}
 		}
 		d.Lines[line] = l
 		return true
@@ -692,39 +739,85 @@ func Refresh(d *Draft, items []storefront.Item, keep func(i int) bool) {
 	}
 }
 
-// ApplyAnswers puts the customer's answers (as the model read them) on the
-// open questions, asked in the order Open gives them; new lines the
-// message asks for are added. It reports whether anything changed.
-func ApplyAnswers(d *Draft, s Said, items []storefront.Item) bool {
-	open := d.Open()
+// ApplyAnswers puts the customer's answers (as the model read them) on
+// the questions they were asked: asked are the lines the numbers meant
+// when the model was asked (AskedIDs), so a line changed or answered since
+// is not answered again, and an answer never lands on another line. The
+// address, delivery or pickup and when, as the customer now says them,
+// replace what was there. Lines for more they ask for are added, except
+// those that only repeat what an answer chose. It reports whether anything
+// changed.
+func ApplyAnswers(d *Draft, s Said, items []storefront.Item, asked []string) bool {
+	EnsureIDs(d)
 	changed := false
+	chosen := map[string]bool{}
+	answered := map[string]bool{}
 	for _, a := range s.Answers {
-		i := a.Question - 1
-		if i < 0 || i >= len(open) {
+		n := a.Question - 1
+		if n < 0 || n >= len(asked) {
 			continue
 		}
-		if Answer(d, open[i], a.Answer, a.Quantity, items) {
+		i := d.LineAt(asked[n])
+		if i < 0 || d.Lines[i].Ask == nil {
+			continue
+		}
+		answered[strings.ToLower(strings.TrimSpace(a.Answer))] = true
+		if Answer(d, i, a.Answer, a.Quantity, items) {
 			changed = true
+			chosen[d.Lines[i].ItemID] = true
+			if p := productOf(items, d.Lines[i].ItemID); p != "" {
+				chosen[p] = true
+			}
 		}
 	}
-	if d.Address == "" && s.Address != "" {
-		d.Address, changed = clip(s.Address, 300), true
+	if a := clip(s.Address, 300); a != "" && a != d.Address {
+		d.Address, changed = a, true
 	}
-	if d.Fulfilment == "" && (s.Fulfilment == "delivery" || s.Fulfilment == "pickup") {
+	if (s.Fulfilment == "delivery" || s.Fulfilment == "pickup") && s.Fulfilment != d.Fulfilment {
 		d.Fulfilment, changed = s.Fulfilment, true
 	}
-	if d.When == "" && s.When != "" {
-		d.When, changed = clip(s.When, 120), true
+	if w := clip(s.When, 120); w != "" && w != d.When {
+		d.When, changed = w, true
 	}
 	more := Match(Said{Lines: s.Lines}, items)
 	for _, l := range more.Lines {
 		if len(d.Lines) >= MaxLines {
 			break
 		}
+		// Only the answer again ("the plate" read as a line too).
+		if l.ItemID != "" && (chosen[l.ItemID] || chosen[productOf(items, l.ItemID)]) || answered[strings.ToLower(l.Said)] {
+			continue
+		}
+		if l.Ask != nil && len(answered) > 0 && askAbout(l.Ask, chosen) {
+			continue
+		}
 		d.Lines = append(d.Lines, l)
 		changed = true
 	}
 	return changed
+}
+
+// productOf is the product a size belongs to (its own id for a product).
+func productOf(items []storefront.Item, id string) string {
+	for _, e := range entries(items) {
+		if e.item.ID == id {
+			if e.product != nil {
+				return e.product.ID
+			}
+			return e.item.ID
+		}
+	}
+	return ""
+}
+
+// askAbout: a question whose choices hold something just chosen.
+func askAbout(q *Question, chosen map[string]bool) bool {
+	for _, c := range q.Choices {
+		if chosen[c.ItemID] {
+			return true
+		}
+	}
+	return false
 }
 
 // Questions are the open questions as one message to the customer,

@@ -33311,6 +33311,9 @@ components:
       type: object
       additionalProperties: false
       properties:
+        id:
+          type: string
+          description: The line, for as long as the order lives.
         said:
           type: string
           description: The customer's words for it.
@@ -33342,6 +33345,9 @@ components:
           enum: [which, size, how_many]
         text:
           type: string
+        about:
+          type: string
+          description: What it asks about (the customer's words, the product or the item), to word it in another language.
         choices:
           type: array
           items:

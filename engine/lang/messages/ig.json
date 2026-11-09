@@ -5940,7 +5940,7 @@
       "reviewed": false
     },
     "customer.chat_pay_link": {
-      "text": "Kwụọ ụgwọ ebe a, site na transfer ma ọ bụ kaadị: {link}",
+      "text": "Kwụọ ụgwọ site na transfer n'ụlọ akụ ebe a: {link}",
       "reviewed": false
     },
     "customer.chat_pay_door": {
@@ -5949,6 +5949,30 @@
     },
     "customer.chat_paid": {
       "text": "Anatala ụgwọ gị, daalụ: {reference}. Anyị na-akwado ya.",
+      "reviewed": false
+    },
+    "customer.order_ask": {
+      "text": "Ka anyị wee nweta ihe i nyere n'iwu nke ọma:",
+      "reviewed": false
+    },
+    "customer.order_which": {
+      "text": "{said}: {choices}?",
+      "reviewed": false
+    },
+    "customer.order_size": {
+      "text": "Kedu {product}? {choices}",
+      "reviewed": false
+    },
+    "customer.order_how_many": {
+      "text": "Ole {item}?",
+      "reviewed": false
+    },
+    "customer.order_or": {
+      "text": "ma ọ bụ",
+      "reviewed": false
+    },
+    "customer.chat_expired": {
+      "text": "Ịkwụghị ụgwọ maka {reference} n'oge, ya mere akagburula ya. Degara anyị ka i nye iwu ọzọ.",
       "reviewed": false
     }
   }

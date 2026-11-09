@@ -79,6 +79,9 @@ CREATE TABLE order_drafts (
   -- Each change bumps it; a change made on an older version is refused.
   version          integer NOT NULL DEFAULT 1 CHECK (version >= 1),
   asked_at         timestamptz,
+  -- Kept a year, as the customer's messages are (an order started by
+  -- hand has no message to go with).
+  expires_at       timestamptz NOT NULL DEFAULT now() + interval '365 days',
   created_at       timestamptz NOT NULL DEFAULT now(),
   updated_at       timestamptz NOT NULL DEFAULT now(),
   CHECK ((status = 'confirmed') = (order_id IS NOT NULL))
@@ -92,8 +95,83 @@ ALTER TABLE order_drafts FORCE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON order_drafts TO taskiem_app
   USING (tenant_id = ANY (taskiem_tenant_scope())) WITH CHECK (tenant_id = ANY (taskiem_tenant_scope()));
 GRANT SELECT, INSERT, UPDATE, DELETE ON order_drafts TO taskiem_app;
+-- The purge sees only when drafts expire, and deletes those past it, with
+-- the customers' messages (00411).
+CREATE POLICY dispatch_purge ON order_drafts FOR DELETE TO taskiem_dispatch USING (expires_at <= now());
+CREATE POLICY dispatch_read_expiry ON order_drafts FOR SELECT TO taskiem_dispatch USING (expires_at <= now());
+GRANT SELECT (id, expires_at), DELETE ON order_drafts TO taskiem_dispatch;
+-- +goose StatementBegin
+CREATE OR REPLACE FUNCTION taskiem_customer_messages_purge()
+RETURNS bigint LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE
+  n bigint;
+  d bigint;
+BEGIN
+  DELETE FROM order_drafts o WHERE o.expires_at <= now();
+  GET DIAGNOSTICS d = ROW_COUNT;
+  DELETE FROM customer_messages m WHERE m.expires_at <= now();
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RETURN n + d;
+END
+$$;
+-- +goose StatementEnd
+
+-- An order confirmed from a customer's message has no card checkout: its
+-- page offers a transfer only (an account number for the order).
+-- +goose StatementBegin
+CREATE OR REPLACE FUNCTION taskiem_public_order_payment(p_reference text, p_status_hash bytea)
+RETURNS TABLE (status text, amount_kobo bigint, account_number text, bank_name text, account_name text, expires_at timestamptz, on_late text,
+               on_wrong_amount text, waiting boolean, issued_last_hour int, issued int, card boolean, held_until timestamptz)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  WITH ord AS (
+    SELECT o.id, o.kind, o.expires_at, COALESCE(a.options->>'connection', '') AS connection FROM storefront_orders o
+      JOIN tenants t ON t.id = o.tenant_id AND t.status = 'active'
+      LEFT JOIN storefront_actions a ON a.storefront_id = o.storefront_id AND a.kind = o.kind
+     WHERE o.reference = p_reference AND o.status_hash = p_status_hash
+  )
+  SELECT a.status, a.amount_kobo, a.account_number, a.bank_name, a.account_name, a.expires_at, a.on_late, a.on_wrong_amount,
+         EXISTS (SELECT 1 FROM customer_invoice_requests r WHERE r.order_id = ord.id AND r.kind = 'transfer'),
+         (SELECT count(*)::int FROM customer_invoice_accounts c WHERE c.order_id = ord.id AND c.kind = 'transfer' AND c.created_at > now() - interval '1 hour'),
+         (SELECT count(*)::int FROM customer_invoice_accounts c WHERE c.order_id = ord.id AND c.kind = 'transfer'),
+         ord.kind <> 'chat' AND (ord.connection NOT LIKE '%/%' OR ord.connection LIKE 'paystack/%'), ord.expires_at
+    FROM ord
+    LEFT JOIN LATERAL (SELECT * FROM customer_invoice_accounts a WHERE a.order_id = ord.id AND a.kind = 'transfer' ORDER BY a.seq DESC LIMIT 1) a ON true
+$$;
+-- +goose StatementEnd
 
 -- +goose Down
+-- +goose StatementBegin
+CREATE OR REPLACE FUNCTION taskiem_public_order_payment(p_reference text, p_status_hash bytea)
+RETURNS TABLE (status text, amount_kobo bigint, account_number text, bank_name text, account_name text, expires_at timestamptz, on_late text,
+               on_wrong_amount text, waiting boolean, issued_last_hour int, issued int, card boolean, held_until timestamptz)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  WITH ord AS (
+    SELECT o.id, o.expires_at, COALESCE(a.options->>'connection', '') AS connection FROM storefront_orders o
+      JOIN tenants t ON t.id = o.tenant_id AND t.status = 'active'
+      LEFT JOIN storefront_actions a ON a.storefront_id = o.storefront_id AND a.kind = o.kind
+     WHERE o.reference = p_reference AND o.status_hash = p_status_hash
+  )
+  SELECT a.status, a.amount_kobo, a.account_number, a.bank_name, a.account_name, a.expires_at, a.on_late, a.on_wrong_amount,
+         EXISTS (SELECT 1 FROM customer_invoice_requests r WHERE r.order_id = ord.id AND r.kind = 'transfer'),
+         (SELECT count(*)::int FROM customer_invoice_accounts c WHERE c.order_id = ord.id AND c.kind = 'transfer' AND c.created_at > now() - interval '1 hour'),
+         (SELECT count(*)::int FROM customer_invoice_accounts c WHERE c.order_id = ord.id AND c.kind = 'transfer'),
+         ord.connection NOT LIKE '%/%' OR ord.connection LIKE 'paystack/%', ord.expires_at
+    FROM ord
+    LEFT JOIN LATERAL (SELECT * FROM customer_invoice_accounts a WHERE a.order_id = ord.id AND a.kind = 'transfer' ORDER BY a.seq DESC LIMIT 1) a ON true
+$$;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE OR REPLACE FUNCTION taskiem_customer_messages_purge()
+RETURNS bigint LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE
+  n bigint;
+BEGIN
+  DELETE FROM customer_messages m WHERE m.expires_at <= now();
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RETURN n;
+END
+$$;
+-- +goose StatementEnd
 DROP TABLE order_drafts;
 DELETE FROM storefront_orders WHERE kind = 'chat';
 -- +goose StatementBegin

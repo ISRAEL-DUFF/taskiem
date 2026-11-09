@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
+	"unicode"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -175,6 +177,7 @@ func (s *Server) draftTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, idTex
 // saveDraftTx writes a draft's body (sealed), total and status, one
 // version on, by who.
 func (s *Server) saveDraftTx(ctx context.Context, tx pgx.Tx, d *draftRow, by string) error {
+	read.EnsureIDs(&d.body.Draft)
 	raw, _ := json.Marshal(d.body)
 	sealed, err := pii.SealText(ctx, s.Store.PII, tx, d.tenant, d.subject, "other", string(raw))
 	if err != nil {
@@ -225,6 +228,14 @@ func (d draftRow) ready() string {
 	case b.Fulfilment == "delivery" && b.Address == "" && b.Zone == "":
 		return "say where to deliver it"
 	}
+	for _, l := range b.Lines {
+		if l.Out {
+			if l.Left != nil && *l.Left > 0 {
+				return fmt.Sprintf("only %d %s left: change how many, or remove it", *l.Left, l.Name)
+			}
+			return l.Name + " is not available now: remove it, or pick another"
+		}
+	}
 	return ""
 }
 
@@ -239,10 +250,23 @@ func (d draftRow) ready() string {
 func (s *Server) readCustomerOrder(tenant, chat, message uuid.UUID, text string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
+	// A few at a time on this server, so a burst of messages never runs
+	// many model calls at once; one waits its turn within its time.
+	select {
+	case orderReads <- struct{}{}:
+		defer func() { <-orderReads }()
+	case <-ctx.Done():
+		s.Logger.Warn("orders: a customer's message not read in time", "tenant", tenant)
+		return
+	}
 	if err := s.readCustomerOrderNow(ctx, tenant, chat, message, text); err != nil && !errors.Is(err, context.Canceled) {
 		s.Logger.Warn("orders: reading a customer's message", "tenant", tenant, "err", err)
 	}
 }
+
+// orderReads holds the background reads (and voice notes put in words)
+// running at once on this server.
+var orderReads = make(chan struct{}, 8)
 
 // customerReadable reports whether a business's customers' messages are
 // read for orders: Orders on, a model, the plan's AI and budget left.
@@ -269,7 +293,7 @@ func (s *Server) customerReadable(ctx context.Context, tenant uuid.UUID) (ai.Pro
 }
 
 func (s *Server) readCustomerOrderNow(ctx context.Context, tenant, chat, message uuid.UUID, text string) error {
-	if !s.limiter("order-read:"+chat.String(), time.Minute, 6).Allow() {
+	if !s.limiter("order-read:"+chat.String(), time.Minute, 6).Allow() || !s.limiter("order-read-tenant:"+tenant.String(), 2*time.Second, 30).Allow() {
 		return nil
 	}
 	model, ok := s.customerReadable(ctx, tenant)
@@ -280,9 +304,14 @@ func (s *Server) readCustomerOrderNow(ctx context.Context, tenant, chat, message
 	if err != nil || len(items) == 0 {
 		return err
 	}
-	// The draft being worked on, if any: the message may answer it.
+	// The draft being worked on, if any: the message may answer it. A
+	// customer who sent STOP is not read: nothing can be sent to them.
 	var open *draftRow
+	var stopped bool
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx, `SELECT stopped_at IS NOT NULL FROM customer_conversations WHERE tenant_id = $1 AND id = $2`, tenant, chat).Scan(&stopped); err != nil || stopped {
+			return err
+		}
 		rows, err := tx.Query(ctx, `SELECT `+draftCols+draftFrom+` WHERE d.tenant_id = $1 AND d.conversation_id = $2 AND d.status IN ('open', 'asked')`, tenant, chat)
 		if err != nil {
 			return err
@@ -293,16 +322,21 @@ func (s *Server) readCustomerOrderNow(ctx context.Context, tenant, chat, message
 		}
 		return err
 	})
-	if err != nil {
+	if err != nil || stopped {
 		return err
 	}
 	if open == nil && !read.MightOrder(text, items) {
 		return nil
 	}
+	// The questions as numbered for the model, by the lines they wait on:
+	// an answer goes to its own line, whatever staff change meanwhile.
 	var asked []read.Question
+	var askedIDs []string
 	if open != nil {
-		for _, i := range open.body.Open() {
-			asked = append(asked, *open.body.Lines[i].Ask)
+		read.EnsureIDs(&open.body.Draft)
+		askedIDs = open.body.AskedIDs()
+		for _, id := range askedIDs {
+			asked = append(asked, *open.body.Lines[open.body.LineAt(id)].Ask)
 		}
 	}
 	req := read.Request(text, items, asked)
@@ -326,24 +360,27 @@ func (s *Server) readCustomerOrderNow(ctx context.Context, tenant, chat, message
 	if outcome != "valid" {
 		return err
 	}
-	return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+	onto := func(tx pgx.Tx, id uuid.UUID, said read.Said, asked []string) error {
+		d, err := s.draftTx(ctx, tx, tenant, id.String(), true)
+		if err != nil {
+			return err
+		}
+		if d.status != "open" && d.status != "asked" {
+			return nil
+		}
+		if !read.ApplyAnswers(&d.body.Draft, said, items, asked) {
+			return nil
+		}
+		read.Refresh(&d.body.Draft, items, d.body.priced)
+		if d.status == "asked" && len(d.body.Open()) == 0 {
+			// Every question answered: back with staff.
+			d.status = "open"
+		}
+		return s.saveDraftTx(ctx, tx, &d, "reader")
+	}
+	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		if open != nil {
-			d, err := s.draftTx(ctx, tx, tenant, open.id.String(), true)
-			if err != nil {
-				return err
-			}
-			if d.status != "open" && d.status != "asked" {
-				return nil
-			}
-			if !read.ApplyAnswers(&d.body.Draft, said, items) {
-				return nil
-			}
-			read.Refresh(&d.body.Draft, items, d.body.priced)
-			if d.status == "asked" && len(d.body.Open()) == 0 {
-				// Every question answered: back with staff.
-				d.status = "open"
-			}
-			return s.saveDraftTx(ctx, tx, &d, "reader")
+			return onto(tx, open.id, said, askedIDs)
 		}
 		draft := read.Match(said, items)
 		if len(draft.Lines) == 0 {
@@ -357,11 +394,27 @@ func (s *Server) readCustomerOrderNow(ctx context.Context, tenant, chat, message
 			body: draftBody{Draft: draft}}
 		return s.insertDraftTx(ctx, tx, &d, "reader")
 	})
+	if !errors.Is(err, errDraftOpen) {
+		return err
+	}
+	// Another message of theirs made the thread's order meanwhile (an order
+	// sent in two messages): this one's lines go onto it.
+	return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		var id uuid.UUID
+		if err := tx.QueryRow(ctx, `SELECT id FROM order_drafts WHERE tenant_id = $1 AND conversation_id = $2 AND status IN ('open', 'asked')`, tenant, chat).Scan(&id); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil
+			}
+			return err
+		}
+		return onto(tx, id, read.Said{Lines: said.Lines, Fulfilment: said.Fulfilment, Address: said.Address, When: said.When}, nil)
+	})
 }
 
 // insertDraftTx writes a new draft; a thread already working on one keeps
 // that one (errDraftOpen).
 func (s *Server) insertDraftTx(ctx context.Context, tx pgx.Tx, d *draftRow, by string) error {
+	read.EnsureIDs(&d.body.Draft)
 	raw, _ := json.Marshal(d.body)
 	sealed, err := pii.SealText(ctx, s.Store.PII, tx, d.tenant, d.subject, "other", string(raw))
 	if err != nil {
@@ -385,8 +438,12 @@ var errDraftOpen = customerSendErr{http.StatusConflict, "this customer already h
 // catalogueFor is the business's catalogue, refreshed from its table first
 // (the copy kept when the table cannot be read).
 func (s *Server) catalogueFor(ctx context.Context, tenant uuid.UUID) ([]storefront.Item, error) {
-	if err := s.SyncStorefront(ctx, tenant); err != nil {
-		s.Logger.Warn("orders: refreshing the catalogue", "tenant", tenant, "err", err)
+	// From the table at most once a minute per business: a card refreshes
+	// every few seconds while a thread is open, and a read per message.
+	if catalogueSyncDue(tenant, time.Now()) {
+		if err := s.SyncStorefront(ctx, tenant); err != nil {
+			s.Logger.Warn("orders: refreshing the catalogue", "tenant", tenant, "err", err)
+		}
 	}
 	var items []storefront.Item
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
@@ -395,6 +452,26 @@ func (s *Server) catalogueFor(ctx context.Context, tenant uuid.UUID) ([]storefro
 		return err
 	})
 	return items, err
+}
+
+var (
+	catalogueSyncMu sync.Mutex
+	catalogueSynced = map[uuid.UUID]time.Time{}
+)
+
+// catalogueSyncDue reports whether a business's catalogue copy is due a
+// refresh from its table (a minute since the last), and marks it done.
+func catalogueSyncDue(tenant uuid.UUID, now time.Time) bool {
+	catalogueSyncMu.Lock()
+	defer catalogueSyncMu.Unlock()
+	if last, ok := catalogueSynced[tenant]; ok && now.Sub(last) < time.Minute {
+		return false
+	}
+	if len(catalogueSynced) > 10000 {
+		clear(catalogueSynced)
+	}
+	catalogueSynced[tenant] = now
+	return true
 }
 
 // --- the API ---
@@ -441,8 +518,34 @@ func (s *Server) draftOptionsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 	if zones != nil {
 		o.Zones = zones
 	}
-	err = tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM storefronts WHERE tenant_id = $1)`, tenant).Scan(&o.PayPage)
-	return o, err
+	var connection *string
+	err = tx.QueryRow(ctx, `SELECT a.options->>'connection' FROM storefronts s LEFT JOIN storefront_actions a ON a.storefront_id = s.id AND a.kind = 'order' AND a.builtin
+		WHERE s.tenant_id = $1`, tenant).Scan(&connection)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return o, nil
+	}
+	if err != nil {
+		return o, err
+	}
+	o.PayPage = s.orderTransfers(ctx, tenant, deref(connection))
+	return o, nil
+}
+
+// orderTransfers reports whether the business's payment rail can give a
+// customer an account number for an order (its page then takes the
+// payment); OrderTransfers says it instead when set (tests).
+func (s *Server) orderTransfers(ctx context.Context, tenant uuid.UUID, connection string) bool {
+	if s.OrderTransfers != nil {
+		return s.OrderTransfers(ctx, tenant)
+	}
+	if s.Orders == nil || s.Orders.IssueTransfer == nil || s.Invoices == nil || s.Invoices.Rails == nil {
+		return false
+	}
+	if i := strings.Index(connection, "/"); i >= 0 {
+		connection = connection[i+1:]
+	}
+	rail, err := s.Invoices.Rails.Resolve(ctx, tenant, connection)
+	return err == nil && rail.Transfer != nil
 }
 
 // listOrderDrafts answers GET /v1/customer-chats/{id}/orders: the thread's
@@ -589,6 +692,10 @@ func (s *Server) changeOrderDraft(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		read.Refresh(&d.body.Draft, items, d.body.priced)
+		if d.status == "asked" && len(d.body.Open()) == 0 {
+			// Staff settled what the customer was asked: back with staff.
+			d.status = "open"
+		}
 		return s.saveDraftTx(ctx, tx, &d, p.Actor())
 	})
 	if err != nil {
@@ -769,7 +876,7 @@ func (s *Server) askOrderDraft(w http.ResponseWriter, r *http.Request) {
 		s.orderDraftFail(w, r, badDraft("the order has no questions to ask"))
 		return
 	}
-	text := "To get your order right:\n" + read.Questions(d.body.Draft)
+	text := s.customerQuestions(s.Orders.CustomerLanguage(ctx, p.TenantID), d.body.Draft)
 	if _, _, err := s.sendCustomer(ctx, p.TenantID, d.chat.String(), customerSend{Text: text, ClientID: fmt.Sprintf("ask:%s:%d", d.id, d.version),
 		SenderID: p.Actor(), SenderName: s.memberFirstName(ctx, p)}); err != nil {
 		s.orderDraftFail(w, r, err)
@@ -792,6 +899,57 @@ func (s *Server) askOrderDraft(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, d.view())
+}
+
+// customerQuestions are a draft's open questions as one message to the
+// customer, in the business's language for customers, numbered when there
+// are several (their answers are read by those numbers).
+func (s *Server) customerQuestions(l lang.Tag, d read.Draft) string {
+	t := func(id string, kv ...string) string { return lang.Default().Text(l, id, kv...) }
+	open := d.Open()
+	var b strings.Builder
+	b.WriteString(t("customer.order_ask"))
+	for n, i := range open {
+		q := d.Lines[i].Ask
+		parts := make([]string, len(q.Choices))
+		for j, c := range q.Choices {
+			parts[j] = c.Name
+			if c.PriceKobo != nil {
+				parts[j] += " (" + storefront.FormatNaira(*c.PriceKobo) + ")"
+			}
+		}
+		choices := strings.Join(parts, ", ")
+		if len(parts) > 1 {
+			choices = strings.Join(parts[:len(parts)-1], ", ") + " " + t("customer.order_or") + " " + parts[len(parts)-1]
+		}
+		about := q.About
+		if about == "" {
+			about = d.Lines[i].Said
+		}
+		var line string
+		switch q.Kind {
+		case read.AskHowMany:
+			line = t("customer.order_how_many", "item", about)
+		case read.AskSize:
+			line = t("customer.order_size", "product", about, "choices", choices)
+		default:
+			line = t("customer.order_which", "said", capitalFirst(about), "choices", choices)
+		}
+		b.WriteByte('\n')
+		if len(open) > 1 {
+			fmt.Fprintf(&b, "%d. ", n+1)
+		}
+		b.WriteString(strings.TrimSpace(line))
+	}
+	return b.String()
+}
+
+func capitalFirst(s string) string {
+	r := []rune(s)
+	if len(r) > 0 {
+		r[0] = unicode.ToUpper(r[0])
+	}
+	return string(r)
 }
 
 // memberFirstName is the person's first name, as their replies show it.
@@ -856,14 +1014,20 @@ func (s *Server) confirmOrderDraft(w http.ResponseWriter, r *http.Request) {
 		if chat.Stopped {
 			return customerSendErr{http.StatusConflict, "this customer asked not to get messages (they sent STOP); the order cannot be sent to them"}
 		}
+		opts, err := s.draftOptionsTx(ctx, tx, p.TenantID)
+		if err != nil {
+			return err
+		}
 		pay := d.body.Pay
+		switch {
+		case pay == storefront.ChatPayTransfer && !opts.PayPage:
+			return customerSendErr{http.StatusConflict, "your shop cannot take this payment by transfer now; choose pay when it arrives, or arrange payment yourself"}
+		case pay == storefront.ChatPayOnDelivery && d.body.Fulfilment != "delivery":
+			pay = ""
+		}
 		if pay == "" {
 			pay = storefront.ChatPayLater
-			var page bool
-			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM storefronts WHERE tenant_id = $1)`, p.TenantID).Scan(&page); err != nil {
-				return err
-			}
-			if page {
+			if opts.PayPage {
 				pay = storefront.ChatPayTransfer
 			}
 		}
@@ -875,17 +1039,15 @@ func (s *Server) confirmOrderDraft(w http.ResponseWriter, r *http.Request) {
 		if name == chat.Phone {
 			name = ""
 		}
-		zone := d.body.Zone
-		if zone == "" {
-			zone = d.body.Address
-		}
-		note := strings.TrimSpace(strings.Join([]string{d.body.When, d.body.Note}, ". "))
-		note = strings.Trim(note, ". ")
+		// The customer's words (where, when, what else) are theirs: sealed
+		// with their details, never in the order's plain columns. The zone
+		// is only a delivery area of the business's.
 		ord, err = s.Orders.PlaceChatTx(ctx, tx, p.TenantID, storefront.ChatOrder{
-			Customer:   storefront.Customer{Name: name, Phone: chat.Phone, Address: d.body.Address},
+			Customer: storefront.Customer{Name: name, Phone: chat.Phone, Address: d.body.Address,
+				BestTime: d.body.When, Message: d.body.Note},
 			Lines:      lines,
-			Fulfilment: d.body.Fulfilment, Zone: zone, DeliveryKobo: d.body.DeliveryKobo,
-			Pay: pay, Note: note, By: p.Actor(),
+			Fulfilment: d.body.Fulfilment, Zone: zoneOf(d.body.Zone, opts.Zones), DeliveryKobo: d.body.DeliveryKobo,
+			Pay: pay, By: p.Actor(),
 		})
 		if err != nil {
 			return err
@@ -911,6 +1073,16 @@ func (s *Server) confirmOrderDraft(w http.ResponseWriter, r *http.Request) {
 		out["told_error"] = err.Error()
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// zoneOf is a delivery area of the business's, or "".
+func zoneOf(z string, zones []storefront.Zone) string {
+	for _, x := range zones {
+		if x.Name == z {
+			return z
+		}
+	}
+	return ""
 }
 
 // tellOrderDraft answers POST /v1/order-drafts/{id}/tell: the confirmed
@@ -1060,6 +1232,32 @@ func (s *Server) orderDraftAlerts(ctx context.Context, p *Principal) ([]chatAler
 			total := v.TotalKobo
 			out = append(out, chatAlert{Key: "order_draft:" + d.id.String(), Kind: "order_draft", At: d.updatedAt, ID: d.chat.String(), Reference: d.id.String(),
 				Title: title, Line: strings.Join(parts, " · "), AmountKobo: &total})
+		}
+		// Confirmed orders that lapsed unpaid in the last two days: staff
+		// may ask again, or let it go.
+		lapsed, err := tx.Query(ctx, `SELECT d.conversation_id, d.reference, o.total_kobo, o.updated_at FROM order_drafts d JOIN storefront_orders o ON o.id = d.order_id
+			WHERE d.tenant_id = $1 AND d.status = 'confirmed' AND o.status = 'expired' AND o.updated_at > now() - interval '2 days'
+			ORDER BY o.updated_at DESC LIMIT $2`, p.TenantID, perKind)
+		if err != nil {
+			return err
+		}
+		type gone struct {
+			chat  uuid.UUID
+			ref   string
+			total int64
+			at    time.Time
+		}
+		list2, err := pgx.CollectRows(lapsed, func(r pgx.CollectableRow) (gone, error) {
+			var g gone
+			return g, r.Scan(&g.chat, &g.ref, &g.total, &g.at)
+		})
+		if err != nil {
+			return err
+		}
+		for _, g := range list2 {
+			total := g.total
+			out = append(out, chatAlert{Key: "order_lapsed:" + g.ref, Kind: "order_draft", At: g.at, ID: g.chat.String(), Reference: g.ref,
+				Title: "Order " + g.ref + " was not paid in time", Line: "It is cancelled, and the customer was told", AmountKobo: &total})
 		}
 		return nil
 	})

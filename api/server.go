@@ -64,6 +64,9 @@ type Server struct {
 	// OrderReadInline reads a customer's message for an order before the
 	// webhook answers, not in the background (tests).
 	OrderReadInline bool
+	// OrderTransfers, when set, says whether a business can take an order's
+	// payment by transfer on its page (tests); else its payment rail does.
+	OrderTransfers func(ctx context.Context, tenant uuid.UUID) bool
 
 	// DiaryWindow is how long changes wait to be told together on the
 	// chat apps (chat_changes.go); 0 is a minute.

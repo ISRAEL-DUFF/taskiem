@@ -486,10 +486,10 @@ func (s *Server) riderAlerts(ctx context.Context, p *Principal) ([]chatAlert, er
 	var out []chatAlert
 	err := db0(ctx, s, p.TenantID, func(tx pgx.Tx) error {
 		// Ready to go out, as dispatch has it (dispatch.ReadyReason): paid,
-		// or nothing to pay before delivery.
+		// nothing to pay before delivery, or paid at the door.
 		rows, err := tx.Query(ctx, `SELECT o.id, o.reference, o.total_kobo, o.created_at, o.paid_at IS NOT NULL FROM storefront_orders o
 			WHERE o.tenant_id = $1 AND o.fulfilment = 'delivery' AND o.status IN ('paid', 'accepted') AND o.created_at > now() - interval '14 days'
-			  AND (o.paid_at IS NOT NULL OR o.payment = 'none')
+			  AND (o.paid_at IS NOT NULL OR o.payment IN ('none', 'on_delivery'))
 			  AND EXISTS (SELECT 1 FROM riders x WHERE x.tenant_id = $1 AND x.retired_at IS NULL AND x.active)
 			  AND NOT EXISTS (SELECT 1 FROM deliveries d WHERE d.tenant_id = $1 AND d.order_id = o.id
 			                  AND d.status IN ('offered', 'accepted', 'picked_up', 'arrived', 'delivered'))

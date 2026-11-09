@@ -237,7 +237,7 @@ func TestAnswers(t *testing.T) {
 		t.Fatalf("questions: %q", text)
 	}
 	// "the plate", 3, and the second choice.
-	if !ApplyAnswers(&d, Said{Answers: []SaidAnswer{{Question: 1, Answer: "plate"}, {Question: 2, Quantity: 3}, {Question: 3, Answer: "2"}}, Address: "Yaba", Fulfilment: "delivery"}, items) {
+	if !ApplyAnswers(&d, Said{Answers: []SaidAnswer{{Question: 1, Answer: "plate"}, {Question: 2, Quantity: 3}, {Question: 3, Answer: "2"}}, Address: "Yaba", Fulfilment: "delivery"}, items, d.AskedIDs()) {
 		t.Fatal("nothing changed")
 	}
 	if d.Lines[0].ItemID != "jp" || d.Lines[0].Quantity != 2 || d.Lines[1].Quantity != 3 || d.Lines[2].ItemID != "sn43b" {
@@ -294,5 +294,48 @@ func TestRefreshKeepsStaffPrices(t *testing.T) {
 	Refresh(&d, items, func(i int) bool { return i == 1 })
 	if d.Lines[0].PriceKobo != 420000 || d.Lines[1].PriceKobo != 100000 {
 		t.Fatalf("%+v", d.Lines)
+	}
+}
+
+func TestAnswersFollowTheirLines(t *testing.T) {
+	items := catalogue()
+	d := Match(Said{Lines: []SaidLine{{Words: "2 jollof", Quantity: 2}, {Words: "fried rice", Item: "Fried rice"}}}, items)
+	asked := d.AskedIDs()
+	// Staff remove the jollof line while the model reads: the answer to
+	// question 1 is not put on the fried rice line.
+	d.Lines = d.Lines[1:]
+	ApplyAnswers(&d, Said{Answers: []SaidAnswer{{Question: 1, Answer: "plate"}, {Question: 2, Quantity: 4}}}, items, asked)
+	if len(d.Lines) != 1 || d.Lines[0].ItemID != "fr" || d.Lines[0].Quantity != 4 {
+		t.Fatalf("%+v", d.Lines)
+	}
+	for _, l := range d.Lines {
+		if l.ID == "" {
+			t.Fatal("a line without an id")
+		}
+	}
+}
+
+func TestAnAnswerIsNotAddedTwice(t *testing.T) {
+	items := catalogue()
+	d := Match(Said{Lines: []SaidLine{{Words: "2 jollof", Quantity: 2}}}, items)
+	// The model answers, and also lists the plate as a line.
+	ApplyAnswers(&d, Said{Answers: []SaidAnswer{{Question: 1, Answer: "Jollof rice plate"}},
+		Lines: []SaidLine{{Words: "the plate", Item: "Jollof rice plate", Quantity: 2}, {Words: "1 chapman", Item: "Chapman", Quantity: 1}}}, items, d.AskedIDs())
+	if len(d.Lines) != 2 || d.Lines[0].ItemID != "jp" || d.Lines[1].ItemID != "ch" {
+		t.Fatalf("%+v", d.Lines)
+	}
+}
+
+func TestTheCustomerCorrectsWhereAndHow(t *testing.T) {
+	items := catalogue()
+	d := Match(Said{Lines: []SaidLine{{Words: "1 chapman", Item: "Chapman", Quantity: 1}}, Fulfilment: "delivery", Address: "Yaba"}, items)
+	if !ApplyAnswers(&d, Said{Address: "15 Allen Avenue, Ikeja"}, items, nil) || d.Address != "15 Allen Avenue, Ikeja" {
+		t.Fatalf("address: %q", d.Address)
+	}
+	if !ApplyAnswers(&d, Said{Fulfilment: "pickup"}, items, nil) || d.Fulfilment != "pickup" {
+		t.Fatalf("pickup: %q", d.Fulfilment)
+	}
+	if ApplyAnswers(&d, Said{Fulfilment: "pickup"}, items, nil) {
+		t.Fatal("no change reported as one")
 	}
 }

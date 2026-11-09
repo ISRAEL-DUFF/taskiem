@@ -45,6 +45,8 @@ func TestOrdersFromCustomersMessages(t *testing.T) {
 		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}}
 	w.srv.Orders.ChatNotify = w.srv.ChatNotify
 	w.srv.OrderReadInline = true
+	// The business's payment rail gives account numbers for orders.
+	w.srv.OrderTransfers = func(context.Context, uuid.UUID) bool { return true }
 
 	// The business's page and catalogue.
 	alpha.must(200, "PUT", "/v1/storefront", map[string]any{"slug": "mama-put", "draft": map[string]any{"name": "Mama Put Kitchen"}})
@@ -202,8 +204,14 @@ func TestOrdersFromCustomersMessages(t *testing.T) {
 	}
 	var kind, status, decided string
 	var total int64
-	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT kind, status, total_kobo, decided_by FROM storefront_orders WHERE reference = $1`, ref).Scan(&kind, &status, &total, &decided); err != nil {
+	var zone, note *string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT kind, status, total_kobo, decided_by, zone, note FROM storefront_orders WHERE reference = $1`, ref).Scan(&kind, &status, &total, &decided, &zone, &note); err != nil {
 		t.Fatal(err)
+	}
+	// The customer's address and words are sealed with their details, never
+	// in the order's plain columns.
+	if zone != nil || note != nil {
+		t.Fatalf("in the clear: zone %v note %v", zone, note)
 	}
 	if kind != "chat" || status != "awaiting_payment" || total != 1200000 || decided == "" {
 		t.Fatalf("order: %s %s %d %s", kind, status, total, decided)
@@ -284,5 +292,72 @@ func TestOrdersFromCustomersMessages(t *testing.T) {
 	}
 	if drafts != 0 || kept != 1 {
 		t.Fatalf("after STOP: %d drafts, %d orders", drafts, kept)
+	}
+	// After STOP their messages are not read: nothing can be sent to them.
+	asks := len(model.Requests())
+	say("2 jolof and 1 chapman, deliver to 12 Herbert Macaulay Yaba")
+	if len(model.Requests()) != asks {
+		t.Fatal("a customer who sent STOP was read")
+	}
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM order_drafts`).Scan(&drafts); err != nil || drafts != 0 {
+		t.Fatalf("drafts after STOP: %d %v", drafts, err)
+	}
+
+	// Another customer. Staff answer the question they were asked
+	// themselves: the order is back with staff.
+	const other = "+2348031119999"
+	w.sendTo(t, "/channels/whatsapp", pnA, waSecret, other, whatsapptest.Text("2 jolof and 1 chapman, deliver to 12 Herbert Macaulay Yaba"))
+	var chat2 string
+	for _, c := range cashier.must(200, "GET", "/v1/customer-chats", nil)["chats"].([]any) {
+		if c := c.(map[string]any); c["phone"] == other {
+			chat2 = c["id"].(string)
+		}
+	}
+	d2 := cashier.must(200, "GET", "/v1/customer-chats/"+chat2+"/orders", nil)["orders"].([]any)[0].(map[string]any)
+	id2 := d2["id"].(string)
+	d2 = cashier.must(200, "POST", "/v1/order-drafts/"+id2+"/ask", map[string]any{"version": d2["version"]})
+	if d2["status"] != "asked" {
+		t.Fatalf("asked: %s", toJSON(d2))
+	}
+	d2 = cashier.must(200, "PUT", "/v1/order-drafts/"+id2, map[string]any{"version": d2["version"], "op": "choose", "line": 0, "item_id": jc})
+	if d2["status"] != "open" || d2["questions"] != float64(0) {
+		t.Fatalf("answered by staff: %s", toJSON(d2))
+	}
+	// A business that cannot take a transfer now: not offered, and refused.
+	w.srv.OrderTransfers = func(context.Context, uuid.UUID) bool { return false }
+	if l := cashier.must(200, "GET", "/v1/customer-chats/"+chat2+"/orders", nil); l["pay_page"] != false {
+		t.Fatalf("pay page offered: %v", l["pay_page"])
+	}
+	d2 = cashier.must(200, "PUT", "/v1/order-drafts/"+id2, map[string]any{"version": d2["version"], "op": "details", "pay": "transfer"})
+	if e := cashier.must(409, "POST", "/v1/order-drafts/"+id2+"/confirm", map[string]any{"version": d2["version"]}); !strings.Contains(e["error"].(string), "cannot take this payment by transfer") {
+		t.Fatalf("transfer refused: %v", e)
+	}
+	d2 = cashier.must(200, "PUT", "/v1/order-drafts/"+id2, map[string]any{"version": d2["version"], "op": "details", "pay": "on_delivery"})
+	c2 := cashier.must(200, "POST", "/v1/order-drafts/"+id2+"/confirm", map[string]any{"version": d2["version"]})
+	ref2 := c2["order"].(map[string]any)["reference"].(string)
+	if c2["order"].(map[string]any)["order_status"] != "accepted" {
+		t.Fatalf("at the door: %s", toJSON(c2))
+	}
+	if told := w.graph.Sent(other); !strings.Contains(told[len(told)-1].Text, "You pay when it arrives.") {
+		t.Fatalf("told: %q", told[len(told)-1].Text)
+	}
+	// One that lapsed unpaid is on Needs you.
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE storefront_orders SET status = 'expired', updated_at = now() WHERE reference = $1`, ref2); err != nil {
+		t.Fatal(err)
+	}
+	if got := toJSON(alpha.must(200, "GET", "/v1/chat-alerts", nil)["alerts"]); !strings.Contains(got, "Order "+ref2+" was not paid in time") {
+		t.Fatalf("lapsed not on Needs you: %s", got)
+	}
+	// An order started by hand goes after its year, as messages do.
+	hand := cashier.must(201, "POST", "/v1/customer-chats/"+chat2+"/orders", nil)["id"].(string)
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE order_drafts SET expires_at = now() - interval '1 second' WHERE id = $1`, hand); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.env.Store.Pool.Exec(ctx, `SELECT taskiem_customer_messages_purge()`); err != nil {
+		t.Fatal(err)
+	}
+	var left int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM order_drafts WHERE id = $1`, hand).Scan(&left); err != nil || left != 0 {
+		t.Fatalf("an expired draft kept: %d %v", left, err)
 	}
 }

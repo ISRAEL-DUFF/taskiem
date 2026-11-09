@@ -938,7 +938,7 @@ func (o *Orders) checkTenant(ctx context.Context, tenant uuid.UUID) error {
 		rows, err := tx.Query(ctx, `SELECT o.id, o.reference, COALESCE(o.payment_ref, ''), COALESCE(a.options->>'connection', ''),
 				CASE WHEN o.pay_to_kobo IS NOT NULL THEN o.pay_step_kobo ELSE COALESCE(o.deposit_kobo, o.total_kobo) END,
 				CASE WHEN o.pay_to_kobo IS NULL THEN o.expires_at END, o.status, o.kind, o.run_id
-			FROM storefront_orders o JOIN storefront_actions a ON a.id = o.action_id
+			FROM storefront_orders o LEFT JOIN storefront_actions a ON a.id = o.action_id
 			WHERE o.tenant_id = $1 AND (o.status = 'awaiting_payment' AND o.pay_to_kobo IS NULL OR o.pay_to_kobo IS NOT NULL AND o.payment_ref IS NOT NULL)
 			ORDER BY o.created_at LIMIT 100`, tenant)
 		if err != nil {
@@ -996,6 +996,26 @@ func (o *Orders) checkTenant(ctx context.Context, tenant uuid.UUID) error {
 			if d.kind == "booking" {
 				if err := o.endBooking(ctx, tenant, d.reference, d.run, "The payment link for "+d.reference+" has expired, so the booking is cancelled. You are welcome to book again.", "expired:"+d.reference); err != nil {
 					errs = append(errs, err)
+				}
+				continue
+			}
+			// An order confirmed from a customer's message (phase 2): they
+			// are told in their thread; nothing of its stock went.
+			if d.kind == "chat" {
+				if o.ChatNotify != nil {
+					var ord Order
+					err := db.InTenantTx(ctx, o.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+						var err error
+						ord, err = o.GetOrder(ctx, tx, tenant, d.reference)
+						return err
+					})
+					if err == nil {
+						text := lang.Default().Text(o.CustomerLanguage(ctx, tenant), "customer.chat_expired", "reference", d.reference)
+						err = o.ChatNotify(ctx, tenant, ord, text)
+					}
+					if err != nil {
+						o.log().Warn("storefront: telling a customer their order lapsed", "reference", d.reference, "err", err)
+					}
 				}
 				continue
 			}

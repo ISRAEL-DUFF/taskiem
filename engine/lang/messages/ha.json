@@ -5940,7 +5940,7 @@
       "reviewed": false
     },
     "customer.chat_pay_link": {
-      "text": "Biya a nan, ta transfer ko kati: {link}",
+      "text": "Biya ta transfer na banki a nan: {link}",
       "reviewed": false
     },
     "customer.chat_pay_door": {
@@ -5949,6 +5949,30 @@
     },
     "customer.chat_paid": {
       "text": "An karɓi kuɗinka, na gode: {reference}. Muna shirya shi.",
+      "reviewed": false
+    },
+    "customer.order_ask": {
+      "text": "Domin mu samu odar ka daidai:",
+      "reviewed": false
+    },
+    "customer.order_which": {
+      "text": "{said}: {choices}?",
+      "reviewed": false
+    },
+    "customer.order_size": {
+      "text": "Wanne {product}? {choices}",
+      "reviewed": false
+    },
+    "customer.order_how_many": {
+      "text": "Guda nawa na {item}?",
+      "reviewed": false
+    },
+    "customer.order_or": {
+      "text": "ko",
+      "reviewed": false
+    },
+    "customer.chat_expired": {
+      "text": "Ba ka biya odar ka {reference} a kan lokaci ba, don haka an soke ta. Rubuto mana don sake yin oda.",
       "reviewed": false
     }
   }

@@ -714,6 +714,8 @@ operators.name
 operators.oidc_issuer
 operators.oidc_subject
 operators.status
+order_drafts.expires_at
+order_drafts.id
 page_reports.contact
 page_reports.created_at
 page_reports.handled_at

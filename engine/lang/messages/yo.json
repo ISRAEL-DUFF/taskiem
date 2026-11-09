@@ -5940,7 +5940,7 @@
       "reviewed": false
     },
     "customer.chat_pay_link": {
-      "text": "Sanwó níbí, nípa transfer tàbí káàdì: {link}",
+      "text": "Sanwó nípa transfer sí báǹkì níbí: {link}",
       "reviewed": false
     },
     "customer.chat_pay_door": {
@@ -5949,6 +5949,30 @@
     },
     "customer.chat_paid": {
       "text": "A ti gba owó rẹ, o ṣé: {reference}. A ń pèsè rẹ̀.",
+      "reviewed": false
+    },
+    "customer.order_ask": {
+      "text": "Kí a lè ṣe ohun tí o béèrè dáadáa:",
+      "reviewed": false
+    },
+    "customer.order_which": {
+      "text": "{said}: {choices}?",
+      "reviewed": false
+    },
+    "customer.order_size": {
+      "text": "Èwo nínú {product}? {choices}",
+      "reviewed": false
+    },
+    "customer.order_how_many": {
+      "text": "Mélòó ni {item}?",
+      "reviewed": false
+    },
+    "customer.order_or": {
+      "text": "tàbí",
+      "reviewed": false
+    },
+    "customer.chat_expired": {
+      "text": "O kò sanwó fún {reference} lásìkò, nítorí náà a ti fagilé e. Kọ sí wa láti béèrè lẹ́ẹ̀kan sí i.",
       "reviewed": false
     }
   }
