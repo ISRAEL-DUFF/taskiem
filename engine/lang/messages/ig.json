@@ -5830,6 +5830,26 @@
     "wa.knowledge.added": {
       "text": "Agbakwunyela m {name} na ihe onye inyeaka gị maara. A malitebeghị iji ya: lelee ya pịa Use this ebe a: {link}",
       "reviewed": false
+    },
+    "wa.knowledge.reading": {
+      "text": "Ana m na-agụ {name} maka onye inyeaka gị…",
+      "reviewed": false
+    },
+    "wa.knowledge.updated": {
+      "text": "Agụla m {name} ọhụrụ maka onye inyeaka gị. A malitebeghị iji nke ọhụrụ: lelee ya pịa Use this ebe a: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.still_reading": {
+      "text": "Agbakwunyela m {name} na ihe onye inyeaka gị maara, mana a ka na-agụ ya. Lee ya mgbe otu nkeji gasịrị pịa Use this ebe a: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.not_kept": {
+      "text": "Enweghị m ike ịgbakwunye akwụkwọ ahụ: {why}. Lee ihe onye inyeaka gị maara ebe a: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.old_word": {
+      "text": "Nke ahụ bụ akwụkwọ Word ochie (.doc), nke Taskiem na-enweghị ike ịgụ. Chekwaa ya dị ka .docx ma ọ bụ PDF zitekwa ya ọzọ.",
+      "reviewed": false
     }
   }
 }

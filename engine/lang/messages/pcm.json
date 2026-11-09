@@ -5830,6 +5830,26 @@
     "wa.knowledge.added": {
       "text": "I don add {name} to wetin your assistant sabi. Dem never dey use am: check am and press Use this for here: {link}",
       "reviewed": false
+    },
+    "wa.knowledge.reading": {
+      "text": "I dey read {name} for your assistant…",
+      "reviewed": false
+    },
+    "wa.knowledge.updated": {
+      "text": "I don read di new {name} for your assistant. Dem never dey use di new one: check am and press Use this for here: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.still_reading": {
+      "text": "I don add {name} to wetin your assistant sabi, but I still dey read am. Look am after one minute and press Use this for here: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.not_kept": {
+      "text": "I no fit add dat document: {why}. See wetin your assistant sabi for here: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.old_word": {
+      "text": "Dat na old Word document (.doc) wey Taskiem no fit read. Save am as .docx or PDF and send am again.",
+      "reviewed": false
     }
   }
 }

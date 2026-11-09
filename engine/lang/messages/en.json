@@ -7270,7 +7270,7 @@
       "context": "Chat: a document was sent and this deployment has no knowledge store"
     },
     "wa.knowledge.too_big": {
-      "text": "That document is too big to read from chat. Add it on the web instead: {link}",
+      "text": "That document is over 10 MB, too big to read from chat. Add it on the web instead: {link}",
       "reviewed": true,
       "context": "Chat: a PDF or Word document over 10 MB"
     },
@@ -7288,6 +7288,31 @@
       "text": "I added {name} to what your assistant knows. It is not used yet: check it and press Use this here: {link}",
       "reviewed": true,
       "context": "Chat: a document was added as a knowledge source waiting for review"
+    },
+    "wa.knowledge.reading": {
+      "text": "Reading {name} for your assistant…",
+      "reviewed": true,
+      "context": "Chat: a document sent for the assistant is being read; the outcome follows"
+    },
+    "wa.knowledge.updated": {
+      "text": "I read the new {name} for your assistant. The new version is not used yet: check it and press Use this here: {link}",
+      "reviewed": true,
+      "context": "Chat: a document sent again replaced the earlier source of the same name"
+    },
+    "wa.knowledge.still_reading": {
+      "text": "I added {name} to what your assistant knows, but it is still being read. Look in a minute and press Use this here: {link}",
+      "reviewed": true,
+      "context": "Chat: a document was kept but reading it did not finish in time"
+    },
+    "wa.knowledge.not_kept": {
+      "text": "I could not add that document: {why}. See what your assistant knows here: {link}",
+      "reviewed": true,
+      "context": "Chat: a document could not be kept (e.g. the most sources a business may have), with why"
+    },
+    "wa.knowledge.old_word": {
+      "text": "That is an old Word document (.doc), which Taskiem cannot read. Save it as .docx or PDF and send it again.",
+      "reviewed": true,
+      "context": "Chat: an old .doc Word document was sent"
     }
   }
 }

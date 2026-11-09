@@ -52,6 +52,10 @@ func TestWhatsAppQualityWatch(t *testing.T) {
 	}
 	check := func() {
 		t.Helper()
+		// As six hours later: a number read in the last five is skipped.
+		if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE whatsapp_number_health SET checked_at = now() - interval '6 hours'`); err != nil {
+			t.Fatal(err)
+		}
 		if n, err := w.srv.CheckWhatsAppQuality(ctx); err != nil || n != 1 {
 			t.Fatalf("read %d numbers: %v", n, err)
 		}
@@ -59,6 +63,10 @@ func TestWhatsAppQualityWatch(t *testing.T) {
 	check()
 	if alerts() != 0 {
 		t.Fatal("a green number told the owners")
+	}
+	// Read just now (another server, a restart): not read again.
+	if n, err := w.srv.CheckWhatsAppQuality(ctx); err != nil || n != 0 {
+		t.Fatalf("read again at once: %d %v", n, err)
 	}
 	mu.Lock()
 	health["quality_rating"] = "YELLOW"
@@ -85,5 +93,27 @@ func TestWhatsAppQualityWatch(t *testing.T) {
 	check()
 	if alerts() != 2 {
 		t.Fatalf("better again told the owners: %d", alerts())
+	}
+	// Banned: the worst status, told.
+	mu.Lock()
+	health["status"] = "BANNED"
+	mu.Unlock()
+	check()
+	if alerts() != 3 {
+		t.Fatalf("banned: %d alerts", alerts())
+	}
+	// Then it cannot be read at all: told once a day.
+	meta.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"error":{"message":"Error validating access token","type":"OAuthException","code":190}}`))
+	})
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE whatsapp_number_health SET checked_at = now() - interval '6 hours'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.srv.CheckWhatsAppQuality(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if alerts() != 4 {
+		t.Fatalf("unreadable: %d alerts", alerts())
 	}
 }

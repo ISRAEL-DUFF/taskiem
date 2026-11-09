@@ -5830,6 +5830,26 @@
     "wa.knowledge.added": {
       "text": "Na ƙara {name} cikin abin da mataimakinka ya sani. Ba a fara amfani da shi ba: duba shi ka danna Use this a nan: {link}",
       "reviewed": false
+    },
+    "wa.knowledge.reading": {
+      "text": "Ina karanta {name} don mataimakinka…",
+      "reviewed": false
+    },
+    "wa.knowledge.updated": {
+      "text": "Na karanta sabon {name} don mataimakinka. Ba a fara amfani da sabon ba: duba shi ka danna Use this a nan: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.still_reading": {
+      "text": "Na ƙara {name} cikin abin da mataimakinka ya sani, amma ana ci gaba da karanta shi. Duba bayan minti ɗaya ka danna Use this a nan: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.not_kept": {
+      "text": "Ban iya ƙara wannan takardar ba: {why}. Duba abin da mataimakinka ya sani a nan: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.old_word": {
+      "text": "Wannan tsohuwar takardar Word ce (.doc), wadda Taskiem ba ya iya karantawa. Ajiye ta a matsayin .docx ko PDF ka sake aikawa.",
+      "reviewed": false
     }
   }
 }

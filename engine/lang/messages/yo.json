@@ -5830,6 +5830,26 @@
     "wa.knowledge.added": {
       "text": "Mo ti fi {name} kún ohun tí olùrànlọ́wọ́ rẹ mọ̀. A kò tíì lò ó: ṣàyẹ̀wò rẹ̀ kí o sì tẹ Use this níbí: {link}",
       "reviewed": false
+    },
+    "wa.knowledge.reading": {
+      "text": "Mo ń ka {name} fún olùrànlọ́wọ́ rẹ…",
+      "reviewed": false
+    },
+    "wa.knowledge.updated": {
+      "text": "Mo ti ka {name} tuntun fún olùrànlọ́wọ́ rẹ. A kò tíì lo ẹ̀yà tuntun náà: ṣàyẹ̀wò rẹ̀ kí o sì tẹ Use this níbí: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.still_reading": {
+      "text": "Mo ti fi {name} kún ohun tí olùrànlọ́wọ́ rẹ mọ̀, ṣùgbọ́n mo ṣì ń kà á. Wò ó lẹ́yìn ìṣẹ́jú kan kí o sì tẹ Use this níbí: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.not_kept": {
+      "text": "Mi ò lè fi ìwé yẹn kún un: {why}. Wo ohun tí olùrànlọ́wọ́ rẹ mọ̀ níbí: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.old_word": {
+      "text": "Ìwé Word àtijọ́ (.doc) nìyẹn, Taskiem kò sì lè kà á. Fi pamọ́ bí .docx tàbí PDF kí o sì fi ránṣẹ́ lẹ́ẹ̀kan sí i.",
+      "reviewed": false
     }
   }
 }

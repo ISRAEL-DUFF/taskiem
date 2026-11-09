@@ -81,7 +81,13 @@ type numberHealth struct {
 // checkTenantWhatsAppQuality reads one business's assistant numbers.
 func (s *Server) checkTenantWhatsAppQuality(ctx context.Context, tenant uuid.UUID) (int, error) {
 	var channels []string
+	fresh := false
 	if err := s.tx0(ctx, tenant, func(tx pgx.Tx) error {
+		// Read in the last few hours (by another server, or before a
+		// restart): not read again yet.
+		if err := tx.QueryRow(ctx, `SELECT COALESCE(max(checked_at) > now() - interval '5 hours', false) FROM whatsapp_number_health WHERE tenant_id = $1`, tenant).Scan(&fresh); err != nil || fresh {
+			return err
+		}
 		as, err := assistantsOf(ctx, tx, tenant)
 		for _, a := range as {
 			if strings.HasPrefix(a.Connector, "whatsapp@") && !strings.Contains(a.Channel, "//") {
@@ -89,7 +95,7 @@ func (s *Server) checkTenantWhatsAppQuality(ctx context.Context, tenant uuid.UUI
 			}
 		}
 		return err
-	}); err != nil {
+	}); err != nil || fresh {
 		return 0, err
 	}
 	seen, n := map[string]bool{}, 0
@@ -113,6 +119,11 @@ func (s *Server) checkTenantWhatsAppQuality(ctx context.Context, tenant uuid.UUI
 		resp, err := act.Execute(ctx, connector.Request{Input: map[string]any{}, Credentials: creds, HTTP: hc, Logger: s.Logger, Attempt: 1})
 		if err != nil {
 			s.Logger.Info("whatsapp quality: a number could not be read", "tenant", tenant, "channel", ch, "err", err)
+			// One read before and none now (banned, disconnected, a token
+			// revoked): the owners are told, once a day.
+			if err := s.tx0(ctx, tenant, func(tx pgx.Tx) error { return numberUnread(ctx, tx, tenant, env, name) }); err != nil {
+				return n, err
+			}
 			continue
 		}
 		out, _ := resp.Output.(map[string]any)
@@ -157,8 +168,9 @@ func recordNumberHealth(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env, n
 	if number == "" {
 		number = "your WhatsApp number"
 	}
+	// A number may get worse, better and worse again: once a day per state.
 	_, err = alerts.TellOwners(ctx, tx, tenant, alerts.Alert{Kind: AlertWhatsAppQuality,
-		Dedup: env + "/" + name + ":" + now.Rating + ":" + now.Tier + ":" + now.Status,
+		Dedup: env + "/" + name + ":" + now.Rating + ":" + now.Tier + ":" + now.Status + ":" + time.Now().UTC().Format("2006-01-02"),
 		Title: "Your WhatsApp number needs attention",
 		Body: "WhatsApp says " + number + " " + why + ". This happens when customers block or report its messages. " +
 			"Look at what your assistant sends under Conversations: shorter answers, fewer messages nobody asked for, and a person when a customer is unhappy help it recover.",
@@ -167,18 +179,42 @@ func recordNumberHealth(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env, n
 	return err
 }
 
+// numberUnread tells the owners that a number read before can no longer
+// be read (in prod, once a day).
+func numberUnread(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env, name string) error {
+	var was bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM whatsapp_number_health WHERE tenant_id = $1 AND environment = $2 AND connection = $3)`,
+		tenant, env, name).Scan(&was); err != nil || !was || env != "prod" {
+		return err
+	}
+	_, err := alerts.TellOwners(ctx, tx, tenant, alerts.Alert{Kind: AlertWhatsAppQuality,
+		Dedup: env + "/" + name + ":unread:" + time.Now().UTC().Format("2006-01-02"),
+		Title: "Taskiem cannot reach your WhatsApp number",
+		Body:  "Taskiem could not read your WhatsApp number's state from WhatsApp, as it could before: the number may be blocked or disconnected, or the connection's token no longer works. Check the connection under Connections, and your number in WhatsApp Manager.",
+		Link:  "/connections", Detail: map[string]any{"connection": name, "environment": env}})
+	return err
+}
+
 var (
 	ratingRank = map[string]int{"GREEN": 0, "YELLOW": 1, "RED": 2}
-	tierRank   = map[string]int{"TIER_UNLIMITED": 5, "TIER_100K": 4, "TIER_10K": 3, "TIER_1K": 2, "TIER_250": 1, "TIER_50": 0}
-	badStatus  = map[string]string{"FLAGGED": "is flagged for low quality: its daily limit may go down",
-		"RESTRICTED": "is restricted: it can only reply to customers who write first"}
+	tierRank   = map[string]int{"TIER_UNLIMITED": 6, "TIER_100K": 5, "TIER_10K": 4, "TIER_2K": 3, "TIER_1K": 2, "TIER_250": 1, "TIER_50": 0}
+	// statusRank: how bad a number's status is, and what it means.
+	statusRank = map[string]int{"CONNECTED": 0, "FLAGGED": 1, "RATE_LIMITED": 2, "RESTRICTED": 3, "DISCONNECTED": 4, "BANNED": 5, "DELETED": 5}
+	statusWords = map[string]string{"FLAGGED": "is flagged for low quality: its daily limit may go down",
+		"RATE_LIMITED": "is sending too fast: WhatsApp is holding some of its messages back",
+		"RESTRICTED":   "is restricted: it can only reply to customers who write first",
+		"DISCONNECTED": "is disconnected from WhatsApp: customers' messages are not reaching it",
+		"BANNED":       "is banned by WhatsApp: it cannot send messages",
+		"DELETED":      "was deleted from your WhatsApp account"}
 )
 
 // worse is, in words, how now is worse than was ("" when it is not); read
 // the first time, how now is not well.
 func worse(was, now numberHealth, first bool) string {
-	if s, ok := badStatus[now.Status]; ok && (first || was.Status != now.Status) {
-		return s
+	if r, ok := statusRank[now.Status]; ok && r > 0 {
+		if w, okWas := statusRank[was.Status]; first || !okWas || r > w {
+			return statusWords[now.Status]
+		}
 	}
 	r, okNow := ratingRank[now.Rating]
 	if okNow && r > 0 {

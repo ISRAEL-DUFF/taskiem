@@ -349,7 +349,20 @@ func TestChatAddsAKnowledgeDocument(t *testing.T) {
 	if r := w.sendAll(t, bn, doc); !strings.Contains(r, "Only the people who manage") {
 		t.Errorf("a builder: %q", r)
 	}
-	if r := w.sendAll(t, on, doc); !strings.Contains(r, "I added Menu.docx to what your assistant knows") || !strings.Contains(r, "Use this") {
+	// The reading is done after the answer; then the owner is told.
+	later := func(from string, msg map[string]any) string {
+		t.Helper()
+		before := len(w.graph.Sent(from))
+		r := w.sendAll(t, from, msg)
+		w.srv.WaitBackground()
+		for _, m := range w.graph.Sent(from)[before:] {
+			if !strings.Contains(r, m.Text) {
+				r += "\n" + m.Text
+			}
+		}
+		return r
+	}
+	if r := later(on, doc); !strings.Contains(r, "Reading Menu.docx") || !strings.Contains(r, "I added Menu.docx to what your assistant knows") || !strings.Contains(r, "Use this") {
 		t.Fatalf("the owner: %q", r)
 	}
 	var kind, status string
@@ -358,5 +371,22 @@ func TestChatAddsAKnowledgeDocument(t *testing.T) {
 	}
 	if kind != "file" || (status != "review" && status != "new") {
 		t.Fatalf("the source: %s %s", kind, status)
+	}
+	// Sent again (a new menu): the same source, its new version.
+	if r := later(on, doc); !strings.Contains(r, "I read the new Menu.docx") {
+		t.Fatalf("again: %q", r)
+	}
+	var n int
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT count(*) FROM knowledge_sources WHERE title = 'Menu.docx'`).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("sources: %d %v", n, err)
+	}
+	// Named a PDF, but not one; an old .doc.
+	w.graph.AddMedia("doc-fake", "application/pdf", []byte("hello"), 0)
+	if r := w.sendAll(t, on, whatsapptest.Document("doc-fake", "application/pdf", "menu.pdf", "")); !strings.Contains(r, "could not read") && !strings.Contains(r, "couldn't read") {
+		t.Errorf("not a PDF: %q", r)
+	}
+	w.graph.AddMedia("doc-old", "application/msword", []byte("\xd0\xcf\x11\xe0"), 0)
+	if r := w.sendAll(t, on, whatsapptest.Document("doc-old", "application/msword", "menu.doc", "")); !strings.Contains(r, "old Word document") {
+		t.Errorf("a .doc: %q", r)
 	}
 }
