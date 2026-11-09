@@ -99,10 +99,11 @@ func TestStockVariantsFixes(t *testing.T) {
 	}
 
 	// WhatsApp: the product's name asks which size, one choice at a time
-	// (black is its only colour, so only the size is asked); the answer
-	// goes on with the sale. The size's own name sells it at once.
-	if r := w.say(t, on, "sold 1 air max 95 46,000 cash"); !strings.Contains(r, "Which size of Air Max 95?") || !strings.Contains(r, "1. 41") ||
-		!strings.Contains(r, "2. 42") || strings.Contains(r, "colour") {
+	// (black is its only colour, so only the size is asked; its sizes are
+	// numbers, so by value, not numbered); the answer goes on with the
+	// sale. The size's own name sells it at once.
+	if r := w.say(t, on, "sold 1 air max 95 46,000 cash"); !strings.Contains(r, "Which size of Air Max 95? Say it: 41, 42") ||
+		strings.Contains(r, "1. 41") || strings.Contains(r, "colour") {
 		t.Fatalf("which size: %s", r)
 	}
 	if r := w.say(t, on, "42"); !strings.Contains(r, "Air Max 95 – 42, Black") || !strings.Contains(r, "₦46,000") {
