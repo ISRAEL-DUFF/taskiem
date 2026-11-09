@@ -33288,6 +33288,9 @@ components:
         ready:
           type: boolean
           description: It can be confirmed as it stands.
+        waits:
+          type: string
+          description: Why it cannot be confirmed yet, in a sentence.
         version:
           type: integer
         reference:

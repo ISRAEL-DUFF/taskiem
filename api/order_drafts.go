@@ -83,8 +83,10 @@ type orderDraftView struct {
 	TotalKobo    int64       `json:"total_kobo"`
 	// Questions is how many lines wait on a question; Ready, whether it
 	// can be confirmed as it stands.
-	Questions   int        `json:"questions"`
-	Ready       bool       `json:"ready"`
+	Questions int  `json:"questions"`
+	Ready     bool `json:"ready"`
+	// Waits is why it cannot be confirmed yet, in a sentence.
+	Waits       string     `json:"waits,omitempty"`
 	Version     int        `json:"version"`
 	Reference   string     `json:"reference,omitempty"`
 	OrderStatus string     `json:"order_status,omitempty"`
@@ -207,7 +209,13 @@ func (d draftRow) view() orderDraftView {
 	if d.body.Fulfilment != "delivery" {
 		v.DeliveryKobo = 0
 	}
-	v.Ready = d.ready() == ""
+	if why := d.ready(); why != "" {
+		if d.status == "open" || d.status == "asked" {
+			v.Waits = capitalFirst(why) + "."
+		}
+	} else {
+		v.Ready = true
+	}
 	return v
 }
 

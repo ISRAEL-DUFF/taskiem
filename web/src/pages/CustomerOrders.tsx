@@ -212,17 +212,7 @@ function OrderCard({
   const saved = payNow(d, data.pay_page);
   const [pay, setPay] = useState(saved);
   useEffect(() => setPay(saved), [saved]);
-  const waitsWhy = !d.ready
-    ? d.questions > 0
-      ? "Answer its questions first."
-      : !d.lines.length
-        ? "Add what they want."
-        : !d.fulfilment
-          ? "Say whether it is delivered or picked up."
-          : d.fulfilment === "delivery" && !d.address && !d.zone
-            ? "Say where to deliver it."
-            : "Every line needs an item, how many and a price."
-    : "";
+  const waitsWhy = d.ready ? "" : (d.waits ?? "");
 
   return (
     <article
@@ -258,7 +248,7 @@ function OrderCard({
           <ul className="customer-order-lines">
             {d.lines.map((l, i) => (
               <LineRow
-                key={`${i}-${l.item_id ?? l.said}`}
+                key={l.id ?? `${i}-${l.item_id ?? l.said}`}
                 l={l}
                 i={i}
                 items={data.items}

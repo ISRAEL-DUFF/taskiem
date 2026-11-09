@@ -16,6 +16,8 @@ export interface OrderQuestion {
 }
 
 export interface OrderLine {
+  /** The line, for as long as the order lives. */
+  id?: string;
   /** The customer's own words for it. */
   said?: string;
   /** None: nothing in the catalogue was matched (kept as written). */
@@ -49,6 +51,8 @@ export interface OrderDraft {
   total_kobo: number;
   questions: number;
   ready: boolean;
+  /** Why it cannot be confirmed yet, in a sentence. */
+  waits?: string;
   version: number;
   reference?: string;
   order_status?: string;
@@ -128,7 +132,7 @@ export function orderPill(d: OrderDraft): {
 
 /** How the customer pays, as the card's choice says it. */
 export const PAY_WORDS: Record<OrderPay, string> = {
-  transfer: "They pay now, by transfer or card (we send them the page)",
+  transfer: "They pay now, by bank transfer (we send them the page)",
   on_delivery: "They pay when it arrives",
   later: "I'll arrange payment with them",
 };

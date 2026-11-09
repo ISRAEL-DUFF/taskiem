@@ -604,6 +604,36 @@ test.describe("customers' conversations", () => {
     });
     expect(connect.status(), await connect.text()).toBe(200);
 
+    const buyer = "2348031113333";
+    await deliver(page, "Good evening, I want to order", 1, buyer, "Bola");
+    await page.goto("/chat");
+    await page
+      .getByTestId("customer-chats")
+      .getByTestId("customer-chat")
+      .filter({ hasText: "Bola" })
+      .click();
+    const pane = page.getByTestId("customer-pane");
+    const card = pane.getByTestId("customer-order");
+    // First on the real server, as far as it goes without a catalogue:
+    // start an order, say where it goes and the fee, see why it waits,
+    // and drop it.
+    await pane.getByRole("button", { name: "Start an order" }).click();
+    await expect(card).toContainText("The order has no items.");
+    await card.getByLabel("Delivered").check();
+    await card.getByLabel("Deliver to").fill("4 Bode Thomas, Surulere");
+    await card.getByLabel("Delivery fee, ₦").fill("2000");
+    await card.getByRole("button", { name: "Save" }).click();
+    await expect(card.getByLabel("Deliver to")).toHaveValue(
+      "4 Bode Thomas, Surulere",
+    );
+    await expect(card).toContainText("₦2,000.00");
+    await expect(card.getByRole("button", { name: "Confirm" })).toBeDisabled();
+    await card.getByRole("button", { name: "Drop" }).click();
+    await expect(
+      pane.getByRole("button", { name: "Start an order" }),
+    ).toBeVisible();
+
+    // Then with a catalogue, from a stand-in.
     // The stand-in: one order, changed as the API changes it.
     const items = [
       { id: "jp", name: "Jollof rice plate", price_kobo: 450000 },
@@ -639,6 +669,11 @@ test.describe("customers' conversations", () => {
         items_kobo: itemsKobo,
         total_kobo: itemsKobo + fee,
         ready,
+        waits: ready
+          ? undefined
+          : order.lines.length
+            ? "Say where to deliver it."
+            : "The order has no items.",
         questions: order.lines.filter((l) => l.ask).length,
       });
     };
@@ -659,6 +694,7 @@ test.describe("customers' conversations", () => {
           total_kobo: 0,
           questions: 0,
           ready: false,
+          waits: "The order has no items.",
           version: 1,
           by_reader: false,
           created_at: new Date().toISOString(),
@@ -720,19 +756,11 @@ test.describe("customers' conversations", () => {
       return r.fulfill({ json: order });
     });
 
-    const buyer = "2348031113333";
-    await deliver(page, "Good evening, I want to order", 1, buyer, "Bola");
-    await page.goto("/chat");
-    await page
-      .getByTestId("customer-chats")
-      .getByTestId("customer-chat")
-      .filter({ hasText: "Bola" })
-      .click();
-    const pane = page.getByTestId("customer-pane");
+    // The thread opens again from the page's address.
+    await page.reload();
     await pane.getByRole("button", { name: "Start an order" }).click();
-    const card = pane.getByTestId("customer-order");
     await expect(card).toContainText("Needs you");
-    await expect(card).toContainText("Add what they want.");
+    await expect(card).toContainText("The order has no items.");
     await card.getByLabel("Add an item").selectOption({
       label: "Jollof rice plate · ₦4,500.00",
     });
