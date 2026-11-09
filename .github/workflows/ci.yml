@@ -45,7 +45,7 @@ jobs:
       # sha256 from the release's sha256sums.txt; change both together.
       - name: Install promtool
         run: |
-          curl -fsSL -o prometheus.tgz https://github.com/prometheus/prometheus/releases/download/v3.15.1/prometheus-3.15.1.linux-amd64.tar.gz
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 -o prometheus.tgz https://github.com/prometheus/prometheus/releases/download/v3.15.1/prometheus-3.15.1.linux-amd64.tar.gz
           echo "6a726885328ad9efebbf36e876ce2fb6225468a71fd1e7ce3ba666d5f4d97a84  prometheus.tgz" | sha256sum -c -
           tar xzf prometheus.tgz -C "$RUNNER_TEMP" --strip-components=1 prometheus-3.15.1.linux-amd64/promtool
           rm prometheus.tgz
@@ -65,7 +65,7 @@ jobs:
       - name: Start OpenBao (transit engine for the secrets tests)
         run: |
           # sha256 from the release's checksums-linux.txt; change both together.
-          curl -fsSL -o bao.tgz https://github.com/openbao/openbao/releases/download/v2.4.1/bao_2.4.1_Linux_x86_64.tar.gz
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 -o bao.tgz https://github.com/openbao/openbao/releases/download/v2.4.1/bao_2.4.1_Linux_x86_64.tar.gz
           echo "b82f5d05d0ab83244340893b8860542dccb9ff25422a30b3b9d60df0e34fb19d  bao.tgz" | sha256sum -c -
           tar xzf bao.tgz bao
           ./bao server -dev -dev-root-token-id=dev -dev-listen-address=127.0.0.1:8200 > bao.log 2>&1 &
