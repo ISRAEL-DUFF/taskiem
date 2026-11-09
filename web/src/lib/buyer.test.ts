@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bagOf, orderLine, priceLine, purchaseState, quoteText, reorderQty, stepQty } from "./buyer";
+import { bagOf, flatItems, orderLine, priceLine, purchaseState, quoteText, reorderQty, sizesTaken, soldInSizes, stepQty } from "./buyer";
 import type { PriceItem } from "./pricelists";
 
 const item = (id: string, name: string, price: number, min = 1, available = true): PriceItem => ({
@@ -47,3 +47,73 @@ describe("the buyer's tools", () => {
     expect(reorderQty(last, links, items)).toEqual({ s1: 2 });
   });
 });
+
+describe("a product ordered by its sizes and colours", () => {
+  const trainer: PriceItem = {
+    item_id: "am",
+    name: "Air Max 90",
+    unit: "pair",
+    price_kobo: 4_000_000,
+    min_quantity: 6,
+    available: true,
+    breaks: [{ min_quantity: 50, price_kobo: 3_600_000 }],
+    sizes: [
+      { item_id: "s42", name: "Air Max 90 – 42", variant: { Size: "42" }, available: true },
+      { item_id: "s46", name: "Air Max 90 – 46", variant: { Size: "46" }, price_kobo: 4_400_000, available: true },
+      { item_id: "s47", name: "Air Max 90 – 47", variant: { Size: "47" }, available: false },
+    ],
+  };
+  it("is its sizes: the product's price and breaks, a size's own price without", () => {
+    const flat = flatItems([trainer]);
+    expect(flat.map((x) => x.item_id)).toEqual(["s42", "s46", "s47"]);
+    expect(flat[0]).toMatchObject({ price_kobo: 4_000_000, variant_of: "am", unit: "pair", min_quantity: 1 });
+    expect(flat[1]).toMatchObject({ price_kobo: 4_400_000, breaks: undefined });
+    expect(flat[2]?.available).toBe(false);
+  });
+  it("prices its sizes at the product's quantity together", () => {
+    const bag = bagOf([trainer], { s42: 40, s46: 10 });
+    expect(bag.lines).toHaveLength(2);
+    expect(bag.total).toBe(40 * 3_600_000 + 10 * 4_400_000);
+    expect(bag.count).toBe("1 item in your order");
+    expect(bagOf([trainer], { s42: 30 }).total).toBe(30 * 4_000_000);
+  });
+  it("says what is taken", () => {
+    expect(sizesTaken(trainer, { s42: 30, s46: 6 })).toBe("36 pairs in 2 sizes and colours");
+    expect(sizesTaken(trainer, {})).toBe("");
+  });
+});
+
+describe("sizes and colours after the phase 4 review", () => {
+  const product: PriceItem = {
+    item_id: "am",
+    name: "Air Max 90",
+    unit: "pair",
+    price_kobo: 4000000,
+    min_quantity: 6,
+    available: true,
+    choices: [{ name: "Size", values: ["42", "43"] }],
+    sizes: [
+      { item_id: "t42", name: "Air Max 90 – 42", variant: { Size: "42" }, available: true },
+      { item_id: "t43", name: "Air Max 90 – 43", variant: { Size: "43" }, available: true },
+    ],
+  };
+
+  it("never orders a product sold in sizes with none on sale itself", () => {
+    const none = { ...product, sizes: [] };
+    expect(soldInSizes(none)).toBe(true);
+    expect(flatItems([none])).toEqual([]);
+  });
+
+  it("orders the last order again by each size", () => {
+    const last = {
+      lines: [
+        { item_id: "o42", item: "Air Max 90 – 42", quantity: 4, cost_kobo: 0, received: 0 },
+        { item_id: "o43", item: "Air Max 90 – 43", quantity: 2, cost_kobo: 0, received: 0 },
+      ],
+    };
+    const links = [{ link: "l", item_id: "o42", seller_item_id: "t42", seller_item: "Air Max 90 – 42" }];
+    // 42 by its link, 43 by its full name; each at its own count.
+    expect(reorderQty(last, links, [product])).toEqual({ t42: 4, t43: 2 });
+  });
+});
+

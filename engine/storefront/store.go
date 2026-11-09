@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/israel-duff/taskiem/engine/media"
+	"github.com/israel-duff/taskiem/engine/variants"
 )
 
 // MaxItems caps the catalogue until the plans set their own (S8).
@@ -150,6 +151,99 @@ type Item struct {
 	// when it starts.
 	Starts *time.Time `json:"starts,omitempty"`
 	Venue  string     `json:"venue,omitempty"`
+	// Sizes and colours: a variant's product (its row id) and its values;
+	// a product's number of variants on sale, its Stock then being theirs
+	// together.
+	VariantOf string            `json:"variant_of,omitempty"`
+	Variant   map[string]string `json:"variant,omitempty"`
+	Variants  int               `json:"variants,omitempty"`
+	// Choices and Sizes are, on a product sold in sizes and colours, its
+	// choices (with only the values some size on sale has) and those sizes,
+	// so a page picks one: a basket line names the size's own row.
+	Choices []variants.Choice `json:"choices,omitempty"`
+	Sizes   []Size            `json:"sizes,omitempty"`
+}
+
+// Size is one of a product's sizes and colours on sale, as a page picks it.
+type Size struct {
+	ID        string            `json:"id"`
+	Variant   map[string]string `json:"variant"`
+	PriceKobo *int64            `json:"price_kobo,omitempty"`
+	Stock     *int64            `json:"stock,omitempty"`
+	// Photo is its own, a colour's (the product's shows for the rest).
+	Photo Image `json:"photo,omitempty"`
+}
+
+// SoldOut reports whether the size keeps a count and has none left.
+func (z Size) SoldOut() bool { return z.Stock != nil && *z.Stock <= 0 }
+
+// Name is the size's full name, as its row and an order line have it.
+func (z Size) Name(product Item) string {
+	return variants.Name(product.Name, z.Variant, product.Choices)
+}
+
+// SizeItems are a product's sizes as items a basket takes: each its own
+// row, price and stock; the product's photo where a size has none.
+func SizeItems(product Item) []Item {
+	out := make([]Item, 0, len(product.Sizes))
+	for _, z := range product.Sizes {
+		it := Item{ID: z.ID, Name: z.Name(product), PriceKobo: z.PriceKobo, Stock: z.Stock, Available: product.Available,
+			Category: product.Category, VariantOf: product.ID, Variant: z.Variant, Photo: z.Photo}
+		if it.PriceKobo == nil {
+			it.PriceKobo = product.PriceKobo
+		}
+		if it.Photo == nil {
+			it.Photo = product.Photo
+		}
+		out = append(out, it)
+	}
+	return out
+}
+
+// WithSizes is items with each product's sizes and colours after it, as
+// items a basket takes (the page lists the product; a line names a size).
+func WithSizes(items []Item) []Item {
+	n := 0
+	for _, it := range items {
+		n += len(it.Sizes)
+	}
+	if n == 0 {
+		return items
+	}
+	out := make([]Item, 0, len(items)+n)
+	for _, it := range items {
+		out = append(out, it)
+		out = append(out, SizeItems(it)...)
+	}
+	return out
+}
+
+// FindSize is the product's size of the values picked, case aside.
+func (it Item) FindSize(picked map[string]string) (Size, bool) {
+	v, ok := variants.Fit(picked, it.Choices)
+	if !ok {
+		return Size{}, false
+	}
+	k := variants.Key(v)
+	for _, z := range it.Sizes {
+		if variants.Key(z.Variant) == k {
+			return z, true
+		}
+	}
+	return Size{}, false
+}
+
+// PublicItems is the items a public page lists: a product, not its
+// sizes and colours one by one (picked on the page from phase 4 of the
+// plan). Items keeps them, so an order's live prices still find them.
+func PublicItems(items []Item) []Item {
+	out := make([]Item, 0, len(items))
+	for _, it := range items {
+		if it.VariantOf == "" {
+			out = append(out, it)
+		}
+	}
+	return out
 }
 
 // SoldOut reports whether the item tracks stock and has none left.
@@ -473,6 +567,15 @@ func Items(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]a
 		if m.Venue != "" {
 			it.Venue = str(r[m.Venue])
 		}
+		if m.VariantOf != "" {
+			it.VariantOf = str(r[m.VariantOf])
+		}
+		if m.Variant != "" && it.VariantOf != "" {
+			it.Variant = variants.ParseVariant(str(r[m.Variant]))
+		}
+		if m.Choices != "" && it.VariantOf == "" {
+			it.Choices = variants.ParseChoices(str(r[m.Choices]))
+		}
 		if m.ReadyIn != "" {
 			if n, ok := num(r[m.ReadyIn]); ok && n >= 1 && n <= 600 {
 				it.ReadyIn = int(n)
@@ -536,7 +639,99 @@ func Items(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]a
 	for i, s := range out {
 		items[i] = s.item
 	}
+	rollUpVariants(items)
 	return items, nil
+}
+
+// rollUpVariants gives a product with sizes and colours on sale their
+// number and their stock together (the product row keeps none of its
+// own): unknown (nil) when any size on sale keeps no count, so the
+// product is sold out only when every size on sale is counted and at
+// none left. It gives the sizes themselves to pick from, with
+// its choices narrowed to the values they have. A size whose values do
+// not fit its product's choices is left out of the pick.
+func rollUpVariants(items []Item) {
+	byID := map[string]int{}
+	for i, it := range items {
+		if it.VariantOf == "" {
+			byID[it.ID] = i
+		}
+	}
+	type sum struct {
+		n         int
+		stock     int64
+		uncounted bool
+		sizes     []Size
+	}
+	of := map[string]*sum{}
+	for _, it := range items {
+		if it.VariantOf == "" || !it.Available {
+			continue
+		}
+		pi, ok := byID[it.VariantOf]
+		if !ok {
+			continue
+		}
+		s := of[it.VariantOf]
+		if s == nil {
+			s = &sum{}
+			of[it.VariantOf] = s
+		}
+		s.n++
+		if it.Stock != nil {
+			s.stock += *it.Stock
+		} else {
+			s.uncounted = true
+		}
+		if v, fits := variants.Fit(it.Variant, items[pi].Choices); fits {
+			z := Size{ID: it.ID, Variant: v, Stock: it.Stock, Photo: it.Photo}
+			if it.PriceKobo != nil && (items[pi].PriceKobo == nil || *it.PriceKobo != *items[pi].PriceKobo) {
+				z.PriceKobo = it.PriceKobo
+			}
+			s.sizes = append(s.sizes, z)
+		}
+	}
+	for i := range items {
+		it := &items[i]
+		if it.VariantOf != "" {
+			continue
+		}
+		s := of[it.ID]
+		if s == nil {
+			// Set up in sizes and colours with none of them on sale: not a
+			// plain item to put in a bag (it keeps no stock of its own).
+			if len(it.Choices) > 0 {
+				it.Available = false
+			}
+			it.Choices = nil
+			continue
+		}
+		it.Variants, it.Stock, it.Sizes = s.n, nil, s.sizes
+		if !s.uncounted {
+			n := s.stock
+			it.Stock = &n
+		}
+		it.Choices = usedChoices(it.Choices, s.sizes)
+	}
+}
+
+// usedChoices are the choices with only the values some size has, in
+// their order.
+func usedChoices(cs []variants.Choice, sizes []Size) []variants.Choice {
+	out := make([]variants.Choice, 0, len(cs))
+	for _, c := range cs {
+		var vals []string
+		for _, v := range c.Values {
+			for _, z := range sizes {
+				if z.Variant[c.Name] == v {
+					vals = append(vals, v)
+					break
+				}
+			}
+		}
+		out = append(out, variants.Choice{Name: c.Name, Values: vals})
+	}
+	return out
 }
 
 // SyncCatalogue replaces the storefront's copy with items, and records

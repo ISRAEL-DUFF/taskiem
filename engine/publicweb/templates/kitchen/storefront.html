@@ -40,7 +40,7 @@
       <div class="kx-meta">
         <div><h3>{{if .ID}}<a class="item-open" href="{{$.Base}}/i/{{.ID}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}</h3>
         <p class="price">{{.Price}}</p>{{if .Few}}<span class="badge badge-few">Few left</span>{{end}}{{if .ReadyIn}}<p class="item-sub">Ready in {{.ReadyIn}} min</p>{{end}}</div>
-        {{if not .Available}}<span class="badge">Unavailable</span>{{else if .SoldOut}}<span class="badge">Sold out</span>{{else if and $.Ordering .Orderable}}{{if .Options}}<a class="add" href="{{$.Base}}/i/{{.ID}}" aria-label="Choose {{.Name}}">{{template "i-plus"}}</a>{{else}}<form class="kx-buy" data-merge method="get" action="{{$.Base}}/a/order"><input type="hidden" name="step" value="bag"><input type="hidden" name="q.{{.ID}}" value="1"><button class="add" type="submit" aria-label="Add {{.Name}}">{{template "i-plus"}}</button></form>{{end}}{{end}}
+        {{if not .Available}}<span class="badge">Unavailable</span>{{else if .SoldOut}}<span class="badge">Sold out</span>{{else if and $.Ordering .Orderable}}{{if or .Options .Sizes}}<a class="add" href="{{$.Base}}/i/{{.ID}}" aria-label="Choose {{.Name}}">{{template "i-plus"}}</a>{{else}}<form class="kx-buy" data-merge method="get" action="{{$.Base}}/a/order"><input type="hidden" name="step" value="bag"><input type="hidden" name="q.{{.ID}}" value="1"><button class="add" type="submit" aria-label="Add {{.Name}}">{{template "i-plus"}}</button></form>{{end}}{{end}}
       </div>
     </li>
     {{end}}

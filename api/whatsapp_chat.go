@@ -723,6 +723,13 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if c.data.Build != nil && c.state != stateIdle {
 		return s.waBuildReply(ctx, c, text, cmd)
 	}
+	if c.data.Shop != nil && c.state != stateIdle && c.data.Shop.Action == "stock_category" {
+		// A category's list: *more* pages it; anything else lets it go and
+		// is read as a new message.
+		if done, err := s.waStockCategoryReply(ctx, c, cmd); done || err != nil {
+			return err
+		}
+	}
 	if c.data.Shop != nil && c.state != stateIdle {
 		return s.waShopReply(ctx, c, text, cmd)
 	}

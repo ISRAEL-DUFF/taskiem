@@ -2,6 +2,8 @@
 // panel and what each one's sheet lists. Phase 1 shows each tool's list in
 // the sheet frame, with "Open full page"; phase 2 makes them work in place.
 
+import { categoriesOf } from "./mentions";
+import { hasSizes, sizesLine, sizesWords } from "./variants";
 import { formatPrice } from "./storefront";
 import type { StockItem, StockView } from "./stock";
 import type { Service } from "./bookings";
@@ -34,8 +36,13 @@ export interface ToolRow {
   sub: string;
   pill?: { text: string; tone: PillTone };
   href: string;
-  /** For the chips: which it is in ("low", "hidden", "new"). */
+  /** For the chips: which it is in ("low", "hidden", "new", and
+   * "cat:Sneakers" for its category). */
   tags: string[];
+  /** Its category and its words (a product's description): search reads
+   * them after the name. */
+  category?: string;
+  words?: string;
   /** What it is, for its form (a stock item, an order, a table…). */
   data?: unknown;
   /** The linked business it is with (a buyer's orders and bills): ""
@@ -82,18 +89,53 @@ function stockPill(it: StockItem): ToolRow["pill"] {
 
 function stockRows(data: unknown): ToolRow[] {
   const v = data as StockView | undefined;
-  return (v?.items ?? []).map((it) => ({
-    id: it.id,
-    name: it.name,
-    sub:
-      it.price_kobo !== undefined
-        ? `${formatPrice(it.price_kobo)}${it.unit ? ` a ${it.unit}` : ""}`
-        : "No price yet",
-    pill: stockPill(it),
-    href: "/storefront/stock",
-    tags: [...(it.low ? ["low"] : []), ...(!it.available ? ["hidden"] : [])],
-    data: it,
-  }));
+  const all = v?.items ?? [];
+  // A product's sizes and colours are not rows of their own: the product
+  // says how many it has and how many are low, and its stock is theirs.
+  return all
+    .filter((it) => !it.variant_of)
+    .map((it) => {
+      const sizes = hasSizes(it) ? sizesLine(all, it.id) : undefined;
+      const shown: StockItem = sizes
+        ? { ...it, stock: sizes.stock, low: sizes.low > 0 }
+        : it;
+      const price =
+        it.price_kobo !== undefined
+          ? `${formatPrice(it.price_kobo)}${it.unit ? ` a ${it.unit}` : ""}`
+          : "No price yet";
+      return {
+        id: it.id,
+        name: it.name,
+        sub: sizes
+          ? `${sizesWords(sizes.count)}${sizes.low ? ` · ${sizes.low} low` : ""} · ${price}`
+          : price,
+        pill: stockPill(shown),
+        href: "/storefront/stock",
+        tags: [
+          ...(shown.low ? ["low"] : []),
+          ...(!it.available ? ["hidden"] : []),
+          ...(it.category ? [categoryTag(it.category)] : []),
+        ],
+        category: it.category,
+        words: it.description,
+        data: it,
+      };
+    });
+}
+
+/** A category as a chip's tag. */
+export const categoryTag = (c: string) => `cat:${c.trim().toLowerCase()}`;
+
+/** The chips for the categories of a sheet's rows, after its own: the most
+ * used first; a category of one item gets none, unless it is the one shown
+ * (on: the chip that is on). */
+export function categoryChips(
+  rows: { category?: string }[],
+  on?: string,
+): { label: string; tag: string }[] {
+  return categoriesOf(rows)
+    .filter((c) => c.count > 1 || categoryTag(c.name) === on)
+    .map((c) => ({ label: c.name, tag: categoryTag(c.name) }));
 }
 
 const lowBadge = (rows: ToolRow[]) => {
@@ -406,18 +448,23 @@ export function toolsFor(can: (perm: string) => boolean, query = "", roles?: str
   );
 }
 
-/** The rows a sheet shows: those a chip picks, then those its search finds. */
+/** The rows a sheet shows: those a chip picks, then those its search
+ * finds, by name first, then by the rest (its line, category, words). */
 export function filterRows(
   rows: ToolRow[],
   chip: string | undefined,
   search: string,
 ): ToolRow[] {
   const q = search.trim().toLowerCase();
-  return rows.filter(
+  const picked = rows.filter((r) => !chip || r.tags.includes(chip));
+  if (q === "") return picked;
+  const named = picked.filter((r) => r.name.toLowerCase().includes(q));
+  const rest = picked.filter(
     (r) =>
-      (!chip || r.tags.includes(chip)) &&
-      (q === "" ||
-        r.name.toLowerCase().includes(q) ||
-        r.sub.toLowerCase().includes(q)),
+      !r.name.toLowerCase().includes(q) &&
+      [r.sub, r.category ?? "", r.words ?? ""].some((t) =>
+        t.toLowerCase().includes(q),
+      ),
   );
+  return [...named, ...rest];
 }

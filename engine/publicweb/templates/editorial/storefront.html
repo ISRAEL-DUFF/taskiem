@@ -49,7 +49,7 @@
         {{with .Description}}<p class="row-sub">{{.}}</p>{{end}}{{if .ReadyIn}}<p class="row-sub">Ready in {{.ReadyIn}} min</p>{{end}}
         <p class="row-price">{{.Price}}</p>
       </div>
-      {{if not .Available}}<span class="badge">Unavailable</span>{{else if .SoldOut}}<span class="badge">Sold out</span>{{else if and $.Ordering .Orderable}}<a class="btn btn-small" href="{{$.Base}}/a/order?item={{.ID}}" aria-label="Add {{.Name}}">Add</a>{{end}}
+      {{if not .Available}}<span class="badge">Unavailable</span>{{else if .SoldOut}}<span class="badge">Sold out</span>{{else if and $.Ordering .Orderable}}{{if or .Options .Sizes}}<a class="btn btn-small" href="{{$.Base}}/i/{{.ID}}" aria-label="Choose {{.Name}}">Choose</a>{{else}}<a class="btn btn-small" href="{{$.Base}}/a/order?item={{.ID}}" aria-label="Add {{.Name}}">Add</a>{{end}}{{end}}
     </article>
     {{end}}
   </section>

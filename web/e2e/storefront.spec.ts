@@ -223,6 +223,9 @@ test("an owner adds a front of questions with its own form", async ({ page }) =>
 });
 
 test("an owner sets booking hours and the booking form", async ({ page }) => {
+  // About 50 steps and an axe run: on a busy runner (a click taking 2 to 6
+  // seconds) more than the default 60 seconds.
+  test.setTimeout(120_000);
   await page.goto("/login");
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");

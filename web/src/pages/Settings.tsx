@@ -224,7 +224,7 @@ function PlanLimits() {
     <section className="card">
       <h2 style={{ marginTop: 0 }}>Plan limits</h2>
       <p className="hint">Set by your operator; 0 means no limit. Above the ingest rate deliveries are still accepted and their runs queued.</p>
-      <table>
+      <table className="cards">
         <thead>
           <tr>
             <th>Limit</th>
@@ -236,13 +236,13 @@ function PlanLimits() {
         <tbody>
           {Object.keys(data.help).sort().map((k) => (
             <tr key={k}>
-              <td className="mono">{k}</td>
-              <td>
+              <td className="mono primary">{k}</td>
+              <td data-label="Value">
                 {data.limits[k]}
                 {k in data.overrides ? "" : " (default)"}
               </td>
-              <td>{used[k] ?? ""}</td>
-              <td className="hint">{data.help[k]}</td>
+              <td data-label="In use">{used[k] ?? ""}</td>
+              <td className="hint wide">{data.help[k]}</td>
             </tr>
           ))}
         </tbody>

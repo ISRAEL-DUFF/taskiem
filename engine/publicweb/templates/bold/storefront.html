@@ -54,7 +54,7 @@
         {{if not .Available}}<span class="badge">Unavailable</span>{{else if .SoldOut}}<span class="badge">Sold out</span>{{end}}</div>
         <h3>{{if .ID}}<a class="item-open" href="{{$.Base}}/i/{{.ID}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}</h3>
         {{with .Description}}<p class="tile-sub">{{.}}</p>{{end}}{{if .ReadyIn}}<p class="tile-sub">Ready in {{.ReadyIn}} min</p>{{end}}
-        <p class="tile-row"><span class="price">{{.Price}}</span>{{if and $.Ordering .Orderable}}<a class="add" href="{{$.Base}}/a/order?item={{.ID}}" aria-label="Add {{.Name}}">{{template "i-plus"}}</a>{{end}}</p>
+        <p class="tile-row"><span class="price">{{.Price}}</span>{{if and $.Ordering .Orderable}}{{if or .Options .Sizes}}<a class="add" href="{{$.Base}}/i/{{.ID}}" aria-label="Choose {{.Name}}">{{template "i-plus"}}</a>{{else}}<a class="add" href="{{$.Base}}/a/order?item={{.ID}}" aria-label="Add {{.Name}}">{{template "i-plus"}}</a>{{end}}{{end}}</p>
       </article>
       {{end}}
     </div>

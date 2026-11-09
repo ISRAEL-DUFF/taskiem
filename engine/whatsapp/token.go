@@ -56,7 +56,10 @@ type Signer struct{ Key []byte }
 
 const tokenPrefix = "tk1."
 
-var b64 = base64.RawURLEncoding
+// Strict: a token has one spelling. Unpadded, a last character carries
+// bits that are not part of the bytes; read leniently, several spellings
+// would decode to the same token (one with its end altered still valid).
+var b64 = base64.RawURLEncoding.Strict()
 
 func purposeByte(p string) byte {
 	if p == PurposeHandoff {

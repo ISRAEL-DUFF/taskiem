@@ -1709,6 +1709,66 @@
       "reviewed": true,
       "context": "A table a chat draft uses exists already but lacks columns the draft reads; the owner adds them in the web app"
     },
+    "wa.stock.category": {
+      "text": "*{category}* ({count}):\n{list}",
+      "reviewed": true,
+      "context": "A category asked for by name (\"sneakers\", \"show me sneakers\", \"stock sneakers\"): its items with their counts, 10 at a time"
+    },
+    "wa.stock.category_more": {
+      "text": "Send *more* for the rest.",
+      "reviewed": true,
+      "context": "After a page of a category's items, when there are more"
+    },
+    "wa.stock.which_size": {
+      "text": "{name} comes in {count} sizes and colours. Say which, with its size and colour after the name, like *{example}*.",
+      "reviewed": true,
+      "context": "A product has more sizes and colours than a numbered list shows"
+    },
+    "wa.order.which_size": {
+      "text": "{name} from {business} comes in sizes and colours: {sizes}. Say which, like *{example}*, or choose many at once in your chat with them on Taskiem.",
+      "reviewed": true,
+      "context": "A buyer ordered a supplier's product sold in sizes without saying which size; a link to the order sheet follows"
+    },
+    "wa.size.which": {
+      "text": "Which {choice} of {name}? Reply with its number, or say it:\n{list}",
+      "reviewed": true,
+      "context": "A product sold in sizes and colours was named without saying which: one choice asked at a time, its values numbered"
+    },
+    "wa.size.again": {
+      "text": "Reply with the number of the {choice}, or say it:\n{list}",
+      "reviewed": true,
+      "context": "The answer to a size or colour question was neither a number on the list nor one of the values"
+    },
+    "wa.size.none": {
+      "text": "{name} has none on sale in {said}. It comes in {sizes}.",
+      "reviewed": true,
+      "context": "The size and colour said is not one on sale; what the product comes in follows"
+    },
+    "wa.size.say": {
+      "text": "Which {choice} of {name}? Say it: {list}",
+      "reviewed": true,
+      "context": "A product's sizes are numbers (shoe sizes 3 to 12): the size is asked by its value, not a numbered list"
+    },
+    "wa.size.say_again": {
+      "text": "Say the {choice}: {list}",
+      "reviewed": true,
+      "context": "The answer to a size question whose values are numbers was none of them"
+    },
+    "wa.order.no_size": {
+      "text": "{name} from {business} doesn't come in {said}. It comes in {sizes}.",
+      "reviewed": true,
+      "context": "A buyer ordered a supplier's product in a size or colour it is not sold in; nothing is ordered"
+    },
+    "wa.stock.sizes": {
+      "text": "{name}: {count} sizes and colours, {total} in all.\n{lines}",
+      "reviewed": true,
+      "context": "stock <product> for a product sold in sizes and colours: each size's count, by colour"
+    },
+    "wa.stock.low_tag": {
+      "text": "(low)",
+      "reviewed": true,
+      "context": "After an item's count in a list, when it is at or below its reorder level"
+    },
     "wa.tablemake.denied": {
       "text": "You cannot make or change tables in {org} (it takes table.edit).",
       "reviewed": true,

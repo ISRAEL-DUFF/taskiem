@@ -47,6 +47,10 @@ type itemData struct {
 	// of Add; DepositNote says what is paid now when there is a deposit.
 	Book        string
 	DepositNote string
+	// Sizes are, on a product sold in sizes and colours, its choices to
+	// pick one by; SizeData is them for the page's script (sizes.go).
+	Sizes    []sizePick
+	SizeData string
 }
 
 // duration says minutes as a person would: "45 minutes", "2 hours",
@@ -104,7 +108,8 @@ func (s *Server) serveItem(w http.ResponseWriter, r *http.Request, site Site, fr
 		return
 	}
 	c := p.Model.Card
-	x := item{Item: it, Small: it.Photo["320"], Large: it.Photo["800"], Orderable: orderable(it)}
+	sized := len(it.Sizes) > 0
+	x := item{Item: it, Small: it.Photo["320"], Large: it.Photo["800"], Orderable: orderable(it) || pickable(it)}
 	if x.Large == "" {
 		x.Large = it.Photo["2000"]
 	}
@@ -114,6 +119,9 @@ func (s *Server) serveItem(w http.ResponseWriter, r *http.Request, site Site, fr
 	}
 	d := itemData{pageData: pageData{Title: it.Name, Lang: c.Language, Look: s.lookFor(r.Context(), site.Tenant, c.Name)},
 		Business: c.Name, Home: home, It: x, Options: formOptions(it, it.ID), Max: most(it), Whats: p.Model.WhatsLink, Phone: c.Phone}
+	if sized {
+		d.Sizes, d.SizeData, d.Max = sizePicks(it), sizeData(it), maxQuantity
+	}
 	var kick []string
 	if it.Category != "" {
 		kick = append(kick, it.Category)

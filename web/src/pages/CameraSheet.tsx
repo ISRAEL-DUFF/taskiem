@@ -10,9 +10,13 @@ import { Modal } from "../ui";
 export function CameraSheet({
   onTake,
   onClose,
+  facing = "user",
 }: {
   onTake: (f: File) => void;
   onClose: () => void;
+  /** Which camera, where there are two: the person (a message) or what is
+   * in front of them (a product's photo). A computer has the one. */
+  facing?: "user" | "environment";
 }) {
   const video = useRef<HTMLVideoElement>(null);
   const [error, setError] = useState<string>();
@@ -21,7 +25,7 @@ export function CameraSheet({
     let stream: MediaStream | undefined;
     let live = true;
     navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: "user" }, audio: false })
+      .getUserMedia({ video: { facingMode: facing }, audio: false })
       .then((s) => {
         if (!live) return s.getTracks().forEach((t) => t.stop());
         stream = s;
@@ -41,7 +45,7 @@ export function CameraSheet({
       live = false;
       stream?.getTracks().forEach((t) => t.stop());
     };
-  }, []);
+  }, [facing]);
   const take = () => {
     const v = video.current;
     if (!v || !v.videoWidth) return;

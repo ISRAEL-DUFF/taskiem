@@ -164,22 +164,71 @@ func linkPrices(ctx context.Context, tx pgx.Tx, seller, link uuid.UUID) (map[str
 	if err != nil || !ok {
 		return nil, err
 	}
-	out := make(map[string]PriceItem, len(items))
-	for _, it := range items {
+	out := map[string]PriceItem{}
+	for id, it := range Flat(items) {
 		if it.PriceKobo > 0 {
-			out[it.ItemID] = it
+			out[id] = it
 		}
 	}
 	return out, nil
 }
 
+// together is how many of each listed product an order's lines take, its
+// sizes and colours together: what its quantity prices count.
+func together(lines []OrderLine, list map[string]PriceItem) map[string]int64 {
+	out := map[string]int64{}
+	for _, l := range lines {
+		if it, ok := list[l.ItemID]; ok {
+			out[ProductOf(it)] += l.Quantity
+		}
+	}
+	return out
+}
+
+// repriceTogether prices again, at the order's totals, the lines priced
+// from the list: matching a line can bring a product's sizes together to
+// a quantity break, which every one of its lines then has, not only the
+// one matched. An offer's lines keep their prices; what they are against
+// follows. It reports whether a line changed.
+func repriceTogether(lines []OrderLine, list map[string]PriceItem) bool {
+	qty := together(lines, list)
+	changed := false
+	for i := range lines {
+		l := &lines[i]
+		if _, ok := list[l.ItemID]; !ok {
+			continue
+		}
+		switch l.PricedBy {
+		case PricedByList:
+			if priceLine(l, list, nil, qty) {
+				changed = true
+			}
+		case PricedByOffer:
+			tmp := *l
+			tmp.PriceKobo, tmp.PricedBy = 0, ""
+			priceLine(&tmp, list, nil, qty)
+			if tmp.PriceKobo > 0 && tmp.PriceKobo != l.ListKobo {
+				l.ListKobo = tmp.PriceKobo
+				changed = true
+			}
+		}
+	}
+	return changed
+}
+
 // priceLine prices a line matched to one of the seller's items: the
 // link's list first, else the catalogue's price; neither leaves it as it
-// was. It reports whether the line's price changed.
-func priceLine(l *OrderLine, list map[string]PriceItem, catalogue *int64) bool {
+// was. It reports whether the line's price changed. qty is the order's
+// quantity of each product, its sizes together (together).
+func priceLine(l *OrderLine, list map[string]PriceItem, catalogue *int64, qty map[string]int64) bool {
 	if it, ok := list[l.ItemID]; ok && it.PriceKobo > 0 {
-		// The quantity's price: a quantity break once reached (phase 7).
-		p := PriceAt(it, l.Quantity)
+		// The quantity's price: a quantity break once reached (phase 7),
+		// counting a product's sizes and colours together (phase 4).
+		n := l.Quantity
+		if qty[ProductOf(it)] > n {
+			n = qty[ProductOf(it)]
+		}
+		p := PriceAt(it, n)
 		changed := l.PriceKobo != p || l.PricedBy != PricedByList
 		l.PriceKobo, l.PricedBy = p, PricedByList
 		return changed
@@ -743,6 +792,7 @@ func WriteOrderTx(ctx context.Context, tx pgx.Tx, v Vault, buyer, id uuid.UUID) 
 	if err != nil {
 		return nil, err
 	}
+	qty := together(lines, list)
 	for i := range lines {
 		if p.Offer {
 			// An offer (phase 7): the buyer's own prices stand, against the
@@ -751,7 +801,7 @@ func WriteOrderTx(ctx context.Context, tx pgx.Tx, v Vault, buyer, id uuid.UUID) 
 			if lines[i].ItemID != "" {
 				tmp := lines[i]
 				tmp.PriceKobo, tmp.PricedBy = 0, ""
-				if priceLine(&tmp, list, nil) || tmp.PriceKobo > 0 {
+				if priceLine(&tmp, list, nil, qty) || tmp.PriceKobo > 0 {
 					lines[i].ListKobo = tmp.PriceKobo
 				}
 			}
@@ -759,7 +809,7 @@ func WriteOrderTx(ctx context.Context, tx pgx.Tx, v Vault, buyer, id uuid.UUID) 
 		}
 		if lines[i].ItemID != "" {
 			lines[i].PriceKobo, lines[i].PricedBy = 0, ""
-			priceLine(&lines[i], list, nil)
+			priceLine(&lines[i], list, nil, qty)
 		}
 	}
 	order, err := insertOrder(ctx, tx, v, orderIn{seller: seller, link: *p.Link, buyer: buyer, source: p.ID, buyerName: name, reference: p.Reference,
@@ -1743,11 +1793,12 @@ func MatchItemsTx(ctx context.Context, tx pgx.Tx, ref string, items []SellerItem
 		return o, false, err
 	}
 	changed := false
+	qty := together(o.Lines, list)
 	for i, l := range o.Lines {
 		if l.ItemID != "" {
 			// Linked by the buyer, or matched before: priced by the seller's
 			// side when it is not yet.
-			if l.PricedBy == "" && priceLine(&o.Lines[i], list, byID[l.ItemID].PriceKobo) {
+			if l.PricedBy == "" && priceLine(&o.Lines[i], list, byID[l.ItemID].PriceKobo, qty) {
 				changed = true
 			}
 			continue
@@ -1767,13 +1818,16 @@ func MatchItemsTx(ctx context.Context, tx pgx.Tx, ref string, items []SellerItem
 			// against (phase 7).
 			tmp := o.Lines[i]
 			tmp.PriceKobo, tmp.PricedBy = 0, ""
-			priceLine(&tmp, list, it.PriceKobo)
+			priceLine(&tmp, list, it.PriceKobo, qty)
 			o.Lines[i].ListKobo = tmp.PriceKobo
 			changed = true
 			continue
 		}
 		o.Lines[i].PriceKobo, o.Lines[i].PricedBy = 0, ""
-		priceLine(&o.Lines[i], list, it.PriceKobo)
+		priceLine(&o.Lines[i], list, it.PriceKobo, qty)
+		changed = true
+	}
+	if repriceTogether(o.Lines, list) {
 		changed = true
 	}
 	if !changed {
@@ -1808,7 +1862,8 @@ func SetLineItemTx(ctx context.Context, tx pgx.Tx, ref string, line int, it Sell
 	l := &o.Lines[line]
 	l.ItemID, l.Matched = it.ID, "linked"
 	l.PriceKobo, l.PricedBy = 0, ""
-	priceLine(l, list, it.PriceKobo)
+	priceLine(l, list, it.PriceKobo, together(o.Lines, list))
+	repriceTogether(o.Lines, list)
 	name := it.Name
 	if r := []rune(name); len(r) > 120 {
 		name = string(r[:120])

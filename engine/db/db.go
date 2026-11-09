@@ -4,8 +4,10 @@ package db
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"embed"
+	"encoding/hex"
 	"fmt"
 	"io/fs"
 	"strconv"
@@ -158,4 +160,27 @@ func InTenantTx(ctx context.Context, pool *pgxpool.Pool, tenants []uuid.UUID, fn
 		}
 		return fn(tx)
 	})
+}
+
+// MigrationsDigest is a hash of every migration's name and text: a
+// database migrated from them is the same as any other so migrated (the
+// test databases' template is keyed by it, dbtest).
+func MigrationsDigest() string {
+	h := sha256.New()
+	sub := mustSub(migrations, "migrations")
+	_ = fs.WalkDir(sub, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		b, err := fs.ReadFile(sub, path)
+		if err != nil {
+			return err
+		}
+		h.Write([]byte(path))
+		h.Write([]byte{0})
+		h.Write(b)
+		h.Write([]byte{0})
+		return nil
+	})
+	return hex.EncodeToString(h.Sum(nil))
 }

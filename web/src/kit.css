@@ -721,3 +721,65 @@ input.tk-switch:disabled { cursor: default; opacity: 0.7; }
 .tk-x-sheet { display: flex; flex-direction: column; gap: 12px; padding: 4px 16px 16px; }
 .tk-x-sheet .tk-x-card.explore-card { box-shadow: 0 0 0 1px var(--border); }
 .tk-x-note { margin: 0 4px; font-size: 13px; color: var(--muted); }
+/* A supplier's list under its categories' headings (chat categories). */
+.tk-order-sections { padding-bottom: 96px; }
+.tk-order-sections .tk-order-list { padding-bottom: 0; }
+.tk-order-cat { margin: 14px 20px 0; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+/* A product's category and the ones already used (chat categories). */
+.tk-category { display: flex; flex-direction: column; gap: 8px; }
+.tk-field-chips { padding: 0; }
+/* Adding a product's photo (chat categories Part C): three ways, side by
+   side where they fit, one under the other on a narrow phone. */
+.tk-photo-ways { display: flex; flex-wrap: wrap; gap: 8px; }
+.tk-photo-ways .tk-btn { flex: 1 1 auto; min-height: 40px; padding: 0 14px; font-size: 14px; }
+.tk-photo-ways .tk-btn svg { width: 18px; height: 18px; }
+.tk-photo-link { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.tk-photo-link .tk-btn { align-self: flex-start; }
+.tk-photo-full { margin: 0; }
+.tk-product-photos { display: flex; flex-direction: column; gap: 12px; }
+.tk-product-photos .tk-photos { list-style: none; margin: 0; padding: 0; }
+.tk-photo { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.tk-photo-acts { display: flex; gap: 10px; font-size: 13px; }
+.tk-photo-linked { display: grid; place-items: center; width: 72px; height: 72px; border-radius: 14px; padding: 6px; background: var(--tk-soft); color: var(--text); font-size: 11px; font-weight: 600; text-align: center; overflow-wrap: anywhere; }
+.tk-photo-failed p { margin: 0 0 4px; }
+.tk-photo-failed ul { margin: 0 0 10px 18px; }
+/* Sizes and colours (chat categories Part B): a choice, and the grid as
+   groups of boxes that wrap, so nothing scrolls sideways on a phone. */
+.tk-choice, .tk-grid-group { border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; margin: 0; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.tk-choice legend, .tk-grid-group legend { font-weight: 700; font-size: 14px; padding: 0 6px; color: var(--text); }
+.tk-grid-tools { display: flex; align-items: flex-end; gap: 10px; }
+.tk-grid-tools .tk-field { flex: 1; }
+.tk-grid-cells { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
+.tk-grid-cell { display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 12px; background: var(--tk-soft); }
+.tk-grid-cell label { display: flex; flex-direction: column; gap: 4px; font-weight: 700; font-size: 13px; color: var(--text); }
+.tk-grid-cell small { display: block; font-weight: 500; color: var(--muted); }
+.tk-grid-cell input { width: 100%; min-width: 0; text-align: center; }
+.tk-grid-cell.low { background: var(--tk-warn-bg); color: var(--tk-warn-ink); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--warn) 55%, transparent); }
+.tk-grid-cell.low label, .tk-grid-cell.low small { color: var(--tk-warn-ink); }
+.tk-check { display: flex; gap: 10px; align-items: center; font-weight: 600; color: var(--text); }
+.tk-stop-sizes { display: flex; flex-direction: column; gap: 8px; }
+.tk-stop-sizes p { margin: 0; }
+/* Sell: a product with sizes and colours, picked under it. */
+.tk-order-row.tk-sized { flex-direction: column; align-items: stretch; gap: 10px; }
+.tk-sized-head { display: flex; align-items: center; gap: 14px; }
+.tk-sized-head .tk-row-words { flex: 1; min-width: 0; }
+.tk-sized-chosen { list-style: none; margin: 0; padding: 0 0 0 56px; display: flex; flex-direction: column; gap: 6px; }
+.tk-sized-chosen li, .tk-sized-found { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-weight: 600; }
+.tk-sized-pick { display: flex; flex-direction: column; gap: 8px; }
+.tk-sized-pick .tk-chips { flex-wrap: wrap; }
+.tk-sized-pick .tk-chips button:disabled { opacity: 0.45; text-decoration: line-through; }
+/* A photo for each colour (phase 4): its picture, its name, the picker. */
+.tk-colour-photo { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 6px 12px; align-items: center; padding: 8px 0; border-top: 1px solid var(--border); }
+.tk-colour-photo img, .tk-colour-photo-none { width: 48px; height: 48px; border-radius: 10px; object-fit: cover; background: var(--panel-2); }
+.tk-colour-photo-name { font-weight: 600; }
+.tk-colour-photo > :nth-child(n + 3) { grid-column: 1 / -1; }
+/* Ordering a product by its sizes (phase 4): the boxes under its row. */
+.tk-order-row .tk-order-sizes { flex-basis: 100%; display: grid; gap: 6px; padding-top: 8px; }
+.tk-order-row { flex-wrap: wrap; }
+.tk-grid-cell.off { opacity: .55; }
+/* Make one product with sizes and colours: the bar over the Products list,
+   and its rows as boxes to tick. */
+.tk-group-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 8px; color: var(--muted); }
+.tk-pick { cursor: pointer; }
+.tk-pick input { width: 22px; height: 22px; flex: none; accent-color: var(--brand); }
+.tk-pick.off { cursor: default; color: var(--muted); }
