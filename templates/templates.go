@@ -110,7 +110,11 @@ type Table struct {
 	// Front marks a known table a storefront's front makes (products,
 	// menu: docs/spec/fronts.md §6). It is filled where the front is, so
 	// chat does not offer it as a new table.
-	Front       bool     `json:"front,omitempty"`
+	Front bool `json:"front,omitempty"`
+	// Assistant marks a known table the customer assistant's templates
+	// make (conversations, assistant_allowed: decision 0062 V8), so chat
+	// does not offer it as a new table either.
+	Assistant   bool     `json:"assistant,omitempty"`
 	Name        string   `json:"name"`
 	Title       string   `json:"title,omitempty"`
 	Description string   `json:"description,omitempty"`

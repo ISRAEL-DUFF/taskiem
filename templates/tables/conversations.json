@@ -2,6 +2,7 @@
   "name": "conversations",
   "title": "Conversations",
   "description": "What customers said to the business's assistant on WhatsApp or Telegram, and what it answered, one row per message: the assistant reads the last few to remember the conversation. Kept as long as the business keeps conversations (30 days unless the owner changes it).",
+  "assistant": true,
   "keep_with_conversations": true,
   "columns": [
     {

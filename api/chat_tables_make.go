@@ -80,8 +80,9 @@ func (s *Server) waNewTable(ctx context.Context, c *chat, arg string) error {
 	m := &chatTableMake{Kind: "new"}
 	for _, kt := range templates.KnownTables() {
 		// A front's table is made with its front, and the assistant's
-		// memory (conversations) with its recipe, not from chat.
-		if !have[kt.Name] && !kt.Front && !kt.KeepWithConversations {
+		// (its conversations and allowed customers) with its templates,
+		// not from chat.
+		if !have[kt.Name] && !kt.Front && !kt.Assistant && !kt.KeepWithConversations {
 			m.Known = append(m.Known, kt.Name)
 		}
 	}
