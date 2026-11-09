@@ -5788,11 +5788,11 @@
       "reviewed": false
     },
     "ready.ai_allowance": {
-      "text": "Di AI answers wey your plan give you for dis month don finish, so di AI steps for dis workflow go use dia fallback (your assistant go tell customers say person go get back to dem) until next month. Bigger plan go give you more.",
+      "text": "Di AI answers wey your plan give you for dis month don finish, so di AI steps for dis workflow go stop until next month: di one wey get fallback go use am (your assistant go tell customers say person go get back to dem). Check your plan, or ask di person wey dey run your Taskiem.",
       "reviewed": false
     },
     "ready.voice_allowance": {
-      "text": "Di voice wey your plan give you for dis month don finish, so dis workflow no fit hear voice notes or answer with voice until next month: customers wey send one go dey asked make dem write am. Bigger plan go give you more.",
+      "text": "Di voice wey your plan give you for dis month don finish, so dis workflow no fit hear voice notes or answer with voice until next month: customers wey send one go dey asked make dem write am. Check your plan, or ask di person wey dey run your Taskiem.",
       "reviewed": false
     },
     "ready.delivery": {

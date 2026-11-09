@@ -222,7 +222,10 @@ export function Editor() {
   const emailAddress = emailEndpoints.data?.endpoints.find((e) => e.environment === "prod" && e.status === "live")?.address || undefined;
   const invalid = useMemo(() => (def ? problemSteps(def, problems) : new Set<string>()), [def, problems]);
   const conns = connectors.data?.connectors ?? [];
-  const picks = useMemo(() => catalog(conns, capabilities.data?.capabilities ?? []), [conns, capabilities.data]);
+  // Voice and chat steps read a customer's message as the guard gives it:
+  // offered for a chat trigger that answers customers.
+  const guarded = !!(def?.trigger?.type === "connector_event" && (def.trigger as { config?: { guard?: unknown } }).config?.guard);
+  const picks = useMemo(() => catalog(conns, capabilities.data?.capabilities ?? [], guarded), [conns, capabilities.data, guarded]);
 
   // A save names the version it started from; if someone saved since, the
   // server merges the two edits, or reports conflicts to resolve.

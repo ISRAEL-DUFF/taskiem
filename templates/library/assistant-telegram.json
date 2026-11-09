@@ -2,7 +2,7 @@
   "id": "assistant-telegram",
   "title": "Your assistant on Telegram",
   "summary": "An assistant that answers your customers on your own Telegram bot, by text or voice, from what your business knows.",
-  "description": "When a customer writes to your Telegram bot, your assistant answers them in their language (English, Pidgin, Yoruba, Hausa or Igbo) from your approved sources and the conversation so far, with every reply checked before it is sent. A voice note is heard and answered by voice. New customers are told they are talking to an assistant and can write PERSON for a person or STOP to stop; too many messages, and kinds of message it does not read, get a polite fixed answer. When it is unsure, the customer is handed to a person and you are told. You can answer only the customers on your list. Try it on Conversations with Talk to it here before customers do.",
+  "description": "When a customer writes to your Telegram bot, your assistant answers them in their language (English, Pidgin, Yoruba, Hausa or Igbo) from your approved sources and the conversation so far, with every reply checked before it is sent. A voice note is heard and answered by voice. New customers are told they are talking to an assistant and can write PERSON for a person or STOP to stop; too many messages, and kinds of message it does not read, get a polite fixed answer. When it is unsure, or cannot answer, the customer is told someone will get back to them and you are told. You can answer only the customers on your list. Try it on Conversations with Talk to it here before customers do.",
   "category": "assistant",
   "tags": [
     "assistant",
@@ -17,7 +17,6 @@
     "telegram",
     "voice",
     "chatbot",
-    "bot",
     "auto reply"
   ],
   "requires": [
@@ -27,12 +26,12 @@
     "reply to customers",
     "reply my customers",
     "chatbot",
-    "bot",
     "auto reply",
     "automatic replies",
     "customer questions"
   ],
   "connectors": [
+    "assistant@1",
     "notify@1",
     "speech@1",
     "telegram@1",
@@ -149,6 +148,58 @@
         }
       },
       {
+        "id": "who",
+        "type": "branch",
+        "name": "Is it someone your assistant answers?",
+        "needs": [
+          "settings"
+        ],
+        "when": "=trigger.guard.outcome != 'quiet'",
+        "config": {
+          "paths": [
+            {
+              "name": "listed",
+              "when": "=steps.settings.output.only_listed",
+              "steps": [
+                {
+                  "id": "listed",
+                  "type": "connector",
+                  "name": "Look them up in the allowed customers",
+                  "connector": "xenibase@1",
+                  "action": "read_rows",
+                  "connection": "data_tables",
+                  "input": {
+                    "table": "{{allowed_table}}",
+                    "filters": [
+                      {
+                        "column": "sender",
+                        "op": "in",
+                        "values": "=[trigger.guard.sender]"
+                      }
+                    ],
+                    "limit": 1
+                  }
+                }
+              ]
+            }
+          ],
+          "default": {
+            "steps": [
+              {
+                "id": "everyone",
+                "type": "transform",
+                "name": "Answer everyone",
+                "config": {
+                  "output": {
+                    "everyone": true
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
         "id": "fixed",
         "type": "connector",
         "name": "Send the fixed answer (STOP, START, a person, too many messages)",
@@ -157,28 +208,26 @@
         "action": "send_message",
         "input": {
           "chat_id": "=trigger.guard.sender",
-          "text": "=trigger.guard.reply"
+          "text": "=(trigger.guard.?notice.orValue('') != '' ? trigger.guard.notice + '\\n\\n' : '') + trigger.guard.reply"
         },
-        "when": "=trigger.guard.outcome == 'reply'"
-      },
-      {
-        "id": "listed",
-        "type": "connector",
-        "name": "Look them up in the allowed customers",
-        "connector": "xenibase@1",
-        "action": "read_rows",
-        "connection": "data_tables",
-        "when": "=trigger.guard.outcome == 'answer'",
-        "input": {
-          "table": "{{allowed_table}}",
-          "filters": [
+        "needs": [
+          "who"
+        ],
+        "when": "=trigger.guard.outcome == 'reply' && (steps.who.output.path == 'default' || has(steps.who.output.steps.listed.rows) && size(steps.who.output.steps.listed.rows) > 0)",
+        "on_error": {
+          "steps": [
             {
-              "column": "sender",
-              "op": "eq",
-              "value": "=trigger.guard.sender"
+              "id": "fixed_told",
+              "type": "connector",
+              "name": "Tell the owners",
+              "connector": "notify@1",
+              "action": "tell",
+              "input": {
+                "title": "A customer was not answered",
+                "message": "='Your assistant answered a customer on Telegram but the reply could not be sent.' + ' Answer them from Conversations.'"
+              }
             }
-          ],
-          "limit": 1
+          ]
         }
       },
       {
@@ -188,9 +237,10 @@
         "connector": "telegram@1",
         "connection": "{{conn}}",
         "needs": [
-          "settings"
+          "settings",
+          "who"
         ],
-        "when": "=trigger.guard.outcome == 'answer'",
+        "when": "=trigger.guard.outcome == 'answer' && (steps.who.output.path == 'default' || has(steps.who.output.steps.listed.rows) && size(steps.who.output.steps.listed.rows) > 0)",
         "on_error": {
           "steps": [
             {
@@ -212,14 +262,41 @@
         }
       },
       {
+        "id": "remember",
+        "type": "connector",
+        "name": "Keep their message in the conversation",
+        "connector": "xenibase@1",
+        "action": "insert_rows",
+        "connection": "data_tables",
+        "when": "=trigger.guard.outcome == 'quiet' && trigger.guard.?text.orValue('') != ''",
+        "input": {
+          "table": "{{conversations_table}}",
+          "rows": "=[{'conversation': 'telegram:' + trigger.guard.sender, 'channel': 'telegram', 'sender': trigger.guard.sender, 'role': 'user', 'text': trigger.guard.text, 'language': trigger.guard.language, 'kind': 'text'}]"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "remember_skipped",
+              "type": "transform",
+              "name": "Carry on without it",
+              "config": {
+                "output": {
+                  "kept": false
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
         "id": "answer",
         "type": "branch",
         "name": "Answer them",
         "needs": [
           "settings",
-          "listed"
+          "who"
         ],
-        "when": "=!steps.settings.output.only_listed || size(steps.listed.output.rows) > 0",
+        "when": "=trigger.guard.outcome == 'answer' && (steps.who.output.path == 'default' || has(steps.who.output.steps.listed.rows) && size(steps.who.output.steps.listed.rows) > 0)",
         "config": {
           "paths": [
             {
@@ -234,7 +311,52 @@
                   "action": "transcribe",
                   "input": {
                     "file": "=trigger.guard.file",
-                    "language": "=trigger.guard.language"
+                    "language": "=trigger.guard.?first.orValue(false) ? '' : trigger.guard.language"
+                  },
+                  "on_error": {
+                    "steps": [
+                      {
+                        "id": "deaf",
+                        "type": "connector",
+                        "name": "Find the words for a voice note that could not be heard",
+                        "connector": "speech@1",
+                        "action": "cannot_hear",
+                        "input": {
+                          "reason": "unavailable",
+                          "language": "=trigger.guard.language"
+                        }
+                      },
+                      {
+                        "id": "say_deaf",
+                        "type": "connector",
+                        "name": "Ask them to write instead",
+                        "connector": "telegram@1",
+                        "connection": "{{conn}}",
+                        "action": "send_message",
+                        "input": {
+                          "chat_id": "=trigger.guard.sender",
+                          "text": "=(trigger.guard.?notice.orValue('') != '' ? trigger.guard.notice + '\\n\\n' : '') + steps.deaf.output.reply"
+                        },
+                        "needs": [
+                          "deaf"
+                        ],
+                        "on_error": {
+                          "steps": [
+                            {
+                              "id": "say_deaf_told",
+                              "type": "connector",
+                              "name": "Tell the owners",
+                              "connector": "notify@1",
+                              "action": "tell",
+                              "input": {
+                                "title": "A customer was not answered",
+                                "message": "='Your assistant answered a customer on Telegram but the reply could not be sent.' + ' Answer them from Conversations.'"
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
                   }
                 },
                 {
@@ -265,8 +387,64 @@
                               "via": "telegram",
                               "sender": "=trigger.guard.sender",
                               "text": "=steps.hear.output.text",
-                              "language": "=trigger.guard.language",
+                              "language": "=steps.hear.output.?language.orValue('') != '' ? steps.hear.output.language : trigger.guard.language",
                               "kind": "voice"
+                            },
+                            "on_error": {
+                              "steps": [
+                                {
+                                  "id": "held_v",
+                                  "type": "connector",
+                                  "name": "Find the words for someone getting back to them",
+                                  "connector": "assistant@1",
+                                  "action": "check_reply",
+                                  "input": {
+                                    "text": "",
+                                    "language": "=trigger.guard.language"
+                                  }
+                                },
+                                {
+                                  "id": "say_held_v",
+                                  "type": "connector",
+                                  "name": "Tell them someone will get back to them",
+                                  "connector": "telegram@1",
+                                  "connection": "{{conn}}",
+                                  "action": "send_message",
+                                  "input": {
+                                    "chat_id": "=trigger.guard.sender",
+                                    "text": "=(trigger.guard.?notice.orValue('') != '' ? trigger.guard.notice + '\\n\\n' : '') + steps.held_v.output.text"
+                                  },
+                                  "needs": [
+                                    "held_v"
+                                  ],
+                                  "on_error": {
+                                    "steps": [
+                                      {
+                                        "id": "say_held_v_told",
+                                        "type": "connector",
+                                        "name": "Tell the owners",
+                                        "connector": "notify@1",
+                                        "action": "tell",
+                                        "input": {
+                                          "title": "A customer was not answered",
+                                          "message": "='Your assistant answered a customer on Telegram but the reply could not be sent.' + ' Answer them from Conversations.'"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "id": "told_v",
+                                  "type": "connector",
+                                  "name": "Tell the owners",
+                                  "connector": "notify@1",
+                                  "action": "tell",
+                                  "input": {
+                                    "title": "A customer was not answered",
+                                    "message": "='Your assistant could not answer a customer on Telegram. They were told someone will get back to them: answer them from Conversations.'"
+                                  }
+                                }
+                              ]
                             }
                           },
                           {
@@ -280,7 +458,7 @@
                             ],
                             "when": "=steps.settings.output.reply_by_voice",
                             "input": {
-                              "text": "=(trigger.guard.?notice.orValue('') != '' ? trigger.guard.notice + '\\n\\n' : '') + steps.answer_v.output.reply",
+                              "text": "=steps.answer_v.output.reply",
                               "customer": "=trigger.guard.sender",
                               "customer_kind": "chat"
                             },
@@ -296,10 +474,41 @@
                                   "input": {
                                     "chat_id": "=trigger.guard.sender",
                                     "text": "=(trigger.guard.?notice.orValue('') != '' ? trigger.guard.notice + '\\n\\n' : '') + steps.answer_v.output.reply"
+                                  },
+                                  "on_error": {
+                                    "steps": [
+                                      {
+                                        "id": "say_instead_told",
+                                        "type": "connector",
+                                        "name": "Tell the owners",
+                                        "connector": "notify@1",
+                                        "action": "tell",
+                                        "input": {
+                                          "title": "A customer was not answered",
+                                          "message": "='Your assistant answered a customer on Telegram but the reply could not be sent.' + ' Answer them from Conversations.'"
+                                        }
+                                      }
+                                    ]
                                   }
                                 }
                               ]
                             }
+                          },
+                          {
+                            "id": "notice_v",
+                            "type": "connector",
+                            "name": "Send the notice for a new customer",
+                            "connector": "telegram@1",
+                            "connection": "{{conn}}",
+                            "action": "send_message",
+                            "input": {
+                              "chat_id": "=trigger.guard.sender",
+                              "text": "=trigger.guard.notice"
+                            },
+                            "needs": [
+                              "answer_v"
+                            ],
+                            "when": "=steps.settings.output.reply_by_voice && trigger.guard.?notice.orValue('') != ''"
                           },
                           {
                             "id": "send_v",
@@ -320,11 +529,11 @@
                                 {
                                   "id": "send_v_told",
                                   "type": "connector",
-                                  "name": "Tell the owners the reply could not be sent",
+                                  "name": "Tell the owners",
                                   "connector": "notify@1",
                                   "action": "tell",
                                   "input": {
-                                    "title": "A reply to a customer could not be sent",
+                                    "title": "A customer was not answered",
                                     "message": "='Your assistant answered a customer on Telegram but the reply could not be sent.' + ' Answer them from Conversations.'"
                                   }
                                 }
@@ -351,11 +560,11 @@
                                 {
                                   "id": "send_tv_told",
                                   "type": "connector",
-                                  "name": "Tell the owners the reply could not be sent",
+                                  "name": "Tell the owners",
                                   "connector": "notify@1",
                                   "action": "tell",
                                   "input": {
-                                    "title": "A reply to a customer could not be sent",
+                                    "title": "A customer was not answered",
                                     "message": "='Your assistant answered a customer on Telegram but the reply could not be sent.' + ' Answer them from Conversations.'"
                                   }
                                 }
@@ -376,7 +585,22 @@
                           "action": "send_message",
                           "input": {
                             "chat_id": "=trigger.guard.sender",
-                            "text": "=steps.hear.output.reply"
+                            "text": "=(trigger.guard.?notice.orValue('') != '' ? trigger.guard.notice + '\\n\\n' : '') + steps.hear.output.reply"
+                          },
+                          "on_error": {
+                            "steps": [
+                              {
+                                "id": "unheard_told",
+                                "type": "connector",
+                                "name": "Tell the owners",
+                                "connector": "notify@1",
+                                "action": "tell",
+                                "input": {
+                                  "title": "A customer was not answered",
+                                  "message": "='Your assistant answered a customer on Telegram but the reply could not be sent.' + ' Answer them from Conversations.'"
+                                }
+                              }
+                            ]
                           }
                         }
                       ]
@@ -409,11 +633,26 @@
                   "action": "send_message",
                   "input": {
                     "chat_id": "=trigger.guard.sender",
-                    "text": "=steps.lost.output.reply"
+                    "text": "=(trigger.guard.?notice.orValue('') != '' ? trigger.guard.notice + '\\n\\n' : '') + steps.lost.output.reply"
                   },
                   "needs": [
                     "lost"
-                  ]
+                  ],
+                  "on_error": {
+                    "steps": [
+                      {
+                        "id": "send_lost_told",
+                        "type": "connector",
+                        "name": "Tell the owners",
+                        "connector": "notify@1",
+                        "action": "tell",
+                        "input": {
+                          "title": "A customer was not answered",
+                          "message": "='Your assistant answered a customer on Telegram but the reply could not be sent.' + ' Answer them from Conversations.'"
+                        }
+                      }
+                    ]
+                  }
                 }
               ]
             }
@@ -437,6 +676,62 @@
                   "text": "=trigger.guard.text",
                   "language": "=trigger.guard.language",
                   "kind": "text"
+                },
+                "on_error": {
+                  "steps": [
+                    {
+                      "id": "held_t",
+                      "type": "connector",
+                      "name": "Find the words for someone getting back to them",
+                      "connector": "assistant@1",
+                      "action": "check_reply",
+                      "input": {
+                        "text": "",
+                        "language": "=trigger.guard.language"
+                      }
+                    },
+                    {
+                      "id": "say_held_t",
+                      "type": "connector",
+                      "name": "Tell them someone will get back to them",
+                      "connector": "telegram@1",
+                      "connection": "{{conn}}",
+                      "action": "send_message",
+                      "input": {
+                        "chat_id": "=trigger.guard.sender",
+                        "text": "=(trigger.guard.?notice.orValue('') != '' ? trigger.guard.notice + '\\n\\n' : '') + steps.held_t.output.text"
+                      },
+                      "needs": [
+                        "held_t"
+                      ],
+                      "on_error": {
+                        "steps": [
+                          {
+                            "id": "say_held_t_told",
+                            "type": "connector",
+                            "name": "Tell the owners",
+                            "connector": "notify@1",
+                            "action": "tell",
+                            "input": {
+                              "title": "A customer was not answered",
+                              "message": "='Your assistant answered a customer on Telegram but the reply could not be sent.' + ' Answer them from Conversations.'"
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "id": "told_t",
+                      "type": "connector",
+                      "name": "Tell the owners",
+                      "connector": "notify@1",
+                      "action": "tell",
+                      "input": {
+                        "title": "A customer was not answered",
+                        "message": "='Your assistant could not answer a customer on Telegram. They were told someone will get back to them: answer them from Conversations.'"
+                      }
+                    }
+                  ]
                 }
               },
               {
@@ -458,11 +753,11 @@
                     {
                       "id": "send_t_told",
                       "type": "connector",
-                      "name": "Tell the owners the reply could not be sent",
+                      "name": "Tell the owners",
                       "connector": "notify@1",
                       "action": "tell",
                       "input": {
-                        "title": "A reply to a customer could not be sent",
+                        "title": "A customer was not answered",
                         "message": "='Your assistant answered a customer on Telegram but the reply could not be sent.' + ' Answer them from Conversations.'"
                       }
                     }

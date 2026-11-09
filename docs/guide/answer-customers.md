@@ -22,7 +22,7 @@ Customers find your bot by its username, or a link `t.me/<username>` you share.
 2. Add your business number and register it. Note its **Phone number ID** (a long number, not the phone number).
 3. In Business Settings, make a **system user** for the app and give it a token with WhatsApp messaging. (A test token stops working after a day.)
 4. Copy the **App secret** from the app's basic settings.
-5. In Taskiem, open **Connections**, choose **WhatsApp**, and enter the token, the Phone number ID, the App secret, and a **check value** you make up (any word).
+5. In Taskiem, open **Connections**, choose **WhatsApp**, and enter the token, the Phone number ID, the App secret, and a **Verify token** you make up (any word).
 
 The last step is done after you choose your assistant (step 3 below): Taskiem shows you the address to paste into Meta, and where.
 
@@ -38,12 +38,12 @@ Open **Templates**, then **Assistant**, and choose **Your assistant on WhatsApp*
 - **Business name**: how the assistant names your business.
 - **About your business**: a few lines it always keeps in mind (what you sell, where you are, how you like to speak to customers).
 - **Answer a voice note with a voice note**: on by default.
-- **Only answer customers on your list**: leave it off to answer everyone. Turn it on to answer only the customers in your **Allowed customers** table (their WhatsApp number with the country code, or their Telegram chat).
+- **Only answer customers on your list**: leave it off to answer everyone. Turn it on to answer only the customers in your **Allowed customers** table (their WhatsApp number, written however you like: `2348031234567`, `+2348031234567` or `08031234567`; or their Telegram chat). Anyone else gets no answer at all, not even to STOP or PERSON.
 
 Taskiem makes two tables for you: **Conversations** (what was said, so it remembers) and **Allowed customers**.
 
-Then the workflow's **Before it can run** list shows anything left to do:
-- for WhatsApp, the **callback address** to paste in Meta's App Dashboard (WhatsApp, then Configuration), with your check value, and **messages** ticked;
+Then the workflow's readiness lists anything left to do, under **Before it can run** (it cannot answer until these are done) or **Worth doing**:
+- for WhatsApp, the **callback address** to paste in Meta's App Dashboard (WhatsApp, then Configuration), with the same Verify token, and **messages** ticked;
 - **Voice in workflows** turned on in Settings, if your assistant hears or speaks;
 - your connection, if it is not made yet.
 
@@ -64,11 +64,13 @@ Customers must know they are talking to an assistant, and how to reach a person.
 - **PERSON** (or "agent", "talk to someone", in their language) hands them to your team: you are told, and the assistant stays quiet for them for a day.
 - **STOP** stops all messages to them until they write **START**.
 
-Also tell customers, in your privacy notice or on your page, that you use an automatic assistant, that conversations are kept for your conversation days (30 by default, in Settings), and that they can ask you to delete what they said. One erase, by their number or chat (ask whoever runs your Taskiem, or with the API), removes their conversations, voice notes and everything your assistant kept about them.
+Also tell customers, in your privacy notice or on your page, that you use an automatic assistant, that conversations are kept for your conversation days (30 by default, in Settings), and that they can ask you to delete what they said. One erase, by their WhatsApp number or Telegram chat (ask whoever runs your Taskiem, or `POST /v1/pii/erase`), removes their conversations, voice notes, their row in your allowed customers, and everything your assistant kept about them.
 
 ## Day to day
 
 - **Conversations** shows every customer, what they said and what was answered, with numbers and emails hidden. Open a customer to answer them yourself: your assistant stays quiet for them while you do.
-- You are told when a customer asks for a person, when the assistant could not answer, and when a reply could not be sent.
+- You are told when a customer asks for a person, when the assistant hands one to you (it was unsure, or a reply was held back: it stays quiet for them for 6 hours), when the AI model could not answer (once a day while it lasts), and when a reply could not be sent.
+- While a person answers a customer, or your assistant is paused, what they write is still kept in the conversation, so your assistant knows it when it answers them again.
+- A voice note your assistant cannot listen to (voice off, this month's voice used up) gets a polite note asking them to write instead.
 - **This month** on Conversations shows messages, answers, how fast, and how much of your monthly allowance for AI answers and voice is used. When an allowance runs out, customers are told someone will get back to them (and voice notes are asked to be written) until the month turns.
-- **Pause for everyone** under Settings, **Your assistant** stops all answers at once; messages are still kept.
+- **Pause your assistant for every customer**, under Settings, **Your assistant**, stops all answers at once; messages are still kept.

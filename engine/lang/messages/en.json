@@ -7235,12 +7235,12 @@
       "context": "Read-back: a chat trigger's customer guard (decision 0062 V6), after the trigger's own sentence"
     },
     "ready.ai_allowance": {
-      "text": "This month's allowance for AI answers is used up, so this workflow's AI steps give their fallback (your assistant tells customers someone will get back to them) until next month. A bigger plan raises it.",
+      "text": "This month's allowance for AI answers is used up, so this workflow's AI steps stop until next month: one with a fallback gives it instead (your assistant tells customers someone will get back to them). See your plan, or ask whoever runs your Taskiem.",
       "reviewed": true,
       "context": "Readiness: the business has used this month's AI-step allowance and its plan has no overage"
     },
     "ready.voice_allowance": {
-      "text": "This month's allowance for voice is used up, so this workflow cannot hear voice notes or answer by voice until next month: customers who send one are asked to write instead. A bigger plan raises it.",
+      "text": "This month's allowance for voice is used up, so this workflow cannot hear voice notes or answer by voice until next month: customers who send one are asked to write instead. See your plan, or ask whoever runs your Taskiem.",
       "reviewed": true,
       "context": "Readiness: the business has used this month's speech allowance (seconds heard and spoken)"
     },

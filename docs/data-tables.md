@@ -111,7 +111,7 @@ The known table **`conversations`** is where an assistant answering customers ke
 
 It is kept as long as the business keeps its conversations (below). It is made with the assistant's templates (`assistant-whatsapp`, `assistant-telegram`), so chat does not offer it as a list.
 
-The known table **`assistant_allowed`** is the customers an assistant may answer when it answers only its own list (the templates' **Only answer customers on your list**): `sender` (their WhatsApp number with the country code, `2348031234567`, or Telegram chat id; personal), `name` (personal) and `note`. Each answered message looks its sender up there.
+The known table **`assistant_allowed`** is the customers an assistant may answer when it answers only its own list (the templates' **Only answer customers on your list**): `sender` (their WhatsApp number with the country code, `2348031234567`, or Telegram chat id; personal), `name` (personal) and `note`. Each answered message (and fixed answer) looks its sender up there, as WhatsApp gives the number, with `+` or with a leading `0`. Erasing a customer deletes their row, as from any table whose `sender` column is personal ([privacy](privacy.md)).
 
 A workflow keeps each message with `insert_rows` and reads the last turns back for the [ai step's](contracts/wd-v1.md#ai-steps) `history`:
 

@@ -145,7 +145,8 @@ func (s *Server) expireTable(ctx context.Context, tenant uuid.UUID, name string,
 
 // eraseConversationRows deletes what a customer said and was answered in
 // every table kept with the business's conversations that has a sender
-// column (decision 0062 V5, P2): the rows whose sender is the person
+// column, and their rows in any table whose sender column is personal (an
+// assistant's allowed customers, V8) (decision 0062 V5, P2): the rows whose sender is the person
 // erased, by their number in the forms it may be written in, or by their
 // chat id. It answers how many rows went.
 func (s *Server) eraseConversationRows(ctx context.Context, tenant uuid.UUID, category string, value any) (int, error) {
@@ -156,7 +157,7 @@ func (s *Server) eraseConversationRows(ctx context.Context, tenant uuid.UUID, ca
 	var names []string
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT t.name FROM data_tables t JOIN data_table_columns c ON c.table_id = t.id AND c.name = 'sender'
-			WHERE t.keep_with_conversations AND t.kept_by IS NULL ORDER BY t.name`)
+			WHERE (t.keep_with_conversations OR c.personal) AND t.kept_by IS NULL ORDER BY t.name`)
 		if err != nil {
 			return err
 		}

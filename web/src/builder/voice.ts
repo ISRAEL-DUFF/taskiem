@@ -164,7 +164,14 @@ export function voiceEntries(
         sub: "Turn a reply into a voice note",
         connector: speech,
         action: "speak",
-        input: { text: "", customer: "=trigger.guard.sender" },
+        input: {
+          text: "",
+          customer: "=trigger.guard.sender",
+          // Filed under the customer as erasing them names them: a
+          // Telegram chat, or a WhatsApp number.
+          customer_kind:
+            "=trigger.guard.channel.startsWith('telegram@') ? 'chat' : 'phone'",
+        },
       },
     );
   }

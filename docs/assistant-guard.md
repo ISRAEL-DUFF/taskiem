@@ -105,8 +105,8 @@ A send Meta refuses for the window (131047, or the older 470) fails with `steps.
 
 In a run started by a guarded message, the customer's words, the transcript of their voice note, the model's replies and anything else of category `other` or `name` are sealed under the customer's own key: their number's (WhatsApp) or chat id's (Telegram). A value that is also someone's own (another person's name or chat id, sealed under their subject) is sealed twice: inside an envelope under its own subject, inside one under the customer. Erasing either erases it. Identifiers (another phone number, an email) keep their own keys only, so erasing whoever they name still reaches them. A child run (a callable `assistant-answer`) and a resumed run inherit it, as do the signals a customer's later message delivers to a waiting run.
 
-So one erase (Data & privacy, by the number or chat id) erases what they said in every run, in its history and its archive, with:
-- their conversation (`assistant_turns`, V7) and their conversation rows (V5);
+So one erase (`POST /v1/pii/erase`, by the number as category `phone` or the Telegram chat id as category `other`) erases what they said in every run, in its history and its archive, with:
+- their conversation (`assistant_turns`, V7) and their conversation rows (V5), and their rows in any table whose `sender` column is personal (an assistant's allowed customers, V8);
 - their files (V1);
 - the guard's record of them (their counts, STOP, a hand-over).
 

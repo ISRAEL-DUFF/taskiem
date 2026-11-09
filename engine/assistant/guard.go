@@ -450,10 +450,16 @@ func HandOver(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, channel, subject
 		return nil
 	}
 	where := channelName(channel)
+	title, why := "A customer wants to talk to a person", "asked to talk to a person"
+	if by == "workflow" {
+		// The workflow handed them over: its assistant was unsure, or a
+		// reply was held back.
+		title, why = "A customer needs a person", "needs a person: your assistant could not answer them well"
+	}
 	_, err = alerts.TellOwners(ctx, tx, tenant, alerts.Alert{Kind: AlertHandover, Dedup: subject + ":" + now.Format(time.RFC3339Nano),
-		Title: "A customer wants to talk to a person",
-		Body: fmt.Sprintf("A customer%s on %s asked to talk to a person. Answer them there: your assistant stays quiet for them for %d hours.",
-			maskSender(sender, category), where, hours),
+		Title: title,
+		Body: fmt.Sprintf("A customer%s on %s %s. Answer them there: your assistant stays quiet for them for %d hours.",
+			maskSender(sender, category), where, why, hours),
 		Detail: map[string]any{"channel": channel, "customer": subject, "by": by, "until": until}})
 	return err
 }

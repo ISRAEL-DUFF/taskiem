@@ -321,12 +321,8 @@ func chatIntentOn(on areas.State, in lang.Intent) bool {
 // only to parts of Taskiem the business has on. A read that fails offers all.
 func (s *Server) templatesOfAreasOn(ctx context.Context, tenant uuid.UUID, list []*templates.Template) []*templates.Template {
 	var on areas.State
-	answers := true
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) (err error) {
-		if on, err = areas.Load(ctx, tx, tenant); err != nil {
-			return err
-		}
-		answers, err = s.assistantsOn(ctx, tx, tenant)
+		on, err = areas.Load(ctx, tx, tenant)
 		return err
 	}); err != nil {
 		return list
@@ -348,12 +344,6 @@ func (s *Server) templatesOfAreasOn(ctx context.Context, tenant uuid.UUID, list 
 			if a, has := areas.TriggerArea(head.Trigger.Type); has && !on.On(a) {
 				ok = false
 			}
-		}
-		// An assistant's template where Taskiem lets no assistant answer
-		// this business (off, a beta it is not in, or stopped): nothing
-		// would ever answer.
-		if t.Category == "assistant" && !answers {
-			ok = false
 		}
 		if ok {
 			kept = append(kept, t)

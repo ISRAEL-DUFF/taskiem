@@ -173,6 +173,9 @@ func (s *Server) listTemplates(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getTemplate(w http.ResponseWriter, r *http.Request) {
 	t, ok := templates.Default().Get(chi.URLParam(r, "id"))
+	if ok && t.Category == templates.CategoryAssistant && !s.assistantsOpen(r.Context(), principalFrom(r.Context()).TenantID) {
+		ok = false
+	}
 	if !ok {
 		writeErr(w, http.StatusNotFound, "not found")
 		return
@@ -211,7 +214,7 @@ func (s *Server) instantiateTemplate(w http.ResponseWriter, r *http.Request) {
 	var wf uuid.UUID
 	var doc []byte
 	err := s.tx(r, func(tx pgx.Tx) error {
-		if t.Category == "assistant" {
+		if t.Category == templates.CategoryAssistant {
 			on, err := s.assistantsOn(r.Context(), tx, p.TenantID)
 			if err != nil {
 				return err
@@ -313,7 +316,7 @@ func (s *Server) embedTemplates(w http.ResponseWriter, r *http.Request) {
 	out := []templateView{}
 	for _, id := range p.EndUser.AllowedTemplates {
 		t, ok := templates.Default().Get(id)
-		if !ok {
+		if !ok || t.Category == templates.CategoryAssistant && !s.assistantsOpen(r.Context(), p.TenantID) {
 			continue
 		}
 		v := viewTemplate(t, reg, false)
@@ -334,6 +337,9 @@ func (s *Server) embedInstantiate(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	id := chi.URLParam(r, "id")
 	t, ok := templates.Default().Get(id)
+	if ok && t.Category == templates.CategoryAssistant && !s.assistantsOpen(r.Context(), p.TenantID) {
+		ok = false
+	}
 	if !ok || !slices.Contains(p.EndUser.AllowedTemplates, id) {
 		writeErr(w, http.StatusForbidden, "the app does not allow this template")
 		return
@@ -443,6 +449,7 @@ func addService(list [][]string, by []string) [][]string {
 // for a business.
 func (s *Server) templateHolds(ctx context.Context, tenant uuid.UUID) map[string]bool {
 	holds := map[string]bool{}
+	holds[templates.WhenAssistantsOff] = !s.assistantsOpen(ctx, tenant)
 	// No Google Sheets connection in any environment: the sheet templates'
 	// twins are offered instead (decision 0060). Worked out before stock,
 	// which a deployment may not have.

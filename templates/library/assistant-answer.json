@@ -16,8 +16,7 @@
     "reply",
     "question",
     "ai",
-    "chatbot",
-    "bot"
+    "chatbot"
   ],
   "requires": [
     "assistant",
@@ -260,7 +259,22 @@
         "when": "=steps.reply.output.needs_person || !steps.check.output.ok",
         "input": {
           "channel": "=trigger.body.channel",
-          "sender": "=trigger.body.sender"
+          "sender": "=trigger.body.sender",
+          "hours": 6
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "hand_skipped",
+              "type": "transform",
+              "name": "Carry on without it",
+              "config": {
+                "output": {
+                  "done": false
+                }
+              }
+            }
+          ]
         }
       },
       {
@@ -275,7 +289,24 @@
         "when": "=steps.reply.output.?fallback.orValue(false)",
         "input": {
           "title": "Your assistant could not answer a customer",
-          "message": "The AI model was not available, so a customer was told someone will get back to them. Answer them from Conversations."
+          "message": "Your assistant could not write an answer (the AI model was not available, or this month's allowance for AI answers is used up), so customers are told someone will get back to them. Answer them from Conversations. You are told once a day while it lasts."
+        },
+        "effect": {
+          "idempotency_seed": "='assistant-could-not-answer:' + run.started_at.substring(0, 10)"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "alert_skipped",
+              "type": "transform",
+              "name": "Carry on without it",
+              "config": {
+                "output": {
+                  "done": false
+                }
+              }
+            }
+          ]
         }
       },
       {
@@ -291,6 +322,20 @@
         "input": {
           "table": "{{conversations_table}}",
           "rows": "=[{'conversation': trigger.body.via + ':' + trigger.body.sender, 'channel': trigger.body.via, 'sender': trigger.body.sender, 'role': 'user', 'text': trigger.body.text, 'language': trigger.body.?language.orValue('en'), 'kind': trigger.body.?kind.orValue('text')}, {'conversation': trigger.body.via + ':' + trigger.body.sender, 'channel': trigger.body.via, 'sender': trigger.body.sender, 'role': 'assistant', 'text': steps.check.output.text, 'language': trigger.body.?language.orValue('en'), 'kind': trigger.body.?kind.orValue('text')}]"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "keep_skipped",
+              "type": "transform",
+              "name": "Carry on without it",
+              "config": {
+                "output": {
+                  "done": false
+                }
+              }
+            }
+          ]
         }
       }
     ],

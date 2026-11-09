@@ -210,3 +210,21 @@ describe("an allowance used up", () => {
     ).toEqual({ kind: "plan" });
   });
 });
+
+describe("messages a provider stopped sending", () => {
+  it("points to the connection", () => {
+    expect(
+      fixFor({
+        kind: "setup",
+        name: "delivery",
+        connector: "telegram",
+        service: "Telegram",
+        environment: "prod",
+        problem: "reconnect",
+        blocking: false,
+        message: "Telegram is not sending this workflow's messages",
+        steps: [],
+      }),
+    ).toEqual({ kind: "reconnect", service: "Telegram" });
+  });
+});

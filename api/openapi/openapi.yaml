@@ -25720,7 +25720,7 @@ components:
           description: The connector's display name.
         problem:
           type: string
-          enum: [missing, expired, disabled, ambiguous, nobody, chat_id, cannot, support, setup, "off", limit]
+          enum: [missing, expired, disabled, ambiguous, nobody, chat_id, cannot, support, setup, "off", limit, reconnect]
           description: "cannot, for a capability step whose connection's rail cannot do it; support, for a connection whose service must turn a feature on for the business (Paystack's Pay with Transfer), never blocking."
         capability:
           type: string

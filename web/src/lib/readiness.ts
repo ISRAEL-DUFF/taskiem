@@ -29,7 +29,8 @@ export interface ReadyNeed {
     | "support"
     | "setup"
     | "off"
-    | "limit";
+    | "limit"
+    | "reconnect";
   environment: string;
   steps: { id: string; name: string }[];
   /** Publishing waits for it: a run would fail at once. */
@@ -75,7 +76,9 @@ export type Fix =
   /** A switch the owner turns on in Settings (Voice in workflows). */
   | { kind: "turn_on"; setting: string }
   /** This month's allowance used up: a bigger plan, or wait for the month to turn. */
-  | { kind: "plan" };
+  | { kind: "plan" }
+  /** A provider stopped sending messages (a bot's webhook refused): check or connect it again. */
+  | { kind: "reconnect"; service: string };
 
 /** The connection name a new connection takes for a need. */
 export const DEFAULT_CONNECTION = "main";
@@ -125,6 +128,8 @@ export function fixFor(n: ReadyNeed): Fix {
       return { kind: "ask_phone", field: n.name };
     case "setup":
       if (n.problem === "limit") return { kind: "plan" };
+      if (n.problem === "reconnect")
+        return { kind: "reconnect", service: n.service ?? n.connector ?? "" };
       return { kind: "outside", service: n.service ?? n.connector ?? "" };
     case "setting":
       return { kind: "turn_on", setting: n.name };

@@ -93,7 +93,15 @@ func HappyPathWith(def *wd.Definition, reg connector.Lookup, find expansion.Temp
 		}
 		trig["guard"] = map[string]any{"outcome": "answer", "reason": "", "reply": "", "notice": "", "language": "en", "first": false,
 			"kind": "text", "text": "Hello, do you deliver?", "channel": conn + "/" + name + "/prod", "sender": "2348030000000"}
-		trig["item"] = map[string]any{"kind": "message", "message": map[string]any{"id": "wamid.sample", "from": "2348030000000", "type": "text"}}
+		if strings.HasPrefix(conn, "telegram@") {
+			// An update as telegram@1 gives it: the chat is the sender.
+			trig["guard"].(map[string]any)["sender"] = "55501"
+			trig["body"] = map[string]any{"update_id": 1, "message": map[string]any{"message_id": 7, "text": "Hello, do you deliver?",
+				"chat": map[string]any{"id": 55501, "type": "private"}, "from": map[string]any{"id": 55501, "first_name": "Ada"}}}
+		} else {
+			trig["item"] = map[string]any{"kind": "message", "message": map[string]any{"id": "wamid.sample", "from": "2348030000000", "type": "text",
+				"text": map[string]any{"body": "Hello, do you deliver?"}}}
+		}
 	}
 	if def.Trigger.Type == "invoice" {
 		// An invoice paid in full, as engine/invoicing.PaidTrigger gives it.

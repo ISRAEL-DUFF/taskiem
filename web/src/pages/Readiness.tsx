@@ -156,6 +156,14 @@ function NeedItem({
         ) : (
           <AskOwner />
         ))}
+      {fix.kind === "reconnect" &&
+        (can("connection.manage") ? (
+          <p className="hint">
+            Check it under <Link to="/connections">Connections</Link>.
+          </p>
+        ) : (
+          <AskOwner />
+        ))}
       {fix.kind === "plan" &&
         (can("billing.manage") ? (
           <p className="hint">

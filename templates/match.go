@@ -218,6 +218,9 @@ func (l *Library) MatchFor(goal string, n int, holds map[string]bool) []Match {
 	var out []Match
 	at := map[string]int{}
 	for _, m := range l.Match(goal, 0) {
+		if m.Template.Closed(holds) {
+			continue
+		}
 		if by := m.Template.ReplacedWhere.By(holds); by != "" {
 			if t, ok := l.Get(by); ok {
 				if _, seen := at[by]; !seen {

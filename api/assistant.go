@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/assistant"
+	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/ops"
 )
 
@@ -274,4 +275,18 @@ func (s *Server) assistantsOn(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) 
 		return false, err
 	}
 	return (mode == assistant.ModeOn || mode == assistant.ModeBeta && beta) && stopped == nil, nil
+}
+
+// assistantsOpen is assistantsOn in its own transaction; true when it
+// cannot be read (the guard refuses at run time all the same).
+func (s *Server) assistantsOpen(ctx context.Context, tenant uuid.UUID) bool {
+	on := true
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) (err error) {
+		on, err = s.assistantsOn(ctx, tx, tenant)
+		return err
+	}); err != nil {
+		s.Logger.Warn("assistant: reading whether assistants answer", "tenant", tenant, "err", err)
+		return true
+	}
+	return on
 }

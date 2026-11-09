@@ -310,7 +310,7 @@ func (s *Server) readinessWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 		if err := s.allowanceNeeds(ctx, tx, tenant, env, l, aiSteps, speechSteps, add); err != nil {
 			return nil, err
 		}
-		if err := deliveryNeeds(ctx, tx, env, l, d, reg, add); err != nil {
+		if err := deliveryNeeds(ctx, tx, tenant, env, l, d, reg, add); err != nil {
 			return nil, err
 		}
 		if d.Trigger.Type == "connector_event" {
@@ -939,7 +939,7 @@ func (s *Server) allowanceNeeds(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 // address Taskiem registers (a Telegram bot's webhook, set when the
 // workflow is deployed) that the provider refused or stopped sending to.
 // Not blocking: Taskiem keeps trying, and a new token mends most.
-func deliveryNeeds(ctx context.Context, tx pgx.Tx, env string, l lang.Tag, d *wd.Definition, reg connector.Lookup, add func(readyKey, readyNeed, *wd.Step)) error {
+func deliveryNeeds(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env string, l lang.Tag, d *wd.Definition, reg connector.Lookup, add func(readyKey, readyNeed, *wd.Step)) error {
 	if d.Trigger.Type != "connector_event" {
 		return nil
 	}
@@ -954,6 +954,22 @@ func deliveryNeeds(ctx context.Context, tx pgx.Tx, env string, l lang.Tag, d *wd
 		return nil
 	}
 	name, _ := d.Trigger.Config["connection"].(string)
+	if name == "" {
+		// The connection the subscription names, as deploying resolved it
+		// (remote.DeclareInUse): the only active one.
+		rows, err := tx.Query(ctx, `SELECT name FROM connections WHERE tenant_id = $1 AND environment = $2 AND connector = $3 AND status = 'active' ORDER BY name LIMIT 2`,
+			tenant, env, c.Manifest.ID)
+		if err != nil {
+			return err
+		}
+		active, err := pgx.CollectRows(rows, pgx.RowTo[string])
+		if err != nil {
+			return err
+		}
+		if len(active) == 1 {
+			name = active[0]
+		}
+	}
 	subs, err := remote.List(ctx, tx, `environment = $1 AND connector = $2 AND trigger_name = $3 AND desired = 'present' AND (connection IS NULL OR connection = $4)`,
 		env, c.Ref(), trig, name)
 	if err != nil {
@@ -969,7 +985,7 @@ func deliveryNeeds(ctx context.Context, tx pgx.Tx, env string, l lang.Tag, d *wd
 				why = *sub.StatusReason
 			}
 			svc := c.Manifest.Name
-			add(readyKey{"setup", "delivery", c.Manifest.ID, env}, readyNeed{Service: svc, Problem: "setup",
+			add(readyKey{"setup", "delivery", c.Manifest.ID, env}, readyNeed{Service: svc, Problem: "reconnect", Connector: c.Manifest.ID,
 				Message: tr(l, "ready.delivery", "service", svc, "why", why)}, nil)
 			return nil
 		}

@@ -80,21 +80,30 @@ func TestErasingACustomerDeletesTheirConversation(t *testing.T) {
 	owner := w.tenant(t, "Mama Put", "owner@mamaput.test")
 	owner.must(201, "POST", "/v1/tables", map[string]any{"name": "conversations", "keep_with_conversations": true,
 		"columns": []map[string]any{{"name": "sender", "type": "text", "personal": true}, {"name": "text", "type": "text", "personal": true}}})
+	// An assistant's allowed customers (V8): not kept with conversations,
+	// but its sender is personal, so the erased customer leaves it too.
+	owner.must(201, "POST", "/v1/tables", map[string]any{"name": "assistant_allowed",
+		"columns": []map[string]any{{"name": "sender", "type": "text", "required": true, "personal": true}, {"name": "name", "type": "text", "personal": true}}})
 	project := w.pg.Projects()[0]
 	now := time.Now().UTC().Format(time.RFC3339)
 	tx := w.pg.Begin(project)
 	for i, who := range []string{"2348031234567", "2348031234567", "+2348031234567", "2348099999999"} {
 		tx.Insert("conversations", map[string]any{"id": int64(i + 1), "sender": who, "text": "hello", "created_at": now, "updated_at": now})
 	}
+	tx.Insert("assistant_allowed", map[string]any{"id": int64(1), "sender": "08031234567", "name": "Ada", "created_at": now, "updated_at": now})
+	tx.Insert("assistant_allowed", map[string]any{"id": int64(2), "sender": "2348099999999", "name": "Bayo", "created_at": now, "updated_at": now})
 	tx.Commit()
 	secret := enrol(t, owner)
 	out := owner.must(200, "POST", "/v1/pii/erase", map[string]any{"category": "phone", "value": "08031234567", "totp": codeAfter(secret, 1)})
-	if out["conversation_rows_deleted"] != float64(3) || out["conversation_rows_pending"] != nil || out["erased"] != false {
+	if out["conversation_rows_deleted"] != float64(4) || out["conversation_rows_pending"] != nil || out["erased"] != false {
 		t.Fatalf("erased: %v", out)
 	}
 	left := w.pg.Rows(project, "conversations")
 	if len(left) != 1 || left[0]["sender"] != "2348099999999" {
 		t.Fatalf("left %v", left)
+	}
+	if left := w.pg.Rows(project, "assistant_allowed"); len(left) != 1 || left[0]["name"] != "Bayo" {
+		t.Fatalf("allowed customers left %v", left)
 	}
 }
 

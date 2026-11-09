@@ -6,8 +6,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
+
 	speechconn "github.com/israel-duff/taskiem/connectors/speech"
 	telegramconn "github.com/israel-duff/taskiem/connectors/telegram"
+
 	"github.com/israel-duff/taskiem/engine/assistant"
 	"github.com/israel-duff/taskiem/engine/connector"
 )
@@ -92,9 +95,14 @@ func TestAssistantReadiness(t *testing.T) {
 	if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO speech_usage (tenant_id, month, seconds_heard) VALUES ($1, date_trunc('month', now() AT TIME ZONE 'UTC')::date, 100000000)`, tenant); err != nil {
 		t.Fatal(err)
 	}
-	wf := publishFlow(t, owner, `{"schema":"wd/v1","id":"wf_x","version":1,"name":"x","trigger":{"type":"manual"},"steps":[{"id":"t","type":"transform","config":{"output":1}}]}`)
-	if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO remote_subscriptions (id, tenant_id, workflow_id, environment, connector, trigger_name, version, desired, state, last_error)
-		VALUES (gen_random_uuid(), $1, $2, 'prod', 'telegram@1', 'update', 1, 'present', 'failed', 'Telegram said: Unauthorized')`, tenant, wf); err != nil {
+	// The bot's webhook as deploying declares it (remote.DeclareInUse): the
+	// connection's own subscription, named by the only bot, which the
+	// trigger does not name.
+	if _, err := w.env.Vault.CreateConnection(ctx, uuid.MustParse(tenant), "prod", "telegram", "main", "api_key", map[string]string{"bot_token": "123:abc"}, "test"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO remote_subscriptions (id, tenant_id, environment, connector, trigger_name, connection, version, desired, state, last_error)
+		VALUES (gen_random_uuid(), $1, 'prod', 'telegram@1', 'update', 'main', 0, 'present', 'failed', 'Telegram said: Unauthorized')`, tenant); err != nil {
 		t.Fatal(err)
 	}
 	n = ready()

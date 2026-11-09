@@ -1175,7 +1175,19 @@ const (
 	// sheet templates whose twins are stock's (sales-day-total,
 	// low-stock-alert), which do nothing without it.
 	WhenNoSheetsStock = "no_sheets_stock"
+	// WhenAssistantsOff: Taskiem lets no assistant answer the business's
+	// customers (off, a beta it is not in, or stopped): the assistant's
+	// templates (category assistant) are not offered (decision 0062 V8).
+	WhenAssistantsOff = "assistants_off"
 )
+
+// CategoryAssistant is the customer assistant's templates' category.
+const CategoryAssistant = "assistant"
+
+// Closed reports whether a template is not offered where holds hold.
+func (t *Template) Closed(holds map[string]bool) bool {
+	return t.Category == CategoryAssistant && holds[WhenAssistantsOff]
+}
 
 // ReplaceWhen are the conditions known.
 var ReplaceWhen = []string{WhenKeepsStock, WhenRecordsSales, WhenNoSheets, WhenNoSheetsStock}
@@ -1204,7 +1216,7 @@ func For(list []*Template, holds map[string]bool) []*Template {
 	}
 	placed := map[string]bool{}
 	for _, t := range list {
-		if t.ReplacedWhere.By(holds) != "" || placed[t.ID] || waits[t.ID] {
+		if t.ReplacedWhere.By(holds) != "" || placed[t.ID] || waits[t.ID] || t.Closed(holds) {
 			continue
 		}
 		// The first twin offered here goes before the template it

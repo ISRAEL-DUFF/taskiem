@@ -5788,11 +5788,11 @@
       "reviewed": false
     },
     "ready.ai_allowance": {
-      "text": "Amsoshin AI da tsarinka ya ba ka na wannan wata sun ƙare, don haka matakan AI na wannan aikin za su yi amfani da amsar madadinsu (mataimakinka zai gaya wa abokan ciniki cewa wani zai dawo musu) har zuwa wata mai zuwa. Babban tsari zai ƙara shi.",
+      "text": "Amsoshin AI da tsarinka ya ba ka na wannan wata sun ƙare, don haka matakan AI na wannan aikin za su tsaya har zuwa wata mai zuwa: wanda ke da amsar madadi zai yi amfani da ita (mataimakinka zai gaya wa abokan ciniki cewa wani zai dawo musu). Duba tsarinka, ko ka tambayi wanda ke gudanar da Taskiem ɗinka.",
       "reviewed": false
     },
     "ready.voice_allowance": {
-      "text": "Muryar da tsarinka ya ba ka na wannan wata ta ƙare, don haka wannan aikin ba zai iya jin saƙon murya ko amsa da murya ba har zuwa wata mai zuwa: za a nemi abokan cinikin da suka aiko su rubuta. Babban tsari zai ƙara shi.",
+      "text": "Muryar da tsarinka ya ba ka na wannan wata ta ƙare, don haka wannan aikin ba zai iya jin saƙon murya ko amsa da murya ba har zuwa wata mai zuwa: za a nemi abokan cinikin da suka aiko su rubuta. Duba tsarinka, ko ka tambayi wanda ke gudanar da Taskiem ɗinka.",
       "reviewed": false
     },
     "ready.delivery": {

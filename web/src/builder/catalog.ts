@@ -130,6 +130,7 @@ const named = (s: Step, name: string): Step => ({ ...s, name }) as Step;
 export function catalog(
   connectors: ConnectorLike[],
   capabilities: CapabilityLike[],
+  guarded = false,
 ): Pick[] {
   const out: Pick[] = [];
   for (const c of capabilities) {
@@ -336,8 +337,9 @@ export function catalog(
     });
   }
   // Voice and chat (decision 0062 V8): the speech and chat actions an
-  // assistant uses, set up for a customer's message.
-  for (const e of voiceEntries(connectors)) {
+  // assistant uses, set up for a customer's message (trigger.guard), so
+  // only for a workflow whose chat trigger answers customers.
+  for (const e of guarded ? voiceEntries(connectors) : []) {
     const step = voiceStep(e, "x");
     const look = lookOf(step, connectors);
     out.push({
