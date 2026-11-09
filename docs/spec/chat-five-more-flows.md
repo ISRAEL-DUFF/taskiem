@@ -193,12 +193,24 @@ Built 9 November 2026 (`web/e2e/chat-phase0.spec.ts` checks each at 360 × 640 a
 - **The Tables tool's viewer** (`src/pages/TableViewer.tsx`, `src/lib/tableView.ts`):
   - **Columns:** every column, not three. A pine header, the first column held while the rest scroll inside the frame, banded rows.
   - **Kinds:** the shop's price, or a number named `*_kobo` or like `price`, `amount` or `total`, in naira, right-aligned; numbers grouped; dates in words; yes/no and `status` as coloured pills; the shop's product photos as thumbnails (from `GET /v1/storefront/catalogue`), else "2 photos".
-  - **Pages and search:** pages of 25 with "1–25 of 312", back and next, through `POST /v1/tables/{id}/rows/query` (`count: "exact"`). A tap on a row opens it to edit, as before.
-  - **Where it differs from the plan:** the search runs over one text column at a time, chosen beside the box ("Search in", the first text column by default). The data service combines filters only with AND, so a search over every text column at once needs an OR from it first.
+  - **Pages:** pages of 25 with "1–25 of 312", back and next, through `POST /v1/tables/{id}/rows/query` (`count: "exact"`).
+    - While a page loads, the count says "Loading…", the old rows fade, and both buttons wait. A second tap on Next can't skip a page, and the count never names a page that isn't shown.
+  - **Search:** over every text column at once by default ("Search in: Everything"), or one column picked beside the box. `%` and `_` typed are themselves.
+    - Every column at once is one `{"any": [...]}` filter group, which `rows/query` and the Xenibase connector's `read_rows` now take as the query body's `or`: up to 20 filters, one of which must hold. It is for reads only; a write by an `any` group is refused.
+    - The test Xenibase now reads a backslash in a `like` pattern as Postgres does.
+  - **Sort:** a tap on a header sorts by it, A to Z, then Z to A, then back to newest first. The header says so with an arrow and `aria-sort`; the page goes back to the first.
+  - **Opening a row:** a tap on a row opens it to edit, as before. A row whose first cell is empty opens from "Open row 12".
+  - **Sizes:** in the shop's products table, a size's row shows its product's photo (through the catalogue's `variant_of` column).
 - **Also fixed:**
   - The red pill ("Cancelled", "Overdue") measured 4.1:1 to 4.4:1 against its background, under the 4.5:1 rule; it now has a solid background and a darker ink (`--tk-danger-bg`, `--tk-danger-ink`).
   - A sheet's search field showed a box inside the search box (the app's field rule outranked it).
   - The phone-width table rule (`.main table:not(.cards)`) made a table its own scroller; the viewer's table is not.
+  - A search field's own clear "×" was the browser's blue; it is the app's grey.
+- **Checked beyond the chat:** the pressed look and the search field fix apply app-wide. The Stock and Orders sheets and the Settings page were looked at in both themes at 390 px.
+- **Tests:**
+  - `web/e2e/chat-phase0.spec.ts` also checks a sheet's one motion on a computer (1280 × 800, its place frame by frame, its entrance not run again) and a size's photo.
+  - `TestDataTables` (`api/datatables_test.go`) runs the viewer's own request through the real route against the test Xenibase: an `any` group with an exact count, a sort, the cursor's second page, and an escaped `%` and `_`.
+  - `TestAnyGroup` (`connectors/xenibase`) checks the `or` it sends.
 
 ## Phases
 

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { columnView, moneyKobo, pageWords, statusTone } from "./tableView";
+import {
+  columnView,
+  moneyKobo,
+  nextSort,
+  pageWords,
+  searchFilter,
+  statusTone,
+} from "./tableView";
 import type { Column } from "./tables";
 
 const col = (name: string, type: Column["type"]): Column => ({
@@ -55,5 +62,40 @@ describe("the Tables tool's viewer", () => {
     expect(pageWords(1, 25, 25, null)).toBe("26–50");
     expect(pageWords(0, 25, 0, 0)).toBe("No rows");
     expect(pageWords(0, 25, 1250, 1250).endsWith("of 1,250")).toBe(true);
+  });
+});
+
+describe("the Tables tool's search and sort", () => {
+  it("searches one column, or any of them, with % and _ as themselves", () => {
+    expect(searchFilter("50% off", ["name"])).toEqual({
+      column: "name",
+      op: "ilike",
+      value: "%50\\% off%",
+    });
+    expect(searchFilter("a_b", ["name", "phone"])).toEqual({
+      any: [
+        { column: "name", op: "ilike", value: "%a\\_b%" },
+        { column: "phone", op: "ilike", value: "%a\\_b%" },
+      ],
+    });
+    expect(searchFilter("", ["name"])).toBeNull();
+    expect(searchFilter("x", [])).toBeNull();
+    const many = Array.from({ length: 30 }, (_, i) => `c${i}`);
+    expect((searchFilter("x", many) as { any: unknown[] }).any).toHaveLength(
+      20,
+    );
+  });
+
+  it("sorts A to Z, then Z to A, then newest first again", () => {
+    expect(nextSort(null, "name")).toEqual({ column: "name", desc: false });
+    expect(nextSort({ column: "name", desc: false }, "name")).toEqual({
+      column: "name",
+      desc: true,
+    });
+    expect(nextSort({ column: "name", desc: true }, "name")).toBeNull();
+    expect(nextSort({ column: "name", desc: true }, "total")).toEqual({
+      column: "total",
+      desc: false,
+    });
   });
 });

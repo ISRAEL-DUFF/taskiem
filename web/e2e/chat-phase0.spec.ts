@@ -185,29 +185,50 @@ for (const vp of [
       };
       const all = Array.from({ length: 60 }, (_, i) => ({
         id: 60 - i,
-        customer: `Customer ${60 - i}`,
+        // One row with no name, opened by its number.
+        customer: i === 4 ? "" : `Customer ${60 - i}`,
         status: ["Paid", "Pending", "Cancelled"][i % 3],
         total_kobo: 1250000 + i * 1000,
         paid: i % 3 === 0,
         due_on: "2026-11-20",
         note: i === 0 ? "Deliver to Yaba before 1pm, gate 2" : "",
       }));
+      type Filter = { column: string; value: string };
       const asked: Record<string, unknown>[] = [];
+      let slow = 0;
       await page.route("**/v1/tables", (r) =>
         r.fulfill(json({ tables: [table] })),
       );
-      await page.route("**/v1/tables/t-orders/rows/query", (r) => {
+      await page.route("**/v1/tables/t-orders/rows/query", async (r) => {
         const body = r.request().postDataJSON() as {
           cursor?: string;
-          filters?: { column: string; value: string }[];
+          filters?: (Filter | { any: Filter[] })[];
+          order?: { column: string; desc?: boolean }[];
         };
         asked.push(body);
-        const want = body.filters?.[0]?.value.replace(/%/g, "").toLowerCase();
-        const hit = want
-          ? all.filter((x) => x.customer.toLowerCase().includes(want))
+        const f = body.filters?.[0];
+        const group = f ? ("any" in f ? f.any : [f]) : [];
+        const want = group[0]?.value.replace(/%/g, "").toLowerCase();
+        let hit = want
+          ? all.filter((x) =>
+              group.some((g) =>
+                String(x[g.column as keyof typeof x])
+                  .toLowerCase()
+                  .includes(want),
+              ),
+            )
           : all;
+        const by = body.order?.[0];
+        if (by)
+          hit = [...hit].sort(
+            (a, b) =>
+              String(a[by.column as keyof typeof a]).localeCompare(
+                String(b[by.column as keyof typeof b]),
+              ) * (by.desc ? -1 : 1),
+          );
         const from = Number(body.cursor ?? 0);
         const page = hit.slice(from, from + 25);
+        if (slow) await new Promise((t) => setTimeout(t, slow));
         return r.fulfill(
           json({
             rows: page,
@@ -264,8 +285,18 @@ for (const vp of [
       await expect(
         pages.getByRole("button", { name: "Previous page" }),
       ).toBeDisabled();
-      await pages.getByRole("button", { name: "Next page" }).click();
+      // A slow page: the buttons wait for it, so a second tap cannot skip
+      // one, and the count never says a page that is not shown.
+      slow = 800;
+      const next = pages.getByRole("button", { name: "Next page" });
+      await next.click();
+      await expect(pages.getByRole("status")).toHaveText("Loading…");
+      await expect(next).toBeDisabled();
+      await next.click({ force: true });
       await expect(pages.getByRole("status")).toHaveText("26–50 of 60");
+      slow = 0;
+      expect(asked.filter((a) => a.cursor === "25")).toHaveLength(1);
+      expect(asked.some((a) => a.cursor === "50")).toBe(false);
       await expect(
         rows.getByRole("row", { name: /Customer 35/ }),
       ).toBeVisible();
@@ -274,19 +305,69 @@ for (const vp of [
       // The table scrolls inside its frame; the page never sideways.
       await fits(page);
       await axeBoth(page, "a table in the Tables tool");
-      // Search: by the first text column, the page back to the first.
+      // A row with no name opens by its number.
+      await expect(
+        rows.getByRole("button", { name: "Open row 56" }),
+      ).toBeVisible();
+      // Sort by a header: A to Z, then Z to A, then newest first.
+      const byName = rows.getByRole("columnheader", { name: /Customer/ });
+      await byName.getByRole("button").click();
+      await expect(byName).toHaveAttribute("aria-sort", "ascending");
+      await expect(pages.getByRole("status")).toHaveText("1–25 of 60");
+      expect(asked.at(-1)).toMatchObject({
+        order: [
+          { column: "customer", desc: false },
+          { column: "id", desc: true },
+        ],
+      });
+      await expect(
+        rows
+          .getByRole("row")
+          .nth(1)
+          .getByRole("button", { name: "Open row 56" }),
+      ).toBeVisible();
+      await byName.getByRole("button").click();
+      await expect(byName).toHaveAttribute("aria-sort", "descending");
+      await expect(rows.getByRole("row").nth(1)).toContainText("Customer 9");
+      await byName.getByRole("button").click();
+      await expect(byName).not.toHaveAttribute("aria-sort", /.+/);
+      await expect(rows.getByRole("row").nth(1)).toContainText("Customer 60");
+      // Search: every text column at first, the page back to the first.
+      await expect(
+        sheet.getByRole("combobox", { name: "Search in" }),
+      ).toHaveValue("");
       await sheet
         .getByRole("searchbox", { name: "Search rows" })
         .fill("customer 5");
-      await expect(pages.getByRole("status")).toHaveText("1–11 of 11");
+      await expect(pages.getByRole("status")).toHaveText("1–10 of 10");
       expect(asked.at(-1)).toMatchObject({
-        filters: [{ column: "customer", op: "ilike", value: "%customer 5%" }],
+        filters: [
+          {
+            any: [
+              { column: "customer", op: "ilike", value: "%customer 5%" },
+              { column: "status", op: "ilike", value: "%customer 5%" },
+              { column: "note", op: "ilike", value: "%customer 5%" },
+            ],
+          },
+        ],
         limit: 25,
         count: "exact",
       });
-      await expect(
-        sheet.getByRole("combobox", { name: "Search in" }),
-      ).toHaveValue("customer");
+      // Words in another column are found too.
+      await sheet.getByRole("searchbox", { name: "Search rows" }).fill("yaba");
+      await expect(pages.getByRole("status")).toHaveText("1–1 of 1");
+      // Or in the one column picked.
+      await sheet
+        .getByRole("combobox", { name: "Search in" })
+        .selectOption("customer");
+      await expect(sheet).toContainText("Nothing found for “yaba”");
+      await sheet
+        .getByRole("searchbox", { name: "Search rows" })
+        .fill("customer 5");
+      await expect(pages.getByRole("status")).toHaveText("1–10 of 10");
+      expect(asked.at(-1)).toMatchObject({
+        filters: [{ column: "customer", op: "ilike", value: "%customer 5%" }],
+      });
       // A row opens to be changed.
       await rows.getByRole("button", { name: "Customer 59" }).click();
       await expect(
@@ -306,4 +387,159 @@ test("on a computer the hint is whole", async ({ page }) => {
     "placeholder",
     /^(Ask Taskiem, or @ to tag|Type a message)$/,
   );
+});
+
+test("a size's row in the products table shows its product's photo", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await owner(page);
+  const table = {
+    id: "t-products",
+    name: "products",
+    title: "Products",
+    row_count: 2,
+    columns: [
+      { name: "name", title: "Name", type: "text", required: true },
+      { name: "photo", title: "Photo", type: "text" },
+      { name: "variant_of", title: "Size of", type: "text" },
+    ],
+  };
+  await page.route("**/v1/tables", (r) => r.fulfill(json({ tables: [table] })));
+  await page.route("**/v1/tables/t-products/rows/query", (r) =>
+    r.fulfill(
+      json({
+        rows: [
+          { id: 4, name: "Air Max 90 — 42", photo: "", variant_of: "3" },
+          { id: 3, name: "Air Max 90", photo: "m1", variant_of: "" },
+          { id: 2, name: "Slides", photo: "", variant_of: "" },
+        ],
+        next_cursor: null,
+        count: 3,
+      }),
+    ),
+  );
+  await page.route("**/v1/storefront", (r) =>
+    r.fulfill(
+      json({
+        slug: "zuri",
+        draft: { name: "Zuri" },
+        status: "draft",
+        catalogue_table: "t-products",
+        catalogue_columns: {
+          name: "name",
+          photo: "photo",
+          variant_of: "variant_of",
+        },
+      }),
+    ),
+  );
+  await page.route("**/v1/storefront/catalogue", (r) =>
+    r.fulfill(
+      json({
+        items: [
+          {
+            id: "3",
+            name: "Air Max 90",
+            photo: { "320": "https://img.test/a.jpg" },
+          },
+          { id: "2", name: "Slides" },
+        ],
+        synced_at: null,
+        error: null,
+      }),
+    ),
+  );
+  await page.route("**/v1/storefront/image?**", (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: "image/png",
+      body: Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+        "base64",
+      ),
+    }),
+  );
+  await page.goto("/chat?with=taskiem");
+  const box = page.getByTestId("taskiem-pane").getByLabel("Message");
+  await box.fill("/tab");
+  await expect(
+    page
+      .getByRole("region", { name: "Tools" })
+      .getByRole("button", { name: /Tables/ }),
+  ).toBeVisible();
+  await box.press("Enter");
+  await page.keyboard.press("Enter");
+  await page
+    .getByRole("dialog", { name: /Tables/ })
+    .getByRole("button", { name: /Products/ })
+    .click();
+  const rows = page
+    .getByRole("dialog", { name: /Products/ })
+    .getByRole("region", { name: "Products: its rows" });
+  const src = (name: RegExp) =>
+    rows.getByRole("row", { name }).locator("img.tk-tv-thumb");
+  // The product's own, and its size borrowing it.
+  await expect(src(/Air Max 90 — 42/)).toHaveAttribute(
+    "src",
+    /img\.test%2Fa\.jpg/,
+  );
+  await expect(
+    rows.locator("tbody tr").nth(1).locator("img.tk-tv-thumb"),
+  ).toHaveAttribute("src", /img\.test%2Fa\.jpg/);
+  await expect(rows.getByRole("row", { name: /Slides/ })).toContainText(
+    "No photo",
+  );
+});
+
+test("on a computer a sheet from a tile arrives in one motion too", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await owner(page);
+  await page.goto("/chat?with=taskiem");
+  await page.getByTestId("tools-button").click();
+  const panel = page.getByTestId("tools-panel");
+  await expect(panel.getByRole("heading", { name: "Tools" })).toBeVisible();
+  await page.waitForTimeout(500);
+  await page.evaluate(() => {
+    const w = window as unknown as { boxes: [number, number][] };
+    w.boxes = [];
+    const t0 = performance.now();
+    const tick = () => {
+      const s = document.querySelector(".tk-sheet");
+      if (s) {
+        const b = s.getBoundingClientRect();
+        w.boxes.push([Math.round(b.top), Math.round(b.left)]);
+      }
+      if (performance.now() - t0 < 1500) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+  await panel.getByRole("button", { name: /Products/ }).click();
+  const sheet = page.getByRole("dialog", { name: /Products/ });
+  await expect(sheet).toBeVisible();
+  await page.waitForTimeout(1700);
+  const boxes = await page.evaluate(
+    () => (window as unknown as { boxes: [number, number][] }).boxes,
+  );
+  const [top, left]: [number, number] = boxes.at(-1) ?? [0, 0];
+  const arrived = boxes.findIndex(
+    ([t, l]) => Math.abs(t - top) <= 2 && Math.abs(l - left) <= 2,
+  );
+  expect(arrived).toBeGreaterThanOrEqual(0);
+  expect(
+    boxes
+      .slice(arrived)
+      .every(([t, l]) => Math.abs(t - top) <= 3 && Math.abs(l - left) <= 3),
+    `the sheet's place, frame by frame: ${boxes.map((b) => b.join(",")).join(" ")}`,
+  ).toBe(true);
+  // It grew from the tile, and its own entrance did not run again after.
+  await expect(page.locator(".tk-sheet")).toHaveClass(/tk-grown/);
+  expect(
+    await page
+      .locator(".tk-sheet")
+      .evaluate((el) => getComputedStyle(el).animationName),
+  ).toBe("none");
 });

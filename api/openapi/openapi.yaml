@@ -41905,13 +41905,29 @@ components:
         desc:
           type: boolean
       additionalProperties: false
+    RowFilterAny:
+      type: object
+      required:
+      - any
+      properties:
+        any:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/RowFilter'
+      additionalProperties: false
     RowsQuery:
       type: object
       properties:
         filters:
           type: array
+          description: >-
+            Filters that all hold. An item may instead be {"any": [filters]}, a group of up to 20 of which one must hold (a search across several columns).
           items:
-            $ref: '#/components/schemas/RowFilter'
+            oneOf:
+            - $ref: '#/components/schemas/RowFilter'
+            - $ref: '#/components/schemas/RowFilterAny'
         order:
           type: array
           items:

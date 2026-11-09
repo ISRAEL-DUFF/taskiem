@@ -10,9 +10,12 @@ import { cellText, type Column, type Row, type Table } from "../lib/tables";
 import {
   columnView,
   moneyKobo,
+  nextSort,
   pageWords,
+  searchFilter,
   statusTone,
   type ColumnView,
+  type Sort,
 } from "../lib/tableView";
 import { ErrorBox, fmtTime, useLoad } from "../ui";
 
@@ -23,8 +26,9 @@ export const PAGE = 25;
  * A table as the chat's Tables tool shows it (five more flows, phase 0):
  * a pine header, the first column held while the rest scroll sideways
  * inside the frame, banded rows, each column drawn by its type (naira,
- * dates, yes/no and status pills, photos), a search over a text column,
- * and pages of 25 with "1–25 of 312". A tap on a row opens it.
+ * dates, yes/no and status pills, photos), a search over every text
+ * column or one, a sort by any column from its header, and pages of 25
+ * with "1–25 of 312". A tap on a row opens it.
  */
 export function TableViewer({
   table,
@@ -33,8 +37,9 @@ export function TableViewer({
   onOpen,
 }: {
   table: Table;
-  /** The shop's catalogue columns, when this table is its products. */
-  shop?: Columns;
+  /** The shop's catalogue columns, when this table is its products; on
+   * a size's row, variant_of holds its product's row id. */
+  shop?: Columns & { variant_of?: string };
   canEdit: boolean;
   onOpen: (r: Row) => void;
 }) {
@@ -43,7 +48,9 @@ export function TableViewer({
   );
   const [typed, setTyped] = useState("");
   const [q, setQ] = useState("");
-  const [inCol, setInCol] = useState(textCols[0]?.name ?? "");
+  // Where a search looks: "" is every text column.
+  const [inCol, setInCol] = useState("");
+  const [sort, setSort] = useState<Sort | null>(null);
   // The cursors of the pages before this one (the first has none).
   const [cursors, setCursors] = useState<string[]>([]);
   const cursor = cursors[cursors.length - 1] ?? "";
@@ -59,6 +66,10 @@ export function TableViewer({
     }, 300);
     return () => window.clearTimeout(t);
   }, [typed, q]);
+  // What is asked for; a page that answers something else is the one
+  // before, still showing while this one loads.
+  const asking = JSON.stringify([table.id, cursor, q, inCol, sort]);
+  const filter = searchFilter(q, inCol ? [inCol] : textCols.map((c) => c.name));
   const page = useLoad(
     () =>
       post<{ rows: Row[]; next_cursor: string | null; count?: number | null }>(
@@ -67,21 +78,13 @@ export function TableViewer({
           limit: PAGE,
           count: "exact",
           ...(cursor ? { cursor } : {}),
-          ...(q && inCol
-            ? {
-                filters: [
-                  {
-                    column: inCol,
-                    op: "ilike",
-                    value: `%${q.replace(/[%_\\]/g, (m) => `\\${m}`)}%`,
-                  },
-                ],
-              }
-            : {}),
+          ...(filter ? { filters: [filter] } : {}),
+          ...(sort ? { order: [sort, { column: "id", desc: true }] } : {}),
         },
-      ),
-    [table.id, cursor, q, inCol],
+      ).then((p) => ({ ...p, asked: asking, at: cursors.length })),
+    [asking],
   );
+  const loading = page.data?.asked !== asking;
   // The shop's product photos, by row.
   const photos = useLoad(
     () =>
@@ -100,6 +103,12 @@ export function TableViewer({
         : Promise.resolve(new Map<string, string>()),
     [shop?.photo],
   );
+  // A size's row shows its product's photo when it has none of its own.
+  const photoOf = (r: Row) =>
+    photos.data?.get(String(r.id)) ??
+    (shop?.variant_of && !blank(r[shop.variant_of])
+      ? photos.data?.get(String(r[shop.variant_of]))
+      : undefined);
   const views = new Map(
     table.columns.map((c) => [c.name, columnView(c, shop)]),
   );
@@ -138,6 +147,7 @@ export function TableViewer({
                 setCursors([]);
               }}
             >
+              <option value="">Everything</option>
               {textCols.map((c) => (
                 <option key={c.name} value={c.name}>
                   {c.title || c.name}
@@ -160,23 +170,39 @@ export function TableViewer({
         />
       ) : (
         <div
-          className="tk-tv-frame"
+          className={`tk-tv-frame${loading ? " busy" : ""}`}
           role="region"
           aria-label={`${title}: its rows`}
+          aria-busy={loading}
           tabIndex={0}
         >
           <table className="tk-tv-table">
             <thead>
               <tr>
-                {table.columns.map((c) => (
-                  <th
-                    key={c.name}
-                    scope="col"
-                    className={align(views.get(c.name))}
-                  >
-                    {c.title || c.name}
-                  </th>
-                ))}
+                {table.columns.map((c) => {
+                  const on = sort?.column === c.name ? sort : null;
+                  return (
+                    <th
+                      key={c.name}
+                      scope="col"
+                      className={align(views.get(c.name))}
+                      aria-sort={
+                        on ? (on.desc ? "descending" : "ascending") : undefined
+                      }
+                    >
+                      <button
+                        type="button"
+                        className="tk-tv-sort"
+                        onClick={() => {
+                          setSort(nextSort(sort, c.name));
+                          setCursors([]);
+                        }}
+                      >
+                        {c.title || c.name}
+                      </button>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
@@ -188,17 +214,18 @@ export function TableViewer({
                 >
                   {table.columns.map((c, j) => {
                     const v = views.get(c.name) ?? { kind: "text" as const };
-                    const shown = cell(
-                      r[c.name],
-                      v,
-                      photos.data?.get(String(r.id)),
-                    );
+                    const shown = cell(r[c.name], v, photoOf(r));
                     return j === 0 ? (
                       <th key={c.name} scope="row" className={align(v)}>
                         {canEdit ? (
                           <button
                             type="button"
                             className="tk-tv-open"
+                            aria-label={
+                              blank(r[c.name])
+                                ? `Open row ${String(r.id ?? i + 1)}`
+                                : undefined
+                            }
                             onClick={(e) => {
                               e.stopPropagation();
                               onOpen(r);
@@ -225,13 +252,15 @@ export function TableViewer({
       {rows && (cursors.length > 0 || rows.length > 0) && (
         <nav className="tk-tv-pages" aria-label="Pages">
           <span className="tk-tv-count" role="status">
-            {pageWords(cursors.length, PAGE, rows.length, total)}
+            {loading
+              ? "Loading…"
+              : pageWords(page.data?.at ?? 0, PAGE, rows.length, total)}
           </span>
           <button
             type="button"
             className="tk-btn soft"
             aria-label="Previous page"
-            disabled={cursors.length === 0}
+            disabled={loading || cursors.length === 0}
             onClick={() => setCursors(cursors.slice(0, -1))}
           >
             <Icon name="back" />
@@ -240,7 +269,7 @@ export function TableViewer({
             type="button"
             className="tk-btn soft"
             aria-label="Next page"
-            disabled={!page.data?.next_cursor}
+            disabled={loading || !page.data?.next_cursor}
             onClick={() => {
               const next = page.data?.next_cursor;
               if (next) setCursors([...cursors, next]);
@@ -258,9 +287,15 @@ function align(v?: ColumnView): string | undefined {
   return v && (v.kind === "money" || v.kind === "number") ? "num" : undefined;
 }
 
+function blank(value: unknown): boolean {
+  return value === null || value === undefined || value === "";
+}
+
 /** A cell as its column's kind draws it. */
 function cell(value: unknown, v: ColumnView, photo?: string): ReactNode {
-  if (value === null || value === undefined || value === "")
+  if (v.kind === "photo" && photo)
+    return <img className="tk-tv-thumb" src={photo} alt="" loading="lazy" />;
+  if (blank(value))
     return v.kind === "photo" ? (
       <span className="tk-tv-none">No photo</span>
     ) : (
@@ -288,11 +323,7 @@ function cell(value: unknown, v: ColumnView, photo?: string): ReactNode {
       return <Pill tone={statusTone(s)}>{s}</Pill>;
     }
     case "photo":
-      return photo ? (
-        <img className="tk-tv-thumb" src={photo} alt="" loading="lazy" />
-      ) : (
-        <span className="tk-tv-photos">{photoCount(value)}</span>
-      );
+      return <span className="tk-tv-photos">{photoCount(value)}</span>;
     case "json":
       return <span className="tk-tv-json">{cellText(value)}</span>;
     default:

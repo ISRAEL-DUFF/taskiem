@@ -182,6 +182,8 @@
   flex: 1; min-width: 0; min-height: 0; border: 0; border-radius: 0; background: none; box-shadow: none; outline: none; font-size: 15px; padding: 0; color: var(--text);
 }
 .tk-search:focus-within { box-shadow: var(--ring); }
+/* The field's own clear button, in the app's grey rather than the browser's blue. */
+.tk-search input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; cursor: pointer; background: var(--muted); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E") center / contain no-repeat; }
 .tk-chips { display: flex; gap: 8px; padding: 0 20px 10px; overflow-x: auto; }
 .tk-chips button { flex: none; min-height: 36px; padding: 0 14px; border-radius: 999px; background: var(--tk-soft); border: 0; box-shadow: none; font-weight: 600; font-size: 14px; color: var(--text); }
 .tk-chips button[aria-pressed="true"] { background: var(--brand); color: #ffffff; }
@@ -786,6 +788,15 @@ input.tk-switch:disabled { cursor: default; opacity: 0.7; }
 .tk-tv-table, .tk-tv-frame > table.tk-tv-table { display: table; width: 100%; max-width: none; min-width: max-content; border-collapse: separate; border-spacing: 0; font-size: 14px; overflow: visible; border: 0; border-radius: 0; background: none; }
 .tk-tv-table thead th { position: sticky; top: 0; z-index: 2; background: var(--brand); color: var(--tk-on-pine); font-size: 12px; font-weight: 700; letter-spacing: 0.02em; text-align: left; padding: 10px 14px; white-space: nowrap; }
 .tk-tv-table thead th:first-child { left: 0; z-index: 3; }
+.tk-tv-table thead th[aria-sort] { box-shadow: inset 0 -3px 0 var(--brand-dark); }
+.tk-tv-sort { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; min-height: 24px; border-radius: 6px; color: inherit; font: inherit; letter-spacing: inherit; }
+.tk-tv-sort:focus-visible { box-shadow: 0 0 0 2px var(--brand-dark); }
+.tk-tv-table thead th.num .tk-tv-sort { flex-direction: row-reverse; }
+/* The arrow says the order to the eye; aria-sort says it to a reader. */
+.tk-tv-sort::after { content: "↕" / ""; font-size: 12px; opacity: 0.6; }
+.tk-tv-table thead th[aria-sort="ascending"] .tk-tv-sort::after { content: "↑" / ""; opacity: 1; color: var(--brand-dark); }
+.tk-tv-table thead th[aria-sort="descending"] .tk-tv-sort::after { content: "↓" / ""; opacity: 1; color: var(--brand-dark); }
+.tk-tv-frame.busy table { opacity: 0.55; transition: opacity 0.15s ease 0.12s; }
 .tk-tv-table tbody th, .tk-tv-table td { padding: 10px 14px; text-align: left; vertical-align: middle; white-space: nowrap; max-width: 240px; overflow: hidden; text-overflow: ellipsis; border-top: 1px solid var(--border); font-weight: 400; color: var(--text); }
 .tk-tv-table tbody th { position: sticky; left: 0; z-index: 1; background: var(--panel); font-weight: 700; box-shadow: 1px 0 0 var(--border); }
 .tk-tv-table tbody tr:nth-child(even) > * { background: var(--tk-tile); }

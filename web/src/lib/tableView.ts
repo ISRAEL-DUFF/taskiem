@@ -127,3 +127,36 @@ export function pageWords(
   const span = `${from.toLocaleString("en-NG")}–${to.toLocaleString("en-NG")}`;
   return total === null ? span : `${span} of ${total.toLocaleString("en-NG")}`;
 }
+
+/** The words a person types as a pattern: % and _ are themselves. */
+export function likeWords(words: string): string {
+  return `%${words.replace(/[%_\\]/g, (m) => `\\${m}`)}%`;
+}
+
+/** The filter a search sends: one column, or any of them (at most 20,
+ * the server's limit for a group). */
+export function searchFilter(
+  words: string,
+  columns: string[],
+): Record<string, unknown> | null {
+  const cols = columns.slice(0, 20);
+  if (!words || cols.length === 0) return null;
+  const one = (column: string) => ({
+    column,
+    op: "ilike",
+    value: likeWords(words),
+  });
+  const [only] = cols;
+  return cols.length === 1 && only ? one(only) : { any: cols.map(one) };
+}
+
+export interface Sort {
+  column: string;
+  desc: boolean;
+}
+
+/** A header tapped: A to Z, then Z to A, then back to newest first. */
+export function nextSort(sort: Sort | null, column: string): Sort | null {
+  if (!sort || sort.column !== column) return { column, desc: false };
+  return sort.desc ? null : { column, desc: true };
+}

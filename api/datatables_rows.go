@@ -204,6 +204,10 @@ func rowsOf(out map[string]any) []any {
 	return rows
 }
 
+// maxAnyFilters is the most filters an any group holds (the connector's
+// own limit).
+const maxAnyFilters = 20
+
 type rowsQuery struct {
 	Filters []json.RawMessage `json:"filters"`
 	Order   []json.RawMessage `json:"order"`
@@ -241,6 +245,24 @@ func (s *Server) queryTableRows(w http.ResponseWriter, r *http.Request) {
 			var m map[string]any
 			if err := json.Unmarshal(raw, &m); err != nil {
 				return nil, fmt.Errorf("%w: %s[%d] is not an object", errBadRequest, what, i)
+			}
+			if group, has := m["any"]; has && what == "filters" {
+				// One of these holds: a search across several columns.
+				list, ok := group.([]any)
+				if !ok || len(list) == 0 || len(list) > maxAnyFilters || len(m) != 1 {
+					return nil, fmt.Errorf("%w: %s[%d]: any is a list of 1 to %d filters, alone in its object", errBadRequest, what, i, maxAnyFilters)
+				}
+				for j, sub := range list {
+					sm, ok := sub.(map[string]any)
+					if !ok || sm["any"] != nil {
+						return nil, fmt.Errorf("%w: %s[%d].any[%d] is not a filter", errBadRequest, what, i, j)
+					}
+					if col, _ := sm["column"].(string); !tr.known(col) {
+						return nil, fmt.Errorf("%w: %s[%d].any[%d]: the table has no column %q", errBadRequest, what, i, j, col)
+					}
+				}
+				out = append(out, m)
+				continue
 			}
 			col, _ := m["column"].(string)
 			if !tr.known(col) {
