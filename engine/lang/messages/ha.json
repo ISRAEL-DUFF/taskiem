@@ -2288,6 +2288,30 @@
       "text": "Faɗa haka: *add rider Musa 0803 123 4567 Lekki Ajah* (yankunan ba dole ba ne).",
       "reviewed": false
     },
+    "wa.riders.added_linked": {
+      "text": "{name} ya zama mai kai maka kaya, kuma an haɗa kasuwancinsa da naka: kayanka na zuwa gare shi a Taskiem.",
+      "reviewed": false
+    },
+    "wa.riders.added_asked": {
+      "text": "{name} ya zama mai kai maka kaya. Kasuwancinsa yana Taskiem, don haka na nemi ya haɗu da naka: da zarar ya amince, kayanka na zuwa gare shi a Taskiem.",
+      "reviewed": false
+    },
+    "wa.riders.confirmed": {
+      "text": "An tabbatar da {reference}: ana biyan {name} {amount}. Zan gaya maka idan ya isa.",
+      "reviewed": false
+    },
+    "wa.riders.confirmed_cash": {
+      "text": "An tabbatar da {reference}: an biya {name} {amount} da kuɗi a hannu. Yana cikin littafin kuɗinka.",
+      "reviewed": false
+    },
+    "wa.riders.confirmed_netted": {
+      "text": "An tabbatar da {reference}: kuɗin {name} na {amount} ya fito daga kuɗin da suke riƙe. Babu sauran biya.",
+      "reviewed": false
+    },
+    "wa.riders.confirm_refused": {
+      "text": "Ban iya tabbatar da wannan isarwa ba: {reason}",
+      "reviewed": false
+    },
     "wa.riders.added": {
       "text": "{name} ya zama mai kai maka kaya. Na aika masa mahaɗi ta SMS don ya riƙa samun kayanka a WhatsApp.",
       "reviewed": false
@@ -4149,7 +4173,7 @@
       "reviewed": false
     },
     "signup.ask_sells": {
-      "text": "Me kake sayarwa ko yi? Amsa da lamba:\n1. Abinci\n2. Kayan masarufi\n3. Kayan ado\n4. Waya da na'urori\n5. Makaranta\n6. Gidan gyaran gashi\n7. Ayyuka\n8. Wani abu daban",
+      "text": "Me kake sayarwa ko yi? Amsa da lamba:\n1. Abinci\n2. Kayan masarufi\n3. Kayan ado\n4. Waya da na'urori\n5. Makaranta\n6. Gidan gyaran gashi\n7. Ayyuka\n8. Isar da kaya (ni mai kai kaya ne)\n9. Wani abu daban",
       "reviewed": false
     },
     "signup.ask_pays": {

@@ -43,7 +43,7 @@ const maxChatAlerts = 20
 type chatAlert struct {
 	// Key names the alert for Later: its kind and what it is about.
 	Key  string    `json:"key"`
-	Kind string    `json:"kind"` // low_stock | overdue | new_order | rider | unmatched | approval | deal | order_draft
+	Kind string    `json:"kind"` // low_stock | overdue | new_order | rider | confirm | unmatched | approval | deal | order_draft
 	At   time.Time `json:"at"`
 	// Title and Line are the card's words.
 	Title      string `json:"title"`
@@ -114,7 +114,7 @@ func (s *Server) getChatAlerts(w http.ResponseWriter, r *http.Request) {
 	}
 	// Each kind on its own: one that cannot be read leaves the others.
 	for _, kind := range []func(context.Context, *Principal) ([]chatAlert, error){
-		s.lowStockAlerts, s.overdueAlerts, s.newOrderAlerts, s.riderAlerts, s.unmatchedAlerts, s.approvalAlerts, s.dealAlerts, s.orderDraftAlerts,
+		s.lowStockAlerts, s.overdueAlerts, s.newOrderAlerts, s.riderAlerts, s.confirmAlerts, s.unmatchedAlerts, s.approvalAlerts, s.dealAlerts, s.orderDraftAlerts,
 	} {
 		got, err := kind(ctx, p)
 		if err != nil {
@@ -464,7 +464,19 @@ func (s *Server) newOrderAlerts(ctx context.Context, p *Principal) ([]chatAlert,
 		}
 		total := o.TotalKobo
 		title, line := "New order "+o.OrderReference+" from "+o.BuyerName, invoicing.Naira(total)
-		if links.IsOffer(o.Lines) {
+		if d := o.Delivery; d != nil {
+			// A delivery offered to a rider (docs/spec/chat-riders.md): the
+			// fee, and how long the offer stands.
+			title = "Delivery " + o.OrderReference + " for " + o.BuyerName
+			if d.DropArea != "" {
+				title += " to " + d.DropArea
+			}
+			if d.ExpiresAt != nil {
+				if left := time.Until(*d.ExpiresAt); left > 0 {
+					line += " · answer within " + answerWithin(left)
+				}
+			}
+		} else if links.IsOffer(o.Lines) {
 			// An offer (phase 7): what they offer against the seller's prices.
 			title = o.BuyerName + " offers " + invoicing.Naira(total) + " for " + o.OrderReference
 			if was := dealWas(o.Lines); was > total {
@@ -475,6 +487,15 @@ func (s *Server) newOrderAlerts(ctx context.Context, p *Principal) ([]chatAlert,
 			Title: title, Line: line, AmountKobo: &total})
 	}
 	return out, nil
+}
+
+// answerWithin words how long an offer still stands: "4 min", "1 min".
+func answerWithin(left time.Duration) string {
+	m := int(left.Round(time.Minute) / time.Minute)
+	if m < 1 {
+		m = 1
+	}
+	return fmt.Sprintf("%d min", m)
 }
 
 // riderAlerts are the storefront's paid orders for delivery that no rider

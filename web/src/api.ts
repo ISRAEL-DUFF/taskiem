@@ -117,6 +117,11 @@ export function uploadFile<T = unknown>(path: string, file: Blob): Promise<T> {
   });
 }
 
+/** POSTs a multipart form (a photo with a step); the browser sets the boundary. */
+export function postForm<T = unknown>(path: string, form: FormData): Promise<T> {
+  return request<T>("POST", path, form, {});
+}
+
 /** GETs a binary response (an image) with the session, as a Blob. */
 export async function getBlob(path: string): Promise<Blob> {
   const res = await fetch(path, {
@@ -305,6 +310,8 @@ export interface Me {
   tenant_name?: string;
   /** Whether the business has the Schools area on (docs/schools.md). */
   schools?: boolean;
+  /** The business delivers for other businesses (a rider): its chat has the Availability tool. */
+  delivers?: boolean;
   /** Which parts of Taskiem the business uses, by area (docs/spec/business-areas.md). */
   areas?: Partial<Record<"storefront" | "orders" | "stock" | "money" | "links" | "schools", boolean>>;
   /** A gate session: the gate screen only; the server refuses the rest. */

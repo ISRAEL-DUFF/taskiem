@@ -41,7 +41,7 @@ import { ContactInfo } from "./ContactInfo";
 import { useConfirm } from "./ConfirmSheet";
 import { DealActions, DealHistory } from "./ChatDeal";
 import { useChatTools } from "../lib/useChatTools";
-import { ORDER_STEPS, cardKicker, cardStatus, isDiary } from "../lib/cardframe";
+import { cardKicker, cardStatus, isDiary, stepsFor } from "../lib/cardframe";
 import { DiaryLine } from "../kit";
 import {
   chime,
@@ -147,6 +147,96 @@ function CardActions({
       if (card.was_kobo !== undefined)
         return <DealActions card={card} side="buyer" onDone={onDone} />;
       break;
+  }
+  // A delivery of ours to make (docs/spec/chat-riders.md): each step from
+  // the card, as the rider's WhatsApp button would take it.
+  if (card.doc === "delivery" && can("storefront.manage|order.handle")) {
+    const step = (s: string, done: string) => (
+      <button
+        type="button"
+        className="small primary"
+        disabled={act.busy}
+        onClick={() => go(`/v1/trade-orders/${id}/${s}`, done)}
+      >
+        {done}
+        {who}
+      </button>
+    );
+    switch (card.event) {
+      case "offered":
+        buttons = (
+          <>
+            {step("accept", "Accept")}
+            <button
+              type="button"
+              className="small"
+              disabled={act.busy}
+              onClick={() =>
+                go(`/v1/trade-orders/${id}/cant`, `Passed on ${card.reference}`)
+              }
+            >
+              Can&apos;t{who}
+            </button>
+          </>
+        );
+        break;
+      case "accepted":
+        buttons = step("picked_up", "Picked up");
+        break;
+      case "picked_up":
+        buttons = step("arrived", "Arrived");
+        break;
+      case "arrived":
+        buttons = step("delivered", "Delivered");
+        break;
+    }
+  }
+  // Our rider's delivery, done: our word pays the fee (phase 4), by bank
+  // through the payout, or handed over in cash.
+  if (
+    card.doc === "dispatch" &&
+    card.event === "delivered" &&
+    can("storefront.manage")
+  ) {
+    const ref = encodeURIComponent(card.reference);
+    buttons = (
+      <>
+        <button
+          type="button"
+          className="small primary"
+          disabled={act.busy}
+          onClick={() =>
+            void act.run(
+              async () => (
+                await post(`/v1/storefront/orders/${ref}/confirm`, {}),
+                onDone()
+              ),
+              `Confirmed ${card.reference}`,
+            )
+          }
+        >
+          Confirm, pay the fee{who}
+        </button>
+        <button
+          type="button"
+          className="small"
+          disabled={act.busy}
+          onClick={() =>
+            void act.run(
+              async () => (
+                await post(`/v1/storefront/orders/${ref}/confirm`, {
+                  how: "cash",
+                }),
+                onDone()
+              ),
+              `${card.reference} paid in cash`,
+            )
+          }
+        >
+          Paid in cash{who}
+        </button>
+      </>
+    );
   }
   switch (`${card.doc}:${card.event}`) {
     case "order:ordered":
@@ -827,15 +917,18 @@ function Bubble({
             </button>
           ) : (
             <Link to={cardHref(card)} className="button small">
-              {card.doc === "order" || card.doc === "purchase"
-                ? "View order"
-                : "View invoice"}
+              {card.doc === "delivery" || card.doc === "dispatch"
+                ? "View delivery"
+                : card.doc === "order" || card.doc === "purchase"
+                  ? "View order"
+                  : "View invoice"}
               <span className="sr-only"> {card.reference}</span>
             </Link>
           )}
-          {latest && !m.mine && (
-            <CardActions card={card} onDone={onDone} onOpenDoc={onOpenDoc} />
-          )}
+          {latest &&
+            (!m.mine || card.doc === "delivery" || card.doc === "dispatch") && (
+              <CardActions card={card} onDone={onDone} onOpenDoc={onOpenDoc} />
+            )}
         </CardFrame>
       ) : (
         <>
@@ -894,6 +987,7 @@ function CardFrame({
   children: ReactNode;
 }) {
   const st = cardStatus(now ?? card);
+  const steps = stepsFor(card);
   return (
     <article className="tk-chatcard" aria-label={cardKicker(card)}>
       <span className="tk-chatcard-top">
@@ -910,14 +1004,14 @@ function CardFrame({
           <span
             className="tk-progress-bar"
             role="img"
-            aria-label={`${ORDER_STEPS[st.step]}: step ${st.step + 1} of ${ORDER_STEPS.length}`}
+            aria-label={`${steps[st.step]}: step ${st.step + 1} of ${steps.length}`}
           >
-            {ORDER_STEPS.map((w, i) => (
+            {steps.map((w, i) => (
               <span key={w} className={i <= (st.step ?? -1) ? "done" : ""} />
             ))}
           </span>
           <span className="tk-progress-words" aria-hidden="true">
-            {ORDER_STEPS.map((w, i) => (
+            {steps.map((w, i) => (
               <span key={w} className={i === st.step ? "now" : ""}>
                 {w}
               </span>

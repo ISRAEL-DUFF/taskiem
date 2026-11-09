@@ -5,7 +5,24 @@
 
 import { answersDelivery, type Purchase } from "./purchases";
 
-export type TradeStatus = "proposed" | "received" | "changed" | "accepted" | "ready" | "dispatched" | "delivered" | "declined" | "cancelled";
+export type TradeStatus = "proposed" | "received" | "changed" | "accepted" | "ready" | "dispatched" | "arrived" | "delivered" | "declined" | "cancelled";
+
+/** The order is a delivery for the linked business, by a rider that is a
+ * business on Taskiem (docs/spec/chat-riders.md): where to pick up, the
+ * area, what the business asks, and who it goes to while the rider holds it. */
+export interface TradeDelivery {
+  delivery_id: string;
+  pickup?: string;
+  pickup_link?: string;
+  drop_area?: string;
+  proof_required: boolean;
+  door_payment: boolean;
+  /** When the offer runs out, while it is new. */
+  expires_at?: string;
+  picked_up_at?: string;
+  arrived_at?: string;
+  customer?: { name?: string; phone?: string; address?: string; landmark?: string; pin?: string };
+}
 
 export interface TradeLine {
   item: string;
@@ -69,6 +86,8 @@ export interface TradeOrder {
   delivered_at?: string;
   created_at: string;
   updated_at: string;
+  /** A delivery for the linked business (a rider's order). */
+  delivery?: TradeDelivery;
 }
 
 type Tone = "ok" | "warn" | "info" | "muted" | "danger";
@@ -88,6 +107,8 @@ export function tradeStatus(s: TradeStatus): { label: string; tone: Tone } {
       return { label: "Ready", tone: "info" };
     case "dispatched":
       return { label: "On its way", tone: "info" };
+    case "arrived":
+      return { label: "At the door", tone: "info" };
     case "delivered":
       return { label: "Delivered", tone: "ok" };
     case "declined":
@@ -99,7 +120,7 @@ export function tradeStatus(s: TradeStatus): { label: string; tone: Tone } {
 
 /** The steps the seller may take on an order in its status. */
 export function sellerSteps(o: Pick<TradeOrder, "status" | "cancel_asked_at" | "short_at" | "short_agreed_at">) {
-  const live = o.status === "accepted" || o.status === "ready" || o.status === "dispatched";
+  const live = o.status === "accepted" || o.status === "ready" || o.status === "dispatched" || o.status === "arrived";
   return {
     accept: o.status === "received",
     change: o.status === "received" || o.status === "changed",

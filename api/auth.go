@@ -607,6 +607,12 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		out["areas"] = st
+		// A business that delivers for others (a rider): its chat has the
+		// Availability tool (docs/spec/chat-riders.md).
+		var delivers bool
+		if err := tx.QueryRow(r.Context(), `SELECT delivers FROM business_profile WHERE tenant_id = $1`, p.TenantID).Scan(&delivers); err == nil && delivers {
+			out["delivers"] = true
+		}
 		out["gate_only"] = access.GateOnly(p.Permissions)
 		return nil
 	})

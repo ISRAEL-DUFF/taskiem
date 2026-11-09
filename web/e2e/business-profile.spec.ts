@@ -121,6 +121,9 @@ test("photos: added, counted, captioned, put in order, removed; twelve at most; 
     logo: null,
     gallery,
     max_gallery: 12,
+    delivers: false,
+    vehicle: "",
+    delivery_areas: [],
   });
   const json = (route: Route, body: unknown, status = 200) =>
     route.fulfill({

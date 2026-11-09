@@ -1,6 +1,8 @@
 package api
 
 import (
+	"github.com/google/uuid"
+
 	"context"
 	"errors"
 	"regexp"
@@ -11,6 +13,8 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/dispatch"
+	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/riders"
 	"github.com/israel-duff/taskiem/engine/storefront"
@@ -28,6 +32,9 @@ var addRiderCmd = regexp.MustCompile(`(?i)^\s*add\s+rider\s+(.+?)\s+(\+?[0-9][0-
 var (
 	offerCmd   = regexp.MustCompile(`^order ` + bookingRef + ` to (.+)$`)
 	releaseCmd = regexp.MustCompile(`^release ` + bookingRef + `$`)
+	// "confirm AK-7QX4KD" pays the rider's fee; "confirm AK-7QX4KD cash"
+	// records it handed over in cash (docs/spec/chat-riders.md, phase 4).
+	confirmCmd = regexp.MustCompile(`^confirm ` + bookingRef + `(?: (cash|paid cash|in cash))?$`)
 )
 
 // waRidersCommand answers the owner's riders and add rider; false for
@@ -53,6 +60,13 @@ func (s *Server) waRidersCommand(ctx context.Context, c *chat, text, cmd string)
 		need = PermOrders
 		m := releaseCmd.FindStringSubmatch(cmd)
 		do = func() error { return s.waReleaseOrder(ctx, c, strings.ToUpper(m[1])) }
+	case s.Dispatch.Ready() && confirmCmd.MatchString(cmd):
+		m := confirmCmd.FindStringSubmatch(cmd)
+		how := dispatch.FeeByBank
+		if m[2] != "" {
+			how = dispatch.FeeInCash
+		}
+		do = func() error { return s.waConfirmOrder(ctx, c, strings.ToUpper(m[1]), how) }
 	case s.Dispatch.Ready() && (cmd == "deliveries" || cmd == "my deliveries" || cmd == "today's deliveries"):
 		need = PermOrders
 		do = func() error { return s.waDeliveries(ctx, c) }
@@ -123,13 +137,17 @@ func (s *Server) waAddRider(ctx context.Context, c *chat, text string) error {
 	}
 	name, phone := m[1], m[2]
 	var x riders.Rider
+	var told uuid.UUID
 	err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
 		known, err := storefront.Zones(ctx, tx, c.tenant.ID)
 		if err != nil {
 			return err
 		}
 		zones := riders.SplitZones(m[3], known)
-		x, err = s.Riders.AddTx(ctx, tx, c.tenant.ID, riders.In{Name: &name, Phone: &phone, Zones: &zones}, c.p.Actor())
+		if x, err = s.Riders.AddTx(ctx, tx, c.tenant.ID, riders.In{Name: &name, Phone: &phone, Zones: &zones}, c.p.Actor()); err != nil {
+			return err
+		}
+		x, told, err = s.linkRiderTx(ctx, tx, c.tenant.ID, x, links.Actor{Type: c.p.ActorType(), ID: c.p.Actor()})
 		return err
 	})
 	switch {
@@ -140,7 +158,13 @@ func (s *Server) waAddRider(ctx context.Context, c *chat, text string) error {
 	case err != nil:
 		return err
 	}
-	if x.Reached != "sms" {
+	s.tellLinkAsked(ctx, told, c.tenant.ID)
+	switch {
+	case x.LinkID != nil:
+		return c.say(ctx, s, c.t("wa.riders.added_linked", "name", x.Name))
+	case told != uuid.Nil:
+		return c.say(ctx, s, c.t("wa.riders.added_asked", "name", x.Name))
+	case x.Reached != "sms":
 		return c.say(ctx, s, c.t("wa.riders.added_reached", "name", x.Name, "app", appName(x.Reached)))
 	}
 	return c.say(ctx, s, c.t("wa.riders.added", "name", x.Name))
@@ -273,4 +297,25 @@ func (s *Server) waDeliveries(ctx context.Context, c *chat) error {
 		lines = append(lines, "• "+x.Reference+" · "+x.Rider+": "+state)
 	}
 	return c.say(ctx, s, strings.Join(lines, "\n"))
+}
+
+// waConfirmOrder is the owner's "confirm REF" or "confirm REF cash".
+func (s *Server) waConfirmOrder(ctx context.Context, c *chat, ref, how string) error {
+	out, _, err := s.confirmDelivery(ctx, c.p, ref, how)
+	switch {
+	case errors.Is(err, dispatch.ErrMove), errors.Is(err, dispatch.ErrInvalid):
+		return c.say(ctx, s, c.t("wa.riders.confirm_refused", "reason", dispatchWords(err)))
+	case errors.Is(err, dispatch.ErrNoDelivery), errors.Is(err, storefront.ErrNoOrder):
+		return c.say(ctx, s, c.t("wa.riders.confirm_refused", "reason", ref+" has no delivery to confirm"))
+	case err != nil:
+		return err
+	}
+	x := out.Delivery
+	switch {
+	case how == dispatch.FeeInCash:
+		return c.say(ctx, s, c.t("wa.riders.confirmed_cash", "reference", x.Reference, "name", x.Rider, "amount", invoicing.Naira(x.FeeKobo)))
+	case out.NetKobo == 0:
+		return c.say(ctx, s, c.t("wa.riders.confirmed_netted", "reference", x.Reference, "name", x.Rider, "amount", invoicing.Naira(x.FeeKobo)))
+	}
+	return c.say(ctx, s, c.t("wa.riders.confirmed", "reference", x.Reference, "name", x.Rider, "amount", invoicing.Naira(out.NetKobo)))
 }

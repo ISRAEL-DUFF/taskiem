@@ -43,6 +43,9 @@ async function axeBoth(page: Page, where: string) {
 }
 
 test("two linked businesses talk", async ({ browser }) => {
+  // Two sign-ups, three axe passes in both themes and a dozen taps: 5 s on a
+  // laptop, but a loaded runner once took it past the default minute.
+  test.setTimeout(180_000);
   const stamp = letters();
   const sellerName = `Dangote Depot ${stamp}`;
   const seller = await (await browser.newContext()).newPage();

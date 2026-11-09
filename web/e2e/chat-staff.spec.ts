@@ -225,7 +225,7 @@ test("a cashier gets no briefing card", async ({ browser }) => {
 test("a cashier sees a business's card from the picker, without Connect", async ({ browser }) => {
   const { member } = await people(browser, "cashier");
   await member.route(/\/v1\/explore\?q=/, (r) =>
-    r.fulfill(json({ near: [], fresh: [], near_more: false, more: false, results: [
+    r.fulfill(json({ near: [], fresh: [], delivery: [], near_more: false, more: false, delivery_more: false, results: [
       { business: "00000000-0000-4000-8000-000000000001", name: "Kola's Bakery", tagline: "Bread and cakes", area: "Yaba", about: "A family bakery.", logo: false, photos: 0, captions: [], state: "none", v: "1" },
     ] })),
   );

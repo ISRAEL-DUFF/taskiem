@@ -314,6 +314,23 @@ function AlertCard({
         };
       case "rider":
         return { words: "Assign rider", go: () => onSheet("rider", from()) };
+      case "confirm":
+        // The rider's fee goes out on the owner's word (chat-riders phase 4).
+        if (!can("storefront.manage")) return undefined;
+        return {
+          words: "Confirm, pay the fee",
+          go: () =>
+            void act
+              .run(
+                () =>
+                  post(
+                    `/v1/storefront/orders/${encodeURIComponent(a.reference ?? "")}/confirm`,
+                    {},
+                  ),
+                `Confirmed ${a.reference}`,
+              )
+              .then((ok) => ok && onDone()),
+        };
       case "order_draft":
         // The customer's thread, with the order on its card.
         return {

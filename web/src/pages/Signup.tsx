@@ -7,10 +7,11 @@ import { ErrorBox, Field, useAction } from "../ui";
 
 /** What a business says it does, in its own words (lib/areas.ts has the
  * parts each switches on). */
-type SignupKind = "shop" | "service" | "school" | "workflows";
+type SignupKind = "shop" | "service" | "delivery" | "school" | "workflows";
 const SIGNUP_KINDS: { id: SignupKind; label: string }[] = [
   { id: "shop", label: "I sell things" },
   { id: "service", label: "I bill customers for a service" },
+  { id: "delivery", label: "I deliver for businesses" },
   { id: "school", label: "I run a school" },
   { id: "workflows", label: "Just workflows for now" },
 ];

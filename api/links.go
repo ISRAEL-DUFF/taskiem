@@ -272,12 +272,17 @@ func (s *Server) answerLink(w http.ResponseWriter, r *http.Request) {
 			// Declined, cancelled or unblocked: no longer shown.
 			shown, err = false, nil
 		}
+		if err == nil && answer == links.Accept && s.Riders.Ready() {
+			// A rider of ours whose business this is (docs/spec/chat-riders.md).
+			_, err = s.Riders.ClaimLinkedTx(r.Context(), tx, p.TenantID)
+		}
 		return err
 	}); err != nil {
 		s.fail(w, r, linkErr(err))
 		return
 	}
 	s.tellLinkAnswered(r.Context(), other, id, answer)
+	s.claimLinkedRiders(r.Context(), other, answer)
 	if name != "" {
 		s.diaryChange(r.Context(), p, linkWords(answer, name))
 	}
@@ -589,6 +594,22 @@ func (s *Server) linkAnswerButtonsTx(ctx context.Context, tx pgx.Tx, l lang.Tag,
 // tellLinkAnswered tells the other side what it may know of an answer: an
 // acceptance, or the end of a link. A decline, a block or a cancel is
 // never told.
+// claimLinkedRiders names, on the other side of a link just accepted, the
+// rider whose business accepted it (docs/spec/chat-riders.md, phase 2).
+func (s *Server) claimLinkedRiders(ctx context.Context, other uuid.UUID, answer string) {
+	if answer != links.Accept || !s.Riders.Ready() {
+		return
+	}
+	s.background(ctx, "link riders", func(ctx context.Context) {
+		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{other}, func(tx pgx.Tx) error {
+			_, err := s.Riders.ClaimLinkedTx(ctx, tx, other)
+			return err
+		}); err != nil {
+			s.Logger.Warn("links: naming a linked rider", "tenant", other, "err", err)
+		}
+	})
+}
+
 func (s *Server) tellLinkAnswered(ctx context.Context, other, id uuid.UUID, answer string) {
 	if answer != links.Accept && answer != links.End {
 		return

@@ -293,6 +293,9 @@ type Order struct {
 	DealUntil   *time.Time `json:"deal_until,omitempty"`
 	DealOwnerAt *time.Time `json:"deal_owner_at,omitempty"`
 	DealOwnerBy string     `json:"deal_owner_by,omitempty"`
+	// Delivery: the order is a delivery for the linked business, by a
+	// rider that is a business on Taskiem (docs/spec/chat-riders.md).
+	Delivery *Delivery `json:"delivery,omitempty"`
 }
 
 // Told is the business a step tells, and what happened, for its people
@@ -319,7 +322,8 @@ const orderCols = `s.id, s.reference, o.source_id, o.link_id, o.buyer_tenant, o.
 	COALESCE((SELECT t.auto_accept FROM trade_settings t WHERE t.tenant_id = o.tenant_id AND t.link_id = o.link_id), false), o.placed_by_seller,
 	COALESCE(s.decided_by, ''), CASE WHEN s.status IN ('accepted', 'paid', 'dispatched', 'on_the_way', 'arrived', 'completed') THEN s.decided_at END,
 	o.ready_at, o.delivered_at, s.created_at, GREATEST(o.updated_at, s.updated_at), o.over_limit_at,
-	o.deal_history, o.deal_until, o.deal_owner_at, COALESCE(o.deal_owner_by, '')`
+	o.deal_history, o.deal_until, o.deal_owner_at, COALESCE(o.deal_owner_by, ''),
+	o.delivery_id, COALESCE(o.pickup, ''), COALESCE(o.pickup_link, ''), COALESCE(o.drop_area, ''), o.proof_required, o.door_payment, o.expires_at, o.picked_up_at, o.arrived_at`
 
 const orderFrom = ` FROM link_orders o JOIN storefront_orders s ON s.id = o.order_id`
 
@@ -327,11 +331,14 @@ func scanOrder(r pgx.Row) (Order, error) {
 	var o Order
 	var ready bool
 	var lines, change, short, deal []byte
+	var deliveryID *uuid.UUID
+	var dl Delivery
 	err := r.Scan(&o.ID, &o.OrderReference, &o.Purchase, &o.LinkID, &o.Buyer, &o.BuyerName, &o.Reference, &lines, &o.TotalKobo, &o.Note,
 		&o.OrderStatus, &ready, &o.Fulfilment, &change, &o.SellerNote, &o.CancelAskedAt, &short, &o.ShortAt, &o.ReceiptAt,
 		&o.ShortAgreedAt, &o.InvoiceID, &o.InvoiceAt, &o.AutoAccept, &o.PlacedBySeller,
 		&o.DecidedBy, &o.AcceptedAt, &o.ReadyAt, &o.DeliveredAt, &o.CreatedAt, &o.UpdatedAt, &o.OverLimitAt,
-		&deal, &o.DealUntil, &o.DealOwnerAt, &o.DealOwnerBy)
+		&deal, &o.DealUntil, &o.DealOwnerAt, &o.DealOwnerBy,
+		&deliveryID, &dl.Pickup, &dl.PickupLink, &dl.DropArea, &dl.ProofRequired, &dl.DoorPayment, &dl.ExpiresAt, &dl.PickedUpAt, &dl.ArrivedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return o, fmt.Errorf("%w: no such order", ErrNotFound)
 	}
@@ -339,6 +346,13 @@ func scanOrder(r pgx.Row) (Order, error) {
 		return o, err
 	}
 	o.Status = TradeStatus(o.OrderStatus, ready)
+	if deliveryID != nil {
+		dl.DeliveryID = *deliveryID
+		o.Delivery = &dl
+		if o.OrderStatus == OrderArrived {
+			o.Status = OrderArrived
+		}
+	}
 	for _, f := range []struct {
 		raw []byte
 		to  any
@@ -1094,6 +1108,12 @@ func MirrorOrderTx(ctx context.Context, tx pgx.Tx, seller, id uuid.UUID) (*Told,
 	}
 	if err != nil {
 		return nil, err
+	}
+	if o.Delivery != nil {
+		// A delivery for a linked business has no purchase order to
+		// mirror to, and no invoice until phase 4: dispatch keeps both
+		// sides in step itself (deliveries.go).
+		return nil, nil
 	}
 	if (live(o.Status) || o.Status == OrderDelivered) && o.InvoiceAt == InvoiceAtAccepted && o.InvoiceID == nil {
 		if err := dueTx(ctx, tx, seller, "invoice", o.ID, 0); err != nil {
