@@ -18,6 +18,7 @@ import { DurationPicker, RulesBuilder, ValuePicker } from "./PlainPickers";
 import { ParamField } from "../pages/Templates";
 import { effectWords, toParams, type CallableWorkflow, type Template } from "../lib/templates";
 import { stepFromJson } from "../lib/flow";
+import { plainPanel, plainSchema } from "../builder/voice";
 
 const ID = /^[a-z][a-z0-9_]{0,62}$/;
 
@@ -759,6 +760,8 @@ function nonEmpty(o: Record<string, unknown>): Record<string, unknown> | undefin
 function ConnectorConfig({ step, connectors, set, advanced, sources }: { step: Extract<Step, { type: "connector" }>; connectors: ConnectorInfo[]; set: (p: Any) => void; advanced: boolean; sources: Source[] }) {
   const conn = connectors.find((c) => c.ref === step.connector);
   const action = conn?.actions[step.action];
+  // A voice or chat step in plain words: only what an owner fills.
+  const plain = advanced ? undefined : plainPanel(step.connector ?? "", step.action ?? "", step.input as Record<string, unknown> | undefined);
   return (
     <>
       <div className="row">
@@ -788,7 +791,8 @@ function ConnectorConfig({ step, connectors, set, advanced, sources }: { step: E
         <ConnectionPicker connector={step.connector ?? ""} value={step.connection ?? ""} onChange={(connection) => set({ connection: connection || undefined })} />
       </Field>
       <h3>Input</h3>
-      <SchemaForm schema={action?.input} value={step.input} onChange={(v) => set({ input: v })} expressions={advanced} sources={sources} />
+      {plain && <p className="hint">{plain.note}</p>}
+      <SchemaForm schema={plain ? plainSchema(action?.input, plain) : action?.input} value={step.input} onChange={(v) => set({ input: v })} expressions={advanced} sources={sources} />
       {advanced && action && action.class !== "read" && (
         <Field label="Idempotency seed" hint="Optional expression replacing the run id in the idempotency key, e.g. =trigger.body.payroll_id + ':' + item.employee_id">
           <input className="mono" value={step.effect?.idempotency_seed ?? ""} onChange={(e) => set({ effect: e.target.value ? { idempotency_seed: e.target.value } : undefined })} />

@@ -97,6 +97,7 @@ describe("what can be added", () => {
     expect(search(all, "whatsapp send").map((p) => p.title)).toEqual([
       "Send an interactive message",
       "Send a message",
+      "Send a voice note on WhatsApp",
     ]);
     expect(search(all, "payments").map((p) => p.title)).toEqual([
       "Send a payment link",

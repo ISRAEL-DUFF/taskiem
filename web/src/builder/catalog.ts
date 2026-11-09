@@ -6,6 +6,7 @@ import { newStep } from "../lib/graph";
 import { newChoice } from "../lib/flow";
 import { lookOf, type Tone } from "./look";
 import { MATCH_STARTER, TOTALS_STARTER } from "../lib/listblocks";
+import { voiceEntries, voiceStep } from "./voice";
 
 export interface Pick {
   key: string;
@@ -36,6 +37,12 @@ export const GROUPS: {
     name: "Messages",
     what: "WhatsApp, Telegram, SMS and email",
     icon: "chat",
+    tone: "ok",
+  },
+  {
+    name: "Voice and chat",
+    what: "Hear a voice note, speak a reply, show you are typing",
+    icon: "mic",
     tone: "ok",
   },
   {
@@ -326,6 +333,22 @@ export function catalog(
           type === "choice" ? newChoice(id) : newStep(type, id),
           title === "If" ? "Is it so?" : title,
         ),
+    });
+  }
+  // Voice and chat (decision 0062 V8): the speech and chat actions an
+  // assistant uses, set up for a customer's message.
+  for (const e of voiceEntries(connectors)) {
+    const step = voiceStep(e, "x");
+    const look = lookOf(step, connectors);
+    out.push({
+      key: e.key,
+      title: e.title,
+      sub: e.sub,
+      icon: look.icon,
+      tone: look.tone,
+      group: "Voice and chat",
+      base: e.key.replace("voice:", ""),
+      make: (id) => voiceStep(e, id),
     });
   }
   // The list blocks (engine/expr/lists.go): a change-the-data step that
