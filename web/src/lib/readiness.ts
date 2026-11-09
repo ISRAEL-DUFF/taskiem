@@ -28,7 +28,8 @@ export interface ReadyNeed {
     | "cannot"
     | "support"
     | "setup"
-    | "off";
+    | "off"
+    | "limit";
   environment: string;
   steps: { id: string; name: string }[];
   /** Publishing waits for it: a run would fail at once. */
@@ -72,7 +73,9 @@ export type Fix =
   /** Something to do outside Taskiem (a provider's dashboard): the message says what. */
   | { kind: "outside"; service: string }
   /** A switch the owner turns on in Settings (Voice in workflows). */
-  | { kind: "turn_on"; setting: string };
+  | { kind: "turn_on"; setting: string }
+  /** This month's allowance used up: a bigger plan, or wait for the month to turn. */
+  | { kind: "plan" };
 
 /** The connection name a new connection takes for a need. */
 export const DEFAULT_CONNECTION = "main";
@@ -121,6 +124,7 @@ export function fixFor(n: ReadyNeed): Fix {
     case "field":
       return { kind: "ask_phone", field: n.name };
     case "setup":
+      if (n.problem === "limit") return { kind: "plan" };
       return { kind: "outside", service: n.service ?? n.connector ?? "" };
     case "setting":
       return { kind: "turn_on", setting: n.name };

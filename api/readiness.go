@@ -21,8 +21,11 @@ import (
 	"github.com/israel-duff/taskiem/engine/expansion"
 	"github.com/israel-duff/taskiem/engine/expr"
 	"github.com/israel-duff/taskiem/engine/lang"
+	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/policy"
+	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/runtime"
+	"github.com/israel-duff/taskiem/engine/speech"
 	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/templates"
 )
@@ -141,7 +144,7 @@ func (s *Server) readinessWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 	vars, secs := map[string][]*wd.Step{}, map[string][]*wd.Step{}
 	var tables, roles []use
 	var caps []*wd.Step // capability steps: their connection is any rail that can
-	var speechSteps []*wd.Step
+	var speechSteps, aiSteps []*wd.Step
 	var policies []use
 	readExprs := func(st *wd.Step, v any) {
 		walkExpressions(v, func(src string) {
@@ -180,6 +183,9 @@ func (s *Server) readinessWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 		}
 		if st.Form != nil && st.Form.To.Role != "" {
 			roles = append(roles, use{st, st.Form.To.Role})
+		}
+		if st.Type == "ai" {
+			aiSteps = append(aiSteps, st)
 		}
 		if st.Type == "capability" {
 			caps = append(caps, st)
@@ -299,6 +305,12 @@ func (s *Server) readinessWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 			}
 		}
 		if err := s.speechNeeds(ctx, tx, tenant, env, l, speechSteps, add); err != nil {
+			return nil, err
+		}
+		if err := s.allowanceNeeds(ctx, tx, tenant, env, l, aiSteps, speechSteps, add); err != nil {
+			return nil, err
+		}
+		if err := deliveryNeeds(ctx, tx, env, l, d, reg, add); err != nil {
 			return nil, err
 		}
 		if d.Trigger.Type == "connector_event" {
@@ -866,6 +878,100 @@ func (s *Server) speechNeeds(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, e
 				add(readyKey{"setting", "voice_in_workflows", "", env}, readyNeed{Service: "Taskiem", Problem: "off", Blocking: true,
 					Message: tr(l, "ready.voice_in_workflows")}, st)
 			}
+		}
+	}
+	return nil
+}
+
+// allowanceNeeds: this month's allowance for AI answers or for voice used
+// up (decision 0062 D7, L10). Not blocking: an ai step answers with its
+// fallback and a voice note with the fixed answers until the month turns
+// (AI answers beyond it are billed on a plan with overage, and no need is
+// shown then).
+func (s *Server) allowanceNeeds(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env string, l lang.Tag, ai, voice []*wd.Step, add func(readyKey, readyNeed, *wd.Step)) error {
+	if len(ai) == 0 && len(voice) == 0 {
+		return nil
+	}
+	lim, err := s.Store.LimitsFor(ctx, tenant)
+	if err != nil {
+		return err
+	}
+	if len(ai) > 0 && lim.AIStepMonthlyTokens > 0 {
+		used, err := runtime.AIStepTokensThisMonth(ctx, tx, tenant)
+		if err != nil {
+			return err
+		}
+		billed := false
+		if s.Billing != nil {
+			if rate, err := s.Billing.AIOverage(ctx, tenant); err == nil && rate > 0 {
+				billed = true
+			}
+		}
+		if used >= lim.AIStepMonthlyTokens && !billed {
+			for _, st := range ai {
+				add(readyKey{"setup", "ai_allowance", "taskiem", env}, readyNeed{Service: "Taskiem", Problem: "limit",
+					Message: tr(l, "ready.ai_allowance")}, st)
+			}
+		}
+	}
+	hears := false
+	for _, st := range voice {
+		hears = hears || st.Action == "transcribe" || st.Action == "speak"
+	}
+	if hears && lim.SpeechSecondsMonthly > 0 {
+		u, err := speech.UsageThisMonth(ctx, tx, tenant)
+		if err != nil {
+			return err
+		}
+		if int64(u.Seconds()) >= lim.SpeechSecondsMonthly {
+			for _, st := range voice {
+				if st.Action == "transcribe" || st.Action == "speak" {
+					add(readyKey{"setup", "voice_allowance", "taskiem", env}, readyNeed{Service: "Taskiem", Problem: "limit",
+						Message: tr(l, "ready.voice_allowance")}, st)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// deliveryNeeds: a chat trigger whose provider sends its messages to an
+// address Taskiem registers (a Telegram bot's webhook, set when the
+// workflow is deployed) that the provider refused or stopped sending to.
+// Not blocking: Taskiem keeps trying, and a new token mends most.
+func deliveryNeeds(ctx context.Context, tx pgx.Tx, env string, l lang.Tag, d *wd.Definition, reg connector.Lookup, add func(readyKey, readyNeed, *wd.Step)) error {
+	if d.Trigger.Type != "connector_event" {
+		return nil
+	}
+	ref, _ := d.Trigger.Config["connector"].(string)
+	trig, _ := d.Trigger.Config["trigger"].(string)
+	c, ok := reg.Get(ref)
+	if !ok {
+		return nil
+	}
+	spec, ok := c.Manifest.Triggers[trig]
+	if !ok || !spec.PerConnection() {
+		return nil
+	}
+	name, _ := d.Trigger.Config["connection"].(string)
+	subs, err := remote.List(ctx, tx, `environment = $1 AND connector = $2 AND trigger_name = $3 AND desired = 'present' AND (connection IS NULL OR connection = $4)`,
+		env, c.Ref(), trig, name)
+	if err != nil {
+		return err
+	}
+	for _, sub := range subs {
+		switch sub.Health {
+		case "failed", "broken", "missing", "paused", "failing":
+			why := ""
+			if sub.LastError != nil {
+				why = pii.Redact(*sub.LastError)
+			} else if sub.StatusReason != nil {
+				why = *sub.StatusReason
+			}
+			svc := c.Manifest.Name
+			add(readyKey{"setup", "delivery", c.Manifest.ID, env}, readyNeed{Service: svc, Problem: "setup",
+				Message: tr(l, "ready.delivery", "service", svc, "why", why)}, nil)
+			return nil
 		}
 	}
 	return nil

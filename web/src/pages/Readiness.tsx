@@ -156,6 +156,15 @@ function NeedItem({
         ) : (
           <AskOwner />
         ))}
+      {fix.kind === "plan" &&
+        (can("billing.manage") ? (
+          <p className="hint">
+            It comes back at the start of next month, or see{" "}
+            <Link to="/settings/billing">your plan</Link>.
+          </p>
+        ) : (
+          <AskOwner />
+        ))}
       {fix.kind === "ask_support" && (
         <p className="hint">
           Nothing to set up here: once {fix.service} has turned it on and a

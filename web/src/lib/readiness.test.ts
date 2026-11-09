@@ -193,3 +193,20 @@ describe("a switch the owner turns on", () => {
     ).toEqual({ kind: "turn_on", setting: "voice_in_workflows" });
   });
 });
+
+describe("an allowance used up", () => {
+  it("points to the plan", () => {
+    expect(
+      fixFor({
+        kind: "setup",
+        name: "ai_allowance",
+        service: "Taskiem",
+        environment: "prod",
+        problem: "limit",
+        blocking: false,
+        message: "This month's allowance for AI answers is used up",
+        steps: [],
+      }),
+    ).toEqual({ kind: "plan" });
+  });
+});

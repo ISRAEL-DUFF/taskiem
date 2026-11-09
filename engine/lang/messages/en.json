@@ -7233,6 +7233,21 @@
       "text": ", from customers' new messages in private chats only (at most {per_minute} a minute and {per_day} a day each; STOP and asking for a person are honoured)",
       "reviewed": true,
       "context": "Read-back: a chat trigger's customer guard (decision 0062 V6), after the trigger's own sentence"
+    },
+    "ready.ai_allowance": {
+      "text": "This month's allowance for AI answers is used up, so this workflow's AI steps give their fallback (your assistant tells customers someone will get back to them) until next month. A bigger plan raises it.",
+      "reviewed": true,
+      "context": "Readiness: the business has used this month's AI-step allowance and its plan has no overage"
+    },
+    "ready.voice_allowance": {
+      "text": "This month's allowance for voice is used up, so this workflow cannot hear voice notes or answer by voice until next month: customers who send one are asked to write instead. A bigger plan raises it.",
+      "reviewed": true,
+      "context": "Readiness: the business has used this month's speech allowance (seconds heard and spoken)"
+    },
+    "ready.delivery": {
+      "text": "{service} is not sending this workflow's messages to Taskiem: {why}. Taskiem keeps trying; check the connection under Connections, and connect the bot again if it was changed in BotFather.",
+      "reviewed": true,
+      "context": "Readiness: the provider refused or stopped the webhook Taskiem registered for a chat trigger (a Telegram bot's), with the reason"
     }
   }
 }

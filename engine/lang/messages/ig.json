@@ -5786,6 +5786,18 @@
     "wd.trigger.guard": {
       "text": ", from customers' new messages in private chats only (at most {per_minute} a minute and {per_day} a day each; STOP and asking for a person are honoured)",
       "reviewed": false
+    },
+    "ready.ai_allowance": {
+      "text": "Azịza AI atụmatụ gị nyere gị maka ọnwa a agwụla, ya mere usoro AI nke ọrụ a ga-eji azịza nnọchi ha (onye inyeaka gị ga-agwa ndị ahịa na mmadụ ga-alaghachikwute ha) ruo ọnwa ọzọ. Atụmatụ ka ukwuu ga-eme ka ọ baa ụba.",
+      "reviewed": false
+    },
+    "ready.voice_allowance": {
+      "text": "Olu atụmatụ gị nyere gị maka ọnwa a agwụla, ya mere ọrụ a enweghị ike ịnụ ozi olu ma ọ bụ iji olu zaa ruo ọnwa ọzọ: a ga-arịọ ndị ahịa zitere otu ka ha dee ya. Atụmatụ ka ukwuu ga-eme ka ọ baa ụba.",
+      "reviewed": false
+    },
+    "ready.delivery": {
+      "text": "{service} anaghị ezitere Taskiem ozi ọrụ a: {why}. Taskiem ka na-anwa; lelee njikọ ahụ na Connections, ma jikọọ bot ahụ ọzọ ma ọ bụrụ na agbanwere ya na BotFather.",
+      "reviewed": false
     }
   }
 }

@@ -5786,6 +5786,18 @@
     "wd.trigger.guard": {
       "text": ", from customers' new messages in private chats only (at most {per_minute} a minute and {per_day} a day each; STOP and asking for a person are honoured)",
       "reviewed": false
+    },
+    "ready.ai_allowance": {
+      "text": "Amsoshin AI da tsarinka ya ba ka na wannan wata sun ƙare, don haka matakan AI na wannan aikin za su yi amfani da amsar madadinsu (mataimakinka zai gaya wa abokan ciniki cewa wani zai dawo musu) har zuwa wata mai zuwa. Babban tsari zai ƙara shi.",
+      "reviewed": false
+    },
+    "ready.voice_allowance": {
+      "text": "Muryar da tsarinka ya ba ka na wannan wata ta ƙare, don haka wannan aikin ba zai iya jin saƙon murya ko amsa da murya ba har zuwa wata mai zuwa: za a nemi abokan cinikin da suka aiko su rubuta. Babban tsari zai ƙara shi.",
+      "reviewed": false
+    },
+    "ready.delivery": {
+      "text": "{service} ba ya aika saƙonnin wannan aikin zuwa Taskiem: {why}. Taskiem yana ci gaba da ƙoƙari; duba haɗin a Connections, kuma sake haɗa bot ɗin idan an canza shi a BotFather.",
+      "reviewed": false
     }
   }
 }

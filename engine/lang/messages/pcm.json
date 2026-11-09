@@ -5786,6 +5786,18 @@
     "wd.trigger.guard": {
       "text": ", from customers' new messages in private chats only (at most {per_minute} a minute and {per_day} a day each; STOP and asking for a person are honoured)",
       "reviewed": false
+    },
+    "ready.ai_allowance": {
+      "text": "Di AI answers wey your plan give you for dis month don finish, so di AI steps for dis workflow go use dia fallback (your assistant go tell customers say person go get back to dem) until next month. Bigger plan go give you more.",
+      "reviewed": false
+    },
+    "ready.voice_allowance": {
+      "text": "Di voice wey your plan give you for dis month don finish, so dis workflow no fit hear voice notes or answer with voice until next month: customers wey send one go dey asked make dem write am. Bigger plan go give you more.",
+      "reviewed": false
+    },
+    "ready.delivery": {
+      "text": "{service} no dey send dis workflow messages come Taskiem: {why}. Taskiem go still dey try; check di connection for Connections, and connect di bot again if dem change am for BotFather.",
+      "reviewed": false
     }
   }
 }
