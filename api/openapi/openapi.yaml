@@ -9013,6 +9013,317 @@ paths:
           description: Done
         default:
           $ref: '#/components/responses/Error'
+  /v1/customer-chats/{id}/orders:
+    get:
+      operationId: listOrderDrafts
+      tags:
+      - Customers
+      summary: 'The orders read from a customer''s messages'
+      description: 'The thread''s orders, read by Taskiem or started by staff, the latest 20, oldest first, with the business''s delivery areas and whether it has a page customers pay on.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The orders
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [orders, zones, pay_page]
+                properties:
+                  orders:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OrderDraft'
+                  zones:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [name, fee_kobo]
+                      properties:
+                        name:
+                          type: string
+                        fee_kobo:
+                          type: integer
+                  pay_page:
+                    type: boolean
+                    description: The business has a page, so a customer can be sent one to pay by transfer or card.
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: startOrderDraft
+      tags:
+      - Customers
+      summary: 'Start an order in a customer''s thread'
+      description: 'An order staff start by hand, with nothing in it yet; 409 when the thread already has one being worked on.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '201':
+          description: The order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDraft'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/order-drafts/{id}:
+    put:
+      operationId: changeOrderDraft
+      tags:
+      - Customers
+      summary: Change an order before it is confirmed
+      description: 'One change, made on the version the card shows: choose an item for a line (answering its question), set how many, set a price, remove a line, add an item, or set its delivery, address, time, note, delivery fee and how it is paid.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version, op]
+              properties:
+                version:
+                  type: integer
+                op:
+                  type: string
+                  enum: [choose, quantity, price, remove, add, details]
+                line:
+                  type: integer
+                item_id:
+                  type: string
+                quantity:
+                  type: integer
+                price_kobo:
+                  type: integer
+                fulfilment:
+                  type: string
+                  enum: [delivery, pickup, '']
+                address:
+                  type: string
+                when:
+                  type: string
+                note:
+                  type: string
+                zone:
+                  type: string
+                delivery_kobo:
+                  type: integer
+                pay:
+                  type: string
+                  enum: [transfer, on_delivery, later, '']
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDraft'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/order-drafts/{id}/ask:
+    post:
+      operationId: askOrderDraft
+      tags:
+      - Customers
+      summary: 'Ask the customer the order''s questions'
+      description: 'Its open questions go to the customer as one message from the business''s number; their answer is read onto the order.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version]
+              properties:
+                version:
+                  type: integer
+                  description: The version the card shows; 409 when the order changed since.
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDraft'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/order-drafts/{id}/confirm:
+    post:
+      operationId: confirmOrderDraft
+      tags:
+      - Customers
+      summary: Confirm an order
+      description: 'A person confirms it: it becomes an order (kind chat), its stock goes (when it is paid, if it is paid by transfer), and the customer is sent the order, its total and how to pay. told is false, with why, when that send failed; tell sends it again.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version]
+              properties:
+                version:
+                  type: integer
+                  description: The version the card shows; 409 when the order changed since.
+      responses:
+        '200':
+          description: The confirmed order
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [order, told]
+                properties:
+                  order:
+                    $ref: '#/components/schemas/OrderDraft'
+                  told:
+                    type: boolean
+                  told_error:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/order-drafts/{id}/tell:
+    post:
+      operationId: tellOrderDraft
+      tags:
+      - Customers
+      summary: Send a confirmed order to the customer again
+      description: 'Once: the same send is not repeated.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDraft'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/order-drafts/{id}/drop:
+    post:
+      operationId: dropOrderDraft
+      tags:
+      - Customers
+      summary: Drop an order before it is confirmed
+      description: Nothing is sent to the customer.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version]
+              properties:
+                version:
+                  type: integer
+                  description: The version the card shows; 409 when the order changed since.
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDraft'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/links/{business}/logo:
     get:
       operationId: getLinkedBusinessLogo
@@ -26975,7 +27286,7 @@ components:
           description: The alert's key, for Later (its kind and what it is about)
         kind:
           type: string
-          enum: [low_stock, overdue, new_order, rider, unmatched, approval, deal]
+          enum: [low_stock, overdue, new_order, rider, unmatched, approval, deal, order_draft]
         at:
           type: string
           format: date-time
@@ -32912,6 +33223,122 @@ components:
         created_at:
           type: string
           format: date-time
+    OrderDraft:
+      type: object
+      additionalProperties: false
+      required: [id, chat_id, status, lines, delivery_kobo, items_kobo, total_kobo, questions, ready, version, by_reader, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        chat_id:
+          type: string
+          format: uuid
+        message_id:
+          type: string
+          format: uuid
+          description: The customer's message it was read from (none when staff started it).
+        status:
+          type: string
+          enum: [open, asked, confirmed, dropped]
+          description: 'open, staff have it; asked, its questions went to the customer.'
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderDraftLine'
+        fulfilment:
+          type: string
+          enum: [delivery, pickup]
+        address:
+          type: string
+        when:
+          type: string
+        note:
+          type: string
+        zone:
+          type: string
+        delivery_kobo:
+          type: integer
+        pay:
+          type: string
+          enum: [transfer, on_delivery, later]
+        items_kobo:
+          type: integer
+        total_kobo:
+          type: integer
+        questions:
+          type: integer
+          description: How many lines wait on a question.
+        ready:
+          type: boolean
+          description: It can be confirmed as it stands.
+        version:
+          type: integer
+        reference:
+          type: string
+          description: The order it became.
+        order_status:
+          type: string
+        by_reader:
+          type: boolean
+          description: Taskiem read it from the customer's message.
+        asked_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    OrderDraftLine:
+      type: object
+      additionalProperties: false
+      properties:
+        said:
+          type: string
+          description: The customer's words for it.
+        item_id:
+          type: string
+          description: The catalogue's item; none when nothing was matched, kept as written for staff to pick.
+        name:
+          type: string
+        quantity:
+          type: integer
+        price_kobo:
+          type: integer
+        no_price:
+          type: boolean
+        out:
+          type: boolean
+          description: Not on sale now, or fewer left than asked.
+        left:
+          type: integer
+        ask:
+          $ref: '#/components/schemas/OrderQuestion'
+    OrderQuestion:
+      type: object
+      additionalProperties: false
+      required: [kind, text]
+      properties:
+        kind:
+          type: string
+          enum: [which, size, how_many]
+        text:
+          type: string
+        choices:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [item_id, name]
+            properties:
+              item_id:
+                type: string
+              name:
+                type: string
+              price_kobo:
+                type: integer
     LinkMessage:
       type: object
       additionalProperties: false

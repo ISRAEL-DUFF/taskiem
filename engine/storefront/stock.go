@@ -251,7 +251,7 @@ func (o *Orders) lowerStock(ctx context.Context, tenant uuid.UUID, ord Order) ([
 		}
 		ord.Basket = mine
 	}
-	if o.Stock == nil || (ord.Kind != "order" && ord.Kind != "trade") || len(ord.Basket) == 0 {
+	if o.Stock == nil || (ord.Kind != "order" && ord.Kind != "trade" && ord.Kind != "chat") || len(ord.Basket) == 0 {
 		return short, nil
 	}
 	var rec map[string]stockStep

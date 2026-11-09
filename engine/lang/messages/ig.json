@@ -5926,6 +5926,30 @@
     "customer.hire_late": {
       "text": "{reference} lọghachiri ụbọchị {days} n'azụ oge, ya mere etinyere ụgwọ ịbịa n'azụ oge {late_fee}. Ihe fọdụrụ ịkwụ: {balance}.",
       "reviewed": false
+    },
+    "customer.chat_order": {
+      "text": "Ihe i nyere n'iwu {reference}:",
+      "reviewed": false
+    },
+    "customer.chat_delivery": {
+      "text": "Iziga",
+      "reviewed": false
+    },
+    "customer.chat_total": {
+      "text": "Ngụkọta",
+      "reviewed": false
+    },
+    "customer.chat_pay_link": {
+      "text": "Kwụọ ụgwọ ebe a, site na transfer ma ọ bụ kaadị: {link}",
+      "reviewed": false
+    },
+    "customer.chat_pay_door": {
+      "text": "Ị ga-akwụ ụgwọ mgbe o ruru gị.",
+      "reviewed": false
+    },
+    "customer.chat_paid": {
+      "text": "Anatala ụgwọ gị, daalụ: {reference}. Anyị na-akwado ya.",
+      "reviewed": false
     }
   }
 }

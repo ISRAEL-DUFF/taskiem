@@ -91,6 +91,20 @@ func TestCorpus(t *testing.T) {
 					t.Fatal("complete with a question open")
 				}
 			}},
+		{"misspelt, and two fit: still a question", "2 jolof",
+			Said{Orderable: true, Lines: []SaidLine{{Words: "2 jolof", Quantity: 2}}},
+			func(t *testing.T, d Draft) {
+				if l := d.Lines[0]; l.ItemID != "" || l.Ask == nil || len(l.Ask.Choices) != 2 {
+					t.Fatalf("%+v", l)
+				}
+			}},
+		{"misspelt, one fits", "1 chapmn",
+			Said{Orderable: true, Lines: []SaidLine{{Words: "1 chapmn", Quantity: 1}}},
+			func(t *testing.T, d Draft) {
+				if l := d.Lines[0]; l.ItemID != "ch" {
+					t.Fatalf("%+v", l)
+				}
+			}},
 		{"pidgin, quantity in words", "abeg send me two pack of fried rice",
 			Said{Orderable: true, Lines: []SaidLine{{Words: "two pack of fried rice", Item: "Fried rice", Quantity: 2}}},
 			func(t *testing.T, d Draft) {
@@ -243,6 +257,17 @@ func TestAnswers(t *testing.T) {
 	// Staff choose the cooler.
 	if !Choose(&d2, 0, "jc", items) || d2.Lines[0].ItemID != "jc" || !d2.Complete() {
 		t.Fatalf("%+v", d2.Lines[0])
+	}
+}
+
+func TestOneOff(t *testing.T) {
+	for a, want := range map[[2]string]bool{
+		{"jolof", "jollof"}: true, {"chapmn", "chapman"}: true, {"rice", "rica"}: true, {"rice", "rice"}: true,
+		{"jolf", "jollof"}: false, {"egg", "egs"}: false, {"plate", "plant"}: false, {"plate", "plane"}: true, {"fried", "bread"}: false,
+	} {
+		if got := oneOff(a[0], a[1]); got != want {
+			t.Errorf("%v: %v", a, got)
+		}
 	}
 }
 

@@ -5926,6 +5926,30 @@
     "customer.hire_late": {
       "text": "{reference} come back {days} days late, so we add late fee of {late_fee}. Wetin remain to pay: {balance}.",
       "reviewed": false
+    },
+    "customer.chat_order": {
+      "text": "Your order {reference}:",
+      "reviewed": false
+    },
+    "customer.chat_delivery": {
+      "text": "Delivery",
+      "reviewed": false
+    },
+    "customer.chat_total": {
+      "text": "Total",
+      "reviewed": false
+    },
+    "customer.chat_pay_link": {
+      "text": "Pay for here, by transfer or card: {link}",
+      "reviewed": false
+    },
+    "customer.chat_pay_door": {
+      "text": "You go pay when e reach you.",
+      "reviewed": false
+    },
+    "customer.chat_paid": {
+      "text": "We don receive your payment, thank you: {reference}. We dey prepare am.",
+      "reviewed": false
     }
   }
 }

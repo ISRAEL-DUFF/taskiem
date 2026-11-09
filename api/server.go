@@ -61,6 +61,10 @@ import (
 
 // Server serves the API.
 type Server struct {
+	// OrderReadInline reads a customer's message for an order before the
+	// webhook answers, not in the background (tests).
+	OrderReadInline bool
+
 	// DiaryWindow is how long changes wait to be told together on the
 	// chat apps (chat_changes.go); 0 is a minute.
 	DiaryWindow time.Duration
@@ -515,6 +519,7 @@ func (s *Server) Handler() http.Handler {
 			s.tradeDealRoutes(r)    // their price deliberation (trade_deals.go)
 			s.linkChatRoutes(r)     // their conversations (link_chat.go)
 			s.customerChatRoutes(r) // customers' conversations (customer_chat.go)
+			s.orderDraftRoutes(r)   // orders read from them (order_drafts.go)
 			s.taskiemChatRoutes(r)  // the Taskiem conversation on the web (chat_history.go)
 			s.priceListRoutes(r)    // price lists and item links (price_lists.go)
 			s.schoolRoutes(r)       // the Schools area (schools.go)

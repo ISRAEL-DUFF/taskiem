@@ -1243,6 +1243,9 @@ func serve(ctx context.Context, args []string) error {
 			// A linked business's order tells its buyer in the buyer's own
 			// Taskiem (business links).
 			e.orders.TradeNotify = srv.TradeNotify
+			// An order confirmed from a customer's message tells them in
+			// their WhatsApp thread (chat-five-more-flows.md, phase 2).
+			e.orders.ChatNotify = srv.ChatNotify
 		}
 		if e.invoices != nil {
 			// A linked business's terms set its invoices' due dates, and a

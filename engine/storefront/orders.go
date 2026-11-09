@@ -98,6 +98,11 @@ type Orders struct {
 	// the kind trade, a message meant for its customer (business links
 	// §7): in its own Taskiem, not by SMS.
 	TradeNotify func(ctx context.Context, tenant uuid.UUID, ord Order, text string) error
+	// ChatNotify tells the customer of an order of the kind chat a message
+	// meant for them, in their WhatsApp thread with the business (chat-
+	// five-more-flows.md, phase 2), not by SMS; "{link}" is already the
+	// order's status link.
+	ChatNotify func(ctx context.Context, tenant uuid.UUID, ord Order, text string) error
 	// AfterPaid hears of an order a payment moved to paid, after the
 	// payment is counted (dispatch tells the rider at the door).
 	AfterPaid func(ctx context.Context, tenant uuid.UUID, ord Order) error
@@ -1320,7 +1325,7 @@ func (o *Orders) NotifyCustomer(ctx context.Context, tenant uuid.UUID, reference
 	}
 	var channels []string
 	overAllowance := false
-	var trade *Order
+	var trade, chat *Order
 	err := db.InTenantTx(ctx, o.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		ord, err := o.GetOrder(ctx, tx, tenant, reference)
 		if err != nil {
@@ -1328,6 +1333,17 @@ func (o *Orders) NotifyCustomer(ctx context.Context, tenant uuid.UUID, reference
 		}
 		if ord.Kind == "trade" {
 			trade = &ord
+			return nil
+		}
+		if ord.Kind == "chat" {
+			if strings.Contains(text, "{link}") {
+				link, err := o.ChatStatusLink(ctx, tx, tenant, ord)
+				if err != nil {
+					return err
+				}
+				text = strings.ReplaceAll(text, "{link}", link)
+			}
+			chat = &ord
 			return nil
 		}
 		var draft []byte
@@ -1379,6 +1395,16 @@ func (o *Orders) NotifyCustomer(ctx context.Context, tenant uuid.UUID, reference
 			return nil, err
 		}
 		channels = []string{"link"}
+	}
+	if err == nil && chat != nil {
+		// A customer who wrote to the business's own number is told there.
+		if o.ChatNotify == nil {
+			return nil, errors.New("storefront: customers' threads cannot be written to here")
+		}
+		if err := o.ChatNotify(ctx, tenant, *chat, text); err != nil {
+			return nil, err
+		}
+		channels = []string{"whatsapp"}
 	}
 	if channels == nil {
 		channels = []string{}

@@ -562,7 +562,7 @@ func allIn(want, name []string) bool {
 	for _, w := range want {
 		ok := false
 		for _, n := range name {
-			if strings.HasPrefix(n, w) {
+			if strings.HasPrefix(n, w) || oneOff(w, n) {
 				ok = true
 				break
 			}
@@ -751,4 +751,37 @@ func Questions(d Draft) string {
 		b.WriteByte('\n')
 	}
 	return strings.TrimSpace(b.String())
+}
+
+// oneOff: a word of four letters or more one letter from another (one
+// added, missing or changed): "jolof" is "jollof", "chapmn" "chapman".
+// Two items it fits are still a question.
+func oneOff(a, b string) bool {
+	ra, rb := []rune(a), []rune(b)
+	if len(ra) < 4 || len(rb) < 4 {
+		return false
+	}
+	if len(ra) > len(rb) {
+		ra, rb = rb, ra
+	}
+	if len(rb)-len(ra) > 1 {
+		return false
+	}
+	i, j, diff := 0, 0, 0
+	for i < len(ra) && j < len(rb) {
+		if ra[i] == rb[j] {
+			i++
+			j++
+			continue
+		}
+		diff++
+		if diff > 1 {
+			return false
+		}
+		if len(ra) == len(rb) {
+			i++
+		}
+		j++
+	}
+	return diff+(len(rb)-j)+(len(ra)-i) <= 1
 }
