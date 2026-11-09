@@ -277,6 +277,10 @@ export function ChatPage() {
     can("storefront.manage|order.handle") && areaOn(me?.areas, "orders");
   const customers = useCustomerChats(customersOn);
   const archivedCustomers = useCustomerChats(customersOn, true);
+  // The search box is for the list: with Linked businesses off, it shows
+  // once there are customers' threads to search.
+  const hasCustomers =
+    (customers.data?.length ?? 0) + (archivedCustomers.data?.length ?? 0) > 0;
   const { view, act, answer } = useLinks();
   const [params, setParams] = useSearchParams();
   // Explore is a step in the browser history (a state of this same address),
@@ -601,7 +605,7 @@ export function ChatPage() {
               )}
             />
           </div>
-          {(linksOn || customersOn) && (
+          {(linksOn || hasCustomers) && (
             <div className="filters" role="search" aria-label="Find a business">
               <label className="search">
                 <span className="sr-only">Find a business</span>
