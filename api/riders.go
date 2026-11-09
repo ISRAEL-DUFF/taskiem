@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/riders"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
@@ -61,6 +63,11 @@ func (s *Server) listRiders(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	out := ridersView{}
 	err := s.tx(r, func(tx pgx.Tx) error {
+		// A rider whose business is linked with since they were added is
+		// named as that business (docs/spec/chat-riders.md, phase 2).
+		if _, err := s.Riders.ClaimLinkedTx(r.Context(), tx, p.TenantID); err != nil {
+			return err
+		}
 		var err error
 		if out.Riders, err = s.Riders.ListTx(r.Context(), tx, p.TenantID, riders.Filter{Retired: r.URL.Query().Get("retired") == "true"}); err != nil {
 			return err
@@ -109,16 +116,52 @@ func (s *Server) addRider(w http.ResponseWriter, r *http.Request) {
 	}
 	p := principalFrom(r.Context())
 	var x riders.Rider
+	var asked bool
 	err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
-		x, err = s.Riders.AddTx(r.Context(), tx, p.TenantID, in, p.Actor())
+		if x, err = s.Riders.AddTx(r.Context(), tx, p.TenantID, in, p.Actor()); err != nil {
+			return err
+		}
+		x, asked, err = s.linkRiderTx(r.Context(), tx, p.TenantID, x, links.Actor{Type: p.ActorType(), ID: p.Actor()})
 		return err
 	})
 	if err != nil {
 		s.riderFail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"rider": x})
+	writeJSON(w, http.StatusCreated, map[string]any{"rider": x, "link_requested": asked})
+}
+
+// linkRiderTx links a business with a rider just added whose phone is a
+// business on Taskiem (docs/spec/chat-riders.md, phase 2): one already
+// linked with is named on the rider at once; otherwise the rider's
+// business is asked to link, as a supplier, from the phone (a blind
+// request: nothing is told of who is behind the number until they answer).
+// true when a request went out. A business past the day's requests, or
+// one that cannot be asked, leaves the rider as added.
+func (s *Server) linkRiderTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x riders.Rider, by links.Actor) (riders.Rider, bool, error) {
+	if x.LinkID != nil || x.Phone == "" {
+		return x, false, nil
+	}
+	is, err := riders.PhoneIsBusinessTx(ctx, tx, x.Phone)
+	if err != nil || !is {
+		return x, false, err
+	}
+	if _, err := s.Riders.ClaimLinkedTx(ctx, tx, tenant); err != nil {
+		return x, false, err
+	}
+	if x, err = s.Riders.GetTx(ctx, tx, tenant, x.ID); err != nil || x.LinkID != nil {
+		return x, false, err
+	}
+	told, err := links.RequestBlindTx(ctx, tx, tenant, links.Blind{Phone: x.Phone}, links.RoleSupplier, by, s.linkKey(tenant))
+	switch {
+	case errors.Is(err, links.ErrTooMany), errors.Is(err, links.ErrState), errors.Is(err, links.ErrInvalid):
+		s.Logger.Warn("riders: asking the rider's business to link", "tenant", tenant, "err", err)
+		return x, false, nil
+	case err != nil:
+		return x, false, err
+	}
+	return x, told != uuid.Nil, nil
 }
 
 // riderAction runs one change to a rider named in the path.

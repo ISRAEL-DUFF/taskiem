@@ -2232,6 +2232,14 @@
       "text": "Sọ ọ́ báyìí: *add rider Musa 0803 123 4567 Lekki Ajah* (àwọn agbègbè kò pọn dandan).",
       "reviewed": false
     },
+    "wa.riders.added_linked": {
+      "text": "{name} ti di ẹni tó ń gbé ọjà rẹ, a sì ti so iṣòwò wọn pọ̀ mọ́ tìrẹ: iṣẹ́ ìfijíṣẹ́ rẹ ń dé ọ̀dọ̀ wọn lórí Taskiem.",
+      "reviewed": false
+    },
+    "wa.riders.added_asked": {
+      "text": "{name} ti di ẹni tó ń gbé ọjà rẹ. Iṣòwò wọn wà lórí Taskiem, nítorí náà mo ti bèèrè kí wọ́n so pọ̀ mọ́ tìrẹ: tí wọ́n bá gbà, iṣẹ́ ìfijíṣẹ́ rẹ yóò máa dé ọ̀dọ̀ wọn lórí Taskiem.",
+      "reviewed": false
+    },
     "wa.riders.added": {
       "text": "{name} ti di ẹni tó ń gbé ọjà rẹ. Mo ti fi ìjápọ̀ ránṣẹ́ sí wọn nípasẹ̀ SMS kí wọ́n lè máa gba iṣẹ́ ìfijíṣẹ́ rẹ lórí WhatsApp.",
       "reviewed": false
@@ -4093,7 +4101,7 @@
       "reviewed": false
     },
     "signup.ask_sells": {
-      "text": "Kí ni o ń tà tàbí ṣe? Fèsì pẹ̀lú nọ́mbà:\n1. Oúnjẹ\n2. Ọjà ilé\n3. Aṣọ\n4. Fóònù àti ẹ̀rọ\n5. Ilé-ìwé\n6. Ilé ìṣaralóge\n7. Iṣẹ́ ìsìn\n8. Nǹkan mìíràn",
+      "text": "Kí ni o ń tà tàbí ṣe? Fèsì pẹ̀lú nọ́mbà:\n1. Oúnjẹ\n2. Ọjà ilé\n3. Aṣọ\n4. Fóònù àti ẹ̀rọ\n5. Ilé-ìwé\n6. Ilé ìṣaralóge\n7. Iṣẹ́ ìsìn\n8. Ìfijíṣẹ́ (ẹni tó ń gbé ọjà ni mí)\n9. Nǹkan mìíràn",
       "reviewed": false
     },
     "signup.ask_pays": {

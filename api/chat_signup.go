@@ -16,6 +16,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/ai/builder"
 	"github.com/israel-duff/taskiem/engine/ai/intent"
+	"github.com/israel-duff/taskiem/engine/areas"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/links"
@@ -80,7 +81,7 @@ const (
 // What a business sells and how its customers pay, in the order they are
 // listed (story 2).
 var (
-	signupSells = []string{"food", "provisions", "fashion", "phones", "school", "salon", "services", "other"}
+	signupSells = []string{"food", "provisions", "fashion", "phones", "school", "salon", "services", "delivery", "other"}
 	signupPays  = []string{"cash", "transfer", "pos", "paystack", "moniepoint", "opay"}
 )
 
@@ -561,6 +562,31 @@ func (s *Server) signupMake(ctx context.Context, sc *signupChat, st *signupState
 		join = func(tx pgx.Tx, tenant, owner uuid.UUID) error { return s.slackJoinTx(ctx, tx, tenant, owner, ss) }
 		nb.Then = join
 	}
+	// A business whose service is delivery (docs/spec/chat-riders.md): it
+	// starts with its orders and links, its chat tools on.
+	setup := func(tx pgx.Tx, tenant uuid.UUID) error {
+		if st.Sells != "delivery" {
+			return nil
+		}
+		start, err := areas.FromKinds([]string{"delivery"})
+		if err != nil {
+			return err
+		}
+		if err := areas.SaveAll(ctx, tx, tenant, start, "signup"); err != nil {
+			return err
+		}
+		return startDeliveryBusinessTx(ctx, tx, tenant, "system:signup")
+	}
+	then := nb.Then
+	nb.Then = func(tx pgx.Tx, tenant, owner uuid.UUID) error {
+		if err := setup(tx, tenant); err != nil {
+			return err
+		}
+		if then != nil {
+			return then(tx, tenant, owner)
+		}
+		return nil
+	}
 	if sc.user == uuid.Nil {
 		// A person the address is the only proof of. On WhatsApp the sign-in
 		// name is the field agent's for the number, so an owner an agent
@@ -587,6 +613,9 @@ func (s *Server) signupMake(ctx context.Context, sc *signupChat, st *signupState
 		}
 		nb.Detail["new_owner"] = nb.Owner == uuid.Nil
 		nb.Then = func(tx pgx.Tx, tenant, owner uuid.UUID) error {
+			if err := setup(tx, tenant); err != nil {
+				return err
+			}
 			outcome := "ok"
 			var err error
 			switch channel {

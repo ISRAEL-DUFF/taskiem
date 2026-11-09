@@ -2232,6 +2232,14 @@
       "text": "Kwuo ya otú a: *add rider Musa 0803 123 4567 Lekki Ajah* (ebe ndị ahụ adịghị mkpa).",
       "reviewed": false
     },
+    "wa.riders.added_linked": {
+      "text": "{name} bụzi onye na-ebugara gị ihe, e jikọọla azụmahịa ha na nke gị: ihe ị ga-ebuga na-eru ha na Taskiem.",
+      "reviewed": false
+    },
+    "wa.riders.added_asked": {
+      "text": "{name} bụzi onye na-ebugara gị ihe. Azụmahịa ha dị na Taskiem, ya mere m rịọrọ ya ka o jikọọ na nke gị: ozugbo ha kwetara, ihe ị ga-ebuga na-eru ha na Taskiem.",
+      "reviewed": false
+    },
     "wa.riders.added": {
       "text": "{name} bụzi onye na-ebugara gị ihe. Ezigara m ha njikọ site na SMS ka ha nweta ihe ị ga-ebuga na WhatsApp.",
       "reviewed": false
@@ -4093,7 +4101,7 @@
       "reviewed": false
     },
     "signup.ask_sells": {
-      "text": "Gịnị ka ị na-ere ma ọ bụ na-eme? Zaa na nọmba:\n1. Nri\n2. Ngwa ụlọ\n3. Ejiji\n4. Ekwentị na ngwaọrụ\n5. Ụlọ akwụkwọ\n6. Ụlọ ntutu\n7. Ọrụ\n8. Ihe ọzọ",
+      "text": "Gịnị ka ị na-ere ma ọ bụ na-eme? Zaa na nọmba:\n1. Nri\n2. Ngwa ụlọ\n3. Ejiji\n4. Ekwentị na ngwaọrụ\n5. Ụlọ akwụkwọ\n6. Ụlọ ntutu\n7. Ọrụ\n8. Nnyefe ihe (abụ m onye na-ebuga ihe)\n9. Ihe ọzọ",
       "reviewed": false
     },
     "signup.ask_pays": {

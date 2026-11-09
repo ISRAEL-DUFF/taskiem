@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -27,6 +28,10 @@ const (
 	MaxArea    = 80
 	MaxAbout   = 1000
 	MaxCaption = 120
+	// MaxVehicle is the longest word for what a business delivers with;
+	// MaxDeliveryAreas how many areas it says it delivers to.
+	MaxVehicle       = 40
+	MaxDeliveryAreas = 20
 )
 
 // ErrGalleryFull refuses a photo past MaxGallery.
@@ -48,6 +53,11 @@ type Profile struct {
 	Area    string `json:"area"`
 	About   string `json:"about"`
 	Logo    *Photo `json:"logo"`
+	// Delivers says the business delivers for other businesses (a rider,
+	// docs/spec/chat-riders.md): with what, and to which areas.
+	Delivers      bool     `json:"delivers"`
+	Vehicle       string   `json:"vehicle"`
+	DeliveryAreas []string `json:"delivery_areas"`
 }
 
 // GalleryPhoto is one photo of the gallery, in order.
@@ -59,10 +69,13 @@ type GalleryPhoto struct {
 
 // ProfileIn is what a business may set; empty text clears a field.
 type ProfileIn struct {
-	Name    string `json:"name"`
-	Tagline string `json:"tagline"`
-	Area    string `json:"area"`
-	About   string `json:"about"`
+	Name          string   `json:"name"`
+	Tagline       string   `json:"tagline"`
+	Area          string   `json:"area"`
+	About         string   `json:"about"`
+	Delivers      bool     `json:"delivers"`
+	Vehicle       string   `json:"vehicle"`
+	DeliveryAreas []string `json:"delivery_areas"`
 }
 
 func clean(field, s string, max int) (string, error) {
@@ -88,6 +101,22 @@ func (p ProfileIn) Validate() (ProfileIn, error) {
 	if p.About, err = clean("the text about the business", p.About, MaxAbout); err != nil {
 		return p, err
 	}
+	if p.Vehicle, err = clean("what you deliver with", p.Vehicle, MaxVehicle); err != nil {
+		return p, err
+	}
+	areas := []string{}
+	for _, a := range p.DeliveryAreas {
+		if a, err = clean("an area", a, MaxArea); err != nil {
+			return p, err
+		}
+		if a != "" && !slices.ContainsFunc(areas, func(x string) bool { return strings.EqualFold(x, a) }) {
+			areas = append(areas, a)
+		}
+	}
+	if len(areas) > MaxDeliveryAreas {
+		return p, fmt.Errorf("%w: at most %d delivery areas", ErrInvalid, MaxDeliveryAreas)
+	}
+	p.DeliveryAreas = areas
 	return p, nil
 }
 
@@ -109,12 +138,16 @@ func photoByID(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, id uuid.UUID) (
 
 // ProfileTx is the business's profile (empty text where it has said nothing).
 func ProfileTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (Profile, error) {
-	var out Profile
+	out := Profile{DeliveryAreas: []string{}}
 	var logo *uuid.UUID
-	err := tx.QueryRow(ctx, `SELECT COALESCE(name, ''), COALESCE(tagline, ''), COALESCE(area, ''), COALESCE(about, ''), logo_media FROM business_profile WHERE tenant_id = $1`, tenant).
-		Scan(&out.Name, &out.Tagline, &out.Area, &out.About, &logo)
+	err := tx.QueryRow(ctx, `SELECT COALESCE(name, ''), COALESCE(tagline, ''), COALESCE(area, ''), COALESCE(about, ''), logo_media, delivers, COALESCE(vehicle, ''), delivery_areas
+		FROM business_profile WHERE tenant_id = $1`, tenant).
+		Scan(&out.Name, &out.Tagline, &out.Area, &out.About, &logo, &out.Delivers, &out.Vehicle, &out.DeliveryAreas)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return out, nil
+	}
+	if out.DeliveryAreas == nil {
+		out.DeliveryAreas = []string{}
 	}
 	if err != nil {
 		return out, err
@@ -133,13 +166,22 @@ func SaveProfileTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, in ProfileI
 	if err != nil {
 		return Profile{}, err
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO business_profile (tenant_id, name, tagline, area, about, updated_by)
-		VALUES ($1, NULLIF($2, ''), NULLIF($3, ''), NULLIF($4, ''), NULLIF($5, ''), $6)
-		ON CONFLICT (tenant_id) DO UPDATE SET name = NULLIF($2, ''), tagline = NULLIF($3, ''), area = NULLIF($4, ''), about = NULLIF($5, ''), updated_by = $6, updated_at = now()`,
-		tenant, in.Name, in.Tagline, in.Area, in.About, by); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO business_profile (tenant_id, name, tagline, area, about, delivers, vehicle, delivery_areas, updated_by)
+		VALUES ($1, NULLIF($2, ''), NULLIF($3, ''), NULLIF($4, ''), NULLIF($5, ''), $6, NULLIF($7, ''), $8, $9)
+		ON CONFLICT (tenant_id) DO UPDATE SET name = NULLIF($2, ''), tagline = NULLIF($3, ''), area = NULLIF($4, ''), about = NULLIF($5, ''),
+		  delivers = $6, vehicle = NULLIF($7, ''), delivery_areas = $8, updated_by = $9, updated_at = now()`,
+		tenant, in.Name, in.Tagline, in.Area, in.About, in.Delivers, in.Vehicle, in.DeliveryAreas, by); err != nil {
 		return Profile{}, err
 	}
 	return ProfileTx(ctx, tx, tenant)
+}
+
+// SetDeliversTx marks a business as one that delivers for others (a
+// sign-up that said so), leaving the rest of its profile as it is.
+func SetDeliversTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, by string) error {
+	_, err := tx.Exec(ctx, `INSERT INTO business_profile (tenant_id, delivers, updated_by) VALUES ($1, true, $2)
+		ON CONFLICT (tenant_id) DO UPDATE SET delivers = true, updated_by = $2, updated_at = now()`, tenant, by)
+	return err
 }
 
 // SetLogoTx makes a stored image (a media id of the business's own) the

@@ -2232,6 +2232,14 @@
       "text": "Talk am like this: *add rider Musa 0803 123 4567 Lekki Ajah* (the area no compulsory).",
       "reviewed": false
     },
+    "wa.riders.added_linked": {
+      "text": "{name} don be your rider, and dem business don link with your own: your delivery dey reach dem for Taskiem.",
+      "reviewed": false
+    },
+    "wa.riders.added_asked": {
+      "text": "{name} don be your rider. Dem business dey Taskiem, so I don ask am make e link with your own: once e gree, your delivery go dey reach dem for Taskiem.",
+      "reviewed": false
+    },
     "wa.riders.added": {
       "text": "{name} don be your rider. I don send dem link by SMS make dem dey get your delivery for WhatsApp.",
       "reviewed": false
@@ -4093,7 +4101,7 @@
       "reviewed": false
     },
     "signup.ask_sells": {
-      "text": "Wetin you dey sell or do? Reply with number:\n1. Food\n2. Provisions\n3. Fashion\n4. Phone and gadget\n5. School\n6. Salon\n7. Services\n8. Another thing",
+      "text": "Wetin you dey sell or do? Reply with number:\n1. Food\n2. Provisions\n3. Fashion\n4. Phone and gadget\n5. School\n6. Salon\n7. Services\n8. Delivery (I be rider)\n9. Another thing",
       "reviewed": false
     },
     "signup.ask_pays": {

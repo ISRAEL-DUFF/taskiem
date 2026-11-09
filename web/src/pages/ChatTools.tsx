@@ -210,6 +210,8 @@ export function ToolsPanel({
           {tools.map((t) => {
             const r = rows[t.key];
             const badge = Array.isArray(r) ? t.badge?.(r) : undefined;
+            const title =
+              Array.isArray(r) && t.titleFor ? t.titleFor(r) : t.title;
             const line =
               r === undefined
                 ? " "
@@ -229,7 +231,7 @@ export function ToolsPanel({
                   <Icon name={t.icon} />
                 </span>
                 <span>
-                  <span className="tk-tile-name">{t.title}</span>
+                  <span className="tk-tile-name">{title}</span>
                   {/* A count rolls into place once it is known. */}
                   <span className="tk-tile-line tk-roll" key={line}>
                     {line}

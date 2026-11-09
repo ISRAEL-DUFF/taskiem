@@ -62,3 +62,50 @@ func TestRidersLinkedMigrationUpDownUp(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// 00409 (riders phase 2) goes up and down: the profile's delivery fields,
+// the two phone definers, and Explore's definer back to 00401's shape.
+func TestRiderProfileMigrationUpDownUp(t *testing.T) {
+	dsn := emptyDatabase(t)
+	ctx := context.Background()
+	cfg, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB := stdlib.OpenDB(*cfg)
+	defer func() { _ = sqlDB.Close() }()
+	p, err := goose.NewProvider(goose.DialectPostgres, sqlDB, mustSub(migrations, "migrations"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.UpTo(ctx, 409); err != nil {
+		t.Fatal(err)
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(ctx) }()
+	if _, err := conn.Exec(ctx, `INSERT INTO tenants (id, name, plan_id) VALUES ('00000000-0000-0000-0000-0000000000a2', 'Musa Rides', gen_random_uuid())`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(ctx, `INSERT INTO business_profile (tenant_id, delivers, vehicle, delivery_areas, updated_by) VALUES ('00000000-0000-0000-0000-0000000000a2', true, 'bike', '{Lekki}', 'test')`); err != nil {
+		t.Fatal(err)
+	}
+	var cols int
+	if err := conn.QueryRow(ctx, `SELECT count(*) FROM pg_proc WHERE proname IN ('taskiem_link_phone_linked', 'taskiem_link_phone_is_business')`).Scan(&cols); err != nil || cols != 2 {
+		t.Fatalf("the phone definers: %d %v", cols, err)
+	}
+	if _, err := p.DownTo(ctx, 408); err != nil {
+		t.Fatal(err)
+	}
+	if err := conn.QueryRow(ctx, `SELECT count(*) FROM information_schema.columns WHERE table_name = 'business_profile' AND column_name IN ('delivers', 'vehicle', 'delivery_areas')`).Scan(&cols); err != nil || cols != 0 {
+		t.Fatalf("the columns after Down: %d %v", cols, err)
+	}
+	if err := conn.QueryRow(ctx, `SELECT count(*) FROM pg_proc WHERE proname = 'taskiem_link_explore'`).Scan(&cols); err != nil || cols != 1 {
+		t.Fatalf("explore after Down: %d %v", cols, err)
+	}
+	if _, err := p.UpTo(ctx, 409); err != nil {
+		t.Fatal(err)
+	}
+}

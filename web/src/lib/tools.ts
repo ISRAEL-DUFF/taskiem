@@ -46,6 +46,9 @@ export interface ToolRow {
 export interface Tool {
   key: ToolKey;
   title: string;
+  /** The title from the rows, when it depends on them (Orders is
+   * Deliveries for a business whose orders are all deliveries). */
+  titleFor?: (rows: ToolRow[]) => string;
   icon: string;
   /** The permission it needs. */
   perm: string;
@@ -262,6 +265,11 @@ export const TOOLS: Tool[] = [
         }),
       ),
     line: () => "From businesses",
+    titleFor: (rows) =>
+      rows.length > 0 &&
+      rows.every((r) => (r.data as TradeOrder | undefined)?.delivery)
+        ? "Deliveries"
+        : "Orders",
     rowIcon: "invoices",
     badge: (r) => {
       const n = tagged(r, "new");
@@ -389,14 +397,21 @@ export const ROLE_TOOLS: Record<string, ToolKey[]> = {
 };
 
 /** The tools a person's roles shape them to, or undefined for all. */
-export function roleTools(roles: string[] | undefined): Set<ToolKey> | undefined {
-  if (!roles || roles.length === 0 || roles.some((r) => !(r in ROLE_TOOLS))) return undefined;
+export function roleTools(
+  roles: string[] | undefined,
+): Set<ToolKey> | undefined {
+  if (!roles || roles.length === 0 || roles.some((r) => !(r in ROLE_TOOLS)))
+    return undefined;
   return new Set(roles.flatMap((r) => ROLE_TOOLS[r] ?? []));
 }
 
 /** The tools a person may open, matching what follows "/" (a word's start),
  * shaped to their role when they are staff. */
-export function toolsFor(can: (perm: string) => boolean, query = "", roles?: string[]): Tool[] {
+export function toolsFor(
+  can: (perm: string) => boolean,
+  query = "",
+  roles?: string[],
+): Tool[] {
   const q = query.trim().toLowerCase();
   const only = roleTools(roles);
   return TOOLS.filter(

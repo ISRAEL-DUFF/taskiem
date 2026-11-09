@@ -144,3 +144,60 @@ func TestLinkedRiderByAPI(t *testing.T) {
 		t.Fatalf("Musa's cards: %v", got)
 	}
 }
+
+// TestRiderByPhoneLinksBusiness (docs/spec/chat-riders.md, phase 2): a
+// rider added by phone whose number is a business on Taskiem has that
+// business asked to link; once it says yes the rider is named as it, and
+// a rider added before the link is named when the link is accepted.
+func TestRiderByPhoneLinksBusiness(t *testing.T) {
+	w, ada := newDispatchWorld(t, "Ada Stores")
+	musaBiz := w.tenant(t, "Musa Rides", "musa@rides.test")
+	tundeBiz := w.tenant(t, "Tunde Express", "tunde@express.test")
+	const musa, tunde = "+2348031110031", "+2348031110032"
+	// Their numbers are their businesses' owners' WhatsApp.
+	for email, number := range map[string]string{"musa@rides.test": musa, "tunde@express.test": tunde} {
+		if _, err := w.env.DB.Admin.Exec(t.Context(), `INSERT INTO whatsapp_bindings (user_id, number) SELECT id, $2 FROM users WHERE email = $1`, email, number); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Musa, added by phone: his business is asked to link.
+	out := ada.must(201, "POST", "/v1/riders", map[string]any{"name": "Musa Bello", "phone": musa, "zones": []string{"Lekki"}, "fee_kobo": 100000})
+	if out["link_requested"] != true || out["rider"].(map[string]any)["link_id"] != nil {
+		t.Fatalf("adding a rider whose number is a business: %v", out)
+	}
+	asks := musaBiz.must(200, "GET", "/v1/links", nil)["links"].([]any)
+	if len(asks) != 1 || asks[0].(map[string]any)["state"] != "asked_us" || asks[0].(map[string]any)["role"] != "customer" {
+		t.Fatalf("the rider's business was asked: %v", asks)
+	}
+	// Added again: no second request, the same rider.
+	ada.must(409, "POST", "/v1/riders", map[string]any{"name": "Musa Bello", "phone": musa})
+	if n := len(musaBiz.must(200, "GET", "/v1/links", nil)["links"].([]any)); n != 1 {
+		t.Fatalf("%d asks after adding twice", n)
+	}
+	// Yes: the rider is that business.
+	link := asks[0].(map[string]any)["id"].(string)
+	musaBiz.must(200, "POST", "/v1/links/"+link+"/accept", nil)
+	w.srv.WaitBackground()
+	rs := ada.must(200, "GET", "/v1/riders", nil)["riders"].([]any)
+	if len(rs) != 1 || rs[0].(map[string]any)["link_id"] != link {
+		t.Fatalf("the rider after the link: %v", rs)
+	}
+
+	// Tunde was linked with first (as any supplier), then added as a rider
+	// by phone: named at once, no request.
+	tundeBiz.must(200, "PUT", "/v1/link-settings", map[string]any{"findable": true})
+	ada.must(201, "POST", "/v1/links", map[string]any{"business": tenantOf(t, tundeBiz), "role": "supplier"})
+	tl := tundeBiz.must(200, "GET", "/v1/links", nil)["links"].([]any)[0].(map[string]any)
+	tundeBiz.must(200, "POST", "/v1/links/"+tl["id"].(string)+"/accept", nil)
+	w.srv.WaitBackground()
+	out = ada.must(201, "POST", "/v1/riders", map[string]any{"name": "Tunde Ojo", "phone": tunde})
+	if out["link_requested"] != false || out["rider"].(map[string]any)["link_id"] != tl["id"] {
+		t.Fatalf("adding a rider already linked with: %v", out)
+	}
+	// A rider whose number is nobody's business: added as before.
+	out = ada.must(201, "POST", "/v1/riders", map[string]any{"name": "Bola Ade", "phone": "+2348031110033"})
+	if out["link_requested"] != false || out["rider"].(map[string]any)["link_id"] != nil {
+		t.Fatalf("a plain rider: %v", out)
+	}
+}

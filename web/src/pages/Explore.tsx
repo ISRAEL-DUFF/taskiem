@@ -357,6 +357,7 @@ export function Explore({
             ...s,
             near: mark(s.near, card.business),
             fresh: mark(s.fresh, card.business),
+            delivery: mark(s.delivery ?? [], card.business),
           },
       );
       setFound(
@@ -379,7 +380,15 @@ export function Explore({
         const state: ExploreCard["state"] = answer === "accept" ? "active" : "none";
         const put = (cards: ExploreCard[]) =>
           cards.map((x) => (x.business === card.business ? { ...x, state } : x));
-        setStart((s) => s && { ...s, near: put(s.near), fresh: put(s.fresh) });
+        setStart(
+          (s) =>
+            s && {
+              ...s,
+              near: put(s.near),
+              fresh: put(s.fresh),
+              delivery: put(s.delivery ?? []),
+            },
+        );
         setFound((f) => f && { ...f, r: { ...f.r, results: put(f.r.results) } });
         onChanged();
       },
@@ -391,12 +400,17 @@ export function Explore({
       setBlindSent(typed);
       onChanged();
     }, `Request sent to ${shown}`);
-  const loadMore = (section: "near" | "new") =>
+  const loadMore = (section: "near" | "new" | "delivery") =>
     void act.run(async () => {
       setMore(true);
       try {
         const have =
-          (section === "near" ? start?.near : start?.fresh)?.length ?? 0;
+          (section === "near"
+            ? start?.near
+            : section === "delivery"
+              ? start?.delivery
+              : start?.fresh
+          )?.length ?? 0;
         const r = await get<ExploreResult>(
           `/v1/explore?section=${section}&offset=${have}`,
         );
@@ -405,7 +419,13 @@ export function Explore({
             s &&
             (section === "near"
               ? { ...s, near: [...s.near, ...r.near], near_more: r.near_more }
-              : { ...s, fresh: [...s.fresh, ...r.fresh], more: r.more }),
+              : section === "delivery"
+                ? {
+                    ...s,
+                    delivery: [...s.delivery, ...r.delivery],
+                    delivery_more: r.delivery_more,
+                  }
+                : { ...s, fresh: [...s.fresh, ...r.fresh], more: r.more }),
         );
       } finally {
         setMore(false);
@@ -551,7 +571,9 @@ export function Explore({
           )
         ) : !start ? (
           <Skeleton rows={3} label="Loading businesses…" />
-        ) : start.near.length === 0 && start.fresh.length === 0 ? (
+        ) : start.near.length === 0 &&
+          start.fresh.length === 0 &&
+          (start.delivery ?? []).length === 0 ? (
           <EmptyState icon="search">
             No businesses to show yet. Businesses appear here when they choose
             to be found.
@@ -578,6 +600,25 @@ export function Explore({
                   )}
                 </div>
                 <ul className="explore-list">{start.near.map(cardOf)}</ul>
+              </section>
+            )}
+            {(start.delivery ?? []).length > 0 && (
+              <section aria-labelledby="explore-delivery">
+                <div className="tk-x-sec">
+                  <h3 id="explore-delivery">Delivery</h3>
+                  {start.delivery_more && (
+                    <button
+                      type="button"
+                      className="explore-more"
+                      disabled={act.busy || more}
+                      onClick={() => loadMore("delivery")}
+                    >
+                      Show more
+                      <span className="sr-only"> delivery businesses</span>
+                    </button>
+                  )}
+                </div>
+                <ul className="explore-list">{start.delivery.map(cardOf)}</ul>
               </section>
             )}
             {start.fresh.length > 0 && (

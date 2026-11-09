@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/dispatch"
+	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/riders"
 	"github.com/israel-duff/taskiem/engine/storefront"
@@ -123,13 +124,17 @@ func (s *Server) waAddRider(ctx context.Context, c *chat, text string) error {
 	}
 	name, phone := m[1], m[2]
 	var x riders.Rider
+	var asked bool
 	err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
 		known, err := storefront.Zones(ctx, tx, c.tenant.ID)
 		if err != nil {
 			return err
 		}
 		zones := riders.SplitZones(m[3], known)
-		x, err = s.Riders.AddTx(ctx, tx, c.tenant.ID, riders.In{Name: &name, Phone: &phone, Zones: &zones}, c.p.Actor())
+		if x, err = s.Riders.AddTx(ctx, tx, c.tenant.ID, riders.In{Name: &name, Phone: &phone, Zones: &zones}, c.p.Actor()); err != nil {
+			return err
+		}
+		x, asked, err = s.linkRiderTx(ctx, tx, c.tenant.ID, x, links.Actor{Type: c.p.ActorType(), ID: c.p.Actor()})
 		return err
 	})
 	switch {
@@ -140,7 +145,12 @@ func (s *Server) waAddRider(ctx context.Context, c *chat, text string) error {
 	case err != nil:
 		return err
 	}
-	if x.Reached != "sms" {
+	switch {
+	case x.LinkID != nil:
+		return c.say(ctx, s, c.t("wa.riders.added_linked", "name", x.Name))
+	case asked:
+		return c.say(ctx, s, c.t("wa.riders.added_asked", "name", x.Name))
+	case x.Reached != "sms":
 		return c.say(ctx, s, c.t("wa.riders.added_reached", "name", x.Name, "app", appName(x.Reached)))
 	}
 	return c.say(ctx, s, c.t("wa.riders.added", "name", x.Name))

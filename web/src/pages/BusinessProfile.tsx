@@ -9,12 +9,16 @@ import {
   MAX_CAPTION,
   MAX_NAME,
   MAX_TAGLINE,
+  MAX_VEHICLE,
   moved,
   photoSrc,
   profileLetter,
+  sameAreas,
+  splitAreas,
   stepTo,
   type BusinessProfile,
   type GalleryPhoto,
+  type ProfileWords,
 } from "../lib/businessProfile";
 import type { LinkSettings } from "../lib/links";
 import { ErrorBox, Skeleton, useAction, useLoad } from "../ui";
@@ -113,6 +117,9 @@ export function BusinessProfilePage() {
     tagline: "",
     area: "",
     about: "",
+    delivers: false,
+    vehicle: "",
+    areasLine: "",
   });
   const [loaded, setLoaded] = useState(false);
   const [uploading, setUploading] = useState(0);
@@ -136,6 +143,9 @@ export function BusinessProfilePage() {
         tagline: data.tagline,
         area: data.area,
         about: data.about,
+        delivers: data.delivers,
+        vehicle: data.vehicle,
+        areasLine: data.delivery_areas.join(", "),
       });
       setLoaded(true);
     }
@@ -143,18 +153,30 @@ export function BusinessProfilePage() {
 
   const gallery = data?.gallery ?? [];
   const max = data?.max_gallery ?? 12;
+  const words: ProfileWords = {
+    name: form.name,
+    tagline: form.tagline,
+    area: form.area,
+    about: form.about,
+    delivers: form.delivers,
+    vehicle: form.delivers ? form.vehicle : "",
+    delivery_areas: form.delivers ? splitAreas(form.areasLine) : [],
+  };
   const dirty =
     !!data &&
-    (form.name !== data.name ||
-      form.tagline !== data.tagline ||
-      form.area !== data.area ||
-      form.about !== data.about);
+    (words.name !== data.name ||
+      words.tagline !== data.tagline ||
+      words.area !== data.area ||
+      words.about !== data.about ||
+      words.delivers !== data.delivers ||
+      words.vehicle !== data.vehicle ||
+      !sameAreas(words.delivery_areas, data.delivery_areas));
 
   const apply = (next: BusinessProfile) => setData(next);
   const save = () =>
     void act.run(
       async () =>
-        apply(await put<BusinessProfile>("/v1/business-profile", form)),
+        apply(await put<BusinessProfile>("/v1/business-profile", words)),
       "Saved",
     );
   const setLogo = (file: File | undefined) => {
@@ -438,6 +460,49 @@ export function BusinessProfilePage() {
                 data-testid="profile-about"
               />
             </label>
+            {/* A rider: a business whose service is delivery. Businesses
+                find it under Delivery in Explore. */}
+            <label className="tk-p-field tk-p-check">
+              <input
+                type="checkbox"
+                checked={form.delivers}
+                disabled={!manage}
+                onChange={(e) =>
+                  setForm({ ...form, delivers: e.target.checked })
+                }
+                data-testid="profile-delivers"
+              />
+              I deliver for other businesses
+            </label>
+            {form.delivers && (
+              <>
+                <label className="tk-p-field">
+                  What you deliver with
+                  <input
+                    value={form.vehicle}
+                    maxLength={MAX_VEHICLE}
+                    disabled={!manage}
+                    placeholder="Bike, van, on foot"
+                    onChange={(e) =>
+                      setForm({ ...form, vehicle: e.target.value })
+                    }
+                    data-testid="profile-vehicle"
+                  />
+                </label>
+                <label className="tk-p-field">
+                  Areas you deliver to
+                  <input
+                    value={form.areasLine}
+                    disabled={!manage}
+                    placeholder="Lekki, Ajah, Victoria Island"
+                    onChange={(e) =>
+                      setForm({ ...form, areasLine: e.target.value })
+                    }
+                    data-testid="profile-delivery-areas"
+                  />
+                </label>
+              </>
+            )}
             {manage && (
               <button
                 type="button"

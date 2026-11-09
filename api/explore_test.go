@@ -273,3 +273,70 @@ func TestExploreAreaFromStorefront(t *testing.T) {
 		t.Fatalf("the profile's area first: %v", a)
 	}
 }
+
+// TestExploreDelivery (docs/spec/chat-riders.md, phase 2): a business that
+// delivers for others is listed under Delivery, those covering our area
+// first, and a search for delivery words finds it whatever its name; one
+// not findable, or already linked with, is not listed.
+func TestExploreDelivery(t *testing.T) {
+	w := newWAWorld(t)
+	ada := w.tenant(t, "Ada's Kitchen", "ada@kitchen.test")
+	musa := w.tenant(t, "Musa Rides", "musa@rides.test")
+	tunde := w.tenant(t, "Tunde Express", "tunde@express.test")
+	hidden := w.tenant(t, "Quiet Riders", "q@riders.test")
+	ada.must(200, "PUT", "/v1/business-profile", map[string]any{"area": "Lekki"})
+	for c, body := range map[*client]map[string]any{
+		musa:   {"name": "Musa Rides", "area": "Ikeja", "delivers": true, "vehicle": "bike", "delivery_areas": []string{"Lekki", "Ajah", "lekki"}},
+		tunde:  {"name": "Tunde Express", "area": "Yaba", "delivers": true, "vehicle": "van"},
+		hidden: {"name": "Quiet Riders", "delivers": true},
+	} {
+		c.must(200, "PUT", "/v1/business-profile", body)
+	}
+	musa.must(200, "PUT", "/v1/link-settings", map[string]any{"findable": true})
+	tunde.must(200, "PUT", "/v1/link-settings", map[string]any{"findable": true})
+	// The profile keeps what was said, the areas once each.
+	if p := musa.must(200, "GET", "/v1/business-profile", nil); p["delivers"] != true || p["vehicle"] != "bike" || len(p["delivery_areas"].([]any)) != 2 {
+		t.Fatalf("the rider's profile: %v", p)
+	}
+	musa.must(400, "PUT", "/v1/business-profile", map[string]any{"delivers": true, "vehicle": strings.Repeat("x", 41)})
+
+	names := func(cards any) []string {
+		var out []string
+		for _, c := range cards.([]any) {
+			out = append(out, c.(map[string]any)["name"].(string))
+		}
+		return out
+	}
+	page := ada.must(200, "GET", "/v1/explore", nil)
+	// Delivery: the one that covers Lekki first; the hidden one never.
+	if got := names(page["delivery"]); strings.Join(got, ",") != "Musa Rides,Tunde Express" || page["delivery_more"] != false {
+		t.Fatalf("delivery: %v %v", got, page["delivery_more"])
+	}
+	m := page["delivery"].([]any)[0].(map[string]any)
+	if m["delivers"] != true || m["vehicle"] != "bike" || len(m["delivery_areas"].([]any)) != 2 {
+		t.Errorf("a rider's card: %v", m)
+	}
+	// Near you is by the business's own area: neither is in Lekki.
+	if got := names(page["near"]); len(got) != 0 {
+		t.Errorf("near: %v", got)
+	}
+	// The section by itself, paged.
+	if got := names(ada.must(200, "GET", "/v1/explore?section=delivery&offset=1", nil)["delivery"]); strings.Join(got, ",") != "Tunde Express" {
+		t.Errorf("the second page: %v", got)
+	}
+	// A search for delivery words finds them, though no name says it.
+	if got := names(ada.must(200, "GET", "/v1/explore?q=dispatch+rider", nil)["results"]); strings.Join(got, ",") != "Musa Rides,Tunde Express" {
+		t.Errorf("a search for riders: %v", got)
+	}
+	if got := names(ada.must(200, "GET", "/v1/explore?q=cement", nil)["results"]); len(got) != 0 {
+		t.Errorf("a search for something else: %v", got)
+	}
+	// Linked with: in the chats, not in the section.
+	musaID := tenantOf(t, musa)
+	ada.must(201, "POST", "/v1/links", map[string]any{"business": musaID, "role": "supplier"})
+	l := musa.must(200, "GET", "/v1/links", nil)["links"].([]any)[0].(map[string]any)
+	musa.must(200, "POST", "/v1/links/"+l["id"].(string)+"/accept", nil)
+	if got := names(ada.must(200, "GET", "/v1/explore", nil)["delivery"]); strings.Join(got, ",") != "Tunde Express" {
+		t.Errorf("after linking: %v", got)
+	}
+}

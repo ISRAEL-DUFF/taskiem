@@ -38,7 +38,11 @@ type exploreOut struct {
 	NearMore bool                `json:"near_more"`
 	Fresh    []links.ExploreCard `json:"fresh"`
 	More     bool                `json:"more"`
-	Blind    *blindOffer         `json:"blind,omitempty"`
+	// Delivery lists the businesses that deliver for others (riders, docs/
+	// spec/chat-riders.md), those covering our area first (section=delivery).
+	Delivery     []links.ExploreCard `json:"delivery"`
+	DeliveryMore bool                `json:"delivery_more"`
+	Blind        *blindOffer         `json:"blind,omitempty"`
 	// Area is our own, as "near you" reads it ("Near you · Yaba").
 	Area string `json:"area,omitempty"`
 }
@@ -58,7 +62,7 @@ func (s *Server) exploreSection(r *http.Request, tx pgx.Tx, section string, offs
 
 func (s *Server) explore(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
-	out := exploreOut{Results: []links.ExploreCard{}, Near: []links.ExploreCard{}, Fresh: []links.ExploreCard{}}
+	out := exploreOut{Results: []links.ExploreCard{}, Near: []links.ExploreCard{}, Fresh: []links.ExploreCard{}, Delivery: []links.ExploreCard{}}
 	// A phone number is never searched: one row that sends a request.
 	if links.LooksLikePhone(q) {
 		if phone, err := whatsapp.Normalise(q, s.defaultCountry()); err == nil {
@@ -81,11 +85,16 @@ func (s *Server) explore(w http.ResponseWriter, r *http.Request) {
 			out.Fresh, out.More, err = s.exploreSection(r, tx, links.SectionNew, offset)
 		case section == links.SectionNear:
 			out.Near, out.NearMore, err = s.exploreSection(r, tx, links.SectionNear, offset)
+		case section == links.SectionDelivery:
+			out.Delivery, out.DeliveryMore, err = s.exploreSection(r, tx, links.SectionDelivery, offset)
 		default:
 			if out.Area, err = links.OwnAreaTx(r.Context(), tx, principalFrom(r.Context()).TenantID); err != nil {
 				return err
 			}
 			if out.Near, out.NearMore, err = s.exploreSection(r, tx, links.SectionNear, 0); err != nil {
+				return err
+			}
+			if out.Delivery, out.DeliveryMore, err = s.exploreSection(r, tx, links.SectionDelivery, 0); err != nil {
 				return err
 			}
 			out.Fresh, out.More, err = s.exploreSection(r, tx, links.SectionNew, 0)

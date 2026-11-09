@@ -351,6 +351,9 @@ type Kind struct {
 var Kinds = []Kind{
 	{ID: "shop", Name: "I sell things", Areas: []Area{Storefront, Orders, Stock, Money, Links}},
 	{ID: "service", Name: "I bill customers for a service", Areas: []Area{Money, Links}},
+	// A rider: a business whose service is delivery (docs/spec/chat-riders.md).
+	// Its deliveries are its orders from linked businesses.
+	{ID: "delivery", Name: "I deliver for businesses", Areas: []Area{Orders, Links}},
 	{ID: "school", Name: "I run a school", Areas: []Area{Schools}},
 }
 

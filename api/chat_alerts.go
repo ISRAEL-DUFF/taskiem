@@ -367,7 +367,19 @@ func (s *Server) newOrderAlerts(ctx context.Context, p *Principal) ([]chatAlert,
 		}
 		total := o.TotalKobo
 		title, line := "New order "+o.OrderReference+" from "+o.BuyerName, invoicing.Naira(total)
-		if links.IsOffer(o.Lines) {
+		if d := o.Delivery; d != nil {
+			// A delivery offered to a rider (docs/spec/chat-riders.md): the
+			// fee, and how long the offer stands.
+			title = "Delivery " + o.OrderReference + " for " + o.BuyerName
+			if d.DropArea != "" {
+				title += " to " + d.DropArea
+			}
+			if d.ExpiresAt != nil {
+				if left := time.Until(*d.ExpiresAt); left > 0 {
+					line += " · answer within " + answerWithin(left)
+				}
+			}
+		} else if links.IsOffer(o.Lines) {
 			// An offer (phase 7): what they offer against the seller's prices.
 			title = o.BuyerName + " offers " + invoicing.Naira(total) + " for " + o.OrderReference
 			if was := dealWas(o.Lines); was > total {
@@ -378,6 +390,15 @@ func (s *Server) newOrderAlerts(ctx context.Context, p *Principal) ([]chatAlert,
 			Title: title, Line: line, AmountKobo: &total})
 	}
 	return out, nil
+}
+
+// answerWithin words how long an offer still stands: "4 min", "1 min".
+func answerWithin(left time.Duration) string {
+	m := int(left.Round(time.Minute) / time.Minute)
+	if m < 1 {
+		m = 1
+	}
+	return fmt.Sprintf("%d min", m)
 }
 
 // riderAlerts are the storefront's paid orders for delivery that no rider
