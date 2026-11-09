@@ -531,6 +531,8 @@ func TestConfirmPaysPerDelivery(t *testing.T) {
 // own delivery to pay its rider, as any business does.
 func TestDispatchCompany(t *testing.T) {
 	w, ada := newDispatchWorld(t, "Ada Stores")
+	// Four deliveries' worth of messages reach Musa within the hour.
+	w.srv.Messages.PerHour, w.srv.Messages.PerDay = 200, 500
 	swift := w.tenant(t, "Swift Dispatch", "swift@dispatch.test")
 	swiftID := tenantOf(t, swift)
 	swift.must(200, "PUT", "/v1/link-settings", map[string]any{"findable": true})
@@ -633,5 +635,101 @@ func TestDispatchCompany(t *testing.T) {
 	// The company pays Musa for its own delivery as any business does.
 	if got := swift.must(200, "POST", "/v1/storefront/orders/"+sref+"/confirm", map[string]any{"how": "cash"}); got["delivery"].(map[string]any)["fee_paid"] != "cash" {
 		t.Fatalf("the company paying its rider: %v", got)
+	}
+
+	// The company's order for one of Ada's, and its own delivery for it.
+	swiftOrder := func(adaRef string) map[string]any {
+		t.Helper()
+		for _, x := range swift.must(200, "GET", "/v1/trade-orders", nil)["orders"].([]any) {
+			if o := x.(map[string]any); o["reference"] == adaRef {
+				return o
+			}
+		}
+		t.Fatalf("no order in the company for %s", adaRef)
+		return nil
+	}
+	innerOf := func(adaRef string) map[string]any {
+		t.Helper()
+		ds := swift.must(200, "GET", "/v1/storefront/orders/"+swiftOrder(adaRef)["order_reference"].(string)+"/deliveries", nil)["deliveries"].([]any)
+		if len(ds) == 0 {
+			return nil
+		}
+		return ds[0].(map[string]any)
+	}
+	offerTo := func() string {
+		t.Helper()
+		ref := w.order(t, "none")
+		ada.must(200, "POST", "/v1/storefront/orders/"+ref+"/offer", map[string]any{"rider_id": m["id"]})
+		w.tick(t)
+		return ref
+	}
+	button := func(want string) string {
+		t.Helper()
+		msg := w.graph.Last(t, musa)
+		for _, b := range msg.Buttons {
+			if b.Title == want {
+				return b.ID
+			}
+		}
+		t.Fatalf("no %s button: %+v", want, msg)
+		return ""
+	}
+
+	// Musa passes: the company has no other rider, so its owner is asked;
+	// Ada's offer to the company stands. Ada then takes it back: the
+	// company's order is cancelled and nothing is left with Musa.
+	ref2 := offerTo()
+	w.press(t, musa, button("Can't"))
+	if x := innerOf(ref2); x["status"] != "declined" {
+		t.Fatalf("Musa's Can't: %v", x["status"])
+	}
+	if ds := ada.must(200, "GET", "/v1/storefront/orders/"+ref2+"/deliveries", nil)["deliveries"].([]any); ds[0].(map[string]any)["status"] != "offered" {
+		t.Fatalf("Ada's offer after Musa's Can't: %v", ds[0].(map[string]any)["status"])
+	}
+	ada.must(200, "POST", "/v1/storefront/orders/"+ref2+"/release", nil)
+	if o := swiftOrder(ref2); o["status"] != "cancelled" {
+		t.Fatalf("the company's order after Ada took it back: %v", o["status"])
+	}
+
+	// Musa holds the job and Ada takes the order back: Musa's own delivery
+	// is released and he is told.
+	ref3 := offerTo()
+	replies := w.press(t, musa, button("Accept"))
+	w.tick(t)
+	if x := innerOf(ref3); x["status"] != "accepted" {
+		ds := ada.must(200, "GET", "/v1/storefront/orders/"+ref3+"/deliveries", nil)["deliveries"]
+		t.Fatalf("Musa's delivery after his Accept: %v; Ada's: %v; replies: %+v", x["status"], ds, replies)
+	}
+	ada.must(200, "POST", "/v1/storefront/orders/"+ref3+"/release", nil)
+	w.tick(t)
+	if x := innerOf(ref3); x["status"] != "released" {
+		t.Fatalf("Musa's delivery after Ada took the order back: %v", x["status"])
+	}
+	if msg := w.graph.Last(t, musa); !strings.Contains(msg.Text, "took "+swiftOrder(ref3)["order_reference"].(string)+" back") {
+		t.Fatalf("Musa told: %+v", msg)
+	}
+
+	// The company's owner moves the order by hand from its own Orders:
+	// Musa's delivery follows, and he is told at the end.
+	ref4 := offerTo()
+	w.press(t, musa, button("Accept"))
+	w.tick(t)
+	oid := swiftOrder(ref4)["id"].(string)
+	for _, step := range []string{"picked_up", "arrived", "delivered"} {
+		swift.must(200, "POST", "/v1/trade-orders/"+oid+"/"+step, nil)
+	}
+	w.tick(t)
+	if x := innerOf(ref4); x["status"] != "delivered" {
+		t.Fatalf("Musa's delivery after the owner's hand: %v", x["status"])
+	}
+	if msg := w.graph.Last(t, musa); !strings.Contains(msg.Text, "is delivered") {
+		t.Fatalf("Musa told at the end: %+v", msg)
+	}
+	order = ada.must(200, "GET", "/v1/storefront/orders/"+ref4, nil)
+	if v, ok := order["order"].(map[string]any); ok {
+		order = v
+	}
+	if order["status"] != "completed" {
+		t.Fatalf("Ada's order by the owner's hand: %v", order["status"])
 	}
 }

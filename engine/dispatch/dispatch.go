@@ -548,9 +548,11 @@ func (d *Dispatch) offerTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, ref
 	}
 	// A rider that is a business on Taskiem gets the order in their own
 	// business too (docs/spec/chat-riders.md).
-	if err := d.placeLinked(ctx, tx, tenant, id, rider, ord, fee, expires, s); err != nil {
+	more, err := d.placeLinked(ctx, tx, tenant, id, rider, ord, fee, expires, s)
+	if err != nil {
 		return out, nil, err
 	}
+	after = append(after, more...)
 	x, err := d.GetTx(ctx, tx, tenant, id)
 	if err != nil {
 		return out, nil, err
@@ -770,6 +772,13 @@ func (d *Dispatch) press(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x Del
 	if err != nil {
 		return t, nil, err
 	}
+	// The customer hears from the business alone: inside a company the
+	// business's own side tells them, through the link.
+	tell := func(f func() error) {
+		if !inner {
+			after = append(after, f)
+		}
+	}
 	switch action {
 	case Accept:
 		if already("accepted", "picked_up", "arrived", "delivered") {
@@ -821,8 +830,14 @@ func (d *Dispatch) press(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x Del
 		if err != nil {
 			return t, nil, err
 		}
-		after = append(after, func() error {
-			return d.tellCustomer(ctx, tenant, ord, "customer.delivery_on_way", "on-way", "rider", firstName(r.Name), "phone", r.Phone)
+		who, phone := firstName(r.Name), r.Phone
+		if opt != nil && opt.member != "" {
+			// A dispatch company's rider: "Musa from Swift Dispatch", and
+			// the rider's own number.
+			who, phone = firstName(opt.member)+" from "+r.Name, opt.memberPhone
+		}
+		tell(func() error {
+			return d.tellCustomer(ctx, tenant, ord, "customer.delivery_on_way", "on-way", "rider", who, "phone", phone)
 		})
 	case Arrived:
 		if already("arrived", "delivered") {
@@ -842,7 +857,7 @@ func (d *Dispatch) press(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x Del
 			if err := d.queue(ctx, tx, tenant, x.ID, x.RiderID, StageArrived, ""); err != nil {
 				return t, nil, err
 			}
-			after = append(after, func() error { return d.tellCustomer(ctx, tenant, ord, "customer.delivery_arrived", "arrived") })
+			tell(func() error { return d.tellCustomer(ctx, tenant, ord, "customer.delivery_arrived", "arrived") })
 		}
 	case NewNumber:
 		if x.Status != "arrived" || !unpaid {
@@ -886,11 +901,7 @@ func (d *Dispatch) press(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x Del
 		if err := d.queue(ctx, tx, tenant, x.ID, x.RiderID, StageDone, ""); err != nil {
 			return t, nil, err
 		}
-		if !inner {
-			// Inside a company the business's own side completes its
-			// order and tells the customer (below).
-			after = append(after, func() error { return d.complete(ctx, tenant, x, ord) })
-		}
+		tell(func() error { return d.complete(ctx, tenant, x, ord) })
 	default:
 		return t, nil, fmt.Errorf("%w: %q", ErrMove, action)
 	}
@@ -907,7 +918,7 @@ func (d *Dispatch) press(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x Del
 		if err != nil {
 			return t, nil, err
 		}
-		_, _, more, err := d.riderStepTx(ctx, tx, tenant, ord.ID.String(), action, r.Name)
+		_, _, more, err := d.riderStepTx(ctx, tx, tenant, ord.ID.String(), action, member{name: r.Name, phone: r.Phone})
 		if err != nil {
 			return t, nil, err
 		}
