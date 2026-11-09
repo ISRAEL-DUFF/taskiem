@@ -1,6 +1,7 @@
 package ingest_test
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -378,7 +379,17 @@ func TestCustomerGuardNoticeAndStopWhileOff(t *testing.T) {
 	if out := g.lastOutput(t); !strings.HasPrefix(out, "answer||false|text|true|") {
 		t.Fatalf("the notice was used up by a dropped message: %s", out)
 	}
+	// A second quick message before any answer carries the notice again:
+	// with gather, its run may be the one that answers both.
 	g.send(t, ada, text("And another"))
+	if out := g.lastOutput(t); !strings.HasPrefix(out, "answer||false|text|true|") {
+		t.Fatalf("the notice not repeated for a quick message: %s", out)
+	}
+	// Given over a minute ago: not again.
+	if _, err := g.DB.Admin.Exec(context.Background(), `UPDATE assistant_contacts SET noticed_at = now() - interval '2 minutes' WHERE tenant_id = $1`, g.Tenant); err != nil {
+		t.Fatal(err)
+	}
+	g.send(t, ada, text("And one more"))
 	if out := g.lastOutput(t); !strings.HasPrefix(out, "answer||false|text|false|") {
 		t.Fatalf("the notice went twice: %s", out)
 	}
