@@ -340,7 +340,8 @@ func (a *actions) findByPhone(ctx context.Context, req connector.Request) (conne
 		}
 		open = append(open, o)
 	}
-	out := map[string]any{"found": sum.Found, "customer_name": sum.CustomerName, "due_kobo": sum.DueKobo, "due": invoicing.Naira(sum.DueKobo), "open": open}
+	out := map[string]any{"found": sum.Found, "customer_name": sum.CustomerName, "due_kobo": sum.DueKobo, "due": invoicing.Naira(sum.DueKobo), "open": open,
+		"credit_kobo": sum.CreditKobo, "credit": invoicing.Naira(sum.CreditKobo)}
 	if p := sum.LastPaid; p != nil {
 		lp := map[string]any{"number": p.Number, "total": invoicing.Naira(p.TotalKobo)}
 		if p.PaidAt != nil {

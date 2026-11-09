@@ -23,7 +23,7 @@
         "body": {
           "wallet_id": "c-ada",
           "currency": "NGN",
-          "total": 2,
+          "total": 4,
           "transactions": [
             {
               "txn_id": "t-1",
@@ -46,6 +46,24 @@
               "fee": 5350,
               "currency": "NGN",
               "occurred_at": "2026-10-28T08:00:00Z"
+            },
+            {
+              "txn_id": "t-3",
+              "type": "debit",
+              "direction": "out",
+              "status": "pending",
+              "amount": 300000,
+              "currency": "NGN",
+              "occurred_at": "2026-10-29T08:00:00Z"
+            },
+            {
+              "txn_id": "t-4",
+              "type": "credit",
+              "direction": "in",
+              "status": "confirmed",
+              "amount": 100,
+              "currency": "USDT",
+              "occurred_at": "2026-10-29T09:00:00Z"
             }
           ]
         }
@@ -54,8 +72,18 @@
   ],
   "expect": {
     "transactions": [
-      {"at": "2026-10-25T09:14:02Z", "direction": "in", "amount_kobo": 4930000, "narration": "SALARY OCTOBER"},
-      {"at": "2026-10-28T08:00:00Z", "direction": "out", "amount_kobo": 1200000, "narration": ""}
+      {
+        "at": "2026-10-25T09:14:02Z",
+        "direction": "in",
+        "amount_kobo": 4930000,
+        "narration": "SALARY OCTOBER"
+      },
+      {
+        "at": "2026-10-28T08:00:00Z",
+        "direction": "out",
+        "amount_kobo": 1200000,
+        "narration": ""
+      }
     ],
     "truncated": false
   }

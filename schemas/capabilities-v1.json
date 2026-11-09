@@ -367,7 +367,7 @@
     },
     "customer_transactions": {
       "title": "List a customer's recent transactions",
-      "description": "The money in and out of one customer's own wallet or account at the rail since a time (decision 0062 V9). truncated is true when the rail had more than was read: read a shorter window.",
+      "description": "The money that moved in and out of one customer's own wallet or account at the rail since a time (decision 0062 V9): settled transactions only, in naira, in the rail's own order (each has its time). truncated is true when the rail had more than was read: read a shorter window.",
       "classes": ["read"],
       "input": {
         "type": "object",

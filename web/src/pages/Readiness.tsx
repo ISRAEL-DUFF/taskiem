@@ -59,7 +59,7 @@ function NeedItem({
   need: ReadyNeed;
   onChanged: () => void;
 }) {
-  const { can } = useAuth();
+  const { can, me } = useAuth();
   const fix = fixFor(need);
   const steps = stepsText(need);
   return (
@@ -149,7 +149,13 @@ function NeedItem({
         </p>
       )}
       {fix.kind === "turn_on" &&
-        (can("secret.manage") ? (
+        // An area is turned on by an owner (What your business uses);
+        // Voice in workflows by whoever manages the settings.
+        ((
+          fix.setting.startsWith("area_")
+            ? me?.roles.includes("owner")
+            : can("secret.manage")
+        ) ? (
           <p className="hint">
             {fix.setting.startsWith("area_") ? (
               <>

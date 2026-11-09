@@ -797,8 +797,7 @@ capabilities:
     input: { account_id: "=input.account", limit: "=50" }
     output:
       transactions: >-
-        =output.transactions.filter(t, has(t.date) && t.date >= input.since)
+        =output.transactions.filter(t, has(t.date) && (t.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}T') ? timestamp(t.date) >= timestamp(input.since) : t.date >= input.since.substring(0, 10)))
         .map(t, {'at': t.date, 'direction': t.type == 'credit' ? 'in' : 'out', 'amount_kobo': int(t.amount),
         'narration': has(t.narration) ? t.narration : ''})
-      truncated: "=has(output.has_more) && output.has_more && output.transactions.all(t, has(t.date) && t.date >= input.since)"
-    ignores: [since]
+      truncated: "=has(output.has_more) && output.has_more && output.transactions.all(t, has(t.date) && (t.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}T') ? timestamp(t.date) >= timestamp(input.since) : t.date >= input.since.substring(0, 10)))"

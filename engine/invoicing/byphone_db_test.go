@@ -50,9 +50,9 @@ func TestFindByPhone(t *testing.T) {
 	if !got.Found || got.DueKobo != 500000 || len(got.Open) != 2 || got.LastPaid == nil || got.LastPaid.Number != paid.Number || got.CustomerName != "Ada Obi" {
 		t.Fatalf("found: %+v", got)
 	}
-	numbers := map[string]bool{got.Open[0].Number: true, got.Open[1].Number: true}
-	if !numbers[later.Number] || !numbers[sooner.Number] {
-		t.Fatalf("open: %v", numbers)
+	// Oldest due first across the ways the number was written.
+	if got.Open[0].Number != sooner.Number || got.Open[1].Number != later.Number {
+		t.Fatalf("open: %s, %s", got.Open[0].Number, got.Open[1].Number)
 	}
 	none, err := svc.FindByPhone(ctx, tenant, "2348000000000")
 	if err != nil || none.Found || none.DueKobo != 0 {

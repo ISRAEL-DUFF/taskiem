@@ -553,13 +553,16 @@ capabilities:
       available_kobo: "=sum(output.balances.filter(b, b.currency == input.currency).map(b, b.available))"
       currency: "=input.currency"
   customer_transactions:
-    # A customer's wallet's transactions since a time; amount_credited is
-    # what landed on a credit, amount the ledger movement otherwise.
+    # A customer's wallet's transactions since a time, confirmed and in
+    # naira only (pending, failed and reversed ones never moved money);
+    # amount_credited is what landed on a credit, amount the ledger
+    # movement otherwise.
     action: list_transactions
     input: { wallet_id: "=input.account", from: "=input.since" }
     output:
       transactions: >-
-        =output.transactions.filter(t, has(t.occurred_at) && has(t.direction) && t.direction in ['in', 'out'])
+        =output.transactions.filter(t, has(t.occurred_at) && has(t.direction) && t.direction in ['in', 'out']
+        && (!has(t.status) || t.status == 'confirmed') && (!has(t.currency) || t.currency == 'NGN'))
         .map(t, {'at': t.occurred_at, 'direction': t.direction,
         'amount_kobo': int(t.direction == 'in' && has(t.amount_credited) ? t.amount_credited : t.amount),
         'narration': has(t.narration) ? t.narration : ''})
