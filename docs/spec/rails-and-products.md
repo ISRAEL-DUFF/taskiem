@@ -144,6 +144,8 @@ Each capability has one input and one output shape, defined by Taskiem in `schem
 | `collect_push` | `amount_kobo`, `currency`, `msisdn`, `description` | `payment_id`, `status` | idempotent or reconcilable |
 | `get_payment` | `payment_id` (as `collect_link` answered it, or as a payment event carried it) | `status` (`paid` \| `pending` \| `failed` \| `refunded`), `amount_kobo`, `currency`, `paid_at` | read |
 | `virtual_account` | `customer {name, email, phone, bvn}` | `account_number`, `bank_name`, `account_name`, `reference` (what `virtual_account.credited` carries) | idempotent preferred; unsafe allowed and declared |
+| `customer_balance` | `account` (the customer's own wallet or account at the rail), `currency` (default NGN) | `available_kobo`, `currency` | read. iswallet (a customer wallet), Mono (a customer's linked bank account); [decision 0062](../decisions/0062-customer-assistant.md) V9 |
+| `customer_transactions` | `account`, `since` (RFC 3339) | `transactions[] {at, direction (in \| out), amount_kobo, narration}`, `truncated` | read. iswallet, Mono (its newest 50, those since `since`) |
 | `refund` | `payment_id`, `amount_kobo` (optional: partial), `reason` | `refund_id`, `status` (`refunded` \| `pending` \| `failed`), `amount_kobo` | idempotent or reconcilable |
 
 Events, normalised the same way (§4.5): `payout.settled`, `payout.failed`, `payout.reversed`, `payment.received`, `payment.returned` (added by T1), `virtual_account.credited`, `pos.sale` (added by T2: a POS terminal's transaction with its `status`, approved, pending, declined or reversed, from `moniepoint_pos@1` and `opay_business@1`).

@@ -5798,6 +5798,10 @@
     "ready.delivery": {
       "text": "{service} kò fi àwọn ìfiránṣẹ́ iṣẹ́ yìí ránṣẹ́ sí Taskiem: {why}. Taskiem ń gbìyànjú síbẹ̀; ṣàyẹ̀wò ìsopọ̀ náà ní Connections, kí o sì so bot náà pọ̀ lẹ́ẹ̀kan sí i bí wọ́n bá yí i padà ní BotFather.",
       "reviewed": false
+    },
+    "ready.area_off": {
+      "text": "{area} kò tíì tàn fún iṣẹ́ òwò yìí, nítorí náà iṣẹ́ yìí kò lè ṣe ohun tó nílò láti inú rẹ̀. Olúwa rẹ̀ lè tàn án ní Settings, What your business uses.",
+      "reviewed": false
     }
   }
 }

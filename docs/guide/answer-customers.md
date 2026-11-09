@@ -66,6 +66,15 @@ Customers must know they are talking to an assistant, and how to reach a person.
 
 Also tell customers, in your privacy notice or on your page, that you use an automatic assistant, that conversations are kept for your conversation days (30 by default, in Settings), and that they can ask you to delete what they said. One erase, by their WhatsApp number or Telegram chat (ask whoever runs your Taskiem, or `POST /v1/pii/erase`), removes their conversations, voice notes, their row in your allowed customers, and everything your assistant kept about them.
 
+## Answering about their own account
+
+If your customers keep money with you (a wallet, savings) or owe you on invoices, choose **Your assistant on WhatsApp, with their accounts** (or on Telegram) instead. Your assistant then also answers "how much do I have?", "have you received my payment?" and "what did I spend this month?", for the person writing and no one else:
+- Who they are comes from the number or chat they write from, looked up in your **Customers' accounts** table: their number (as WhatsApp gives it, `2348031234567`, or their Telegram chat), their wallet at iswallet or bank account linked through Mono, and, for Telegram, the phone number their invoices are under. Someone who is not in the table is told someone from the team will help.
+- What they owe is read from your invoices under their phone number.
+- The AI model only decides what they are asking about. It never chooses whose account is read, and nothing is ever paid or changed.
+
+You need a payments service that can read a customer's wallet or account (iswallet, or Mono) connected, and **Money and invoices** turned on under **What your business uses**.
+
 ## Day to day
 
 - **Conversations** shows every customer, what they said and what was answered, with numbers and emails hidden. Open a customer to answer them yourself: your assistant stays quiet for them while you do.

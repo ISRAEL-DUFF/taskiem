@@ -5798,6 +5798,10 @@
     "ready.delivery": {
       "text": "{service} ba ya aika saƙonnin wannan aikin zuwa Taskiem: {why}. Taskiem yana ci gaba da ƙoƙari; duba haɗin a Connections, kuma sake haɗa bot ɗin idan an canza shi a BotFather.",
       "reviewed": false
+    },
+    "ready.area_off": {
+      "text": "{area} ba a kunna shi ga wannan kasuwancin ba, don haka wannan aikin ba zai iya yin abin da yake buƙata daga gare shi ba. Mai shi yana kunna shi a Settings, What your business uses.",
+      "reviewed": false
     }
   }
 }

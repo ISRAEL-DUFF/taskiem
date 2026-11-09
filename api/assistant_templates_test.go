@@ -115,3 +115,27 @@ func TestAssistantReadiness(t *testing.T) {
 		t.Fatalf("needs: %v", n)
 	}
 }
+
+// Readiness says when a step needs a part of Taskiem the business has
+// turned off (I4): an assistant reading invoices needs Money.
+func TestReadinessAreaOff(t *testing.T) {
+	w := newWorld(t)
+	owner := w.tenant(t, "Mama Put", "owner@mamaput.test")
+	tenant := tenantOf(t, owner)
+	doc := `{"schema":"wd/v1","id":"wf_owed","version":1,"name":"Owed","trigger":{"type":"manual"},
+	  "steps":[{"id":"owed","type":"connector","connector":"invoices@1","action":"find_by_phone","input":{"phone":"=trigger.body.phone"}}]}`
+	ready := func() map[string]map[string]any {
+		return needsOf(t, owner.must(200, "POST", "/v1/readiness", map[string]any{"definition": json.RawMessage(doc)})["needs"])
+	}
+	if n := ready()["setting/area_money/prod"]; n != nil {
+		t.Fatalf("money is on: %v", n)
+	}
+	if _, err := w.env.DB.Admin.Exec(context.Background(), `INSERT INTO business_areas (tenant_id, area, enabled, updated_by) VALUES ($1, 'money', false, 'test')
+		ON CONFLICT (tenant_id, area) DO UPDATE SET enabled = false`, tenant); err != nil {
+		t.Fatal(err)
+	}
+	n := ready()["setting/area_money/prod"]
+	if n == nil || n["blocking"] != true || !strings.Contains(n["message"].(string), "is not turned on") {
+		t.Fatalf("money off: %v", n)
+	}
+}

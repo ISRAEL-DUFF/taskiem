@@ -244,6 +244,9 @@ func TriggerArea(typ string) (Area, bool) {
 	return a, ok
 }
 
+// Name is an area's name in plain words (Money and invoices).
+func Name(a Area) string { return info[a].Name }
+
 // OffSentence is what a step, a message or a page says when its area is off.
 func OffSentence(a Area) string {
 	return info[a].Name + " is not turned on for this business. An owner turns it on in Settings."

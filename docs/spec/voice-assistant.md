@@ -551,6 +551,13 @@ Left as they are:
 - The assistant's fixed routing (D4): "balance", "payment status", "recent", "something else" → a step each, identity from the trigger only.
 - Area checks surfaced at readiness (I4).
 
+**Built** (ahead of launch, at the owner's request; [the guide](../guide/answer-customers.md#answering-about-their-own-account)):
+- **The customers link (I1).** The known table `customer_accounts`: a customer's number or chat id, their wallet or account at the rail, and the phone their invoices are under. A customer is only ever read through it or their own number.
+- **Capabilities (I2).** `customer_balance` and `customer_transactions`, on iswallet (a customer wallet: `get_balance`, `list_transactions`) and Mono (a customer's linked bank account: `get_balance`, `list_transactions`, its newest 50 since the time asked). `invoices@1 find_by_phone`: what a customer owes, their open invoices and last paid one, by their number in each way it may be written.
+- **Fixed routing (D4).** `assistant-account` (callable): an ai step names what is asked (balance, payment status, recent, other, with a fallback of other); a branch reads it for `trigger.body.sender`; a transform puts it into words. `assistant-answer` takes them (`account`) for the model and the reply check's material. `assistant-whatsapp-accounts` and `assistant-telegram-accounts` call both; a failure reading gives the held answer and tells the owners.
+- **Areas (I4).** Readiness says when a step or trigger needs an area the business turned off (blocking), for any workflow.
+- **Different from the plan:** the routing is in separate `-accounts` templates, not the shop assistant: a capability step needs a rail connected (readiness blocks without one), and a shop needs no second model call. Templates nest at most three deep, so the `-accounts` entries call `assistant-account` and `assistant-answer` themselves. Paystack and Flutterwave are not mapped: they have no balance per customer, and their transactions are the whole business's.
+
 ### V10. After launch
 
 - Quality-rating watch for WhatsApp numbers (C23).

@@ -5798,6 +5798,10 @@
     "ready.delivery": {
       "text": "{service} no dey send dis workflow messages come Taskiem: {why}. Taskiem go still dey try; check di connection for Connections, and connect di bot again if dem change am for BotFather.",
       "reviewed": false
+    },
+    "ready.area_off": {
+      "text": "{area} never dey on for dis business, so dis workflow no fit do wetin e need from am. Owner fit on am for Settings, What your business uses.",
+      "reviewed": false
     }
   }
 }

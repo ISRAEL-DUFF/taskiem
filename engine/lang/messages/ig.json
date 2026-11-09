@@ -5798,6 +5798,10 @@
     "ready.delivery": {
       "text": "{service} anaghị ezitere Taskiem ozi ọrụ a: {why}. Taskiem ka na-anwa; lelee njikọ ahụ na Connections, ma jikọọ bot ahụ ọzọ ma ọ bụrụ na agbanwere ya na BotFather.",
       "reviewed": false
+    },
+    "ready.area_off": {
+      "text": "{area} agbanyeghị maka azụmahịa a, ya mere ọrụ a enweghị ike ime ihe ọ chọrọ na ya. Onye nwe ya na-agbanye ya na Settings, What your business uses.",
+      "reviewed": false
     }
   }
 }

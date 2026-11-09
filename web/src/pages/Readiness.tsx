@@ -151,7 +151,16 @@ function NeedItem({
       {fix.kind === "turn_on" &&
         (can("secret.manage") ? (
           <p className="hint">
-            Turn it on in <Link to="/settings#voice">Settings</Link>.
+            {fix.setting.startsWith("area_") ? (
+              <>
+                Turn it on in{" "}
+                <Link to="/settings/areas">What your business uses</Link>.
+              </>
+            ) : (
+              <>
+                Turn it on in <Link to="/settings#voice">Settings</Link>.
+              </>
+            )}
           </p>
         ) : (
           <AskOwner />

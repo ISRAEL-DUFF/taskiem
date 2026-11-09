@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/ai/builder"
+	"github.com/israel-duff/taskiem/engine/areas"
 	"github.com/israel-duff/taskiem/engine/capability"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/expansion"
@@ -145,6 +146,7 @@ func (s *Server) readinessWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 	var tables, roles []use
 	var caps []*wd.Step // capability steps: their connection is any rail that can
 	var speechSteps, aiSteps []*wd.Step
+	areaSteps := map[areas.Area][]*wd.Step{} // steps of a part of Taskiem a business turns on (I4)
 	var policies []use
 	readExprs := func(st *wd.Step, v any) {
 		walkExpressions(v, func(src string) {
@@ -186,6 +188,9 @@ func (s *Server) readinessWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 		}
 		if st.Type == "ai" {
 			aiSteps = append(aiSteps, st)
+		}
+		if a, ok := areas.ConnectorArea(st.Connector); ok && st.Connector != "" {
+			areaSteps[a] = append(areaSteps[a], st)
 		}
 		if st.Type == "capability" {
 			caps = append(caps, st)
@@ -308,6 +313,9 @@ func (s *Server) readinessWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 			return nil, err
 		}
 		if err := s.allowanceNeeds(ctx, tx, tenant, env, l, aiSteps, speechSteps, add); err != nil {
+			return nil, err
+		}
+		if err := areaNeeds(ctx, tx, tenant, env, l, d, areaSteps, add); err != nil {
 			return nil, err
 		}
 		if err := deliveryNeeds(ctx, tx, tenant, env, l, d, reg, add); err != nil {
@@ -988,6 +996,35 @@ func deliveryNeeds(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env string,
 			add(readyKey{"setup", "delivery", c.Manifest.ID, env}, readyNeed{Service: svc, Problem: "reconnect", Connector: c.Manifest.ID,
 				Message: tr(l, "ready.delivery", "service", svc, "why", why)}, nil)
 			return nil
+		}
+	}
+	return nil
+}
+
+// areaNeeds: a step (or the trigger) of a part of Taskiem the business
+// has turned off (invoices are Money, stock@1 Stock: decision 0062 I4).
+// Such a step fails at once, so publishing waits for it to be turned on.
+func areaNeeds(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env string, l lang.Tag, d *wd.Definition, steps map[areas.Area][]*wd.Step,
+	add func(readyKey, readyNeed, *wd.Step)) error {
+	trig, trigOK := areas.TriggerArea(d.Trigger.Type)
+	for _, a := range areas.All {
+		if len(steps[a]) == 0 && (!trigOK || trig != a) {
+			continue
+		}
+		on, err := areas.Enabled(ctx, tx, tenant, a)
+		if err != nil {
+			return err
+		}
+		if on {
+			continue
+		}
+		k := readyKey{"setting", "area_" + string(a), "", env}
+		n := readyNeed{Service: "Taskiem", Problem: "off", Blocking: true, Message: tr(l, "ready.area_off", "area", areas.Name(a))}
+		if trigOK && trig == a {
+			add(k, n, nil)
+		}
+		for _, st := range steps[a] {
+			add(k, n, st)
 		}
 	}
 	return nil

@@ -7248,6 +7248,11 @@
       "text": "{service} is not sending this workflow's messages to Taskiem: {why}. Taskiem keeps trying; check the connection under Connections, and connect the bot again if it was changed in BotFather.",
       "reviewed": true,
       "context": "Readiness: the provider refused or stopped the webhook Taskiem registered for a chat trigger (a Telegram bot's), with the reason"
+    },
+    "ready.area_off": {
+      "text": "{area} is not turned on for this business, so this workflow cannot do what it needs from it. An owner turns it on in Settings, What your business uses.",
+      "reviewed": true,
+      "context": "Readiness: a workflow's step or trigger belongs to a part of Taskiem (an area) the business has turned off"
     }
   }
 }
