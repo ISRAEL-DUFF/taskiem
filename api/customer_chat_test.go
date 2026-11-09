@@ -247,6 +247,25 @@ func TestCustomerConversationsEdges(t *testing.T) {
 	if d := delivery(); d != "read" {
 		t.Fatalf("after read: %q", d)
 	}
+	// One WhatsApp could not deliver: failed, with the reason.
+	alpha.must(201, "POST", "/v1/customer-chats/"+id+"/messages", map[string]any{"text": "Your order is ready"})
+	if err := admin.QueryRow(ctx, `SELECT wa_id FROM customer_messages WHERE mine ORDER BY created_at DESC LIMIT 1`).Scan(&wamid); err != nil {
+		t.Fatal(err)
+	}
+	failed := []byte(`{"object":"whatsapp_business_account","entry":[{"id":"WABA","changes":[{"field":"messages","value":{"messaging_product":"whatsapp",` +
+		`"metadata":{"display_phone_number":"2348000000001","phone_number_id":"` + pnA + `"},"statuses":[{"id":"` + wamid + `","status":"failed","recipient_id":"2348031112222",` +
+		`"errors":[{"code":131026,"title":"Message undeliverable"}]}]}}]}]}`)
+	if code, raw := w.post(t, "/channels/whatsapp", failed, whatsapp.Sign(waSecret, failed)); code != 200 {
+		t.Fatalf("failed status: %d %s", code, raw)
+	}
+	msgs := alpha.must(200, "GET", "/v1/customer-chats/"+id+"/messages", nil)["messages"].([]any)
+	if last := msgs[len(msgs)-1].(map[string]any); last["delivery"] != "failed" || last["failure"] != "Message undeliverable" {
+		t.Fatalf("failed: %s", toJSON(last))
+	}
+	status("read") // a failed reply is not read later
+	if d := delivery(); d != "failed" {
+		t.Fatalf("after failed: %q", d)
+	}
 
 	// A day on: a reply too long for the template is refused, not cut.
 	if _, err := admin.Exec(ctx, `UPDATE whatsapp_own_contacts SET last_inbound_at = now() - interval '25 hours'`); err != nil {
