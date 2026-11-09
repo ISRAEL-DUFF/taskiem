@@ -197,13 +197,26 @@ func RunConversation(ctx context.Context, tx pgx.Tx, tenant, run uuid.UUID) (cha
 
 // Conversation is a customer's turns on a channel, oldest first: the last
 // limit of them (before, when set, pages back).
-func Conversation(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, channel, subject string, before *time.Time, limit int) ([]Turn, error) {
+// Before is a page's edge: the turns before this one (at, then id, so
+// turns of one moment are neither skipped nor shown twice). A zero ID
+// means everything before At.
+type Before struct {
+	At time.Time
+	ID uuid.UUID
+}
+
+func Conversation(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, channel, subject string, before *Before, limit int) ([]Turn, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 200
 	}
+	var at *time.Time
+	var id uuid.UUID
+	if before != nil {
+		at, id = &before.At, before.ID
+	}
 	rows, err := tx.Query(ctx, `SELECT id, at, role, kind, body, transcript, file, COALESCE(status, ''), COALESCE(reason, ''), run_id, COALESCE(step, ''), COALESCE(by_actor, '')
-		FROM (SELECT * FROM assistant_turns WHERE tenant_id = $1 AND channel = $2 AND subject = $3 AND ($4::timestamptz IS NULL OR at < $4)
-		      ORDER BY at DESC, id DESC LIMIT $5) t ORDER BY at, id`, tenant, channel, subject, before, limit)
+		FROM (SELECT * FROM assistant_turns WHERE tenant_id = $1 AND channel = $2 AND subject = $3 AND ($4::timestamptz IS NULL OR (at, id) < ($4, $6))
+		      ORDER BY at DESC, id DESC LIMIT $5) t ORDER BY at, id`, tenant, channel, subject, at, limit, id)
 	if err != nil {
 		return nil, err
 	}

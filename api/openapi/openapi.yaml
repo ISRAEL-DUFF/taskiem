@@ -15869,6 +15869,13 @@ paths:
         required: false
         schema:
           type: string
+      - name: before_id
+        in: query
+        required: false
+        description: With before, the id of the earliest message shown, so messages of one moment are not skipped
+        schema:
+          type: string
+          format: uuid
       responses:
         '200':
           description: OK
@@ -16095,7 +16102,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ConversationTestStarted'
         '200':
-          description: The guard answered without a run (STOP, too many messages, a hand-over)
+          description: Not answered, so no run (they had written STOP, too many messages, a kind it does not read, too busy, or assistants are off); STOP, START and asking for a person start a run (201) with a fixed answer
           content:
             application/json:
               schema:

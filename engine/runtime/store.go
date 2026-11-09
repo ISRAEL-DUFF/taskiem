@@ -331,7 +331,7 @@ func (s *Store) startIn(ctx context.Context, tx pgx.Tx, req StartRequest, ref *R
 			return err
 		}
 		if c := req.Conversation; c != nil && c.Dedup != "" {
-			if _, err := tx.Exec(ctx, `UPDATE assistant_turns SET run_id = $4 WHERE tenant_id = $1 AND channel = $2 AND dedup = $3`,
+			if _, err := tx.Exec(ctx, `UPDATE assistant_turns SET run_id = $4 WHERE tenant_id = $1 AND channel = $2 AND dedup = $3 AND run_id IS NULL`,
 				req.TenantID, c.Channel, c.Dedup, ref.ID); err != nil {
 				return err
 			}
@@ -531,12 +531,13 @@ type runRow struct {
 	env        string
 	forked     bool   // continues a failed run (fork.go)
 	expansion  []byte // the expansion it runs, for a version with capability steps
+	sandbox    bool   // a test run: nothing it does reaches anyone (sandbox.go)
 }
 
 func lockRun(ctx context.Context, tx pgx.Tx, id uuid.UUID) (runRow, error) {
 	r := runRow{ref: RunRef{ID: id}}
-	err := tx.QueryRow(ctx, `SELECT tenant_id, workflow_id, version, status, environment, forked_from_seq IS NOT NULL, expansion FROM runs WHERE id = $1 FOR UPDATE`, id).
-		Scan(&r.ref.TenantID, &r.workflowID, &r.version, &r.status, &r.env, &r.forked, &r.expansion)
+	err := tx.QueryRow(ctx, `SELECT tenant_id, workflow_id, version, status, environment, forked_from_seq IS NOT NULL, expansion, sandbox FROM runs WHERE id = $1 FOR UPDATE`, id).
+		Scan(&r.ref.TenantID, &r.workflowID, &r.version, &r.status, &r.env, &r.forked, &r.expansion, &r.sandbox)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return r, fmt.Errorf("run %s: %w", id, ErrNotFound)
 	}
@@ -645,6 +646,7 @@ func (s *Store) decideInline(ctx context.Context, tx pgx.Tx, ref RunRef) error {
 			return err
 		}
 		var deferred []func() error
+		var asks string // a test run reaching a step that asks a person
 		for _, ev := range evs {
 			if ev.Type == history.StepScheduled {
 				scheduled++
@@ -668,6 +670,14 @@ func (s *Store) decideInline(ctx context.Context, tx pgx.Tx, ref RunRef) error {
 			if _, err := appendEvent(ctx, tx, ref.ID, ev.Type, ev.StepID, ev.Attempt, sealed, history.OriginDecide); err != nil {
 				return err
 			}
+			if run.sandbox && asks == "" {
+				if asks = asksAPerson(ev); asks != "" {
+					continue // never delivered: the run ends below
+				}
+			}
+			if asks != "" {
+				continue
+			}
 			then, err := s.applyEffects(ctx, tx, run, def, ev, sealed, taint)
 			if err != nil {
 				return fmt.Errorf("apply %s(%s): %w", ev.Type, ev.StepID, err)
@@ -675,6 +685,9 @@ func (s *Store) decideInline(ctx context.Context, tx pgx.Tx, ref RunRef) error {
 			if then != nil {
 				deferred = append(deferred, then)
 			}
+		}
+		if asks != "" {
+			return s.failSandbox(ctx, tx, run, def, asks)
 		}
 		for _, f := range deferred {
 			if err := f(); err != nil {
@@ -1039,7 +1052,7 @@ func (s *Store) endRun(ctx context.Context, tx pgx.Tx, r runRow, def *wd.Definit
 func QueueOutcome(ctx context.Context, tx pgx.Tx, run uuid.UUID, status string) error {
 	_, err := tx.Exec(ctx, `INSERT INTO run_outcomes (run_id, tenant_id, status)
 		SELECT r.id, r.tenant_id, $2 FROM runs r
-		 WHERE r.id = $1 AND ($2 IN ('failed', 'needs_reconciliation')
+		 WHERE r.id = $1 AND NOT r.sandbox AND ($2 IN ('failed', 'needs_reconciliation')
 		   OR ($2 = 'completed' AND r.started_by ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'))
 		ON CONFLICT DO NOTHING`, run, status)
 	return err

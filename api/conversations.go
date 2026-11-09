@@ -139,26 +139,25 @@ func (s *Server) listConversations(w http.ResponseWriter, r *http.Request) {
 		if only != "" {
 			channels = []string{only}
 		}
-		rows, err := tx.Query(ctx, `SELECT c.channel, c.subject, c.sender, c.first_at, c.last_inbound_at, c.stopped_at, c.handover_until,
-			  COALESCE(l.at, c.last_inbound_at), COALESCE(l.role, 'customer')
+		// From the contact's own columns (V7): no turn read and no
+		// envelope opened per customer.
+		rows, err := tx.Query(ctx, `SELECT c.channel, c.subject, c.hint, c.first_at, c.last_inbound_at, c.stopped_at, c.handover_until,
+			  COALESCE(c.last_turn_at, c.last_inbound_at), COALESCE(c.last_role, 'customer')
 			FROM assistant_contacts c
-			LEFT JOIN LATERAL (SELECT at, role FROM assistant_turns t WHERE t.tenant_id = c.tenant_id AND t.channel = c.channel AND t.subject = c.subject
-			  ORDER BY at DESC LIMIT 1) l ON true
 			WHERE c.tenant_id = $1 AND ($2::text[] IS NULL OR c.channel = ANY($2)) AND (c.channel NOT LIKE 'test/%' OR c.channel LIKE $3 || '%')
-			ORDER BY COALESCE(l.at, c.last_inbound_at) DESC LIMIT 200`, p.TenantID, nilIfEmpty(channels), testChannelPrefix(p.Actor()))
+			ORDER BY COALESCE(c.last_turn_at, c.last_inbound_at) DESC LIMIT 200`, p.TenantID, nilIfEmpty(channels), testChannelPrefix(p.Actor()))
 		if err != nil {
 			return err
 		}
 		type row struct {
-			v      customerView
-			sealed map[string]any
-			last   time.Time
-			stop   *time.Time
+			v    customerView
+			last time.Time
+			stop *time.Time
 		}
 		var list []row
 		for rows.Next() {
 			var x row
-			if err := rows.Scan(&x.v.Channel, &x.v.Customer, &x.sealed, &x.v.FirstAt, &x.last, &x.stop, &x.v.Until, &x.v.LastAt, &x.v.LastRole); err != nil {
+			if err := rows.Scan(&x.v.Channel, &x.v.Customer, &x.v.Hint, &x.v.FirstAt, &x.last, &x.stop, &x.v.Until, &x.v.LastAt, &x.v.LastRole); err != nil {
 				rows.Close()
 				return err
 			}
@@ -181,7 +180,9 @@ func (s *Server) listConversations(w http.ResponseWriter, r *http.Request) {
 				x.v.Until = nil
 			}
 			x.v.WindowOpen = !strings.HasPrefix(x.v.Channel, "whatsapp@") || now.Sub(x.last) < assistant.Window
-			x.v.Hint = s.customerHint(ctx, tx, p.TenantID, x.v.Channel, x.v.Customer, x.sealed)
+			if x.v.Hint == "" {
+				x.v.Hint = s.customerHint(ctx, tx, p.TenantID, x.v.Channel, x.v.Customer, nil)
+			}
 			customers = append(customers, x.v)
 		}
 		out["customers"] = customers
@@ -275,14 +276,20 @@ func (s *Server) getConversation(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusForbidden, "showing numbers and emails takes "+PermPIIReveal)
 		return
 	}
-	var before *time.Time
+	var before *assistant.Before
 	if b := q.Get("before"); b != "" {
 		t, err := time.Parse(time.RFC3339Nano, b)
 		if err != nil {
 			writeErr(w, http.StatusBadRequest, "before is a time (RFC 3339)")
 			return
 		}
-		before = &t
+		before = &assistant.Before{At: t}
+		if id := q.Get("before_id"); id != "" {
+			if before.ID, err = uuid.Parse(id); err != nil {
+				writeErr(w, http.StatusBadRequest, "before_id is a message's id")
+				return
+			}
+		}
 	}
 	out := map[string]any{}
 	err := s.tx(r, func(tx pgx.Tx) error {
@@ -410,7 +417,7 @@ func (s *Server) replyByHand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ref, name, env, ok := splitChannel(req.Channel)
-	if !ok || s.Vault == nil {
+	if !ok || s.Vault == nil || ref == "test" {
 		writeErr(w, http.StatusBadRequest, "no such channel")
 		return
 	}
@@ -441,13 +448,6 @@ func (s *Server) replyByHand(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		stopped = stop != nil
-		if until == nil || !until.After(time.Now()) {
-			// A person answering: the assistant stays quiet for them, so
-			// they do not get two answers.
-			if err := assistant.HandOver(ctx, tx, p.TenantID, req.Channel, req.Customer, sender, assistant.SenderCategory(req.Channel), 24, time.Now(), "member:"+p.Actor()); err != nil {
-				return err
-			}
-		}
 		return nil
 	})
 	switch {
@@ -510,18 +510,35 @@ func (s *Server) replyByHand(w http.ResponseWriter, r *http.Request) {
 	// known is not.
 	sealer, _ := any(s.Vault).(assistant.Sealer)
 	err = s.tx(r, func(tx pgx.Tx) error {
+		// A person answering: the assistant stays quiet for them, so they
+		// do not get two answers. Only once the message is to be sent: a
+		// refused reply leaves the assistant as it was.
+		var until *time.Time
+		if err := tx.QueryRow(ctx, `SELECT handover_until FROM assistant_contacts WHERE tenant_id = $1 AND channel = $2 AND subject = $3`,
+			p.TenantID, req.Channel, req.Customer).Scan(&until); err != nil {
+			return err
+		}
+		if until == nil || !until.After(time.Now()) {
+			if err := assistant.HandOver(ctx, tx, p.TenantID, req.Channel, req.Customer, sender, assistant.SenderCategory(req.Channel), 24, time.Now(), "member:"+p.Actor()); err != nil {
+				return err
+			}
+		}
 		err := assistant.RecordSent(ctx, tx, sealer, p.TenantID, req.Channel, req.Customer, assistant.Sent{Role: assistant.RoleMember, Kind: kind, Text: text,
 			By: p.Actor(), RequestID: req.RequestID, Status: "sending"})
 		if !errors.Is(err, assistant.ErrDuplicate) {
 			return err
 		}
 		var was, wasChannel, wasCustomer string
-		if err := tx.QueryRow(ctx, `SELECT COALESCE(status, ''), channel, subject FROM assistant_turns WHERE tenant_id = $1 AND request_id = $2`,
-			p.TenantID, req.RequestID).Scan(&was, &wasChannel, &wasCustomer); err != nil {
+		var wasBody any
+		if err := tx.QueryRow(ctx, `SELECT COALESCE(status, ''), channel, subject, body FROM assistant_turns WHERE tenant_id = $1 AND request_id = $2`,
+			p.TenantID, req.RequestID).Scan(&was, &wasChannel, &wasCustomer, &wasBody); err != nil {
 			return err
 		}
 		if wasChannel != req.Channel || wasCustomer != req.Customer {
 			return errRequestReused
+		}
+		if words, _ := s.openTurnText(ctx, tx, p.TenantID, wasBody, true); words != text {
+			return errRequestReused // the same id for other words: another message
 		}
 		if was != "failed" {
 			return &replyState{status: was}
@@ -634,7 +651,7 @@ func (s *Server) conversationTemplates(w http.ResponseWriter, r *http.Request) {
 	}
 	conn, creds, hc, err := s.connectionIn(r.Context(), p.TenantID, env, ref, name, "conversation.templates")
 	if err != nil {
-		writeErr(w, http.StatusConflict, "the "+channelWhere(ref)+" connection cannot be used: "+err.Error())
+		writeErr(w, http.StatusConflict, "your "+channelWhere(ref)+" connection cannot be used: check it under Connections")
 		return
 	}
 	spec := replySpec(conn)
@@ -644,7 +661,8 @@ func (s *Server) conversationTemplates(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := conn.Actions[spec.Templates].Execute(r.Context(), connector.Request{Input: map[string]any{}, Credentials: creds, HTTP: hc, Logger: s.Logger, Attempt: 1})
 	if err != nil {
-		writeErr(w, http.StatusBadGateway, "the templates could not be read: "+pii.Redact(err.Error()))
+		s.Logger.Info("conversations: templates not read", "tenant", p.TenantID, "err", pii.Redact(err.Error()))
+		writeErr(w, http.StatusBadGateway, "your templates could not be read from "+channelWhere(ref)+": try again in a moment")
 		return
 	}
 	out, _ := resp.Output.(map[string]any)
@@ -763,7 +781,7 @@ func (s *Server) conversationMetrics(w http.ResponseWriter, r *http.Request) {
 			       (SELECT count(*) FROM m WHERE role = 'assistant'),
 			       (SELECT count(*) FROM m WHERE role = 'held'),
 			       (SELECT count(*) FROM m WHERE role = 'member' AND status = 'sent'),
-			       (SELECT count(*) FROM m WHERE role = 'customer' AND reason = 'handover')`, p.TenantID, channel).
+			       (SELECT count(DISTINCT subject) FROM m WHERE role = 'customer' AND reason = 'handover')`, p.TenantID, channel).
 			Scan(&customers, &in, &answers, &held, &byHand, &handovers); err != nil {
 			return err
 		}
@@ -871,7 +889,9 @@ func (s *Server) ExpireConversations(ctx context.Context) (int, error) {
 				return err
 			})
 			if err != nil {
-				return total, err
+				// One business failing does not hold back the others'
+				// deletions: it is tried again next hour.
+				s.Logger.Warn("conversations: a business's turns did not expire", "tenant", d.tenant, "err", err)
 			}
 		}
 		if len(list) < 200 || ctx.Err() != nil {

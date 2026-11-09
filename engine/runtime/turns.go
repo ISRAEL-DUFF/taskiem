@@ -4,13 +4,10 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/assistant"
-	"github.com/israel-duff/taskiem/engine/db"
 )
 
 // The conversation's record from a run (decision 0062 V7): a step that
@@ -22,7 +19,7 @@ import (
 
 // recordTurn records what a completed step said to (or heard from) the
 // run's customer, when the run belongs to a conversation.
-func (w *Worker) recordTurn(ctx context.Context, p *plan, input map[string]any, output any) {
+func (w *Worker) recordTurn(ctx context.Context, outer pgx.Tx, p *plan, input map[string]any, output any) {
 	if p == nil || p.conn == nil {
 		return
 	}
@@ -35,9 +32,14 @@ func (w *Worker) recordTurn(ctx context.Context, p *plan, input map[string]any, 
 	if !ok {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-	defer cancel()
-	err := db.InTenantTx(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, func(tx pgx.Tx) error {
+	// In the step's own transaction, under a savepoint: a failure to
+	// record is logged, never the step's.
+	tx, err := outer.Begin(ctx)
+	if err != nil {
+		w.logTurn(p, err)
+		return
+	}
+	err = func() error {
 		channel, subject, root, ok, err := assistant.RunConversation(ctx, tx, p.c.tenant, p.c.run)
 		if err != nil || !ok {
 			return err
@@ -109,8 +111,18 @@ func (w *Worker) recordTurn(ctx context.Context, p *plan, input map[string]any, 
 				Run: &run, StepRun: &stepRun, Step: p.c.step})
 		}
 		return nil
-	})
-	if err != nil && w.Logger != nil {
+	}()
+	if err == nil {
+		err = tx.Commit(ctx)
+	}
+	if err != nil {
+		_ = tx.Rollback(ctx)
+		w.logTurn(p, err)
+	}
+}
+
+func (w *Worker) logTurn(p *plan, err error) {
+	if w.Logger != nil {
 		w.Logger.Warn("conversation: a step's message was not recorded", "tenant", p.c.tenant, "run", p.c.run, "step", p.c.step, "err", err)
 	}
 }

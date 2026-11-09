@@ -60,7 +60,7 @@ ALTER TABLE assistant_contacts
 CREATE INDEX assistant_contacts_recent ON assistant_contacts (tenant_id, channel, (COALESCE(last_turn_at, last_inbound_at)) DESC);
 
 -- The hourly sweep, across tenants: the businesses with turns older than
--- a week (the shortest a plan keeps conversations), a page at a time after
+-- a day, a page at a time after
 -- a tenant id, with their conversation days; the api role caps the days by
 -- the plan and deletes in each business's scope. Ids and days only.
 CREATE POLICY turns_expiry ON assistant_turns FOR SELECT TO taskiem_dispatch USING (true);

@@ -91,7 +91,7 @@ actions:
     description: By URL (Telegram fetches it; 5 MB) or by a file_id Telegram gave the bot. Not idempotent, like send_message.
     class: unsafe_write
     # Speaks to a customer: recorded in the conversation (connector/v1 rule 24).
-    turn: { to: chat_id, text: caption, file: file, kind: image }
+    turn: { to: chat_id, text: caption, file: photo, kind: image }
     # A duplicate is a duplicate chat message: a step may ask for a lost
     # send to be sent once more (decision 0062 D11).
     resend_if_lost: true
@@ -126,7 +126,7 @@ actions:
       file_id. Not idempotent, like send_message.
     class: unsafe_write
     # Speaks to a customer: recorded in the conversation (connector/v1 rule 24).
-    turn: { to: chat_id, text: caption, file: file, kind: document }
+    turn: { to: chat_id, text: caption, file: document, kind: document }
     # A duplicate is a duplicate chat message: a step may ask for a lost
     # send to be sent once more (decision 0062 D11).
     resend_if_lost: true

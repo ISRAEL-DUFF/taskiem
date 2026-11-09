@@ -564,6 +564,21 @@ func (w *Worker) run(ctx context.Context, c claim, target, outcome *string) erro
 		if err != nil {
 			return err
 		}
+		if result.Type == history.StepCompleted && p.conn != nil {
+			// A send found done on reconcile (the provider had it): it was
+			// said to the customer as much as one answered at once.
+			if in, err := w.resolveSecrets(ctx, p); err == nil {
+				if input, ok := in.(map[string]any); ok {
+					var out any
+					if v, err := expr.DecodeJSON(result.Payload); err == nil {
+						if m, ok := v.(map[string]any); ok {
+							out = m["output"]
+						}
+					}
+					p.turnIn, p.turnOut = input, out
+				}
+			}
+		}
 	}
 	if p.mode == modeSend {
 		result = w.send(ctx, p)
@@ -1027,13 +1042,7 @@ func (w *Worker) postpone(ctx context.Context, p *plan, at time.Time) error {
 // as the lease still holds. Repeating it after an unknown COMMIT is safe:
 // a committed finish released the task, so the repeat is fenced out.
 func (w *Worker) finish(ctx context.Context, p *plan, result *history.Event) error {
-	err := w.finishTx(ctx, p, result)
-	// What the step said to the run's customer goes in their conversation
-	// (V7), once its result is written.
-	if err == nil && result != nil && result.Type == history.StepCompleted && p.turnIn != nil {
-		w.recordTurn(ctx, p, p.turnIn, p.turnOut)
-	}
-	return err
+	return w.finishTx(ctx, p, result)
 }
 
 func (w *Worker) finishTx(ctx context.Context, p *plan, result *history.Event) error {
@@ -1143,6 +1152,12 @@ func (w *Worker) finishTx(ctx context.Context, p *plan, result *history.Event) e
 				}
 			}
 		}
+		// What the step said to the run's customer goes in their
+		// conversation (V7), with its result: before the run can end on it,
+		// and never lost between the two.
+		if result.Type == history.StepCompleted && p.turnIn != nil {
+			w.recordTurn(ctx, tx, p, p.turnIn, p.turnOut)
+		}
 		return w.Store.decideInline(ctx, tx, RunRef{ID: p.c.run, TenantID: p.c.tenant})
 	})
 }
@@ -1213,9 +1228,11 @@ func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 	if err != nil {
 		return w.secretFailure(p, err)
 	}
-	// A test conversation's run runs no code, container or http step that
-	// could change something: each answers a simulated output (sandbox.go).
-	if p.conn == nil && (p.stepType == "code" || p.stepType == "container" || p.stepType == "http" && p.class != effects.Read) {
+	// A test conversation's run runs no container or http step that could
+	// change something: each answers a simulated output (sandbox.go). Code
+	// runs: it can only read (host.fetch takes GET and HEAD), and a
+	// recipe's steps that shape a message must behave as they will.
+	if p.conn == nil && (p.stepType == "container" || p.stepType == "http") && p.class != effects.Read {
 		if sim, ok, err := w.simulateStep(ctx, p); err != nil {
 			return w.classify(p, fmt.Errorf("checking for a test run: %w: %w", err, effects.ErrNotSent))
 		} else if ok {

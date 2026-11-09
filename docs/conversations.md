@@ -20,7 +20,7 @@ Taskiem keeps each conversation itself (`assistant_turns`), whatever the workflo
 
 Each message links to the run that answered it (**See how it was answered**, the run's page).
 
-**Personal data.** The words are sealed under the customer's key, like everything their messages start ([erasing a customer](assistant-guard.md#erasing-a-customer-p2)): erasing them erases their conversations. Turns go after the business's conversation days (30 by default, capped by the plan), with the conversations table and the runs.
+**Personal data.** The words are sealed under the customer's key, like everything their messages start ([erasing a customer](assistant-guard.md#erasing-a-customer-p2)): erasing them erases their conversations. The customer list keeps, per customer, a hint (the number's last four digits), when they last wrote and STOP; it is kept while they are a customer (STOP must be remembered) and goes when they are erased. Turns go after the business's conversation days (30 by default, capped by the plan), with the conversations table and the runs.
 
 ## Who sees what
 
@@ -33,7 +33,7 @@ Each message links to the run that answered it (**See how it was answered**, the
 ## Answering by hand
 
 - **Answer them myself** pauses the assistant for that customer for 24 hours (a hand-over by a member, no alert; `hours` 1 to 168 in the API), so it does not answer over the person. **Let the assistant answer them again** ends it.
-- **Answer them** sends the member's message from the business's own number or bot, through the same connection the assistant uses, as the business. Sending pauses the assistant for them too (24 hours) when it was answering. It is recorded with who sent it, and audited (`conversation.reply`).
+- **Answer them** sends the member's message from the business's own number or bot, through the same connection the assistant uses, as the business. Sending pauses the assistant for them too (24 hours) when it was answering; a reply that is refused before it is sent (STOP, the window, the connection) leaves the assistant as it was. It is recorded with who sent it, and audited (`conversation.reply`).
 - **Once.** Each message has a request id: pressing **Send** twice sends once. A message that failed may be sent again with the same id; one still being sent, or whose outcome is unknown, is refused rather than sent twice. A send is finished even when the page is closed.
 - **Not to someone who wrote STOP**, and not while the business is suspended.
 - **WhatsApp's 24-hour window.** A business may write freely within 24 hours of the customer's last message, and only with an approved template after. Outside the window the page offers the business's approved templates (`whatsapp@1 list_templates`), with a box for each `{{1}}` in the body (each must be filled), and sends one (`send_template`). What is recorded is the template's words as the customer read them.
@@ -54,9 +54,9 @@ Also how much of this month's allowance for AI answers and voice notes the busin
 A member writes as a customer would, and sees what the assistant would answer:
 - **The guard is real.** The message goes through the assistant's guard on a test chat of the member's own, one per assistant (`test/<member>.<workflow>/<env>`), so the notice, STOP and START, the limits and asking for a person all work as they will for customers. Only that member sees it, on this page only (not in the list of customers). **Start again** forgets the member's test chats (and STOP or a hand-over tried in them).
 - **The run is real.** It runs the version published in the environment (dev before prod), not a draft, with what the business knows, the real model, and hearing and speaking. It counts against the month's allowances.
-- **Nothing changes.** It runs as a *sandbox run* (`runs.sandbox`). Every step that would change something (a WhatsApp or Telegram message, a row, a hand-over) is simulated: it answers an output of the action's shape, marked `simulated`, and sends nothing.
-- **What you see.** What it would have sent appears as its answer, with replies the check held back, and a link to the run. A test run that fails alerts no one.
-- **What it refuses.** A workflow with a step that asks a person (an approval, a form, a callback) cannot be tried here.
+- **Nothing changes.** It runs as a *sandbox run* (`runs.sandbox`). Every step that would change something (a WhatsApp or Telegram message, a row, a hand-over) is simulated: it answers an output of the action's shape, marked `simulated`, and sends nothing. HTTP calls that write and container steps are simulated too. Code steps run (they can only read), so steps that shape a message behave as they will.
+- **What you see.** What it would have sent appears as its answer, with replies the check held back, and a link to the run. A test run that fails alerts no one and notifies no one, through the business's alert rules too.
+- **What it refuses.** A workflow with a step that asks a person (an approval, a form, a callback) cannot be tried here. One met only on the way (in a template or a workflow it calls) ends the test run there: no one is asked.
 
 **What it cannot try.** The conversation's memory: the recipe reads it from the conversations table, which a sandbox run does not write. So each test message is answered as if it were the first. Voice notes cannot be sent from the page yet, and a voice note or picture in a conversation shows as its kind (and transcript), not played.
 

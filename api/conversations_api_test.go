@@ -251,3 +251,59 @@ func TestConversations(t *testing.T) {
 		t.Fatalf("audit: %v", actions)
 	}
 }
+
+// Talk to it here asks no one for anything: a step that would (an
+// approval in a workflow it calls) ends the test run instead.
+func TestTestChatAsksNoOne(t *testing.T) {
+	w := newWorld(t)
+	chat := &chatFake{}
+	if err := w.env.Registry.Register(chat.connector()); err != nil {
+		t.Fatal(err)
+	}
+	owner := w.tenant(t, "Mama Put", "owner@mamaput.test")
+	tenant := uuid.MustParse(tenantOf(t, owner))
+	if _, err := w.env.Vault.CreateConnection(context.Background(), tenant, "prod", "chatfake", "main", "api_key", map[string]string{"token": "s3cret"}, "test"); err != nil {
+		t.Fatal(err)
+	}
+	child := publishFlow(t, owner, `{"schema":"wd/v1","id":"wf_ask","version":1,"name":"Ask","trigger":{"type":"subflow"},
+	  "steps":[{"id":"ok","type":"approval","config":{"role":"admin","subject":{"why":"a refund"}}}]}`)
+	wf := publishFlow(t, owner, `{"schema":"wd/v1","id":"wf_assistant","version":1,"name":"Assistant",
+	  "trigger":{"type":"connector_event","config":{"connector":"chatfake@1","trigger":"messages","guard":true}},
+	  "steps":[{"id":"ask","type":"subflow","config":{"workflow":"`+child+`"},"input":{}},
+	    {"id":"answer","type":"connector","connector":"chatfake@1","action":"send","needs":["ask"],
+	    "input":{"to":"=trigger.guard.sender","body":"Done"}}]}`)
+	started := owner.must(201, "POST", "/v1/conversations/test", map[string]any{"workflow": wf, "text": "Refund me"})
+	var got map[string]any
+	for i := 0; i < 50; i++ {
+		w.env.Drain(t)
+		got = owner.must(200, "GET", "/v1/conversations/test/"+started["run"].(string), nil)
+		if got["ended"] == true {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if got["ended"] != true || got["status"] != "completed" && got["status"] != "failed" {
+		t.Fatalf("test chat: %v", got)
+	}
+	var approvals int
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT count(*) FROM approvals WHERE tenant_id = $1`, tenant).Scan(&approvals); err != nil {
+		t.Fatal(err)
+	}
+	if approvals != 0 || chat.count() != 0 {
+		t.Fatalf("a test chat asked someone: %d approvals, %d sent", approvals, chat.count())
+	}
+	var status string
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT status FROM runs WHERE tenant_id = $1 AND workflow_id::text = $2 AND sandbox`, tenant, child).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != "failed" {
+		t.Fatalf("the test run's subflow: %s", status)
+	}
+	var outcomes int
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT count(*) FROM run_outcomes WHERE tenant_id = $1`, tenant).Scan(&outcomes); err != nil {
+		t.Fatal(err)
+	}
+	if outcomes != 0 {
+		t.Fatalf("a test run's end was queued for alerts: %d", outcomes)
+	}
+}

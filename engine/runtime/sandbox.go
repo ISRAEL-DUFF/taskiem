@@ -9,7 +9,10 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/decide"
 	"github.com/israel-duff/taskiem/engine/effects"
+	"github.com/israel-duff/taskiem/engine/history"
+	"github.com/israel-duff/taskiem/engine/wd"
 )
 
 // Sandbox runs (decision 0062 V7, Talk to it here): a test conversation
@@ -104,7 +107,7 @@ func shape(s map[string]any, resolve func(string) json.RawMessage, depth int) an
 	return nil
 }
 
-// simulateStep answers a code, container or writing http step of a sandbox
+// simulateStep answers a writing container or http step of a sandbox
 // run without running it.
 func (w *Worker) simulateStep(ctx context.Context, p *plan) (map[string]any, bool, error) {
 	sb, err := w.sandboxed(ctx, p.c.tenant, p.c.run)
@@ -116,4 +119,40 @@ func (w *Worker) simulateStep(ctx context.Context, p *plan) (map[string]any, boo
 		out["status"], out["headers"], out["body"] = 200, map[string]any{}, map[string]any{}
 	}
 	return out, true, nil
+}
+
+// asksAPerson is what a step of a test run would ask a person for (an
+// approval, a form, a callback), or "": a test run sends no one anything,
+// so such a step ends it. The publish-time check in the API sees only
+// the workflow itself; this one sees templates' and subflows' steps too.
+func asksAPerson(ev decide.NewEvent) string {
+	switch ev.Type {
+	case history.ApprovalRequested:
+		return "an approval (step " + ev.StepID + ")"
+	case history.StepScheduled:
+		p, ok := ev.Payload.(history.ScheduledPayload)
+		switch {
+		case !ok:
+		case p.Form != nil:
+			return "a form (step " + ev.StepID + ")"
+		case p.Kind == history.KindSignal && p.Event == history.CallbackEvent:
+			return "a callback (step " + ev.StepID + ")"
+		}
+	}
+	return ""
+}
+
+// failSandbox ends a test run that reached a step asking a person, after
+// decide's batch (as countSteps ends a run past its step limit).
+func (s *Store) failSandbox(ctx context.Context, tx pgx.Tx, run runRow, def *wd.Definition, asks string) error {
+	s.folds.drop(run.ref.ID)
+	msg := "a test run cannot ask a person for something: it reached " + asks + ". Try it with a real message instead"
+	if _, err := appendEvent(ctx, tx, run.ref.ID, history.RunFailed, "", 0,
+		history.RunFailedPayload{Error: history.Error{Kind: "sandbox", Message: msg, Next: "fail"}}, history.OriginScheduler); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE runs SET decided_seq = last_seq, orch_lease_owner = NULL, orch_lease_until = NULL WHERE id = $1`, run.ref.ID); err != nil {
+		return err
+	}
+	return s.endRun(ctx, tx, run, def, "failed")
 }

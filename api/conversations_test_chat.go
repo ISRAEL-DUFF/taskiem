@@ -106,11 +106,14 @@ func (s *Server) startTestTurn(w http.ResponseWriter, r *http.Request) {
 			d.Walk(func(st *wd.Step) {
 				switch st.Type {
 				case "approval", "form", "callback":
-					asks = st.ID
+					asks = st.Name
+					if asks == "" {
+						asks = st.Type
+					}
 				}
 			})
 			if asks != "" {
-				return fmt.Errorf("%w: this assistant asks a person for something (step %s), which a test chat cannot do; try it with a real message instead", errBadRequest, asks)
+				return fmt.Errorf("%w: this assistant asks a person for something (%q), which a test chat cannot do; try it with a real message instead", errBadRequest, asks)
 			}
 		}
 		var m map[string]any
@@ -126,7 +129,7 @@ func (s *Server) startTestTurn(w http.ResponseWriter, r *http.Request) {
 		return assistant.RecordInbound(ctx, tx, sealer, p.TenantID, msg, d)
 	})
 	if errors.Is(err, errNotAssistant) {
-		writeErr(w, http.StatusNotFound, "that workflow does not answer customers in any environment (its chat trigger has no guard, or it is not published)")
+		writeErr(w, http.StatusNotFound, "that workflow does not answer customers yet: publish it first")
 		return
 	}
 	if err != nil {
@@ -206,7 +209,7 @@ func (s *Server) getTestTurn(w http.ResponseWriter, r *http.Request) {
 			if t.RunID == nil || *t.RunID != root || t.Role == assistant.RoleCustomer {
 				continue
 			}
-			text, _ := s.openTurnText(ctx, tx, p.TenantID, t.Body, true)
+			text, _ := s.openTurnText(ctx, tx, p.TenantID, t.Body, false) // numbers hidden, as on the thread
 			views = append(views, turnView{ID: t.ID, At: t.At, Role: t.Role, Kind: t.Kind, Text: text, Reason: t.Reason, File: t.File, RunID: t.RunID, Step: t.Step})
 		}
 		out["status"], out["ended"], out["turns"] = status, status == "completed" || status == "failed" || status == "cancelled", nonNil(views)

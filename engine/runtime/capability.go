@@ -52,6 +52,11 @@ func project(p *plan, result history.Event) history.Event {
 			}
 		}
 	}
+	if m, _ := raw.(map[string]any); err != nil && m != nil && m["simulated"] == true {
+		// A test run's simulated answer (sandbox.go): nothing moved, so
+		// nothing is parked; the run goes on with what was simulated.
+		return result
+	}
 	if err != nil {
 		msg := fmt.Sprintf("%s's answer could not be read as %s: %v", p.sched.Connector, uses, err)
 		if p.class.IsWrite() {

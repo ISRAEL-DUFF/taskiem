@@ -414,7 +414,7 @@ func (a *Alerter) find(ctx context.Context, tx pgx.Tx, r rule, now time.Time) ([
 	case RunFailed:
 		where, args := filters(r.cfg, "r", []any{r.since, now})
 		err = runAlert(`SELECT r.id, w.name, r.environment, r.ended_at FROM runs r JOIN workflows w ON w.id = r.workflow_id
-			WHERE r.status = 'failed' AND r.ended_at > $1 AND r.ended_at <= $2`+where+` ORDER BY r.ended_at LIMIT 200`, args,
+			WHERE r.status = 'failed' AND NOT r.sandbox AND r.ended_at > $1 AND r.ended_at <= $2`+where+` ORDER BY r.ended_at LIMIT 200`, args,
 			func(id uuid.UUID, wf, env string, at time.Time) Alert {
 				return Alert{Kind: r.kind, Dedup: id.String(), Title: fmt.Sprintf("%s failed in %s", wf, env),
 					Body: fmt.Sprintf("Run %s of %s failed at %s.", id, wf, at.UTC().Format(time.RFC1123)), Link: a.link("/runs/" + id.String()), Detail: runDetail(id, wf, env)}
@@ -422,7 +422,7 @@ func (a *Alerter) find(ctx context.Context, tx pgx.Tx, r rule, now time.Time) ([
 	case NeedsReconciliation:
 		where, args := filters(r.cfg, "r", nil)
 		err = runAlert(`SELECT r.id, w.name, r.environment, r.started_at FROM runs r JOIN workflows w ON w.id = r.workflow_id
-			WHERE r.status = 'needs_reconciliation'`+where+` ORDER BY r.started_at LIMIT 200`, args,
+			WHERE r.status = 'needs_reconciliation' AND NOT r.sandbox`+where+` ORDER BY r.started_at LIMIT 200`, args,
 			func(id uuid.UUID, wf, env string, _ time.Time) Alert {
 				return Alert{Kind: r.kind, Dedup: id.String(), Title: fmt.Sprintf("%s needs reconciliation in %s", wf, env),
 					Body: fmt.Sprintf("Run %s of %s made a call whose outcome is unknown. Someone with run.resolve must check with the provider and resolve the step.", id, wf),
@@ -431,7 +431,7 @@ func (a *Alerter) find(ctx context.Context, tx pgx.Tx, r rule, now time.Time) ([
 	case SlowRun:
 		where, args := filters(r.cfg, "r", []any{now.Add(-threshold)})
 		err = runAlert(`SELECT r.id, w.name, r.environment, r.started_at FROM runs r JOIN workflows w ON w.id = r.workflow_id
-			WHERE r.status IN ('queued', 'running', 'waiting') AND r.started_at < $1`+where+` ORDER BY r.started_at LIMIT 200`, args,
+			WHERE r.status IN ('queued', 'running', 'waiting') AND NOT r.sandbox AND r.started_at < $1`+where+` ORDER BY r.started_at LIMIT 200`, args,
 			func(id uuid.UUID, wf, env string, at time.Time) Alert {
 				return Alert{Kind: r.kind, Dedup: id.String(), Title: fmt.Sprintf("%s has been running over %s in %s", wf, threshold, env),
 					Body: fmt.Sprintf("Run %s of %s started at %s and has not finished.", id, wf, at.UTC().Format(time.RFC1123)), Link: a.link("/runs/" + id.String()), Detail: runDetail(id, wf, env)}
