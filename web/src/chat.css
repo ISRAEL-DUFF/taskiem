@@ -435,3 +435,28 @@ img.tk-live-tile { object-fit: cover; }
 .chat-pane .bubble.media-note .text { color: var(--muted); }
 .chat-list-pane section[aria-labelledby="customers-head"] { margin-top: 12px; }
 .customer-failed { display: block; margin-top: 4px; font-size: 12px; color: var(--danger); }
+/* Orders from customers' messages (phase 2): the card above the reply box. */
+.customer-orders { margin: 0 12px 8px; display: flex; flex-direction: column; gap: 8px; }
+.customer-orders:empty { display: none; }
+.customer-order { background: var(--panel); border: 1px solid var(--border); }
+.customer-order .tk-chatcard-top .tk-pill { margin-left: auto; }
+.customer-order-fold svg { transition: rotate 0.15s; }
+.customer-order-fold[aria-expanded="true"] svg { rotate: 180deg; }
+.customer-order-body { display: flex; flex-direction: column; gap: 10px; max-height: 45vh; overflow-y: auto; }
+.customer-order-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.customer-order-line { display: flex; flex-direction: column; gap: 4px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.customer-order-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.customer-order-row .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.customer-order-row input, .customer-order-row select { flex: 1; min-width: 0; }
+.customer-order-said { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.customer-order-warn { font-size: 13px; color: var(--tk-warn-ink); }
+.customer-order-ask { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: 8px; background: var(--tk-warn-bg); color: var(--tk-warn-ink); }
+.customer-order-ask .tk-chatcard-actions button.small { white-space: normal; text-align: left; }
+.customer-order-tools { justify-content: flex-end; }
+.customer-order-details, .customer-order-pay { display: flex; flex-direction: column; gap: 6px; border: 0; margin: 0; padding: 0; }
+.customer-order-details fieldset { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.customer-order-details legend, .customer-order-pay legend { font-weight: 700; font-size: 13px; padding: 0; margin-bottom: 4px; }
+.customer-order-details label:not(.check) { font-size: 13px; color: var(--muted); }
+.customer-order-sums { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; margin: 0; }
+.customer-order-sums dd { margin: 0; text-align: right; }
+.customer-order-start { align-self: flex-start; }

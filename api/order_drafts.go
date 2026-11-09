@@ -477,7 +477,38 @@ func (s *Server) listOrderDrafts(w http.ResponseWriter, r *http.Request) {
 		s.orderDraftFail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"orders": out, "zones": opts.Zones, "pay_page": opts.PayPage})
+	items, err := s.catalogueFor(ctx, p.TenantID)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"orders": out, "zones": opts.Zones, "pay_page": opts.PayPage, "items": pickable(items)})
+}
+
+// pickItem is an item staff may put on an order: each product on sale, and
+// each size of one sold in sizes (a line names the size).
+type pickItem struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	PriceKobo *int64 `json:"price_kobo,omitempty"`
+	Left      *int64 `json:"left,omitempty"`
+}
+
+func pickable(items []storefront.Item) []pickItem {
+	out := []pickItem{}
+	for _, it := range items {
+		if !it.Available {
+			continue
+		}
+		if len(it.Sizes) == 0 {
+			out = append(out, pickItem{ID: it.ID, Name: it.Name, PriceKobo: it.PriceKobo, Left: it.Stock})
+			continue
+		}
+		for _, z := range storefront.SizeItems(it) {
+			out = append(out, pickItem{ID: z.ID, Name: z.Name, PriceKobo: z.PriceKobo, Left: z.Stock})
+		}
+	}
+	return out
 }
 
 // startOrderDraft answers POST /v1/customer-chats/{id}/orders: an order

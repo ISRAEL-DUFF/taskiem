@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -15,8 +16,10 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/reach"
+	"github.com/israel-duff/taskiem/engine/voice"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
@@ -216,7 +219,8 @@ func (s *Server) customerInbound(ctx context.Context, wa *whatsapp.Platform, num
 	}
 	type keptMessage struct {
 		chat, message uuid.UUID
-		text          string
+		text, subject string
+		voice         *whatsapp.Media
 	}
 	var kept *keptMessage
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{wa.Tenant}, func(tx pgx.Tx) error {
@@ -239,19 +243,33 @@ func (s *Server) customerInbound(ctx context.Context, wa *whatsapp.Platform, num
 		if err != nil || tag.RowsAffected() == 0 {
 			return err
 		}
-		if kind == "text" {
+		switch {
+		case kind == "text":
 			kept = &keptMessage{chat: id, message: msg, text: text}
+		case in.Media != nil && in.Image == nil && in.Document == nil:
+			// A voice note: put in words after, where voice notes are on.
+			kept = &keptMessage{chat: id, message: msg, subject: subject, voice: in.Media}
 		}
 		// A message after STOP is theirs to send; it does not undo STOP.
 		_, err = tx.Exec(ctx, `UPDATE customer_conversations SET last_inbound_at = now(), last_message_at = now(), archived = false WHERE id = $1`, id)
 		return err
 	})
 	if err == nil && kept != nil {
-		// Read for an order (phase 2), away from the webhook.
+		// Read for an order (phase 2), away from the webhook: a voice note
+		// put in words first.
+		read := func() {
+			text := kept.text
+			if kept.voice != nil {
+				if text = s.customerVoice(wa, kept.chat, kept.message, kept.subject, kept.voice); text == "" {
+					return
+				}
+			}
+			s.readCustomerOrder(wa.Tenant, kept.chat, kept.message, text)
+		}
 		if s.OrderReadInline {
-			s.readCustomerOrder(wa.Tenant, kept.chat, kept.message, kept.text)
+			read()
 		} else {
-			go s.readCustomerOrder(wa.Tenant, kept.chat, kept.message, kept.text)
+			go read()
 		}
 	}
 	return true, err
@@ -1016,4 +1034,80 @@ func (s *Server) searchCustomerChats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"chats": chats, "messages": hits})
+}
+
+// customerVoice puts a customer's voice note in words, where the business
+// has voice notes on (Settings, Languages): the recording is fetched and
+// transcribed in memory and not kept; the words replace "Voice note" in the
+// thread, sealed as the message was. "" when it is not put in words (off,
+// too long, a failure): the thread keeps "Voice note".
+func (s *Server) customerVoice(wa *whatsapp.Platform, chat, message uuid.UUID, subject string, media *whatsapp.Media) string {
+	if s.Voice == nil || s.Voice.Provider == nil || voice.Extension(media.MimeType) == "" {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), voiceTranscribeTimeout+30*time.Second)
+	defer cancel()
+	tc, err := s.tenantChannel(ctx, wa.Tenant)
+	if err != nil || !s.voiceOn(tc) {
+		return ""
+	}
+	// Transcription costs money and time: a pace per business.
+	if !s.limiter("wa-voice-tenant:"+wa.Tenant.String(), 2*time.Second, 30).Allow() {
+		return ""
+	}
+	lim := s.Voice.Limits.WithDefaults()
+	info, err := wa.Client.MediaInfo(ctx, media.ID)
+	if err != nil {
+		s.Logger.Warn("customer chat: a voice note's file", "tenant", wa.Tenant, "err", err)
+		return ""
+	}
+	mime := media.MimeType
+	if info.MimeType != "" {
+		mime = info.MimeType
+	}
+	if info.SHA256 == "" {
+		info.SHA256 = media.SHA256
+	}
+	data, err := wa.Client.Download(ctx, info, lim.MaxBytes)
+	if err != nil {
+		return ""
+	}
+	audio := voice.Audio{Data: data, MimeType: mime}
+	if info, ok := lang.Lookup(tc.Default); ok {
+		audio.Language = info.Speech
+	}
+	if _, err := voice.Check(audio, lim); err != nil {
+		clear(data)
+		return ""
+	}
+	tctx, tcancel := context.WithTimeout(ctx, voiceTranscribeTimeout)
+	got, err := s.Voice.Provider.Transcribe(tctx, audio)
+	tcancel()
+	clear(data) // the recording is not kept
+	if err != nil {
+		if !errors.Is(err, voice.ErrEmpty) {
+			s.Logger.Warn("customer chat: transcribing a voice note", "provider", s.Voice.Provider.Name(), "err", err)
+		}
+		return ""
+	}
+	text := strings.TrimSpace(got.Text)
+	if utf8.RuneCountInString(text) > voiceMaxTranscript {
+		text = string([]rune(text)[:voiceMaxTranscript])
+	}
+	if text == "" {
+		return ""
+	}
+	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{wa.Tenant}, func(tx pgx.Tx) error {
+		body, err := pii.SealText(ctx, s.Store.PII, tx, wa.Tenant, subject, "other", "Voice note: "+text)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `UPDATE customer_messages SET body = $3 WHERE tenant_id = $1 AND id = $2 AND conversation_id = $4`, wa.Tenant, message, body, chat)
+		return err
+	})
+	if err != nil {
+		s.Logger.Warn("customer chat: keeping a voice note's words", "tenant", wa.Tenant, "err", err)
+		return ""
+	}
+	return text
 }

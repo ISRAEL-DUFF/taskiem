@@ -9040,8 +9040,24 @@ paths:
               schema:
                 type: object
                 additionalProperties: false
-                required: [orders, zones, pay_page]
+                required: [orders, zones, pay_page, items]
                 properties:
+                  items:
+                    type: array
+                    description: What may be put on an order, each product on sale and each size of one sold in sizes.
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [id, name]
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        price_kobo:
+                          type: integer
+                        left:
+                          type: integer
                   orders:
                     type: array
                     items:

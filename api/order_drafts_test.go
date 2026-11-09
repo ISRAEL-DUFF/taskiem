@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -16,6 +17,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/orders/read"
 	"github.com/israel-duff/taskiem/engine/sender"
 	"github.com/israel-duff/taskiem/engine/storefront"
+	"github.com/israel-duff/taskiem/engine/voice"
 	"github.com/israel-duff/taskiem/engine/whatsapp/whatsapptest"
 )
 
@@ -242,6 +244,26 @@ func TestOrdersFromCustomersMessages(t *testing.T) {
 		t.Fatalf("by hand: %s", toJSON(h))
 	}
 	cashier.must(200, "POST", "/v1/order-drafts/"+h["id"].(string)+"/drop", map[string]any{"version": h["version"]})
+
+	// A voice note, where voice notes are on: put in words in the thread,
+	// the recording not kept, and read for an order like typed words.
+	w.srv.Voice = &api.VoiceSettings{Provider: &voice.Fake{Text: "2 chapman please"},
+		Limits: voice.Limits{MaxBytes: 64 << 10, MaxDuration: 30 * time.Second}, Retention: time.Hour}
+	alpha.must(200, "PUT", "/v1/languages", map[string]any{"languages": []string{}, "voice_notes": true})
+	reads["2 chapman please"] = read.Said{Orderable: true, Lines: []read.SaidLine{{Words: "2 chapman", Item: "Chapman", Quantity: 2}}}
+	w.graph.AddMedia("v-1", "audio/ogg; codecs=opus", voice.TestOgg(3, 100), 0)
+	if got := w.sendTo(t, "/channels/whatsapp", pnA, waSecret, customer, whatsapptest.Audio("v-1", "audio/ogg; codecs=opus", true)); len(got) != 0 {
+		t.Fatalf("the voice note was answered: %+v", got)
+	}
+	msgs := cashier.must(200, "GET", "/v1/customer-chats/"+chat+"/messages", nil)["messages"].([]any)
+	if last := msgs[len(msgs)-1].(map[string]any); last["body"] != "Voice note: 2 chapman please" || last["kind"] != "media" {
+		t.Fatalf("voice note: %s", toJSON(last))
+	}
+	os = orders()
+	v := os[len(os)-1].(map[string]any)
+	if v["status"] != "open" || v["lines"].([]any)[0].(map[string]any)["item_id"] != ch || v["lines"].([]any)[0].(map[string]any)["quantity"] != float64(2) {
+		t.Fatalf("voice order: %s", toJSON(v))
+	}
 
 	// STOP: the thread's orders being read go; the order stays.
 	say("STOP")
