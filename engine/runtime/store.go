@@ -145,6 +145,28 @@ type StartRequest struct {
 	// sealed under their subject, so erasing them erases the run's record
 	// of what they said. A child or fork run inherits its parent's.
 	Customer *Customer
+	// Received marks a trigger just received from outside (a provider's
+	// event): a value in it of a person erased who has not come back is
+	// kept as erased (pii.Received) rather than refusing the start, which
+	// a provider would retry for ever. Otherwise a new run's trigger is
+	// sealed under each person's current key and an erased person's value
+	// is refused (pii.Current).
+	Received bool
+	// Sandbox makes a test conversation's run (decision 0062 V7, Talk to it
+	// here): what its steps would change is simulated, never sent
+	// (sandbox.go). A child or fork run of a sandbox run is one too.
+	Sandbox bool
+	// Conversation is the customer's message the run answers (decision 0062
+	// V7): it is tied to the run in the run's own transaction, so a run that
+	// answers at once finds its conversation.
+	Conversation *ConversationRef
+}
+
+// ConversationRef names a customer's message by its channel and the
+// delivery's id.
+type ConversationRef struct {
+	Channel string
+	Dedup   string
 }
 
 // Customer names a person as erasure does: a category and a value.
@@ -305,6 +327,15 @@ func (s *Store) startIn(ctx context.Context, tx pgx.Tx, req StartRequest, ref *R
 				return err
 			}
 		}
+		if err := setSandbox(ctx, tx, req, ref.ID); err != nil {
+			return err
+		}
+		if c := req.Conversation; c != nil && c.Dedup != "" {
+			if _, err := tx.Exec(ctx, `UPDATE assistant_turns SET run_id = $4 WHERE tenant_id = $1 AND channel = $2 AND dedup = $3`,
+				req.TenantID, c.Channel, c.Dedup, ref.ID); err != nil {
+				return err
+			}
+		}
 		if err := s.setCustomer(ctx, tx, req, ref.ID); err != nil {
 			return err
 		}
@@ -347,6 +378,16 @@ func (s *Store) startIn(ctx context.Context, tx pgx.Tx, req StartRequest, ref *R
 		cipher, err := s.runCipher(ctx, tx, ref.ID)
 		if err != nil {
 			return err
+		}
+		if pii.CustomerOf(cipher) == "" && req.Fork == nil && req.Parent == nil {
+			// New input, not values read from an earlier run: a person
+			// who came back after an erasure is sealed under the key they
+			// were given (a customer's run does so itself, pii.Under).
+			if req.Received {
+				cipher = pii.Received(cipher)
+			} else {
+				cipher = pii.Current(cipher)
+			}
 		}
 		taint := pii.Taint{}
 		if p := req.Parent; p != nil {
@@ -1389,5 +1430,20 @@ func (s *Store) setCustomer(ctx context.Context, tx pgx.Tx, req StartRequest, ru
 		return nil
 	}
 	_, err := tx.Exec(ctx, `UPDATE runs SET customer_subject = (SELECT customer_subject FROM runs WHERE id = $2) WHERE id = $1`, run, from)
+	return err
+}
+
+// setSandbox marks a test conversation's run, or one started by such a run
+// (a child, a fork): nothing it would change is sent.
+func setSandbox(ctx context.Context, tx pgx.Tx, req StartRequest, run uuid.UUID) error {
+	var err error
+	switch {
+	case req.Sandbox:
+		_, err = tx.Exec(ctx, `UPDATE runs SET sandbox = true WHERE id = $1`, run)
+	case req.Parent != nil:
+		_, err = tx.Exec(ctx, `UPDATE runs SET sandbox = (SELECT sandbox FROM runs WHERE id = $2) WHERE id = $1`, run, req.Parent.Run)
+	case req.Fork != nil:
+		_, err = tx.Exec(ctx, `UPDATE runs SET sandbox = (SELECT sandbox FROM runs WHERE id = $2) WHERE id = $1`, run, req.Fork.Parent)
+	}
 	return err
 }

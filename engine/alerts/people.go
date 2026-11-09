@@ -173,10 +173,13 @@ func (a *Alerter) outcome(ctx context.Context, o outcome) error {
 		var wf, env string
 		var startedBy *string
 		var publishedBy *uuid.UUID
-		err := tx.QueryRow(ctx, `SELECT w.id, w.name, r.environment, r.started_by, wv.published_by FROM runs r
+		var sandbox bool
+		err := tx.QueryRow(ctx, `SELECT w.id, w.name, r.environment, r.started_by, wv.published_by, r.sandbox FROM runs r
 			JOIN workflows w ON w.id = r.workflow_id JOIN workflow_versions wv ON wv.workflow_id = r.workflow_id AND wv.version = r.version
-			WHERE r.id = $1`, o.run).Scan(&wfID, &wf, &env, &startedBy, &publishedBy)
-		if errors.Is(err, pgx.ErrNoRows) {
+			WHERE r.id = $1`, o.run).Scan(&wfID, &wf, &env, &startedBy, &publishedBy, &sandbox)
+		if errors.Is(err, pgx.ErrNoRows) || err == nil && sandbox {
+			// Gone, or a test chat's run (Talk to it here): the member
+			// watching it sees how it ended; no one is alerted.
 			_, err = tx.Exec(ctx, `DELETE FROM run_outcomes WHERE run_id = $1 AND status = $2`, o.run, o.status)
 			return err
 		}

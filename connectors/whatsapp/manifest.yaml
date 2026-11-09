@@ -69,6 +69,8 @@ actions:
       repeated. A throughput refusal (130429 and the other rate limits)
       proves nothing was sent and is retried.
     class: unsafe_write
+    # Speaks to a customer: recorded in the conversation (connector/v1 rule 24).
+    turn: { to: to, text: body, kind: text }
     # A duplicate is a duplicate chat message: a step may ask for a lost
     # send to be sent once more (decision 0062 D11).
     resend_if_lost: true
@@ -96,6 +98,8 @@ actions:
       button parameters exactly as Meta documents them. Not idempotent, like
       send_text.
     class: unsafe_write
+    # Speaks to a customer: recorded in the conversation (connector/v1 rule 24).
+    turn: { to: to, text: name, kind: template }
     compensate: null
     input:
       type: object
@@ -130,6 +134,8 @@ actions:
       Audio with voice true is sent as a voice note. Not idempotent, like
       send_text.
     class: unsafe_write
+    # Speaks to a customer: recorded in the conversation (connector/v1 rule 24).
+    turn: { to: to, text: caption, file: file, kind_field: media_type }
     # A duplicate is a duplicate chat message: a step may ask for a lost
     # send to be sent once more (decision 0062 D11).
     resend_if_lost: true
@@ -164,6 +170,8 @@ actions:
       inbound message event with interactive.button_reply or list_reply. Not
       idempotent, like send_text.
     class: unsafe_write
+    # Speaks to a customer: recorded in the conversation (connector/v1 rule 24).
+    turn: { to: to, text: interactive.body.text, kind: button }
     # A duplicate is a duplicate chat message: a step may ask for a lost
     # send to be sent once more (decision 0062 D11).
     resend_if_lost: true
@@ -319,6 +327,7 @@ triggers:
       media: '=item.kind == "message" && item.message.type == "audio" ? item.message.audio.id : ""'
       fetch: get_media
       fetch_input: media_id
+      reply: { action: send_text, to: to, text: body, template: send_template, templates: list_templates }
     pii:
       - { field: body.entry.*.changes.*.value.contacts.*.wa_id, category: phone }
       - { field: body.entry.*.changes.*.value.contacts.*.profile.name, category: name }

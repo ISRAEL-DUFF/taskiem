@@ -50,6 +50,8 @@ app_event_drops.last_at
 app_event_drops.trigger_name
 approval_decisions.run_id
 approvals.run_id
+assistant_turns.at
+assistant_turns.tenant_id
 audit_anchors.anchored_at
 audit_anchors.chain_seq
 audit_anchors.tenant_id

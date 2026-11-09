@@ -110,6 +110,20 @@ type ConversationSpec struct {
 	Media      string `json:"media,omitempty"`
 	Fetch      string `json:"fetch,omitempty"`
 	FetchInput string `json:"fetch_input,omitempty"`
+	// Reply is how a person answers a customer by hand (V7): the action
+	// that sends text (its input fields To and Text), and, for WhatsApp,
+	// Template, the action that sends an approved template, used outside
+	// the 24-hour window, and Templates, the read action that lists them.
+	Reply *ReplySpec `json:"reply,omitempty"`
+}
+
+// ReplySpec is how a person answers a customer by hand.
+type ReplySpec struct {
+	Action    string `json:"action"`
+	To        string `json:"to"`
+	Text      string `json:"text"`
+	Template  string `json:"template,omitempty"`
+	Templates string `json:"templates,omitempty"`
 }
 
 // ConversationKinds are the kinds of message a conversation reads.

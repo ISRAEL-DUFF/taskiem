@@ -105,7 +105,7 @@ func (h *Handler) deliverInto(ctx context.Context, w http.ResponseWriter, r *htt
 		out["test"], trig["test"] = true, true
 	}
 	if ev.correlation != "" {
-		woke, fresh, err := h.Store.DeliverSignalOnce(ctx, t.tenant, ev.env, ev.ref+":"+ev.name, ev.correlation, ev.dedup, payload)
+		woke, fresh, err := h.Store.DeliverSignalPII(ctx, t.tenant, ev.env, ev.ref+":"+ev.name, ev.correlation, ev.dedup, payload, triggerPII(ev))
 		if err != nil {
 			h.unavailable(w, r, err)
 			return nil, false
@@ -139,8 +139,10 @@ func (h *Handler) deliverInto(ctx context.Context, w http.ResponseWriter, r *htt
 		}
 		var customer *runtime.Customer
 		triggerPII := triggerPII(ev)
+		var guardedAs guarded
 		if s.guard != nil {
 			g, err := h.guardEvent(ctx, t, ev, s)
+			guardedAs = g
 			if err != nil {
 				h.unavailable(w, r, fmt.Errorf("guarding the conversation: %w", err))
 				return nil, false
@@ -160,7 +162,7 @@ func (h *Handler) deliverInto(ctx context.Context, w http.ResponseWriter, r *htt
 		run, _, err := h.Store.StartRun(ctx, runtime.StartRequest{
 			TenantID: t.tenant, WorkflowID: s.workflow, Version: s.version, Environment: ev.env,
 			Trigger: runTrig, StartedBy: "connector:" + ev.ref, TriggerID: "event/" + s.workflow.String() + "/" + ev.env, DedupKey: ev.dedup,
-			Throttled: t.throttled, TriggerPII: triggerPII, Customer: customer,
+			Throttled: t.throttled, TriggerPII: triggerPII, Customer: customer, Received: true, Conversation: conversationOf(guardedAs),
 		})
 		if le, ok := runtime.IsLimit(err); ok {
 			limited(w, le)

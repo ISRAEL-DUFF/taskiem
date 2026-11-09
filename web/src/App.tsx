@@ -50,6 +50,7 @@ import { OnboardingProvider, useOnboarding } from "./onboarding";
 import { Keys } from "./pages/Keys";
 import { TablePage, Tables } from "./pages/Tables";
 import { Knowledge, KnowledgeSourcePage } from "./pages/Knowledge";
+import { ConversationPage, Conversations } from "./pages/Conversations";
 import { Storefront } from "./pages/Storefront";
 import { Look } from "./pages/Look";
 import { StorefrontOrder, StorefrontOrders } from "./pages/StorefrontOrders";
@@ -442,6 +443,8 @@ function SignedIn() {
     ["/tables", "Tables", "tables", can("table.read")],
     // What the assistant answers customers from (decision 0062 D12).
     ["/knowledge", "What your assistant knows", "templates", can("secret.manage")],
+    // What customers said to the assistant, and answering them (V7).
+    ["/conversations", "Conversations", "chat", can("conversation.read")],
     // Other businesses on Taskiem (business links, pages/Links.tsx).
     ["/chat", "Chat", "chat", true],
     [
@@ -688,6 +691,8 @@ function SignedIn() {
                   <Route path="/tables" element={<Tables />} />
                   <Route path="/knowledge" element={<Knowledge />} />
                   <Route path="/knowledge/:id" element={<KnowledgeSourcePage />} />
+                  <Route path="/conversations" element={<Conversations />} />
+                  <Route path="/conversations/view" element={<ConversationPage />} />
                   <Route path="/tables/:id" element={<TablePage />} />
                   <Route path="/storefront" element={<Storefront />} />
                   <Route path="/storefront/look" element={<Look />} />

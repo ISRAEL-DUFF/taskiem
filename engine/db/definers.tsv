@@ -318,3 +318,4 @@ taskiem_bill_payments_tenants()	@ISRAEL-DUFF (business links)	Businesses with a 
 taskiem_run_files_expired(integer)	@ISRAEL-DUFF (customer assistant)	Which run files have expired, for the sweep to delete their stored objects and rows: ids, tenants and storage keys only (00313)
 taskiem_tables_to_expire(uuid,uuid,integer)	@ISRAEL-DUFF (customer assistant)	Which data tables keep their rows for a time, for the sweep to delete older rows: tenants, table ids, names and days only, never rows (00317, paged by 00318)
 taskiem_knowledge_due(integer)	@ISRAEL-DUFF (customer assistant)	Which knowledge sources are due their daily refresh: tenants and source ids only, never text (00319)
+taskiem_conversation_turns_due(uuid,integer)	@ISRAEL-DUFF (customer assistant)	Which businesses have conversation turns over a day old, a page after a tenant id, with their conversation days: tenant ids and days only, never words (00322)

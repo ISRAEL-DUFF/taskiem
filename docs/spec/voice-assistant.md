@@ -507,7 +507,7 @@ Left as they are:
 - **The owner's page.** Settings has **Your assistant**: pause for everyone, and the customers waiting for a person with **Let the assistant answer them now** (`/v1/assistant`).
 - **Threat model.** Boundary B21 and its threats (P7, A11).
 - **Tests:** the guard over signed WhatsApp and Telegram deliveries (STOP, START, limits, notice, kinds, a person, the owner's pause, Taskiem's stop and beta, groups and edits, the queue); erasure and a customer coming back; `assistant@1` in a run; the reply check; the switches through the API and the operators' console, which members cannot change even through the database role.
-- **Not done here:** a debounce of quick messages (L5, V10); the conversations page and answering by hand (V7). The counsel's wording of the notice, and native speakers' review of the words and answers, are people items.
+- **Not done here:** a debounce of quick messages (L5, V10). The counsel's wording of the notice, and native speakers' review of the words and answers, are people items.
 
 ### V7. Conversations page
 
@@ -515,6 +515,14 @@ Left as they are:
 - Owner can pause the assistant for one customer and answer by hand from the page (a send through the same connection).
 - **Talk to it here**: a test conversation in the web against the draft, with a fake sender, before going live (R10).
 - Assistant metrics on the page: replies, time to reply, failures, cost this month (E5).
+
+**Built** ([conversations](../conversations.md)):
+- **The record.** `assistant_turns` (migration 00322): each customer message as the guard decided it, each step that sent them something (an action declaring `turn`, connector/v1 rule 24: WhatsApp and Telegram sends, the speech transcript), each reply the check held back, and each answer by hand; sealed under the customer, erased with them, expired with the conversation days.
+- **The page** `/conversations`: assistants, customers (last four digits or a mark), a conversation with the run behind each answer, **Show numbers and emails** (`pii.reveal`, audited), pause and resume for one customer, answering by hand (templates outside WhatsApp's window, once per request id, never after STOP; answering pauses the assistant for them), and the month's numbers. Permissions `conversation.read` and `conversation.reply`.
+- **Talk to it here**: the guard on the member's own test chat, then a *sandbox run* (`runs.sandbox`) where every write is simulated (connector writes answer an output of their shape, marked `simulated`; HTTP writes, code and containers too), alerting no one when it fails.
+- **Different from the plan:** Talk to it here runs the version published in the environment, not a draft (a draft has no trigger or guard); "cost" is the share of this month's AI and voice allowances used, all assistants together; voice notes and pictures show as their kind and transcript, not played; the test chat has no memory of earlier test messages (the recipe's memory is the conversations table, which a sandbox run does not write).
+- **Review.** Fixed after review: a sandbox run could write through HTTP, code and container steps; the run was attached to its message after the run started (a race); replies by hand could be sent twice when retried, were lost when the page closed mid-send, could reach a customer who wrote STOP, and did not pause the assistant; held replies kept text with secrets; members could see each other's test chats; metrics counted failed answers by hand.
+- **V6 review, erasure.** Values naming another person inside a customer's run are sealed twice (under each); a run still open after its customer is erased seals tombstones; a number is erased in each way it may have been written; signals carry the customer's sealing; conversation turns are erased. Residual: `signal_waits.correlation` holds the sender in clear while a run waits.
 
 ### V8. The recipe
 

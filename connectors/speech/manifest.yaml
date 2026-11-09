@@ -24,6 +24,8 @@ actions:
       language. The speech service being down fails the step after its
       retries; send cannot_hear's answer from on_error.
     class: read
+    # Hears a customer: the words go with their voice note in the conversation (rule 24).
+    turn: { transcript: text }
     # A five-minute voice note can take longer to hear than the usual 30 s.
     call_timeout: 180
     input:

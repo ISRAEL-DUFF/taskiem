@@ -38,7 +38,7 @@ func SenderCategory(channel string) string {
 }
 
 func (s *Service) subject(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, channel, sender string) (string, error) {
-	return s.Vault.SubjectForTx(ctx, tx, tenant, SenderCategory(channel), sender)
+	return s.Vault.LiveSubjectTx(ctx, tx, tenant, SenderCategory(channel), sender)
 }
 
 // HandOver hands a customer to a person for hours (a workflow's choice,

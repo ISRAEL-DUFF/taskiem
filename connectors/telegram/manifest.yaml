@@ -62,6 +62,8 @@ actions:
       parked for a person, never repeated. A 429 (flood control) proves the
       message was not sent and is retried.
     class: unsafe_write
+    # Speaks to a customer: recorded in the conversation (connector/v1 rule 24).
+    turn: { to: chat_id, text: text, kind: text }
     # A duplicate is a duplicate chat message: a step may ask for a lost
     # send to be sent once more (decision 0062 D11).
     resend_if_lost: true
@@ -88,6 +90,8 @@ actions:
     title: Send a photo
     description: By URL (Telegram fetches it; 5 MB) or by a file_id Telegram gave the bot. Not idempotent, like send_message.
     class: unsafe_write
+    # Speaks to a customer: recorded in the conversation (connector/v1 rule 24).
+    turn: { to: chat_id, text: caption, file: file, kind: image }
     # A duplicate is a duplicate chat message: a step may ask for a lost
     # send to be sent once more (decision 0062 D11).
     resend_if_lost: true
@@ -121,6 +125,8 @@ actions:
       By URL (Telegram fetches it; only .PDF and .ZIP by URL, 20 MB) or by a
       file_id. Not idempotent, like send_message.
     class: unsafe_write
+    # Speaks to a customer: recorded in the conversation (connector/v1 rule 24).
+    turn: { to: chat_id, text: caption, file: file, kind: document }
     # A duplicate is a duplicate chat message: a step may ask for a lost
     # send to be sent once more (decision 0062 D11).
     resend_if_lost: true
@@ -172,6 +178,8 @@ actions:
       URL. OGG/Opus (Vorbis is refused), MP3 or M4A, shown as a voice message. Not idempotent,
       like send_message.
     class: unsafe_write
+    # Speaks to a customer: recorded in the conversation (connector/v1 rule 24).
+    turn: { to: chat_id, text: caption, file: file, kind: voice }
     # A duplicate is a duplicate chat message: a step may ask for a lost
     # send to be sent once more (decision 0062 D11).
     resend_if_lost: true
@@ -199,6 +207,8 @@ actions:
       A run file's reference, a file_id or a URL; MP3 or M4A, shown in the
       music player. Not idempotent, like send_message.
     class: unsafe_write
+    # Speaks to a customer: recorded in the conversation (connector/v1 rule 24).
+    turn: { to: chat_id, text: caption, file: file, kind: audio }
     # A duplicate is a duplicate chat message: a step may ask for a lost
     # send to be sent once more (decision 0062 D11).
     resend_if_lost: true
@@ -411,6 +421,7 @@ triggers:
       media: '=!has(body.message) ? "" : has(body.message.voice) ? body.message.voice.file_id : has(body.message.audio) ? body.message.audio.file_id : ""'
       fetch: get_file
       fetch_input: file_id
+      reply: { action: send_message, to: chat_id, text: text }
     # Who wrote and what they wrote is personal data (decision 0062, P1):
     # sealed in run history, readable by the run's steps.
     pii:

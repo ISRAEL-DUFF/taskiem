@@ -1249,6 +1249,8 @@ func serve(ctx context.Context, args []string) error {
 		// What the assistant knows is read daily, or when asked (V5b).
 		srv.Knowledge = srv.KnowledgeService(e.pool)
 		tasks = append(tasks, func(ctx context.Context) error { srv.RunKnowledgeRefresh(ctx); return nil })
+		// What customers said is kept the business's conversation days (V7).
+		tasks = append(tasks, func(ctx context.Context) error { srv.RunConversationExpiry(ctx); return nil })
 		// Checking a Python step compiles CPython first (seconds): do it now.
 		go func() { _ = sandbox.InitPython() }()
 		srv.Done = runCtx.Done()

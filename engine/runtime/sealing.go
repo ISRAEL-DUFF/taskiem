@@ -144,7 +144,7 @@ func (s *Store) sealSignal(ctx context.Context, tx pgx.Tx, c pii.Cipher, tenant 
 // run that takes it keeps it: opened, and sealed again with the run's
 // cipher, so in a customer's run their words are under them.
 func (s *Store) resealSignal(ctx context.Context, tx pgx.Tx, ref RunRef, event string, payload []byte) (map[string]any, error) {
-	if s.PII == nil || !bytes.Contains(payload, []byte(`"$pii"`)) {
+	if s.PII == nil || len(payload) == 0 {
 		return signalPayload(event, payload), nil
 	}
 	v, err := expr.DecodeJSON(payload)

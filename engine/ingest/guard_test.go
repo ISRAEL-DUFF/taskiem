@@ -18,8 +18,8 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/history"
 	"github.com/israel-duff/taskiem/engine/ingest"
-	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/runtime"
+	"github.com/israel-duff/taskiem/engine/wd"
 )
 
 type guardWorld struct {
@@ -281,7 +281,6 @@ func TestCustomerGuardTelegram(t *testing.T) {
 		t.Fatalf("%d runs, want 1", n)
 	}
 }
-
 
 // A run started by a guarded message reads the customer's window, checks
 // a reply and hands the customer over with assistant@1.

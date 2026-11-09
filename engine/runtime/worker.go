@@ -485,6 +485,10 @@ type plan struct {
 	// sentBefore is how many earlier attempts of the step recorded an
 	// EffectIntent: how often it may already have been sent.
 	sentBefore int
+	// turnIn and turnOut are a connector step's input and output, for the
+	// conversation's record (turns.go).
+	turnIn  map[string]any
+	turnOut any
 }
 
 // execute runs one claimed task: prepare (and record intent), call, record
@@ -1023,6 +1027,16 @@ func (w *Worker) postpone(ctx context.Context, p *plan, at time.Time) error {
 // as the lease still holds. Repeating it after an unknown COMMIT is safe:
 // a committed finish released the task, so the repeat is fenced out.
 func (w *Worker) finish(ctx context.Context, p *plan, result *history.Event) error {
+	err := w.finishTx(ctx, p, result)
+	// What the step said to the run's customer goes in their conversation
+	// (V7), once its result is written.
+	if err == nil && result != nil && result.Type == history.StepCompleted && p.turnIn != nil {
+		w.recordTurn(ctx, p, p.turnIn, p.turnOut)
+	}
+	return err
+}
+
+func (w *Worker) finishTx(ctx context.Context, p *plan, result *history.Event) error {
 	return db.InTenantTxRetry(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, true, func(tx pgx.Tx) error {
 		ok, err := w.finishTask(ctx, tx, p.c)
 		if err != nil {
@@ -1086,6 +1100,13 @@ func (w *Worker) finish(ctx context.Context, p *plan, result *history.Event) err
 			cipher, err := w.Store.runCipher(ctx, tx, p.c.run)
 			if err != nil {
 				return err
+			}
+			if result.Type == history.StepCompleted && p.stepType == "ai" && pii.CustomerOf(cipher) != "" {
+				// What a model answered in a customer's run is made from
+				// what they said: every text of it is sealed under them.
+				if m, ok := v.(map[string]any); ok {
+					paths = append(paths, stringPaths(m["output"], []string{"output"}, "other")...)
+				}
 			}
 			if v, err = pii.Seal(ctx, cipher, tx, p.c.tenant, v, paths, p.taint); err != nil {
 				return err
@@ -1192,6 +1213,15 @@ func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 	if err != nil {
 		return w.secretFailure(p, err)
 	}
+	// A test conversation's run runs no code, container or http step that
+	// could change something: each answers a simulated output (sandbox.go).
+	if p.conn == nil && (p.stepType == "code" || p.stepType == "container" || p.stepType == "http" && p.class != effects.Read) {
+		if sim, ok, err := w.simulateStep(ctx, p); err != nil {
+			return w.classify(p, fmt.Errorf("checking for a test run: %w: %w", err, effects.ErrNotSent))
+		} else if ok {
+			return completedEvent(p.c, sim, false)
+		}
+	}
 	if p.stepType == "code" {
 		w.scrubCodeSecrets(ctx, p)
 		// The sandbox enforces the step's own time limit.
@@ -1230,6 +1260,14 @@ func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 		if p.class.IsWrite() && p.field != "" && !strings.HasPrefix(p.field, "header:") {
 			input[p.field] = p.key
 		}
+		// A test conversation's run (Talk to it here) sends nothing: a
+		// write is answered with a simulated output (sandbox.go).
+		if sim, ok, err := w.simulate(ctx, p); err != nil {
+			return w.classify(p, fmt.Errorf("checking for a test run: %w: %w", err, effects.ErrNotSent))
+		} else if ok {
+			p.turnIn, p.turnOut = input, sim
+			return completedEvent(p.c, sim, false)
+		}
 		creds, err := w.credentials(ctx, p)
 		if err != nil {
 			return w.secretFailure(p, err)
@@ -1254,6 +1292,7 @@ func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 		}
 		out = resp.Output
 		p.drift = drift.Check(p.conn.Manifest, p.action, out)
+		p.turnIn, p.turnOut = input, out
 	default:
 		out, err = w.doHTTP(ctx, p, in)
 		if err != nil {

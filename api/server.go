@@ -430,6 +430,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermSecretManage)).Get("/ussd", s.getUSSD)
 			r.With(s.need(PermSecretManage), s.tenantWide).Route("/knowledge", s.knowledgeRoutes) // what the assistant knows (knowledge.go)
 			r.With(s.need(PermSecretManage), s.tenantWide).Route("/assistant", s.assistantRoutes) // the customer assistant's pause and hand-overs (assistant.go)
+			r.With(s.tenantWide).Route("/conversations", s.conversationRoutes)                    // the customer assistant's conversations (conversations.go)
 			r.With(s.need(PermSecretManage)).Get("/languages", s.getLanguages)
 			r.With(s.need(PermSecretManage), s.tenantWide).Put("/languages", s.putLanguages)
 			r.With(s.need(PermPIIReveal)).Get("/languages/transcripts", s.getTranscripts)

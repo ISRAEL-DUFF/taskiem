@@ -580,10 +580,14 @@ func (w *Worker) recordAIStep(ctx context.Context, p *plan, model, provider, dig
 		kind = "step_correct"
 	}
 	err := db.InTenantTx(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `INSERT INTO ai_interactions (id, tenant_id, run_id, step_id, round, kind, actor, provider, model, system_digest, messages,
+		msgs, text, err := w.sealAIRecord(ctx, tx, p, rawMsgs, text)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO ai_interactions (id, tenant_id, run_id, step_id, round, kind, actor, provider, model, system_digest, messages,
 			response, stop_reason, outcome, error, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, total_tokens)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NULLIF($13, ''), $14, NULLIF($15, ''), $16, $17, $18, $19, $20)`,
-			uuid.Must(uuid.NewV7()), p.c.tenant, p.c.run, p.c.step, round, kind, "run:"+p.c.run.String(), provider, model, digest, rawMsgs,
+			uuid.Must(uuid.NewV7()), p.c.tenant, p.c.run, p.c.step, round, kind, "run:"+p.c.run.String(), provider, model, digest, msgs,
 			text, stop, outcome, errText, u.InputTokens, u.OutputTokens, u.CacheCreationTokens, u.CacheReadTokens, u.Total())
 		return err
 	})
@@ -591,6 +595,48 @@ func (w *Worker) recordAIStep(ctx context.Context, p *plan, model, provider, dig
 		w.allowanceAlert(ctx, p.c.tenant)
 	}
 	return err
+}
+
+// sealAIRecord is an ai step's call as its record keeps it. In a run a
+// customer's message started, what was sent and answered is made from what
+// they said, and the redaction of the values the run knows cannot catch
+// all of it (their words, let through or in the history): the messages
+// (jsonb) are kept as one sealed envelope, and the answer (text) as that
+// envelope's JSON, both under the customer alone (pii.SealUnderCustomer),
+// so erasing them erases these too. The rest of the record (model,
+// outcome, tokens, what it cost) stays readable for budgets and audit;
+// the words open, like a run's history, for whoever may reveal personal
+// data, until the customer is erased. Other runs keep the record as
+// before: redacted, in the clear.
+func (w *Worker) sealAIRecord(ctx context.Context, tx pgx.Tx, p *plan, msgs []byte, text *string) ([]byte, *string, error) {
+	if w.Store.PII == nil {
+		return msgs, text, nil
+	}
+	cipher, err := w.Store.runCipher(ctx, tx, p.c.run)
+	if err != nil {
+		return nil, nil, err
+	}
+	env, ok, err := pii.SealUnderCustomer(ctx, cipher, tx, p.c.tenant, "other", json.RawMessage(msgs))
+	if err != nil || !ok {
+		return msgs, text, err
+	}
+	sealedMsgs, err := json.Marshal(env)
+	if err != nil {
+		return nil, nil, err
+	}
+	if text != nil {
+		env, _, err := pii.SealUnderCustomer(ctx, cipher, tx, p.c.tenant, "other", *text)
+		if err != nil {
+			return nil, nil, err
+		}
+		raw, err := json.Marshal(env)
+		if err != nil {
+			return nil, nil, err
+		}
+		t := string(raw)
+		text = &t
+	}
+	return sealedMsgs, text, nil
 }
 
 // allowanceAlert tells the owners at 80 % and 100 % of this month's AI

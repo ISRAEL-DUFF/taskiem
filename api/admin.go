@@ -26,6 +26,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/knowledge"
 	"github.com/israel-duff/taskiem/engine/lang"
+	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/tunnel"
@@ -565,6 +566,14 @@ type eraseReq struct {
 // erase destroys a data subject's key (NDPA erasure, spec 9.4), named
 // either by subject id or by the identifying value and its category.
 // Every sealed copy of their data becomes unreadable. It cannot be undone.
+//
+// A value names a person however it was written where it was sealed: a
+// phone number as WhatsApp gives it (2348031234567), with + or a leading
+// 0; a number as a number or as a string (a Telegram chat id). Each form
+// is erased, in its category and as "other" (a chat's sender may be
+// declared so), wherever it has a key. A subject id is erased with its
+// later generations (a person who came back), whichever generation is
+// named. It answers 404 only when nothing at all was found to erase.
 func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 	var req eraseReq
 	if err := decodeBody(r, &req); err != nil {
@@ -573,9 +582,14 @@ func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 	}
 	p := principalFrom(r.Context())
 	subject := req.Subject
+	var candidates []string
 	if subject == "" {
 		if req.Category == "" || req.Value == nil {
 			s.fail(w, r, fmt.Errorf("%w: give subject, or category and value", errBadRequest))
+			return
+		}
+		if !eraseCategoryRe.MatchString(req.Category) {
+			s.fail(w, r, fmt.Errorf("%w: category is lower-case letters and underscores (phone, email, bvn, other...)", errBadRequest))
 			return
 		}
 		var err error
@@ -583,11 +597,29 @@ func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 			s.fail(w, r, err)
 			return
 		}
+		for _, cat := range []string{req.Category, "other"} {
+			for _, v := range eraseForms(req.Category, req.Value) {
+				id, err := s.Vault.SubjectFor(r.Context(), p.TenantID, cat, v)
+				if err != nil {
+					s.fail(w, r, err)
+					return
+				}
+				if !slices.Contains(candidates, id) {
+					candidates = append(candidates, id)
+				}
+			}
+		}
 	}
 	// Erasure cannot be undone: a person confirms it, for this subject, with
 	// a passkey or authenticator code (Atlas part D findings).
 	if _, ok := s.personStepUp(w, r, req.stepUpProof, "pii.erase", subject, "erasures", "erasing personal data"); !ok {
 		return
+	}
+	// A generation named (<subject>~2) is the person: every step below
+	// works on the base, which reaches all its generations.
+	subject = pii.BaseSubject(subject)
+	if len(candidates) == 0 {
+		candidates = []string{subject}
 	}
 	// What they said to the business's assistant goes too, where they are
 	// named by their number or chat id (decision 0062 V5): a subject id
@@ -603,46 +635,89 @@ func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 		}
 		rowsOut["conversation_rows_deleted"], rowsGone = n, n
 	}
-	erased := true
-	if err := s.Vault.Erase(r.Context(), p.TenantID, subject, p.Actor()); err != nil {
-		if !errors.Is(err, secrets.ErrNotFound) || rowsGone == 0 {
-			if errors.Is(err, secrets.ErrNotFound) {
-				err = fmt.Errorf("%w: no such subject, or already erased", secrets.ErrNotFound)
-			}
+	var erasedSubjects []string
+	for _, id := range candidates {
+		err := s.Vault.Erase(r.Context(), p.TenantID, id, p.Actor())
+		if errors.Is(err, secrets.ErrNotFound) {
+			continue
+		}
+		if err != nil {
 			s.fail(w, r, err)
 			return
 		}
-		erased = false // no key, but their conversation rows went
+		erasedSubjects = append(erasedSubjects, id)
 	}
-	out := map[string]any{"subject": subject, "erased": erased}
+	if len(erasedSubjects) == 0 && rowsGone == 0 {
+		s.fail(w, r, fmt.Errorf("%w: no such subject, or already erased", secrets.ErrNotFound))
+		return
+	}
+	out := map[string]any{"subject": subject, "erased": len(erasedSubjects) > 0}
 	for k, v := range rowsOut {
 		out[k] = v
+	}
+	// The subjects whatever else is kept about the person is found by:
+	// the one named, and each other form that had a key.
+	reach := []string{subject}
+	for _, id := range erasedSubjects {
+		if !slices.Contains(reach, id) {
+			reach = append(reach, id)
+		}
 	}
 	// Files a person sent go with them (decision 0062): their key is gone,
 	// and the files themselves are deleted now, not at their expiry.
 	if s.EraseFiles != nil {
-		n, err := s.EraseFiles(r.Context(), p.TenantID, subject)
-		if err != nil {
-			s.Logger.Warn("erase: files about the subject not deleted yet", "err", err)
+		total, pending := 0, false
+		for _, id := range reach {
+			n, err := s.EraseFiles(r.Context(), p.TenantID, id)
+			if err != nil {
+				s.Logger.Warn("erase: files about the subject not deleted yet", "err", err)
+				pending = true
+			}
+			total += n
+		}
+		if pending {
 			out["files_pending"] = true
 		}
-		out["files_deleted"] = n
+		out["files_deleted"] = total
 	}
 	// The customer guard's record of them (their counts, STOP, a hand-over)
-	// goes; what they said in the runs their messages started was sealed
-	// under them, and is erased with their key (decision 0062 P2).
+	// goes, and the messages from them buffered for runs not waiting yet
+	// (a chat message's correlation is its sender); what they said in the
+	// runs their messages started was sealed under them, and is erased
+	// with their key (decision 0062 P2).
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		n, err := assistant.EraseContacts(r.Context(), tx, p.TenantID, subject)
-		if err != nil {
-			return err
+		contacts, runs, turns := 0, 0, 0
+		for _, id := range reach {
+			n, err := assistant.EraseContacts(r.Context(), tx, p.TenantID, id)
+			if err != nil {
+				return err
+			}
+			contacts += n
+			// Their conversations (V7): unreadable once the key is gone; the
+			// rows go too.
+			if n, err = assistant.EraseTurns(r.Context(), tx, p.TenantID, id); err != nil {
+				return err
+			}
+			turns += n
+			var c int
+			if err := tx.QueryRow(r.Context(), `SELECT count(*) FROM runs WHERE tenant_id = $1 AND customer_subject IS NOT NULL
+				AND customer_subject ~>=~ $2 AND customer_subject ~<~ ($2 || chr(127))`, p.TenantID, id).Scan(&c); err != nil {
+				return err
+			}
+			runs += c
 		}
-		out["assistant_contacts_deleted"] = n
-		var runs int
-		if err := tx.QueryRow(r.Context(), `SELECT count(*) FROM runs WHERE tenant_id = $1 AND (customer_subject = $2 OR left(customer_subject, length($2) + 1) = $2 || '~')`,
-			p.TenantID, subject).Scan(&runs); err != nil {
-			return err
+		out["assistant_contacts_deleted"], out["customer_runs"], out["conversation_turns_deleted"] = contacts, runs, turns
+		if req.Category != "" && req.Value != nil {
+			var forms []string
+			for _, v := range eraseForms(req.Category, req.Value) {
+				if str, ok := v.(string); ok {
+					forms = append(forms, str)
+				}
+			}
+			if _, err := tx.Exec(r.Context(), `DELETE FROM signals WHERE tenant_id = $1 AND correlation = ANY($2)`, p.TenantID, forms); err != nil {
+				return err
+			}
 		}
-		out["customer_runs"] = runs
 		return nil
 	}); err != nil {
 		s.Logger.Warn("erase: the assistant's record of the customer not deleted yet", "err", err)
@@ -659,6 +734,55 @@ func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, out)
 }
+
+var eraseCategoryRe = regexp.MustCompile(`^[a-z_]+$`)
+
+// eraseForms are the ways a value naming a person may have been sealed:
+// as given; a phone number in each way it is written (senderForms:
+// digits as WhatsApp gives them, with +, with a leading 0); a number as a
+// string (a Telegram chat id is sealed as its string) and a string of
+// digits as a number.
+func eraseForms(category string, value any) []any {
+	var out []any
+	add := func(v any) {
+		for _, x := range out {
+			if x == v {
+				return
+			}
+		}
+		out = append(out, v)
+	}
+	add(value)
+	var str string
+	switch v := value.(type) {
+	case string:
+		str = strings.TrimSpace(v)
+		add(str)
+		if digitsRe.MatchString(str) {
+			if f, err := strconv.ParseFloat(str, 64); err == nil && f < 1<<53 {
+				add(f)
+			}
+		}
+	case float64:
+		if v == float64(int64(v)) {
+			str = strconv.FormatInt(int64(v), 10)
+		} else {
+			str = strconv.FormatFloat(v, 'f', -1, 64)
+		}
+		add(str)
+	default:
+		return out
+	}
+	if str == "" {
+		return out
+	}
+	for _, f := range senderForms(category, str) {
+		add(f)
+	}
+	return out
+}
+
+var digitsRe = regexp.MustCompile(`^[1-9][0-9]{0,15}$`)
 
 // listAnchors returns the tenant's signed audit-chain anchors and the key
 // they verify with. With an export, they let an auditor show the chain was

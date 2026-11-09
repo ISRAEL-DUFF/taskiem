@@ -323,6 +323,14 @@ func sealDerived(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, s s
 		}
 		return hits[i].text < hits[j].text
 	})
+	// In a customer's run (Under), the string is also sealed under the
+	// customer, so erasing them erases it too; the values it contains are
+	// made sure of with the cipher underneath.
+	u, _ := c.(*under)
+	inner := c
+	if u != nil {
+		inner = u.c
+	}
 	var out any = s
 	seen := map[string]bool{}
 	for _, h := range hits {
@@ -335,13 +343,26 @@ func sealDerived(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, s s
 		}
 		seen[subject] = true
 		// Sealing the value itself makes sure its subject has a key; one
-		// already erased leaves nothing of this string to keep.
-		if _, err := c.SealTx(ctx, tx, tenant, h.cat, h.value); errors.Is(err, ErrErased) {
+		// already erased leaves nothing of this string to keep. The
+		// customer's key is made when their run starts.
+		if u == nil || subject != u.subject {
+			if _, err := inner.SealTx(ctx, tx, tenant, h.cat, h.value); errors.Is(err, ErrErased) {
+				return Erased, nil
+			} else if err != nil {
+				return nil, err
+			}
+		}
+		if out, err = ss.SealUnderTx(ctx, tx, tenant, subject, h.cat, out); errors.Is(err, ErrErased) {
 			return Erased, nil
 		} else if err != nil {
 			return nil, err
 		}
-		if out, err = ss.SealUnderTx(ctx, tx, tenant, subject, h.cat, out); err != nil {
+	}
+	if u != nil && !seen[u.subject] {
+		var err error
+		if out, err = ss.SealUnderTx(ctx, tx, tenant, u.subject, "other", out); errors.Is(err, ErrErased) {
+			return Erased, nil
+		} else if err != nil {
 			return nil, err
 		}
 	}
@@ -354,6 +375,9 @@ func Open(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v any, tai
 	switch t := v.(type) {
 	case map[string]any:
 		if IsEnvelope(t) {
+			if IsTombstone(t) {
+				return Erased, nil // sealed when its person was erased already
+			}
 			if c == nil {
 				return nil, fmt.Errorf("sealed value but no cipher configured")
 			}
@@ -365,7 +389,9 @@ func Open(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v any, tai
 				return nil, err
 			}
 			if IsEnvelope(pt) {
-				// A derived string sealed under several people (sealDerived).
+				// A derived string sealed under several people (sealDerived),
+				// or a value under its own subject inside its customer's
+				// (Under).
 				return Open(ctx, c, tx, tenant, pt, taint)
 			}
 			cat, _ := t["$pii"].(string)

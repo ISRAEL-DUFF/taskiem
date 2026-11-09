@@ -87,13 +87,13 @@ A customer's message is instructions to the model as much as the owner's prompt,
 | `internal` | One of `never`, as a word: values the business keeps from customers (cost prices, staff numbers) |
 | `too_long`, `empty` | Over `max` (4,000 characters by default), or nothing |
 
-**What it does not see.** An amount spelled out in words, a promise in other words ("we'll sort it out for you"), or another customer's name: the check reads shapes, not meaning. The recipe (V8) always checks before sending and offers a person when unsure, and members see every conversation (V7). Nothing yet refuses a guarded workflow that sends without checking: until the recipe, that is the builder's rule.
+**What it does not see.** An amount spelled out in words, a promise in other words ("we'll sort it out for you"), or another customer's name: the check reads shapes, not meaning. The recipe (V8) always checks before sending and offers a person when unsure, and members see every conversation ([conversations](conversations.md)). Nothing yet refuses a guarded workflow that sends without checking: until the recipe, that is the builder's rule.
 
 `ok` false answers, as `text`, "Let me check that with the team and get back to you" in the customer's language, to send instead. A recipe may also hand the customer over (`hand_over`).
 
 ## A person: `assistant@1 hand_over` and `resume`
 
-`hand_over` (`channel`, `sender`, `hours`) is the customer's own word, for a workflow: when the model is unsure, or the customer is upset. A hand-over while one is on keeps (or lengthens) it and alerts no one again, so a retried action is harmless. `resume` ends it. People who manage the business's settings (`secret.manage`) see the customers waiting for a person on Settings, **Your assistant** (`GET /v1/assistant`), and let the assistant answer them again there; the conversations page (V7) will show them with their messages to everyone who answers customers.
+`hand_over` (`channel`, `sender`, `hours`) is the customer's own word, for a workflow: when the model is unsure, or the customer is upset. A hand-over while one is on keeps (or lengthens) it and alerts no one again, so a retried action is harmless. `resume` ends it. People who manage the business's settings (`secret.manage`) see the customers waiting for a person on Settings, **Your assistant** (`GET /v1/assistant`), and let the assistant answer them again there; the [conversations page](conversations.md) shows them with their messages to everyone who answers customers, and answering one by hand pauses the assistant for them.
 
 ## WhatsApp's 24-hour window: `assistant@1 window`
 
@@ -103,16 +103,22 @@ A send Meta refuses for the window (131047, or the older 470) fails with `steps.
 
 ## Erasing a customer (P2)
 
-In a run started by a guarded message, the customer's words, the transcript of their voice note, the model's replies and anything else of category `other` or `name` are sealed under the customer's own key: their number's (WhatsApp) or chat id's (Telegram). Identifiers (another phone number, an email) keep their own keys, so erasing whoever they name still reaches them. A child run (a callable `assistant-answer`) and a resumed run inherit it.
+In a run started by a guarded message, the customer's words, the transcript of their voice note, the model's replies and anything else of category `other` or `name` are sealed under the customer's own key: their number's (WhatsApp) or chat id's (Telegram). A value that is also someone's own (another person's name or chat id, sealed under their subject) is sealed twice: inside an envelope under its own subject, inside one under the customer. Erasing either erases it. Identifiers (another phone number, an email) keep their own keys only, so erasing whoever they name still reaches them. A child run (a callable `assistant-answer`) and a resumed run inherit it, as do the signals a customer's later message delivers to a waiting run.
 
 So one erase (Data & privacy, by the number or chat id) erases what they said in every run, in its history and its archive, with:
-- their conversation rows (V5);
+- their conversation (`assistant_turns`, V7) and their conversation rows (V5);
 - their files (V1);
 - the guard's record of them (their counts, STOP, a hand-over).
 
-The answer counts what it found (`customer_runs`, `assistant_contacts_deleted`).
+**However the number was written.** A number is erased in each way it may have been sealed: as WhatsApp gives it (`2348031234567`), with `+`, with a leading `0`, and a chat id as a string or a number.
 
-**A customer who comes back.** Erasure is one way: a destroyed key is never restored. A customer erased who writes again gets a new key (their subject's next generation, `<subject>~2`). Their new messages are answered and sealed under it, and erasing them again destroys every generation.
+The answer counts what it found (`customer_runs`, `assistant_contacts_deleted`, `conversation_turns_deleted`).
+
+**A run still open.** A run whose customer is erased while it waits (a timer, a later message) carries on: whatever it would seal under them becomes an empty *tombstone* that opens as erased, so nothing of theirs is kept again.
+
+**A customer who comes back.** Erasure is one way: a destroyed key is never restored. A customer erased who writes again gets a new key (their subject's next generation, `<subject>~2`, `~3`…). Their new messages are answered and sealed under it, and erasing them again destroys every generation.
+
+**What is not erased.** A run waiting for a customer's next message keeps its correlation (the sender) in clear until it ends (`signal_waits.correlation`).
 
 ## The switches
 
@@ -135,5 +141,4 @@ The owners are told when this month's allowance for AI steps or for voice (secon
 ## Not yet
 
 - **Debounce** (L5): three quick messages get three answers.
-- **The conversations page** (V7): reading a conversation and answering by hand.
 - **The recipe** (V8) wires all of this into the WhatsApp and Telegram templates.

@@ -34,6 +34,8 @@ const fetchTimeout = 3 * time.Second
 // guarded is what the guard decided for one subscriber.
 type guarded struct {
 	start    bool
+	channel  string         // the customer's channel and the delivery's id, to tie
+	dedup    string         // the conversation's record to the run it starts
 	trigger  map[string]any // trigger.guard
 	customer *runtime.Customer
 	pii      []pii.Path
@@ -76,10 +78,12 @@ func (h *Handler) guardEvent(ctx context.Context, t target, ev eventItem, s subs
 				return err
 			}
 			if full {
-				d = assistant.Decision{Dropped: assistant.DropBusy}
+				d = assistant.Decision{Dropped: assistant.DropBusy, Subject: d.Subject}
 			}
 		}
-		return nil
+		// The conversation's record (V7): the message and what was done
+		// with it, once per delivery.
+		return assistant.RecordInbound(ctx, tx, vault, t.tenant, msg, d)
 	})
 	if err != nil {
 		return guarded{}, err
@@ -99,7 +103,10 @@ func (h *Handler) guardEvent(ctx context.Context, t target, ev eventItem, s subs
 				// and does not fetch the note again.
 				d.File = file
 				_ = db.InTenantTx(context.WithoutCancel(ctx), h.Store.Pool, []uuid.UUID{t.tenant}, func(tx pgx.Tx) error {
-					return assistant.Keep(ctx, tx, t.tenant, msg.Channel, msg.Dedup, d)
+					if err := assistant.Keep(ctx, tx, t.tenant, msg.Channel, msg.Dedup, d); err != nil {
+						return err
+					}
+					return assistant.AttachInbound(ctx, tx, t.tenant, msg.Channel, msg.Dedup, nil, file)
 				})
 			}
 		}
@@ -113,7 +120,7 @@ func (h *Handler) guardEvent(ctx context.Context, t target, ev eventItem, s subs
 	if cat == "" {
 		cat = "other"
 	}
-	return guarded{start: true, trigger: g, outcome: d.Outcome,
+	return guarded{start: true, trigger: g, outcome: d.Outcome, channel: msg.Channel, dedup: msg.Dedup,
 		customer: &runtime.Customer{Category: cat, Value: ev.conv.sender},
 		pii: []pii.Path{{Segments: []string{"guard", "sender"}, Category: cat}, {Segments: []string{"guard", "text"}, Category: "other"},
 			{Segments: []string{"guard", "file", "name"}, Category: "other"}}}, nil
@@ -201,4 +208,13 @@ func connectionName(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env, conne
 		return names[0], nil
 	}
 	return "", nil
+}
+
+// conversationOf is the customer's message a guarded run answers, tied to
+// the run when it starts (V7).
+func conversationOf(g guarded) *runtime.ConversationRef {
+	if !g.start || g.dedup == "" {
+		return nil
+	}
+	return &runtime.ConversationRef{Channel: g.channel, Dedup: g.dedup}
 }

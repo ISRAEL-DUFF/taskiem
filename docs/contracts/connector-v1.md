@@ -52,3 +52,9 @@ The structure is defined by `schemas/connector-v1.schema.json`; `connectors/pays
     - `text`: its words (a caption, a button's title).
 
     `media` with `fetch` and `fetch_input` name a voice note's id and the read action that downloads it into a run file (input `fetch_input` and `sender`, output `file`). The guard fetches it when the message arrives. Only a trigger with `conversation` takes a workflow's `guard`; `whatsapp@1` `messages` and `telegram@1` `update` declare one.
+24. **Turn** (an addition; [customer assistant](../spec/voice-assistant.md) V7, [conversations](../conversations.md)). An action that speaks to a customer may declare `turn`, so what a run sends is recorded in the conversation:
+    - `to`, `text` and `file`: its input fields (dotted for nested ones, such as `interactive.body.text`). `to` is the customer as the channel's trigger gives them: its conversation's `sender`.
+    - `kind`, or `kind_field`: an input field holding the kind.
+    - `transcript`: for an action that hears a customer's voice note, the output field of the words heard.
+
+    A completed step of such an action, in a run that a customer's message started (or a child of one), is recorded when `to` is that customer. A trigger's `conversation` may also name `reply`: the action and fields a person answers by hand with, and for WhatsApp `template` and `templates`.

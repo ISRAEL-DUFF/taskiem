@@ -405,10 +405,13 @@ type ActionSpec struct {
 	// a five-minute voice note or speaking a long reply (decision 0062).
 	// Reads only: a write's deadline also decides when reconciling may
 	// conclude it was never sent. At most MaxCallTimeout.
-	CallTimeout int             `json:"call_timeout,omitempty"`
-	Input       json.RawMessage `json:"input"`
-	Output      json.RawMessage `json:"output"`
-	PII         []PIIField      `json:"pii"`
+	CallTimeout int `json:"call_timeout,omitempty"`
+	// Turn says the action speaks to (or hears) a customer, for the
+	// conversation's record (decision 0062 V7; rule 24).
+	Turn   *TurnSpec       `json:"turn,omitempty"`
+	Input  json.RawMessage `json:"input"`
+	Output json.RawMessage `json:"output"`
+	PII    []PIIField      `json:"pii"`
 }
 
 // PIIField accepts either "field" or {field, category}.
@@ -925,4 +928,20 @@ type PickerSpec struct {
 	Items  string `json:"items"`
 	ID     string `json:"id"`
 	Label  string `json:"label"`
+}
+
+// TurnSpec is how an action takes part in a conversation with a customer
+// (rule 24). A send names its input fields: To (the customer, as the
+// channel's trigger gives them: its conversation's sender), Text and File
+// (a run file sent); Kind is its kind (text, voice, audio, image,
+// document, template), or KindField an input field holding it. Transcript
+// names the output field of what an action heard in the customer's voice
+// note (speech@1 transcribe).
+type TurnSpec struct {
+	To         string `json:"to,omitempty"`
+	Text       string `json:"text,omitempty"`
+	File       string `json:"file,omitempty"`
+	Kind       string `json:"kind,omitempty"`
+	KindField  string `json:"kind_field,omitempty"`
+	Transcript string `json:"transcript,omitempty"`
 }

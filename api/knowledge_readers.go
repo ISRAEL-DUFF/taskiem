@@ -346,6 +346,11 @@ func containsString(list []string, s string) bool {
 // connectionFor is a business's connection in prod to a connector, with
 // an egress-guarded client to its hosts; the read is recorded.
 func (s *Server) connectionFor(ctx context.Context, tenant uuid.UUID, ref, name, purpose string) (*connector.Connector, map[string]string, *http.Client, error) {
+	return s.connectionIn(ctx, tenant, "prod", ref, name, purpose)
+}
+
+// connectionIn is connectionFor in an environment.
+func (s *Server) connectionIn(ctx context.Context, tenant uuid.UUID, env, ref, name, purpose string) (*connector.Connector, map[string]string, *http.Client, error) {
 	if s.Registry == nil || s.Vault == nil {
 		return nil, nil, nil, errors.New("no connector registry or vault")
 	}
@@ -360,7 +365,7 @@ func (s *Server) connectionFor(ctx context.Context, tenant uuid.UUID, ref, name,
 	if name == "" {
 		name = "main"
 	}
-	creds, err := s.Vault.Credentials(secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindConnection, Purpose: purpose, Actor: knowledgeActor(ctx)}), tenant, "prod", conn.Manifest.ID, name)
+	creds, err := s.Vault.Credentials(secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindConnection, Purpose: purpose, Actor: knowledgeActor(ctx)}), tenant, env, conn.Manifest.ID, name)
 	if errors.Is(err, secrets.ErrNotFound) {
 		return nil, nil, nil, knowledge.Plainly(err, "the %s connection %q is missing: connect it again in Connections", conn.Manifest.Name, name)
 	}

@@ -809,6 +809,19 @@
           "maximum": 300,
           "description": "Read actions only: seconds one call may take when the worker's usual bound (30 s) is too short, such as hearing a long voice note (decision 0062)."
         },
+        "turn": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "The action speaks to (or hears) a customer, for the conversation's record (rule 24): to, text and file are input fields of a send (to is the customer as the channel's trigger gives them); kind, or kind_field an input field holding it; transcript the output field of what was heard in the customer's voice note.",
+          "properties": {
+            "to": { "type": "string" },
+            "text": { "type": "string" },
+            "file": { "type": "string" },
+            "kind": { "type": "string" },
+            "kind_field": { "type": "string" },
+            "transcript": { "type": "string" }
+          }
+        },
         "resend_if_lost": {
           "type": "boolean",
           "description": "An unsafe write whose duplicate is only a duplicate chat message: a step may ask for it to be sent once more when its answer is lost (decision 0062 D11)."
@@ -1134,7 +1147,20 @@
             "text": { "$ref": "#/$defs/expr" },
             "media": { "$ref": "#/$defs/expr" },
             "fetch": { "type": "string", "description": "A read action of this connector that downloads media into a run file (input: fetch_input and sender; output: file)." },
-            "fetch_input": { "type": "string" }
+            "fetch_input": { "type": "string" },
+            "reply": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["action", "to", "text"],
+              "description": "How a person answers a customer by hand (V7): the send action and its input fields; template and templates, the actions that send and list approved templates (WhatsApp, outside the 24-hour window).",
+              "properties": {
+                "action": { "type": "string" },
+                "to": { "type": "string" },
+                "text": { "type": "string" },
+                "template": { "type": "string" },
+                "templates": { "type": "string" }
+              }
+            }
           }
         },
         "example": {

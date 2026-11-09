@@ -109,6 +109,11 @@ func (d Decision) Map(m Message, kind string) map[string]any {
 type Sealer interface {
 	pii.Cipher
 	pii.SubjectSealer
+	// RenewSubjectTx is a person's live subject, making a new generation
+	// (and its key) when they were erased and came back.
+	RenewSubjectTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, category string, value any) (string, error)
+	// LiveSubjectTx is the same lookup without making anything.
+	LiveSubjectTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, category string, value any) (string, error)
 }
 
 // Guard decides, for each customer's message, whether a run starts and
@@ -234,7 +239,7 @@ func (g *Guard) decide(ctx context.Context, tx pgx.Tx, sealer Sealer, tenant uui
 			language = string(t)
 		}
 	}
-	c, first, err := touch(ctx, tx, tenant, m.Channel, subject, sealed, language, now)
+	c, first, err := touch(ctx, tx, tenant, m.Channel, subject, sealed, language, Hint(m.Channel, cat, m.Sender), now)
 	if err != nil {
 		return Decision{}, err
 	}
@@ -335,11 +340,11 @@ func (g *Guard) decide(ctx context.Context, tx pgx.Tx, sealer Sealer, tenant uui
 // customerKey is the customer's subject and their sender sealed under it,
 // making the key (or, for a customer erased who came back, a new one).
 func customerKey(ctx context.Context, tx pgx.Tx, sealer Sealer, tenant uuid.UUID, cat, sender string) (string, map[string]any, error) {
-	subject, err := sealer.SubjectForTx(ctx, tx, tenant, cat, sender)
+	subject, err := sealer.RenewSubjectTx(ctx, tx, tenant, cat, sender)
 	if err != nil {
 		return "", nil, err
 	}
-	sealed, err := sealer.SealTx(ctx, tx, tenant, cat, sender)
+	sealed, err := sealer.SealUnderTx(ctx, tx, tenant, subject, cat, sender)
 	return subject, sealed, err
 }
 
@@ -395,13 +400,13 @@ func (c contact) over(cfg Config) (bool, time.Time) {
 // touch records a message from a customer: their window, their language,
 // this minute's and today's counts. It answers the row as it is now, and
 // whether they are new.
-func touch(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, channel, subject string, sealed map[string]any, language string, now time.Time) (contact, bool, error) {
+func touch(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, channel, subject string, sealed map[string]any, language, hint string, now time.Time) (contact, bool, error) {
 	var c contact
 	var inserted bool
-	err := tx.QueryRow(ctx, `INSERT INTO assistant_contacts AS a (tenant_id, channel, subject, sender, language, first_at, last_inbound_at, minute_at, minute_count, day, day_count)
-		VALUES ($1, $2, $3, $4, COALESCE(NULLIF($5, ''), 'en'), $6, $6, $6, 1, ($6 AT TIME ZONE 'Africa/Lagos')::date, 1)
+	err := tx.QueryRow(ctx, `INSERT INTO assistant_contacts AS a (tenant_id, channel, subject, sender, language, first_at, last_inbound_at, minute_at, minute_count, day, day_count, hint)
+		VALUES ($1, $2, $3, $4, COALESCE(NULLIF($5, ''), 'en'), $6, $6, $6, 1, ($6 AT TIME ZONE 'Africa/Lagos')::date, 1, $7)
 		ON CONFLICT (tenant_id, channel, subject) DO UPDATE SET
-		  sender = EXCLUDED.sender,
+		  sender = EXCLUDED.sender, hint = EXCLUDED.hint,
 		  language = COALESCE(NULLIF($5, ''), a.language),
 		  last_inbound_at = $6,
 		  minute_count = CASE WHEN a.minute_at > $6 - interval '1 minute' THEN a.minute_count + 1 ELSE 1 END,
@@ -410,7 +415,7 @@ func touch(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, channel, subject st
 		  day = ($6 AT TIME ZONE 'Africa/Lagos')::date
 		RETURNING language, minute_at, minute_count, (day::timestamp AT TIME ZONE 'Africa/Lagos'), day_count, limited_at, stopped_at,
 		  handover_at, handover_until, noticed_at, (xmax = 0)`,
-		tenant, channel, subject, sealed, language, now).Scan(&c.language, &c.minuteAt, &c.minuteCount, &c.dayStart, &c.dayCount,
+		tenant, channel, subject, sealed, language, now, hint).Scan(&c.language, &c.minuteAt, &c.minuteCount, &c.dayStart, &c.dayCount,
 		&c.limitedAt, &c.stoppedAt, &c.handoverAt, &c.handoverUntil, &c.noticedAt, &inserted)
 	return c, inserted, err
 }
@@ -439,7 +444,9 @@ func HandOver(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, channel, subject
 		tenant, channel, subject, now, until); err != nil {
 		return err
 	}
-	if was != nil && was.After(now) {
+	if was != nil && was.After(now) || strings.HasPrefix(by, "member") || strings.HasPrefix(channel, "test/") {
+		// Already told; a member paused it to answer them; or a member's
+		// test chat (Talk to it here): nobody to tell.
 		return nil
 	}
 	where := channelName(channel)
@@ -485,7 +492,7 @@ func WindowOf(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, channel, subject
 // EraseContacts deletes what the guard keeps about a customer (their
 // counts, STOP, a hand-over), on every channel.
 func EraseContacts(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, subject string) (int, error) {
-	tag, err := tx.Exec(ctx, `DELETE FROM assistant_contacts WHERE tenant_id = $1 AND (subject = $2 OR left(subject, length($2) + 1) = $2 || '~')`, tenant, subject)
+	tag, err := tx.Exec(ctx, `DELETE FROM assistant_contacts WHERE tenant_id = $1 AND subject ~>=~ $2 AND subject ~<~ ($2 || chr(127))`, tenant, subject)
 	return int(tag.RowsAffected()), err
 }
 
@@ -512,6 +519,18 @@ func channelName(channel string) string {
 func maskSender(sender, category string) string {
 	if category == "phone" && utf8.RuneCountInString(sender) > 4 {
 		return " (number ending " + sender[len(sender)-4:] + ")"
+	}
+	return ""
+}
+
+// Hint is how a customer is shown without who they are: the last four
+// digits of a WhatsApp number, a member's test chat, or a short mark.
+func Hint(channel, category, sender string) string {
+	switch {
+	case strings.HasPrefix(channel, "test/"):
+		return "Your test chat"
+	case category == "phone" && utf8.RuneCountInString(sender) > 4:
+		return "Number ending " + sender[len(sender)-4:]
 	}
 	return ""
 }
