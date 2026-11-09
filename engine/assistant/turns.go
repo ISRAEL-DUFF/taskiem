@@ -279,7 +279,6 @@ type Gathered struct {
 	Earlier []string
 }
 
-
 // unheardVoice stands for an earlier voice note no run transcribed.
 const unheardVoice = "(a voice note the assistant has not listened to)"
 
