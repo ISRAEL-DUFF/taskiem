@@ -184,7 +184,10 @@ export function useMentions(
           ? { kind: p.kind, link: p.id }
           : p.kind === "service"
             ? { kind: p.kind, service_id: p.id }
-            : p.kind === "invoice" || p.kind === "order"
+            : p.kind === "invoice" ||
+                p.kind === "bill" ||
+                p.kind === "order" ||
+                p.kind === "purchase"
               ? { kind: p.kind, ref: p.id }
               : { kind: p.kind, item_id: p.id },
       );
@@ -338,10 +341,22 @@ function PickIcon({ s }: { s: Suggestion }) {
         {initialsOf(s.name)}
       </span>
     );
-  if (s.kind === "invoice" || s.kind === "order")
+  if (
+    s.kind === "invoice" ||
+    s.kind === "bill" ||
+    s.kind === "order" ||
+    s.kind === "purchase"
+  )
     return (
-      <span className="pick-icon soft" aria-hidden="true">
-        <Icon name={s.kind === "invoice" ? "invoices" : "orders"} />
+      <span
+        className={`pick-icon ${s.kind === "bill" || s.kind === "purchase" ? "blue" : "soft"}`}
+        aria-hidden="true"
+      >
+        <Icon
+          name={
+            s.kind === "invoice" ? "invoices" : s.kind === "bill" ? "money" : "orders"
+          }
+        />
       </span>
     );
   return (
@@ -353,6 +368,15 @@ function PickIcon({ s }: { s: Suggestion }) {
     </span>
   );
 }
+
+const REF_WHAT: Record<RefKind, string> = {
+  invoice: "an invoice or a bill",
+  bill: "a bill",
+  order: "an order",
+  purchase: "an order to a supplier",
+  product: "a product",
+  customer: "a customer",
+};
 
 /** The picker of the designs: matches in groups, the first ready for
  * Enter, springing up from the composer. */
@@ -371,9 +395,7 @@ function Picker({
   leaving: boolean;
 }) {
   let n = 0;
-  const what = kind
-    ? `Tag ${kind === "invoice" ? "an invoice" : kind === "order" ? "an order" : `a ${kind}`}`
-    : "Tag a thing or a business";
+  const what = kind ? `Tag ${REF_WHAT[kind]}` : "Tag a thing or a business";
   return (
     <section
       ref={leaving ? undefined : m.list}
@@ -505,7 +527,10 @@ export function MentionText({
           <Link key={i} className="mention" to={`/chat?with=${p.mention.link}`}>
             {p.text}
           </Link>
-        ) : (p.mention.kind === "invoice" || p.mention.kind === "order") &&
+        ) : (p.mention.kind === "invoice" ||
+            p.mention.kind === "bill" ||
+            p.mention.kind === "order" ||
+            p.mention.kind === "purchase") &&
           p.mention.price_kobo ? (
           <strong key={i} className="mention">
             {p.text}

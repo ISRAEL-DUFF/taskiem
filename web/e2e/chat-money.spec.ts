@@ -67,10 +67,31 @@ async function answer(page: Page) {
     r.request().method() === "GET" ? r.fulfill(json({ entries: ENTRIES })) : remember(r, { entry_id: "e9", created: true }, 201),
   );
   await page.route(/\/v1\/money\/entries\/[^/]+\/match$/, (r) => remember(r, { ok: true }));
-  await page.route(/\/v1\/storefront\/orders(\?.*)?$/, (r) =>
-    r.fulfill(json({ orders: [{ id: "o1", reference: "AK-7QX4KD", kind: "chat", status: "paid", total_kobo: 1_330_000, customer: { name: "A•••" } }] })),
+  await page.route("**/v1/chat-refs", (r) =>
+    r.fulfill(json({ refs: [
+      { kind: "invoice", id: "i1", name: "INV-0001", party: "B•••", when: now, total_kobo: 4_500_000, status: "sent" },
+      { kind: "invoice", id: "i2", name: "INV-0002", party: "Tola's Kitchen", when: "2026-11-03T10:00:00Z", total_kobo: 1_200_000, status: "overdue" },
+      { kind: "bill", id: "b1", name: "INV-0420", party: "Dangote Stores", when: now, total_kobo: 7_800_000, status: "open" },
+      { kind: "order", id: "o1", name: "AK-7QX4KD", party: "A•••", when: now, total_kobo: 1_330_000, status: "paid" },
+      { kind: "customer", id: "c1", name: "Bisi Okafor", party: "•••0555", when: now },
+    ] })),
   );
-  await page.route("**/v1/customer-chats", (r) => r.fulfill(json({ chats: [{ id: "c1", name: "Bisi Okafor", phone: "•••0555" }] })));
+  await page.route(/\/v1\/chat-card\?/, (r) => {
+    const q = new URL(r.request().url()).searchParams;
+    if (q.get("kind") === "invoice")
+      return r.fulfill(json({ kind: "invoice", id: "i2", name: "INV-0002", party: "Tola's Kitchen", when: "2026-11-03T10:00:00Z", total_kobo: 1_200_000, status: "overdue",
+        due_on: "2026-11-08", paid_kobo: 300_000, due_kobo: 900_000, lines: [{ name: "Chairs", quantity: 10, total_kobo: 1_000_000 }, { name: "Tables", quantity: 2, total_kobo: 200_000 }], action: "remind" }));
+    if (q.get("kind") === "customer")
+      return r.fulfill(json({ kind: "customer", id: "c1", name: "Bisi Okafor", party: "•••0555", when: now, orders: 3, owes_kobo: 450_000,
+        last_order: { reference: "AK-7QX4KD", total_kobo: 1_330_000, status: "paid", when: now }, action: "message" }));
+    return r.fulfill(json({ kind: "order", id: "o1", name: "AK-7QX4KD", party: "A•••", when: now, total_kobo: 1_330_000, status: "paid", lines: [] }));
+  });
+  // Taskiem answers what was written: the words come back as the person's.
+  await page.route("**/v1/taskiem-chat", (r) =>
+    r.request().method() === "POST"
+      ? r.fulfill(json({ messages: [{ id: "m1", channel: "web", inbound: true, kind: "text", text: (r.request().postDataJSON() as { text: string }).text, created_at: now }] }))
+      : r.fulfill(json({ messages: [] })),
+  );
   await page.route("**/v1/chat-alerts", (r) => r.fulfill(json({ alerts: [] })));
   await page.route(/\/v1\/chat-briefing(\?.*)?$/, (r) => r.fulfill(json({ ready: false, day: "", key: "", put_off: false, part: "morning", now: "07:00" })));
   return sent;
@@ -154,7 +175,10 @@ for (const width of [390, 360]) {
     await box.press("Backspace");
     await box.pressSequentially("INV-000");
     await expect(picker.getByRole("button", { name: /INV-0001/ })).toBeVisible();
-    await expect(picker.getByRole("button", { name: /INV-0002/ })).toBeVisible();
+    // Each row says who, when, how much and where it stands, and what it is.
+    await expect(picker.getByRole("button", { name: /INV-0002/ })).toContainText("Tola's Kitchen · 3 Nov");
+    await expect(picker.getByRole("button", { name: /INV-0002/ })).toContainText("overdue");
+    await expect(picker.getByRole("button", { name: /INV-0002/ })).toContainText("Invoice");
     // The tools panel is not opened by it.
     await expect(page.getByRole("region", { name: "Tools" })).toHaveCount(0);
     await axeBoth(page, "the / picker");
@@ -168,6 +192,40 @@ for (const width of [390, 360]) {
     await box.pressSequentially("for /customer bisi");
     await picker.getByRole("button", { name: /Bisi Okafor/ }).click();
     await expect(box).toHaveValue("Did they pay #INV-0002 and #AK-7QX4KD for #Bisi Okafor ");
+    // Sent: each thing named is a card, read now.
+    await box.press("Enter");
+    const cards = pane.getByTestId("ref-card");
+    await expect(cards).toHaveCount(3);
+    const inv = pane.getByRole("article", { name: "Invoice INV-0002" });
+    await expect(inv).toContainText("Tola's Kitchen");
+    await expect(inv).toContainText("₦9,000");
+    await expect(inv).toContainText("Overdue");
+    await expect(inv).toContainText("10 × Chairs");
+    await expect(inv.getByRole("button", { name: /^Send a reminder/ })).toBeVisible();
+    const bisi = pane.getByRole("article", { name: "Customer Bisi Okafor" });
+    await expect(bisi).toContainText("•••0555");
+    await expect(bisi).toContainText("₦4,500");
+    await expect(bisi).toContainText("AK-7QX4KD");
+    await expect(bisi.getByRole("button", { name: /^Message them/ })).toBeVisible();
+    await axeBoth(page, "the cards");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    if (width === 390) await page.screenshot({ path: "test-results/ref-cards-phone.png", fullPage: false });
+  });
+
+  test(`"/bill" and "/order" in the Taskiem chat, at ${width} px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await owner(page);
+    await answer(page);
+    await page.goto("/chat?with=taskiem");
+    const box = page.getByTestId("taskiem-pane").locator("#taskiem-text");
+    await box.click();
+    await box.pressSequentially("/bill ");
+    const picker = page.getByTestId("mention-list");
+    await expect(picker.getByRole("button")).toHaveCount(1);
+    await expect(picker.getByRole("button", { name: /INV-0420/ })).toContainText("Dangote Stores");
+    await box.fill("");
+    await box.pressSequentially("/invoice ");
+    // "/invoice" is invoices and bills.
+    await expect(picker.getByRole("button")).toHaveCount(3);
   });
 }

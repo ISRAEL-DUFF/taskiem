@@ -1,4 +1,6 @@
-import { linkRefSuggestions, type LinkRef } from "../lib/refs";
+import type { ToolKey } from "../lib/tools";
+import { docMentions, refSources, type ChatRef } from "../lib/refs";
+import { RefCard } from "./ChatRefCard";
 import {
   useCallback,
   useEffect,
@@ -542,6 +544,7 @@ function Bubble({
   cheer = false,
   live,
   onOpenDoc,
+  refs,
 }: {
   m: LinkMessage;
   other: string;
@@ -576,6 +579,12 @@ function Bubble({
   live?: Live;
   /** Chat tools: a card of our order or bill opens it in a sheet. */
   onOpenDoc?: (card: DocCard, from: DOMRect) => void;
+  /** An invoice, bill or order the message names shows as a card, read
+   * as this side has it (the conversation's link). */
+  refs?: {
+    link: string;
+    openTool?: (k: ToolKey, from?: DOMRect, start?: { rowId?: string }) => void;
+  };
 }) {
   const card = m.kind === "card" ? m.card : undefined;
   const fold = useFold(m.body ?? "");
@@ -855,6 +864,14 @@ function Bubble({
               )}
             </span>
           )}
+          {refs &&
+            docMentions(m.mentions).map((x) => (
+              <RefCard
+                key={`${x.kind}:${x.name}`}
+                url={`/v1/link-chats/${encodeURIComponent(refs.link)}/card?kind=${x.kind}&name=${encodeURIComponent(x.name)}`}
+                openTool={refs.openTool}
+              />
+            ))}
           {m.preview && <PreviewCard p={m.preview} />}
         </>
       )}
@@ -1076,11 +1093,11 @@ export function ConversationPane({
   // What "/invoice" and "/order" offer: what is between us and them only.
   const shared = useLoad(
     () =>
-      get<{ refs: LinkRef[] }>(
+      get<{ refs: ChatRef[] }>(
         `/v1/link-chats/${encodeURIComponent(conv.link)}/refs`,
       ).then(
-        (r) => linkRefSuggestions(r.refs ?? []),
-        () => ({ invoice: [], order: [] }),
+        (r) => refSources(r.refs ?? []),
+        () => refSources([]),
       ),
     [conv.link],
   );
@@ -1794,6 +1811,7 @@ export function ConversationPane({
               cheer={cheer === m.id}
               live={chatTools ? liveNow : undefined}
               onOpenDoc={chatTools ? openDoc : undefined}
+              refs={{ link: conv.link, openTool: chatTools ? c.openTool : undefined }}
             />
           )
         }

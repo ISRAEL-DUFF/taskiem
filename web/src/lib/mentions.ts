@@ -13,7 +13,9 @@ export interface Suggestion {
     | "taskiem"
     | "category"
     | "invoice"
+    | "bill"
     | "order"
+    | "purchase"
     | "customer";
   /** The link (a business) or the seller's item id. */
   id: string;
@@ -33,7 +35,7 @@ export interface Suggestion {
 
 /** A mention as a message stores it. */
 export interface Mention {
-  kind: "business" | "item" | "service" | "invoice" | "order";
+  kind: "business" | "item" | "service" | "invoice" | "bill" | "order" | "purchase";
   name: string;
   link?: string;
   item_id?: string;
@@ -48,17 +50,20 @@ export interface Mention {
   status?: string;
 }
 
-/** What "/" picks to tag (phase 2 additions): "/invoice", "/product",
- * "/order", "/customer", then a space or "/" and the words to find. */
-export type RefKind = "invoice" | "product" | "order" | "customer";
+/** What "/" picks to tag (phase 2 additions): "/invoice" (invoices and
+ * bills), "/bill", "/order" (orders and purchases), "/purchase",
+ * "/product", "/customer", then a space or "/" and the words to find. */
+export type RefKind = "invoice" | "bill" | "order" | "purchase" | "product" | "customer";
 
-export const REF_KINDS: RefKind[] = ["invoice", "product", "order", "customer"];
+export const REF_KINDS: RefKind[] = ["invoice", "bill", "order", "purchase", "product", "customer"];
 
 /** The picker's heading for each. */
 export const REF_LABEL: Record<RefKind, string> = {
-  invoice: "Invoices",
-  product: "Products",
+  invoice: "Invoices and bills",
+  bill: "Bills",
   order: "Orders",
+  purchase: "Your orders to suppliers",
+  product: "Products",
   customer: "Customers",
 };
 
@@ -97,7 +102,7 @@ export const refStatusWords = (s: string) =>
 
 /** "/invoice ada" or "/invoices/ada": the kind and the words, or null. */
 function refQuery(after: string): { kind: RefKind; query: string } | null {
-  const m = /^(invoice|product|order|customer)s?[/ ](.*)$/i.exec(after);
+  const m = /^(invoice|bill|order|purchase|product|customer)s?[/ ](.*)$/i.exec(after);
   if (!m) return null;
   return { kind: (m[1] ?? "").toLowerCase() as RefKind, query: m[2] ?? "" };
 }

@@ -460,3 +460,42 @@ img.tk-live-tile { object-fit: cover; }
 .customer-order-sums { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; margin: 0; }
 .customer-order-sums dd { margin: 0; text-align: right; }
 .customer-order-start { align-self: flex-start; }
+
+/* A thing tagged in a message (phase 2 additions): an invoice, a bill, an
+   order, an order to a supplier or a customer, read now. */
+.tk-ref { display: flex; flex-direction: column; background: var(--panel); border-radius: 14px; overflow: hidden; margin: 6px 0; box-shadow: 0 0 0 1px var(--border); max-width: 360px; width: 100%; }
+.tk-ref-loading { gap: 8px; padding: 14px; }
+.tk-ref-loading .tk-shimmer { height: 12px; border-radius: 6px; }
+.tk-ref-loading .tk-shimmer + .tk-shimmer { width: 60%; }
+.tk-ref-top { display: flex; gap: 12px; align-items: flex-start; padding: 12px 12px 8px; }
+.tk-ref-tile { flex: none; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--tk-lime-soft); color: var(--brand); }
+.tk-ref-tile svg { width: 22px; height: 22px; }
+.tk-ref-tile.bill, .tk-ref-tile.purchase { background: var(--tk-blue-bg); color: var(--tk-blue-ink); }
+.tk-ref-tile.customer { background: var(--tk-soft); color: var(--text); }
+:root[data-theme="dark"] .tk-ref-tile.invoice, :root[data-theme="dark"] .tk-ref-tile.order { color: var(--brand-dark); }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .tk-ref-tile.invoice, :root[data-theme="system"] .tk-ref-tile.order { color: var(--brand-dark); } }
+.tk-ref-words { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tk-ref-name { font-weight: 700; font-size: 16px; color: var(--text); overflow-wrap: anywhere; }
+.tk-ref-sub { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.tk-ref-pill { flex: none; }
+.tk-ref-money { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; padding: 0 12px 8px; }
+.tk-ref-money b { font-size: 22px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
+.tk-ref-money span { font-size: 13px; color: var(--muted); }
+.tk-ref-paid { display: flex; align-items: center; gap: 8px; padding: 0 12px 8px; font-size: 13px; color: var(--muted); }
+.tk-ref-bar { flex: 1; height: 6px; border-radius: 3px; background: var(--tk-soft); overflow: hidden; }
+.tk-ref-bar span { display: block; height: 100%; border-radius: 3px; background: var(--brand); }
+.tk-ref-lines { list-style: none; margin: 0; padding: 8px 12px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 4px; }
+.tk-ref-lines li { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; color: var(--text); }
+.tk-ref-lines li span { min-width: 0; overflow-wrap: anywhere; }
+.tk-ref-lines li b { flex: none; font-weight: 600; font-variant-numeric: tabular-nums; }
+.tk-ref-lines .tk-ref-more { color: var(--muted); font-size: 13px; }
+.tk-ref-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 12px 10px; }
+.tk-ref-stats > span { display: flex; flex-direction: column; gap: 2px; background: var(--tk-soft); border-radius: 10px; padding: 8px 10px; min-width: 0; }
+.tk-ref-stats > span.wide { grid-column: 1 / -1; }
+.tk-ref-stats > span > span { font-size: 12px; color: var(--muted); }
+.tk-ref-stats b { font-size: 15px; color: var(--text); overflow-wrap: anywhere; }
+.tk-ref-stats b.warn { color: var(--tk-warn-ink); }
+.tk-ref-stats .tk-ref-when { font-size: 12px; }
+.tk-ref-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--border); }
+.tk-ref-foot .tk-btn { min-height: 40px; padding: 0 16px; font-size: 14px; }
+.tk-refs { display: flex; flex-direction: column; }

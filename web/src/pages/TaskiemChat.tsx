@@ -29,17 +29,16 @@ import { get, post, upload } from "../api";
 import type { Conversation } from "../lib/linkchat";
 import { categoriesOf } from "../lib/mentions";
 import {
-  customerRefs,
-  invoiceRefs,
+  cardRefs,
   knownRefs,
-  orderRefs,
   productRefs,
   refParts,
+  refSources,
+  type ChatRef,
   type KnownRef,
 } from "../lib/refs";
-import type { CustomerInvoice } from "../lib/invoices";
-import type { Order } from "../lib/orders";
-import type { CustomerChat } from "../lib/customerchat";
+import { RefCard } from "./ChatRefCard";
+import { customerKey } from "../lib/customerchat";
 import type { StockItem, StockView } from "../lib/stock";
 import { priceWords, type SupplierPrices } from "../lib/pricelists";
 import { Icon, TaskiemMark } from "../icons";
@@ -106,15 +105,19 @@ function TaskiemText({
         const words = parts.map((x, j) =>
           !x.ref ? (
             x.text
-          ) : x.ref.kind === "order" ? (
+          ) : x.ref.kind === "order" || x.ref.kind === "customer" ? (
             <Link
               key={j}
               className="mention"
-              to={`/storefront/orders/${encodeURIComponent(x.ref.name)}`}
+              to={
+                x.ref.kind === "order"
+                  ? `/storefront/orders/${encodeURIComponent(x.ref.name)}`
+                  : `/chat?with=${customerKey(x.ref.id)}`
+              }
             >
               {x.text}
             </Link>
-          ) : x.ref.kind === "customer" || !onRef ? (
+          ) : !onRef ? (
             <strong key={j} className="mention">
               {x.text}
             </strong>
@@ -180,39 +183,24 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
         : Promise.resolve([] as StockItem[]),
     [chatTools],
   );
-  // What "/invoice", "/order" and "/customer" offer to tag (phase 2
-  // additions), each for those who may see it.
-  const refLists = useLoad(
+  // What "/invoice", "/bill", "/order", "/purchase" and "/customer" offer
+  // to tag (phase 2 additions): all the person may see.
+  const refList = useLoad(
     () =>
       chatTools
-        ? Promise.all([
-            can("invoice.read")
-              ? get<{ invoices: CustomerInvoice[] }>("/v1/invoices?limit=200").then(
-                  (r) => invoiceRefs(r.invoices ?? []),
-                  () => [],
-                )
-              : Promise.resolve([]),
-            can("storefront.manage|order.handle")
-              ? get<{ orders: Order[] }>("/v1/storefront/orders?limit=200").then(
-                  (r) => orderRefs(r.orders ?? []),
-                  () => [],
-                )
-              : Promise.resolve([]),
-            can("storefront.manage|order.handle")
-              ? get<{ chats: CustomerChat[] }>("/v1/customer-chats").then(
-                  (r) => customerRefs(r.chats ?? []),
-                  () => [],
-                )
-              : Promise.resolve([]),
-          ]).then(([invoice, order, customer]) => ({ invoice, order, customer }))
-        : Promise.resolve(undefined),
+        ? get<{ refs: ChatRef[] }>("/v1/chat-refs").then(
+            (r) => r.refs ?? [],
+            () => [] as ChatRef[],
+          )
+        : Promise.resolve([] as ChatRef[]),
     [chatTools],
   );
   const ownProducts = useMemo(() => productRefs(ownStock.data ?? []), [ownStock.data]);
   const known = useMemo(
-    () => knownRefs({ ...refLists.data, product: ownProducts }),
-    [refLists.data, ownProducts],
+    () => knownRefs(refList.data ?? [], ownProducts),
+    [refList.data, ownProducts],
   );
+  const refSrc = useMemo(() => refSources(refList.data ?? []), [refList.data]);
   // Alerts you can act on, as cards at the end (chat-tools.md §6).
   const alerts = useChatAlerts(!!chatTools);
   const afterDiary = useRef<() => void>(() => undefined);
@@ -262,7 +250,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
           })),
       )],
       categories: categoriesOf(ownStock.data ?? []),
-      refs: { ...refLists.data, product: ownProducts },
+      refs: { ...refSrc, product: ownProducts },
     },
     onSend: (s) => {
       if (!s.file && briefs && asksBriefing(s.text)) showBriefing();
@@ -617,11 +605,30 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
                 gap={inline}
                 known={known}
                 onRef={(r, from) =>
-                  c.openTool(r.kind === "invoice" ? "invoices" : "products", from, {
-                    rowId: r.id,
-                  })
+                  c.openTool(
+                    r.kind === "invoice"
+                      ? "invoices"
+                      : r.kind === "bill"
+                        ? "bills"
+                        : r.kind === "purchase"
+                          ? "purchases"
+                          : "products",
+                    from,
+                    { rowId: r.id },
+                  )
                 }
               />
+              {cardRefs(m.text, known).length > 0 && (
+                <span className="tk-refs">
+                  {cardRefs(m.text, known).map((r) => (
+                    <RefCard
+                      key={`${r.kind}:${r.id}`}
+                      url={`/v1/chat-card?kind=${r.kind}&id=${encodeURIComponent(r.id)}`}
+                      openTool={c.openTool}
+                    />
+                  ))}
+                </span>
+              )}
               {m.buttons && m.buttons.length > 0 && (
                 <span
                   className="reply-buttons"
