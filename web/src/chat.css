@@ -426,3 +426,11 @@ img.tk-live-tile { object-fit: cover; }
 .tk-share-row { display: flex; align-items: center; gap: 10px; min-height: 40px; font-size: 14px; font-weight: 500; color: var(--text); cursor: pointer; }
 .tk-share-note { margin: 0; padding: 12px 14px; border-radius: 14px; border: 1px dashed color-mix(in srgb, var(--brand-dark) 70%, var(--border-strong)); background: var(--tone-green-bg); color: var(--tone-green-ink); font-size: 13px; line-height: 1.45; }
 @media (prefers-reduced-motion: no-preference) { .tk-share-pick { animation: tkd-up8 0.25s ease both; } }
+
+/* Customers' conversations (chat-five-more-flows.md, phase 1): how a reply
+ * goes, above the box: more than a day since they wrote (amber), or STOP
+ * (red, and no box). */
+.customer-note { margin: 0 12px 8px; padding: 8px 12px; border-radius: 12px; font-size: 13px; line-height: 1.4; background: var(--tk-warn-bg); color: var(--tk-warn-ink); }
+.customer-note.stop { background: var(--tk-danger-bg); color: var(--tk-danger-ink); }
+.chat-pane .bubble.media-note .text { color: var(--muted); }
+.chat-list-pane section[aria-labelledby="customers-head"] { margin-top: 12px; }

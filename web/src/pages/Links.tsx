@@ -45,6 +45,8 @@ import { ConversationPane } from "./Conversation";
 import { TaskiemPane } from "./TaskiemChat";
 import { useChatAlerts } from "./ChatAlerts";
 import { ChatRow } from "./ChatRow";
+import { CustomerPane, CustomerRows, useCustomerChats } from "./CustomerChat";
+import { customerID } from "../lib/customerchat";
 import { useConfirm } from "./ConfirmSheet";
 import { Explore } from "./Explore";
 import { HeadMenu } from "./ChatHead";
@@ -264,6 +266,11 @@ export function ChatPage() {
   // businesses off it shows that alone, and asks for no business's chats.
   const linksOn = areaOn(me?.areas, "links");
   const manage = can("link.manage") && linksOn;
+  // Customers who wrote to the business's own WhatsApp number (customers'
+  // conversations): for those who handle orders, with Orders on.
+  const customersOn =
+    can("storefront.manage|order.handle") && areaOn(me?.areas, "orders");
+  const customers = useCustomerChats(customersOn);
   const { view, act, answer } = useLinks();
   const [params, setParams] = useSearchParams();
   // Explore is a step in the browser history (a state of this same address),
@@ -274,7 +281,8 @@ export function ChatPage() {
   loc.current = here;
   const go = useRef(navigate);
   go.current = navigate;
-  const exploring = (here.state as { explore?: boolean } | null)?.explore === true;
+  const exploring =
+    (here.state as { explore?: boolean } | null)?.explore === true;
   const convs = useLoad(
     () =>
       linksOn
@@ -382,6 +390,7 @@ export function ChatPage() {
   const open = all.find((c) => c.link === openID);
   // The person's own conversation with Taskiem, pinned at the top (§5.5).
   const taskiemOpen = openID === "taskiem";
+  const customerOpen = customersOn ? customerID(openID) : undefined;
   const unreadCount = all.filter((c) => !c.archived && c.unread > 0).length;
   const archivedCount = all.filter((c) => c.archived).length;
   const narrowed = linksOn && query.length === 1 ? matchChats(all, query) : all;
@@ -511,7 +520,9 @@ export function ChatPage() {
   return (
     <>
       <h1 className="sr-only">Chat</h1>
-      <div className={`chat-layout${open || taskiemOpen ? " open" : ""}`}>
+      <div
+        className={`chat-layout${open || taskiemOpen || customerOpen ? " open" : ""}`}
+      >
         <div className="chat-list-pane" onKeyDown={onListKey}>
           <div className="chat-list-head">
             <h2>Chats</h2>
@@ -644,8 +655,13 @@ export function ChatPage() {
                         <span className="draft">Draft:</span> {drafts.taskiem}
                       </>
                     ) : waiting > 0 ? (
-                      <span className="tk-waiting" data-testid="taskiem-waiting">
-                        {waiting === 1 ? "1 thing needs you" : `${waiting} things need you`}
+                      <span
+                        className="tk-waiting"
+                        data-testid="taskiem-waiting"
+                      >
+                        {waiting === 1
+                          ? "1 thing needs you"
+                          : `${waiting} things need you`}
                       </span>
                     ) : (
                       "Your own conversation with Taskiem, as on your phone"
@@ -657,6 +673,17 @@ export function ChatPage() {
                 />
               </ul>
             )}
+          {!searching && !archived && filter !== "starred" && (
+            <CustomerRows
+              chats={(customers.data ?? []).filter(
+                (c) =>
+                  (filter !== "unread" || c.unread > 0) &&
+                  (query.length === 0 ||
+                    c.name.toLowerCase().includes(query.toLowerCase())),
+              )}
+              openKey={openID}
+            />
+          )}
           {searching ? (
             <section aria-label="Search results" data-testid="link-results">
               {chats.length > 0 && (
@@ -738,7 +765,8 @@ export function ChatPage() {
                 <Skeleton rows={2} label="Searching businesses…" />
               ) : others.length === 0 ? (
                 <EmptyState icon="search">
-                  No business found for “{query}”. Only businesses that chose to be found are listed.
+                  No business found for “{query}”. Only businesses that chose to
+                  be found are listed.
                 </EmptyState>
               ) : (
                 <Items label="Businesses on Taskiem">
@@ -995,6 +1023,14 @@ export function ChatPage() {
           )}
         </div>
         {taskiemOpen && <TaskiemPane onBack={() => setParams({})} />}
+        {customerOpen && (
+          <CustomerPane
+            key={customerOpen}
+            id={customerOpen}
+            onBack={() => setParams({})}
+            onChanged={customers.reload}
+          />
+        )}
         {open && (
           <ConversationPane
             key={open.link}
@@ -1528,7 +1564,10 @@ function startTag() {
   if (!el) return;
   const add = el.value && !/\s$/.test(el.value) ? " @" : "@";
   const next = el.value + add;
-  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(el, next);
+  Object.getOwnPropertyDescriptor(
+    HTMLTextAreaElement.prototype,
+    "value",
+  )?.set?.call(el, next);
   el.focus();
   el.setSelectionRange(next.length, next.length);
   el.dispatchEvent(new Event("input", { bubbles: true }));
