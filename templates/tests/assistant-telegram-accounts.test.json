@@ -2,7 +2,8 @@
   "schema": "wd-test/v1",
   "template": "assistant-telegram-accounts",
   "params": {
-    "business_name": "Ada Wallet"
+    "business_name": "Ada Wallet",
+    "rail_connection": "main"
   },
   "cases": [
     {
@@ -107,6 +108,11 @@
           "look_t__acct": {
             "filters": [
               {
+                "column": "channel",
+                "op": "eq",
+                "value": "telegram"
+              },
+              {
                 "column": "sender",
                 "op": "in",
                 "values": [
@@ -117,11 +123,11 @@
           },
           "answer_t__reply": {
             "input": {
-              "account": "This customer asked about their balance. Their balance, read just now from their own account: 49300 naira."
+              "account": "This customer asked about their balance. Their balance, read just now from their own account: 49300.00 naira."
             }
           },
           "answer_t__check": {
-            "material": "\n\nThis customer asked about their balance. Their balance, read just now from their own account: 49300 naira."
+            "material": "\n\nThis customer asked about their balance. Their balance, read just now from their own account: 49300.00 naira."
           },
           "send_t": {
             "chat_id": "55501",
@@ -302,12 +308,15 @@
             "message_id": 8
           }
         },
-        "told_lt": {
+        "hand_lt": {
           "output": {
-            "people": 1,
-            "chat": 1,
-            "email": 0,
-            "nobody": false
+            "until": "2026-11-10T10:00:00Z"
+          }
+        },
+        "keep_lt": {
+          "output": {
+            "affected": 2,
+            "rows": []
           }
         }
       },
@@ -315,6 +324,8 @@
         "status": "completed",
         "steps": {
           "say_held_lt": "completed",
+          "hand_lt": "completed",
+          "keep_lt": "completed",
           "answer_t": "skipped",
           "send_t": "skipped"
         },
@@ -461,7 +472,7 @@
           },
           "answer_v__reply": {
             "input": {
-              "account": "This customer asked about their balance. Their balance, read just now from their own account: 49300 naira."
+              "account": "This customer asked about their balance. Their balance, read just now from their own account: 49300.00 naira."
             }
           }
         }

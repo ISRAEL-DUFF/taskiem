@@ -2,7 +2,7 @@
   "id": "assistant-account",
   "title": "Your assistant reads their own account",
   "summary": "For your assistant: what a customer asks about their own account (their balance, what they owe, recent transactions), read for the person writing and no one else.",
-  "description": "The AI model only says what the customer is asking about: their balance, what they owe or their payments, their recent transactions, or something else. Taskiem then reads that, for the customer who wrote (by their number or chat, never by anything they or the model say): their balance and recent transactions from their own wallet or account at your payments service, through your customers' accounts table, and what they owe from your invoices. Nothing is ever paid or changed. The WhatsApp and Telegram assistants that answer about accounts use it.",
+  "description": "The AI model only says what the customer is asking about: their balance, what they owe or their payments, their recent transactions, or something else. Taskiem then reads that, for the customer who wrote (by their number or chat, never by anything they or the model say): their balance and recent transactions from their own wallet or account at your payments service, through your customers' accounts table (their channel and number or chat), and what they owe from your invoices. Nothing is ever paid or changed. The WhatsApp and Telegram assistants that answer about accounts use it.",
   "category": "assistant",
   "tags": [
     "assistant",
@@ -48,10 +48,9 @@
         "customer_balance"
       ],
       "title": "Your payments service",
-      "description": "Where your customers' wallets or accounts are: iswallet, or bank accounts linked through Mono.",
-      "required": false,
-      "default": "",
-      "example": ""
+      "description": "Where your customers' wallets or accounts are: iswallet, or bank accounts linked through Mono. Chosen once here, so connecting another payments service later changes nothing.",
+      "required": true,
+      "example": "main"
     }
   ],
   "tables": [
@@ -136,12 +135,22 @@
           "table": "{{accounts_table}}",
           "filters": [
             {
+              "column": "channel",
+              "op": "eq",
+              "value": "=trigger.body.via"
+            },
+            {
               "column": "sender",
               "op": "in",
               "values": "=trigger.body.via == 'whatsapp' ? [trigger.body.sender, '+' + trigger.body.sender] + (trigger.body.sender.startsWith('234') ? ['0' + trigger.body.sender.substring(3)] : []) : [trigger.body.sender]"
             }
           ],
-          "limit": 1
+          "limit": 1,
+          "order": [
+            {
+              "column": "id"
+            }
+          ]
         }
       },
       {
@@ -281,7 +290,7 @@
         "config": {
           "output": {
             "asked": "=steps.classify.output.intent",
-            "text": "=steps.look.output.path == 'balance' ? 'This customer asked about their balance. Their balance, read just now from their own account: ' + string(steps.look.output.steps.bal.available_kobo / 100) + ' naira.' : steps.look.output.path == 'recent' ? (size(steps.look.output.steps.txns.transactions) == 0 ? 'This customer asked about their recent transactions. Their own account shows none in the last 30 days.' : 'This customer asked about their recent transactions. Their own account shows, in the last 30 days (date, in or out, naira, what it says):\\n' + steps.look.output.steps.txns.transactions.map(t, t.at.substring(0, 10) + ', ' + t.direction + ', ' + string(t.amount_kobo / 100) + ' naira' + (has(t.narration) && t.narration != '' ? ', ' + t.narration : '')).join('\\n')) : steps.look.output.path == 'owed' ? (steps.look.output.steps.owed.found ? 'This customer asked about what they owe or their payments. Their invoices with the business: they owe ' + steps.look.output.steps.owed.due + (size(steps.look.output.steps.owed.open) > 0 ? ' on ' + string(size(steps.look.output.steps.owed.open)) + ' open invoice(s): ' + steps.look.output.steps.owed.open.map(o, o.number + ' ' + o.due + (has(o.due_on) ? ' due ' + o.due_on : '')).join('; ') : '') + (has(steps.look.output.steps.owed.last_paid) ? '. Last paid: invoice ' + steps.look.output.steps.owed.last_paid.number + ' (' + steps.look.output.steps.owed.last_paid.total + (has(steps.look.output.steps.owed.last_paid.paid_on) ? ', on ' + steps.look.output.steps.owed.last_paid.paid_on : '') + ')' : '') + '.' : 'This customer asked about what they owe or their payments. The business has no invoices for them.') : steps.look.output.path == 'unlinked' ? 'This customer asked about their own account, but the business has not linked their number to an account, so it cannot be read here: say someone from the team will help.' : ''"
+            "text": "=steps.look.output.path == 'balance' ? 'This customer asked about their balance. Their balance, read just now from their own account: ' + ((steps.look.output.steps.bal.available_kobo) < 0 ? '-' : '') + string(math.abs(steps.look.output.steps.bal.available_kobo) / 100) + '.' + (math.abs(steps.look.output.steps.bal.available_kobo) % 100 < 10 ? '0' : '') + string(math.abs(steps.look.output.steps.bal.available_kobo) % 100) + ' ' + (steps.look.output.steps.bal.currency == 'NGN' ? 'naira' : steps.look.output.steps.bal.currency) + '.' : steps.look.output.path == 'recent' ? (size(steps.look.output.steps.txns.transactions) == 0 ? 'This customer asked about their recent transactions. Their own account shows none in the last 30 days.' : 'This customer asked about their recent transactions. Their own account shows, newest first, in the last 30 days (date, money in or out, naira):\\n' + (size(steps.look.output.steps.txns.transactions.sortBy(t, t.at).reverse()) > 20 ? steps.look.output.steps.txns.transactions.sortBy(t, t.at).reverse().slice(0, 20) : steps.look.output.steps.txns.transactions.sortBy(t, t.at).reverse()).map(t, (t.at.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}T') ? string(timestamp(t.at) + duration('1h')).substring(0, 10) : t.at.substring(0, 10)) + ', ' + (t.direction == 'in' ? 'in' : 'out') + ', ' + ((t.amount_kobo) < 0 ? '-' : '') + string(math.abs(t.amount_kobo) / 100) + '.' + (math.abs(t.amount_kobo) % 100 < 10 ? '0' : '') + string(math.abs(t.amount_kobo) % 100) + ' naira').join('\\n') + (size(steps.look.output.steps.txns.transactions) > 20 || has(steps.look.output.steps.txns.truncated) && steps.look.output.steps.txns.truncated ? '\\n(Only the newest are shown: there were more.)' : '')) : steps.look.output.path == 'owed' ? (steps.look.output.steps.owed.found ? 'This customer asked about what they owe or their payments. Their invoices with the business, under their number: they owe ' + steps.look.output.steps.owed.due + (size(steps.look.output.steps.owed.open) > 0 ? ' on ' + string(size(steps.look.output.steps.owed.open)) + ' open invoice(s): ' + steps.look.output.steps.owed.open.map(o, o.number + ' ' + o.due + (has(o.due_on) ? ' due ' + o.due_on : '')).join('; ') : '') + (has(steps.look.output.steps.owed.last_paid) ? '. Last paid: invoice ' + steps.look.output.steps.owed.last_paid.number + ' (' + steps.look.output.steps.owed.last_paid.total + (has(steps.look.output.steps.owed.last_paid.paid_on) ? ', on ' + steps.look.output.steps.owed.last_paid.paid_on : '') + ')' : '') + (has(steps.look.output.steps.owed.credit_kobo) && steps.look.output.steps.owed.credit_kobo > 0 ? '. They also have ' + steps.look.output.steps.owed.credit + ' paid in that no invoice has taken yet' : '') + '.' : 'This customer asked about what they owe or their payments. The business has no invoices under their number: say someone from the team will check.') : steps.look.output.path == 'unlinked' ? 'This customer asked about their own account, but the business has not linked their number to an account, so it cannot be read here: say someone from the team will help.' : ''"
           }
         }
       }

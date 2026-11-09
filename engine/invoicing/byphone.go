@@ -93,6 +93,20 @@ func (s Service) FindByPhone(ctx context.Context, tenant uuid.UUID, phone string
 			}
 			subjects = append(subjects, id)
 		}
+		// A person erased (whose key is destroyed) is not found: their
+		// number may be someone else's now.
+		live := subjects[:0]
+		for _, sub := range subjects {
+			var shredded bool
+			err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM subject_keys WHERE tenant_id = $1 AND subject_id = $2 AND shredded_at IS NOT NULL)`, tenant, sub).Scan(&shredded)
+			if err != nil {
+				return err
+			}
+			if !shredded {
+				live = append(live, sub)
+			}
+		}
+		subjects = live
 		// One query for all the forms: oldest due first across them.
 		rows, err := tx.Query(ctx, `SELECT id FROM customer_invoices WHERE tenant_id = $1 AND customer_id = ANY($2) AND status IN ('recorded', 'sent', 'part_paid', 'overdue')
 			ORDER BY COALESCE(due_on, (COALESCE(sent_at, recorded_at) AT TIME ZONE 'Africa/Lagos')::date), COALESCE(sent_at, recorded_at), number LIMIT 10`, tenant, subjects)

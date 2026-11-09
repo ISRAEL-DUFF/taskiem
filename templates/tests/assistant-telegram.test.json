@@ -1024,12 +1024,15 @@
             "message_id": 8
           }
         },
-        "told_t": {
+        "hand_t": {
           "output": {
-            "people": 1,
-            "chat": 1,
-            "email": 0,
-            "nobody": false
+            "until": "2026-11-10T10:00:00Z"
+          }
+        },
+        "keep_t": {
+          "output": {
+            "affected": 2,
+            "rows": []
           }
         }
       },
@@ -1037,7 +1040,8 @@
         "status": "completed",
         "steps": {
           "say_held_t": "completed",
-          "told_t": "completed",
+          "hand_t": "completed",
+          "keep_t": "completed",
           "send_t": "skipped"
         },
         "inputs": {

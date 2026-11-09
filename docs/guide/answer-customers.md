@@ -68,12 +68,13 @@ Also tell customers, in your privacy notice or on your page, that you use an aut
 
 ## Answering about their own account
 
-If your customers keep money with you (a wallet, savings) or owe you on invoices, choose **Your assistant on WhatsApp, with their accounts** (or on Telegram) instead. Your assistant then also answers "how much do I have?", "have you received my payment?" and "what did I spend this month?", for the person writing and no one else:
-- Who they are comes from the number or chat they write from, looked up in your **Customers' accounts** table: their number (as WhatsApp gives it, `2348031234567`, or their Telegram chat), their wallet at iswallet or bank account linked through Mono, and, for Telegram, the phone number their invoices are under. Someone who is not in the table is told someone from the team will help.
-- What they owe is read from your invoices under their phone number.
+If your customers keep money with you (a wallet, savings), choose **Your assistant on WhatsApp, with their accounts** (or on Telegram) instead. Your assistant then also answers "how much do I have?", "have you received my payment?" and "what did I spend this month?", for the person writing and no one else:
+- Who they are comes from the number or chat they write from, looked up in your **Customers' accounts** table: `whatsapp` or `telegram`, their number (`2348031234567`, `+2348031234567` or `08031234567`, without spaces) or their Telegram chat, their wallet at iswallet or bank account linked through Mono, and, for Telegram, the phone number their invoices are under. Someone who is not in the table is told someone from the team will help.
+- What they owe is read from your invoices made out to their phone number, with any money they paid that no invoice took yet. Invoices made for a customer key (a school's student) or with the number written another way (with spaces) are not found: they are told someone will check.
+- Their recent transactions are the newest 20 of the last 30 days, with dates and amounts only: what the bank or wallet says about each is never repeated to them.
 - The AI model only decides what they are asking about. It never chooses whose account is read, and nothing is ever paid or changed.
 
-You need a payments service that can read a customer's wallet or account (iswallet, or Mono) connected, and **Money and invoices** turned on under **What your business uses**.
+You need a payments service that can read a customer's wallet or account (iswallet, or Mono) connected and chosen when you set it up, and **Money and invoices** turned on under **What your business uses**. If that connection stops working, your assistant stops answering until it is fixed: readiness says so.
 
 ## Day to day
 

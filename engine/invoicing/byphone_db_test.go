@@ -54,6 +54,17 @@ func TestFindByPhone(t *testing.T) {
 	if got.Open[0].Number != sooner.Number || got.Open[1].Number != later.Number {
 		t.Fatalf("open: %s, %s", got.Open[0].Number, got.Open[1].Number)
 	}
+	// Bayo erased: his number, if someone else writes from it, finds nothing.
+	bayo, err := w.inv.Vault.SubjectFor(ctx, tenant, "phone", "+2348099999999")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.inv.Vault.Erase(ctx, tenant, bayo, "test"); err != nil {
+		t.Fatal(err)
+	}
+	if gone, err := svc.FindByPhone(ctx, tenant, "2348099999999"); err != nil || gone.Found || gone.DueKobo != 0 {
+		t.Fatalf("an erased customer's number: %+v %v", gone, err)
+	}
 	none, err := svc.FindByPhone(ctx, tenant, "2348000000000")
 	if err != nil || none.Found || none.DueKobo != 0 {
 		t.Fatalf("a stranger: %+v %v", none, err)

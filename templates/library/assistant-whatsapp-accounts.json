@@ -33,6 +33,7 @@
   "connectors": [
     "assistant@1",
     "capability:customer_balance",
+    "invoices@1",
     "notify@1",
     "speech@1",
     "whatsapp@1",
@@ -126,10 +127,9 @@
         "customer_balance"
       ],
       "title": "Your payments service",
-      "description": "Where your customers' wallets or accounts are: iswallet, or bank accounts linked through Mono.",
-      "required": false,
-      "default": "",
-      "example": ""
+      "description": "Where your customers' wallets or accounts are: iswallet, or bank accounts linked through Mono. Chosen once here, so connecting another payments service later changes nothing.",
+      "required": true,
+      "example": "main"
     }
   ],
   "tables": [
@@ -458,14 +458,61 @@
                                   }
                                 },
                                 {
-                                  "id": "told_lv",
+                                  "id": "hand_lv",
                                   "type": "connector",
-                                  "name": "Tell the owners",
-                                  "connector": "notify@1",
-                                  "action": "tell",
+                                  "name": "Hand them to a person",
+                                  "connector": "assistant@1",
+                                  "action": "hand_over",
+                                  "needs": [
+                                    "say_held_lv"
+                                  ],
                                   "input": {
-                                    "title": "A customer was not answered",
-                                    "message": "='Your assistant could not answer a customer on WhatsApp. They were told someone will get back to them: answer them from Conversations.'"
+                                    "channel": "=trigger.guard.channel",
+                                    "sender": "=trigger.guard.sender",
+                                    "hours": 6
+                                  },
+                                  "on_error": {
+                                    "steps": [
+                                      {
+                                        "id": "hand_lv_skipped",
+                                        "type": "transform",
+                                        "name": "Carry on without it",
+                                        "config": {
+                                          "output": {
+                                            "done": false
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "id": "keep_lv",
+                                  "type": "connector",
+                                  "name": "Keep both messages in the conversation",
+                                  "connector": "xenibase@1",
+                                  "action": "insert_rows",
+                                  "connection": "data_tables",
+                                  "needs": [
+                                    "held_lv"
+                                  ],
+                                  "input": {
+                                    "table": "{{conversations_table}}",
+                                    "rows": "=[{'conversation': 'whatsapp:' + trigger.guard.sender, 'channel': 'whatsapp', 'sender': trigger.guard.sender, 'role': 'user', 'text': trigger.guard.?text.orValue(''), 'language': trigger.guard.language, 'kind': 'text'}, {'conversation': 'whatsapp:' + trigger.guard.sender, 'channel': 'whatsapp', 'sender': trigger.guard.sender, 'role': 'assistant', 'text': steps.held_lv.output.text, 'language': trigger.guard.language, 'kind': 'text'}]"
+                                  },
+                                  "on_error": {
+                                    "steps": [
+                                      {
+                                        "id": "keep_lv_skipped",
+                                        "type": "transform",
+                                        "name": "Carry on without it",
+                                        "config": {
+                                          "output": {
+                                            "kept": false
+                                          }
+                                        }
+                                      }
+                                    ]
                                   }
                                 }
                               ]
@@ -534,14 +581,61 @@
                                   }
                                 },
                                 {
-                                  "id": "told_v",
+                                  "id": "hand_v",
                                   "type": "connector",
-                                  "name": "Tell the owners",
-                                  "connector": "notify@1",
-                                  "action": "tell",
+                                  "name": "Hand them to a person",
+                                  "connector": "assistant@1",
+                                  "action": "hand_over",
+                                  "needs": [
+                                    "say_held_v"
+                                  ],
                                   "input": {
-                                    "title": "A customer was not answered",
-                                    "message": "='Your assistant could not answer a customer on WhatsApp. They were told someone will get back to them: answer them from Conversations.'"
+                                    "channel": "=trigger.guard.channel",
+                                    "sender": "=trigger.guard.sender",
+                                    "hours": 6
+                                  },
+                                  "on_error": {
+                                    "steps": [
+                                      {
+                                        "id": "hand_v_skipped",
+                                        "type": "transform",
+                                        "name": "Carry on without it",
+                                        "config": {
+                                          "output": {
+                                            "done": false
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "id": "keep_v",
+                                  "type": "connector",
+                                  "name": "Keep both messages in the conversation",
+                                  "connector": "xenibase@1",
+                                  "action": "insert_rows",
+                                  "connection": "data_tables",
+                                  "needs": [
+                                    "held_v"
+                                  ],
+                                  "input": {
+                                    "table": "{{conversations_table}}",
+                                    "rows": "=[{'conversation': 'whatsapp:' + trigger.guard.sender, 'channel': 'whatsapp', 'sender': trigger.guard.sender, 'role': 'user', 'text': trigger.guard.?text.orValue(''), 'language': trigger.guard.language, 'kind': 'text'}, {'conversation': 'whatsapp:' + trigger.guard.sender, 'channel': 'whatsapp', 'sender': trigger.guard.sender, 'role': 'assistant', 'text': steps.held_v.output.text, 'language': trigger.guard.language, 'kind': 'text'}]"
+                                  },
+                                  "on_error": {
+                                    "steps": [
+                                      {
+                                        "id": "keep_v_skipped",
+                                        "type": "transform",
+                                        "name": "Carry on without it",
+                                        "config": {
+                                          "output": {
+                                            "kept": false
+                                          }
+                                        }
+                                      }
+                                    ]
                                   }
                                 }
                               ]
@@ -823,14 +917,61 @@
                       }
                     },
                     {
-                      "id": "told_lt",
+                      "id": "hand_lt",
                       "type": "connector",
-                      "name": "Tell the owners",
-                      "connector": "notify@1",
-                      "action": "tell",
+                      "name": "Hand them to a person",
+                      "connector": "assistant@1",
+                      "action": "hand_over",
+                      "needs": [
+                        "say_held_lt"
+                      ],
                       "input": {
-                        "title": "A customer was not answered",
-                        "message": "='Your assistant could not answer a customer on WhatsApp. They were told someone will get back to them: answer them from Conversations.'"
+                        "channel": "=trigger.guard.channel",
+                        "sender": "=trigger.guard.sender",
+                        "hours": 6
+                      },
+                      "on_error": {
+                        "steps": [
+                          {
+                            "id": "hand_lt_skipped",
+                            "type": "transform",
+                            "name": "Carry on without it",
+                            "config": {
+                              "output": {
+                                "done": false
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "id": "keep_lt",
+                      "type": "connector",
+                      "name": "Keep both messages in the conversation",
+                      "connector": "xenibase@1",
+                      "action": "insert_rows",
+                      "connection": "data_tables",
+                      "needs": [
+                        "held_lt"
+                      ],
+                      "input": {
+                        "table": "{{conversations_table}}",
+                        "rows": "=[{'conversation': 'whatsapp:' + trigger.guard.sender, 'channel': 'whatsapp', 'sender': trigger.guard.sender, 'role': 'user', 'text': trigger.guard.?text.orValue(''), 'language': trigger.guard.language, 'kind': 'text'}, {'conversation': 'whatsapp:' + trigger.guard.sender, 'channel': 'whatsapp', 'sender': trigger.guard.sender, 'role': 'assistant', 'text': steps.held_lt.output.text, 'language': trigger.guard.language, 'kind': 'text'}]"
+                      },
+                      "on_error": {
+                        "steps": [
+                          {
+                            "id": "keep_lt_skipped",
+                            "type": "transform",
+                            "name": "Carry on without it",
+                            "config": {
+                              "output": {
+                                "kept": false
+                              }
+                            }
+                          }
+                        ]
                       }
                     }
                   ]
@@ -899,14 +1040,61 @@
                       }
                     },
                     {
-                      "id": "told_t",
+                      "id": "hand_t",
                       "type": "connector",
-                      "name": "Tell the owners",
-                      "connector": "notify@1",
-                      "action": "tell",
+                      "name": "Hand them to a person",
+                      "connector": "assistant@1",
+                      "action": "hand_over",
+                      "needs": [
+                        "say_held_t"
+                      ],
                       "input": {
-                        "title": "A customer was not answered",
-                        "message": "='Your assistant could not answer a customer on WhatsApp. They were told someone will get back to them: answer them from Conversations.'"
+                        "channel": "=trigger.guard.channel",
+                        "sender": "=trigger.guard.sender",
+                        "hours": 6
+                      },
+                      "on_error": {
+                        "steps": [
+                          {
+                            "id": "hand_t_skipped",
+                            "type": "transform",
+                            "name": "Carry on without it",
+                            "config": {
+                              "output": {
+                                "done": false
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "id": "keep_t",
+                      "type": "connector",
+                      "name": "Keep both messages in the conversation",
+                      "connector": "xenibase@1",
+                      "action": "insert_rows",
+                      "connection": "data_tables",
+                      "needs": [
+                        "held_t"
+                      ],
+                      "input": {
+                        "table": "{{conversations_table}}",
+                        "rows": "=[{'conversation': 'whatsapp:' + trigger.guard.sender, 'channel': 'whatsapp', 'sender': trigger.guard.sender, 'role': 'user', 'text': trigger.guard.?text.orValue(''), 'language': trigger.guard.language, 'kind': 'text'}, {'conversation': 'whatsapp:' + trigger.guard.sender, 'channel': 'whatsapp', 'sender': trigger.guard.sender, 'role': 'assistant', 'text': steps.held_t.output.text, 'language': trigger.guard.language, 'kind': 'text'}]"
+                      },
+                      "on_error": {
+                        "steps": [
+                          {
+                            "id": "keep_t_skipped",
+                            "type": "transform",
+                            "name": "Carry on without it",
+                            "config": {
+                              "output": {
+                                "kept": false
+                              }
+                            }
+                          }
+                        ]
                       }
                     }
                   ]
