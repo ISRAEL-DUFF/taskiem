@@ -60,6 +60,7 @@ const OWNER_FILES = [
   "pages/CustomerOrders.tsx",
   "pages/ChatMoney.tsx",
   "pages/ChatRefCard.tsx",
+  "pages/Staff.tsx",
   "pages/ChatToolForms.tsx",
   "pages/ChatTools.tsx",
   "pages/ChatBuyer.tsx",

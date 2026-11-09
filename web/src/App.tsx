@@ -24,6 +24,7 @@ import { Audit } from "./pages/Audit";
 import { Alerts } from "./pages/Alerts";
 import { Dashboard } from "./pages/Dashboard";
 import { Members } from "./pages/Members";
+import { Staff } from "./pages/Staff";
 import { Policies } from "./pages/Policies";
 import { Account, Invitations, Passkeys } from "./pages/Account";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -458,6 +459,8 @@ function SignedIn() {
     ["/tables", "Tables", "tables", can("table.read")],
     // Other businesses on Taskiem (business links, pages/Links.tsx).
     ["/chat", "Chat", "chat", true],
+    // The people of the business (pages/Staff.tsx).
+    ["/staff", "Staff", "members", can("member.manage")],
     [
       "/approvals",
       "Approvals",
@@ -890,6 +893,7 @@ function SignedIn() {
                   <Route path="/alerts" element={<Alerts />} />
                   <Route path="/audit" element={<Audit />} />
                   <Route path="/members" element={<Members />} />
+                  <Route path="/staff" element={<Staff />} />
                   <Route path="/policies" element={<Policies />} />
                   <Route path="/account" element={<Account />} />
                   <Route path="/handoff" element={<Handoff />} />
