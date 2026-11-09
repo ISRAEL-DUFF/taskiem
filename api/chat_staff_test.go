@@ -139,6 +139,29 @@ func TestCashierShift(t *testing.T) {
 	}
 	manager.must(400, "POST", "/v1/chat-handover", map[string]any{"cash_counted_kobo": -1})
 
+	// Each person's figures (staff_figures.go): the cashier's sales and the
+	// order they worked; the manager's shift and handover, ₦6,000 short.
+	meID := func(c *client) string { return c.must(200, "GET", "/v1/me", nil)["user"].(map[string]any)["id"].(string) }
+	cashID, samID := meID(cashier), meID(manager)
+	f := cashier.must(200, "GET", "/v1/staff/"+cashID+"/figures?period=week", nil)
+	if sales := f["sales"].(map[string]any); sales["count"] != float64(2) || sales["total_kobo"] != float64(23400000) || sales["by_how"].(map[string]any)["pos"] != float64(7800000) || f["orders"] != float64(1) {
+		t.Fatalf("the cashier's figures: %v", f)
+	}
+	cashier.must(403, "GET", "/v1/staff/"+samID+"/figures", nil)
+	cashier.must(400, "GET", "/v1/staff/"+cashID+"/figures?period=year", nil)
+	f = manager.must(200, "GET", "/v1/staff/"+samID+"/figures?period=day", nil)
+	if hs := f["handovers"].([]any); len(hs) != 1 || hs[0].(map[string]any)["diff_kobo"] != float64(-600000) || f["shifts"] != float64(1) {
+		t.Fatalf("the manager's figures: %v", f)
+	}
+	manager.must(200, "GET", "/v1/staff/"+cashID+"/figures?period=month", nil)
+	if r := w.say(t, cashOn, "my week"); !strings.Contains(r, "Your week (from") || !strings.Contains(r, "Sales: ₦234,000 in 2 sales (cash ₦156,000, POS ₦78,000).") ||
+		!strings.Contains(r, "Orders worked: 1.") {
+		t.Fatalf("my week: %q", r)
+	}
+	if r := w.say(t, samOn, "my day"); !strings.Contains(r, "Handovers: 1, ₦6,000 short.") || !strings.Contains(r, "over 1 shift") {
+		t.Fatalf("my day: %q", r)
+	}
+
 	// The owner's briefing: from 8am Lagos, not for a cashier.
 	lagos, _ := time.LoadLocation("Africa/Lagos")
 	at := func(hour int) func() time.Time {

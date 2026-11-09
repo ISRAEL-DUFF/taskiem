@@ -982,6 +982,10 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		if done, err := s.waStaffClock(ctx, c, cmd); done || err != nil {
 			return err
 		}
+		// "my week": one's own hours, sales, handovers and tasks (staff_figures.go).
+		if done, err := s.waMyFigures(ctx, c, cmd); done || err != nil {
+			return err
+		}
 		// Bringing someone in (chat_invites.go): "invite +234… as cashier",
 		// or "add Tunde 0803 123 4567 as cashier" (a number and a role).
 		if strings.HasPrefix(cmd, "invite ") ||

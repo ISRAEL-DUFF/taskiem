@@ -511,15 +511,15 @@ func (s *Server) postChatHandover(w http.ResponseWriter, r *http.Request) {
 		if who = strings.TrimSpace(name); who == "" {
 			who, _, _ = strings.Cut(email, "@")
 		}
-		var sold int64
+		var sold, cash int64
 		if h.Sales != nil {
-			sold = h.Sales.TotalKobo
+			sold, cash = h.Sales.TotalKobo, h.Sales.ByHow["cash"]
 		}
 		// Handing over ends the shift (staff_clock.go).
 		if _, err := clockOutTx(r.Context(), tx, p.TenantID, p.UserID, "handover", s.staffNow()); err != nil {
 			return err
 		}
-		return auditTx(r, tx, "chat.handover", h.Day, map[string]any{"cash_counted_kobo": in.Cash, "sales_kobo": sold})
+		return auditTx(r, tx, "chat.handover", h.Day, map[string]any{"cash_counted_kobo": in.Cash, "sales_kobo": sold, "cash_kobo": cash})
 	}); err != nil {
 		s.fail(w, r, err)
 		return

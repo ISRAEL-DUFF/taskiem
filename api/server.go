@@ -726,6 +726,9 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermTaskGive), s.tenantWide).Post("/staff/tasks/{id}/give", s.passTask)
 			r.With(s.need(PermTaskGive), s.tenantWide).Delete("/staff/tasks/{id}", s.cancelTask)
 			r.With(s.need(PermTaskGive), s.tenantWide).Delete("/staff/task-repeats/{id}", s.stopRepeat)
+			// One person's figures (staff_figures.go): anyone's for those
+			// who run the business, one's own for anyone.
+			r.Get("/staff/{user}/figures", s.getStaffFigures)
 			r.With(s.need(PermMemberManage)).Get("/staff/{user}", s.getStaff)
 			r.With(s.need(PermMemberManage), s.tenantWide).Put("/staff/{user}/profile", s.putStaffProfile)
 			r.Get("/permissions", s.listPermissions)

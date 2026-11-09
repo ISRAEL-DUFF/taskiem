@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { get, put } from "../api";
 import { ErrorBox, Field, Modal, PageHeader, Skeleton, useAction, useLoad } from "../ui";
 import { dateLabel, naira } from "../lib/invoices";
 import {
   WEEKDAYS,
+  figureRows,
   payWords,
   personSub,
   profileForm,
@@ -13,11 +14,12 @@ import {
   rotaWords,
   type PayPer,
   type ProfileForm,
+  type StaffFigures,
   type StaffPersonView,
 } from "../lib/team";
 
 /** One person of the business (phase 3): who they are, their usual hours
- * and their pay for the record. */
+ * and their pay for the record, and how they are doing. */
 export function StaffPerson() {
   const { user = "" } = useParams();
   const view = useLoad(() => get<StaffPersonView>(`/v1/staff/${encodeURIComponent(user)}`), [user]);
@@ -73,6 +75,7 @@ export function StaffPerson() {
           </dl>
         </section>
       )}
+      {p && <PersonFigures user={user} name={name} />}
       {editing && p && (
         <EditProfile
           user={user}
@@ -178,5 +181,44 @@ function EditProfile({ user, name, start, onClose, onDone }: { user: string; nam
         </div>
       </form>
     </Modal>
+  );
+}
+
+/** Their figures for today, this week or this month (phase 3, step 5). */
+function PersonFigures({ user, name }: { user: string; name: string }) {
+  const [period, setPeriod] = useState<StaffFigures["period"]>("week");
+  const figs = useLoad(() => get<StaffFigures>(`/v1/staff/${encodeURIComponent(user)}/figures?period=${period}`), [user, period]);
+  const f = figs.data;
+  return (
+    <section className="card" aria-labelledby="person-figures">
+      <h2 id="person-figures" style={{ marginTop: 0 }}>
+        How {name.split(" ")[0]} is doing
+      </h2>
+      <div className="segmented" role="group" aria-label="Period">
+        {(
+          [
+            ["day", "Today"],
+            ["week", "This week"],
+            ["month", "This month"],
+          ] as const
+        ).map(([v, label]) => (
+          <button key={v} type="button" aria-pressed={period === v} onClick={() => setPeriod(v)}>
+            {label}
+          </button>
+        ))}
+      </div>
+      <ErrorBox error={figs.error} />
+      {!f && !figs.error && <Skeleton rows={3} label="Loading their figures…" />}
+      {f && f.period === period && (
+        <dl className="kv" data-testid="person-figures">
+          {figureRows(f, naira).map(([k, v]) => (
+            <Fragment key={k}>
+              <dt>{k}</dt>
+              <dd>{v}</dd>
+            </Fragment>
+          ))}
+        </dl>
+      )}
+    </section>
   );
 }

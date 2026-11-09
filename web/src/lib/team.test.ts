@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { lengthWords, shiftWords, staffTile, emptyStaff, inviteSub, payWords, personSub, profileForm, profileProblem, profileRequest, roleWords, rotaWords, staffProblem } from "./team";
+import { figureRows, lengthWords, shiftWords, staffTile, emptyStaff, inviteSub, payWords, personSub, profileForm, profileProblem, profileRequest, roleWords, rotaWords, staffProblem } from "./team";
 
 describe("staff", () => {
   it("says roles as people do", () => {
@@ -79,5 +79,38 @@ describe("clocking in", () => {
   it("says who is in on the briefing", () => {
     expect(staffTile({ in: [1, 2], late: [] })).toBe("2 in");
     expect(staffTile({ in: [], late: [1] })).toBe("0 in · 1 late");
+  });
+
+  it("says a person's figures", () => {
+    const money = (k: number) => `N${k / 100}`;
+    const f = {
+      period: "week" as const,
+      from: "2026-11-09",
+      to: "2026-11-11",
+      minutes: 485,
+      shifts: 1,
+      late_days: ["2026-11-09"],
+      missed_days: [],
+      sales: { count: 2, total_kobo: 23400000, by_how: { cash: 15600000, pos: 7800000 } },
+      handovers: [{ at: "2026-11-09T16:00:00Z", diff_kobo: -600000 }],
+      orders: 1,
+      tasks: { done: 2, done_late: 1, cant: 0, open: 1, late: 0 },
+    };
+    expect(figureRows(f, money)).toEqual([
+      ["Hours", "8 hours 5 minutes over 1 shift"],
+      ["Time keeping", "Late on 1 day"],
+      ["Sales", "N234000 in 2 sales (Cash N156000, POS N78000)"],
+      ["Handovers", "1, N6000 short"],
+      ["Orders worked", "1"],
+      ["Tasks", "2 done (1 late), 1 open"],
+    ]);
+    const none = { ...f, minutes: 0, shifts: 0, late_days: [], missed_days: ["2026-11-10"], sales: { count: 0, total_kobo: 0, by_how: {} }, handovers: [], orders: 0, tasks: { done: 0, done_late: 0, cant: 0, open: 0, late: 0 } };
+    expect(figureRows(none, money)).toEqual([
+      ["Hours", "None clocked"],
+      ["Time keeping", "Did not come on 1 day they were due"],
+      ["Sales", "None recorded"],
+      ["Orders worked", "None"],
+      ["Tasks", "None"],
+    ]);
   });
 });

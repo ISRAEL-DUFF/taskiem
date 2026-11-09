@@ -253,3 +253,50 @@ export function staffTile(n: { in: unknown[]; late: unknown[] }): string {
   if (n.late.length > 0) parts.push(`${n.late.length} late`);
   return parts.join(" · ");
 }
+
+/** One person's figures for a period (phase 3, step 5). */
+export interface StaffFigures {
+  period: "day" | "week" | "month";
+  from: string;
+  to: string;
+  minutes: number;
+  shifts: number;
+  late_days: string[];
+  missed_days: string[];
+  sales: { count: number; total_kobo: number; by_how: Record<string, number> };
+  handovers: { at: string; counted_kobo?: number; cash_kobo?: number; diff_kobo?: number }[];
+  orders: number;
+  tasks: { done: number; done_late: number; cant: number; open: number; late: number };
+}
+
+const HOW_WORDS: Record<string, string> = { cash: "Cash", transfer: "Transfer", pos: "POS" };
+const count = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
+
+/** The figures as label and words, in the order the page shows them. */
+export function figureRows(f: StaffFigures, money: (kobo: number) => string): [string, string][] {
+  const rows: [string, string][] = [];
+  const hours = f.shifts === 0 ? "None clocked" : `${lengthWords(f.minutes * 60_000)} over ${count(f.shifts, "shift")}`;
+  rows.push(["Hours", hours]);
+  const late = [f.late_days.length > 0 && `late on ${count(f.late_days.length, "day")}`, f.missed_days.length > 0 && `did not come on ${count(f.missed_days.length, "day")} they were due`]
+    .filter(Boolean)
+    .join(", ");
+  if (late) rows.push(["Time keeping", late.charAt(0).toUpperCase() + late.slice(1)]);
+  if (f.sales.count > 0) {
+    const how = ["cash", "transfer", "pos"].filter((k) => f.sales.by_how[k] !== undefined).map((k) => `${HOW_WORDS[k]} ${money(f.sales.by_how[k] ?? 0)}`);
+    rows.push(["Sales", `${money(f.sales.total_kobo)} in ${count(f.sales.count, "sale")} (${how.join(", ")})`]);
+  } else rows.push(["Sales", "None recorded"]);
+  if (f.handovers.length > 0) {
+    const diff = f.handovers.reduce((t, h) => t + (h.diff_kobo ?? 0), 0);
+    const cash = diff < 0 ? `${money(-diff)} short` : diff > 0 ? `${money(diff)} over` : "the cash right";
+    rows.push(["Handovers", `${f.handovers.length}, ${cash}`]);
+  }
+  rows.push(["Orders worked", f.orders === 0 ? "None" : String(f.orders)]);
+  const t = f.tasks;
+  const parts = [
+    t.done > 0 && `${t.done} done${t.done_late > 0 ? ` (${t.done_late} late)` : ""}`,
+    t.open > 0 && `${t.open} open${t.late > 0 ? ` (${t.late} late)` : ""}`,
+    t.cant > 0 && `${t.cant} sent back`,
+  ].filter(Boolean);
+  rows.push(["Tasks", parts.length ? parts.join(", ") : "None"]);
+  return rows;
+}

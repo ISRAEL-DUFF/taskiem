@@ -104,6 +104,13 @@ for (const width of [390, 360]) {
     await expect(facts).toContainText("Mon to Fri, 08:00 to 16:00; Sat, 10:00 to 18:00");
     await expect(facts).toContainText("₦80,000");
     await expect(facts).toContainText("a month");
+    // How they are doing (step 5): nothing yet this week; this month too.
+    const figs = page.getByTestId("person-figures");
+    await expect(figs).toContainText("None clocked");
+    await expect(figs).toContainText("Orders worked");
+    await page.getByRole("button", { name: "This month" }).click();
+    await expect(page.getByRole("button", { name: "This month" })).toHaveAttribute("aria-pressed", "true");
+    await expect(figs).toContainText("Tasks");
     await axeBoth(page, "a person's page");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.getByRole("link", { name: "All staff" }).click();

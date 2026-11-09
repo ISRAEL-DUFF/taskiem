@@ -20041,6 +20041,111 @@ paths:
           description: Stopped
         default:
           $ref: '#/components/responses/Error'
+  /v1/staff/{user}/figures:
+    get:
+      operationId: getStaffFigures
+      tags:
+      - Account
+      summary: One person's figures for a day, a week or a month
+      description: 'From the first of the period (today; this week from Monday; this month, Lagos) to today: the minutes clocked in (an open shift up to now) over how many shifts, the days they clocked in 15 minutes or more late and the days they were due by their usual hours and never clocked in, the sales they recorded by how paid, their handovers with the cash counted against the cash sold (diff below 0 short), how many orders they worked, and their tasks (done, done late, sent back, open now, late now). Anyone''s for those who run the business (member.manage or invoice.manage); one''s own for anyone.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: user
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: period
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [day, week, month]
+      responses:
+        '200':
+          description: The figures
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [period, from, to, minutes, shifts, late_days, missed_days, sales, handovers, orders, tasks]
+                properties:
+                  period:
+                    type: string
+                    enum: [day, week, month]
+                  from:
+                    type: string
+                    format: date
+                  to:
+                    type: string
+                    format: date
+                  minutes:
+                    type: integer
+                  shifts:
+                    type: integer
+                  late_days:
+                    type: array
+                    items:
+                      type: string
+                      format: date
+                  missed_days:
+                    type: array
+                    items:
+                      type: string
+                      format: date
+                  sales:
+                    type: object
+                    additionalProperties: false
+                    required: [count, total_kobo, by_how]
+                    properties:
+                      count:
+                        type: integer
+                      total_kobo:
+                        type: integer
+                      by_how:
+                        type: object
+                        additionalProperties:
+                          type: integer
+                  handovers:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [at]
+                      properties:
+                        at:
+                          type: string
+                          format: date-time
+                        counted_kobo:
+                          type: integer
+                        cash_kobo:
+                          type: integer
+                        diff_kobo:
+                          type: integer
+                  orders:
+                    type: integer
+                  tasks:
+                    type: object
+                    additionalProperties: false
+                    required: [done, done_late, cant, open, late]
+                    properties:
+                      done:
+                        type: integer
+                      done_late:
+                        type: integer
+                      cant:
+                        type: integer
+                      open:
+                        type: integer
+                      late:
+                        type: integer
+        default:
+          $ref: '#/components/responses/Error'
   /v1/staff/{user}:
     get:
       operationId: getStaff
