@@ -4,7 +4,7 @@ import tseslint from "typescript-eslint";
 export default tseslint.config(
   // .claude/ holds agent worktrees (other checkouts of this repository);
   // site/ is the built docs site (make docs).
-  { ignores: ["**/dist/**", "**/node_modules/**", "web/test-results/**", "web/playwright-report/**", ".claude/**", "site/**"] },
+  { ignores: ["**/dist/**", "**/node_modules/**", "web/test-results/**", "web/playwright-report/**", ".claude/**", "site/**", "web/e2e/demo/**"] },
   js.configs.recommended,
   ...tseslint.configs.strict,
   // Plain scripts the public host serves to browsers (docs/public-host.md).
@@ -25,6 +25,19 @@ export default tseslint.config(
         self: "readonly", module: "writable", fetch: "readonly", URL: "readonly", JSON: "readonly", ServiceWorkerGlobalScope: "readonly",
         btoa: "readonly", AbortController: "readonly", setTimeout: "readonly", clearTimeout: "readonly",
       },
+    },
+  },
+  // The explainer's renderer (video/README.md) runs on Node; the scenes'
+  // timeline runs in Chromium.
+  {
+    files: ["video/*.mjs", "video/recording/*.mjs"],
+    languageOptions: { globals: { process: "readonly", console: "readonly", window: "readonly", document: "readonly" } },
+  },
+  {
+    files: ["video/kit/kit.js"],
+    languageOptions: {
+      sourceType: "script",
+      globals: { window: "readonly", document: "readonly", location: "readonly", addEventListener: "readonly", performance: "readonly", requestAnimationFrame: "readonly", URLSearchParams: "readonly" },
     },
   },
   // The card maker's Node script, whose callbacks also run in the browser (docs/strategy/marketing/cards).

@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { useChatTools } from "../lib/useChatTools";
+import { setSound, soundOn } from "../lib/moments";
 import {
   Link,
   useNavigate,
@@ -41,7 +43,15 @@ import {
 } from "../lib/linkchat";
 import { ConversationPane } from "./Conversation";
 import { TaskiemPane } from "./TaskiemChat";
+import { useChatAlerts } from "./ChatAlerts";
 import { ChatRow } from "./ChatRow";
+import {
+  CustomerPane,
+  CustomerRows,
+  CustomerSearch,
+  useCustomerChats,
+} from "./CustomerChat";
+import { customerID, customerKey } from "../lib/customerchat";
 import { useConfirm } from "./ConfirmSheet";
 import { Explore } from "./Explore";
 import { HeadMenu } from "./ChatHead";
@@ -253,10 +263,24 @@ function useLinks() {
  */
 export function ChatPage() {
   const { me, can } = useAuth();
+  const chatTools = useChatTools();
+  // Alerts waiting in the Taskiem conversation, said on its row.
+  const waiting = useChatAlerts(!!chatTools).list?.length ?? 0;
+  const [sound, setSoundState] = useState(soundOn);
   // Chat is also the person's own conversation with Taskiem: with Linked
   // businesses off it shows that alone, and asks for no business's chats.
   const linksOn = areaOn(me?.areas, "links");
   const manage = can("link.manage") && linksOn;
+  // Customers who wrote to the business's own WhatsApp number (customers'
+  // conversations): for those who handle orders, with Orders on.
+  const customersOn =
+    can("storefront.manage|order.handle") && areaOn(me?.areas, "orders");
+  const customers = useCustomerChats(customersOn);
+  const archivedCustomers = useCustomerChats(customersOn, true);
+  // The search box is for the list: with Linked businesses off, it shows
+  // once there are customers' threads to search.
+  const hasCustomers =
+    (customers.data?.length ?? 0) + (archivedCustomers.data?.length ?? 0) > 0;
   const { view, act, answer } = useLinks();
   const [params, setParams] = useSearchParams();
   // Explore is a step in the browser history (a state of this same address),
@@ -267,7 +291,8 @@ export function ChatPage() {
   loc.current = here;
   const go = useRef(navigate);
   go.current = navigate;
-  const exploring = (here.state as { explore?: boolean } | null)?.explore === true;
+  const exploring =
+    (here.state as { explore?: boolean } | null)?.explore === true;
   const convs = useLoad(
     () =>
       linksOn
@@ -375,8 +400,21 @@ export function ChatPage() {
   const open = all.find((c) => c.link === openID);
   // The person's own conversation with Taskiem, pinned at the top (§5.5).
   const taskiemOpen = openID === "taskiem";
+  const customerOpen = customersOn ? customerID(openID) : undefined;
   const unreadCount = all.filter((c) => !c.archived && c.unread > 0).length;
-  const archivedCount = all.filter((c) => c.archived).length;
+  const archivedCount =
+    all.filter((c) => c.archived).length +
+    (archivedCustomers.data?.length ?? 0);
+  // Customers' threads as the list shows them: the archived ones under
+  // Archived, narrowed by Unread and by a letter typed.
+  const shownCustomers = (
+    (archived ? archivedCustomers.data : customers.data) ?? []
+  ).filter(
+    (c) =>
+      (filter !== "unread" || c.unread > 0) &&
+      (query.length === 0 ||
+        c.name.toLowerCase().includes(query.toLowerCase())),
+  );
   const narrowed = linksOn && query.length === 1 ? matchChats(all, query) : all;
   const listed = narrowed.filter(
     (c) => c.archived === archived && (filter !== "unread" || c.unread > 0),
@@ -387,7 +425,13 @@ export function ChatPage() {
   const searchBox = useRef<HTMLInputElement>(null);
   const [keysOpen, setKeysOpen] = useState(false);
   const [hint, setHint] = useState("");
-  const order = ["taskiem", ...listed.map((c) => c.link)];
+  const order = [
+    "taskiem",
+    ...(filter !== "starred" && query.length < 2
+      ? shownCustomers.map((c) => customerKey(c.id))
+      : []),
+    ...listed.map((c) => c.link),
+  ];
   const keys = useRef({ order, openID: openID ?? undefined, setParams });
   keys.current = { order, openID: openID ?? undefined, setParams };
   // Asking a business to link starts at the search box (the "n" key, and the
@@ -415,7 +459,7 @@ export function ChatPage() {
         if (e.defaultPrevented || !k.openID) return;
         if (
           document.querySelector(
-            '[data-testid="chat-more"], [data-testid="chat-recording"], .chat-menu, .attach-menu, .chat-info, .modal, .mention-list, .emoji-panel, .explore',
+            '[data-testid="chat-more"], [data-testid="chat-recording"], .chat-menu, .attach-menu, .chat-info, .modal, .mention-list, .emoji-panel, .explore, .tk-sheet, .tk-tools, .tk-picker',
           )
         )
           return;
@@ -429,14 +473,16 @@ export function ChatPage() {
         );
         return;
       }
-      // Not under an open menu, sheet or panel: the letters are theirs.
+      // Not under an open menu, sheet, picker, tools or Explore: the
+      // letters are theirs.
       const covered = !!document.querySelector(
-        '[data-testid="chat-more"], [data-testid="chat-recording"], .chat-menu, .attach-menu, .chat-info, .modal, .mention-list, .emoji-panel, .explore',
+        '[data-testid="chat-more"], [data-testid="chat-recording"], .chat-menu, .attach-menu, .chat-info, .modal, .mention-list, .emoji-panel, .explore, .tk-sheet, .tk-tools, .tk-picker',
       );
       const what = shortcutOf(e, covered || isTyping(document.activeElement));
       if (!what || e.defaultPrevented) return;
       e.preventDefault();
       if (what === "help") setKeysOpen(true);
+      else if (what === "tag") startTag();
       else if (what === "search" || what === "new") {
         if (what === "new") return startNew.current();
         k.setParams({});
@@ -502,10 +548,15 @@ export function ChatPage() {
   return (
     <>
       <h1 className="sr-only">Chat</h1>
-      <div className={`chat-layout${open || taskiemOpen ? " open" : ""}`}>
+      <div
+        className={`chat-layout${open || taskiemOpen || customerOpen ? " open" : ""}`}
+      >
         <div className="chat-list-pane" onKeyDown={onListKey}>
           <div className="chat-list-head">
-            <h2>Chat</h2>
+            <h2>Chats</h2>
+            {me?.tenant_name && (
+              <span className="chat-list-biz">{me.tenant_name}</span>
+            )}
             {linksOn && (
               <button
                 type="button"
@@ -536,11 +587,25 @@ export function ChatPage() {
                   >
                     Your business in Explore
                   </Link>
+                  {chatTools && (
+                    <button
+                      type="button"
+                      className="menu-link"
+                      aria-pressed={sound}
+                      onClick={() => {
+                        setSound(!sound);
+                        setSoundState(!sound);
+                        close();
+                      }}
+                    >
+                      Sound for new orders and payments: {sound ? "on" : "off"}
+                    </button>
+                  )}
                 </>
               )}
             />
           </div>
-          {linksOn && (
+          {(linksOn || hasCustomers) && (
             <div className="filters" role="search" aria-label="Find a business">
               <label className="search">
                 <span className="sr-only">Find a business</span>
@@ -548,7 +613,7 @@ export function ChatPage() {
                 <input
                   type="search"
                   ref={searchBox}
-                  placeholder="Search or find a business"
+                  placeholder="Search chats, messages, businesses"
                   value={q}
                   onChange={(e) => (setQ(e.target.value), setHint(""))}
                   onKeyDown={(e) => {
@@ -569,34 +634,37 @@ export function ChatPage() {
           <p className="sr-only" role="status">
             {hint}
           </p>
-          {!searching && all.length > 0 && (
-            <div className="chat-chips" role="group" aria-label="Show">
-              {(
-                [
-                  ["all", "All"],
+          {!searching &&
+            (all.length > 0 ||
+              (customers.data?.length ?? 0) > 0 ||
+              (archivedCustomers.data?.length ?? 0) > 0) && (
+              <div className="chat-chips" role="group" aria-label="Show">
+                {(
                   [
-                    "unread",
-                    unreadCount ? `Unread (${unreadCount})` : "Unread",
-                  ],
-                  ["starred", "Starred"],
-                  ["archived", `Archived (${archivedCount})`],
-                ] as const
-              ).map(([key, label]) => (
-                <button
-                  key={key}
-                  type="button"
-                  className="chat-chip"
-                  aria-pressed={filter === key}
-                  onClick={() => {
-                    setFilter(key);
-                    if (key === "starred") setStarTick((n) => n + 1);
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
+                    ["all", "All"],
+                    [
+                      "unread",
+                      unreadCount ? `Unread (${unreadCount})` : "Unread",
+                    ],
+                    ["starred", "Starred"],
+                    ["archived", `Archived (${archivedCount})`],
+                  ] as const
+                ).map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className="chat-chip"
+                    aria-pressed={filter === key}
+                    onClick={() => {
+                      setFilter(key);
+                      if (key === "starred") setStarTick((n) => n + 1);
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
           <ErrorBox error={view.error ?? act.error ?? searchError} />
           {!searching &&
             !archived &&
@@ -617,6 +685,15 @@ export function ChatPage() {
                       <>
                         <span className="draft">Draft:</span> {drafts.taskiem}
                       </>
+                    ) : waiting > 0 ? (
+                      <span
+                        className="tk-waiting"
+                        data-testid="taskiem-waiting"
+                      >
+                        {waiting === 1
+                          ? "1 thing needs you"
+                          : `${waiting} things need you`}
+                      </span>
                     ) : (
                       "Your own conversation with Taskiem, as on your phone"
                     )
@@ -627,6 +704,18 @@ export function ChatPage() {
                 />
               </ul>
             )}
+          {customersOn &&
+            filter !== "starred" &&
+            (query.length >= 2 ? (
+              <CustomerSearch query={query} openKey={openID} />
+            ) : (
+              <CustomerRows
+                chats={shownCustomers}
+                openKey={openID}
+                drafts={drafts}
+                archived={archived}
+              />
+            ))}
           {searching ? (
             <section aria-label="Search results" data-testid="link-results">
               {chats.length > 0 && (
@@ -708,7 +797,8 @@ export function ChatPage() {
                 <Skeleton rows={2} label="Searching businesses…" />
               ) : others.length === 0 ? (
                 <EmptyState icon="search">
-                  No business found for “{query}”. Only businesses that chose to be found are listed.
+                  No business found for “{query}”. Only businesses that chose to
+                  be found are listed.
                 </EmptyState>
               ) : (
                 <Items label="Businesses on Taskiem">
@@ -965,11 +1055,22 @@ export function ChatPage() {
           )}
         </div>
         {taskiemOpen && <TaskiemPane onBack={() => setParams({})} />}
+        {customerOpen && (
+          <CustomerPane
+            key={customerOpen}
+            id={customerOpen}
+            onBack={() => setParams({})}
+            onChanged={() => (customers.reload(), archivedCustomers.reload())}
+          />
+        )}
         {open && (
           <ConversationPane
             key={open.link}
             conv={open}
             others={all}
+            roles={Object.fromEntries(
+              (view.data?.links ?? []).map((l) => [l.id, l.role]),
+            )}
             onBack={() => setParams({})}
             onChanged={reloadConvs}
             focus={params.get("msg") ?? undefined}
@@ -1484,6 +1585,24 @@ function FindableQuestion({
       </div>
     </section>
   );
+}
+
+/** "@" away from the box: the open chat's box takes the focus and an "@",
+ * and the picker opens as if it were typed. */
+function startTag() {
+  const el = document.querySelector<HTMLTextAreaElement>(
+    "textarea[data-chat-box]",
+  );
+  if (!el) return;
+  const add = el.value && !/\s$/.test(el.value) ? " @" : "@";
+  const next = el.value + add;
+  Object.getOwnPropertyDescriptor(
+    HTMLTextAreaElement.prototype,
+    "value",
+  )?.set?.call(el, next);
+  el.focus();
+  el.setSelectionRange(next.length, next.length);
+  el.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
 /** The keys of the Chat page, for a reader who has a keyboard. */

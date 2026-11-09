@@ -62,6 +62,13 @@ import (
 
 // Server serves the API.
 type Server struct {
+	// DiaryWindow is how long changes wait to be told together on the
+	// chat apps (chat_changes.go); 0 is a minute.
+	DiaryWindow time.Duration
+	// BriefingClock is the time the morning briefing reads (time.Now when
+	// nil; tests set it to before or after 8am Lagos).
+	BriefingClock func() time.Time
+	diary         diaryQueue
 	// chatGate caps the open Chat page streams (chat_stream.go).
 	chatGate chatStreamGate
 	// ChatStreamPing is how often an open chat stream says something when it
@@ -505,22 +512,24 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/storefront/actions/{id}/form", s.putActionForm)
 			r.With(s.need(PermStorefrontManage), s.need(PermWorkflowEdit), s.tenantWide).Post("/storefront/actions/{kind}/setup", s.setupAction)
 			s.invoiceRoutes(r)
-			s.linkRoutes(r)        // business links (links.go)
-			s.profileRoutes(r)     // a business's profile and gallery (business_profile.go)
-			s.exploreRoutes(r)     // finding a business by browsing (explore.go)
-			s.billRoutes(r)        // their bills (bills.go)
-			s.linkOrderRoutes(r)   // their orders (link_orders.go)
-			s.linkChatRoutes(r)    // their conversations (link_chat.go)
-			s.taskiemChatRoutes(r) // the Taskiem conversation on the web (chat_history.go)
-			s.priceListRoutes(r)   // price lists and item links (price_lists.go)
-			s.schoolRoutes(r)      // the Schools area (schools.go)
-			r.With(s.need(PermStorefrontManage)).Get("/storefront/orders", s.listStorefrontOrders)
-			r.With(s.need(PermStorefrontManage)).Get("/storefront/orders/{reference}", s.getStorefrontOrder)
+			s.linkRoutes(r)         // business links (links.go)
+			s.profileRoutes(r)      // a business's profile and gallery (business_profile.go)
+			s.exploreRoutes(r)      // finding a business by browsing (explore.go)
+			s.billRoutes(r)         // their bills (bills.go)
+			s.linkOrderRoutes(r)    // their orders (link_orders.go)
+			s.tradeDealRoutes(r)    // their price deliberation (trade_deals.go)
+			s.linkChatRoutes(r)     // their conversations (link_chat.go)
+			s.customerChatRoutes(r) // customers' conversations (customer_chat.go)
+			s.taskiemChatRoutes(r)  // the Taskiem conversation on the web (chat_history.go)
+			s.priceListRoutes(r)    // price lists and item links (price_lists.go)
+			s.schoolRoutes(r)       // the Schools area (schools.go)
+			r.With(s.need(PermOrders)).Get("/storefront/orders", s.listStorefrontOrders)
+			r.With(s.need(PermOrders)).Get("/storefront/orders/{reference}", s.getStorefrontOrder)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/refund", s.refundStorefrontOrder)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/refunded", s.markStorefrontRefunded)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/quote", s.quoteStorefrontOrder)
 			// The business's own riders (riders.go, dispatch D1).
-			r.With(s.need(PermStorefrontManage)).Get("/riders", s.listRiders)
+			r.With(s.need(PermOrders)).Get("/riders", s.listRiders)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/riders", s.addRider)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Patch("/riders/{id}", s.updateRider)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/riders/{id}/retire", s.retireRider)
@@ -539,6 +548,11 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/items", s.addStockItem)
 			r.With(s.need(PermTableEdit), s.tenantWide).Patch("/stock/items/{id}", s.patchStockItem)
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/movements", s.moveStock)
+			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/movements/grid", s.moveStockGrid)
+			r.With(s.need(PermTableEdit), s.tenantWide).Put("/stock/items/{id}/variants", s.setStockVariants)
+			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/group", s.groupStockItems)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/stock/items/{id}/variants/photo", s.setPhotoOfChoice)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Delete("/stock/items/{id}/variants/photo", s.clearPhotoOfChoice)
 			r.With(s.need(PermTableRead)).Get("/stock/sales", s.getSales)
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/sales", s.recordSale)
 			// Counts and shrinkage (stock_counts.go, K4).
@@ -563,10 +577,10 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/purchases/{id}/receive", s.receivePurchase)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/stock/purchases/{id}/pay", s.payPurchase)
 			// Deliveries with riders (dispatch.go, D2 to D4).
-			r.With(s.need(PermStorefrontManage)).Get("/deliveries", s.listDeliveries)
-			r.With(s.need(PermStorefrontManage)).Get("/storefront/orders/{reference}/deliveries", s.orderDeliveries)
-			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/offer", s.offerOrder)
-			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/release", s.releaseOrder)
+			r.With(s.need(PermOrders)).Get("/deliveries", s.listDeliveries)
+			r.With(s.need(PermOrders)).Get("/storefront/orders/{reference}/deliveries", s.orderDeliveries)
+			r.With(s.need(PermOrders), s.tenantWide).Post("/storefront/orders/{reference}/offer", s.offerOrder)
+			r.With(s.need(PermOrders), s.tenantWide).Post("/storefront/orders/{reference}/release", s.releaseOrder)
 			r.With(s.need(PermStorefrontManage)).Get("/dispatch/settings", s.getDispatchSettings)
 			r.With(s.need(PermStorefrontManage)).Get("/dispatch/workflow", s.getDeliveriesOn)
 			r.With(s.need(PermStorefrontManage), s.need(PermWorkflowEdit), s.need(PermWorkflowPublish), s.tenantWide).Post("/dispatch/workflow", s.turnOnDeliveries)
@@ -651,6 +665,16 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermMemberManage), s.tenantWide).Put("/settings/security", s.putSecurity)
 			r.Get("/settings/advanced", s.getAdvanced) // the Advanced switch (advanced.go)
 			r.With(s.need(PermMemberManage), s.tenantWide).Put("/settings/advanced", s.putAdvanced)
+			r.Get("/settings/chat-tools", s.getChatTools) // chat tools (chat_tools.go)
+			r.With(s.need(PermMemberManage), s.tenantWide).Put("/settings/chat-tools", s.putChatTools)
+			r.Post("/chat-diary", s.postChatDiary)
+			r.Get("/chat-alerts", s.getChatAlerts)
+			r.Post("/chat-alerts/later", s.postChatAlertLater)
+			r.Get("/chat-alerts/match-options", s.getMatchOptions)
+			r.Get("/chat-briefing", s.getChatBriefing)
+			r.With(s.need(PermTableRead)).Get("/chat-handover", s.getChatHandover)
+			r.With(s.need(PermTableRead)).Post("/chat-handover", s.postChatHandover)
+			r.Post("/chat-tools/request", s.postChatToolRequest)
 			r.Get("/settings/areas", s.getAreas) // which parts of Taskiem the business uses (areas.go)
 			r.With(s.tenantWide).Put("/settings/areas", s.putAreas)
 			r.Get("/settings/schools", s.getSchoolSettings) // the Schools area's switch (schools.go)

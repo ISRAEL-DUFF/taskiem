@@ -10,6 +10,7 @@ import { USSDChannels } from "./USSDChannels";
 import { Help } from "../onboarding";
 import { proof } from "../passkeys";
 import { SchoolsSwitch } from "./Schools";
+import { setChatTools } from "../lib/useChatTools";
 
 interface Secret {
   environment: string;
@@ -43,6 +44,47 @@ function AdvancedSwitch() {
       </label>
       <p className="hint">For someone who builds workflows by hand: a blank canvas, formulas, the test environment and your own connectors. Everyone in the business sees the same.</p>
       <ErrorBox error={act.error} />
+    </div>
+  );
+}
+
+/** Chat tools (docs/spec/chat-tools.md): a message goes to the businesses
+ * it names, and @Taskiem calls Taskiem. Owners and admins turn it on for
+ * everyone. */
+function ChatToolsSwitch() {
+  const view = useLoad(() => get<{ chat_tools: boolean }>("/v1/settings/chat-tools"), []);
+  const act = useAction();
+  // What was just chosen shows at once; the saved value once it is back.
+  const [chosen, setChosen] = useState<boolean | null>(null);
+  const on = chosen ?? !!view.data?.chat_tools;
+  return (
+    <div className="card">
+      <h2 style={{ marginTop: 0 }}>Chat tools</h2>
+      <label>
+        <input
+          type="checkbox"
+          checked={on}
+          disabled={act.busy || !view.data}
+          onChange={(e) => {
+            const next = e.target.checked;
+            setChosen(next);
+            void act.run(async () => {
+              try {
+                await put("/v1/settings/chat-tools", { chat_tools: next });
+                setChatTools(next);
+              } catch (err) {
+                setChosen(null);
+                throw err;
+              }
+            }, "Saved");
+          }}
+        />{" "}
+        Name a business to message it
+      </label>
+      <p className="hint">
+        On WhatsApp, Telegram, Slack and in your Taskiem chat, a message naming linked businesses goes straight to them. Write @Taskiem to ask Taskiem instead. Everyone in the business gets the same.
+      </p>
+      <ErrorBox error={act.error ?? view.error} />
     </div>
   );
 }
@@ -127,6 +169,7 @@ export function Settings() {
         actions={<EnvSelect value={env} onChange={setEnv} />}
       />
       {can("member.manage") && <AdvancedSwitch />}
+      {can("member.manage") && <ChatToolsSwitch />}
       {can("member.manage") && <Security />}
       {me?.roles.includes("owner") && <SchoolsSwitch />}
       {advanced && <Environments editable={can("secret.manage")} />}
@@ -181,7 +224,7 @@ function PlanLimits() {
     <section className="card">
       <h2 style={{ marginTop: 0 }}>Plan limits</h2>
       <p className="hint">Set by your operator; 0 means no limit. Above the ingest rate deliveries are still accepted and their runs queued.</p>
-      <table>
+      <table className="cards">
         <thead>
           <tr>
             <th>Limit</th>
@@ -193,13 +236,13 @@ function PlanLimits() {
         <tbody>
           {Object.keys(data.help).sort().map((k) => (
             <tr key={k}>
-              <td className="mono">{k}</td>
-              <td>
+              <td className="mono primary">{k}</td>
+              <td data-label="Value">
                 {data.limits[k]}
                 {k in data.overrides ? "" : " (default)"}
               </td>
-              <td>{used[k] ?? ""}</td>
-              <td className="hint">{data.help[k]}</td>
+              <td data-label="In use">{used[k] ?? ""}</td>
+              <td className="hint wide">{data.help[k]}</td>
             </tr>
           ))}
         </tbody>

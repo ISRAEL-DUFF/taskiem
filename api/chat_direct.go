@@ -87,7 +87,7 @@ func directBody(text string, parts []mentionPart) string {
 // (done false when the message has no marker and none was waited for).
 // Buttons are never one.
 func (s *Server) waDirect(ctx context.Context, c *chat) (bool, error) {
-	if c.in.Reply != "" {
+	if c.in.Reply != "" || c.toTaskiem {
 		return false, nil
 	}
 	text, marked := cutDirect(c.in.Text)
@@ -153,7 +153,9 @@ func (s *Server) directTo(ctx context.Context, c *chat, text string, file bool) 
 		return nil, "", err
 	}
 	mo := parseMentions(text, list)
-	if len(mo.Unknown) > 0 {
+	// With chat tools a word after "@" may be a thing (a product, an
+	// order): only the businesses named are recipients.
+	if len(mo.Unknown) > 0 && !c.tools {
 		return nil, "", c.say(ctx, s, c.t("wa.mention.unlinked", "name", whatsapp.SafeText(mo.Unknown[0])))
 	}
 	if len(mo.Parts) == 0 {

@@ -128,6 +128,12 @@ func TestMentionsOrderFromTwo(t *testing.T) {
 	if len(theirs) != 2 || theirs[1].(map[string]any)["link"] != nil || theirs[1].(map[string]any)["name"] != "Cherry Blocks" {
 		t.Fatalf("their copy: %v", theirs)
 	}
+	// The chat tools picker writes an item "@Cement": the same mention.
+	at := buyer.must(201, "POST", "/v1/link-chats/"+dl+"/messages", map[string]any{"text": "@Cement is almost out here",
+		"mentions": []any{map[string]any{"kind": "item", "item_id": sCement}}})["message"].(map[string]any)
+	if ms, _ := at["mentions"].([]any); len(ms) != 1 || ms[0].(map[string]any)["kind"] != "item" {
+		t.Fatalf("an item written with @: %v", at)
+	}
 	buyer.must(400, "POST", "/v1/link-chats/"+dl+"/messages", map[string]any{"text": "#Sand", "mentions": []any{map[string]any{"kind": "item", "item_id": "nope"}}})
 	buyer.must(400, "POST", "/v1/link-chats/"+dl+"/messages", map[string]any{"text": "@x", "mentions": []any{map[string]any{"kind": "business", "link": "00000000-0000-0000-0000-000000000001"}}})
 }

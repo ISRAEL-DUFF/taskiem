@@ -45,6 +45,13 @@ type stockChat struct {
 	Purchase *purchaseChat `json:"purchase,omitempty"`
 	// Count is a count being taken (stock_counts.go).
 	Count *countChat `json:"count,omitempty"`
+	// SaleAsk is a sale waiting on a size (whatsapp_sizes.go).
+	SaleAsk *saleAsk `json:"sale_ask,omitempty"`
+	// CountAsk is a count waiting on a size (whatsapp_sizes.go).
+	CountAsk *countSizeAsk `json:"count_ask,omitempty"`
+	// Received: goods that came in ("received 12 air max 90"), received
+	// against the item's supplier's open order once it is chosen.
+	Received bool `json:"received,omitempty"`
 }
 
 // waStockCommand acts on a stock command; false when cmd is not one (or
@@ -85,8 +92,121 @@ func (s *Server) waStockCommand(ctx context.Context, c *chat, text, cmd string) 
 		return true, s.waStockShow(ctx, c, strings.Join(strings.Fields(text)[1:], " "))
 	case words[0] == "adjust":
 		return true, s.waStockAdjust(ctx, c, strings.Join(strings.Fields(text)[1:], " "))
+	case len(words) > 2 && words[0] == "show" && words[1] == "me":
+		// "show me sneakers": a category; anything else is not this.
+		return s.waStockCategoryAsked(ctx, c, strings.Join(strings.Fields(text)[2:], " "))
+	case len(words) <= 3:
+		// A category's name alone: "sneakers", "soft drinks".
+		return s.waStockCategoryAsked(ctx, c, text)
 	}
 	return false, nil
+}
+
+// categoryPage is how many of a category's items one message lists.
+const categoryPage = 10
+
+// stockCategory is the category a name asks for, as the items spell it,
+// a plural or singular alike; "" when none matches.
+func stockCategory(items []stock.Item, name string) string {
+	want := matchKey(name)
+	if want == "" {
+		return ""
+	}
+	for _, it := range items {
+		if it.Category == "" {
+			continue
+		}
+		k := matchKey(it.Category)
+		if k == want || matchKey(stock.Singular(it.Category)) == matchKey(stock.Singular(name)) {
+			return it.Category
+		}
+	}
+	return ""
+}
+
+// inCategory is a category's items, by name.
+func inCategory(items []stock.Item, category string) []stock.Item {
+	var out []stock.Item
+	for _, it := range items {
+		if it.Category != "" && matchKey(it.Category) == matchKey(category) {
+			out = append(out, it)
+		}
+	}
+	return out
+}
+
+// waStockCategoryAsked lists a category's items when the words name one;
+// false when they do not (or the catalogue keeps no categories), so the
+// other words answer. Nothing is read unless the catalogue has a category
+// column.
+func (s *Server) waStockCategoryAsked(ctx context.Context, c *chat, name string) (bool, error) {
+	name = strings.Trim(strings.TrimSpace(name), "?!.")
+	if name == "" || !c.p.Can(PermTableRead) {
+		return false, nil
+	}
+	sh, err := s.stockShopOf(s.waTablesCtx(ctx, c), c.tenant.ID)
+	switch {
+	case errors.Is(err, errStockOff):
+		return false, nil // no stock kept: no categories either
+	case err != nil:
+		return false, err
+	case sh.cols().Category == "":
+		return false, nil
+	}
+	_, items, ok, err := s.stockChatItems(ctx, c)
+	if !ok || err != nil {
+		return true, err
+	}
+	cat := stockCategory(items, name)
+	if cat == "" {
+		return false, nil
+	}
+	return true, s.waStockCategoryPage(ctx, c, items, cat, 0)
+}
+
+// waStockCategoryPage says a page of a category's items, each with its
+// count and whether it is low, and keeps the place for *more*.
+func (s *Server) waStockCategoryPage(ctx context.Context, c *chat, items []stock.Item, category string, from int) error {
+	in := inCategory(items, category)
+	from = min(from, len(in))
+	end := min(from+categoryPage, len(in))
+	lines := make([]string, 0, end-from)
+	for _, it := range in[from:end] {
+		line := "• " + whatsapp.SafeText(it.Name)
+		if it.Stock != nil {
+			line += ": " + whatsapp.SafeText(it.Quantity(*it.Stock))
+			if it.Low() {
+				line += " " + c.t("wa.stock.low_tag")
+			}
+		}
+		lines = append(lines, line)
+	}
+	msg := c.t("wa.stock.category", "category", whatsapp.SafeText(category), "count", strconv.Itoa(len(in)), "list", strings.Join(lines, "\n"))
+	if end < len(in) {
+		if err := s.saveSession(ctx, c, stateCollecting, chatData{Shop: &chatShop{Action: "stock_category", Category: category, From: end}}, waPendingTTL); err != nil {
+			return err
+		}
+		msg += "\n\n" + c.t("wa.stock.category_more")
+	} else if c.state != stateIdle {
+		if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
+			return err
+		}
+	}
+	return c.say(ctx, s, msg)
+}
+
+// waStockCategoryReply takes a message while a category's list is kept:
+// *more* is the next page; anything else lets the list go (false).
+func (s *Server) waStockCategoryReply(ctx context.Context, c *chat, cmd string) (bool, error) {
+	sh := c.data.Shop
+	if cmd == "more" || cmd == "next" {
+		_, items, ok, err := s.stockChatItems(ctx, c)
+		if !ok || err != nil {
+			return true, err
+		}
+		return true, s.waStockCategoryPage(ctx, c, items, sh.Category, sh.From)
+	}
+	return false, s.saveSession(ctx, c, stateIdle, chatData{}, 0)
 }
 
 // stockChatItems reads the business's items for a chat, or says why it
@@ -122,11 +242,80 @@ func matchStock(items []stock.Item, name string) []stock.Item {
 			}
 		}
 	}
+	held := stockHolders(items, out)
+	// "air max 90 size 42", "air max 90 black": a product sold in sizes
+	// named with values said after it.
+	if len(held) == 0 {
+		if product, have, ok := findSized(items, name); ok {
+			// A value it does not have ("air max 90 45 black"): none, never
+			// the one size the rest of the words leave.
+			if unknownWords(product, name) != "" {
+				return nil
+			}
+			return narrowSizes(items, product.ID, have)
+		}
+	}
+	return held
+}
+
+// stockHolders narrows matches to the items that hold stock: a product
+// sold in sizes and colours keeps none of its own, so it stands for its
+// sizes and colours on sale; one taken off sale is offered nowhere.
+func stockHolders(items, match []stock.Item) []stock.Item {
+	out := make([]stock.Item, 0, len(match))
+	seen := map[string]bool{}
+	add := func(it stock.Item) {
+		if !seen[it.ID] && !it.Retired() {
+			seen[it.ID] = true
+			out = append(out, it)
+		}
+	}
+	for _, it := range match {
+		if !it.HasSizes() {
+			add(it)
+			continue
+		}
+		for _, v := range items {
+			if v.VariantOf == it.ID {
+				add(v)
+			}
+		}
+	}
 	return out
+}
+
+// sizesOfOne is the product whose sizes and colours all the matches are,
+// when they are several of one product's.
+func sizesOfOne(items, match []stock.Item) (stock.Item, bool) {
+	if len(match) < 2 || match[0].VariantOf == "" {
+		return stock.Item{}, false
+	}
+	for _, it := range match {
+		if it.VariantOf != match[0].VariantOf {
+			return stock.Item{}, false
+		}
+	}
+	for _, it := range items {
+		if it.ID == match[0].VariantOf {
+			return it, true
+		}
+	}
+	return stock.Item{}, false
+}
+
+// whichSizeOf asks for the size and colour by name, when a product has
+// more than a list shows: "Air Max 90 comes in 33 sizes and colours. Say
+// which, like stock Air Max 90 – 42, Black".
+func whichSizeOf(c *chat, product string, n int, example string) string {
+	return c.t("wa.stock.which_size", "name", whatsapp.SafeText(product), "count", strconv.Itoa(n), "example", whatsapp.SafeText(example))
 }
 
 // stockPick offers a numbered list when several items match.
 func (s *Server) stockPick(ctx context.Context, c *chat, sh *chatShop, match []stock.Item) error {
+	// Several sizes of one product: asked one choice at a time.
+	if done, err := s.sizedPick(ctx, c, sh, sh.Name, match); done || err != nil {
+		return err
+	}
 	for _, it := range match[:min(shopPickMax, len(match))] {
 		sh.Pick = append(sh.Pick, shopChoice{Row: it.ID, Name: it.Name})
 	}
@@ -158,7 +347,7 @@ func (s *Server) waStockPick(ctx context.Context, c *chat, text string) error {
 				}
 				return s.stockSay(ctx, c, it)
 			case "stock_add":
-				return s.stockAskAdd(ctx, c, sh, &it)
+				return s.stockAddChosen(ctx, c, sh, it)
 			case "stock_adjust":
 				return s.stockAskAdjust(ctx, c, sh, it)
 			}
@@ -181,11 +370,25 @@ func (s *Server) waStockShow(ctx context.Context, c *chat, name string) error {
 		return err
 	}
 	match := matchStock(items, name)
+	// "stock sneakers": a category's items, unless an item is called that.
+	if cat := stockCategory(items, name); cat != "" && (len(match) != 1 || matchKey(match[0].Name) != matchKey(name)) {
+		return s.waStockCategoryPage(ctx, c, items, cat, 0)
+	}
+	// "stock Air Max 90": its sizes and colours in words, when only the
+	// product is named.
+	if product, one := sizesOfOne(items, match); one {
+		if _, have, found := findSized(items, name); !found || len(have) == 0 {
+			return c.say(ctx, s, sizesGrid(c, product, sizesOnSale(items, product.ID)))
+		}
+	}
 	switch {
 	case len(match) == 0:
+		if done, err := s.sizeNotSold(ctx, c, items, name); done || err != nil {
+			return err
+		}
 		return c.say(ctx, s, c.t("wa.shop.no_item", "name", whatsapp.SafeText(name)))
 	case len(match) > 1:
-		return s.stockPick(ctx, c, &chatShop{Action: "stock_show"}, match)
+		return s.stockPick(ctx, c, &chatShop{Action: "stock_show", Name: name}, match)
 	}
 	return s.stockSay(ctx, c, match[0])
 }
@@ -286,11 +489,17 @@ func (s *Server) waStockLow(ctx context.Context, c *chat) error {
 // waStockAdd answers "add 50 cartons of Indomie at 8,500": an item added,
 // or goods received on one there, shown first.
 func (s *Server) waStockAdd(ctx context.Context, c *chat, a stock.Added) error {
+	return s.waStockAddFrom(ctx, c, a, false)
+}
+
+// waStockAddFrom is waStockAdd; received, the goods came from a supplier
+// ("received …"): the item chosen is received against its open order.
+func (s *Server) waStockAddFrom(ctx context.Context, c *chat, a stock.Added, received bool) error {
 	if !c.p.Can(PermTableEdit) {
 		return c.say(ctx, s, c.t("wa.stock.denied", "org", c.tenant.Name))
 	}
 	sh := &chatShop{Action: "stock_add", Name: a.Name, Stock: &a.Quantity, Old: a.Unit}
-	sh.StockChat = &stockChat{Quantity: a.Quantity, Unit: a.Unit, CostKobo: a.CostKobo}
+	sh.StockChat = &stockChat{Quantity: a.Quantity, Unit: a.Unit, CostKobo: a.CostKobo, Received: received}
 	_, items, err := s.stockItems(s.waTablesCtx(ctx, c), c.tenant.ID)
 	if errors.Is(err, errStockOff) {
 		if !c.p.Can(PermStorefrontManage) {
@@ -317,6 +526,9 @@ func (s *Server) waStockAdd(ctx context.Context, c *chat, a stock.Added) error {
 		return s.stockAskAdd(ctx, c, sh, &match[0])
 	case len(match) > 1:
 		return s.stockPick(ctx, c, sh, match)
+	}
+	if done, err := s.sizeNotSold(ctx, c, items, a.Name); done || err != nil {
+		return err
 	}
 	return s.stockAskAdd(ctx, c, sh, nil)
 }
@@ -371,6 +583,9 @@ func (s *Server) waStockAdjust(ctx context.Context, c *chat, args string) error 
 	match := matchStock(items, a.Name)
 	switch {
 	case len(match) == 0:
+		if done, err := s.sizeNotSold(ctx, c, items, a.Name); done || err != nil {
+			return err
+		}
 		return c.say(ctx, s, c.t("wa.shop.no_item", "name", whatsapp.SafeText(a.Name)))
 	case len(match) > 1:
 		return s.stockPick(ctx, c, sh, match)
@@ -610,13 +825,79 @@ func (s *Server) waStockSale(ctx context.Context, c *chat, args string) error {
 	if !ok || err != nil {
 		return err
 	}
-	sale := &saleChat{AmountKobo: said.AmountKobo, PaidHow: said.PaidHow, Customer: customer, CustomerKey: customerKey, CustomerID: customerID}
+	paid := said.PaidHow
+	if said, ok = saleSaid(args, items); !ok {
+		return c.say(ctx, s, c.t("wa.sale.how"))
+	}
+	said.PaidHow = paid // on credit, as found above
+	return s.saleFrom(ctx, c, &saleAsk{Said: said, Customer: customer, CustomerKey: customerKey, CustomerID: customerID})
+}
+
+// saleSaid reads a sale's words as the catalogue has its items: a size
+// written out with a comma ("2 Air Max 90 – 42, Black") is one item, not
+// two; and a number after a product sold in sizes that is one of its
+// values is that value ("sold 2 air max 90 42"), not the amount.
+func saleSaid(args string, items []stock.Item) (stock.Sold, bool) {
+	said, ok := stock.ParseSale(args)
+	// Each item of it names exactly one of the catalogue's.
+	exact := func(sd stock.Sold) bool {
+		for _, x := range sd.Items {
+			if len(matchStock(items, x.Name)) != 1 {
+				return false
+			}
+		}
+		return len(sd.Items) > 0
+	}
+	if ok && strings.Contains(args, ",") && !exact(said) {
+		if joined, ok2 := stock.ParseSale(strings.ReplaceAll(args, ",", " ")); ok2 && exact(joined) {
+			said = joined
+		}
+	}
+	if ok && said.AmountKobo != nil && *said.AmountKobo%100 == 0 && len(said.Items) == 1 {
+		n := strconv.FormatInt(*said.AmountKobo/100, 10)
+		x := said.Items[0]
+		if _, have, found := findSized(items, x.Name+" "+n); found {
+			for _, v := range have {
+				if matchKey(v) == n {
+					said.Items[0].Name = x.Name + " " + n
+					said.AmountKobo = nil
+					break
+				}
+			}
+		}
+	}
+	return said, ok
+}
+
+// saleFrom shows a sale for yes: its items found as the other stock words
+// find them, a product's size asked one choice at a time (the sale waits,
+// then goes on). One that matches several others, or none, is said, and
+// nothing is recorded.
+func (s *Server) saleFrom(ctx context.Context, c *chat, ask *saleAsk) error {
+	said := ask.Said
+	_, items, ok, err := s.stockChatItems(ctx, c)
+	if !ok || err != nil {
+		return err
+	}
+	byID := map[string]stock.Item{}
+	for _, it := range items {
+		byID[it.ID] = it
+	}
+	sale := &saleChat{AmountKobo: said.AmountKobo, PaidHow: said.PaidHow, Customer: ask.Customer, CustomerKey: ask.CustomerKey, CustomerID: ask.CustomerID}
 	if sale.PaidHow == "" {
 		sale.PaidHow = stock.Cash
 	}
 	var total int64
-	for _, x := range said.Items {
-		match := matchStock(items, x.Name)
+	for i, x := range said.Items {
+		var match []stock.Item
+		if id, chosen := ask.Chosen[i]; chosen {
+			if it, ok := byID[id]; ok {
+				match = []stock.Item{it}
+			}
+		}
+		if match == nil {
+			match = matchStock(items, x.Name)
+		}
 		if len(match) > 1 {
 			var exact []stock.Item
 			for _, it := range match {
@@ -628,8 +909,20 @@ func (s *Server) waStockSale(ctx context.Context, c *chat, args string) error {
 				match = exact
 			}
 		}
+		// Several sizes of one product: its size asked, the sale waiting.
+		if product, one := sizesOfOne(items, match); one {
+			ask.At = i
+			have := map[string]string{}
+			if p, h, found := findSized(items, x.Name); found && p.ID == product.ID {
+				have = h
+			}
+			return s.askSize(ctx, c, &chatShop{Action: "stock_sale_size", Name: x.Name, StockChat: &stockChat{SaleAsk: ask}}, product, have)
+		}
 		switch {
 		case len(match) == 0:
+			if done, err := s.sizeNotSold(ctx, c, items, x.Name); done || err != nil {
+				return err
+			}
 			return c.say(ctx, s, c.t("wa.shop.no_item", "name", whatsapp.SafeText(x.Name)))
 		case len(match) > 1:
 			names := make([]string, 0, min(shopPickMax, len(match)))
@@ -794,4 +1087,17 @@ func (s *Server) creditSale(ctx context.Context, tx pgx.Tx, c *chat, sale *saleC
 		d.Lines, d.AmountKobo, d.Description = nil, amount, stock.SaleWords(lines)
 	}
 	return s.Invoices.RecordCredit(ctx, tx, c.tenant.ID, key, cust, d, c.p.Actor())
+}
+
+// stockAddChosen goes on with goods in once their item is chosen: against
+// its supplier's open order when they were received from one, else as
+// stock in.
+func (s *Server) stockAddChosen(ctx context.Context, c *chat, sh *chatShop, it stock.Item) error {
+	if sc := sh.StockChat; sc != nil && sc.Received {
+		a := stock.Added{Name: it.Name, Quantity: sc.Quantity, Unit: sc.Unit, CostKobo: sc.CostKobo}
+		if done, err := s.receivedItem(ctx, c, a, it); done || err != nil {
+			return err
+		}
+	}
+	return s.stockAskAdd(ctx, c, sh, &it)
 }

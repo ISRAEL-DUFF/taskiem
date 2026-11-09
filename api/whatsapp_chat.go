@@ -139,6 +139,11 @@ func (s *Server) waReceive(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	// What became of replies to customers (delivered, read, failed),
+	// for the numbers this app speaks for (customer_chat.go).
+	if sts, err := whatsapp.ParseStatuses(body); err == nil && len(sts) > 0 {
+		s.customerStatuses(ctx, hook, sts)
+	}
 	for _, m := range msgs {
 		if m.ID == "" {
 			continue
@@ -209,6 +214,9 @@ type chat struct {
 	// in another language, by its words or the model's routing, still
 	// finds it (R6).
 	letGo *chatFound
+	// tools is the business's chat tools switch (chat_tools.go), and
+	// toTaskiem that this message called Taskiem with "@Taskiem".
+	tools, toTaskiem bool
 }
 
 // t is a message in the conversation's language.
@@ -443,6 +451,10 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	if err := s.loadSession(ctx, c); err != nil {
 		return err
 	}
+	// Chat tools: the switch, and "@Taskiem" taken off (chat_tools.go).
+	if err := s.chatToolsRead(ctx, c); err != nil {
+		return err
+	}
 	// A template a new business was offered (chat_signup.go).
 	if id, ok := strings.CutPrefix(in.Reply, signupTplPrefix); ok {
 		return s.chatTemplateBuild(ctx, c, id)
@@ -464,6 +476,15 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 		}
 		if marked && strings.Contains(caption, "@") {
 			return s.waDirectFile(ctx, c, caption)
+		}
+		// With chat tools, a caption naming linked businesses is for them.
+		if !marked {
+			if to, err := s.toolsFileTo(ctx, c, in.Text); err != nil || to {
+				if err != nil {
+					return err
+				}
+				return s.waDirectFile(ctx, c, strings.TrimSpace(in.Text))
+			}
 		}
 	}
 	// A completed WhatsApp form carries its flow token.
@@ -511,12 +532,20 @@ func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number st
 	if done, err := s.riderMedia(ctx, &chat{ch: wa, wa: wa, addr: number, in: in}, reach.WhatsApp); done || err != nil {
 		return err
 	}
+	// A customer's STOP or START on the business's own number
+	// (customer_chat.go), before the reach book's.
+	if done, err := s.customerStopStart(ctx, wa, number, text); done || err != nil {
+		return err
+	}
 	if done, err := s.reachStopStart(ctx, wa, reach.WhatsApp, number, text); done || err != nil {
 		return err
 	}
 	// A rider's off, on or busy (whatsapp_riders.go), and their words for
 	// a delivery (dispatch.go).
 	if done, err := s.riderWord(ctx, wa, reach.WhatsApp, number, text); done || err != nil {
+		return err
+	}
+	if done, err := s.riderJobsWord(ctx, wa, reach.WhatsApp, number, text); done || err != nil {
 		return err
 	}
 	if done, err := s.riderDeliveryWord(ctx, wa, reach.WhatsApp, number, text); done || err != nil {
@@ -547,7 +576,15 @@ func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number st
 		return err
 	}
 	if wa.Own() {
-		if done, err := s.waPublic(ctx, wa, number, in); done || err != nil {
+		// The public menu answers a customer who asks for it (its word,
+		// or a choice of it under way); anything else a customer writes
+		// to the business's own number is their conversation with it.
+		if s.waPublicAsked(ctx, wa, number, in) {
+			if done, err := s.waPublic(ctx, wa, number, in); done || err != nil {
+				return err
+			}
+		}
+		if done, err := s.customerInbound(ctx, wa, number, in); done || err != nil {
 			return err
 		}
 	} else if s.WhatsAppPublic != nil {
@@ -678,6 +715,24 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if done, err := s.waDirect(ctx, c); done || err != nil {
 		return err
 	}
+	// With chat tools, a message naming linked businesses is for them,
+	// unless it calls Taskiem (chat_tools.go).
+	if done, err := s.toolsDirect(ctx, c); done || err != nil {
+		return err
+	}
+	// "tools", "/products": links to the tools on the web (chat_tool_requests.go).
+	if done, err := s.waToolsCommand(ctx, c, cmd); done || err != nil {
+		return err
+	}
+	// "how did we do this week?": the numbers, and a chart card in the
+	// Taskiem conversation (chat_briefing.go).
+	if done, err := s.waHowDidWeDo(ctx, c, cmd); done || err != nil {
+		return err
+	}
+	// "counter 750k": a price on the order waiting on them (trade_deals.go).
+	if done, err := s.waDealCounter(ctx, c, cmd); done || err != nil {
+		return err
+	}
 	// Accept or Decline on a linked business's order, All came on its
 	// delivery (link_orders.go).
 	if strings.HasPrefix(text, orderPrefix) {
@@ -685,6 +740,13 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	}
 	if c.data.Build != nil && c.state != stateIdle {
 		return s.waBuildReply(ctx, c, text, cmd)
+	}
+	if c.data.Shop != nil && c.state != stateIdle && c.data.Shop.Action == "stock_category" {
+		// A category's list: *more* pages it; anything else lets it go and
+		// is read as a new message.
+		if done, err := s.waStockCategoryReply(ctx, c, cmd); done || err != nil {
+			return err
+		}
 	}
 	if c.data.Shop != nil && c.state != stateIdle {
 		return s.waShopReply(ctx, c, text, cmd)
@@ -929,6 +991,13 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if c.state == stateStepUp {
 		return c.say(ctx, s, c.t("wa.stepup_waiting", "step", c.data.Step))
 	}
+	// Not recognised: a typed request for a tool, read by the model, is
+	// answered with its form, filled in (chat_tool_requests.go).
+	if c.state == stateIdle && !matched {
+		if done, err := s.waToolRequest(ctx, c, text); done || err != nil {
+			return err
+		}
+	}
 	// Not recognised: in English, a question naming a table goes to the
 	// model as one (chat_tables_ask.go).
 	if c.state == stateIdle && !matched {
@@ -1082,6 +1151,8 @@ func (s *Server) waHelp(c *chat) string {
 	}
 	if c.p.Can(PermStorefrontManage) {
 		lines = append(lines, c.t("wa.help.shop"), c.t("wa.help.shop_catalogue"), c.t("wa.help.fronts"))
+	}
+	if c.p.Can(PermOrders) {
 		if s.Orders != nil {
 			lines = append(lines, c.t("wa.help.shop_orders"))
 		}

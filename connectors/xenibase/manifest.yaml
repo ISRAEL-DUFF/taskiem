@@ -178,14 +178,15 @@ actions:
         select: { type: string, description: "Columns to return (default all), as the data API's select: id,title,owner:profiles(name)" }
         filters:
           type: array
+          description: 'Filters that all hold. An item may instead be {"any": [filters]}: up to 20 filters, one of which must hold.'
           items:
             type: object
-            required: [column, op]
             properties:
               column: { type: string }
               op:     { type: string, enum: [eq, neq, lt, lte, gt, gte, in, like, ilike, is, contains, contained_by, search, is_null, not_null] }
               value:  { description: "The value; for is: null, true or false" }
               values: { type: array, description: For in }
+              any:    { type: array, maxItems: 20, items: { type: object }, description: "Filters (column and op each) of which one must hold" }
         order:
           type: array
           items:

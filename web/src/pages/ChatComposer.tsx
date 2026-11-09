@@ -8,16 +8,41 @@ import {
   type KeyboardEvent,
 } from "react";
 import { Icon } from "../icons";
+import { toast } from "../toast";
 import { insertAt } from "../lib/emoji";
 import { isHeic, preparePhoto } from "../lib/photo";
 import { useComposerFocus } from "../lib/composerFocus";
 import { getDraft, setDraft } from "../lib/drafts";
 import { useAutoGrow } from "../lib/useAutoGrow";
-import { MentionList, useMentions, type Mentions } from "./Mentions";
+import {
+  GroupedPicker,
+  MentionList,
+  useMentions,
+  type Mentions,
+} from "./Mentions";
 import { MicButton, RecordingBar, useVoiceNote } from "./VoiceNote";
 import { PendingFile } from "./PendingFile";
 import { AttachMenu } from "./AttachMenu";
 import { CameraSheet } from "./CameraSheet";
+import { ToolSheet, ToolsPanel } from "./ChatTools";
+import { OrderSheet, type OrderStart } from "./ChatBuyer";
+import { HandoverSheet, SellSheet } from "./ChatStaff";
+import { toolsFor, type ToolKey } from "../lib/tools";
+import type { Prefill, Request } from "../lib/intents";
+import { RequestChip } from "./RequestChip";
+
+type ToolStart = {
+  rowId?: string;
+  add?: boolean;
+  prefill?: Prefill;
+  /** A chip already on: a category picked in "@". */
+  chip?: string;
+  /** The Order sheet: an item in the bag, or a past order again. */
+  order?: OrderStart;
+};
+import { useAuth } from "../auth";
+import { categoryTag } from "../lib/tools";
+import { useMediaQuery, usePresence } from "../kit";
 
 // The composer of every conversation (a business's and Taskiem's): the box
 // that grows, emoji, a photo (and, where it is taken, a PDF), the camera,
@@ -92,6 +117,20 @@ export type ComposerOptions<R> = {
   closes?: boolean[];
   /** Drops and the box are off (a conversation one may only read). */
   enabled?: boolean;
+  /** Chat tools (chat-tools.md §3): "@" tags things and businesses in
+   * groups (with the Taskiem row when taskiem). */
+  grouped?: { taskiem: boolean };
+  /** The box's words when empty ("Ask Taskiem, or @ to tag"). */
+  placeholder?: string;
+  /** Chat tools: the tools button, and "/". */
+  tools?: boolean;
+  /** Where the tools are open: "taskiem" or a link. */
+  diaryWhere?: string;
+  /** A tool saved a change: what is newer is shown. */
+  onDiary?: (line: unknown) => void;
+  /** A business's conversation: its orders and bills only, and, when they
+   * share prices with us, ordering from them. */
+  scope?: { link: string; name: string; supplies: boolean };
 };
 
 export function useComposer<R>(o: ComposerOptions<R>) {
@@ -109,10 +148,57 @@ export function useComposer<R>(o: ComposerOptions<R>) {
   useAutoGrow(textBox, text);
   // An unsent message is kept per conversation.
   useEffect(() => {
-    setDraft(o.draftKey, text);
+    // "/pro" opening the tools is not a message to keep.
+    setDraft(o.draftKey, o.tools && /^\/\S*$/.test(text) ? "" : text);
     // Only a change of the words is kept: a switch of conversation loads one.
   }, [text]);
-  const mentions = useMentions(text, setText, textBox, o.sources);
+  // A category picked in "@" opens its items (set below, once the tools are).
+  const onCategory = useRef<(name: string) => void>(() => undefined);
+  const mentions = useMentions(
+    text,
+    setText,
+    textBox,
+    o.sources,
+    o.grouped && {
+      ...o.grouped,
+      onCategory: (name) => onCategory.current(name),
+    },
+  );
+  // The tools panel: the grid button, or "/" and a word as the whole message.
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [tool, setTool] = useState<{
+    key: ToolKey;
+    from?: DOMRect;
+    start?: ToolStart;
+  }>();
+  const { can, me } = useAuth();
+  const slash = o.tools ? /^\/(\S*)$/.exec(text) : null;
+  const toolsShown = !!o.tools && (toolsOpen || !!slash);
+  // How many tools what follows "/" names: none, and Enter sends it.
+  const toolMatches = toolsShown ? toolsFor(can, slash?.[1] ?? "", me?.roles).length : 0;
+  const closeTools = () => {
+    setToolsOpen(false);
+    if (slash) setText("");
+  };
+  const openTool = (k: ToolKey, from?: DOMRect, start?: ToolStart) => {
+    closeTools();
+    setTool({ key: k, from, start });
+  };
+  // A supplier's category opens their list, to order from; ours, our
+  // products.
+  onCategory.current = (name) =>
+    o.scope?.supplies
+      ? openTool("order", undefined, { order: { category: name } })
+      : openTool("products", undefined, { chip: categoryTag(name) });
+  // A typed request: its tool opens at the form, filled in; the words go.
+  const openRequest = (r: Request) => {
+    setText("");
+    openTool(r.tool, undefined, {
+      rowId: r.rowId,
+      add: r.add,
+      prefill: r.prefill,
+    });
+  };
   // A voice note held and released goes at once; one tapped waits for Send.
   const sendRef = useRef<(f?: File) => void>(() => undefined);
   const voice = useVoiceNote(
@@ -128,7 +214,14 @@ export function useComposer<R>(o: ComposerOptions<R>) {
   // photo to caption asks for it.
   useComposerFocus(
     textBox,
-    [emojiOpen, !!file, !!reply, voice.secs !== undefined, ...(o.closes ?? [])],
+    [
+      emojiOpen,
+      !!file,
+      !!reply,
+      voice.secs !== undefined,
+      !!tool,
+      ...(o.closes ?? []),
+    ],
     [!!reply, !!file],
   );
   const send = (held?: File) => {
@@ -197,7 +290,12 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     const r = insertAt(text, start, el?.selectionEnd ?? start, c);
     typed(r.text);
     mentions.update(r.text, r.caret);
+    // Back to the message after the render, unless the person has gone on
+    // somewhere (the search box, to find the next one) in the meantime.
+    const from = document.activeElement;
     requestAnimationFrame(() => {
+      const now = document.activeElement;
+      if (now !== from && now !== document.body && now !== el) return;
       el?.focus();
       el?.setSelectionRange(r.caret, r.caret);
     });
@@ -270,6 +368,15 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     addEmoji,
     onPaneKeyDown,
     dropProps,
+    toolsShown,
+    toolsQuery: slash?.[1] ?? "",
+    setToolsOpen,
+    closeTools,
+    toolMatches,
+    openRequest,
+    tool,
+    setTool,
+    openTool,
   };
 }
 
@@ -292,6 +399,8 @@ export function ComposerView<R>({
   textLabel: string;
 }) {
   const { voice, file, text, reply } = c;
+  const toolsP = usePresence(c.toolsShown);
+  const roomy = useMediaQuery("(min-width: 600px)");
   return (
     <>
       {reply && c.o.replyLine && (
@@ -353,37 +462,132 @@ export function ComposerView<R>({
         </Suspense>
       )}
       <MentionList m={c.mentions} />
+      {c.tool?.key === "order" && c.o.scope && (
+        <OrderSheet
+          link={c.o.scope.link}
+          business={c.o.scope.name}
+          from={c.tool.from}
+          start={c.tool.start?.order}
+          onClose={() => c.setTool(undefined)}
+          onPlaced={() => c.o.onDiary?.(undefined)}
+        />
+      )}
+      {c.tool?.key === "sell" && (
+        <SellSheet
+          from={c.tool.from}
+          onClose={() => c.setTool(undefined)}
+          onSold={() => c.o.onDiary?.(undefined)}
+        />
+      )}
+      {c.tool?.key === "handover" && (
+        <HandoverSheet
+          from={c.tool.from}
+          onClose={() => c.setTool(undefined)}
+          onSent={() => c.o.onDiary?.(undefined)}
+        />
+      )}
+      {c.tool && !["order", "sell", "handover"].includes(c.tool.key) && (
+        <ToolSheet
+          tool={c.tool.key}
+          from={c.tool.from}
+          start={c.tool.start}
+          scope={c.o.scope?.link}
+          onReorder={
+            c.o.scope?.supplies
+              ? (p) => c.openTool("order", undefined, { order: { last: p } })
+              : undefined
+          }
+          onNewOrder={
+            c.o.scope?.supplies ? () => c.openTool("order") : undefined
+          }
+          onClose={() => c.setTool(undefined)}
+          onSaved={() => {
+            // The server tells the change as a diary line in the person's
+            // Taskiem conversation (chat_changes.go): shown there at once;
+            // from a business's conversation, said where it went.
+            c.o.onDiary?.(undefined);
+            if (c.o.diaryWhere && c.o.diaryWhere !== "taskiem")
+              toast("Saved. The change is in your Taskiem chat.", "success", {
+                href: "/chat?with=taskiem",
+                linkText: "Open",
+              });
+          }}
+        />
+      )}
       {voice.secs !== undefined || voice.holding ? (
         <RecordingBar voice={voice} />
       ) : (
         <form
-          className="composer"
+          className={`composer${c.o.tools ? " tools-on" : ""}`}
           onSubmit={(e) => {
             e.preventDefault();
             c.send();
           }}
         >
-          <div className="composer-pill">
+          <GroupedPicker m={c.mentions} />
+          {c.o.tools && !c.toolsShown && !c.mentions.q && (
+            <RequestChip text={c.text} onOpen={c.openRequest} />
+          )}
+          {toolsP.mounted && (
+            <ToolsPanel
+              query={c.toolsQuery}
+              onOpen={c.openTool}
+              onClose={c.closeTools}
+              leaving={toolsP.leaving}
+              scope={c.o.scope?.link}
+              supplier={c.o.scope?.supplies ? c.o.scope.name : undefined}
+            />
+          )}
+          {c.o.tools && (
             <button
               type="button"
-              className="icon-button"
-              aria-label="Emoji"
-              title="Emoji"
-              aria-expanded={c.emojiOpen}
-              data-testid="emoji-button"
-              onClick={() => c.setEmojiOpen(!c.emojiOpen)}
+              className={`composer-tools${c.toolsShown ? " open" : ""}`}
+              aria-label={c.toolsShown ? "Close tools" : "Open tools"}
+              aria-expanded={c.toolsShown}
+              data-testid="tools-button"
+              onClick={() =>
+                c.toolsShown ? c.closeTools() : c.setToolsOpen(true)
+              }
             >
-              <Icon name="emoji" />
+              <Icon name="grid" />
             </button>
+          )}
+          <div className="composer-pill">
+            {/* The designs have no emoji button: keyboards have emoji. */}
+            {!c.o.tools && (
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Emoji"
+                title="Emoji"
+                aria-expanded={c.emojiOpen}
+                data-testid="emoji-button"
+                onClick={() => c.setEmojiOpen(!c.emojiOpen)}
+              >
+                <Icon name="emoji" />
+              </button>
+            )}
             <label className="sr-only" htmlFor={textId}>
               {textLabel}
             </label>
             <textarea
               id={textId}
               ref={c.textBox}
+              data-chat-box=""
               rows={1}
               maxLength={4000}
-              placeholder={file ? "Add a caption" : "Type a message"}
+              placeholder={
+                file
+                  ? "Add a caption"
+                  : hint(
+                      c.o.placeholder
+                        ? c.o.placeholder
+                        : c.o.grouped
+                          ? "Message, @ to tag"
+                          : "Type a message",
+                      roomy,
+                    )
+              }
               value={text}
               onChange={(e) => {
                 c.typed(e.target.value);
@@ -401,6 +605,25 @@ export function ComposerView<R>({
               }}
               onKeyDown={(e) => {
                 if (c.mentions.onKeyDown(e)) return;
+                if (
+                  c.toolsShown &&
+                  (e.key === "Escape" ||
+                    ((e.key === "Enter" || e.key === "ArrowUp") &&
+                      c.toolMatches > 0))
+                ) {
+                  // The tools panel takes the keys: Esc closes it, Enter
+                  // or the up arrow goes to its first tile. With no tool
+                  // named, Enter sends the words as they are.
+                  e.preventDefault();
+                  if (e.key === "Escape") c.closeTools();
+                  else
+                    (
+                      document.querySelector(
+                        ".tk-tools .tk-tile",
+                      ) as HTMLButtonElement | null
+                    )?.focus();
+                  return;
+                }
                 if (e.key === "Escape") {
                   // Esc gives up what is being prepared: the panel, a photo
                   // waiting for its caption, then a reply.
@@ -417,7 +640,7 @@ export function ComposerView<R>({
               }}
             />
             <AttachMenu onChoose={c.attach} documents={c.o.rules.documents} />
-            {!text.trim() && !file && (
+            {!file && (
               <button
                 type="button"
                 className="icon-button camera-quick"
@@ -441,7 +664,7 @@ export function ComposerView<R>({
               className="primary icon-button send-button"
               disabled={busy || (!text.trim() && !file)}
             >
-              <Icon name="send" />
+              <Icon name="arrow-up" />
               <span className="sr-only">
                 {busy && file ? "Sending…" : "Send"}
               </span>
@@ -469,4 +692,10 @@ export function ComposerView<R>({
       )}
     </>
   );
+}
+
+/** The box's hint on one line: on a phone, the words before its comma
+ * ("Ask Taskiem", "Message"); with room, all of it. */
+export function hint(words: string, roomy: boolean): string {
+  return roomy ? words : (words.split(",")[0] ?? words).trim();
 }

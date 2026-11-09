@@ -286,9 +286,19 @@ test("the calendar is a month with arrows, today filled in, later days dimmed an
   await buyer.keyboard.press("PageUp");
   await expect(cal.locator(".dp-month")).not.toHaveText(month);
   await expect(cal.getByRole("button", { name: "Next month" })).toBeEnabled();
-  await cal.getByRole("button", { name: "Next month" }).click(); // Sep 28 -> Oct 28
-  await cal.getByRole("button", { name: "Next month" }).click(); // -> today's month
+  // A day and a week back is this month or the last, by today's date (the
+  // 4th: the last; the 9th: this); Page Up one more. As many arrows on.
+  const back = new Date(now);
+  back.setDate(now.getDate() - 8);
+  const months =
+    (now.getFullYear() - back.getFullYear()) * 12 +
+    now.getMonth() -
+    back.getMonth() +
+    1;
+  for (let i = 0; i < months; i++)
+    await cal.getByRole("button", { name: "Next month" }).click();
   await expect(cal.locator(".dp-month")).toHaveText(month);
+  await expect(cal.getByRole("button", { name: "Next month" })).toBeDisabled();
 
   // A click elsewhere and Esc close the calendar only.
   await buyer.keyboard.press("Escape");

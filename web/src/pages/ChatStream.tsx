@@ -25,6 +25,7 @@ export function ChatStream<T extends { id: string; created_at: string }>({
   unread,
   empty,
   overlay,
+  tail,
 }: {
   /** Undefined while loading. */
   items: T[] | undefined;
@@ -40,6 +41,8 @@ export function ChatStream<T extends { id: string; created_at: string }>({
   empty: ReactNode;
   /** The round button, or anything over the corner. */
   overlay?: ReactNode;
+  /** After the messages, in the thread: the alert cards. */
+  tail?: ReactNode;
 }) {
   const days: { day: string; messages: T[] }[] = [];
   for (const m of items ?? []) {
@@ -95,6 +98,7 @@ export function ChatStream<T extends { id: string; created_at: string }>({
             </div>
           ))
         )}
+        {items && tail}
       </div>
       {overlay}
     </div>

@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { ApiError, del, get, post, postOnce, put, whenOff } from "../api";
 import type { LinksView } from "../lib/links";
 import { feeInput, feeKobo } from "../lib/orders";
+import { MAX_BREAKS, breaksProblem, priceAt, type Break } from "../lib/deals";
 import {
   lineProblem,
   priceWords,
@@ -12,6 +13,8 @@ import {
   type SupplierPrices,
 } from "../lib/pricelists";
 import type { StockItem, StockView } from "../lib/stock";
+import { hasSizes, label, sizesOf, sizesWords } from "../lib/variants";
+import { soldInSizes } from "../lib/buyer";
 import { formatPrice } from "../lib/storefront";
 import {
   EmptyState,
@@ -184,6 +187,7 @@ export function StorefrontPriceLists() {
           </Items>
         </section>
       )}
+      {view.data && <OffersCard />}
       {editing && (
         <ListItemsModal
           list={editing}
@@ -216,7 +220,19 @@ interface ItemRow {
   price: string;
   min: string;
   available: boolean;
+  /** Lower prices from a quantity up, as typed. */
+  breaks: { qty: string; price: string }[];
+  /** A product sold in sizes and colours: its sizes' own prices on the
+   * list, as typed ("" is the product's), by the size's item. */
+  sizePrices: Record<string, string>;
 }
+
+/** A row's breaks as the API takes them. */
+const rowBreaks = (r: ItemRow): Break[] =>
+  r.breaks.map((b) => ({
+    min_quantity: /^\d+$/.test(b.qty) ? Number(b.qty) : NaN,
+    price_kobo: feeKobo(b.price),
+  }));
 
 /** A list's items: which of the business's own, at what price, at least
  * how many, and whether available. */
@@ -235,14 +251,25 @@ function ListItemsModal({
   useEffect(() => {
     if (!stock.data) return;
     setRows(
-      stock.data.items.map((it) => {
+      // A product sold in sizes and colours is one row: its sizes go on
+      // the list with it, at its price unless one has its own.
+      stock.data.items.filter((it) => !it.variant_of).map((it) => {
         const on = list.items.find((x) => x.item_id === it.id);
         return {
           item: it,
           on: !!on,
+          sizePrices: Object.fromEntries(
+            (on?.sizes ?? [])
+              .filter((z) => (z.price_kobo ?? 0) > 0)
+              .map((z) => [z.item_id, feeInput(z.price_kobo ?? 0)]),
+          ),
           price: feeInput(on?.price_kobo ?? it.price_kobo ?? 0),
           min: String(on?.min_quantity ?? 1),
           available: on?.available ?? true,
+          breaks: (on?.breaks ?? []).map((b) => ({
+            qty: String(b.min_quantity),
+            price: feeInput(b.price_kobo),
+          })),
         };
       }),
     );
@@ -252,8 +279,20 @@ function ListItemsModal({
   const bad = (rows ?? []).find(
     (r) =>
       r.on &&
-      (!(feeKobo(r.price) > 0) || !/^\d+$/.test(r.min) || Number(r.min) < 1),
+      (!(feeKobo(r.price) > 0) ||
+        !/^\d+$/.test(r.min) ||
+        Number(r.min) < 1 ||
+        Object.values(r.sizePrices).some(
+          (p) => p.trim() !== "" && !(feeKobo(p) > 0),
+        )),
   );
+  const badBreaks = (rows ?? [])
+    .filter((r) => r.on && !bad)
+    .map((r) => ({
+      r,
+      why: breaksProblem(Number(r.min), feeKobo(r.price), rowBreaks(r)),
+    }))
+    .find((x) => x.why);
   const save = () =>
     void act
       .run(async () => {
@@ -265,6 +304,14 @@ function ListItemsModal({
               price_kobo: feeKobo(r.price),
               min_quantity: Number(r.min),
               available: r.available,
+              breaks: rowBreaks(r),
+              ...(hasSizes(r.item)
+                ? {
+                    sizes: Object.entries(r.sizePrices)
+                      .filter(([, p]) => p.trim() !== "")
+                      .map(([id, p]) => ({ item_id: id, price_kobo: feeKobo(p) })),
+                  }
+                : {}),
             })),
         });
         onSaved();
@@ -290,7 +337,10 @@ function ListItemsModal({
       ) : (
         <div className="price-rows" data-testid="price-items">
           {rows.map((r, i) => (
-            <fieldset key={r.item.id} className="price-row">
+            <fieldset
+              key={r.item.id}
+              className="price-row"
+            >
               <legend className="sr-only">{r.item.name}</legend>
               <label className="inline">
                 <input
@@ -325,6 +375,102 @@ function ListItemsModal({
                     />
                     Available
                   </label>
+                  {hasSizes(r.item) && stock.data && (
+                    <details className="price-sizes">
+                      <summary>
+                        {sizesWords(sizesOf(stock.data.items, r.item.id).length)}
+                        : some cost more or less
+                      </summary>
+                      <p className="hint">
+                        Each goes on the list at the price above unless you
+                        give it its own.
+                      </p>
+                      {sizesOf(stock.data.items, r.item.id).map((z) => (
+                        <Field
+                          key={z.id}
+                          label={`${label(z.variant, r.item.choices)} (₦)`}
+                        >
+                          <input
+                            inputMode="decimal"
+                            placeholder={r.price}
+                            value={r.sizePrices[z.id] ?? ""}
+                            onChange={(e) =>
+                              set(i, {
+                                sizePrices: {
+                                  ...r.sizePrices,
+                                  [z.id]: e.target.value,
+                                },
+                              })
+                            }
+                          />
+                        </Field>
+                      ))}
+                    </details>
+                  )}
+                  {r.breaks.map((b, k) => (
+                    <div
+                      key={k}
+                      className="price-break"
+                      role="group"
+                      aria-label={`${r.item.name}: quantity price ${k + 1}`}
+                    >
+                      <Field label="From">
+                        <input
+                          inputMode="numeric"
+                          value={b.qty}
+                          onChange={(e) =>
+                            set(i, {
+                              breaks: r.breaks.map((x, j) =>
+                                j === k ? { ...x, qty: e.target.value } : x,
+                              ),
+                            })
+                          }
+                        />
+                      </Field>
+                      <Field label="Price (₦)">
+                        <input
+                          inputMode="decimal"
+                          value={b.price}
+                          onChange={(e) =>
+                            set(i, {
+                              breaks: r.breaks.map((x, j) =>
+                                j === k ? { ...x, price: e.target.value } : x,
+                              ),
+                            })
+                          }
+                        />
+                      </Field>
+                      <button
+                        type="button"
+                        className="small"
+                        onClick={() =>
+                          set(i, {
+                            breaks: r.breaks.filter((_, j) => j !== k),
+                          })
+                        }
+                      >
+                        Remove
+                        <span className="sr-only">
+                          {" "}
+                          quantity price {k + 1} of {r.item.name}
+                        </span>
+                      </button>
+                    </div>
+                  ))}
+                  {r.breaks.length < MAX_BREAKS && (
+                    <button
+                      type="button"
+                      className="small price-break-add"
+                      onClick={() =>
+                        set(i, {
+                          breaks: [...r.breaks, { qty: "", price: "" }],
+                        })
+                      }
+                    >
+                      + Lower price for more
+                      <span className="sr-only"> of {r.item.name}</span>
+                    </button>
+                  )}
                 </div>
               )}
             </fieldset>
@@ -336,11 +482,16 @@ function ListItemsModal({
           {bad.item.name} needs a price and a whole number for “At least”.
         </p>
       )}
+      {badBreaks && (
+        <p className="hint" role="alert">
+          {badBreaks.r.item.name}: {badBreaks.why}
+        </p>
+      )}
       <div className="row-actions">
         <button
           type="button"
           className="primary"
-          disabled={act.busy || !rows || !!bad}
+          disabled={act.busy || !rows || !!bad || !!badBreaks}
           onClick={save}
         >
           Save
@@ -350,6 +501,71 @@ function ListItemsModal({
         </button>
       </div>
     </Modal>
+  );
+}
+
+/** Offers from buyers (phase 7): the largest discount staff may agree on
+ * a whole order; under it, or under an item's lowest price, an offer
+ * waits for the owner. Items' lowest prices are set on each product. */
+function OffersCard() {
+  const view = useLoad(
+    () =>
+      get<{ floors: Record<string, number>; max_discount_pct?: number | null }>(
+        "/v1/trade-floors",
+      ),
+    [],
+  );
+  const act = useAction();
+  const [pct, setPct] = useState<string | null>(null);
+  const shown =
+    pct ?? (view.data?.max_discount_pct ? String(view.data.max_discount_pct) : "");
+  const n = shown.trim() === "" ? null : Number(shown);
+  const bad = n !== null && (!Number.isInteger(n) || n < 1 || n > 90);
+  const floors = Object.keys(view.data?.floors ?? {}).length;
+  return (
+    <section className="card" aria-labelledby="offers">
+      <h2 id="offers">Offers from buyers</h2>
+      <p className="hint">
+        Buyers can offer their own price; you and your staff accept, counter or
+        decline it in the chat. Staff agree down to each product&apos;s lowest
+        price ({floors === 0 ? "none set yet" : `${floors} set`}, on the
+        product) and this discount. Under them, the offer waits for your OK.
+      </p>
+      <ErrorBox error={view.error ?? act.error} />
+      <form
+        className="toolbar"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void act
+            .run(
+              () =>
+                put("/v1/trade-floors", {
+                  set_discount: true,
+                  max_discount_pct: n,
+                }),
+              n === null ? "No discount limit" : `Staff can agree up to ${n}% off`,
+            )
+            .then((ok) => ok && (setPct(null), view.reload()));
+        }}
+      >
+        <Field label="Largest discount staff can agree (%)">
+          <input
+            inputMode="numeric"
+            value={shown}
+            placeholder="No limit"
+            onChange={(e) => setPct(e.target.value)}
+          />
+        </Field>
+        <button
+          type="submit"
+          className="primary"
+          disabled={act.busy || !view.data || bad || pct === null}
+        >
+          Save
+        </button>
+      </form>
+      {bad && <p className="hint" role="alert">A whole number from 1 to 90.</p>}
+    </section>
   );
 }
 
@@ -534,7 +750,8 @@ export function SupplierPricesPage() {
     (it) => !linkOf(it.item_id) && !mine[it.item_id],
   );
   const total = lines.reduce(
-    (sum, it) => sum + it.price_kobo * (Number(qty[it.item_id]) || 0),
+    (sum, it) =>
+      sum + priceAt(it, Number(qty[it.item_id]) || 0) * (Number(qty[it.item_id]) || 0),
     0,
   );
   const order = () =>
@@ -628,6 +845,11 @@ export function SupplierPricesPage() {
                       </td>
                       <td>{priceWords(it)}</td>
                       <td>
+                        {soldInSizes(it) ? (
+                          <Link to={`/chat?with=${encodeURIComponent(p.link)}`}>
+                            Order its sizes in your chat with {p.business}
+                          </Link>
+                        ) : (
                         <input
                           aria-label={`How many ${it.name}`}
                           inputMode="numeric"
@@ -641,6 +863,7 @@ export function SupplierPricesPage() {
                             }))
                           }
                         />
+                        )}
                         {problem && (
                           <span className="block hint">{problem}</span>
                         )}

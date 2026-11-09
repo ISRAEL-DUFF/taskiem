@@ -141,9 +141,10 @@ export function NotificationSettings() {
               {box(r.chat, "On WhatsApp or Telegram", r.setting.chat, (on) =>
                 save({ ...r.setting, chat: on }),
               )}
-              {box(r.email, "By email", r.setting.email, (on) =>
-                save({ ...r.setting, email: on }),
-              )}
+              {r.email &&
+                box(r.email, "By email", r.setting.email, (on) =>
+                  save({ ...r.setting, email: on }),
+                )}
             </Row>
           ))}
         </Items>

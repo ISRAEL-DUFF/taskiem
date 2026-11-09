@@ -106,6 +106,10 @@ func rolesTx(ctx context.Context, tx pgx.Tx) ([]roleInfo, error) {
 	}
 	sort.Slice(names, func(i, j int) bool { return len(rolePermissions[names[i]]) > len(rolePermissions[names[j]]) })
 	for _, n := range names {
+		// A business's own role of a name built in later is what it holds.
+		if slices.ContainsFunc(custom, func(c roleInfo) bool { return c.Name == n }) {
+			continue
+		}
 		out = append(out, roleInfo{Name: n, Permissions: slices.Sorted(slices.Values(rolePermissions[n])), BuiltIn: true, Members: counts[n]})
 	}
 	for _, c := range custom {

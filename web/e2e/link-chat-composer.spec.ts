@@ -878,15 +878,16 @@ test("on a phone the camera sits beside the microphone; on a computer it is in t
   const chooser = phone.buyer.waitForEvent("filechooser");
   await quick.click();
   await chooser; // the camera app, through the file input
-  // It goes once words are typed (the Send button takes over).
+  // It stays while words are typed, beside the clip, as the boards draw
+  // the composer; a computer has it too (DeskSeller).
   await phone.buyer.getByTestId("chat-pane").getByLabel("Message").fill("hi");
-  await expect(quick).toBeHidden();
+  await expect(quick).toBeVisible();
 
   const computer = await linked(browser);
   await computer.buyer.goto(`/chat?with=${computer.link}`);
   await expect(
     computer.buyer.getByTestId("chat-pane").getByTestId("camera-quick"),
-  ).toBeHidden();
+  ).toBeVisible();
 });
 
 test("Esc gives up a reply from anywhere in the chat, but closes an open menu first", async ({
@@ -1104,4 +1105,28 @@ test("a message that was not sent keeps its two icon buttons on the screen, besi
   expect(
     await buyer.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1),
   ).toBe(false);
+});
+
+test("after an emoji is picked, going to the search box keeps the typing there, however slow the screen", async ({
+  browser,
+}) => {
+  const { buyer, link } = await linked(browser);
+  await buyer.goto(`/chat?with=${link}`);
+  const pane = buyer.getByTestId("chat-pane");
+  await pane.getByTestId("emoji-button").click();
+  const panel = pane.getByTestId("emoji-panel");
+  const search = panel.getByLabel("Search emoji");
+  await expect(search).toBeVisible();
+  // A slow screen: the message box's focus after the pick comes late.
+  await buyer.evaluate(() => {
+    const raf = window.requestAnimationFrame.bind(window);
+    window.requestAnimationFrame = (cb) => (setTimeout(() => raf(cb), 400), 0);
+  });
+  await search.fill("okada");
+  await panel.getByRole("button", { name: "motorcycle" }).click();
+  await search.click();
+  await buyer.waitForTimeout(700);
+  await buyer.keyboard.type(" bike");
+  await expect(search).toHaveValue("okada bike");
+  await expect(pane.getByLabel("Message")).toHaveValue("🏍️");
 });

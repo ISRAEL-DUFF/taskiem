@@ -55,6 +55,10 @@ const (
 	// Storefronts and hosted forms (decisions 0036, 0037): the public
 	// pages and the websites allowed to embed them.
 	PermStorefrontManage = access.StorefrontManage
+	// PermOrderHandle is working the orders without the storefront's
+	// settings; PermOrders is either (Can reads "a|b" as either).
+	PermOrderHandle = access.OrderHandle
+	PermOrders      = access.StorefrontManage + "|" + access.OrderHandle
 	// PermFormLinks mints one-time links to a link form (forms 8.4).
 	PermFormLinks = access.FormLinks
 )
@@ -110,7 +114,13 @@ type Principal struct {
 	Agent *AgentAccess
 }
 
-func (p *Principal) Can(perm string) bool { return p.Permissions[perm] }
+// Can reports whether the principal holds perm; "a|b" is either of them.
+func (p *Principal) Can(perm string) bool {
+	if a, b, either := strings.Cut(perm, "|"); either {
+		return p.Permissions[a] || p.Can(b)
+	}
+	return p.Permissions[perm]
+}
 
 // businessRoles are the principal's roles that are not built in (a
 // "credit_officer"): each lets its holder decide approvals naming it.
@@ -136,7 +146,8 @@ func (p *Principal) mayDecide(role *string) bool {
 
 // mayDecideAny reports whether the principal may decide some approvals.
 func (p *Principal) mayDecideAny() bool {
-	return p.Can(PermApprovalDecide) || len(p.businessRoles()) > 0
+	// Working the orders decides the shop's own order steps (orderVoteRoles).
+	return p.Can(PermApprovalDecide) || len(p.businessRoles()) > 0 || p.Can(PermOrders)
 }
 
 // currentApprovalRole is an approval's current role.
@@ -419,7 +430,10 @@ func (s *Server) loadRoles(ctx context.Context, p *Principal) error {
 			}
 			p.Roles = append(p.Roles, role)
 			perms, builtin := rolePermissions[role]
-			if !builtin {
+			// A business's own role wins over a built-in one of the same
+			// name made after it (cashier, shift_manager came in chat tools
+			// phase 5): nobody's permissions change underneath them.
+			if !builtin || custom != nil {
 				perms = custom // a custom role, or none for a business role
 			}
 			for _, perm := range perms {

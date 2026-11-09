@@ -26,6 +26,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/pii"
+	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
 // Rows go through the connector's actions on the data_tables connection,
@@ -203,6 +204,10 @@ func rowsOf(out map[string]any) []any {
 	return rows
 }
 
+// maxAnyFilters is the most filters an any group holds (the connector's
+// own limit).
+const maxAnyFilters = 20
+
 type rowsQuery struct {
 	Filters []json.RawMessage `json:"filters"`
 	Order   []json.RawMessage `json:"order"`
@@ -240,6 +245,24 @@ func (s *Server) queryTableRows(w http.ResponseWriter, r *http.Request) {
 			var m map[string]any
 			if err := json.Unmarshal(raw, &m); err != nil {
 				return nil, fmt.Errorf("%w: %s[%d] is not an object", errBadRequest, what, i)
+			}
+			if group, has := m["any"]; has && what == "filters" {
+				// One of these holds: a search across several columns.
+				list, ok := group.([]any)
+				if !ok || len(list) == 0 || len(list) > maxAnyFilters || len(m) != 1 {
+					return nil, fmt.Errorf("%w: %s[%d]: any is a list of 1 to %d filters, alone in its object", errBadRequest, what, i, maxAnyFilters)
+				}
+				for j, sub := range list {
+					sm, ok := sub.(map[string]any)
+					if !ok || sm["any"] != nil {
+						return nil, fmt.Errorf("%w: %s[%d].any[%d] is not a filter", errBadRequest, what, i, j)
+					}
+					if col, _ := sm["column"].(string); !tr.known(col) {
+						return nil, fmt.Errorf("%w: %s[%d].any[%d]: the table has no column %q", errBadRequest, what, i, j, col)
+					}
+				}
+				out = append(out, m)
+				continue
 			}
 			col, _ := m["column"].(string)
 			if !tr.known(col) {
@@ -342,6 +365,9 @@ func (s *Server) insertTableRows(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.auditRows(r, tr, "table.row.insert", map[string]any{"rows": len(checked), "affected": out["affected"], "replayed": out["replayed"] == true})
+	if out["replayed"] != true && len(rows) == 1 {
+		s.rowDiary(r, tr.table, rows[0], true)
+	}
 	writeJSON(w, http.StatusCreated, map[string]any{"affected": out["affected"], "rows": rowsOf(out), "replayed": out["replayed"] == true})
 }
 
@@ -401,6 +427,9 @@ func (s *Server) updateTableRow(w http.ResponseWriter, r *http.Request) {
 		row = rows[0]
 	}
 	s.auditRows(r, tr, "table.row.update", map[string]any{"row_id": id, "replayed": out["replayed"] == true})
+	if out["replayed"] != true {
+		s.rowDiary(r, tr.table, req.Set, false)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"affected": out["affected"], "row": row, "replayed": out["replayed"] == true})
 }
 
@@ -824,4 +853,57 @@ func quoteAll(list []string) []string {
 		out[i] = strconv.Quote(s)
 	}
 	return out
+}
+
+// rowDiary tells a row added or changed by a person as a diary line
+// (chat_changes.go): a service, when the table is the storefront's
+// services; another table's row only when a chat tool saved it
+// (X-Taskiem-Diary), so imports and page edits stay quiet.
+func (s *Server) rowDiary(r *http.Request, t datatables.Table, row map[string]any, added bool) {
+	p := principalFrom(r.Context())
+	if p == nil || p.UserID == uuid.Nil {
+		return
+	}
+	var sf storefront.Storefront
+	_ = s.tx(r, func(tx pgx.Tx) (err error) {
+		sf, err = storefront.Get(r.Context(), tx, p.TenantID)
+		return err
+	})
+	if sf.ServicesTable != nil && *sf.ServicesTable == t.ID {
+		m := sf.ServicesColumns
+		name, _ := row[m.Name].(string)
+		if name == "" && added {
+			return
+		}
+		if !added {
+			if name == "" {
+				name = "a service"
+			}
+			s.diaryChange(r.Context(), p, "Changed the service "+name)
+			return
+		}
+		line := "New service: " + name
+		if v, ok := row[m.Duration]; ok && m.Duration != "" {
+			line += fmt.Sprintf(", %v min", v)
+		}
+		if v, ok := row[m.Price]; ok && m.Price != "" {
+			if f, ok := v.(float64); ok {
+				line += ", " + naira(int64(f*100))
+			}
+		}
+		s.diaryChange(r.Context(), p, line)
+		return
+	}
+	if r.Header.Get("X-Taskiem-Diary") == "" {
+		return
+	}
+	title := t.Title
+	if title == "" {
+		title = t.Name
+	}
+	if added {
+		s.diaryChange(r.Context(), p, "Added a row to "+title)
+	} else {
+		s.diaryChange(r.Context(), p, "Changed a row of "+title)
+	}
 }

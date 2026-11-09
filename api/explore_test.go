@@ -79,6 +79,11 @@ func TestExploreBrowse(t *testing.T) {
 	if d["logo"] != true || d["photos"] != float64(3) || d["tagline"] != "Cement and sand, delivered" || d["about"] != "Family-run since 1998." || d["state"] != "none" || d["business"] != dangoteID {
 		t.Errorf("a card: %v", d)
 	}
+	// Each photo's words, in order, for the card (chat tools phase 6), and
+	// our own area for "Near you · Ikeja".
+	if caps, _ := d["captions"].([]any); len(caps) != 3 || caps[0] != "Photo A" || caps[2] != "Photo C" || page["area"] != "Ikeja" {
+		t.Errorf("captions and our area: %v %v", d["captions"], page["area"])
+	}
 	if d["v"] == nil || d["v"] == "" || page["near_more"] != false {
 		t.Errorf("a card's version and paging: %v %v", d["v"], page["near_more"])
 	}
@@ -88,7 +93,8 @@ func TestExploreBrowse(t *testing.T) {
 	}
 
 	// Search: by the profile, with the same card; none for the hidden one.
-	if got := ada.must(200, "GET", "/v1/explore?q=cement", nil)["results"].([]any); len(got) != 1 || got[0].(map[string]any)["photos"] != float64(3) || got[0].(map[string]any)["logo"] != true {
+	if got := ada.must(200, "GET", "/v1/explore?q=cement", nil)["results"].([]any); len(got) != 1 || got[0].(map[string]any)["photos"] != float64(3) || got[0].(map[string]any)["logo"] != true ||
+		len(got[0].(map[string]any)["captions"].([]any)) != 3 {
 		t.Errorf("search: %v", got)
 	}
 	if got := ada.must(200, "GET", "/v1/explore?q=hidden", nil)["results"].([]any); len(got) != 0 {
@@ -206,5 +212,64 @@ func TestExplorePaging(t *testing.T) {
 		if len(seen) != 14 {
 			t.Errorf("%s: %d businesses over two pages, want 14", sec.name, len(seen))
 		}
+	}
+}
+
+// Asking to link and answering are diary lines on each side with chat tools
+// on (chat tools phase 6): asked, taken back, asked again, linked.
+func TestLinkDiaryLines(t *testing.T) {
+	w := newWAWorld(t)
+	ada := w.tenant(t, "Ada's Kitchen", "ada@kitchen.test")
+	kola := w.tenant(t, "Kola Bakery", "k@kola.test")
+	for _, c := range []*client{ada, kola} {
+		c.must(200, "PUT", "/v1/settings/chat-tools", map[string]any{"chat_tools": true})
+	}
+	kola.must(200, "PUT", "/v1/link-settings", map[string]any{"findable": true})
+	kolaID := tenantOf(t, kola)
+	link := func(c *client, state string) string {
+		t.Helper()
+		for _, x := range c.must(200, "GET", "/v1/links", nil)["links"].([]any) {
+			if l := x.(map[string]any); l["state"] == state {
+				return l["id"].(string)
+			}
+		}
+		t.Fatalf("no %s link", state)
+		return ""
+	}
+	ada.must(201, "POST", "/v1/links", map[string]any{"business": kolaID, "role": "both"})
+	if d := diaryOf(t, ada); !hasLine(d, "Asked Kola Bakery to link") {
+		t.Fatalf("asked: %q", d)
+	}
+	ada.must(204, "POST", "/v1/links/"+link(ada, "requested")+"/cancel", nil)
+	if d := diaryOf(t, ada); !hasLine(d, "Took back the request to link with Kola Bakery") {
+		t.Fatalf("taken back: %q", d)
+	}
+	ada.must(201, "POST", "/v1/links", map[string]any{"business": kolaID, "role": "both"})
+	kola.must(200, "POST", "/v1/links/"+link(kola, "asked_us")+"/accept", nil)
+	if d := diaryOf(t, kola); !hasLine(d, "Linked with Ada's Kitchen") {
+		t.Fatalf("linked: %q", d)
+	}
+	if d := diaryOf(t, kola); hasLine(d, "Asked Kola Bakery to link") {
+		t.Fatalf("the other side's line: %q", d)
+	}
+}
+
+// With no area in the business profile, "near you" reads the published
+// storefront's (and the page says which).
+func TestExploreAreaFromStorefront(t *testing.T) {
+	w := shopWorld(t)
+	owner := w.tenant(t, "Ada's Kitchen", "ada@ada.test")
+	verifyPhone(t, w.world, owner, "phone", "business")
+	owner.must(200, "PUT", "/v1/storefront", map[string]any{"slug": "ada-kitchen", "draft": map[string]any{"name": "Ada's Kitchen", "area": "Yaba"}})
+	if a := owner.must(200, "GET", "/v1/explore", nil)["area"]; a != nil && a != "" {
+		t.Fatalf("a draft's area: %v", a)
+	}
+	owner.must(200, "POST", "/v1/storefront/publish", nil)
+	if a := owner.must(200, "GET", "/v1/explore", nil)["area"]; a != "Yaba" {
+		t.Fatalf("the storefront's area: %v", a)
+	}
+	owner.must(200, "PUT", "/v1/business-profile", map[string]any{"name": "", "tagline": "", "area": "Ikeja", "about": ""})
+	if a := owner.must(200, "GET", "/v1/explore", nil)["area"]; a != "Ikeja" {
+		t.Fatalf("the profile's area first: %v", a)
 	}
 }

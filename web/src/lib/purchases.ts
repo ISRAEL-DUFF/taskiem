@@ -2,6 +2,7 @@
 // orders"; /v1/stock/suppliers, /v1/stock/purchases): the API's shapes, how
 // a supplier and an order read in a row, and the forms.
 
+import type { DealStep } from "./deals";
 import { whenLabel } from "./bookings";
 import { feeInput, feeKobo } from "./orders";
 import { quantity } from "./stock";
@@ -81,9 +82,23 @@ export interface Purchase {
   /** Sent to a linked supplier through this link; the supplier's side,
    * mirrored, and our own cancel request and Not all came. */
   link_id?: string;
-  seller_status?: "proposed" | "received" | "changed" | "accepted" | "ready" | "dispatched" | "delivered" | "declined" | "cancelled" | null;
+  seller_status?:
+    | "proposed"
+    | "received"
+    | "changed"
+    | "accepted"
+    | "ready"
+    | "dispatched"
+    | "delivered"
+    | "declined"
+    | "cancelled"
+    | null;
   seller_note?: string;
   change?: PurchaseLine[];
+  /** Sent at our own prices (an offer), and its history (phase 7). */
+  offer?: boolean;
+  deal_history?: DealStep[] | null;
+  deal_until?: string | null;
   delivered_at?: string;
   cancel_asked_at?: string;
   short_at?: string;
@@ -107,7 +122,8 @@ export const STATUS: Record<PurchaseStatus, { label: string; tone: string }> = {
 export function reachedLine(s: Supplier): string {
   if (s.reached === "whatsapp") return "Gets orders on WhatsApp";
   if (s.reached === "telegram") return "Gets orders on Telegram";
-  if (s.reached === "link") return "Linked on Taskiem: orders go straight to their business";
+  if (s.reached === "link")
+    return "Linked on Taskiem: orders go straight to their business";
   return "Gets orders by text message until they tap the link";
 }
 
@@ -120,13 +136,72 @@ export function supplierSub(s: Supplier): string {
   return parts.join(" · ");
 }
 
+/** Each size and colour's product, from the business's own items: what
+ * linesWords groups by. */
+export function sizeParents(
+  items: { id: string; variant_of?: string }[],
+): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const i of items) if (i.variant_of) out.set(i.id, i.variant_of);
+  return out;
+}
+
+/** Lines in words: "46 cartons Indomie, 17 bags Rice"; a product's sizes
+ * and colours ("Air Max 90 – 42, Black") together: "36 pairs Air Max 90 in
+ * 7 sizes and colours". Only lines of one product's sizes are grouped
+ * (parents, sizeParents), never items that merely share the start of
+ * their names. */
+export function linesWords(
+  lines: { item: string; quantity: number; unit?: string; item_id?: string }[],
+  parents?: Map<string, string>,
+): string {
+  const groups = new Map<
+    string,
+    {
+      name: string;
+      full: string;
+      unit?: string;
+      qty: number;
+      n: number;
+      sized: boolean;
+    }
+  >();
+  for (const l of lines) {
+    const product = l.item_id ? parents?.get(l.item_id) : undefined;
+    const cut = l.item.indexOf(" – ");
+    const sized = !!product;
+    const name = sized && cut > 0 ? l.item.slice(0, cut) : l.item;
+    const key = sized ? `\u0000${product}` : `\u0001${l.item}`;
+    const g = groups.get(key) ?? {
+      name,
+      full: l.item,
+      unit: l.unit,
+      qty: 0,
+      n: 0,
+      sized,
+    };
+    g.qty += l.quantity;
+    g.n += 1;
+    groups.set(key, g);
+  }
+  return [...groups.values()]
+    .map((g) => {
+      if (!g.sized || g.n === 1) return `${quantity(g.qty, g.unit)} ${g.full}`;
+      return `${quantity(g.qty, g.unit)} ${g.name} in ${g.n} sizes and colours`;
+    })
+    .join(", ");
+}
+
 /** An order's items: "46 cartons Indomie, 17 bags Rice". */
-export const purchaseItems = (p: Purchase) =>
-  p.lines.map((l) => `${quantity(l.quantity, l.unit)} ${l.item}`).join(", ");
+export const purchaseItems = (p: Purchase, parents?: Map<string, string>) =>
+  linesWords(p.lines, parents);
 
 /** An order underneath its title: its items, when, what the supplier said, what is owed. */
-export function purchaseSub(p: Purchase): string {
-  const parts = [purchaseItems(p)];
+export function purchaseSub(
+  p: Purchase,
+  parents?: Map<string, string>,
+): string {
+  const parts = [purchaseItems(p, parents)];
   const when = p.received_at ?? p.confirmed_at ?? p.sent_at ?? p.created_at;
   parts.push(whenLabel(when));
   if (p.status === "confirmed" || p.confirmed_how)
@@ -173,7 +248,9 @@ export function purchaseActions(p: Purchase) {
     answerDelivery: answersDelivery(p),
     pay: p.status !== "drafted" && p.status !== "cancelled",
     cancel:
-      (p.status === "drafted" || p.status === "sent" || p.status === "confirmed") &&
+      (p.status === "drafted" ||
+        p.status === "sent" ||
+        p.status === "confirmed") &&
       !(p.link_id && (p.cancel_asked_at || p.seller_status === "delivered")),
   };
 }

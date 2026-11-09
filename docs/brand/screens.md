@@ -221,11 +221,35 @@ The rules of the [no-technical-steps plan](../spec/no-technical-steps.md) apply 
 
 ## Icons
 
-Use the line icons in `web/src/icons.tsx` by name: `home`, `money`, `invoices`, `orders`, `storefront`, `workflows`, `runs`, `activity`, `approvals`, `forms`, `tables`, `schools`, `members`, `keys`, `lock`, `bell`, `alerts`, `clock`, `start`, `refund`, `connections`, `settings`, `billing`, `reports`, `audit`, `inbox`, `templates`, `search`, `plus`, `close`, `chevron`, `info`, `sparkle`, `bolt`, `back`, `more`, `menu`, `tick`, `tick-double`, `emoji`, `send`, `down`, `pin`, `mute`, `image`, `star`, `dashboard`, `catalogue`, `policies`. One icon per row; the same thing always has the same icon. Add a new icon to `icons.tsx` in the same 24-unit line style rather than using an emoji or another set.
+Use the line icons in `web/src/icons.tsx` by name: `home`, `money`, `invoices`, `orders`, `storefront`, `workflows`, `runs`, `activity`, `approvals`, `forms`, `tables`, `schools`, `members`, `keys`, `lock`, `bell`, `alerts`, `clock`, `start`, `refund`, `connections`, `settings`, `billing`, `reports`, `audit`, `inbox`, `templates`, `search`, `plus`, `close`, `chevron`, `info`, `sparkle`, `bolt`, `back`, `more`, `menu`, `tick`, `tick-double`, `emoji`, `send`, `down`, `pin`, `mute`, `image`, `star`, `dashboard`, `catalogue`, `policies`, `box`, `grid`, `store`, `tag`. One icon per row; the same thing always has the same icon. Add a new icon to `icons.tsx` in the same 24-unit line style rather than using an emoji or another set.
+
+## The new kit
+
+The new look is built as shared parts in `web/src/kit.tsx` and `kit.css`, with
+the timings in `motion.css` ([chat tools](../spec/chat-tools.md) §2). The chat
+uses them first; every other page moves onto them whole, one page at a time, so
+no page mixes the old look and the new.
+
+- **Sheet**: the one frame for anything that opens over a page: a sheet from the
+  bottom on a phone, a drawer on a tablet, a panel beside the page on a computer.
+  Give it `from` (the tile's rectangle) and it grows out of it.
+- **Pill** (lime, warn, danger, plain), **buttons** `.tk-btn` (primary, soft,
+  ghost), **cards** `.tk-card`, **rows** `.tk-row`, **fields** `KitField`.
+- **KitEmpty** (an icon, a title, a line and what to do) and **KitLoading**
+  (shimmering rows) for every list's empty and loading states.
+- **DiaryLine**: a change told in a conversation as a line.
+- **SavedTick**: a save, done; the tick draws itself with a light buzz. A form
+  in a sheet (`ChatToolForms.tsx`) has its fields in the body and one main
+  button at the foot (`.tk-cta`); money in a tall `.tk-money` box with ₦, counts
+  in a `.tk-stepper` (− n +).
+- **usePresence**: a part that leaves with a little motion. With motion turned
+  down nothing moves.
 
 ## The Chat page
 
 The Chat page is the one screen that does **not** follow Taskiem's look. Business links §5.5 makes it WhatsApp Web's look, feel and way of working, deliberately and in detail, so a person who knows WhatsApp has nothing to learn. Copy it for any other conversation screen.
+
+> **Redrawn.** Chat tools ([spec](../spec/chat-tools.md) §2, §3) redraws the chat in Taskiem's own look from the designs, keeping WhatsApp's behaviours: `web/src/chat.css` (soft bubbles, initials in pine and lime, the tools button, the picker, the sheet, the card frame, diary lines) is laid over what follows, and `web/src/motion.css` holds the timings. Where the two disagree, the designs and `chat.css` win; WhatsApp's way of working below still holds.
 
 - **It fills the window.** `/chat` sets `chat-mode` on the shell (`App.tsx`), which reuses the builder's rail: a 64px menu on a computer, no top or tab bar on a phone. There is no page title or padding; a visually hidden `h1` stays for screen readers. The list pane and the open conversation each scroll inside; the composer stays at the bottom. On a phone one pane shows at a time and the thread has an arrow back to the list.
 - **Chat colours are tokens**, not brand colours: `--chat-wallpaper`, `--chat-in`, `--chat-out`, `--chat-out-meta`, `--chat-tick-read`, `--chat-select`, each with a light and a dark value in `styles.css`. Use them for bubbles, the wallpaper, read ticks and the selected row; never a hex colour in a component.

@@ -424,6 +424,14 @@
       "text": "You no go dey get update from {business} for here again. Send START make e start again.",
       "reviewed": false
     },
+    "customer.resumed": {
+      "text": "You fit write {business} for here again, and dem fit answer you.",
+      "reviewed": false
+    },
+    "customer.stopped": {
+      "text": "You no go dey get message from {business} for here again, and wetin you write give dem don delete. Send START make you fit write dem again.",
+      "reviewed": false
+    },
     "reach.stopped_none": {
       "text": "Nobody dey send you update for here.",
       "reviewed": false
@@ -566,6 +574,38 @@
     },
     "rider.location_kept": {
       "text": "I don collect your location: e dey with the delivery.",
+      "reviewed": false
+    },
+    "rider.jobs": {
+      "text": "Your deliveries now:",
+      "reviewed": false
+    },
+    "rider.job": {
+      "text": "*{reference}* from {business}, go {drop}: {step}",
+      "reviewed": false
+    },
+    "rider.job_offered": {
+      "text": "dem offer am give you. Send ACCEPT or CAN'T.",
+      "reviewed": false
+    },
+    "rider.job_accepted": {
+      "text": "na your own. Send PICKED UP once you collect am.",
+      "reviewed": false
+    },
+    "rider.job_picked_up": {
+      "text": "e dey road. Send ARRIVED for door, or DELIVERED.",
+      "reviewed": false
+    },
+    "rider.job_arrived": {
+      "text": "you don reach door. Send DELIVERED when you hand am over.",
+      "reviewed": false
+    },
+    "money.daily.today": {
+      "text": "Today: {deliveries} deliveries, {bookings} bookings.",
+      "reviewed": false
+    },
+    "money.daily.card": {
+      "text": "Your morning card, each line go open im tool: {link}",
       "reviewed": false
     },
     "rider.no_delivery": {
@@ -1334,6 +1374,54 @@
     },
     "wa.build.table_lacks": {
       "text": "Your table {table} never get {columns} column, wey e dey use. Add am for the app{link}, or those steps go fail.",
+      "reviewed": false
+    },
+    "wa.stock.category": {
+      "text": "*{category}* ({count}):\n{list}",
+      "reviewed": false
+    },
+    "wa.stock.category_more": {
+      "text": "Send *more* make I show you the rest.",
+      "reviewed": false
+    },
+    "wa.stock.which_size": {
+      "text": "{name} get {count} sizes and colours. Talk which one, put the size and colour after the name, like *{example}*.",
+      "reviewed": false
+    },
+    "wa.order.which_size": {
+      "text": "{name} from {business} dey come for sizes and colours: {sizes}. Talk which one, like *{example}*, or choose many at once for your chat with them for Taskiem.",
+      "reviewed": false
+    },
+    "wa.size.which": {
+      "text": "Which {choice} of {name}? Reply with im number, or talk am:\n{list}",
+      "reviewed": false
+    },
+    "wa.size.again": {
+      "text": "Reply with the number of the {choice}, or talk am:\n{list}",
+      "reviewed": false
+    },
+    "wa.size.none": {
+      "text": "{name} no get any for sale for {said}. E dey come for {sizes}.",
+      "reviewed": false
+    },
+    "wa.size.say": {
+      "text": "Which {choice} of {name}? Talk am: {list}",
+      "reviewed": false
+    },
+    "wa.size.say_again": {
+      "text": "Talk the {choice}: {list}",
+      "reviewed": false
+    },
+    "wa.order.no_size": {
+      "text": "{name} from {business} no dey come for {said}. E dey come for {sizes}.",
+      "reviewed": false
+    },
+    "wa.stock.sizes": {
+      "text": "{name}: {count} sizes and colours, {total} for all.\n{lines}",
+      "reviewed": false
+    },
+    "wa.stock.low_tag": {
+      "text": "(e don low)",
       "reviewed": false
     },
     "wa.tablemake.denied": {
@@ -4990,6 +5078,66 @@
     },
     "bill.notice.paired": {
       "text": "*{from}* talk say their transfer of {amount} ({note}) na for invoice {reference}. If e don count for another invoice, move am for the invoice page.",
+      "reviewed": false
+    },
+    "order.link.offered_title": {
+      "text": "{from} don give price for {reference}",
+      "reviewed": false
+    },
+    "order.link.offered": {
+      "text": "*{from}* wan pay their own price for order {reference}: {note}. Accept or decline am, or send your own price: counter {reference} 785k",
+      "reviewed": false
+    },
+    "order.link.countered_title": {
+      "text": "{from} don answer your price for {reference}",
+      "reviewed": false
+    },
+    "order.link.countered": {
+      "text": "*{from}* don answer your price for order {reference}: {note}. Accept or decline am, or send your own price: counter {reference} 790k",
+      "reviewed": false
+    },
+    "order.link.seller_countered_title": {
+      "text": "{from} don answer your offer for {reference}",
+      "reviewed": false
+    },
+    "order.link.seller_countered": {
+      "text": "*{from}* don answer your offer for order {reference}: {note}. Accept am, cancel the order, or send your own price: counter {reference} 760k",
+      "reviewed": false
+    },
+    "order.link.button_accept_change": {
+      "text": "Accept",
+      "reviewed": false
+    },
+    "order.link.done_accept_change": {
+      "text": "You don accept their price for {reference}. We don tell them.",
+      "reviewed": false
+    },
+    "deal.owner_title": {
+      "text": "{who} wan agree {amount} with {business}",
+      "reviewed": false
+    },
+    "deal.owner_body": {
+      "text": "Order {reference}: {why}. Accept or decline am for Taskiem chat.",
+      "reviewed": false
+    },
+    "deal.owner_asked": {
+      "text": "That price low pass wetin una business dey collect, so na oga go decide {reference}. We don tell am.",
+      "reviewed": false
+    },
+    "deal.counter_sent": {
+      "text": "We don send am: {amount} for {reference}. Dem fit accept or answer.",
+      "reviewed": false
+    },
+    "deal.counter_none": {
+      "text": "No order dey wait for your price. Open the order for Taskiem to give your price.",
+      "reviewed": false
+    },
+    "deal.counter_which": {
+      "text": "Pass one order dey wait ({references}). Talk which one, like: counter {reference} 750k",
+      "reviewed": false
+    },
+    "deal.counter_how": {
+      "text": "Send your price like this: counter 750k (or counter {reference} 750k).",
       "reviewed": false
     },
     "order.link.ordered_title": {

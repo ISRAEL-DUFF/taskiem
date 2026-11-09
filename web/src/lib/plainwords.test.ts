@@ -30,6 +30,8 @@ export const GLOSSARY: RegExp[] = [
   /\bundefined\b/,
   /\/steps\/[0-9a-z_]/,
   /\b(status|HTTP) [1-5]\d\d\b/,
+  // Sizes and colours (chat categories Part B): never "variant" to an owner.
+  /\bvariants?\b/i,
 ];
 
 /** The owner's path: the pages of the gate's five tasks. */
@@ -55,6 +57,14 @@ const OWNER_FILES = [
   "pages/TradeOrders.tsx",
   "pages/Conversation.tsx",
   "pages/TaskiemChat.tsx",
+  "pages/CustomerChat.tsx",
+  "pages/ChatToolForms.tsx",
+  "pages/ChatTools.tsx",
+  "pages/ChatBuyer.tsx",
+  "pages/ProductPhotos.tsx",
+  "pages/PhotoAdd.tsx",
+  "pages/SizesForms.tsx",
+  "pages/ChatStaff.tsx",
   "pages/PriceLists.tsx",
   "pages/Mentions.tsx",
   "pages/Statement.tsx",

@@ -266,9 +266,18 @@ func openText(ctx context.Context, c pii.Cipher, tx pgx.Tx, tenant uuid.UUID, en
 	return nil, errors.New("chat history: a message sealed too deep")
 }
 
+// unkept marks a send that is already in the history in another form (a
+// diary line told on the phone): recordSent leaves it out.
+type unkeptKey struct{}
+
+func unkept(ctx context.Context) context.Context { return context.WithValue(ctx, unkeptKey{}, true) }
+
 // recordSent keeps a message a channel sent to a member: in the business
 // it names, or the one the conversation is with.
 func (s *Server) recordSent(ctx context.Context, channel, addr string, m whatsapp.Message) {
+	if ctx.Value(unkeptKey{}) != nil {
+		return
+	}
 	tenant := m.Tenant
 	if tenant == uuid.Nil {
 		tenant = chatTenantOf(ctx)
@@ -361,7 +370,11 @@ func (s *Server) recordHeard(ctx context.Context, c *chat) {
 // purgeChatHistory deletes the history past its retention, in every
 // business, through a definer that reads only the expiry.
 func (s *Server) purgeChatHistory(ctx context.Context) error {
-	_, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_chat_history_purge()`)
+	if _, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_chat_history_purge()`); err != nil {
+		return err
+	}
+	// Customers' messages past their year (customer_chat.go).
+	_, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_customer_messages_purge()`)
 	return err
 }
 
@@ -529,20 +542,29 @@ func (s *Server) taskiemAnswer(w http.ResponseWriter, r *http.Request, p *Princi
 		writeErr(w, http.StatusTooManyRequests, "slow down: a moment between messages")
 		return
 	}
-	s.chatHooks()
-	live := &webLive{user: p.UserID}
-	ctx := context.WithValue(r.Context(), webLiveKey{}, live)
-	c := &chat{ch: &webChannel{s: s, tenant: p.TenantID}, addr: webAddr(p.UserID), in: msg, upload: upload}
-	err := s.converse(ctx, c, p.UserID)
-	clear(upload) // the file is not kept
+	out, err := s.taskiemRun(r.Context(), p, msg, upload)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	live.mu.Lock()
-	out := slices.Clone(live.msgs)
-	live.mu.Unlock()
 	writeJSON(w, http.StatusOK, taskiemChatOut{Messages: out})
+}
+
+// taskiemRun reads a message on the web as one typed on WhatsApp, and
+// gives what Taskiem said.
+func (s *Server) taskiemRun(ctx context.Context, p *Principal, msg whatsapp.Inbound, upload []byte) ([]TaskiemMessage, error) {
+	s.chatHooks()
+	live := &webLive{user: p.UserID}
+	ctx = context.WithValue(ctx, webLiveKey{}, live)
+	c := &chat{ch: &webChannel{s: s, tenant: p.TenantID}, addr: webAddr(p.UserID), in: msg, upload: upload}
+	err := s.converse(ctx, c, p.UserID)
+	clear(upload) // the file is not kept
+	if err != nil {
+		return nil, err
+	}
+	live.mu.Lock()
+	defer live.mu.Unlock()
+	return slices.Clone(live.msgs), nil
 }
 
 // taskiemSend is POST /v1/taskiem-chat/files: a voice note or a photo
