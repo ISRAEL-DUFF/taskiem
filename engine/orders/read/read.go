@@ -86,7 +86,7 @@ type Draft struct {
 type Line struct {
 	// ID names the line for as long as the order lives (a card's row; the
 	// question it waits on).
-	ID string `json:"id,omitempty"`
+	ID        string `json:"id,omitempty"`
 	Said      string `json:"said,omitempty"`
 	ItemID    string `json:"item_id,omitempty"`
 	Name      string `json:"name,omitempty"`

@@ -42,8 +42,8 @@ func TestChatOrders(t *testing.T) {
 		w.in(func(tx pgx.Tx) error {
 			var err error
 			o, err = w.orders.PlaceChatTx(ctx, tx, w.env.Tenant, storefront.ChatOrder{
-				Customer: storefront.Customer{Name: "Bola", Phone: "+2348031234567", Address: "12 Herbert Macaulay, Yaba", Message: "no pepper"},
-				Lines:    []storefront.Line{{ID: "1", Name: "Jollof rice", Quantity: 2, PriceKobo: 450000}, {ID: "2", Name: "Chapman", Quantity: 1, PriceKobo: 150000}},
+				Customer:   storefront.Customer{Name: "Bola", Phone: "+2348031234567", Address: "12 Herbert Macaulay, Yaba", Message: "no pepper"},
+				Lines:      []storefront.Line{{ID: "1", Name: "Jollof rice", Quantity: 2, PriceKobo: 450000}, {ID: "2", Name: "Chapman", Quantity: 1, PriceKobo: 150000}},
 				Fulfilment: fulfilment, DeliveryKobo: 150000, Pay: pay, By: "user:ada",
 			})
 			return err
