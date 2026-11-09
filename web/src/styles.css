@@ -112,6 +112,16 @@ code, pre, textarea.mono, input.mono { font-family: ui-monospace, "JetBrains Mon
 :not(pre) > code { background: var(--code-bg); padding: 1px 5px; border-radius: 5px; }
 pre { background: var(--code-bg); border: 1px solid var(--border); padding: 10px 12px; border-radius: var(--radius-sm); overflow: auto; max-height: 360px; margin: 4px 0; white-space: pre-wrap; word-break: break-word; }
 :focus-visible { outline: none; box-shadow: var(--ring); }
+/* No box over what is tapped (Android draws one unless told not to); a
+   tap is answered by the pressed look below instead. Keyboard focus keeps
+   its ring (:focus-visible). */
+:root, :root * { -webkit-tap-highlight-color: transparent; }
+:where(button, a[href], [role="button"], [role="tab"], [role="menuitem"], summary, .tk-tile):active:not(:disabled):not([aria-disabled="true"]) {
+  scale: 0.97; opacity: 0.86; transition: scale 80ms ease-out, opacity 80ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(button, a[href], [role="button"], [role="tab"], [role="menuitem"], summary, .tk-tile):active:not(:disabled):not([aria-disabled="true"]) { scale: none; }
+}
 table:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .num, .tile-value, td.num { font-variant-numeric: tabular-nums; }
 
@@ -360,10 +370,9 @@ body:has(.login) { background: var(--bg); min-height: 100vh; }
   .auth-main .login { margin: 0; align-self: center; padding: 36px 36px 30px; }
 }
 .modal-backdrop { position: fixed; inset: 0; background: rgba(14, 15, 12, 0.32); backdrop-filter: blur(2px); display: grid; place-items: center; z-index: 50; animation: fade-in 0.12s ease-out; }
-.modal { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 24px 26px; width: min(560px, 92vw); max-height: 86vh; overflow: auto; box-shadow: var(--shadow-lg); animation: pop-in 0.16s ease-out; }
+.modal { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 24px 26px; width: min(560px, 92vw); max-height: 86vh; overflow: auto; box-shadow: var(--shadow-lg); }
 .modal h2:first-child { font-size: 17px; }
 @keyframes fade-in { from { opacity: 0; } }
-@keyframes pop-in { from { opacity: 0; transform: translateY(6px) scale(0.985); } }
 @media (prefers-reduced-motion: reduce) { .modal, .modal-backdrop { animation: none; } }
 .modal:has(.ai-builder) { width: min(880px, 94vw); }
 .ai-preview { height: 300px; margin-bottom: 12px; }
@@ -516,7 +525,6 @@ a.list-row:hover { background: var(--panel-2); text-decoration: none; }
   .tabbar .tab-icon { display: grid; place-items: center; width: 56px; height: 30px; border-radius: 15px; transition: background-color 0.15s; }
   .tabbar a.active .tab-icon { background: var(--brand); color: var(--brand-dark); }
   :root[data-theme="dark"] .tabbar a.active .tab-icon { background: var(--brand-dark); color: var(--brand-dark-text); }
-  .tabbar a, .tabbar button, .list-row, a.stat, .nav.drawer a { -webkit-tap-highlight-color: transparent; }
   .tabbar { user-select: none; -webkit-user-select: none; }
   .tabbar a:active .tab-icon, .tabbar button:active .tab-icon { transform: scale(0.94); }
   a.list-row:active, .list-row.has-action:active, a.stat:active { background: var(--panel-2); }
@@ -2030,6 +2038,8 @@ button.chat-avatar { border: 0; padding: 0; cursor: pointer; }
 .composer-pill { flex: 1; min-width: 0; display: flex; align-items: flex-end; background: var(--panel); border-radius: 24px; padding: 2px 4px; box-shadow: 0 1px 0.5px var(--chat-shadow); }
 .composer-pill textarea { flex: 1; min-width: 0; border: 0; background: transparent; box-shadow: none; border-radius: 20px; min-height: 40px; padding: 10px 6px; font-size: 15.5px; }
 .composer-pill textarea:focus { box-shadow: none; border-color: transparent; outline: none; }
+/* A hint that does not fit is cut, never wrapped onto a hidden second line. */
+.composer-pill textarea::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .composer-pill .icon-button { background: transparent; border-color: transparent; box-shadow: none; color: var(--muted); width: 40px; height: 40px; }
 .composer-pill .icon-button:hover:not(:disabled) { background: var(--chat-select); color: var(--text); }
 .composer > .icon-button.primary, .composer > .send-button { flex: none; width: 48px; height: 48px; border-radius: 50%; }

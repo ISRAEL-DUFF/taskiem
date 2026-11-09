@@ -10,6 +10,8 @@
   --tk-lime-soft: #e9f7d0;     /* a product's tile */
   --tk-warn-bg: #fdf0dc;       /* "4 left", "3 low" */
   --tk-warn-ink: #8a3410;
+  --tk-danger-bg: #fbe9e6;     /* "Cancelled", "Overdue": solid, so banded rows keep its contrast */
+  --tk-danger-ink: #a32a1a;
   --tk-blue-bg: #e6eefc;       /* a service's tile */
   --tk-blue-ink: #2f5bd3;
   --tk-lift: 0 30px 60px -20px rgba(14, 15, 12, 0.35), 0 2px 8px rgba(14, 15, 12, 0.06);
@@ -35,14 +37,14 @@
 :root[data-theme="dark"] {
   --tk-pine-ink: var(--text);
   --tk-soft: #1f2a26; --tk-tile: #1a2420; --tk-lime-soft: rgba(200, 241, 105, 0.14);
-  --tk-warn-bg: rgba(253, 176, 34, 0.16); --tk-warn-ink: #fdc565; --tk-blue-bg: rgba(132, 173, 255, 0.16); --tk-blue-ink: #a8c5ff;
+  --tk-warn-bg: rgba(253, 176, 34, 0.16); --tk-warn-ink: #fdc565; --tk-danger-bg: #3a1f1c; --tk-danger-ink: #ffb4ab; --tk-blue-bg: rgba(132, 173, 255, 0.16); --tk-blue-ink: #a8c5ff;
   --tk-lift: 0 30px 60px -20px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--border); --tk-veil: rgba(0, 0, 0, 0.55);
 }
 @media (prefers-color-scheme: dark) {
   :root[data-theme="system"] {
     --tk-pine-ink: var(--text);
     --tk-soft: #1f2a26; --tk-tile: #1a2420; --tk-lime-soft: rgba(200, 241, 105, 0.14);
-    --tk-warn-bg: rgba(253, 176, 34, 0.16); --tk-warn-ink: #fdc565; --tk-blue-bg: rgba(132, 173, 255, 0.16); --tk-blue-ink: #a8c5ff;
+    --tk-warn-bg: rgba(253, 176, 34, 0.16); --tk-warn-ink: #fdc565; --tk-danger-bg: #3a1f1c; --tk-danger-ink: #ffb4ab; --tk-blue-bg: rgba(132, 173, 255, 0.16); --tk-blue-ink: #a8c5ff;
     --tk-lift: 0 30px 60px -20px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--border); --tk-veil: rgba(0, 0, 0, 0.55);
   }
 }
@@ -83,7 +85,7 @@
 .tk-pill { flex: none; display: inline-flex; align-items: center; font-size: 12px; font-weight: 700; padding: 4px 9px; border-radius: 999px; background: var(--tk-soft); color: var(--text); white-space: nowrap; }
 .tk-pill.lime { background: var(--brand-dark); color: var(--brand-dark-text); }
 .tk-pill.warn { background: var(--tk-warn-bg); color: var(--tk-warn-ink); }
-.tk-pill.danger { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); }
+.tk-pill.danger { background: var(--tk-danger-bg); color: var(--tk-danger-ink); }
 .tk-kicker { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 
 /* ---------- Buttons ---------- */
@@ -220,21 +222,7 @@
 @keyframes tk-sheet-down { to { transform: translateY(100%); } }
 @keyframes tk-drawer-out { to { transform: translateX(100%); } }
 
-@media (prefers-reduced-motion: no-preference) {
-  .tk-veil { animation: tk-fade var(--t-sheet) var(--ease-out); }
-  .tk-sheet { animation: tk-sheet-up var(--t-sheet) var(--spring-settle) backwards; }
-  .tk-sheet.tk-morphing { animation: none; }
-  .tk-sheet.leaving { animation: tk-sheet-down var(--t-picker) var(--ease-out) forwards; pointer-events: none; }
-  .tk-veil.leaving { animation: tk-unfade var(--t-picker) var(--ease-out) forwards; }
-}
-@media (prefers-reduced-motion: no-preference) and (min-width: 768px) {
-  @keyframes tk-drawer-in { from { transform: translateX(100%); } }
-  .tk-sheet { animation-name: tk-drawer-in; }
-  .tk-sheet.leaving { animation-name: tk-drawer-out; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .tk-veil, .tk-sheet { animation: none; }
-}
+/* The sheet and its veil move as chat.css says (one definition). */
 
 /* ---------- Diary lines ---------- */
 
@@ -370,7 +358,7 @@ button.tk-table-row { display: grid; gap: 2px; width: 100%; padding: 0; border: 
 
 /* The bag bar floats over the list: pine, its button lime. */
 .tk-sheet-foot:has(.tk-bag) { border-top: 0; padding-top: 0; background: transparent; }
-.tk-bag { display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 20px; border-radius: 22px; background: var(--brand); color: var(--tk-on-pine); box-shadow: 0 20px 40px -14px color-mix(in srgb, var(--brand) 60%, transparent); animation: tk-rise 0.32s var(--ease) both; }
+.tk-bag { display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 20px; border-radius: 22px; background: var(--brand); color: var(--tk-on-pine); box-shadow: 0 20px 40px -14px color-mix(in srgb, var(--brand) 60%, transparent); animation: tk-card-in 0.32s var(--ease) both; }
 .tk-bag > span { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .tk-bag-count { font-size: 13px; opacity: 0.8; }
 .tk-bag-total { font-size: 20px; font-weight: 800; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
@@ -379,7 +367,7 @@ button.tk-table-row { display: grid; gap: 2px; width: 100%; padding: 0; border: 
 .tk-bag-go:disabled { opacity: 0.55; cursor: default; }
 .tk-bag-go svg { width: 18px; height: 18px; }
 .tk-bag-go:focus-visible { box-shadow: 0 0 0 3px var(--brand), 0 0 0 5px var(--brand-dark); }
-@keyframes tk-rise { from { transform: translateY(24px); opacity: 0; } }
+@keyframes tk-card-in { from { transform: translateY(24px); opacity: 0; } }
 
 .tk-review-foot { display: grid; gap: 12px; }
 .tk-review-total { display: flex; justify-content: space-between; align-items: baseline; font-size: 15px; }
@@ -422,7 +410,7 @@ button.tk-table-row { display: grid; gap: 2px; width: 100%; padding: 0; border: 
    design): white cards at the end of the Taskiem conversation that rise in;
    a dealt-with card leaves. */
 .tk-alerts { list-style: none; margin: 4px 0 8px; padding: 0; display: grid; gap: 12px; width: 100%; max-width: 480px; }
-.tk-alerts > li { animation: tk-rise 0.36s var(--ease) both; transition: opacity 0.26s var(--ease), transform 0.26s var(--ease); }
+.tk-alerts > li { animation: tk-card-in 0.36s var(--ease) both; transition: opacity 0.26s var(--ease), transform 0.26s var(--ease); }
 .tk-alerts > li.leaving { animation: none; opacity: 0; transform: translateY(-8px) scale(0.98); }
 .tk-alert, .tk-approve { display: grid; gap: 14px; padding: 16px; border-radius: 22px; background: var(--panel); box-shadow: 0 10px 30px -18px color-mix(in srgb, var(--brand) 45%, transparent); }
 .tk-alert-top { display: flex; align-items: center; gap: 14px; }
@@ -487,7 +475,7 @@ button.tk-cta.tk-cta-danger, button.tk-cta.tk-cta-danger:hover:not(:disabled), b
 /* The morning briefing (chat-tools.md §7, the Alerts design): pine, lime
    on pine, at the end of the Taskiem conversation from 8am. */
 .tk-brief { display: grid; gap: 14px; padding: 18px; border-radius: 22px; background: var(--brand); color: var(--tk-on-pine); width: 100%; max-width: 480px;
-  box-shadow: 0 20px 40px -18px color-mix(in srgb, var(--brand) 60%, transparent); animation: tk-rise 0.36s var(--ease) both; }
+  box-shadow: 0 20px 40px -18px color-mix(in srgb, var(--brand) 60%, transparent); animation: tk-card-in 0.36s var(--ease) both; }
 .tk-brief .tk-kicker { color: var(--brand-dark); }
 .tk-brief-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .tk-brief-head > span { display: grid; gap: 2px; }
@@ -515,14 +503,14 @@ button.tk-cta.tk-cta-danger, button.tk-cta.tk-cta-danger:hover:not(:disabled), b
 /* "How did we do?": a chart card in the conversation. */
 .tk-chart-row { display: flex; }
 .tk-chart { display: grid; gap: 4px; padding: 16px; border-radius: 22px; background: var(--panel); width: 100%; max-width: 420px;
-  box-shadow: 0 10px 30px -18px color-mix(in srgb, var(--brand) 45%, transparent); animation: tk-rise 0.36s var(--ease) both; }
+  box-shadow: 0 10px 30px -18px color-mix(in srgb, var(--brand) 45%, transparent); animation: tk-card-in 0.36s var(--ease) both; }
 .tk-chart-total { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; color: var(--text); font-variant-numeric: tabular-nums; }
 .tk-chart-change { font-size: 14px; font-weight: 700; }
 .tk-chart-change.up { color: var(--ok); }
 .tk-chart-change.down { color: var(--danger); }
 .tk-bars { display: flex; align-items: stretch; gap: 4px; height: 120px; margin-top: 10px; }
 .tk-bar { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; }
-.tk-bar > span { width: 100%; max-width: 28px; border-radius: 6px 6px 3px 3px; background: color-mix(in srgb, var(--brand) 25%, transparent); transform-origin: bottom; animation: tk-grow 0.5s var(--ease) both; }
+.tk-bar > span { width: 100%; max-width: 28px; border-radius: 6px 6px 3px 3px; background: color-mix(in srgb, var(--brand) 25%, transparent); transform-origin: bottom; animation: tk-bar-up 0.5s var(--ease) both; }
 .tk-bar.on > span { background: var(--brand); }
 .tk-bar small { font-size: 11px; color: var(--muted); height: 14px; }
 :root[data-theme="dark"] .tk-bar.on > span { background: var(--text); }
@@ -533,7 +521,7 @@ button.tk-cta.tk-cta-danger, button.tk-cta.tk-cta-danger:hover:not(:disabled), b
   :root[data-theme="system"] .tk-bar > span { background: color-mix(in srgb, var(--text) 25%, transparent); }
   :root[data-theme="system"] .tk-chart { box-shadow: none; border: 1px solid var(--border); }
 }
-@keyframes tk-grow { from { transform: scaleY(0); } }
+@keyframes tk-bar-up { from { transform: scaleY(0); } }
 @media (prefers-reduced-motion: reduce) { .tk-brief, .tk-chart, .tk-bar > span { animation: none; } }
 
 /* ---------- Explore (designs 10 and 12): find a business ---------- */
@@ -783,3 +771,40 @@ input.tk-switch:disabled { cursor: default; opacity: 0.7; }
 .tk-pick { cursor: pointer; }
 .tk-pick input { width: 22px; height: 22px; flex: none; accent-color: var(--brand); }
 .tk-pick.off { cursor: default; color: var(--muted); }
+
+/* ---------- A table in the Tables tool (five more flows, phase 0) ----------
+   A pine header, the first column held while the rest scroll sideways
+   inside the frame (the page never does), banded rows, numbers right. */
+.tk-tv { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.tk-tv-search { display: flex; gap: 8px; align-items: center; }
+.tk-tv-search .tk-search { flex: 1; min-width: 0; margin: 0; }
+.tk-tv-search select { flex: none; max-width: 42%; min-height: 44px; border-radius: 12px; }
+.tk-tv-frame { overflow-x: auto; overscroll-behavior-x: contain; border-radius: 16px; border: 1px solid var(--border); background: var(--panel); max-width: 100%; }
+.tk-tv-frame:focus-visible { box-shadow: var(--ring); outline: none; }
+/* overflow visible: the table is not its own scroller, so its first column
+   holds against the frame's sideways scroll (the app's table rule clips). */
+.tk-tv-table, .tk-tv-frame > table.tk-tv-table { display: table; width: 100%; max-width: none; min-width: max-content; border-collapse: separate; border-spacing: 0; font-size: 14px; overflow: visible; border: 0; border-radius: 0; background: none; }
+.tk-tv-table thead th { position: sticky; top: 0; z-index: 2; background: var(--brand); color: var(--tk-on-pine); font-size: 12px; font-weight: 700; letter-spacing: 0.02em; text-align: left; padding: 10px 14px; white-space: nowrap; }
+.tk-tv-table thead th:first-child { left: 0; z-index: 3; }
+.tk-tv-table tbody th, .tk-tv-table td { padding: 10px 14px; text-align: left; vertical-align: middle; white-space: nowrap; max-width: 240px; overflow: hidden; text-overflow: ellipsis; border-top: 1px solid var(--border); font-weight: 400; color: var(--text); }
+.tk-tv-table tbody th { position: sticky; left: 0; z-index: 1; background: var(--panel); font-weight: 700; box-shadow: 1px 0 0 var(--border); }
+.tk-tv-table tbody tr:nth-child(even) > * { background: var(--tk-tile); }
+.tk-tv-table tbody tr.open { cursor: pointer; }
+.tk-tv-table tbody tr.open:hover > * { background: var(--tk-soft); }
+.tk-tv-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.tk-tv-open { all: unset; cursor: pointer; display: block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; border-radius: 6px; }
+.tk-tv-open:focus-visible { box-shadow: var(--ring); }
+.tk-tv-none { color: var(--muted); }
+.tk-tv-thumb { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; display: block; background: var(--tk-tile); }
+.tk-tv-photos { font-size: 12px; color: var(--muted); }
+.tk-tv-json { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--muted); }
+.tk-tv-pages { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.tk-tv-count { margin-right: auto; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tk-tv-pages .tk-btn { min-width: 44px; min-height: 44px; padding: 0; display: inline-grid; place-items: center; }
+.tk-tv-pages .tk-btn svg { width: 18px; height: 18px; }
+/* A search box's field takes the box's own fill: the app's field rule
+   (styles.css) outranks a plain selector, hence its :not() chain here. */
+.tk-search input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]):not([type="range"]),
+.tk-search input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]):not([type="range"]):hover:not(:focus):not(:disabled),
+.tk-search input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]):not([type="range"]):focus { background-color: transparent; border-color: transparent; box-shadow: none; }
+.tk-tv-search .tk-search input[type="search"] { flex: 1; min-width: 0; min-height: 0; padding: 0; border: 0; font-size: 15px; color: var(--text); }

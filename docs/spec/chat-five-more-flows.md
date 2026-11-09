@@ -173,6 +173,33 @@ Before the new flows add more sheets and cards, four things the founder saw on a
 
 Done when: at 360 × 640 and 390 × 844, the tools menu shows its heading and every tile; every sheet opened from a tile or a card arrives in one motion; a tap shows no box anywhere in the app; a table opens with a coloured header, search and pages; and the axe, plain-words and motion tests pass in both themes.
 
+### As built: phase 0
+
+Built 9 November 2026 (`web/e2e/chat-phase0.spec.ts` checks each at 360 × 640 and 390 × 844, in both themes with axe).
+
+- **The tools menu** (`ToolsPanel` in `src/pages/ChatTools.tsx`, `src/chat.css`):
+  - It measures the room above the message bar, the keyboard's too (`visualViewport`), and takes that as its height limit.
+  - The tiles scroll inside it; its heading and Recent stay in place.
+  - On a phone it rests flush on the bar, with rounded top corners only.
+  - Below 600 px a tile is a row (icon beside its words), two to a line, so nine fit on a 360 × 640 screen without scrolling (the menu is 386 px tall there).
+- **One motion per sheet** (`Sheet` in `src/kit.tsx`, `src/chat.css`):
+  - A sheet opened from a tile or card carries the class `tk-grown` from its first render, so the CSS rise is off before it is measured and stays off.
+  - Measured frame by frame, its top edge now comes from the tile to its place once and stays there.
+  - The rise in `kit.css` was a second definition of the one in `chat.css` and is gone; `kit.css`'s own `tk-rise` and `tk-grow` are now `tk-card-in` and `tk-bar-up`.
+  - **Also fixed:** every dialog (`.modal`) used to open squashed from a flat line, because `kit.css`'s bar keyframe had replaced `motion.css`'s grow. `pop-in` is defined once, and `.modal` is animated once.
+  - **Where it differs from the plan:** the sheet's motion stays in `chat.css` (defined there alone) rather than moving to `motion.css`.
+- **No tap box** (`src/styles.css`, `src/main.tsx`): `-webkit-tap-highlight-color: transparent` for the whole app. In its place, a pressed look on buttons, links, tabs, menu items and tiles: `scale: 0.97` and a slight fade within 80 ms (no scale with reduced motion). An empty touch listener lets iOS Safari show it.
+- **The message box's hint** is the words before its comma below 600 px ("Ask Taskiem", "Message"), all of it with room. A hint that still does not fit is cut, never wrapped.
+- **The Tables tool's viewer** (`src/pages/TableViewer.tsx`, `src/lib/tableView.ts`):
+  - **Columns:** every column, not three. A pine header, the first column held while the rest scroll inside the frame, banded rows.
+  - **Kinds:** the shop's price, or a number named `*_kobo` or like `price`, `amount` or `total`, in naira, right-aligned; numbers grouped; dates in words; yes/no and `status` as coloured pills; the shop's product photos as thumbnails (from `GET /v1/storefront/catalogue`), else "2 photos".
+  - **Pages and search:** pages of 25 with "1–25 of 312", back and next, through `POST /v1/tables/{id}/rows/query` (`count: "exact"`). A tap on a row opens it to edit, as before.
+  - **Where it differs from the plan:** the search runs over one text column at a time, chosen beside the box ("Search in", the first text column by default). The data service combines filters only with AND, so a search over every text column at once needs an OR from it first.
+- **Also fixed:**
+  - The red pill ("Cancelled", "Overdue") measured 4.1:1 to 4.4:1 against its background, under the 4.5:1 rule; it now has a solid background and a darker ink (`--tk-danger-bg`, `--tk-danger-ink`).
+  - A sheet's search field showed a box inside the search box (the app's field rule outranked it).
+  - The phone-width table rule (`.main table:not(.cards)`) made a table its own scroller; the viewer's table is not.
+
 ## Phases
 
 Seven phases, each a PR that ships on its own. Phase 0 puts the chat's tools, motion and tables right first, since every flow adds sheets and cards on top of them. Customer conversations go next because flows 1 and 4 stand on them; tasks and restocking are small and can run beside the larger ones.
