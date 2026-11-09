@@ -1296,6 +1296,118 @@
       }
     },
     {
+      "name": "a question before a voice note that cannot be heard is still answered",
+      "trigger": {
+        "event": "message",
+        "guard": {
+          "outcome": "answer",
+          "reason": "",
+          "reply": "",
+          "notice": "",
+          "language": "en",
+          "first": false,
+          "kind": "voice",
+          "text": "",
+          "channel": "whatsapp@1/main/prod",
+          "sender": "2348031234567",
+          "file": {
+            "file": "019a0000-0000-7000-8000-000000000001",
+            "name": "voice.ogg",
+            "type": "audio/ogg",
+            "size": 9000,
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "item": {
+          "kind": "message",
+          "message": {
+            "id": "wamid.IN1",
+            "from": "2348031234567",
+            "type": "text"
+          }
+        }
+      },
+      "mocks": {
+        "typing": {
+          "output": {}
+        },
+        "gather": {
+          "output": {
+            "latest": true,
+            "earlier": [
+              "Do you deliver to Ajah?"
+            ],
+            "earlier_text": "Do you deliver to Ajah?"
+          }
+        },
+        "hear": {
+          "output": {
+            "heard": false,
+            "reason": "empty",
+            "reply": "Sorry, I couldn't hear that.",
+            "seconds": 1
+          }
+        },
+        "unheard": {
+          "output": {
+            "message_id": "wamid.OUT"
+          }
+        },
+        "answer_u__memory": {
+          "output": {
+            "rows": []
+          }
+        },
+        "answer_u__know": {
+          "output": {
+            "found": true,
+            "material": "We deliver to Lekki and Ajah.",
+            "passages": []
+          }
+        },
+        "answer_u__reply": {
+          "output": {
+            "reply": "Yes, we deliver to Ajah.",
+            "needs_person": false
+          }
+        },
+        "answer_u__check": {
+          "output": {
+            "ok": true,
+            "text": "Yes, we deliver to Ajah.",
+            "problems": []
+          }
+        },
+        "answer_u__keep": {
+          "output": {
+            "affected": 2,
+            "rows": []
+          }
+        },
+        "send_u": {
+          "output": {
+            "message_id": "wamid.OUT"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "unheard": "completed",
+          "send_u": "completed"
+        },
+        "inputs": {
+          "answer_u__check": {
+            "customer": "Do you deliver to Ajah?"
+          },
+          "send_u": {
+            "to": "+2348031234567",
+            "body": "Yes, we deliver to Ajah."
+          }
+        }
+      }
+    },
+    {
       "name": "a reply that could not be kept in the conversation is still sent",
       "trigger": {
         "event": "message",

@@ -268,17 +268,28 @@ func decode(raw []byte) any {
 // Gathered is what gather answers a run (decision 0062 V10, L5): a
 // customer who sends several short messages in a row gets one answer.
 type Gathered struct {
-	// Latest: no newer message of theirs is waiting for an answer, so this
-	// run answers; otherwise the run for the newer one does.
+	// Latest: no newer message of theirs is waiting for an answer (nor a
+	// STOP or a request for a person after it), so this run answers;
+	// otherwise the run for the newer one does, or nothing should.
 	Latest bool
-	// Earlier are their messages since the last answer, before this run's
-	// own, oldest first: what this answer must also answer.
+	// Earlier are their messages before this run's own that no answer has
+	// taken yet, oldest first (at most 20, of the last quarter of an hour):
+	// what this answer must also answer. A voice note no run heard is said
+	// as such.
 	Earlier []string
 }
 
-// Gather is what the run's customer wrote since they were last answered,
-// and whether this run's message is their latest. A run that belongs to
-// no conversation is its own latest, with nothing earlier.
+
+// unheardVoice stands for an earlier voice note no run transcribed.
+const unheardVoice = "(a voice note the assistant has not listened to)"
+
+// Gather is what the run's customer wrote that no answer has taken yet,
+// and whether this run's message is their latest. A run that answers
+// (Latest) takes its message and the earlier ones: it marks them
+// (step_run), so a later run never answers them again, and a message
+// that arrives while this answer is being written is still gathered by
+// the run after it. A run that belongs to no conversation is its own
+// latest, with nothing earlier.
 func (s *Service) Gather(ctx context.Context, tenant, run uuid.UUID) (Gathered, error) {
 	out := Gathered{Latest: true}
 	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
@@ -295,37 +306,54 @@ func (s *Service) Gather(ctx context.Context, tenant, run uuid.UUID) (Gathered, 
 		if err != nil {
 			return err
 		}
-		// A newer message that will be answered (one the guard let through).
+		// One customer's runs gather one at a time.
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('assistant-gather:' || $1::text || $2 || $3))`, tenant, channel, subject); err != nil {
+			return err
+		}
+		// A newer message that a live run will answer, or a STOP or a
+		// request for a person after this one (nothing more is said then).
 		var newer bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM assistant_turns WHERE tenant_id = $1 AND channel = $2 AND subject = $3
-			AND role = 'customer' AND status = 'answer' AND (at, id) > ($4, $5))`, tenant, channel, subject, mine, id).Scan(&newer); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM assistant_turns t LEFT JOIN runs r ON r.id = t.run_id
+			WHERE t.tenant_id = $1 AND t.channel = $2 AND t.subject = $3 AND t.role = 'customer' AND (t.at, t.id) > ($4, $5)
+			  AND (t.status = 'reply' AND t.reason IN ('stopped', 'handover')
+			    OR t.status = 'answer' AND (r.status IS NULL AND t.run_id IS NULL AND t.at > now() - interval '30 seconds'
+			      OR r.status IS NOT NULL AND r.status NOT IN ('failed', 'cancelled'))))`, tenant, channel, subject, mine, id).Scan(&newer); err != nil {
 			return err
 		}
 		out.Latest = !newer
-		rows, err := tx.Query(ctx, `SELECT body, transcript FROM assistant_turns t WHERE tenant_id = $1 AND channel = $2 AND subject = $3
-			AND role = 'customer' AND status = 'answer' AND (at, id) < ($4, $5)
-			AND at > COALESCE((SELECT max(at) FROM assistant_turns a WHERE a.tenant_id = $1 AND a.channel = $2 AND a.subject = $3
-			  AND a.role IN ('assistant', 'member', 'held')), '-infinity')
-			ORDER BY at, id LIMIT 20`, tenant, channel, subject, mine, id)
+		if !out.Latest {
+			return nil
+		}
+		rows, err := tx.Query(ctx, `SELECT id, kind, body, transcript FROM (
+			SELECT id, at, kind, body, transcript FROM assistant_turns WHERE tenant_id = $1 AND channel = $2 AND subject = $3
+			  AND role = 'customer' AND status = 'answer' AND step_run IS NULL AND (at, id) < ($4, $5) AND at > $4 - interval '15 minutes'
+			ORDER BY at DESC, id DESC LIMIT 20) t ORDER BY at, id`, tenant, channel, subject, mine, id)
 		if err != nil {
 			return err
 		}
-		type pair struct{ body, transcript []byte }
-		var list []pair
+		type turn struct {
+			id               uuid.UUID
+			kind             string
+			body, transcript []byte
+		}
+		var list []turn
 		for rows.Next() {
-			var p pair
-			if err := rows.Scan(&p.body, &p.transcript); err != nil {
+			var t turn
+			if err := rows.Scan(&t.id, &t.kind, &t.body, &t.transcript); err != nil {
 				rows.Close()
 				return err
 			}
-			list = append(list, p)
+			list = append(list, t)
 		}
 		rows.Close()
 		if err := rows.Err(); err != nil {
 			return err
 		}
-		for _, p := range list {
-			for _, raw := range [][]byte{p.transcript, p.body} {
+		taken := []uuid.UUID{id}
+		for _, t := range list {
+			taken = append(taken, t.id)
+			said := ""
+			for _, raw := range [][]byte{t.transcript, t.body} {
 				env, _ := decode(raw).(map[string]any)
 				if env == nil {
 					continue
@@ -335,12 +363,20 @@ func (s *Service) Gather(ctx context.Context, tenant, run uuid.UUID) (Gathered, 
 					continue
 				}
 				if text, _ := v.(string); strings.TrimSpace(text) != "" {
-					out.Earlier = append(out.Earlier, text)
+					said = text
 					break
 				}
 			}
+			if said == "" && (t.kind == "voice" || t.kind == "audio") {
+				said = unheardVoice
+			}
+			if said != "" {
+				out.Earlier = append(out.Earlier, said)
+			}
 		}
-		return nil
+		// This run answers them: no later run answers them again.
+		_, err = tx.Exec(ctx, `UPDATE assistant_turns SET step_run = $3 WHERE tenant_id = $1 AND id = ANY($2) AND step_run IS NULL`, tenant, taken, run)
+		return err
 	})
 	return out, err
 }

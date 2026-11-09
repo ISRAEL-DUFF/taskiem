@@ -684,6 +684,162 @@
                               }
                             ]
                           }
+                        },
+                        {
+                          "id": "answer_u",
+                          "type": "template",
+                          "name": "Answer them",
+                          "template": "assistant-answer",
+                          "params": {
+                            "business_name": "{{business_name}}",
+                            "about": "{{about}}",
+                            "conversations_table": "{{conversations_table}}"
+                          },
+                          "input": {
+                            "channel": "=trigger.guard.channel",
+                            "via": "telegram",
+                            "sender": "=trigger.guard.sender",
+                            "text": "=steps.gather.output.earlier_text",
+                            "language": "=trigger.guard.language",
+                            "kind": "text"
+                          },
+                          "on_error": {
+                            "steps": [
+                              {
+                                "id": "held_u",
+                                "type": "connector",
+                                "name": "Find the words for someone getting back to them",
+                                "connector": "assistant@1",
+                                "action": "check_reply",
+                                "input": {
+                                  "text": "",
+                                  "language": "=trigger.guard.language"
+                                }
+                              },
+                              {
+                                "id": "say_held_u",
+                                "type": "connector",
+                                "name": "Tell them someone will get back to them",
+                                "connector": "telegram@1",
+                                "connection": "{{conn}}",
+                                "action": "send_message",
+                                "input": {
+                                  "chat_id": "=trigger.guard.sender",
+                                  "text": "=(trigger.guard.?notice.orValue('') != '' ? trigger.guard.notice + '\\n\\n' : '') + steps.held_u.output.text"
+                                },
+                                "needs": [
+                                  "held_u"
+                                ],
+                                "on_error": {
+                                  "steps": [
+                                    {
+                                      "id": "say_held_u_told",
+                                      "type": "connector",
+                                      "name": "Tell the owners",
+                                      "connector": "notify@1",
+                                      "action": "tell",
+                                      "input": {
+                                        "title": "A customer was not answered",
+                                        "message": "='Your assistant answered a customer on Telegram but the reply could not be sent.' + ' Answer them from Conversations.'"
+                                      }
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "id": "hand_u",
+                                "type": "connector",
+                                "name": "Hand them to a person",
+                                "connector": "assistant@1",
+                                "action": "hand_over",
+                                "needs": [
+                                  "say_held_u"
+                                ],
+                                "input": {
+                                  "channel": "=trigger.guard.channel",
+                                  "sender": "=trigger.guard.sender",
+                                  "hours": 6
+                                },
+                                "on_error": {
+                                  "steps": [
+                                    {
+                                      "id": "hand_u_skipped",
+                                      "type": "transform",
+                                      "name": "Carry on without it",
+                                      "config": {
+                                        "output": {
+                                          "done": false
+                                        }
+                                      }
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "id": "keep_u",
+                                "type": "connector",
+                                "name": "Keep both messages in the conversation",
+                                "connector": "xenibase@1",
+                                "action": "insert_rows",
+                                "connection": "data_tables",
+                                "needs": [
+                                  "held_u"
+                                ],
+                                "input": {
+                                  "table": "{{conversations_table}}",
+                                  "rows": "=[{'conversation': 'telegram:' + trigger.guard.sender, 'channel': 'telegram', 'sender': trigger.guard.sender, 'role': 'user', 'text': trigger.guard.?text.orValue(''), 'language': trigger.guard.language, 'kind': 'text'}, {'conversation': 'telegram:' + trigger.guard.sender, 'channel': 'telegram', 'sender': trigger.guard.sender, 'role': 'assistant', 'text': steps.held_u.output.text, 'language': trigger.guard.language, 'kind': 'text'}]"
+                                },
+                                "on_error": {
+                                  "steps": [
+                                    {
+                                      "id": "keep_u_skipped",
+                                      "type": "transform",
+                                      "name": "Carry on without it",
+                                      "config": {
+                                        "output": {
+                                          "kept": false
+                                        }
+                                      }
+                                    }
+                                  ]
+                                }
+                              }
+                            ]
+                          },
+                          "when": "=steps.gather.output.earlier_text != ''",
+                          "needs": [
+                            "unheard"
+                          ]
+                        },
+                        {
+                          "id": "send_u",
+                          "type": "connector",
+                          "name": "Send the reply to what they wrote",
+                          "connector": "telegram@1",
+                          "connection": "{{conn}}",
+                          "action": "send_message",
+                          "input": {
+                            "chat_id": "=trigger.guard.sender",
+                            "text": "=steps.answer_u.output.reply"
+                          },
+                          "needs": [
+                            "answer_u"
+                          ],
+                          "on_error": {
+                            "steps": [
+                              {
+                                "id": "send_u_told",
+                                "type": "connector",
+                                "name": "Tell the owners",
+                                "connector": "notify@1",
+                                "action": "tell",
+                                "input": {
+                                  "title": "A customer was not answered",
+                                  "message": "='Your assistant answered a customer on Telegram but the reply could not be sent.' + ' Answer them from Conversations.'"
+                                }
+                              }
+                            ]
+                          }
                         }
                       ]
                     }
@@ -724,6 +880,162 @@
                     "steps": [
                       {
                         "id": "send_lost_told",
+                        "type": "connector",
+                        "name": "Tell the owners",
+                        "connector": "notify@1",
+                        "action": "tell",
+                        "input": {
+                          "title": "A customer was not answered",
+                          "message": "='Your assistant answered a customer on Telegram but the reply could not be sent.' + ' Answer them from Conversations.'"
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "id": "answer_w",
+                  "type": "template",
+                  "name": "Answer them",
+                  "template": "assistant-answer",
+                  "params": {
+                    "business_name": "{{business_name}}",
+                    "about": "{{about}}",
+                    "conversations_table": "{{conversations_table}}"
+                  },
+                  "input": {
+                    "channel": "=trigger.guard.channel",
+                    "via": "telegram",
+                    "sender": "=trigger.guard.sender",
+                    "text": "=steps.gather.output.earlier_text",
+                    "language": "=trigger.guard.language",
+                    "kind": "text"
+                  },
+                  "on_error": {
+                    "steps": [
+                      {
+                        "id": "held_w",
+                        "type": "connector",
+                        "name": "Find the words for someone getting back to them",
+                        "connector": "assistant@1",
+                        "action": "check_reply",
+                        "input": {
+                          "text": "",
+                          "language": "=trigger.guard.language"
+                        }
+                      },
+                      {
+                        "id": "say_held_w",
+                        "type": "connector",
+                        "name": "Tell them someone will get back to them",
+                        "connector": "telegram@1",
+                        "connection": "{{conn}}",
+                        "action": "send_message",
+                        "input": {
+                          "chat_id": "=trigger.guard.sender",
+                          "text": "=(trigger.guard.?notice.orValue('') != '' ? trigger.guard.notice + '\\n\\n' : '') + steps.held_w.output.text"
+                        },
+                        "needs": [
+                          "held_w"
+                        ],
+                        "on_error": {
+                          "steps": [
+                            {
+                              "id": "say_held_w_told",
+                              "type": "connector",
+                              "name": "Tell the owners",
+                              "connector": "notify@1",
+                              "action": "tell",
+                              "input": {
+                                "title": "A customer was not answered",
+                                "message": "='Your assistant answered a customer on Telegram but the reply could not be sent.' + ' Answer them from Conversations.'"
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "id": "hand_w",
+                        "type": "connector",
+                        "name": "Hand them to a person",
+                        "connector": "assistant@1",
+                        "action": "hand_over",
+                        "needs": [
+                          "say_held_w"
+                        ],
+                        "input": {
+                          "channel": "=trigger.guard.channel",
+                          "sender": "=trigger.guard.sender",
+                          "hours": 6
+                        },
+                        "on_error": {
+                          "steps": [
+                            {
+                              "id": "hand_w_skipped",
+                              "type": "transform",
+                              "name": "Carry on without it",
+                              "config": {
+                                "output": {
+                                  "done": false
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "id": "keep_w",
+                        "type": "connector",
+                        "name": "Keep both messages in the conversation",
+                        "connector": "xenibase@1",
+                        "action": "insert_rows",
+                        "connection": "data_tables",
+                        "needs": [
+                          "held_w"
+                        ],
+                        "input": {
+                          "table": "{{conversations_table}}",
+                          "rows": "=[{'conversation': 'telegram:' + trigger.guard.sender, 'channel': 'telegram', 'sender': trigger.guard.sender, 'role': 'user', 'text': trigger.guard.?text.orValue(''), 'language': trigger.guard.language, 'kind': 'text'}, {'conversation': 'telegram:' + trigger.guard.sender, 'channel': 'telegram', 'sender': trigger.guard.sender, 'role': 'assistant', 'text': steps.held_w.output.text, 'language': trigger.guard.language, 'kind': 'text'}]"
+                        },
+                        "on_error": {
+                          "steps": [
+                            {
+                              "id": "keep_w_skipped",
+                              "type": "transform",
+                              "name": "Carry on without it",
+                              "config": {
+                                "output": {
+                                  "kept": false
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "when": "=steps.gather.output.earlier_text != ''",
+                  "needs": [
+                    "send_lost"
+                  ]
+                },
+                {
+                  "id": "send_w",
+                  "type": "connector",
+                  "name": "Send the reply to what they wrote",
+                  "connector": "telegram@1",
+                  "connection": "{{conn}}",
+                  "action": "send_message",
+                  "input": {
+                    "chat_id": "=trigger.guard.sender",
+                    "text": "=steps.answer_w.output.reply"
+                  },
+                  "needs": [
+                    "answer_w"
+                  ],
+                  "on_error": {
+                    "steps": [
+                      {
+                        "id": "send_w_told",
                         "type": "connector",
                         "name": "Tell the owners",
                         "connector": "notify@1",

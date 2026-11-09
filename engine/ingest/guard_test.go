@@ -400,28 +400,47 @@ func TestCustomerGuardGather(t *testing.T) {
 	  {"id":"g","type":"connector","connector":"assistant@1","action":"gather","input":{}},
 	  {"id":"a","type":"transform","needs":["g"],"config":{"output":"=string(steps.g.output.latest) + '|' + steps.g.output.earlier_text"}}]`)
 	const ada = "2348031234567"
-	g.send(t, ada, text("Hello"))
-	g.send(t, ada, text("Do you deliver to Ajah?"))
+	first := g.send(t, ada, text("Hello"))
+	second := g.send(t, ada, text("Do you deliver to Ajah?"))
+	// The notice for a new customer goes with the message that answers.
+	if first["notice"] == "" || second["notice"] == "" {
+		t.Fatalf("the notice: %v / %v", first["notice"], second["notice"])
+	}
 	g.Drain(t)
-	var runs []uuid.UUID
-	if err := db.InTenantTx(ctx, g.DB.App, []uuid.UUID{g.Tenant}, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT id FROM runs WHERE workflow_id = $1 ORDER BY started_at, id`, g.wf)
-		if err != nil {
+	outputs := func() []string {
+		t.Helper()
+		var runs []uuid.UUID
+		if err := db.InTenantTx(ctx, g.DB.App, []uuid.UUID{g.Tenant}, func(tx pgx.Tx) error {
+			rows, err := tx.Query(ctx, `SELECT id FROM runs WHERE workflow_id = $1 ORDER BY started_at, id`, g.wf)
+			if err != nil {
+				return err
+			}
+			runs, err = pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
 			return err
+		}); err != nil {
+			t.Fatal(err)
 		}
-		runs, err = pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
-		return err
-	}); err != nil {
-		t.Fatal(err)
+		var out []string
+		for _, id := range runs {
+			out = append(out, stepOutput(t, g.world, runtime.RunRef{TenantID: g.Tenant, ID: id}, "a"))
+		}
+		return out
 	}
-	if len(runs) != 2 {
-		t.Fatalf("%d runs", len(runs))
-	}
-	got := map[string]bool{}
-	for _, id := range runs {
-		got[stepOutput(t, g.world, runtime.RunRef{TenantID: g.Tenant, ID: id}, "a")] = true
-	}
-	if !got["false|"] || !got["true|Hello"] {
+	got := outputs()
+	if len(got) != 2 || !((got[0] == "false|" && got[1] == "true|Hello") || (got[1] == "false|" && got[0] == "true|Hello")) {
 		t.Fatalf("gathered: %v", got)
+	}
+	// What was answered is taken: the next message gathers nothing before it.
+	g.send(t, ada, text("Thank you"))
+	g.Drain(t)
+	if got = outputs(); got[2] != "true|" {
+		t.Fatalf("after an answer: %v", got)
+	}
+	// A STOP right after a message: the earlier run says nothing more.
+	g.send(t, ada, text("Actually one more thing"))
+	g.send(t, ada, text("STOP"))
+	g.Drain(t)
+	if got = outputs(); got[3] != "false|" {
+		t.Fatalf("after STOP: %v", got)
 	}
 }

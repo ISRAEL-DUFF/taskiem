@@ -256,10 +256,16 @@ func (g *Guard) decide(ctx context.Context, tx pgx.Tx, sealer Sealer, tenant uui
 		d.Start, d.Outcome, d.Reason, d.Reply = true, outcome, reason, reply
 		// The notice goes once, with the first answer that says something
 		// (not a goodbye, nor a "slow down").
-		if cfg.Notice && c.noticedAt == nil && (outcome == OutcomeAnswer || reason == ReasonKind || reason == ReasonHandover || reason == ReasonStarted) {
+		// A message sent within a minute of the first, before anything was
+		// answered, carries it too: of several quick messages only the
+		// newest's run answers (gather, L5), and it must say it.
+		again := c.noticedAt != nil && now.Sub(*c.noticedAt) < time.Minute && (c.lastRole == "" || c.lastRole == RoleCustomer)
+		if cfg.Notice && (c.noticedAt == nil || again) && (outcome == OutcomeAnswer || reason == ReasonKind || reason == ReasonHandover || reason == ReasonStarted) {
 			d.Notice = g.text(language, "assistant.notice", "business", businessName(ctx, tx, tenant))
-			if err := set("noticed_at", now); err != nil {
-				return Decision{}, err
+			if c.noticedAt == nil {
+				if err := set("noticed_at", now); err != nil {
+					return Decision{}, err
+				}
 			}
 		}
 		return d, nil
@@ -382,6 +388,7 @@ type contact struct {
 	limitedAt, stoppedAt      *time.Time
 	handoverAt, handoverUntil *time.Time
 	noticedAt                 *time.Time
+	lastRole                  string // who spoke last before this message (customer, assistant, member, held)
 }
 
 // over reports whether the customer is over a limit, and since when the
@@ -414,9 +421,9 @@ func touch(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, channel, subject st
 		  day_count = CASE WHEN a.day = ($6 AT TIME ZONE 'Africa/Lagos')::date THEN a.day_count + 1 ELSE 1 END,
 		  day = ($6 AT TIME ZONE 'Africa/Lagos')::date
 		RETURNING language, minute_at, minute_count, (day::timestamp AT TIME ZONE 'Africa/Lagos'), day_count, limited_at, stopped_at,
-		  handover_at, handover_until, noticed_at, (xmax = 0)`,
+		  handover_at, handover_until, noticed_at, COALESCE(last_role, ''), (xmax = 0)`,
 		tenant, channel, subject, sealed, language, now, hint).Scan(&c.language, &c.minuteAt, &c.minuteCount, &c.dayStart, &c.dayCount,
-		&c.limitedAt, &c.stoppedAt, &c.handoverAt, &c.handoverUntil, &c.noticedAt, &inserted)
+		&c.limitedAt, &c.stoppedAt, &c.handoverAt, &c.handoverUntil, &c.noticedAt, &c.lastRole, &inserted)
 	return c, inserted, err
 }
 
