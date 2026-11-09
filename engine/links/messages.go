@@ -113,7 +113,7 @@ type Preview struct {
 // composer: a linked business ("@Dangote Stores") or an item of the
 // conversation's price list ("#Rice, 50 kg", with its unit and price).
 type Mention struct {
-	Kind      string    `json:"kind"` // business, item or service
+	Kind      string    `json:"kind"` // business, item, service, invoice or order
 	Name      string    `json:"name"`
 	Link      uuid.UUID `json:"link,omitzero"` // a business, on our copy only
 	ItemID    string    `json:"item_id,omitempty"`
@@ -123,6 +123,11 @@ type Mention struct {
 	// it takes, as the sender offers it.
 	ServiceID string `json:"service_id,omitempty"`
 	Minutes   int    `json:"minutes,omitempty"`
+	// An invoice or an order between the two businesses (phase 2
+	// additions): its number as Name, its total as PriceKobo, its status
+	// when named, and our own id for it (Ref, on our copy only).
+	Ref    string `json:"ref,omitempty"`
+	Status string `json:"status,omitempty"`
 }
 
 // Quote is the message a reply quotes, as the reply shows it.
@@ -527,7 +532,7 @@ func SendWithTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body str
 		ours, _ = json.Marshal(o.Mentions)
 		other := make([]Mention, len(o.Mentions))
 		for i, x := range o.Mentions {
-			x.Link = uuid.Nil
+			x.Link, x.Ref = uuid.Nil, ""
 			other[i] = x
 		}
 		theirs, _ = json.Marshal(other)

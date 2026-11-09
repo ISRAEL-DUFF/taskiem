@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 )
@@ -93,4 +94,64 @@ func TestChatInvoicesAndMoney(t *testing.T) {
 	// Only those who may see invoices see the money log.
 	builder := addMember(t, w.world, seller, "build", "builder")
 	builder.must(403, "GET", "/v1/money/entries", nil)
+}
+
+// "/invoice" and "/order" in a business's conversation (phase 2
+// additions): what is between the two businesses only, named in a
+// message with its total and status; the other side's copy carries no
+// id of ours; someone else's invoice is refused.
+func TestLinkChatRefs(t *testing.T) {
+	w := shopWorld(t)
+	withStock(w.world)
+	withLinkedOrders(w.world)
+	seller, buyer, _, buyerID := linkedPair(t, w.waWorld)
+	x := seller.must(201, "POST", "/v1/invoices", map[string]any{"customer": map[string]any{"name": "Ada's Kitchen", "key": "link:" + buyerID},
+		"amount_kobo": 4250000}, "Idempotency-Key", "r-1")
+	seller.must(200, "POST", "/v1/invoices/"+x["id"].(string)+"/send", nil, "Idempotency-Key", "r-1s")
+	// Another customer's invoice: never offered here.
+	other := seller.must(201, "POST", "/v1/invoices", map[string]any{"customer": map[string]any{"name": "Bisi", "phone": "+2348030000557"}, "amount_kobo": 100000}, "Idempotency-Key", "r-2")
+	seller.must(200, "POST", "/v1/invoices/"+other["id"].(string)+"/send", nil, "Idempotency-Key", "r-2s")
+	if _, err := w.srv.LinkMirrorTick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	link := seller.must(200, "GET", "/v1/link-chats", nil)["conversations"].([]any)[0].(map[string]any)["link"].(string)
+	refs := seller.must(200, "GET", "/v1/link-chats/"+link+"/refs", nil)["refs"].([]any)
+	if len(refs) != 1 {
+		t.Fatalf("the seller's refs: %v", refs)
+	}
+	r := refs[0].(map[string]any)
+	if r["kind"] != "invoice" || r["name"] != x["number"] || r["side"] != "ours" || r["total_kobo"] != float64(4250000) || r["status"] != "sent" {
+		t.Fatalf("our invoice: %v", r)
+	}
+	bl := buyer.must(200, "GET", "/v1/link-chats", nil)["conversations"].([]any)[0].(map[string]any)["link"].(string)
+	theirs := buyer.must(200, "GET", "/v1/link-chats/"+bl+"/refs", nil)["refs"].([]any)
+	if len(theirs) != 1 || theirs[0].(map[string]any)["side"] != "theirs" || theirs[0].(map[string]any)["name"] != x["number"] {
+		t.Fatalf("the buyer's refs: %v", theirs)
+	}
+
+	num := x["number"].(string)
+	msg := seller.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{
+		"text": "#" + num + " is due on Friday", "mentions": []any{map[string]any{"kind": "invoice", "ref": x["id"]}}})["message"].(map[string]any)
+	ms, _ := msg["mentions"].([]any)
+	if len(ms) != 1 {
+		t.Fatalf("mentions: %v", msg)
+	}
+	if m := ms[0].(map[string]any); m["kind"] != "invoice" || m["name"] != num || m["price_kobo"] != float64(4250000) || m["status"] != "sent" || m["ref"] != x["id"] {
+		t.Fatalf("the invoice named: %v", m)
+	}
+	w.srv.WaitBackground()
+	got := buyer.must(200, "GET", "/v1/link-chats/"+bl+"/messages", nil)["messages"].([]any)
+	if m := got[len(got)-1].(map[string]any)["mentions"].([]any)[0].(map[string]any); m["kind"] != "invoice" || m["name"] != num || m["ref"] != nil {
+		t.Fatalf("their copy: %v", m)
+	}
+	// Someone else's invoice, and a made-up one.
+	seller.must(400, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{
+		"text": "#" + other["number"].(string), "mentions": []any{map[string]any{"kind": "invoice", "ref": other["id"]}}})
+	seller.must(400, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{
+		"text": "#INV-9999", "mentions": []any{map[string]any{"kind": "order", "ref": "nope"}}})
+	// Without invoice.read, no invoices are offered.
+	builder := addMember(t, w.world, seller, "build2", "builder")
+	if refs := builder.must(200, "GET", "/v1/link-chats/"+link+"/refs", nil)["refs"].([]any); len(refs) != 0 {
+		t.Fatalf("a builder's refs: %v", refs)
+	}
 }

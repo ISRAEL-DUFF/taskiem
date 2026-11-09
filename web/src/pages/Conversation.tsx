@@ -1,3 +1,4 @@
+import { linkRefSuggestions, type LinkRef } from "../lib/refs";
 import {
   useCallback,
   useEffect,
@@ -1072,6 +1073,17 @@ export function ConversationPane({
     [conv.link],
   );
   const items = { data: priced.data?.items };
+  // What "/invoice" and "/order" offer: what is between us and them only.
+  const shared = useLoad(
+    () =>
+      get<{ refs: LinkRef[] }>(
+        `/v1/link-chats/${encodeURIComponent(conv.link)}/refs`,
+      ).then(
+        (r) => linkRefSuggestions(r.refs ?? []),
+        () => ({ invoice: [], order: [] }),
+      ),
+    [conv.link],
+  );
   // Live cards read our own stock, and the picker offers our own services
   // (chat tools; each only to those who may see it).
   const ownStock = useLoad(
@@ -1132,6 +1144,16 @@ export function ConversationPane({
     c.openTool(card.doc === "purchase" ? "purchases" : "bills", from, {
       rowId: card.id,
     });
+  const priceItems = (items.data ?? [])
+    .filter((it) => it.available)
+    .map((it) => ({
+      kind: "item" as const,
+      id: it.item_id,
+      name: it.name,
+      sub: priceWords(it),
+      category: it.category,
+      words: it.description,
+    }));
   const c = useComposer<LinkMessage>({
     draftKey: conv.link,
     rules: BUSINESS_FILES,
@@ -1162,16 +1184,10 @@ export function ConversationPane({
           .filter(Boolean)
           .join(" · "),
       })),
-      "#": (items.data ?? [])
-        .filter((it) => it.available)
-        .map((it) => ({
-          kind: "item" as const,
-          id: it.item_id,
-          name: it.name,
-          sub: priceWords(it),
-          category: it.category,
-          words: it.description,
-        })),
+      "#": priceItems,
+      // "/product" is "#"'s items; a customer is never named to another
+      // business.
+      refs: { ...shared.data, product: priceItems },
       // A category opens where it can be seen: their list, to order from
       // (supplies), or our own products (table.read); otherwise none is
       // offered, as a tap would open nothing of theirs.

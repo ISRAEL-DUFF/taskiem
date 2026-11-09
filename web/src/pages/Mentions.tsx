@@ -18,8 +18,11 @@ import {
   stillNamed,
   suggest,
   unlinkedSuggestion,
+  refStatusWords,
+  REF_LABEL,
   type Mention,
   type MentionQuery,
+  type RefKind,
   type Suggestion,
   type SuggestionGroup,
 } from "../lib/mentions";
@@ -44,6 +47,8 @@ export function useMentions(
     services?: Suggestion[];
     /** The categories "@" offers, when not the items' own. */
     categories?: { name: string; count: number }[];
+    /** What "/invoice", "/product", "/order" and "/customer" offer. */
+    refs?: Partial<Record<RefKind, Suggestion[]>>;
   },
   /** Chat tools (chat-tools.md §3): "@" tags things and businesses, in
    * groups, with the Taskiem row when it may be called; a category picked
@@ -94,9 +99,16 @@ export function useMentions(
           },
           grouped.taskiem,
         )
-      : q
-        ? [{ label: "", items: suggest(sources[q.mark], q.query) }]
-        : [];
+      : q?.mark === "/" && q.kind
+        ? [
+            {
+              label: REF_LABEL[q.kind],
+              items: suggest(sources.refs?.[q.kind] ?? [], q.query),
+            },
+          ]
+        : q && q.mark !== "/"
+          ? [{ label: "", items: suggest(sources[q.mark], q.query) }]
+          : [];
   const shown = groups.flatMap((g) => g.items);
   // What Enter takes: the first match. The Taskiem row, always offered,
   // only when "Taskiem" is what is being typed ("@4500" stays as typed).
@@ -164,13 +176,18 @@ export function useMentions(
   };
   /** The mentions still named, as a message sends them. */
   const refs = () =>
-    stillNamed(text, picked).map((p) =>
-      p.kind === "business"
-        ? { kind: p.kind, link: p.id }
-        : p.kind === "service"
-          ? { kind: p.kind, service_id: p.id }
-          : { kind: p.kind, item_id: p.id },
-    );
+    stillNamed(text, picked)
+      // A customer is named in words only: never sent to another business.
+      .filter((p) => p.kind !== "customer")
+      .map((p) =>
+        p.kind === "business"
+          ? { kind: p.kind, link: p.id }
+          : p.kind === "service"
+            ? { kind: p.kind, service_id: p.id }
+            : p.kind === "invoice" || p.kind === "order"
+              ? { kind: p.kind, ref: p.id }
+              : { kind: p.kind, item_id: p.id },
+      );
   const reset = () => {
     setPicked([]);
     setQ(null);
@@ -215,20 +232,32 @@ export function MentionList({ m }: { m: Mentions }) {
   if (!m.q || m.shown.length === 0) return null;
   const mark = m.q.mark;
   // The grouped picker floats over the chat from inside the composer.
-  if (m.grouped && mark === "@") return null;
+  if (m.grouped && (mark === "@" || mark === "/")) return null;
   return <PlainList m={m} />;
 }
 
 /** The picker of chat tools, springing up and leaving with a little
  * motion: while it leaves it shows what it last showed. */
 export function GroupedPicker({ m }: { m: Mentions }) {
-  const open = !!m.grouped && m.q?.mark === "@" && m.shown.length > 0;
+  const open =
+    !!m.grouped &&
+    (m.q?.mark === "@" || m.q?.mark === "/") &&
+    m.shown.length > 0;
   const p = usePresence(open, 150);
-  const last = useRef<{ query: string; groups: SuggestionGroup[] }>({
+  const last = useRef<{
+    query: string;
+    groups: SuggestionGroup[];
+    kind?: RefKind;
+  }>({
     query: "",
     groups: [],
   });
-  if (open) last.current = { query: m.q?.query ?? "", groups: m.groups };
+  if (open)
+    last.current = {
+      query: m.q?.query ?? "",
+      groups: m.groups,
+      kind: m.q?.kind,
+    };
   return (
     <>
       {p.mounted && (
@@ -236,6 +265,7 @@ export function GroupedPicker({ m }: { m: Mentions }) {
           m={m}
           query={last.current.query}
           groups={last.current.groups}
+          kind={last.current.kind}
           leaving={p.leaving}
         />
       )}
@@ -302,6 +332,18 @@ function PickIcon({ s }: { s: Suggestion }) {
         <Icon name="grid" />
       </span>
     );
+  if (s.kind === "customer")
+    return (
+      <span className="pick-icon round soft" aria-hidden="true">
+        {initialsOf(s.name)}
+      </span>
+    );
+  if (s.kind === "invoice" || s.kind === "order")
+    return (
+      <span className="pick-icon soft" aria-hidden="true">
+        <Icon name={s.kind === "invoice" ? "invoices" : "orders"} />
+      </span>
+    );
   return (
     <span
       className={`pick-icon ${s.kind === "service" ? "blue" : "soft"}`}
@@ -318,20 +360,26 @@ function Picker({
   m,
   query,
   groups,
+  kind,
   leaving,
 }: {
   m: Mentions;
   query: string;
   groups: SuggestionGroup[];
+  /** "/invoice" and the like: what is being picked. */
+  kind?: RefKind;
   leaving: boolean;
 }) {
   let n = 0;
+  const what = kind
+    ? `Tag ${kind === "invoice" ? "an invoice" : kind === "order" ? "an order" : `a ${kind}`}`
+    : "Tag a thing or a business";
   return (
     <section
       ref={leaving ? undefined : m.list}
       className={`tk-picker${leaving ? " leaving" : ""}`}
       aria-hidden={leaving || undefined}
-      aria-label="Tag something"
+      aria-label={kind ? what : "Tag something"}
       data-testid="mention-list"
     >
       <div className="tk-picker-head">
@@ -341,10 +389,10 @@ function Picker({
               Matches for <b>{query}</b>
             </>
           ) : (
-            "Tag a thing or a business"
+            what
           )}
         </span>
-        {query && <span>Tag a thing or a business</span>}
+        {query && <span>{what}</span>}
       </div>
       {groups.map((g) => (
         <div
@@ -415,14 +463,20 @@ function PlainList({ m }: { m: Mentions }) {
     <ul
       ref={m.list as RefObject<HTMLUListElement>}
       className="mention-list"
-      aria-label={mark === "@" ? "Businesses to mention" : "Items to mention"}
+      aria-label={
+        mark === "@"
+          ? "Businesses to mention"
+          : mark === "/"
+            ? "Things to tag"
+            : "Items to mention"
+      }
       data-testid="mention-list"
     >
       {m.shown.map((s) => (
         <li key={`${s.kind}:${s.id}`}>
           <button type="button" onClick={() => m.pick(s)} onKeyDown={move}>
             <span className="name">
-              {mark}
+              {mark === "/" ? "#" : mark}
               {s.name}
             </span>
             {s.sub && <span className="hint">{s.sub}</span>}
@@ -451,6 +505,16 @@ export function MentionText({
           <Link key={i} className="mention" to={`/chat?with=${p.mention.link}`}>
             {p.text}
           </Link>
+        ) : (p.mention.kind === "invoice" || p.mention.kind === "order") &&
+          p.mention.price_kobo ? (
+          <strong key={i} className="mention">
+            {p.text}
+            <span className="hint">
+              {" "}
+              ({formatPrice(p.mention.price_kobo)}
+              {p.mention.status ? ` · ${refStatusWords(p.mention.status)}` : ""})
+            </span>
+          </strong>
         ) : p.mention.kind === "item" && p.mention.price_kobo ? (
           <strong key={i} className="mention">
             {p.text}

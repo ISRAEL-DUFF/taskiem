@@ -424,6 +424,8 @@ type mentionRef struct {
 	Link      uuid.UUID `json:"link"`
 	ItemID    string    `json:"item_id"`
 	ServiceID string    `json:"service_id"`
+	// Ref is an invoice's or an order's id (from /link-chats/{link}/refs).
+	Ref string `json:"ref"`
 }
 
 // conversationItems is what "#" names in a conversation with a link: the
@@ -447,12 +449,14 @@ func conversationItems(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID) (
 // business one of ours, linked; each item on the conversation's price
 // list, with its unit and price; each named in the text. A mention whose
 // name the text does not hold is left out.
-func checkMentions(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, text string, refs []mentionRef) ([]links.Mention, error) {
+func checkMentions(ctx context.Context, tx pgx.Tx, p *Principal, link uuid.UUID, text string, refs []mentionRef) ([]links.Mention, error) {
+	tenant := p.TenantID
 	if len(refs) > 10 {
 		return nil, fmt.Errorf("%w: up to 10 mentions in a message", links.ErrInvalid)
 	}
 	var items []links.PriceItem
 	var services []storefront.Item
+	var shared []linkRef
 	lower := strings.ToLower(text)
 	out := []links.Mention{}
 	for _, r := range refs {
@@ -497,8 +501,25 @@ func checkMentions(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, text 
 			if sv.PriceKobo != nil {
 				m.PriceKobo = *sv.PriceKobo
 			}
+		case "invoice", "order":
+			// Between the two businesses only (linkRefsTx).
+			if shared == nil {
+				l, err := links.GetTx(ctx, tx, link)
+				if err != nil {
+					return nil, err
+				}
+				if shared, err = linkRefsTx(ctx, tx, p, l); err != nil {
+					return nil, err
+				}
+			}
+			i := slices.IndexFunc(shared, func(x linkRef) bool { return x.Kind == r.Kind && x.ID == r.Ref })
+			if i < 0 {
+				return nil, fmt.Errorf("%w: you can name only invoices and orders between you and this business", links.ErrInvalid)
+			}
+			x := shared[i]
+			m = links.Mention{Kind: x.Kind, Name: x.Name, Ref: x.ID, PriceKobo: x.TotalKobo, Status: x.Status}
 		default:
-			return nil, fmt.Errorf("%w: a mention is a business, an item or a service", links.ErrInvalid)
+			return nil, fmt.Errorf("%w: a mention is a business, an item, a service, an invoice or an order", links.ErrInvalid)
 		}
 		// A business is "@Name"; an item "#Name", or "@Name" as the chat
 		// tools picker writes it (docs/spec/chat-tools.md §3).

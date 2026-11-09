@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { TOOLS, type ToolKey } from "../lib/tools";
 import { DiaryLine } from "../kit";
 import { useChatTools } from "../lib/useChatTools";
@@ -28,6 +28,18 @@ import { useChatLive } from "./ChatLive";
 import { get, post, upload } from "../api";
 import type { Conversation } from "../lib/linkchat";
 import { categoriesOf } from "../lib/mentions";
+import {
+  customerRefs,
+  invoiceRefs,
+  knownRefs,
+  orderRefs,
+  productRefs,
+  refParts,
+  type KnownRef,
+} from "../lib/refs";
+import type { CustomerInvoice } from "../lib/invoices";
+import type { Order } from "../lib/orders";
+import type { CustomerChat } from "../lib/customerchat";
 import type { StockItem, StockView } from "../lib/stock";
 import { priceWords, type SupplierPrices } from "../lib/pricelists";
 import { Icon, TaskiemMark } from "../icons";
@@ -73,13 +85,55 @@ if (typeof window !== "undefined") {
 }
 
 /** Taskiem's words, *bold* marked, a long answer folded. */
-function TaskiemText({ text, gap }: { text: string; gap: boolean }) {
+function TaskiemText({
+  text,
+  gap,
+  known = [],
+  onRef,
+}: {
+  text: string;
+  gap: boolean;
+  /** Things "#" may name (an invoice, an order, a product): shown as a
+   * chip that opens it. */
+  known?: KnownRef[];
+  onRef?: (r: KnownRef, from: DOMRect) => void;
+}) {
   const fold = useFold(text);
   return (
     <span className="text">
-      {boldParts(fold.shown).map((p, k) =>
-        p.bold ? <strong key={k}>{p.text}</strong> : p.text,
-      )}
+      {boldParts(fold.shown).map((p, k) => {
+        const parts = refParts(p.text, known);
+        const words = parts.map((x, j) =>
+          !x.ref ? (
+            x.text
+          ) : x.ref.kind === "order" ? (
+            <Link
+              key={j}
+              className="mention"
+              to={`/storefront/orders/${encodeURIComponent(x.ref.name)}`}
+            >
+              {x.text}
+            </Link>
+          ) : x.ref.kind === "customer" || !onRef ? (
+            <strong key={j} className="mention">
+              {x.text}
+            </strong>
+          ) : (
+            <button
+              key={j}
+              type="button"
+              className="mention mention-open"
+              onClick={(e) =>
+                x.ref && onRef(x.ref, e.currentTarget.getBoundingClientRect())
+              }
+            >
+              {x.text}
+              <span className="sr-only">: open it</span>
+            </button>
+          ),
+        );
+        return p.bold ? <strong key={k}>{words}</strong> : <span key={k}>{words}</span>;
+      })}
       {fold.folded && <ReadMore onClick={fold.more} />}
       {gap && <span className="stamp-gap" aria-hidden="true" />}
     </span>
@@ -126,6 +180,39 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
         : Promise.resolve([] as StockItem[]),
     [chatTools],
   );
+  // What "/invoice", "/order" and "/customer" offer to tag (phase 2
+  // additions), each for those who may see it.
+  const refLists = useLoad(
+    () =>
+      chatTools
+        ? Promise.all([
+            can("invoice.read")
+              ? get<{ invoices: CustomerInvoice[] }>("/v1/invoices?limit=200").then(
+                  (r) => invoiceRefs(r.invoices ?? []),
+                  () => [],
+                )
+              : Promise.resolve([]),
+            can("storefront.manage|order.handle")
+              ? get<{ orders: Order[] }>("/v1/storefront/orders?limit=200").then(
+                  (r) => orderRefs(r.orders ?? []),
+                  () => [],
+                )
+              : Promise.resolve([]),
+            can("storefront.manage|order.handle")
+              ? get<{ chats: CustomerChat[] }>("/v1/customer-chats").then(
+                  (r) => customerRefs(r.chats ?? []),
+                  () => [],
+                )
+              : Promise.resolve([]),
+          ]).then(([invoice, order, customer]) => ({ invoice, order, customer }))
+        : Promise.resolve(undefined),
+    [chatTools],
+  );
+  const ownProducts = useMemo(() => productRefs(ownStock.data ?? []), [ownStock.data]);
+  const known = useMemo(
+    () => knownRefs({ ...refLists.data, product: ownProducts }),
+    [refLists.data, ownProducts],
+  );
   // Alerts you can act on, as cards at the end (chat-tools.md §6).
   const alerts = useChatAlerts(!!chatTools);
   const afterDiary = useRef<() => void>(() => undefined);
@@ -161,7 +248,8 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
       "@": (convs.data ?? [])
         .filter((x) => x.state === "active")
         .map((x) => ({ kind: "business" as const, id: x.link, name: x.name })),
-      "#": (prices.data ?? []).flatMap((p) =>
+      // "#": the business's own products first, then what suppliers sell.
+      "#": [...ownProducts, ...(prices.data ?? []).flatMap((p) =>
         p.items
           .filter((it) => it.available)
           .map((it) => ({
@@ -172,8 +260,9 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
             category: it.category,
             words: it.description,
           })),
-      ),
+      )],
       categories: categoriesOf(ownStock.data ?? []),
+      refs: { ...refLists.data, product: ownProducts },
     },
     onSend: (s) => {
       if (!s.file && briefs && asksBriefing(s.text)) showBriefing();
@@ -523,7 +612,16 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
               }
             >
               {!m.inbound && first && <span className="who">Taskiem</span>}
-              <TaskiemText text={m.text} gap={inline} />
+              <TaskiemText
+                text={m.text}
+                gap={inline}
+                known={known}
+                onRef={(r, from) =>
+                  c.openTool(r.kind === "invoice" ? "invoices" : "products", from, {
+                    rowId: r.id,
+                  })
+                }
+              />
               {m.buttons && m.buttons.length > 0 && (
                 <span
                   className="reply-buttons"
