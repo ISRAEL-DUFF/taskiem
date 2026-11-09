@@ -127,6 +127,21 @@ function moveTiles(e: KeyboardEvent<HTMLElement>) {
   tiles[Math.min(tiles.length - 1, Math.max(0, at + step))]?.focus();
 }
 
+/** A tile of the tools menu that is not a tool: a tap runs it. */
+export interface ExtraTile {
+  key: string;
+  title: string;
+  icon: string;
+  line: string;
+  onPick: () => void;
+}
+
+/** The extra tiles what follows "/" names. */
+export const extrasFor = (extras: ExtraTile[] | undefined, query: string) => {
+  const q = query.trim().toLowerCase();
+  return (extras ?? []).filter((x) => !q || x.title.toLowerCase().startsWith(q));
+};
+
 /** The panel of tiles over the composer. */
 export function ToolsPanel({
   query,
@@ -135,6 +150,7 @@ export function ToolsPanel({
   leaving = false,
   scope,
   supplier,
+  extras,
 }: {
   /** What follows "/" in the box, when it was typed. */
   query: string;
@@ -145,7 +161,9 @@ export function ToolsPanel({
   scope?: string;
   /** In a supplier's conversation (they share prices): ordering comes first. */
   supplier?: string;
+  extras?: ExtraTile[];
 }) {
+  const more = extrasFor(extras, query);
   const { can, me } = useAuth();
   const listed = toolsFor(can, query, me?.roles);
   const { rows: loaded } = useToolRows(listed);
@@ -230,7 +248,7 @@ export function ToolsPanel({
         <h2>Tools</h2>
         <span>Opens over the chat</span>
       </div>
-      {tools.length === 0 ? (
+      {tools.length + more.length === 0 ? (
         <p className="tk-tools-none">
           No tool called “{query}”. Enter sends it as a message.
         </p>
@@ -273,6 +291,25 @@ export function ToolsPanel({
               </button>
             );
           })}
+          {more.map((x) => (
+            <button
+              key={x.key}
+              type="button"
+              className="tk-tile"
+              onClick={() => {
+                onClose();
+                x.onPick();
+              }}
+            >
+              <span className="tk-tile-icon">
+                <Icon name={x.icon} />
+              </span>
+              <span>
+                <span className="tk-tile-name">{x.title}</span>
+                <span className="tk-tile-line">{x.line}</span>
+              </span>
+            </button>
+          ))}
         </div>
       )}
       {recent.length > 0 && !query && (

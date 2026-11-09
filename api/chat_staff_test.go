@@ -153,8 +153,44 @@ func TestCashierShift(t *testing.T) {
 	if b := seller.must(200, "GET", "/v1/chat-briefing", nil); b["put_off"] != true {
 		t.Fatalf("Got it: %v", b)
 	}
+	// The greeting follows the hour, and the time is the time it was read.
+	if b["part"] != "morning" || b["now"] != "09:05" {
+		t.Fatalf("the briefing's hour: %v", b)
+	}
+	w.srv.BriefingClock = at(15)
+	if b := seller.must(200, "GET", "/v1/chat-briefing", nil); b["part"] != "afternoon" || b["now"] != "15:05" || b["put_off"] != true {
+		t.Fatalf("in the afternoon: %v", b)
+	}
+	// Asked for again (the tools menu, or "briefing"): back, put away or not,
+	// and at any hour.
+	if b := seller.must(200, "GET", "/v1/chat-briefing?show=1", nil); b["ready"] != true || b["put_off"] != false || b["part"] != "afternoon" {
+		t.Fatalf("shown again: %v", b)
+	}
+	if b := seller.must(200, "GET", "/v1/chat-briefing", nil); b["put_off"] != false {
+		t.Fatalf("after showing it again: %v", b)
+	}
+	w.srv.BriefingClock = at(6)
+	if b := seller.must(200, "GET", "/v1/chat-briefing?show=1", nil); b["ready"] != true {
+		t.Fatalf("asked for before 8am: %v", b)
+	}
+	// Put away today, it is back tomorrow from 8am.
+	w.srv.BriefingClock = at(9)
+	seller.must(200, "POST", "/v1/chat-alerts/later", map[string]any{"key": b["key"], "hours": 24})
+	w.srv.BriefingClock = func() time.Time { return at(9)().Add(24 * time.Hour) }
+	if b := seller.must(200, "GET", "/v1/chat-briefing", nil); b["ready"] != true || b["put_off"] != false {
+		t.Fatalf("the next day: %v", b)
+	}
+	w.srv.BriefingClock = at(9)
 
-	// "How did we do this week?": the words, and a chart card.
+	// An invoice sent is a sale; one still a draft is not.
+	inv := seller.must(201, "POST", "/v1/invoices", map[string]any{"customer": map[string]any{"name": "Bisi Okafor", "phone": "+2348030000555"}, "amount_kobo": 4250000}, "Idempotency-Key", "inv-1")
+	seller.must(200, "POST", "/v1/invoices/"+inv["id"].(string)+"/send", nil, "Idempotency-Key", "inv-1s")
+	seller.must(201, "POST", "/v1/invoices", map[string]any{"customer": map[string]any{"name": "Bisi Okafor", "phone": "+2348030000555"}, "amount_kobo": 100000}, "Idempotency-Key", "inv-2")
+
+	// "How did we do this week?": the words, and a chart card. Sales are the
+	// counter's ₦234,000, the trade order accepted above (₦390,000) and the
+	// invoice sent (₦42,500); the trade order's own invoice is not counted
+	// again.
 	said := seller.must(200, "POST", "/v1/taskiem-chat", map[string]any{"text": "how did we do this week?"})["messages"].([]any)
 	var reply string
 	for _, x := range said {
@@ -162,7 +198,7 @@ func TestCashierShift(t *testing.T) {
 			reply += m["text"].(string)
 		}
 	}
-	if !strings.Contains(reply, "Sales, the last 7 days: ₦234,000") {
+	if !strings.Contains(reply, "Sales, the last 7 days: ₦666,500") {
 		t.Fatalf("how did we do: %q", reply)
 	}
 	var chart map[string]any
@@ -171,10 +207,10 @@ func TestCashierShift(t *testing.T) {
 			_ = json.Unmarshal([]byte(m["text"].(string)), &chart)
 		}
 	}
-	if chart == nil || chart["total_kobo"] != float64(23400000) || len(chart["bars"].([]any)) != 7 || chart["highlight"] != float64(-1) {
+	if chart == nil || chart["total_kobo"] != float64(66650000) || len(chart["bars"].([]any)) != 7 || chart["highlight"] != float64(-1) {
 		t.Fatalf("the chart: %v", chart)
 	}
-	if r := w.say(t, ownerOn, "how did we do today"); !strings.Contains(r, "Sales today: ₦234,000") {
+	if r := w.say(t, ownerOn, "how did we do today"); !strings.Contains(r, "Sales today: ₦666,500") {
 		t.Fatalf("on WhatsApp: %q", r)
 	}
 }

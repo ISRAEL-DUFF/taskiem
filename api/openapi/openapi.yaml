@@ -22907,11 +22907,19 @@ paths:
       tags:
       - Account
       summary: The morning briefing card
-      description: For those who run the business (storefront.manage or invoice.manage), with chat tools on, from 8am Lagos time (ready); yesterday's sales against the same day a week before with the week's bars, what customers owe, how many items are low, and today's deliveries and bookings, each only for those who may see it. put_off once the person has said Got it (Later with key).
+      description: "For those who run the business (storefront.manage or invoice.manage), with chat tools on, from 8am Lagos time (ready); yesterday's sales against the same day a week before with the week's bars, what customers owe, how many items are low, and today's deliveries and bookings, each only for those who may see it. Sales are counter sales, shop, chat and trade orders, and invoices sent (each only for those who may see it). put_off once the person has said Got it (Later with key). With show=1 (the tools menu's Briefing, or briefing typed), today's is ready at any hour and Got it is undone."
       security:
       - sessionCookie: []
       - sessionToken: []
       - apiKey: []
+      parameters:
+      - name: show
+        in: query
+        required: false
+        description: 1 asks for today's briefing again, whatever the hour and though it was put away.
+        schema:
+          type: string
+          enum: ['1']
       responses:
         '200':
           description: The briefing
@@ -22919,7 +22927,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [ready, day, key, put_off]
+                required: [ready, day, key, put_off, part, now]
                 properties:
                   ready:
                     type: boolean
@@ -22930,6 +22938,13 @@ paths:
                     type: string
                   put_off:
                     type: boolean
+                  part:
+                    type: string
+                    enum: [morning, afternoon, evening]
+                    description: The part of the day it is in Lagos, for the greeting.
+                  now:
+                    type: string
+                    description: The Lagos time its numbers were read at, "14:05".
                   sales:
                     type: object
                     properties:

@@ -12,7 +12,7 @@ import { ComposerView, TASKIEM_FILES, useComposer } from "./ChatComposer";
 import { AlertCards, useChatAlerts } from "./ChatAlerts";
 import { BriefingCard, ChartCard } from "./ChatStaff";
 import { useAuth } from "../auth";
-import type { SalesChart } from "../lib/staff";
+import { asksBriefing, showBriefing, type SalesChart } from "../lib/staff";
 
 /** A chart message's numbers, or undefined when they cannot be read. */
 function parseChart(text: string): SalesChart | undefined {
@@ -130,6 +130,9 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
   const alerts = useChatAlerts(!!chatTools);
   const afterDiary = useRef<() => void>(() => undefined);
   const localN = useRef(0);
+  // The briefing card is here for those who sell or bill; the tools menu
+  // and "briefing" typed bring it back.
+  const briefs = !!chatTools && (can("storefront.manage") || can("invoice.manage"));
   const c = useComposer<never>({
     draftKey: "taskiem",
     rules: TASKIEM_FILES,
@@ -143,6 +146,17 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
     // A tool saved: the server's diary line is pulled in.
     // A tool saved a change: its diary line, and the cards it settles.
     onDiary: () => (afterDiary.current(), alerts.reload()),
+    extras: briefs
+      ? [
+          {
+            key: "briefing",
+            title: "Briefing",
+            icon: "sparkle",
+            line: "Today's numbers",
+            onPick: showBriefing,
+          },
+        ]
+      : undefined,
     sources: {
       "@": (convs.data ?? [])
         .filter((x) => x.state === "active")
@@ -162,7 +176,8 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
       categories: categoriesOf(ownStock.data ?? []),
     },
     onSend: (s) => {
-      if (s.file) sendFile(s.file, s.text);
+      if (!s.file && briefs && asksBriefing(s.text)) showBriefing();
+      else if (s.file) sendFile(s.file, s.text);
       else say({ text: s.text });
     },
   });
@@ -554,7 +569,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
         tail={
           chatTools ? (
             <>
-              {(can("storefront.manage") || can("invoice.manage")) && (
+              {briefs && (
                 <BriefingCard openTool={c.openTool} onAsk={(text) => say({ text })} />
               )}
               <AlertCards
