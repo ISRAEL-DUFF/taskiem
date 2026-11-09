@@ -19660,6 +19660,52 @@ paths:
           description: Cancelled
         default:
           $ref: '#/components/responses/Error'
+  /v1/staff/clock:
+    get:
+      operationId: staffClockDay
+      tags:
+      - Account
+      summary: A day's shifts, who is in now and who is late
+      description: 'The shifts clocked in on a day (Lagos; today when none), with when each ended and how (chat, web, handover, or closed by Taskiem: auto), and the place shared when one was; who is clocked in now; who should have started 15 minutes or more ago (within three hours) by their usual hours and has not clocked in.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: member.manage
+      parameters:
+      - name: day
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: The day
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [day, shifts, in, late]
+                properties:
+                  day:
+                    type: string
+                    format: date
+                  shifts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StaffShift'
+                  in:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StaffShift'
+                  late:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StaffLate'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/staff/{user}:
     get:
       operationId: getStaff
@@ -23462,6 +23508,20 @@ paths:
                     type: string
                   put_off:
                     type: boolean
+                  staff:
+                    type: object
+                    description: Who is clocked in and who is late, when anyone is either (for those who run the people).
+                    additionalProperties: false
+                    required: [in, late]
+                    properties:
+                      in:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/StaffShift'
+                      late:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/StaffLate'
                   part:
                     type: string
                     enum: [morning, afternoon, evening]
@@ -33692,6 +33752,44 @@ components:
         minutes:
           type: integer
           description: How long the service takes; an invoice's or an order's total is price_kobo
+    StaffShift:
+      type: object
+      additionalProperties: false
+      required: [id, user_id, in_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        in_at:
+          type: string
+          format: date-time
+        out_at:
+          type: string
+          format: date-time
+        out_how:
+          type: string
+          enum: [chat, web, handover, auto]
+        in_where:
+          type: string
+          description: A maps link of where they were when they clocked in, when they shared it
+    StaffLate:
+      type: object
+      additionalProperties: false
+      required: [user_id, name, due]
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        due:
+          type: string
+          description: When their shift should have started, "08:00"
     StaffProfile:
       type: object
       additionalProperties: false

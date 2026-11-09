@@ -197,6 +197,12 @@ func maskCustomer(c *storefront.Customer) {
 // erases the customer's details of ended orders past retention.
 func (s *Server) RunStorefrontOrders(ctx context.Context) error {
 	s.chatHooks()
+	// Staff: who is late, shifts left open (staff_clock.go).
+	go every(ctx, time.Minute, func() {
+		if err := s.StaffTick(ctx); err != nil && ctx.Err() == nil {
+			s.Logger.Error("staff: the job", "err", err)
+		}
+	})
 	if s.Orders == nil {
 		<-ctx.Done()
 		return nil

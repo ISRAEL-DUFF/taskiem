@@ -198,3 +198,58 @@ export function profileRequest(f: ProfileForm): StaffProfile {
     rota: WEEKDAYS.filter((d) => f.days[d.value].on).map((d) => ({ day: d.value, start: f.days[d.value].start, end: f.days[d.value].end })),
   };
 }
+
+// --- clocking in (step 3) ---
+
+export interface StaffShift {
+  id: string;
+  user_id: string;
+  name?: string;
+  in_at: string;
+  out_at?: string;
+  out_how?: "chat" | "web" | "handover" | "auto";
+  /** A maps link of where they clocked in, when they shared it. */
+  in_where?: string;
+}
+
+export interface StaffLate {
+  user_id: string;
+  name: string;
+  /** "08:00" */
+  due: string;
+}
+
+export interface StaffDay {
+  day: string;
+  shifts: StaffShift[];
+  in: StaffShift[];
+  late: StaffLate[];
+}
+
+const hm = (iso: string) =>
+  new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Africa/Lagos" });
+
+/** "8 hours 5 minutes", "45 minutes". */
+export function lengthWords(ms: number): string {
+  const mins = Math.round(ms / 60_000);
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  const part = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
+  if (h === 0) return part(m, "minute");
+  if (m === 0) return part(h, "hour");
+  return `${part(h, "hour")} ${part(m, "minute")}`;
+}
+
+/** A shift's line: "08:25 to 16:30 · 8 hours 5 minutes", "Since 08:25". */
+export function shiftWords(s: StaffShift): string {
+  if (!s.out_at) return `Since ${hm(s.in_at)}`;
+  const how = s.out_how === "auto" ? " · closed by Taskiem" : s.out_how === "handover" ? " · handed over" : "";
+  return `${hm(s.in_at)} to ${hm(s.out_at)} · ${lengthWords(Date.parse(s.out_at) - Date.parse(s.in_at))}${how}`;
+}
+
+/** The briefing's staff tile: "2 in · 1 late". */
+export function staffTile(n: { in: unknown[]; late: unknown[] }): string {
+  const parts = [`${n.in.length} in`];
+  if (n.late.length > 0) parts.push(`${n.late.length} late`);
+  return parts.join(" · ");
+}

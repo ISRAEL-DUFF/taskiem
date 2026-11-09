@@ -221,15 +221,22 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
     // A tool saved: the server's diary line is pulled in.
     // A tool saved a change: its diary line, and the cards it settles.
     onDiary: () => (afterDiary.current(), alerts.reload()),
-    extras: briefs
+    extras: chatTools
       ? [
-          {
-            key: "briefing",
-            title: "Briefing",
-            icon: "sparkle",
-            line: "Today's numbers",
-            onPick: showBriefing,
-          },
+          ...(briefs
+            ? [
+                {
+                  key: "briefing",
+                  title: "Briefing",
+                  icon: "sparkle",
+                  line: "Today's numbers",
+                  onPick: showBriefing,
+                },
+              ]
+            : []),
+          // Clocking in and out, as "in" and "out" are said (phase 3).
+          { key: "clock-in", title: "Clock in", icon: "clock", line: "Start your shift", onPick: () => say({ text: "in" }) },
+          { key: "clock-out", title: "Clock out", icon: "clock", line: "End your shift", onPick: () => say({ text: "out" }) },
         ]
       : undefined,
     sources: {

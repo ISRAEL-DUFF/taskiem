@@ -30,6 +30,7 @@ import {
 import { formatPrice } from "../lib/storefront";
 import { ErrorBox, useLoad } from "../ui";
 import { toast } from "../toast";
+import { staffTile } from "../lib/team";
 
 // Staff who work from chat (docs/spec/chat-tools.md §7): a cashier's Sell,
 // a counter sale as the Order sheet looks (the items with steppers, the pine
@@ -655,6 +656,12 @@ export function BriefingCard({
           <Link to="/storefront/deliveries" className="tk-brief-tile">
             <span>Deliveries</span>
             <b>{b.deliveries} today</b>
+          </Link>
+        )}
+        {b.staff && (
+          <Link to="/staff" className="tk-brief-tile">
+            <span>Staff</span>
+            <b>{staffTile(b.staff)}</b>
           </Link>
         )}
         {b.bookings !== undefined && b.bookings > 0 && (

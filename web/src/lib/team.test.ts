@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { emptyStaff, inviteSub, payWords, personSub, profileForm, profileProblem, profileRequest, roleWords, rotaWords, staffProblem } from "./team";
+import { lengthWords, shiftWords, staffTile, emptyStaff, inviteSub, payWords, personSub, profileForm, profileProblem, profileRequest, roleWords, rotaWords, staffProblem } from "./team";
 
 describe("staff", () => {
   it("says roles as people do", () => {
@@ -64,5 +64,20 @@ describe("a person's profile", () => {
     f.pay = "";
     f.days.sun = { on: true, start: "09:00", end: "09:00" };
     expect(profileProblem(f)).toBe("Sunday starts and ends at the same time.");
+  });
+});
+
+describe("clocking in", () => {
+  it("says a shift", () => {
+    expect(lengthWords(8 * 3600_000 + 5 * 60_000)).toBe("8 hours 5 minutes");
+    expect(lengthWords(45 * 60_000)).toBe("45 minutes");
+    expect(lengthWords(3600_000)).toBe("1 hour");
+    expect(shiftWords({ id: "s", user_id: "u", in_at: "2026-11-09T07:25:00Z" })).toBe("Since 08:25");
+    expect(shiftWords({ id: "s", user_id: "u", in_at: "2026-11-09T07:25:00Z", out_at: "2026-11-09T15:30:00Z", out_how: "chat" })).toBe("08:25 to 16:30 · 8 hours 5 minutes");
+    expect(shiftWords({ id: "s", user_id: "u", in_at: "2026-11-09T16:00:00Z", out_at: "2026-11-10T08:00:00Z", out_how: "auto" })).toBe("17:00 to 09:00 · 16 hours · closed by Taskiem");
+  });
+  it("says who is in on the briefing", () => {
+    expect(staffTile({ in: [1, 2], late: [] })).toBe("2 in");
+    expect(staffTile({ in: [], late: [1] })).toBe("0 in · 1 late");
   });
 });

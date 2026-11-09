@@ -114,6 +114,10 @@ func TestCashierShift(t *testing.T) {
 	if sales["total_kobo"] != float64(23400000) || sales["by_how"].(map[string]any)["cash"] != float64(15600000) || h["orders_open"] != float64(1) {
 		t.Fatalf("the shift so far: %v", h)
 	}
+	// Clocked in, the handover clocks them out (staff_clock.go).
+	if got := w.say(t, samOn, "in"); !strings.Contains(got, "Clocked in at") {
+		t.Fatalf("sam in: %q", got)
+	}
 	before = len(w.graph.Sent(ownerOn))
 	samBefore := len(w.graph.Sent(samOn))
 	out := manager.must(200, "POST", "/v1/chat-handover", map[string]any{"cash_counted_kobo": 15000000, "note": "Till drawer sticks"})
@@ -121,6 +125,10 @@ func TestCashierShift(t *testing.T) {
 	if !strings.Contains(words, "Sold ₦234,000 in 2 sales") || !strings.Contains(words, "Cash counted: ₦150,000, ₦6,000 short of the ₦156,000 sold") ||
 		!strings.Contains(words, "Note: Till drawer sticks") {
 		t.Fatalf("the handover: %q", words)
+	}
+	var how string
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT COALESCE(out_how, '') FROM staff_clock WHERE user_id = (SELECT user_id FROM whatsapp_bindings WHERE number = $1)`, samOn).Scan(&how); err != nil || how != "handover" {
+		t.Fatalf("the handover clocked out: %q %v", how, err)
 	}
 	w.srv.WaitBackground()
 	if told := w.lastTo(t, ownerOn, before); len(told) == 0 || !strings.Contains(told[0].Text, "sam handed the shift over") {

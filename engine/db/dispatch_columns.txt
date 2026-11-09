@@ -1055,6 +1055,10 @@ sso_requests.return_to
 sso_requests.state
 sso_requests.tenant_id
 sso_requests.verifier
+staff_clock.out_at
+staff_clock.tenant_id
+staff_profiles.rota
+staff_profiles.tenant_id
 stock_movements.change
 stock_movements.claimed_at
 stock_movements.count_after

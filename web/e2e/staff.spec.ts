@@ -46,9 +46,10 @@ for (const width of [390, 360]) {
     await page.setViewportSize({ width, height: 844 });
     await owner(page);
     // Someone already in the business, to remove.
+    const bisi = `bisi-${letters()}@staff.test`;
     const added = await page.request.post("/v1/members", {
       headers: H,
-      data: { email: `bisi-${letters()}@staff.test`, name: "Bisi Okafor", password: "correct horse battery", roles: ["cashier"] },
+      data: { email: bisi, name: "Bisi Okafor", password: "correct horse battery", roles: ["cashier"] },
     });
     expect(added.status(), await added.text()).toBe(201);
     await page.goto("/staff");
@@ -106,6 +107,19 @@ for (const width of [390, 360]) {
     await axeBoth(page, "a person's page");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.getByRole("link", { name: "All staff" }).click();
+
+    // Bisi said "in" on WhatsApp just now (step 3): the page shows who is in now.
+    sql(
+      `INSERT INTO staff_clock (id, tenant_id, user_id, in_at, in_how)
+       SELECT gen_random_uuid(), m.tenant_id, m.user_id, now() - interval '5 minutes', 'chat'
+       FROM memberships m JOIN users u ON u.id = m.user_id WHERE lower(u.email) = lower('${bisi}')`,
+    );
+    await page.reload();
+    const shift = page.getByTestId("staff-shift").filter({ hasText: "Bisi Okafor" });
+    await expect(shift).toContainText("In now");
+    await expect(shift).toContainText("Since");
+    await axeBoth(page, "who is in now");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
     // Bisi has left.
     page.once("dialog", (d) => void d.accept());

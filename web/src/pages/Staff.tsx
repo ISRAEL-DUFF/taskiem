@@ -9,7 +9,9 @@ import {
   inviteSub,
   personSub,
   roleWords,
+  shiftWords,
   staffProblem,
+  type StaffDay,
   type StaffForm,
   type StaffView,
 } from "../lib/team";
@@ -18,6 +20,7 @@ import {
  * joined and who is still to tap Join, and remove someone who has left. */
 export function Staff() {
   const view = useLoad(() => get<StaffView>("/v1/staff"), []);
+  const day = useLoad(() => get<StaffDay>("/v1/staff/clock"), []);
   const roles = useLoad(() => get<{ roles: { name: string }[] }>("/v1/roles").catch(() => ({ roles: [] })), []);
   const [adding, setAdding] = useState(false);
   const act = useAction();
@@ -39,6 +42,41 @@ export function Staff() {
       />
       <ErrorBox error={view.error ?? act.error} />
       {!v && !view.error && <Skeleton rows={4} label="Loading your staff…" />}
+      {day.data && (day.data.in.length > 0 || day.data.late.length > 0 || day.data.shifts.length > 0) && (
+        <section className="card" aria-labelledby="staff-today">
+          <h2 id="staff-today" style={{ marginTop: 0 }}>
+            Today
+          </h2>
+          <p className="hint">Staff say in and out to Taskiem on WhatsApp when they start and finish.</p>
+          <Items label="Today">
+            {day.data.late.map((l) => (
+              <Row key={`late-${l.user_id}`} letter={l.name} title={l.name} side={<span className="badge warn">Not in yet</span>} sub={<span className="sub">Due at {l.due}</span>} testid="staff-late" />
+            ))}
+            {day.data.shifts.map((x) => (
+              <Row
+                key={x.id}
+                letter={x.name || "?"}
+                title={x.name || "Someone"}
+                side={!x.out_at && <span className="badge ok">In now</span>}
+                sub={
+                  <span className="sub">
+                    {shiftWords(x)}
+                    {x.in_where && (
+                      <>
+                        {" · "}
+                        <a href={x.in_where} target="_blank" rel="noopener noreferrer">
+                          where<span className="sr-only"> {x.name} clocked in (opens a map)</span>
+                        </a>
+                      </>
+                    )}
+                  </span>
+                }
+                testid="staff-shift"
+              />
+            ))}
+          </Items>
+        </section>
+      )}
       {v && v.invites.length > 0 && (
         <section className="card" aria-labelledby="staff-waiting">
           <h2 id="staff-waiting" style={{ marginTop: 0 }}>

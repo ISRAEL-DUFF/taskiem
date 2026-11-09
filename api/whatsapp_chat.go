@@ -491,6 +491,12 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	if in.Flow != "" {
 		return s.waFlowCompleted(ctx, c)
 	}
+	// A location shared: today's clock-in carries it (staff_clock.go).
+	if in.Location != "" {
+		if done, err := s.clockPlace(ctx, c); done || err != nil {
+			return err
+		}
+	}
 	// A photo: a product to add, or the logo the set-up asked for
 	// (whatsapp_storefront.go).
 	if in.Image != nil {
@@ -949,6 +955,10 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 			return s.waPay(ctx, c, "")
 		case "email", "my email", "add email", "add my email":
 			return s.waEmail(ctx, c, "")
+		}
+		// Clocking in and out, and who is in (staff_clock.go).
+		if done, err := s.waStaffClock(ctx, c, cmd); done || err != nil {
+			return err
 		}
 		// Bringing someone in (chat_invites.go): "invite +234… as cashier",
 		// or "add Tunde 0803 123 4567 as cashier" (a number and a role).

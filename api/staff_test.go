@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -154,4 +155,117 @@ func TestStaffProfile(t *testing.T) {
 	owner.must(404, "PUT", "/v1/staff/"+uuid.NewString()+"/profile", good)
 	cashier.must(403, "GET", "/v1/staff/"+id, nil)
 	cashier.must(403, "PUT", "/v1/staff/"+id+"/profile", good)
+}
+
+// Clocking in and out (phase 3 plan, step 3): a cashier with usual hours
+// who has not clocked in 15 minutes after the start is told to the owner
+// once; "in", a shared location, "who is in", "out" with the hours; the
+// briefing says who is in; a shift left open is closed by Taskiem.
+func TestStaffClock(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	owner.must(200, "PUT", "/v1/settings/chat-tools", map[string]any{"chat_tools": true})
+	const ownerNumber, cashNumber = "+2348031239501", "+2348031239502"
+	w.bind(t, owner, ownerNumber)
+	cashier := w.member(t, owner, "cash@acme.test", "cashier")
+	w.bind(t, cashier, cashNumber)
+	cashID := cashier.must(200, "GET", "/v1/me", nil)["user"].(map[string]any)["id"].(string)
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE users SET name = 'Bisi' WHERE id = $1`, cashID); err != nil {
+		t.Fatal(err)
+	}
+
+	lagos, _ := time.LoadLocation("Africa/Lagos")
+	base := time.Now().In(lagos)
+	at := func(day, hour, minute int) time.Time {
+		return time.Date(base.Year(), base.Month(), base.Day()+day, hour, minute, 0, 0, lagos)
+	}
+	today := rotaDayName(at(0, 12, 0))
+	owner.must(200, "PUT", "/v1/staff/"+cashID+"/profile", map[string]any{"rota": []any{map[string]any{"day": today, "start": "08:00", "end": "16:00"}}})
+	clock := func(day, h, m int) { w.srv.BriefingClock = func() time.Time { return at(day, h, m) } }
+
+	// 08:10: not late yet; 08:20: late, told once.
+	clock(0, 8, 10)
+	before := len(w.graph.Sent(ownerNumber))
+	if err := w.srv.StaffTick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := w.graph.Sent(ownerNumber)[before:]; len(got) != 0 {
+		t.Fatalf("told too soon: %+v", got)
+	}
+	clock(0, 8, 20)
+	for range 2 {
+		if err := w.srv.StaffTick(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := w.graph.Sent(ownerNumber)[before:]; len(got) != 1 || !strings.Contains(got[0].Text, "Bisi has not clocked in") || !strings.Contains(got[0].Text, "Due at 08:00") {
+		t.Fatalf("late: %+v", got)
+	}
+	b := owner.must(200, "GET", "/v1/chat-briefing", nil)
+	if late := b["staff"].(map[string]any)["late"].([]any); len(late) != 1 || late[0].(map[string]any)["due"] != "08:00" {
+		t.Fatalf("the briefing's late: %v", b["staff"])
+	}
+
+	// In, again, a location, who is in.
+	clock(0, 8, 25)
+	if got := w.say(t, cashNumber, "in"); !strings.Contains(got, "Clocked in at 08:25") {
+		t.Fatalf("in: %q", got)
+	}
+	if got := w.say(t, cashNumber, "clock in"); !strings.Contains(got, "You clocked in at 08:25") {
+		t.Fatalf("in again: %q", got)
+	}
+	got := w.send(t, cashNumber, map[string]any{"type": "location", "location": map[string]any{"latitude": 6.4541, "longitude": 3.3947}})
+	if len(got) != 1 || !strings.Contains(got[0].Text, "Your location is with today's clock-in") {
+		t.Fatalf("the location: %+v", got)
+	}
+	if got := w.say(t, ownerNumber, "who is in"); !strings.Contains(got, "In now: Bisi (since 08:25)") {
+		t.Fatalf("who is in: %q", got)
+	}
+	if got := w.say(t, cashNumber, "who is in"); !strings.Contains(got, "Only those who run the business") {
+		t.Fatalf("a cashier asks: %q", got)
+	}
+	day := owner.must(200, "GET", "/v1/staff/clock", nil)
+	if shifts := day["shifts"].([]any); len(shifts) != 1 || shifts[0].(map[string]any)["in_where"] == nil || len(day["in"].([]any)) != 1 || len(day["late"].([]any)) != 0 {
+		t.Fatalf("the day: %v", day)
+	}
+	if b := owner.must(200, "GET", "/v1/chat-briefing", nil); len(b["staff"].(map[string]any)["in"].([]any)) != 1 {
+		t.Fatalf("the briefing's in: %v", b["staff"])
+	}
+
+	// Out, with the hours; out again says so.
+	clock(0, 16, 30)
+	if got := w.say(t, cashNumber, "out"); !strings.Contains(got, "Clocked out at 16:30: 8 hours 5 minutes today") {
+		t.Fatalf("out: %q", got)
+	}
+	if got := w.say(t, cashNumber, "out"); !strings.Contains(got, "You are not clocked in") {
+		t.Fatalf("out again: %q", got)
+	}
+
+	// Left open: in after the shift, closed by Taskiem after 16 hours.
+	clock(0, 17, 0)
+	w.say(t, cashNumber, "in")
+	clock(1, 8, 59)
+	if err := w.srv.StaffTick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var how string
+	var out time.Time
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT COALESCE(out_how, ''), COALESCE(out_at, now()) FROM staff_clock WHERE in_at = $1`, at(0, 17, 0)).Scan(&how, &out); err != nil || how != "" {
+		t.Fatalf("closed too soon: %q %v", how, err)
+	}
+	clock(1, 9, 1)
+	if err := w.srv.StaffTick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT out_how, out_at FROM staff_clock WHERE in_at = $1`, at(0, 17, 0)).Scan(&how, &out); err != nil || how != "auto" || !out.Equal(at(1, 9, 0)) {
+		t.Fatalf("closed by Taskiem: %q %v %v", how, out, err)
+	}
+	owner.must(400, "GET", "/v1/staff/clock?day=today", nil)
+	cashier.must(403, "GET", "/v1/staff/clock", nil)
+}
+
+// rotaDayName is a date's day as a rota names it.
+func rotaDayName(t time.Time) string {
+	return []string{"sun", "mon", "tue", "wed", "thu", "fri", "sat"}[t.Weekday()]
 }

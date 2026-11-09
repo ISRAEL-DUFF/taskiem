@@ -714,6 +714,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermMemberManage), s.tenantWide).Post("/staff/invites/{id}/send", s.resendStaffInvite)
 			r.With(s.need(PermMemberManage), s.tenantWide).Delete("/staff/invites/{id}", s.cancelStaffInvite)
 			r.With(s.need(PermMemberManage), s.tenantWide).Post("/staff/{user}/remove", s.removeStaff)
+			r.With(s.need(PermMemberManage)).Get("/staff/clock", s.staffClockDay)
 			r.With(s.need(PermMemberManage)).Get("/staff/{user}", s.getStaff)
 			r.With(s.need(PermMemberManage), s.tenantWide).Put("/staff/{user}/profile", s.putStaffProfile)
 			r.Get("/permissions", s.listPermissions)

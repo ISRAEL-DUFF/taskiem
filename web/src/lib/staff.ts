@@ -44,6 +44,8 @@ export interface Briefing {
   low?: number;
   deliveries?: number;
   bookings?: number;
+  /** Who is clocked in, and who is late (phase 3). */
+  staff?: { in: { user_id: string; name?: string; in_at: string }[]; late: { user_id: string; name: string; due: string }[] };
 }
 
 /** Asks the briefing card to come back (the tools menu's Briefing, or
