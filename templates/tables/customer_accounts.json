@@ -1,0 +1,33 @@
+{
+  "name": "customer_accounts",
+  "title": "Customers' accounts",
+  "description": "Who each customer is in the business's own records, for its assistant: their WhatsApp number (digits with the country code, 2348031234567) or Telegram chat id, and their wallet or account at the payments service (an iswallet wallet, or a bank account linked through Mono), and the phone number their invoices are under when it differs. The assistant reads a customer's own account only through this table, never by what they write.",
+  "assistant": true,
+  "columns": [
+    {
+      "name": "sender",
+      "title": "Number or chat id",
+      "type": "text",
+      "required": true,
+      "personal": true
+    },
+    {
+      "name": "name",
+      "title": "Name",
+      "type": "text",
+      "personal": true
+    },
+    {
+      "name": "account",
+      "title": "Wallet or account",
+      "type": "text",
+      "personal": true
+    },
+    {
+      "name": "phone",
+      "title": "Phone on their invoices",
+      "type": "phone",
+      "personal": true
+    }
+  ]
+}

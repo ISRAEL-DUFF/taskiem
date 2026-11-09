@@ -1,0 +1,958 @@
+{
+  "id": "assistant-whatsapp-accounts",
+  "title": "Your assistant on WhatsApp, with their accounts",
+  "summary": "An assistant that answers your customers on your own WhatsApp number, by text or voice, from what your business knows.",
+  "description": "When a customer writes to your WhatsApp number, your assistant answers them in their language (English, Pidgin, Yoruba, Hausa or Igbo) from your approved sources and the conversation so far, with every reply checked before it is sent. A voice note is heard and answered by voice. New customers are told they are talking to an assistant and can write PERSON for a person or STOP to stop; too many messages, and kinds of message it does not read, get a polite fixed answer. When it is unsure, or cannot answer, the customer is told someone will get back to them and you are told. You can answer only the customers on your list. Try it on Conversations with Talk to it here before customers do. It also tells each customer their own balance, recent transactions and what they owe, read for the person writing (by their number or chat in your customers' accounts table) and never anyone else; nothing is paid or changed.",
+  "category": "assistant",
+  "tags": [
+    "assistant",
+    "whatsapp",
+    "voice",
+    "ai"
+  ],
+  "keywords": [
+    "assistant",
+    "answer",
+    "questions",
+    "whatsapp",
+    "voice",
+    "chatbot",
+    "auto reply"
+  ],
+  "requires": [
+    "assistant",
+    "answer customers",
+    "answer my customers",
+    "reply to customers",
+    "reply my customers",
+    "chatbot",
+    "auto reply",
+    "automatic replies",
+    "customer questions"
+  ],
+  "connectors": [
+    "assistant@1",
+    "capability:customer_balance",
+    "notify@1",
+    "speech@1",
+    "whatsapp@1",
+    "xenibase@1"
+  ],
+  "params": [
+    {
+      "name": "conn",
+      "type": "connection",
+      "connector": "whatsapp",
+      "title": "WhatsApp connection",
+      "description": "Your business's own WhatsApp number, connected to Taskiem.",
+      "required": false,
+      "default": "main",
+      "example": "main"
+    },
+    {
+      "name": "business_name",
+      "type": "string",
+      "title": "Business name",
+      "description": "How your assistant names your business to customers.",
+      "required": true,
+      "example": "Mama Put Kitchen",
+      "max_length": 80
+    },
+    {
+      "name": "about",
+      "type": "text",
+      "title": "About your business",
+      "description": "A few lines your assistant always keeps in mind: what you sell, where you are, your opening hours, and how you like to speak to customers. Prices and offers belong in your approved sources, where they are checked.",
+      "required": false,
+      "default": "",
+      "example": "We cook and deliver Nigerian meals in Lekki and Ajah, every day from 9am to 9pm. Be warm and brief.",
+      "max_length": 2000
+    },
+    {
+      "name": "reply_by_voice",
+      "type": "boolean",
+      "title": "Answer a voice note with a voice note",
+      "description": "When a customer sends a voice note, your assistant answers by speaking. Otherwise it writes.",
+      "required": false,
+      "default": true,
+      "example": true
+    },
+    {
+      "name": "only_listed",
+      "type": "boolean",
+      "title": "Only answer customers on your list",
+      "description": "Your assistant answers only the customers in your allowed customers table, and says nothing to anyone else. Leave it off to answer everyone.",
+      "required": false,
+      "default": false,
+      "example": false
+    },
+    {
+      "name": "allowed_table",
+      "type": "string",
+      "title": "Allowed customers table",
+      "description": "The customers your assistant may answer, when you choose to answer only them. Taskiem makes it for you if it does not exist.",
+      "required": false,
+      "default": "assistant_allowed",
+      "example": "assistant_allowed",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$",
+      "picker": "table"
+    },
+    {
+      "name": "conversations_table",
+      "type": "string",
+      "title": "Conversations table",
+      "description": "Where what was said is kept, so your assistant remembers the conversation. Taskiem makes it for you if it does not exist.",
+      "required": false,
+      "default": "conversations",
+      "example": "conversations",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$",
+      "picker": "table"
+    },
+    {
+      "name": "accounts_table",
+      "type": "string",
+      "title": "Customers' accounts table",
+      "description": "Who each customer is: their number or chat, and their wallet or account at your payments service. Taskiem makes it for you if it does not exist.",
+      "required": false,
+      "default": "customer_accounts",
+      "example": "customer_accounts",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$",
+      "picker": "table"
+    },
+    {
+      "name": "rail_connection",
+      "type": "connection",
+      "capability": [
+        "customer_balance"
+      ],
+      "title": "Your payments service",
+      "description": "Where your customers' wallets or accounts are: iswallet, or bank accounts linked through Mono.",
+      "required": false,
+      "default": "",
+      "example": ""
+    }
+  ],
+  "tables": [
+    {
+      "known": "conversations",
+      "name": "{{conversations_table}}"
+    },
+    {
+      "known": "assistant_allowed",
+      "name": "{{allowed_table}}"
+    },
+    {
+      "known": "customer_accounts",
+      "name": "{{accounts_table}}"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_assistantWhatsAppAccounts",
+    "version": 1,
+    "name": "Answer customers on WhatsApp",
+    "trigger": {
+      "type": "connector_event",
+      "config": {
+        "connector": "whatsapp@1",
+        "trigger": "messages",
+        "events": [
+          "message"
+        ],
+        "connection": "{{conn}}",
+        "guard": true
+      }
+    },
+    "steps": [
+      {
+        "id": "settings",
+        "type": "transform",
+        "name": "Use your choices",
+        "config": {
+          "output": {
+            "reply_by_voice": "{{reply_by_voice}}",
+            "only_listed": "{{only_listed}}"
+          }
+        }
+      },
+      {
+        "id": "who",
+        "type": "branch",
+        "name": "Is it someone your assistant answers?",
+        "needs": [
+          "settings"
+        ],
+        "when": "=trigger.guard.outcome != 'quiet'",
+        "config": {
+          "paths": [
+            {
+              "name": "listed",
+              "when": "=steps.settings.output.only_listed",
+              "steps": [
+                {
+                  "id": "listed",
+                  "type": "connector",
+                  "name": "Look them up in the allowed customers",
+                  "connector": "xenibase@1",
+                  "action": "read_rows",
+                  "connection": "data_tables",
+                  "input": {
+                    "table": "{{allowed_table}}",
+                    "filters": [
+                      {
+                        "column": "sender",
+                        "op": "in",
+                        "values": "=[trigger.guard.sender, '+' + trigger.guard.sender] + (trigger.guard.sender.startsWith('234') ? ['0' + trigger.guard.sender.substring(3)] : [])"
+                      }
+                    ],
+                    "limit": 1
+                  }
+                }
+              ]
+            }
+          ],
+          "default": {
+            "steps": [
+              {
+                "id": "everyone",
+                "type": "transform",
+                "name": "Answer everyone",
+                "config": {
+                  "output": {
+                    "everyone": true
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "fixed",
+        "type": "connector",
+        "name": "Send the fixed answer (STOP, START, a person, too many messages)",
+        "connector": "whatsapp@1",
+        "connection": "{{conn}}",
+        "action": "send_text",
+        "input": {
+          "to": "='+' + trigger.guard.sender",
+          "body": "=(trigger.guard.?notice.orValue('') != '' ? trigger.guard.notice + '\\n\\n' : '') + trigger.guard.reply"
+        },
+        "needs": [
+          "who"
+        ],
+        "when": "=trigger.guard.outcome == 'reply' && (steps.who.output.path == 'default' || has(steps.who.output.steps.listed.rows) && size(steps.who.output.steps.listed.rows) > 0)",
+        "on_error": {
+          "steps": [
+            {
+              "id": "fixed_told",
+              "type": "connector",
+              "name": "Tell the owners",
+              "connector": "notify@1",
+              "action": "tell",
+              "input": {
+                "title": "A customer was not answered",
+                "message": "='Your assistant answered a customer on WhatsApp but the reply could not be sent.' + (steps.fixed.error.?code.orValue('') == 'window_closed' ? ' They last wrote more than 24 hours ago, so WhatsApp only takes an approved template now.' : '') + ' Answer them from Conversations.'"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "typing",
+        "type": "connector",
+        "name": "Show that a reply is being written",
+        "connector": "whatsapp@1",
+        "connection": "{{conn}}",
+        "needs": [
+          "settings",
+          "who"
+        ],
+        "when": "=trigger.guard.outcome == 'answer' && (steps.who.output.path == 'default' || has(steps.who.output.steps.listed.rows) && size(steps.who.output.steps.listed.rows) > 0)",
+        "on_error": {
+          "steps": [
+            {
+              "id": "typing_skipped",
+              "type": "transform",
+              "name": "Carry on without it",
+              "config": {
+                "output": {
+                  "shown": false
+                }
+              }
+            }
+          ]
+        },
+        "action": "send_typing",
+        "input": {
+          "message_id": "=trigger.item.message.id"
+        }
+      },
+      {
+        "id": "remember",
+        "type": "connector",
+        "name": "Keep their message in the conversation",
+        "connector": "xenibase@1",
+        "action": "insert_rows",
+        "connection": "data_tables",
+        "when": "=trigger.guard.outcome == 'quiet' && trigger.guard.?text.orValue('') != ''",
+        "input": {
+          "table": "{{conversations_table}}",
+          "rows": "=[{'conversation': 'whatsapp:' + trigger.guard.sender, 'channel': 'whatsapp', 'sender': trigger.guard.sender, 'role': 'user', 'text': trigger.guard.text, 'language': trigger.guard.language, 'kind': 'text'}]"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "remember_skipped",
+              "type": "transform",
+              "name": "Carry on without it",
+              "config": {
+                "output": {
+                  "kept": false
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "answer",
+        "type": "branch",
+        "name": "Answer them",
+        "needs": [
+          "settings",
+          "who"
+        ],
+        "when": "=trigger.guard.outcome == 'answer' && (steps.who.output.path == 'default' || has(steps.who.output.steps.listed.rows) && size(steps.who.output.steps.listed.rows) > 0)",
+        "config": {
+          "paths": [
+            {
+              "name": "voice",
+              "when": "=trigger.guard.kind in ['voice', 'audio'] && has(trigger.guard.file)",
+              "steps": [
+                {
+                  "id": "hear",
+                  "type": "connector",
+                  "name": "Hear the voice note",
+                  "connector": "speech@1",
+                  "action": "transcribe",
+                  "input": {
+                    "file": "=trigger.guard.file",
+                    "language": "=trigger.guard.?first.orValue(false) ? '' : trigger.guard.language"
+                  },
+                  "on_error": {
+                    "steps": [
+                      {
+                        "id": "deaf",
+                        "type": "connector",
+                        "name": "Find the words for a voice note that could not be heard",
+                        "connector": "speech@1",
+                        "action": "cannot_hear",
+                        "input": {
+                          "reason": "unavailable",
+                          "language": "=trigger.guard.language"
+                        }
+                      },
+                      {
+                        "id": "say_deaf",
+                        "type": "connector",
+                        "name": "Ask them to write instead",
+                        "connector": "whatsapp@1",
+                        "connection": "{{conn}}",
+                        "action": "send_text",
+                        "input": {
+                          "to": "='+' + trigger.guard.sender",
+                          "body": "=(trigger.guard.?notice.orValue('') != '' ? trigger.guard.notice + '\\n\\n' : '') + steps.deaf.output.reply"
+                        },
+                        "needs": [
+                          "deaf"
+                        ],
+                        "on_error": {
+                          "steps": [
+                            {
+                              "id": "say_deaf_told",
+                              "type": "connector",
+                              "name": "Tell the owners",
+                              "connector": "notify@1",
+                              "action": "tell",
+                              "input": {
+                                "title": "A customer was not answered",
+                                "message": "='Your assistant answered a customer on WhatsApp but the reply could not be sent.' + (steps.say_deaf.error.?code.orValue('') == 'window_closed' ? ' They last wrote more than 24 hours ago, so WhatsApp only takes an approved template now.' : '') + ' Answer them from Conversations.'"
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "id": "heard",
+                  "type": "branch",
+                  "name": "Were the words heard?",
+                  "needs": [
+                    "hear"
+                  ],
+                  "config": {
+                    "paths": [
+                      {
+                        "name": "heard",
+                        "when": "=steps.hear.output.heard",
+                        "steps": [
+                          {
+                            "id": "look_v",
+                            "type": "template",
+                            "name": "Read what they ask about their own account",
+                            "template": "assistant-account",
+                            "params": {
+                              "accounts_table": "{{accounts_table}}",
+                              "rail_connection": "{{rail_connection}}"
+                            },
+                            "input": {
+                              "via": "whatsapp",
+                              "sender": "=trigger.guard.sender",
+                              "text": "=steps.hear.output.text",
+                              "language": "=steps.hear.output.?language.orValue('') != '' ? steps.hear.output.language : trigger.guard.language"
+                            },
+                            "on_error": {
+                              "steps": [
+                                {
+                                  "id": "held_lv",
+                                  "type": "connector",
+                                  "name": "Find the words for someone getting back to them",
+                                  "connector": "assistant@1",
+                                  "action": "check_reply",
+                                  "input": {
+                                    "text": "",
+                                    "language": "=trigger.guard.language"
+                                  }
+                                },
+                                {
+                                  "id": "say_held_lv",
+                                  "type": "connector",
+                                  "name": "Tell them someone will get back to them",
+                                  "connector": "whatsapp@1",
+                                  "connection": "{{conn}}",
+                                  "action": "send_text",
+                                  "input": {
+                                    "to": "='+' + trigger.guard.sender",
+                                    "body": "=(trigger.guard.?notice.orValue('') != '' ? trigger.guard.notice + '\\n\\n' : '') + steps.held_lv.output.text"
+                                  },
+                                  "needs": [
+                                    "held_lv"
+                                  ],
+                                  "on_error": {
+                                    "steps": [
+                                      {
+                                        "id": "say_held_lv_told",
+                                        "type": "connector",
+                                        "name": "Tell the owners",
+                                        "connector": "notify@1",
+                                        "action": "tell",
+                                        "input": {
+                                          "title": "A customer was not answered",
+                                          "message": "='Your assistant answered a customer on WhatsApp but the reply could not be sent.' + (steps.say_held_lv.error.?code.orValue('') == 'window_closed' ? ' They last wrote more than 24 hours ago, so WhatsApp only takes an approved template now.' : '') + ' Answer them from Conversations.'"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "id": "told_lv",
+                                  "type": "connector",
+                                  "name": "Tell the owners",
+                                  "connector": "notify@1",
+                                  "action": "tell",
+                                  "input": {
+                                    "title": "A customer was not answered",
+                                    "message": "='Your assistant could not answer a customer on WhatsApp. They were told someone will get back to them: answer them from Conversations.'"
+                                  }
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "id": "answer_v",
+                            "type": "template",
+                            "name": "Answer them",
+                            "template": "assistant-answer",
+                            "params": {
+                              "business_name": "{{business_name}}",
+                              "about": "{{about}}",
+                              "conversations_table": "{{conversations_table}}"
+                            },
+                            "input": {
+                              "channel": "=trigger.guard.channel",
+                              "via": "whatsapp",
+                              "sender": "=trigger.guard.sender",
+                              "text": "=steps.hear.output.text",
+                              "language": "=steps.hear.output.?language.orValue('') != '' ? steps.hear.output.language : trigger.guard.language",
+                              "kind": "voice",
+                              "account": "=steps.look_v.output.facts"
+                            },
+                            "on_error": {
+                              "steps": [
+                                {
+                                  "id": "held_v",
+                                  "type": "connector",
+                                  "name": "Find the words for someone getting back to them",
+                                  "connector": "assistant@1",
+                                  "action": "check_reply",
+                                  "input": {
+                                    "text": "",
+                                    "language": "=trigger.guard.language"
+                                  }
+                                },
+                                {
+                                  "id": "say_held_v",
+                                  "type": "connector",
+                                  "name": "Tell them someone will get back to them",
+                                  "connector": "whatsapp@1",
+                                  "connection": "{{conn}}",
+                                  "action": "send_text",
+                                  "input": {
+                                    "to": "='+' + trigger.guard.sender",
+                                    "body": "=(trigger.guard.?notice.orValue('') != '' ? trigger.guard.notice + '\\n\\n' : '') + steps.held_v.output.text"
+                                  },
+                                  "needs": [
+                                    "held_v"
+                                  ],
+                                  "on_error": {
+                                    "steps": [
+                                      {
+                                        "id": "say_held_v_told",
+                                        "type": "connector",
+                                        "name": "Tell the owners",
+                                        "connector": "notify@1",
+                                        "action": "tell",
+                                        "input": {
+                                          "title": "A customer was not answered",
+                                          "message": "='Your assistant answered a customer on WhatsApp but the reply could not be sent.' + (steps.say_held_v.error.?code.orValue('') == 'window_closed' ? ' They last wrote more than 24 hours ago, so WhatsApp only takes an approved template now.' : '') + ' Answer them from Conversations.'"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "id": "told_v",
+                                  "type": "connector",
+                                  "name": "Tell the owners",
+                                  "connector": "notify@1",
+                                  "action": "tell",
+                                  "input": {
+                                    "title": "A customer was not answered",
+                                    "message": "='Your assistant could not answer a customer on WhatsApp. They were told someone will get back to them: answer them from Conversations.'"
+                                  }
+                                }
+                              ]
+                            },
+                            "needs": [
+                              "look_v"
+                            ]
+                          },
+                          {
+                            "id": "speak",
+                            "type": "connector",
+                            "name": "Speak the reply",
+                            "connector": "speech@1",
+                            "action": "speak",
+                            "needs": [
+                              "answer_v"
+                            ],
+                            "when": "=steps.settings.output.reply_by_voice",
+                            "input": {
+                              "text": "=steps.answer_v.output.reply",
+                              "customer": "=trigger.guard.sender",
+                              "customer_kind": "phone"
+                            },
+                            "on_error": {
+                              "steps": [
+                                {
+                                  "id": "say_instead",
+                                  "type": "connector",
+                                  "name": "Send the reply as text instead",
+                                  "connector": "whatsapp@1",
+                                  "connection": "{{conn}}",
+                                  "action": "send_text",
+                                  "input": {
+                                    "to": "='+' + trigger.guard.sender",
+                                    "body": "=(trigger.guard.?notice.orValue('') != '' ? trigger.guard.notice + '\\n\\n' : '') + steps.answer_v.output.reply"
+                                  },
+                                  "on_error": {
+                                    "steps": [
+                                      {
+                                        "id": "say_instead_told",
+                                        "type": "connector",
+                                        "name": "Tell the owners",
+                                        "connector": "notify@1",
+                                        "action": "tell",
+                                        "input": {
+                                          "title": "A customer was not answered",
+                                          "message": "='Your assistant answered a customer on WhatsApp but the reply could not be sent.' + (steps.say_instead.error.?code.orValue('') == 'window_closed' ? ' They last wrote more than 24 hours ago, so WhatsApp only takes an approved template now.' : '') + ' Answer them from Conversations.'"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "id": "notice_v",
+                            "type": "connector",
+                            "name": "Send the notice for a new customer",
+                            "connector": "whatsapp@1",
+                            "connection": "{{conn}}",
+                            "action": "send_text",
+                            "input": {
+                              "to": "='+' + trigger.guard.sender",
+                              "body": "=trigger.guard.notice"
+                            },
+                            "needs": [
+                              "answer_v"
+                            ],
+                            "when": "=steps.settings.output.reply_by_voice && trigger.guard.?notice.orValue('') != ''"
+                          },
+                          {
+                            "id": "send_v",
+                            "type": "connector",
+                            "name": "Send the spoken reply",
+                            "connector": "whatsapp@1",
+                            "connection": "{{conn}}",
+                            "action": "send_media",
+                            "input": {
+                              "to": "='+' + trigger.guard.sender",
+                              "media_type": "audio",
+                              "voice": true,
+                              "file": "=steps.speak.output.file"
+                            },
+                            "needs": [
+                              "speak"
+                            ],
+                            "on_error": {
+                              "steps": [
+                                {
+                                  "id": "send_v_told",
+                                  "type": "connector",
+                                  "name": "Tell the owners",
+                                  "connector": "notify@1",
+                                  "action": "tell",
+                                  "input": {
+                                    "title": "A customer was not answered",
+                                    "message": "='Your assistant answered a customer on WhatsApp but the reply could not be sent.' + (steps.send_v.error.?code.orValue('') == 'window_closed' ? ' They last wrote more than 24 hours ago, so WhatsApp only takes an approved template now.' : '') + ' Answer them from Conversations.'"
+                                  }
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "id": "send_tv",
+                            "type": "connector",
+                            "name": "Send the reply",
+                            "connector": "whatsapp@1",
+                            "connection": "{{conn}}",
+                            "action": "send_text",
+                            "input": {
+                              "to": "='+' + trigger.guard.sender",
+                              "body": "=(trigger.guard.?notice.orValue('') != '' ? trigger.guard.notice + '\\n\\n' : '') + steps.answer_v.output.reply"
+                            },
+                            "needs": [
+                              "answer_v"
+                            ],
+                            "when": "=!steps.settings.output.reply_by_voice",
+                            "on_error": {
+                              "steps": [
+                                {
+                                  "id": "send_tv_told",
+                                  "type": "connector",
+                                  "name": "Tell the owners",
+                                  "connector": "notify@1",
+                                  "action": "tell",
+                                  "input": {
+                                    "title": "A customer was not answered",
+                                    "message": "='Your assistant answered a customer on WhatsApp but the reply could not be sent.' + (steps.send_tv.error.?code.orValue('') == 'window_closed' ? ' They last wrote more than 24 hours ago, so WhatsApp only takes an approved template now.' : '') + ' Answer them from Conversations.'"
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    ],
+                    "default": {
+                      "steps": [
+                        {
+                          "id": "unheard",
+                          "type": "connector",
+                          "name": "Tell them it could not be heard",
+                          "connector": "whatsapp@1",
+                          "connection": "{{conn}}",
+                          "action": "send_text",
+                          "input": {
+                            "to": "='+' + trigger.guard.sender",
+                            "body": "=(trigger.guard.?notice.orValue('') != '' ? trigger.guard.notice + '\\n\\n' : '') + steps.hear.output.reply"
+                          },
+                          "on_error": {
+                            "steps": [
+                              {
+                                "id": "unheard_told",
+                                "type": "connector",
+                                "name": "Tell the owners",
+                                "connector": "notify@1",
+                                "action": "tell",
+                                "input": {
+                                  "title": "A customer was not answered",
+                                  "message": "='Your assistant answered a customer on WhatsApp but the reply could not be sent.' + (steps.unheard.error.?code.orValue('') == 'window_closed' ? ' They last wrote more than 24 hours ago, so WhatsApp only takes an approved template now.' : '') + ' Answer them from Conversations.'"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "voice_lost",
+              "when": "=trigger.guard.kind in ['voice', 'audio']",
+              "steps": [
+                {
+                  "id": "lost",
+                  "type": "connector",
+                  "name": "Find the words for a voice note that could not be fetched",
+                  "connector": "speech@1",
+                  "action": "cannot_hear",
+                  "input": {
+                    "reason": "unavailable",
+                    "language": "=trigger.guard.language"
+                  }
+                },
+                {
+                  "id": "send_lost",
+                  "type": "connector",
+                  "name": "Tell them it could not be heard",
+                  "connector": "whatsapp@1",
+                  "connection": "{{conn}}",
+                  "action": "send_text",
+                  "input": {
+                    "to": "='+' + trigger.guard.sender",
+                    "body": "=(trigger.guard.?notice.orValue('') != '' ? trigger.guard.notice + '\\n\\n' : '') + steps.lost.output.reply"
+                  },
+                  "needs": [
+                    "lost"
+                  ],
+                  "on_error": {
+                    "steps": [
+                      {
+                        "id": "send_lost_told",
+                        "type": "connector",
+                        "name": "Tell the owners",
+                        "connector": "notify@1",
+                        "action": "tell",
+                        "input": {
+                          "title": "A customer was not answered",
+                          "message": "='Your assistant answered a customer on WhatsApp but the reply could not be sent.' + (steps.send_lost.error.?code.orValue('') == 'window_closed' ? ' They last wrote more than 24 hours ago, so WhatsApp only takes an approved template now.' : '') + ' Answer them from Conversations.'"
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ],
+          "default": {
+            "steps": [
+              {
+                "id": "look_t",
+                "type": "template",
+                "name": "Read what they ask about their own account",
+                "template": "assistant-account",
+                "params": {
+                  "accounts_table": "{{accounts_table}}",
+                  "rail_connection": "{{rail_connection}}"
+                },
+                "input": {
+                  "via": "whatsapp",
+                  "sender": "=trigger.guard.sender",
+                  "text": "=trigger.guard.text",
+                  "language": "=trigger.guard.language"
+                },
+                "on_error": {
+                  "steps": [
+                    {
+                      "id": "held_lt",
+                      "type": "connector",
+                      "name": "Find the words for someone getting back to them",
+                      "connector": "assistant@1",
+                      "action": "check_reply",
+                      "input": {
+                        "text": "",
+                        "language": "=trigger.guard.language"
+                      }
+                    },
+                    {
+                      "id": "say_held_lt",
+                      "type": "connector",
+                      "name": "Tell them someone will get back to them",
+                      "connector": "whatsapp@1",
+                      "connection": "{{conn}}",
+                      "action": "send_text",
+                      "input": {
+                        "to": "='+' + trigger.guard.sender",
+                        "body": "=(trigger.guard.?notice.orValue('') != '' ? trigger.guard.notice + '\\n\\n' : '') + steps.held_lt.output.text"
+                      },
+                      "needs": [
+                        "held_lt"
+                      ],
+                      "on_error": {
+                        "steps": [
+                          {
+                            "id": "say_held_lt_told",
+                            "type": "connector",
+                            "name": "Tell the owners",
+                            "connector": "notify@1",
+                            "action": "tell",
+                            "input": {
+                              "title": "A customer was not answered",
+                              "message": "='Your assistant answered a customer on WhatsApp but the reply could not be sent.' + (steps.say_held_lt.error.?code.orValue('') == 'window_closed' ? ' They last wrote more than 24 hours ago, so WhatsApp only takes an approved template now.' : '') + ' Answer them from Conversations.'"
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "id": "told_lt",
+                      "type": "connector",
+                      "name": "Tell the owners",
+                      "connector": "notify@1",
+                      "action": "tell",
+                      "input": {
+                        "title": "A customer was not answered",
+                        "message": "='Your assistant could not answer a customer on WhatsApp. They were told someone will get back to them: answer them from Conversations.'"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "answer_t",
+                "type": "template",
+                "name": "Answer them",
+                "template": "assistant-answer",
+                "params": {
+                  "business_name": "{{business_name}}",
+                  "about": "{{about}}",
+                  "conversations_table": "{{conversations_table}}"
+                },
+                "input": {
+                  "channel": "=trigger.guard.channel",
+                  "via": "whatsapp",
+                  "sender": "=trigger.guard.sender",
+                  "text": "=trigger.guard.text",
+                  "language": "=trigger.guard.language",
+                  "kind": "text",
+                  "account": "=steps.look_t.output.facts"
+                },
+                "on_error": {
+                  "steps": [
+                    {
+                      "id": "held_t",
+                      "type": "connector",
+                      "name": "Find the words for someone getting back to them",
+                      "connector": "assistant@1",
+                      "action": "check_reply",
+                      "input": {
+                        "text": "",
+                        "language": "=trigger.guard.language"
+                      }
+                    },
+                    {
+                      "id": "say_held_t",
+                      "type": "connector",
+                      "name": "Tell them someone will get back to them",
+                      "connector": "whatsapp@1",
+                      "connection": "{{conn}}",
+                      "action": "send_text",
+                      "input": {
+                        "to": "='+' + trigger.guard.sender",
+                        "body": "=(trigger.guard.?notice.orValue('') != '' ? trigger.guard.notice + '\\n\\n' : '') + steps.held_t.output.text"
+                      },
+                      "needs": [
+                        "held_t"
+                      ],
+                      "on_error": {
+                        "steps": [
+                          {
+                            "id": "say_held_t_told",
+                            "type": "connector",
+                            "name": "Tell the owners",
+                            "connector": "notify@1",
+                            "action": "tell",
+                            "input": {
+                              "title": "A customer was not answered",
+                              "message": "='Your assistant answered a customer on WhatsApp but the reply could not be sent.' + (steps.say_held_t.error.?code.orValue('') == 'window_closed' ? ' They last wrote more than 24 hours ago, so WhatsApp only takes an approved template now.' : '') + ' Answer them from Conversations.'"
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "id": "told_t",
+                      "type": "connector",
+                      "name": "Tell the owners",
+                      "connector": "notify@1",
+                      "action": "tell",
+                      "input": {
+                        "title": "A customer was not answered",
+                        "message": "='Your assistant could not answer a customer on WhatsApp. They were told someone will get back to them: answer them from Conversations.'"
+                      }
+                    }
+                  ]
+                },
+                "needs": [
+                  "look_t"
+                ]
+              },
+              {
+                "id": "send_t",
+                "type": "connector",
+                "name": "Send the reply",
+                "connector": "whatsapp@1",
+                "connection": "{{conn}}",
+                "action": "send_text",
+                "input": {
+                  "to": "='+' + trigger.guard.sender",
+                  "body": "=(trigger.guard.?notice.orValue('') != '' ? trigger.guard.notice + '\\n\\n' : '') + steps.answer_t.output.reply"
+                },
+                "needs": [
+                  "answer_t"
+                ],
+                "on_error": {
+                  "steps": [
+                    {
+                      "id": "send_t_told",
+                      "type": "connector",
+                      "name": "Tell the owners",
+                      "connector": "notify@1",
+                      "action": "tell",
+                      "input": {
+                        "title": "A customer was not answered",
+                        "message": "='Your assistant answered a customer on WhatsApp but the reply could not be sent.' + (steps.send_t.error.?code.orValue('') == 'window_closed' ? ' They last wrote more than 24 hours ago, so WhatsApp only takes an approved template now.' : '') + ' Answer them from Conversations.'"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "15m",
+      "retention": "conversations"
+    }
+  }
+}

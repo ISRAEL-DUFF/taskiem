@@ -142,6 +142,13 @@
               "voice"
             ],
             "title": "Text or voice"
+          },
+          "account": {
+            "type": "string",
+            "maxLength": 20000,
+            "title": "What their own account says",
+            "description": "From assistant-account: what the customer asked about their own account and what was read for them",
+            "x-pii": "other"
           }
         }
       }
@@ -192,11 +199,12 @@
         ],
         "config": {
           "system": "You answer customers of {{business_name}} on WhatsApp and Telegram, for the business. {{about}}",
-          "prompt": "Answer the customer's latest message (question) in a short, friendly reply, in their language (language: en English, pcm Nigerian Pidgin, yo Yoruba, ha Hausa, ig Igbo). Use only the business's material for facts, prices, offers and links; never invent them. If the material does not answer it, or they are upset, or they ask for something only a person can do, say kindly that someone from the team will get back to them, and set needs_person.",
+          "prompt": "Answer the customer's latest message (question) in a short, friendly reply, in their language (language: en English, pcm Nigerian Pidgin, yo Yoruba, ha Hausa, ig Igbo). Use only the business's material for facts, prices, offers and links; never invent them. If the material does not answer it, or they are upset, or they ask for something only a person can do, say kindly that someone from the team will get back to them, and set needs_person. When account is not empty, it is this customer's own record, read for them just now: answer what they asked from it (amounts are in naira); it is the only place to take their balance, invoices or transactions from.",
           "history": "=steps.memory.output.rows.filter(r, has(r.role) && has(r.text) && r.role in ['user', 'assistant']).reverse().map(r, {'role': r.role, 'text': r.text})",
           "personal_data": [
             "history",
-            "question"
+            "question",
+            "account"
           ],
           "max_tokens": 600,
           "output_schema": {
@@ -227,7 +235,8 @@
         "input": {
           "question": "=trigger.body.text",
           "language": "=trigger.body.?language.orValue('en')",
-          "material": "=steps.know.output.material"
+          "material": "=steps.know.output.material",
+          "account": "=trigger.body.?account.orValue('')"
         }
       },
       {
@@ -241,7 +250,7 @@
         ],
         "input": {
           "text": "=steps.reply.output.reply",
-          "material": "=steps.know.output.material",
+          "material": "=steps.know.output.material + (trigger.body.?account.orValue('') != '' ? '\\n\\n' + trigger.body.account : '')",
           "customer": "=trigger.body.text",
           "language": "=trigger.body.?language.orValue('en')",
           "max": 1500

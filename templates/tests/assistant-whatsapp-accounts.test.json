@@ -1,0 +1,457 @@
+{
+  "schema": "wd-test/v1",
+  "template": "assistant-whatsapp-accounts",
+  "params": {
+    "business_name": "Ada Wallet"
+  },
+  "cases": [
+    {
+      "name": "a balance question is answered from the customer's own account, read for them",
+      "trigger": {
+        "event": "message",
+        "guard": {
+          "outcome": "answer",
+          "reason": "",
+          "reply": "",
+          "notice": "",
+          "language": "en",
+          "first": false,
+          "kind": "text",
+          "text": "How much is in my wallet?",
+          "channel": "whatsapp@1/main/prod",
+          "sender": "2348031234567"
+        },
+        "item": {
+          "kind": "message",
+          "message": {
+            "id": "wamid.IN1",
+            "from": "2348031234567",
+            "type": "text"
+          }
+        }
+      },
+      "mocks": {
+        "typing": {
+          "output": {}
+        },
+        "look_t__acct": {
+          "output": {
+            "rows": [
+              {
+                "id": 1,
+                "sender": "2348031234567",
+                "account": "c-ada"
+              }
+            ]
+          }
+        },
+        "look_t__classify": {
+          "output": {
+            "intent": "balance"
+          }
+        },
+        "look_t__bal": {
+          "output": {
+            "available_kobo": 4930000,
+            "currency": "NGN"
+          }
+        },
+        "answer_t__memory": {
+          "output": {
+            "rows": []
+          }
+        },
+        "answer_t__know": {
+          "output": {
+            "found": false,
+            "material": "",
+            "passages": []
+          }
+        },
+        "answer_t__reply": {
+          "output": {
+            "reply": "You have ₦49,300 in your wallet.",
+            "needs_person": false
+          }
+        },
+        "answer_t__check": {
+          "output": {
+            "ok": true,
+            "text": "You have ₦49,300 in your wallet.",
+            "problems": []
+          }
+        },
+        "answer_t__keep": {
+          "output": {
+            "affected": 2,
+            "rows": []
+          }
+        },
+        "send_t": {
+          "output": {
+            "message_id": "wamid.OUT"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "look_t__bal": "completed",
+          "send_t": "completed"
+        },
+        "inputs": {
+          "look_t__acct": {
+            "filters": [
+              {
+                "column": "sender",
+                "op": "in",
+                "values": [
+                  "2348031234567",
+                  "+2348031234567",
+                  "08031234567"
+                ]
+              }
+            ]
+          },
+          "answer_t__reply": {
+            "input": {
+              "account": "This customer asked about their balance. Their balance, read just now from their own account: 49300 naira."
+            }
+          },
+          "answer_t__check": {
+            "material": "\n\nThis customer asked about their balance. Their balance, read just now from their own account: 49300 naira."
+          },
+          "send_t": {
+            "to": "+2348031234567",
+            "body": "You have ₦49,300 in your wallet."
+          }
+        }
+      }
+    },
+    {
+      "name": "a question about something else reads no account",
+      "trigger": {
+        "event": "message",
+        "guard": {
+          "outcome": "answer",
+          "reason": "",
+          "reply": "",
+          "notice": "",
+          "language": "en",
+          "first": false,
+          "kind": "text",
+          "text": "Are you open on Sunday?",
+          "channel": "whatsapp@1/main/prod",
+          "sender": "2348031234567"
+        },
+        "item": {
+          "kind": "message",
+          "message": {
+            "id": "wamid.IN1",
+            "from": "2348031234567",
+            "type": "text"
+          }
+        }
+      },
+      "mocks": {
+        "typing": {
+          "output": {}
+        },
+        "look_t__acct": {
+          "output": {
+            "rows": [
+              {
+                "id": 1,
+                "sender": "2348031234567",
+                "account": "c-ada"
+              }
+            ]
+          }
+        },
+        "look_t__classify": {
+          "output": {
+            "intent": "other"
+          }
+        },
+        "answer_t__memory": {
+          "output": {
+            "rows": []
+          }
+        },
+        "answer_t__know": {
+          "output": {
+            "found": false,
+            "material": "",
+            "passages": []
+          }
+        },
+        "answer_t__reply": {
+          "output": {
+            "reply": "Yes, from 10am.",
+            "needs_person": false
+          }
+        },
+        "answer_t__check": {
+          "output": {
+            "ok": true,
+            "text": "Yes, from 10am.",
+            "problems": []
+          }
+        },
+        "answer_t__keep": {
+          "output": {
+            "affected": 2,
+            "rows": []
+          }
+        },
+        "send_t": {
+          "output": {
+            "message_id": "wamid.OUT"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "look_t__bal": "not_run",
+          "send_t": "completed"
+        },
+        "inputs": {
+          "answer_t__reply": {
+            "input": {
+              "account": ""
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "when their account cannot be read, they are told someone will get back to them and the owners are told",
+      "trigger": {
+        "event": "message",
+        "guard": {
+          "outcome": "answer",
+          "reason": "",
+          "reply": "",
+          "notice": "",
+          "language": "en",
+          "first": false,
+          "kind": "text",
+          "text": "How much is in my wallet?",
+          "channel": "whatsapp@1/main/prod",
+          "sender": "2348031234567"
+        },
+        "item": {
+          "kind": "message",
+          "message": {
+            "id": "wamid.IN1",
+            "from": "2348031234567",
+            "type": "text"
+          }
+        }
+      },
+      "mocks": {
+        "typing": {
+          "output": {}
+        },
+        "look_t__acct": {
+          "output": {
+            "rows": [
+              {
+                "id": 1,
+                "sender": "2348031234567",
+                "account": "c-ada"
+              }
+            ]
+          }
+        },
+        "look_t__classify": {
+          "output": {
+            "intent": "balance"
+          }
+        },
+        "look_t__bal": {
+          "error": {
+            "kind": "fatal",
+            "code": "unavailable"
+          }
+        },
+        "held_lt": {
+          "output": {
+            "ok": false,
+            "text": "Let me check that with the team and get back to you.",
+            "problems": [
+              {
+                "kind": "empty"
+              }
+            ]
+          }
+        },
+        "say_held_lt": {
+          "output": {
+            "message_id": "wamid.OUT"
+          }
+        },
+        "told_lt": {
+          "output": {
+            "people": 1,
+            "chat": 1,
+            "email": 0,
+            "nobody": false
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "say_held_lt": "completed",
+          "answer_t": "skipped",
+          "send_t": "skipped"
+        },
+        "inputs": {
+          "say_held_lt": {
+            "to": "+2348031234567",
+            "body": "Let me check that with the team and get back to you."
+          }
+        }
+      }
+    },
+    {
+      "name": "a voice note about their balance is heard, read and answered by voice",
+      "trigger": {
+        "event": "message",
+        "guard": {
+          "outcome": "answer",
+          "reason": "",
+          "reply": "",
+          "notice": "",
+          "language": "en",
+          "first": false,
+          "kind": "voice",
+          "text": "",
+          "channel": "whatsapp@1/main/prod",
+          "sender": "2348031234567",
+          "file": {
+            "file": "019a0000-0000-7000-8000-000000000001",
+            "name": "voice.ogg",
+            "type": "audio/ogg",
+            "size": 9000,
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "item": {
+          "kind": "message",
+          "message": {
+            "id": "wamid.IN1",
+            "from": "2348031234567",
+            "type": "text"
+          }
+        }
+      },
+      "mocks": {
+        "typing": {
+          "output": {}
+        },
+        "hear": {
+          "output": {
+            "heard": true,
+            "text": "How much do I have?",
+            "language": "en",
+            "seconds": 2
+          }
+        },
+        "look_v__acct": {
+          "output": {
+            "rows": [
+              {
+                "id": 1,
+                "sender": "2348031234567",
+                "account": "c-ada"
+              }
+            ]
+          }
+        },
+        "look_v__classify": {
+          "output": {
+            "intent": "balance"
+          }
+        },
+        "look_v__bal": {
+          "output": {
+            "available_kobo": 4930000,
+            "currency": "NGN"
+          }
+        },
+        "answer_v__memory": {
+          "output": {
+            "rows": []
+          }
+        },
+        "answer_v__know": {
+          "output": {
+            "found": false,
+            "material": "",
+            "passages": []
+          }
+        },
+        "answer_v__reply": {
+          "output": {
+            "reply": "You have 49,300 naira.",
+            "needs_person": false
+          }
+        },
+        "answer_v__check": {
+          "output": {
+            "ok": true,
+            "text": "You have 49,300 naira.",
+            "problems": []
+          }
+        },
+        "answer_v__keep": {
+          "output": {
+            "affected": 2,
+            "rows": []
+          }
+        },
+        "speak": {
+          "output": {
+            "file": {
+              "file": "019a0000-0000-7000-8000-000000000002",
+              "name": "reply.ogg",
+              "type": "audio/ogg",
+              "size": 12000,
+              "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+            },
+            "seconds": 2,
+            "characters": 20,
+            "plays_inline": true
+          }
+        },
+        "send_v": {
+          "output": {
+            "message_id": "wamid.OUT"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "look_v__bal": "completed",
+          "send_v": "completed"
+        },
+        "inputs": {
+          "look_v__classify": {
+            "input": {
+              "question": "How much do I have?"
+            }
+          },
+          "answer_v__reply": {
+            "input": {
+              "account": "This customer asked about their balance. Their balance, read just now from their own account: 49300 naira."
+            }
+          }
+        }
+      }
+    }
+  ]
+}

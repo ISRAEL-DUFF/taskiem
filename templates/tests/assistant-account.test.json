@@ -1,0 +1,375 @@
+{
+  "schema": "wd-test/v1",
+  "template": "assistant-account",
+  "params": {},
+  "cases": [
+    {
+      "name": "a balance question reads the customer's own wallet, found by their number",
+      "trigger": {
+        "body": {
+          "via": "whatsapp",
+          "sender": "2348031234567",
+          "text": "How much do I have?",
+          "language": "en"
+        }
+      },
+      "mocks": {
+        "acct": {
+          "output": {
+            "rows": [
+              {
+                "id": 1,
+                "sender": "2348031234567",
+                "name": "Ada",
+                "account": "c-ada"
+              }
+            ]
+          }
+        },
+        "classify": {
+          "output": {
+            "intent": "balance"
+          }
+        },
+        "bal": {
+          "output": {
+            "available_kobo": 4930000,
+            "currency": "NGN"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "bal": "completed",
+          "txns": "not_run",
+          "owed": "not_run"
+        },
+        "inputs": {
+          "acct": {
+            "table": "customer_accounts",
+            "filters": [
+              {
+                "column": "sender",
+                "op": "in",
+                "values": [
+                  "2348031234567",
+                  "+2348031234567",
+                  "08031234567"
+                ]
+              }
+            ],
+            "limit": 1
+          },
+          "bal": {
+            "account": "c-ada"
+          }
+        },
+        "outputs": {
+          "facts": {
+            "asked": "balance",
+            "text": "This customer asked about their balance. Their balance, read just now from their own account: 49300 naira."
+          }
+        }
+      }
+    },
+    {
+      "name": "recent transactions are read from the last 30 days",
+      "trigger": {
+        "body": {
+          "via": "whatsapp",
+          "sender": "2348031234567",
+          "text": "Show me my last transactions",
+          "language": "en"
+        }
+      },
+      "mocks": {
+        "acct": {
+          "output": {
+            "rows": [
+              {
+                "id": 1,
+                "sender": "2348031234567",
+                "name": "Ada",
+                "account": "c-ada"
+              }
+            ]
+          }
+        },
+        "classify": {
+          "output": {
+            "intent": "recent"
+          }
+        },
+        "txns": {
+          "output": {
+            "transactions": [
+              {
+                "at": "2026-10-25T09:14:02Z",
+                "direction": "in",
+                "amount_kobo": 4930000,
+                "narration": "SALARY"
+              },
+              {
+                "at": "2026-10-28T08:00:00Z",
+                "direction": "out",
+                "amount_kobo": 1200000
+              }
+            ],
+            "truncated": false
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "txns": "completed"
+        },
+        "inputs": {
+          "txns": {
+            "account": "c-ada"
+          }
+        },
+        "outputs": {
+          "facts": {
+            "text": "This customer asked about their recent transactions. Their own account shows, in the last 30 days (date, in or out, naira, what it says):\n2026-10-25, in, 49300 naira, SALARY\n2026-10-28, out, 12000 naira"
+          }
+        }
+      }
+    },
+    {
+      "name": "what they owe is read from the invoices under their own WhatsApp number",
+      "trigger": {
+        "body": {
+          "via": "whatsapp",
+          "sender": "2348031234567",
+          "text": "Have you received my payment?",
+          "language": "en"
+        }
+      },
+      "mocks": {
+        "acct": {
+          "output": {
+            "rows": []
+          }
+        },
+        "classify": {
+          "output": {
+            "intent": "payment_status"
+          }
+        },
+        "owed": {
+          "output": {
+            "found": true,
+            "customer_name": "Ada",
+            "due_kobo": 500000,
+            "due": "₦5,000",
+            "open": [
+              {
+                "number": "INV-0002",
+                "status": "overdue",
+                "due_kobo": 500000,
+                "due": "₦5,000",
+                "due_on": "2026-11-01"
+              }
+            ],
+            "last_paid": {
+              "number": "INV-0001",
+              "total": "₦1,000",
+              "paid_on": "2026-10-31"
+            }
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "owed": "completed",
+          "bal": "not_run"
+        },
+        "inputs": {
+          "owed": {
+            "phone": "2348031234567"
+          }
+        },
+        "outputs": {
+          "facts": {
+            "asked": "payment_status",
+            "text": "This customer asked about what they owe or their payments. Their invoices with the business: they owe ₦5,000 on 1 open invoice(s): INV-0002 ₦5,000 due 2026-11-01. Last paid: invoice INV-0001 (₦1,000, on 2026-10-31)."
+          }
+        }
+      }
+    },
+    {
+      "name": "on Telegram, what they owe is read under the phone on their record",
+      "trigger": {
+        "body": {
+          "via": "telegram",
+          "sender": "55501",
+          "text": "What do I owe?",
+          "language": "en"
+        }
+      },
+      "mocks": {
+        "acct": {
+          "output": {
+            "rows": [
+              {
+                "id": 2,
+                "sender": "55501",
+                "phone": "+2348099999999"
+              }
+            ]
+          }
+        },
+        "classify": {
+          "output": {
+            "intent": "payment_status"
+          }
+        },
+        "owed": {
+          "output": {
+            "found": false,
+            "customer_name": "",
+            "due_kobo": 0,
+            "due": "₦0",
+            "open": []
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "acct": {
+            "filters": [
+              {
+                "column": "sender",
+                "op": "in",
+                "values": [
+                  "55501"
+                ]
+              }
+            ]
+          },
+          "owed": {
+            "phone": "+2348099999999"
+          }
+        },
+        "outputs": {
+          "facts": {
+            "text": "This customer asked about what they owe or their payments. The business has no invoices for them."
+          }
+        }
+      }
+    },
+    {
+      "name": "a balance question from someone with no linked account reads nothing",
+      "trigger": {
+        "body": {
+          "via": "whatsapp",
+          "sender": "2348031234567",
+          "text": "How much do I have?",
+          "language": "en"
+        }
+      },
+      "mocks": {
+        "acct": {
+          "output": {
+            "rows": []
+          }
+        },
+        "classify": {
+          "output": {
+            "intent": "balance"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "bal": "not_run",
+          "unlinked": "completed"
+        },
+        "outputs": {
+          "facts": {
+            "text": "This customer asked about their own account, but the business has not linked their number to an account, so it cannot be read here: say someone from the team will help."
+          }
+        }
+      }
+    },
+    {
+      "name": "on Telegram with no record, what they owe cannot be read",
+      "trigger": {
+        "body": {
+          "via": "telegram",
+          "sender": "55501",
+          "text": "What do I owe?",
+          "language": "en"
+        }
+      },
+      "mocks": {
+        "acct": {
+          "output": {
+            "rows": []
+          }
+        },
+        "classify": {
+          "output": {
+            "intent": "payment_status"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "owed": "not_run",
+          "unlinked": "completed"
+        }
+      }
+    },
+    {
+      "name": "anything else reads nothing",
+      "trigger": {
+        "body": {
+          "via": "whatsapp",
+          "sender": "2348031234567",
+          "text": "Are you open on Sunday?",
+          "language": "en"
+        }
+      },
+      "mocks": {
+        "acct": {
+          "output": {
+            "rows": [
+              {
+                "id": 1,
+                "sender": "2348031234567",
+                "name": "Ada",
+                "account": "c-ada"
+              }
+            ]
+          }
+        },
+        "classify": {
+          "output": {
+            "intent": "other"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "bal": "not_run",
+          "owed": "not_run",
+          "nothing": "completed"
+        },
+        "outputs": {
+          "facts": {
+            "asked": "other",
+            "text": ""
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,294 @@
+{
+  "id": "assistant-account",
+  "title": "Your assistant reads their own account",
+  "summary": "For your assistant: what a customer asks about their own account (their balance, what they owe, recent transactions), read for the person writing and no one else.",
+  "description": "The AI model only says what the customer is asking about: their balance, what they owe or their payments, their recent transactions, or something else. Taskiem then reads that, for the customer who wrote (by their number or chat, never by anything they or the model say): their balance and recent transactions from their own wallet or account at your payments service, through your customers' accounts table, and what they owe from your invoices. Nothing is ever paid or changed. The WhatsApp and Telegram assistants that answer about accounts use it.",
+  "category": "assistant",
+  "tags": [
+    "assistant",
+    "ai",
+    "balance"
+  ],
+  "keywords": [
+    "assistant",
+    "balance",
+    "account",
+    "owe",
+    "transactions",
+    "statement"
+  ],
+  "requires": [
+    "assistant",
+    "customers' accounts",
+    "customer account",
+    "customer balance"
+  ],
+  "connectors": [
+    "xenibase@1",
+    "invoices@1",
+    "capability:customer_balance",
+    "capability:customer_transactions"
+  ],
+  "params": [
+    {
+      "name": "accounts_table",
+      "type": "string",
+      "title": "Customers' accounts table",
+      "description": "Who each customer is: their number or chat, and their wallet or account at your payments service. Taskiem makes it for you if it does not exist.",
+      "required": false,
+      "default": "customer_accounts",
+      "example": "customer_accounts",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$",
+      "picker": "table"
+    },
+    {
+      "name": "rail_connection",
+      "type": "connection",
+      "capability": [
+        "customer_balance"
+      ],
+      "title": "Your payments service",
+      "description": "Where your customers' wallets or accounts are: iswallet, or bank accounts linked through Mono.",
+      "required": false,
+      "default": "",
+      "example": ""
+    }
+  ],
+  "tables": [
+    {
+      "known": "customer_accounts",
+      "name": "{{accounts_table}}"
+    }
+  ],
+  "callable": true,
+  "outputs": [
+    {
+      "name": "facts",
+      "type": "string",
+      "title": "What their account says",
+      "description": "In words, for the reply: what they asked about and what was read for them, or empty when they asked about something else.",
+      "value": "=steps.facts.output.text"
+    },
+    {
+      "name": "asked",
+      "type": "string",
+      "title": "What they asked about",
+      "description": "balance, payment_status, recent or other.",
+      "value": "=steps.facts.output.asked"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_assistantAccount",
+    "version": 1,
+    "name": "Read a customer's own account",
+    "trigger": {
+      "type": "manual"
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "via",
+          "sender",
+          "text"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "via": {
+            "type": "string",
+            "enum": [
+              "whatsapp",
+              "telegram"
+            ],
+            "title": "WhatsApp or Telegram"
+          },
+          "sender": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "title": "Customer",
+            "x-pii": "other"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 4000,
+            "title": "What they wrote or said",
+            "x-pii": "other"
+          },
+          "language": {
+            "type": "string",
+            "maxLength": 8,
+            "title": "Their language"
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "acct",
+        "type": "connector",
+        "name": "Find who they are in your customers' accounts",
+        "connector": "xenibase@1",
+        "action": "read_rows",
+        "connection": "data_tables",
+        "input": {
+          "table": "{{accounts_table}}",
+          "filters": [
+            {
+              "column": "sender",
+              "op": "in",
+              "values": "=trigger.body.via == 'whatsapp' ? [trigger.body.sender, '+' + trigger.body.sender] + (trigger.body.sender.startsWith('234') ? ['0' + trigger.body.sender.substring(3)] : []) : [trigger.body.sender]"
+            }
+          ],
+          "limit": 1
+        }
+      },
+      {
+        "id": "classify",
+        "type": "ai",
+        "name": "Understand what they are asking about",
+        "config": {
+          "prompt": "A customer wrote this message (question) to a business. Say only which of these it is about: balance (how much they have in their account or wallet), payment_status (what they owe the business, or whether a payment of theirs was received), recent (their recent transactions, money in or out), or other (anything else). Never answer the message.",
+          "personal_data": [
+            "question"
+          ],
+          "max_tokens": 50,
+          "output_schema": {
+            "type": "object",
+            "required": [
+              "intent"
+            ],
+            "properties": {
+              "intent": {
+                "type": "string",
+                "enum": [
+                  "balance",
+                  "payment_status",
+                  "recent",
+                  "other"
+                ]
+              }
+            }
+          },
+          "fallback": {
+            "intent": "other"
+          }
+        },
+        "input": {
+          "question": "=trigger.body.text"
+        }
+      },
+      {
+        "id": "look",
+        "type": "branch",
+        "name": "Read what they asked about, for them",
+        "needs": [
+          "acct",
+          "classify"
+        ],
+        "config": {
+          "paths": [
+            {
+              "name": "balance",
+              "when": "=steps.classify.output.intent == 'balance' && size(steps.acct.output.rows) > 0 && has(steps.acct.output.rows[0].account) && steps.acct.output.rows[0].account != ''",
+              "steps": [
+                {
+                  "id": "bal",
+                  "type": "capability",
+                  "uses": "customer_balance",
+                  "name": "Read their balance",
+                  "connection": "{{rail_connection}}",
+                  "input": {
+                    "account": "=steps.acct.output.rows[0].account"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "recent",
+              "when": "=steps.classify.output.intent == 'recent' && size(steps.acct.output.rows) > 0 && has(steps.acct.output.rows[0].account) && steps.acct.output.rows[0].account != ''",
+              "steps": [
+                {
+                  "id": "txns",
+                  "type": "capability",
+                  "uses": "customer_transactions",
+                  "name": "Read their recent transactions",
+                  "connection": "{{rail_connection}}",
+                  "input": {
+                    "account": "=steps.acct.output.rows[0].account",
+                    "since": "=string(timestamp(run.started_at) - duration('720h'))"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "owed",
+              "when": "=steps.classify.output.intent == 'payment_status' && (size(steps.acct.output.rows) > 0 && has(steps.acct.output.rows[0].phone) && steps.acct.output.rows[0].phone != '' ? steps.acct.output.rows[0].phone : (trigger.body.via == 'whatsapp' ? trigger.body.sender : '')) != ''",
+              "steps": [
+                {
+                  "id": "owed",
+                  "type": "connector",
+                  "connector": "invoices@1",
+                  "action": "find_by_phone",
+                  "name": "Read what they owe",
+                  "input": {
+                    "phone": "=(size(steps.acct.output.rows) > 0 && has(steps.acct.output.rows[0].phone) && steps.acct.output.rows[0].phone != '' ? steps.acct.output.rows[0].phone : (trigger.body.via == 'whatsapp' ? trigger.body.sender : ''))"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "unlinked",
+              "when": "=steps.classify.output.intent != 'other'",
+              "steps": [
+                {
+                  "id": "unlinked",
+                  "type": "transform",
+                  "name": "Their account is not linked",
+                  "config": {
+                    "output": {
+                      "linked": false
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "default": {
+            "steps": [
+              {
+                "id": "nothing",
+                "type": "transform",
+                "name": "Nothing to read",
+                "config": {
+                  "output": {
+                    "asked": "other"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "facts",
+        "type": "transform",
+        "name": "Put what was read into words",
+        "needs": [
+          "look"
+        ],
+        "config": {
+          "output": {
+            "asked": "=steps.classify.output.intent",
+            "text": "=steps.look.output.path == 'balance' ? 'This customer asked about their balance. Their balance, read just now from their own account: ' + string(steps.look.output.steps.bal.available_kobo / 100) + ' naira.' : steps.look.output.path == 'recent' ? (size(steps.look.output.steps.txns.transactions) == 0 ? 'This customer asked about their recent transactions. Their own account shows none in the last 30 days.' : 'This customer asked about their recent transactions. Their own account shows, in the last 30 days (date, in or out, naira, what it says):\\n' + steps.look.output.steps.txns.transactions.map(t, t.at.substring(0, 10) + ', ' + t.direction + ', ' + string(t.amount_kobo / 100) + ' naira' + (has(t.narration) && t.narration != '' ? ', ' + t.narration : '')).join('\\n')) : steps.look.output.path == 'owed' ? (steps.look.output.steps.owed.found ? 'This customer asked about what they owe or their payments. Their invoices with the business: they owe ' + steps.look.output.steps.owed.due + (size(steps.look.output.steps.owed.open) > 0 ? ' on ' + string(size(steps.look.output.steps.owed.open)) + ' open invoice(s): ' + steps.look.output.steps.owed.open.map(o, o.number + ' ' + o.due + (has(o.due_on) ? ' due ' + o.due_on : '')).join('; ') : '') + (has(steps.look.output.steps.owed.last_paid) ? '. Last paid: invoice ' + steps.look.output.steps.owed.last_paid.number + ' (' + steps.look.output.steps.owed.last_paid.total + (has(steps.look.output.steps.owed.last_paid.paid_on) ? ', on ' + steps.look.output.steps.owed.last_paid.paid_on : '') + ')' : '') + '.' : 'This customer asked about what they owe or their payments. The business has no invoices for them.') : steps.look.output.path == 'unlinked' ? 'This customer asked about their own account, but the business has not linked their number to an account, so it cannot be read here: say someone from the team will help.' : ''"
+          }
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "5m",
+      "retention": "conversations"
+    }
+  }
+}
