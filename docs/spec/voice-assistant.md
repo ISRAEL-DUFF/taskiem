@@ -533,6 +533,15 @@ Left as they are:
 - Builder: catalogue entries and plain panels for transcribe, speak, send voice, typing (R5, R6).
 - Guides: "Answer your customers on WhatsApp and Telegram" for owners and field agents, with Meta and BotFather steps, coexistence with the WhatsApp Business app, and what customers must be told (R9, C22).
 
+**Built** ([the guide](../guide/answer-customers.md), [templates](../templates.md)):
+- **Templates.** Category `assistant`: `assistant-whatsapp` and `assistant-telegram` (a guarded chat trigger: the guard's fixed answers; an optional allow-list; typing; a voice note heard, then answered by voice or text; one that cannot be heard or fetched answered politely; the notice for a new customer; a failed send tells the owners) and the callable `assistant-answer` (the conversation from `conversations`, `knowledge@1 search`, an ai step with history, system, max tokens and a fallback, `check_reply`, `hand_over` when held or unsure, the owners told when the model could not answer, both messages kept). Offered only where Taskiem lets the business's assistants answer.
+- **Tables.** `conversations` (known since V5) and the new known `assistant_allowed`.
+- **Tests.** Each template's workflow tests: text, voice in and out, unheard, photo, over the limit, stranger and listed customer, model failure, WhatsApp's window, a person answering; the answer template also as a step. An API test makes both assistants and their tables.
+- **Readiness.** Connections, the Meta callback and the speech switch were there (V3, V6); added: this month's AI and voice allowances used up, and a chat trigger whose provider subscription (a Telegram bot's webhook) failed, with its reason. A deployment without a model, a plan without AI steps, or a business with AI steps off was already refused at saving.
+- **Builder.** A Voice and chat group (hear, speak, a voice note on WhatsApp or Telegram, typing), each started from `trigger.guard`, with plain panels.
+- **Guide.** "Answer your customers on WhatsApp and Telegram" (BotFather and Meta steps, coexistence with the WhatsApp Business app, what customers are told), internal until the assistant is released.
+- **Different from the plan:** "normalise" and the per-sender limit are the guard's (V6), not template steps; the allow-list is read for every answered message (a skipped step skips what needs it, so it cannot be left out when off); the builder's dry run learned ai steps and `trigger.guard`, which no template had used.
+
 ### V9. Read-only tools (after launch: the first customer is a shop, Q1)
 
 - A `customers` link: phone or chat id → the business's customer record (I1).

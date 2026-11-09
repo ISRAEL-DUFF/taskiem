@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -257,4 +258,20 @@ func shortMark(subject string) string {
 		subject = subject[:4]
 	}
 	return strings.ToUpper(subject)
+}
+
+// assistantsOn reports whether Taskiem lets this business's assistants
+// answer customers: TASKIEM_ASSISTANTS on, or beta with the business in
+// it, and not stopped for it by an operator.
+func (s *Server) assistantsOn(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (bool, error) {
+	mode := s.AssistantMode
+	if mode == "" {
+		mode = assistant.ModeOn
+	}
+	var beta bool
+	var stopped *time.Time
+	if err := tx.QueryRow(ctx, `SELECT beta, stopped_at FROM assistant_controls WHERE tenant_id = $1`, tenant).Scan(&beta, &stopped); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return false, err
+	}
+	return (mode == assistant.ModeOn || mode == assistant.ModeBeta && beta) && stopped == nil, nil
 }

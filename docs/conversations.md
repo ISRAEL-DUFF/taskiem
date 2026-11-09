@@ -58,7 +58,7 @@ A member writes as a customer would, and sees what the assistant would answer:
 - **What you see.** What it would have sent appears as its answer, with replies the check held back, and a link to the run. A test run that fails alerts no one and notifies no one, through the business's alert rules too.
 - **What it refuses.** A workflow with a step that asks a person (an approval, a form, a callback) cannot be tried here. One met only on the way (in a template or a workflow it calls) ends the test run there: no one is asked.
 
-**What it cannot try.** The conversation's memory: the recipe reads it from the conversations table, which a sandbox run does not write. So each test message is answered as if it were the first. Voice notes cannot be sent from the page yet, and a voice note or picture in a conversation shows as its kind (and transcript), not played.
+**What it cannot try.** The conversation's memory: the assistant's templates read it from the conversations table, which a sandbox run does not write. So each test message is answered as if it were the first. Voice notes cannot be sent from the page yet, and a voice note or picture in a conversation shows as its kind (and transcript), not played.
 
 ## For operators
 

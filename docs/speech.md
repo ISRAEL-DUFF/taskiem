@@ -52,7 +52,7 @@ A reply in steps, for a WhatsApp voice note:
  "input": {"to": "=trigger.item.message.from", "media_type": "audio", "file": "=steps.say.output.file", "voice": true}}
 ```
 
-On Telegram, use `get_file` and `send_voice` instead. The model step that writes the answer comes with plan V4, and the recipe with V8.
+On Telegram, use `get_file` and `send_voice` instead. The assistant's templates (`assistant-whatsapp`, `assistant-telegram`) put these together: [answer your customers](guide/answer-customers.md).
 
 **Time.** Both `transcribe` and `speak` may take up to three minutes per call (`call_timeout: 180` in the manifest), instead of the 30 seconds every other connector call gets: hearing a five-minute voice note, or speaking a 4,096-character reply, can take longer than 30 seconds. Without that, the step would be cut short, retried and billed again each time.
 

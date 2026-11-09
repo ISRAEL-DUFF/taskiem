@@ -35633,6 +35633,12 @@ components:
               personal:
                 type: boolean
             additionalProperties: false
+        keep_days:
+          type: integer
+          description: Rows go this many days after they were added
+        keep_with_conversations:
+          type: boolean
+          description: Rows are kept as long as the business keeps its conversations with customers
       additionalProperties: false
     TemplateList:
       type: object

@@ -8,6 +8,7 @@ import (
 
 	speechconn "github.com/israel-duff/taskiem/connectors/speech"
 	telegramconn "github.com/israel-duff/taskiem/connectors/telegram"
+	"github.com/israel-duff/taskiem/engine/assistant"
 	"github.com/israel-duff/taskiem/engine/connector"
 )
 
@@ -37,6 +38,17 @@ func TestAssistantTemplates(t *testing.T) {
 	wf := owner.must(200, "GET", "/v1/workflows/"+out["id"].(string)+"/versions/1", nil)
 	if s := toJSON(wf); !strings.Contains(s, `"guard":true`) || !strings.Contains(s, `"template":"assistant-answer"`) {
 		t.Fatalf("the draft: %s", s)
+	}
+	// Where Taskiem lets no assistant answer this business, they are not
+	// offered, and cannot be made.
+	w.srv.AssistantMode = assistant.ModeBeta
+	if list := toJSON(owner.must(200, "GET", "/v1/templates", nil)); strings.Contains(list, "assistant-whatsapp") {
+		t.Fatal("an assistant offered outside the beta")
+	}
+	owner.must(409, "POST", "/v1/templates/assistant-telegram/instantiate", map[string]any{"params": map[string]any{"business_name": "Mama Put Kitchen"}})
+	w.srv.AssistantMode = assistant.ModeOn
+	if list := toJSON(owner.must(200, "GET", "/v1/templates", nil)); !strings.Contains(list, "assistant-whatsapp") {
+		t.Fatal("an assistant not offered")
 	}
 	// The Telegram assistant uses the same tables: they are there already.
 	out = owner.must(201, "POST", "/v1/templates/assistant-telegram/instantiate", map[string]any{"params": map[string]any{"business_name": "Mama Put Kitchen"}})

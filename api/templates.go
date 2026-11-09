@@ -211,6 +211,15 @@ func (s *Server) instantiateTemplate(w http.ResponseWriter, r *http.Request) {
 	var wf uuid.UUID
 	var doc []byte
 	err := s.tx(r, func(tx pgx.Tx) error {
+		if t.Category == "assistant" {
+			on, err := s.assistantsOn(r.Context(), tx, p.TenantID)
+			if err != nil {
+				return err
+			}
+			if !on {
+				return fmt.Errorf("%w: answering customers with an assistant is not open to your business yet", errConflict)
+			}
+		}
 		var err error
 		wf, doc, err = s.instantiateTx(r.Context(), tx, p, t, req.Params, req.Name, func(action, target string, detail map[string]any) error {
 			return auditTx(r, tx, action, target, detail)

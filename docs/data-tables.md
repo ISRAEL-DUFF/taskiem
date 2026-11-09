@@ -109,7 +109,9 @@ The known table **`conversations`** is where an assistant answering customers ke
 | `language` | `en`, `pcm`, `yo`, `ha` or `ig` | no |
 | `kind` | `text` or `voice` | no |
 
-It is kept as long as the business keeps its conversations (below). It is made with the assistant's recipe, so chat does not offer it as a list.
+It is kept as long as the business keeps its conversations (below). It is made with the assistant's templates (`assistant-whatsapp`, `assistant-telegram`), so chat does not offer it as a list.
+
+The known table **`assistant_allowed`** is the customers an assistant may answer when it answers only its own list (the templates' **Only answer customers on your list**): `sender` (their WhatsApp number with the country code, `2348031234567`, or Telegram chat id; personal), `name` (personal) and `note`. Each answered message looks its sender up there.
 
 A workflow keeps each message with `insert_rows` and reads the last turns back for the [ai step's](contracts/wd-v1.md#ai-steps) `history`:
 

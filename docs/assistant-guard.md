@@ -67,7 +67,7 @@ A word counts only as the whole message, folded (lower case, no tone marks, no p
 
 ## A reply is checked before it is sent: `assistant@1 check_reply`
 
-A customer's message is instructions to the model as much as the owner's prompt, and outside material can carry instructions too (A11). With no tools (D4), the harm is in what the model says. So the recipe checks the reply before sending it (L6):
+A customer's message is instructions to the model as much as the owner's prompt, and outside material can carry instructions too (A11). With no tools (D4), the harm is in what the model says. So the assistant's templates check the reply before sending it (L6):
 
 ```json
 {"id": "check", "type": "connector", "connector": "assistant@1", "action": "check_reply", "needs": ["reply"],
@@ -87,7 +87,7 @@ A customer's message is instructions to the model as much as the owner's prompt,
 | `internal` | One of `never`, as a word: values the business keeps from customers (cost prices, staff numbers) |
 | `too_long`, `empty` | Over `max` (4,000 characters by default), or nothing |
 
-**What it does not see.** An amount spelled out in words, a promise in other words ("we'll sort it out for you"), or another customer's name: the check reads shapes, not meaning. The recipe (V8) always checks before sending and offers a person when unsure, and members see every conversation ([conversations](conversations.md)). Nothing yet refuses a guarded workflow that sends without checking: until the recipe, that is the builder's rule.
+**What it does not see.** An amount spelled out in words, a promise in other words ("we'll sort it out for you"), or another customer's name: the check reads shapes, not meaning. The assistant's templates (`assistant-whatsapp`, `assistant-telegram`, through `assistant-answer`: [the guide](guide/answer-customers.md)) always check before sending and hand the customer to a person when the check holds a reply or the model is unsure, and members see every conversation ([conversations](conversations.md)). Nothing refuses a guarded workflow built by hand that sends without checking: that is the builder's rule.
 
 `ok` false answers, as `text`, "Let me check that with the team and get back to you" in the customer's language, to send instead. A recipe may also hand the customer over (`hand_over`).
 
@@ -141,4 +141,3 @@ The owners are told when this month's allowance for AI steps or for voice (secon
 ## Not yet
 
 - **Debounce** (L5): three quick messages get three answers.
-- **The recipe** (V8) wires all of this into the WhatsApp and Telegram templates.
