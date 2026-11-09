@@ -40,8 +40,11 @@ actions:
         id:                       { type: string }
         display_phone_number:     { type: string }
         verified_name:            { type: string }
-        quality_rating:           { type: string }
+        quality_rating:           { type: string, description: "GREEN, YELLOW or RED (Meta's rating of how customers receive the number's messages), or UNKNOWN" }
         code_verification_status: { type: string }
+        messaging_limit_tier:     { type: string, description: "How many customers a day the business may start conversations with: TIER_250, TIER_1K, TIER_10K, TIER_100K or TIER_UNLIMITED" }
+        status:                   { type: string, description: "CONNECTED, FLAGGED (quality is low: the limit may go down), RESTRICTED (the number can only reply), …" }
+        name_status:              { type: string, description: "The display name's review: APPROVED, PENDING_REVIEW, DECLINED, …" }
   list_templates:
     title: List approved message templates
     description: The business's approved message templates with their language and words, to choose one by what it says. Needs the WhatsApp Business Account ID on the connection.

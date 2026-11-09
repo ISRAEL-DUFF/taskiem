@@ -1251,6 +1251,8 @@ func serve(ctx context.Context, args []string) error {
 		tasks = append(tasks, func(ctx context.Context) error { srv.RunKnowledgeRefresh(ctx); return nil })
 		// What customers said is kept the business's conversation days (V7).
 		tasks = append(tasks, func(ctx context.Context) error { srv.RunConversationExpiry(ctx); return nil })
+		// Assistants' WhatsApp numbers: quality read every few hours (C23).
+		tasks = append(tasks, func(ctx context.Context) error { srv.RunWhatsAppQuality(ctx); return nil })
 		// Checking a Python step compiles CPython first (seconds): do it now.
 		go func() { _ = sandbox.InitPython() }()
 		srv.Done = runCtx.Done()

@@ -4,6 +4,9 @@
   "path": "/106540352242922",
   "headers": {
    "Authorization": "Bearer EAAtest"
+  },
+  "query": {
+   "fields": "id,display_phone_number,verified_name,quality_rating,code_verification_status,messaging_limit_tier,status,name_status"
   }
  },
  "response": {
@@ -13,7 +16,10 @@
    "display_phone_number": "+234 801 000 0000",
    "id": "106540352242922",
    "quality_rating": "GREEN",
-   "verified_name": "Acme Payroll"
+   "verified_name": "Acme Payroll",
+   "messaging_limit_tier": "TIER_1K",
+   "status": "CONNECTED",
+   "name_status": "APPROVED"
   }
  }
 }

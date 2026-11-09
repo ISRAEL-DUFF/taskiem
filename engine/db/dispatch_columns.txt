@@ -1290,6 +1290,7 @@ trigger_receipts.received_at
 triggers.connection
 triggers.connector
 triggers.environment
+triggers.guard
 triggers.id
 triggers.lease_until
 triggers.next_fire_at

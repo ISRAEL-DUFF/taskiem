@@ -319,3 +319,4 @@ taskiem_run_files_expired(integer)	@ISRAEL-DUFF (customer assistant)	Which run f
 taskiem_tables_to_expire(uuid,uuid,integer)	@ISRAEL-DUFF (customer assistant)	Which data tables keep their rows for a time, for the sweep to delete older rows: tenants, table ids, names and days only, never rows (00317, paged by 00318)
 taskiem_knowledge_due(integer)	@ISRAEL-DUFF (customer assistant)	Which knowledge sources are due their daily refresh: tenants and source ids only, never text (00319)
 taskiem_conversation_turns_due(uuid,integer)	@ISRAEL-DUFF (customer assistant)	Which businesses have conversation turns over a day old, a page after a tenant id, with their conversation days: tenant ids and days only, never words (00322)
+taskiem_whatsapp_quality_due(uuid,integer)	@ISRAEL-DUFF (customer assistant)	Which businesses have a WhatsApp trigger the customer guard watches, a page after a tenant id: tenant ids only (00323)

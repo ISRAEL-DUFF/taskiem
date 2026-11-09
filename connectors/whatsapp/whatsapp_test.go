@@ -62,7 +62,7 @@ func TestRegisters(t *testing.T) {
 
 func TestPhoneNumberAndAuth(t *testing.T) {
 	r, err := call(t, "get_phone_number", nil, "get_phone_number")
-	if err != nil || out(r)["verified_name"] != "Acme Payroll" || out(r)["quality_rating"] != "GREEN" {
+	if err != nil || out(r)["verified_name"] != "Acme Payroll" || out(r)["quality_rating"] != "GREEN" || out(r)["messaging_limit_tier"] != "TIER_1K" || out(r)["status"] != "CONNECTED" {
 		t.Errorf("%v %v", r.Output, err)
 	}
 	_, err = call(t, "get_phone_number", nil, "get_phone_number_expired")

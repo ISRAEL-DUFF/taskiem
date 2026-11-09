@@ -184,12 +184,17 @@ func (c *client) getPhoneNumber(ctx context.Context, req connector.Request) (con
 		VerifiedName           string `json:"verified_name"`
 		QualityRating          string `json:"quality_rating"`
 		CodeVerificationStatus string `json:"code_verification_status"`
+		MessagingLimitTier     string `json:"messaging_limit_tier"`
+		Status                 string `json:"status"`
+		NameStatus             string `json:"name_status"`
 	}
-	if err := c.do(ctx, req, http.MethodGet, "/"+id, nil, &p); err != nil {
+	// The quality and limit fields are only sent when asked for.
+	if err := c.do(ctx, req, http.MethodGet, "/"+id+"?fields=id,display_phone_number,verified_name,quality_rating,code_verification_status,messaging_limit_tier,status,name_status", nil, &p); err != nil {
 		return connector.Response{}, err
 	}
 	return connector.Response{Output: map[string]any{"id": p.ID, "display_phone_number": p.DisplayPhoneNumber, "verified_name": p.VerifiedName,
-		"quality_rating": p.QualityRating, "code_verification_status": p.CodeVerificationStatus}}, nil
+		"quality_rating": p.QualityRating, "code_verification_status": p.CodeVerificationStatus,
+		"messaging_limit_tier": p.MessagingLimitTier, "status": p.Status, "name_status": p.NameStatus}}, nil
 }
 
 // send posts one message of type kind with content, adding the fields every
