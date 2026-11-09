@@ -11911,6 +11911,57 @@ paths:
                     $ref: '#/components/schemas/Delivery'
         default:
           $ref: '#/components/responses/Error'
+  /v1/storefront/orders/{reference}/confirm:
+    post:
+      operationId: confirmOrder
+      tags:
+      - Riders
+      summary: Confirm a delivery and pay the rider's fee
+      description: Riders are paid per delivery (docs/spec/chat-riders.md). The business's word that the order's delivery is done makes a payout of that one delivery. how bank (the default) pays it through the pay-riders workflow set up under Riders > Pay, under the business's approval policy, and answers the run; the cash the rider owes from the door comes off the fee first, and a fee it covers is settled with nothing to pay. how cash records the fee handed over in cash, with no transfer, and a cash payment out in the money log. For a rider that is a business on Taskiem, both sides' cards and the rider's money log follow. 409 when the delivery is not delivered, already confirmed, the rider has no bank account for a bank payment, or paying riders is not set up.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: reference
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                how:
+                  type: string
+                  enum: [bank, cash]
+      responses:
+        '200':
+          description: The delivery, confirmed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [delivery, net_kobo]
+                properties:
+                  delivery:
+                    $ref: '#/components/schemas/Delivery'
+                  net_kobo:
+                    type: integer
+                    description: What reaches the rider's bank after the cash they owed is taken off
+                  run_id:
+                    type: string
+                    format: uuid
+                    description: The pay-riders run paying it, when one started
+        default:
+          $ref: '#/components/responses/Error'
   /v1/storefront/bookings:
     put:
       operationId: putStorefrontBookings
@@ -26390,7 +26441,7 @@ components:
           description: The alert's key, for Later (its kind and what it is about)
         kind:
           type: string
-          enum: [low_stock, overdue, new_order, rider, unmatched, approval, deal]
+          enum: [low_stock, overdue, new_order, rider, confirm, unmatched, approval, deal]
         at:
           type: string
           format: date-time
@@ -31444,6 +31495,18 @@ components:
           enum: [pickup, arrival]
         zone:
           type: string
+        link_order_id:
+          type: string
+          format: uuid
+          description: The rider's own order for it, when the rider is a business on Taskiem
+        confirmed_at:
+          type: string
+          format: date-time
+          description: When the business confirmed the delivery (the fee is payable)
+        fee_paid:
+          type: string
+          enum: [pending, bank, cash]
+          description: How the rider's fee stands once confirmed
     DeliveriesOn:
       type: object
       required: ["on", workflow_id]

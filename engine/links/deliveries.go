@@ -188,6 +188,10 @@ var deliveryStatus = map[string]string{
 	"passed":    "cancelled",
 	"withdrawn": "cancelled",
 	"released":  "cancelled",
+	// Phase 4: the business confirmed the delivery (the fee is on its way)
+	// and the fee was paid. The order is complete already.
+	"confirmed": "completed",
+	"paid":      "completed",
 }
 
 // DeliveryStepTx records a delivery's step on the rider's order, in the

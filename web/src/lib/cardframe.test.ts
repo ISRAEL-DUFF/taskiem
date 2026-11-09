@@ -44,6 +44,9 @@ describe("the card frame", () => {
     expect(cardStatus({ doc: "dispatch", event: "delivered", reference: "AK-1" }).step).toBe(4);
     expect(cardStatus({ doc: "delivery", event: "cant", reference: "AK-1" })).toEqual({ word: "Passed", tone: "danger" });
     expect(cardStatus({ doc: "dispatch", event: "released", reference: "AK-1" }).word).toBe("Taken back");
+    // Phase 4: the business's confirm and the fee paid stay on the last step.
+    expect(cardStatus({ doc: "dispatch", event: "confirmed", reference: "AK-1" })).toEqual({ word: "Confirmed", tone: "lime", step: 4 });
+    expect(cardStatus({ doc: "delivery", event: "paid", reference: "AK-1" })).toEqual({ word: "Fee paid", tone: "lime", step: 4 });
     expect(cardKicker({ doc: "delivery", event: "offered", reference: "AK-1" })).toBe("Delivery · AK-1");
     expect(stepsFor({ doc: "delivery" })).toBe(DELIVERY_STEPS);
     expect(stepsFor({ doc: "order" })).toBe(ORDER_STEPS);

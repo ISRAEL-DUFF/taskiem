@@ -9,6 +9,7 @@ export type AlertKind =
   | "overdue"
   | "new_order"
   | "rider"
+  | "confirm"
   | "unmatched"
   | "approval"
   | "deal";
@@ -43,6 +44,7 @@ export const ALERT_LOOK: Record<
   overdue: { icon: "invoices", tone: "warn" },
   new_order: { icon: "orders", tone: "lime" },
   rider: { icon: "store", tone: "plain" },
+  confirm: { icon: "money", tone: "lime" },
   unmatched: { icon: "money", tone: "plain" },
   approval: { icon: "approvals", tone: "plain" },
   deal: { icon: "money", tone: "warn" },

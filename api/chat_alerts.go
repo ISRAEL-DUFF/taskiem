@@ -42,7 +42,7 @@ const maxChatAlerts = 20
 type chatAlert struct {
 	// Key names the alert for Later: its kind and what it is about.
 	Key  string    `json:"key"`
-	Kind string    `json:"kind"` // low_stock | overdue | new_order | rider | unmatched | approval
+	Kind string    `json:"kind"` // low_stock | overdue | new_order | rider | confirm | unmatched | approval | deal
 	At   time.Time `json:"at"`
 	// Title and Line are the card's words.
 	Title      string `json:"title"`
@@ -105,7 +105,7 @@ func (s *Server) getChatAlerts(w http.ResponseWriter, r *http.Request) {
 	}
 	// Each kind on its own: one that cannot be read leaves the others.
 	for _, kind := range []func(context.Context, *Principal) ([]chatAlert, error){
-		s.lowStockAlerts, s.overdueAlerts, s.newOrderAlerts, s.riderAlerts, s.unmatchedAlerts, s.approvalAlerts, s.dealAlerts,
+		s.lowStockAlerts, s.overdueAlerts, s.newOrderAlerts, s.riderAlerts, s.confirmAlerts, s.unmatchedAlerts, s.approvalAlerts, s.dealAlerts,
 	} {
 		got, err := kind(ctx, p)
 		if err != nil {

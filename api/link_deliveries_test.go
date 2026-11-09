@@ -2,12 +2,21 @@ package api_test
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"mime/multipart"
 	"net/url"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/israel-duff/taskiem/connectors/iswallet"
+	ridersconn "github.com/israel-duff/taskiem/connectors/riders"
+	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/dispatch"
+	"github.com/israel-duff/taskiem/engine/secrets"
 )
 
 // A rider that is a business on Taskiem, through the API (docs/spec/
@@ -324,5 +333,191 @@ func TestRiderAvailability(t *testing.T) {
 	}
 	if c := card(); c["available"] != "busy" {
 		t.Errorf("the card while holding: %v", c["available"])
+	}
+}
+
+// TestConfirmPaysPerDelivery (docs/spec/chat-riders.md, phase 4): riders
+// are paid per delivery. The business's Confirm on a delivered delivery
+// makes a payout of that one delivery and starts the pay-riders run; a
+// rider with no bank account, or no paying set up, is refused in plain
+// words; the paid card reaches both sides and the rider's money log once
+// the run pays; cash the rider took at the door nets the fee; a fee handed
+// over in cash is recorded as paid with no transfer.
+func TestConfirmPaysPerDelivery(t *testing.T) {
+	ctx := context.Background()
+	w, ada := newDispatchWorld(t, "Ada Stores")
+	musaBiz := w.tenant(t, "Musa Rides", "musa@rides.test")
+	musaID := tenantOf(t, musaBiz)
+	musaBiz.must(200, "PUT", "/v1/link-settings", map[string]any{"findable": true})
+	ada.must(201, "POST", "/v1/links", map[string]any{"business": musaID, "role": "supplier"})
+	l := musaBiz.must(200, "GET", "/v1/links", nil)["links"].([]any)[0].(map[string]any)
+	musaBiz.must(200, "POST", "/v1/links/"+l["id"].(string)+"/accept", nil)
+	w.srv.WaitBackground()
+	link := l["id"].(string)
+	const musa = "+2348031110051"
+	path := strings.TrimPrefix(ada.must(200, "GET", "/v1/riders", nil)["tap_in_url"].(string), "https://"+reachFormHost)
+	loc, _ := url.Parse(w.page(t, path+"/whatsapp", nil).Header().Get("Location"))
+	w.whatsapp(t, musa, loc.Query().Get("text"))
+	m := ada.must(201, "POST", "/v1/riders", map[string]any{"name": "Musa Bello", "phone": musa, "zones": []string{"Lekki"}, "fee_kobo": 100000})["rider"].(map[string]any)
+	rid := m["id"].(string)
+	ada.must(200, "PATCH", "/v1/riders/"+rid, map[string]any{"link_id": link})
+
+	deliver := func(payment string) (string, string) {
+		t.Helper()
+		ref := w.order(t, payment)
+		ada.must(200, "POST", "/v1/storefront/orders/"+ref+"/offer", map[string]any{})
+		d := ada.must(200, "GET", "/v1/storefront/orders/"+ref+"/deliveries", nil)["deliveries"].([]any)[0].(map[string]any)
+		id := uuid.MustParse(d["id"].(string))
+		steps := []string{dispatch.Accept, dispatch.PickedUp, dispatch.Arrived}
+		if payment == "on_delivery" {
+			steps = append(steps, dispatch.Cash)
+		} else {
+			steps = append(steps, dispatch.Delivered)
+		}
+		for _, a := range steps {
+			if _, err := w.srv.Dispatch.Press(ctx, w.biz, id, a); err != nil {
+				t.Fatalf("%s: %v", a, err)
+			}
+		}
+		return ref, id.String()
+	}
+	events := func(c *client) string {
+		t.Helper()
+		var out []string
+		for _, x := range c.must(200, "GET", "/v1/link-chats/"+link+"/messages", nil)["messages"].([]any) {
+			if msg := x.(map[string]any); msg["kind"] == "card" {
+				out = append(out, msg["card"].(map[string]any)["event"].(string))
+			}
+		}
+		return strings.Join(out, " ")
+	}
+
+	// Delivered, paid online: the fee waits on the business's word (a card
+	// in the chat, with the chat tools on).
+	ada.must(200, "PUT", "/v1/settings/chat-tools", map[string]any{"chat_tools": true})
+	ref, _ := deliver("none")
+	alerts := ada.must(200, "GET", "/v1/chat-alerts", nil)["alerts"].([]any)
+	found := false
+	for _, a := range alerts {
+		if x := a.(map[string]any); x["kind"] == "confirm" && x["reference"] == ref {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("no confirm alert: %v", alerts)
+	}
+	// No bank account yet: refused in plain words; in cash would do.
+	if st, out := ada.do("POST", "/v1/storefront/orders/"+ref+"/confirm", map[string]any{}); st != 409 || !strings.Contains(fmt.Sprint(out["error"]), "no bank account") {
+		t.Fatalf("no bank: %d %v", st, out)
+	}
+	// Ada's own WhatsApp, for the owner's words later (bound before the
+	// authenticator, which the bank account needs).
+	const adaWA = "+2348020000051"
+	ada.must(202, "POST", "/v1/me/whatsapp", map[string]any{"number": adaWA, "password": testPassword})
+	ada.must(200, "POST", "/v1/me/whatsapp/verify", map[string]any{"code": codeRe.FindString(w.graph.Last(t, adaWA).Text)})
+	secret := enrol(t, ada)
+	ada.must(200, "PUT", "/v1/riders/"+rid+"/bank", map[string]any{"bank_code": "058", "bank_name": "GTBank", "account_number": "0123456789", "totp": codeAfter(secret, 1)})
+	// Paying riders not set up yet: refused, nothing confirmed.
+	if st, out := ada.do("POST", "/v1/storefront/orders/"+ref+"/confirm", map[string]any{}); st != 409 || !strings.Contains(fmt.Sprint(out["error"]), "set up paying riders") {
+		t.Fatalf("no payout set up: %d %v", st, out)
+	}
+	if d := ada.must(200, "GET", "/v1/storefront/orders/"+ref+"/deliveries", nil)["deliveries"].([]any)[0].(map[string]any); d["confirmed_at"] != nil || d["fee_paid"] != nil {
+		t.Fatalf("confirmed though refused: %v", d)
+	}
+	// Set up (riders are paid from the Taskiem wallet, as the weekly test does).
+	f := newFakeWallets(t)
+	ops := &ridersconn.Late{}
+	ops.Set(w.srv.Riders)
+	ops.SetDispatch(w.srv.Dispatch)
+	for _, c := range []*connector.Connector{iswallet.New(iswallet.Options{BaseURL: f.srv.URL, TestURL: f.srv.URL}), ridersconn.New(ops)} {
+		if err := w.env.Registry.Register(c); err != nil {
+			t.Fatal(err)
+		}
+	}
+	w.env.Vault.Platform = secrets.PlatformClients{"iswallet": {"test": {"api_key": "isw_platform_test", "shared_client": "true"}}}
+	ada.must(201, "POST", "/v1/settings/receive-money", map[string]any{"business_email": "ada@ada.test", "bvn": "22212345678"})
+	ada.must(200, "PUT", "/v1/riders/pay/setup", map[string]any{"pay_day": 5, "pay_time": "17:30"})
+
+	// Confirmed: a payout of this one delivery, its run started; both
+	// sides see Confirmed; the fee is pending.
+	out := ada.must(200, "POST", "/v1/storefront/orders/"+ref+"/confirm", map[string]any{})
+	d := out["delivery"].(map[string]any)
+	if d["confirmed_at"] == nil || d["fee_paid"] != "pending" || out["net_kobo"] != float64(100000) || out["run_id"] == nil {
+		t.Fatalf("confirmed: %v", out)
+	}
+	ada.must(409, "POST", "/v1/storefront/orders/"+ref+"/confirm", map[string]any{})
+	if got := events(ada); !strings.HasSuffix(got, "delivered confirmed") {
+		t.Fatalf("Ada's cards: %s", got)
+	}
+	if got := events(musaBiz); !strings.HasSuffix(got, "delivered confirmed") {
+		t.Fatalf("Musa's cards: %s", got)
+	}
+	var batch uuid.UUID
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT batch_id FROM rider_payouts WHERE tenant_id = $1 AND delivery_id = $2`, w.biz, d["id"]).Scan(&batch); err != nil {
+		t.Fatal(err)
+	}
+	// The run pays it (here, as the connector's finish does): the paid
+	// card on both sides, the fee in Musa's money log, the delivery paid.
+	payouts := ada.must(200, "GET", "/v1/riders/pay", nil)["payouts"].([]any)
+	if len(payouts) != 1 || payouts[0].(map[string]any)["status"] != "pending" {
+		t.Fatalf("payouts: %v", payouts)
+	}
+	pid := uuid.MustParse(payouts[0].(map[string]any)["payout_id"].(string))
+	if paid, _, err := w.srv.Dispatch.FinishBatch(ctx, w.biz, batch, []dispatch.Result{{PayoutID: pid, Status: "paid", AccountName: "MUSA BELLO"}}, false); err != nil || paid != 1 {
+		t.Fatalf("finish: %d %v", paid, err)
+	}
+	if got := events(musaBiz); !strings.HasSuffix(got, "delivered confirmed paid") {
+		t.Fatalf("Musa's cards after paying: %s", got)
+	}
+	if d := ada.must(200, "GET", "/v1/storefront/orders/"+ref+"/deliveries", nil)["deliveries"].([]any)[0].(map[string]any); d["fee_paid"] != "bank" {
+		t.Fatalf("after paying: %v", d["fee_paid"])
+	}
+	var income int64
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT COALESCE(sum(amount_kobo), 0) FROM money_entries WHERE tenant_id = $1 AND direction = 'in' AND reference LIKE 'delivery-fee:%'`, musaID).Scan(&income); err != nil || income != 100000 {
+		t.Fatalf("Musa's income: %d %v", income, err)
+	}
+	// Nothing is left for a weekly batch.
+	if lines := ada.must(200, "GET", "/v1/riders/pay", nil)["lines"].([]any); len(lines) != 0 {
+		t.Fatalf("still due: %v", lines)
+	}
+
+	// Cash at the door: Musa holds the order's cash; the fee comes off it
+	// and nothing is paid by bank.
+	ref2, _ := deliver("on_delivery")
+	out = ada.must(200, "POST", "/v1/storefront/orders/"+ref2+"/confirm", map[string]any{})
+	if out["net_kobo"] != float64(0) || out["run_id"] != nil || out["delivery"].(map[string]any)["fee_paid"] != "bank" {
+		t.Fatalf("netted: %v", out)
+	}
+	// The fee came off what Musa owes: a remittance part netted from the payout.
+	var netted int64
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT COALESCE(sum(amount_kobo), 0) FROM rider_remittance_parts WHERE tenant_id = $1 AND how = 'netted'`, w.biz).Scan(&netted); err != nil || netted != 100000 {
+		t.Fatalf("netted: %d %v", netted, err)
+	}
+	if got := events(musaBiz); !strings.HasSuffix(got, "delivered paid") {
+		t.Fatalf("Musa's cards after netting: %s", got)
+	}
+
+	// Handed over in cash: paid with no transfer, a cash payment out.
+	ref3, _ := deliver("none")
+	out = ada.must(200, "POST", "/v1/storefront/orders/"+ref3+"/confirm", map[string]any{"how": "cash"})
+	if out["run_id"] != nil || out["delivery"].(map[string]any)["fee_paid"] != "cash" {
+		t.Fatalf("in cash: %v", out)
+	}
+	var cashOut int64
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT COALESCE(sum(amount_kobo), 0) FROM money_entries WHERE tenant_id = $1 AND direction = 'out' AND channel = 'cash' AND reference LIKE 'rider-fee:%'`, w.biz).Scan(&cashOut); err != nil || cashOut != 100000 {
+		t.Fatalf("the cash payment out: %d %v", cashOut, err)
+	}
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT COALESCE(sum(amount_kobo), 0) FROM money_entries WHERE tenant_id = $1 AND direction = 'in' AND reference LIKE 'delivery-fee:%'`, musaID).Scan(&income); err != nil || income != 300000 {
+		t.Fatalf("Musa's income after three: %d %v", income, err)
+	}
+	// Confirmed already: refused, over the API and from the owner's WhatsApp.
+	ada.must(409, "POST", "/v1/storefront/orders/"+ref3+"/confirm", map[string]any{"how": "cash"})
+	if got := w.whatsapp(t, adaWA, "confirm "+ref3); len(got) != 1 || !strings.Contains(got[0].Text, "could not confirm") {
+		t.Fatalf("confirm twice from WhatsApp: %+v", got)
+	}
+	// And a fourth, confirmed from WhatsApp in cash.
+	ref4, _ := deliver("none")
+	if got := w.whatsapp(t, adaWA, "confirm "+ref4+" cash"); len(got) != 1 || !strings.Contains(got[0].Text, "paid ₦1,000.00 in cash") && !strings.Contains(got[0].Text, "in cash") {
+		t.Fatalf("confirm in cash from WhatsApp: %+v", got)
 	}
 }

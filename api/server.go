@@ -570,6 +570,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermOrders)).Get("/storefront/orders/{reference}/deliveries", s.orderDeliveries)
 			r.With(s.need(PermOrders), s.tenantWide).Post("/storefront/orders/{reference}/offer", s.offerOrder)
 			r.With(s.need(PermOrders), s.tenantWide).Post("/storefront/orders/{reference}/release", s.releaseOrder)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/confirm", s.confirmOrder) // the rider's fee (dispatch_confirm.go)
 			r.With(s.need(PermStorefrontManage)).Get("/dispatch/settings", s.getDispatchSettings)
 			r.With(s.need(PermStorefrontManage)).Get("/dispatch/workflow", s.getDeliveriesOn)
 			r.With(s.need(PermStorefrontManage), s.need(PermWorkflowEdit), s.need(PermWorkflowPublish), s.tenantWide).Post("/dispatch/workflow", s.turnOnDeliveries)

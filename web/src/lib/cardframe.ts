@@ -15,7 +15,13 @@ export interface CardStatus {
 
 export const ORDER_STEPS = ["Placed", "Accepted", "On the way", "Delivered"];
 /** A delivery's steps (docs/spec/chat-riders.md): the rider's and the business's card alike. */
-export const DELIVERY_STEPS = ["Offered", "Accepted", "Picked up", "Arrived", "Delivered"];
+export const DELIVERY_STEPS = [
+  "Offered",
+  "Accepted",
+  "Picked up",
+  "Arrived",
+  "Delivered",
+];
 
 /** The steps a card's progress runs on. */
 export function stepsFor(card: Pick<DocCard, "doc">): string[] {
@@ -28,6 +34,9 @@ const DELIVERY: Record<string, CardStatus> = {
   picked_up: { word: "Picked up", tone: "lime", step: 2 },
   arrived: { word: "At the door", tone: "lime", step: 3 },
   delivered: { word: "Delivered", tone: "lime", step: 4 },
+  // Phase 4: the business confirmed it (the fee is on its way) and paid it.
+  confirmed: { word: "Confirmed", tone: "lime", step: 4 },
+  paid: { word: "Fee paid", tone: "lime", step: 4 },
   cant: { word: "Passed", tone: "danger" },
   passed: { word: "Ran out", tone: "plain" },
   withdrawn: { word: "Withdrawn", tone: "plain" },
@@ -70,7 +79,12 @@ const INVOICE: Record<string, CardStatus> = {
 /** The card's pill and progress. */
 export function cardStatus(card: DocCard, now = Date.now()): CardStatus {
   if (isDelivery(card))
-    return DELIVERY[card.event] ?? { word: card.event.replaceAll("_", " "), tone: "plain" };
+    return (
+      DELIVERY[card.event] ?? {
+        word: card.event.replaceAll("_", " "),
+        tone: "plain",
+      }
+    );
   const order = card.doc === "order" || card.doc === "purchase";
   // A deal no one answered in time (phase 7): nothing more happens to it.
   if (

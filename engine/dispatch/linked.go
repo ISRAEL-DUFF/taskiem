@@ -88,6 +88,13 @@ func (d *Dispatch) mirrorStep(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 	if err := d.ourCard(ctx, tx, tenant, *r.LinkID, pair, x, stage, ours); err != nil {
 		return err
 	}
+	// Our own name, read on our side: the other side cannot see our row.
+	var business string
+	if stage == "paid" {
+		if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, tenant).Scan(&business); err != nil {
+			return err
+		}
+	}
 	if _, err := links.EnterTx(ctx, tx, *r.LinkID, "link.delivery."+stage, nil, linkActor); err != nil {
 		if back := links.ReturnTx(ctx, tx, tenant); back != nil {
 			return back
@@ -102,6 +109,10 @@ func (d *Dispatch) mirrorStep(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 	if err == nil {
 		err = links.DeliveryStepTx(ctx, tx, d.Vault, rider, *x.LinkOrderID, stage, pair, !ours)
 	}
+	if err == nil && stage == "paid" {
+		// The fee is the rider's income (phase 4), in their own books.
+		err = d.riderIncomeTx(ctx, tx, rider, x, business, d.now())
+	}
 	if back := links.ReturnTx(ctx, tx, tenant); back != nil {
 		return back
 	}
@@ -112,7 +123,11 @@ func (d *Dispatch) mirrorStep(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 // conversation with the rider.
 func (d *Dispatch) ourCard(ctx context.Context, tx pgx.Tx, tenant, link, pair uuid.UUID, x Delivery, stage string, ours bool) error {
 	fee := x.FeeKobo
-	return links.CardTx(ctx, tx, tenant, link, pair, ours, links.DocCard{Doc: links.DocDispatch, Event: stage, Reference: x.Reference, ID: x.ID.String(), AmountKobo: &fee, Note: x.Rider})
+	note := x.Rider
+	if stage == "paid" && x.paidHow != "" {
+		note = x.paidHow // how the fee was paid: bank or cash
+	}
+	return links.CardTx(ctx, tx, tenant, link, pair, ours, links.DocCard{Doc: links.DocDispatch, Event: stage, Reference: x.Reference, ID: x.ID.String(), AmountKobo: &fee, Note: note})
 }
 
 // scopeTx is the business the transaction is scoped to after the door

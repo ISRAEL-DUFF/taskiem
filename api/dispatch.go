@@ -558,11 +558,7 @@ func (s *Server) dispatchReady(w http.ResponseWriter, r *http.Request) bool {
 
 // dispatchFail maps dispatch's refusals to plain answers.
 func (s *Server) dispatchFail(w http.ResponseWriter, r *http.Request, err error) {
-	msg := err.Error()
-	for _, p := range []string{"dispatch: the order is not ready to dispatch: ", "dispatch: that does not fit the delivery now: ", "dispatch: invalid: ",
-		"riders: invalid: ", "storefront: "} {
-		msg = strings.ReplaceAll(msg, p, "")
-	}
+	msg := dispatchWords(err)
 	switch {
 	case errors.Is(err, dispatch.ErrNoDelivery), errors.Is(err, storefront.ErrNoOrder), errors.Is(err, dispatch.ErrNoDelivery):
 		err = pgx.ErrNoRows
@@ -641,6 +637,16 @@ func (s *Server) orderDeliveries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"deliveries": s.proofURLs(r.Context(), p.TenantID, cashierView(p, list)), "not_ready": why})
+}
+
+// dispatchWords is a dispatch error in the owner's words.
+func dispatchWords(err error) string {
+	msg := err.Error()
+	for _, p := range []string{"dispatch: the order is not ready to dispatch: ", "dispatch: that does not fit the delivery now: ", "dispatch: invalid: ",
+		"riders: invalid: ", "storefront: "} {
+		msg = strings.ReplaceAll(msg, p, "")
+	}
+	return msg
 }
 
 // offerOrder is POST /v1/storefront/orders/{reference}/offer: to a named

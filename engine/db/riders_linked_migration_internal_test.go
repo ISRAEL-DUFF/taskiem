@@ -146,3 +146,43 @@ func TestRiderAvailabilityMigrationUpDownUp(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// 00411 (riders phase 4) goes up and down: the confirm on deliveries and
+// the payout of one delivery.
+func TestRiderFeeMigrationUpDownUp(t *testing.T) {
+	dsn := emptyDatabase(t)
+	ctx := context.Background()
+	cfg, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB := stdlib.OpenDB(*cfg)
+	defer func() { _ = sqlDB.Close() }()
+	p, err := goose.NewProvider(goose.DialectPostgres, sqlDB, mustSub(migrations, "migrations"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.UpTo(ctx, 411); err != nil {
+		t.Fatal(err)
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(ctx) }()
+	var n int
+	if err := conn.QueryRow(ctx, `SELECT count(*) FROM information_schema.columns WHERE (table_name = 'deliveries' AND column_name IN ('confirmed_at', 'confirmed_by'))
+		OR (table_name = 'rider_payouts' AND column_name IN ('delivery_id', 'how'))`).Scan(&n); err != nil || n != 4 {
+		t.Fatalf("the columns: %d %v", n, err)
+	}
+	if _, err := p.DownTo(ctx, 410); err != nil {
+		t.Fatal(err)
+	}
+	if err := conn.QueryRow(ctx, `SELECT count(*) FROM information_schema.columns WHERE (table_name = 'deliveries' AND column_name IN ('confirmed_at', 'confirmed_by'))
+		OR (table_name = 'rider_payouts' AND column_name IN ('delivery_id', 'how'))`).Scan(&n); err != nil || n != 0 {
+		t.Fatalf("after Down: %d %v", n, err)
+	}
+	if _, err := p.UpTo(ctx, 411); err != nil {
+		t.Fatal(err)
+	}
+}

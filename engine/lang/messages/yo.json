@@ -2240,6 +2240,22 @@
       "text": "{name} ti di ẹni tó ń gbé ọjà rẹ. Iṣòwò wọn wà lórí Taskiem, nítorí náà mo ti bèèrè kí wọ́n so pọ̀ mọ́ tìrẹ: tí wọ́n bá gbà, iṣẹ́ ìfijíṣẹ́ rẹ yóò máa dé ọ̀dọ̀ wọn lórí Taskiem.",
       "reviewed": false
     },
+    "wa.riders.confirmed": {
+      "text": "Ti jẹ́rìí {reference}: a ń san {name} {amount}. Màá sọ fún ọ tí ó bá dé.",
+      "reviewed": false
+    },
+    "wa.riders.confirmed_cash": {
+      "text": "Ti jẹ́rìí {reference}: a san {name} {amount} ní owó lọ́wọ́. Ó wà nínú ìwé owó rẹ.",
+      "reviewed": false
+    },
+    "wa.riders.confirmed_netted": {
+      "text": "Ti jẹ́rìí {reference}: owó iṣẹ́ {name} tí í ṣe {amount} jáde látinú owó tí wọ́n mú dání. Kò sí ohun tó kù láti san.",
+      "reviewed": false
+    },
+    "wa.riders.confirm_refused": {
+      "text": "Mi ò lè jẹ́rìí ìfijíṣẹ́ yẹn: {reason}",
+      "reviewed": false
+    },
     "wa.riders.added": {
       "text": "{name} ti di ẹni tó ń gbé ọjà rẹ. Mo ti fi ìjápọ̀ ránṣẹ́ sí wọn nípasẹ̀ SMS kí wọ́n lè máa gba iṣẹ́ ìfijíṣẹ́ rẹ lórí WhatsApp.",
       "reviewed": false

@@ -2240,6 +2240,22 @@
       "text": "{name} don be your rider. Dem business dey Taskiem, so I don ask am make e link with your own: once e gree, your delivery go dey reach dem for Taskiem.",
       "reviewed": false
     },
+    "wa.riders.confirmed": {
+      "text": "I don confirm {reference}: we dey pay {name} {amount}. I go tell you when e land.",
+      "reviewed": false
+    },
+    "wa.riders.confirmed_cash": {
+      "text": "I don confirm {reference}: {name} don collect {amount} cash. E dey your money log.",
+      "reviewed": false
+    },
+    "wa.riders.confirmed_netted": {
+      "text": "I don confirm {reference}: {name} fee of {amount} comot from the cash wey dem hold. Nothing remain to pay.",
+      "reviewed": false
+    },
+    "wa.riders.confirm_refused": {
+      "text": "I no fit confirm that delivery: {reason}",
+      "reviewed": false
+    },
     "wa.riders.added": {
       "text": "{name} don be your rider. I don send dem link by SMS make dem dey get your delivery for WhatsApp.",
       "reviewed": false

@@ -2799,6 +2799,26 @@
       "reviewed": true,
       "context": "The owner added a rider whose business is on Taskiem: it was asked to link"
     },
+    "wa.riders.confirmed": {
+      "text": "Confirmed {reference}: paying {name} {amount}. I will tell you when it lands.",
+      "reviewed": true,
+      "context": "The owner confirmed a delivery; the rider's fee is being paid to their bank"
+    },
+    "wa.riders.confirmed_cash": {
+      "text": "Confirmed {reference}: {name} was paid {amount} in cash. It is in your money log.",
+      "reviewed": true,
+      "context": "The owner confirmed a delivery and handed the fee over in cash"
+    },
+    "wa.riders.confirmed_netted": {
+      "text": "Confirmed {reference}: {name}'s fee of {amount} came out of the cash they held. Nothing more to pay.",
+      "reviewed": true,
+      "context": "The owner confirmed a delivery; the fee was taken from the cash the rider owed"
+    },
+    "wa.riders.confirm_refused": {
+      "text": "I could not confirm that delivery: {reason}",
+      "reviewed": true,
+      "context": "Confirming a delivery was refused; reason is in English"
+    },
     "wa.riders.added": {
       "text": "{name} is now your rider. I sent them a link by SMS to get your deliveries on WhatsApp.",
       "reviewed": true,

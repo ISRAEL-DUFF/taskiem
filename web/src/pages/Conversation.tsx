@@ -188,6 +188,53 @@ function CardActions({
         break;
     }
   }
+  // Our rider's delivery, done: our word pays the fee (phase 4), by bank
+  // through the payout, or handed over in cash.
+  if (
+    card.doc === "dispatch" &&
+    card.event === "delivered" &&
+    can("storefront.manage")
+  ) {
+    const ref = encodeURIComponent(card.reference);
+    buttons = (
+      <>
+        <button
+          type="button"
+          className="small primary"
+          disabled={act.busy}
+          onClick={() =>
+            void act.run(
+              async () => (
+                await post(`/v1/storefront/orders/${ref}/confirm`, {}),
+                onDone()
+              ),
+              `Confirmed ${card.reference}`,
+            )
+          }
+        >
+          Confirm, pay the fee{who}
+        </button>
+        <button
+          type="button"
+          className="small"
+          disabled={act.busy}
+          onClick={() =>
+            void act.run(
+              async () => (
+                await post(`/v1/storefront/orders/${ref}/confirm`, {
+                  how: "cash",
+                }),
+                onDone()
+              ),
+              `${card.reference} paid in cash`,
+            )
+          }
+        >
+          Paid in cash{who}
+        </button>
+      </>
+    );
+  }
   switch (`${card.doc}:${card.event}`) {
     case "order:ordered":
       if (can("storefront.manage|order.handle"))
@@ -868,9 +915,10 @@ function Bubble({
               <span className="sr-only"> {card.reference}</span>
             </Link>
           )}
-          {latest && (!m.mine || card.doc === "delivery") && (
-            <CardActions card={card} onDone={onDone} onOpenDoc={onOpenDoc} />
-          )}
+          {latest &&
+            (!m.mine || card.doc === "delivery" || card.doc === "dispatch") && (
+              <CardActions card={card} onDone={onDone} onOpenDoc={onOpenDoc} />
+            )}
         </CardFrame>
       ) : (
         <>

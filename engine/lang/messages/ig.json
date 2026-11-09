@@ -2240,6 +2240,22 @@
       "text": "{name} bụzi onye na-ebugara gị ihe. Azụmahịa ha dị na Taskiem, ya mere m rịọrọ ya ka o jikọọ na nke gị: ozugbo ha kwetara, ihe ị ga-ebuga na-eru ha na Taskiem.",
       "reviewed": false
     },
+    "wa.riders.confirmed": {
+      "text": "Ekwenyela {reference}: a na-akwụ {name} {amount}. M ga-agwa gị mgbe ọ ruru.",
+      "reviewed": false
+    },
+    "wa.riders.confirmed_cash": {
+      "text": "Ekwenyela {reference}: a kwụrụ {name} {amount} n'ego aka. Ọ dị n'akwụkwọ ego gị.",
+      "reviewed": false
+    },
+    "wa.riders.confirmed_netted": {
+      "text": "Ekwenyela {reference}: ụgwọ {name} nke {amount} si n'ego ha jidere pụta. Ọ dịghị ihe ọzọ a ga-akwụ.",
+      "reviewed": false
+    },
+    "wa.riders.confirm_refused": {
+      "text": "Enweghị m ike ikwenye nnyefe ahụ: {reason}",
+      "reviewed": false
+    },
     "wa.riders.added": {
       "text": "{name} bụzi onye na-ebugara gị ihe. Ezigara m ha njikọ site na SMS ka ha nweta ihe ị ga-ebuga na WhatsApp.",
       "reviewed": false

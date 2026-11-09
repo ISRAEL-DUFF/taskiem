@@ -331,6 +331,11 @@ func (d *Dispatch) FinishBatch(ctx context.Context, tenant, batch uuid.UUID, res
 				if err := d.settlePayoutTx(ctx, tx, tenant, o.id, o.rider, o.owed); err != nil {
 					return err
 				}
+				// A payout of one delivery (a confirm, phase 4): the fee's
+				// paid card on both sides.
+				if err := d.payoutPaidTx(ctx, tx, tenant, o.id); err != nil {
+					return err
+				}
 				if r.AccountName != "" {
 					if bank, ok, err := d.bankOf(ctx, tx, tenant, o.rider); err != nil {
 						return err

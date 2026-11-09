@@ -247,8 +247,15 @@ type Delivery struct {
 	// LinkOrderID is the rider's own order for it, when the rider is a
 	// business on Taskiem (docs/spec/chat-riders.md).
 	LinkOrderID *uuid.UUID `json:"link_order_id,omitempty"`
+	// ConfirmedAt is when the business confirmed the delivery (phase 4:
+	// the fee is payable); FeePaid how the fee stands: "" (not confirmed),
+	// pending (being paid), bank or cash (paid).
+	ConfirmedAt *time.Time `json:"confirmed_at,omitempty"`
+	FeePaid     string     `json:"fee_paid,omitempty"`
 	// proofPath is the photo's place in the business's storage.
 	proofPath string
+	// paidHow carries how the fee was paid to the paid card (confirm.go).
+	paidHow string
 }
 
 // ProofPath is where the delivery's photo is kept ("" for none).
@@ -256,13 +263,15 @@ func (x Delivery) ProofPath() string { return x.proofPath }
 
 const deliveryCols = `d.id, d.order_id, o.reference, d.rider_id, d.status, d.offered_by, d.offered_at, d.expires_at, d.answered_at, d.accepted_at,
 	d.picked_up_at, d.arrived_at, d.delivered_at, d.released_at, d.fee_kobo, COALESCE(d.paid_how, ''), COALESCE(d.proof, ''), COALESCE(d.location, ''),
-	d.rating, COALESCE(o.zone, ''), d.link_order_id`
+	d.rating, COALESCE(o.zone, ''), d.link_order_id, d.confirmed_at,
+	COALESCE((SELECT CASE WHEN p.status = 'paid' THEN p.how WHEN p.status = 'pending' THEN 'pending' END FROM rider_payouts p WHERE p.id = d.payout_id), '')`
 
 func scanDelivery(r pgx.Row) (Delivery, error) {
 	var x Delivery
 	var rating *int16
 	err := r.Scan(&x.ID, &x.OrderID, &x.Reference, &x.RiderID, &x.Status, &x.OfferedBy, &x.OfferedAt, &x.ExpiresAt, &x.AnsweredAt, &x.AcceptedAt,
-		&x.PickedUpAt, &x.ArrivedAt, &x.DeliveredAt, &x.ReleasedAt, &x.FeeKobo, &x.PaidHow, &x.proofPath, &x.Location, &rating, &x.Zone, &x.LinkOrderID)
+		&x.PickedUpAt, &x.ArrivedAt, &x.DeliveredAt, &x.ReleasedAt, &x.FeeKobo, &x.PaidHow, &x.proofPath, &x.Location, &rating, &x.Zone, &x.LinkOrderID,
+		&x.ConfirmedAt, &x.FeePaid)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return x, ErrNoDelivery
 	}
