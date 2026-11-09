@@ -130,7 +130,7 @@ func TestRules(t *testing.T) {
 	good, bad := mustLoad(t, goodPayout), mustLoad(t, badPayout)
 	for _, name := range ruleNames() {
 		switch name {
-		case "capability_when_unnamed", "no_payment_with_product", "reply_in_window", "opted_in_only", "invoice_copied_once", "books_by_capability":
+		case "capability_when_unnamed", "no_payment_with_product", "reply_in_window", "opted_in_only", "invoice_copied_once", "books_by_capability", "customer_guard":
 			continue // their good definitions are below
 		}
 		if ok, why := rules[name](good, reg); !ok {
@@ -518,5 +518,20 @@ func TestCIRunsTheSuitesForTheAILayer(t *testing.T) {
 		if filter.MatchString(p) {
 			t.Errorf("a change to %s runs the AI evaluation", p)
 		}
+	}
+}
+
+// customer_guard: an assistant's chat trigger has the customer guard (A13).
+func TestCustomerGuardRule(t *testing.T) {
+	guarded := mustLoad(t, `{"schema":"wd/v1","id":"wf_a","version":1,"name":"A","trigger":{"type":"connector_event","config":{"connector":"telegram@1","trigger":"update","guard":true}},"steps":[{"id":"t","type":"transform","config":{"output":1}}]}`)
+	open := mustLoad(t, `{"schema":"wd/v1","id":"wf_b","version":1,"name":"B","trigger":{"type":"connector_event","config":{"connector":"telegram@1","trigger":"update"}},"steps":[{"id":"t","type":"transform","config":{"output":1}}]}`)
+	if ok, why := ruleCustomerGuard(guarded, nil); !ok {
+		t.Errorf("guarded: %s", why)
+	}
+	if ok, _ := ruleCustomerGuard(open, nil); ok {
+		t.Error("a chat trigger without the guard passes")
+	}
+	if ok, _ := ruleCustomerGuard(mustLoad(t, goodPayout), nil); ok {
+		t.Error("a webhook passes")
 	}
 }
