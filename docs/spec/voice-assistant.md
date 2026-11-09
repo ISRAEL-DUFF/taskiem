@@ -68,7 +68,7 @@ Each gap says what is missing, the evidence, and how much it matters: **Blocker*
 | C20 ⊕ | Replies longer than a channel allows (4,096 characters on both) are refused, not split | `send_text`/`send_message` limits | Launch |
 | C21 ⊕ | A media download must happen soon: Meta's media URLs last minutes and Telegram's file links an hour, and Telegram bots cannot fetch files over 20 MB. A run that waits in a queue (concurrency, backlog) can find the voice note gone | provider rules | Launch (download first, store, then queue) |
 | C22 ⊕ | A number on the WhatsApp Cloud API cannot be used in the WhatsApp Business app at the same time unless Meta's coexistence applies to it, so staff who answer from the app on their phone lose that number. Owners must be told before connecting | Meta's rules; not in any Taskiem doc | Launch (guide, decision) |
-| C23 ⊕ | No watch on the number's quality rating or messaging limit; a business whose assistant annoys people can be throttled by Meta without knowing | `get_phone_number` returns `quality_rating`; nothing reads it on a schedule | Later |
+| C23 ⊕ | No watch on the number's quality rating or messaging limit; a business whose assistant annoys people can be throttled by Meta without knowing | `get_phone_number` returns `quality_rating`; nothing reads it on a schedule | Built (V10) |
 
 ### 3.2 Files and audio inside a run
 
@@ -112,7 +112,7 @@ Each gap says what is missing, the evidence, and how much it matters: **Blocker*
 | A10 | Each ai step takes two database transactions and a budget reservation before the call, and up to two model rounds; the latency of a voice round trip has never been measured | `aistep.go:163-188` | Launch (measure) |
 | A11 ⊕ | Prompt injection: a customer's message is instructions to the model as much as the owner's prompt. With no tools (D4) the harm is limited to what the model says, but it can still be talked into promises (prices, refunds) the business never made | | Launch (reply policy, L6) |
 | A12 ⊕ | When the AI budget runs out, is switched off, or the provider is down, the step fails and the customer hears nothing; there is no fall-back answer without a model | `aistep.go` failure kinds | Launch |
-| A13 ⊕ | The AI builder and its evaluation suite know nothing of assistants: "make me a WhatsApp assistant" will not retrieve the recipe or draft one sensibly | `engine/ai/builder`, `tools/aieval` | Later |
+| A13 ⊕ | The AI builder and its evaluation suite know nothing of assistants: "make me a WhatsApp assistant" will not retrieve the recipe or draft one sensibly | `engine/ai/builder`, `tools/aieval` | Built (V10) |
 
 ### 3.5 Memory and state
 
@@ -145,7 +145,7 @@ Each gap says what is missing, the evidence, and how much it matters: **Blocker*
 | L2 | `max_running_runs` counts runs waiting on a signal: Starter 5, Growth 25. A design that waits for the customer's next message holds a slot per customer | `docs/operations.md` plan limits | Launch (D3) |
 | L3 | No audio length check before transcription in workflows (the chat path has one) | | Launch |
 | L4 | No cost view: AI tokens are counted, transcription and speech are not, WhatsApp sends on a tenant's own app are not counted by Taskiem | | Launch |
-| L5 | No debounce: a customer who sends three short messages gets three answers | | Later |
+| L5 | No debounce: a customer who sends three short messages gets three answers | | Built (V10) |
 | L6 | No moderation of what the assistant says to customers (moderation covers storefronts) | `docs/moderation.md` | Launch (D6) |
 | L7 ⊕ | A reply send is an `unsafe_write`: if the answer from Meta or Telegram is lost, the step parks for an operator and the customer gets nothing, possibly for hours. A chat reply needs a different rule (retry once and accept a rare duplicate, or check the message id) | `docs/contracts/action-classes.md`; `send_text` class | Launch (D11) |
 | L8 ⊕ | Queued runs count against `max_queued_runs`; a busy assistant with one conversation at a time per sender can fill the backlog and get 429 for everyone in the tenant | `docs/operations.md` | Launch |
@@ -507,7 +507,7 @@ Left as they are:
 - **The owner's page.** Settings has **Your assistant**: pause for everyone, and the customers waiting for a person with **Let the assistant answer them now** (`/v1/assistant`).
 - **Threat model.** Boundary B21 and its threats (P7, A11).
 - **Tests:** the guard over signed WhatsApp and Telegram deliveries (STOP, START, limits, notice, kinds, a person, the owner's pause, Taskiem's stop and beta, groups and edits, the queue); erasure and a customer coming back; `assistant@1` in a run; the reply check; the switches through the API and the operators' console, which members cannot change even through the database role.
-- **Not done here:** a debounce of quick messages (L5, V10). The counsel's wording of the notice, and native speakers' review of the words and answers, are people items.
+- **Not done here:** a debounce of quick messages (L5; built in V10). The counsel's wording of the notice, and native speakers' review of the words and answers, are people items.
 
 ### V7. Conversations page
 
@@ -565,15 +565,16 @@ Left as they are:
 
 - Quality-rating watch for WhatsApp numbers (C23).
 - The AI builder and evaluation suite learn assistants (A13).
-- OCR for scanned files and photos of menus (K7, A4); a Drive and Docs connector; shop-platform connectors (K8, K9); adding a knowledge document by sending it in chat (K7).
+- OCR for scanned files and photos of menus (K7, A4); a Drive and Docs connector; shop-platform connectors (K8, K9).
+- Adding a knowledge document by sending it in chat (K7).
 - Better search (embeddings) if full-text search is not good enough on real questions (K4).
 - Debounce several quick messages into one answer (L5).
 
 **Built:**
-- **Quality watch (C23).** `whatsapp@1 get_phone_number` reads the messaging limit tier and status too; every six hours each assistant's WhatsApp number is read (`whatsapp_number_health`, migration 00323, definer `taskiem_whatsapp_quality_due`), and the owners told (`whatsapp_quality`) when its rating, limit or status gets worse in prod.
-- **The builder knows assistants (A13).** Six evaluation cases (`evals/builder/assistant.jsonl`) graded with a `customer_guard` property; retrieval meets the WhatsApp or Telegram assistant for an assistant goal and the `-accounts` variants only for goals about customers' own money (the callable building blocks carry no channel words). The builder's prompt had the recipe since V8.
-- **Debounce (L5).** `assistant@1 gather` and a short wait in the templates (**Wait for more messages**, 4 seconds): the newest of several quick messages answers them all, the others stay quiet. No guard or runtime change: the wait holds a run slot for seconds.
-- **A document sent in chat (K7).** A PDF or Word document sent in Taskiem's chat by someone with `secret.manage` becomes a document source waiting for **Use this** (up to 10 MB; a scan refused in plain words).
+- **Quality watch (C23).** `whatsapp@1 get_phone_number` reads the messaging limit tier and status too; every six hours each assistant's WhatsApp number is read (`whatsapp_number_health`, migration 00323, definer `taskiem_whatsapp_quality_due`), and the owners told (`whatsapp_quality`) when its rating, limit or status (flagged, rate limited, restricted, disconnected, banned, deleted) gets worse in prod, or a number read before can no longer be read; once a day per state. A number read in the last five hours is not read again, so two servers or a restart do not read it twice.
+- **The builder knows assistants (A13).** Six evaluation cases (`evals/builder/assistant.jsonl`) graded with a `customer_guard` property; the builder's prompt learned `gather`; retrieval meets the WhatsApp or Telegram assistant for an assistant goal and the `-accounts` variants only for goals naming customers' balances, accounts or wallets, never a business's own balance (the callable building blocks carry no channel words). The builder's prompt had the recipe since V8.
+- **Debounce (L5).** `assistant@1 gather` and a short wait in the templates (**Wait for more messages**, 4 seconds): the newest of several quick messages answers them all, the others stay quiet. Each run claims the turns it answers (`step_run`, under an advisory lock), so two runs never answer the same message; a newer STOP or a request for a person, or a newer message whose run has not started in 30 seconds, does not silence this one. Earlier turns are those not answered in the last 15 minutes (at most 20); an unheard voice note among them is named, not dropped. The guard repeats the first-answer notice when it was given under a minute ago and the customer has not been answered since. The wait holds a run slot for seconds; WhatsApp's typing indicator lasts 25 seconds, so a wait longer than about 20 is not offered.
+- **A document sent in chat (K7).** A PDF or Word document sent in Taskiem's chat by someone with `secret.manage` becomes a document source waiting for **Use this** (up to 10 MB; a scan refused in plain words). The document is read after the chat's answer ("Reading…"), with its own time, and the person told how it went; the same document sent again updates its source; a file that is not really a PDF or .docx, an old .doc, and the most sources a business may have each get their own words.
 - **Not built, and why:**
   - **OCR** of scans and photos of menus needs image input to the model (A4), which this plan leaves out.
   - **Google Docs and Drive** need the Google Picker or a broader scope that Google must verify (`drive.readonly` with a security assessment): a decision for the business running Taskiem, not code.

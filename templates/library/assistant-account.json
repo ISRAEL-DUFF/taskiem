@@ -12,7 +12,10 @@
     "assistant"
   ],
   "requires": [
-    "assistant"
+    "customer balance",
+    "customers' balance",
+    "customers' accounts",
+    "their own account"
   ],
   "connectors": [
     "xenibase@1",

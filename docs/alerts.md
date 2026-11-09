@@ -58,7 +58,7 @@ A business's customer assistant ([keeping it safe](assistant-guard.md)) raises t
 - **`assistant_busy`**: the assistant's queue is full and new messages are not answered; once a day per workflow.
 - **`allowance`**: this month's allowance for AI steps or for voice is 80 % used, and again when it is used up; once a month each.
 
-An assistant's WhatsApp number raises **`whatsapp_quality`** when Meta rates it lower (yellow, red), lowers how many customers a day it may start conversations with, or flags or restricts it: read every six hours ([keeping it safe](assistant-guard.md#the-whatsapp-numbers-quality)), once for each new state, in prod.
+An assistant's WhatsApp number raises **`whatsapp_quality`** when Meta rates it lower (yellow, red), lowers how many customers a day it may start conversations with, or flags, rate-limits, restricts, disconnects, bans or deletes it, or when a number read before can no longer be read: read every six hours ([keeping it safe](assistant-guard.md#the-whatsapp-numbers-quality)), once a day for each state, in prod.
 
 What the assistant knows raises **`knowledge_source`** when a source starts failing to read ([knowledge](knowledge.md)).
 

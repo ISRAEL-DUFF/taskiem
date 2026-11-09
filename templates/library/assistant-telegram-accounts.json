@@ -22,14 +22,15 @@
   "requires": [
     "customer balance",
     "customers' balance",
-    "their balance",
-    "wallet balance",
-    "account balance",
+    "customer's balance",
     "customer account",
     "customers' accounts",
+    "customer's account",
+    "customer wallet",
+    "customers' wallets",
     "their own account",
-    "recent transactions",
-    "what they owe"
+    "customers' transactions",
+    "what customers owe"
   ],
   "connectors": [
     "assistant@1",
