@@ -456,7 +456,7 @@ func checkMentions(ctx context.Context, tx pgx.Tx, p *Principal, link uuid.UUID,
 	}
 	var items []links.PriceItem
 	var services []storefront.Item
-	var shared []linkRef
+	var shared []chatRef
 	lower := strings.ToLower(text)
 	out := []links.Mention{}
 	for _, r := range refs {
@@ -501,7 +501,7 @@ func checkMentions(ctx context.Context, tx pgx.Tx, p *Principal, link uuid.UUID,
 			if sv.PriceKobo != nil {
 				m.PriceKobo = *sv.PriceKobo
 			}
-		case "invoice", "order":
+		case "invoice", "bill", "order", "purchase":
 			// Between the two businesses only (linkRefsTx).
 			if shared == nil {
 				l, err := links.GetTx(ctx, tx, link)
@@ -512,14 +512,14 @@ func checkMentions(ctx context.Context, tx pgx.Tx, p *Principal, link uuid.UUID,
 					return nil, err
 				}
 			}
-			i := slices.IndexFunc(shared, func(x linkRef) bool { return x.Kind == r.Kind && x.ID == r.Ref })
+			i := slices.IndexFunc(shared, func(x chatRef) bool { return x.Kind == r.Kind && x.ID == r.Ref })
 			if i < 0 {
 				return nil, fmt.Errorf("%w: you can name only invoices and orders between you and this business", links.ErrInvalid)
 			}
 			x := shared[i]
-			m = links.Mention{Kind: x.Kind, Name: x.Name, Ref: x.ID, PriceKobo: x.TotalKobo, Status: x.Status}
+			m = links.Mention{Kind: x.Kind, Name: x.Name, Ref: x.ID, PriceKobo: *x.TotalKobo, Status: x.Status}
 		default:
-			return nil, fmt.Errorf("%w: a mention is a business, an item, a service, an invoice or an order", links.ErrInvalid)
+			return nil, fmt.Errorf("%w: a mention is a business, an item, a service, an invoice, a bill or an order", links.ErrInvalid)
 		}
 		// A business is "@Name"; an item "#Name", or "@Name" as the chat
 		// tools picker writes it (docs/spec/chat-tools.md §3).

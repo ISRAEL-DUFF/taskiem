@@ -7477,7 +7477,7 @@ paths:
                 mentions:
                   type: array
                   maxItems: 10
-                  description: 'Each a business you are linked with ({kind: business, link}), an item of this conversation''s price list ({kind: item, item_id}), one of your own services ({kind: service, service_id}), or an invoice or order between you and this business ({kind: invoice or order, ref}: one of /link-chats/{link}/refs), named in the text as @Name (any but a business also #Name); one the text does not name is left out.'
+                  description: 'Each a business you are linked with ({kind: business, link}), an item of this conversation''s price list ({kind: item, item_id}), one of your own services ({kind: service, service_id}), or an invoice, bill, order or purchase between you and this business ({kind, ref}: one of /link-chats/{link}/refs), named in the text as @Name (any but a business also #Name); one the text does not name is left out.'
                   items:
                     type: object
                     additionalProperties: false
@@ -7485,7 +7485,7 @@ paths:
                     properties:
                       kind:
                         type: string
-                        enum: [business, item, service, invoice, order]
+                        enum: [business, item, service, invoice, bill, order, purchase]
                       link:
                         type: string
                         format: uuid
@@ -8158,6 +8158,65 @@ paths:
           description: Done
         default:
           $ref: '#/components/responses/Error'
+  /v1/chat-refs:
+    get:
+      operationId: chatRefs
+      tags:
+      - Account
+      summary: What "/" may tag in the Taskiem chat
+      description: 'Everything the person may see: invoices and bills (invoice.read), orders (order handling), purchases (table.read) and customers who write to the business (order handling), each with who it is with (a person masked, a business in full), when, the total and the status.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The things
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [refs]
+                properties:
+                  refs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChatRef'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/chat-card:
+    get:
+      operationId: chatCard
+      tags:
+      - Account
+      summary: A tagged thing's card, read now
+      description: 'An invoice, bill, order, purchase or customer by its id, for those who may see it: its lines (three, and how many more), what is paid and due, and the one thing the card offers (send a draft, remind of what is owed, pay a bill, message a customer). A customer''s card has their orders, their latest and what they owe.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: kind
+        in: query
+        required: true
+        schema:
+          type: string
+          enum: [invoice, bill, order, purchase, customer]
+      - name: id
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The card
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatCard'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/taskiem-chat:
     get:
       operationId: taskiemHistory
@@ -8425,8 +8484,8 @@ paths:
       operationId: linkChatRefs
       tags:
       - Links
-      summary: What "/invoice" and "/order" name in a conversation
-      description: 'Only what is between the two businesses, newest first: invoices you sent them and bills they sent you (with invoice.read), orders they placed with you (with order handling) and orders you sent them (with table.read).'
+      summary: What "/invoice", "/bill", "/order" and "/purchase" name in a conversation
+      description: 'Only what is between the two businesses, newest first: invoices you sent them and bills they sent you (with invoice.read), orders they placed with you (with order handling) and orders you sent them (purchases, with table.read). Never a customer.'
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -8451,26 +8510,46 @@ paths:
                   refs:
                     type: array
                     items:
-                      type: object
-                      additionalProperties: false
-                      required: [kind, id, name, total_kobo, status, side]
-                      properties:
-                        kind:
-                          type: string
-                          enum: [invoice, order]
-                        id:
-                          type: string
-                        name:
-                          type: string
-                          description: Its number or reference
-                        total_kobo:
-                          type: integer
-                        status:
-                          type: string
-                        side:
-                          type: string
-                          enum: [ours, theirs]
-                          description: 'ours: you sent it, or they ordered from you'
+                      $ref: '#/components/schemas/ChatRef'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/card:
+    get:
+      operationId: linkChatCard
+      tags:
+      - Links
+      summary: The card of an invoice or order a message named
+      description: 'By its number, as this side has it (their invoice is our bill, their order our purchase), read now; only what is between the two businesses, and only what the person may see.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: kind
+        in: query
+        required: true
+        schema:
+          type: string
+          enum: [invoice, bill, order, purchase]
+      - name: name
+        in: query
+        required: true
+        description: Its number or reference
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The card
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatCard'
         default:
           $ref: '#/components/responses/Error'
   /v1/link-chats/{link}/typing:
@@ -33281,7 +33360,7 @@ components:
       properties:
         kind:
           type: string
-          enum: [business, item, service, invoice, order]
+          enum: [business, item, service, invoice, bill, order, purchase]
         name:
           type: string
         link:
@@ -33306,6 +33385,94 @@ components:
         minutes:
           type: integer
           description: How long the service takes; an invoice's or an order's total is price_kobo
+    ChatRef:
+      type: object
+      additionalProperties: false
+      required: [kind, id, name, when]
+      description: A thing "/" may tag
+      properties:
+        kind:
+          type: string
+          enum: [invoice, bill, order, purchase, customer]
+        id:
+          type: string
+        name:
+          type: string
+          description: Its number or reference, or a customer's name
+        party:
+          type: string
+          description: Who it is with (a person masked, a business in full); a customer's number, masked
+        when:
+          type: string
+          format: date-time
+        total_kobo:
+          type: integer
+        status:
+          type: string
+    ChatCard:
+      type: object
+      additionalProperties: false
+      required: [kind, id, name, when]
+      properties:
+        kind:
+          type: string
+          enum: [invoice, bill, order, purchase, customer]
+        id:
+          type: string
+        name:
+          type: string
+        party:
+          type: string
+        when:
+          type: string
+          format: date-time
+        total_kobo:
+          type: integer
+        status:
+          type: string
+        due_on:
+          type: string
+        paid_kobo:
+          type: integer
+        due_kobo:
+          type: integer
+        lines:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [name, quantity, total_kobo]
+            properties:
+              name:
+                type: string
+              quantity:
+                type: integer
+              total_kobo:
+                type: integer
+        more:
+          type: integer
+          description: Lines not shown
+        orders:
+          type: integer
+        owes_kobo:
+          type: integer
+        last_order:
+          type: object
+          additionalProperties: false
+          required: [reference, total_kobo, status, when]
+          properties:
+            reference:
+              type: string
+            total_kobo:
+              type: integer
+            status:
+              type: string
+            when:
+              type: string
+              format: date-time
+        action:
+          type: string
+          enum: [send, remind, pay, message]
     LinkReaction:
       type: object
       additionalProperties: false

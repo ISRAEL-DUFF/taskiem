@@ -120,12 +120,12 @@ func TestLinkChatRefs(t *testing.T) {
 		t.Fatalf("the seller's refs: %v", refs)
 	}
 	r := refs[0].(map[string]any)
-	if r["kind"] != "invoice" || r["name"] != x["number"] || r["side"] != "ours" || r["total_kobo"] != float64(4250000) || r["status"] != "sent" {
+	if r["kind"] != "invoice" || r["name"] != x["number"] || r["party"] != "Ada's Kitchen" || r["total_kobo"] != float64(4250000) || r["status"] != "sent" || r["when"] == nil {
 		t.Fatalf("our invoice: %v", r)
 	}
 	bl := buyer.must(200, "GET", "/v1/link-chats", nil)["conversations"].([]any)[0].(map[string]any)["link"].(string)
 	theirs := buyer.must(200, "GET", "/v1/link-chats/"+bl+"/refs", nil)["refs"].([]any)
-	if len(theirs) != 1 || theirs[0].(map[string]any)["side"] != "theirs" || theirs[0].(map[string]any)["name"] != x["number"] {
+	if len(theirs) != 1 || theirs[0].(map[string]any)["kind"] != "bill" || theirs[0].(map[string]any)["name"] != x["number"] || theirs[0].(map[string]any)["party"] != "Dangote Stores" {
 		t.Fatalf("the buyer's refs: %v", theirs)
 	}
 
@@ -144,14 +144,57 @@ func TestLinkChatRefs(t *testing.T) {
 	if m := got[len(got)-1].(map[string]any)["mentions"].([]any)[0].(map[string]any); m["kind"] != "invoice" || m["name"] != num || m["ref"] != nil {
 		t.Fatalf("their copy: %v", m)
 	}
+	// Each side's card of it, read now: ours an invoice with a reminder to
+	// send, theirs a bill to pay; paid, both say so.
+	card := seller.must(200, "GET", "/v1/link-chats/"+link+"/card?kind=invoice&name="+num, nil)
+	if card["kind"] != "invoice" || card["due_kobo"] != float64(4250000) || card["action"] != "remind" || card["party"] != "Ada's Kitchen" {
+		t.Fatalf("our card: %v", card)
+	}
+	bill := buyer.must(200, "GET", "/v1/link-chats/"+bl+"/card?kind=invoice&name="+num, nil)
+	if bill["kind"] != "bill" || bill["party"] != "Dangote Stores" || bill["action"] != "pay" {
+		t.Fatalf("their card: %v", bill)
+	}
+	buyer.must(404, "GET", "/v1/link-chats/"+bl+"/card?kind=invoice&name="+other["number"].(string), nil)
+	e := seller.must(201, "POST", "/v1/money/entries", map[string]any{"kind": "cash", "direction": "in", "amount_kobo": 4250000, "description": "Ada paid"}, "Idempotency-Key", "r-pay")
+	seller.must(200, "POST", "/v1/money/entries/"+e["entry_id"].(string)+"/match", map[string]any{"invoice": num})
+	if card := seller.must(200, "GET", "/v1/link-chats/"+link+"/card?kind=invoice&name="+num, nil); card["status"] != "paid" || card["action"] != nil {
+		t.Fatalf("paid, our card: %v", card)
+	}
+
 	// Someone else's invoice, and a made-up one.
 	seller.must(400, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{
 		"text": "#" + other["number"].(string), "mentions": []any{map[string]any{"kind": "invoice", "ref": other["id"]}}})
 	seller.must(400, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{
 		"text": "#INV-9999", "mentions": []any{map[string]any{"kind": "order", "ref": "nope"}}})
-	// Without invoice.read, no invoices are offered.
+	// A bill named as if it were our invoice.
+	seller.must(400, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{
+		"text": "#" + num, "mentions": []any{map[string]any{"kind": "bill", "ref": x["id"]}}})
+	// Without invoice.read, no invoices are offered, nor their cards.
 	builder := addMember(t, w.world, seller, "build2", "builder")
 	if refs := builder.must(200, "GET", "/v1/link-chats/"+link+"/refs", nil)["refs"].([]any); len(refs) != 0 {
 		t.Fatalf("a builder's refs: %v", refs)
 	}
+	builder.must(404, "GET", "/v1/link-chats/"+link+"/card?kind=invoice&name="+num, nil)
+	builder.must(403, "GET", "/v1/chat-card?kind=invoice&id="+x["id"].(string), nil)
+
+	// The Taskiem chat offers everything: the invoices, the other customer's
+	// masked, the linked business's in full.
+	all := seller.must(200, "GET", "/v1/chat-refs", nil)["refs"].([]any)
+	names := map[string]string{}
+	for _, x := range all {
+		m := x.(map[string]any)
+		names[m["name"].(string)] = m["kind"].(string) + ":" + m["party"].(string)
+	}
+	if names[num] != "invoice:Ada's Kitchen" || names[other["number"].(string)] != "invoice:B•••" {
+		t.Fatalf("the Taskiem chat's refs: %v", names)
+	}
+	if bills := buyer.must(200, "GET", "/v1/chat-refs", nil)["refs"].([]any); len(bills) != 1 || bills[0].(map[string]any)["kind"] != "bill" {
+		t.Fatalf("the buyer's Taskiem chat refs: %v", bills)
+	}
+	c := seller.must(200, "GET", "/v1/chat-card?kind=invoice&id="+other["id"].(string), nil)
+	if c["party"] != "B•••" || c["action"] != "remind" || c["total_kobo"] != float64(100000) {
+		t.Fatalf("a card from the Taskiem chat: %v", c)
+	}
+	seller.must(404, "GET", "/v1/chat-card?kind=invoice&id=nope", nil)
+	seller.must(404, "GET", "/v1/chat-card?kind=nothing&id=x", nil)
 }
