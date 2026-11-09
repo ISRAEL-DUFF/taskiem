@@ -63,21 +63,23 @@ DECLARE
   v_off int := GREATEST(p_offset, 0);
   v_delivery_words boolean := lower(COALESCE(p_query, '')) ~ '(deliver|dispatch|rider|courier|logistic|okada|bike)';
 BEGIN
-  SELECT lower(COALESCE(NULLIF(bp.area, ''), (SELECT snap.model->'card'->>'area'
-                                                FROM storefronts s JOIN storefront_snapshots snap ON snap.storefront_id = s.id AND snap.version = s.published_version
-                                               WHERE s.tenant_id = v_me AND s.status = 'published')))
-    INTO v_area
-    FROM (SELECT 1) one LEFT JOIN business_profile bp ON bp.tenant_id = v_me;
   IF p_section = 'search' THEN
+    -- What the search finds, in its own order (linked first, then our
+    -- area, then name); then, for delivery words, the businesses that
+    -- deliver which it did not find, by name.
     RETURN QUERY
-    WITH found AS (
-      SELECT s.business, s.name, s.slug, s.area, s.tagline, s.state, 0 AS rank FROM taskiem_link_search(p_query, v_lim) s
+    WITH hit AS (
+      SELECT s.business, s.name, s.slug, s.area, s.tagline, s.state, s.n FROM taskiem_link_search(p_query, v_lim) WITH ORDINALITY AS s(business, name, slug, area, tagline, items, state, n)
+    ), found AS (
+      SELECT h.business, h.name, h.slug, h.area, h.tagline, h.state, 0 AS rank, h.n FROM hit h
       UNION ALL
-      SELECT t.id, COALESCE(NULLIF(bp.name, ''), t.name), NULL::text, bp.area, bp.tagline,
-             COALESCE((SELECT taskiem_link_view(l, v_me) FROM business_links l WHERE l.a_tenant = LEAST(v_me, t.id) AND l.b_tenant = GREATEST(v_me, t.id)), 'none'), 1
+      SELECT t.id, COALESCE(NULLIF(bp.name, ''), t.name),
+             (SELECT s.published_slug FROM storefronts s WHERE s.tenant_id = t.id AND s.status = 'published'),
+             bp.area, bp.tagline,
+             COALESCE((SELECT taskiem_link_view(l, v_me) FROM business_links l WHERE l.a_tenant = LEAST(v_me, t.id) AND l.b_tenant = GREATEST(v_me, t.id)), 'none'), 1, 0::bigint
         FROM business_profile bp JOIN tenants t ON t.id = bp.tenant_id AND t.status = 'active'
        WHERE v_delivery_words AND bp.delivers AND t.id <> v_me AND taskiem_link_findable(t.id)
-         AND NOT EXISTS (SELECT 1 FROM taskiem_link_search(p_query, v_lim) s2 WHERE s2.business = t.id)
+         AND NOT EXISTS (SELECT 1 FROM hit h WHERE h.business = t.id)
     )
     SELECT f.business, f.name, f.slug, f.area, f.tagline, bp.about,
            EXISTS (SELECT 1 FROM business_profile b2 JOIN storefront_media m ON m.id = b2.logo_media AND m.tenant_id = b2.tenant_id AND m.moderation <> 'rejected' WHERE b2.tenant_id = f.business),
@@ -87,13 +89,18 @@ BEGIN
            COALESCE(bp.delivers, false), bp.vehicle, COALESCE(bp.delivery_areas, '{}')
       FROM found f
       LEFT JOIN business_profile bp ON bp.tenant_id = f.business
-     ORDER BY f.rank, f.name
+     ORDER BY f.rank, f.n, f.name
      LIMIT v_lim;
     RETURN;
   END IF;
   IF p_section NOT IN ('near', 'new', 'delivery') THEN
     RETURN;
   END IF;
+  SELECT lower(COALESCE(NULLIF(bp.area, ''), (SELECT snap.model->'card'->>'area'
+                                                FROM storefronts s JOIN storefront_snapshots snap ON snap.storefront_id = s.id AND snap.version = s.published_version
+                                               WHERE s.tenant_id = v_me AND s.status = 'published')))
+    INTO v_area
+    FROM (SELECT 1) one LEFT JOIN business_profile bp ON bp.tenant_id = v_me;
   RETURN QUERY
   WITH cand AS (
     SELECT t.id AS biz, t.created_at AS made,

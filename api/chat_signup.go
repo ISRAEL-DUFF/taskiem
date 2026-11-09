@@ -748,6 +748,10 @@ func signupTemplates(sells string, pays []string) []string {
 	switch {
 	case sells == "school":
 		add("school-fee-reminders")
+	case sells == "delivery":
+		// A rider bills the businesses it delivers for; no stock, no shop.
+		add("send-invoice")
+		add("payment-receipt-whatsapp")
 	case shop:
 		add("sales-day-total")
 	default:

@@ -2,11 +2,9 @@ package riders
 
 import (
 	"context"
-	"errors"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/israel-duff/taskiem/engine/pii"
 )
@@ -46,11 +44,10 @@ func (r *Riders) ClaimLinkedTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID)
 		if link == nil {
 			continue
 		}
-		tag, err := tx.Exec(ctx, `UPDATE riders SET link_id = $3, updated_at = now() WHERE tenant_id = $1 AND id = $2 AND link_id IS NULL AND retired_at IS NULL`, tenant, x.ID, *link)
-		var pg *pgconn.PgError
-		if errors.As(err, &pg) && pg.Code == "23505" {
-			continue // another rider is already that business
-		}
+		// Not when another current rider is already that business (a
+		// failed statement would end the transaction).
+		tag, err := tx.Exec(ctx, `UPDATE riders SET link_id = $3, updated_at = now() WHERE tenant_id = $1 AND id = $2 AND link_id IS NULL AND retired_at IS NULL
+			AND NOT EXISTS (SELECT 1 FROM riders o WHERE o.tenant_id = $1 AND o.link_id = $3 AND o.retired_at IS NULL)`, tenant, x.ID, *link)
 		if err != nil {
 			return n, err
 		}

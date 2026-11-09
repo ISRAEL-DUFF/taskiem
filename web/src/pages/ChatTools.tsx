@@ -268,8 +268,6 @@ export function ToolsPanel({
   );
 }
 
-
-
 /** What a tool's row opens: its form, or a look at it. */
 /** Whether the person may change what a tool shows (else they see it). */
 export function mayEdit(tool: ToolKey, can: (p: string) => boolean): boolean {
@@ -458,7 +456,8 @@ export function ToolSheet({
   // In a business's conversation, the orders and bills with that business.
   const list = Array.isArray(rows) ? inScope(rows, scope) : undefined;
   const shown = list ? filterRows(list, chip, search) : [];
-  const name = tool.title.toLowerCase();
+  const title = list && tool.titleFor ? tool.titleFor(list) : tool.title;
+  const name = title.toLowerCase();
   const done = (line: string | null) => {
     if (line) void onSaved?.(line);
     setSaved(true);
@@ -468,11 +467,9 @@ export function ToolSheet({
   const add = ADDS[key];
   return (
     <Sheet
-      title={
-        open === "add" ? (add ?? tool.title) : open ? open.name : tool.title
-      }
+      title={open === "add" ? (add ?? title) : open ? open.name : title}
       count={open ? undefined : list?.length}
-      crumb={open && open !== "add" ? tool.title : undefined}
+      crumb={open && open !== "add" ? title : undefined}
       from={from}
       onClose={onClose}
       onBack={open ? () => setOpen(undefined) : undefined}

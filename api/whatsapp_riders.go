@@ -1,6 +1,8 @@
 package api
 
 import (
+	"github.com/google/uuid"
+
 	"context"
 	"errors"
 	"regexp"
@@ -124,7 +126,7 @@ func (s *Server) waAddRider(ctx context.Context, c *chat, text string) error {
 	}
 	name, phone := m[1], m[2]
 	var x riders.Rider
-	var asked bool
+	var told uuid.UUID
 	err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
 		known, err := storefront.Zones(ctx, tx, c.tenant.ID)
 		if err != nil {
@@ -134,7 +136,7 @@ func (s *Server) waAddRider(ctx context.Context, c *chat, text string) error {
 		if x, err = s.Riders.AddTx(ctx, tx, c.tenant.ID, riders.In{Name: &name, Phone: &phone, Zones: &zones}, c.p.Actor()); err != nil {
 			return err
 		}
-		x, asked, err = s.linkRiderTx(ctx, tx, c.tenant.ID, x, links.Actor{Type: c.p.ActorType(), ID: c.p.Actor()})
+		x, told, err = s.linkRiderTx(ctx, tx, c.tenant.ID, x, links.Actor{Type: c.p.ActorType(), ID: c.p.Actor()})
 		return err
 	})
 	switch {
@@ -145,10 +147,11 @@ func (s *Server) waAddRider(ctx context.Context, c *chat, text string) error {
 	case err != nil:
 		return err
 	}
+	s.tellLinkAsked(ctx, told, c.tenant.ID)
 	switch {
 	case x.LinkID != nil:
 		return c.say(ctx, s, c.t("wa.riders.added_linked", "name", x.Name))
-	case asked:
+	case told != uuid.Nil:
 		return c.say(ctx, s, c.t("wa.riders.added_asked", "name", x.Name))
 	case x.Reached != "sms":
 		return c.say(ctx, s, c.t("wa.riders.added_reached", "name", x.Name, "app", appName(x.Reached)))

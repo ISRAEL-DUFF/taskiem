@@ -324,9 +324,16 @@ func TestExploreDelivery(t *testing.T) {
 	if got := names(ada.must(200, "GET", "/v1/explore?section=delivery&offset=1", nil)["delivery"]); strings.Join(got, ",") != "Tunde Express" {
 		t.Errorf("the second page: %v", got)
 	}
-	// A search for delivery words finds them, though no name says it.
+	// A search for delivery words finds them, though no name says it; what
+	// the search itself finds keeps its own order, first.
 	if got := names(ada.must(200, "GET", "/v1/explore?q=dispatch+rider", nil)["results"]); strings.Join(got, ",") != "Musa Rides,Tunde Express" {
 		t.Errorf("a search for riders: %v", got)
+	}
+	zed := w.tenant(t, "Zed Delivery", "zed@delivery.test")
+	zed.must(200, "PUT", "/v1/link-settings", map[string]any{"findable": true})
+	zed.must(200, "PUT", "/v1/business-profile", map[string]any{"name": "Zed Delivery", "area": "Lekki"})
+	if got := names(ada.must(200, "GET", "/v1/explore?q=delivery", nil)["results"]); strings.Join(got, ",") != "Zed Delivery,Musa Rides,Tunde Express" {
+		t.Errorf("search order: %v", got)
 	}
 	if got := names(ada.must(200, "GET", "/v1/explore?q=cement", nil)["results"]); len(got) != 0 {
 		t.Errorf("a search for something else: %v", got)

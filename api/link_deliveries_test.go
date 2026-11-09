@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"bytes"
+	"fmt"
 	"mime/multipart"
 	"net/url"
 	"strings"
@@ -194,6 +195,28 @@ func TestRiderByPhoneLinksBusiness(t *testing.T) {
 	out = ada.must(201, "POST", "/v1/riders", map[string]any{"name": "Tunde Ojo", "phone": tunde})
 	if out["link_requested"] != false || out["rider"].(map[string]any)["link_id"] != tl["id"] {
 		t.Fatalf("adding a rider already linked with: %v", out)
+	}
+	// Told: the rider's business has the request in its chats and alerts
+	// (tellLinkAsked), as any link request.
+	w.srv.WaitBackground()
+	if n := len(musaBiz.must(200, "GET", "/v1/links", nil)["links"].([]any)); n != 1 {
+		t.Fatalf("%d links on the rider's side", n)
+	}
+	// Past the day's blind requests, the rider is still added, with no request.
+	for i := range 20 {
+		if _, err := w.env.DB.Admin.Exec(t.Context(), `INSERT INTO link_blind_requests (id, tenant_id, kind, shown, address_hash, role, requested_by, expires_at)
+			VALUES (gen_random_uuid(), $1, 'phone', '0803…0000', $2, 'supplier', 'user:test', now() + interval '30 days')`, w.biz, []byte(fmt.Sprintf("filler-%02d-%s", i, strings.Repeat("x", 22)))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	w.tenant(t, "Chidi Logistics", "chidi@logistics.test")
+	const chidi = "+2348031110034"
+	if _, err := w.env.DB.Admin.Exec(t.Context(), `INSERT INTO whatsapp_bindings (user_id, number) SELECT id, $2 FROM users WHERE email = $1`, "chidi@logistics.test", chidi); err != nil {
+		t.Fatal(err)
+	}
+	out = ada.must(201, "POST", "/v1/riders", map[string]any{"name": "Chidi Eze", "phone": chidi})
+	if out["link_requested"] != false || out["rider"].(map[string]any)["link_id"] != nil {
+		t.Fatalf("past the day's requests: %v", out)
 	}
 	// A rider whose number is nobody's business: added as before.
 	out = ada.must(201, "POST", "/v1/riders", map[string]any{"name": "Bola Ade", "phone": "+2348031110033"})
