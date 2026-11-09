@@ -6,22 +6,13 @@
   "category": "assistant",
   "tags": [
     "assistant",
-    "ai",
-    "balance"
+    "ai"
   ],
   "keywords": [
-    "assistant",
-    "balance",
-    "account",
-    "owe",
-    "transactions",
-    "statement"
+    "assistant"
   ],
   "requires": [
-    "assistant",
-    "customers' accounts",
-    "customer account",
-    "customer balance"
+    "assistant"
   ],
   "connectors": [
     "xenibase@1",

@@ -20,15 +20,16 @@
     "auto reply"
   ],
   "requires": [
-    "assistant",
-    "answer customers",
-    "answer my customers",
-    "reply to customers",
-    "reply my customers",
-    "chatbot",
-    "auto reply",
-    "automatic replies",
-    "customer questions"
+    "customer balance",
+    "customers' balance",
+    "their balance",
+    "wallet balance",
+    "account balance",
+    "customer account",
+    "customers' accounts",
+    "their own account",
+    "recent transactions",
+    "what they owe"
   ],
   "connectors": [
     "assistant@1",

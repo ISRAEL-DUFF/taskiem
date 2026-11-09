@@ -40,6 +40,7 @@ var rules = map[string]rule{
 	"opted_in_only":           ruleOptedInOnly,
 	"invoice_copied_once":     ruleInvoiceCopiedOnce,
 	"books_by_capability":     ruleBooksByCapability,
+	"customer_guard":          ruleCustomerGuard,
 }
 
 // hygiene rules apply to every case.
@@ -659,4 +660,22 @@ func ruleBooksByCapability(def *wd.Definition, reg connector.Lookup) (bool, stri
 		return false, "no step uses a books capability"
 	}
 	return why == "", why
+}
+
+// ruleCustomerGuard: an assistant answering customers on a chat starts on
+// a chat trigger the customer guard watches (decision 0062 V6): STOP, a
+// person, limits and the notice before any run (A13).
+func ruleCustomerGuard(def *wd.Definition, _ connector.Lookup) (bool, string) {
+	if def.Trigger.Type != "connector_event" {
+		return false, "the workflow does not start on a chat's messages"
+	}
+	switch g := def.Trigger.Config["guard"].(type) {
+	case bool:
+		if g {
+			return true, ""
+		}
+	case map[string]any:
+		return true, ""
+	}
+	return false, "the chat trigger has no customer guard (config.guard)"
 }
