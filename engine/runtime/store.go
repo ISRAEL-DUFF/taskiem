@@ -1126,6 +1126,84 @@ func (s *Store) deliverSignal(ctx context.Context, tenant uuid.UUID, env, event,
 	return woke, fresh, err
 }
 
+// WakeWorkflow hands a signal to the runs of one workflow in an
+// environment that wait for it, and to no other: a reply in an email
+// thread (decision 0063) belongs to the workflow whose address it came to,
+// though another workflow of the business may use the same ticket key.
+// Nothing is buffered: with no run waiting it returns no runs and records
+// nothing, so the caller decides what else to do. A dedupKey already
+// delivered for the event in the environment is ignored (fresh false).
+// then, when given, runs in the same transaction once runs were woken,
+// so what the caller records about the delivery (an email reply's
+// message and files) commits with it or not at all.
+func (s *Store) WakeWorkflow(ctx context.Context, tenant uuid.UUID, env string, workflow uuid.UUID, event, correlation, dedupKey string, payload any,
+	then func(ctx context.Context, tx pgx.Tx, woke []uuid.UUID) error) ([]uuid.UUID, bool, error) {
+	if env == "" || dedupKey == "" {
+		return nil, false, errors.New("signal: an environment and a dedup key are required")
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return nil, false, err
+	}
+	var woke []uuid.UUID
+	fresh := true
+	err = db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		woke, fresh = woke[:0], true
+		if err := signalLock(ctx, tx, tenant, env, event, correlation); err != nil {
+			return err
+		}
+		receipt := "signal/" + env + "/" + event
+		var seen bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM trigger_receipts WHERE tenant_id = $1 AND trigger_id = $2 AND dedup_key = $3)`,
+			tenant, receipt, dedupKey).Scan(&seen); err != nil {
+			return err
+		}
+		if seen {
+			fresh = false
+			return nil
+		}
+		rows, err := tx.Query(ctx, `DELETE FROM signal_waits w USING runs r
+			WHERE r.id = w.run_id AND r.workflow_id = $5 AND w.tenant_id = $1 AND w.environment = $2 AND w.event = $3 AND w.correlation = $4
+			RETURNING w.run_id, w.step_id`, tenant, env, event, correlation, workflow)
+		if err != nil {
+			return err
+		}
+		type wait struct {
+			run  uuid.UUID
+			step string
+		}
+		waits, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (wait, error) {
+			var w wait
+			return w, r.Scan(&w.run, &w.step)
+		})
+		if err != nil || len(waits) == 0 {
+			return err
+		}
+		if _, err := tx.Exec(ctx, insertReceipt, tenant, receipt, dedupKey, uuid.Nil); err != nil {
+			return err
+		}
+		for _, w := range waits {
+			if _, err := lockRun(ctx, tx, w.run); err != nil {
+				return err
+			}
+			if _, err := appendEvent(ctx, tx, w.run, history.SignalReceived, w.step, 0, signalPayload(event, raw), history.OriginSignal); err != nil {
+				return err
+			}
+			if !deciding(ctx, w.run) {
+				if err := s.decideInline(ctx, tx, RunRef{ID: w.run, TenantID: tenant}); err != nil {
+					return err
+				}
+			}
+			woke = append(woke, w.run)
+		}
+		if then != nil {
+			return then(ctx, tx, woke)
+		}
+		return nil
+	})
+	return woke, fresh, err
+}
+
 // deliverSignalTx hands a signal to the runs waiting for it in tx, and
 // buffers it when none is (buffer), or drops it (a subflow's report to a
 // parent that no longer waits). A run being decided in this very call

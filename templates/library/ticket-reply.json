@@ -1,0 +1,233 @@
+{
+  "id": "ticket-reply",
+  "title": "Answer customers' tickets",
+  "summary": "A form for your team: pick a ticket, write the answer, and the customer gets it the way they wrote to you.",
+  "description": "Your team's form for answering tickets, open to the members of your business when they are signed in to Taskiem. They type the ticket's number (the message telling a department about a new ticket has a link that fills it in), write the answer and choose: answer and wait for the customer, answer and mark it resolved, or write a note only the team sees. The customer gets the answer the way the ticket came: by email in the same conversation, from your Zoho Mail or Gmail mailbox, or on WhatsApp, Telegram or by text. The answer is saved with the ticket, the ticket is marked, and the first member to answer it is the one it is assigned to. Put this form's link in the setting ticket_reply_form so every new ticket's message carries it.",
+  "category": "customers",
+  "tags": [
+    "support",
+    "tickets",
+    "helpdesk",
+    "form"
+  ],
+  "keywords": [
+    "ticket",
+    "tickets",
+    "support",
+    "helpdesk",
+    "answer",
+    "reply",
+    "respond",
+    "customer service",
+    "department",
+    "form"
+  ],
+  "requires": [
+    "ticket",
+    "tickets",
+    "helpdesk",
+    "help desk",
+    "support desk"
+  ],
+  "connectors": [
+    "xenibase@1",
+    "notify@1"
+  ],
+  "params": [],
+  "tables": [
+    {
+      "known": "tickets"
+    },
+    {
+      "known": "ticket_messages"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_ticketReply",
+    "version": 1,
+    "name": "Answer customers' tickets",
+    "description": "A members' form that answers a ticket's customer, resolves it, or adds a note for the team.",
+    "trigger": {
+      "type": "form",
+      "config": {
+        "title": "Answer a customer's ticket",
+        "access": "members",
+        "description": "The customer gets your answer the way they wrote to us.",
+        "after": {
+          "mode": "message",
+          "message": "Done. If the ticket number was wrong, you will be told."
+        }
+      }
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "ticket",
+          "what",
+          "message"
+        ],
+        "properties": {
+          "ticket": {
+            "type": "string",
+            "title": "Ticket number",
+            "maxLength": 24,
+            "pattern": "^[Tt]?-? ?[0-9]{1,9}$",
+            "x-form": {
+              "prefill": true,
+              "placeholder": "T-1042"
+            }
+          },
+          "what": {
+            "type": "string",
+            "title": "What you are doing",
+            "enum": [
+              "Answer and wait for the customer",
+              "Answer, and the ticket is resolved",
+              "A note for the team (the customer does not see it)"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "title": "Your answer or note",
+            "maxLength": 5000,
+            "x-pii": "other",
+            "x-form": {
+              "widget": "textarea"
+            }
+          },
+          "agent": {
+            "type": "string",
+            "title": "Your name",
+            "maxLength": 120,
+            "x-pii": "name",
+            "x-form": {
+              "from": "member.name"
+            }
+          },
+          "agent_email": {
+            "type": "string",
+            "title": "Your email",
+            "maxLength": 200,
+            "x-pii": "email",
+            "x-form": {
+              "from": "member.email"
+            }
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "ref",
+        "type": "transform",
+        "name": "Read the ticket number",
+        "config": {
+          "output": {
+            "reference": "='T-' + trigger.body.ticket.upperAscii().replace('T', '').replace('-', '').replace(' ', '')"
+          }
+        }
+      },
+      {
+        "id": "find",
+        "type": "connector",
+        "name": "Find the ticket",
+        "connector": "xenibase@1",
+        "action": "read_rows",
+        "connection": "data_tables",
+        "needs": [
+          "ref"
+        ],
+        "input": {
+          "table": "tickets",
+          "filters": [
+            {
+              "column": "reference",
+              "op": "eq",
+              "value": "=steps.ref.output.reference"
+            }
+          ],
+          "limit": 1
+        }
+      },
+      {
+        "id": "act",
+        "type": "branch",
+        "name": "Answer the customer, or note it for the team",
+        "needs": [
+          "find"
+        ],
+        "config": {
+          "paths": [
+            {
+              "name": "note",
+              "when": "=steps.find.output.rows.size() > 0 && steps.find.output.rows[0].?reference.orValue('') != '' && trigger.body.what == 'A note for the team (the customer does not see it)'",
+              "steps": [
+                {
+                  "id": "note",
+                  "type": "connector",
+                  "name": "Save the note with the ticket",
+                  "connector": "xenibase@1",
+                  "action": "insert_rows",
+                  "connection": "data_tables",
+                  "input": {
+                    "table": "ticket_messages",
+                    "row": {
+                      "reference": "=steps.ref.output.reference",
+                      "direction": "note",
+                      "author": "=trigger.body.?agent.orValue('')",
+                      "body": "=trigger.body.message",
+                      "at": "=run.started_at",
+                      "channel": "note"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "answer",
+              "when": "=steps.find.output.rows.size() > 0 && steps.find.output.rows[0].?reference.orValue('') != ''",
+              "steps": [
+                {
+                  "id": "answer",
+                  "type": "template",
+                  "template": "ticket-answer",
+                  "name": "Answer the customer",
+                  "params": {},
+                  "input": {
+                    "reference": "=steps.ref.output.reference",
+                    "message": "=trigger.body.message",
+                    "author": "=trigger.body.?agent.orValue('')",
+                    "status": "=trigger.body.what == 'Answer, and the ticket is resolved' ? 'resolved' : 'waiting_on_customer'",
+                    "assign_to": "=trigger.body.?agent_email.orValue('')"
+                  }
+                }
+              ]
+            }
+          ],
+          "default": {
+            "steps": [
+              {
+                "id": "missing",
+                "type": "connector",
+                "name": "Tell you there is no such ticket",
+                "connector": "notify@1",
+                "action": "tell",
+                "input": {
+                  "to": "=trigger.body.?agent_email.orValue('') != '' ? 'members' : 'owner'",
+                  "members": "=trigger.body.?agent_email.orValue('') != '' ? [trigger.body.agent_email] : []",
+                  "title": "='No ticket ' + steps.ref.output.reference",
+                  "message": "='There is no ticket ' + steps.ref.output.reference + ', so your answer was not sent. Check the number and send the form again.'"
+                }
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "30m"
+    }
+  }
+}

@@ -56,6 +56,7 @@ type emailEndpointOut struct {
 	Messages    []emailMessageOut `json:"messages"`
 	Senders     []string          `json:"senders"`
 	Attachments string            `json:"attachments"`
+	Threads     bool              `json:"threads"`
 }
 
 // getWorkflowEmail is a workflow's addresses, per environment, with the
@@ -84,7 +85,7 @@ func (s *Server) getWorkflowEmail(w http.ResponseWriter, r *http.Request) {
 			}
 			var c inmail.Config
 			_ = json.Unmarshal(cfg, &c)
-			o.Senders, o.Attachments = nonNil(c.Senders), c.Attachments
+			o.Senders, o.Attachments, o.Threads = nonNil(c.Senders), c.Attachments, c.Threads
 			if o.Attachments == "" {
 				o.Attachments = "ignore"
 			}

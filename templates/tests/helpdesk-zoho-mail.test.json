@@ -1,0 +1,212 @@
+{
+  "schema": "wd-test/v1",
+  "template": "helpdesk-zoho-mail",
+  "params": {},
+  "cases": [
+    {
+      "name": "a new conversation opens a ticket keyed by Zoho's thread, its answer left for the mailbox",
+      "trigger": {
+        "event": "message.received",
+        "body": {
+          "event": "message.received",
+          "data": {
+            "message_id": "1761480000000100001",
+            "folder_id": "2560636000000008014",
+            "thread_id": "1761480000000100001",
+            "subject": "Order 42 is late",
+            "from": "Ada Obi <ada@example.com>",
+            "to": "help@adacakes.ng",
+            "summary": "Where is my order?",
+            "received_at": "2026-11-07T09:00:00Z",
+            "unread": true,
+            "has_attachment": false
+          }
+        }
+      },
+      "mocks": {
+        "open__ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 43
+              }
+            ]
+          }
+        },
+        "open__number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__route__classify": {
+          "output": {
+            "department": "Billing",
+            "priority": "normal",
+            "summary": "Asks for a refund"
+          }
+        },
+        "open__ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "full": {
+          "output": {
+            "text": "Where is my order? I paid on Monday."
+          }
+        },
+        "find": {
+          "output": {
+            "rows": []
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "full": {
+            "folder_id": "2560636000000008014",
+            "message_id": "1761480000000100001"
+          },
+          "find": {
+            "filters": [
+              {
+                "column": "mail",
+                "op": "eq",
+                "value": "zoho"
+              },
+              {
+                "column": "thread",
+                "op": "eq",
+                "value": "1761480000000100001"
+              }
+            ]
+          },
+          "open__ticket": {
+            "row": {
+              "customer_name": "Ada Obi",
+              "customer_email": "ada@example.com",
+              "mail": "zoho",
+              "thread": "1761480000000100001",
+              "last_message_id": "1761480000000100001"
+            }
+          },
+          "open__first": {
+            "row": {
+              "body": "Where is my order? I paid on Monday."
+            }
+          },
+          "open__number": {
+            "set": {
+              "reference": "T-1043",
+              "thread": "1761480000000100001"
+            }
+          },
+          "open__ack_queued": {
+            "row": {
+              "reference": "T-1043",
+              "mail": "zoho",
+              "direction": "out"
+            }
+          }
+        },
+        "steps": {
+          "append": "not_run",
+          "open__ack_email": "not_run"
+        }
+      }
+    },
+    {
+      "name": "a reply in the conversation joins its ticket",
+      "trigger": {
+        "event": "message.received",
+        "body": {
+          "event": "message.received",
+          "data": {
+            "message_id": "1761480000000100009",
+            "folder_id": "2560636000000008014",
+            "thread_id": "1761480000000100001",
+            "subject": "Re: Order 42 is late",
+            "from": "ada@example.com",
+            "to": "help@adacakes.ng",
+            "summary": "Where is my order?",
+            "received_at": "2026-11-07T09:00:00Z",
+            "unread": true,
+            "has_attachment": false
+          }
+        }
+      },
+      "mocks": {
+        "append": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "reopen": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "full": {
+          "output": {
+            "text": "Still waiting."
+          }
+        },
+        "find": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "T-1042",
+                "status": "open",
+                "department": "Delivery",
+                "role": "dispatch",
+                "assigned_to": "",
+                "resolved_at": null
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "append": {
+            "row": {
+              "reference": "T-1042",
+              "author": "ada@example.com",
+              "body": "Still waiting.",
+              "message_id": "1761480000000100009",
+              "mail": "zoho"
+            }
+          },
+          "reopen": {
+            "set": {
+              "status": "open",
+              "last_message_id": "1761480000000100009"
+            }
+          }
+        },
+        "steps": {
+          "open__ticket": "not_run"
+        }
+      }
+    }
+  ]
+}

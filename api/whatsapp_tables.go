@@ -174,6 +174,9 @@ func (s *Server) waTableAdd(ctx context.Context, c *chat, name string) error {
 // up (the first ten columns, required ones first; the rest follow in
 // chat), else column by column in chat.
 func (s *Server) waTableStart(ctx context.Context, c *chat, t datatables.Table) error {
+	if !c.p.readsTable(t) {
+		return s.waTableRestricted(ctx, c, t)
+	}
 	if t.Kept() {
 		return s.waTableKept(ctx, c, t)
 	}
@@ -497,6 +500,9 @@ func (s *Server) waTableInsert(ctx context.Context, c *chat) error {
 	if err != nil {
 		return s.waTableGone(ctx, c, err)
 	}
+	if !c.p.readsTable(t) {
+		return s.waTableRestricted(ctx, c, t)
+	}
 	if t.Kept() {
 		return s.waTableKept(ctx, c, t)
 	}
@@ -551,6 +557,32 @@ func (s *Server) waTableKept(ctx context.Context, c *chat, t datatables.Table) e
 		return err
 	}
 	return c.say(ctx, s, c.t("wa.table.kept", "table", whatsapp.SafeText(tableTitle(t))))
+}
+
+// waTableRestricted answers a person who holds none of a table's readers
+// (decision 0065): who may read it, and nothing of its rows.
+func (s *Server) waTableRestricted(ctx context.Context, c *chat, t datatables.Table) error {
+	if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
+		return err
+	}
+	return c.say(ctx, s, c.t("wa.table.restricted", "table", whatsapp.SafeText(tableTitle(t)), "readers", whatsapp.SafeText(strings.Join(t.Readers, ", "))))
+}
+
+// waReadableTables are the tenant's tables whose rows the person may
+// read: what a question over the tables is asked of, so the model is not
+// even told of a table the person cannot read.
+func (s *Server) waReadableTables(ctx context.Context, c *chat) ([]datatables.Table, error) {
+	tables, err := s.waListTables(ctx, c.tenant.ID)
+	if err != nil {
+		return nil, err
+	}
+	out := tables[:0]
+	for _, t := range tables {
+		if c.p.readsTable(t) {
+			out = append(out, t)
+		}
+	}
+	return out, nil
 }
 
 // tablesChatReason says, in a few words, why Xenibase refused a row.

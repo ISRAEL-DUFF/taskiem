@@ -25,6 +25,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/mailtext"
 	"github.com/israel-duff/taskiem/engine/secrets"
 )
 
@@ -74,6 +75,12 @@ type Message struct {
 	ReplyTo string
 	Subject string // email only
 	Text    string
+	// MessageID, InReplyTo and References thread an email (decision
+	// 0063): Message-IDs without brackets. MessageID is the one it is
+	// sent with (default: one made per attempt).
+	MessageID  string
+	InReplyTo  string
+	References []string
 	// Key makes queueing idempotent: a second message with the same key
 	// for the tenant is not queued.
 	Key string
@@ -151,7 +158,7 @@ func (q *Queue) Enqueue(ctx context.Context, tx pgx.Tx, m Message) (bool, error)
 		return false, err
 	}
 	subject, _ := recipient["subject"].(string)
-	body, err := q.Vault.SealUnderTx(ctx, tx, m.Tenant, subject, category, map[string]any{"subject": m.Subject, "text": m.Text, "reply_to": m.ReplyTo})
+	body, err := q.Vault.SealUnderTx(ctx, tx, m.Tenant, subject, category, m.sealedBody())
 	if err != nil {
 		return false, err
 	}
@@ -166,6 +173,25 @@ func (q *Queue) Enqueue(ctx context.Context, tx pgx.Tx, m Message) (bool, error)
 		return false, err
 	}
 	return tag.RowsAffected() == 1, nil
+}
+
+// sealedBody is what is sealed of a message besides its recipient.
+func (m *Message) sealedBody() map[string]any {
+	b := map[string]any{"subject": m.Subject, "text": m.Text, "reply_to": m.ReplyTo}
+	if m.MessageID != "" {
+		b["message_id"] = m.MessageID
+	}
+	if m.InReplyTo != "" {
+		b["in_reply_to"] = m.InReplyTo
+	}
+	if len(m.References) > 0 {
+		refs := make([]any, 0, len(m.References))
+		for _, r := range m.References {
+			refs = append(refs, r)
+		}
+		b["references"] = refs
+	}
+	return b
 }
 
 // TakeRecipient counts one message to a recipient on another channel (a
@@ -212,8 +238,8 @@ func (q *Queue) check(m *Message) (to, category string, err error) {
 		if to, err = NormalisePhone(m.To, q.countries()); err != nil {
 			return "", "", err
 		}
-		if m.Subject != "" || m.ReplyTo != "" {
-			return "", "", fmt.Errorf("%w: an SMS has no subject or reply-to", ErrInvalid)
+		if m.Subject != "" || m.ReplyTo != "" || m.MessageID != "" || m.InReplyTo != "" || len(m.References) > 0 {
+			return "", "", fmt.Errorf("%w: an SMS has no subject, reply-to or threading", ErrInvalid)
 		}
 		if !strings.HasPrefix(m.Text, m.SenderName) {
 			m.Text = m.SenderName + ": " + m.Text
@@ -236,6 +262,14 @@ func (q *Queue) check(m *Message) (to, category string, err error) {
 		}
 		if len(m.Text) > 20000 {
 			return "", "", fmt.Errorf("%w: the email is longer than 20,000 characters", ErrInvalid)
+		}
+		if len(m.References) > 20 {
+			return "", "", fmt.Errorf("%w: at most 20 references", ErrInvalid)
+		}
+		for _, id := range append([]string{m.MessageID, m.InReplyTo}, m.References...) {
+			if id != "" && !mailtext.ValidMessageID(id) {
+				return "", "", fmt.Errorf("%w: %q is not a Message-ID", ErrInvalid, id)
+			}
 		}
 		return to, "email", nil
 	}

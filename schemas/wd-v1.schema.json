@@ -1974,6 +1974,11 @@
                       "ignore"
                     ],
                     "default": "ignore"
+                  },
+                  "threads": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Replies in a thread (found by the reply tag, In-Reply-To or References, or a [#KEY] subject from a proven sender in the thread) wake the run waiting on email.reply for that thread instead of starting one (decision 0063)"
                   }
                 }
               }

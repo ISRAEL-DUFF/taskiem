@@ -1,0 +1,31 @@
+{
+  "name": "hr_confidential_tickets",
+  "kit": true,
+  "title": "HR confidential requests",
+  "description": "Confidential matters your people raise with HR (a complaint, a concern or a personal matter), one row per request, shaped as HR requests are, with references such as HC-1042. Only members with the hr_lead role, and the owner, can read it.",
+  "readers": ["hr_lead"],
+  "columns": [
+    {"name": "reference", "title": "Reference", "type": "text"},
+    {"name": "subject", "title": "Subject", "type": "text", "personal": true},
+    {"name": "customer_name", "title": "Requester", "type": "text", "personal": true},
+    {"name": "customer_email", "title": "Requester's email", "type": "email"},
+    {"name": "customer_phone", "title": "Requester's phone", "type": "phone"},
+    {"name": "channel", "title": "Came by", "type": "text"},
+    {"name": "department", "title": "Department", "type": "text"},
+    {"name": "role", "title": "Answered by (role)", "type": "text"},
+    {"name": "priority", "title": "Priority", "type": "text"},
+    {"name": "status", "title": "Status", "type": "text"},
+    {"name": "assigned_to", "title": "Assigned to", "type": "text"},
+    {"name": "summary", "title": "Summary", "type": "text", "personal": true},
+    {"name": "last_customer_at", "title": "Customer last wrote", "type": "datetime"},
+    {"name": "last_reply_at", "title": "Last answered", "type": "datetime"},
+    {"name": "resolved_at", "title": "Resolved", "type": "datetime"},
+    {"name": "reminded_at", "title": "Department reminded", "type": "datetime"},
+    {"name": "escalated_at", "title": "Escalated", "type": "datetime"},
+    {"name": "thread", "title": "Conversation", "type": "text"},
+    {"name": "mail", "title": "Email goes by", "type": "text"},
+    {"name": "mailbox", "title": "Helpdesk address", "type": "text"},
+    {"name": "last_message_id", "title": "Customer's last email", "type": "text"},
+    {"name": "previous_reference", "title": "Follows ticket", "type": "text"}
+  ]
+}

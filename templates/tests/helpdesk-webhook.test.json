@@ -1,0 +1,338 @@
+{
+  "schema": "wd-test/v1",
+  "template": "helpdesk-webhook",
+  "params": {},
+  "cases": [
+    {
+      "name": "a message opens a ticket and the app gets its number back",
+      "params": {
+        "helpdesk_address": "k3x9q2m7a1bz@in.taskiem.app",
+        "routing": "ai"
+      },
+      "trigger": {
+        "type": "webhook",
+        "method": "POST",
+        "body": {
+          "subject": "Charged twice",
+          "message": "The app charged me twice for order 42.",
+          "name": "Ada Obi",
+          "email": "ada@example.com",
+          "phone": "+2348030000001",
+          "external_id": "msg_981"
+        },
+        "headers": {},
+        "query": {}
+      },
+      "mocks": {
+        "open__ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 42
+              }
+            ]
+          }
+        },
+        "open__number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_email": {
+          "output": {
+            "message_id": "tk-1@in.taskiem.app"
+          }
+        },
+        "open__ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "open__ack_noted": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_told": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__route__classify": {
+          "output": {
+            "department": "Billing",
+            "priority": "urgent",
+            "summary": "Charged twice"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "open__ticket": {
+            "row": {
+              "channel": "api",
+              "customer_name": "Ada Obi",
+              "customer_email": "ada@example.com",
+              "customer_phone": "+2348030000001",
+              "mail": "taskiem",
+              "mailbox": "k3x9q2m7a1bz@in.taskiem.app",
+              "priority": "urgent"
+            }
+          },
+          "open__ack_email": {
+            "to": "ada@example.com",
+            "thread": "T-1042",
+            "address": "k3x9q2m7a1bz@in.taskiem.app"
+          }
+        },
+        "outputs": {
+          "answer": {
+            "status": 201,
+            "body": {
+              "reference": "T-1042",
+              "department": "Billing",
+              "priority": "urgent",
+              "told_by": "email",
+              "external_id": "msg_981"
+            }
+          }
+        },
+        "steps": {
+          "open__ack_message": "not_run"
+        }
+      }
+    },
+    {
+      "name": "without a helpdesk address, a phone-only customer is messaged, and the department they chose is used",
+      "params": {
+        "helpdesk_address": "",
+        "routing": "chosen"
+      },
+      "trigger": {
+        "type": "webhook",
+        "method": "POST",
+        "body": {
+          "subject": "Rider",
+          "message": "The rider never came.",
+          "phone": "08030000001",
+          "department": "Delivery"
+        },
+        "headers": {},
+        "query": {}
+      },
+      "mocks": {
+        "open__ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 43
+              }
+            ]
+          }
+        },
+        "open__number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_email": {
+          "output": {
+            "message_id": "tk-1@in.taskiem.app"
+          }
+        },
+        "open__ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "open__ack_noted": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_told": {
+          "output": {
+            "affected": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "open__ticket": {
+            "row": {
+              "department": "Delivery",
+              "role": "dispatch",
+              "mailbox": ""
+            }
+          },
+          "open__ack_message": {
+            "phone": "08030000001",
+            "about": "your ticket T-1043"
+          }
+        },
+        "outputs": {
+          "answer": {
+            "body": {
+              "reference": "T-1043",
+              "department": "Delivery",
+              "told_by": "message",
+              "external_id": ""
+            }
+          }
+        },
+        "steps": {
+          "open__ack_email": "not_run",
+          "open__route__classify": "not_run"
+        }
+      }
+    },
+    {
+      "name": "nobody to answer: still a ticket, and the app is told so",
+      "params": {
+        "routing": "rules"
+      },
+      "trigger": {
+        "type": "webhook",
+        "method": "POST",
+        "body": {
+          "subject": "Feedback",
+          "message": "Love the new menu."
+        },
+        "headers": {},
+        "query": {}
+      },
+      "mocks": {
+        "open__ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 44
+              }
+            ]
+          }
+        },
+        "open__number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_email": {
+          "output": {
+            "message_id": "tk-1@in.taskiem.app"
+          }
+        },
+        "open__ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "open__ack_noted": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_told": {
+          "output": {
+            "affected": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "outputs": {
+          "answer": {
+            "body": {
+              "reference": "T-1044",
+              "department": "General",
+              "told_by": "none"
+            }
+          }
+        },
+        "steps": {
+          "open__ack_email": "not_run",
+          "open__ack_message": "not_run"
+        }
+      }
+    }
+  ]
+}

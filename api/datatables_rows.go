@@ -83,7 +83,14 @@ func (s *Server) tableRows(r *http.Request) (tableRows, error) {
 
 // tableRowsFor is a table with the connector ready to act on its rows,
 // the connection read recorded under purpose (the API's, or the chat's).
+// A table naming readers is refused here to a person in ctx who holds
+// none of them (datatables.ErrRestricted), before the connection is read,
+// whichever handler asked: every path a person reaches rows by comes
+// through here.
 func (s *Server) tableRowsFor(ctx context.Context, tenant uuid.UUID, t datatables.Table, purpose string) (tableRows, error) {
+	if err := checkTableReaders(ctx, t); err != nil {
+		return tableRows{}, err
+	}
 	conn, creds, hc, err := s.xenibaseConnection(ctx, tenant, datatables.ConnectionName, purpose)
 	if err != nil {
 		return tableRows{}, err

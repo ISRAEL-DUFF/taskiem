@@ -17,6 +17,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/ai/builder"
 	"github.com/israel-duff/taskiem/engine/capability"
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/expansion"
 	"github.com/israel-duff/taskiem/engine/expr"
 	"github.com/israel-duff/taskiem/engine/lang"
@@ -198,6 +199,11 @@ func (s *Server) readinessWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 		if c.Manifest.ID == "xenibase" && st.Connection == "data_tables" {
 			if name, ok := st.Input["table"].(string); ok && name != "" && !expr.IsExpr(name) {
 				tables = append(tables, use{st, name})
+			} else if ok && expr.IsExpr(name) {
+				// A table chosen by expression: each it can be.
+				for _, n := range tablesOf(readyExpr, d, st, name) {
+					tables = append(tables, use{st, n})
+				}
 			}
 		}
 	})
@@ -334,6 +340,33 @@ func (s *Server) readinessWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 			}
 			if !held {
 				add(key{"role", u.name, "", roleEnv}, readyNeed{Problem: "nobody", Message: needMessage(l, "role", "nobody", "", u.name)}, u.step)
+			}
+		}
+		// A table's readers nobody holds yet (a template's table names hr
+		// and hr_lead before anyone is given them): until someone is, only
+		// owners read its rows.
+		known := map[string][]string{}
+		for _, u := range tables {
+			readers, ok := known[u.name]
+			if !ok {
+				err := tx.QueryRow(ctx, `SELECT COALESCE(readers, '{}') FROM data_tables WHERE name = $1`, u.name).Scan(&readers)
+				if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+					return nil, err
+				}
+				known[u.name] = readers
+			}
+			for _, role := range readers {
+				if role == datatables.Owner {
+					continue
+				}
+				var held bool
+				if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM memberships m JOIN users u ON u.id = m.user_id WHERE m.role = $1 AND u.status = 'active')`, role).Scan(&held); err != nil {
+					return nil, err
+				}
+				if !held {
+					add(key{"role", role, "", roleEnv}, readyNeed{Problem: "nobody",
+						Message: tr(l, "ready.reader", "role", humanName(role), "table", humanName(u.name))}, u.step)
+				}
 			}
 		}
 	}

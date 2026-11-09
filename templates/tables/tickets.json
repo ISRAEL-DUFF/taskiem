@@ -1,0 +1,30 @@
+{
+  "name": "tickets",
+  "kit": true,
+  "title": "Tickets",
+  "description": "Customers' questions and complaints, one row per ticket: its reference (T-1042), the subject, the customer and how they reached the business, the department that answers it and how urgent it is, where it stands (new, open, waiting on the customer, resolved or closed), and when the customer and the business last wrote. The ticket templates keep it.",
+  "columns": [
+    {"name": "reference", "title": "Reference", "type": "text"},
+    {"name": "subject", "title": "Subject", "type": "text", "personal": true},
+    {"name": "customer_name", "title": "Customer", "type": "text", "personal": true},
+    {"name": "customer_email", "title": "Customer's email", "type": "email"},
+    {"name": "customer_phone", "title": "Customer's phone", "type": "phone"},
+    {"name": "channel", "title": "Came by", "type": "text"},
+    {"name": "department", "title": "Department", "type": "text"},
+    {"name": "role", "title": "Answered by (role)", "type": "text"},
+    {"name": "priority", "title": "Priority", "type": "text"},
+    {"name": "status", "title": "Status", "type": "text"},
+    {"name": "assigned_to", "title": "Assigned to", "type": "text"},
+    {"name": "summary", "title": "Summary", "type": "text", "personal": true},
+    {"name": "last_customer_at", "title": "Customer last wrote", "type": "datetime"},
+    {"name": "last_reply_at", "title": "Last answered", "type": "datetime"},
+    {"name": "resolved_at", "title": "Resolved", "type": "datetime"},
+    {"name": "reminded_at", "title": "Department reminded", "type": "datetime"},
+    {"name": "escalated_at", "title": "Escalated", "type": "datetime"},
+    {"name": "thread", "title": "Conversation", "type": "text"},
+    {"name": "mail", "title": "Email goes by", "type": "text"},
+    {"name": "mailbox", "title": "Helpdesk address", "type": "text"},
+    {"name": "last_message_id", "title": "Customer's last email", "type": "text"},
+    {"name": "previous_reference", "title": "Follows ticket", "type": "text"}
+  ]
+}

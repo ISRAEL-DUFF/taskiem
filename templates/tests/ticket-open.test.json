@@ -1,0 +1,928 @@
+{
+  "schema": "wd-test/v1",
+  "template": "ticket-open",
+  "params": {},
+  "cases": [
+    {
+      "name": "an email opens T-1042, the department is told and the customer answered in the conversation",
+      "params": {
+        "routing": "ai"
+      },
+      "env": {
+        "ticket_reply_form": "https://app.taskiem.app/f/replyform"
+      },
+      "trigger": {
+        "body": {
+          "channel": "email",
+          "subject": "Order 42 has not arrived",
+          "message": "I paid on Monday and the rider has not come.",
+          "customer_name": "Ada Obi",
+          "customer_email": "ada@example.com",
+          "mail": "taskiem",
+          "mailbox": "k3x9q2m7a1bz@in.taskiem.app",
+          "message_id": "c0@mail.example.com",
+          "received_at": "2026-11-07T09:00:00Z"
+        }
+      },
+      "mocks": {
+        "number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_noted": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "ack_message": {
+          "output": {
+            "via": "whatsapp"
+          }
+        },
+        "route__classify": {
+          "output": {
+            "department": "Delivery",
+            "priority": "high",
+            "summary": "Paid order not delivered"
+          }
+        },
+        "ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 42,
+                "status": "new"
+              }
+            ]
+          }
+        },
+        "ack_email": {
+          "output": {
+            "message_id": "tk-abc@in.taskiem.app",
+            "thread": "T-1042"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "ticket": {
+            "table": "tickets",
+            "row": {
+              "subject": "Order 42 has not arrived",
+              "customer_name": "Ada Obi",
+              "customer_email": "ada@example.com",
+              "customer_phone": "",
+              "channel": "email",
+              "department": "Delivery",
+              "role": "dispatch",
+              "priority": "high",
+              "summary": "Paid order not delivered",
+              "status": "new",
+              "last_customer_at": "2026-11-07T09:00:00Z",
+              "mail": "taskiem",
+              "mailbox": "k3x9q2m7a1bz@in.taskiem.app",
+              "last_message_id": "c0@mail.example.com",
+              "previous_reference": ""
+            }
+          },
+          "number": {
+            "table": "tickets",
+            "key": 42,
+            "set": {
+              "reference": "T-1042",
+              "thread": "T-1042"
+            }
+          },
+          "first": {
+            "table": "ticket_messages",
+            "row": {
+              "reference": "T-1042",
+              "direction": "in",
+              "author": "Ada Obi",
+              "body": "I paid on Monday and the rider has not come.",
+              "message_id": "c0@mail.example.com",
+              "channel": "email",
+              "mail": "taskiem"
+            }
+          },
+          "tell": {
+            "to": "role",
+            "role": "dispatch",
+            "title": "New ticket T-1042 (high)",
+            "message": "T-1042 for Delivery, high priority: Order 42 has not arrived\nPaid order not delivered\nAnswer it: https://app.taskiem.app/f/replyform?ticket=T-1042"
+          },
+          "ack_email": {
+            "to": "ada@example.com",
+            "subject": "Order 42 has not arrived",
+            "thread": "T-1042",
+            "in_reply_to": "c0@mail.example.com",
+            "address": "k3x9q2m7a1bz@in.taskiem.app",
+            "message": "Thank you for getting in touch. We have your message and will answer you soon.\n\nYour ticket is T-1042."
+          },
+          "ack_sent": {
+            "table": "ticket_messages",
+            "row": {
+              "reference": "T-1042",
+              "direction": "out",
+              "message_id": "tk-abc@in.taskiem.app",
+              "mail": "taskiem",
+              "sent_at": "2026-11-07T09:00:00Z"
+            }
+          }
+        },
+        "steps": {
+          "ack_message": "not_run",
+          "ack_queued": "not_run"
+        },
+        "outputs": {
+          "ref": {
+            "reference": "T-1042",
+            "how": "email"
+          }
+        }
+      }
+    },
+    {
+      "name": "an acknowledgement the outbox refuses leaves the ticket open, with a note saying why",
+      "params": {
+        "routing": "ai"
+      },
+      "env": {
+        "ticket_reply_form": "https://app.taskiem.app/f/replyform"
+      },
+      "trigger": {
+        "body": {
+          "channel": "email",
+          "subject": "Order 42 has not arrived",
+          "message": "I paid on Monday and the rider has not come.",
+          "customer_name": "Ada Obi",
+          "customer_email": "ada@example.com",
+          "mail": "taskiem",
+          "mailbox": "k3x9q2m7a1bz@in.taskiem.app",
+          "message_id": "c0@mail.example.com",
+          "received_at": "2026-11-07T09:00:00Z"
+        }
+      },
+      "mocks": {
+        "number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_noted": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "ack_message": {
+          "output": {
+            "via": "whatsapp"
+          }
+        },
+        "route__classify": {
+          "output": {
+            "department": "Delivery",
+            "priority": "high",
+            "summary": "Paid order not delivered"
+          }
+        },
+        "ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 42,
+                "status": "new"
+              }
+            ]
+          }
+        },
+        "ack_email": {
+          "error": {
+            "kind": "fatal",
+            "message": "sender: too many messages to this recipient"
+          }
+        },
+        "ack_failed": {
+          "output": {
+            "affected": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "ticket": {
+            "table": "tickets",
+            "row": {
+              "subject": "Order 42 has not arrived",
+              "customer_name": "Ada Obi",
+              "customer_email": "ada@example.com",
+              "customer_phone": "",
+              "channel": "email",
+              "department": "Delivery",
+              "role": "dispatch",
+              "priority": "high",
+              "summary": "Paid order not delivered",
+              "status": "new",
+              "last_customer_at": "2026-11-07T09:00:00Z",
+              "mail": "taskiem",
+              "mailbox": "k3x9q2m7a1bz@in.taskiem.app",
+              "last_message_id": "c0@mail.example.com",
+              "previous_reference": ""
+            }
+          },
+          "number": {
+            "table": "tickets",
+            "key": 42,
+            "set": {
+              "reference": "T-1042",
+              "thread": "T-1042"
+            }
+          },
+          "first": {
+            "table": "ticket_messages",
+            "row": {
+              "reference": "T-1042",
+              "direction": "in",
+              "author": "Ada Obi",
+              "body": "I paid on Monday and the rider has not come.",
+              "message_id": "c0@mail.example.com",
+              "channel": "email",
+              "mail": "taskiem"
+            }
+          },
+          "tell": {
+            "to": "role",
+            "role": "dispatch",
+            "title": "New ticket T-1042 (high)",
+            "message": "T-1042 for Delivery, high priority: Order 42 has not arrived\nPaid order not delivered\nAnswer it: https://app.taskiem.app/f/replyform?ticket=T-1042"
+          },
+          "ack_email": {
+            "to": "ada@example.com",
+            "subject": "Order 42 has not arrived",
+            "thread": "T-1042",
+            "in_reply_to": "c0@mail.example.com",
+            "address": "k3x9q2m7a1bz@in.taskiem.app",
+            "message": "Thank you for getting in touch. We have your message and will answer you soon.\n\nYour ticket is T-1042."
+          },
+          "ack_failed": {
+            "table": "ticket_messages",
+            "row": {
+              "reference": "T-1042",
+              "direction": "note",
+              "author": "Taskiem",
+              "body": "Taskiem could not email the customer their ticket number: sender: too many messages to this recipient",
+              "mail": "taskiem"
+            }
+          }
+        },
+        "steps": {
+          "ack_email": "failed",
+          "ack_sent": "skipped",
+          "ack_failed": "completed",
+          "ack_message": "not_run",
+          "first": "completed",
+          "number": "completed",
+          "tell": "completed"
+        },
+        "outputs": {
+          "ref": {
+            "reference": "T-1042",
+            "how": "email"
+          }
+        }
+      }
+    },
+    {
+      "name": "a WhatsApp customer is answered on their phone",
+      "trigger": {
+        "body": {
+          "channel": "whatsapp",
+          "subject": "Refund",
+          "message": "Please refund my last order.",
+          "customer_name": "Bola",
+          "customer_phone": "+2348030000001"
+        }
+      },
+      "mocks": {
+        "number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_noted": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "ack_message": {
+          "output": {
+            "via": "whatsapp"
+          }
+        },
+        "route__classify": {
+          "output": {
+            "department": "Billing",
+            "priority": "normal",
+            "summary": "Wants a refund"
+          }
+        },
+        "ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 7
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "ack_message": {
+            "phone": "+2348030000001",
+            "email": "",
+            "about": "your ticket T-1007",
+            "message": "Thank you for getting in touch. We have your message and will answer you soon.\n\nYour ticket is T-1007."
+          },
+          "ack_noted": {
+            "row": {
+              "reference": "T-1007",
+              "direction": "out",
+              "channel": "whatsapp"
+            }
+          },
+          "tell": {
+            "role": "accounts"
+          }
+        },
+        "steps": {
+          "ack_email": "not_run",
+          "ack_queued": "not_run"
+        }
+      }
+    },
+    {
+      "name": "a Zoho Mail customer's answer is left for the mailbox to send, and the ticket keeps Zoho's thread",
+      "params": {
+        "routing": "rules",
+        "acknowledgement": "Thanks, we are on it."
+      },
+      "trigger": {
+        "body": {
+          "channel": "email",
+          "subject": "Late delivery",
+          "message": "The rider is late again.",
+          "customer_email": "ada@example.com",
+          "mail": "zoho",
+          "thread": "1761480000000100001",
+          "message_id": "1761480000000100001",
+          "previous": "T-1003"
+        }
+      },
+      "mocks": {
+        "number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_noted": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "ack_message": {
+          "output": {
+            "via": "whatsapp"
+          }
+        },
+        "ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 8
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "number": {
+            "set": {
+              "reference": "T-1008",
+              "thread": "1761480000000100001"
+            }
+          },
+          "first": {
+            "row": {
+              "author": "ada@example.com",
+              "mail": "zoho"
+            }
+          },
+          "tell": {
+            "role": "dispatch",
+            "message": "T-1008 for Delivery, normal priority: Late delivery\nLate delivery\nIt follows ticket T-1003.\nAnswer it with the ticket reply form."
+          },
+          "ack_queued": {
+            "table": "ticket_messages",
+            "row": {
+              "reference": "T-1008",
+              "direction": "out",
+              "author": "Taskiem",
+              "body": "Thanks, we are on it.\n\nYour ticket is T-1008.",
+              "channel": "email",
+              "mail": "zoho"
+            }
+          }
+        },
+        "steps": {
+          "route__classify": "not_run",
+          "ack_email": "not_run",
+          "ack_message": "not_run"
+        }
+      }
+    },
+    {
+      "name": "a customer with no way to answer them still gets a ticket",
+      "params": {
+        "routing": "chosen"
+      },
+      "trigger": {
+        "body": {
+          "channel": "staff",
+          "subject": "Walk-in complaint",
+          "message": "Broken chair at table 3.",
+          "department": "General"
+        }
+      },
+      "mocks": {
+        "number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_noted": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "ack_message": {
+          "output": {
+            "via": "whatsapp"
+          }
+        },
+        "ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 9
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "tell": {
+            "role": "support"
+          }
+        },
+        "steps": {
+          "ack_email": "not_run",
+          "ack_message": "not_run",
+          "ack_queued": "not_run"
+        },
+        "outputs": {
+          "ref": {
+            "how": "none"
+          }
+        }
+      }
+    },
+    {
+      "name": "a customer who wrote to the business's WhatsApp number is answered from it: the answer is left for its sending workflow",
+      "params": {
+        "routing": "rules"
+      },
+      "trigger": {
+        "body": {
+          "channel": "whatsapp",
+          "subject": "Where is my order?",
+          "message": "Where is my order? The rider is late.",
+          "customer_phone": "+2348030000001",
+          "mail": "whatsapp",
+          "received_at": "2026-11-07T09:00:00Z"
+        }
+      },
+      "mocks": {
+        "number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_noted": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_told": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "ack_message": {
+          "output": {
+            "via": "whatsapp"
+          }
+        },
+        "ack_member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 10
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "ticket": {
+            "row": {
+              "channel": "whatsapp",
+              "mail": "whatsapp",
+              "customer_phone": "+2348030000001",
+              "last_customer_at": "2026-11-07T09:00:00Z"
+            }
+          },
+          "number": {
+            "set": {
+              "reference": "T-1010",
+              "thread": "T-1010"
+            }
+          },
+          "ack_queued": {
+            "table": "ticket_messages",
+            "row": {
+              "reference": "T-1010",
+              "direction": "out",
+              "author": "Taskiem",
+              "body": "Thank you for getting in touch. We have your message and will answer you soon.\n\nYour ticket is T-1010.",
+              "channel": "whatsapp",
+              "mail": "whatsapp"
+            }
+          }
+        },
+        "steps": {
+          "ack_email": "not_run",
+          "ack_message": "not_run",
+          "ack_member": "not_run"
+        },
+        "outputs": {
+          "ref": {
+            "reference": "T-1010",
+            "how": "mailbox"
+          }
+        }
+      }
+    },
+    {
+      "name": "a member's own request: they are told their number as a member",
+      "params": {
+        "routing": "chosen",
+        "acknowledgement": "IT has your request."
+      },
+      "trigger": {
+        "body": {
+          "channel": "staff",
+          "subject": "Laptop will not start",
+          "message": "My laptop will not start since this morning.",
+          "customer_name": "Bola Ade",
+          "customer_email": "bola@adacakes.ng",
+          "department": "General",
+          "mail": "member"
+        }
+      },
+      "mocks": {
+        "number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_noted": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_told": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "ack_message": {
+          "output": {
+            "via": "whatsapp"
+          }
+        },
+        "ack_member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 11
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "ticket": {
+            "row": {
+              "channel": "staff",
+              "mail": "member",
+              "customer_email": "bola@adacakes.ng",
+              "department": "General"
+            }
+          },
+          "ack_member": {
+            "to": "members",
+            "members": [
+              "bola@adacakes.ng"
+            ],
+            "title": "Your request T-1011",
+            "message": "IT has your request.\n\nYour ticket is T-1011."
+          },
+          "ack_told": {
+            "table": "ticket_messages",
+            "row": {
+              "reference": "T-1011",
+              "direction": "out",
+              "channel": "staff",
+              "mail": "member"
+            }
+          }
+        },
+        "steps": {
+          "ack_email": "not_run",
+          "ack_message": "not_run",
+          "ack_queued": "not_run"
+        },
+        "outputs": {
+          "ref": {
+            "how": "member"
+          }
+        }
+      }
+    },
+    {
+      "name": "a member's request without their email is told to nobody, and still a ticket",
+      "params": {
+        "routing": "rules"
+      },
+      "trigger": {
+        "body": {
+          "channel": "staff",
+          "subject": "Printer",
+          "message": "The printer is jammed.",
+          "mail": "member"
+        }
+      },
+      "mocks": {
+        "number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_noted": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "ack_told": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "ack_message": {
+          "output": {
+            "via": "whatsapp"
+          }
+        },
+        "ack_member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 12
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "ack_email": "not_run",
+          "ack_message": "not_run",
+          "ack_queued": "not_run",
+          "ack_member": "not_run"
+        },
+        "outputs": {
+          "ref": {
+            "how": "none"
+          }
+        }
+      }
+    }
+  ]
+}

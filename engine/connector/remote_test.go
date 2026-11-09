@@ -125,6 +125,15 @@ func TestRemoteTriggerNeedsRegistrar(t *testing.T) {
 		t.Errorf("enricher for no trigger: %v", err)
 	}
 	delete(c.Enrichers, "nope")
+	c.Filters = map[string]Filter{"nope": nil}
+	if err := c.Check(); err == nil || !strings.Contains(err.Error(), "filter") {
+		t.Errorf("filter for no trigger: %v", err)
+	}
+	c.Filters = map[string]Filter{"ev": nil}
+	if err := c.Check(); err != nil {
+		t.Errorf("filter for a trigger: %v", err)
+	}
+	c.Filters = nil
 	c.Keyers = map[string]Keyer{"nope": nil}
 	if err := c.Check(); err == nil || !strings.Contains(err.Error(), "keyer") {
 		t.Errorf("keyer for no trigger: %v", err)

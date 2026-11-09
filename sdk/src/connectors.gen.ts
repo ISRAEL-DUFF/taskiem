@@ -304,9 +304,27 @@ export interface EmailFileUrlInput {
   file: Val<string>;
   ttl_minutes?: Val<number>;
 }
+export interface EmailSendInThreadInput {
+  /** Send from another email workflow's address, whose run gets the replies: its Taskiem email address (trigger.email.address) or its workflow id. It must have threads on and be of this business and environment. Default: this workflow's own address */
+  address?: Val<string>;
+  /** The customer's message this answers (trigger.body.message_id); default: the last email sent in the thread. One that is not a Message-ID is left out */
+  in_reply_to?: Val<string>;
+  /** The email */
+  message: Val<string>;
+  /** The thread's earlier Message-IDs (trigger.body.references); any that is not a Message-ID is left out */
+  references?: Value;
+  /** The subject; [#<thread>] is put before it unless it carries it already */
+  subject: Val<string>;
+  /** The ticket key (T-1042): letters, digits and single hyphens */
+  thread: Val<string>;
+  /** The customer's email address (trigger.body.from.address) */
+  to: Val<string>;
+}
 export const email = {
   /** Get a link to an attachment (read) */
   file_url: (input: EmailFileUrlInput, extra?: ConnectorExtra): StepSpec => connector("email@1", "file_url", input, extra),
+  /** Email a customer in a conversation (idempotent_write) */
+  send_in_thread: (input: EmailSendInThreadInput, extra?: ConnectorExtra): StepSpec => connector("email@1", "send_in_thread", input, extra),
 };
 
 // Flutterwave (flutterwave@1)
@@ -463,6 +481,11 @@ export interface GmailModifyLabelsInput {
   /** Set by the engine; not sent to Gmail */
   request_key?: Val<string>;
 }
+export interface GmailNewMessagesInput {
+  /** Message ids already read (the poller's), not read again */
+  seen?: Value;
+  since: Val<string>;
+}
 export interface GmailSendMessageInput {
   attachments?: Value;
   bcc?: Value;
@@ -497,6 +520,8 @@ export const gmail = {
   list_messages: (input?: GmailListMessagesInput, extra?: ConnectorExtra): StepSpec => connector("gmail@1", "list_messages", input, extra),
   /** Add or remove labels (idempotent_write) */
   modify_labels: (input: GmailModifyLabelsInput, extra?: ConnectorExtra): StepSpec => connector("gmail@1", "modify_labels", input, extra),
+  /** Read new mail (read) */
+  new_messages: (input: GmailNewMessagesInput, extra?: ConnectorExtra): StepSpec => connector("gmail@1", "new_messages", input, extra),
   /** Send an email (unsafe_write) */
   send_message: (input?: GmailSendMessageInput, extra?: ConnectorExtra): StepSpec => connector("gmail@1", "send_message", input, extra),
 };
@@ -3776,6 +3801,8 @@ export interface ZohoMailListMessagesInput {
   status?: Val<"all" | "read" | "unread">;
 }
 export interface ZohoMailNewMessagesInput {
+  /** Message ids already answered (the poller's), not answered again */
+  seen?: Value;
   since: Val<string>;
 }
 export interface ZohoMailReplyInput {
@@ -3901,10 +3928,10 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "breet@1": ["add_bank", "generate_address", "get_balances", "get_deposit", "get_withdrawal", "list_assets", "list_banks", "verify_bank_account", "withdraw_crypto", "withdraw_to_bank"],
   "brevo@1": ["add_to_list", "create_or_update_contact", "get_account", "list_lists", "send_campaign", "send_email", "send_sms"],
   "dojah@1": ["check_balance", "lookup_bvn", "lookup_nin"],
-  "email@1": ["file_url"],
+  "email@1": ["file_url", "send_in_thread"],
   "flutterwave@1": ["create_dynamic_account", "create_static_account", "get_balance", "get_transfer", "get_transfer_by_reference", "get_transfer_fee", "list_banks", "list_transactions", "resolve_account", "transfer", "verify_payment"],
   "form@1": ["file_url", "respond"],
-  "gmail@1": ["create_draft", "get_message", "get_profile", "list_labels", "list_messages", "modify_labels", "send_message"],
+  "gmail@1": ["create_draft", "get_message", "get_profile", "list_labels", "list_messages", "modify_labels", "new_messages", "send_message"],
   "googlesheets@1": ["add_sheet", "append_rows", "batch_get_values", "clear_values", "create_spreadsheet", "get_spreadsheet", "get_values", "update_values"],
   "instagram@1": ["get_account", "get_conversation", "get_profile", "mark_seen", "send_message", "send_typing"],
   "interswitch@1": ["get_payment", "get_transfer", "list_banks", "resolve_account", "transfer"],

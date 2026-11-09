@@ -345,6 +345,24 @@ func TestDryRunAnswersForms(t *testing.T) {
 	}
 }
 
+// The generated happy path answers an ai step with an answer of its own
+// shape, in a branch too, and the draft completes.
+func TestDryRunAnswersAISteps(t *testing.T) {
+	doc := `{"schema":"wd/v1","id":"wf_a","version":1,"name":"a","trigger":{"type":"manual"},
+	 "inputs":{"schema":{"type":"object","required":["text"],"properties":{"text":{"type":"string"}}}},
+	 "steps":[{"id":"b","type":"branch","config":{"paths":[{"name":"ask","when":"=true","steps":[
+	   {"id":"sort","type":"ai","input":{"text":"=trigger.body.text"},"config":{"prompt":"Sort it.",
+	    "output_schema":{"type":"object","required":["kind","score"],"properties":{"kind":{"type":"string","enum":["sale","question"]},"score":{"type":"integer","minimum":1}}}}}]}]}},
+	  {"id":"use","type":"transform","needs":["b"],"config":{"output":{"q":"=steps.b.output.steps.sort.kind == 'question' && steps.b.output.steps.sort.score >= 1"}}}]}`
+	_, results, err := builder.DryRun([]byte(doc), connector.NewRegistry(), nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 || !results[0].Passed {
+		t.Fatalf("%+v", results)
+	}
+}
+
 // A draft that composes callable templates (rule 18, decision 0047) is
 // checked, dry-run and policy-checked with the templates' steps: their own
 // approval gates their payments.

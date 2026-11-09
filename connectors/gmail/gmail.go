@@ -1,7 +1,8 @@
 // Package gmail is the Gmail connector (Gmail API v1): send and draft
-// email built safely as RFC 5322, search and read messages, and change
-// their labels. Connections are a service account with domain-wide
-// delegation acting as a subject, or an OAuth client with a refresh token
+// email built safely as RFC 5322, search and read messages, change their
+// labels, and start workflows when mail arrives (new_mail, polled).
+// Connections are a service account with domain-wide delegation acting as
+// a subject, or an OAuth client with a refresh token
 // (connectors/internal/google). Built from Google's public documentation
 // (docs/integrations/gmail.md).
 package gmail
@@ -62,7 +63,8 @@ func New(o Options) *connector.Connector {
 		"get_message":   connector.ActionFunc(c.getMessage),
 		"modify_labels": connector.ActionFunc(c.modifyLabels),
 		"list_labels":   connector.ActionFunc(c.listLabels),
-	}}
+		"new_messages":  connector.ActionFunc(c.newMessages),
+	}, Filters: map[string]connector.Filter{"new_mail": filterNewMail}}
 }
 
 func hostOf(u string) string {

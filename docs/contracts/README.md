@@ -17,5 +17,7 @@ Changes recorded during Phase 1:
 - `wd/v1` trigger type `storefront` (an addition; nothing existing changed), and its `booking` action (S4, also an addition): [decision 0036](../decisions/0036-storefronts.md), [storefronts](../storefronts.md).
 - `wd/v1` trigger type `form` and step type `form` (S7, additions; nothing existing changed), with the `forms` mock in `wd-test/v1`: [decision 0037](../decisions/0037-forms.md), [forms](../spec/forms.md).
 - `connector/v1` rule 17, `auth.modes`: live and test as hosts, chosen per connection (an addition; connections without a mode are unchanged).
+- `connector/v1` rule 22, a poll's `seen`, `keys` and `until` (additions; a poll without them is unchanged): a busy provider's records are read oldest first, none skipped and none read twice ([connector/v1](connector-v1.md)).
 - `wd/v1` rule 9: an `http` step cannot be `reconcilable_write` (refused at publish, not by the schema, so versions already published still load; their unknown outcomes park): it has no reconcile action to ask with.
+- `wd/v1` email trigger `threads`, with `trigger.body.in_reply_to` and `references` and `trigger.email.tag`, `thread` and `matched_by` (additions; an email trigger without `threads` behaves as before): [decision 0063](../decisions/0063-email-threads.md).
 - `wd/v1` webhook trigger `methods`, `auth: basic` and `jwt`, `jwt` settings and `cors` (additions; a webhook without them is unchanged, POST only), with test calls: [webhook triggers](wd-v1.md#webhook-triggers).

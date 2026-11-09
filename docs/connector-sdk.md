@@ -140,6 +140,7 @@ triggers:
 - `items` (over `output`) lists the records; `event` (over `item`) names each one's event.
 - Each record becomes the delivery the provider would send, `{"event": …, "data": item}`, signed with the connection's own secret, and goes through the trigger's usual checks, dedup and subscribers. An event the webhook also delivers is taken once.
 - Only a trigger verified by plain HMAC (`hmac_sha256`, `hmac_sha512`) can be polled.
+- A poll is made once per connection, whatever the workflows listening ask; a built-in connector applies each workflow's trigger `options` to what came with a filter (`Connector.Filters`, [connector/v1](contracts/connector-v1.md)).
 
 The editor then says the address in the provider's dashboard is optional; with it, events arrive at once.
 

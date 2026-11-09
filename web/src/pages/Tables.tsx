@@ -14,9 +14,14 @@ import {
   exampleStep,
   importError,
   isKept,
+  isRestricted,
   keptNotice,
+  readerChoices,
+  readersText,
+  rolesText,
   tableActions,
   tableControls,
+  toggleReader,
   matchHeaders,
   tableFromCSV,
   nameError,
@@ -102,6 +107,7 @@ export function Tables() {
                 <>
                   <code>{t.name}</code>
                   {isKept(t) && <span>kept by Taskiem</span>}
+                  {isRestricted(t) && <span>for {rolesText(t.readers ?? [])} only</span>}
                   <span>changed {fmtTime(t.updated_at)}</span>
                 </>
               }
@@ -334,7 +340,14 @@ export function TablePage() {
           ))}
         </div>
       )}
-      <Rows table={t} edit={controls.editRows} onChanged={table.reload} />
+      {t.can_read === false ? (
+        <div className="notice" role="note">
+          <p>{readersText(t)} Ask the owner if you need them.</p>
+        </div>
+      ) : (
+        <Rows table={t} edit={controls.editRows} onChanged={table.reload} />
+      )}
+      <Readers table={t} manage={can("role.manage") && t.can_read !== false && !isKept(t)} onChanged={table.reload} />
       <section className="card" style={{ marginTop: 24 }}>
         <h2>Columns</h2>
         <table>
@@ -365,6 +378,69 @@ export function TablePage() {
         />
       )}
     </>
+  );
+}
+
+/** Who can see the rows (decision 0065): the table's readers, which someone who manages roles, and can see the rows, changes. */
+function Readers({ table, manage, onChanged }: { table: Table; manage: boolean; onChanged: () => void }) {
+  const [changing, setChanging] = useState(false);
+  return (
+    <section className="card" style={{ marginTop: 24 }} aria-labelledby="readers-heading">
+      <h2 id="readers-heading">Who can see the rows</h2>
+      <p>{readersText(table)}</p>
+      <p className="hint">Workflows still read and write it, so whoever can change and publish workflows can reach its rows.</p>
+      {manage && (
+        <button onClick={() => setChanging(true)}>{isRestricted(table) ? "Change who can see it" : "Keep it for some roles"}</button>
+      )}
+      {changing && <ReadersForm table={table} onClose={() => setChanging(false)} onDone={() => (setChanging(false), onChanged())} />}
+    </section>
+  );
+}
+
+function ReadersForm({ table, onClose, onDone }: { table: Table; onClose: () => void; onDone: () => void }) {
+  const [chosen, setChosen] = useState<string[]>([...(table.readers ?? [])].sort());
+  const roles = useLoad(() => get<{ readers: string[] | null; roles: string[] }>(`/v1/tables/${table.id}/readers`), [table.id]);
+  const act = useAction();
+  const choices = readerChoices(roles.data?.roles ?? [], table.readers);
+  return (
+    <Modal title="Who can see the rows" onClose={onClose}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (chosen.length === 0) return;
+          void act.run(async () => (await put(`/v1/tables/${table.id}/readers`, { readers: chosen }), onDone()), "Saved");
+        }}
+      >
+        <p className="hint">Only members with one of these roles, and the owner, will see and change its rows, here and in chat. Give the roles to people under Members.</p>
+        <ErrorBox error={roles.error} />
+        {!roles.data && !roles.error && <Skeleton />}
+        {roles.data && (
+          <fieldset>
+            <legend>Roles</legend>
+            {choices.map((r) => (
+              <label key={r} className="inline">
+                <input type="checkbox" checked={chosen.includes(r)} onChange={(e) => setChosen(toggleReader(chosen, r, e.target.checked))} /> {r}
+              </label>
+            ))}
+            <p className="hint">{chosen.length === 0 ? "Choose at least one role: with none, nobody but the owner could see the rows." : `Chosen: ${rolesText(chosen)}.`}</p>
+          </fieldset>
+        )}
+        <ErrorBox error={act.error} />
+        <div className="toolbar">
+          <button type="submit" className="primary" disabled={act.busy || chosen.length === 0}>
+            Save
+          </button>
+          {isRestricted(table) && (
+            <button type="button" disabled={act.busy} onClick={() => void act.run(async () => (await del(`/v1/tables/${table.id}/readers`), onDone()), "Everyone with access to your tables can see it")}>
+              Let everyone see it
+            </button>
+          )}
+          <button type="button" onClick={onClose}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

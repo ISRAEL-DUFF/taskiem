@@ -594,7 +594,7 @@ export interface EmailMessage {
   sender_domain: string | null;
   size: number;
   attachments: number;
-  status: "started" | "refused" | "confirmation";
+  status: "started" | "refused" | "confirmation" | "replied";
   note: string | null;
   run_id: string | null;
   received_at: string;
@@ -609,6 +609,8 @@ export interface EmailEndpoint {
   version: number;
   senders: string[];
   attachments: "keep" | "ignore";
+  /** Replies in a thread wake the run waiting for them (decision 0063). */
+  threads: boolean;
   confirmation: EmailConfirmation | null;
   messages: EmailMessage[];
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/israel-duff/taskiem/templates"
@@ -137,8 +138,54 @@ func TestKnownTables(t *testing.T) {
 	for _, kt := range templates.KnownTables() {
 		names = append(names, kt.Name)
 	}
-	if !reflect.DeepEqual(names, []string{"classes", "customers", "events", "hire_items", "menu", "products", "spaces", "staff", "subscribers"}) {
+	if !reflect.DeepEqual(names, []string{"classes", "customers", "events", "hire_items", "hr_confidential_messages", "hr_confidential_tickets", "hr_ticket_messages", "hr_tickets",
+		"menu", "products", "spaces", "staff", "subscribers", "ticket_messages", "tickets"}) {
 		t.Errorf("known tables: %v", names)
+	}
+	for _, name := range []string{"tickets", "ticket_messages", "hr_tickets", "hr_ticket_messages", "hr_confidential_tickets", "hr_confidential_messages"} {
+		if kt, _ := templates.KnownTable(name); !kt.Kit || kt.Front {
+			t.Errorf("%s is the ticket kit's, not offered in chat", name)
+		}
+	}
+	// The HR tables are the HR roles' (decision 0065), shaped as the
+	// customers' tickets are; the confidential ones hr_lead's alone.
+	tickets, _ := templates.KnownTable("tickets")
+	messages, _ := templates.KnownTable("ticket_messages")
+	for name, want := range map[string][]string{"hr_tickets": {"hr", "hr_lead"}, "hr_ticket_messages": {"hr", "hr_lead"},
+		"hr_confidential_tickets": {"hr_lead"}, "hr_confidential_messages": {"hr_lead"}} {
+		kt, _ := templates.KnownTable(name)
+		if !reflect.DeepEqual(kt.Readers, want) {
+			t.Errorf("%s: readers %v, want %v", name, kt.Readers, want)
+		}
+		shape := tickets
+		if strings.HasSuffix(name, "messages") {
+			shape = messages
+		}
+		if len(kt.Columns) != len(shape.Columns) {
+			t.Fatalf("%s: %d columns, want %d", name, len(kt.Columns), len(shape.Columns))
+		}
+		for i, c := range kt.Columns {
+			x := shape.Columns[i]
+			if c.Name != x.Name || c.Type != x.Type || c.Required != x.Required || !reflect.DeepEqual(c.Personal, x.Personal) {
+				t.Errorf("%s: column %+v is not %s's %+v", name, c, shape.Name, x)
+			}
+		}
+	}
+	if kt, _ := templates.KnownTable("tickets"); kt.Readers != nil {
+		t.Errorf("customers' tickets name readers: %v", kt.Readers)
+	}
+	hr, _ := templates.Default().Get("staff-hr-desk")
+	got := map[string][]string{}
+	for _, tb := range hr.TablesFor(map[string]any{}) {
+		got[tb.Name] = tb.Readers
+	}
+	if !reflect.DeepEqual(got, map[string][]string{"hr_tickets": {"hr", "hr_lead"}, "hr_ticket_messages": {"hr", "hr_lead"},
+		"hr_confidential_tickets": {"hr_lead"}, "hr_confidential_messages": {"hr_lead"}}) {
+		t.Errorf("staff-hr-desk's tables: %v", got)
+	}
+	if _, err := templates.Parse([]byte(`{"id": "x", "title": "x", "summary": "x", "description": "x", "category": "x", "connectors": [], "params": [],
+		"tables": [{"name": "t", "readers": [], "columns": [{"name": "a", "type": "text"}]}], "definition": {"schema": "wd/v1"}}`)); err == nil {
+		t.Error("a table naming an empty list of readers is refused")
 	}
 	staff, _ := templates.KnownTable("staff")
 	payroll, _ := templates.Default().Get("run-payroll")

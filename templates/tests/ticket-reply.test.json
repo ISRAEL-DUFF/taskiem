@@ -1,0 +1,328 @@
+{
+  "schema": "wd-test/v1",
+  "template": "ticket-reply",
+  "params": {},
+  "cases": [
+    {
+      "name": "an answer goes to the customer in the conversation and the ticket waits on them",
+      "trigger": {
+        "body": {
+          "ticket": "t 1042",
+          "what": "Answer and wait for the customer",
+          "message": "Your order left this morning.",
+          "agent": "Bola Ade",
+          "agent_email": "bola@adacakes.ng"
+        },
+        "form": {
+          "submission_id": "00000000-0000-7000-8000-000000000001",
+          "reference": "F-1",
+          "submitted_at": "2026-11-07T10:00:00Z",
+          "respondent": {
+            "kind": "member",
+            "member_id": "00000000-0000-7000-8000-000000000002"
+          },
+          "channel": "direct",
+          "consents": []
+        }
+      },
+      "mocks": {
+        "find": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "T-1042",
+                "subject": "Order 42 is late",
+                "customer_email": "ada@example.com",
+                "customer_phone": "",
+                "channel": "email",
+                "status": "open",
+                "assigned_to": "",
+                "thread": "T-1042",
+                "mail": "taskiem",
+                "mailbox": "k3x9q2m7a1bz@in.taskiem.app"
+              }
+            ]
+          }
+        },
+        "answer__find": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "T-1042",
+                "subject": "Order 42 is late",
+                "customer_email": "ada@example.com",
+                "customer_phone": "",
+                "channel": "email",
+                "status": "open",
+                "assigned_to": "",
+                "thread": "T-1042",
+                "mail": "taskiem",
+                "mailbox": "k3x9q2m7a1bz@in.taskiem.app"
+              }
+            ]
+          }
+        },
+        "answer__email": {
+          "output": {
+            "message_id": "tk-3@in.taskiem.app"
+          }
+        },
+        "answer__record": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "answer__update": {
+          "output": {
+            "affected": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "find": {
+            "filters": [
+              {
+                "column": "reference",
+                "op": "eq",
+                "value": "T-1042"
+              }
+            ]
+          },
+          "answer__email": {
+            "to": "ada@example.com",
+            "message": "Your order left this morning.",
+            "thread": "T-1042"
+          },
+          "answer__record": {
+            "row": {
+              "author": "Bola Ade",
+              "direction": "out"
+            }
+          },
+          "answer__update": {
+            "set": {
+              "status": "waiting_on_customer",
+              "assigned_to": "bola@adacakes.ng"
+            }
+          }
+        },
+        "steps": {
+          "note": "not_run",
+          "missing": "not_run"
+        }
+      }
+    },
+    {
+      "name": "answer and resolve",
+      "trigger": {
+        "body": {
+          "ticket": "T-1042",
+          "what": "Answer, and the ticket is resolved",
+          "message": "Refunded today.",
+          "agent": "Bola Ade",
+          "agent_email": "bola@adacakes.ng"
+        },
+        "form": {
+          "submission_id": "00000000-0000-7000-8000-000000000001",
+          "reference": "F-1",
+          "submitted_at": "2026-11-07T10:00:00Z",
+          "respondent": {
+            "kind": "member",
+            "member_id": "00000000-0000-7000-8000-000000000002"
+          },
+          "channel": "direct",
+          "consents": []
+        }
+      },
+      "mocks": {
+        "find": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "T-1042",
+                "subject": "Order 42 is late",
+                "customer_email": "ada@example.com",
+                "customer_phone": "",
+                "channel": "email",
+                "status": "open",
+                "assigned_to": "",
+                "thread": "T-1042",
+                "mail": "taskiem",
+                "mailbox": "k3x9q2m7a1bz@in.taskiem.app"
+              }
+            ]
+          }
+        },
+        "answer__find": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "T-1042",
+                "subject": "Order 42 is late",
+                "customer_email": "ada@example.com",
+                "customer_phone": "",
+                "channel": "email",
+                "status": "open",
+                "assigned_to": "",
+                "thread": "T-1042",
+                "mail": "taskiem",
+                "mailbox": "k3x9q2m7a1bz@in.taskiem.app"
+              }
+            ]
+          }
+        },
+        "answer__email": {
+          "output": {
+            "message_id": "tk-4@in.taskiem.app"
+          }
+        },
+        "answer__record": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "answer__update": {
+          "output": {
+            "affected": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "answer__update": {
+            "set": {
+              "status": "resolved",
+              "resolved_at": "2026-01-05T09:00:00Z"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "a note stays with the team",
+      "trigger": {
+        "body": {
+          "ticket": "1042",
+          "what": "A note for the team (the customer does not see it)",
+          "message": "Called the rider: he is 10 minutes away.",
+          "agent": "Bola Ade",
+          "agent_email": "bola@adacakes.ng"
+        },
+        "form": {
+          "submission_id": "00000000-0000-7000-8000-000000000001",
+          "reference": "F-1",
+          "submitted_at": "2026-11-07T10:00:00Z",
+          "respondent": {
+            "kind": "member",
+            "member_id": "00000000-0000-7000-8000-000000000002"
+          },
+          "channel": "direct",
+          "consents": []
+        }
+      },
+      "mocks": {
+        "find": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "T-1042",
+                "subject": "Order 42 is late",
+                "customer_email": "ada@example.com",
+                "customer_phone": "",
+                "channel": "email",
+                "status": "open",
+                "assigned_to": "",
+                "thread": "T-1042",
+                "mail": "taskiem",
+                "mailbox": "k3x9q2m7a1bz@in.taskiem.app"
+              }
+            ]
+          }
+        },
+        "note": {
+          "output": {
+            "affected": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "note": {
+            "table": "ticket_messages",
+            "row": {
+              "reference": "T-1042",
+              "direction": "note",
+              "author": "Bola Ade",
+              "body": "Called the rider: he is 10 minutes away.",
+              "channel": "note"
+            }
+          }
+        },
+        "steps": {
+          "answer__email": "not_run",
+          "missing": "not_run"
+        }
+      }
+    },
+    {
+      "name": "a wrong number is told to the member, and nothing is sent",
+      "trigger": {
+        "body": {
+          "ticket": "T-9999",
+          "what": "Answer and wait for the customer",
+          "message": "Hello",
+          "agent": "Bola Ade",
+          "agent_email": "bola@adacakes.ng"
+        },
+        "form": {
+          "submission_id": "00000000-0000-7000-8000-000000000001",
+          "reference": "F-1",
+          "submitted_at": "2026-11-07T10:00:00Z",
+          "respondent": {
+            "kind": "member",
+            "member_id": "00000000-0000-7000-8000-000000000002"
+          },
+          "channel": "direct",
+          "consents": []
+        }
+      },
+      "mocks": {
+        "find": {
+          "output": {
+            "rows": []
+          }
+        },
+        "missing": {
+          "output": {
+            "people": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "missing": {
+            "to": "members",
+            "members": [
+              "bola@adacakes.ng"
+            ],
+            "title": "No ticket T-9999"
+          }
+        },
+        "steps": {
+          "answer__find": "not_run",
+          "note": "not_run"
+        }
+      }
+    }
+  ]
+}

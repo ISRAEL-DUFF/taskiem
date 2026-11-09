@@ -52,6 +52,7 @@ Access tokens are cached in memory per credential set (key, subject and scopes; 
 | `get_message` | `GET users/{user}/messages/{id}` | read | `full` (default) decodes the first text/plain and text/html bodies and lists attachments; `metadata`, `minimal` |
 | `modify_labels` | `POST users/{user}/messages/{id}/modify` | idempotent write | Mark read: remove `UNREAD`; archive: remove `INBOX` |
 | `list_labels` | `GET users/{user}/labels` | read | Ids for user labels (`Label_12`) |
+| `new_messages` | `GET users/{user}/profile`, `messages?q=after:…`, then `messages/{id}` | read | Mail since a time, oldest first, at most 200, never one in `seen`; `keys` (every id read) and `until` (how far it got, when more came): what the [`new_mail` trigger](#new_mail-polled) polls |
 
 **Never twice.** Gmail has no idempotency key or client-side dedup for messages or drafts. A send whose outcome is unknown (connection dropped after sending, 500, 502, 504) parks for a person. Quota refusals (429, and 403 with `rateLimitExceeded`/`userRateLimitExceeded`/`dailyLimitExceeded`) mean Gmail refused before acting, so they are retried; Google notes the sending limit can last hours. `modify_labels` is a set operation, so it is declared `idempotent_write`; its `request_key` satisfies the contract and is not sent.
 
@@ -59,13 +60,35 @@ Access tokens are cached in memory per credential set (key, subject and scopes; 
 
 Attachments **by URL** are not supported: fetching an arbitrary URL would need the egress policy to allow that host. Fetch the file in an `http` step and pass its base64.
 
-**Personal data.** Recipients are declared `email`; subject, bodies and attachments `other`; the search query `other`. Message contents returned by `get_message` are detected by the engine (emails) but not declared.
+**Personal data.** Recipients are declared `email`; subject, bodies and attachments `other`; the search query `other`. Message contents returned by `get_message` are declared too (addresses `email`, the rest `other`), and so are `new_messages`' and the `new_mail` trigger's (below).
 
 **Errors.** 400 and 403 (other than quota) and 404 are fatal; 401 after one fresh token is fatal; 503 retryable; 500/502/504 unknown outcome. Google's `error.status` and `errors[0].reason` are in the message.
+
+## Triggers
+
+### `new_mail` (polled)
+
+Gmail's push notifications need a Cloud Pub/Sub topic in the business's own Google project, so Taskiem asks the mailbox itself every 5 minutes while a workflow listens, as it does [Zoho Mail](zoho-mail.md#new_mail-polled) (`new_messages`). Polled deliveries are signed with the connection's refresh token, so the trigger's address takes nothing anyone else sends.
+
+- **Connections it works with:** one-click and refresh-token connections. A **service-account** connection has no refresh token to sign its deliveries with, so the poll fails (its error is kept on the poll) and nothing is delivered; connect with **Connect Gmail**, or with a refresh token, for this trigger.
+- **Scopes:** reading mail. `gmail.modify`, which one-click connections ask for, covers it; a refresh token granted only `gmail.send`, or a service account whose `scopes` list no reading scope (`gmail.readonly` or `gmail.modify`), is refused by Gmail with 403 and the poll fails.
+- **What it reads:** `after:<since> -in:sent`, then each listed message in full, except those an earlier poll read (the poller keeps the last 2,000 ids it was given back and passes them as `seen`). The first poll starts when the workflow is deployed (nothing earlier is replayed); each later one looks back ten minutes before where the last one got to. A listing of more than 2,000 ids is narrowed (`before:`, halving the window) until it fits.
+- **A busy mailbox:** at most 200 messages are read a poll, the oldest first. When more came, the poll says how far it got (`until`, the newest it read, or the narrowed window's end), and the next poll starts there on the poller's next tick (a minute later), not five minutes on, until it has caught up: no message is skipped, and none is read twice. Only more than 2,000 messages within one second could not all be listed; that is logged.
+- **Never the mailbox's own mail:** a message labelled `SENT` (a message to oneself too) or `DRAFT`, or whose From is the mailbox's own address, is not delivered, so a workflow that replies cannot wake itself; nor are Chat, spam or trash. Mail the business sends from a send-as alias outside Gmail is not recognised as its own.
+- **What a run gets:** `body.data`: `id` (Gmail's, for `get_message` and `modify_labels`), `thread_id` (for `send_message`'s `thread_id`), `message_id` (the RFC 5322 Message-ID, for `in_reply_to` and `references`), `from`, `from_address` (the address alone, lower case), `to`, `cc`, `subject`, `date` (the header), `received_at`, `snippet`, `latest` (the text without the earlier messages it quotes, as the [email trigger](../email.md) reads it; from the HTML when there is no text part; at most 32 KB, with `truncated`), `in_reply_to`, `references`, `label_ids`, `unread` and `has_attachments`. Read attachments and the whole body with `get_message`.
+- **Once each:** by Gmail's message id, however many polls list it.
+- **Correlation:** the thread. A run waiting on a `signal` step with event `gmail@1:new_mail` and the ticket's `thread_id` as its correlation wakes on the customer's reply. To keep the reply in the thread, send it with `send_message`'s `thread_id`, `in_reply_to` (the message's `message_id`), `references` (its `references` followed by its `message_id`) and the same subject.
+- **Options** (`config.options` of the workflow's trigger), applied to each workflow on its own: `inbox_only` (default `true`: not mail a Gmail filter archived), `label_ids` (every one of these labels: ids as `list_labels` lists them, such as `Label_12`, `IMPORTANT` or `CATEGORY_PERSONAL`) and `senders` (addresses, `@domain` or `domain`; a subdomain is another domain). Options choose which mail starts the workflow; a run waiting on a thread hears every reply in it, whatever the options.
+- **Personal data:** the addresses, subject, snippet and text are sealed in run history (rule 21's `pii`).
+
+## Templates
+
+- **A helpdesk on your Gmail mailbox** (`helpdesk-gmail`) and **Send ticket answers from your Gmail mailbox** (`helpdesk-gmail-send`): each new conversation in the inbox becomes a numbered ticket, replies join it (found by `thread_id`), and the business's answers go back with `send_message` in the customer's thread (`thread_id`, `in_reply_to`, `references`) ([customer tickets](../guide/tickets.md), [the kit](../spec/tickets.md#7-phase-2-the-ticket-kit)).
 
 ## Needs a person
 
 - A Google Cloud project with the Gmail API enabled, and either a Workspace super administrator to grant domain-wide delegation to a service account, or a Gmail user to consent for a refresh token, for a live check.
+- A live check of `new_mail` on a real mailbox: a customer's reply waking a waiting run, and the business's own reply not.
 
 ## To confirm with Google
 
@@ -73,3 +96,6 @@ Attachments **by URL** are not supported: fetching an arbitrary URL would need t
 2. Whether `MessagePartBody.data` is returned in the part's declared charset or converted to UTF-8 (the connector returns the bytes as text, assuming UTF-8).
 3. Refresh tokens of OAuth clients whose consent screen is in *Testing* expire after a short period; publish the app (or use a service account) for production.
 4. Whether `expires_in` is always present in token responses (the connector assumes five minutes without it).
+5. That `after:` and `before:` take seconds since the epoch in `users.messages.list`'s `q` (the connector also checks each message's `internalDate`), and that `-in:sent` leaves out what the mailbox sent (the connector also skips `SENT`).
+7. That `users.messages.list` lists newest first: of more than 200 new messages, the connector reads the last 200 listed as the oldest.
+6. That header values in `payload.headers` come decoded (RFC 2047) as the web app shows them.

@@ -25867,6 +25867,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Table'
+        '403':
+          description: >-
+            `table_restricted`: the table names readers (decision 0065) and the caller holds none of their roles and is not the owner.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: >-
             No such table.
@@ -25916,6 +25923,13 @@ paths:
         '400':
           description: >-
             `confirm` is not the table's name.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: >-
+            `table_restricted`: the table names readers (decision 0065) and the caller holds none of their roles and is not the owner.
           content:
             application/json:
               schema:
@@ -26006,6 +26020,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '403':
+          description: >-
+            `table_restricted`: the table names readers (decision 0065) and the caller holds none of their roles and is not the owner.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
   /v1/tables/{id}/columns/{name}:
@@ -26056,6 +26077,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '403':
+          description: >-
+            `table_restricted`: the table names readers (decision 0065) and the caller holds none of their roles and is not the owner.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: >-
             No such table or column.
@@ -26073,6 +26101,201 @@ paths:
         '409':
           description: >-
             `table_kept`: the table is kept by Taskiem (`kept_by`); its rows are added only by Taskiem and it cannot be changed or deleted here.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/tables/{id}/readers:
+    get:
+      operationId: getTableReaders
+      tags:
+      - Data tables
+      summary: A table's readers, and the roles to choose them from
+      description: >-
+        The table's readers (null for every `table.read` holder) and the business's roles: built in, its custom roles, and every role a member holds, sorted. The Tables page offers these to pick from when it sets readers. The same permissions as setting them.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.read,role.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The table's id
+      responses:
+        '200':
+          description: The readers and the roles
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [readers, roles]
+                properties:
+                  readers:
+                    type: [array, 'null']
+                    items:
+                      type: string
+                  roles:
+                    type: array
+                    items:
+                      type: string
+        '403':
+          description: >-
+            The permission is missing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: >-
+            No such table.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: setTableReaders
+      tags:
+      - Data tables
+      summary: Restrict a table's rows to some roles
+      description: >-
+        Sets the table's readers (decision 0065): the membership roles whose holders, and the owner, may read and change its rows, on top of `table.read` and `table.edit`, everywhere a person reaches rows (this API, the Tables page, exports and imports, chat and its questions). Each must be a role of the business: built in, one of its custom roles, held by a member (a business role such as `hr`), or named as readers by one of its tables or by the template catalogue (the HR desk's `hr` and `hr_lead`); such a role need not be held by anyone yet. Anything else (a typo, which would lock everyone but the owner out) is refused with 422 `unknown_roles`, naming the unknown roles and listing the business's. Readers that hold none of the caller's own roles are refused with 422 `readers_lock_out`, unless the caller is the owner, who reads every table. Needs `role.manage`, since readers say what a role grants, and `table.read`; only someone who may read the table now may change its readers, so it never lets the caller into rows they could not read. An empty list (nobody) is refused: clear the readers with DELETE instead. Audited as `table.readers.set` with the roles before and after. Workflows still reach the rows through the `data_tables` connection.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.read,role.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The table's id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TableReaders'
+      responses:
+        '200':
+          description: The table with its readers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Table'
+        '400':
+          description: >-
+            No roles (an empty list would let nobody read the table), a name that is not a role, or more than 20.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: >-
+            `table_restricted`: the table names readers and the caller holds none of them; or the permission is missing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: >-
+            No such table.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: >-
+            `table_kept`: a kept table's readers do not change.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: >-
+            `unknown_roles`: a reader is no role of the business (`unknown` names them); or `readers_lock_out`: the readers hold none of the caller's roles and the caller is not the owner. Both list the business's roles (`roles`) to choose from.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [error, code, roles]
+                properties:
+                  error:
+                    type: string
+                  code:
+                    type: string
+                    enum: [unknown_roles, readers_lock_out]
+                  unknown:
+                    type: array
+                    items:
+                      type: string
+                    description: The readers that are no role of the business (unknown_roles).
+                  roles:
+                    type: array
+                    items:
+                      type: string
+                    description: The business's roles, built in, custom and held by members, sorted.
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: clearTableReaders
+      tags:
+      - Data tables
+      summary: Let every table.read holder read a table again
+      description: >-
+        Clears the table's readers, so every `table.read` holder reads its rows again. The same permissions and rule as setting them; audited as `table.readers.clear`.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.read,role.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The table's id
+      responses:
+        '200':
+          description: The table, with no readers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Table'
+        '403':
+          description: >-
+            `table_restricted`: the table names readers and the caller holds none of them; or the permission is missing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: >-
+            No such table.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: >-
+            `table_kept`: a kept table's readers do not change.
           content:
             application/json:
               schema:
@@ -26124,6 +26347,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RowPage'
+        '403':
+          description: >-
+            `table_restricted`: the table names readers (decision 0065) and the caller holds none of their roles and is not the owner.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: >-
             No such table (or Xenibase has no such table: `xenibase_not_found`).
@@ -26183,6 +26413,13 @@ paths:
         '400':
           description: >-
             A value does not fit its column, a required column is missing, or Xenibase refused it (`xenibase_refused`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: >-
+            `table_restricted`: the table names readers (decision 0065) and the caller holds none of their roles and is not the owner.
           content:
             application/json:
               schema:
@@ -26252,6 +26489,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '403':
+          description: >-
+            `table_restricted`: the table names readers (decision 0065) and the caller holds none of their roles and is not the owner.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: >-
             No such table.
@@ -26315,6 +26559,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '403':
+          description: >-
+            `table_restricted`: the table names readers (decision 0065) and the caller holds none of their roles and is not the owner.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: >-
             No such table or row.
@@ -26371,6 +26622,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RowsDeleted'
+        '403':
+          description: >-
+            `table_restricted`: the table names readers (decision 0065) and the caller holds none of their roles and is not the owner.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: >-
             No such table or row.
@@ -26445,6 +26703,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '403':
+          description: >-
+            `table_restricted`: the table names readers (decision 0065) and the caller holds none of their roles and is not the owner.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: >-
             No such table.
@@ -26489,6 +26754,13 @@ paths:
             text/csv:
               schema:
                 type: string
+        '403':
+          description: >-
+            `table_restricted`: the table names readers (decision 0065) and the caller holds none of their roles and is not the owner.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: >-
             No such table.
@@ -31410,6 +31682,11 @@ components:
               missing:
                 type: array
                 description: The columns a table that exists already lacks, which the workflow uses.
+                items:
+                  type: string
+              readers:
+                type: array
+                description: The roles the template's table is for, when the table exists already without exactly those readers; someone with `role.manage` sets them on the Tables page (decision 0065).
                 items:
                   type: string
     AlertChannelKind:
@@ -37184,6 +37461,11 @@ components:
               personal:
                 type: boolean
             additionalProperties: false
+        readers:
+          type: array
+          items:
+            type: string
+          description: The roles whose holders, and the owner, may read the table's rows once it is made (decision 0065); left out, every `table.read` holder reads it.
       additionalProperties: false
     TemplateList:
       type: object
@@ -37254,6 +37536,11 @@ components:
               missing:
                 type: array
                 description: The columns a table that exists already lacks, which the workflow uses.
+                items:
+                  type: string
+              readers:
+                type: array
+                description: The roles the template's table is for, when the table exists already without exactly those readers; someone with `role.manage` sets them on the Tables page (decision 0065).
                 items:
                   type: string
             additionalProperties: false
@@ -37383,6 +37670,7 @@ components:
       - messages
       - senders
       - attachments
+      - threads
       properties:
         id:
           type: string
@@ -37409,6 +37697,9 @@ components:
           enum:
           - keep
           - ignore
+        threads:
+          type: boolean
+          description: Replies in a thread wake the run waiting for them instead of starting one (decision 0063).
         confirmation:
           description: The latest forwarding confirmation a mail provider sent to the address.
           oneOf:
@@ -37452,10 +37743,12 @@ components:
                 type: integer
               status:
                 type: string
+                description: What came of it; replied is a reply delivered to the run of its thread that waited for it (decision 0063).
                 enum:
                 - started
                 - refused
                 - confirmation
+                - replied
               note:
                 type:
                 - string
@@ -42139,6 +42432,29 @@ components:
           minItems: 1
           items:
             $ref: '#/components/schemas/ColumnRequest'
+        readers:
+          type: [array, 'null']
+          minItems: 1
+          maxItems: 20
+          items:
+            type: string
+            pattern: '^[a-z][a-z0-9_]{0,62}$'
+          description: >-
+            Restrict the new table's rows to the holders of these roles and the owner (decision 0065). Needs only `table.edit` on a new table, which holds nothing yet; changing them later needs `role.manage` (`PUT /v1/tables/{id}/readers`). An empty list (nobody) is refused.
+      additionalProperties: false
+    TableReaders:
+      type: object
+      required:
+      - readers
+      properties:
+        readers:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            type: string
+            pattern: '^[a-z][a-z0-9_]{0,62}$'
+          description: The roles whose holders, and the owner, may read and change the table's rows.
       additionalProperties: false
     TablePatch:
       type: object
@@ -42160,6 +42476,8 @@ components:
       - connection
       - created_by
       - kept_by
+      - readers
+      - can_read
       - created_at
       - updated_at
       properties:
@@ -42191,6 +42509,15 @@ components:
           type: [string, 'null']
           description: >-
             The Taskiem feature that keeps the table (`money_log`), or null for an ordinary table. A kept table's rows are added only by Taskiem: its rows, columns, title and the table itself cannot be changed or deleted through the API, chat or workflows (409 `table_kept`), and it is read, searched and exported like any table.
+        readers:
+          type: [array, 'null']
+          items:
+            type: string
+          description: >-
+            The membership roles (built-in, custom or business roles) whose holders, and the owner, may read and change the table's rows, on top of `table.read` and `table.edit` (decision 0065); null for every `table.read` holder. A restricted table is still listed, with its columns and readers, to every `table.read` holder; its rows, row count, export, import and changes answer 403 `table_restricted` to the others. Workflows reach its rows through the `data_tables` connection as any table's.
+        can_read:
+          type: boolean
+          description: Whether the caller may read the table's rows (always true for a table without readers).
         created_at:
           $ref: '#/components/schemas/Timestamp'
         updated_at:

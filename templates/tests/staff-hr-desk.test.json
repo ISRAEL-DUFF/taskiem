@@ -1,0 +1,1192 @@
+{
+  "schema": "wd-test/v1",
+  "template": "staff-hr-desk",
+  "params": {},
+  "cases": [
+    {
+      "name": "leave waits for a manager; approved, the member hears it, the ticket stays open and HR is told",
+      "trigger": {
+        "body": {
+          "subject": "Annual leave in December",
+          "message": "Annual leave from 22 December to 2 January. Chidi covers for me.",
+          "requester": "Bola Ade",
+          "requester_email": "bola@adacakes.ng"
+        },
+        "form": {
+          "submission_id": "00000000-0000-7000-8000-000000000001",
+          "reference": "F-1",
+          "submitted_at": "2026-11-07T10:00:00Z",
+          "respondent": {
+            "kind": "member",
+            "member_id": "00000000-0000-7000-8000-000000000002"
+          },
+          "channel": "direct",
+          "consents": []
+        }
+      },
+      "mocks": {
+        "open__ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 45
+              }
+            ]
+          }
+        },
+        "open__number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_email": {
+          "output": {
+            "message_id": "x"
+          }
+        },
+        "open__ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "open__ack_noted": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_told": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "thanks": {
+          "output": {
+            "reference": "F-1",
+            "message": "ok"
+          }
+        },
+        "answer__find": {
+          "output": {
+            "rows": [
+              {
+                "id": 45,
+                "reference": "HR-1045",
+                "subject": "Annual leave in December",
+                "customer_name": "Bola Ade",
+                "customer_email": "bola@adacakes.ng",
+                "customer_phone": "",
+                "channel": "staff",
+                "status": "new",
+                "assigned_to": "",
+                "thread": "HR-1045",
+                "mail": "member",
+                "mailbox": ""
+              }
+            ]
+          }
+        },
+        "answer__member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "answer__record": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "answer__update": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "answer__email": {
+          "output": {
+            "message_id": "x"
+          }
+        },
+        "answer__message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "tell_hr": {
+          "output": {
+            "people": 2
+          }
+        }
+      },
+      "approvals": {
+        "decide": {
+          "decision": "approved",
+          "by": "amaka@adacakes.ng"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "open__ticket": {
+            "row": {
+              "channel": "staff",
+              "mail": "member",
+              "department": "Leave",
+              "role": "hr"
+            }
+          },
+          "thanks": {
+            "message": "Thank you. Your request is HR-1045, with Leave. A manager will approve it first, and you will hear the decision."
+          },
+          "answer__member": {
+            "to": "members",
+            "members": [
+              "bola@adacakes.ng"
+            ],
+            "message": "HR-1045 (Annual leave in December):\nYour request HR-1045 was approved. HR will finish it and tell you when it is done."
+          },
+          "answer__update": {
+            "set": {
+              "status": "open"
+            },
+            "table": "hr_tickets"
+          },
+          "tell_hr": {
+            "to": "role",
+            "role": "hr",
+            "title": "Request HR-1045 approved",
+            "message": "HR-1045 (Leave): a manager approved it; it is yours to finish."
+          },
+          "answer__find": {
+            "table": "hr_tickets",
+            "filters": [
+              {
+                "column": "reference",
+                "op": "eq",
+                "value": "HR-1045"
+              }
+            ]
+          },
+          "answer__record": {
+            "table": "hr_ticket_messages"
+          }
+        },
+        "steps": {
+          "decide": "completed",
+          "open__route__classify": "not_run"
+        }
+      }
+    },
+    {
+      "name": "declined leave is resolved and the member is told",
+      "trigger": {
+        "body": {
+          "subject": "Annual leave in December",
+          "message": "Annual leave from 22 December to 2 January. Chidi covers for me.",
+          "requester": "Bola Ade",
+          "requester_email": "bola@adacakes.ng"
+        },
+        "form": {
+          "submission_id": "00000000-0000-7000-8000-000000000001",
+          "reference": "F-1",
+          "submitted_at": "2026-11-07T10:00:00Z",
+          "respondent": {
+            "kind": "member",
+            "member_id": "00000000-0000-7000-8000-000000000002"
+          },
+          "channel": "direct",
+          "consents": []
+        }
+      },
+      "mocks": {
+        "open__ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 45
+              }
+            ]
+          }
+        },
+        "open__number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_email": {
+          "output": {
+            "message_id": "x"
+          }
+        },
+        "open__ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "open__ack_noted": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_told": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "thanks": {
+          "output": {
+            "reference": "F-1",
+            "message": "ok"
+          }
+        },
+        "answer__find": {
+          "output": {
+            "rows": [
+              {
+                "id": 45,
+                "reference": "HR-1045",
+                "subject": "Annual leave in December",
+                "customer_name": "Bola Ade",
+                "customer_email": "bola@adacakes.ng",
+                "customer_phone": "",
+                "channel": "staff",
+                "status": "new",
+                "assigned_to": "",
+                "thread": "HR-1045",
+                "mail": "member",
+                "mailbox": ""
+              }
+            ]
+          }
+        },
+        "answer__member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "answer__record": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "answer__update": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "answer__email": {
+          "output": {
+            "message_id": "x"
+          }
+        },
+        "answer__message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "tell_hr": {
+          "output": {
+            "people": 2
+          }
+        }
+      },
+      "approvals": {
+        "decide": {
+          "decision": "rejected",
+          "by": "amaka@adacakes.ng"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "answer__member": {
+            "message": "HR-1045 (Annual leave in December):\nYour request HR-1045 was not approved. Please speak to your manager."
+          },
+          "answer__update": {
+            "set": {
+              "status": "resolved"
+            }
+          },
+          "tell_hr": {
+            "title": "Request HR-1045 not approved"
+          }
+        }
+      }
+    },
+    {
+      "name": "no manager decides within three days: not approved, and the member is told why",
+      "trigger": {
+        "body": {
+          "subject": "Annual leave in December",
+          "message": "Annual leave from 22 December to 2 January. Chidi covers for me.",
+          "requester": "Bola Ade",
+          "requester_email": "bola@adacakes.ng"
+        },
+        "form": {
+          "submission_id": "00000000-0000-7000-8000-000000000001",
+          "reference": "F-1",
+          "submitted_at": "2026-11-07T10:00:00Z",
+          "respondent": {
+            "kind": "member",
+            "member_id": "00000000-0000-7000-8000-000000000002"
+          },
+          "channel": "direct",
+          "consents": []
+        }
+      },
+      "mocks": {
+        "open__ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 45
+              }
+            ]
+          }
+        },
+        "open__number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_email": {
+          "output": {
+            "message_id": "x"
+          }
+        },
+        "open__ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "open__ack_noted": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_told": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "thanks": {
+          "output": {
+            "reference": "F-1",
+            "message": "ok"
+          }
+        },
+        "answer__find": {
+          "output": {
+            "rows": [
+              {
+                "id": 45,
+                "reference": "HR-1045",
+                "subject": "Annual leave in December",
+                "customer_name": "Bola Ade",
+                "customer_email": "bola@adacakes.ng",
+                "customer_phone": "",
+                "channel": "staff",
+                "status": "new",
+                "assigned_to": "",
+                "thread": "HR-1045",
+                "mail": "member",
+                "mailbox": ""
+              }
+            ]
+          }
+        },
+        "answer__member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "answer__record": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "answer__update": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "answer__email": {
+          "output": {
+            "message_id": "x"
+          }
+        },
+        "answer__message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "tell_hr": {
+          "output": {
+            "people": 2
+          }
+        }
+      },
+      "approvals": {
+        "decide": {
+          "timeout": true
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "answer__member": {
+            "message": "HR-1045 (Annual leave in December):\nYour request HR-1045 was not approved, since no manager decided within three days. Please speak to your manager."
+          },
+          "answer__update": {
+            "set": {
+              "status": "resolved"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "a payroll question needs no approval and goes to HR",
+      "trigger": {
+        "body": {
+          "subject": "Payslip for October",
+          "message": "My October payslip shows the wrong deduction.",
+          "requester": "Bola Ade",
+          "requester_email": "bola@adacakes.ng"
+        },
+        "form": {
+          "submission_id": "00000000-0000-7000-8000-000000000001",
+          "reference": "F-1",
+          "submitted_at": "2026-11-07T10:00:00Z",
+          "respondent": {
+            "kind": "member",
+            "member_id": "00000000-0000-7000-8000-000000000002"
+          },
+          "channel": "direct",
+          "consents": []
+        }
+      },
+      "mocks": {
+        "open__ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 46
+              }
+            ]
+          }
+        },
+        "open__number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_email": {
+          "output": {
+            "message_id": "x"
+          }
+        },
+        "open__ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "open__ack_noted": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_told": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "thanks": {
+          "output": {
+            "reference": "F-1",
+            "message": "ok"
+          }
+        },
+        "answer__find": {
+          "output": {
+            "rows": [
+              {
+                "id": 45,
+                "reference": "HR-1045",
+                "subject": "Annual leave in December",
+                "customer_name": "Bola Ade",
+                "customer_email": "bola@adacakes.ng",
+                "customer_phone": "",
+                "channel": "staff",
+                "status": "new",
+                "assigned_to": "",
+                "thread": "HR-1045",
+                "mail": "member",
+                "mailbox": ""
+              }
+            ]
+          }
+        },
+        "answer__member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "answer__record": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "answer__update": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "answer__email": {
+          "output": {
+            "message_id": "x"
+          }
+        },
+        "answer__message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "tell_hr": {
+          "output": {
+            "people": 2
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "open__ticket": {
+            "row": {
+              "department": "Payroll",
+              "role": "hr"
+            },
+            "table": "hr_tickets"
+          },
+          "thanks": {
+            "message": "Thank you. Your request is HR-1046, with Payroll."
+          },
+          "open__number": {
+            "table": "hr_tickets",
+            "set": {
+              "reference": "HR-1046"
+            }
+          },
+          "open__first": {
+            "table": "hr_ticket_messages",
+            "row": {
+              "reference": "HR-1046",
+              "direction": "in"
+            }
+          }
+        },
+        "steps": {
+          "decide": "not_run",
+          "answer__find": "not_run",
+          "tell_hr": "not_run"
+        }
+      }
+    },
+    {
+      "name": "a confidential matter goes to its own role",
+      "trigger": {
+        "body": {
+          "subject": "A concern",
+          "message": "I want to raise a harassment concern in confidence.",
+          "requester": "Bola Ade",
+          "requester_email": "bola@adacakes.ng"
+        },
+        "form": {
+          "submission_id": "00000000-0000-7000-8000-000000000001",
+          "reference": "F-1",
+          "submitted_at": "2026-11-07T10:00:00Z",
+          "respondent": {
+            "kind": "member",
+            "member_id": "00000000-0000-7000-8000-000000000002"
+          },
+          "channel": "direct",
+          "consents": []
+        }
+      },
+      "mocks": {
+        "open__ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 47
+              }
+            ]
+          }
+        },
+        "open__number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_email": {
+          "output": {
+            "message_id": "x"
+          }
+        },
+        "open__ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "open__ack_noted": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_told": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "thanks": {
+          "output": {
+            "reference": "F-1",
+            "message": "ok"
+          }
+        },
+        "answer__find": {
+          "output": {
+            "rows": [
+              {
+                "id": 45,
+                "reference": "HR-1045",
+                "subject": "Annual leave in December",
+                "customer_name": "Bola Ade",
+                "customer_email": "bola@adacakes.ng",
+                "customer_phone": "",
+                "channel": "staff",
+                "status": "new",
+                "assigned_to": "",
+                "thread": "HR-1045",
+                "mail": "member",
+                "mailbox": ""
+              }
+            ]
+          }
+        },
+        "answer__member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "answer__record": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "answer__update": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "answer__email": {
+          "output": {
+            "message_id": "x"
+          }
+        },
+        "answer__message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "tell_hr": {
+          "output": {
+            "people": 2
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "open__ticket": {
+            "row": {
+              "department": "Confidential",
+              "role": "hr_lead"
+            },
+            "table": "hr_confidential_tickets"
+          },
+          "open__tell": {
+            "to": "role",
+            "role": "hr_lead",
+            "title": "New ticket HC-1047 (normal)",
+            "message": "HC-1047 for Confidential, normal priority: A concern\nA concern\nAnswer it with the HR confidential reply form."
+          },
+          "open__number": {
+            "table": "hr_confidential_tickets",
+            "set": {
+              "reference": "HC-1047"
+            }
+          },
+          "open__first": {
+            "table": "hr_confidential_messages",
+            "row": {
+              "reference": "HC-1047",
+              "direction": "in",
+              "body": "I want to raise a harassment concern in confidence."
+            }
+          },
+          "open__ack_told": {
+            "table": "hr_confidential_messages",
+            "row": {
+              "reference": "HC-1047",
+              "direction": "out"
+            }
+          },
+          "thanks": {
+            "message": "Thank you. Your request is HC-1047, with Confidential."
+          }
+        },
+        "steps": {
+          "decide": "not_run"
+        }
+      }
+    },
+    {
+      "name": "with none needing approval, leave goes straight to HR",
+      "params": {
+        "approval_kinds": "none"
+      },
+      "trigger": {
+        "body": {
+          "subject": "Annual leave in December",
+          "message": "Annual leave from 22 December to 2 January. Chidi covers for me.",
+          "requester": "Bola Ade",
+          "requester_email": "bola@adacakes.ng"
+        },
+        "form": {
+          "submission_id": "00000000-0000-7000-8000-000000000001",
+          "reference": "F-1",
+          "submitted_at": "2026-11-07T10:00:00Z",
+          "respondent": {
+            "kind": "member",
+            "member_id": "00000000-0000-7000-8000-000000000002"
+          },
+          "channel": "direct",
+          "consents": []
+        }
+      },
+      "mocks": {
+        "open__ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 48
+              }
+            ]
+          }
+        },
+        "open__number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_email": {
+          "output": {
+            "message_id": "x"
+          }
+        },
+        "open__ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "open__ack_noted": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_told": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "thanks": {
+          "output": {
+            "reference": "F-1",
+            "message": "ok"
+          }
+        },
+        "answer__find": {
+          "output": {
+            "rows": [
+              {
+                "id": 45,
+                "reference": "HR-1045",
+                "subject": "Annual leave in December",
+                "customer_name": "Bola Ade",
+                "customer_email": "bola@adacakes.ng",
+                "customer_phone": "",
+                "channel": "staff",
+                "status": "new",
+                "assigned_to": "",
+                "thread": "HR-1045",
+                "mail": "member",
+                "mailbox": ""
+              }
+            ]
+          }
+        },
+        "answer__member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "answer__record": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "answer__update": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "answer__email": {
+          "output": {
+            "message_id": "x"
+          }
+        },
+        "answer__message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "tell_hr": {
+          "output": {
+            "people": 2
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "thanks": {
+            "message": "Thank you. Your request is HR-1048, with Leave."
+          }
+        },
+        "steps": {
+          "decide": "not_run"
+        }
+      }
+    },
+    {
+      "name": "several kinds can need approval",
+      "params": {
+        "approval_kinds": "Benefits, leave"
+      },
+      "trigger": {
+        "body": {
+          "subject": "Annual leave in December",
+          "message": "Annual leave from 22 December to 2 January. Chidi covers for me.",
+          "requester": "Bola Ade",
+          "requester_email": "bola@adacakes.ng"
+        },
+        "form": {
+          "submission_id": "00000000-0000-7000-8000-000000000001",
+          "reference": "F-1",
+          "submitted_at": "2026-11-07T10:00:00Z",
+          "respondent": {
+            "kind": "member",
+            "member_id": "00000000-0000-7000-8000-000000000002"
+          },
+          "channel": "direct",
+          "consents": []
+        }
+      },
+      "mocks": {
+        "open__ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 45
+              }
+            ]
+          }
+        },
+        "open__number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_email": {
+          "output": {
+            "message_id": "x"
+          }
+        },
+        "open__ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "open__ack_noted": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_told": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "thanks": {
+          "output": {
+            "reference": "F-1",
+            "message": "ok"
+          }
+        },
+        "answer__find": {
+          "output": {
+            "rows": [
+              {
+                "id": 45,
+                "reference": "HR-1045",
+                "subject": "Annual leave in December",
+                "customer_name": "Bola Ade",
+                "customer_email": "bola@adacakes.ng",
+                "customer_phone": "",
+                "channel": "staff",
+                "status": "new",
+                "assigned_to": "",
+                "thread": "HR-1045",
+                "mail": "member",
+                "mailbox": ""
+              }
+            ]
+          }
+        },
+        "answer__member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "answer__record": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "answer__update": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "answer__email": {
+          "output": {
+            "message_id": "x"
+          }
+        },
+        "answer__message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "tell_hr": {
+          "output": {
+            "people": 2
+          }
+        }
+      },
+      "approvals": {
+        "decide": {
+          "decision": "approved",
+          "by": "amaka@adacakes.ng"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "decide": "completed"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,167 @@
+{
+  "schema": "wd-test/v1",
+  "template": "ticket-route",
+  "params": {},
+  "cases": [
+    {
+      "name": "Taskiem's AI picks the department, priority and summary",
+      "params": {
+        "routing": "ai"
+      },
+      "trigger": {
+        "body": {
+          "subject": "My order has not arrived",
+          "message": "I paid for order 42 on Monday and the rider has not come. Please help."
+        }
+      },
+      "mocks": {
+        "classify": {
+          "output": {
+            "department": "delivery",
+            "priority": "high",
+            "summary": "Paid order 42 not delivered yet"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "classify": {
+            "input": {
+              "message": "My order has not arrived\n\nI paid for order 42 on Monday and the rider has not come. Please help."
+            }
+          }
+        },
+        "outputs": {
+          "pick": {
+            "department": "Delivery",
+            "role": "dispatch",
+            "priority": "high",
+            "summary": "Paid order 42 not delivered yet"
+          }
+        }
+      }
+    },
+    {
+      "name": "a department the AI makes up goes to the fallback",
+      "params": {
+        "routing": "ai"
+      },
+      "trigger": {
+        "body": {
+          "subject": "My order has not arrived",
+          "message": "I paid for order 42 on Monday and the rider has not come. Please help."
+        }
+      },
+      "mocks": {
+        "classify": {
+          "output": {
+            "department": "Logistics",
+            "priority": "normal",
+            "summary": "Order not delivered"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "outputs": {
+          "pick": {
+            "department": "General",
+            "role": "support",
+            "priority": "normal"
+          }
+        }
+      }
+    },
+    {
+      "name": "by your words: the first department with one of its words",
+      "params": {
+        "routing": "rules"
+      },
+      "trigger": {
+        "body": {
+          "subject": "Refund please",
+          "message": "The cake came late and I want a refund."
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "classify": "not_run"
+        },
+        "outputs": {
+          "pick": {
+            "department": "Billing",
+            "role": "accounts",
+            "priority": "normal",
+            "summary": "Refund please"
+          }
+        }
+      }
+    },
+    {
+      "name": "by your words: no word fits, the fallback",
+      "params": {
+        "routing": "rules"
+      },
+      "trigger": {
+        "body": {
+          "subject": "Hello",
+          "message": "Do you open on Sundays?"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "outputs": {
+          "pick": {
+            "department": "General",
+            "role": "support"
+          }
+        }
+      }
+    },
+    {
+      "name": "as the customer chose, in any case",
+      "params": {
+        "routing": "chosen"
+      },
+      "trigger": {
+        "body": {
+          "subject": "Invoice",
+          "message": "Please resend it.",
+          "department": "billing"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "outputs": {
+          "pick": {
+            "department": "Billing",
+            "role": "accounts"
+          }
+        }
+      }
+    },
+    {
+      "name": "a choice that is not a department goes to the fallback",
+      "params": {
+        "routing": "chosen"
+      },
+      "trigger": {
+        "body": {
+          "subject": "Invoice",
+          "message": "Please resend it.",
+          "department": "Marketing"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "outputs": {
+          "pick": {
+            "department": "General"
+          }
+        }
+      }
+    }
+  ]
+}

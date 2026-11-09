@@ -31,6 +31,11 @@ bash "$root/web/e2e/seed-catalogue.sh" "$dsn" "$tenant" "$root/$taskiem"
 psql "$dsn" -v ON_ERROR_STOP=1 -q \
   -c "INSERT INTO data_tables (id, tenant_id, name, title, created_by, kept_by) VALUES ('0192e2e0-0000-7000-8000-000000000001', '$tenant', 'money_log', 'Money log', 'taskiem:money_log', 'money_log')" \
   -c "INSERT INTO data_table_columns (tenant_id, table_id, name, type, required, position) VALUES ('$tenant', '0192e2e0-0000-7000-8000-000000000001', 'entry_id', 'text', true, 0), ('$tenant', '0192e2e0-0000-7000-8000-000000000001', 'amount_kobo', 'integer', false, 1)"
+# A table whose rows are for HR roles (tables.spec.ts, decision 0065): its
+# record only; the owner reads it and may change who can.
+psql "$dsn" -v ON_ERROR_STOP=1 -q \
+  -c "INSERT INTO data_tables (id, tenant_id, name, title, created_by, readers) VALUES ('0192e2e0-0000-7000-8000-000000000002', '$tenant', 'hr_tickets', 'HR requests', 'e2e', '{hr,hr_lead}')" \
+  -c "INSERT INTO data_table_columns (tenant_id, table_id, name, type, personal, position) VALUES ('$tenant', '0192e2e0-0000-7000-8000-000000000002', 'reference', 'text', false, 0), ('$tenant', '0192e2e0-0000-7000-8000-000000000002', 'subject', 'text', true, 1)"
 # An operator for ops.spec.ts: on the reviewer list, with a one-time link
 # to enrol a passkey (bin/ is not committed).
 TASKIEM_PUBLIC_URL=http://localhost:18080 "$taskiem" operators add ops@taskiem.test --name Ops | grep -o 'http://.*/ops/enrol#.*' >"$root/bin/e2e-ops-enrol.txt"

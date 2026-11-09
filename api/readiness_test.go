@@ -2,12 +2,14 @@ package api_test
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/israel-duff/taskiem/connectors/xenibase"
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/ai/builder"
+	"github.com/israel-duff/taskiem/templates"
 )
 
 // needsOf indexes a readiness answer's needs by kind/name/environment.
@@ -138,4 +140,37 @@ func TestReadinessDescribesMissingTables(t *testing.T) {
 		return
 	}
 	t.Fatalf("no table need: %v", r["needs"])
+}
+
+// A ticket workflow, whose steps choose their tables by expression (the
+// desk), is flagged when its tables are missing, as one naming them
+// outright is; the customers' desk is not asked for HR's tables.
+func TestReadinessFindsTheTicketKitsTables(t *testing.T) {
+	w := newWorld(t)
+	if err := w.env.Registry.Register(xenibase.New(xenibase.Options{})); err != nil {
+		t.Fatal(err)
+	}
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	tpl, ok := templates.Default().Get("helpdesk-web-form")
+	if !ok {
+		t.Fatal("no helpdesk-web-form")
+	}
+	doc, err := tpl.Instantiate(tpl.Examples(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := owner.must(200, "POST", "/v1/readiness", map[string]any{"definition": json.RawMessage(doc)})
+	var missing []string
+	for _, x := range r["needs"].([]any) {
+		if n := x.(map[string]any); n["kind"] == "table" && n["environment"] == "prod" {
+			if n["blocking"] != true {
+				t.Errorf("a missing table does not block: %v", n)
+			}
+			missing = append(missing, n["name"].(string))
+		}
+	}
+	slices.Sort(missing)
+	if !slices.Equal(missing, []string{"ticket_messages", "tickets"}) {
+		t.Fatalf("missing tables %v, want tickets and ticket_messages: %v", missing, r["needs"])
+	}
 }

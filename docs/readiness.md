@@ -8,9 +8,9 @@ Before a workflow is published, Taskiem checks that everything it needs is in pl
 | --- | --- | --- | --- |
 | **Connection** | A step uses a service (Paystack, Google Sheets…) that has no connection, an expired or switched-off one, or several when the step names none | Yes | **Connect** it in place: the service and name are filled in, nothing to match by hand |
 | **Secret** | An expression or code step reads a private value that is not stored | Yes | Type it in place; it is encrypted when saved |
-| **Table** | A step writes or reads a data table that does not exist | Yes | **Make it**, with the columns the workflow writes, filters and orders by (each typed from the form field that fills it, else text); from the AI review; or on the Tables page |
+| **Table** | A step writes or reads a data table that does not exist; a step that chooses its table by expression (the ticket kit's, by desk or by the ticket's reference) counts every table it can choose, read through the transforms and template inputs it depends on, so the customers' desk needs `tickets` and HR's needs its own tables | Yes | **Make it**, with the columns the workflow writes, filters and orders by (each typed from the form field that fills it, else text); from the AI review; or on the Tables page |
 | **Setting** (variable) | An expression reads `env.<name>` and it is not set | No: it can be set later | Type it in place |
-| **Role** | An approval or form step names a role no member holds | No: owners decide meanwhile | Give it to a member in place |
+| **Role** | An approval or form step names a role no member holds, or a table the workflow uses names [readers](data-tables.md#who-may-read-a-table) no member holds yet | No: owners decide (and read the table) meanwhile | Give it to a member in place |
 | **A feature the service turns on** (`support`) | A step collects payments by transfer (`collect_transfer`) on Paystack, which turns Pay with Transfer on for each business through its support, and no transfer account has been opened on that connection yet | No | Ask Paystack support; the note goes once a transfer account has been opened (the Connections page says the same beside the connection) |
 
 Publishing deploys to every environment without a promotion step (normally dev and prod). Gaps in **prod** block a publish; gaps in **dev**, a rehearsal, are listed but do not.

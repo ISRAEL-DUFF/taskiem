@@ -1,0 +1,228 @@
+{
+  "id": "helpdesk-webhook",
+  "title": "Tickets from your own app",
+  "summary": "Your app or website's server sends each customer's message to a web address; it becomes a numbered ticket, and the number comes back at once.",
+  "description": "Your app or website's own server calls this workflow's web address with the customer's message (subject, message, their name, email and phone, and the department they chose, as JSON), signed with the key Taskiem shows with the workflow. Each call becomes a ticket with a number (T-1042), saved in your tickets table, and the number comes back in the answer, so your app can show it. Your departments work as in the other helpdesk templates, and the customer is told their number too. Give the address of your A helpdesk on your Taskiem email address workflow, and answers go by email from it, with the customer's replies joining their ticket; otherwise they go on WhatsApp, Telegram, by text or by a plain email. Your team answers with the Answer customers' tickets form.",
+  "category": "customers",
+  "tags": [
+    "support",
+    "tickets",
+    "helpdesk",
+    "app"
+  ],
+  "keywords": [
+    "ticket",
+    "tickets",
+    "support",
+    "helpdesk",
+    "help desk",
+    "app",
+    "api",
+    "complaint",
+    "complaints",
+    "customer service",
+    "department"
+  ],
+  "requires": [
+    "ticket",
+    "tickets",
+    "helpdesk",
+    "help desk",
+    "support desk"
+  ],
+  "connectors": [],
+  "variables": [
+    {
+      "name": "ticket_reply_form",
+      "why": "The link of your ticket reply form (the Answer customers' tickets workflow), put in each message to a department so they can answer at once."
+    }
+  ],
+  "params": [
+    {
+      "name": "departments",
+      "type": "text",
+      "title": "Departments",
+      "description": "One department per line: its name, the role whose members answer its tickets, what it looks after, and words that send a ticket there, separated by a | sign. For example: Billing | accounts | Payments, invoices and refunds | refund, invoice, payment",
+      "required": true,
+      "example": "Billing | accounts | Payments, invoices and refunds | refund, invoice, payment, charged\nDelivery | dispatch | Orders on their way, late or damaged deliveries | delivery, late, rider, damaged\nGeneral | support | Anything else |",
+      "max_length": 2000
+    },
+    {
+      "name": "default_department",
+      "type": "string",
+      "title": "Department when none fits",
+      "description": "One of your departments, by its name: it gets the tickets that fit no other.",
+      "required": true,
+      "example": "General",
+      "max_length": 60
+    },
+    {
+      "name": "routing",
+      "type": "string",
+      "title": "How a ticket finds its department",
+      "description": "ai: Taskiem's AI reads the message and picks the department, how urgent it is and a one-line summary. rules (the default): the first department with one of its words in the message. chosen: the department the customer picked.",
+      "required": false,
+      "default": "rules",
+      "example": "rules",
+      "enum": [
+        "ai",
+        "rules",
+        "chosen"
+      ]
+    },
+    {
+      "name": "acknowledgement",
+      "type": "text",
+      "title": "What the customer is told first",
+      "description": "The first answer a customer gets when they write; their ticket's reference is added after it.",
+      "required": false,
+      "default": "Thank you for getting in touch. We have your message and will answer you soon.",
+      "example": "Thank you for getting in touch. We have your message and will answer you soon.",
+      "max_length": 600
+    },
+    {
+      "name": "helpdesk_address",
+      "type": "string",
+      "title": "Your helpdesk's Taskiem email address (optional)",
+      "description": "The email address of your A helpdesk on your Taskiem email address workflow. With it, customers get your answers by email from that address, and their replies join their ticket. Without it, they get your answers on WhatsApp, Telegram, by text or by a plain email.",
+      "required": false,
+      "default": "",
+      "example": "k3x9q2m7a1bz@in.taskiem.app",
+      "max_length": 200
+    },
+    {
+      "name": "path",
+      "type": "string",
+      "title": "Web address path",
+      "description": "The path your app or website's server calls.",
+      "required": false,
+      "default": "/support/tickets",
+      "example": "/support/tickets",
+      "pattern": "^/[A-Za-z0-9/_.-]{1,80}$"
+    }
+  ],
+  "tables": [
+    {
+      "known": "tickets"
+    },
+    {
+      "known": "ticket_messages"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_helpdeskWebhook",
+    "version": 1,
+    "name": "Helpdesk webhook",
+    "description": "Opens a ticket for each message your app or website sends, and answers with its number.",
+    "trigger": {
+      "type": "webhook",
+      "config": {
+        "path": "{{path}}",
+        "auth": "hmac",
+        "respond": true
+      }
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "subject",
+          "message"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "subject": {
+            "type": "string",
+            "title": "Subject",
+            "minLength": 1,
+            "maxLength": 300,
+            "x-pii": "other"
+          },
+          "message": {
+            "type": "string",
+            "title": "The customer's message",
+            "minLength": 1,
+            "maxLength": 20000,
+            "x-pii": "other"
+          },
+          "name": {
+            "type": "string",
+            "title": "The customer's name",
+            "maxLength": 120,
+            "x-pii": "name"
+          },
+          "email": {
+            "type": "string",
+            "title": "The customer's email",
+            "maxLength": 200,
+            "x-pii": "email"
+          },
+          "phone": {
+            "type": "string",
+            "title": "The customer's phone",
+            "maxLength": 20,
+            "x-pii": "phone"
+          },
+          "department": {
+            "type": "string",
+            "title": "The department they chose",
+            "maxLength": 60
+          },
+          "external_id": {
+            "type": "string",
+            "title": "Your app's id for the message",
+            "maxLength": 100,
+            "description": "Given back in the answer, to match the ticket to your record"
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "open",
+        "type": "template",
+        "template": "ticket-open",
+        "name": "Open a ticket",
+        "params": {
+          "departments": "{{departments}}",
+          "default_department": "{{default_department}}",
+          "routing": "{{routing}}",
+          "acknowledgement": "{{acknowledgement}}"
+        },
+        "input": {
+          "channel": "api",
+          "subject": "=trigger.body.subject",
+          "message": "=trigger.body.message",
+          "customer_name": "=trigger.body.?name.orValue('')",
+          "customer_email": "=trigger.body.?email.orValue('')",
+          "customer_phone": "=trigger.body.?phone.orValue('')",
+          "department": "=trigger.body.?department.orValue('')",
+          "mail": "taskiem",
+          "mailbox": "{{helpdesk_address}}"
+        }
+      },
+      {
+        "id": "answer",
+        "type": "respond",
+        "name": "Answer your app with the ticket's number",
+        "needs": [
+          "open"
+        ],
+        "config": {
+          "status": 201,
+          "body": {
+            "reference": "=steps.open.output.reference",
+            "department": "=steps.open.output.department",
+            "priority": "=steps.open.output.priority",
+            "told_by": "=steps.open.output.told_by",
+            "external_id": "=trigger.body.?external_id.orValue('')"
+          }
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "30m"
+    }
+  }
+}

@@ -474,18 +474,21 @@ type Table struct {
 	// KeptBy names the feature that keeps the table (kept.go), empty for
 	// an ordinary table.
 	KeptBy string `json:"kept_by,omitempty"`
+	// Readers are the roles whose holders may read and change the rows
+	// (readers.go); nil for every table.read holder.
+	Readers []string `json:"readers,omitempty"`
 }
 
 // ListTables reads the tenant's tables with their columns. tx must have
 // the tenant in scope.
 func ListTables(ctx context.Context, tx pgx.Tx) ([]Table, error) {
-	rows, err := tx.Query(ctx, `SELECT id, name, title, description, created_by, created_at, updated_at, COALESCE(kept_by, '') FROM data_tables ORDER BY name`)
+	rows, err := tx.Query(ctx, `SELECT id, name, title, description, created_by, created_at, updated_at, COALESCE(kept_by, ''), readers FROM data_tables ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
 	tables, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (Table, error) {
 		var t Table
-		return t, r.Scan(&t.ID, &t.Name, &t.Title, &t.Description, &t.CreatedBy, &t.CreatedAt, &t.UpdatedAt, &t.KeptBy)
+		return t, r.Scan(&t.ID, &t.Name, &t.Title, &t.Description, &t.CreatedBy, &t.CreatedAt, &t.UpdatedAt, &t.KeptBy, &t.Readers)
 	})
 	if err != nil {
 		return nil, err
@@ -516,8 +519,8 @@ func ListTables(ctx context.Context, tx pgx.Tx) ([]Table, error) {
 // GetTable reads one table with its columns.
 func GetTable(ctx context.Context, tx pgx.Tx, id uuid.UUID) (Table, error) {
 	var t Table
-	err := tx.QueryRow(ctx, `SELECT id, name, title, description, created_by, created_at, updated_at, COALESCE(kept_by, '') FROM data_tables WHERE id = $1`, id).
-		Scan(&t.ID, &t.Name, &t.Title, &t.Description, &t.CreatedBy, &t.CreatedAt, &t.UpdatedAt, &t.KeptBy)
+	err := tx.QueryRow(ctx, `SELECT id, name, title, description, created_by, created_at, updated_at, COALESCE(kept_by, ''), readers FROM data_tables WHERE id = $1`, id).
+		Scan(&t.ID, &t.Name, &t.Title, &t.Description, &t.CreatedBy, &t.CreatedAt, &t.UpdatedAt, &t.KeptBy, &t.Readers)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return t, fmt.Errorf("table %s: %w", id, ErrNotFound)
 	}
@@ -538,13 +541,18 @@ func GetTable(ctx context.Context, tx pgx.Tx, id uuid.UUID) (Table, error) {
 	return t, err
 }
 
-// InsertTable records a table and its columns. The caller checked them.
+// InsertTable records a table and its columns, and its readers when it
+// names any. The caller checked them (CheckReaders).
 func InsertTable(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, t *Table) error {
 	if t.ID == uuid.Nil {
 		t.ID = uuid.Must(uuid.NewV7())
 	}
-	err := tx.QueryRow(ctx, `INSERT INTO data_tables (id, tenant_id, name, title, description, created_by) VALUES ($1, $2, $3, $4, $5, $6) RETURNING created_at, updated_at`,
-		t.ID, tenant, t.Name, t.Title, t.Description, t.CreatedBy).Scan(&t.CreatedAt, &t.UpdatedAt)
+	var readers any
+	if len(t.Readers) > 0 {
+		readers = t.Readers
+	}
+	err := tx.QueryRow(ctx, `INSERT INTO data_tables (id, tenant_id, name, title, description, created_by, readers) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING created_at, updated_at`,
+		t.ID, tenant, t.Name, t.Title, t.Description, t.CreatedBy, readers).Scan(&t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
 		return err
 	}

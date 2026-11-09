@@ -1,0 +1,532 @@
+{
+  "schema": "wd-test/v1",
+  "template": "helpdesk-email",
+  "params": {},
+  "cases": [
+    {
+      "name": "a new email opens a ticket and the customer is answered in the conversation",
+      "trigger": {
+        "body": {
+          "from": {
+            "address": "ada@example.com",
+            "name": "Ada Obi"
+          },
+          "to": [],
+          "cc": [],
+          "reply_to": [],
+          "subject": "Refund for order 42",
+          "message_id": "c1@mail.example.com",
+          "in_reply_to": "",
+          "references": [],
+          "text": "Please refund order 42.",
+          "latest": "Please refund order 42.",
+          "html": "",
+          "attachments": [],
+          "skipped": []
+        },
+        "email": {
+          "address": "k3x9q2m7a1bz@in.taskiem.app",
+          "received_at": "2026-11-07T09:00:00Z",
+          "auth": {
+            "spf": "pass",
+            "dkim": [],
+            "dmarc": "",
+            "aligned": true
+          }
+        }
+      },
+      "mocks": {
+        "open__ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 43
+              }
+            ]
+          }
+        },
+        "open__number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_email": {
+          "output": {
+            "message_id": "tk-1@in.taskiem.app"
+          }
+        },
+        "open__ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__route__classify": {
+          "output": {
+            "department": "Billing",
+            "priority": "normal",
+            "summary": "Asks for a refund"
+          }
+        },
+        "find": {
+          "output": {
+            "rows": []
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "find": {
+            "filters": [
+              {
+                "column": "reference",
+                "op": "eq",
+                "value": "T-0"
+              }
+            ]
+          },
+          "open__ticket": {
+            "row": {
+              "channel": "email",
+              "subject": "Refund for order 42",
+              "customer_email": "ada@example.com",
+              "mail": "taskiem",
+              "mailbox": "k3x9q2m7a1bz@in.taskiem.app",
+              "previous_reference": ""
+            }
+          },
+          "open__ack_email": {
+            "to": "ada@example.com",
+            "thread": "T-1043",
+            "address": "k3x9q2m7a1bz@in.taskiem.app",
+            "in_reply_to": "c1@mail.example.com"
+          }
+        },
+        "steps": {
+          "append": "not_run",
+          "reopen": "not_run",
+          "tell": "not_run"
+        }
+      }
+    },
+    {
+      "name": "a reply joins its open ticket and the department hears it",
+      "trigger": {
+        "body": {
+          "from": {
+            "address": "ada@example.com",
+            "name": "Ada Obi"
+          },
+          "to": [],
+          "cc": [],
+          "reply_to": [],
+          "subject": "Re: [#T-1042] Order 42",
+          "message_id": "c2@mail.example.com",
+          "in_reply_to": "",
+          "references": [],
+          "text": "It came, but the cake was crushed.",
+          "latest": "It came, but the cake was crushed.",
+          "html": "",
+          "attachments": [],
+          "skipped": []
+        },
+        "email": {
+          "address": "k3x9q2m7a1bz@in.taskiem.app",
+          "received_at": "2026-11-07T09:00:00Z",
+          "auth": {
+            "spf": "pass",
+            "dkim": [],
+            "dmarc": "",
+            "aligned": true
+          },
+          "thread": "T-1042",
+          "matched_by": "tag"
+        }
+      },
+      "mocks": {
+        "append": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "reopen": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "find": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "T-1042",
+                "status": "waiting_on_customer",
+                "department": "Delivery",
+                "role": "dispatch",
+                "assigned_to": "",
+                "resolved_at": null
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "find": {
+            "filters": [
+              {
+                "column": "reference",
+                "op": "eq",
+                "value": "T-1042"
+              }
+            ]
+          },
+          "append": {
+            "table": "ticket_messages",
+            "row": {
+              "reference": "T-1042",
+              "direction": "in",
+              "author": "Ada Obi",
+              "body": "It came, but the cake was crushed.",
+              "message_id": "c2@mail.example.com",
+              "channel": "email",
+              "mail": "taskiem"
+            }
+          },
+          "reopen": {
+            "table": "tickets",
+            "key": 42,
+            "set": {
+              "status": "open",
+              "last_customer_at": "2026-11-07T09:00:00Z",
+              "last_message_id": "c2@mail.example.com"
+            }
+          },
+          "tell": {
+            "to": "role",
+            "role": "dispatch",
+            "title": "The customer answered on T-1042",
+            "message": "T-1042 (Delivery, was waiting_on_customer): Re: [#T-1042] Order 42\nIt came, but the cake was crushed."
+          }
+        },
+        "steps": {
+          "open__ticket": "not_run"
+        }
+      }
+    },
+    {
+      "name": "a reply to a ticket resolved within the reopening days reopens it, and its member hears it",
+      "trigger": {
+        "body": {
+          "from": {
+            "address": "ada@example.com",
+            "name": "Ada Obi"
+          },
+          "to": [],
+          "cc": [],
+          "reply_to": [],
+          "subject": "Re: [#T-1042] Order 42",
+          "message_id": "c1@mail.example.com",
+          "in_reply_to": "",
+          "references": [],
+          "text": "Sorry, one more thing.",
+          "latest": "Sorry, one more thing.",
+          "html": "",
+          "attachments": [],
+          "skipped": []
+        },
+        "email": {
+          "address": "k3x9q2m7a1bz@in.taskiem.app",
+          "received_at": "2026-11-07T09:00:00Z",
+          "auth": {
+            "spf": "pass",
+            "dkim": [],
+            "dmarc": "",
+            "aligned": true
+          },
+          "thread": "T-1042",
+          "matched_by": "tag"
+        }
+      },
+      "mocks": {
+        "append": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "reopen": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "find": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "T-1042",
+                "status": "resolved",
+                "department": "Delivery",
+                "role": "dispatch",
+                "assigned_to": "bola@adacakes.ng",
+                "resolved_at": "2026-11-03T09:00:00Z"
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "reopen": {
+            "set": {
+              "status": "open"
+            }
+          },
+          "tell": {
+            "to": "members",
+            "members": [
+              "bola@adacakes.ng"
+            ]
+          }
+        },
+        "steps": {
+          "open__ticket": "not_run"
+        }
+      }
+    },
+    {
+      "name": "a reply long after the ticket was resolved opens a new ticket that follows it",
+      "params": {
+        "routing": "ai"
+      },
+      "trigger": {
+        "body": {
+          "from": {
+            "address": "ada@example.com",
+            "name": "Ada Obi"
+          },
+          "to": [],
+          "cc": [],
+          "reply_to": [],
+          "subject": "Re: [#T-1042] Order 42",
+          "message_id": "c1@mail.example.com",
+          "in_reply_to": "",
+          "references": [],
+          "text": "Ordering again, same problem.",
+          "latest": "Ordering again, same problem.",
+          "html": "",
+          "attachments": [],
+          "skipped": []
+        },
+        "email": {
+          "address": "k3x9q2m7a1bz@in.taskiem.app",
+          "received_at": "2026-11-07T09:00:00Z",
+          "auth": {
+            "spf": "pass",
+            "dkim": [],
+            "dmarc": "",
+            "aligned": true
+          },
+          "thread": "T-1042",
+          "matched_by": "tag"
+        }
+      },
+      "mocks": {
+        "open__ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 43
+              }
+            ]
+          }
+        },
+        "open__number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_email": {
+          "output": {
+            "message_id": "tk-1@in.taskiem.app"
+          }
+        },
+        "open__ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__route__classify": {
+          "output": {
+            "department": "Billing",
+            "priority": "normal",
+            "summary": "Asks for a refund"
+          }
+        },
+        "find": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "T-1042",
+                "status": "closed",
+                "department": "Delivery",
+                "role": "dispatch",
+                "assigned_to": "",
+                "resolved_at": "2026-10-01T09:00:00Z"
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "open__ticket": {
+            "row": {
+              "previous_reference": "T-1042"
+            }
+          },
+          "open__tell": {
+            "role": "accounts"
+          }
+        },
+        "steps": {
+          "append": "not_run",
+          "reopen": "not_run"
+        }
+      }
+    },
+    {
+      "name": "a thread with no ticket in the table opens one",
+      "trigger": {
+        "body": {
+          "from": {
+            "address": "ada@example.com",
+            "name": "Ada Obi"
+          },
+          "to": [],
+          "cc": [],
+          "reply_to": [],
+          "subject": "Re: [#T-77] Old",
+          "message_id": "c1@mail.example.com",
+          "in_reply_to": "",
+          "references": [],
+          "text": "Hello?",
+          "latest": "Hello?",
+          "html": "",
+          "attachments": [],
+          "skipped": []
+        },
+        "email": {
+          "address": "k3x9q2m7a1bz@in.taskiem.app",
+          "received_at": "2026-11-07T09:00:00Z",
+          "auth": {
+            "spf": "pass",
+            "dkim": [],
+            "dmarc": "",
+            "aligned": true
+          },
+          "thread": "T-77",
+          "matched_by": "tag"
+        }
+      },
+      "mocks": {
+        "open__ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 43
+              }
+            ]
+          }
+        },
+        "open__number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_email": {
+          "output": {
+            "message_id": "tk-1@in.taskiem.app"
+          }
+        },
+        "open__ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__route__classify": {
+          "output": {
+            "department": "Billing",
+            "priority": "normal",
+            "summary": "Asks for a refund"
+          }
+        },
+        "find": {
+          "output": {
+            "rows": []
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "open__ticket": {
+            "row": {
+              "previous_reference": ""
+            }
+          }
+        },
+        "steps": {
+          "append": "not_run"
+        }
+      }
+    }
+  ]
+}

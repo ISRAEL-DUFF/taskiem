@@ -1,0 +1,18 @@
+{
+  "name": "hr_confidential_messages",
+  "kit": true,
+  "title": "HR confidential messages",
+  "description": "Every message of every confidential HR request, oldest first, shaped as HR request messages are. Only members with the hr_lead role, and the owner, can read it.",
+  "readers": ["hr_lead"],
+  "columns": [
+    {"name": "reference", "title": "Ticket", "type": "text", "required": true},
+    {"name": "direction", "title": "Direction", "type": "text", "required": true},
+    {"name": "author", "title": "From", "type": "text", "personal": true},
+    {"name": "body", "title": "Message", "type": "text", "personal": true},
+    {"name": "at", "title": "When", "type": "datetime"},
+    {"name": "message_id", "title": "Email reference", "type": "text"},
+    {"name": "channel", "title": "Channel", "type": "text"},
+    {"name": "mail", "title": "Email goes by", "type": "text"},
+    {"name": "sent_at", "title": "Sent", "type": "datetime"}
+  ]
+}

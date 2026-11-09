@@ -13,6 +13,19 @@ import (
 // carried it ("Ada's Kitchen via Taskiem"), so a business cannot pass its
 // email off as anyone else's, and Reply-To takes answers to the business.
 func buildEmail(from, senderName, to, replyTo, subject, text, id string, now time.Time) []byte {
+	return buildThreadEmail(from, senderName, to, replyTo, subject, text, threading{messageID: id + "@taskiem"}, now)
+}
+
+// threading is an email's Message-ID and the messages it answers
+// (decision 0063), without brackets.
+type threading struct {
+	messageID, inReplyTo string
+	references           []string
+}
+
+// buildThreadEmail is buildEmail with its Message-ID and, when it answers
+// a thread, In-Reply-To and References.
+func buildThreadEmail(from, senderName, to, replyTo, subject, text string, th threading, now time.Time) []byte {
 	clean := func(s string) string { return strings.NewReplacer("\r", " ", "\n", " ").Replace(s) }
 	// The platform's sender may be written with a name of its own; the
 	// business's name replaces it.
@@ -29,7 +42,18 @@ func buildEmail(from, senderName, to, replyTo, subject, text, id string, now tim
 	}
 	fmt.Fprintf(&b, "Subject: %s\r\n", mime.QEncoding.Encode("utf-8", clean(subject)))
 	fmt.Fprintf(&b, "Date: %s\r\n", now.UTC().Format(time.RFC1123Z))
-	fmt.Fprintf(&b, "Message-ID: <%s@taskiem>\r\n", clean(id))
+	fmt.Fprintf(&b, "Message-ID: <%s>\r\n", clean(th.messageID))
+	if th.inReplyTo != "" {
+		fmt.Fprintf(&b, "In-Reply-To: <%s>\r\n", clean(th.inReplyTo))
+	}
+	if len(th.references) > 0 {
+		refs := make([]string, 0, len(th.references))
+		for _, r := range th.references {
+			refs = append(refs, "<"+clean(r)+">")
+		}
+		// Folded, one per line, so a long thread stays within line limits.
+		fmt.Fprintf(&b, "References: %s\r\n", strings.Join(refs, "\r\n "))
+	}
 	b.WriteString("MIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\nAuto-Submitted: auto-generated\r\n\r\n")
 	b.WriteString(strings.ReplaceAll(strings.ReplaceAll(text, "\r\n", "\n"), "\n", "\r\n"))
 	b.WriteString("\r\n")

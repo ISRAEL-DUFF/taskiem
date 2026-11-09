@@ -26,6 +26,8 @@ export function messageWords(m: EmailMessage): string {
       return m.attachments > 0 ? `Started a run, with ${m.attachments} attachment${m.attachments > 1 ? "s" : ""}` : "Started a run";
     case "confirmation":
       return "A request to confirm forwarding";
+    case "replied":
+      return m.run_id ? "A reply, given to the conversation's run waiting for it" : (m.note ?? "A reply in a conversation");
     default:
       return m.note ?? "Not started";
   }

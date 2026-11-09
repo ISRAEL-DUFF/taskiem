@@ -180,6 +180,35 @@ func TestServerTakesMailForKnownAddressesOnly(t *testing.T) {
 	}
 }
 
+func TestServerKeepsTheTag(t *testing.T) {
+	ep := uuid.New()
+	st := &fakeStore{endpoints: map[string]uuid.UUID{"k3x9q2m7a1bz": ep}}
+	addr := startServer(t, st)
+	for _, to := range []string{"k3x9q2m7a1bz+T-1042-Q7M2X9K4A8BZ@in.taskiem.test", "k3x9q2m7a1bz+bad.tag@in.taskiem.test", "k3x9q2m7a1bz@in.taskiem.test"} {
+		if err := send(addr, "ada@x.example", to, gmailForwarded); err != nil {
+			t.Fatalf("%s: %v", to, err)
+		}
+	}
+	// A tagged address of an unknown one is refused as the address is.
+	if err := send(addr, "ada@x.example", "nobodyhere12+t-1-q7m2x9k4a8bz@in.taskiem.test", gmailForwarded); code(err) != 550 {
+		t.Errorf("unknown address with a tag: %v", err)
+	}
+	var tags []string
+	for _, g := range st.got {
+		var meta Meta
+		if err := json.Unmarshal([]byte(strings.TrimPrefix(string(g.meta), MetaAAD(g.id)+"|")), &meta); err != nil {
+			t.Fatal(err)
+		}
+		if meta.Address != "k3x9q2m7a1bz@in.taskiem.test" {
+			t.Errorf("address %q", meta.Address)
+		}
+		tags = append(tags, meta.Tag)
+	}
+	if fmt.Sprint(tags) != "[t-1042-q7m2x9k4a8bz  ]" {
+		t.Errorf("tags %q", tags)
+	}
+}
+
 func TestServerSameMessageSameIdem(t *testing.T) {
 	ep := uuid.New()
 	st := &fakeStore{endpoints: map[string]uuid.UUID{"k3x9q2m7a1bz": ep}}

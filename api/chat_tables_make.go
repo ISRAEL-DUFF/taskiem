@@ -76,8 +76,9 @@ func (s *Server) waNewTable(ctx context.Context, c *chat, arg string) error {
 	}
 	m := &chatTableMake{Kind: "new"}
 	for _, kt := range templates.KnownTables() {
-		// A front's table is made with its front, not from chat.
-		if !have[kt.Name] && !kt.Front {
+		// A front's table is made with its front, and a kit's by its
+		// templates, not from chat.
+		if !have[kt.Name] && !kt.Front && !kt.Kit {
 			m.Known = append(m.Known, kt.Name)
 		}
 	}
@@ -456,6 +457,9 @@ func (s *Server) waOneTable(ctx context.Context, c *chat, words string) (datatab
 		return datatables.Table{}, true, c.say(ctx, s, c.t("wa.table.no_match", "name", fmt.Sprintf("%q", whatsapp.SafeText(words))))
 	case len(match) > 1:
 		return datatables.Table{}, true, c.say(ctx, s, c.t("wa.tablemake.which", "list", numberedTables(match[:min(waPickMax, len(match))])))
+	case !c.p.readsTable(match[0]):
+		// A restricted table is changed by its readers only.
+		return datatables.Table{}, true, s.waTableRestricted(ctx, c, match[0])
 	}
 	return match[0], false, nil
 }

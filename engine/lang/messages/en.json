@@ -574,6 +574,11 @@
       "reviewed": true,
       "context": "Readiness: a workflow collects payments by transfer on Paystack, which turns the feature on per business, and none has been collected yet"
     },
+    "ready.reader": {
+      "text": "Nobody has the role {role} yet, so only owners can read the table {table}: give the role to the people who should.",
+      "reviewed": true,
+      "context": "Readiness: a data table the workflow uses names readers (roles) that no member holds yet"
+    },
     "ready.role": {
       "text": "Nobody has the role {role} yet, so owners will be asked; give it to someone if they should decide.",
       "reviewed": true,
@@ -5028,6 +5033,11 @@
       "text": "{table} is kept by Taskiem: rows are added by Taskiem and cannot be changed or deleted here. Corrections are new rows.",
       "reviewed": true,
       "context": "add to a table Taskiem keeps (the money log)"
+    },
+    "wa.table.restricted": {
+      "text": "{table} is for {readers} only, and the owner: your roles cannot read or change its rows. Ask the owner if you need it.",
+      "reviewed": true,
+      "context": "find, add, change or delete on a table whose readers the person holds none of (HR tickets)"
     },
     "wa.table.list_head": {
       "text": "Data tables in {org}:",

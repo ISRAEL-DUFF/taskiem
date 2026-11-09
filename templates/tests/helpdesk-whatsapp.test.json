@@ -1,0 +1,593 @@
+{
+  "schema": "wd-test/v1",
+  "template": "helpdesk-whatsapp",
+  "params": {},
+  "cases": [
+    {
+      "name": "a first message opens a ticket answered from the WhatsApp number",
+      "params": {
+        "routing": "ai"
+      },
+      "trigger": {
+        "event": "message",
+        "item": {
+          "kind": "message",
+          "metadata": {
+            "display_phone_number": "2348000000000",
+            "phone_number_id": "106540352242922"
+          },
+          "message": {
+            "from": "2348030000001",
+            "id": "wamid.A1",
+            "timestamp": "1794042000",
+            "type": "text",
+            "text": {
+              "body": "My order has not come.\nIt is order 42."
+            }
+          }
+        }
+      },
+      "mocks": {
+        "open__ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 43
+              }
+            ]
+          }
+        },
+        "open__number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_email": {
+          "output": {
+            "message_id": "x"
+          }
+        },
+        "open__ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "open__ack_noted": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_told": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__route__classify": {
+          "output": {
+            "department": "Delivery",
+            "priority": "normal",
+            "summary": "Order not delivered"
+          }
+        },
+        "find": {
+          "output": {
+            "rows": []
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "find": {
+            "table": "tickets",
+            "filters": [
+              {
+                "column": "customer_phone",
+                "op": "eq",
+                "value": "+2348030000001"
+              },
+              {
+                "column": "mail",
+                "op": "eq",
+                "value": "whatsapp"
+              }
+            ],
+            "order": [
+              {
+                "column": "id",
+                "desc": true
+              }
+            ],
+            "limit": 1
+          },
+          "open__ticket": {
+            "row": {
+              "channel": "whatsapp",
+              "subject": "My order has not come.",
+              "customer_phone": "+2348030000001",
+              "mail": "whatsapp",
+              "last_message_id": "wamid.A1",
+              "previous_reference": "",
+              "department": "Delivery",
+              "last_customer_at": "2026-11-07T09:00:00Z"
+            }
+          },
+          "open__first": {
+            "row": {
+              "body": "My order has not come.\nIt is order 42.",
+              "channel": "whatsapp",
+              "message_id": "wamid.A1",
+              "author": ""
+            }
+          },
+          "open__ack_queued": {
+            "row": {
+              "reference": "T-1043",
+              "direction": "out",
+              "channel": "whatsapp",
+              "mail": "whatsapp"
+            }
+          },
+          "open__tell": {
+            "role": "dispatch"
+          }
+        },
+        "steps": {
+          "append": "not_run",
+          "open__ack_message": "not_run",
+          "open__ack_email": "not_run",
+          "skip": "not_run"
+        }
+      }
+    },
+    {
+      "name": "a message from a customer with an open ticket joins it and the department hears it",
+      "trigger": {
+        "event": "message",
+        "item": {
+          "kind": "message",
+          "metadata": {
+            "display_phone_number": "2348000000000",
+            "phone_number_id": "106540352242922"
+          },
+          "message": {
+            "from": "2348030000001",
+            "id": "wamid.A1",
+            "timestamp": "1794042000",
+            "type": "text",
+            "text": {
+              "body": "Any news?"
+            }
+          }
+        }
+      },
+      "mocks": {
+        "append": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "reopen": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "find": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "T-1042",
+                "subject": "My order has not come",
+                "customer_phone": "+2348030000001",
+                "customer_name": "",
+                "channel": "whatsapp",
+                "mail": "whatsapp",
+                "status": "waiting_on_customer",
+                "department": "Delivery",
+                "role": "dispatch",
+                "assigned_to": "",
+                "resolved_at": null
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "append": {
+            "table": "ticket_messages",
+            "row": {
+              "reference": "T-1042",
+              "direction": "in",
+              "author": "+2348030000001",
+              "body": "Any news?",
+              "message_id": "wamid.A1",
+              "channel": "whatsapp",
+              "mail": "whatsapp"
+            }
+          },
+          "reopen": {
+            "table": "tickets",
+            "key": 42,
+            "set": {
+              "status": "open",
+              "last_message_id": "wamid.A1",
+              "last_customer_at": "2026-11-07T09:00:00Z"
+            }
+          },
+          "tell": {
+            "to": "role",
+            "role": "dispatch",
+            "title": "The customer wrote on T-1042",
+            "message": "T-1042 (Delivery, was waiting_on_customer): My order has not come\nAny news?"
+          }
+        },
+        "steps": {
+          "open__ticket": "not_run"
+        }
+      }
+    },
+    {
+      "name": "a button the customer pressed is read as their message, and the assigned member hears it",
+      "trigger": {
+        "event": "message",
+        "item": {
+          "kind": "message",
+          "metadata": {
+            "display_phone_number": "2348000000000",
+            "phone_number_id": "106540352242922"
+          },
+          "message": {
+            "from": "2348030000001",
+            "id": "wamid.A1",
+            "timestamp": "1794042000",
+            "type": "interactive",
+            "interactive": {
+              "type": "button_reply",
+              "button_reply": {
+                "id": "yes",
+                "title": "Yes, it came"
+              }
+            }
+          }
+        }
+      },
+      "mocks": {
+        "append": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "reopen": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "find": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "T-1042",
+                "subject": "My order has not come",
+                "customer_phone": "+2348030000001",
+                "customer_name": "",
+                "channel": "whatsapp",
+                "mail": "whatsapp",
+                "status": "open",
+                "department": "Delivery",
+                "role": "dispatch",
+                "assigned_to": "bola@adacakes.ng",
+                "resolved_at": null
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "append": {
+            "row": {
+              "body": "Yes, it came"
+            }
+          },
+          "tell": {
+            "to": "members",
+            "members": [
+              "bola@adacakes.ng"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "a message within the reopening days of a resolved ticket reopens it",
+      "trigger": {
+        "event": "message",
+        "item": {
+          "kind": "message",
+          "metadata": {
+            "display_phone_number": "2348000000000",
+            "phone_number_id": "106540352242922"
+          },
+          "message": {
+            "from": "2348030000001",
+            "id": "wamid.A1",
+            "timestamp": "1794042000",
+            "type": "text",
+            "text": {
+              "body": "Sorry, one more thing."
+            }
+          }
+        }
+      },
+      "mocks": {
+        "append": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "reopen": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "find": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "T-1042",
+                "subject": "My order has not come",
+                "customer_phone": "+2348030000001",
+                "customer_name": "",
+                "channel": "whatsapp",
+                "mail": "whatsapp",
+                "status": "resolved",
+                "department": "Delivery",
+                "role": "dispatch",
+                "assigned_to": "",
+                "resolved_at": "2026-11-01T09:00:00Z"
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "reopen": {
+            "set": {
+              "status": "open"
+            }
+          }
+        },
+        "steps": {
+          "open__ticket": "not_run"
+        }
+      }
+    },
+    {
+      "name": "a message long after the ticket was resolved opens a new ticket that follows it",
+      "trigger": {
+        "event": "message",
+        "item": {
+          "kind": "message",
+          "metadata": {
+            "display_phone_number": "2348000000000",
+            "phone_number_id": "106540352242922"
+          },
+          "message": {
+            "from": "2348030000001",
+            "id": "wamid.A1",
+            "timestamp": "1794042000",
+            "type": "text",
+            "text": {
+              "body": "Hello again"
+            }
+          }
+        }
+      },
+      "mocks": {
+        "open__ticket": {
+          "output": {
+            "affected": 1,
+            "rows": [
+              {
+                "id": 44
+              }
+            ]
+          }
+        },
+        "open__number": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__first": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__tell": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_email": {
+          "output": {
+            "message_id": "x"
+          }
+        },
+        "open__ack_sent": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_message": {
+          "output": {
+            "via": "sms"
+          }
+        },
+        "open__ack_noted": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_queued": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__ack_member": {
+          "output": {
+            "people": 1
+          }
+        },
+        "open__ack_told": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "open__route__classify": {
+          "output": {
+            "department": "Delivery",
+            "priority": "normal",
+            "summary": "Order not delivered"
+          }
+        },
+        "find": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "T-1042",
+                "subject": "My order has not come",
+                "customer_phone": "+2348030000001",
+                "customer_name": "",
+                "channel": "whatsapp",
+                "mail": "whatsapp",
+                "status": "closed",
+                "department": "Delivery",
+                "role": "dispatch",
+                "assigned_to": "",
+                "resolved_at": "2026-09-01T09:00:00Z"
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "open__ticket": {
+            "row": {
+              "previous_reference": "T-1042",
+              "subject": "Hello again"
+            }
+          }
+        },
+        "steps": {
+          "append": "not_run"
+        }
+      }
+    },
+    {
+      "name": "a reaction is left alone",
+      "trigger": {
+        "event": "message",
+        "item": {
+          "kind": "message",
+          "metadata": {
+            "display_phone_number": "2348000000000",
+            "phone_number_id": "106540352242922"
+          },
+          "message": {
+            "from": "2348030000001",
+            "id": "wamid.A1",
+            "timestamp": "1794042000",
+            "type": "reaction",
+            "reaction": {
+              "message_id": "wamid.X",
+              "emoji": "👍"
+            }
+          }
+        }
+      },
+      "mocks": {
+        "find": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "T-1042",
+                "subject": "My order has not come",
+                "customer_phone": "+2348030000001",
+                "customer_name": "",
+                "channel": "whatsapp",
+                "mail": "whatsapp",
+                "status": "waiting_on_customer",
+                "department": "Delivery",
+                "role": "dispatch",
+                "assigned_to": "",
+                "resolved_at": null
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "skip": "completed",
+          "append": "not_run",
+          "open__ticket": "not_run"
+        }
+      }
+    }
+  ]
+}

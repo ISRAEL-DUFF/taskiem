@@ -847,6 +847,10 @@ type aiTableResult struct {
 	Error  string `json:"error,omitempty"`
 	// Missing are the columns a table that exists already lacks.
 	Missing []string `json:"missing,omitempty"`
+	// Readers are the roles a template's table is for (decision 0065)
+	// when the table exists already without exactly those readers: they
+	// are set on the Tables page, by someone with role.manage.
+	Readers []string `json:"readers,omitempty"`
 }
 
 // tableReqOf is a proposed table as the Tables page would send it.

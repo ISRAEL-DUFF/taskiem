@@ -1,0 +1,31 @@
+{
+  "name": "hr_tickets",
+  "kit": true,
+  "title": "HR requests",
+  "description": "Requests your people send HR with the HR help desk, one row per request: its reference (HR-1042), what it is about, who asked (their sign-in name and email), the kind of request and the role that answers it, where it stands (new, open, waiting on the member, resolved or closed), and when the member and HR last wrote. Only members with the hr or hr_lead role, and the owner, can read it. Confidential matters are kept apart, in HR confidential requests.",
+  "readers": ["hr", "hr_lead"],
+  "columns": [
+    {"name": "reference", "title": "Reference", "type": "text"},
+    {"name": "subject", "title": "Subject", "type": "text", "personal": true},
+    {"name": "customer_name", "title": "Requester", "type": "text", "personal": true},
+    {"name": "customer_email", "title": "Requester's email", "type": "email"},
+    {"name": "customer_phone", "title": "Requester's phone", "type": "phone"},
+    {"name": "channel", "title": "Came by", "type": "text"},
+    {"name": "department", "title": "Department", "type": "text"},
+    {"name": "role", "title": "Answered by (role)", "type": "text"},
+    {"name": "priority", "title": "Priority", "type": "text"},
+    {"name": "status", "title": "Status", "type": "text"},
+    {"name": "assigned_to", "title": "Assigned to", "type": "text"},
+    {"name": "summary", "title": "Summary", "type": "text", "personal": true},
+    {"name": "last_customer_at", "title": "Customer last wrote", "type": "datetime"},
+    {"name": "last_reply_at", "title": "Last answered", "type": "datetime"},
+    {"name": "resolved_at", "title": "Resolved", "type": "datetime"},
+    {"name": "reminded_at", "title": "Department reminded", "type": "datetime"},
+    {"name": "escalated_at", "title": "Escalated", "type": "datetime"},
+    {"name": "thread", "title": "Conversation", "type": "text"},
+    {"name": "mail", "title": "Email goes by", "type": "text"},
+    {"name": "mailbox", "title": "Helpdesk address", "type": "text"},
+    {"name": "last_message_id", "title": "Customer's last email", "type": "text"},
+    {"name": "previous_reference", "title": "Follows ticket", "type": "text"}
+  ]
+}

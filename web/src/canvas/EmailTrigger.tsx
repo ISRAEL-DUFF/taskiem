@@ -1,5 +1,6 @@
-// The email trigger (decision 0038): who it takes mail from and whether it
-// keeps attachments, the workflow's address, a guide to forwarding mail
+// The email trigger (decision 0038): who it takes mail from, whether it
+// keeps attachments and whether replies continue a conversation (decision
+// 0063), the workflow's address, a guide to forwarding mail
 // there, and what has arrived.
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -37,6 +38,10 @@ export function EmailTriggerSettings({ config, onChange }: { config: Record<stri
       <label className="row">
         <input type="checkbox" checked={config.attachments === "keep"} onChange={(e) => onChange({ attachments: e.target.checked ? "keep" : undefined })} />
         Keep attachments (pictures and PDFs, up to 10 an email)
+      </label>
+      <label className="row">
+        <input type="checkbox" checked={config.threads === true} onChange={(e) => onChange({ threads: e.target.checked ? true : undefined })} />
+        Replies continue the conversation (a reply to an email this workflow sent goes to the run waiting for it, instead of starting a new one)
       </label>
     </>
   );

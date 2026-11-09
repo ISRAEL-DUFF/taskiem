@@ -9,12 +9,16 @@
 #   https://developers.google.com/identity/protocols/oauth2/service-account
 #   https://developers.google.com/identity/protocols/oauth2/web-server
 #     (refreshing an access token)
+# The new_mail trigger (added 7 November 2026) also uses
+#   https://developers.google.com/gmail/api/guides/filtering (the after:
+#     search operator) and users.messages.list/get as above; the points it
+#     assumes are listed under "To confirm with Google" in the docs.
 # See docs/integrations/gmail.md.
 manifest: connector/v1
 id: gmail
 version: 1.0.0
 name: Gmail
-description: Send and draft email, search and read messages, and label them, as a Google Workspace or Gmail user.
+description: Send and draft email, search and read messages, label them, and start workflows when mail arrives, as a Google Workspace or Gmail user.
 category: productivity
 auth:
   type: custom
@@ -233,3 +237,100 @@ actions:
               id:   { type: string }
               name: { type: string }
               type: { type: string, description: system or user }
+  new_messages:
+    title: Read new mail
+    description: >-
+      Messages that arrived since a time, oldest first, at most 200, each
+      read in full: never the mailbox's own (labelled SENT or DRAFT, or from
+      its own address), Chat, spam or trash, and never one listed in seen.
+      When more arrived than one call reads, until says how far it got: the
+      next call starts there. What the new_mail trigger polls.
+    class: read
+    input:
+      type: object
+      required: [since]
+      properties:
+        since: { type: string, format: date-time }
+        seen:  { type: array, maxItems: 2000, items: { type: string }, description: "Message ids already read (the poller's), not read again" }
+    output:
+      type: object
+      properties:
+        keys:  { type: array, items: { type: string }, description: The ids of every message read this time, kept or not }
+        until: { type: string, description: "When more arrived than were read: the time (RFC 3339) up to which every message was; empty otherwise" }
+        messages:
+          type: array
+          items:
+            type: object
+            properties:
+              id:              { type: string, description: Gmail's message id, for get_message and modify_labels }
+              thread_id:       { type: string, description: For send_message's thread_id }
+              message_id:      { type: string, description: The RFC 5322 Message-ID, for in_reply_to and references }
+              from:            { type: string, description: "The From header, e.g. Ada <ada@example.com>" }
+              from_address:    { type: string, description: The sender's address alone, lower case }
+              to:              { type: string }
+              cc:              { type: string }
+              subject:         { type: string }
+              date:            { type: string, description: The Date header }
+              received_at:     { type: string, description: When Gmail received it (RFC 3339) }
+              snippet:         { type: string, description: Gmail's short extract }
+              latest:          { type: string, description: The text without the earlier messages it quotes, at most 32 KB }
+              truncated:       { type: boolean, description: latest was cut }
+              in_reply_to:     { type: string }
+              references:      { type: string }
+              label_ids:       { type: array, items: { type: string } }
+              unread:          { type: boolean }
+              has_attachments: { type: boolean }
+    pii:
+      - { field: output.messages.*.from, category: email }
+      - { field: output.messages.*.from_address, category: email }
+      - { field: output.messages.*.to, category: email }
+      - { field: output.messages.*.cc, category: email }
+      - { field: output.messages.*.subject, category: other }
+      - { field: output.messages.*.snippet, category: other }
+      - { field: output.messages.*.latest, category: other }
+triggers:
+  # Gmail's push notifications need a Cloud Pub/Sub topic in the
+  # business's own Google project, so Taskiem asks the mailbox itself every
+  # 5 minutes while a workflow listens, as for Zoho Mail. Polled deliveries
+  # are signed with the connection's refresh token, so the trigger's
+  # address takes nothing anyone else sends; a service-account connection
+  # has none and cannot be polled.
+  new_mail:
+    type: webhook
+    title: New mail in your Gmail
+    verify: { scheme: hmac_sha256, header: X-Taskiem-Signature, secret_field: refresh_token }
+    events: [message.received]
+    event_type: =body.event
+    dedup: =body.data.id
+    # The thread: a run waiting on a reply wakes when one comes.
+    correlation: '=has(body.data.thread_id) && body.data.thread_id != "" ? dyn(body.data.thread_id) : dyn(body.data.id)'
+    poll: { action: new_messages, since: since, seen: seen, keys: =output.keys, until: =output.until, items: =output.messages, event: '="message.received"', every: 5m }
+    # Gmail is asked once per connection; each workflow's options choose
+    # from what came (the connector's filter).
+    options:
+      type: object
+      additionalProperties: false
+      properties:
+        inbox_only: { type: boolean, default: true, description: "Only mail in the inbox (default): not mail a Gmail filter archived" }
+        label_ids:
+          type: array
+          maxItems: 20
+          items: { type: string, minLength: 1 }
+          description: "Only mail with every one of these labels: ids as list_labels lists them (Label_12, IMPORTANT, CATEGORY_PERSONAL)"
+        senders:
+          type: array
+          maxItems: 100
+          items: { type: string, minLength: 1 }
+          description: "Only mail from these senders: addresses, @domain or domain"
+    pii:
+      - { field: body.data.from, category: email }
+      - { field: body.data.from_address, category: email }
+      - { field: body.data.to, category: email }
+      - { field: body.data.cc, category: email }
+      - { field: body.data.subject, category: other }
+      - { field: body.data.snippet, category: other }
+      - { field: body.data.latest, category: other }
+    example:
+      body:
+        event: message.received
+        data: { id: "18c2f1a9b3d4e5f6", thread_id: "18c2f0e1a2b3c4d5", message_id: "<CAF=ada.42@mail.gmail.com>", from: "Ada Obi <ada@example.com>", from_address: ada@example.com, to: help@adacakes.ng, cc: "", subject: "Re: Order 42: the cake arrived late", date: "Sat, 7 Nov 2026 10:02:00 +0100", received_at: "2026-11-07T09:02:00Z", snippet: "Thanks, a refund is fine.", latest: "Thanks, a refund is fine.", in_reply_to: "<taskiem.t-42@adacakes.ng>", references: "<CAF=ada.41@mail.gmail.com> <taskiem.t-42@adacakes.ng>", label_ids: [INBOX, UNREAD, CATEGORY_PERSONAL], unread: true, has_attachments: false }

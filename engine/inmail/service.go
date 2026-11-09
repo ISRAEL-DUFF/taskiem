@@ -21,6 +21,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/forms"
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/runtime"
+	"github.com/israel-duff/taskiem/engine/sender"
 	"github.com/israel-duff/taskiem/engine/telemetry"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
@@ -48,8 +49,18 @@ type Service struct {
 	OwnSenders []string
 	// AppURL is the web app's, for links in owners' notices.
 	AppURL string
-	Logger *slog.Logger
-	Now    func() time.Time
+	// PII seals a reply's personal parts before it is handed to the run
+	// waiting for it, and gives a sender's pseudonym (secrets.Vault).
+	PII Vault
+	// Wake delivers a reply to the runs of its workflow waiting for it
+	// (runtime.Store.WakeWorkflow); nil: threads start runs only.
+	Wake func(ctx context.Context, tenant uuid.UUID, env string, workflow uuid.UUID, event, correlation, dedupKey string, payload any,
+		then func(ctx context.Context, tx pgx.Tx, woke []uuid.UUID) error) ([]uuid.UUID, bool, error)
+	// Messages sends email in a thread (email@1 send_in_thread) through
+	// the platform outbox; nil: it cannot.
+	Messages *sender.Queue
+	Logger   *slog.Logger
+	Now      func() time.Time
 }
 
 // Limits on what a run gets of a message: the text and HTML are cut
@@ -109,7 +120,17 @@ func (s *Service) Drain(ctx context.Context) error {
 	}
 	var errs []error
 	for _, x := range list {
-		if err := s.process(ctx, x); err != nil {
+		if err := s.process(ctx, x); errors.Is(err, errHeld) {
+			// Waiting for its ticket's run: left alone longer each time
+			// (up to an hour), and released as soon as a run waits on its
+			// thread.
+			var h heldError
+			errors.As(err, &h)
+			if _, err := s.Pool.Exec(ctx, `SELECT taskiem_email_inbox_hold($1, $2)`, x.id, h.thread); err != nil {
+				errs = append(errs, err)
+			}
+			continue
+		} else if err != nil {
 			errs = append(errs, fmt.Errorf("email %s: %w", x.id, err))
 			continue
 		}
@@ -137,6 +158,8 @@ func (s *Service) Run(ctx context.Context, every time.Duration) {
 }
 
 type endpoint struct {
+	id       uuid.UUID
+	replyKey []byte
 	workflow uuid.UUID
 	env      string
 	version  int
@@ -148,6 +171,9 @@ type endpoint struct {
 type Config struct {
 	Senders     []string `json:"senders"`
 	Attachments string   `json:"attachments"`
+	// Threads: replies in a thread wake the run waiting for them
+	// (decision 0063).
+	Threads bool `json:"threads"`
 }
 
 // TriggerConfig reads an email trigger's config.
@@ -164,6 +190,8 @@ type record struct {
 	note        string
 	run         *uuid.UUID
 	attachments int
+	// recorded: saved already, with the delivery it records.
+	recorded bool
 }
 
 func (s *Service) process(ctx context.Context, x inboxRow) error {
@@ -194,9 +222,9 @@ func (s *Service) handle(ctx context.Context, x inboxRow, meta Meta, raw []byte)
 			return err
 		}
 		var def []byte
-		err := tx.QueryRow(ctx, `SELECT e.workflow_id, e.environment, e.version, e.public_id, v.definition FROM email_endpoints e
+		err := tx.QueryRow(ctx, `SELECT e.id, e.reply_key, e.workflow_id, e.environment, e.version, e.public_id, v.definition FROM email_endpoints e
 			JOIN workflow_versions v ON v.workflow_id = e.workflow_id AND v.version = e.version WHERE e.id = $1`, x.endpoint).
-			Scan(&ep.workflow, &ep.env, &ep.version, &ep.publicID, &def)
+			Scan(&ep.id, &ep.replyKey, &ep.workflow, &ep.env, &ep.version, &ep.publicID, &def)
 		if err != nil {
 			return err
 		}
@@ -210,6 +238,11 @@ func (s *Service) handle(ctx context.Context, x inboxRow, meta Meta, raw []byte)
 		return err
 	}
 	msg, perr := Parse(raw)
+	domain := ""
+	if msg != nil {
+		domain = Domain(msg.From.Address)
+	}
+	save := saverFor(x, ep, meta, len(raw), domain)
 	rec := record{status: "refused"}
 	var files []keptFile
 	var conf Confirmation
@@ -233,20 +266,44 @@ func (s *Service) handle(ctx context.Context, x inboxRow, meta Meta, raw []byte)
 				rec.note += " (the sender could not be proven, so the list does not trust it)"
 			}
 			rec.note += "."
+		} else if cfg.Threads && !sample(meta) {
+			rec, files, err = s.threaded(ctx, x, meta, msg, ep, cfg, save)
+			if err != nil {
+				return err
+			}
 		} else {
-			rec, files, err = s.startRun(ctx, x, meta, msg, ep, cfg)
+			rec, files, err = s.startRun(ctx, x, meta, msg, ep, cfg, threadMatch{})
 			if err != nil {
 				return err
 			}
 		}
 	}
 	telemetry.Ingest.WithLabelValues("email", rec.status).Inc()
-	size := len(raw)
-	domain := ""
-	if msg != nil {
-		domain = Domain(msg.From.Address)
+	if rec.recorded {
+		return nil
 	}
 	return db.InTenantTx(ctx, s.Pool, []uuid.UUID{x.tenant}, func(tx pgx.Tx) error {
+		if err := save(ctx, tx, rec, files); err != nil {
+			return err
+		}
+		if rec.status != "confirmation" {
+			return nil
+		}
+		c, _ := json.Marshal(conf)
+		if _, err := tx.Exec(ctx, `UPDATE email_endpoints SET confirmation = $2, updated_at = now() WHERE id = $1`, x.endpoint, c); err != nil {
+			return err
+		}
+		return s.tellConfirmation(ctx, tx, x.tenant, ep, conf)
+	})
+}
+
+// saver records what came of a message: its email_messages row and the
+// files kept, in tx.
+type saver func(ctx context.Context, tx pgx.Tx, rec record, files []keptFile) error
+
+// saverFor is the saver of an inbox message.
+func saverFor(x inboxRow, ep endpoint, meta Meta, size int, domain string) saver {
+	return func(ctx context.Context, tx pgx.Tx, rec record, files []keptFile) error {
 		if _, err := tx.Exec(ctx, `INSERT INTO email_messages (id, tenant_id, endpoint_id, workflow_id, environment, idem, sender_domain, size, attachments, status, note, run_id, received_at)
 			VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), $8, $9, $10, NULLIF($11, ''), $12, $13) ON CONFLICT (endpoint_id, idem) DO NOTHING`,
 			x.id, x.tenant, x.endpoint, ep.workflow, ep.env, x.idem, domain, size, rec.attachments, rec.status, rec.note, rec.run, meta.ReceivedAt); err != nil {
@@ -260,15 +317,8 @@ func (s *Service) handle(ctx context.Context, x inboxRow, meta Meta, raw []byte)
 				return err
 			}
 		}
-		if rec.status != "confirmation" {
-			return nil
-		}
-		c, _ := json.Marshal(conf)
-		if _, err := tx.Exec(ctx, `UPDATE email_endpoints SET confirmation = $2, updated_at = now() WHERE id = $1`, x.endpoint, c); err != nil {
-			return err
-		}
-		return s.tellConfirmation(ctx, tx, x.tenant, ep, conf)
-	})
+		return nil
+	}
 }
 
 // tellConfirmation tells the owners, in chat, what their mail provider
@@ -299,15 +349,13 @@ func link(base, path string) string {
 
 // startRun keeps the message's attachments and starts the workflow with
 // the message as its trigger.
-func (s *Service) startRun(ctx context.Context, x inboxRow, meta Meta, msg *Message, ep endpoint, cfg Config) (record, []keptFile, error) {
+func (s *Service) startRun(ctx context.Context, x inboxRow, meta Meta, msg *Message, ep endpoint, cfg Config, th threadMatch) (record, []keptFile, error) {
 	files, refs, skipped, err := s.attachments(ctx, x.tenant, msg, cfg)
 	if err != nil {
 		return record{}, nil, err
 	}
 	body := Body(msg, refs, skipped)
-	trig := map[string]any{"type": "email", "body": body, "email": map[string]any{
-		"address": meta.Address, "received_at": meta.ReceivedAt.UTC().Format(time.RFC3339),
-		"auth": map[string]any{"spf": meta.Auth.SPF, "dkim": stringsAny(meta.Auth.DKIM), "dmarc": meta.Auth.DMARC, "aligned": meta.Auth.Aligned}}}
+	trig := map[string]any{"type": "email", "body": body, "email": emailOf(meta, th)}
 	// Plain JSON values, as runs take them.
 	raw, _ := json.Marshal(trig)
 	var plain map[string]any
@@ -321,6 +369,20 @@ func (s *Service) startRun(ctx context.Context, x inboxRow, meta Meta, msg *Mess
 		return record{}, nil, err
 	}
 	return record{status: "started", run: &st.Ref.ID, attachments: len(files)}, files, nil
+}
+
+// emailOf is trigger.email (and a reply's email): where and how the
+// message came, and the thread it was found to belong to.
+func emailOf(meta Meta, th threadMatch) map[string]any {
+	out := map[string]any{"address": meta.Address, "received_at": meta.ReceivedAt.UTC().Format(time.RFC3339),
+		"auth": map[string]any{"spf": meta.Auth.SPF, "dkim": stringsAny(meta.Auth.DKIM), "dmarc": meta.Auth.DMARC, "aligned": meta.Auth.Aligned}}
+	if meta.Tag != "" {
+		out["tag"] = meta.Tag
+	}
+	if th.thread != "" {
+		out["thread"], out["matched_by"] = th.thread, th.by
+	}
+	return out
 }
 
 func stringsAny(s []string) []any {
@@ -433,6 +495,7 @@ func Body(m *Message, files []forms.FileRef, skipped []Skipped) map[string]any {
 		"subject": m.Subject, "message_id": m.MessageID,
 		"text": text, "latest": latest, "html": html,
 		"attachments": files, "skipped": skipped,
+		"in_reply_to": m.InReplyTo, "references": stringsAny(m.References),
 	}
 	if !m.Date.IsZero() {
 		body["date"] = m.Date.UTC().Format(time.RFC3339)

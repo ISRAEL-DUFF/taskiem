@@ -1,0 +1,325 @@
+{
+  "id": "helpdesk-whatsapp",
+  "title": "A helpdesk on your WhatsApp number",
+  "summary": "Every new message to your business's WhatsApp number becomes a numbered ticket for the right department; customers' next messages join their ticket.",
+  "description": "Customers write to your business's own WhatsApp number (connected with the WhatsApp Cloud API). A message from someone with no open ticket becomes a ticket with a number (T-1042), saved in your tickets table, and they are answered at once on WhatsApp with their number. Their next messages join their ticket, the ticket is open again and the department is told. A message after their ticket was resolved more than a few days ago (you choose how many) opens a new ticket that says which one it follows. You write your departments once; Taskiem's AI (or your words, or the customer's choice) sends each ticket to the right one, and its members are told on WhatsApp, Telegram or by email. They answer with the Answer customers' tickets form. Also add Send ticket answers from your WhatsApp number, which sends every answer from your number.",
+  "category": "customers",
+  "tags": [
+    "support",
+    "tickets",
+    "helpdesk",
+    "whatsapp"
+  ],
+  "keywords": [
+    "ticket",
+    "tickets",
+    "support",
+    "helpdesk",
+    "help desk",
+    "whatsapp",
+    "chat",
+    "complaint",
+    "complaints",
+    "customer service",
+    "department"
+  ],
+  "requires": [
+    "ticket",
+    "tickets",
+    "helpdesk",
+    "help desk",
+    "support desk",
+    "complaint",
+    "complaints",
+    "customer service"
+  ],
+  "connectors": [
+    "xenibase@1",
+    "notify@1",
+    "whatsapp@1"
+  ],
+  "variables": [
+    {
+      "name": "ticket_reply_form",
+      "why": "The link of your ticket reply form (the Answer customers' tickets workflow), put in each message to a department so they can answer at once."
+    }
+  ],
+  "params": [
+    {
+      "name": "whatsapp_connection",
+      "type": "connection",
+      "connector": "whatsapp",
+      "title": "WhatsApp connection",
+      "description": "Your business's WhatsApp number (WhatsApp Cloud API), the one your customers write to.",
+      "required": false,
+      "default": "main",
+      "example": "main"
+    },
+    {
+      "name": "departments",
+      "type": "text",
+      "title": "Departments",
+      "description": "One department per line: its name, the role whose members answer its tickets, what it looks after, and words that send a ticket there, separated by a | sign. For example: Billing | accounts | Payments, invoices and refunds | refund, invoice, payment",
+      "required": true,
+      "example": "Billing | accounts | Payments, invoices and refunds | refund, invoice, payment, charged\nDelivery | dispatch | Orders on their way, late or damaged deliveries | delivery, late, rider, damaged\nGeneral | support | Anything else |",
+      "max_length": 2000
+    },
+    {
+      "name": "default_department",
+      "type": "string",
+      "title": "Department when none fits",
+      "description": "One of your departments, by its name: it gets the tickets that fit no other.",
+      "required": true,
+      "example": "General",
+      "max_length": 60
+    },
+    {
+      "name": "routing",
+      "type": "string",
+      "title": "How a ticket finds its department",
+      "description": "ai: Taskiem's AI reads the message and picks the department, how urgent it is and a one-line summary. rules (the default): the first department with one of its words in the message. chosen: the department the customer picked.",
+      "required": false,
+      "default": "rules",
+      "example": "rules",
+      "enum": [
+        "ai",
+        "rules",
+        "chosen"
+      ]
+    },
+    {
+      "name": "acknowledgement",
+      "type": "text",
+      "title": "What the customer is told first",
+      "description": "The first answer a customer gets when they write; their ticket's reference is added after it.",
+      "required": false,
+      "default": "Thank you for getting in touch. We have your message and will answer you soon.",
+      "example": "Thank you for getting in touch. We have your message and will answer you soon.",
+      "max_length": 600
+    },
+    {
+      "name": "reopen_days",
+      "type": "integer",
+      "title": "Days a resolved ticket can be reopened",
+      "description": "A customer who writes back within these days after their ticket was resolved reopens it; later, they get a new ticket that says which one it follows.",
+      "required": false,
+      "default": 7,
+      "example": 7,
+      "minimum": 1,
+      "maximum": 90
+    }
+  ],
+  "tables": [
+    {
+      "known": "tickets"
+    },
+    {
+      "known": "ticket_messages"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_helpdeskWhatsapp",
+    "version": 1,
+    "name": "Helpdesk on WhatsApp",
+    "description": "Opens a ticket for each customer who writes to the WhatsApp number with no open ticket, and adds their next messages to it.",
+    "trigger": {
+      "type": "connector_event",
+      "config": {
+        "connector": "whatsapp@1",
+        "trigger": "messages",
+        "connection": "{{whatsapp_connection}}",
+        "events": [
+          "message"
+        ]
+      }
+    },
+    "steps": [
+      {
+        "id": "settings",
+        "type": "transform",
+        "name": "Use your reopening days",
+        "config": {
+          "output": {
+            "reopen_days": "{{reopen_days}}"
+          }
+        }
+      },
+      {
+        "id": "words",
+        "type": "transform",
+        "name": "Read the message",
+        "config": {
+          "output": {
+            "phone": "='+' + trigger.item.message.from",
+            "text": "=(trigger.item.message.?text.?body.orValue('') != '' ? trigger.item.message.text.body : trigger.item.message.?interactive.?button_reply.?title.orValue('') != '' ? trigger.item.message.interactive.button_reply.title : trigger.item.message.?interactive.?list_reply.?title.orValue('') != '' ? trigger.item.message.interactive.list_reply.title : trigger.item.message.?button.?text.orValue('') != '' ? trigger.item.message.button.text : trigger.item.message.?image.?caption.orValue('') != '' ? trigger.item.message.image.caption : trigger.item.message.?document.?caption.orValue('') != '' ? trigger.item.message.document.caption : '(a ' + trigger.item.message.?type.orValue('message') + ' with no text)')",
+            "at": "=string(timestamp(int(trigger.item.message.timestamp)))",
+            "ignore": "=trigger.item.message.?type.orValue('') in ['reaction', 'system', 'unsupported', 'request_welcome']"
+          }
+        }
+      },
+      {
+        "id": "find",
+        "type": "connector",
+        "name": "Find the customer's last WhatsApp ticket",
+        "connector": "xenibase@1",
+        "action": "read_rows",
+        "connection": "data_tables",
+        "needs": [
+          "words"
+        ],
+        "input": {
+          "table": "tickets",
+          "filters": [
+            {
+              "column": "customer_phone",
+              "op": "eq",
+              "value": "=steps.words.output.phone"
+            },
+            {
+              "column": "mail",
+              "op": "eq",
+              "value": "whatsapp"
+            }
+          ],
+          "order": [
+            {
+              "column": "id",
+              "desc": true
+            }
+          ],
+          "limit": 1
+        }
+      },
+      {
+        "id": "state",
+        "type": "transform",
+        "name": "Is it a new ticket or more on one",
+        "needs": [
+          "find",
+          "settings"
+        ],
+        "config": {
+          "output": {
+            "action": "=steps.words.output.ignore ? 'ignore' : steps.find.output.rows.size() == 0 || steps.find.output.rows[0].?reference.orValue('') == '' ? 'new' : !(steps.find.output.rows[0].?status.orValue('') in ['resolved', 'closed']) || (steps.find.output.rows[0].?resolved_at.orValue(null) != null && timestamp(steps.words.output.at) - timestamp(steps.find.output.rows[0].resolved_at) <= duration(string(steps.settings.output.reopen_days * 24) + 'h')) ? 'reply' : 'follow'"
+          }
+        }
+      },
+      {
+        "id": "handle",
+        "type": "branch",
+        "name": "Add the message to its ticket, or open a ticket",
+        "needs": [
+          "state"
+        ],
+        "config": {
+          "paths": [
+            {
+              "name": "ignore",
+              "when": "=steps.state.output.action == 'ignore'",
+              "steps": [
+                {
+                  "id": "skip",
+                  "type": "transform",
+                  "name": "Leave reactions and system notices alone",
+                  "config": {
+                    "output": {
+                      "ignored": true
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "reply",
+              "when": "=steps.state.output.action == 'reply'",
+              "steps": [
+                {
+                  "id": "append",
+                  "type": "connector",
+                  "name": "Add the customer's message to the ticket",
+                  "connector": "xenibase@1",
+                  "action": "insert_rows",
+                  "connection": "data_tables",
+                  "input": {
+                    "table": "ticket_messages",
+                    "row": {
+                      "reference": "=steps.find.output.rows[0].reference",
+                      "direction": "in",
+                      "author": "=steps.find.output.rows[0].?customer_name.orValue('') != '' ? steps.find.output.rows[0].customer_name : steps.words.output.phone",
+                      "body": "=steps.words.output.text",
+                      "at": "=steps.words.output.at",
+                      "message_id": "=trigger.item.message.id",
+                      "channel": "whatsapp",
+                      "mail": "whatsapp"
+                    }
+                  }
+                },
+                {
+                  "id": "reopen",
+                  "type": "connector",
+                  "name": "Open the ticket again",
+                  "connector": "xenibase@1",
+                  "action": "update_rows",
+                  "connection": "data_tables",
+                  "input": {
+                    "table": "tickets",
+                    "key": "=steps.find.output.rows[0].id",
+                    "set": {
+                      "status": "open",
+                      "last_customer_at": "=steps.words.output.at",
+                      "last_message_id": "=trigger.item.message.id"
+                    }
+                  }
+                },
+                {
+                  "id": "tell",
+                  "type": "connector",
+                  "name": "Tell the department the customer wrote",
+                  "connector": "notify@1",
+                  "action": "tell",
+                  "input": {
+                    "to": "=steps.find.output.rows[0].?assigned_to.orValue('') != '' ? 'members' : 'role'",
+                    "members": "=steps.find.output.rows[0].?assigned_to.orValue('') != '' ? [steps.find.output.rows[0].assigned_to] : []",
+                    "role": "=steps.find.output.rows[0].?role.orValue('') != '' ? steps.find.output.rows[0].role : 'owner'",
+                    "title": "='The customer wrote on ' + steps.find.output.rows[0].reference",
+                    "message": "=steps.find.output.rows[0].reference + ' (' + steps.find.output.rows[0].?department.orValue('') + ', was ' + steps.find.output.rows[0].status + '): ' + steps.find.output.rows[0].?subject.orValue('') + '\\n' + (steps.words.output.text.size() > 500 ? steps.words.output.text.substring(0, 500) : steps.words.output.text)"
+                  }
+                }
+              ]
+            }
+          ],
+          "default": {
+            "steps": [
+              {
+                "id": "open",
+                "type": "template",
+                "template": "ticket-open",
+                "name": "Open a ticket",
+                "params": {
+                  "departments": "{{departments}}",
+                  "default_department": "{{default_department}}",
+                  "routing": "{{routing}}",
+                  "acknowledgement": "{{acknowledgement}}"
+                },
+                "input": {
+                  "channel": "whatsapp",
+                  "subject": "=(steps.words.output.text.split('\\n')[0].size() > 80 ? steps.words.output.text.split('\\n')[0].substring(0, 80) : (steps.words.output.text.split('\\n')[0].trim() != '' ? steps.words.output.text.split('\\n')[0] : 'WhatsApp message'))",
+                  "message": "=steps.words.output.text",
+                  "customer_phone": "=steps.words.output.phone",
+                  "mail": "whatsapp",
+                  "message_id": "=trigger.item.message.id",
+                  "received_at": "=steps.words.output.at",
+                  "previous": "=steps.state.output.action == 'follow' ? steps.find.output.rows[0].reference : ''"
+                }
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "30m"
+    }
+  }
+}

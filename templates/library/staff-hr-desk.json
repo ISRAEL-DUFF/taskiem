@@ -1,0 +1,351 @@
+{
+  "id": "staff-hr-desk",
+  "title": "An HR help desk for your staff, with a manager's approval where needed",
+  "summary": "Your people ask HR with a form in Taskiem; each request gets a number and goes to the right person, and leave waits for a manager's approval.",
+  "description": "Your staff sign in to Taskiem and fill in a short form: what they need from HR and the details. Their name and email come from their sign-in. Each request becomes a request with a number (HR-1042) in your HR requests table, the page shows its number, and the people who look after that kind of request (leave, payroll, benefits or policy, role hr; something confidential, role hr_lead) are told on WhatsApp, Telegram or by email. Requests of the kinds you choose (leave, unless you change it) first go to a manager to approve or decline in Taskiem, WhatsApp or Telegram; the member hears the decision, and HR is told. HR answers with the Answer HR requests form, and hr_lead answers confidential ones (HC-1042) with the Answer confidential HR requests form; the member hears the answer on WhatsApp, Telegram or by email. Requests are sorted by your words, not by AI, unless you choose otherwise, since they can be personal. They are kept apart from your customers' tickets, in tables only members with the hr or hr_lead role and the owner can read, and confidential ones in tables only hr_lead and the owner can read: give your HR people those roles under Members.",
+  "category": "approvals",
+  "tags": [
+    "support",
+    "tickets",
+    "helpdesk",
+    "hr"
+  ],
+  "keywords": [
+    "human resources",
+    "hr desk",
+    "helpdesk",
+    "ticket",
+    "tickets",
+    "benefits",
+    "policy",
+    "confidential",
+    "approval",
+    "employee"
+  ],
+  "requires": [
+    "human resources",
+    "hr desk",
+    "hr help desk",
+    "hr requests",
+    "staff requests"
+  ],
+  "connectors": [
+    "form@1",
+    "notify@1"
+  ],
+  "variables": [
+    {
+      "name": "hr_ticket_reply_form",
+      "why": "The link of your HR reply form (the Answer HR requests workflow), put in each message to HR about a new request so they can answer at once."
+    },
+    {
+      "name": "hr_confidential_reply_form",
+      "why": "The link of your HR confidential reply form (the Answer confidential HR requests workflow), put in each message to hr_lead about a new confidential request."
+    }
+  ],
+  "params": [
+    {
+      "name": "departments",
+      "type": "text",
+      "title": "Departments",
+      "description": "One kind of request per line: its name, the role whose members answer it, what it looks after, and words that send a request there, separated by a | sign. Give each the role hr, and hr_lead for confidential matters: only those roles can read the HR tables, and a request whose role is hr_lead is kept as confidential.",
+      "required": false,
+      "example": "Leave | hr | Time off: annual, sick, maternity and paternity leave | leave, holiday, vacation, sick, maternity, paternity, time off, day off\nPayroll | hr | Salary, deductions, payslips and tax | salary, pay, payslip, deduction, tax, paye, arrears\nBenefits | hr | Health insurance, pension and other benefits | insurance, hmo, pension, benefit, allowance\nPolicy | hr | How things are done: rules, hours and the handbook | policy, rule, handbook, hours, dress\nConfidential | hr_lead | Something to raise in confidence: a complaint, a concern or a personal matter | confidential, harassment, bullying, complaint, concern",
+      "max_length": 2000,
+      "default": "Leave | hr | Time off: annual, sick, maternity and paternity leave | leave, holiday, vacation, sick, maternity, paternity, time off, day off\nPayroll | hr | Salary, deductions, payslips and tax | salary, pay, payslip, deduction, tax, paye, arrears\nBenefits | hr | Health insurance, pension and other benefits | insurance, hmo, pension, benefit, allowance\nPolicy | hr | How things are done: rules, hours and the handbook | policy, rule, handbook, hours, dress\nConfidential | hr_lead | Something to raise in confidence: a complaint, a concern or a personal matter | confidential, harassment, bullying, complaint, concern"
+    },
+    {
+      "name": "default_department",
+      "type": "string",
+      "title": "Department when none fits",
+      "description": "One of your kinds of request, by its name: it gets the requests that fit no other.",
+      "required": false,
+      "example": "Policy",
+      "max_length": 60,
+      "default": "Policy"
+    },
+    {
+      "name": "routing",
+      "type": "string",
+      "title": "How a ticket finds its department",
+      "description": "rules (the default, since HR requests can be personal): the first kind with one of its words in the request. chosen: the kind the member picked. ai: Taskiem's AI reads the request (never the member's name or email) and picks its kind, how urgent it is and a one-line summary.",
+      "required": false,
+      "default": "rules",
+      "example": "rules",
+      "enum": [
+        "ai",
+        "rules",
+        "chosen"
+      ]
+    },
+    {
+      "name": "acknowledgement",
+      "type": "text",
+      "title": "What the member is told first",
+      "description": "The first answer a member gets when they ask; their request's number is added after it.",
+      "required": false,
+      "default": "Thank you. HR has your request and will get back to you.",
+      "example": "Thank you. HR has your request and will get back to you.",
+      "max_length": 600
+    },
+    {
+      "name": "approval_kinds",
+      "type": "string",
+      "title": "Kinds of request a manager approves",
+      "description": "The kinds of request, by name and separated by commas, that wait for a manager's approval before HR acts on them. Write none for no approvals.",
+      "required": false,
+      "default": "Leave",
+      "example": "Leave",
+      "max_length": 300
+    },
+    {
+      "name": "approver_role",
+      "type": "string",
+      "title": "Who approves",
+      "description": "The role whose members approve those requests, such as manager.",
+      "required": false,
+      "default": "manager",
+      "example": "manager",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$",
+      "picker": "role"
+    }
+  ],
+  "tables": [
+    {
+      "known": "hr_tickets"
+    },
+    {
+      "known": "hr_ticket_messages"
+    },
+    {
+      "known": "hr_confidential_tickets"
+    },
+    {
+      "known": "hr_confidential_messages"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_staffHrDesk",
+    "version": 1,
+    "name": "HR help desk",
+    "description": "Opens a ticket for each HR request a member sends, gets a manager's approval for the kinds that need it, and tells the member.",
+    "trigger": {
+      "type": "form",
+      "config": {
+        "title": "Ask HR",
+        "access": "members",
+        "description": "Tell HR what you need. You will hear the answer on WhatsApp, Telegram or by email.",
+        "pages": [
+          {
+            "fields": [
+              "subject",
+              "message"
+            ]
+          },
+          {
+            "title": "What kind of request?",
+            "fields": [
+              "department"
+            ],
+            "show_if": "'{{routing}}' == 'chosen'"
+          }
+        ],
+        "after": {
+          "mode": "result",
+          "message": "Thank you. HR has your request, and you will be told its number."
+        }
+      }
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "subject",
+          "message"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "subject": {
+            "type": "string",
+            "title": "What is it about?",
+            "minLength": 1,
+            "maxLength": 300,
+            "x-pii": "other"
+          },
+          "message": {
+            "type": "string",
+            "title": "The details",
+            "minLength": 1,
+            "maxLength": 5000,
+            "x-pii": "other",
+            "x-form": {
+              "widget": "textarea",
+              "help": "For leave: the kind of leave, the first and last day, and who covers for you."
+            }
+          },
+          "department": {
+            "type": "string",
+            "title": "Kind of request",
+            "maxLength": 60,
+            "x-form": {
+              "help": "Leave, Payroll, Benefits, Policy or Confidential."
+            }
+          },
+          "requester": {
+            "type": "string",
+            "title": "Your name",
+            "maxLength": 120,
+            "x-pii": "name",
+            "x-form": {
+              "from": "member.name",
+              "hidden": true
+            }
+          },
+          "requester_email": {
+            "type": "string",
+            "title": "Your email",
+            "maxLength": 200,
+            "x-pii": "email",
+            "x-form": {
+              "from": "member.email",
+              "hidden": true
+            }
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "settings",
+        "type": "transform",
+        "name": "Use the kinds of request a manager approves",
+        "config": {
+          "output": {
+            "approval_kinds": "{{approval_kinds}}"
+          }
+        }
+      },
+      {
+        "id": "open",
+        "type": "template",
+        "template": "ticket-open",
+        "name": "Open a ticket",
+        "params": {
+          "departments": "{{departments}}",
+          "default_department": "{{default_department}}",
+          "routing": "{{routing}}",
+          "acknowledgement": "{{acknowledgement}}"
+        },
+        "input": {
+          "channel": "staff",
+          "subject": "=trigger.body.subject",
+          "message": "=trigger.body.message",
+          "customer_name": "=trigger.body.?requester.orValue('')",
+          "customer_email": "=trigger.body.?requester_email.orValue('')",
+          "department": "=trigger.body.?department.orValue('')",
+          "mail": "member",
+          "received_at": "=trigger.form.?submitted_at.orValue(run.started_at)",
+          "desk": "hr"
+        }
+      },
+      {
+        "id": "needs",
+        "type": "transform",
+        "name": "Does a manager approve it?",
+        "needs": [
+          "open",
+          "settings"
+        ],
+        "config": {
+          "output": {
+            "approval": "=steps.settings.output.approval_kinds.split(',').exists(k, k.trim() != '' && k.trim().lowerAscii() == steps.open.output.department.lowerAscii())"
+          }
+        }
+      },
+      {
+        "id": "thanks",
+        "type": "connector",
+        "name": "Show the member their request's number",
+        "connector": "form@1",
+        "action": "respond",
+        "needs": [
+          "needs"
+        ],
+        "input": {
+          "message": "='Thank you. Your request is ' + steps.open.output.reference + ', with ' + steps.open.output.department + '.' + (steps.needs.output.approval ? ' A manager will approve it first, and you will hear the decision.' : '')"
+        }
+      },
+      {
+        "id": "approve",
+        "type": "branch",
+        "name": "Get a manager's approval",
+        "needs": [
+          "needs"
+        ],
+        "config": {
+          "paths": [
+            {
+              "name": "approval",
+              "when": "=steps.needs.output.approval",
+              "steps": [
+                {
+                  "id": "decide",
+                  "type": "approval",
+                  "name": "Approve or decline the request",
+                  "config": {
+                    "role": "{{approver_role}}",
+                    "count": 1,
+                    "timeout": "72h",
+                    "subject": {
+                      "ticket": "=steps.open.output.reference",
+                      "from": "=trigger.body.?requester.orValue('')",
+                      "kind": "=steps.open.output.department",
+                      "about": "=trigger.body.subject",
+                      "details": "=trigger.body.message.size() > 1000 ? trigger.body.message.substring(0, 1000) : trigger.body.message"
+                    }
+                  }
+                },
+                {
+                  "id": "answer",
+                  "type": "template",
+                  "template": "ticket-answer",
+                  "name": "Tell the member the decision",
+                  "params": {},
+                  "needs": [
+                    "decide"
+                  ],
+                  "input": {
+                    "reference": "=steps.open.output.reference",
+                    "message": "=steps.decide.output.decision == 'approved' ? 'Your request ' + steps.open.output.reference + ' was approved. HR will finish it and tell you when it is done.' : 'Your request ' + steps.open.output.reference + ' was not approved' + (steps.decide.output.?reason.orValue('') == 'timeout' ? ', since no manager decided within three days' : '') + '. Please speak to your manager.'",
+                    "author": "Taskiem",
+                    "status": "=steps.decide.output.decision == 'approved' ? 'open' : 'resolved'"
+                  }
+                },
+                {
+                  "id": "tell_hr",
+                  "type": "connector",
+                  "name": "Tell HR the decision",
+                  "connector": "notify@1",
+                  "action": "tell",
+                  "needs": [
+                    "decide"
+                  ],
+                  "input": {
+                    "to": "role",
+                    "role": "=steps.open.output.role",
+                    "title": "='Request ' + steps.open.output.reference + (steps.decide.output.decision == 'approved' ? ' approved' : ' not approved')",
+                    "message": "=steps.open.output.reference + ' (' + steps.open.output.department + '): ' + (steps.decide.output.decision == 'approved' ? 'a manager approved it; it is yours to finish.' : 'a manager did not approve it; it is resolved and the member was told.')"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "96h"
+    }
+  }
+}

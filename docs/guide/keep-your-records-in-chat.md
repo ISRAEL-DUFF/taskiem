@@ -10,7 +10,7 @@ You don't need a spreadsheet. Your customers, your staff, what people owe you an
 - *add column birthday to customers* and *rename customers to Shop customers* change a list.
 - *tables* shows your lists and how many entries each has.
 
-Removing a whole list, or one of its columns, is done on the web, under **Tables**.
+Removing a whole list, or one of its columns, is done on the web, under **Tables**. A list you keep for some roles only (your HR requests) shows its entries only to people with one of those roles, and to you as the owner; anyone else is told who can see it ([Your tables](tables.md#keep-a-table-for-some-people)).
 
 ## Bring a list you already have
 

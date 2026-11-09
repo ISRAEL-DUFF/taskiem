@@ -209,3 +209,35 @@ triggers:
     # wait for the user's reply or button press. Status: the wamid (send_*
     # output message_id), so a run can wait for delivered, read or failed.
     correlation: '=item.kind == "message" ? item.message.from : item.kind == "status" ? item.status.id : ""'
+    # A message as a run sees it (dry runs and the docs).
+    example:
+      item:
+        kind: message
+        metadata: { display_phone_number: "2348000000000", phone_number_id: "106540352242922" }
+        message:
+          from: "2348030000001"
+          id: wamid.sample
+          timestamp: "1761480000"
+          type: text
+          text: { body: "Hello, my order has not come." }
+    # The sender's number and what they wrote, and the contact's name, are
+    # sealed when a run starts.
+    pii:
+      - { field: body.entry.*.changes.*.value.messages.*.from, category: phone }
+      - { field: body.entry.*.changes.*.value.messages.*.text, category: other }
+      - { field: body.entry.*.changes.*.value.messages.*.interactive, category: other }
+      - { field: body.entry.*.changes.*.value.messages.*.button, category: other }
+      - { field: body.entry.*.changes.*.value.messages.*.image, category: other }
+      - { field: body.entry.*.changes.*.value.messages.*.document, category: other }
+      - { field: body.entry.*.changes.*.value.messages.*.location, category: other }
+      - { field: body.entry.*.changes.*.value.contacts.*.wa_id, category: phone }
+      - { field: body.entry.*.changes.*.value.contacts.*.profile.name, category: name }
+      - { field: body.entry.*.changes.*.value.statuses.*.recipient_id, category: phone }
+      - { field: item.message.from, category: phone }
+      - { field: item.message.text, category: other }
+      - { field: item.message.interactive, category: other }
+      - { field: item.message.button, category: other }
+      - { field: item.message.image, category: other }
+      - { field: item.message.document, category: other }
+      - { field: item.message.location, category: other }
+      - { field: item.status.recipient_id, category: phone }

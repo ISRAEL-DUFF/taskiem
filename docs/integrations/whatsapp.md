@@ -64,6 +64,8 @@ Every POST is verified with `X-Hub-Signature-256: sha256=<hex>`, an HMAC-SHA256 
 
 So a run that asks a question waits on `whatsapp@1:messages` with correlation `steps.ask.output.wa_id` and reads `trigger.body.entry[0].changes[0].value.messages[0]`. A run that must know a message arrived waits with correlation `steps.notify.output.message_id`. A `read` can arrive without a `delivered`; Meta notes that read implies delivered.
 
+A run also gets the event it was started for as `trigger.item`: `{kind, message, metadata}` for a message (`message.from`, `message.id`, `message.timestamp`, `message.type` and `message.text.body`, `interactive`, ...). The sender's number, what they wrote and the contact's name are personal data, sealed when the run starts (the trigger's `pii`). The [ticket kit](../guide/tickets.md#whatsapp)'s `helpdesk-whatsapp` turns messages into tickets this way, and `helpdesk-whatsapp-send` answers with `send_text` inside the 24-hour window.
+
 Meta sends every field the app subscribes to (template status, account updates, ...) to the same URL. The trigger acknowledges the other fields and ignores them. Meta retries failed deliveries for up to 7 days and expects quick 200s.
 
 ## To confirm before go-live

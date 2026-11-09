@@ -85,7 +85,7 @@ func emailService(cfg config, e *engine, log *slog.Logger) (*inmail.Service, err
 		return nil, err
 	}
 	s := &inmail.Service{Pool: e.pool, Keys: keys, Start: e.store.Start, Domain: cfg.Mail.Domain, AppURL: cfg.PublicURL,
-		Logger: log.With("component", "email")}
+		Logger: log.With("component", "email"), PII: e.vault, Wake: e.store.WakeWorkflow}
 	s.Files = &media.Service{Credentials: e.tables().Credentials, Guard: &egress.Guard{Logger: log}, Logger: log}
 	if addr := strings.TrimSpace(os.Getenv("TASKIEM_CLAMD_ADDR")); addr != "" {
 		s.Scanner = &forms.ClamdScanner{Addr: addr}

@@ -309,3 +309,28 @@ actions:
 		t.Errorf("tokens %q %q %v", a, b, err)
 	}
 }
+
+// A polled trigger's seen names a list input of its action, and comes
+// with keys (connector/v1 rule 22).
+func TestPollSeenAndKeys(t *testing.T) {
+	src := func(poll string) string {
+		return strings.Replace(head, "auth: { type: none }", "auth: { type: custom, fields: [{ key: secret, label: Secret, secret: true }] }", 1) +
+			"  list: { title: List, class: read, input: { type: object, properties: { since: { type: string }, seen: { type: array, items: { type: string } }, one: { type: string } } } }\n" +
+			"triggers:\n  ev:\n    type: webhook\n    verify: { scheme: hmac_sha256, header: X-Sig, secret_field: secret }\n    event_type: =body.event\n" +
+			"    poll: { action: list, since: since, items: =output.items, event: '=\"x\"'" + poll + " }\n"
+	}
+	if _, probs := Parse([]byte(src(", seen: seen, keys: =output.keys, until: =output.until"))); len(probs) > 0 {
+		t.Fatalf("a poll with seen, keys and until: %v", probs)
+	}
+	for poll, want := range map[string]string{
+		", seen: one, keys: =output.keys":  "must be a list input",
+		", seen: nope, keys: =output.keys": "must be a list input",
+		", seen: seen":                     "seen and keys go together",
+		", keys: =output.keys":             "seen and keys go together",
+	} {
+		_, probs := Parse([]byte(src(poll)))
+		if !strings.Contains(strings.Join(probs, "\n"), want) {
+			t.Errorf("%s: want %q, got %v", poll, want, probs)
+		}
+	}
+}

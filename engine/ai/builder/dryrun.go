@@ -191,6 +191,15 @@ func HappyPathWith(def *wd.Definition, reg connector.Lookup, find expansion.Temp
 				c.Mocks[st.ID] = wdtest.Mocks{{Output: map[string]any{"status": 200, "body": map[string]any{}}}}
 			case "code", "container":
 				c.Mocks[st.ID] = wdtest.Mocks{{Output: map[string]any{}}}
+			case "ai":
+				// An answer of the step's own shape (decision 0050).
+				var out any = map[string]any{}
+				if st.AI != nil {
+					if o := sample(rawAny(st.AI.OutputSchema), types, nil, 0); o != nil {
+						out = o
+					}
+				}
+				c.Mocks[st.ID] = wdtest.Mocks{{Output: out}}
 			case "approval":
 				c.Approvals[st.ID] = wdtest.ApprovalMock{Decision: "approved", By: "checker"}
 			case "signal":

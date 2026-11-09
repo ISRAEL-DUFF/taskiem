@@ -1,0 +1,388 @@
+{
+  "id": "ticket-follow-up",
+  "title": "Follow up tickets nobody has answered",
+  "summary": "Remind a department of tickets waiting too long for an answer, then tell the person you choose; close tickets the customer left.",
+  "description": "Every 15 minutes, Taskiem looks at your tickets. A ticket the department has not answered within your first-answer time is sent to its department again, and if it is still waiting after twice that time, to the person or role you choose. A ticket waiting on the customer for more days than you allow is resolved with a polite closing message to the customer, the way they wrote to you. Resolved tickets are closed after the days you choose; a customer who writes back to a closed ticket gets a new one. Choose which tickets: your customers', or the HR help desk's (its requests, and its confidential ones, each followed up by a workflow of its own, telling HR roles only).",
+  "category": "customers",
+  "tags": [
+    "support",
+    "tickets",
+    "helpdesk",
+    "reminders"
+  ],
+  "keywords": [
+    "ticket",
+    "tickets",
+    "support",
+    "helpdesk",
+    "follow up",
+    "escalate",
+    "escalation",
+    "overdue",
+    "reminder",
+    "close",
+    "customer service"
+  ],
+  "requires": [
+    "ticket",
+    "tickets",
+    "helpdesk",
+    "help desk",
+    "support desk"
+  ],
+  "connectors": [
+    "xenibase@1",
+    "notify@1"
+  ],
+  "params": [
+    {
+      "name": "desk",
+      "type": "string",
+      "title": "Which tickets",
+      "description": "customers (the default): your customers' tickets. hr: the HR help desk's requests, in the HR tables; hr_confidential: its confidential requests. Each desk is followed up by a workflow of its own. HR requests are reminded to their role (hr or hr_lead) and escalated to hr_lead alone, whatever the role below, so no HR request reaches anyone else.",
+      "required": false,
+      "default": "customers",
+      "example": "customers",
+      "enum": [
+        "customers",
+        "hr",
+        "hr_confidential"
+      ]
+    },
+    {
+      "name": "first_answer_hours",
+      "type": "integer",
+      "title": "Hours to give the first answer",
+      "description": "A ticket the department has not answered after this many hours is sent to it again; after twice as long, to the person or role below.",
+      "required": false,
+      "default": 4,
+      "example": 4,
+      "minimum": 1,
+      "maximum": 168
+    },
+    {
+      "name": "escalation_role",
+      "type": "string",
+      "title": "Who hears about tickets still waiting",
+      "description": "The role told when a ticket is still not answered after twice the first-answer time, such as a manager. For the HR desks it is always hr_lead.",
+      "required": false,
+      "default": "owner",
+      "example": "manager",
+      "picker": "role"
+    },
+    {
+      "name": "waiting_days",
+      "type": "integer",
+      "title": "Days to wait for the customer",
+      "description": "A ticket waiting on the customer for this many days without an answer from them is resolved.",
+      "required": false,
+      "default": 5,
+      "example": 5,
+      "minimum": 1,
+      "maximum": 60
+    },
+    {
+      "name": "closing_message",
+      "type": "text",
+      "title": "What the customer is told then",
+      "description": "Sent to the customer when their ticket is resolved because they did not answer; their ticket's number is put before it.",
+      "required": false,
+      "default": "We have not heard back from you, so we are closing this ticket for now. Just reply if you still need help.",
+      "example": "We have not heard back from you, so we are closing this ticket for now. Just reply if you still need help.",
+      "max_length": 600
+    },
+    {
+      "name": "close_days",
+      "type": "integer",
+      "title": "Days before a resolved ticket is closed",
+      "description": "A resolved ticket is closed after this many days.",
+      "required": false,
+      "default": 7,
+      "example": 7,
+      "minimum": 1,
+      "maximum": 90
+    }
+  ],
+  "tables": [
+    {
+      "known": "tickets"
+    },
+    {
+      "known": "ticket_messages"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_ticketFollowUp",
+    "version": 1,
+    "name": "Follow up tickets",
+    "description": "Reminds departments of unanswered tickets, escalates those still waiting, resolves tickets the customer left, and closes old resolved ones.",
+    "trigger": {
+      "type": "schedule",
+      "config": {
+        "cron": "*/15 * * * *",
+        "timezone": "Africa/Lagos"
+      }
+    },
+    "steps": [
+      {
+        "id": "settings",
+        "type": "transform",
+        "name": "Use your times and closing message",
+        "config": {
+          "output": {
+            "hours": "{{first_answer_hours}}",
+            "escalate_to": "={{desk}} == 'customers' ? {{escalation_role}} : 'hr_lead'",
+            "waiting_days": "{{waiting_days}}",
+            "close_days": "{{close_days}}",
+            "closing": "{{closing_message}}",
+            "tickets": "={{desk}} == 'hr' ? 'hr_tickets' : {{desk}} == 'hr_confidential' ? 'hr_confidential_tickets' : 'tickets'"
+          }
+        }
+      },
+      {
+        "id": "times",
+        "type": "transform",
+        "name": "Work out the times",
+        "needs": [
+          "settings"
+        ],
+        "config": {
+          "output": {
+            "late": "=string(timestamp((has(trigger.scheduled_time) ? trigger.scheduled_time : run.started_at)) - duration(string(steps.settings.output.hours) + 'h'))",
+            "escalate": "=string(timestamp((has(trigger.scheduled_time) ? trigger.scheduled_time : run.started_at)) - duration(string(steps.settings.output.hours * 2) + 'h'))",
+            "waiting": "=string(timestamp((has(trigger.scheduled_time) ? trigger.scheduled_time : run.started_at)) - duration(string(steps.settings.output.waiting_days * 24) + 'h'))",
+            "close": "=string(timestamp((has(trigger.scheduled_time) ? trigger.scheduled_time : run.started_at)) - duration(string(steps.settings.output.close_days * 24) + 'h'))"
+          }
+        }
+      },
+      {
+        "id": "late",
+        "type": "connector",
+        "name": "Find tickets waiting for an answer",
+        "connector": "xenibase@1",
+        "action": "read_rows",
+        "connection": "data_tables",
+        "needs": [
+          "times"
+        ],
+        "input": {
+          "table": "=steps.settings.output.tickets",
+          "filters": [
+            {
+              "column": "status",
+              "op": "in",
+              "values": [
+                "new",
+                "open"
+              ]
+            },
+            {
+              "column": "last_customer_at",
+              "op": "lt",
+              "value": "=steps.times.output.late"
+            }
+          ],
+          "order": [
+            {
+              "column": "last_customer_at"
+            }
+          ],
+          "limit": 200
+        }
+      },
+      {
+        "id": "remind",
+        "type": "foreach",
+        "name": "Remind the department of each",
+        "needs": [
+          "late"
+        ],
+        "config": {
+          "items": "=steps.late.output.rows.filter(r, has(r.last_customer_at) && r.last_customer_at != null && (r.?last_reply_at.orValue(null) == null || timestamp(r.last_reply_at) < timestamp(r.last_customer_at)) && (r.?reminded_at.orValue(null) == null || timestamp(r.reminded_at) < timestamp(r.last_customer_at)))",
+          "max_concurrency": 5,
+          "max_items": 200,
+          "steps": [
+            {
+              "id": "tell_department",
+              "type": "connector",
+              "name": "Remind the department",
+              "connector": "notify@1",
+              "action": "tell",
+              "effect": {
+                "idempotency_seed": "='ticket-late:' + item.reference + ':' + item.last_customer_at"
+              },
+              "input": {
+                "to": "=item.?assigned_to.orValue('') != '' ? 'members' : 'role'",
+                "members": "=item.?assigned_to.orValue('') != '' ? [item.assigned_to] : []",
+                "role": "=item.?role.orValue('') != '' ? item.role : 'owner'",
+                "title": "='Ticket ' + item.reference + ' is waiting for an answer'",
+                "message": "=item.reference + ' (' + item.?priority.orValue('normal') + ' priority) has waited more than ' + string(steps.settings.output.hours) + ' hours for an answer: ' + item.?subject.orValue('')"
+              }
+            },
+            {
+              "id": "reminded",
+              "type": "connector",
+              "name": "Note the reminder",
+              "connector": "xenibase@1",
+              "action": "update_rows",
+              "connection": "data_tables",
+              "needs": [
+                "tell_department"
+              ],
+              "input": {
+                "table": "=steps.settings.output.tickets",
+                "key": "=item.id",
+                "set": {
+                  "reminded_at": "=(has(trigger.scheduled_time) ? trigger.scheduled_time : run.started_at)"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "escalate",
+        "type": "foreach",
+        "name": "Tell your chosen person of each still waiting",
+        "needs": [
+          "late"
+        ],
+        "config": {
+          "items": "=steps.late.output.rows.filter(r, has(r.last_customer_at) && r.last_customer_at != null && timestamp(r.last_customer_at) < timestamp(steps.times.output.escalate) && (r.?last_reply_at.orValue(null) == null || timestamp(r.last_reply_at) < timestamp(r.last_customer_at)) && (r.?escalated_at.orValue(null) == null || timestamp(r.escalated_at) < timestamp(r.last_customer_at)))",
+          "max_concurrency": 5,
+          "max_items": 200,
+          "steps": [
+            {
+              "id": "tell_escalation",
+              "type": "connector",
+              "name": "Tell your chosen person",
+              "connector": "notify@1",
+              "action": "tell",
+              "effect": {
+                "idempotency_seed": "='ticket-escalate:' + item.reference + ':' + item.last_customer_at"
+              },
+              "input": {
+                "to": "role",
+                "role": "=steps.settings.output.escalate_to",
+                "title": "='Ticket ' + item.reference + ' is still not answered'",
+                "message": "=item.reference + ' for ' + item.?department.orValue('') + ' (' + item.?priority.orValue('normal') + ' priority) has waited more than ' + string(steps.settings.output.hours * 2) + ' hours for an answer: ' + item.?subject.orValue('')"
+              }
+            },
+            {
+              "id": "escalated",
+              "type": "connector",
+              "name": "Note it was escalated",
+              "connector": "xenibase@1",
+              "action": "update_rows",
+              "connection": "data_tables",
+              "needs": [
+                "tell_escalation"
+              ],
+              "input": {
+                "table": "=steps.settings.output.tickets",
+                "key": "=item.id",
+                "set": {
+                  "escalated_at": "=(has(trigger.scheduled_time) ? trigger.scheduled_time : run.started_at)"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "quiet",
+        "type": "connector",
+        "name": "Find tickets the customer has not answered",
+        "connector": "xenibase@1",
+        "action": "read_rows",
+        "connection": "data_tables",
+        "needs": [
+          "times"
+        ],
+        "input": {
+          "table": "=steps.settings.output.tickets",
+          "filters": [
+            {
+              "column": "status",
+              "op": "eq",
+              "value": "waiting_on_customer"
+            },
+            {
+              "column": "last_reply_at",
+              "op": "lt",
+              "value": "=steps.times.output.waiting"
+            }
+          ],
+          "order": [
+            {
+              "column": "last_reply_at"
+            }
+          ],
+          "limit": 100
+        }
+      },
+      {
+        "id": "resolve",
+        "type": "foreach",
+        "name": "Resolve each with a closing message",
+        "needs": [
+          "quiet"
+        ],
+        "config": {
+          "items": "=steps.quiet.output.rows.filter(r, r.?reference.orValue('') != '')",
+          "max_concurrency": 5,
+          "max_items": 100,
+          "steps": [
+            {
+              "id": "bye",
+              "type": "template",
+              "template": "ticket-answer",
+              "name": "Send the closing message and resolve the ticket",
+              "params": {},
+              "input": {
+                "reference": "=item.reference",
+                "message": "='Ticket ' + item.reference + ': ' + steps.settings.output.closing",
+                "author": "Taskiem",
+                "status": "resolved"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "close",
+        "type": "connector",
+        "name": "Close tickets resolved long ago",
+        "connector": "xenibase@1",
+        "action": "update_rows",
+        "connection": "data_tables",
+        "needs": [
+          "times"
+        ],
+        "input": {
+          "table": "=steps.settings.output.tickets",
+          "filters": [
+            {
+              "column": "status",
+              "op": "eq",
+              "value": "resolved"
+            },
+            {
+              "column": "resolved_at",
+              "op": "lt",
+              "value": "=steps.times.output.close"
+            }
+          ],
+          "set": {
+            "status": "closed"
+          },
+          "max_affected": 1000
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "1h"
+    }
+  }
+}

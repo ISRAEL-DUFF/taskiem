@@ -364,6 +364,7 @@ data_tables.description
 data_tables.id
 data_tables.kept_by
 data_tables.name
+data_tables.readers
 data_tables.tenant_id
 data_tables.title
 data_tables.updated_at
@@ -384,6 +385,7 @@ email_endpoints.created_at
 email_endpoints.environment
 email_endpoints.id
 email_endpoints.public_id
+email_endpoints.reply_key
 email_endpoints.status
 email_endpoints.tenant_id
 email_endpoints.updated_at
@@ -392,6 +394,8 @@ email_endpoints.workflow_id
 email_inbox.claimed_until
 email_inbox.created_at
 email_inbox.endpoint_id
+email_inbox.held_count
+email_inbox.held_thread
 email_inbox.id
 email_inbox.idem
 email_inbox.meta

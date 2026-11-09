@@ -1,0 +1,157 @@
+{
+  "schema": "wd-test/v1",
+  "template": "helpdesk-gmail-send",
+  "params": {},
+  "cases": [
+    {
+      "name": "an answer left for the mailbox is sent in the conversation and marked sent",
+      "trigger": {
+        "event": "INSERT",
+        "body": {
+          "type": "INSERT",
+          "record": {
+            "id": 501,
+            "reference": "T-1042",
+            "direction": "out",
+            "author": "Bola",
+            "body": "Your order left this morning.",
+            "mail": "gmail",
+            "sent_at": null
+          }
+        }
+      },
+      "mocks": {
+        "ticket": {
+          "output": {
+            "rows": [
+              {
+                "id": 42,
+                "reference": "T-1042",
+                "subject": "Order 42 is late",
+                "customer_email": "ada@example.com",
+                "thread": "18c2f0e1a2b3c4d5",
+                "last_message_id": "<CAF=ada.41@mail.gmail.com>",
+                "mail": "gmail"
+              }
+            ]
+          }
+        },
+        "send": {
+          "output": {
+            "id": "18c2f1a9b3d4e600",
+            "thread_id": "18c2f0e1a2b3c4d5"
+          }
+        },
+        "mark": {
+          "output": {
+            "affected": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "ticket": {
+            "filters": [
+              {
+                "column": "reference",
+                "op": "eq",
+                "value": "T-1042"
+              }
+            ]
+          },
+          "send": {
+            "to": [
+              "ada@example.com"
+            ],
+            "subject": "Re: Order 42 is late",
+            "text": "Your order left this morning.",
+            "thread_id": "18c2f0e1a2b3c4d5",
+            "in_reply_to": "<CAF=ada.41@mail.gmail.com>",
+            "references": "<CAF=ada.41@mail.gmail.com>"
+          },
+          "mark": {
+            "table": "ticket_messages",
+            "key": 501,
+            "set": {
+              "message_id": "18c2f1a9b3d4e600"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "a customer's message, a note, or an answer sent another way is left alone",
+      "trigger": {
+        "event": "INSERT",
+        "body": {
+          "type": "INSERT",
+          "record": {
+            "id": 502,
+            "reference": "T-1042",
+            "direction": "in",
+            "body": "Hello",
+            "mail": "gmail"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "ticket": "skipped",
+          "send": "skipped",
+          "mark": "skipped"
+        }
+      }
+    },
+    {
+      "name": "an answer already sent is not sent again",
+      "trigger": {
+        "event": "INSERT",
+        "body": {
+          "type": "INSERT",
+          "record": {
+            "id": 501,
+            "reference": "T-1042",
+            "direction": "out",
+            "author": "Bola",
+            "body": "Your order left this morning.",
+            "mail": "gmail",
+            "sent_at": "2026-11-07T09:00:00Z"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "ticket": "skipped",
+          "send": "skipped"
+        }
+      }
+    },
+    {
+      "name": "an answer for another mailbox is left alone",
+      "trigger": {
+        "event": "INSERT",
+        "body": {
+          "type": "INSERT",
+          "record": {
+            "id": 501,
+            "reference": "T-1042",
+            "direction": "out",
+            "author": "Bola",
+            "body": "Your order left this morning.",
+            "mail": "zoho",
+            "sent_at": null
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "ticket": "skipped"
+        }
+      }
+    }
+  ]
+}

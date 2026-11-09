@@ -1189,6 +1189,18 @@
             "every": {
               "type": "string",
               "pattern": "^[0-9]+(m|h)$"
+            },
+            "seen": {
+              "description": "An input field (a list) the poller fills with the keys the action reported lately (keys), at most 2,000, so it need not read those records again.",
+              "$ref": "#/$defs/name"
+            },
+            "keys": {
+              "description": "A list (over output) of the keys of every record the action read this time, delivered or not; given back in seen.",
+              "$ref": "#/$defs/expr"
+            },
+            "until": {
+              "description": "A time (RFC 3339, over output) up to which the action answered every record, when it stopped short of now; empty or null when it answered everything. The next poll starts there, on the poller's next tick.",
+              "$ref": "#/$defs/expr"
             }
           }
         },
