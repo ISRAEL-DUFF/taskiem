@@ -585,7 +585,7 @@ Left as they are:
 
 - Money moving from a conversation (needs a non-member confirmation design, I3, D8).
 - Model tool calling (A3), image or audio input to the model (A4), streaming replies.
-- A **call agent** (the assistant answering and making phone calls): its own plan, started only after this one is built end to end.
+- A **call agent** (the assistant answering and making phone calls): its own plan, [call-agent.md](call-agent.md), started only after this one is built end to end.
 - Taskiem's own channel serving businesses' customers (D1 option b), template submission for tenants' WhatsApp accounts (C14).
 
 ## 6. People items (nothing in code can close these)
