@@ -11,7 +11,7 @@ import {
   SendingLine,
   type Sending,
 } from "./ProductPhotos";
-import { photoCount, type PhotoPick } from "../lib/photos";
+import { type PhotoPick } from "../lib/photos";
 import { useConfirm } from "./ConfirmSheet";
 import { KitEmpty, KitField, KitLoading, Pill } from "../kit";
 import { serviceRow } from "../lib/bookings";
@@ -41,6 +41,7 @@ import {
   stockInLine,
 } from "../lib/toolforms";
 import { ErrorBox, useLoad } from "../ui";
+import { TableViewer } from "./TableViewer";
 import type { Prefill } from "../lib/intents";
 
 // The chat tools' forms (docs/spec/chat-tools.md §4): each does the common
@@ -1009,13 +1010,6 @@ export function TableTool({
   onSaved: (line: string | null) => void;
   canEdit?: boolean;
 }) {
-  const rows = useLoad(
-    () =>
-      get<{ rows: Row[] }>(
-        `/v1/tables/${encodeURIComponent(table.id)}/rows?limit=20`,
-      ),
-    [table.id],
-  );
   const [editing, setEditing] = useState<Row | "new">();
   const [values, setValues] = useState<Record<string, string>>({});
   // The shop's products table: its photo column takes photos (the camera,
@@ -1038,7 +1032,6 @@ export function TableTool({
   const [addedRow, setAddedRow] = useState<string>();
   const [failed, setFailed] = useState<{ pick: PhotoPick; why: string }[]>([]);
   const [sending, setSending] = useState<Sending>();
-  const cols = table.columns.slice(0, 3);
   const title = table.title || table.name;
   if (editing) {
     const row = editing === "new" ? undefined : editing;
@@ -1165,37 +1158,16 @@ export function TableTool({
   return (
     <>
       <div className="tk-sheet-list tk-form-body">
-        {!rows.data ? (
-          rows.error ? (
-            <ErrorBox error={rows.error} />
-          ) : (
-            <KitLoading />
-          )
-        ) : rows.data.rows.length === 0 ? (
-          <KitEmpty icon="tables" title="No rows yet" />
-        ) : (
-          <ul className="tk-table-rows">
-            {rows.data.rows.map((r, i) => (
-              <li key={String(r.id ?? i)}>
-                <button
-                  type="button"
-                  className="tk-table-row"
-                  disabled={!canEdit}
-                  onClick={() => open(r)}
-                >
-                  {cols.map((c) => (
-                    <span key={c.name}>
-                      <span className="tk-cell-name">{c.title || c.name}</span>{" "}
-                      {c.name === photoCol
-                        ? photoCount(r[c.name])
-                        : cellText(r[c.name])}
-                    </span>
-                  ))}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+        <TableViewer
+          table={table}
+          shop={
+            shop.data?.catalogue_table === table.id
+              ? shop.data.catalogue_columns
+              : undefined
+          }
+          canEdit={canEdit}
+          onOpen={open}
+        />
       </div>
       {canEdit && (
         <div className="tk-sheet-foot">

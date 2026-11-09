@@ -422,10 +422,12 @@ test("the Tables tool's photo column takes photos, not a web address", async ({
     ],
   };
   await page.route("**/v1/tables", (r) => r.fulfill(json({ tables: [table] })));
-  await page.route("**/v1/tables/t-products/rows?**", (r) =>
+  await page.route("**/v1/tables/t-products/rows/query", (r) =>
     r.fulfill(
       json({
         rows: [{ id: 3, name: "Air Max 90", photo: "m1,m2", price: 45000 }],
+        next_cursor: null,
+        count: 1,
       }),
     ),
   );
@@ -461,12 +463,12 @@ test("the Tables tool's photo column takes photos, not a web address", async ({
     .getByRole("button", { name: /Products/ })
     .click();
   const sheet = page.getByRole("dialog", { name: /Products/ });
-  // The list says a row's photos as a count, not their references.
-  await expect(sheet.getByRole("button", { name: /Air Max 90/ })).toContainText(
+  // The table says a row's photos as a count, not their references.
+  await expect(sheet.getByRole("row", { name: /Air Max 90/ })).toContainText(
     "2 photos",
   );
   await expect(
-    sheet.getByRole("button", { name: /Air Max 90/ }),
+    sheet.getByRole("row", { name: /Air Max 90/ }),
   ).not.toContainText("m1,m2");
   await sheet.getByRole("button", { name: "Add a row" }).click();
   await expect(sheet.getByRole("textbox", { name: /photo/i })).toHaveCount(0);

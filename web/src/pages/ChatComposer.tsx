@@ -42,7 +42,7 @@ type ToolStart = {
 };
 import { useAuth } from "../auth";
 import { categoryTag } from "../lib/tools";
-import { usePresence } from "../kit";
+import { useMediaQuery, usePresence } from "../kit";
 
 // The composer of every conversation (a business's and Taskiem's): the box
 // that grows, emoji, a photo (and, where it is taken, a PDF), the camera,
@@ -400,6 +400,7 @@ export function ComposerView<R>({
 }) {
   const { voice, file, text, reply } = c;
   const toolsP = usePresence(c.toolsShown);
+  const roomy = useMediaQuery("(min-width: 600px)");
   return (
     <>
       {reply && c.o.replyLine && (
@@ -578,11 +579,14 @@ export function ComposerView<R>({
               placeholder={
                 file
                   ? "Add a caption"
-                  : c.o.placeholder
-                    ? c.o.placeholder
-                    : c.o.grouped
-                      ? "Message, @ to tag"
-                      : "Type a message"
+                  : hint(
+                      c.o.placeholder
+                        ? c.o.placeholder
+                        : c.o.grouped
+                          ? "Message, @ to tag"
+                          : "Type a message",
+                      roomy,
+                    )
               }
               value={text}
               onChange={(e) => {
@@ -688,4 +692,10 @@ export function ComposerView<R>({
       )}
     </>
   );
+}
+
+/** The box's hint on one line: on a phone, the words before its comma
+ * ("Ask Taskiem", "Message"); with room, all of it. */
+export function hint(words: string, roomy: boolean): string {
+  return roomy ? words : (words.split(",")[0] ?? words).trim();
 }
