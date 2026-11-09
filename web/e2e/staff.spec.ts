@@ -83,6 +83,30 @@ for (const width of [390, 360]) {
     await waiting.getByRole("button", { name: /^Cancel/ }).click();
     await expect(page.getByTestId("staff-invite")).toHaveCount(0);
 
+    // Bisi's page: her job, hours and pay.
+    await people.filter({ hasText: "Bisi Okafor" }).getByRole("link", { name: "Bisi Okafor" }).click();
+    await expect(page.getByRole("heading", { name: "Bisi Okafor", level: 1 })).toBeVisible();
+    await expect(page.getByTestId("person-facts")).toContainText("No usual hours set");
+    await page.getByRole("button", { name: "Change" }).click();
+    const edit = page.getByRole("dialog", { name: "Change Bisi Okafor" });
+    await edit.getByLabel("Job title").fill("Head cashier");
+    await edit.getByLabel("Amount in naira").fill("80000");
+    for (const day of ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]) await edit.getByRole("checkbox", { name: day }).check();
+    await edit.getByRole("checkbox", { name: "Saturday" }).check();
+    await edit.getByLabel("Saturday from").fill("10:00");
+    await edit.getByLabel("Saturday to").fill("18:00");
+    await axeBoth(page, "changing a profile");
+    await edit.getByRole("button", { name: "Save" }).click();
+    await expect(edit).toHaveCount(0);
+    const facts = page.getByTestId("person-facts");
+    await expect(page.getByRole("heading", { name: "Head cashier" })).toBeVisible();
+    await expect(facts).toContainText("Mon to Fri, 08:00 to 16:00; Sat, 10:00 to 18:00");
+    await expect(facts).toContainText("₦80,000");
+    await expect(facts).toContainText("a month");
+    await axeBoth(page, "a person's page");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.getByRole("link", { name: "All staff" }).click();
+
     // Bisi has left.
     page.once("dialog", (d) => void d.accept());
     await people.filter({ hasText: "Bisi Okafor" }).getByRole("button", { name: /^Remove/ }).click();

@@ -85,3 +85,116 @@ export function inviteSub(x: StaffInvite): string {
   const sent = x.sent_at ? `sent ${dateLabel(x.sent_at)}` : "not sent yet";
   return [x.roles.map(roleWords).join(", "), x.phone, sent].join(" · ");
 }
+
+// --- a person's profile (step 2) ---
+
+export type Weekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+export const WEEKDAYS: { value: Weekday; label: string; short: string }[] = [
+  { value: "mon", label: "Monday", short: "Mon" },
+  { value: "tue", label: "Tuesday", short: "Tue" },
+  { value: "wed", label: "Wednesday", short: "Wed" },
+  { value: "thu", label: "Thursday", short: "Thu" },
+  { value: "fri", label: "Friday", short: "Fri" },
+  { value: "sat", label: "Saturday", short: "Sat" },
+  { value: "sun", label: "Sunday", short: "Sun" },
+];
+
+export interface RotaShift {
+  day: Weekday;
+  start: string;
+  end: string;
+}
+
+export type PayPer = "hour" | "day" | "week" | "month";
+
+export interface StaffProfile {
+  title: string;
+  started_on?: string;
+  note: string;
+  pay_kobo?: number;
+  pay_per?: PayPer;
+  rota: RotaShift[];
+}
+
+export interface StaffPersonView extends StaffPerson {
+  profile: StaffProfile;
+}
+
+/** "Mon to Fri, 08:00 to 16:00; Sat, 10:00 to 18:00": days in a row with
+ * the same hours are said once. */
+export function rotaWords(rota: RotaShift[]): string {
+  if (rota.length === 0) return "No usual hours set";
+  const order = WEEKDAYS.map((d) => d.value);
+  const sorted = [...rota].sort((a, b) => order.indexOf(a.day) - order.indexOf(b.day));
+  const runs: { from: Weekday; to: Weekday; start: string; end: string }[] = [];
+  for (const r of sorted) {
+    const last = runs[runs.length - 1];
+    if (last && last.start === r.start && last.end === r.end && order.indexOf(r.day) === order.indexOf(last.to) + 1) last.to = r.day;
+    else runs.push({ from: r.day, to: r.day, start: r.start, end: r.end });
+  }
+  const short = (d: Weekday) => WEEKDAYS.find((w) => w.value === d)?.short ?? d;
+  return runs.map((r) => `${r.from === r.to ? short(r.from) : `${short(r.from)} to ${short(r.to)}`}, ${r.start} to ${r.end}`).join("; ");
+}
+
+const PER_WORDS: Record<PayPer, string> = { hour: "an hour", day: "a day", week: "a week", month: "a month" };
+
+/** "₦80,000 a month", or "" when none is set. */
+export function payWords(p: Pick<StaffProfile, "pay_kobo" | "pay_per">, naira: (k: number) => string): string {
+  if (p.pay_kobo === undefined || !p.pay_per) return "";
+  return `${naira(p.pay_kobo)} ${PER_WORDS[p.pay_per]}`;
+}
+
+/** The profile as its form holds it: pay in naira as typed, a row a day. */
+export interface ProfileForm {
+  title: string;
+  started_on: string;
+  note: string;
+  pay: string;
+  pay_per: PayPer;
+  days: Record<Weekday, { on: boolean; start: string; end: string }>;
+}
+
+export function profileForm(p: StaffProfile): ProfileForm {
+  const days = Object.fromEntries(
+    WEEKDAYS.map((d) => {
+      const r = p.rota.find((x) => x.day === d.value);
+      return [d.value, r ? { on: true, start: r.start, end: r.end } : { on: false, start: "08:00", end: "16:00" }];
+    }),
+  ) as ProfileForm["days"];
+  return {
+    title: p.title,
+    started_on: p.started_on ?? "",
+    note: p.note,
+    pay: p.pay_kobo !== undefined ? String(p.pay_kobo / 100) : "",
+    pay_per: p.pay_per ?? "month",
+    days,
+  };
+}
+
+/** Why the form will be refused, or null. */
+export function profileProblem(f: ProfileForm): string | null {
+  if (f.title.trim().length > 60) return "A job title is at most 60 letters.";
+  if (f.note.trim().length > 500) return "A note is at most 500 letters.";
+  const pay = f.pay.replace(/[,\s₦]/g, "");
+  if (pay !== "" && !/^\d+(\.\d{1,2})?$/.test(pay)) return "The pay is a number of naira, like 80000.";
+  for (const d of WEEKDAYS) {
+    const x = f.days[d.value];
+    if (!x.on) continue;
+    if (!/^\d{2}:\d{2}$/.test(x.start) || !/^\d{2}:\d{2}$/.test(x.end)) return `Give ${d.label}'s hours, like 08:00 and 16:00.`;
+    if (x.start === x.end) return `${d.label} starts and ends at the same time.`;
+  }
+  return null;
+}
+
+/** The PUT /v1/staff/{user}/profile body. Call it once profileProblem is null. */
+export function profileRequest(f: ProfileForm): StaffProfile {
+  const pay = f.pay.replace(/[,\s₦]/g, "");
+  return {
+    title: f.title.trim(),
+    started_on: f.started_on || undefined,
+    note: f.note.trim(),
+    pay_kobo: pay === "" ? undefined : Math.round(Number(pay) * 100),
+    pay_per: pay === "" ? undefined : f.pay_per,
+    rota: WEEKDAYS.filter((d) => f.days[d.value].on).map((d) => ({ day: d.value, start: f.days[d.value].start, end: f.days[d.value].end })),
+  };
+}

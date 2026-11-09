@@ -25,6 +25,7 @@ import { Alerts } from "./pages/Alerts";
 import { Dashboard } from "./pages/Dashboard";
 import { Members } from "./pages/Members";
 import { Staff } from "./pages/Staff";
+import { StaffPerson } from "./pages/StaffPerson";
 import { Policies } from "./pages/Policies";
 import { Account, Invitations, Passkeys } from "./pages/Account";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -894,6 +895,7 @@ function SignedIn() {
                   <Route path="/audit" element={<Audit />} />
                   <Route path="/members" element={<Members />} />
                   <Route path="/staff" element={<Staff />} />
+                  <Route path="/staff/:user" element={<StaffPerson />} />
                   <Route path="/policies" element={<Policies />} />
                   <Route path="/account" element={<Account />} />
                   <Route path="/handoff" element={<Handoff />} />

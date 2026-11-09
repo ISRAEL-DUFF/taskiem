@@ -19660,6 +19660,96 @@ paths:
           description: Cancelled
         default:
           $ref: '#/components/responses/Error'
+  /v1/staff/{user}:
+    get:
+      operationId: getStaff
+      tags:
+      - Account
+      summary: A person of the business and their profile
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: member.manage
+      parameters:
+      - name: user
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The person
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [user_id, name, roles, chat, profile]
+                properties:
+                  user_id:
+                    type: string
+                    format: uuid
+                  name:
+                    type: string
+                  email:
+                    type: string
+                  phone:
+                    type: string
+                  roles:
+                    type: array
+                    items:
+                      type: string
+                  chat:
+                    type: boolean
+                  you:
+                    type: boolean
+                  profile:
+                    $ref: '#/components/schemas/StaffProfile'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/staff/{user}/profile:
+    put:
+      operationId: putStaffProfile
+      tags:
+      - Account
+      summary: Change a person's profile
+      description: The whole profile. Pay is for the record only (Taskiem pays no one here); the audit log keeps that it changed, not the amount.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: member.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: user
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StaffProfile'
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [profile]
+                properties:
+                  profile:
+                    $ref: '#/components/schemas/StaffProfile'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/staff/{user}/remove:
     post:
       operationId: removeStaff
@@ -33602,6 +33692,42 @@ components:
         minutes:
           type: integer
           description: How long the service takes; an invoice's or an order's total is price_kobo
+    StaffProfile:
+      type: object
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          maxLength: 60
+        started_on:
+          type: string
+          format: date
+        note:
+          type: string
+          maxLength: 500
+        pay_kobo:
+          type: integer
+          minimum: 0
+        pay_per:
+          type: string
+          enum: [hour, day, week, month]
+        rota:
+          type: array
+          description: Their usual hours, one set a day, Monday first; an end before its start runs past midnight.
+          items:
+            type: object
+            additionalProperties: false
+            required: [day, start, end]
+            properties:
+              day:
+                type: string
+                enum: [mon, tue, wed, thu, fri, sat, sun]
+              start:
+                type: string
+                pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+              end:
+                type: string
+                pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
     ChatRef:
       type: object
       additionalProperties: false

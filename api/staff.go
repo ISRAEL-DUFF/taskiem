@@ -130,23 +130,11 @@ func (s *Server) listStaff(w http.ResponseWriter, r *http.Request) {
 	people := []staffMember{}
 	invites := []staffInvite{}
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		rows, err := tx.Query(r.Context(), `SELECT u.id, u.name, u.email, array_agg(m.role ORDER BY m.role) FROM memberships m JOIN users u ON u.id = m.user_id
-			WHERE m.tenant_id = $1 GROUP BY u.id, u.name, u.email ORDER BY lower(u.name), u.email`, p.TenantID)
-		if err != nil {
+		var err error
+		if people, err = staffPeopleTx(r.Context(), tx, p, uuid.Nil, show); err != nil {
 			return err
 		}
-		if people, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (staffMember, error) {
-			var m staffMember
-			err := row.Scan(&m.UserID, &m.Name, &m.Email, &m.Roles)
-			if emailPlaceholder(m.Email) {
-				m.Email = ""
-			}
-			m.You = m.UserID == p.UserID
-			return m, err
-		}); err != nil {
-			return err
-		}
-		rows, err = tx.Query(r.Context(), `SELECT id, name, address, roles, inviter, sent_at, expires_at, created_at FROM chat_invites
+		rows, err := tx.Query(r.Context(), `SELECT id, name, address, roles, inviter, sent_at, expires_at, created_at FROM chat_invites
 			WHERE tenant_id = $1 AND channel = 'whatsapp' AND state = 'sent' AND expires_at > now() ORDER BY created_at DESC`, p.TenantID)
 		if err != nil {
 			return err
@@ -159,33 +147,64 @@ func (s *Server) listStaff(w http.ResponseWriter, r *http.Request) {
 		}); err != nil {
 			return err
 		}
-		// Their chat numbers (the bindings answer within the business).
-		ids := make([]uuid.UUID, len(people))
-		for i, m := range people {
-			ids[i] = m.UserID
-		}
-		rows, err = tx.Query(r.Context(), `SELECT user_id, number FROM taskiem_wa_numbers($1)`, ids)
-		if err != nil {
-			return err
-		}
-		type bound struct {
-			User   uuid.UUID
-			Number string
-		}
-		got, err := pgx.CollectRows(rows, pgx.RowToStructByPos[bound])
-		for _, b := range got {
-			for i := range people {
-				if people[i].UserID == b.User {
-					people[i].Phone, people[i].Chat = show(b.Number), true
-				}
-			}
-		}
-		return err
+		return nil
 	}); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"people": people, "invites": invites})
+}
+
+// staffPeopleTx is the people of the business (one, when user is set),
+// with their chat numbers shown as show says.
+func staffPeopleTx(ctx context.Context, tx pgx.Tx, p *Principal, user uuid.UUID, show func(string) string) ([]staffMember, error) {
+	rows, err := tx.Query(ctx, `SELECT u.id, u.name, u.email, array_agg(m.role ORDER BY m.role) FROM memberships m JOIN users u ON u.id = m.user_id
+		WHERE m.tenant_id = $1 AND ($2::uuid IS NULL OR u.id = $2) GROUP BY u.id, u.name, u.email ORDER BY lower(u.name), u.email`, p.TenantID, nullUUID(user))
+	if err != nil {
+		return nil, err
+	}
+	people, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (staffMember, error) {
+		var m staffMember
+		err := row.Scan(&m.UserID, &m.Name, &m.Email, &m.Roles)
+		if emailPlaceholder(m.Email) {
+			m.Email = ""
+		}
+		m.You = m.UserID == p.UserID
+		return m, err
+	})
+	if err != nil || len(people) == 0 {
+		return []staffMember{}, err
+	}
+	// Their chat numbers (the bindings answer within the business).
+	ids := make([]uuid.UUID, len(people))
+	for i, m := range people {
+		ids[i] = m.UserID
+	}
+	rows, err = tx.Query(ctx, `SELECT user_id, number FROM taskiem_wa_numbers($1)`, ids)
+	if err != nil {
+		return nil, err
+	}
+	type bound struct {
+		User   uuid.UUID
+		Number string
+	}
+	got, err := pgx.CollectRows(rows, pgx.RowToStructByPos[bound])
+	for _, b := range got {
+		for i := range people {
+			if people[i].UserID == b.User {
+				people[i].Phone, people[i].Chat = show(b.Number), true
+			}
+		}
+	}
+	return people, err
+}
+
+// nullUUID is nil for the zero id, for "any" in a query.
+func nullUUID(id uuid.UUID) *uuid.UUID {
+	if id == uuid.Nil {
+		return nil
+	}
+	return &id
 }
 
 // staffInviteBody is POST /v1/staff/invites.

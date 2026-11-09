@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { del, get, post } from "../api";
 import { EmptyState, ErrorBox, Field, Items, Modal, PageHeader, Row, Skeleton, useAction, useLoad } from "../ui";
 import { toast } from "../toast";
@@ -92,7 +93,7 @@ export function Staff() {
                   letter={p.name || p.email || "?"}
                   title={
                     <>
-                      {p.name || p.email}
+                      <Link to={`/staff/${p.user_id}`}>{p.name || p.email}</Link>
                       {p.you ? " (you)" : ""}
                     </>
                   }

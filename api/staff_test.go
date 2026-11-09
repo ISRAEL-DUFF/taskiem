@@ -105,3 +105,53 @@ func TestStaffByPhone(t *testing.T) {
 	viewer.must(403, "GET", "/v1/staff", nil)
 	viewer.must(403, "POST", "/v1/staff/invites", map[string]any{"name": "X", "phone": "08031239404", "roles": []string{"viewer"}})
 }
+
+// A person's profile (phase 3 plan, step 2): job title, start day, note,
+// pay for the record and usual hours; checked, kept per business, and read
+// with the person.
+func TestStaffProfile(t *testing.T) {
+	w := newWAWorld(t)
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	cashier := addMember(t, w.world, owner, "cash", "cashier")
+	id := cashier.must(200, "GET", "/v1/me", nil)["user"].(map[string]any)["id"].(string)
+
+	empty := owner.must(200, "GET", "/v1/staff/"+id, nil)
+	if empty["roles"].([]any)[0] != "cashier" || empty["profile"].(map[string]any)["title"] != "" || len(empty["profile"].(map[string]any)["rota"].([]any)) != 0 {
+		t.Fatalf("before: %v", empty)
+	}
+	good := map[string]any{"title": "Head cashier", "started_on": "2026-03-01", "note": "Keys to the till", "pay_kobo": 8000000, "pay_per": "month",
+		"rota": []any{
+			map[string]any{"day": "sat", "start": "10:00", "end": "18:00"},
+			map[string]any{"day": "mon", "start": "08:00", "end": "16:00"},
+			map[string]any{"day": "fri", "start": "20:00", "end": "04:00"},
+		}}
+	saved := owner.must(200, "PUT", "/v1/staff/"+id+"/profile", good)["profile"].(map[string]any)
+	if days := saved["rota"].([]any); days[0].(map[string]any)["day"] != "mon" || days[2].(map[string]any)["day"] != "sat" {
+		t.Fatalf("the rota in order: %v", saved)
+	}
+	got := owner.must(200, "GET", "/v1/staff/"+id, nil)["profile"].(map[string]any)
+	if got["title"] != "Head cashier" || got["started_on"] != "2026-03-01" || got["pay_kobo"] != float64(8000000) || got["pay_per"] != "month" || len(got["rota"].([]any)) != 3 {
+		t.Fatalf("after: %v", got)
+	}
+	for _, bad := range []map[string]any{
+		{"title": strings.Repeat("x", 61), "rota": []any{}},
+		{"started_on": "March", "rota": []any{}},
+		{"pay_kobo": 100, "rota": []any{}},
+		{"pay_kobo": 100, "pay_per": "year", "rota": []any{}},
+		{"rota": []any{map[string]any{"day": "mon", "start": "8am", "end": "16:00"}}},
+		{"rota": []any{map[string]any{"day": "mon", "start": "08:00", "end": "08:00"}}},
+		{"rota": []any{map[string]any{"day": "mon", "start": "08:00", "end": "16:00"}, map[string]any{"day": "mon", "start": "17:00", "end": "18:00"}}},
+		{"rota": []any{map[string]any{"day": "someday", "start": "08:00", "end": "16:00"}}},
+	} {
+		owner.must(400, "PUT", "/v1/staff/"+id+"/profile", bad)
+	}
+	// Pay cleared: neither amount nor what it is per.
+	cleared := owner.must(200, "PUT", "/v1/staff/"+id+"/profile", map[string]any{"title": "Head cashier", "rota": []any{}})["profile"].(map[string]any)
+	if cleared["pay_kobo"] != nil {
+		t.Fatalf("pay kept: %v", cleared)
+	}
+	owner.must(404, "GET", "/v1/staff/"+uuid.NewString(), nil)
+	owner.must(404, "PUT", "/v1/staff/"+uuid.NewString()+"/profile", good)
+	cashier.must(403, "GET", "/v1/staff/"+id, nil)
+	cashier.must(403, "PUT", "/v1/staff/"+id+"/profile", good)
+}
