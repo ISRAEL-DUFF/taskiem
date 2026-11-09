@@ -57,8 +57,18 @@ CREATE TABLE customer_messages (
   sent_as          text CHECK (sent_as IN ('text', 'template')),
   -- The chat app's id of the message (sent or received).
   wa_id            text CHECK (length(wa_id) <= 200),
-  -- The member's own key for a reply, so a retried send is one message.
+  -- The member's own key for a reply, so a retried send is one message:
+  -- the reply is written (sending) before it goes, so two sends of one
+  -- key cannot both go.
   client_id        text CHECK (length(client_id) <= 80),
+  -- A reply's way to the customer, as WhatsApp reports it: sending
+  -- (written, not yet taken), sent, delivered, read, or failed (with
+  -- WhatsApp's reason).
+  delivery         text CHECK (delivery IN ('sending', 'sent', 'delivered', 'read', 'failed')),
+  failure          text CHECK (length(failure) <= 300),
+  -- Kept a year, then deleted (taskiem_customer_messages_purge); a
+  -- customer's STOP or erasure deletes them sooner.
+  expires_at       timestamptz NOT NULL DEFAULT now() + interval '365 days',
   -- On the customer's message, when the business read it.
   read_at          timestamptz,
   created_at       timestamptz NOT NULL DEFAULT now()
@@ -66,11 +76,34 @@ CREATE TABLE customer_messages (
 CREATE INDEX customer_messages_stream ON customer_messages (tenant_id, conversation_id, created_at DESC);
 CREATE UNIQUE INDEX customer_messages_client ON customer_messages (tenant_id, conversation_id, client_id) WHERE client_id IS NOT NULL;
 CREATE UNIQUE INDEX customer_messages_wa ON customer_messages (tenant_id, wa_id) WHERE wa_id IS NOT NULL AND NOT mine;
+CREATE INDEX customer_messages_sent ON customer_messages (tenant_id, wa_id) WHERE wa_id IS NOT NULL AND mine;
 ALTER TABLE customer_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE customer_messages FORCE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON customer_messages TO taskiem_app
   USING (tenant_id = ANY (taskiem_tenant_scope())) WITH CHECK (tenant_id = ANY (taskiem_tenant_scope()));
 GRANT SELECT, INSERT, UPDATE, DELETE ON customer_messages TO taskiem_app;
+
+-- Retention across businesses: the dispatch role sees only when rows
+-- expire and deletes those past it, as the Taskiem chat history's.
+CREATE POLICY dispatch_purge ON customer_messages FOR DELETE TO taskiem_dispatch USING (expires_at <= now());
+CREATE POLICY dispatch_read_expiry ON customer_messages FOR SELECT TO taskiem_dispatch USING (expires_at <= now());
+GRANT SELECT (id, expires_at), DELETE ON customer_messages TO taskiem_dispatch;
+
+-- +goose StatementBegin
+CREATE FUNCTION taskiem_customer_messages_purge()
+RETURNS bigint LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE
+  n bigint;
+BEGIN
+  DELETE FROM customer_messages m WHERE m.expires_at <= now();
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RETURN n;
+END
+$$;
+-- +goose StatementEnd
+ALTER FUNCTION taskiem_customer_messages_purge() OWNER TO taskiem_dispatch;
+REVOKE EXECUTE ON FUNCTION taskiem_customer_messages_purge() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION taskiem_customer_messages_purge() TO taskiem_app;
 
 -- The public menu answers a customer only when asked (its word, or a
 -- choice of it under way): "menu" marks a menu shown, so the number
@@ -84,5 +117,6 @@ DELETE FROM whatsapp_public_sessions WHERE state = 'menu';
 ALTER TABLE whatsapp_public_sessions DROP CONSTRAINT whatsapp_public_sessions_state_check;
 ALTER TABLE whatsapp_public_sessions ADD CONSTRAINT whatsapp_public_sessions_state_check
   CHECK (state IN ('collecting_input', 'awaiting_confirmation'));
+DROP FUNCTION taskiem_customer_messages_purge();
 DROP TABLE customer_messages;
 DROP TABLE customer_conversations;

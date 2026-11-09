@@ -139,6 +139,11 @@ func (s *Server) waReceive(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	// What became of replies to customers (delivered, read, failed),
+	// for the numbers this app speaks for (customer_chat.go).
+	if sts, err := whatsapp.ParseStatuses(body); err == nil && len(sts) > 0 {
+		s.customerStatuses(ctx, hook, sts)
+	}
 	for _, m := range msgs {
 		if m.ID == "" {
 			continue

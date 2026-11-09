@@ -16,6 +16,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/pii"
+	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
@@ -34,29 +35,57 @@ import (
 const customerReplyMax = 2000
 
 // customerThreadTx is the thread for number on wa's own number, made when
-// it is the customer's first message: its id, and whether they said STOP.
-func (s *Server) customerThreadTx(ctx context.Context, tx pgx.Tx, wa *whatsapp.Platform, number string) (uuid.UUID, bool, error) {
+// it is the customer's first message: its id and the customer's subject.
+// The name they gave WhatsApp, when it came with the message, is kept
+// (sealed) as what to call them until the business's book names them.
+func (s *Server) customerThreadTx(ctx context.Context, tx pgx.Tx, wa *whatsapp.Platform, number, profile string) (uuid.UUID, string, error) {
 	tenant := wa.Tenant
 	phone := "+" + strings.TrimPrefix(number, "+")
 	env, err := s.Store.PII.SealTx(ctx, tx, tenant, "phone", phone)
 	if err != nil {
-		return uuid.Nil, false, err
+		return uuid.Nil, "", err
 	}
 	subject, _ := env["subject"].(string)
 	if subject == "" {
-		return uuid.Nil, false, errors.New("customer chat: the number has no subject")
+		return uuid.Nil, "", errors.New("customer chat: the number has no subject")
 	}
-	who, err := json.Marshal(map[string]any{"number": env})
+	whoMap := map[string]any{"number": env}
+	profile = strings.Join(strings.Fields(profile), " ")
+	if r := []rune(profile); len(r) > 80 {
+		profile = string(r[:80])
+	}
+	if profile != "" {
+		if whoMap["name"], err = pii.SealText(ctx, s.Store.PII, tx, tenant, subject, "name", profile); err != nil {
+			return uuid.Nil, "", err
+		}
+	}
+	who, err := json.Marshal(whoMap)
 	if err != nil {
-		return uuid.Nil, false, err
+		return uuid.Nil, "", err
 	}
 	id := uuid.Must(uuid.NewV7())
-	var stopped *time.Time
 	err = tx.QueryRow(ctx, `INSERT INTO customer_conversations (id, tenant_id, phone_number_id, subject_id, who)
 		VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (tenant_id, phone_number_id, subject_id) DO UPDATE SET who = customer_conversations.who
-		RETURNING id, stopped_at`, id, tenant, wa.Config.PhoneNumberID, subject, who).Scan(&id, &stopped)
-	return id, stopped != nil, err
+		ON CONFLICT (tenant_id, phone_number_id, subject_id) DO UPDATE
+		SET who = CASE WHEN $6 THEN EXCLUDED.who ELSE customer_conversations.who END
+		RETURNING id`, id, tenant, wa.Config.PhoneNumberID, subject, who, profile != "").Scan(&id)
+	return id, subject, err
+}
+
+// riderOrSupplier reports whether number is one of the business's riders
+// or suppliers: what they write that is not their words (off, busy, a
+// delivery's) is not a customer's, and they are never made one.
+func (s *Server) riderOrSupplier(ctx context.Context, tenant uuid.UUID, number string) (bool, error) {
+	if !s.Reach.Ready() {
+		return false, nil
+	}
+	hash := s.Reach.PhoneHash("+" + strings.TrimPrefix(number, "+"))
+	var known bool
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM riders WHERE tenant_id = $1 AND phone_hash = $2 AND retired_at IS NULL)
+			OR EXISTS (SELECT 1 FROM suppliers WHERE tenant_id = $1 AND phone_hash = $2 AND retired_at IS NULL)`, tenant, hash).Scan(&known)
+	})
+	return known, err
 }
 
 // phoneSubject is the subject a phone's details are sealed under, made
@@ -112,13 +141,19 @@ func (s *Server) customerStopStart(ctx context.Context, wa *whatsapp.Platform, n
 			return err
 		}
 		var id uuid.UUID
-		err = tx.QueryRow(ctx, `SELECT id FROM customer_conversations WHERE tenant_id = $1 AND phone_number_id = $2 AND subject_id = $3`,
-			wa.Tenant, wa.Config.PhoneNumberID, subject).Scan(&id)
+		var stopped *time.Time
+		err = tx.QueryRow(ctx, `SELECT id, stopped_at FROM customer_conversations WHERE tenant_id = $1 AND phone_number_id = $2 AND subject_id = $3`,
+			wa.Tenant, wa.Config.PhoneNumberID, subject).Scan(&id, &stopped)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}
 		if err != nil {
 			return err
+		}
+		// START from someone who never said STOP is not theirs to answer
+		// here (the reach book's START, if any).
+		if word == "start" && stopped == nil {
+			return nil
 		}
 		found = true
 		if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, wa.Tenant).Scan(&name); err != nil {
@@ -137,6 +172,19 @@ func (s *Server) customerStopStart(ctx context.Context, wa *whatsapp.Platform, n
 	if err != nil || !found {
 		return found, err
 	}
+	// The business's other messages to them (updates, reminders) stop and
+	// start with it: STOP is to the business, whatever it sends.
+	if s.Reach.Ready() {
+		var rerr error
+		if word == "start" {
+			_, rerr = s.Reach.Resume(ctx, reach.WhatsApp, number)
+		} else {
+			_, rerr = s.Reach.Stop(ctx, reach.WhatsApp, number)
+		}
+		if rerr != nil {
+			s.Logger.Warn("customer chat: the reach book's stop or start", "err", rerr)
+		}
+	}
 	l := s.chooseLang(ctx, wa.Tenant, number, "").Tag
 	if word == "start" {
 		return true, s.waSay(ctx, wa, number, "", tr(l, "customer.resumed", "business", name))
@@ -151,6 +199,9 @@ func (s *Server) customerInbound(ctx context.Context, wa *whatsapp.Platform, num
 	if !wa.Own() {
 		return false, nil
 	}
+	if known, err := s.riderOrSupplier(ctx, wa.Tenant, number); err != nil || known {
+		return false, err
+	}
 	kind, text := customerWords(in)
 	if text == "" {
 		return true, nil
@@ -159,12 +210,8 @@ func (s *Server) customerInbound(ctx context.Context, wa *whatsapp.Platform, num
 		text = string(r[:4000])
 	}
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{wa.Tenant}, func(tx pgx.Tx) error {
-		id, _, err := s.customerThreadTx(ctx, tx, wa, number)
+		id, subject, err := s.customerThreadTx(ctx, tx, wa, number, in.ProfileName)
 		if err != nil {
-			return err
-		}
-		var subject string
-		if err := tx.QueryRow(ctx, `SELECT subject_id FROM customer_conversations WHERE id = $1`, id).Scan(&subject); err != nil {
 			return err
 		}
 		body, err := pii.SealText(ctx, s.Store.PII, tx, wa.Tenant, subject, "other", text)
@@ -193,6 +240,8 @@ func (s *Server) customerInbound(ctx context.Context, wa *whatsapp.Platform, num
 func (s *Server) customerChatRoutes(r chi.Router) {
 	orders := s.need(PermOrders)
 	r.With(orders).Get("/customer-chats", s.listCustomerChats)
+	r.With(orders).Get("/customer-chats/unread", s.customerChatsUnread)
+	r.With(orders).Get("/customer-chats/search", s.searchCustomerChats)
 	r.With(orders).Get("/customer-chats/{id}", s.getCustomerChat)
 	r.With(orders).Get("/customer-chats/{id}/messages", s.customerMessages)
 	r.With(orders, s.tenantWide).Post("/customer-chats/{id}/messages", s.replyCustomer)
@@ -218,14 +267,18 @@ type customerChatView struct {
 }
 
 type customerMessageView struct {
-	ID         uuid.UUID  `json:"id"`
-	Mine       bool       `json:"mine"`
-	Kind       string     `json:"kind"`
-	Body       string     `json:"body"`
-	SenderName string     `json:"sender_name,omitempty"`
-	SentAs     string     `json:"sent_as,omitempty"`
-	ReadAt     *time.Time `json:"read_at"`
-	CreatedAt  time.Time  `json:"created_at"`
+	ID         uuid.UUID `json:"id"`
+	Mine       bool      `json:"mine"`
+	Kind       string    `json:"kind"`
+	Body       string    `json:"body"`
+	SenderName string    `json:"sender_name,omitempty"`
+	SentAs     string    `json:"sent_as,omitempty"`
+	// A reply's way to the customer: sending, sent, delivered, read or
+	// failed (with WhatsApp's reason).
+	Delivery  string     `json:"delivery,omitempty"`
+	Failure   string     `json:"failure,omitempty"`
+	ReadAt    *time.Time `json:"read_at"`
+	CreatedAt time.Time  `json:"created_at"`
 }
 
 // openCustomerText opens a sealed message or number, or "" when its
@@ -250,15 +303,19 @@ func (s *Server) openCustomerText(ctx context.Context, tx pgx.Tx, tenant uuid.UU
 	return t, nil
 }
 
-// customerName is the customer's name in the business's book, or their
-// number when the book has no record of them.
-func (s *Server) customerName(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, subject, phone string) (string, error) {
+// customerName is the customer's name in the business's book, else the
+// name they gave WhatsApp, else their number.
+func (s *Server) customerName(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, subject, profile, phone string) (string, error) {
+	fallback := phone
+	if profile != "" {
+		fallback = profile
+	}
 	if s.Invoices == nil {
-		return phone, nil
+		return fallback, nil
 	}
 	c, err := s.Invoices.BookCustomerByCustomer(ctx, tx, tenant, subject)
 	if errors.Is(err, invoicing.ErrNotFound) || (err == nil && c.Name == "") {
-		return phone, nil
+		return fallback, nil
 	}
 	if err != nil {
 		return "", err
@@ -302,6 +359,7 @@ func (s *Server) openCustomerChat(ctx context.Context, tx pgx.Tx, tenant uuid.UU
 	v := x.v
 	var w struct {
 		Number json.RawMessage `json:"number"`
+		Name   json.RawMessage `json:"name"`
 	}
 	if err := json.Unmarshal(x.who, &w); err != nil {
 		return v, err
@@ -310,8 +368,14 @@ func (s *Server) openCustomerChat(ctx context.Context, tx pgx.Tx, tenant uuid.UU
 	if err != nil {
 		return v, err
 	}
+	profile := ""
+	if len(w.Name) > 0 {
+		if profile, err = s.openCustomerText(ctx, tx, tenant, w.Name); err != nil {
+			return v, err
+		}
+	}
 	v.Phone = phone
-	if v.Name, err = s.customerName(ctx, tx, tenant, x.subject, phone); err != nil {
+	if v.Name, err = s.customerName(ctx, tx, tenant, x.subject, profile, phone); err != nil {
 		return v, err
 	}
 	if v.Name == "" {
@@ -424,7 +488,7 @@ func (s *Server) customerMessages(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		q := `SELECT id, mine, kind, body, sender_name, COALESCE(sent_as, ''), read_at, created_at FROM customer_messages
+		q := `SELECT id, mine, kind, body, sender_name, COALESCE(sent_as, ''), COALESCE(delivery, ''), COALESCE(failure, ''), read_at, created_at FROM customer_messages
 			WHERE tenant_id = $1 AND conversation_id = $2`
 		args := []any{p.TenantID, chat.ID}
 		if b, err := uuid.Parse(r.URL.Query().Get("before")); err == nil {
@@ -441,7 +505,7 @@ func (s *Server) customerMessages(w http.ResponseWriter, r *http.Request) {
 		}
 		raws, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (rawMsg, error) {
 			var x rawMsg
-			return x, r.Scan(&x.v.ID, &x.v.Mine, &x.v.Kind, &x.body, &x.v.SenderName, &x.v.SentAs, &x.v.ReadAt, &x.v.CreatedAt)
+			return x, r.Scan(&x.v.ID, &x.v.Mine, &x.v.Kind, &x.body, &x.v.SenderName, &x.v.SentAs, &x.v.Delivery, &x.v.Failure, &x.v.ReadAt, &x.v.CreatedAt)
 		})
 		if err != nil {
 			return err
@@ -526,11 +590,19 @@ func (s *Server) putCustomerChat(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// customerTemplateMax is the longest reply that can go after the 24
+// hours: on one line, inside the approved template (WhatsApp takes 1,024
+// characters in a variable; the rest of the template needs room).
+const customerTemplateMax = 900
+
 // replyCustomer sends a member's reply to the customer from the
 // business's own number and keeps it in the thread: as words within 24
-// hours of the customer's last message, as the approved template after.
-// Refused when the customer said STOP, or the business's number is no
-// longer the one they wrote to.
+// hours of the customer's last message, as the approved template after
+// (up to customerTemplateMax characters, refused longer rather than cut).
+// The reply is written (sending) before it goes, so two sends of one
+// client_id cannot both go. When the business's number has changed since
+// the customer wrote, the thread moves to the new number and the reply
+// goes from it. Refused after STOP, and when the customer was erased.
 func (s *Server) replyCustomer(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	p := principalFrom(ctx)
@@ -553,28 +625,34 @@ func (s *Server) replyCustomer(w http.ResponseWriter, r *http.Request) {
 	}
 	var chat customerChatView
 	var subject, pnid, business, sender string
-	var repeat *customerMessageView
+	repeat := func(tx pgx.Tx) (*customerMessageView, error) {
+		if req.ClientID == "" {
+			return nil, nil
+		}
+		var m customerMessageView
+		var body []byte
+		err := tx.QueryRow(ctx, `SELECT id, mine, kind, body, sender_name, COALESCE(sent_as, ''), COALESCE(delivery, ''), COALESCE(failure, ''), read_at, created_at FROM customer_messages
+			WHERE tenant_id = $1 AND conversation_id = $2 AND client_id = $3`, p.TenantID, chat.ID, req.ClientID).
+			Scan(&m.ID, &m.Mine, &m.Kind, &body, &m.SenderName, &m.SentAs, &m.Delivery, &m.Failure, &m.ReadAt, &m.CreatedAt)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		if m.Body, err = s.openCustomerText(ctx, tx, p.TenantID, body); err != nil {
+			return nil, err
+		}
+		return &m, nil
+	}
+	var again *customerMessageView
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
 		var err error
 		if chat, subject, err = s.customerChatIn(ctx, tx, p.TenantID, chi.URLParam(r, "id")); err != nil {
 			return err
 		}
-		if req.ClientID != "" {
-			var m customerMessageView
-			var body []byte
-			err := tx.QueryRow(ctx, `SELECT id, mine, kind, body, sender_name, COALESCE(sent_as, ''), read_at, created_at FROM customer_messages
-				WHERE tenant_id = $1 AND conversation_id = $2 AND client_id = $3`, p.TenantID, chat.ID, req.ClientID).
-				Scan(&m.ID, &m.Mine, &m.Kind, &body, &m.SenderName, &m.SentAs, &m.ReadAt, &m.CreatedAt)
-			if err == nil {
-				if m.Body, err = s.openCustomerText(ctx, tx, p.TenantID, body); err != nil {
-					return err
-				}
-				repeat = &m
-				return nil
-			}
-			if !errors.Is(err, pgx.ErrNoRows) {
-				return err
-			}
+		if again, err = repeat(tx); err != nil || again != nil {
+			return err
 		}
 		if err := tx.QueryRow(ctx, `SELECT phone_number_id FROM customer_conversations WHERE id = $1`, chat.ID).Scan(&pnid); err != nil {
 			return err
@@ -595,8 +673,8 @@ func (s *Server) replyCustomer(w http.ResponseWriter, r *http.Request) {
 		s.customerChatFail(w, r, err)
 		return
 	}
-	if repeat != nil {
-		writeJSON(w, http.StatusOK, repeat)
+	if again != nil {
+		writeJSON(w, http.StatusOK, again)
 		return
 	}
 	switch {
@@ -616,23 +694,99 @@ func (s *Server) replyCustomer(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if !wa.Own() || wa.Config.PhoneNumberID != pnid {
-		writeErr(w, http.StatusConflict, "the business's WhatsApp number is not the one this customer wrote to; connect it again in Settings to reply")
+	if !wa.Own() {
+		writeErr(w, http.StatusConflict, "the business has no WhatsApp number of its own connected now; connect it in Settings to reply")
+		return
+	}
+	number := chat.Phone
+	// The words as the template carries them: on one line.
+	oneLine := strings.Join(strings.Fields(text), " ")
+	contact, err := wa.Contact(ctx, number)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	open := wa.Config.PhoneNumberID == pnid && contact.LastInbound != nil && time.Since(*contact.LastInbound) < whatsapp.Window
+	if !open && len([]rune(oneLine)) > customerTemplateMax {
+		writeErr(w, http.StatusBadRequest, "more than a day has passed since this customer last wrote: a reply then goes as a WhatsApp message of up to "+
+			strconv.Itoa(customerTemplateMax)+" characters, on one line. Send it in shorter parts")
+		return
+	}
+	sentAs := "text"
+	if !open {
+		sentAs = "template"
+	}
+	// Written before it goes: the thread moves to the business's number
+	// now if it changed, and a second send of the same client_id finds
+	// this one rather than going again.
+	out := customerMessageView{ID: uuid.Must(uuid.NewV7()), Mine: true, Kind: "text", Body: text, SenderName: sender, SentAs: sentAs, Delivery: "sending"}
+	err = db.InTenantTx(context.WithoutCancel(ctx), s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+		if wa.Config.PhoneNumberID != pnid {
+			var other bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM customer_conversations WHERE tenant_id = $1 AND phone_number_id = $2 AND subject_id = $3)`,
+				p.TenantID, wa.Config.PhoneNumberID, subject).Scan(&other); err != nil {
+				return err
+			}
+			if other {
+				return errCustomerOnNewNumber
+			}
+			if _, err := tx.Exec(ctx, `UPDATE customer_conversations SET phone_number_id = $3 WHERE tenant_id = $1 AND id = $2`, p.TenantID, chat.ID, wa.Config.PhoneNumberID); err != nil {
+				return err
+			}
+		}
+		body, err := pii.SealText(ctx, s.Store.PII, tx, p.TenantID, subject, "other", text)
+		if err != nil {
+			return err
+		}
+		var client *string
+		if req.ClientID != "" {
+			client = &req.ClientID
+		}
+		return tx.QueryRow(ctx, `INSERT INTO customer_messages (id, tenant_id, conversation_id, mine, kind, body, sender_id, sender_name, sent_as, client_id, delivery)
+			VALUES ($1, $2, $3, true, 'text', $4, $5, $6, $7, $8, 'sending') RETURNING created_at`,
+			out.ID, p.TenantID, chat.ID, body, p.Actor(), sender, sentAs, client).Scan(&out.CreatedAt)
+	})
+	if err != nil {
+		if isUnique(err) {
+			// The same send, at the same moment: that one goes.
+			var m *customerMessageView
+			if e := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+				var err error
+				m, err = repeat(tx)
+				return err
+			}); e == nil && m != nil {
+				writeJSON(w, http.StatusOK, m)
+				return
+			}
+		}
+		if errors.Is(err, errCustomerOnNewNumber) {
+			writeErr(w, http.StatusConflict, err.Error())
+			return
+		}
+		s.fail(w, r, err)
 		return
 	}
 	tpl := whatsapp.TplCustomerReply
-	oneLine := strings.Join(strings.Fields(text), " ")
-	if rs := []rune(oneLine); len(rs) > 900 {
-		oneLine = string(rs[:899]) + "…"
+	vars := map[string]string{"business": business, "message": oneLine}
+	var waID string
+	if open {
+		waID, err = wa.Send(unkept(ctx), number, whatsapp.Message{Tenant: p.TenantID, Text: text})
+		if errors.Is(err, whatsapp.ErrWindowClosed) && len([]rune(oneLine)) <= customerTemplateMax {
+			// WhatsApp says the 24 hours are over after all: the template.
+			sentAs = "template"
+			waID, err = wa.SendTemplate(ctx, p.TenantID, number, tpl, vars, nil)
+		}
+	} else {
+		waID, err = wa.SendTemplate(ctx, p.TenantID, number, tpl, vars, nil)
 	}
-	msg := whatsapp.Message{Tenant: p.TenantID, Text: text, Template: &tpl, Vars: map[string]string{"business": business, "message": oneLine}}
-	number := chat.Phone
-	sentAs := "text"
-	if !chat.WindowOpen {
-		sentAs = "template"
-	}
-	waID, err := wa.Send(unkept(ctx), number, msg)
 	if err != nil {
+		// Not sent: the reply is not kept, and the box gets it back.
+		if derr := db.InTenantTx(context.WithoutCancel(ctx), s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `DELETE FROM customer_messages WHERE tenant_id = $1 AND id = $2`, p.TenantID, out.ID)
+			return err
+		}); derr != nil {
+			s.Logger.Warn("customer chat: a reply not sent, not removed", "err", derr)
+		}
 		switch {
 		case errors.Is(err, whatsapp.ErrTemplateNotApproved), errors.Is(err, whatsapp.ErrWindowClosed):
 			writeErr(w, http.StatusConflict, "more than a day has passed since this customer last wrote, and WhatsApp has not yet approved the message that reaches them after that; your reply can go when they write again")
@@ -641,31 +795,167 @@ func (s *Server) replyCustomer(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	var out customerMessageView
+	out.SentAs, out.Delivery = sentAs, "sent"
 	err = db.InTenantTx(context.WithoutCancel(ctx), s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
-		body, err := pii.SealText(ctx, s.Store.PII, tx, p.TenantID, subject, "other", text)
-		if err != nil {
-			return err
-		}
-		out = customerMessageView{ID: uuid.Must(uuid.NewV7()), Mine: true, Kind: "text", Body: text, SenderName: sender, SentAs: sentAs}
-		var client, wid *string
-		if req.ClientID != "" {
-			client = &req.ClientID
-		}
+		var wid *string
 		if waID != "" {
 			wid = &waID
 		}
-		if err := tx.QueryRow(ctx, `INSERT INTO customer_messages (id, tenant_id, conversation_id, mine, kind, body, sender_id, sender_name, sent_as, wa_id, client_id)
-			VALUES ($1, $2, $3, true, 'text', $4, $5, $6, $7, $8, $9) RETURNING created_at`,
-			out.ID, p.TenantID, chat.ID, body, p.Actor(), sender, sentAs, wid, client).Scan(&out.CreatedAt); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE customer_messages SET wa_id = $3, sent_as = $4, delivery = 'sent' WHERE tenant_id = $1 AND id = $2 AND delivery = 'sending'`,
+			p.TenantID, out.ID, wid, sentAs); err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `UPDATE customer_conversations SET last_message_at = now() WHERE id = $1`, chat.ID)
+		_, err := tx.Exec(ctx, `UPDATE customer_conversations SET last_message_at = now() WHERE id = $1`, chat.ID)
 		return err
+	})
+	if err != nil {
+		// Sent: it is in the thread as sending; it is not sent again.
+		s.Logger.Warn("customer chat: a reply sent, not marked so", "err", err)
+	}
+	writeJSON(w, http.StatusCreated, out)
+}
+
+var errCustomerOnNewNumber = errors.New("this customer already has a conversation with the business's new WhatsApp number; answer them there")
+
+// customerStatuses records what WhatsApp says became of replies to
+// customers (sent, delivered, read, failed), for the numbers the webhook's
+// app speaks for. A status only moves forward; failed replaces sending or
+// sent.
+func (s *Server) customerStatuses(ctx context.Context, hook *whatsapp.Platform, sts []whatsapp.StatusUpdate) {
+	for _, u := range sts {
+		wa := hook
+		if u.PhoneNumberID != hook.Config.PhoneNumberID {
+			if hook.Own() {
+				continue
+			}
+			var err error
+			if wa, err = s.WhatsApp.ForPhoneNumberID(ctx, u.PhoneNumberID); err != nil || wa == nil || wa.OwnApp {
+				continue
+			}
+		}
+		if !wa.Own() {
+			continue
+		}
+		failure := u.Failure
+		if r := []rune(failure); len(r) > 300 {
+			failure = string(r[:300])
+		}
+		err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{wa.Tenant}, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `UPDATE customer_messages SET delivery = $3, failure = NULLIF($4, '')
+				WHERE tenant_id = $1 AND wa_id = $2 AND mine AND (
+				  ($3 = 'failed' AND delivery IN ('sending', 'sent'))
+				  OR ($3 <> 'failed' AND delivery <> 'failed' AND array_position(ARRAY['sending', 'sent', 'delivered', 'read'], delivery) < array_position(ARRAY['sending', 'sent', 'delivered', 'read'], $3::text)))`,
+				wa.Tenant, u.ID, u.Status, failure)
+			return err
+		})
+		if err != nil {
+			s.Logger.Warn("customer chat: a reply's status", "err", err)
+		}
+	}
+}
+
+// customerChatsUnread is how many customers' threads have messages not
+// yet read (for the Chat tab), and how many messages.
+func (s *Server) customerChatsUnread(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r.Context())
+	var chats, msgs int
+	err := db.InTenantTx(r.Context(), s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `SELECT count(DISTINCT m.conversation_id), count(*) FROM customer_messages m
+			JOIN customer_conversations c ON c.id = m.conversation_id AND c.tenant_id = m.tenant_id
+			WHERE m.tenant_id = $1 AND NOT m.mine AND m.read_at IS NULL AND NOT c.archived`, p.TenantID).Scan(&chats, &msgs)
 	})
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, out)
+	writeJSON(w, http.StatusOK, map[string]int{"chats": chats, "messages": msgs})
+}
+
+// customerSearchDepth is how many of the latest messages a search reads:
+// they are sealed, so they are opened to be searched.
+const customerSearchDepth = 1000
+
+// searchCustomerChats finds words in customers' threads: in their names
+// and numbers, and in the latest messages, newest first (30 at most).
+func (s *Server) searchCustomerChats(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r.Context())
+	q := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
+	if len([]rune(q)) < 2 || len(q) > 100 {
+		writeErr(w, http.StatusBadRequest, "q is 2 to 100 characters")
+		return
+	}
+	type hit struct {
+		ChatID    uuid.UUID `json:"chat_id"`
+		MessageID uuid.UUID `json:"message_id"`
+		Name      string    `json:"name"`
+		Mine      bool      `json:"mine"`
+		Body      string    `json:"body"`
+		CreatedAt time.Time `json:"created_at"`
+	}
+	hits := []hit{}
+	chats := []customerChatView{}
+	err := db.InTenantTx(r.Context(), s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+		rows, err := tx.Query(r.Context(), `SELECT `+customerChatCols+` FROM customer_conversations c
+			WHERE c.tenant_id = $1 ORDER BY c.last_message_at DESC LIMIT 500`, p.TenantID)
+		if err != nil {
+			return err
+		}
+		raws, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (customerChatRaw, error) { return scanCustomerChatRaw(r) })
+		if err != nil {
+			return err
+		}
+		names := map[uuid.UUID]string{}
+		for _, x := range raws {
+			v, err := s.openCustomerChat(r.Context(), tx, p.TenantID, x)
+			if err != nil {
+				return err
+			}
+			names[v.ID] = v.Name
+			digits := strings.Map(func(r rune) rune {
+				if r >= '0' && r <= '9' {
+					return r
+				}
+				return -1
+			}, q)
+			if strings.Contains(strings.ToLower(v.Name), q) || (len(digits) >= 4 && strings.Contains(v.Phone, digits)) {
+				chats = append(chats, v)
+			}
+		}
+		rows, err = tx.Query(r.Context(), `SELECT conversation_id, id, mine, body, created_at FROM customer_messages
+			WHERE tenant_id = $1 AND kind = 'text' ORDER BY created_at DESC LIMIT $2`, p.TenantID, customerSearchDepth)
+		if err != nil {
+			return err
+		}
+		type raw struct {
+			h    hit
+			body []byte
+		}
+		msgs, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (raw, error) {
+			var x raw
+			return x, r.Scan(&x.h.ChatID, &x.h.MessageID, &x.h.Mine, &x.body, &x.h.CreatedAt)
+		})
+		if err != nil {
+			return err
+		}
+		for _, x := range msgs {
+			if len(hits) >= 30 {
+				break
+			}
+			body, err := s.openCustomerText(r.Context(), tx, p.TenantID, x.body)
+			if err != nil {
+				return err
+			}
+			if !strings.Contains(strings.ToLower(body), q) {
+				continue
+			}
+			x.h.Body, x.h.Name = body, names[x.h.ChatID]
+			hits = append(hits, x.h)
+		}
+		return nil
+	})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"chats": chats, "messages": hits})
 }

@@ -1,10 +1,14 @@
 package api_test
 
 import (
+	"bytes"
 	"context"
 	"strings"
 	"testing"
 
+	"github.com/israel-duff/taskiem/engine/reach"
+	"github.com/israel-duff/taskiem/engine/riders"
+	"github.com/israel-duff/taskiem/engine/whatsapp"
 	"github.com/israel-duff/taskiem/engine/whatsapp/whatsapptest"
 )
 
@@ -38,7 +42,7 @@ func TestCustomerConversations(t *testing.T) {
 	}
 	c := chats[0].(map[string]any)
 	id := c["id"].(string)
-	if c["phone"] != customer || c["name"] != customer || !strings.Contains(c["last"].(string), "Yaba") || c["unread"] != float64(1) ||
+	if c["phone"] != customer || c["name"] != "Someone" || !strings.Contains(c["last"].(string), "Yaba") || c["unread"] != float64(1) ||
 		c["window_open"] != true || c["stopped"] != false || c["last_mine"] != false {
 		t.Fatalf("chat: %s", toJSON(c))
 	}
@@ -157,5 +161,137 @@ func TestCustomerConversations(t *testing.T) {
 	// The shared number keeps telling a stranger how to link.
 	if got := w.sendTo(t, "/channels/whatsapp", waPNID, waSecret, "+2348031113333", whatsapptest.Text("hello")); len(got) != 1 || !strings.Contains(got[0].Text, "not linked") {
 		t.Fatalf("shared number: %+v", got)
+	}
+
+	// Search: in names, numbers and the latest messages.
+	found := cashier.must(200, "GET", "/v1/customer-chats/search?q=HELLO%20again", nil)
+	if n := len(found["messages"].([]any)); n < 1 || !strings.Contains(toJSON(found["messages"]), "Hello again") {
+		t.Fatalf("search: %s", toJSON(found))
+	}
+	if n := len(cashier.must(200, "GET", "/v1/customer-chats/search?q=8031112", nil)["chats"].([]any)); n != 1 {
+		t.Fatalf("search by number: %d", n)
+	}
+	cashier.must(400, "GET", "/v1/customer-chats/search?q=y", nil)
+	viewer.must(403, "GET", "/v1/customer-chats/search?q=yaba", nil)
+}
+
+// What the review of phase 1 found: riders and suppliers are not made
+// customers; START is only for a thread that was stopped; WhatsApp's
+// word on a reply (delivered, read, failed) is kept; a late reply too
+// long for the template is refused, not cut; the unread count; a thread
+// follows the business to a new number; messages past their year go.
+func TestCustomerConversationsEdges(t *testing.T) {
+	w := newWAWorld(t)
+	w.graph.AddNumber(pnA, tokA, "+234 800 000 0001")
+	w.graph.AddNumber(pnB, tokB, "+234 800 000 0002")
+	alpha := w.tenant(t, "Mama Put Kitchen", "owner@mamaput.test")
+	const wabaA, wabaB = "300000000000001", "300000000000002"
+	alpha.must(200, "PUT", "/v1/whatsapp/number", map[string]any{"phone_number_id": pnA, "waba_id": wabaA, "access_token": tokA, "own_app": false})
+	ctx := context.Background()
+	admin := w.env.DB.Admin
+	say := func(pnid, from, text string) []whatsapptest.Sent {
+		return w.sendTo(t, "/channels/whatsapp", pnid, waSecret, from, whatsapptest.Text(text))
+	}
+	chats := func() []any { return alpha.must(200, "GET", "/v1/customer-chats", nil)["chats"].([]any) }
+
+	// A rider's free words are not a customer's (riders and suppliers are
+	// known by their numbers' keyed hashes, through the reach book).
+	w.srv.Reach = &reach.Book{Pool: w.env.Store.Pool, Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}
+	w.srv.Riders = &riders.Riders{Pool: w.env.DB.App, Vault: w.env.Vault, Book: w.srv.Reach, PageBase: "https://" + reachFormHost}
+	const rider = "+2348031234888"
+	alpha.must(201, "POST", "/v1/riders", map[string]any{"name": "Musa Bello", "phone": rider, "zones": []string{"Yaba"}, "fee_kobo": 100000})
+	say(pnA, rider, "I am at the gate")
+	if n := len(chats()); n != 0 {
+		t.Fatalf("a rider made a customer: %d chats", n)
+	}
+
+	// START from a customer who never said STOP: not the thread's to answer.
+	const customer = "+2348031112222"
+	say(pnA, customer, "Hello, are you open today?")
+	if got := say(pnA, customer, "START"); len(got) == 1 && strings.Contains(got[0].Text, "write to Mama Put Kitchen here again") {
+		t.Fatalf("START answered for a thread never stopped: %+v", got)
+	}
+	cs := chats()
+	if len(cs) != 1 {
+		t.Fatalf("chats: %s", toJSON(cs))
+	}
+	id := cs[0].(map[string]any)["id"].(string)
+	if u := alpha.must(200, "GET", "/v1/customer-chats/unread", nil); u["chats"] != float64(1) || u["messages"].(float64) < 1 {
+		t.Fatalf("unread: %v", u)
+	}
+
+	// WhatsApp's word on a reply.
+	alpha.must(201, "POST", "/v1/customer-chats/"+id+"/messages", map[string]any{"text": "Yes, till 9pm"})
+	var wamid string
+	if err := admin.QueryRow(ctx, `SELECT wa_id FROM customer_messages WHERE mine ORDER BY created_at DESC LIMIT 1`).Scan(&wamid); err != nil || wamid == "" {
+		t.Fatalf("the reply's id: %q %v", wamid, err)
+	}
+	status := func(st string) {
+		t.Helper()
+		body := []byte(`{"object":"whatsapp_business_account","entry":[{"id":"WABA","changes":[{"field":"messages","value":{"messaging_product":"whatsapp",` +
+			`"metadata":{"display_phone_number":"2348000000001","phone_number_id":"` + pnA + `"},"statuses":[{"id":"` + wamid + `","status":"` + st + `","recipient_id":"2348031112222"}]}}]}]}`)
+		if code, raw := w.post(t, "/channels/whatsapp", body, whatsapp.Sign(waSecret, body)); code != 200 {
+			t.Fatalf("status: %d %s", code, raw)
+		}
+	}
+	delivery := func() string {
+		msgs := alpha.must(200, "GET", "/v1/customer-chats/"+id+"/messages", nil)["messages"].([]any)
+		return msgs[len(msgs)-1].(map[string]any)["delivery"].(string)
+	}
+	if d := delivery(); d != "sent" {
+		t.Fatalf("after sending: %q", d)
+	}
+	status("delivered")
+	status("read")
+	status("delivered") // late: never back
+	if d := delivery(); d != "read" {
+		t.Fatalf("after read: %q", d)
+	}
+
+	// A day on: a reply too long for the template is refused, not cut.
+	if _, err := admin.Exec(ctx, `UPDATE whatsapp_own_contacts SET last_inbound_at = now() - interval '25 hours'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := admin.Exec(ctx, `INSERT INTO whatsapp_templates (waba_id, name, language, status) VALUES ($1, 'taskiem_customer_reply', 'en', 'approved'), ($2, 'taskiem_customer_reply', 'en', 'approved')
+		ON CONFLICT (waba_id, name, language) DO UPDATE SET status = 'approved'`, wabaA, wabaB); err != nil {
+		t.Fatal(err)
+	}
+	before := len(w.graph.Sent(customer))
+	alpha.must(400, "POST", "/v1/customer-chats/"+id+"/messages", map[string]any{"text": strings.Repeat("Our menu today is long. ", 40)})
+	if len(w.graph.Sent(customer)) != before {
+		t.Fatal("a long reply went after the 24 hours")
+	}
+	if m := alpha.must(201, "POST", "/v1/customer-chats/"+id+"/messages", map[string]any{"text": "Still there?"}); m["sent_as"] != "template" {
+		t.Fatalf("late reply: %s", toJSON(m))
+	}
+
+	// The business moves to another number: the thread follows, and the
+	// reply goes from the new number.
+	alpha.must(204, "DELETE", "/v1/whatsapp/number", nil)
+	alpha.must(200, "PUT", "/v1/whatsapp/number", map[string]any{"phone_number_id": pnB, "waba_id": wabaB, "access_token": tokB, "own_app": false})
+	before = len(w.graph.Sent(customer))
+	alpha.must(201, "POST", "/v1/customer-chats/"+id+"/messages", map[string]any{"text": "We have a new number"})
+	sent := w.graph.Sent(customer)[before:]
+	if len(sent) != 1 || sent[0].From != pnB {
+		t.Fatalf("from the new number: %+v", sent)
+	}
+	if got := say(pnB, customer, "Thanks"); len(got) != 0 {
+		t.Fatalf("answered: %+v", got)
+	}
+	if n := len(chats()); n != 1 {
+		t.Fatalf("the customer's thread is split: %d", n)
+	}
+
+	// Messages past their year are deleted with the chat history's.
+	if _, err := admin.Exec(ctx, `UPDATE customer_messages SET expires_at = now() - interval '1 second' WHERE NOT mine`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.env.Store.Pool.Exec(ctx, `SELECT taskiem_customer_messages_purge()`); err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range alpha.must(200, "GET", "/v1/customer-chats/"+id+"/messages", nil)["messages"].([]any) {
+		if m.(map[string]any)["mine"] == false {
+			t.Fatalf("an expired message is kept: %s", toJSON(m))
+		}
 	}
 }

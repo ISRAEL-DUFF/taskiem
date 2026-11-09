@@ -8747,6 +8747,92 @@ paths:
                       $ref: '#/components/schemas/CustomerChat'
         default:
           $ref: '#/components/responses/Error'
+  /v1/customer-chats/unread:
+    get:
+      operationId: customerChatsUnread
+      tags:
+      - Customers
+      summary: Customers waiting for an answer
+      description: How many customers' threads (not archived) have messages not yet read, and how many messages; for the Chat tab.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      responses:
+        '200':
+          description: The counts
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [chats, messages]
+                properties:
+                  chats:
+                    type: integer
+                  messages:
+                    type: integer
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/customer-chats/search:
+    get:
+      operationId: searchCustomerChats
+      tags:
+      - Customers
+      summary: Search customers' conversations
+      description: Customers whose name (or, with four digits or more, number) has the words, and the latest 1,000 messages that do, newest first (30 at most). Messages are sealed, so they are opened to be searched.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      parameters:
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 2
+          maxLength: 100
+      responses:
+        '200':
+          description: What was found
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [chats, messages]
+                properties:
+                  chats:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CustomerChat'
+                  messages:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [chat_id, message_id, name, mine, body, created_at]
+                      properties:
+                        chat_id:
+                          type: string
+                          format: uuid
+                        message_id:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        mine:
+                          type: boolean
+                        body:
+                          type: string
+                        created_at:
+                          type: string
+                          format: date-time
+        default:
+          $ref: '#/components/responses/Error'
   /v1/customer-chats/{id}:
     get:
       operationId: getCustomerChat
@@ -8858,7 +8944,7 @@ paths:
       tags:
       - Customers
       summary: Reply to a customer
-      description: Sent from the business's own WhatsApp number, as words within 24 hours of the customer's last message and as the approved template after. Refused (409) when the customer sent STOP, the template is not approved yet, or the business's number is no longer the one they wrote to. A repeat of a client_id answers the message it sent (200).
+      description: Sent from the business's own WhatsApp number, as words within 24 hours of the customer's last message and as the approved template after (then up to 900 characters, on one line; longer is refused, 400, never cut). The reply is kept before it goes, so a repeat of a client_id answers the message it sent (200) and never goes twice. When the business's number changed since the customer wrote, the thread moves to the new number. Refused (409) when the customer sent STOP, the template is not approved yet, or the customer already has a thread on the new number.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -32813,6 +32899,13 @@ components:
         sent_as:
           type: string
           enum: [text, template]
+        delivery:
+          type: string
+          enum: [sending, sent, delivered, read, failed]
+          description: A reply's way to the customer, as WhatsApp reports it.
+        failure:
+          type: string
+          description: Why WhatsApp could not deliver it (failed).
         read_at:
           type: [string, 'null']
           format: date-time
