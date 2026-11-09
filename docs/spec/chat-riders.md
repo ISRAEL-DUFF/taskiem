@@ -14,7 +14,7 @@ The first draft of this plan gave the rider a sign-up of their own, a kind, a pr
 - A business **finds a rider in Explore** by searching for delivery, and **adds them by linking**, as it links with any supplier. The rider shares a price list with that business, which is how a supplier gives one buyer their price.
 - A delivery is **a link order the business places with the rider**, of kind `delivery`: it carries the pickup, the drop, the fee and the customer's details while held, and it is one card in the conversation between them with the steps the order card already has, plus Arrived.
 - The rider's tools are **the seller's tools that exist**: Orders (their deliveries), Invoices and Bills (their earnings and the cash they owe), the bank on their business, Linked businesses. Their alerts are a seller's alerts. Their briefing is a seller's briefing in their numbers.
-- The rider is **paid as a supplier is paid**: they invoice the business for delivered orders, the business pays the bill, paid once and matched twice. Cash held at the door is a bill the other way.
+- The rider is **paid per delivery**, as dispatch riders are: the business confirms a delivery and the fee goes to the bank on the rider's business through the payout path that exists, paid once, one card on both sides; cash held at the door nets the fee; a fee handed over in cash is recorded as paid.
 - A dispatch company is **a service business with staff** who hold `order.handle` and work the orders, which is what that permission is for.
 
 Three things are rider-specific and stay: the content of a delivery order (pickup, drop, Arrived, the proof photo, the door payment tied to the business's own storefront order), availability (a supplier who is on, off or busy, offered to first when free), and the offer with a window (an order placed to several suppliers in turn, the first to accept holding it). Each is a small addition to what exists, not a module.
@@ -29,7 +29,7 @@ Everything a rider does today on WhatsApp or Telegram keeps working, word for wo
 | Sign-up `kinds` (shop, service, school, workflows) | One question, four answers | A fifth answer, "I deliver for businesses", which is kind `service` with the Delivery service made |
 | Business profile and Explore | Name, tagline, area, about, logo, gallery; found by name, kind, area and what is sold | Unchanged. A rider is found by their Delivery service's words and area |
 | Services (the fronts' services table, a known table) | A service with a price and a duration, shown on the storefront, tagged in chat | The rider's service: "Delivery", with their areas and vehicle as its words, their price |
-| Business links (0061): roles supplier, customer, both; price lists; link orders with steps; conversations; paid once matched twice | Trade between two businesses | The rider is a supplier; the delivery is a link order of a new kind; the fee is a shared price list; earnings are invoices |
+| Business links (0061): roles supplier, customer, both; price lists; link orders with steps; conversations; paid once matched twice | Trade between two businesses | The rider is a supplier; the delivery is a link order of a new kind; the fee is paid per delivery through the payout path dispatch has |
 | Chat tools, phases 1 to 7: tools, cards, diary lines, alerts, staff roles, the briefing, deals | For businesses | Used as they are by the rider's business; the delivery card gains its fields |
 | `order.handle` (phase 5) | Working the orders without the storefront's settings | A dispatch company's riders |
 | Paying people (plan) | A payee of kind rider | A linked rider is a supplier with a bill; the payee kind stays for riders not on Taskiem |
@@ -71,7 +71,7 @@ The rider's business has chat tools on, so it has the seller's tools. They show 
 | Tool | For a rider |
 | --- | --- |
 | **Orders** | Their deliveries: offered (with the window counting down), held in step order, done; each the delivery card with Accept, Can't, Picked up, Arrived, Delivered. In a business's conversation, only that business's. "Deliveries" is the tile's name when the business's only service is Delivery |
-| **Invoices** | What they have earned: a weekly invoice per business drafted from delivered orders (§ Getting paid), sent with a tap; its state as it is paid |
+| **Earnings** | What they have earned: each confirmed delivery's fee as it is paid (§ Getting paid), in their money log, and what is still waiting on a business's Confirm |
 | **Bills** | Cash they hold for a business, as that business's bill to them, paid from the app or by transfer |
 | **Availability** | On, off, busy till, areas today. New, small; writes presence (§ Availability) |
 | **Linked businesses** | As any business's: who they deliver for, requests, Explore |
@@ -88,17 +88,19 @@ Phase 3 makes it the rider's business's **availability** without a second store:
 
 ## Getting paid
 
-Money between a business and a rider goes two ways, and both are what business links already carry.
+Riders are paid **per delivery**, not by the week: that is how dispatch riders work, and the fee is already on each delivery (dispatch D5). Nothing new moves money. The paths are the payout that exists, the business's approval policy and the money log; Taskiem holds nothing.
 
-**Fees.** Each delivered order is a sale of the rider's Delivery service to the business. The rider **invoices** the business for them: a draft invoice per business gathers the week's delivered orders (one line per delivery, with the reference and the fee), drafted on a day the rider chooses or at any time from Invoices, sent with a tap, arriving as a **bill** in the business as any linked supplier's invoice does. The business pays it as it pays bills: `pay-riders-weekly` becomes paying the rider's bill, under the business's approval policy, to the bank on the rider's business, paid once and matched twice with the pairing token. The rider sees the payment land as a card and a diary line and in their money log as income. A business that prefers to pay per delivery pays each bill as it comes.
+**The fee, per delivery.** A delivery's fee is due when the rider taps Delivered and becomes **payable when the business confirms** it: a Confirm on the business's card (and in Orders and the daily close), the same place the owner sees the proof photo. Confirming makes a payout of that one delivery and pays it through the path that exists (`pay_bank` to the bank on the rider, under the business's approval policy, keyed by the payout so it is paid once), so the owner's Confirm is also the approval where the policy allows, and the approval card where it does not. A business that does not confirm within a day is reminded; a delivery the business disputes is released back with a word, and nothing is paid. For a linked rider the payment lands as a **paid card** in the shared conversation and in the rider's money log as income against their delivery order; a rider with no business is paid as today, from a payout of one.
 
-**Cash.** A rider who tapped Cash received owes the business. The business's remittance due becomes **the business's invoice to the rider**, drafted by Taskiem when the cash is recorded (or the day's cash in one), arriving as a bill in the rider's business: the rider pays it from the app through their own payments connection, or by transfer with the token, or hands the notes in and the business marks it paid, each closing both sides. The rider's Bills tool shows what they hold; the business's debtor book shows what each rider owes, with the leak that exists.
+**Cash at the door nets the fee.** When the rider took cash for the order, the fee is taken out of the cash: the remittance due shrinks by the fee the moment the delivery is confirmed, and the rider remits the rest as today. A rider whose cash covers the fee is paid nothing and owes less; nothing crosses the bank twice.
 
-**Nothing new moves money.** The bank is the one on the rider's business; the paths are bill pay and matching; Taskiem holds nothing. A rider not on Taskiem is paid as today, and the paying-people plan's payee of kind rider stays for them.
+**Paid in cash by hand.** A business that hands the rider their fee in cash marks the delivery **Paid in cash** instead of Confirm: the payout is recorded as paid with no transfer, the money log has a cash payment out against it, and the rider's card and log show it as paid in cash. The rider can say otherwise from their side, which raises it with the owner.
+
+**What this replaces.** The weekly invoice from the rider, `pay-riders-weekly`, and the cash invoice to the rider are not built: a payout per delivery and the netting at the door cover them. A business that prefers to pay several deliveries at once confirms them together, and the payouts go out as one approval. A bill across the link can come later if a real business asks for one.
 
 ## A dispatch company
 
-A company with ten riders is a service business with staff: the riders are members with `order.handle`. It links with businesses as one rider does and shares its price list. A business's delivery order reaches the company, and the company's own order workflow offers it to its riders by the rotation dispatch has, inside the company; the business and the customer see the company accept and the rider's steps ("on its way with Musa from Swift Dispatch"). The company invoices the businesses and pays its riders as staff, through the paying-people plan's payroll or however it likes; each rider's Orders shows their own, the owner's shows all. This is the fleet connector the dispatch plan deferred, without a connector.
+A company with ten riders is a service business with staff: the riders are members with `order.handle`. It links with businesses as one rider does and shares its price list. A business's delivery order reaches the company, and the company's own order workflow offers it to its riders by the rotation dispatch has, inside the company; the business and the customer see the company accept and the rider's steps ("on its way with Musa from Swift Dispatch"). The company is paid per delivery as one rider is and pays its riders as staff, through the paying-people plan's payroll or however it likes; each rider's Orders shows their own, the owner's shows all. This is the fleet connector the dispatch plan deferred, without a connector.
 
 ## Data model, engine and API
 
@@ -112,15 +114,15 @@ Under the core rule (the core cleanup plan, PR 172), nothing here adds a busines
 | `riders` | `link_id`, set on claiming; a row with a link is read-only and the legacy path does not use it |
 | `rider_presence` | Keyed by the business (tenant) as well as the phone hash; written by the Availability tool; the definer unchanged |
 | `price_list_items` | Unchanged: the Delivery service on a list, per area as lines |
-| Invoices and bills | Unchanged: an invoice drafted from delivered orders; the cash invoice drafted by dispatch |
+| Payouts (dispatch D5) | A payout of one delivery, made on the business's Confirm (or recorded as paid in cash), through `pay_bank` and the approval policy as today |
 
-**Engine.** `engine/dispatch` learns to place a link order instead of a `deliveries` row when the rider is linked, keeps rotation, the window, the door, cash, quiet riders and the customer's messages, and drafts the cash invoice. `engine/links` learns the `delivery` kind's fields and the Arrived step on an order. `engine/invoicing` gains the weekly draft from delivered orders (a template, `invoice-deliveries-weekly`, the rider's). Explore indexes services' areas and availability. No new module.
+**Engine.** `engine/dispatch` learns to place a link order instead of a `deliveries` row when the rider is linked, keeps rotation, the window, the door, cash, quiet riders and the customer's messages, and makes a payout of one delivery on Confirm, netting the door's cash. `engine/links` learns the `delivery` kind's fields and the Arrived step on an order, and the paid card. Explore indexes services' areas and availability. No new module.
 
 **API.** Nothing rider-named. `/v1/trade-orders` and the link order routes take kind `delivery` and its fields and the `arrived` step; `/v1/availability` (the business's on, off, busy, areas); `/v1/explore?service=delivery`; `/v1/riders` lists linked suppliers with a Delivery service beside legacy riders; `/v1/links` unchanged.
 
 ## WhatsApp, Telegram and Slack
 
-Every word and button a rider uses today stays and acts on the delivery order. A signed-in rider has, as any business owner has, "orders", "invoices", "bills", "tools", "how did we do", and "on", "off", "busy till 3" as today. "I'm a rider" from someone not on Taskiem starts the chat sign-up with the delivery answer. An offer on WhatsApp is the link order's message with Accept and Can't, as a supplier's order arrives today.
+Every word and button a rider uses today stays and acts on the delivery order. A signed-in rider has, as any business owner has, "orders", "money", "tools", "how did we do", and "on", "off", "busy till 3" as today. "I'm a rider" from someone not on Taskiem starts the chat sign-up with the delivery answer. An offer on WhatsApp is the link order's message with Accept and Can't, as a supplier's order arrives today.
 
 ## Safety and privacy
 
@@ -128,7 +130,7 @@ Every word and button a rider uses today stays and acts on the delivery order. A
 - **A business sees of a rider what any linked supplier shows**: the profile, the service, the price list shared with it, availability as a state, and the orders between them. Never another business's orders.
 - **Money moves only through bill pay and matching**, under the business's approval policy, to the bank on the rider's business; the first-payment warning holds; Taskiem holds nothing.
 - **Explore shows nothing a business did not turn on**; a phone finds nobody.
-- **No new way across tenants**: the link definers that exist carry the order, the invoice and the payment; the isolation test's list is unchanged.
+- **No new way across tenants**: the link definers that exist carry the order and the paid card; the payout path carries the payment; the isolation test's list is unchanged.
 - **Plain words:** "Rider", "Deliveries", "Available", "Earned", "Cash you hold"; never "fleet", "dispatcher", "payout" or "tenant" on a rider's screen.
 
 ## Phases
@@ -141,14 +143,14 @@ Five phases, each a PR that ships on its own. The delivery order first, because 
    - Done when: a rider signs up from WhatsApp in under three minutes, is found by a business searching "delivery Yaba", and a business's legacy rider becomes a link in two taps with history kept.
 3. **Availability.** The tool and the words writing the business's availability; rotation reading it; Explore showing it; a dispatch company's per-member state.
    - Done when: a rider who says "off" from the tool is offered nothing by two businesses until they say "on", and Explore shows them as off.
-4. **Earnings and cash.** The weekly invoice drafted from delivered orders and sent; `pay-riders-weekly` paying the rider's bill; the cash invoice drafted on Cash received and paid from the rider's Bills; the rider's briefing and "how did I do".
-   - Done when: a rider's week of deliveries is one invoice paid by the business under approval to the bank on the rider's business, and cash the rider held is a bill they pay from the app, both matched on both sides.
+4. **Getting paid, per delivery.** Confirm and Paid in cash on the business's side; the payout of one delivery through the payout path and the approval policy; the netting of cash at the door; the paid card and the rider's money log; the reminder to confirm; the rider's "how did I do".
+   - Done when: a rider taps Delivered, the business confirms, the fee reaches the bank on the rider's business under the business's approval policy with one card on both sides, cash the rider took is netted against the fee, and a fee handed over in cash is recorded as paid with no transfer.
 5. **The dispatch company.** Staff with `order.handle` working delivery orders; the company's own rotation inside itself; the company's and each rider's view.
    - Done when: a business offers an order to a company, the company's rotation gives it to a member, the business and the customer see that member's steps, and the company's owner sees the week's orders and money.
 
 ## Tests and checks
 
-- **Go:** a delivery order placed, offered in turn with the window and held by the first to accept; the steps accepted only from the rider's side and only for their own order; customer details present only while held; the door payment and cash on the storefront order as before; the legacy path unchanged by every test dispatch has; the claim; availability read as a state only; the weekly invoice's lines; the cash invoice; paid once matched twice with the token; `order.handle` in a company; the isolation test's definer list unchanged.
+- **Go:** a delivery order placed, offered in turn with the window and held by the first to accept; the steps accepted only from the rider's side and only for their own order; customer details present only while held; the door payment and cash on the storefront order as before; the legacy path unchanged by every test dispatch has; the claim; availability read as a state only; a payout of one delivery on Confirm, paid once; cash netted against the fee; paid in cash recorded with no transfer; `order.handle` in a company; the isolation test's definer list unchanged.
 - **Browser (e2e):** at 390 and 360 px in both themes with axe: the rider's chat sign-up; Explore's Delivery chip and Connect; the delivery card through the steps with a photo on a phone; Availability; the invoice sent and the bill paid; the company's dispatch.
 - **WhatsApp:** the fake Graph API the e2e tests run: an offer reaching the rider on WhatsApp and the card at once, answered on either.
 - **Plain words:** every new rider-facing line through `src/lib/plainwords.test.ts`.
