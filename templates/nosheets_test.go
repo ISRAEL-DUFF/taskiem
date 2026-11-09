@@ -137,7 +137,7 @@ func TestKnownTables(t *testing.T) {
 	for _, kt := range templates.KnownTables() {
 		names = append(names, kt.Name)
 	}
-	if !reflect.DeepEqual(names, []string{"classes", "conversations", "customers", "events", "hire_items", "menu", "products", "spaces", "staff", "subscribers"}) {
+	if !reflect.DeepEqual(names, []string{"assistant_allowed", "classes", "conversations", "customers", "events", "hire_items", "menu", "products", "spaces", "staff", "subscribers"}) {
 		t.Errorf("known tables: %v", names)
 	}
 	staff, _ := templates.KnownTable("staff")

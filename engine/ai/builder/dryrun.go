@@ -83,6 +83,18 @@ func HappyPathWith(def *wd.Definition, reg connector.Lookup, find expansion.Temp
 		trig["email"] = map[string]any{"address": "sample@in.taskiem.app", "received_at": "2026-01-01T09:00:00Z",
 			"auth": map[string]any{"spf": "pass", "dkim": []any{"example.com"}, "dmarc": "", "aligned": true}}
 	}
+	if g, ok := def.Trigger.Config["guard"]; ok && def.Trigger.Type == "connector_event" && g != false && g != nil {
+		// A customer's message the guard lets through (decision 0062 V6):
+		// trigger.guard as a guarded run gets it.
+		conn, _ := def.Trigger.Config["connector"].(string)
+		name, _ := def.Trigger.Config["connection"].(string)
+		if name == "" {
+			name = "main"
+		}
+		trig["guard"] = map[string]any{"outcome": "answer", "reason": "", "reply": "", "notice": "", "language": "en", "first": false,
+			"kind": "text", "text": "Hello, do you deliver?", "channel": conn + "/" + name + "/prod", "sender": "2348030000000"}
+		trig["item"] = map[string]any{"kind": "message", "message": map[string]any{"id": "wamid.sample", "from": "2348030000000", "type": "text"}}
+	}
 	if def.Trigger.Type == "invoice" {
 		// An invoice paid in full, as engine/invoicing.PaidTrigger gives it.
 		trig["event"] = "paid"
@@ -191,6 +203,15 @@ func HappyPathWith(def *wd.Definition, reg connector.Lookup, find expansion.Temp
 				c.Mocks[st.ID] = wdtest.Mocks{{Output: map[string]any{"status": 200, "body": map[string]any{}}}}
 			case "code", "container":
 				c.Mocks[st.ID] = wdtest.Mocks{{Output: map[string]any{}}}
+			case "ai":
+				// The model's answer, of the step's own shape.
+				var out any = map[string]any{}
+				if st.AI != nil && len(st.AI.OutputSchema) > 0 {
+					if o := sample(rawAny(st.AI.OutputSchema), nil, nil, 0); o != nil {
+						out = o
+					}
+				}
+				c.Mocks[st.ID] = wdtest.Mocks{{Output: out}}
 			case "approval":
 				c.Approvals[st.ID] = wdtest.ApprovalMock{Decision: "approved", By: "checker"}
 			case "signal":

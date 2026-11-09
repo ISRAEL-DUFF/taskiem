@@ -1,0 +1,302 @@
+{
+  "id": "assistant-answer",
+  "title": "Your assistant's answer",
+  "summary": "Your assistant's answer to one customer message: from what your business knows and the conversation so far, checked before it is sent.",
+  "description": "Reads the last messages with this customer, finds what your business knows that answers them (your approved sources), and asks the AI model for a short reply in the customer's language. The reply is checked before anything is sent: a price, link, phone number or promise your sources do not give is held back, and the customer is told someone will get back to them. When the model is unsure, or cannot answer, the customer is handed to a person and the owners are told. Both messages are kept in your conversations table, so the next answer remembers them. The WhatsApp and Telegram assistant templates use it.",
+  "category": "assistant",
+  "tags": [
+    "assistant",
+    "ai",
+    "whatsapp",
+    "telegram"
+  ],
+  "keywords": [
+    "assistant",
+    "answer",
+    "reply",
+    "question",
+    "ai",
+    "chatbot",
+    "bot"
+  ],
+  "requires": [
+    "assistant",
+    "answer customers",
+    "answer my customers",
+    "chatbot"
+  ],
+  "connectors": [
+    "xenibase@1",
+    "knowledge@1",
+    "assistant@1",
+    "notify@1"
+  ],
+  "params": [
+    {
+      "name": "business_name",
+      "type": "string",
+      "title": "Business name",
+      "description": "How your assistant names your business to customers.",
+      "required": true,
+      "example": "Mama Put Kitchen",
+      "max_length": 80
+    },
+    {
+      "name": "about",
+      "type": "text",
+      "title": "About your business",
+      "description": "A few lines your assistant always keeps in mind: what you sell, where you are, your opening hours, and how you like to speak to customers. Prices and offers belong in your approved sources, where they are checked.",
+      "required": false,
+      "default": "",
+      "example": "We cook and deliver Nigerian meals in Lekki and Ajah, every day from 9am to 9pm. Be warm and brief.",
+      "max_length": 2000
+    },
+    {
+      "name": "conversations_table",
+      "type": "string",
+      "title": "Conversations table",
+      "description": "Where what was said is kept, so your assistant remembers the conversation. Taskiem makes it for you if it does not exist.",
+      "required": false,
+      "default": "conversations",
+      "example": "conversations",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$",
+      "picker": "table"
+    }
+  ],
+  "tables": [
+    {
+      "known": "conversations",
+      "name": "{{conversations_table}}"
+    }
+  ],
+  "callable": true,
+  "outputs": [
+    {
+      "name": "reply",
+      "type": "string",
+      "title": "The reply",
+      "description": "What to send the customer: the checked answer, or a polite note that someone will get back to them.",
+      "value": "=steps.check.output.text"
+    },
+    {
+      "name": "handed_over",
+      "type": "boolean",
+      "title": "Handed to a person",
+      "description": "The assistant could not answer well and a person will answer this customer.",
+      "value": "=steps.reply.output.needs_person || !steps.check.output.ok"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_assistantAnswer",
+    "version": 1,
+    "name": "Answer a customer",
+    "trigger": {
+      "type": "manual"
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "channel",
+          "via",
+          "sender",
+          "text"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "channel": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Channel"
+          },
+          "via": {
+            "type": "string",
+            "enum": [
+              "whatsapp",
+              "telegram"
+            ],
+            "title": "WhatsApp or Telegram"
+          },
+          "sender": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "title": "Customer",
+            "x-pii": "other"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 4000,
+            "title": "What they wrote or said",
+            "x-pii": "other"
+          },
+          "language": {
+            "type": "string",
+            "maxLength": 8,
+            "title": "Their language"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "text",
+              "voice"
+            ],
+            "title": "Text or voice"
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "memory",
+        "type": "connector",
+        "name": "Read the conversation so far",
+        "connector": "xenibase@1",
+        "action": "read_rows",
+        "connection": "data_tables",
+        "input": {
+          "table": "{{conversations_table}}",
+          "filters": [
+            {
+              "column": "conversation",
+              "op": "eq",
+              "value": "=trigger.body.via + ':' + trigger.body.sender"
+            }
+          ],
+          "order": [
+            {
+              "column": "id",
+              "desc": true
+            }
+          ],
+          "limit": 20
+        }
+      },
+      {
+        "id": "know",
+        "type": "connector",
+        "name": "Find what your business knows about it",
+        "connector": "knowledge@1",
+        "action": "search",
+        "input": {
+          "question": "=trigger.body.text"
+        }
+      },
+      {
+        "id": "reply",
+        "type": "ai",
+        "name": "Write the reply",
+        "needs": [
+          "memory",
+          "know"
+        ],
+        "config": {
+          "system": "You answer customers of {{business_name}} on WhatsApp and Telegram, for the business. {{about}}",
+          "prompt": "Answer the customer's latest message (question) in a short, friendly reply, in their language (language: en English, pcm Nigerian Pidgin, yo Yoruba, ha Hausa, ig Igbo). Use only the business's material for facts, prices, offers and links; never invent them. If the material does not answer it, or they are upset, or they ask for something only a person can do, say kindly that someone from the team will get back to them, and set needs_person.",
+          "history": "=steps.memory.output.rows.filter(r, has(r.role) && has(r.text) && r.role in ['user', 'assistant']).reverse().map(r, {'role': r.role, 'text': r.text})",
+          "personal_data": [
+            "history",
+            "question"
+          ],
+          "max_tokens": 600,
+          "output_schema": {
+            "type": "object",
+            "required": [
+              "reply",
+              "needs_person"
+            ],
+            "properties": {
+              "reply": {
+                "type": "string",
+                "maxLength": 2000
+              },
+              "needs_person": {
+                "type": "boolean"
+              },
+              "fallback": {
+                "type": "boolean"
+              }
+            }
+          },
+          "fallback": {
+            "reply": "",
+            "needs_person": true,
+            "fallback": true
+          }
+        },
+        "input": {
+          "question": "=trigger.body.text",
+          "language": "=trigger.body.?language.orValue('en')",
+          "material": "=steps.know.output.material"
+        }
+      },
+      {
+        "id": "check",
+        "type": "connector",
+        "name": "Check the reply before it is sent",
+        "connector": "assistant@1",
+        "action": "check_reply",
+        "needs": [
+          "reply"
+        ],
+        "input": {
+          "text": "=steps.reply.output.reply",
+          "material": "=steps.know.output.material",
+          "customer": "=trigger.body.text",
+          "language": "=trigger.body.?language.orValue('en')",
+          "max": 1500
+        }
+      },
+      {
+        "id": "hand",
+        "type": "connector",
+        "name": "Hand them to a person",
+        "connector": "assistant@1",
+        "action": "hand_over",
+        "needs": [
+          "check"
+        ],
+        "when": "=steps.reply.output.needs_person || !steps.check.output.ok",
+        "input": {
+          "channel": "=trigger.body.channel",
+          "sender": "=trigger.body.sender"
+        }
+      },
+      {
+        "id": "alert",
+        "type": "connector",
+        "name": "Tell the owners the assistant could not answer",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "reply"
+        ],
+        "when": "=steps.reply.output.?fallback.orValue(false)",
+        "input": {
+          "title": "Your assistant could not answer a customer",
+          "message": "The AI model was not available, so a customer was told someone will get back to them. Answer them from Conversations."
+        }
+      },
+      {
+        "id": "keep",
+        "type": "connector",
+        "name": "Keep both messages in the conversation",
+        "connector": "xenibase@1",
+        "action": "insert_rows",
+        "connection": "data_tables",
+        "needs": [
+          "check"
+        ],
+        "input": {
+          "table": "{{conversations_table}}",
+          "rows": "=[{'conversation': trigger.body.via + ':' + trigger.body.sender, 'channel': trigger.body.via, 'sender': trigger.body.sender, 'role': 'user', 'text': trigger.body.text, 'language': trigger.body.?language.orValue('en'), 'kind': trigger.body.?kind.orValue('text')}, {'conversation': trigger.body.via + ':' + trigger.body.sender, 'channel': trigger.body.via, 'sender': trigger.body.sender, 'role': 'assistant', 'text': steps.check.output.text, 'language': trigger.body.?language.orValue('en'), 'kind': trigger.body.?kind.orValue('text')}]"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "15m",
+      "retention": "conversations"
+    }
+  }
+}

@@ -1,0 +1,721 @@
+{
+  "schema": "wd-test/v1",
+  "template": "assistant-telegram",
+  "params": {
+    "business_name": "Mama Put Kitchen"
+  },
+  "cases": [
+    {
+      "name": "a written question is answered in writing, with the notice for a new customer",
+      "trigger": {
+        "event": "message",
+        "guard": {
+          "outcome": "answer",
+          "reason": "",
+          "reply": "",
+          "notice": "You're chatting with Mama Put Kitchen's automatic assistant. Reply PERSON for a person, or STOP.",
+          "language": "en",
+          "first": true,
+          "kind": "text",
+          "text": "Do you deliver to Ajah?",
+          "channel": "telegram@1/main/prod",
+          "sender": "55501"
+        },
+        "body": {
+          "update_id": 1,
+          "message": {
+            "message_id": 7,
+            "chat": {
+              "id": 55501,
+              "type": "private"
+            }
+          }
+        }
+      },
+      "mocks": {
+        "listed": {
+          "output": {
+            "rows": []
+          }
+        },
+        "typing": {
+          "output": {
+            "ok": true
+          }
+        },
+        "answer_t__memory": {
+          "output": {
+            "rows": []
+          }
+        },
+        "answer_t__know": {
+          "output": {
+            "found": true,
+            "material": "We deliver to Lekki and Ajah.",
+            "passages": []
+          }
+        },
+        "answer_t__reply": {
+          "output": {
+            "reply": "Yes, we deliver to Ajah.",
+            "needs_person": false
+          }
+        },
+        "answer_t__check": {
+          "output": {
+            "ok": true,
+            "text": "Yes, we deliver to Ajah.",
+            "problems": []
+          }
+        },
+        "answer_t__keep": {
+          "output": {
+            "affected": 2,
+            "rows": []
+          }
+        },
+        "send_t": {
+          "output": {
+            "message_id": 8
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "fixed": "skipped",
+          "send_t": "completed",
+          "hear": "not_run"
+        },
+        "inputs": {
+          "send_t": {
+            "chat_id": "55501",
+            "text": "You're chatting with Mama Put Kitchen's automatic assistant. Reply PERSON for a person, or STOP.\n\nYes, we deliver to Ajah."
+          },
+          "answer_t__memory": {
+            "filters": [
+              {
+                "column": "conversation",
+                "op": "eq",
+                "value": "telegram:55501"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "a voice note is heard and answered by voice",
+      "trigger": {
+        "event": "message",
+        "guard": {
+          "outcome": "answer",
+          "reason": "",
+          "reply": "",
+          "notice": "",
+          "language": "pcm",
+          "first": false,
+          "kind": "voice",
+          "text": "",
+          "channel": "telegram@1/main/prod",
+          "sender": "55501",
+          "file": {
+            "file": "019a0000-0000-7000-8000-000000000001",
+            "name": "voice.ogg",
+            "type": "audio/ogg",
+            "size": 9000,
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "body": {
+          "update_id": 1,
+          "message": {
+            "message_id": 7,
+            "chat": {
+              "id": 55501,
+              "type": "private"
+            }
+          }
+        }
+      },
+      "mocks": {
+        "listed": {
+          "output": {
+            "rows": []
+          }
+        },
+        "typing": {
+          "output": {
+            "ok": true
+          }
+        },
+        "hear": {
+          "output": {
+            "heard": true,
+            "text": "Una dey deliver go Ajah?",
+            "language": "pcm",
+            "seconds": 3
+          }
+        },
+        "answer_v__memory": {
+          "output": {
+            "rows": []
+          }
+        },
+        "answer_v__know": {
+          "output": {
+            "found": true,
+            "material": "We deliver to Lekki and Ajah.",
+            "passages": []
+          }
+        },
+        "answer_v__reply": {
+          "output": {
+            "reply": "Yes o, we dey deliver go Ajah.",
+            "needs_person": false
+          }
+        },
+        "answer_v__check": {
+          "output": {
+            "ok": true,
+            "text": "Yes o, we dey deliver go Ajah.",
+            "problems": []
+          }
+        },
+        "answer_v__keep": {
+          "output": {
+            "affected": 2,
+            "rows": []
+          }
+        },
+        "speak": {
+          "output": {
+            "file": {
+              "file": "019a0000-0000-7000-8000-000000000002",
+              "name": "reply.ogg",
+              "type": "audio/ogg",
+              "size": 12000,
+              "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+            },
+            "seconds": 3,
+            "characters": 30,
+            "plays_inline": true
+          }
+        },
+        "send_v": {
+          "output": {
+            "message_id": 8
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "hear": "completed",
+          "speak": "completed",
+          "send_v": "completed",
+          "send_tv": "skipped",
+          "send_t": "not_run"
+        },
+        "inputs": {
+          "hear": {
+            "file": {
+              "file": "019a0000-0000-7000-8000-000000000001",
+              "name": "voice.ogg",
+              "type": "audio/ogg",
+              "size": 9000,
+              "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "language": "pcm"
+          },
+          "speak": {
+            "text": "Yes o, we dey deliver go Ajah."
+          },
+          "send_v": {
+            "chat_id": "55501",
+            "file": {
+              "file": "019a0000-0000-7000-8000-000000000002",
+              "name": "reply.ogg",
+              "type": "audio/ogg",
+              "size": 12000,
+              "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+            }
+          },
+          "answer_v__check": {
+            "customer": "Una dey deliver go Ajah?",
+            "language": "pcm"
+          }
+        }
+      }
+    },
+    {
+      "name": "a voice note that cannot be heard gets the fixed answer",
+      "trigger": {
+        "event": "message",
+        "guard": {
+          "outcome": "answer",
+          "reason": "",
+          "reply": "",
+          "notice": "",
+          "language": "en",
+          "first": false,
+          "kind": "voice",
+          "text": "",
+          "channel": "telegram@1/main/prod",
+          "sender": "55501",
+          "file": {
+            "file": "019a0000-0000-7000-8000-000000000001",
+            "name": "voice.ogg",
+            "type": "audio/ogg",
+            "size": 9000,
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "body": {
+          "update_id": 1,
+          "message": {
+            "message_id": 7,
+            "chat": {
+              "id": 55501,
+              "type": "private"
+            }
+          }
+        }
+      },
+      "mocks": {
+        "listed": {
+          "output": {
+            "rows": []
+          }
+        },
+        "typing": {
+          "output": {
+            "ok": true
+          }
+        },
+        "hear": {
+          "output": {
+            "heard": false,
+            "reason": "empty",
+            "reply": "Sorry, I couldn't hear that. Please send it again or write it.",
+            "seconds": 1
+          }
+        },
+        "unheard": {
+          "output": {
+            "message_id": 8
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "unheard": "completed",
+          "answer_v": "not_run"
+        },
+        "inputs": {
+          "unheard": {
+            "chat_id": "55501",
+            "text": "Sorry, I couldn't hear that. Please send it again or write it."
+          }
+        }
+      }
+    },
+    {
+      "name": "a photo gets the guard's fixed answer and nothing else",
+      "trigger": {
+        "event": "message",
+        "guard": {
+          "outcome": "reply",
+          "reason": "kind",
+          "reply": "I can read text and voice notes only. Please write your question.",
+          "notice": "",
+          "language": "en",
+          "first": false,
+          "kind": "image",
+          "text": "",
+          "channel": "telegram@1/main/prod",
+          "sender": "55501"
+        },
+        "body": {
+          "update_id": 1,
+          "message": {
+            "message_id": 7,
+            "chat": {
+              "id": 55501,
+              "type": "private"
+            }
+          }
+        }
+      },
+      "mocks": {
+        "fixed": {
+          "output": {
+            "message_id": 8
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "fixed": "completed",
+          "listed": "skipped",
+          "typing": "skipped",
+          "answer": "skipped"
+        },
+        "inputs": {
+          "fixed": {
+            "chat_id": "55501",
+            "text": "I can read text and voice notes only. Please write your question."
+          }
+        }
+      }
+    },
+    {
+      "name": "too many messages get the guard's fixed answer once",
+      "trigger": {
+        "event": "message",
+        "guard": {
+          "outcome": "reply",
+          "reason": "limited",
+          "reply": "You've sent a lot of messages. Please wait a little and try again.",
+          "notice": "",
+          "language": "en",
+          "first": false,
+          "kind": "text",
+          "text": "Do you deliver to Ajah?",
+          "channel": "telegram@1/main/prod",
+          "sender": "55501"
+        },
+        "body": {
+          "update_id": 1,
+          "message": {
+            "message_id": 7,
+            "chat": {
+              "id": 55501,
+              "type": "private"
+            }
+          }
+        }
+      },
+      "mocks": {
+        "fixed": {
+          "output": {
+            "message_id": 8
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "fixed": "completed",
+          "answer": "skipped"
+        },
+        "inputs": {
+          "fixed": {
+            "chat_id": "55501",
+            "text": "You've sent a lot of messages. Please wait a little and try again."
+          }
+        }
+      }
+    },
+    {
+      "name": "a customer not on the list is not answered when only listed customers are",
+      "params": {
+        "only_listed": true
+      },
+      "trigger": {
+        "event": "message",
+        "guard": {
+          "outcome": "answer",
+          "reason": "",
+          "reply": "",
+          "notice": "",
+          "language": "en",
+          "first": false,
+          "kind": "text",
+          "text": "Do you deliver to Ajah?",
+          "channel": "telegram@1/main/prod",
+          "sender": "55501"
+        },
+        "body": {
+          "update_id": 1,
+          "message": {
+            "message_id": 7,
+            "chat": {
+              "id": 55501,
+              "type": "private"
+            }
+          }
+        }
+      },
+      "mocks": {
+        "listed": {
+          "output": {
+            "rows": []
+          }
+        },
+        "typing": {
+          "output": {
+            "ok": true
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "listed": "completed",
+          "answer": "skipped",
+          "fixed": "skipped"
+        },
+        "inputs": {
+          "listed": {
+            "table": "assistant_allowed",
+            "filters": [
+              {
+                "column": "sender",
+                "op": "eq",
+                "value": "55501"
+              }
+            ],
+            "limit": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "a customer on the list is answered when only listed customers are",
+      "params": {
+        "only_listed": true
+      },
+      "trigger": {
+        "event": "message",
+        "guard": {
+          "outcome": "answer",
+          "reason": "",
+          "reply": "",
+          "notice": "",
+          "language": "en",
+          "first": false,
+          "kind": "text",
+          "text": "Do you deliver to Ajah?",
+          "channel": "telegram@1/main/prod",
+          "sender": "55501"
+        },
+        "body": {
+          "update_id": 1,
+          "message": {
+            "message_id": 7,
+            "chat": {
+              "id": 55501,
+              "type": "private"
+            }
+          }
+        }
+      },
+      "mocks": {
+        "listed": {
+          "output": {
+            "rows": [
+              {
+                "sender": "55501"
+              }
+            ]
+          }
+        },
+        "typing": {
+          "output": {
+            "ok": true
+          }
+        },
+        "answer_t__memory": {
+          "output": {
+            "rows": []
+          }
+        },
+        "answer_t__know": {
+          "output": {
+            "found": true,
+            "material": "We deliver to Lekki and Ajah.",
+            "passages": []
+          }
+        },
+        "answer_t__reply": {
+          "output": {
+            "reply": "Yes, we deliver to Ajah.",
+            "needs_person": false
+          }
+        },
+        "answer_t__check": {
+          "output": {
+            "ok": true,
+            "text": "Yes, we deliver to Ajah.",
+            "problems": []
+          }
+        },
+        "answer_t__keep": {
+          "output": {
+            "affected": 2,
+            "rows": []
+          }
+        },
+        "send_t": {
+          "output": {
+            "message_id": 8
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "send_t": "completed"
+        }
+      }
+    },
+    {
+      "name": "when the model cannot answer, the customer is told someone will get back to them and the owners are told",
+      "trigger": {
+        "event": "message",
+        "guard": {
+          "outcome": "answer",
+          "reason": "",
+          "reply": "",
+          "notice": "",
+          "language": "en",
+          "first": false,
+          "kind": "text",
+          "text": "Do you deliver to Ajah?",
+          "channel": "telegram@1/main/prod",
+          "sender": "55501"
+        },
+        "body": {
+          "update_id": 1,
+          "message": {
+            "message_id": 7,
+            "chat": {
+              "id": 55501,
+              "type": "private"
+            }
+          }
+        }
+      },
+      "mocks": {
+        "listed": {
+          "output": {
+            "rows": []
+          }
+        },
+        "typing": {
+          "output": {
+            "ok": true
+          }
+        },
+        "answer_t__memory": {
+          "output": {
+            "rows": []
+          }
+        },
+        "answer_t__know": {
+          "output": {
+            "found": true,
+            "material": "We deliver to Lekki and Ajah.",
+            "passages": []
+          }
+        },
+        "answer_t__reply": {
+          "output": {
+            "reply": "",
+            "needs_person": true,
+            "fallback": true
+          }
+        },
+        "answer_t__check": {
+          "output": {
+            "ok": false,
+            "text": "Let me check that with the team and get back to you.",
+            "problems": [
+              {
+                "kind": "empty"
+              }
+            ]
+          }
+        },
+        "answer_t__keep": {
+          "output": {
+            "affected": 2,
+            "rows": []
+          }
+        },
+        "answer_t__hand": {
+          "output": {
+            "until": "2026-11-10T10:00:00Z"
+          }
+        },
+        "answer_t__alert": {
+          "output": {
+            "people": 1,
+            "chat": 1,
+            "email": 0,
+            "nobody": false
+          }
+        },
+        "send_t": {
+          "output": {
+            "message_id": 8
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "answer_t__alert": "completed",
+          "answer_t__hand": "completed",
+          "send_t": "completed"
+        },
+        "inputs": {
+          "send_t": {
+            "chat_id": "55501",
+            "text": "Let me check that with the team and get back to you."
+          }
+        }
+      }
+    },
+    {
+      "name": "while a person answers them, the assistant says nothing",
+      "trigger": {
+        "event": "message",
+        "guard": {
+          "outcome": "quiet",
+          "reason": "waiting",
+          "reply": "",
+          "notice": "",
+          "language": "en",
+          "first": false,
+          "kind": "text",
+          "text": "Do you deliver to Ajah?",
+          "channel": "telegram@1/main/prod",
+          "sender": "55501"
+        },
+        "body": {
+          "update_id": 1,
+          "message": {
+            "message_id": 7,
+            "chat": {
+              "id": 55501,
+              "type": "private"
+            }
+          }
+        }
+      },
+      "mocks": {},
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "fixed": "skipped",
+          "listed": "skipped",
+          "answer": "skipped"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "name": "assistant_allowed",
+  "title": "Allowed customers",
+  "description": "The customers a business's assistant may answer, when it answers only its own list: one row per customer, by their WhatsApp number (digits with the country code, 2348031234567) or Telegram chat id.",
+  "keep_with_conversations": false,
+  "columns": [
+    {
+      "name": "sender",
+      "title": "Number or chat id",
+      "type": "text",
+      "required": true,
+      "personal": true
+    },
+    {
+      "name": "name",
+      "title": "Name",
+      "type": "text",
+      "personal": true
+    },
+    {
+      "name": "note",
+      "title": "Note",
+      "type": "text"
+    }
+  ]
+}

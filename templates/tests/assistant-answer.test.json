@@ -1,0 +1,292 @@
+{
+  "schema": "wd-test/v1",
+  "template": "assistant-answer",
+  "params": {
+    "business_name": "Mama Put Kitchen",
+    "about": "We cook and deliver Nigerian meals in Lekki and Ajah."
+  },
+  "cases": [
+    {
+      "name": "a question the material answers is answered, checked and kept",
+      "trigger": {
+        "body": {
+          "channel": "whatsapp@1/main/prod",
+          "via": "whatsapp",
+          "sender": "2348031234567",
+          "text": "Do you deliver to Ajah?",
+          "language": "en",
+          "kind": "text"
+        }
+      },
+      "mocks": {
+        "memory": {
+          "output": {
+            "rows": [
+              {
+                "id": 2,
+                "role": "assistant",
+                "text": "Hello! How can I help?"
+              },
+              {
+                "id": 1,
+                "role": "user",
+                "text": "Hi"
+              }
+            ]
+          }
+        },
+        "know": {
+          "output": {
+            "found": true,
+            "material": "We deliver to Lekki and Ajah from 9am to 9pm.",
+            "passages": []
+          }
+        },
+        "reply": {
+          "output": {
+            "reply": "Yes, we deliver to Ajah from 9am to 9pm.",
+            "needs_person": false
+          }
+        },
+        "check": {
+          "output": {
+            "ok": true,
+            "text": "Yes, we deliver to Ajah from 9am to 9pm.",
+            "problems": []
+          }
+        },
+        "keep": {
+          "output": {
+            "affected": 2,
+            "rows": []
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "memory": "completed",
+          "know": "completed",
+          "reply": "completed",
+          "check": "completed",
+          "hand": "skipped",
+          "alert": "skipped",
+          "keep": "completed"
+        },
+        "inputs": {
+          "memory": {
+            "table": "conversations",
+            "filters": [
+              {
+                "column": "conversation",
+                "op": "eq",
+                "value": "whatsapp:2348031234567"
+              }
+            ],
+            "order": [
+              {
+                "column": "id",
+                "desc": true
+              }
+            ],
+            "limit": 20
+          },
+          "check": {
+            "text": "Yes, we deliver to Ajah from 9am to 9pm.",
+            "material": "We deliver to Lekki and Ajah from 9am to 9pm.",
+            "customer": "Do you deliver to Ajah?",
+            "language": "en",
+            "max": 1500
+          },
+          "keep": {
+            "table": "conversations",
+            "rows": [
+              {
+                "conversation": "whatsapp:2348031234567",
+                "channel": "whatsapp",
+                "sender": "2348031234567",
+                "role": "user",
+                "text": "Do you deliver to Ajah?",
+                "language": "en",
+                "kind": "text"
+              },
+              {
+                "conversation": "whatsapp:2348031234567",
+                "channel": "whatsapp",
+                "sender": "2348031234567",
+                "role": "assistant",
+                "text": "Yes, we deliver to Ajah from 9am to 9pm.",
+                "language": "en",
+                "kind": "text"
+              }
+            ]
+          }
+        },
+        "outputs": {
+          "check": {
+            "text": "Yes, we deliver to Ajah from 9am to 9pm."
+          }
+        }
+      }
+    },
+    {
+      "name": "a reply the check holds is not sent: the customer is told someone will answer and is handed over",
+      "trigger": {
+        "body": {
+          "channel": "telegram@1/main/prod",
+          "via": "telegram",
+          "sender": "55501",
+          "text": "How much is jollof?",
+          "language": "pcm",
+          "kind": "voice"
+        }
+      },
+      "mocks": {
+        "memory": {
+          "output": {
+            "rows": []
+          }
+        },
+        "know": {
+          "output": {
+            "found": false,
+            "material": "",
+            "passages": []
+          }
+        },
+        "reply": {
+          "output": {
+            "reply": "Jollof na 2,000 naira.",
+            "needs_person": false
+          }
+        },
+        "check": {
+          "output": {
+            "ok": false,
+            "text": "Make I check am with the team, we go get back to you.",
+            "problems": [
+              {
+                "kind": "price",
+                "detail": "2,000"
+              }
+            ]
+          }
+        },
+        "hand": {
+          "output": {
+            "until": "2026-11-10T10:00:00Z"
+          }
+        },
+        "keep": {
+          "output": {
+            "affected": 2,
+            "rows": []
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "hand": "completed",
+          "alert": "skipped",
+          "keep": "completed"
+        },
+        "inputs": {
+          "hand": {
+            "channel": "telegram@1/main/prod",
+            "sender": "55501"
+          }
+        },
+        "outputs": {
+          "check": {
+            "text": "Make I check am with the team, we go get back to you."
+          }
+        }
+      }
+    },
+    {
+      "name": "when the model cannot answer, the customer gets the polite held answer, a person is asked and the owners are told",
+      "trigger": {
+        "body": {
+          "channel": "whatsapp@1/main/prod",
+          "via": "whatsapp",
+          "sender": "2348031234567",
+          "text": "Are you open on Sunday?"
+        }
+      },
+      "mocks": {
+        "memory": {
+          "output": {
+            "rows": []
+          }
+        },
+        "know": {
+          "output": {
+            "found": false,
+            "material": "",
+            "passages": []
+          }
+        },
+        "reply": {
+          "output": {
+            "reply": "",
+            "needs_person": true,
+            "fallback": true
+          }
+        },
+        "check": {
+          "output": {
+            "ok": false,
+            "text": "Let me check that with the team and get back to you.",
+            "problems": [
+              {
+                "kind": "empty"
+              }
+            ]
+          }
+        },
+        "hand": {
+          "output": {
+            "until": "2026-11-10T10:00:00Z"
+          }
+        },
+        "alert": {
+          "output": {
+            "people": 1,
+            "chat": 1,
+            "email": 0,
+            "nobody": false
+          }
+        },
+        "keep": {
+          "output": {
+            "affected": 2,
+            "rows": []
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "hand": "completed",
+          "alert": "completed",
+          "keep": "completed"
+        },
+        "inputs": {
+          "check": {
+            "text": "",
+            "material": "",
+            "customer": "Are you open on Sunday?",
+            "language": "en",
+            "max": 1500
+          }
+        },
+        "outputs": {
+          "check": {
+            "text": "Let me check that with the team and get back to you."
+          }
+        }
+      }
+    }
+  ]
+}
