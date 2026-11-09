@@ -141,7 +141,9 @@ func TestCashierShift(t *testing.T) {
 
 	// Each person's figures (staff_figures.go): the cashier's sales and the
 	// order they worked; the manager's shift and handover, ₦6,000 short.
-	meID := func(c *client) string { return c.must(200, "GET", "/v1/me", nil)["user"].(map[string]any)["id"].(string) }
+	meID := func(c *client) string {
+		return c.must(200, "GET", "/v1/me", nil)["user"].(map[string]any)["id"].(string)
+	}
 	cashID, samID := meID(cashier), meID(manager)
 	f := cashier.must(200, "GET", "/v1/staff/"+cashID+"/figures?period=week", nil)
 	if sales := f["sales"].(map[string]any); sales["count"] != float64(2) || sales["total_kobo"] != float64(23400000) || sales["by_how"].(map[string]any)["pos"] != float64(7800000) || f["orders"] != float64(1) {
