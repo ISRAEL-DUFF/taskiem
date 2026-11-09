@@ -546,6 +546,84 @@ async function main() {
   });
   await bayo.must("PUT", `/v1/price-lists/${bayoList}/links`, { links: [linkIds.bayo.theirs] });
 
+  // ---- Zuri Atelier: uniforms and clothing sold in sizes and colours
+  // (docs/spec/chat-categories-and-variants.md, phase 5). Kitchen clogs in
+  // seven sizes, black and white, on a trade list Ada's Kitchen orders
+  // from (36 pairs in 7 sizes; the 50-pair price); a chef jacket and an
+  // Ankara kaftan; three aprons still sold as items of their own, for
+  // "Make one product with sizes and colours".
+  console.log("sizes and colours…");
+  const zuri = c.zuri;
+  await zuri.must("PUT", "/v1/settings/chat-tools", { chat_tools: true });
+  await link("zuri", "supplier");
+  await zuri.must("POST", "/v1/stock/setup");
+  const sized = async (
+    name: string,
+    unit: string,
+    price: number,
+    category: string,
+    choices: { name: string; values: string[] }[],
+    count: (v: Record<string, string>) => number,
+  ) => {
+    const id = (await zuri.must("POST", "/v1/stock/items", { name, quantity: 0, unit, price_kobo: naira(price), category, reorder_level: 2 }, idem("z")))
+      .item.id as string;
+    const cells: { variant: Record<string, string>; count: number }[] = [];
+    const walk = (i: number, v: Record<string, string>) => {
+      const ch = choices[i];
+      if (!ch) {
+        cells.push({ variant: { ...v }, count: count(v) });
+        return;
+      }
+      for (const x of ch.values) walk(i + 1, { ...v, [ch.name]: x });
+    };
+    walk(0, {});
+    await zuri.must("PUT", `/v1/stock/items/${id}/variants`, { choices, cells }, idem("zv"));
+    return id;
+  };
+  const clogs = await sized(
+    "Kitchen Clogs",
+    "pair",
+    12_000,
+    "Footwear",
+    [
+      { name: "Size", values: ["38", "39", "40", "41", "42", "43", "44"] },
+      { name: "Colour", values: ["Black", "White"] },
+    ],
+    (v) => (v.Colour === "Black" ? (v.Size === "42" ? 2 : 10) : 6),
+  );
+  const jacket = await sized(
+    "Chef Jacket",
+    "piece",
+    18_000,
+    "Uniforms",
+    [
+      { name: "Size", values: ["S", "M", "L", "XL"] },
+      { name: "Colour", values: ["White", "Black"] },
+    ],
+    (v) => (v.Colour === "White" ? 8 : 4),
+  );
+  await sized(
+    "Ankara Kaftan",
+    "piece",
+    25_000,
+    "Kaftans",
+    [
+      { name: "Size", values: ["S", "M", "L"] },
+      { name: "Colour", values: ["Blue", "Red"] },
+    ],
+    () => 3,
+  );
+  for (const colour of ["Red", "Blue", "Black"])
+    await zuri.must("POST", "/v1/stock/items", { name: `Kitchen Apron ${colour}`, quantity: 12, unit: "piece", price_kobo: naira(4_500), category: "Uniforms" }, idem("za"));
+  const zuriList = (await zuri.must("POST", "/v1/price-lists", { name: "Restaurants and hotels" })).list.id;
+  await zuri.must("PUT", `/v1/price-lists/${zuriList}/items`, {
+    items: [
+      { item_id: clogs, price_kobo: naira(11_000), min_quantity: 12, breaks: [{ min_quantity: 50, price_kobo: naira(10_000) }] },
+      { item_id: jacket, price_kobo: naira(16_500), min_quantity: 4 },
+    ],
+  });
+  await zuri.must("PUT", `/v1/price-lists/${zuriList}/links`, { links: [linkIds.zuri.theirs] });
+
   // ---- services (before stock: the storefront PUT names no products catalogue).
   console.log("services…");
   const slug = "adas-kitchen-" + ada.tenant.replace(/-/g, "").slice(-6);
@@ -603,6 +681,7 @@ async function main() {
   };
   await sup("Bayo Rice Mills", "0803 555 0101", "bayo");
   await sup("Mama Tunde's Market", "0805 555 0102", "mama");
+  await sup("Zuri Atelier", "0809 555 0108", "zuri");
   const order = (
     await ada.must("POST", `/v1/supplier-prices/${linkIds.bayo.ada}/order`, {
       lines: [{ seller_item_id: bayoIds["Rice, 25kg bag"], quantity: 20, item_id: adaIds["Rice, 25kg bag"] }],

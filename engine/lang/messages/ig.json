@@ -424,6 +424,14 @@
       "text": "Ị gaghị enwetakwa ozi site na {business} ebe a. Zipu START iji nweta ha ọzọ.",
       "reviewed": false
     },
+    "customer.resumed": {
+      "text": "Ị nwere ike idegara {business} ebe a ọzọ, ha nwekwara ike ịza gị.",
+      "reviewed": false
+    },
+    "customer.stopped": {
+      "text": "Ị gaghị enweta ozi ọzọ site n'aka {business} ebe a, ehichapụla ihe i degaara ha. Zipu START ka i degara ha ọzọ.",
+      "reviewed": false
+    },
     "reach.stopped_none": {
       "text": "Ọ dịghị onye na-ezitere gị ozi ebe a.",
       "reviewed": false
@@ -1366,6 +1374,54 @@
     },
     "wa.build.table_lacks": {
       "text": "Tebụl gị {table} enweghị kọlụm {columns} ugbu a, nke ọ na-eji. Tinye ya na ngwa ahụ{link}, ma ọ bụghị ya, nzọụkwụ ndị ahụ ga-ada.",
+      "reviewed": false
+    },
+    "wa.stock.category": {
+      "text": "*{category}* ({count}):\n{list}",
+      "reviewed": false
+    },
+    "wa.stock.category_more": {
+      "text": "Ziga *more* maka ndị fọdụrụ.",
+      "reviewed": false
+    },
+    "wa.stock.which_size": {
+      "text": "{name} nwere nha na agba {count}. Kwuo nke ọ bụ, tinye nha na agba ya mgbe aha gachara, dị ka *{example}*.",
+      "reviewed": false
+    },
+    "wa.order.which_size": {
+      "text": "{name} si {business} na-abịa na nha na agba: {sizes}. Kwuo nke ọ bụ, dị ka *{example}*, ma ọ bụ họrọ ọtụtụ otu mgbe na nkata gị na ha na Taskiem.",
+      "reviewed": false
+    },
+    "wa.size.which": {
+      "text": "Kedu {choice} nke {name}? Zaa nọmba ya, ma ọ bụ kwuo ya:\n{list}",
+      "reviewed": false
+    },
+    "wa.size.again": {
+      "text": "Zaa nọmba {choice} ahụ, ma ọ bụ kwuo ya:\n{list}",
+      "reviewed": false
+    },
+    "wa.size.none": {
+      "text": "{name} enweghị nke a na-ere na {said}. Ọ na-abịa na {sizes}.",
+      "reviewed": false
+    },
+    "wa.size.say": {
+      "text": "Kedu {choice} nke {name}? Kwuo ya: {list}",
+      "reviewed": false
+    },
+    "wa.size.say_again": {
+      "text": "Kwuo {choice} ahụ: {list}",
+      "reviewed": false
+    },
+    "wa.order.no_size": {
+      "text": "{name} sitere na {business} anaghị abịa na {said}. Ọ na-abịa na {sizes}.",
+      "reviewed": false
+    },
+    "wa.stock.sizes": {
+      "text": "{name}: nha na agba {count}, {total} n'ozuzu.\n{lines}",
+      "reviewed": false
+    },
+    "wa.stock.low_tag": {
+      "text": "(ọ dịla ala)",
       "reviewed": false
     },
     "wa.tablemake.denied": {
@@ -5893,6 +5949,54 @@
     },
     "customer.hire_late": {
       "text": "{reference} lọghachiri ụbọchị {days} n'azụ oge, ya mere etinyere ụgwọ ịbịa n'azụ oge {late_fee}. Ihe fọdụrụ ịkwụ: {balance}.",
+      "reviewed": false
+    },
+    "customer.chat_order": {
+      "text": "Ihe i nyere n'iwu {reference}:",
+      "reviewed": false
+    },
+    "customer.chat_delivery": {
+      "text": "Iziga",
+      "reviewed": false
+    },
+    "customer.chat_total": {
+      "text": "Ngụkọta",
+      "reviewed": false
+    },
+    "customer.chat_pay_link": {
+      "text": "Kwụọ ụgwọ site na transfer n'ụlọ akụ ebe a: {link}",
+      "reviewed": false
+    },
+    "customer.chat_pay_door": {
+      "text": "Ị ga-akwụ ụgwọ mgbe o ruru gị.",
+      "reviewed": false
+    },
+    "customer.chat_paid": {
+      "text": "Anatala ụgwọ gị, daalụ: {reference}. Anyị na-akwado ya.",
+      "reviewed": false
+    },
+    "customer.order_ask": {
+      "text": "Ka anyị wee nweta ihe i nyere n'iwu nke ọma:",
+      "reviewed": false
+    },
+    "customer.order_which": {
+      "text": "{said}: {choices}?",
+      "reviewed": false
+    },
+    "customer.order_size": {
+      "text": "Kedu {product}? {choices}",
+      "reviewed": false
+    },
+    "customer.order_how_many": {
+      "text": "Ole {item}?",
+      "reviewed": false
+    },
+    "customer.order_or": {
+      "text": "ma ọ bụ",
+      "reviewed": false
+    },
+    "customer.chat_expired": {
+      "text": "Ịkwụghị ụgwọ maka {reference} n'oge, ya mere akagburula ya. Degara anyị ka i nye iwu ọzọ.",
       "reviewed": false
     }
   }

@@ -97,10 +97,13 @@ business_gallery.position
 business_gallery.tenant_id
 business_profile.about
 business_profile.area
+business_profile.delivers
+business_profile.delivery_areas
 business_profile.logo_media
 business_profile.name
 business_profile.tagline
 business_profile.tenant_id
+business_profile.vehicle
 business_links.a_blocked
 business_links.a_tenant
 business_links.answered_actor
@@ -343,6 +346,8 @@ customer_invoices.total_kobo
 customer_invoices.updated_at
 customer_invoices.void_reason
 customer_invoices.voided_at
+customer_messages.expires_at
+customer_messages.id
 data_table_columns.created_at
 data_table_columns.name
 data_table_columns.personal
@@ -712,6 +717,8 @@ operators.name
 operators.oidc_issuer
 operators.oidc_subject
 operators.status
+order_drafts.expires_at
+order_drafts.id
 page_reports.contact
 page_reports.created_at
 page_reports.handled_at
@@ -850,6 +857,7 @@ rider_remittance_parts.entry_id
 rider_remittances.settled_at
 rider_remittances.tenant_id
 riders.id
+riders.link_id
 riders.phone
 riders.phone_hash
 riders.retired_at

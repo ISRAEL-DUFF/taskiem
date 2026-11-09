@@ -775,7 +775,7 @@ func (s *Server) writeLinkedOrder(ctx context.Context, buyer, id uuid.UUID) erro
 	}
 	note := ""
 	if o != nil {
-		note = linesWords(o.Lines) + ", " + storefront.FormatNaira(linesKobo(o.Lines))
+		note = linesWords(o.Lines, s.sizeParents(ctx, seller)) + ", " + storefront.FormatNaira(linesKobo(o.Lines))
 		if err := s.Orders.StartTrade(ctx, seller, o.OrderReference); err != nil {
 			s.Logger.Warn("links: starting the order workflow", "tenant", seller, "err", err)
 		}
@@ -793,10 +793,44 @@ func linesKobo(lines []links.OrderLine) int64 {
 }
 
 // linesWords says an order's lines: "10 bags Rice, 5 cartons Indomie".
-func linesWords(lines []links.OrderLine) string {
-	parts := make([]string, len(lines))
-	for i, l := range lines {
-		parts[i] = (stock.Item{Unit: l.Unit}).Quantity(l.Quantity) + " " + l.Item
+// A product's sizes and colours (named "Air Max 90 – 42, Black") are told
+// together: "36 pairs Air Max 90 in 7 sizes and colours". parents is each
+// size's product (sizeParents): only lines of one product's sizes are
+// grouped, never items that merely share the start of their names.
+func linesWords(lines []links.OrderLine, parents map[string]string) string {
+	type group struct {
+		name, full, unit string
+		qty              int64
+		n                int
+		sized            bool
+	}
+	var order []string
+	byKey := map[string]*group{}
+	for _, l := range lines {
+		key, name, sized := "\x01"+l.Item, l.Item, false
+		if product := parents[l.ItemID]; product != "" && l.ItemID != "" {
+			key, sized = "\x00"+product, true
+			if i := strings.Index(l.Item, " – "); i > 0 {
+				name = l.Item[:i]
+			}
+		}
+		g := byKey[key]
+		if g == nil {
+			g = &group{name: name, full: l.Item, unit: l.Unit, sized: sized}
+			byKey[key] = g
+			order = append(order, key)
+		}
+		g.qty += l.Quantity
+		g.n++
+	}
+	parts := make([]string, 0, len(order))
+	for _, k := range order {
+		g := byKey[k]
+		w := (stock.Item{Unit: g.unit}).Quantity(g.qty) + " " + g.full
+		if g.sized && g.n > 1 {
+			w = (stock.Item{Unit: g.unit}).Quantity(g.qty) + " " + g.name + " in " + strconv.Itoa(g.n) + " " + sizesWord(g.n)
+		}
+		parts = append(parts, w)
 	}
 	return strings.Join(parts, ", ")
 }
@@ -1380,7 +1414,7 @@ func (s *Server) placeTradeOrder(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, orderErr(err))
 		return
 	}
-	s.tellOrder(r.Context(), told, links.StepIn{Note: linesWords(out.Order.Lines) + ", " + storefront.FormatNaira(out.Order.TotalKobo)})
+	s.tellOrder(r.Context(), told, links.StepIn{Note: linesWords(out.Order.Lines, s.sizeParents(r.Context(), p.TenantID)) + ", " + storefront.FormatNaira(out.Order.TotalKobo)})
 	writeJSON(w, http.StatusCreated, out)
 }
 

@@ -143,9 +143,13 @@ test("the Stock page before stock is kept, and with items", async ({
   await axeBoth(page, "/storefront/stock, not kept");
   // No Xenibase here: refused as making a table is.
   await page.getByRole("button", { name: "Keep my stock" }).click();
-  await expect(page.getByRole("alert")).toContainText(
-    "data tables are not available",
-  );
+  // The error is beside the button pressed. (Where that is out of view,
+  // the app also says it in a toast, so only this one is looked for.)
+  await expect(
+    page
+      .getByRole("region", { name: "Keep your stock here" })
+      .getByRole("alert"),
+  ).toContainText("data tables are not available");
 
   // With items (from fixtures).
   await page.route("**/v1/stock", (route) =>

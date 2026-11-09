@@ -12,7 +12,8 @@ export type AlertKind =
   | "confirm"
   | "unmatched"
   | "approval"
-  | "deal";
+  | "deal"
+  | "order_draft";
 
 export interface ChatAlert {
   key: string;
@@ -21,7 +22,8 @@ export interface ChatAlert {
   title: string;
   line: string;
   amount_kobo?: number;
-  /** The stock item, invoice, order, payment entry or run. */
+  /** The stock item, invoice, order, payment entry or run; for an
+   * order read from a customer's message, their thread. */
   id?: string;
   reference?: string;
   reorder?: {
@@ -30,6 +32,9 @@ export interface ChatAlert {
     seller_item_id: string;
     quantity: number;
     price_kobo: number;
+    /** A product sold in sizes and colours: how many of each of the
+     * supplier's sizes (seller_item_id is then their product). */
+    sizes?: Record<string, number>;
   };
   approval?: Approval;
   who?: string;
@@ -48,6 +53,7 @@ export const ALERT_LOOK: Record<
   unmatched: { icon: "money", tone: "plain" },
   approval: { icon: "approvals", tone: "plain" },
   deal: { icon: "money", tone: "warn" },
+  order_draft: { icon: "chat", tone: "lime" },
 };
 
 /** "Reorder 20 from Bayo Rice Mills". */

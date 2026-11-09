@@ -274,6 +274,11 @@ export function Sheet({
   const id = useId();
   const docked = useMediaQuery("(min-width: 1200px)");
   const [leaving, setLeaving] = useState(false);
+  // Opened from a tile or a card: it grows out of it, and that is its one
+  // entrance. The class is in the markup from the first render, so the CSS
+  // rise is off before the sheet is measured, and stays off: removing it
+  // when the grow ended played the rise again (a sheet that came up twice).
+  const [grown] = useState(() => !!from && !reducedMotion());
   const closing = useRef(false);
   // Leaves with its motion, then is gone (at once with motion turned down).
   const close = () => {
@@ -305,16 +310,14 @@ export function Sheet({
   // Grows out of what opened it.
   useLayoutEffect(() => {
     const el = ref.current;
-    if (!el || !from || reducedMotion() || typeof el.animate !== "function")
-      return;
+    if (!el || !from || !grown || typeof el.animate !== "function") return;
     const to = el.getBoundingClientRect();
     if (!to.width || !to.height) return;
     const sx = from.width / to.width;
     const sy = from.height / to.height;
     const dx = from.left - to.left;
     const dy = from.top - to.top;
-    el.classList.add("tk-morphing");
-    const a = el.animate(
+    el.animate(
       [
         {
           transformOrigin: "0 0",
@@ -329,7 +332,6 @@ export function Sheet({
       [{ opacity: 0 }, { opacity: 0, offset: 0.55 }, { opacity: 1 }],
       { duration: 420, easing: "ease-out" },
     );
-    a.onfinish = () => el.classList.remove("tk-morphing");
   }, []);
   return (
     <>
@@ -342,7 +344,7 @@ export function Sheet({
       )}
       <section
         ref={ref}
-        className={`tk-sheet${docked ? " docked" : ""}${leaving ? " leaving" : ""}`}
+        className={`tk-sheet${docked ? " docked" : ""}${grown ? " tk-grown" : ""}${leaving ? " leaving" : ""}`}
         role="dialog"
         aria-modal={!docked}
         aria-labelledby={id}

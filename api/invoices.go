@@ -171,6 +171,7 @@ func (s *Server) createInvoice(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	s.diaryChange(r.Context(), p, "Made invoice "+x.Number+" for "+naira(x.TotalKobo))
 	maskInvoice(&x)
 	writeJSON(w, http.StatusCreated, x)
 }
@@ -251,6 +252,7 @@ func (s *Server) voidInvoice(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	s.diaryChange(r.Context(), p, "Cancelled invoice "+x.Number)
 	maskInvoice(&x)
 	writeJSON(w, http.StatusOK, x)
 }

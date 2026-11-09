@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { TOOLS, type ToolKey } from "../lib/tools";
 import { DiaryLine } from "../kit";
 import { useChatTools } from "../lib/useChatTools";
@@ -12,7 +12,7 @@ import { ComposerView, TASKIEM_FILES, useComposer } from "./ChatComposer";
 import { AlertCards, useChatAlerts } from "./ChatAlerts";
 import { BriefingCard, ChartCard } from "./ChatStaff";
 import { useAuth } from "../auth";
-import type { SalesChart } from "../lib/staff";
+import { asksBriefing, showBriefing, type SalesChart } from "../lib/staff";
 
 /** A chart message's numbers, or undefined when they cannot be read. */
 function parseChart(text: string): SalesChart | undefined {
@@ -27,6 +27,19 @@ import { BubbleShell, CopyItem, Ticks } from "./BubbleShell";
 import { useChatLive } from "./ChatLive";
 import { get, post, upload } from "../api";
 import type { Conversation } from "../lib/linkchat";
+import { categoriesOf } from "../lib/mentions";
+import {
+  cardRefs,
+  knownRefs,
+  productRefs,
+  refParts,
+  refSources,
+  type ChatRef,
+  type KnownRef,
+} from "../lib/refs";
+import { RefCard } from "./ChatRefCard";
+import { customerKey } from "../lib/customerchat";
+import type { StockItem, StockView } from "../lib/stock";
 import { priceWords, type SupplierPrices } from "../lib/pricelists";
 import { Icon, TaskiemMark } from "../icons";
 import { clock } from "../lib/linkchat";
@@ -71,13 +84,59 @@ if (typeof window !== "undefined") {
 }
 
 /** Taskiem's words, *bold* marked, a long answer folded. */
-function TaskiemText({ text, gap }: { text: string; gap: boolean }) {
+function TaskiemText({
+  text,
+  gap,
+  known = [],
+  onRef,
+}: {
+  text: string;
+  gap: boolean;
+  /** Things "#" may name (an invoice, an order, a product): shown as a
+   * chip that opens it. */
+  known?: KnownRef[];
+  onRef?: (r: KnownRef, from: DOMRect) => void;
+}) {
   const fold = useFold(text);
   return (
     <span className="text">
-      {boldParts(fold.shown).map((p, k) =>
-        p.bold ? <strong key={k}>{p.text}</strong> : p.text,
-      )}
+      {boldParts(fold.shown).map((p, k) => {
+        const parts = refParts(p.text, known);
+        const words = parts.map((x, j) =>
+          !x.ref ? (
+            x.text
+          ) : x.ref.kind === "order" || x.ref.kind === "customer" ? (
+            <Link
+              key={j}
+              className="mention"
+              to={
+                x.ref.kind === "order"
+                  ? `/storefront/orders/${encodeURIComponent(x.ref.name)}`
+                  : `/chat?with=${customerKey(x.ref.id)}`
+              }
+            >
+              {x.text}
+            </Link>
+          ) : !onRef ? (
+            <strong key={j} className="mention">
+              {x.text}
+            </strong>
+          ) : (
+            <button
+              key={j}
+              type="button"
+              className="mention mention-open"
+              onClick={(e) =>
+                x.ref && onRef(x.ref, e.currentTarget.getBoundingClientRect())
+              }
+            >
+              {x.text}
+              <span className="sr-only">: open it</span>
+            </button>
+          ),
+        );
+        return p.bold ? <strong key={k}>{words}</strong> : <span key={k}>{words}</span>;
+      })}
       {fold.folded && <ReadMore onClick={fold.more} />}
       {gap && <span className="stamp-gap" aria-hidden="true" />}
     </span>
@@ -112,10 +171,43 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
   const act = useAction();
   const chatTools = useChatTools();
   const { can, me } = useAuth();
+  // The business's own categories: "@sneakers" offers its Sneakers, to
+  // open in Products (docs/spec/chat-categories-and-variants.md).
+  const ownStock = useLoad(
+    () =>
+      chatTools && can("table.read")
+        ? get<StockView>("/v1/stock").then(
+            (r) => r.items,
+            () => [] as StockItem[],
+          )
+        : Promise.resolve([] as StockItem[]),
+    [chatTools],
+  );
+  // What "/invoice", "/bill", "/order", "/purchase" and "/customer" offer
+  // to tag (phase 2 additions): all the person may see.
+  const refList = useLoad(
+    () =>
+      chatTools
+        ? get<{ refs: ChatRef[] }>("/v1/chat-refs").then(
+            (r) => r.refs ?? [],
+            () => [] as ChatRef[],
+          )
+        : Promise.resolve([] as ChatRef[]),
+    [chatTools],
+  );
+  const ownProducts = useMemo(() => productRefs(ownStock.data ?? []), [ownStock.data]);
+  const known = useMemo(
+    () => knownRefs(refList.data ?? [], ownProducts),
+    [refList.data, ownProducts],
+  );
+  const refSrc = useMemo(() => refSources(refList.data ?? []), [refList.data]);
   // Alerts you can act on, as cards at the end (chat-tools.md §6).
   const alerts = useChatAlerts(!!chatTools);
   const afterDiary = useRef<() => void>(() => undefined);
   const localN = useRef(0);
+  // The briefing card is here for those who sell or bill; the tools menu
+  // and "briefing" typed bring it back.
+  const briefs = !!chatTools && (can("storefront.manage") || can("invoice.manage"));
   const c = useComposer<never>({
     draftKey: "taskiem",
     rules: TASKIEM_FILES,
@@ -129,11 +221,23 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
     // A tool saved: the server's diary line is pulled in.
     // A tool saved a change: its diary line, and the cards it settles.
     onDiary: () => (afterDiary.current(), alerts.reload()),
+    extras: briefs
+      ? [
+          {
+            key: "briefing",
+            title: "Briefing",
+            icon: "sparkle",
+            line: "Today's numbers",
+            onPick: showBriefing,
+          },
+        ]
+      : undefined,
     sources: {
       "@": (convs.data ?? [])
         .filter((x) => x.state === "active")
         .map((x) => ({ kind: "business" as const, id: x.link, name: x.name })),
-      "#": (prices.data ?? []).flatMap((p) =>
+      // "#": the business's own products first, then what suppliers sell.
+      "#": [...ownProducts, ...(prices.data ?? []).flatMap((p) =>
         p.items
           .filter((it) => it.available)
           .map((it) => ({
@@ -141,11 +245,16 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
             id: `${p.link}:${it.item_id}`,
             name: it.name,
             sub: `${p.business} · ${priceWords(it)}`,
+            category: it.category,
+            words: it.description,
           })),
-      ),
+      )],
+      categories: categoriesOf(ownStock.data ?? []),
+      refs: { ...refSrc, product: ownProducts },
     },
     onSend: (s) => {
-      if (s.file) sendFile(s.file, s.text);
+      if (!s.file && briefs && asksBriefing(s.text)) showBriefing();
+      else if (s.file) sendFile(s.file, s.text);
       else say({ text: s.text });
     },
   });
@@ -491,7 +600,35 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
               }
             >
               {!m.inbound && first && <span className="who">Taskiem</span>}
-              <TaskiemText text={m.text} gap={inline} />
+              <TaskiemText
+                text={m.text}
+                gap={inline}
+                known={known}
+                onRef={(r, from) =>
+                  c.openTool(
+                    r.kind === "invoice"
+                      ? "invoices"
+                      : r.kind === "bill"
+                        ? "bills"
+                        : r.kind === "purchase"
+                          ? "purchases"
+                          : "products",
+                    from,
+                    { rowId: r.id },
+                  )
+                }
+              />
+              {cardRefs(m.text, known).length > 0 && (
+                <span className="tk-refs">
+                  {cardRefs(m.text, known).map((r) => (
+                    <RefCard
+                      key={`${r.kind}:${r.id}`}
+                      url={`/v1/chat-card?kind=${r.kind}&id=${encodeURIComponent(r.id)}`}
+                      openTool={c.openTool}
+                    />
+                  ))}
+                </span>
+              )}
               {m.buttons && m.buttons.length > 0 && (
                 <span
                   className="reply-buttons"
@@ -537,7 +674,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
         tail={
           chatTools ? (
             <>
-              {(can("storefront.manage") || can("invoice.manage")) && (
+              {briefs && (
                 <BriefingCard openTool={c.openTool} onAsk={(text) => say({ text })} />
               )}
               <AlertCards

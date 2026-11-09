@@ -8,14 +8,14 @@
 {{if eq .Step "details"}}{{template "bagsummary" .}}{{else if .Items}}
 <fieldset class="basket">
 <legend class="kicker">What you are ordering</legend>
-{{range .Items}}
+{{range .Items}}{{if and .Size (not .Qty)}}{{else if .Choose}}{{template "choosesize" .}}{{else}}
 <div class="row line{{if not .Orderable}} is-unavailable{{end}}">
 {{if .Orderable}}<label for="q-{{.N}}"><span class="line-name">{{.Name}}</span> <span class="line-price">{{.Price}} each</span></label>
 <input id="q-{{.N}}" class="qty" type="number" name="q.{{.ID}}" value="{{.Qty}}" min="0" max="{{.Max}}" step="1" inputmode="numeric" data-price="{{.PriceKobo}}">{{range .Options}}
 <select class="opt" name="{{.Input}}" aria-label="{{.Name}}">{{range .Choices}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select>{{end}}
 {{else}}<span>{{.Name}}</span> <span class="badge">{{if .SoldOut}}Sold out{{else}}Unavailable{{end}}</span>{{end}}
 </div>
-{{end}}
+{{end}}{{end}}
 </fieldset>
 {{end}}
 {{template "hire" .}}{{if eq .Kind "order"}}

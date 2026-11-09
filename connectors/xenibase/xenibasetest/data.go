@@ -374,8 +374,17 @@ func (c cond) match(row map[string]any) bool {
 func likePattern(p string) string {
 	var b strings.Builder
 	b.WriteString("^")
+	escaped := false
 	for _, r := range p {
+		if escaped {
+			// As Postgres: a backslash makes the next character itself.
+			b.WriteString(regexp.QuoteMeta(string(r)))
+			escaped = false
+			continue
+		}
 		switch r {
+		case '\\':
+			escaped = true
 		case '%':
 			b.WriteString(".*")
 		case '_':

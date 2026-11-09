@@ -155,7 +155,13 @@ type dataFilter struct {
 	column, op string
 	value      any
 	values     []any
+	// any is a group of which one must hold ({"any": [filters]}), read
+	// only: the query body's or. A group holds plain filters, not groups.
+	any []dataFilter
 }
+
+// MaxAny is the most filters an any group holds.
+const MaxAny = 20
 
 // parseDataFilters checks filters as the actions take them. A column is a
 // plain name or a JSON path (meta->tag, meta->>tag), never anything that
@@ -166,6 +172,23 @@ func parseDataFilters(filters []any) ([]dataFilter, error) {
 		m, ok := f.(map[string]any)
 		if !ok {
 			return nil, fmt.Errorf("filters[%d] is not an object", i)
+		}
+		if group, has := m["any"]; has {
+			list, ok := group.([]any)
+			if !ok || len(list) == 0 || len(list) > MaxAny {
+				return nil, fmt.Errorf("filters[%d]: any takes a list of 1 to %d filters, one of which must hold", i, MaxAny)
+			}
+			for _, sub := range list {
+				if sm, ok := sub.(map[string]any); ok && sm["any"] != nil {
+					return nil, fmt.Errorf("filters[%d]: an any group holds filters, not another any", i)
+				}
+			}
+			subs, err := parseDataFilters(list)
+			if err != nil {
+				return nil, fmt.Errorf("filters[%d].any: %w", i, err)
+			}
+			out = append(out, dataFilter{any: subs})
+			continue
 		}
 		col, _ := m["column"].(string)
 		op, _ := m["op"].(string)
@@ -238,6 +261,9 @@ func valueText(v any) (string, error) {
 func whereParams(filters []dataFilter) ([]string, error) {
 	out := make([]string, 0, len(filters))
 	for i, f := range filters {
+		if f.any != nil {
+			return nil, fmt.Errorf("filters[%d]: any is for reads only; a write names the rows with filters that all hold", i)
+		}
 		var text string
 		switch f.op {
 		case "not_null":
@@ -270,11 +296,20 @@ func whereParams(filters []dataFilter) ([]string, error) {
 }
 
 // queryWhere renders filters as the query body's where (all must hold):
-// one condition, or {and: [...]}. is_null is {op: is, value: null};
-// not_null is {not: {op: is, value: null}}; in sends its values as a list.
+// one condition, or {and: [...]}; an any group is {or: [...]}. is_null
+// is {op: is, value: null}; not_null is {not: {op: is, value: null}}; in
+// sends its values as a list.
 func queryWhere(filters []dataFilter) any {
 	conds := make([]any, 0, len(filters))
 	for _, f := range filters {
+		if f.any != nil {
+			if one := queryWhere(f.any); len(f.any) == 1 {
+				conds = append(conds, one)
+			} else {
+				conds = append(conds, map[string]any{"or": one.(map[string]any)["and"]})
+			}
+			continue
+		}
 		var c map[string]any
 		switch f.op {
 		case "is_null":

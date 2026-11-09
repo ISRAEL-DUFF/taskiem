@@ -81,10 +81,12 @@ async function answer(page: Page) {
       ? r.fulfill(json({ day: day(0), sales: { total_kobo: 23_400_000, count: 3, by_how: { cash: 15_600_000, pos: 7_800_000 }, waiting: 0 }, orders_open: 2, deliveries: { out: 1, done: 3 }, low: ["Garri, Ijebu"] }))
       : remember(r, { handover: {}, words: "" }),
   );
-  await page.route("**/v1/chat-briefing", (r) =>
-    r.fulfill(json({ ready: true, day: day(0), key: `briefing:${day(0)}`, put_off: false,
-      sales: { yesterday_kobo: 48_650_000, change_pct: 12, weekday: "Wednesday", week: WEEK }, owed_kobo: 21_200_000, low: 3, deliveries: 4, bookings: 0 })),
-  );
+  const brief = { ready: true, day: day(0), key: `briefing:${day(0)}`, put_off: false, part: "morning", now: "08:05",
+    sales: { yesterday_kobo: 48_650_000, change_pct: 12, weekday: "Wednesday", week: WEEK }, owed_kobo: 21_200_000, low: 3, deliveries: 4, bookings: 0 };
+  await page.route("**/v1/chat-briefing", (r) => r.fulfill(json(brief)));
+  // Asked for again (the tools menu's Briefing, or "briefing"): back in
+  // the afternoon, with the time it was read.
+  await page.route("**/v1/chat-briefing?show=1", (r) => remember(r, { ...brief, part: "afternoon", now: "14:20" }));
   await page.route("**/v1/chat-alerts/later", (r) => remember(r, { key: "x", until: day(-1) }));
   await page.route("**/v1/chat-alerts", (r) => r.fulfill(json({ alerts: [] })));
   return sent;
@@ -191,6 +193,22 @@ for (const [size, viewport] of [
     await card.getByRole("button", { name: /^Got it/ }).click();
     await expect(card).toHaveCount(0);
     expect(sent.find((x) => x.path === "/v1/chat-alerts/later")?.body).toEqual({ key: `briefing:${day(0)}`, hours: 24 });
+    // Put away, it comes back from the tools menu, greeting by the hour.
+    const pane = owner.getByTestId("taskiem-pane");
+    await pane.getByRole("button", { name: "Open tools" }).click();
+    await owner.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Briefing/ }).click();
+    await expect(card).toContainText("Good afternoon, Ada");
+    await expect(card).toContainText("· 14:20");
+    await expect(card).toBeFocused();
+    await card.getByRole("button", { name: /^Got it/ }).click();
+    await expect(card).toHaveCount(0);
+    // And from "briefing" typed: no message is sent for it.
+    const box = pane.locator("#taskiem-text");
+    await box.fill("briefing");
+    await box.press("Enter");
+    await expect(card).toContainText("Good afternoon, Ada");
+    await expect(pane.locator(".bubble", { hasText: /^briefing/ })).toHaveCount(0);
+    expect(sent.filter((x) => x.path === "/v1/chat-briefing").length).toBe(2);
   });
 }
 

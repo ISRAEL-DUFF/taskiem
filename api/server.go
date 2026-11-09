@@ -61,6 +61,13 @@ import (
 
 // Server serves the API.
 type Server struct {
+	// OrderReadInline reads a customer's message for an order before the
+	// webhook answers, not in the background (tests).
+	OrderReadInline bool
+	// OrderTransfers, when set, says whether a business can take an order's
+	// payment by transfer on its page (tests); else its payment rail does.
+	OrderTransfers func(ctx context.Context, tenant uuid.UUID) bool
+
 	// DiaryWindow is how long changes wait to be told together on the
 	// chat apps (chat_changes.go); 0 is a minute.
 	DiaryWindow time.Duration
@@ -507,16 +514,18 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/storefront/actions/{id}/form", s.putActionForm)
 			r.With(s.need(PermStorefrontManage), s.need(PermWorkflowEdit), s.tenantWide).Post("/storefront/actions/{kind}/setup", s.setupAction)
 			s.invoiceRoutes(r)
-			s.linkRoutes(r)        // business links (links.go)
-			s.profileRoutes(r)     // a business's profile and gallery (business_profile.go)
-			s.exploreRoutes(r)     // finding a business by browsing (explore.go)
-			s.billRoutes(r)        // their bills (bills.go)
-			s.linkOrderRoutes(r)   // their orders (link_orders.go)
-			s.tradeDealRoutes(r)   // their price deliberation (trade_deals.go)
-			s.linkChatRoutes(r)    // their conversations (link_chat.go)
-			s.taskiemChatRoutes(r) // the Taskiem conversation on the web (chat_history.go)
-			s.priceListRoutes(r)   // price lists and item links (price_lists.go)
-			s.schoolRoutes(r)      // the Schools area (schools.go)
+			s.linkRoutes(r)         // business links (links.go)
+			s.profileRoutes(r)      // a business's profile and gallery (business_profile.go)
+			s.exploreRoutes(r)      // finding a business by browsing (explore.go)
+			s.billRoutes(r)         // their bills (bills.go)
+			s.linkOrderRoutes(r)    // their orders (link_orders.go)
+			s.tradeDealRoutes(r)    // their price deliberation (trade_deals.go)
+			s.linkChatRoutes(r)     // their conversations (link_chat.go)
+			s.customerChatRoutes(r) // customers' conversations (customer_chat.go)
+			s.orderDraftRoutes(r)   // orders read from them (order_drafts.go)
+			s.taskiemChatRoutes(r)  // the Taskiem conversation on the web (chat_history.go)
+			s.priceListRoutes(r)    // price lists and item links (price_lists.go)
+			s.schoolRoutes(r)       // the Schools area (schools.go)
 			r.With(s.need(PermOrders)).Get("/storefront/orders", s.listStorefrontOrders)
 			r.With(s.need(PermOrders)).Get("/storefront/orders/{reference}", s.getStorefrontOrder)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/refund", s.refundStorefrontOrder)
@@ -542,6 +551,11 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/items", s.addStockItem)
 			r.With(s.need(PermTableEdit), s.tenantWide).Patch("/stock/items/{id}", s.patchStockItem)
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/movements", s.moveStock)
+			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/movements/grid", s.moveStockGrid)
+			r.With(s.need(PermTableEdit), s.tenantWide).Put("/stock/items/{id}/variants", s.setStockVariants)
+			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/group", s.groupStockItems)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/stock/items/{id}/variants/photo", s.setPhotoOfChoice)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Delete("/stock/items/{id}/variants/photo", s.clearPhotoOfChoice)
 			r.With(s.need(PermTableRead)).Get("/stock/sales", s.getSales)
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/sales", s.recordSale)
 			// Counts and shrinkage (stock_counts.go, K4).

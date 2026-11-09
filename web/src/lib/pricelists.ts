@@ -11,6 +11,10 @@ export interface PriceItem {
   item_id: string;
   name: string;
   unit?: string;
+  /** The seller's category for it ("Sneakers"). */
+  category?: string;
+  /** The seller's words for it (its storefront description), for search. */
+  description?: string;
   price_kobo: number;
   min_quantity: number;
   available: boolean;
@@ -18,6 +22,21 @@ export interface PriceItem {
   overridden?: boolean;
   /** Lower prices from a quantity up (none on a buyer's own price). */
   breaks?: Break[];
+  /** A product sold in sizes and colours, listed once: its choices and its
+   * sizes on sale, each ordered on its own item, at the product's price
+   * unless it has its own; breaks and the minimum count them together. */
+  choices?: { name: string; values: string[] }[];
+  sizes?: PriceSize[];
+}
+
+export interface PriceSize {
+  item_id: string;
+  /** Written out in full: "Air Max 90 – 42, Black". */
+  name: string;
+  variant: Record<string, string>;
+  /** Its own price on the list; absent, the product's. */
+  price_kobo?: number;
+  available: boolean;
 }
 
 export interface PriceList {
@@ -99,6 +118,7 @@ export function itemsWithPrice(
   min_quantity: number;
   available: boolean;
   breaks?: Break[];
+  sizes?: { item_id: string; price_kobo: number }[];
 }[] {
   const out: ReturnType<typeof itemsWithPrice> = list.items.map((x) => ({
     item_id: x.item_id,
@@ -110,6 +130,7 @@ export function itemsWithPrice(
       x.item_id === itemId
         ? x.breaks?.filter((b) => b.price_kobo < kobo)
         : x.breaks,
+    ...ownSizePrices(x),
   }));
   if (!list.items.some((x) => x.item_id === itemId))
     out.push({ item_id: itemId, price_kobo: kobo, min_quantity: 1, available: true });
@@ -126,4 +147,15 @@ export function sharedWords(ids: string[], names: Map<string, string>): string {
  * price list" as they are (the word is not said twice). */
 export function listLabel(name: string): string {
   return /\bprices?\b|\bprice list\b/i.test(name) ? name : `${name} price list`;
+}
+
+/** A listed product's sizes with a price of their own, as the API takes
+ * them back: kept when the list is saved again. */
+export function ownSizePrices(
+  it: PriceItem,
+): { sizes?: { item_id: string; price_kobo: number }[] } {
+  const own = (it.sizes ?? []).filter((z) => (z.price_kobo ?? 0) > 0);
+  return own.length
+    ? { sizes: own.map((z) => ({ item_id: z.item_id, price_kobo: z.price_kobo ?? 0 })) }
+    : {};
 }

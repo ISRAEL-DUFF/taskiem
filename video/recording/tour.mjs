@@ -457,6 +457,89 @@ acts.act8f = async () => {
   });
 };
 
+// 9 · Sizes and colours (docs/spec/chat-categories-and-variants.md, phase 5).
+// a: Zuri Atelier: a category chip, a chef jacket's grid, a sale of the
+// clogs in size 42.
+acts.act9a = async () => {
+  const page = await person("zuri");
+  await page.goto(BASE + "/chat?with=taskiem");
+  await page.getByRole("button", { name: "Remind me later" }).click({ timeout: 3000 }).catch(() => {});
+  await page.getByTestId("taskiem-stream").waitFor();
+  await page.waitForTimeout(1200);
+  const sheet = page.getByTestId("tool-sheet");
+  const tools = () => page.getByRole("region", { name: "Tools" });
+  return record(page, "act9a", async () => {
+    await sleep(1200);
+    await timed("Open the tools", () => page.getByTestId("tools-button").click(), () => tools().waitFor());
+    await sleep(1000);
+    await timed("Open Products", () => tools().getByRole("button", { name: /^Products/ }).click(), () => sheet.waitFor());
+    await sleep(1500);
+    await timed("A category chip", () => sheet.getByRole("button", { name: /^Uniforms/ }).click(), () => sheet.getByRole("button", { name: /Chef Jacket/ }).waitFor());
+    await sleep(1800);
+    await timed("Open a product in sizes", () => sheet.getByRole("button", { name: /Chef Jacket/ }).first().click(), () => sheet.getByRole("button", { name: "Change sizes and colours" }).waitFor());
+    await sleep(1200);
+    await timed("Its grid", () => sheet.getByRole("button", { name: "Change sizes and colours" }).click(), () => sheet.getByRole("textbox", { name: "M, White: how many" }).waitFor());
+    await sleep(1000);
+    await sheet.getByRole("textbox", { name: "XL, Black: how many" }).evaluate((el) => el.scrollIntoView({ behavior: "smooth", block: "center" }));
+    await sleep(3000);
+    await sheet.getByRole("button", { name: "Close" }).first().click();
+    await sheet.waitFor({ state: "hidden" });
+    await sleep(1200);
+    // Sell: size 42, then black.
+    await timed("Open Sell", async () => {
+      await page.getByTestId("tools-button").click();
+      await tools().getByRole("button", { name: /^Sell/ }).click();
+    }, () => page.getByTestId("sell-sheet").waitFor());
+    const sell = page.getByTestId("sell-sheet");
+    await sleep(1200);
+    const row = sell.getByTestId("sell-row").filter({ hasText: "Kitchen Clogs" });
+    await timed("Choose its size", () => row.getByRole("button", { name: /Choose/ }).click(), () => sell.getByRole("group", { name: "Size" }).waitFor());
+    await sleep(900);
+    await sell.getByRole("group", { name: "Size" }).getByRole("button", { name: "42" }).click();
+    await sleep(900);
+    await sell.getByRole("group", { name: "Colour" }).getByRole("button", { name: "Black" }).click();
+    await sleep(900);
+    await sell.getByRole("button", { name: "One more Kitchen Clogs, 42, Black" }).first().click();
+    await sleep(1200);
+    await sell.getByRole("button", { name: /Next/ }).click();
+    await sleep(1200);
+    await timed("Sell size 42", () => sell.getByRole("button", { name: "Record the sale" }).click(), () => page.getByTestId("chat-diary").filter({ hasText: /Kitchen Clogs/ }).last().waitFor({ timeout: 15000 }));
+    await sleep(3500);
+  });
+};
+
+// b: Ada orders 36 pairs in 7 sizes from Zuri, on one sheet.
+acts.act9b = async () => {
+  const page = await person("ada");
+  await chatWith(page, "Zuri Atelier");
+  return record(page, "act9b", async () => {
+    await sleep(1000);
+    await page.getByRole("link", { name: /^Zuri Atelier/ }).first().click();
+    const pane = page.getByTestId("chat-pane");
+    await pane.waitFor();
+    await sleep(1500);
+    await pane.getByRole("button", { name: "Open tools" }).click();
+    await sleep(800);
+    const order = page.getByTestId("order-sheet");
+    await timed("Open Order", () => page.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Order/ }).first().click(), () => order.waitFor());
+    await sleep(1500);
+    await timed("Choose sizes", () => order.getByRole("button", { name: "Choose sizes of Kitchen Clogs" }).click(), () => order.getByTestId("order-sizes").waitFor());
+    const grid = order.getByTestId("order-sizes");
+    await sleep(900);
+    for (const [z, q] of [["38", 4], ["39", 5], ["40", 6], ["41", 6], ["42", 6], ["43", 5], ["44", 4]]) {
+      const box = grid.getByRole("textbox", { name: `${z}, Black: how many` });
+      await box.click();
+      await box.pressSequentially(String(q), { delay: 80 });
+      await sleep(350);
+    }
+    await sleep(1800);
+    await timed("Review 36 pairs in 7 sizes", () => order.getByRole("button", { name: "Review order" }).click(), () => order.getByRole("button", { name: "Place order" }).waitFor());
+    await sleep(2500);
+    await timed("Place the order", () => order.getByRole("button", { name: "Place order" }).click(), () => pane.getByRole("article", { name: /^Order · / }).last().waitFor({ timeout: 15000 }));
+    await sleep(4000);
+  });
+};
+
 const wanted = process.argv.slice(2);
 const run = wanted.length ? wanted : FILM.flatMap((f) => f.acts ?? []);
 for (const a of run) {

@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -27,6 +28,8 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/ai"
+	"github.com/israel-duff/taskiem/engine/stock"
+	"github.com/israel-duff/taskiem/engine/variants"
 )
 
 // chatTool is a tool as the chat apps name it.
@@ -48,6 +51,9 @@ var chatTools = []chatTool{
 	// A buyer's (phase 3): the orders sent to suppliers, and their bills.
 	{"purchases", "Your orders", PermTableRead},
 	{"bills", "Bills", PermInvoiceRead},
+	// The money a business is owed and has: its invoices, and the money log.
+	{"invoices", "Invoices", PermInvoiceRead},
+	{"money", "Money", PermInvoiceRead},
 }
 
 // toolRequest is a typed request: the tool, the row it is about (or a new
@@ -225,12 +231,20 @@ type toolAnswer struct {
 	Count      int64   `json:"count"`
 	Name       string  `json:"name"`
 	Minutes    int64   `json:"minutes"`
+	// Choices are a size, a colour or another choice heard with the
+	// product ("size 42", "black"), as the words say them.
+	Choices []toolChoice `json:"choices"`
+}
+
+type toolChoice struct {
+	Choice string `json:"choice"`
+	Value  string `json:"value"`
 }
 
 var toolSchema = map[string]any{
 	"type":                 "object",
 	"additionalProperties": false,
-	"required":             []string{"tool", "thing", "price_naira", "count", "name", "minutes"},
+	"required":             []string{"tool", "thing", "price_naira", "count", "name", "minutes", "choices"},
 	"properties": map[string]any{
 		"tool":        map[string]any{"type": "string", "enum": []string{"price", "stock_in", "new_service", "none"}},
 		"thing":       map[string]any{"type": "string", "description": "the product named, as the words name it; empty if none"},
@@ -238,6 +252,12 @@ var toolSchema = map[string]any{
 		"count":       map[string]any{"type": "integer", "description": "how many came in; 0 if none"},
 		"name":        map[string]any{"type": "string", "description": "a new service's name; empty if none"},
 		"minutes":     map[string]any{"type": "integer", "description": "how long a new service takes in minutes; 0 if none"},
+		"choices": map[string]any{"type": "array", "description": "a size, colour or other choice said with the product (size 42, black, XL), each with what it is; empty if none",
+			"items": map[string]any{"type": "object", "additionalProperties": false, "required": []string{"choice", "value"},
+				"properties": map[string]any{
+					"choice": map[string]any{"type": "string", "description": "Size, Colour, or the choice's name as said"},
+					"value":  map[string]any{"type": "string", "description": "its value as said: 42, Black, XL"},
+				}}},
 	},
 }
 
@@ -245,6 +265,7 @@ const toolPrompt = `You read a short message a business owner typed in a chat an
 - change a product's price ("price": the product, the new price),
 - record goods that came in ("stock_in": the product, how many),
 - add a new service ("new_service": its name, minutes it takes, its price).
+A product may be named with its category ("the Nike sneakers") and with a size, colour or other choice ("Air Max 90 size 42 in black"): the thing is the product's name without them, and each choice said goes in choices.
 Otherwise "none". A question ("how much is rice?") is "none". Never invent a product, a number or a name the words do not give.`
 
 // readToolRequest asks the model what a request asks for and matches the
@@ -315,11 +336,7 @@ func (s *Server) matchToolAnswer(ctx context.Context, p *Principal, a toolAnswer
 		if err != nil {
 			return toolRequest{}, false
 		}
-		named := make([]namedThing, 0, len(items))
-		for _, it := range items {
-			named = append(named, namedThing{id: it.ID, name: it.Name})
-		}
-		it, ok := matchThing(a.Thing, named)
+		it, ok := matchStockThing(items, a)
 		if !ok {
 			return toolRequest{}, false
 		}
@@ -400,4 +417,62 @@ func matchThing(said string, things []namedThing) (namedThing, bool) {
 		return namedThing{}, false
 	}
 	return fits[0].t, true
+}
+
+// matchStockThing is the stock item a request names: a product's size by
+// its full name, or by the product and the choices heard (the model's, and
+// any values in the words); a product's category words count with its
+// name. A product sold in sizes whose size is not said is the product
+// (its form or grid; never a guess between sizes). Never a guess between
+// two others either.
+func matchStockThing(items []stock.Item, a toolAnswer) (namedThing, bool) {
+	named := make([]namedThing, 0, len(items))
+	for _, it := range items {
+		if it.Retired() {
+			continue
+		}
+		named = append(named, namedThing{id: it.ID, name: strings.TrimSpace(it.Name + " " + it.Category)})
+	}
+	said := a.Thing
+	for _, c := range a.Choices {
+		said += " " + c.Value
+	}
+	byID := map[string]stock.Item{}
+	for _, it := range items {
+		byID[it.ID] = it
+	}
+	// The product and its values, when it is one sold in sizes.
+	if product, have, ok := findSized(items, said); ok {
+		// Each choice heard: by its name, else wherever its value is one
+		// ("color" for Colour, "shoe size" for Size).
+		for _, c := range a.Choices {
+			val := strings.TrimSpace(c.Value)
+			named := slices.IndexFunc(product.Choices, func(pc variants.Choice) bool { return strings.EqualFold(pc.Name, strings.TrimSpace(c.Choice)) })
+			for i, pc := range product.Choices {
+				if named >= 0 && i != named {
+					continue
+				}
+				for _, v := range pc.Values {
+					if strings.EqualFold(v, val) {
+						have[pc.Name] = v
+					}
+				}
+			}
+		}
+		// A choice heard that it does not have ("XL" of a kaftan in S and
+		// M): the product itself, never the one size the rest leave.
+		if unknownWords(product, said) != "" {
+			return namedThing{id: product.ID, name: product.Name}, true
+		}
+		left := narrowSizes(items, product.ID, have)
+		if len(left) == 1 {
+			return namedThing{id: left[0].ID, name: left[0].Name}, true
+		}
+		return namedThing{id: product.ID, name: product.Name}, true
+	}
+	t, ok := matchThing(said, named)
+	if !ok {
+		return namedThing{}, false
+	}
+	return namedThing{id: t.id, name: byID[t.id].Name}, true
 }

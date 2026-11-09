@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ApiError, get, post, postOnce } from "../api";
 import { useAuth } from "../auth";
 import { Icon } from "../icons";
@@ -20,6 +20,7 @@ import {
   type ChatAlert,
 } from "../lib/alerts";
 import { subjectWords } from "../lib/approvals";
+import { customerKey } from "../lib/customerchat";
 import { chime, soundOn } from "../lib/moments";
 import { formatPrice } from "../lib/storefront";
 import type { ToolKey } from "../lib/tools";
@@ -150,9 +151,19 @@ export function AlertCards({
           link={sheet.a.reorder.link}
           business={sheet.a.reorder.supplier}
           from={sheet.from}
-          start={{
-            qty: { [sheet.a.reorder.seller_item_id]: sheet.a.reorder.quantity },
-          }}
+          start={
+            sheet.a.reorder.sizes
+              ? // The low sizes, in the product's grid.
+                {
+                  qty: sheet.a.reorder.sizes,
+                  itemId: sheet.a.reorder.seller_item_id,
+                }
+              : {
+                  qty: {
+                    [sheet.a.reorder.seller_item_id]: sheet.a.reorder.quantity,
+                  },
+                }
+          }
           onClose={close}
           onPlaced={() => done(sheet.a)}
         />
@@ -237,6 +248,7 @@ function AlertCard({
   openTool: Open;
 }) {
   const { can } = useAuth();
+  const nav = useNavigate();
   const act = useAction();
   const card = useRef<HTMLElement>(null);
   const look = ALERT_LOOK[a.kind];
@@ -318,6 +330,12 @@ function AlertCard({
                 `Confirmed ${a.reference}`,
               )
               .then((ok) => ok && onDone()),
+        };
+      case "order_draft":
+        // The customer's thread, with the order on its card.
+        return {
+          words: "Open the order",
+          go: () => nav(`/chat?with=${customerKey(a.id ?? "")}`),
         };
       case "unmatched":
         return can("invoice.manage")

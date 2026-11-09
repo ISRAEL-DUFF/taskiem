@@ -198,6 +198,7 @@ WhatsApp only delivers free-form messages within 24 hours of the person's last m
 | `taskiem_alert` | Utility | `[{{1}}] {{2}} Details: {{3}}` | — | Every other alert rule; a `notify@1` **Tell me** message (its title and message on the one line); the daily money summary and the school's daily close until their own templates are approved |
 | `taskiem_update` | Utility | `[{{1}}] Update on {{2}}: {{3}}` | — | A workflow's message to someone outside the business who asked for its updates ([updates](updates.md)); {{2}} is what they asked about. Also a school family message with no template of its own |
 | `taskiem_link_message` | Utility | `[{{1}}] has a message for you: {{2}} Tap Open to see the conversation and reply.` | URL **Open** → `<public URL>/chat` | A message from a linked business in the conversation between them ([business links](spec/business-links.md#55-the-conversation-chat-between-linked-businesses)), to the people who write in it, outside the window (inside it the message goes as text, `[Dangote Stores] Musa: …`); {{1}} the business that wrote, {{2}} the sender's first name and the words on one line, or what was sent (a photo, a voice note, a file's name), or `open the chat`. A bill's notice between linked businesses goes the same way. Until it is approved, the message reaches the other side on the web and in Telegram only |
+| `taskiem_customer_reply` | Utility | `[{{1}}] Reply to your message: {{2}} Answer here to carry on.` | — | A business's reply to a customer who wrote to its own number ([customers' conversations](spec/chat-five-more-flows.md)), once 24 hours have passed since they last wrote (within them the reply goes as text); {{1}} the business, {{2}} the reply on one line. Until it is approved, a reply after the 24 hours is refused, and goes when the customer writes again |
 | `taskiem_invoice` | Utility | `[{{1}}] Invoice {{2}}: {{3}} to pay. Tap Pay by transfer for an account number to pay into, or Open invoice to see the invoice and pay.` | Quick reply **Pay by transfer** (the payload is the signed invoice button, as inside the window); URL **Open invoice** → `https://<form host>/i/{{1}}` (the invoice page's token) | An invoice to a customer who gets the business's updates on WhatsApp ([invoices](invoices.md#on-whatsapp-and-telegram)); {{2}} the number, {{3}} what is due |
 | `taskiem_balance` | Utility | `[{{1}}] You owe {{2}} on {{3}} bill(s). Tap Pay now to see them and pay all or part.` | URL **Pay now** → `https://<form host>/c/{{1}}` | What a customer owes in all, to a customer who gets the business's updates on WhatsApp: `send Ada her balance`, and a [reminder per customer](templates.md); {{3}} is how many open invoices and debts, and the button opens their [payment link](invoices.md#a-customers-payment-link). The balance is worked out when it goes |
 | `taskiem_invite` | Utility | `[{{1}}] {{2}} invited you to work with {{1}} on Taskiem, as {{3}}. Tap Join to accept. If you do not want this, tap Stop and nothing more is sent.` | Quick replies **Join** and **Stop** (payloads name the invitation) | An owner's `invite +234… as <role>` from chat, to a number that may never have written to Taskiem ([onboarding](onboarding.md#one-person-many-doors)); the owner's invitation is the opt-in |
@@ -293,7 +294,7 @@ In the organisation's Meta app, set the callback URL to `<edge URL>/channels/wha
 
 Then:
 
-- inbound messages are routed by `metadata.phone_number_id`: a delivery signed with one app's secret is only taken for that app's numbers; a bound person writing to the number acts in that organisation only, if they are a member; an unbound number gets the [public menu](#public-menus), if there is one;
+- inbound messages are routed by `metadata.phone_number_id`: a delivery signed with one app's secret is only taken for that app's numbers; a bound person writing to the number acts in that organisation only, if they are a member; an unbound number writing to an organisation's own number is a [customer](#customers-conversations) (or asks for the [public menu](#public-menus) by its word); on the shared number it is told how to link;
 - binding codes, approval requests, step-up links and forms, run outcomes and alerts to the organisation's people go from its number, without the bracketed name; the 24-hour window is per business number (`whatsapp_own_contacts`);
 - anything else, and other organisations, use the shared number.
 
@@ -313,7 +314,32 @@ Approvals, codes, step-up and alerts never wait on a bill. Usage is in `GET /v1/
 
 ## Public menus
 
-An organisation with its own number may offer a menu to anyone who writes to it without a linked account (Settings > WhatsApp number, `PUT /v1/whatsapp/public-menu`, `workflow.publish`): up to nine workflows it marks public, each with a short label. A message gets the numbered menu; a number picks one; its inputs come as a form (`taskiem_inputs`, never asked in chat), checked against the schema; a summary and **yes**; then a run of the version deployed in `prod`, started as `whatsapp_public:<number>` (audited by the system actor with the number masked), and a reference. Nothing else is reachable: no status, no approvals, no other workflows. Limits: six messages then one every 10 seconds per number, three starts then one every 20 minutes per number, and per-organisation ceilings, then the plan limits. Menus are never offered on the shared number (`Server.WhatsAppPublic` remains the hook there).
+An organisation with its own number may offer a menu to anyone who writes to it without a linked account (Settings > WhatsApp number, `PUT /v1/whatsapp/public-menu`, `workflow.publish`): up to nine workflows it marks public, each with a short label. The word **menu** gets the numbered menu (any other message is the [customer's conversation](#customers-conversations) with the business); a number picks one; its inputs come as a form (`taskiem_inputs`, never asked in chat), checked against the schema; a summary and **yes**; then a run of the version deployed in `prod`, started as `whatsapp_public:<number>` (audited by the system actor with the number masked), and a reference. Nothing else is reachable: no status, no approvals, no other workflows. Limits: six messages then one every 10 seconds per number, three starts then one every 20 minutes per number, and per-organisation ceilings, then the plan limits. Menus are never offered on the shared number (`Server.WhatsAppPublic` remains the hook there).
+
+## Customers' conversations
+
+Someone who writes to an organisation's own number and isn't on its team, a rider, a supplier or a linked business is a customer ([chat-five-more-flows](spec/chat-five-more-flows.md), phase 1).
+- **Their thread:** what they write is a thread in the Chat page (Customers), one per customer number, sealed under the customer's own subject. Nothing is sent back.
+- **Who replies:** people who handle orders (`storefront.manage` or `order.handle`), from the thread.
+- **How a reply goes:** from the organisation's number, as text within 24 hours of the customer's last message, and as `taskiem_customer_reply` after that (refused until it is approved; on one line, up to 900 characters, a longer one refused rather than cut).
+  - A reply is written as sending before it goes, so a send repeated or made twice at once goes once; one Graph refuses is taken out again.
+  - If the organisation's number changed since the customer wrote, the thread moves to the new number.
+- **Ticks:** the webhook's statuses for a reply (sent, delivered, read, failed with the reason) are kept on it, only ever moving forward.
+- **STOP:** it deletes the thread's messages, stops every reply and the reach book's updates to that number, until **START** (taken as START only when they had stopped). It comes before the reach book's STOP.
+- **Not customers:** numbers on the organisation's riders or suppliers.
+- **Names:** the book's name, else the WhatsApp profile name (sealed), else the number.
+- **How long:** a year, then the daily purge deletes the message.
+- **API:** `/v1/customer-chats` (with `/unread` and `/search`).
+
+### Orders from customers' messages
+
+What a customer writes is read for an order ([chat-five-more-flows](spec/chat-five-more-flows.md), phase 2; `api/order_drafts.go`, `engine/orders/read`):
+- **When:** after the webhook has answered, when Orders is on, a model is set up, the plan has AI and budget is left, and the words name something sold. A voice note is transcribed first where voice notes are on (the recording held in memory only).
+- **What it makes:** a draft order (`order_drafts`, sealed under the customer), one per thread at a time, on a card in their thread. Nothing is sent to the customer by the reader.
+- **Confirmed by a person:** a storefront order of the kind `chat`. The order, its total and how to pay (the order's page, by bank transfer, when the business's rail gives account numbers for orders; at the door; or arranged by staff) go to the customer from the business's number, as a reply does (words within 24 hours, the customer reply template after). Its questions go the same way, in the business's language for customers.
+- **Not read:** a customer who sent STOP. The model sees their words with numbers and emails masked ([privacy](privacy.md#customers-orders-read-by-the-model)).
+- **Updates:** a chat order's notices to its customer (paid, on its way, arrived, delivered) go in their thread through `storefront.Orders.ChatNotify`, not by SMS.
+- **STOP** deletes the thread's drafts too; confirmed orders stay.
 
 ## Alerts to WhatsApp
 

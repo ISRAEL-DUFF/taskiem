@@ -52,6 +52,8 @@ func (s *Server) linkChatRoutes(r chi.Router) {
 	r.With(write, s.tenantWide).Post("/link-chats/{link}/files", s.sendLinkFile)
 	r.Get("/link-chats/{link}/files/{id}", s.linkFile)
 	r.Get("/link-chats/{link}/items", s.linkChatItems)
+	r.Get("/link-chats/{link}/refs", s.linkChatRefs)
+	r.Get("/link-chats/{link}/card", s.linkChatCard)
 	r.Post("/link-chats/{link}/read", s.readLinkChat)
 	r.With(write, s.tenantWide).Post("/link-chats/{link}/typing", s.linkTyping)
 	r.With(write, s.tenantWide, paced).Post("/link-chats/{link}/forward", s.forwardLinkMessage)
@@ -303,7 +305,7 @@ func (s *Server) sendLinkMessage(w http.ResponseWriter, r *http.Request) {
 	if len(in.Mentions) > 0 {
 		if err := s.tx(r, func(tx pgx.Tx) error {
 			var err error
-			ments, err = checkMentions(r.Context(), tx, p.TenantID, link, in.Text, in.Mentions)
+			ments, err = checkMentions(r.Context(), tx, p, link, in.Text, in.Mentions)
 			return err
 		}); err != nil {
 			s.fail(w, r, linkMessageErr(err))

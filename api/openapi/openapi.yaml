@@ -121,6 +121,9 @@ tags:
 - name: Invoices
   description: Invoices the business sends its customers, paid only by the payments counted towards them.
   x-taskiem-guide: invoices
+- name: Customers
+  description: Customers' conversations with the business on its own WhatsApp number (chat-five-more-flows, phase 1).
+  x-taskiem-guide: spec/chat-five-more-flows
 - name: Links
   description: Links with other businesses on Taskiem, made with both sides' consent (decision 0061).
   x-taskiem-guide: spec/business-links
@@ -620,6 +623,15 @@ paths:
             schema:
               type: string
               format: binary
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [url]
+              properties:
+                url:
+                  type: string
+                  description: A picture on the web (http or https). Taskiem fetches it once, through the egress guard (its own host, no private address), checks it as an upload and keeps its own copy; 400 when it cannot be opened or is not a picture.
       responses:
         '200':
           description: Stored, and the row updated
@@ -2939,6 +2951,88 @@ paths:
         default:
           $ref: '#/components/responses/Error'
   /v1/money/entries:
+    get:
+      operationId: listMoneyEntries
+      tags:
+      - Invoices
+      summary: The money log, newest first
+      description: "What came in and went out, newest first by when it was recorded (the chat's Money tool), with what each counts towards and whether matching left it for a person. A payer's details are never listed here."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        description: How many, 100 unless given, at most 200.
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+      - name: before
+        in: query
+        required: false
+        description: Only those recorded before this time (RFC 3339), for the next page.
+        schema:
+          type: string
+          format: date-time
+      responses:
+        '200':
+          description: The entries
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [entries]
+                properties:
+                  entries:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, kind, direction, status, when, to_match]
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        kind:
+                          type: string
+                          enum: [payment, account_credit, payout, refund, pos_sale, fee, statement, cash, expense, correction]
+                        direction:
+                          type: string
+                          enum: [in, out]
+                        amount_kobo:
+                          type: integer
+                        fee_kobo:
+                          type: integer
+                        status:
+                          type: string
+                          enum: [settled, pending, failed, reversed]
+                        channel:
+                          type: string
+                        reference:
+                          type: string
+                        when:
+                          type: string
+                          format: date-time
+                        description:
+                          type: string
+                        vendor:
+                          type: string
+                        category:
+                          type: string
+                        left_kobo:
+                          type: integer
+                          description: Money in only, what is left of it to count towards an invoice or order.
+                        towards:
+                          type: string
+                          description: What it counts towards now, such as "invoice INV-0104".
+                        to_match:
+                          type: boolean
+                          description: Matching left it for a person (as /v1/money/unmatched).
+        default:
+          $ref: '#/components/responses/Error'
     post:
       operationId: enterMoney
       tags:
@@ -7391,7 +7485,7 @@ paths:
                 mentions:
                   type: array
                   maxItems: 10
-                  description: 'Each a business you are linked with ({kind: business, link}), an item of this conversation''s price list ({kind: item, item_id}) or one of your own services ({kind: service, service_id}), named in the text as @Name (an item or a service also #Name); one the text does not name is left out.'
+                  description: 'Each a business you are linked with ({kind: business, link}), an item of this conversation''s price list ({kind: item, item_id}), one of your own services ({kind: service, service_id}), or an invoice, bill, order or purchase between you and this business ({kind, ref}: one of /link-chats/{link}/refs), named in the text as @Name (any but a business also #Name); one the text does not name is left out.'
                   items:
                     type: object
                     additionalProperties: false
@@ -7399,7 +7493,7 @@ paths:
                     properties:
                       kind:
                         type: string
-                        enum: [business, item, service]
+                        enum: [business, item, service, invoice, bill, order, purchase]
                       link:
                         type: string
                         format: uuid
@@ -7407,6 +7501,9 @@ paths:
                         type: string
                       service_id:
                         type: string
+                      ref:
+                        type: string
+                        description: An invoice's or an order's id, from /link-chats/{link}/refs
       responses:
         '201':
           description: Sent
@@ -7670,6 +7767,23 @@ paths:
                             price_kobo:
                               type: integer
                               minimum: 1
+                      sizes:
+                        type: array
+                        maxItems: 100
+                        description: A product sold in sizes and colours goes on the list with all its sizes on sale; these are the ones with a price of their own, or taken off this list. A size or colour given as an item alone is refused (400).
+                        items:
+                          type: object
+                          additionalProperties: false
+                          required: [item_id]
+                          properties:
+                            item_id:
+                              type: string
+                            price_kobo:
+                              type: integer
+                              minimum: 0
+                              description: Its own price on the list; 0, the product's
+                            available:
+                              type: boolean
       responses:
         '200':
           description: Done
@@ -7872,7 +7986,7 @@ paths:
       tags:
       - Links
       summary: Order from a suppliers price list
-      description: 'A purchase order drafted at the lists prices (each line at least its minimum, while available), sent as any order is. Needs an Idempotency-Key. A line whose item you have not said is one of yours answers 422 with code item_unlinked and the item, unless item_id says which, which then links it.'
+      description: 'A purchase order drafted at the lists prices (each line at least its minimum, while available), sent as any order is. Needs an Idempotency-Key. A line whose item you have not said is one of yours answers 422 with code item_unlinked and the item, unless item_id says which, which then links it. A line is a size (seller_item_id is the size; item_id may be your product, whose matching size is used, or added when it has none yet). Quantity breaks and the minimum count a product''s sizes together. Your product with other choices answers 409 sizes_differ; your item without sizes linked to a sized product answers 409 sizes_first.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -8050,6 +8164,65 @@ paths:
       responses:
         '204':
           description: Done
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/chat-refs:
+    get:
+      operationId: chatRefs
+      tags:
+      - Account
+      summary: What "/" may tag in the Taskiem chat
+      description: 'Everything the person may see: invoices and bills (invoice.read), orders (order handling), purchases (table.read) and customers who write to the business (order handling), each with who it is with (a person masked, a business in full), when, the total and the status.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The things
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [refs]
+                properties:
+                  refs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChatRef'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/chat-card:
+    get:
+      operationId: chatCard
+      tags:
+      - Account
+      summary: A tagged thing's card, read now
+      description: 'An invoice, bill, order, purchase or customer by its id, for those who may see it: its lines (three, and how many more), what is paid and due, and the one thing the card offers (send a draft, remind of what is owed, pay a bill, message a customer). A customer''s card has their orders, their latest and what they owe.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: kind
+        in: query
+        required: true
+        schema:
+          type: string
+          enum: [invoice, bill, order, purchase, customer]
+      - name: id
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The card
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatCard'
         default:
           $ref: '#/components/responses/Error'
   /v1/taskiem-chat:
@@ -8312,6 +8485,79 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/PriceItem'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/refs:
+    get:
+      operationId: linkChatRefs
+      tags:
+      - Links
+      summary: What "/invoice", "/bill", "/order" and "/purchase" name in a conversation
+      description: 'Only what is between the two businesses, newest first: invoices you sent them and bills they sent you (with invoice.read), orders they placed with you (with order handling) and orders you sent them (purchases, with table.read). Never a customer.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The invoices and orders
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [refs]
+                properties:
+                  refs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChatRef'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/card:
+    get:
+      operationId: linkChatCard
+      tags:
+      - Links
+      summary: The card of an invoice or order a message named
+      description: 'By its number, as this side has it (their invoice is our bill, their order our purchase), read now; only what is between the two businesses, and only what the person may see.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: kind
+        in: query
+        required: true
+        schema:
+          type: string
+          enum: [invoice, bill, order, purchase]
+      - name: name
+        in: query
+        required: true
+        description: Its number or reference
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The card
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatCard'
         default:
           $ref: '#/components/responses/Error'
   /v1/link-chats/{link}/typing:
@@ -8690,6 +8936,633 @@ paths:
                 properties:
                   read:
                     type: integer
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/customer-chats:
+    get:
+      operationId: listCustomerChats
+      tags:
+      - Customers
+      summary: Customers' conversations
+      description: One thread per customer who wrote to the business's own WhatsApp number, the latest first. Archived ones with archived=1.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      parameters:
+      - name: archived
+        in: query
+        schema:
+          type: string
+          enum: ['1']
+      responses:
+        '200':
+          description: The threads
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [chats]
+                properties:
+                  chats:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CustomerChat'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/customer-chats/unread:
+    get:
+      operationId: customerChatsUnread
+      tags:
+      - Customers
+      summary: Customers waiting for an answer
+      description: How many customers' threads (not archived) have messages not yet read, and how many messages; for the Chat tab.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      responses:
+        '200':
+          description: The counts
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [chats, messages]
+                properties:
+                  chats:
+                    type: integer
+                  messages:
+                    type: integer
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/customer-chats/search:
+    get:
+      operationId: searchCustomerChats
+      tags:
+      - Customers
+      summary: Search customers' conversations
+      description: Customers whose name (or, with four digits or more, number) has the words, and the latest 1,000 messages that do, newest first (30 at most). Messages are sealed, so they are opened to be searched.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      parameters:
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 2
+          maxLength: 100
+      responses:
+        '200':
+          description: What was found
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [chats, messages]
+                properties:
+                  chats:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CustomerChat'
+                  messages:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [chat_id, message_id, name, mine, body, created_at]
+                      properties:
+                        chat_id:
+                          type: string
+                          format: uuid
+                        message_id:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        mine:
+                          type: boolean
+                        body:
+                          type: string
+                        created_at:
+                          type: string
+                          format: date-time
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/customer-chats/{id}:
+    get:
+      operationId: getCustomerChat
+      tags:
+      - Customers
+      summary: A customer's conversation
+      description: The thread, with what the customer owes on open invoices.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The thread
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerChat'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putCustomerChat
+      tags:
+      - Customers
+      summary: Archive a customer's conversation, or bring it back
+      description: An archived thread comes back when the customer writes again.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [archived]
+              properties:
+                archived:
+                  type: boolean
+      responses:
+        '204':
+          description: Done
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/customer-chats/{id}/messages:
+    get:
+      operationId: listCustomerMessages
+      tags:
+      - Customers
+      summary: A customer's conversation's messages
+      description: The latest 50, oldest first; before (a message's id) for the 50 before it.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: before
+        in: query
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: A page of messages
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [messages, more]
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CustomerMessage'
+                  more:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: replyCustomer
+      tags:
+      - Customers
+      summary: Reply to a customer
+      description: Sent from the business's own WhatsApp number, as words within 24 hours of the customer's last message and as the approved template after (then up to 900 characters, on one line; longer is refused, 400, never cut). The reply is kept before it goes, so a repeat of a client_id answers the message it sent (200) and never goes twice. When the business's number changed since the customer wrote, the thread moves to the new number. Refused (409) when the customer sent STOP, the template is not approved yet, or the customer already has a thread on the new number.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [text]
+              properties:
+                text:
+                  type: string
+                  maxLength: 2000
+                client_id:
+                  type: string
+                  maxLength: 80
+      responses:
+        '200':
+          description: The reply already sent with this client_id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerMessage'
+        '201':
+          description: Sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerMessage'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/customer-chats/{id}/read:
+    post:
+      operationId: readCustomerChat
+      tags:
+      - Customers
+      summary: Mark a customer's messages read
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Done
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/customer-chats/{id}/orders:
+    get:
+      operationId: listOrderDrafts
+      tags:
+      - Customers
+      summary: 'The orders read from a customer''s messages'
+      description: 'The thread''s orders, read by Taskiem or started by staff, the latest 20, oldest first, with the business''s delivery areas and whether it has a page customers pay on.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The orders
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [orders, zones, pay_page, items]
+                properties:
+                  items:
+                    type: array
+                    description: What may be put on an order, each product on sale and each size of one sold in sizes.
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [id, name]
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        price_kobo:
+                          type: integer
+                        left:
+                          type: integer
+                  orders:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OrderDraft'
+                  zones:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [name, fee_kobo]
+                      properties:
+                        name:
+                          type: string
+                        fee_kobo:
+                          type: integer
+                  pay_page:
+                    type: boolean
+                    description: The business has a page, so a customer can be sent one to pay by transfer or card.
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: startOrderDraft
+      tags:
+      - Customers
+      summary: 'Start an order in a customer''s thread'
+      description: 'An order staff start by hand, with nothing in it yet; 409 when the thread already has one being worked on.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '201':
+          description: The order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDraft'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/order-drafts/{id}:
+    put:
+      operationId: changeOrderDraft
+      tags:
+      - Customers
+      summary: Change an order before it is confirmed
+      description: 'One change, made on the version the card shows: choose an item for a line (answering its question), set how many, set a price, remove a line, add an item, or set its delivery, address, time, note, delivery fee and how it is paid.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version, op]
+              properties:
+                version:
+                  type: integer
+                op:
+                  type: string
+                  enum: [choose, quantity, price, remove, add, details]
+                line:
+                  type: integer
+                item_id:
+                  type: string
+                quantity:
+                  type: integer
+                price_kobo:
+                  type: integer
+                fulfilment:
+                  type: string
+                  enum: [delivery, pickup, '']
+                address:
+                  type: string
+                when:
+                  type: string
+                note:
+                  type: string
+                zone:
+                  type: string
+                delivery_kobo:
+                  type: integer
+                pay:
+                  type: string
+                  enum: [transfer, on_delivery, later, '']
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDraft'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/order-drafts/{id}/ask:
+    post:
+      operationId: askOrderDraft
+      tags:
+      - Customers
+      summary: 'Ask the customer the order''s questions'
+      description: 'Its open questions go to the customer as one message from the business''s number; their answer is read onto the order.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version]
+              properties:
+                version:
+                  type: integer
+                  description: The version the card shows; 409 when the order changed since.
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDraft'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/order-drafts/{id}/confirm:
+    post:
+      operationId: confirmOrderDraft
+      tags:
+      - Customers
+      summary: Confirm an order
+      description: 'A person confirms it: it becomes an order (kind chat), its stock goes (when it is paid, if it is paid by transfer), and the customer is sent the order, its total and how to pay. told is false, with why, when that send failed; tell sends it again.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version]
+              properties:
+                version:
+                  type: integer
+                  description: The version the card shows; 409 when the order changed since.
+      responses:
+        '200':
+          description: The confirmed order
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [order, told]
+                properties:
+                  order:
+                    $ref: '#/components/schemas/OrderDraft'
+                  told:
+                    type: boolean
+                  told_error:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/order-drafts/{id}/tell:
+    post:
+      operationId: tellOrderDraft
+      tags:
+      - Customers
+      summary: Send a confirmed order to the customer again
+      description: 'Once: the same send is not repeated.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDraft'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/order-drafts/{id}/drop:
+    post:
+      operationId: dropOrderDraft
+      tags:
+      - Customers
+      summary: Drop an order before it is confirmed
+      description: Nothing is sent to the customer.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version]
+              properties:
+                version:
+                  type: integer
+                  description: The version the card shows; 409 when the order changed since.
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDraft'
         default:
           $ref: '#/components/responses/Error'
   /v1/links/{business}/logo:
@@ -10280,6 +11153,10 @@ paths:
                 supplier:
                   type: string
                   maxLength: 120
+                category:
+                  type: string
+                  maxLength: 60
+                  description: The kind of thing it is ("Sneakers"). The catalogue gets a category column the first time one is set
       responses:
         '201':
           description: The item, and the movement of its quantity
@@ -10341,6 +11218,10 @@ paths:
                   type: integer
                 supplier:
                   type: string
+                category:
+                  type: string
+                  maxLength: 60
+                  description: The kind of thing it is ("Sneakers"); empty for none. The catalogue gets a category column the first time one is set
                 available:
                   type: boolean
                   description: Shown on the storefront and the price lists it is on
@@ -10355,6 +11236,331 @@ paths:
                 properties:
                   item:
                     $ref: '#/components/schemas/StockItem'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/stock/group:
+    post:
+      operationId: groupStockItems
+      tags:
+      - Stock
+      summary: Make existing items one product with sizes and colours
+      description: 'Items sold as separate products ("Ankara Kaftan S Blue", "Ankara Kaftan M Blue") become one product''s sizes and colours. Each keeps its row, so its stock, history, sales, prices and links stay with it; it gains its product and its values, and its name is written out in full ("Ankara Kaftan – S, Blue"). The product is a new row with the first item''s unit, category and supplier, and the price most of the items have (those at another price keep it as their own). A price list that held some of the items one by one holds the product in their place. At least two items, all plain products with the same choices and no two of the same values; everything is checked before anything is written. The product takes the first item''s photo and is on sale when one of the items was. One grouping runs at a time in a business (409 while another does); asked again after one stopped part way, it finishes with the product it made rather than refuse it.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit
+      x-taskiem-all-environments: true
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Makes the request safe to retry: the same key is the same change'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, items]
+              properties:
+                name:
+                  type: string
+                  description: The product's name ("Ankara Kaftan")
+                choices:
+                  type: array
+                  description: The choices' order ("Size", then "Colour")
+                  items:
+                    type: string
+                items:
+                  type: array
+                  minItems: 2
+                  maxItems: 100
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [item_id, variant]
+                    properties:
+                      item_id:
+                        type: string
+                      variant:
+                        type: object
+                        description: 'Its values: {"Size": "M", "Colour": "Blue"}'
+                        additionalProperties:
+                          type: string
+      responses:
+        '200':
+          description: The product and its sizes and colours
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  item:
+                    $ref: '#/components/schemas/StockItem'
+                  variants:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StockItem'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/stock/items/{id}/variants:
+    put:
+      operationId: setStockVariants
+      tags:
+      - Stock
+      summary: Set a product's sizes and colours
+      description: 'Its choices (up to 3, 20 values each) and the grid of what it sells (up to 100). Each one sold is a catalogue row of its own, pointing at the product: made, renamed (a cell with its row id and new values), brought back, or retired (hidden, never deleted). A kept one''s count is a count. A new one''s count is stock moved from the product while the product holds some (reason moved: neither received nor lost), the rest goods received; what the product held beyond what they took is counted off it, so its own count ends at 0. One without its own price takes the product''s and follows it; the cells given a price are recorded as their own (own_price). On the price lists that hold the product itself, it is taken off sale. Everything is checked before anything is written; 409 while another save of the same product''s sizes and colours runs, and no_variant_columns when the catalogue has no room for the four columns it needs (variant_of, variant, choices, available).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit
+      x-taskiem-all-environments: true
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Makes the request safe to retry: the same key is the same change'
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                choices:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/VariantChoice'
+                cells:
+                  type: array
+                  maxItems: 100
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [variant]
+                    properties:
+                      id:
+                        type: string
+                        description: Its row, when it has one
+                      variant:
+                        type: object
+                        additionalProperties:
+                          type: string
+                      count:
+                        type: integer
+                        minimum: 0
+                      price_kobo:
+                        type: integer
+                        minimum: 0
+                        description: Its own price; absent takes the product's
+      responses:
+        '200':
+          description: The product and its sizes and colours (retired ones too)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  item:
+                    $ref: '#/components/schemas/StockItem'
+                  variants:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StockItem'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/stock/items/{id}/variants/photo:
+    post:
+      operationId: setPhotoOfChoice
+      tags:
+      - Stock
+      summary: Set a colour's photo on a product's sizes
+      description: The picture (a file, or a link as for a product's photo) is stored once and made the photo of each of the product's sizes and colours on sale with that value, which the public page shows when a customer picks it; the product's own photos stay. A diary line and an audit entry.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The product's row id
+      - name: choice
+        in: query
+        required: true
+        schema:
+          type: string
+        description: The choice the photo is for, as the product names it (Colour); any case
+      - name: value
+        in: query
+        required: true
+        schema:
+          type: string
+        description: Its value (Black); 400 when no size or colour of it is on sale
+      requestBody:
+        required: true
+        content:
+          image/jpeg:
+            schema:
+              type: string
+              format: binary
+          image/png:
+            schema:
+              type: string
+              format: binary
+          image/webp:
+            schema:
+              type: string
+              format: binary
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [url]
+              properties:
+                url:
+                  type: string
+                  description: A picture on the web, fetched once as for a product's photo
+      responses:
+        '200':
+          description: Stored, and set on that colour's sizes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [photo, sizes]
+                properties:
+                  photo:
+                    $ref: '#/components/schemas/StorefrontMedia'
+                  sizes:
+                    type: integer
+                    description: How many sizes now show it
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: clearPhotoOfChoice
+      tags:
+      - Stock
+      summary: Take a colour's photo off a product's sizes
+      description: That colour's sizes show the product's photos again.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The product's row id
+      - name: choice
+        in: query
+        required: true
+        schema:
+          type: string
+        description: The choice the photo is for, as the product names it (Colour); any case
+      - name: value
+        in: query
+        required: true
+        schema:
+          type: string
+        description: Its value (Black); 400 when no size or colour of it is on sale
+      responses:
+        '204':
+          description: Taken out
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/stock/movements/grid:
+    post:
+      operationId: moveStockGrid
+      tags:
+      - Stock
+      summary: Goods received, or a count, for several of a product's sizes and colours
+      description: 'One movement each, told as one diary line ("Stock in: Air Max 90, 7 sizes and colours, +36").'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit
+      x-taskiem-all-environments: true
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Makes the request safe to retry: the same key is the same change'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [reason, lines]
+              properties:
+                reason:
+                  type: string
+                  enum: [received, count]
+                note:
+                  type: string
+                lines:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [item_id]
+                    properties:
+                      item_id:
+                        type: string
+                      change:
+                        type: integer
+                        minimum: 1
+                      count:
+                        type: integer
+                        minimum: 0
+      responses:
+        '200':
+          description: The movements
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  movements:
+                    type: array
+                    items:
+                      type: object
         default:
           $ref: '#/components/responses/Error'
   /v1/stock/movements:
@@ -10378,7 +11584,7 @@ paths:
         in: query
         schema:
           type: string
-          enum: [order, sale, received, adjustment, count, outside]
+          enum: [order, sale, received, adjustment, count, outside, moved]
       - name: since
         in: query
         schema:
@@ -22046,11 +23252,19 @@ paths:
       tags:
       - Account
       summary: The morning briefing card
-      description: For those who run the business (storefront.manage or invoice.manage), with chat tools on, from 8am Lagos time (ready); yesterday's sales against the same day a week before with the week's bars, what customers owe, how many items are low, and today's deliveries and bookings, each only for those who may see it. put_off once the person has said Got it (Later with key).
+      description: "For those who run the business (storefront.manage or invoice.manage), with chat tools on, from 8am Lagos time (ready); yesterday's sales against the same day a week before with the week's bars, what customers owe, how many items are low, and today's deliveries and bookings, each only for those who may see it. Sales are counter sales, shop, chat and trade orders, and invoices sent (each only for those who may see it). put_off once the person has said Got it (Later with key). With show=1 (the tools menu's Briefing, or briefing typed), today's is ready at any hour and Got it is undone."
       security:
       - sessionCookie: []
       - sessionToken: []
       - apiKey: []
+      parameters:
+      - name: show
+        in: query
+        required: false
+        description: 1 asks for today's briefing again, whatever the hour and though it was put away.
+        schema:
+          type: string
+          enum: ['1']
       responses:
         '200':
           description: The briefing
@@ -22058,7 +23272,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [ready, day, key, put_off]
+                required: [ready, day, key, put_off, part, now]
                 properties:
                   ready:
                     type: boolean
@@ -22069,6 +23283,13 @@ paths:
                     type: string
                   put_off:
                     type: boolean
+                  part:
+                    type: string
+                    enum: [morning, afternoon, evening]
+                    description: The part of the day it is in Lagos, for the greeting.
+                  now:
+                    type: string
+                    description: The Lagos time its numbers were read at, "14:05".
                   sales:
                     type: object
                     properties:
@@ -26441,7 +27662,7 @@ components:
           description: The alert's key, for Later (its kind and what it is about)
         kind:
           type: string
-          enum: [low_stock, overdue, new_order, rider, confirm, unmatched, approval, deal]
+          enum: [low_stock, overdue, new_order, rider, confirm, unmatched, approval, deal, order_draft]
         at:
           type: string
           format: date-time
@@ -26471,6 +27692,11 @@ components:
               type: integer
             price_kobo:
               type: integer
+            sizes:
+              type: object
+              description: A product sold in sizes and colours (seller_item_id is the supplier's product) - how many of each of the supplier's sizes, by their item; at least the supplier's minimum together
+              additionalProperties:
+                type: integer
         approval:
           $ref: '#/components/schemas/Approval'
         who:
@@ -31033,6 +32259,15 @@ components:
           type: string
         supplier:
           type: string
+        variant_of:
+          type: string
+          description: A size or colour's product row (sizes and colours)
+        variant:
+          type: string
+          description: A size or colour's values, as JSON
+        choices:
+          type: string
+          description: A product's choices and their values, as JSON
         sort:
           type: string
         duration:
@@ -32122,6 +33357,12 @@ components:
           type: string
         unit:
           type: string
+        category:
+          type: string
+          description: The seller's category for it
+        description:
+          type: string
+          description: The seller's words for it (its storefront description), for search
         price_kobo:
           type: integer
         min_quantity:
@@ -32146,6 +33387,41 @@ components:
               price_kobo:
                 type: integer
                 minimum: 1
+        choices:
+          type: array
+          description: A product sold in sizes and colours, listed once - its choices, with only the values its sizes on sale have
+          items:
+            $ref: '#/components/schemas/VariantChoice'
+        sizes:
+          type: array
+          maxItems: 100
+          description: Its sizes and colours on sale, each ordered on its own row (an order line names the size's item_id), at the product's price unless it has its own; the product's breaks and minimum count its sizes together
+          items:
+            type: object
+            additionalProperties: false
+            required: [item_id, name, variant, available]
+            properties:
+              item_id:
+                type: string
+              name:
+                type: string
+                description: Written out in full - Air Max 90 – 42, Black
+              variant:
+                type: object
+                additionalProperties:
+                  type: string
+              price_kobo:
+                type: integer
+                description: Its own price on the list; absent, the product's
+              available:
+                type: boolean
+        variant_of:
+          type: string
+          description: On a size as an order line prices it, its product's item
+        variant:
+          type: object
+          additionalProperties:
+            type: string
     PriceList:
       type: object
       additionalProperties: false
@@ -32250,13 +33526,19 @@ components:
       properties:
         kind:
           type: string
-          enum: [business, item, service]
+          enum: [business, item, service, invoice, bill, order, purchase]
         name:
           type: string
         link:
           type: string
           format: uuid
           description: A business, on our copy only
+        ref:
+          type: string
+          description: An invoice's or an order's id, on our copy only
+        status:
+          type: string
+          description: An invoice's or an order's status when it was named
         item_id:
           type: string
         unit:
@@ -32268,7 +33550,95 @@ components:
           description: One of the sender's own services
         minutes:
           type: integer
-          description: How long the service takes
+          description: How long the service takes; an invoice's or an order's total is price_kobo
+    ChatRef:
+      type: object
+      additionalProperties: false
+      required: [kind, id, name, when]
+      description: A thing "/" may tag
+      properties:
+        kind:
+          type: string
+          enum: [invoice, bill, order, purchase, customer]
+        id:
+          type: string
+        name:
+          type: string
+          description: Its number or reference, or a customer's name
+        party:
+          type: string
+          description: Who it is with (a person masked, a business in full); a customer's number, masked
+        when:
+          type: string
+          format: date-time
+        total_kobo:
+          type: integer
+        status:
+          type: string
+    ChatCard:
+      type: object
+      additionalProperties: false
+      required: [kind, id, name, when]
+      properties:
+        kind:
+          type: string
+          enum: [invoice, bill, order, purchase, customer]
+        id:
+          type: string
+        name:
+          type: string
+        party:
+          type: string
+        when:
+          type: string
+          format: date-time
+        total_kobo:
+          type: integer
+        status:
+          type: string
+        due_on:
+          type: string
+        paid_kobo:
+          type: integer
+        due_kobo:
+          type: integer
+        lines:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [name, quantity, total_kobo]
+            properties:
+              name:
+                type: string
+              quantity:
+                type: integer
+              total_kobo:
+                type: integer
+        more:
+          type: integer
+          description: Lines not shown
+        orders:
+          type: integer
+        owes_kobo:
+          type: integer
+        last_order:
+          type: object
+          additionalProperties: false
+          required: [reference, total_kobo, status, when]
+          properties:
+            reference:
+              type: string
+            total_kobo:
+              type: integer
+            status:
+              type: string
+            when:
+              type: string
+              format: date-time
+        action:
+          type: string
+          enum: [send, remind, pay, message]
     LinkReaction:
       type: object
       additionalProperties: false
@@ -32288,6 +33658,204 @@ components:
           items:
             type: string
           description: Their first names
+    CustomerChat:
+      type: object
+      additionalProperties: false
+      required: [id, name, phone, last, last_mine, last_at, unread, window_open, window_until, stopped, archived]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: The customer's name in the business's book, or their number.
+        phone:
+          type: string
+          description: Empty when the customer's details were erased.
+        last:
+          type: string
+        last_mine:
+          type: boolean
+        last_at:
+          type: string
+          format: date-time
+        unread:
+          type: integer
+        window_open:
+          type: boolean
+          description: A reply goes as words (within 24 hours of the customer's last message, and not stopped).
+        window_until:
+          type: [string, 'null']
+          format: date-time
+        stopped:
+          type: boolean
+          description: The customer sent STOP; nothing is sent until START.
+        archived:
+          type: boolean
+        owes_kobo:
+          type: integer
+          description: One thread only, what the customer owes on open invoices.
+        open_invoices:
+          type: integer
+    CustomerMessage:
+      type: object
+      additionalProperties: false
+      required: [id, mine, kind, body, read_at, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        mine:
+          type: boolean
+          description: From the business.
+        kind:
+          type: string
+          enum: [text, media]
+        body:
+          type: string
+        sender_name:
+          type: string
+        sent_as:
+          type: string
+          enum: [text, template]
+        delivery:
+          type: string
+          enum: [sending, sent, delivered, read, failed]
+          description: A reply's way to the customer, as WhatsApp reports it.
+        failure:
+          type: string
+          description: Why WhatsApp could not deliver it (failed).
+        read_at:
+          type: [string, 'null']
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+    OrderDraft:
+      type: object
+      additionalProperties: false
+      required: [id, chat_id, status, lines, delivery_kobo, items_kobo, total_kobo, questions, ready, version, by_reader, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        chat_id:
+          type: string
+          format: uuid
+        message_id:
+          type: string
+          format: uuid
+          description: The customer's message it was read from (none when staff started it).
+        status:
+          type: string
+          enum: [open, asked, confirmed, dropped]
+          description: 'open, staff have it; asked, its questions went to the customer.'
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderDraftLine'
+        fulfilment:
+          type: string
+          enum: [delivery, pickup]
+        address:
+          type: string
+        when:
+          type: string
+        note:
+          type: string
+        zone:
+          type: string
+        delivery_kobo:
+          type: integer
+        pay:
+          type: string
+          enum: [transfer, on_delivery, later]
+        items_kobo:
+          type: integer
+        total_kobo:
+          type: integer
+        questions:
+          type: integer
+          description: How many lines wait on a question.
+        ready:
+          type: boolean
+          description: It can be confirmed as it stands.
+        waits:
+          type: string
+          description: Why it cannot be confirmed yet, in a sentence.
+        version:
+          type: integer
+        reference:
+          type: string
+          description: The order it became.
+        order_status:
+          type: string
+        by_reader:
+          type: boolean
+          description: Taskiem read it from the customer's message.
+        asked_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    OrderDraftLine:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          description: The line, for as long as the order lives.
+        said:
+          type: string
+          description: The customer's words for it.
+        item_id:
+          type: string
+          description: The catalogue's item; none when nothing was matched, kept as written for staff to pick.
+        name:
+          type: string
+        quantity:
+          type: integer
+        price_kobo:
+          type: integer
+        no_price:
+          type: boolean
+        out:
+          type: boolean
+          description: Not on sale now, or fewer left than asked.
+        left:
+          type: integer
+        ask:
+          $ref: '#/components/schemas/OrderQuestion'
+    OrderQuestion:
+      type: object
+      additionalProperties: false
+      required: [kind, text]
+      properties:
+        kind:
+          type: string
+          enum: [which, size, how_many]
+        text:
+          type: string
+        about:
+          type: string
+          description: What it asks about (the customer's words, the product or the item), to word it in another language.
+        choices:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [item_id, name]
+            properties:
+              item_id:
+                type: string
+              name:
+                type: string
+              price_kobo:
+                type: integer
     LinkMessage:
       type: object
       additionalProperties: false
@@ -32642,6 +34210,20 @@ components:
               type: string
             pin:
               type: string
+    VariantChoice:
+      type: object
+      additionalProperties: false
+      required: [name, values]
+      properties:
+        name:
+          type: string
+          maxLength: 30
+        values:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            maxLength: 30
     StockItem:
       type: object
       required: [id, name, available, stock]
@@ -32667,6 +34249,30 @@ components:
           type: integer
         supplier:
           type: string
+        category:
+          type: string
+          description: The kind of thing it is ("Sneakers"), when the catalogue has a category column
+        description:
+          type: string
+          description: Its words on the storefront, when the catalogue maps them
+        variant_of:
+          type: string
+          description: The product this is a size or colour of
+        variant:
+          type: object
+          additionalProperties:
+            type: string
+          description: 'Its values: {"Size": "42", "Colour": "Black"}'
+        choices:
+          type: array
+          description: A product's choices, when it has sizes and colours (it keeps no stock of its own then)
+          items:
+            $ref: '#/components/schemas/VariantChoice'
+        own_price:
+          type: array
+          description: On a product, its sizes and colours with a price of their own, each as its values in lower case ("colour=black|size=42"); the others follow the product's price
+          items:
+            type: string
         low:
           type: boolean
         suggest:
@@ -32688,7 +34294,7 @@ components:
           type: string
         reason:
           type: string
-          enum: [order, sale, received, adjustment, count, outside]
+          enum: [order, sale, received, adjustment, count, outside, moved]
         status:
           type: string
           enum: [pending, done, void]
@@ -41700,13 +43306,29 @@ components:
         desc:
           type: boolean
       additionalProperties: false
+    RowFilterAny:
+      type: object
+      required:
+      - any
+      properties:
+        any:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/RowFilter'
+      additionalProperties: false
     RowsQuery:
       type: object
       properties:
         filters:
           type: array
+          description: >-
+            Filters that all hold. An item may instead be {"any": [filters]}, a group of up to 20 of which one must hold (a search across several columns).
           items:
-            $ref: '#/components/schemas/RowFilter'
+            oneOf:
+            - $ref: '#/components/schemas/RowFilter'
+            - $ref: '#/components/schemas/RowFilterAny'
         order:
           type: array
           items:

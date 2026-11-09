@@ -135,8 +135,9 @@ test("on a computer the panel sits beside the thread; rows show who, when and th
   const bubble = pane
     .getByTestId("chat-message")
     .filter({ hasText: "Send twenty bags" });
-  await expect(bubble).toBeInViewport();
+  // The flash lasts 1.8 s: looked for first, while the scroll settles.
   await expect(bubble).toHaveClass(/flash/);
+  await expect(bubble).toBeInViewport();
   await expect(panel).toBeVisible(); // beside the thread, it stays
 
   await panel.getByTestId("chat-search").fill("zebra");
@@ -286,9 +287,19 @@ test("the calendar is a month with arrows, today filled in, later days dimmed an
   await buyer.keyboard.press("PageUp");
   await expect(cal.locator(".dp-month")).not.toHaveText(month);
   await expect(cal.getByRole("button", { name: "Next month" })).toBeEnabled();
-  await cal.getByRole("button", { name: "Next month" }).click(); // Sep 28 -> Oct 28
-  await cal.getByRole("button", { name: "Next month" }).click(); // -> today's month
+  // A day and a week back is this month or the last, by today's date (the
+  // 4th: the last; the 9th: this); Page Up one more. As many arrows on.
+  const back = new Date(now);
+  back.setDate(now.getDate() - 8);
+  const months =
+    (now.getFullYear() - back.getFullYear()) * 12 +
+    now.getMonth() -
+    back.getMonth() +
+    1;
+  for (let i = 0; i < months; i++)
+    await cal.getByRole("button", { name: "Next month" }).click();
   await expect(cal.locator(".dp-month")).toHaveText(month);
+  await expect(cal.getByRole("button", { name: "Next month" })).toBeDisabled();
 
   // A click elsewhere and Esc close the calendar only.
   await buyer.keyboard.press("Escape");

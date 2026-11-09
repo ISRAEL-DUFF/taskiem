@@ -3,7 +3,7 @@
 -- off, and the businesses that use it read that as they read a rider's
 -- words today (rider_presence, 00242; held deliveries, 00243). No second
 -- store: the rider's business writes the row of the rider it is, through
--- the riders rows linked to it (riders.link_id, 00408).
+-- the riders rows linked to it (riders.link_id, 00413).
 -- +goose Up
 -- The definers (owned by taskiem_dispatch) read which link a rider is.
 GRANT SELECT (link_id) ON riders TO taskiem_dispatch;

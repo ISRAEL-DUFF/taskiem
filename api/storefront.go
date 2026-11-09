@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"slices"
 	"strconv"
@@ -308,6 +309,8 @@ func (s *Server) SyncStorefront(ctx context.Context, tenant uuid.UUID) error {
 	if err != nil {
 		return err
 	}
+	// The page lists a product, not its sizes and colours one by one.
+	items = storefront.PublicItems(items)
 	// A live page's items are checked as they are copied (moderation.go),
 	// with no transaction open while the model answers.
 	checked, err := s.moderateItems(ctx, tenant, items)
@@ -326,6 +329,9 @@ func (s *Server) SyncStorefront(ctx context.Context, tenant uuid.UUID) error {
 	if err := s.syncLists(ctx, tenant); err != nil {
 		return err
 	}
+	// The price lists holding a product sold in sizes keep its sizes on
+	// sale as the catalogue now has them, however they changed.
+	s.syncListSizes(ctx, tenant)
 	return s.syncServices(ctx, tenant, sf)
 }
 
@@ -369,6 +375,9 @@ func (s *Server) syncLists(ctx context.Context, tenant uuid.UUID) error {
 			errs = append(errs, fmt.Errorf("%s: %w", l.TableName, err))
 			continue
 		}
+		// As the catalogue's: a product, not its sizes and colours one by
+		// one.
+		items = storefront.PublicItems(items)
 		checked, err := s.moderateItems(ctx, tenant, items)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", l.TableName, err))
@@ -522,14 +531,40 @@ func (s *Server) storeStorefrontImage(r *http.Request) (storefront.Media, error)
 	if s.Media == nil {
 		return storefront.Media{}, fmt.Errorf("%w: storage for photos is not configured", errConflict)
 	}
-	data, err := io.ReadAll(http.MaxBytesReader(nil, r.Body, media.MaxImageBytes+1))
-	if err != nil || len(data) > media.MaxImageBytes {
-		return storefront.Media{}, fmt.Errorf("%w: an image is at most %d MB", errBadRequest, media.MaxImageBytes>>20)
+	// A picture's bytes, or {"url": "https://…"}: a picture on the web,
+	// fetched once and kept as the business's own copy
+	// (docs/spec/chat-categories-and-variants.md, Part C).
+	var data []byte
+	var link string
+	if ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); ct == "application/json" {
+		var in struct {
+			URL string `json:"url"`
+		}
+		if err := decodeBody(r, &in); err != nil {
+			return storefront.Media{}, err
+		}
+		link = strings.TrimSpace(in.URL)
+		var err error
+		if data, err = s.imageFromLink(r.Context(), principalFrom(r.Context()), link); err != nil {
+			return storefront.Media{}, err
+		}
+	} else {
+		var err error
+		data, err = io.ReadAll(http.MaxBytesReader(nil, r.Body, media.MaxImageBytes+1))
+		if err != nil || len(data) > media.MaxImageBytes {
+			return storefront.Media{}, fmt.Errorf("%w: an image is at most %d MB", errBadRequest, media.MaxImageBytes>>20)
+		}
 	}
 	m, err := s.putStorefrontImage(r.Context(), principalFrom(r.Context()), data, func(tx pgx.Tx, m storefront.Media) error {
-		return auditTx(r, tx, "storefront.media_add", m.ID.String(), map[string]any{"moderation": m.Moderation})
+		detail := map[string]any{"moderation": m.Moderation}
+		if link != "" {
+			detail["from"] = link
+		}
+		return auditTx(r, tx, "storefront.media_add", m.ID.String(), detail)
 	})
 	switch {
+	case errors.Is(err, media.ErrImage) && link != "":
+		return m, fmt.Errorf("%w: that link is not a picture we can use", errBadRequest)
 	case errors.Is(err, media.ErrImage):
 		return m, fmt.Errorf("%w: %s", errBadRequest, plainError(err))
 	case errors.Is(err, errImageRejected):
@@ -542,6 +577,10 @@ func (s *Server) storeStorefrontImage(r *http.Request) (storefront.Media, error)
 // business's data project, where photos live, is said as tables say it
 // (being set up, or what Xenibase refused), not as an internal error.
 func (s *Server) failImage(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, errPhotoLinksTooFast) {
+		writeErr(w, http.StatusTooManyRequests, err.Error())
+		return
+	}
 	var xe *datatables.Error
 	if errors.Is(err, datatables.ErrUnavailable) || errors.Is(err, datatables.ErrProvisioning) || errors.Is(err, datatables.ErrProjectFailed) || errors.As(err, &xe) {
 		s.failTables(w, r, err)
@@ -640,6 +679,7 @@ func (s *Server) changePhotos(ctx context.Context, tenant uuid.UUID, t datatable
 	if err != nil {
 		return err
 	}
+	call := uuid.NewString()
 	for attempt := range photoAttempts {
 		was, have, err := s.photoCell(ctx, tr, t, key, col)
 		if err != nil {
@@ -649,6 +689,10 @@ func (s *Server) changePhotos(ctx context.Context, tenant uuid.UUID, t datatable
 		if err != nil {
 			return err
 		}
+		// Nothing to change (the photo is there already): done.
+		if slices.Equal(next, have) {
+			return nil
+		}
 		var value any
 		if len(next) > 0 {
 			value = strings.Join(next, ",")
@@ -657,8 +701,11 @@ func (s *Server) changePhotos(ctx context.Context, tenant uuid.UUID, t datatable
 		if was == nil {
 			still = map[string]any{"column": col, "op": "is_null"}
 		}
+		// The key is this request's own (once per call, then per attempt):
+		// the same change asked again later, such as a photo added back
+		// after it was taken out, is a new write, not an answer replayed.
 		out, err := tr.call(ctx, s, "update_rows", map[string]any{"table": t.Name, "set": map[string]any{col: value}, "max_affected": 1, "return": "minimal",
-			"filters": []any{map[string]any{"column": "id", "op": "eq", "value": key}, still}}, idem+":"+strconv.Itoa(attempt))
+			"filters": []any{map[string]any{"column": "id", "op": "eq", "value": key}, still}}, idem+":"+call+":"+strconv.Itoa(attempt))
 		if err != nil {
 			return err
 		}
@@ -798,6 +845,50 @@ func (s *Server) catalogueItemChanged(r *http.Request, action string, t datatabl
 	if err := s.SyncStorefront(r.Context(), p.TenantID); err != nil && !errors.Is(err, r.Context().Err()) && !errors.Is(err, storefront.ErrNotFound) {
 		s.Logger.Warn("storefront: refreshing the copies", "tenant", p.TenantID, "err", err)
 	}
+	// The change in the diary, as a price or a category is.
+	name := s.catalogueRowName(r.Context(), p.TenantID, t, row)
+	if name == "" {
+		return
+	}
+	switch action {
+	case "storefront.item_photo":
+		s.diaryChange(r.Context(), p, "New photo of "+name)
+	case "storefront.item_photo_remove":
+		s.diaryChange(r.Context(), p, "A photo of "+name+" taken out")
+	case "storefront.item_photo_main":
+		s.diaryChange(r.Context(), p, "New main photo of "+name)
+	}
+}
+
+// catalogueRowName is a catalogue row's name as the mapping names it; ""
+// when it cannot be read.
+func (s *Server) catalogueRowName(ctx context.Context, tenant uuid.UUID, t datatables.Table, row int64) string {
+	var sf storefront.Storefront
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		var err error
+		sf, err = storefront.Get(ctx, tx, tenant)
+		return err
+	}); err != nil || sf.CatalogueColumns.Name == "" {
+		return ""
+	}
+	tr, err := s.tableRowsFor(ctx, tenant, t, storefrontPurpose)
+	if err != nil {
+		return ""
+	}
+	col := sf.CatalogueColumns.Name
+	page, err := tr.call(ctx, s, "read_rows", map[string]any{"table": t.Name, "limit": 1, "select": "id," + col,
+		"filters": []any{map[string]any{"column": "id", "op": "eq", "value": row}}}, "")
+	if err != nil {
+		return ""
+	}
+	for _, x := range rowsOf(page) {
+		if m, ok := x.(map[string]any); ok {
+			if v, ok := m[col].(string); ok {
+				return strings.TrimSpace(v)
+			}
+		}
+	}
+	return ""
 }
 
 // cataloguePhotoRow reads the request's catalogue row and the table its

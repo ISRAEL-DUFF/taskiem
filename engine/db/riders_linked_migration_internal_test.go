@@ -9,7 +9,7 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
-// 00408 (riders phase 1) goes up and down: its Down takes the riders'
+// 00413 (riders phase 1) goes up and down: its Down takes the riders'
 // delivery orders with their link rows, in the order the foreign key
 // allows, and puts the reference check back.
 func TestRidersLinkedMigrationUpDownUp(t *testing.T) {
@@ -25,7 +25,7 @@ func TestRidersLinkedMigrationUpDownUp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := p.UpTo(ctx, 408); err != nil {
+	if _, err := p.UpTo(ctx, 413); err != nil {
 		t.Fatal(err)
 	}
 	conn, err := pgx.Connect(ctx, dsn)
@@ -51,19 +51,19 @@ func TestRidersLinkedMigrationUpDownUp(t *testing.T) {
 		VALUES ('00000000-0000-0000-0000-0000000000c1', '00000000-0000-0000-0000-0000000000a2', '00000000-0000-0000-0000-0000000000e1',
 		'00000000-0000-0000-0000-0000000000a1', 'Ada Stores', '00000000-0000-0000-0000-0000000000d1', 'AD-1', '[{"item":"Delivery","quantity":1,"price_kobo":1000}]',
 		'00000000-0000-0000-0000-0000000000d1')`)
-	if _, err := p.DownTo(ctx, 407); err != nil {
+	if _, err := p.DownTo(ctx, 412); err != nil {
 		t.Fatal(err)
 	}
 	var n int
 	if err := conn.QueryRow(ctx, `SELECT count(*) FROM storefront_orders WHERE kind = 'trade'`).Scan(&n); err != nil || n != 0 {
 		t.Fatalf("the rider's order after Down: %d %v", n, err)
 	}
-	if _, err := p.UpTo(ctx, 408); err != nil {
+	if _, err := p.UpTo(ctx, 413); err != nil {
 		t.Fatal(err)
 	}
 }
 
-// 00409 (riders phase 2) goes up and down: the profile's delivery fields,
+// 00414 (riders phase 2) goes up and down: the profile's delivery fields,
 // the two phone definers, and Explore's definer back to 00401's shape.
 func TestRiderProfileMigrationUpDownUp(t *testing.T) {
 	dsn := emptyDatabase(t)
@@ -78,7 +78,7 @@ func TestRiderProfileMigrationUpDownUp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := p.UpTo(ctx, 409); err != nil {
+	if _, err := p.UpTo(ctx, 414); err != nil {
 		t.Fatal(err)
 	}
 	conn, err := pgx.Connect(ctx, dsn)
@@ -96,7 +96,7 @@ func TestRiderProfileMigrationUpDownUp(t *testing.T) {
 	if err := conn.QueryRow(ctx, `SELECT count(*) FROM pg_proc WHERE proname IN ('taskiem_link_phone_linked', 'taskiem_link_phone_is_business')`).Scan(&cols); err != nil || cols != 2 {
 		t.Fatalf("the phone definers: %d %v", cols, err)
 	}
-	if _, err := p.DownTo(ctx, 408); err != nil {
+	if _, err := p.DownTo(ctx, 413); err != nil {
 		t.Fatal(err)
 	}
 	if err := conn.QueryRow(ctx, `SELECT count(*) FROM information_schema.columns WHERE table_name = 'business_profile' AND column_name IN ('delivers', 'vehicle', 'delivery_areas')`).Scan(&cols); err != nil || cols != 0 {
@@ -105,12 +105,12 @@ func TestRiderProfileMigrationUpDownUp(t *testing.T) {
 	if err := conn.QueryRow(ctx, `SELECT count(*) FROM pg_proc WHERE proname = 'taskiem_link_explore'`).Scan(&cols); err != nil || cols != 1 {
 		t.Fatalf("explore after Down: %d %v", cols, err)
 	}
-	if _, err := p.UpTo(ctx, 409); err != nil {
+	if _, err := p.UpTo(ctx, 414); err != nil {
 		t.Fatal(err)
 	}
 }
 
-// 00410 (riders phase 3) goes up and down: the availability definers.
+// 00415 (riders phase 3) goes up and down: the availability definers.
 func TestRiderAvailabilityMigrationUpDownUp(t *testing.T) {
 	dsn := emptyDatabase(t)
 	ctx := context.Background()
@@ -124,7 +124,7 @@ func TestRiderAvailabilityMigrationUpDownUp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := p.UpTo(ctx, 410); err != nil {
+	if _, err := p.UpTo(ctx, 415); err != nil {
 		t.Fatal(err)
 	}
 	conn, err := pgx.Connect(ctx, dsn)
@@ -136,18 +136,18 @@ func TestRiderAvailabilityMigrationUpDownUp(t *testing.T) {
 	if err := conn.QueryRow(ctx, `SELECT count(*) FROM pg_proc WHERE proname IN ('taskiem_rider_own_hashes', 'taskiem_rider_availability_say', 'taskiem_rider_availability', 'taskiem_link_availability')`).Scan(&n); err != nil || n != 4 {
 		t.Fatalf("the availability definers: %d %v", n, err)
 	}
-	if _, err := p.DownTo(ctx, 409); err != nil {
+	if _, err := p.DownTo(ctx, 414); err != nil {
 		t.Fatal(err)
 	}
 	if err := conn.QueryRow(ctx, `SELECT count(*) FROM pg_proc WHERE proname LIKE 'taskiem_rider_availability%' OR proname = 'taskiem_link_availability'`).Scan(&n); err != nil || n != 0 {
 		t.Fatalf("after Down: %d %v", n, err)
 	}
-	if _, err := p.UpTo(ctx, 410); err != nil {
+	if _, err := p.UpTo(ctx, 415); err != nil {
 		t.Fatal(err)
 	}
 }
 
-// 00411 (riders phase 4) goes up and down: the confirm on deliveries and
+// 00416 (riders phase 4) goes up and down: the confirm on deliveries and
 // the payout of one delivery.
 func TestRiderFeeMigrationUpDownUp(t *testing.T) {
 	dsn := emptyDatabase(t)
@@ -162,7 +162,7 @@ func TestRiderFeeMigrationUpDownUp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := p.UpTo(ctx, 411); err != nil {
+	if _, err := p.UpTo(ctx, 416); err != nil {
 		t.Fatal(err)
 	}
 	conn, err := pgx.Connect(ctx, dsn)
@@ -175,14 +175,14 @@ func TestRiderFeeMigrationUpDownUp(t *testing.T) {
 		OR (table_name = 'rider_payouts' AND column_name IN ('delivery_id', 'how'))`).Scan(&n); err != nil || n != 4 {
 		t.Fatalf("the columns: %d %v", n, err)
 	}
-	if _, err := p.DownTo(ctx, 410); err != nil {
+	if _, err := p.DownTo(ctx, 415); err != nil {
 		t.Fatal(err)
 	}
 	if err := conn.QueryRow(ctx, `SELECT count(*) FROM information_schema.columns WHERE (table_name = 'deliveries' AND column_name IN ('confirmed_at', 'confirmed_by'))
 		OR (table_name = 'rider_payouts' AND column_name IN ('delivery_id', 'how'))`).Scan(&n); err != nil || n != 0 {
 		t.Fatalf("after Down: %d %v", n, err)
 	}
-	if _, err := p.UpTo(ctx, 411); err != nil {
+	if _, err := p.UpTo(ctx, 416); err != nil {
 		t.Fatal(err)
 	}
 }

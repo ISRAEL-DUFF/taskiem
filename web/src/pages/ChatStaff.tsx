@@ -10,6 +10,7 @@ import {
   changeWords,
   firstName,
   saleOf,
+  SHOW_BRIEFING,
   type Briefing,
   type Handover,
   type PaidHow,
@@ -17,8 +18,18 @@ import {
 } from "../lib/staff";
 import type { ToolKey } from "../lib/tools";
 import type { StockItem, StockView } from "../lib/stock";
+import {
+  findSize,
+  hasSizes,
+  label,
+  pickable,
+  sizesOf,
+  sizesWords,
+  type Variant,
+} from "../lib/variants";
 import { formatPrice } from "../lib/storefront";
 import { ErrorBox, useLoad } from "../ui";
+import { toast } from "../toast";
 
 // Staff who work from chat (docs/spec/chat-tools.md §7): a cashier's Sell,
 // a counter sale as the Order sheet looks (the items with steppers, the pine
@@ -79,9 +90,12 @@ export function SellSheet({
     hows.current[i]?.focus();
   };
   const q = search.trim().toLowerCase();
+  // A product's sizes and colours are picked under it, not listed apart.
   const shown = (items.data ?? []).filter(
-    (it) => !q || it.name.toLowerCase().includes(q),
+    (it) => !it.variant_of && (!q || it.name.toLowerCase().includes(q)),
   );
+  const [open, setOpen] = useState<string>();
+  const [picked, setPicked] = useState<Record<string, Variant>>({});
   const record = async () => {
     setBusy(true);
     setError(undefined);
@@ -170,6 +184,20 @@ export function SellSheet({
           </label>
           <ul className="tk-sheet-list tk-order-list tk-stagger">
             {shown.map((it) => {
+              if (hasSizes(it))
+                return (
+                  <SizedRow
+                    key={it.id}
+                    item={it}
+                    all={items.data ?? []}
+                    qty={qty}
+                    set={set}
+                    open={open === it.id}
+                    onOpen={() => setOpen(open === it.id ? undefined : it.id)}
+                    picked={picked[it.id] ?? {}}
+                    onPick={(v) => setPicked({ ...picked, [it.id]: v })}
+                  />
+                );
               const n = qty[it.id] ?? 0;
               const out = it.stock !== null && it.stock <= 0;
               const over = it.stock !== null && n > Math.max(0, it.stock);
@@ -489,26 +517,53 @@ export function BriefingCard({
   const [b, setB] = useState<Briefing>();
   const [gone, setGone] = useState<string>();
   const [error, setError] = useState<unknown>();
+  const card = useRef<HTMLElement>(null);
+  const asked = useRef(false);
   // Read again when the page comes back, and every ten minutes: the card
-  // appears at 8am and a new day's card replaces yesterday's.
+  // appears at 8am and a new day's card replaces yesterday's. Asked for
+  // (the tools menu's Briefing, or "briefing"), today's comes back, put
+  // away or not.
   useEffect(() => {
     let live = true;
     const load = () => {
       if (document.visibilityState === "hidden") return;
       get<Briefing>("/v1/chat-briefing").then(
-        (x) => live && setB(x),
+        (x) => live && !asked.current && setB(x),
         (e: unknown) => console.warn("the morning briefing", e),
+      );
+    };
+    const show = () => {
+      asked.current = true;
+      get<Briefing>("/v1/chat-briefing?show=1").then(
+        (x) => {
+          asked.current = false;
+          if (!live) return;
+          setB(x);
+          setGone(undefined);
+          setError(undefined);
+          requestAnimationFrame(() => {
+            card.current?.scrollIntoView({ block: "nearest" });
+            card.current?.focus();
+          });
+        },
+        (e: unknown) => {
+          asked.current = false;
+          console.warn("the morning briefing", e);
+          toast("The briefing didn't load. Try again.", "error");
+        },
       );
     };
     load();
     const every = window.setInterval(load, 10 * 60_000);
     document.addEventListener("visibilitychange", load);
     window.addEventListener("focus", load);
+    window.addEventListener(SHOW_BRIEFING, show);
     return () => {
       live = false;
       window.clearInterval(every);
       document.removeEventListener("visibilitychange", load);
       window.removeEventListener("focus", load);
+      window.removeEventListener(SHOW_BRIEFING, show);
     };
   }, []);
   if (!b || !b.ready || b.put_off || gone === b.key) return null;
@@ -523,23 +578,32 @@ export function BriefingCard({
       },
     );
   };
-  const day = new Date(`${b.day}T08:00:00`);
+  const day = new Date(`${b.day}T12:00:00`);
+  const hello =
+    b.part === "afternoon"
+      ? "Good afternoon"
+      : b.part === "evening"
+        ? "Good evening"
+        : "Good morning";
   const change =
     b.sales && changeWords(b.sales.change_pct, `last ${b.sales.weekday}`);
   const heights = b.sales ? barHeights(b.sales.week) : [];
   return (
     <article
+      ref={card}
+      tabIndex={-1}
       className="tk-brief"
-      aria-label="Morning briefing"
+      aria-label="Today's briefing"
       data-testid="briefing-card"
     >
       <span className="tk-brief-head">
         <span>
           <span className="tk-kicker">
-            Good morning, {firstName(me?.user?.name, me?.user?.email)}
+            {hello}, {firstName(me?.user?.name, me?.user?.email)}
           </span>
           <span className="tk-brief-day">
-            {day.toLocaleDateString("en-GB", { weekday: "long" })} · 8:00
+            {day.toLocaleDateString("en-GB", { weekday: "long" })}
+            {b.now ? ` · ${b.now}` : ""}
           </span>
         </span>
         {/* Live: today's numbers (the Alerts board's dot). */}
@@ -609,5 +673,145 @@ export function BriefingCard({
         </p>
       )}
     </article>
+  );
+}
+
+/** A product with sizes and colours in Sell: Choose opens its choices, one
+ * row of buttons each (what is off sale or has none left greyed out);
+ * the size picked gets its own − n +, and those chosen so far are listed
+ * under the product. */
+function SizedRow({
+  item,
+  all,
+  qty,
+  set,
+  open,
+  onOpen,
+  picked,
+  onPick,
+}: {
+  item: StockItem;
+  all: StockItem[];
+  qty: Record<string, number>;
+  set: (it: StockItem, n: number) => void;
+  open: boolean;
+  onOpen: () => void;
+  picked: Variant;
+  onPick: (v: Variant) => void;
+}) {
+  const cs = item.choices ?? [];
+  const sizes = sizesOf(all, item.id);
+  const chosen = sizes.filter((v) => (qty[v.id] ?? 0) > 0);
+  const n = chosen.reduce((a, v) => a + (qty[v.id] ?? 0), 0);
+  const left = sizes.reduce((a, v) => a + (v.stock ?? 0), 0);
+  const found = cs.every((c) => picked[c.name])
+    ? findSize(all, item.id, picked)
+    : undefined;
+  const stepper = (v: StockItem) => {
+    const m = qty[v.id] ?? 0;
+    const name = `${item.name}, ${label(v.variant, cs)}`;
+    return (
+      <span className="tk-qty" role="group" aria-label={`How many ${name}`}>
+        <button
+          type="button"
+          aria-label={`One fewer ${name}`}
+          disabled={m === 0}
+          onClick={() => set(v, m - 1)}
+        >
+          −
+        </button>
+        <span aria-live="polite">{m}</span>
+        <button
+          type="button"
+          aria-label={`One more ${name}`}
+          onClick={() => set(v, m + 1)}
+        >
+          +
+        </button>
+      </span>
+    );
+  };
+  return (
+    <li
+      className={`tk-order-row tk-sized${n > 0 ? " on" : ""}`}
+      data-testid="sell-row"
+    >
+      <div className="tk-sized-head">
+        <span className="tk-row-tile" aria-hidden="true">
+          <Icon name="box" />
+        </span>
+        <span className="tk-row-words">
+          <span className="tk-row-name">{item.name}</span>
+          <span className="tk-row-sub">
+            {item.price_kobo !== undefined ? formatPrice(item.price_kobo) : ""}
+            {` · ${sizesWords(sizes.length)} · ${left} left`}
+          </span>
+        </span>
+        <button
+          type="button"
+          className="tk-btn soft"
+          aria-expanded={open}
+          onClick={onOpen}
+        >
+          {open ? "Done" : "Choose"}
+          <span className="sr-only"> a size or colour of {item.name}</span>
+        </button>
+      </div>
+      {chosen.length > 0 && (
+        <ul className="tk-sized-chosen" aria-label={`${item.name} chosen`}>
+          {chosen.map((v) => (
+            <li key={v.id}>
+              <span>
+                {label(v.variant, cs)}
+                {v.price_kobo !== undefined && v.price_kobo !== item.price_kobo
+                  ? ` · ${formatPrice(v.price_kobo)}`
+                  : ""}
+              </span>
+              {stepper(v)}
+            </li>
+          ))}
+        </ul>
+      )}
+      {open && (
+        <div className="tk-sized-pick">
+          {cs.map((c) => {
+            const can = pickable(all, item.id, c.name, picked);
+            return (
+              <div
+                key={c.name}
+                className="tk-chips tk-field-chips"
+                role="group"
+                aria-label={c.name}
+              >
+                {c.values.map((x) => (
+                  <button
+                    key={x}
+                    type="button"
+                    aria-pressed={picked[c.name] === x}
+                    disabled={!can.has(x)}
+                    onClick={() => onPick({ ...picked, [c.name]: x })}
+                  >
+                    {x}
+                  </button>
+                ))}
+              </div>
+            );
+          })}
+          {found ? (
+            <div className="tk-sized-found">
+              <span>
+                {label(found.variant, cs)}
+                {found.stock !== null ? ` · ${found.stock} left` : ""}
+              </span>
+              {stepper(found)}
+            </div>
+          ) : (
+            <p className="hint">
+              Choose {cs.map((c) => c.name.toLowerCase()).join(" and ")}.
+            </p>
+          )}
+        </div>
+      )}
+    </li>
   );
 }

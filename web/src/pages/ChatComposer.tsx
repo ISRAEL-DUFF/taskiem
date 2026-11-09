@@ -24,7 +24,7 @@ import { MicButton, RecordingBar, useVoiceNote } from "./VoiceNote";
 import { PendingFile } from "./PendingFile";
 import { AttachMenu } from "./AttachMenu";
 import { CameraSheet } from "./CameraSheet";
-import { ToolSheet, ToolsPanel } from "./ChatTools";
+import { extrasFor, ToolSheet, ToolsPanel, type ExtraTile } from "./ChatTools";
 import { OrderSheet, type OrderStart } from "./ChatBuyer";
 import { AvailabilitySheet } from "./ChatAvailability";
 import { HandoverSheet, SellSheet } from "./ChatStaff";
@@ -36,11 +36,14 @@ type ToolStart = {
   rowId?: string;
   add?: boolean;
   prefill?: Prefill;
+  /** A chip already on: a category picked in "@". */
+  chip?: string;
   /** The Order sheet: an item in the bag, or a past order again. */
   order?: OrderStart;
 };
 import { useAuth } from "../auth";
-import { usePresence } from "../kit";
+import { categoryTag } from "../lib/tools";
+import { useMediaQuery, usePresence } from "../kit";
 
 // The composer of every conversation (a business's and Taskiem's): the box
 // that grows, emoji, a photo (and, where it is taken, a PDF), the camera,
@@ -129,6 +132,8 @@ export type ComposerOptions<R> = {
   /** A business's conversation: its orders and bills only, and, when they
    * share prices with us, ordering from them. */
   scope?: { link: string; name: string; supplies: boolean };
+  /** Tiles of the tools menu that are not tools (Briefing): a tap runs it. */
+  extras?: ExtraTile[];
 };
 
 export function useComposer<R>(o: ComposerOptions<R>) {
@@ -150,7 +155,18 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     setDraft(o.draftKey, o.tools && /^\/\S*$/.test(text) ? "" : text);
     // Only a change of the words is kept: a switch of conversation loads one.
   }, [text]);
-  const mentions = useMentions(text, setText, textBox, o.sources, o.grouped);
+  // A category picked in "@" opens its items (set below, once the tools are).
+  const onCategory = useRef<(name: string) => void>(() => undefined);
+  const mentions = useMentions(
+    text,
+    setText,
+    textBox,
+    o.sources,
+    o.grouped && {
+      ...o.grouped,
+      onCategory: (name) => onCategory.current(name),
+    },
+  );
   // The tools panel: the grid button, or "/" and a word as the whole message.
   const [toolsOpen, setToolsOpen] = useState(false);
   const [tool, setTool] = useState<{
@@ -159,11 +175,14 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     start?: ToolStart;
   }>();
   const { can, me } = useAuth();
-  const slash = o.tools ? /^\/(\S*)$/.exec(text) : null;
+  // "/invoice/" and the like pick a thing to tag, not a tool.
+  const slash =
+    o.tools && mentions.q?.mark !== "/" ? /^\/(\S*)$/.exec(text) : null;
   const toolsShown = !!o.tools && (toolsOpen || !!slash);
   // How many tools what follows "/" names: none, and Enter sends it.
   const toolMatches = toolsShown
-    ? toolsFor(can, slash?.[1] ?? "", me?.roles, me?.delivers).length
+    ? toolsFor(can, slash?.[1] ?? "", me?.roles, me?.delivers).length +
+      extrasFor(o.extras, slash?.[1] ?? "").length
     : 0;
   const closeTools = () => {
     setToolsOpen(false);
@@ -173,6 +192,12 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     closeTools();
     setTool({ key: k, from, start });
   };
+  // A supplier's category opens their list, to order from; ours, our
+  // products.
+  onCategory.current = (name) =>
+    o.scope?.supplies
+      ? openTool("order", undefined, { order: { category: name } })
+      : openTool("products", undefined, { chip: categoryTag(name) });
   // A typed request: its tool opens at the form, filled in; the words go.
   const openRequest = (r: Request) => {
     setText("");
@@ -273,7 +298,12 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     const r = insertAt(text, start, el?.selectionEnd ?? start, c);
     typed(r.text);
     mentions.update(r.text, r.caret);
+    // Back to the message after the render, unless the person has gone on
+    // somewhere (the search box, to find the next one) in the meantime.
+    const from = document.activeElement;
     requestAnimationFrame(() => {
+      const now = document.activeElement;
+      if (now !== from && now !== document.body && now !== el) return;
       el?.focus();
       el?.setSelectionRange(r.caret, r.caret);
     });
@@ -378,6 +408,7 @@ export function ComposerView<R>({
 }) {
   const { voice, file, text, reply } = c;
   const toolsP = usePresence(c.toolsShown);
+  const roomy = useMediaQuery("(min-width: 600px)");
   return (
     <>
       {reply && c.o.replyLine && (
@@ -521,6 +552,7 @@ export function ComposerView<R>({
               leaving={toolsP.leaving}
               scope={c.o.scope?.link}
               supplier={c.o.scope?.supplies ? c.o.scope.name : undefined}
+              extras={c.o.extras}
             />
           )}
           {c.o.tools && (
@@ -564,11 +596,14 @@ export function ComposerView<R>({
               placeholder={
                 file
                   ? "Add a caption"
-                  : c.o.placeholder
-                    ? c.o.placeholder
-                    : c.o.grouped
-                      ? "Message, @ to tag"
-                      : "Type a message"
+                  : hint(
+                      c.o.placeholder
+                        ? c.o.placeholder
+                        : c.o.grouped
+                          ? "Message, @ to tag"
+                          : "Type a message",
+                      roomy,
+                    )
               }
               value={text}
               onChange={(e) => {
@@ -674,4 +709,10 @@ export function ComposerView<R>({
       )}
     </>
   );
+}
+
+/** The box's hint on one line: on a phone, the words before its comma
+ * ("Ask Taskiem", "Message"); with room, all of it. */
+export function hint(words: string, roomy: boolean): string {
+  return roomy ? words : (words.split(",")[0] ?? words).trim();
 }

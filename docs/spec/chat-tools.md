@@ -392,6 +392,12 @@ phone the owner keeps the 8am money summary, now with today's deliveries
 and bookings ("Today: 4 deliveries, 1 bookings.") and, with chat tools on,
 the link to the morning card in the Taskiem conversation.
 
+Since 9 November 2026 (docs/spec/chat-five-more-flows.md, phase 2 additions)
+the card greets by the hour ("Good afternoon, Ada") and shows the time its
+numbers were read; the tools menu's **Briefing** tile, or "briefing" typed,
+brings today's back after Got it; and its sales, like "how did we do", count
+shop, chat and trade orders and invoices sent, not only the counter's.
+
 **"How did we do?"** ("how did we do this week?", "today", "yesterday", "last
 week", "this month", "sales", and "@Taskiem how did we do?" from any
 conversation): the numbers in words on every channel ("Sales, the last 7 days:

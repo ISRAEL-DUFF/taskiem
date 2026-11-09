@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -40,24 +41,21 @@ func New(t testing.TB) *DB {
 	defer cancel()
 
 	name := "taskiem_test_" + uuid.NewString()[:8]
+	tmpl, err := template(base)
+	if err != nil {
+		t.Fatalf("the migrated template: %v", err)
+	}
 	admin, err := pgx.Connect(ctx, base)
 	if err != nil {
 		t.Fatalf("connect %s: %v", EnvVar, err)
 	}
-	if _, err := admin.Exec(ctx, "CREATE DATABASE "+name); err != nil {
+	// A copy of the migrated template: a fraction of a second, where
+	// migrating each test's database from nothing took seconds.
+	if _, err := admin.Exec(ctx, "CREATE DATABASE "+name+" TEMPLATE "+tmpl); err != nil {
 		t.Fatal(err)
 	}
 	_ = admin.Close(ctx)
-
-	u, err := url.Parse(base)
-	if err != nil {
-		t.Fatal(err)
-	}
-	u.Path = "/" + name
-	dsn := u.String()
-	if err := migrate(ctx, dsn); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	dsn := dsnFor(t, base, name)
 
 	// Small pools: CI's Postgres allows 100 connections and test packages run in parallel.
 	d := &DB{DSN: dsn, Admin: pool(t, dsn, "", 4), App: pool(t, dsn, "taskiem_app", 16), Dispatch: pool(t, dsn, "taskiem_dispatch", 2)}
@@ -157,6 +155,91 @@ func (d *DB) StartRun(t testing.TB, tn Tenant) uuid.UUID {
 		t.Fatal(err)
 	}
 	return runID
+}
+
+func dsnFor(t testing.TB, base, name string) string {
+	u, err := url.Parse(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.Path = "/" + name
+	return u.String()
+}
+
+// The template every test database is copied from: migrated once, named
+// by the migrations' digest, so a change to any migration builds a new
+// one. Test packages run in parallel, each its own process: one builds it
+// under an advisory lock while the others wait, and then all copy it.
+// Nothing connects to it once it is built (a copy needs that).
+var tmplOnce struct {
+	sync.Once
+	name string
+	err  error
+}
+
+const tmplPrefix = "taskiem_tmpl_"
+
+func template(base string) (string, error) {
+	tmplOnce.Do(func() { tmplOnce.name, tmplOnce.err = buildTemplate(base) })
+	return tmplOnce.name, tmplOnce.err
+}
+
+func buildTemplate(base string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	name := tmplPrefix + db.MigrationsDigest()[:16]
+	admin, err := pgx.Connect(ctx, base)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = admin.Close(context.Background()) }()
+	// One process builds; the lock is the session's, freed with it.
+	if _, err := admin.Exec(ctx, `SELECT pg_advisory_lock(7342019)`); err != nil {
+		return "", err
+	}
+	defer func() { _, _ = admin.Exec(context.Background(), `SELECT pg_advisory_unlock(7342019)`) }()
+	var have bool
+	if err := admin.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = $1)`, name).Scan(&have); err != nil {
+		return "", err
+	}
+	if have {
+		return name, nil
+	}
+	// Built under another name and renamed when whole: a build cut short
+	// is never copied.
+	build := name + "_b"
+	if _, err := admin.Exec(ctx, "DROP DATABASE IF EXISTS "+build+" WITH (FORCE)"); err != nil {
+		return "", err
+	}
+	if _, err := admin.Exec(ctx, "CREATE DATABASE "+build); err != nil {
+		return "", err
+	}
+	u, err := url.Parse(base)
+	if err != nil {
+		return "", err
+	}
+	u.Path = "/" + build
+	if err := migrate(ctx, u.String()); err != nil {
+		return "", fmt.Errorf("migrate: %w", err)
+	}
+	// Its connections are closed with the migration; any left would stop
+	// the rename and every copy.
+	if _, err := admin.Exec(ctx, `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1`, build); err != nil {
+		return "", err
+	}
+	if _, err := admin.Exec(ctx, "ALTER DATABASE "+build+" RENAME TO "+name); err != nil {
+		return "", err
+	}
+	// Templates of migrations since changed are no longer used here.
+	rows, err := admin.Query(ctx, `SELECT datname FROM pg_database WHERE datname LIKE $1 AND datname <> $2`, tmplPrefix+"%", name)
+	if err != nil {
+		return name, nil
+	}
+	old, _ := pgx.CollectRows(rows, pgx.RowTo[string])
+	for _, o := range old {
+		_, _ = admin.Exec(ctx, "DROP DATABASE IF EXISTS "+o)
+	}
+	return name, nil
 }
 
 // migrate migrates a test database. Roles belong to the whole server, so

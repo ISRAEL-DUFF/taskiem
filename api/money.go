@@ -33,6 +33,7 @@ func (s *Server) moneyRoutes(r chi.Router) {
 	r.With(manage, s.tenantWide).Post("/money/statements", s.uploadStatement)
 	r.With(read).Get("/money/statement-waiting", s.listStatementWaiting)
 	r.With(manage, s.tenantWide).Post("/money/statement-waiting/{id}", s.decideStatementLine)
+	r.With(read).Get("/money/entries", s.listMoneyEntries)
 	r.With(manage, s.tenantWide).Post("/money/entries", s.enterMoney)
 }
 
@@ -328,6 +329,12 @@ func (s *Server) enterMoney(w http.ResponseWriter, r *http.Request) {
 	status := http.StatusCreated
 	if !fresh {
 		status = http.StatusOK
+	} else {
+		what := "an expense of " + naira(req.AmountKobo)
+		if req.Kind == "cash" {
+			what = naira(req.AmountKobo) + " cash " + req.Direction
+		}
+		s.diaryChange(r.Context(), p, "Added "+what+" to the money log")
 	}
 	writeJSON(w, status, map[string]any{"entry_id": id, "created": fresh})
 }

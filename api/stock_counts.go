@@ -39,7 +39,9 @@ func countLines(items []stock.Item, got map[string]int64) (lines []stock.CountLi
 	for _, it := range items {
 		n, ok := got[it.ID]
 		if !ok {
-			if it.Stock != nil {
+			// A product sold in sizes and colours is counted through them,
+			// and one taken off sale is not on the shelf to count.
+			if it.Stock != nil && !it.HasSizes() && !it.Retired() {
 				full = false
 			}
 			continue
@@ -208,10 +210,50 @@ func (s *Server) waStockCount(ctx context.Context, c *chat, args string) error {
 	if !ok {
 		return c.say(ctx, s, c.t("wa.count.how"))
 	}
+	return s.countFrom(ctx, c, &countSizeAsk{Said: said, Reason: reason})
+}
+
+// countFrom shows a count for yes: its items found as the other stock
+// words find them, a product's size asked one choice at a time (the
+// count waits, then goes on). One that matches several others, or none,
+// is said, and nothing is recorded.
+func (s *Server) countFrom(ctx context.Context, c *chat, ask *countSizeAsk) error {
+	_, items, ok, err := s.stockChatItems(ctx, c)
+	if !ok || err != nil {
+		return err
+	}
+	byID := map[string]stock.Item{}
+	for _, it := range items {
+		byID[it.ID] = it
+	}
 	got := map[string]int64{}
-	for _, x := range said {
-		match := matchStock(items, x.Name)
+	for i, x := range ask.Said {
+		var match []stock.Item
+		if id, chosen := ask.Chosen[i]; chosen {
+			if it, ok := byID[id]; ok {
+				match = []stock.Item{it}
+			}
+		}
+		if match == nil {
+			match = matchStock(items, x.Name)
+		}
+		if product, one := sizesOfOne(items, match); one {
+			ask.At = i
+			have := map[string]string{}
+			if p, h, found := findSized(items, x.Name); found && p.ID == product.ID {
+				have = h
+			}
+			return s.askSize(ctx, c, &chatShop{Action: "stock_count_size", Name: x.Name, StockChat: &stockChat{CountAsk: ask}}, product, have)
+		}
+		if len(match) == 0 {
+			if done, err := s.sizeNotSold(ctx, c, items, x.Name); done || err != nil {
+				return err
+			}
+		}
 		if len(match) != 1 {
+			if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
+				return err
+			}
 			return c.say(ctx, s, c.t("wa.shop.no_item", "name", whatsapp.SafeText(x.Name)))
 		}
 		got[match[0].ID] = x.Count
@@ -220,7 +262,7 @@ func (s *Server) waStockCount(ctx context.Context, c *chat, args string) error {
 	if err != nil {
 		return err
 	}
-	return s.countConfirm(ctx, c, &countChat{Lines: lines, Reason: reason})
+	return s.countConfirm(ctx, c, &countChat{Lines: lines, Reason: ask.Reason})
 }
 
 // countAsk asks for one item's count.

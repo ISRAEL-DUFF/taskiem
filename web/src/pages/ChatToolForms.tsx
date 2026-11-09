@@ -1,5 +1,4 @@
-import { useRef, useState, type ReactNode } from "react";
-import { tileLetters, toneOf } from "../lib/tone";
+import { useState } from "react";
 import {
   del,
   get,
@@ -9,8 +8,19 @@ import {
   postOnce,
   put,
   sendWith,
-  uploadFile,
 } from "../api";
+import { FormFrame, formKey as key, type Saver } from "./FormFrame";
+import { GridStockIn, SizesEditor } from "./SizesForms";
+import { hasSizes, sizesLine, sizesWords } from "../lib/variants";
+import {
+  PendingPhotos,
+  PhotoFailures,
+  ProductPhotos,
+  sendAll,
+  SendingLine,
+  type Sending,
+} from "./ProductPhotos";
+import { type PhotoPick } from "../lib/photos";
 import { useConfirm } from "./ConfirmSheet";
 import { KitEmpty, KitField, KitLoading, Pill } from "../kit";
 import { serviceRow } from "../lib/bookings";
@@ -20,18 +30,15 @@ import {
   itemsWithPrice,
   listFor,
   listLabel,
+  ownSizePrices,
   sharedWords,
   type PriceList,
 } from "../lib/pricelists";
 import type { BusinessLink } from "../lib/links";
 import { useAuth } from "../auth";
-import { quantity, type StockItem } from "../lib/stock";
-import {
-  formatPrice,
-  imageProblem,
-  thumb,
-  type Catalogue,
-} from "../lib/storefront";
+import { quantity, type StockItem, type StockView } from "../lib/stock";
+import { categoriesOf } from "../lib/mentions";
+import { formatPrice, type Storefront } from "../lib/storefront";
 import { cellText, cellValue, type Row, type Table } from "../lib/tables";
 import type { TradeOrder } from "../lib/tradeorders";
 import {
@@ -43,6 +50,7 @@ import {
   stockInLine,
 } from "../lib/toolforms";
 import { ErrorBox, useLoad } from "../ui";
+import { TableViewer } from "./TableViewer";
 import type { Prefill } from "../lib/intents";
 
 // The chat tools' forms (docs/spec/chat-tools.md §4): each does the common
@@ -52,78 +60,12 @@ import type { Prefill } from "../lib/intents";
 // sees it, with no Save.
 
 /** What a form does on Save: words for what changed, or null for nothing. */
-export type Saver = () => Promise<string | null>;
-
-const key = () => `chat-${crypto.randomUUID()}`;
 
 /** A chat tool's write, marked so a table row added is told as a change. */
 const toolPost = <T,>(path: string, body: unknown) =>
   sendWith<T>("POST", path, body, { "X-Taskiem-Diary": "1" });
 const toolPatch = <T,>(path: string, body: unknown) =>
   sendWith<T>("PATCH", path, body, { "X-Taskiem-Diary": "1" });
-
-/** The scrolling body and the Save at the foot, as every form has them. */
-function FormFrame({
-  children,
-  save,
-  saveWords = "Save",
-  onSaved,
-  ready = true,
-  canEdit = true,
-  onCancel,
-}: {
-  /** With it, the foot is Cancel | Save changes (the DeskSeller board). */
-  onCancel?: () => void;
-  children: ReactNode;
-  save: Saver;
-  saveWords?: string;
-  onSaved: (line: string | null) => void;
-  ready?: boolean;
-  canEdit?: boolean;
-}) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<unknown>();
-  return (
-    <form
-      className="tk-form"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (busy || !ready || !canEdit) return;
-        setBusy(true);
-        setError(undefined);
-        save().then(
-          (line) => onSaved(line),
-          (err: unknown) => (setError(err), setBusy(false)),
-        );
-      }}
-    >
-      <fieldset className="tk-sheet-list tk-form-body" disabled={!canEdit}>
-        {children}
-        <ErrorBox error={error} />
-      </fieldset>
-      <div className="tk-sheet-foot">
-        {canEdit && onCancel ? (
-          <div className="tk-form-foot-two">
-            <button type="button" className="tk-btn soft" onClick={onCancel}>
-              Cancel
-            </button>
-            <button type="submit" className="tk-cta" disabled={busy || !ready}>
-              {busy ? "Saving…" : "Save changes"}
-            </button>
-          </div>
-        ) : canEdit ? (
-          <button type="submit" className="tk-cta" disabled={busy || !ready}>
-            {busy ? "Saving…" : saveWords}
-          </button>
-        ) : (
-          <p className="tk-form-readonly">
-            You can see this. Changing it needs someone who may edit it.
-          </p>
-        )}
-      </div>
-    </form>
-  );
-}
 
 /** − n + for a count. */
 function Stepper({
@@ -221,70 +163,58 @@ function Switch({
   );
 }
 
-/** A product's photos: the first, and one added. */
-function Photos({ item, canEdit }: { item: StockItem; canEdit: boolean }) {
-  const cat = useLoad(
-    () => get<Catalogue>("/v1/storefront/catalogue").catch(() => null),
+/** A product's category (docs/spec/chat-categories-and-variants.md): any
+ * word the owner types, with the categories already used offered as chips
+ * ("Sneakers · 48"), so spellings don't drift. */
+function CategoryField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const used = useLoad(
+    () =>
+      get<StockView>("/v1/stock").then(
+        (r) => categoriesOf(r.items),
+        () => [],
+      ),
     [],
   );
-  const pick = useRef<HTMLInputElement>(null);
-  const [error, setError] = useState<unknown>();
-  const [busy, setBusy] = useState(false);
-  const it = cat.data?.items.find((x) => x.id === item.id);
-  const shots = [it?.photo, ...(it?.gallery ?? [])].filter(Boolean).slice(0, 3);
+  const q = value.trim().toLowerCase();
+  const offer = (used.data ?? [])
+    .filter(
+      (c) =>
+        c.name.toLowerCase() !== q &&
+        (q === "" || c.name.toLowerCase().includes(q)),
+    )
+    .slice(0, 6);
   return (
-    <div className="tk-photos">
-      {shots.map((p, i) => (
-        <img
-          key={i}
-          src={thumb(p)}
-          alt={i === 0 ? `${item.name}, its photo` : ""}
+    <div className="tk-category">
+      <KitField
+        label="Category"
+        hint="Sneakers, Soft drinks… Search and the chips use it."
+      >
+        <input
+          value={value}
+          maxLength={60}
+          placeholder="None"
+          onChange={(e) => onChange(e.target.value)}
         />
-      ))}
-      {shots.length === 0 && (
-        <span
-          className="tk-photo-none"
-          aria-hidden="true"
-          data-tone={toneOf(item.name)}
+      </KitField>
+      {offer.length > 0 && (
+        <div
+          className="tk-chips tk-field-chips"
+          role="group"
+          aria-label="Categories you use"
         >
-          {tileLetters(item.name)}
-        </span>
+          {offer.map((c) => (
+            <button key={c.name} type="button" onClick={() => onChange(c.name)}>
+              {c.name} · {c.count}
+            </button>
+          ))}
+        </div>
       )}
-      {canEdit && (
-        <>
-          <button
-            type="button"
-            className="tk-photo-add"
-            aria-label="Add a photo"
-            disabled={busy}
-            onClick={() => pick.current?.click()}
-          >
-            +
-          </button>
-          <input
-            ref={pick}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            hidden
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              e.target.value = "";
-              if (!file) return;
-              const bad = imageProblem(file);
-              if (bad) return setError(new Error(bad));
-              setBusy(true);
-              uploadFile(
-                `/v1/storefront/catalogue/rows/${encodeURIComponent(item.id)}/photo${shots.length ? "?add=1" : ""}`,
-                file,
-              )
-                .then(() => post("/v1/storefront/catalogue/refresh"))
-                .then(() => cat.reload(), setError)
-                .finally(() => setBusy(false));
-            }}
-          />
-        </>
-      )}
-      <ErrorBox error={error} />
     </div>
   );
 }
@@ -306,10 +236,15 @@ export function ProductForm({
   /** The business whose conversation it was opened from (its list first). */
   link?: string;
 }) {
+  // Its sizes and colours, set up in place of the form (chat categories
+  // Part B).
+  const [sizesOpen, setSizesOpen] = useState(false);
   const [name, setName] = useState(item.name);
   // Its price on a price list, and who the list is shared with (the
   // DeskSeller board): for those who keep the storefront's prices.
   const { can } = useAuth();
+  // A product sold in sizes and colours is listed once: its trade price is
+  // each size's (unless one has its own), its lowest price too.
   const trade = can("storefront.manage");
   const lists = useLoad(
     () =>
@@ -349,8 +284,7 @@ export function ProductForm({
       listFor(lists.data, item.id, link));
   const onList = chosen?.items.find((x) => x.item_id === item.id);
   const [tradePrice, setTradePrice] = useState<string | null>(null);
-  const tradeShown =
-    tradePrice ?? (onList ? nairaText(onList.price_kobo) : "");
+  const tradeShown = tradePrice ?? (onList ? nairaText(onList.price_kobo) : "");
   const tradeKobo = nairaKobo(tradeShown);
   const [share, setShare] = useState<string[] | null>(null);
   const sharing = share ?? chosen?.links ?? [];
@@ -366,6 +300,7 @@ export function ProductForm({
   // The count is sent only when it was changed (an item may have none).
   const [count, setCount] = useState<number | null>(item.stock);
   const [shown, setShown] = useState(item.available);
+  const [category, setCategory] = useState(item.category ?? "");
   const kobo = nairaKobo(price);
   const save: Saver = async () => {
     const said: string[] = [];
@@ -374,6 +309,8 @@ export function ProductForm({
       change.price_kobo = kobo;
     if (name.trim() && name.trim() !== item.name) change.name = name.trim();
     if (shown !== item.available) change.available = shown;
+    if (category.trim() !== (item.category ?? ""))
+      change.category = category.trim();
     if (Object.keys(change).length) {
       await patch(`/v1/stock/items/${encodeURIComponent(item.id)}`, change);
       said.push("Saved");
@@ -404,7 +341,10 @@ export function ProductForm({
       !Number.isNaN(floorKobo) &&
       floorKobo !== (floorWas ?? 0)
     ) {
-      await put("/v1/trade-floors", { item_id: item.id, floor_kobo: floorKobo });
+      await put("/v1/trade-floors", {
+        item_id: item.id,
+        floor_kobo: floorKobo,
+      });
       said.push("Lowest price set");
     }
     if (count !== null && count !== item.stock) {
@@ -418,6 +358,14 @@ export function ProductForm({
     }
     return said.length ? `${name.trim() || item.name}: saved` : null;
   };
+  if (sizesOpen)
+    return (
+      <SizesEditor
+        item={item}
+        onSaved={onSaved}
+        onCancel={() => setSizesOpen(false)}
+      />
+    );
   return (
     <FormFrame
       save={save}
@@ -431,10 +379,15 @@ export function ProductForm({
         !Number.isNaN(floorKobo)
       }
     >
-      <Photos item={item} canEdit={canEdit} />
+      <ProductPhotos row={item.id} name={item.name} canEdit={canEdit} />
       <KitField label="Name">
-        <input value={name} maxLength={120} onChange={(e) => setName(e.target.value)} />
+        <input
+          value={name}
+          maxLength={120}
+          onChange={(e) => setName(e.target.value)}
+        />
       </KitField>
+      <CategoryField value={category} onChange={setCategory} />
       {chosen ? (
         <>
           <div className="tk-form-two">
@@ -484,10 +437,13 @@ export function ProductForm({
           </div>
           {picking && (
             <fieldset className="tk-share-pick">
-              <legend className="sr-only">Who sees the {chosen.name} list</legend>
+              <legend className="sr-only">
+                Who sees the {chosen.name} list
+              </legend>
               {(linked.data ?? []).length === 0 ? (
                 <p className="tk-form-row-sub">
-                  No linked businesses yet. Link with a business to share a list.
+                  No linked businesses yet. Link with a business to share a
+                  list.
                 </p>
               ) : (
                 (linked.data ?? []).map((l) => (
@@ -525,17 +481,24 @@ export function ProductForm({
       ) : (
         <Money label="Price" value={price} onChange={setPrice} />
       )}
-      <div className="tk-form-row">
-        <span>
-          <span className="tk-form-row-title">In stock</span>
-          <span className="tk-form-row-sub">
-            {count === null
-              ? "No count yet: set one"
-              : "Counts down as orders are accepted"}
+      {hasSizes(item) ? null : (
+        <div className="tk-form-row">
+          <span>
+            <span className="tk-form-row-title">In stock</span>
+            <span className="tk-form-row-sub">
+              {count === null
+                ? "No count yet: set one"
+                : "Counts down as orders are accepted"}
+            </span>
           </span>
-        </span>
-        <Stepper label="In stock" value={count ?? 0} onChange={setCount} />
-      </div>
+          <Stepper label="In stock" value={count ?? 0} onChange={setCount} />
+        </div>
+      )}
+      <SizesRow
+        item={item}
+        canEdit={canEdit}
+        onOpen={() => setSizesOpen(true)}
+      />
       <Switch
         label="Show on your storefront"
         hint="And on price lists you share"
@@ -552,6 +515,48 @@ export function ProductForm({
   );
 }
 
+/** A product's sizes and colours, in its form: how many, and the way to
+ * set them up or change them. */
+function SizesRow({
+  item,
+  canEdit,
+  onOpen,
+}: {
+  item: StockItem;
+  canEdit: boolean;
+  onOpen: () => void;
+}) {
+  const all = useLoad(
+    () =>
+      hasSizes(item)
+        ? get<StockView>("/v1/stock").then((r) => r.items)
+        : Promise.resolve([] as StockItem[]),
+    [item.id],
+  );
+  const line =
+    hasSizes(item) && all.data ? sizesLine(all.data, item.id) : undefined;
+  return (
+    <div className="tk-form-row">
+      <span>
+        <span className="tk-form-row-title">Sizes and colours</span>
+        <span className="tk-form-row-sub">
+          {!hasSizes(item)
+            ? "A count for each size and colour"
+            : line
+              ? `${sizesWords(line.count)}${line.stock !== null ? ` · ${line.stock} in stock` : ""}${line.low ? ` · ${line.low} low` : ""}`
+              : "Loading…"}
+        </span>
+      </span>
+      {canEdit && (
+        <button type="button" className="tk-btn soft" onClick={onOpen}>
+          {hasSizes(item) ? "Change" : "Set up"}
+          <span className="sr-only"> sizes and colours</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** A new product: its name, price, unit and how many there are. */
 export function ProductAdd({
   onSaved,
@@ -561,39 +566,91 @@ export function ProductAdd({
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
   const [unit, setUnit] = useState("");
+  const [category, setCategory] = useState("");
   const [count, setCount] = useState(0);
+  // Its photos (chat categories Part C): held until the product exists,
+  // then sent to it. One that does not go leaves the product added and
+  // the form open, to send it again.
+  const { can } = useAuth();
+  const photosOK = can("storefront.manage");
+  const [picks, setPicks] = useState<PhotoPick[]>([]);
+  const [added, setAdded] = useState<string>();
+  const [failed, setFailed] = useState<{ pick: PhotoPick; why: string }[]>([]);
+  const [sending, setSending] = useState<Sending>();
   const kobo = nairaKobo(price);
   const save: Saver = async () => {
-    await postOnce("/v1/stock/items", key(), {
-      name: name.trim(),
-      price_kobo: kobo,
-      unit: unit.trim(),
-      quantity: count,
-    });
+    let id = added;
+    if (!id) {
+      const out = await postOnce<{ item: { id: string } }>(
+        "/v1/stock/items",
+        key(),
+        {
+          name: name.trim(),
+          price_kobo: kobo,
+          unit: unit.trim(),
+          quantity: count,
+          ...(category.trim() ? { category: category.trim() } : {}),
+        },
+      );
+      id = out.item.id;
+    }
+    const todo = added ? failed.map((f) => f.pick) : photosOK ? picks : [];
+    if (todo.length) {
+      setSending({ done: 0, of: todo.length });
+      const bad = await sendAll(
+        id,
+        todo,
+        added ? picks.length - failed.length : 0,
+        () => setSending((x) => x && { ...x, done: x.done + 1 }),
+      ).finally(() => setSending(undefined));
+      await post("/v1/storefront/catalogue/refresh").catch(() => undefined);
+      if (bad.length) {
+        setAdded(id);
+        setFailed(bad);
+        throw new Error(
+          `${name.trim()} is added, but ${bad.length === 1 ? "a photo" : `${bad.length} photos`} did not go. Press Send the photos again, or close: the product stays.`,
+        );
+      }
+    }
     return productLine(name.trim(), kobo, unit.trim() || undefined);
   };
   return (
     <FormFrame
       save={save}
       onSaved={onSaved}
-      saveWords="Add product"
+      saveWords={added ? "Send the photos again" : "Add product"}
       ready={name.trim() !== "" && kobo > 0}
     >
-      <KitField label="Name">
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Rice, 50kg bag"
-        />
-      </KitField>
-      <Money label="Price" value={price} onChange={setPrice} />
-      <KitField label="Sold by the" hint="bag, carton, piece…">
-        <input value={unit} onChange={(e) => setUnit(e.target.value)} />
-      </KitField>
-      <div className="tk-form-row">
-        <span className="tk-form-row-title">In stock now</span>
-        <Stepper label="In stock now" value={count} onChange={setCount} />
-      </div>
+      <SendingLine sending={sending} />
+      {photosOK &&
+        (added ? (
+          <PhotoFailures failed={failed} onRetry={() => undefined} hideRetry />
+        ) : (
+          <PendingPhotos picks={picks} onChange={setPicks} />
+        ))}
+      {added ? (
+        // Added: what is left is its photos, said above; nothing else to change here.
+        <p className="tk-form-now">{name.trim()} is in your products.</p>
+      ) : (
+        <>
+          <KitField label="Name">
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Rice, 50kg bag"
+            />
+          </KitField>
+          <CategoryField value={category} onChange={setCategory} />
+          <Money label="Price" value={price} onChange={setPrice} />
+          <KitField label="Sold by the" hint="bag, carton, piece…">
+            <input value={unit} onChange={(e) => setUnit(e.target.value)} />
+          </KitField>
+          <div className="tk-form-row">
+            <span className="tk-form-row-title">In stock now</span>
+            <Stepper label="In stock now" value={count} onChange={setCount} />
+          </div>
+        </>
+      )}
     </FormFrame>
   );
 }
@@ -612,6 +669,9 @@ export function StockInForm({
 }) {
   const [n, setN] = useState(prefill?.count ?? 1);
   const [note, setNote] = useState("");
+  // A product with sizes and colours: goods received by its grid.
+  if (hasSizes(item))
+    return <GridStockIn item={item} onSaved={onSaved} canEdit={canEdit} />;
   const save: Saver = async () => {
     await postOnce("/v1/stock/movements", key(), {
       item_id: item.id,
@@ -778,6 +838,7 @@ export function PriceListForm({
         price_kobo: to,
         min_quantity: it.min_quantity,
         available: it.available,
+        ...ownSizePrices(it),
       };
     });
     if (changed === 0) return null;
@@ -847,7 +908,11 @@ const DELIVERY_WORD: Record<string, string> = {
 };
 
 /** The rider's diary line for a step. */
-function deliveryLine(step: string, reference: string, business: string): string {
+function deliveryLine(
+  step: string,
+  reference: string,
+  business: string,
+): string {
   switch (step) {
     case "accept":
       return `Taking ${reference} for ${business}`;
@@ -881,7 +946,9 @@ export function DeliveryView({
   const d = order.delivery;
   const step = DELIVERY_STEP[order.status];
   const c = d?.customer;
-  const act = async (s: "accept" | "cant" | "picked_up" | "arrived" | "delivered") => {
+  const act = async (
+    s: "accept" | "cant" | "picked_up" | "arrived" | "delivered",
+  ) => {
     if (
       s === "cant" &&
       !(await confirm({
@@ -918,7 +985,8 @@ export function DeliveryView({
           : order.status === "arrived"
             ? { step: "delivered", word: "Delivered" }
             : undefined;
-  const needsPhoto = !!d?.proof_required && order.status === "arrived" && !photo;
+  const needsPhoto =
+    !!d?.proof_required && order.status === "arrived" && !photo;
   return (
     <>
       <div className="tk-sheet-list tk-form-body">
@@ -1025,7 +1093,10 @@ export function DeliveryView({
           </li>
         </ul>
         {d?.proof_required && order.status === "arrived" && (
-          <KitField label="Photo of the delivery" hint="The business asks for one.">
+          <KitField
+            label="Photo of the delivery"
+            hint="The business asks for one."
+          >
             <input
               type="file"
               accept="image/*"
@@ -1210,22 +1281,36 @@ export function TableTool({
   onSaved: (line: string | null) => void;
   canEdit?: boolean;
 }) {
-  const rows = useLoad(
-    () =>
-      get<{ rows: Row[] }>(
-        `/v1/tables/${encodeURIComponent(table.id)}/rows?limit=20`,
-      ),
-    [table.id],
-  );
   const [editing, setEditing] = useState<Row | "new">();
   const [values, setValues] = useState<Record<string, string>>({});
-  const cols = table.columns.slice(0, 3);
+  // The shop's products table: its photo column takes photos (the camera,
+  // the device, a link), not a web address typed as text (chat categories
+  // Part C). It is the storefront's to write, so it is left out of the row.
+  const { can } = useAuth();
+  const shop = useLoad(
+    () => get<Storefront>("/v1/storefront").catch(() => null),
+    [],
+  );
+  const photoCol =
+    shop.data?.catalogue_table === table.id
+      ? shop.data.catalogue_columns.photo
+      : undefined;
+  const nameCol =
+    shop.data?.catalogue_table === table.id
+      ? shop.data.catalogue_columns.name
+      : undefined;
+  const [picks, setPicks] = useState<PhotoPick[]>([]);
+  const [addedRow, setAddedRow] = useState<string>();
+  const [failed, setFailed] = useState<{ pick: PhotoPick; why: string }[]>([]);
+  const [sending, setSending] = useState<Sending>();
   const title = table.title || table.name;
   if (editing) {
     const row = editing === "new" ? undefined : editing;
+    const photosOK = !!photoCol && can("storefront.manage");
     const save: Saver = async () => {
       const set = Object.fromEntries(
         table.columns
+          .filter((c) => c.name !== photoCol)
           .filter(
             (c) =>
               (values[c.name] ?? "") !== (row ? cellText(row[c.name]) : ""),
@@ -1240,9 +1325,33 @@ export function TableTool({
         );
         return `${title}: a row changed`;
       }
-      await toolPost(`/v1/tables/${encodeURIComponent(table.id)}/rows`, {
-        row: set,
-      });
+      let id = addedRow;
+      if (!id) {
+        const out = await toolPost<{ rows?: Row[] }>(
+          `/v1/tables/${encodeURIComponent(table.id)}/rows`,
+          { row: set },
+        );
+        id =
+          out.rows?.[0]?.id !== undefined ? String(out.rows[0].id) : undefined;
+      }
+      const todo = addedRow ? failed.map((f) => f.pick) : photosOK ? picks : [];
+      if (id && todo.length) {
+        setSending({ done: 0, of: todo.length });
+        const bad = await sendAll(
+          id,
+          todo,
+          addedRow ? picks.length - failed.length : 0,
+          () => setSending((x) => x && { ...x, done: x.done + 1 }),
+        ).finally(() => setSending(undefined));
+        await post("/v1/storefront/catalogue/refresh").catch(() => undefined);
+        if (bad.length) {
+          setAddedRow(id);
+          setFailed(bad);
+          throw new Error(
+            `The row is added, but ${bad.length === 1 ? "a photo" : `${bad.length} photos`} did not go. Press Send the photos again, or close: the row stays.`,
+          );
+        }
+      }
       return `${title}: a row added`;
     };
     const missing =
@@ -1254,23 +1363,53 @@ export function TableTool({
       <FormFrame
         save={save}
         onSaved={onSaved}
-        saveWords={row ? "Save" : "Add the row"}
+        saveWords={
+          row ? "Save" : addedRow ? "Send the photos again" : "Add the row"
+        }
         ready={!missing}
         canEdit={canEdit}
       >
-        {table.columns.map((c) => (
-          <KitField
-            key={c.name}
-            label={`${c.title || c.name}${c.required ? "" : " (optional)"}`}
-          >
-            <input
-              value={values[c.name] ?? ""}
-              onChange={(e) =>
-                setValues({ ...values, [c.name]: e.target.value })
-              }
-            />
-          </KitField>
-        ))}
+        {table.columns.map((c) =>
+          c.name === photoCol ? (
+            <div key={c.name} className="tk-field">
+              <span className="tk-field-label">{c.title || c.name}</span>
+              {!photosOK ? (
+                <p className="hint">
+                  Photos are added by whoever looks after the shop&apos;s page.
+                </p>
+              ) : row ? (
+                <ProductPhotos
+                  row={String(row.id)}
+                  name={(nameCol && values[nameCol]) || "this product"}
+                  canEdit={canEdit}
+                />
+              ) : addedRow ? (
+                <PhotoFailures
+                  failed={failed}
+                  onRetry={() => undefined}
+                  hideRetry
+                />
+              ) : (
+                <>
+                  <SendingLine sending={sending} />
+                  <PendingPhotos picks={picks} onChange={setPicks} />
+                </>
+              )}
+            </div>
+          ) : (
+            <KitField
+              key={c.name}
+              label={`${c.title || c.name}${c.required ? "" : " (optional)"}`}
+            >
+              <input
+                value={values[c.name] ?? ""}
+                onChange={(e) =>
+                  setValues({ ...values, [c.name]: e.target.value })
+                }
+              />
+            </KitField>
+          ),
+        )}
       </FormFrame>
     );
   }
@@ -1282,40 +1421,24 @@ export function TableTool({
             table.columns.map((c) => [c.name, cellText(r[c.name])]),
           ),
     );
+    setPicks([]);
+    setAddedRow(undefined);
+    setFailed([]);
     setEditing(r);
   };
   return (
     <>
       <div className="tk-sheet-list tk-form-body">
-        {!rows.data ? (
-          rows.error ? (
-            <ErrorBox error={rows.error} />
-          ) : (
-            <KitLoading />
-          )
-        ) : rows.data.rows.length === 0 ? (
-          <KitEmpty icon="tables" title="No rows yet" />
-        ) : (
-          <ul className="tk-table-rows">
-            {rows.data.rows.map((r, i) => (
-              <li key={String(r.id ?? i)}>
-                <button
-                  type="button"
-                  className="tk-table-row"
-                  disabled={!canEdit}
-                  onClick={() => open(r)}
-                >
-                  {cols.map((c) => (
-                    <span key={c.name}>
-                      <span className="tk-cell-name">{c.title || c.name}</span>{" "}
-                      {cellText(r[c.name])}
-                    </span>
-                  ))}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+        <TableViewer
+          table={table}
+          shop={
+            shop.data?.catalogue_table === table.id
+              ? shop.data.catalogue_columns
+              : undefined
+          }
+          canEdit={canEdit}
+          onOpen={open}
+        />
       </div>
       {canEdit && (
         <div className="tk-sheet-foot">

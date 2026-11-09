@@ -18,10 +18,15 @@ import {
   purchaseState,
   quoteText,
   reorderQty,
+  sizesTaken,
+  soldInSizes,
   stepQty,
+  type OrderItem,
 } from "../lib/buyer";
+import { label } from "../lib/variants";
 import { ORDER_STEPS } from "../lib/cardframe";
-import { breakWords, dealKobo, offWords, priceAt } from "../lib/deals";
+import { categoryChips, categoryTag } from "../lib/tools";
+import { breakWords, dealKobo, offWords } from "../lib/deals";
 import { answersDelivery } from "../lib/purchases";
 import { buyerSteps, sameName } from "../lib/tradeorders";
 import type { ItemLink, PriceItem, SupplierPrices } from "../lib/pricelists";
@@ -46,10 +51,61 @@ export interface OrderStart {
   qty?: Record<string, number>;
   /** Reorder: the last order's lines, as the price list has them now. */
   last?: Purchase;
+  /** A category picked in "@": the list opens showing it. */
+  category?: string;
 }
 
 /** An order from a supplier's price list: pick, review, place (or ask them
  * to quote). Placing drafts the order at their prices and sends it. */
+/** The items of their list a chip and a search show: by name first, then
+ * those whose category or description holds the words. */
+export function orderShown(
+  items: PriceItem[],
+  chip: string | undefined,
+  search: string,
+): PriceItem[] {
+  const q = search.trim().toLowerCase();
+  const picked = items.filter(
+    (it) => !chip || (it.category && categoryTag(it.category) === chip),
+  );
+  if (q === "") return picked;
+  return [
+    ...picked.filter((it) => it.name.toLowerCase().includes(q)),
+    ...picked.filter(
+      (it) =>
+        !it.name.toLowerCase().includes(q) &&
+        [it.category ?? "", it.description ?? ""].some((t) =>
+          t.toLowerCase().includes(q),
+        ),
+    ),
+  ];
+}
+
+/** Their list under its categories' headings, in the order the list has
+ * them, "Other" last; one section with no heading when it has none. */
+export function orderSections(
+  items: PriceItem[],
+): { label: string; items: PriceItem[] }[] {
+  if (!items.some((it) => it.category))
+    return items.length ? [{ label: "", items }] : [];
+  const by = new Map<string, { label: string; items: PriceItem[] }>();
+  const other: PriceItem[] = [];
+  for (const it of items) {
+    const c = it.category?.trim();
+    if (!c) {
+      other.push(it);
+      continue;
+    }
+    const k = c.toLowerCase();
+    const sec = by.get(k) ?? { label: c, items: [] };
+    sec.items.push(it);
+    by.set(k, sec);
+  }
+  const out = [...by.values()];
+  if (other.length) out.push({ label: "Other", items: other });
+  return out;
+}
+
 export function OrderSheet({
   link,
   business,
@@ -125,12 +181,16 @@ export function OrderSheet({
     if (start.last)
       setQty(reorderQty(start.last, links.data.item_links, list.items));
     const it = list.items.find((x) => x.item_id === start.itemId);
-    if (it && !qty[it.item_id])
+    // A product sold in sizes opens on its sizes (grid, below) instead.
+    if (it && !soldInSizes(it) && !qty[it.item_id])
       setQty({ ...qty, [it.item_id]: Math.max(1, it.min_quantity) });
     setSeeded(true);
   }
   const [step, setStep] = useState<"pick" | "review">("pick");
   const [search, setSearch] = useState("");
+  const [chip, setChip] = useState<string | undefined>(
+    start?.category ? categoryTag(start.category) : undefined,
+  );
   const [note, setNote] = useState("");
   // Make an offer (phase 7): our own price for the whole order.
   const [offering, setOffering] = useState(false);
@@ -141,6 +201,11 @@ export function OrderSheet({
   const [done, setDone] = useState<string>();
   const [shut, setShut] = useState(false);
   const bag = bagOf(list?.items ?? [], qty);
+  // A product's sizes under its minimum, together.
+  const short = (list?.items ?? []).find((it) => {
+    const n = (it.sizes ?? []).reduce((a, z) => a + (qty[z.item_id] ?? 0), 0);
+    return n > 0 && n < it.min_quantity;
+  });
   const offerKobo = offering ? dealKobo(offerText) : NaN;
   const offerProblem = !offering
     ? ""
@@ -159,11 +224,30 @@ export function OrderSheet({
   const ownFor = (it: PriceItem) =>
     linkedTo(it.item_id) ??
     mine[it.item_id] ??
-    own.data?.find((x) => x.name.toLowerCase() === it.name.toLowerCase())?.id ??
+    own.data?.find(
+      (x) => !x.variant_of && x.name.toLowerCase() === it.name.toLowerCase(),
+    )?.id ??
     "new";
-  const shown = (list?.items ?? []).filter((it) =>
-    it.name.toLowerCase().includes(search.trim().toLowerCase()),
-  );
+  // A size's line is for the product: our product of theirs (its sizes
+  // matched by their values, those we lack added to it).
+  const lineProduct = (it: OrderItem): PriceItem =>
+    (it.variant_of && list?.items.find((x) => x.item_id === it.variant_of)) ||
+    it;
+  // The items the bag's lines are for, a product once for all its sizes.
+  const unlinkedProducts = [
+    ...new Map(
+      bag.lines.map((l) => {
+        const of = lineProduct(l.item);
+        return [of.item_id, of] as const;
+      }),
+    ).values(),
+  ].filter((it) => !linkedTo(it.item_id));
+  // Which product's sizes are open to choose (the one Order was tapped on).
+  const [grid, setGrid] = useState<string | undefined>(start?.itemId);
+  // Their categories as chips; the list under their headings.
+  const cats = categoryChips(list?.items ?? [], chip);
+  const shown = orderShown(list?.items ?? [], chip, search);
+  const sections = orderSections(shown);
   const finish = (words: string) => {
     setDone(words);
     onPlaced?.(words);
@@ -211,19 +295,22 @@ export function OrderSheet({
       const lines = [];
       for (const l of bag.lines) {
         const seller = l.item.item_id;
-        let itemId = m.items[seller] ?? ownFor(l.item);
+        // A size: ours is the product's, linked or chosen once for all its
+        // sizes.
+        const of = lineProduct(l.item);
+        let itemId = m.items[of.item_id] ?? ownFor(of);
         if (itemId === "new") {
           const out = await postOnce<{ item: { id: string } }>(
             "/v1/stock/items",
-            keyOf(`item-${seller}`),
-            { name: l.item.name, unit: l.item.unit ?? "", quantity: 0 },
+            keyOf(`item-${of.item_id}`),
+            { name: of.name, unit: of.unit ?? "", quantity: 0 },
           );
-          itemId = m.items[seller] = out.item.id;
+          itemId = m.items[of.item_id] = out.item.id;
         }
         lines.push({
           seller_item_id: seller,
           quantity: l.quantity,
-          item_id: linkedTo(seller) ? undefined : itemId,
+          item_id: linkedTo(of.item_id) ? undefined : itemId,
         });
       }
       // The same bag, note and offer is the same order: drafted once.
@@ -310,13 +397,17 @@ export function OrderSheet({
         step === "pick" ? (
           <div className="tk-bag" data-testid="order-bag">
             <span>
-              <span className="tk-bag-count">{bag.count}</span>
+              <span className="tk-bag-count">
+                {short
+                  ? `${short.name}: at least ${short.min_quantity} in all`
+                  : bag.count}
+              </span>
               <span className="tk-bag-total">{formatPrice(bag.total)}</span>
             </span>
             <button
               type="button"
               className="tk-bag-go"
-              disabled={bag.lines.length === 0}
+              disabled={bag.lines.length === 0 || !!short}
               onClick={() => setStep("review")}
             >
               Review order <Icon name="arrow-right" />
@@ -408,70 +499,133 @@ export function OrderSheet({
               onChange={(e) => setSearch(e.target.value)}
             />
           </label>
-          <ul className="tk-sheet-list tk-order-list tk-stagger">
-            {shown.map((it) => {
-              const n = qty[it.item_id] ?? 0;
-              return (
-                <li
-                  key={it.item_id}
-                  className={`tk-order-row${n > 0 ? " on" : ""}`}
-                  data-testid="order-row"
+          {cats.length > 0 && (
+            <div className="tk-chips" role="group" aria-label="Show">
+              <button
+                type="button"
+                aria-pressed={!chip}
+                onClick={() => setChip(undefined)}
+              >
+                All
+              </button>
+              {cats.map((c) => (
+                <button
+                  key={c.tag}
+                  type="button"
+                  aria-pressed={chip === c.tag}
+                  onClick={() => setChip(chip === c.tag ? undefined : c.tag)}
                 >
-                  <span
-                    className="tk-row-tile"
-                    aria-hidden="true"
-                    data-tone="sand"
-                  >
-                    <Icon name="package" />
-                  </span>
-                  <span className="tk-row-words">
-                    <span className="tk-row-name">{it.name}</span>
-                    <span className="tk-row-sub">
-                      {it.available ? orderLine(it) : "Not available now"}
-                    </span>
-                    {it.available && !!it.breaks?.length && (
-                      <span className="tk-row-sub tk-breaks">
-                        {breakWords(it)}
-                      </span>
-                    )}
-                  </span>
-                  <span
-                    className="tk-qty"
-                    role="group"
-                    aria-label={`How many ${it.name}`}
-                  >
-                    <button
-                      type="button"
-                      aria-label={`One fewer ${it.name}`}
-                      disabled={n === 0}
-                      onClick={() =>
-                        setQty({
-                          ...qty,
-                          [it.item_id]: stepQty(n, it.min_quantity, -1),
-                        })
-                      }
-                    >
-                      −
-                    </button>
-                    <span aria-live="polite">{n}</span>
-                    <button
-                      type="button"
-                      aria-label={`One more ${it.name}`}
-                      disabled={!it.available}
-                      onClick={() =>
-                        setQty({
-                          ...qty,
-                          [it.item_id]: stepQty(n, it.min_quantity, 1),
-                        })
-                      }
-                    >
-                      +
-                    </button>
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="tk-sheet-list tk-order-sections">
+            {shown.length === 0 && (
+              <KitEmpty icon="search" title="Nothing matches">
+                Try another word, or show all.
+              </KitEmpty>
+            )}
+            {sections.map((sec) => (
+              <section
+                key={sec.label || "all"}
+                aria-label={sec.label || undefined}
+              >
+                {sec.label && <h3 className="tk-order-cat">{sec.label}</h3>}
+                <ul className="tk-order-list tk-stagger">
+                  {sec.items.map((it) => {
+                    const n = qty[it.item_id] ?? 0;
+                    return (
+                      <li
+                        key={it.item_id}
+                        className={`tk-order-row${n > 0 ? " on" : ""}`}
+                        data-testid="order-row"
+                      >
+                        <span
+                          className="tk-row-tile"
+                          aria-hidden="true"
+                          data-tone="sand"
+                        >
+                          <Icon name="package" />
+                        </span>
+                        <span className="tk-row-words">
+                          <span className="tk-row-name">{it.name}</span>
+                          <span className="tk-row-sub">
+                            {it.available &&
+                            !(soldInSizes(it) && !it.sizes?.length)
+                              ? orderLine(it)
+                              : "Not available now"}
+                          </span>
+                          {it.available && !!it.breaks?.length && (
+                            <span className="tk-row-sub tk-breaks">
+                              {breakWords(it)}
+                            </span>
+                          )}
+                        </span>
+                        {soldInSizes(it) ? (
+                          <button
+                            type="button"
+                            className="tk-btn soft"
+                            aria-expanded={grid === it.item_id}
+                            disabled={!it.available || !it.sizes?.length}
+                            onClick={() =>
+                              setGrid(
+                                grid === it.item_id ? undefined : it.item_id,
+                              )
+                            }
+                          >
+                            {sizesTaken(it, qty) || "Choose sizes"}
+                            <span className="sr-only"> of {it.name}</span>
+                          </button>
+                        ) : (
+                          <span
+                            className="tk-qty"
+                            role="group"
+                            aria-label={`How many ${it.name}`}
+                          >
+                            <button
+                              type="button"
+                              aria-label={`One fewer ${it.name}`}
+                              disabled={n === 0}
+                              onClick={() =>
+                                setQty({
+                                  ...qty,
+                                  [it.item_id]: stepQty(n, it.min_quantity, -1),
+                                })
+                              }
+                            >
+                              −
+                            </button>
+                            <span aria-live="polite">{n}</span>
+                            <button
+                              type="button"
+                              aria-label={`One more ${it.name}`}
+                              disabled={!it.available}
+                              onClick={() =>
+                                setQty({
+                                  ...qty,
+                                  [it.item_id]: stepQty(n, it.min_quantity, 1),
+                                })
+                              }
+                            >
+                              +
+                            </button>
+                          </span>
+                        )}
+                        {grid === it.item_id && (
+                          <SizesQty
+                            product={it}
+                            qty={qty}
+                            onQty={(id, n) => setQty({ ...qty, [id]: n })}
+                          />
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ))}
+          </div>
         </>
       ) : (
         <div className="tk-sheet-list tk-form-body">
@@ -518,44 +672,50 @@ export function OrderSheet({
               <li key={l.item.item_id}>
                 <span>
                   {l.quantity} × {l.item.name}
-                  {priceAt(l.item, l.quantity) < l.item.price_kobo && (
+                  {bag.unitPrice(l.item) < l.item.price_kobo && (
                     <span className="tk-row-sub">
                       {" "}
-                      at {formatPrice(priceAt(l.item, l.quantity))} for{" "}
-                      {l.quantity}
+                      at {formatPrice(bag.unitPrice(l.item))}
+                      {l.item.variant_of ? "" : ` for ${l.quantity}`}
                     </span>
                   )}
                 </span>
-                <b>{formatPrice(l.quantity * priceAt(l.item, l.quantity))}</b>
+                <b>{formatPrice(l.quantity * bag.unitPrice(l.item))}</b>
               </li>
             ))}
           </ul>
-          {bag.lines.some((l) => !linkedTo(l.item.item_id)) && (
+          {unlinkedProducts.length > 0 && (
             <>
               <p className="tk-form-now">
                 Which of your items is each? It is remembered for next time.
               </p>
-              {bag.lines
-                .filter((l) => !linkedTo(l.item.item_id))
-                .map((l) => (
-                  <KitField key={l.item.item_id} label={l.item.name}>
-                    <select
-                      value={ownFor(l.item)}
-                      onChange={(e) =>
-                        setMine({ ...mine, [l.item.item_id]: e.target.value })
-                      }
-                    >
-                      <option value="new">
-                        A new item of mine: {l.item.name}
-                      </option>
-                      {(own.data ?? []).map((x) => (
+              {unlinkedProducts.map((it) => (
+                <KitField
+                  key={it.item_id}
+                  label={it.name}
+                  hint={
+                    soldInSizes(it)
+                      ? "Its sizes and colours go into yours of the same size and colour; those it lacks are added to it."
+                      : undefined
+                  }
+                >
+                  <select
+                    value={ownFor(it)}
+                    onChange={(e) =>
+                      setMine({ ...mine, [it.item_id]: e.target.value })
+                    }
+                  >
+                    <option value="new">A new item of mine: {it.name}</option>
+                    {(own.data ?? [])
+                      .filter((x) => !x.variant_of)
+                      .map((x) => (
                         <option key={x.id} value={x.id}>
                           {x.name}
                         </option>
                       ))}
-                    </select>
-                  </KitField>
-                ))}
+                  </select>
+                </KitField>
+              ))}
             </>
           )}
           <div className="tk-offer" data-testid="make-offer">
@@ -1152,5 +1312,58 @@ export function BillView({
         )}
       </div>
     </>
+  );
+}
+
+/** A product's sizes and colours to order by: a box each (how many), those
+ * off sale greyed; its minimum and quantity prices count them together. */
+function SizesQty({
+  product,
+  qty,
+  onQty,
+}: {
+  product: PriceItem;
+  qty: Record<string, number>;
+  onQty: (item: string, n: number) => void;
+}) {
+  const sizes = product.sizes ?? [];
+  const taken = sizes.reduce((a, z) => a + (qty[z.item_id] ?? 0), 0);
+  return (
+    <div className="tk-order-sizes" data-testid="order-sizes">
+      <p className="tk-row-sub">
+        {product.min_quantity > 1 &&
+          `At least ${product.min_quantity} in all. `}
+        {taken > 0 && `${taken} so far.`}
+      </p>
+      <div className="tk-grid-cells">
+        {sizes.map((z) => (
+          <label
+            key={z.item_id}
+            className={`tk-grid-cell${z.available ? "" : " off"}`}
+          >
+            <span>
+              {label(z.variant, product.choices)}
+              {(z.price_kobo ?? 0) > 0 && (
+                <span className="tk-row-sub">
+                  {" "}
+                  {formatPrice(z.price_kobo ?? 0)}
+                </span>
+              )}
+            </span>
+            <input
+              inputMode="numeric"
+              aria-label={`${label(z.variant, product.choices)}: how many`}
+              disabled={!z.available}
+              placeholder="0"
+              value={qty[z.item_id] ? String(qty[z.item_id]) : ""}
+              onChange={(e) => {
+                const n = Number(e.target.value.replace(/\D/g, ""));
+                onQty(z.item_id, Number.isFinite(n) ? Math.min(n, 100000) : 0);
+              }}
+            />
+          </label>
+        ))}
+      </div>
+    </div>
   );
 }

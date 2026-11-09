@@ -4,8 +4,19 @@ import type { ExploreCard } from "./explore";
 // in the text and, in a conversation, a structured reference beside it.
 
 export interface Suggestion {
-  /** A linked business, an item of a price list, a service, or Taskiem. */
-  kind: "business" | "item" | "service" | "taskiem";
+  /** A linked business, an item of a price list, a service, Taskiem, or
+   * a category of items (picking it opens them, filtered). */
+  kind:
+    | "business"
+    | "item"
+    | "service"
+    | "taskiem"
+    | "category"
+    | "invoice"
+    | "bill"
+    | "order"
+    | "purchase"
+    | "customer";
   /** The link (a business) or the seller's item id. */
   id: string;
   name: string;
@@ -16,11 +27,15 @@ export interface Suggestion {
   /** A business we are not linked with, found in Explore: picking it
    * shows its card (with Connect) rather than tagging it. */
   explore?: ExploreCard;
+  /** An item's category ("Sneakers") and its words (the storefront's
+   * description): search reads both, after the name. */
+  category?: string;
+  words?: string;
 }
 
 /** A mention as a message stores it. */
 export interface Mention {
-  kind: "business" | "item" | "service";
+  kind: "business" | "item" | "service" | "invoice" | "bill" | "order" | "purchase";
   name: string;
   link?: string;
   item_id?: string;
@@ -29,22 +44,83 @@ export interface Mention {
   /** One of the sender's own services, and how long it takes. */
   service_id?: string;
   minutes?: number;
+  /** An invoice or an order between the two businesses: our id for it
+   * (on our copy only), and its status when it was named. */
+  ref?: string;
+  status?: string;
 }
 
+/** What "/" picks to tag (phase 2 additions): "/invoice" (invoices and
+ * bills), "/bill", "/order" (orders and purchases), "/purchase",
+ * "/product", "/customer", then a space or "/" and the words to find. */
+export type RefKind = "invoice" | "bill" | "order" | "purchase" | "product" | "customer";
+
+export const REF_KINDS: RefKind[] = ["invoice", "bill", "order", "purchase", "product", "customer"];
+
+/** The picker's heading for each. */
+export const REF_LABEL: Record<RefKind, string> = {
+  invoice: "Invoices and bills",
+  bill: "Bills",
+  order: "Orders",
+  purchase: "Your orders to suppliers",
+  product: "Products",
+  customer: "Customers",
+};
+
 export interface MentionQuery {
-  mark: "@" | "#";
+  mark: "@" | "#" | "/";
   query: string;
   /** Where the mark is in the text. */
   start: number;
+  /** "/": what is being picked. */
+  kind?: RefKind;
+}
+
+const REF_STATUS: Record<string, string> = {
+  sent: "sent",
+  open: "to pay",
+  part_paid: "part-paid",
+  paid: "paid",
+  overdue: "overdue",
+  void: "cancelled",
+  disputed: "questioned",
+  paying: "being paid",
+  received: "new",
+  changed: "changed",
+  accepted: "accepted",
+  dispatched: "on the way",
+  delivered: "delivered",
+  declined: "declined",
+  cancelled: "cancelled",
+  confirmed: "confirmed",
+  part_received: "part received",
+};
+
+/** An invoice's or an order's status, as a reference shows it. */
+export const refStatusWords = (s: string) =>
+  REF_STATUS[s] ?? s.replaceAll("_", " ");
+
+/** "/invoice ada" or "/invoices/ada": the kind and the words, or null. */
+function refQuery(after: string): { kind: RefKind; query: string } | null {
+  const m = /^(invoice|bill|order|purchase|product|customer)s?[/ ](.*)$/i.exec(after);
+  if (!m) return null;
+  return { kind: (m[1] ?? "").toLowerCase() as RefKind, query: m[2] ?? "" };
 }
 
 /** The mention being typed before the caret: "@" or "#" at the start or
  * after a space, then up to 40 characters on the line; null when none. */
 export function mentionQuery(text: string, caret: number): MentionQuery | null {
   const before = text.slice(0, caret);
-  for (let i = before.length - 1; i >= 0 && before.length - i <= 41; i--) {
+  for (let i = before.length - 1; i >= 0 && before.length - i <= 51; i--) {
     const ch = before.charAt(i);
     if (ch === "\n") return null;
+    if (ch === "/" && (i === 0 || /\s|\(/.test(before.charAt(i - 1)))) {
+      const r = refQuery(before.slice(i + 1));
+      if (r) return { mark: "/", query: r.query, start: i, kind: r.kind };
+      continue;
+    }
+    // "@" and "#" look back 40 characters; "/invoice " a little further.
+    if (before.length - i > 41) continue;
     if (
       (ch === "@" || ch === "#") &&
       (i === 0 || /\s|\(/.test(before.charAt(i - 1)))
@@ -55,23 +131,67 @@ export function mentionQuery(text: string, caret: number): MentionQuery | null {
   return null;
 }
 
+/** Whether a word of the text starts with q. */
+const wordStarts = (text: string, q: string) =>
+  text.startsWith(q) || text.split(/\s+/).some((w) => w.startsWith(q));
+
 /** The suggestions a query fits: a word of the name starting with it
- * first, then the name holding it; six at most. */
+ * first, then the name holding it, then those whose category or words
+ * hold it ("nike" finds a shoe whose description says Nike); six at most. */
 export function suggest(list: Suggestion[], query: string): Suggestion[] {
   const q = query.trim().toLowerCase();
   const starts: Suggestion[] = [];
   const holds: Suggestion[] = [];
+  const about: Suggestion[] = [];
   for (const s of list) {
     const n = s.name.toLowerCase();
-    if (
-      q === "" ||
-      n.startsWith(q) ||
-      n.split(/\s+/).some((w) => w.startsWith(q))
-    )
-      starts.push(s);
+    if (q === "" || wordStarts(n, q)) starts.push(s);
     else if (n.includes(q)) holds.push(s);
+    else if (
+      (s.category ?? "").toLowerCase().includes(q) ||
+      (s.words ?? "").toLowerCase().includes(q)
+    )
+      about.push(s);
   }
-  return [...starts, ...holds].slice(0, 6);
+  return [...starts, ...holds, ...about].slice(0, 6);
+}
+
+/** The categories of a list with how many items each has, the most used
+ * first (then by name). */
+export function categoriesOf(
+  list: { category?: string }[],
+): { name: string; count: number }[] {
+  const n = new Map<string, { name: string; count: number }>();
+  for (const it of list) {
+    const c = it.category?.trim();
+    if (!c) continue;
+    const k = c.toLowerCase();
+    const got = n.get(k);
+    if (got) got.count++;
+    else n.set(k, { name: c, count: 1 });
+  }
+  return [...n.values()].sort(
+    (a, b) => b.count - a.count || a.name.localeCompare(b.name),
+  );
+}
+
+/** The categories a query names, as the picker's first rows: "Sneakers ·
+ * 48 items"; two at most, none for an empty query. */
+export function categorySuggestions(
+  categories: { name: string; count: number }[],
+  query: string,
+): Suggestion[] {
+  const q = query.trim().toLowerCase();
+  if (q === "") return [];
+  return categories
+    .filter((c) => wordStarts(c.name.toLowerCase(), q))
+    .slice(0, 2)
+    .map((c) => ({
+      kind: "category" as const,
+      id: c.name,
+      name: c.name,
+      sub: `${c.count} ${c.count === 1 ? "item" : "items"}`,
+    }));
 }
 
 /** The text with the query replaced by the picked name and a space, and
@@ -82,7 +202,8 @@ export function insertMention(
   caret: number,
   name: string,
 ): { text: string; caret: number } {
-  const head = text.slice(0, q.start) + q.mark + name + " ";
+  // A thing picked with "/" is written as "#" writes an item: "#INV-0104".
+  const head = text.slice(0, q.start) + (q.mark === "/" ? "#" : q.mark) + name + " ";
   return { text: head + text.slice(caret), caret: head.length };
 }
 
@@ -166,6 +287,9 @@ export function groupSuggestions(
     businesses: Suggestion[];
     /** Found in Explore for these words: not linked, after the linked. */
     unlinked?: Suggestion[];
+    /** The categories offered (the business's own, in its Taskiem chat);
+     * else the items' own. */
+    categories?: { name: string; count: number }[];
   },
   taskiem: boolean,
 ): SuggestionGroup[] {
@@ -176,6 +300,9 @@ export function groupSuggestions(
     const all = [...got, ...more.filter((s) => !names.has(s.name.toLowerCase())).slice(0, 3)];
     if (all.length > 0) out.push({ label, items: all });
   };
+  // A category the words name comes first: it opens its items, filtered.
+  const cats = categorySuggestions(src.categories ?? categoriesOf(src.items), query);
+  if (cats.length > 0) out.push({ label: "Categories", items: cats });
   add("Products", src.items, 4);
   add("Services", src.services, 3);
   add("Businesses", src.businesses, 4, src.unlinked);

@@ -370,7 +370,11 @@ func (s *Server) recordHeard(ctx context.Context, c *chat) {
 // purgeChatHistory deletes the history past its retention, in every
 // business, through a definer that reads only the expiry.
 func (s *Server) purgeChatHistory(ctx context.Context) error {
-	_, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_chat_history_purge()`)
+	if _, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_chat_history_purge()`); err != nil {
+		return err
+	}
+	// Customers' messages past their year (customer_chat.go).
+	_, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_customer_messages_purge()`)
 	return err
 }
 
@@ -490,6 +494,8 @@ func (w *webChannel) Send(ctx context.Context, addr string, m whatsapp.Message) 
 
 func (s *Server) taskiemChatRoutes(r chi.Router) {
 	r.Get("/taskiem-chat", s.taskiemHistory)
+	r.Get("/chat-refs", s.chatRefs)
+	r.Get("/chat-card", s.chatCardGet)
 	r.Post("/taskiem-chat", s.taskiemSay)
 	r.Post("/taskiem-chat/files", s.taskiemSend)
 }
