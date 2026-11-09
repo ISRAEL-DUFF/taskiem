@@ -32,13 +32,9 @@ var linkActor = links.Actor{Type: "system", ID: "dispatch"}
 // card through the door, the scope back on the business afterwards. A
 // rider whose business has its links turned off, or whose link has ended,
 // is offered by chat alone.
-func (d *Dispatch) placeLinked(ctx context.Context, tx pgx.Tx, tenant, delivery uuid.UUID, r riders.Rider, ord storefront.Order, fee int64, s Settings) error {
+func (d *Dispatch) placeLinked(ctx context.Context, tx pgx.Tx, tenant, delivery uuid.UUID, r riders.Rider, ord storefront.Order, fee int64, expires time.Time, s Settings) error {
 	if r.LinkID == nil || d.Vault == nil {
 		return nil
-	}
-	var expires time.Time
-	if err := tx.QueryRow(ctx, `SELECT expires_at FROM deliveries WHERE id = $1`, delivery).Scan(&expires); err != nil {
-		return err
 	}
 	order := uuid.Must(uuid.NewV7())
 	pair := uuid.Must(uuid.NewV7())
@@ -53,10 +49,8 @@ func (d *Dispatch) placeLinked(ctx context.Context, tx pgx.Tx, tenant, delivery 
 	if sf, err := storefront.Get(ctx, tx, tenant); err == nil {
 		pickup, pickupLink = strings.TrimSpace(sf.Draft.Address), sf.Draft.MapLink()
 	}
-	if err := links.CardTx(ctx, tx, tenant, *r.LinkID, pair, true, links.DocCard{Doc: links.DocDispatch, Event: StageOffer + "ed", Reference: ord.Reference,
-		ID: delivery.String(), AmountKobo: &fee, Note: r.Name}); err != nil {
-		return err
-	}
+	// The rider's order and card first, through the door; the business's
+	// card only once they have it, so a fallback leaves no card alone.
 	_, err := links.PlaceDeliveryTx(ctx, tx, d.Vault, links.DeliveryIn{Link: *r.LinkID, DeliveryID: delivery, OrderID: order, Pair: pair, BusinessID: tenant,
 		Business: business, Reference: ord.Reference, Pickup: pickup, PickupLink: pickupLink, Area: ord.Zone, FeeKobo: fee, Customer: ord.Customer,
 		ProofRequired: s.Proof, DoorPayment: ord.Payment == "on_delivery", ExpiresAt: expires}, linkActor)
@@ -68,8 +62,13 @@ func (d *Dispatch) placeLinked(ctx context.Context, tx pgx.Tx, tenant, delivery 
 		// The order cannot reach them: the chat app's offer stands alone.
 		d.log().Warn("dispatch: a linked rider's order could not be placed", "tenant", tenant, "rider", r.ID, "err", err)
 		_, err = tx.Exec(ctx, `UPDATE deliveries SET link_order_id = NULL WHERE id = $1`, delivery)
+		return err
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	return links.CardTx(ctx, tx, tenant, *r.LinkID, pair, true, links.DocCard{Doc: links.DocDispatch, Event: StageOffer + "ed", Reference: ord.Reference,
+		ID: delivery.String(), AmountKobo: &fee, Note: r.Name})
 }
 
 // mirrorStep records a delivery's step on the linked rider's order, when

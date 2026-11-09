@@ -45,6 +45,9 @@ func (s *Server) deliveryStep(w http.ResponseWriter, r *http.Request, ref links.
 		s.fail(w, r, errors.New("deliveries are not configured"))
 		return
 	}
+	// The photo, when one came with Delivered, is kept once the step is
+	// taken: a refused step (not paid at the door yet) keeps nothing.
+	var photo []byte
 	if action == dispatch.Delivered && strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/") {
 		r.Body = http.MaxBytesReader(w, r.Body, media.MaxImageBytes+(1<<20))
 		if err := r.ParseMultipartForm(1 << 20); err != nil { //nolint:gosec // the body is bounded by MaxBytesReader above
@@ -53,26 +56,15 @@ func (s *Server) deliveryStep(w http.ResponseWriter, r *http.Request, ref links.
 		}
 		defer func() { _ = r.MultipartForm.RemoveAll() }()
 		if f, _, err := r.FormFile("photo"); err == nil {
-			data, err := io.ReadAll(f)
+			photo, err = io.ReadAll(f)
 			_ = f.Close()
-			if err != nil || len(data) == 0 {
+			if err != nil || len(photo) == 0 {
 				s.fail(w, r, fmt.Errorf("%w: the photo could not be read", errBadRequest))
-				return
-			}
-			// The proof is the business's, in its own storage, as a photo
-			// sent from WhatsApp is.
-			path, err := s.storeProof(ctx, ref.Business, data)
-			if err != nil {
-				s.fail(w, r, fmt.Errorf("%w: the photo could not be kept", errBadRequest))
-				return
-			}
-			if err := s.Dispatch.SetProof(ctx, ref.Business, ref.DeliveryID, path, ""); err != nil {
-				s.fail(w, r, err)
 				return
 			}
 		}
 	}
-	_, _, err := s.Dispatch.RiderStep(ctx, p.TenantID, ref.OrderID.String(), action)
+	tap, _, err := s.Dispatch.RiderStep(ctx, p.TenantID, ref.OrderID.String(), action)
 	switch {
 	case errors.Is(err, dispatch.ErrMove):
 		s.fail(w, r, fmt.Errorf("%w: %s", errConflict, strings.TrimPrefix(err.Error(), dispatch.ErrMove.Error()+": ")))
@@ -80,6 +72,16 @@ func (s *Server) deliveryStep(w http.ResponseWriter, r *http.Request, ref links.
 	case err != nil:
 		s.fail(w, r, orderErr(err))
 		return
+	}
+	if len(photo) > 0 && tap.Moved {
+		// The proof is the business's, in its own storage, as a photo sent
+		// from WhatsApp is.
+		path, err := s.storeProof(ctx, ref.Business, photo)
+		if err != nil {
+			s.Logger.Warn("deliveries: keeping the proof photo", "err", err)
+		} else if err := s.Dispatch.SetProof(ctx, ref.Business, ref.DeliveryID, path, ""); err != nil {
+			s.Logger.Warn("deliveries: recording the proof photo", "err", err)
+		}
 	}
 	var o links.Order
 	if err := s.tx(r, func(tx pgx.Tx) error {

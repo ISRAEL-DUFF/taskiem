@@ -40,7 +40,9 @@ CREATE INDEX link_orders_delivery ON link_orders (delivery_id) WHERE delivery_id
 -- +goose Down
 DROP INDEX link_orders_delivery;
 DELETE FROM link_messages WHERE kind = 'card' AND card ->> 'doc' IN ('delivery', 'dispatch');
-DELETE FROM link_orders WHERE delivery_id IS NOT NULL;
+-- The riders' orders go with their link rows (the link row references the order).
+WITH gone AS (DELETE FROM link_orders WHERE delivery_id IS NOT NULL RETURNING order_id)
+DELETE FROM storefront_orders WHERE id IN (SELECT order_id FROM gone);
 ALTER TABLE link_orders DROP CONSTRAINT link_orders_purchase_reference_check;
 ALTER TABLE link_orders ADD CONSTRAINT link_orders_purchase_reference_check CHECK (purchase_reference ~ '^P-[A-Z0-9]{6}$');
 ALTER TABLE link_orders DROP COLUMN arrived_at, DROP COLUMN picked_up_at, DROP COLUMN expires_at, DROP COLUMN door_payment, DROP COLUMN proof_required,

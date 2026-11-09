@@ -23,6 +23,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/israel-duff/taskiem/engine/db"
@@ -580,7 +581,8 @@ func (r *Riders) UpdateTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, 
 			link = &lid
 		}
 		if _, err := tx.Exec(ctx, `UPDATE riders SET link_id = $2, updated_at = now() WHERE id = $1`, id, link); err != nil {
-			if link != nil {
+			var pe *pgconn.PgError
+			if errors.As(err, &pe) && pe.Code == "23505" {
 				return Rider{}, fmt.Errorf("%w: another rider is already that business", ErrInvalid)
 			}
 			return Rider{}, err

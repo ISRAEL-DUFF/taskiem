@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
@@ -117,7 +119,9 @@ func PlaceDeliveryTx(ctx context.Context, tx pgx.Tx, v Vault, in DeliveryIn, by 
 	_, hash := storefront.NewStatusKey()
 	line := deliveryLine(in.Area, in.FeeKobo)
 	b, _ := json.Marshal(basket([]OrderLine{line}))
-	ref := in.Reference
+	// The business's own order has the reference; the rider's is marked
+	// as the delivery of it, then suffixed should that be taken too.
+	ref := in.Reference + "-D"
 	for try := 0; ; try++ {
 		tag, err := tx.Exec(ctx, `INSERT INTO storefront_orders (id, tenant_id, storefront_id, kind, reference, status_hash, status, customer, subject_id, basket,
 			total_kobo, fulfilment, payment, zone) VALUES ($1, $2, $3, 'trade', $4, $5, 'received', $6, $7, $8, $9, 'delivery', 'none', $10)
@@ -131,7 +135,7 @@ func PlaceDeliveryTx(ctx context.Context, tx pgx.Tx, v Vault, in DeliveryIn, by 
 		if try == 4 {
 			return rider, errors.New("links: no free reference for the delivery")
 		}
-		ref = in.Reference + "-" + newReference()[2:4]
+		ref = in.Reference + "-D" + newReference()[2:4]
 	}
 	raw, _ := json.Marshal([]OrderLine{line})
 	if _, err := tx.Exec(ctx, `INSERT INTO link_orders (order_id, tenant_id, link_id, buyer_tenant, buyer_name, source_id, purchase_reference, lines, note,
@@ -224,13 +228,20 @@ func DeliveryStepTx(ctx context.Context, tx pgx.Tx, v Vault, rider, order uuid.U
 	}
 	if status == "completed" || status == "cancelled" || status == "declined" {
 		// The customer's details leave the rider's side with the delivery;
-		// the name stays, as the record of who it went to.
+		// the name stays, as the record of who it went to. An erased
+		// customer has nothing left to clear.
 		c, err := openDeliveryCustomer(ctx, tx, v, rider, o.ID)
-		if err == nil {
-			if sealed, _, err := sealDeliveryCustomer(ctx, tx, v, rider, storefront.Customer{Name: c.Name}); err == nil {
-				if _, err := tx.Exec(ctx, `UPDATE storefront_orders SET customer = $2 WHERE id = $1`, o.ID, sealed); err != nil {
-					return err
-				}
+		switch {
+		case errors.Is(err, pii.ErrErased):
+		case err != nil:
+			return err
+		default:
+			sealed, _, err := sealDeliveryCustomer(ctx, tx, v, rider, storefront.Customer{Name: c.Name})
+			if err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, `UPDATE storefront_orders SET customer = $2 WHERE id = $1`, o.ID, sealed); err != nil {
+				return err
 			}
 		}
 	}
@@ -286,4 +297,24 @@ func openDeliveryCustomer(ctx context.Context, tx pgx.Tx, v Vault, rider, order 
 func ReturnTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) error {
 	_, err := tx.Exec(ctx, `SELECT set_config('app.tenant_scope', $1, true)`, db.Scope(tenant))
 	return err
+}
+
+// DeliveryRefTx is DeliveryOfTx by one small query, for the API's check
+// of which path a step takes: ErrNotFound when the order is not a
+// delivery of the business in scope.
+func DeliveryRefTx(ctx context.Context, tx pgx.Tx, ref string) (DeliveryRef, error) {
+	var r DeliveryRef
+	q := `SELECT o.link_id, o.buyer_tenant, o.delivery_id, s.id, o.purchase_reference, s.status FROM link_orders o JOIN storefront_orders s ON s.id = o.order_id
+		WHERE o.delivery_id IS NOT NULL AND `
+	var row pgx.Row
+	if id, err := uuid.Parse(ref); err == nil {
+		row = tx.QueryRow(ctx, q+`s.id = $1`, id)
+	} else {
+		row = tx.QueryRow(ctx, q+`(s.reference = $1 OR o.purchase_reference = $1) ORDER BY s.created_at DESC LIMIT 1`, strings.ToUpper(strings.TrimSpace(ref)))
+	}
+	err := row.Scan(&r.Link, &r.Business, &r.DeliveryID, &r.OrderID, &r.Reference, &r.Status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return r, fmt.Errorf("%w: no such delivery", ErrNotFound)
+	}
+	return r, err
 }

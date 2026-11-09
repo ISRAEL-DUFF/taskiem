@@ -533,7 +533,7 @@ func (d *Dispatch) offerTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, ref
 	}
 	// A rider that is a business on Taskiem gets the order in their own
 	// business too (docs/spec/chat-riders.md).
-	if err := d.placeLinked(ctx, tx, tenant, id, rider, ord, fee, s); err != nil {
+	if err := d.placeLinked(ctx, tx, tenant, id, rider, ord, fee, expires, s); err != nil {
 		return out, nil, err
 	}
 	x, err := d.GetTx(ctx, tx, tenant, id)
@@ -770,13 +770,6 @@ func (d *Dispatch) press(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x Del
 		if err := d.queue(ctx, tx, tenant, x.ID, x.RiderID, StageCant, ""); err != nil {
 			return t, nil, err
 		}
-		if err := d.mirrorPress(ctx, tx, tenant, x, moved, opt); err != nil {
-			return t, nil, err
-		}
-		moved = ""
-		if err := d.next(ctx, tx, tenant, x, ord); err != nil {
-			return t, nil, err
-		}
 	case PickedUp:
 		if already("picked_up", "arrived", "delivered") {
 			return t, nil, nil
@@ -865,6 +858,12 @@ func (d *Dispatch) press(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x Del
 	}
 	if moved != "" {
 		if err := d.mirrorPress(ctx, tx, tenant, x, moved, opt); err != nil {
+			return t, nil, err
+		}
+	}
+	if moved == Cant {
+		// On to the next rider, once this one's order says they passed.
+		if err := d.next(ctx, tx, tenant, x, ord); err != nil {
 			return t, nil, err
 		}
 	}

@@ -1059,6 +1059,12 @@ func MirrorOrderTx(ctx context.Context, tx pgx.Tx, seller, id uuid.UUID) (*Told,
 	if err != nil {
 		return nil, err
 	}
+	if o.Delivery != nil {
+		// A delivery for a linked business has no purchase order to
+		// mirror to, and no invoice until phase 4: dispatch keeps both
+		// sides in step itself (deliveries.go).
+		return nil, nil
+	}
 	if (live(o.Status) || o.Status == OrderDelivered) && o.InvoiceAt == InvoiceAtAccepted && o.InvoiceID == nil {
 		if err := dueTx(ctx, tx, seller, "invoice", o.ID, 0); err != nil {
 			return nil, err

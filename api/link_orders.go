@@ -137,14 +137,14 @@ func (s *Server) tradeOrderStep(w http.ResponseWriter, r *http.Request) {
 		var ref links.DeliveryRef
 		err := s.tx(r, func(tx pgx.Tx) error {
 			var err error
-			ref, err = links.DeliveryOfTx(r.Context(), tx, chi.URLParam(r, "id"))
+			ref, err = links.DeliveryRefTx(r.Context(), tx, chi.URLParam(r, "id"))
 			return err
 		})
 		switch {
 		case err == nil:
 			s.deliveryStep(w, r, ref, step)
 			return
-		case !errors.Is(err, links.ErrState) && !errors.Is(err, links.ErrNotFound):
+		case !errors.Is(err, links.ErrNotFound):
 			s.fail(w, r, orderErr(err))
 			return
 		}
