@@ -199,7 +199,7 @@ var (
 	ratingRank = map[string]int{"GREEN": 0, "YELLOW": 1, "RED": 2}
 	tierRank   = map[string]int{"TIER_UNLIMITED": 6, "TIER_100K": 5, "TIER_10K": 4, "TIER_2K": 3, "TIER_1K": 2, "TIER_250": 1, "TIER_50": 0}
 	// statusRank: how bad a number's status is, and what it means.
-	statusRank = map[string]int{"CONNECTED": 0, "FLAGGED": 1, "RATE_LIMITED": 2, "RESTRICTED": 3, "DISCONNECTED": 4, "BANNED": 5, "DELETED": 5}
+	statusRank  = map[string]int{"CONNECTED": 0, "FLAGGED": 1, "RATE_LIMITED": 2, "RESTRICTED": 3, "DISCONNECTED": 4, "BANNED": 5, "DELETED": 5}
 	statusWords = map[string]string{"FLAGGED": "is flagged for low quality: its daily limit may go down",
 		"RATE_LIMITED": "is sending too fast: WhatsApp is holding some of its messages back",
 		"RESTRICTED":   "is restricted: it can only reply to customers who write first",
