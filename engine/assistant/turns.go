@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/pii"
 )
 
@@ -261,4 +263,84 @@ func decode(raw []byte) any {
 		return nil
 	}
 	return v
+}
+
+// Gathered is what gather answers a run (decision 0062 V10, L5): a
+// customer who sends several short messages in a row gets one answer.
+type Gathered struct {
+	// Latest: no newer message of theirs is waiting for an answer, so this
+	// run answers; otherwise the run for the newer one does.
+	Latest bool
+	// Earlier are their messages since the last answer, before this run's
+	// own, oldest first: what this answer must also answer.
+	Earlier []string
+}
+
+// Gather is what the run's customer wrote since they were last answered,
+// and whether this run's message is their latest. A run that belongs to
+// no conversation is its own latest, with nothing earlier.
+func (s *Service) Gather(ctx context.Context, tenant, run uuid.UUID) (Gathered, error) {
+	out := Gathered{Latest: true}
+	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		channel, subject, root, ok, err := RunConversation(ctx, tx, tenant, run)
+		if err != nil || !ok {
+			return err
+		}
+		var mine time.Time
+		var id uuid.UUID
+		err = tx.QueryRow(ctx, `SELECT id, at FROM assistant_turns WHERE tenant_id = $1 AND run_id = $2 AND role = 'customer' ORDER BY at LIMIT 1`, tenant, root).Scan(&id, &mine)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		// A newer message that will be answered (one the guard let through).
+		var newer bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM assistant_turns WHERE tenant_id = $1 AND channel = $2 AND subject = $3
+			AND role = 'customer' AND status = 'answer' AND (at, id) > ($4, $5))`, tenant, channel, subject, mine, id).Scan(&newer); err != nil {
+			return err
+		}
+		out.Latest = !newer
+		rows, err := tx.Query(ctx, `SELECT body, transcript FROM assistant_turns t WHERE tenant_id = $1 AND channel = $2 AND subject = $3
+			AND role = 'customer' AND status = 'answer' AND (at, id) < ($4, $5)
+			AND at > COALESCE((SELECT max(at) FROM assistant_turns a WHERE a.tenant_id = $1 AND a.channel = $2 AND a.subject = $3
+			  AND a.role IN ('assistant', 'member', 'held')), '-infinity')
+			ORDER BY at, id LIMIT 20`, tenant, channel, subject, mine, id)
+		if err != nil {
+			return err
+		}
+		type pair struct{ body, transcript []byte }
+		var list []pair
+		for rows.Next() {
+			var p pair
+			if err := rows.Scan(&p.body, &p.transcript); err != nil {
+				rows.Close()
+				return err
+			}
+			list = append(list, p)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		for _, p := range list {
+			for _, raw := range [][]byte{p.transcript, p.body} {
+				env, _ := decode(raw).(map[string]any)
+				if env == nil {
+					continue
+				}
+				v, err := pii.Open(ctx, s.Vault, tx, tenant, env, pii.Taint{})
+				if err != nil || v == pii.Erased {
+					continue
+				}
+				if text, _ := v.(string); strings.TrimSpace(text) != "" {
+					out.Earlier = append(out.Earlier, text)
+					break
+				}
+			}
+		}
+		return nil
+	})
+	return out, err
 }

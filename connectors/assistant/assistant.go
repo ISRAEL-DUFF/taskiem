@@ -28,6 +28,7 @@ type Ops interface {
 	HandOver(ctx context.Context, tenant uuid.UUID, channel, sender string, hours int) (time.Time, error)
 	ResumeSender(ctx context.Context, tenant uuid.UUID, channel, sender string) error
 	Window(ctx context.Context, tenant uuid.UUID, channel, sender string) (bool, *time.Time, error)
+	Gather(ctx context.Context, tenant, run uuid.UUID) (assistant.Gathered, error)
 }
 
 // New returns the connector; ops nil makes every action but check_reply
@@ -39,6 +40,7 @@ func New(ops Ops) *connector.Connector {
 		"hand_over":   connector.ActionFunc(a.handOver),
 		"resume":      connector.ActionFunc(a.resume),
 		"window":      connector.ActionFunc(a.window),
+		"gather":      connector.ActionFunc(a.gather),
 	}}
 }
 
@@ -162,6 +164,25 @@ func (a *actions) window(ctx context.Context, req connector.Request) (connector.
 	return connector.Response{Output: out}, nil
 }
 
+// gather answers whether this run's customer message is their latest,
+// and what they wrote before it since they were last answered (L5).
+func (a *actions) gather(ctx context.Context, _ connector.Request) (connector.Response, error) {
+	tenant, err := a.caller(ctx)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	c, _ := connector.CallerFrom(ctx)
+	g, err := a.ops.Gather(ctx, tenant, c.Run)
+	if err != nil {
+		return connector.Response{}, classify(err)
+	}
+	earlier := make([]any, 0, len(g.Earlier))
+	for _, t := range g.Earlier {
+		earlier = append(earlier, t)
+	}
+	return connector.Response{Output: map[string]any{"latest": g.Latest, "earlier": earlier, "earlier_text": strings.Join(g.Earlier, "\n")}}, nil
+}
+
 // Late is Ops set after the connector is registered.
 type Late struct {
 	mu  sync.RWMutex
@@ -196,6 +217,15 @@ func (l *Late) ResumeSender(ctx context.Context, tenant uuid.UUID, channel, send
 	return o.ResumeSender(ctx, tenant, channel, sender)
 }
 
+func (l *Late) Gather(ctx context.Context, tenant, run uuid.UUID) (assistant.Gathered, error) {
+	o, err := l.get()
+	if err != nil {
+		return assistant.Gathered{}, err
+	}
+	return o.Gather(ctx, tenant, run)
+}
+
+// Window implements Ops.
 func (l *Late) Window(ctx context.Context, tenant uuid.UUID, channel, sender string) (bool, *time.Time, error) {
 	o, err := l.get()
 	if err != nil {

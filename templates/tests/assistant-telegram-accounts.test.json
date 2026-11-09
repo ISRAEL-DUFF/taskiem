@@ -39,6 +39,13 @@
             "ok": true
           }
         },
+        "gather": {
+          "output": {
+            "latest": true,
+            "earlier": [],
+            "earlier_text": ""
+          }
+        },
         "look_t__acct": {
           "output": {
             "rows": [
@@ -169,6 +176,13 @@
             "ok": true
           }
         },
+        "gather": {
+          "output": {
+            "latest": true,
+            "earlier": [],
+            "earlier_text": ""
+          }
+        },
         "look_t__acct": {
           "output": {
             "rows": [
@@ -268,6 +282,13 @@
         "typing": {
           "output": {
             "ok": true
+          }
+        },
+        "gather": {
+          "output": {
+            "latest": true,
+            "earlier": [],
+            "earlier_text": ""
           }
         },
         "look_t__acct": {
@@ -375,6 +396,13 @@
         "typing": {
           "output": {
             "ok": true
+          }
+        },
+        "gather": {
+          "output": {
+            "latest": true,
+            "earlier": [],
+            "earlier_text": ""
           }
         },
         "hear": {

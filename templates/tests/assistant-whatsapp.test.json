@@ -34,6 +34,13 @@
         "typing": {
           "output": {}
         },
+        "gather": {
+          "output": {
+            "latest": true,
+            "earlier": [],
+            "earlier_text": ""
+          }
+        },
         "answer_t__memory": {
           "output": {
             "rows": []
@@ -130,6 +137,13 @@
       "mocks": {
         "typing": {
           "output": {}
+        },
+        "gather": {
+          "output": {
+            "latest": true,
+            "earlier": [],
+            "earlier_text": ""
+          }
         },
         "hear": {
           "output": {
@@ -268,6 +282,13 @@
         "typing": {
           "output": {}
         },
+        "gather": {
+          "output": {
+            "latest": true,
+            "earlier": [],
+            "earlier_text": ""
+          }
+        },
         "hear": {
           "output": {
             "heard": true,
@@ -390,6 +411,13 @@
       "mocks": {
         "typing": {
           "output": {}
+        },
+        "gather": {
+          "output": {
+            "latest": true,
+            "earlier": [],
+            "earlier_text": ""
+          }
         },
         "hear": {
           "output": {
@@ -649,6 +677,13 @@
         "typing": {
           "output": {}
         },
+        "gather": {
+          "output": {
+            "latest": true,
+            "earlier": [],
+            "earlier_text": ""
+          }
+        },
         "listed": {
           "output": {
             "rows": [
@@ -730,6 +765,13 @@
       "mocks": {
         "typing": {
           "output": {}
+        },
+        "gather": {
+          "output": {
+            "latest": true,
+            "earlier": [],
+            "earlier_text": ""
+          }
         },
         "answer_t__memory": {
           "output": {
@@ -829,6 +871,13 @@
       "mocks": {
         "typing": {
           "output": {}
+        },
+        "gather": {
+          "output": {
+            "latest": true,
+            "earlier": [],
+            "earlier_text": ""
+          }
         },
         "answer_t__memory": {
           "output": {
@@ -979,6 +1028,13 @@
         "typing": {
           "output": {}
         },
+        "gather": {
+          "output": {
+            "latest": true,
+            "earlier": [],
+            "earlier_text": ""
+          }
+        },
         "hear": {
           "error": {
             "kind": "fatal",
@@ -1040,6 +1096,13 @@
         "typing": {
           "output": {}
         },
+        "gather": {
+          "output": {
+            "latest": true,
+            "earlier": [],
+            "earlier_text": ""
+          }
+        },
         "answer_t__memory": {
           "error": {
             "kind": "fatal",
@@ -1098,6 +1161,141 @@
       }
     },
     {
+      "name": "an earlier of several quick messages is not answered on its own: the newest one answers",
+      "trigger": {
+        "event": "message",
+        "guard": {
+          "outcome": "answer",
+          "reason": "",
+          "reply": "",
+          "notice": "",
+          "language": "en",
+          "first": false,
+          "kind": "text",
+          "text": "Hello",
+          "channel": "whatsapp@1/main/prod",
+          "sender": "2348031234567"
+        },
+        "item": {
+          "kind": "message",
+          "message": {
+            "id": "wamid.IN1",
+            "from": "2348031234567",
+            "type": "text"
+          }
+        }
+      },
+      "mocks": {
+        "typing": {
+          "output": {}
+        },
+        "gather": {
+          "output": {
+            "latest": false,
+            "earlier": [],
+            "earlier_text": ""
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "pause": "completed",
+          "gather": "completed",
+          "answer": "skipped",
+          "send_t": "not_run"
+        }
+      }
+    },
+    {
+      "name": "the newest of several quick messages answers them all together",
+      "trigger": {
+        "event": "message",
+        "guard": {
+          "outcome": "answer",
+          "reason": "",
+          "reply": "",
+          "notice": "",
+          "language": "en",
+          "first": false,
+          "kind": "text",
+          "text": "Do you deliver to Ajah?",
+          "channel": "whatsapp@1/main/prod",
+          "sender": "2348031234567"
+        },
+        "item": {
+          "kind": "message",
+          "message": {
+            "id": "wamid.IN1",
+            "from": "2348031234567",
+            "type": "text"
+          }
+        }
+      },
+      "mocks": {
+        "typing": {
+          "output": {}
+        },
+        "gather": {
+          "output": {
+            "latest": true,
+            "earlier": [
+              "Hello",
+              "I want jollof"
+            ],
+            "earlier_text": "Hello\nI want jollof"
+          }
+        },
+        "answer_t__memory": {
+          "output": {
+            "rows": []
+          }
+        },
+        "answer_t__know": {
+          "output": {
+            "found": true,
+            "material": "We deliver to Lekki and Ajah.",
+            "passages": []
+          }
+        },
+        "answer_t__reply": {
+          "output": {
+            "reply": "Hello! Yes, we deliver jollof to Ajah.",
+            "needs_person": false
+          }
+        },
+        "answer_t__check": {
+          "output": {
+            "ok": true,
+            "text": "Hello! Yes, we deliver jollof to Ajah.",
+            "problems": []
+          }
+        },
+        "answer_t__keep": {
+          "output": {
+            "affected": 2,
+            "rows": []
+          }
+        },
+        "send_t": {
+          "output": {
+            "message_id": "wamid.OUT"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "send_t": "completed"
+        },
+        "inputs": {
+          "answer_t__check": {
+            "customer": "Hello\nI want jollof\nDo you deliver to Ajah?"
+          }
+        }
+      }
+    },
+    {
       "name": "a reply that could not be kept in the conversation is still sent",
       "trigger": {
         "event": "message",
@@ -1125,6 +1323,13 @@
       "mocks": {
         "typing": {
           "output": {}
+        },
+        "gather": {
+          "output": {
+            "latest": true,
+            "earlier": [],
+            "earlier_text": ""
+          }
         },
         "answer_t__memory": {
           "output": {

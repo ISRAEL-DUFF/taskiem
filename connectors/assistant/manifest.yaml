@@ -118,3 +118,24 @@ actions:
         closes_at:       { type: string }
     pii:
       - { field: sender, category: other }
+  gather:
+    title: Gather a customer's quick messages
+    description: >-
+      For a customer who sends several short messages in a row, so they get
+      one answer (decision 0062 V10, L5): after a short wait, latest says
+      whether this run's message is still their newest one waiting for an
+      answer (when it is not, the run for the newer one answers, and this
+      one stays quiet), and earlier is what they wrote before it since they
+      were last answered, oldest first, to answer together with it. Reads
+      only the run's own conversation.
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        latest:       { type: boolean }
+        earlier:      { type: array, items: { type: string } }
+        earlier_text: { type: string, description: "earlier, one message a line" }
+    pii:
+      - { field: output.earlier, category: other }
+      - { field: output.earlier_text, category: other }

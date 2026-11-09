@@ -391,3 +391,37 @@ func TestCustomerGuardNoticeAndStopWhileOff(t *testing.T) {
 		t.Fatalf("the STOP written while off was lost: %v", s)
 	}
 }
+
+// Several quick messages get one answer (decision 0062 V10, L5): the run of
+// an earlier message finds a newer one waiting and stays quiet; the newest
+// answers, with what was written before it since the last answer.
+func TestCustomerGuardGather(t *testing.T) {
+	g := newGuardWorld(t, "true", "", `[
+	  {"id":"g","type":"connector","connector":"assistant@1","action":"gather","input":{}},
+	  {"id":"a","type":"transform","needs":["g"],"config":{"output":"=string(steps.g.output.latest) + '|' + steps.g.output.earlier_text"}}]`)
+	const ada = "2348031234567"
+	g.send(t, ada, text("Hello"))
+	g.send(t, ada, text("Do you deliver to Ajah?"))
+	g.Drain(t)
+	var runs []uuid.UUID
+	if err := db.InTenantTx(ctx, g.DB.App, []uuid.UUID{g.Tenant}, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT id FROM runs WHERE workflow_id = $1 ORDER BY started_at, id`, g.wf)
+		if err != nil {
+			return err
+		}
+		runs, err = pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(runs) != 2 {
+		t.Fatalf("%d runs", len(runs))
+	}
+	got := map[string]bool{}
+	for _, id := range runs {
+		got[stepOutput(t, g.world, runtime.RunRef{TenantID: g.Tenant, ID: id}, "a")] = true
+	}
+	if !got["false|"] || !got["true|Hello"] {
+		t.Fatalf("gathered: %v", got)
+	}
+}

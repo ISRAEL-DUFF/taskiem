@@ -80,6 +80,17 @@
       "example": true
     },
     {
+      "name": "gather_seconds",
+      "type": "integer",
+      "title": "Wait for more messages (seconds)",
+      "description": "A customer who sends several short messages in a row gets one answer to all of them: your assistant waits this long after each message for another.",
+      "required": false,
+      "default": 4,
+      "example": 4,
+      "minimum": 1,
+      "maximum": 20
+    },
+    {
       "name": "only_listed",
       "type": "boolean",
       "title": "Only answer customers on your list",
@@ -318,14 +329,38 @@
         }
       },
       {
+        "id": "pause",
+        "type": "wait",
+        "name": "Wait a moment for more messages",
+        "needs": [
+          "who"
+        ],
+        "when": "=trigger.guard.outcome == 'answer' && (steps.who.output.path == 'default' || has(steps.who.output.steps.listed.rows) && size(steps.who.output.steps.listed.rows) > 0)",
+        "config": {
+          "duration": "{{gather_seconds}}s"
+        }
+      },
+      {
+        "id": "gather",
+        "type": "connector",
+        "name": "Gather their quick messages",
+        "connector": "assistant@1",
+        "action": "gather",
+        "needs": [
+          "pause"
+        ],
+        "input": {}
+      },
+      {
         "id": "answer",
         "type": "branch",
         "name": "Answer them",
         "needs": [
           "settings",
-          "who"
+          "who",
+          "gather"
         ],
-        "when": "=trigger.guard.outcome == 'answer' && (steps.who.output.path == 'default' || has(steps.who.output.steps.listed.rows) && size(steps.who.output.steps.listed.rows) > 0)",
+        "when": "=trigger.guard.outcome == 'answer' && steps.gather.output.latest && (steps.who.output.path == 'default' || has(steps.who.output.steps.listed.rows) && size(steps.who.output.steps.listed.rows) > 0)",
         "config": {
           "paths": [
             {
@@ -413,7 +448,7 @@
                             "input": {
                               "via": "telegram",
                               "sender": "=trigger.guard.sender",
-                              "text": "=steps.hear.output.text",
+                              "text": "=(steps.gather.output.earlier_text != '' ? steps.gather.output.earlier_text + '\\n' : '') + steps.hear.output.text",
                               "language": "=steps.hear.output.?language.orValue('') != '' ? steps.hear.output.language : trigger.guard.language"
                             },
                             "on_error": {
@@ -534,7 +569,7 @@
                               "channel": "=trigger.guard.channel",
                               "via": "telegram",
                               "sender": "=trigger.guard.sender",
-                              "text": "=steps.hear.output.text",
+                              "text": "=(steps.gather.output.earlier_text != '' ? steps.gather.output.earlier_text + '\\n' : '') + steps.hear.output.text",
                               "language": "=steps.hear.output.?language.orValue('') != '' ? steps.hear.output.language : trigger.guard.language",
                               "kind": "voice",
                               "account": "=steps.look_v.output.facts"
@@ -870,7 +905,7 @@
                 "input": {
                   "via": "telegram",
                   "sender": "=trigger.guard.sender",
-                  "text": "=trigger.guard.text",
+                  "text": "=(steps.gather.output.earlier_text != '' ? steps.gather.output.earlier_text + '\\n' : '') + trigger.guard.text",
                   "language": "=trigger.guard.language"
                 },
                 "on_error": {
@@ -991,7 +1026,7 @@
                   "channel": "=trigger.guard.channel",
                   "via": "telegram",
                   "sender": "=trigger.guard.sender",
-                  "text": "=trigger.guard.text",
+                  "text": "=(steps.gather.output.earlier_text != '' ? steps.gather.output.earlier_text + '\\n' : '') + trigger.guard.text",
                   "language": "=trigger.guard.language",
                   "kind": "text",
                   "account": "=steps.look_t.output.facts"

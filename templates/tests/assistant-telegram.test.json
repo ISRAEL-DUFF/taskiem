@@ -38,6 +38,13 @@
             "ok": true
           }
         },
+        "gather": {
+          "output": {
+            "latest": true,
+            "earlier": [],
+            "earlier_text": ""
+          }
+        },
         "answer_t__memory": {
           "output": {
             "rows": []
@@ -137,6 +144,13 @@
         "typing": {
           "output": {
             "ok": true
+          }
+        },
+        "gather": {
+          "output": {
+            "latest": true,
+            "earlier": [],
+            "earlier_text": ""
           }
         },
         "hear": {
@@ -278,6 +292,13 @@
             "ok": true
           }
         },
+        "gather": {
+          "output": {
+            "latest": true,
+            "earlier": [],
+            "earlier_text": ""
+          }
+        },
         "hear": {
           "output": {
             "heard": true,
@@ -403,6 +424,13 @@
         "typing": {
           "output": {
             "ok": true
+          }
+        },
+        "gather": {
+          "output": {
+            "latest": true,
+            "earlier": [],
+            "earlier_text": ""
           }
         },
         "hear": {
@@ -673,6 +701,13 @@
             "ok": true
           }
         },
+        "gather": {
+          "output": {
+            "latest": true,
+            "earlier": [],
+            "earlier_text": ""
+          }
+        },
         "listed": {
           "output": {
             "rows": [
@@ -757,6 +792,13 @@
         "typing": {
           "output": {
             "ok": true
+          }
+        },
+        "gather": {
+          "output": {
+            "latest": true,
+            "earlier": [],
+            "earlier_text": ""
           }
         },
         "answer_t__memory": {
@@ -930,6 +972,13 @@
             "ok": true
           }
         },
+        "gather": {
+          "output": {
+            "latest": true,
+            "earlier": [],
+            "earlier_text": ""
+          }
+        },
         "hear": {
           "error": {
             "kind": "fatal",
@@ -995,6 +1044,13 @@
             "ok": true
           }
         },
+        "gather": {
+          "output": {
+            "latest": true,
+            "earlier": [],
+            "earlier_text": ""
+          }
+        },
         "answer_t__memory": {
           "error": {
             "kind": "fatal",
@@ -1053,6 +1109,149 @@
       }
     },
     {
+      "name": "an earlier of several quick messages is not answered on its own: the newest one answers",
+      "trigger": {
+        "event": "message",
+        "guard": {
+          "outcome": "answer",
+          "reason": "",
+          "reply": "",
+          "notice": "",
+          "language": "en",
+          "first": false,
+          "kind": "text",
+          "text": "Hello",
+          "channel": "telegram@1/main/prod",
+          "sender": "55501"
+        },
+        "body": {
+          "update_id": 1,
+          "message": {
+            "message_id": 7,
+            "chat": {
+              "id": 55501,
+              "type": "private"
+            }
+          }
+        }
+      },
+      "mocks": {
+        "typing": {
+          "output": {
+            "ok": true
+          }
+        },
+        "gather": {
+          "output": {
+            "latest": false,
+            "earlier": [],
+            "earlier_text": ""
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "pause": "completed",
+          "gather": "completed",
+          "answer": "skipped",
+          "send_t": "not_run"
+        }
+      }
+    },
+    {
+      "name": "the newest of several quick messages answers them all together",
+      "trigger": {
+        "event": "message",
+        "guard": {
+          "outcome": "answer",
+          "reason": "",
+          "reply": "",
+          "notice": "",
+          "language": "en",
+          "first": false,
+          "kind": "text",
+          "text": "Do you deliver to Ajah?",
+          "channel": "telegram@1/main/prod",
+          "sender": "55501"
+        },
+        "body": {
+          "update_id": 1,
+          "message": {
+            "message_id": 7,
+            "chat": {
+              "id": 55501,
+              "type": "private"
+            }
+          }
+        }
+      },
+      "mocks": {
+        "typing": {
+          "output": {
+            "ok": true
+          }
+        },
+        "gather": {
+          "output": {
+            "latest": true,
+            "earlier": [
+              "Hello",
+              "I want jollof"
+            ],
+            "earlier_text": "Hello\nI want jollof"
+          }
+        },
+        "answer_t__memory": {
+          "output": {
+            "rows": []
+          }
+        },
+        "answer_t__know": {
+          "output": {
+            "found": true,
+            "material": "We deliver to Lekki and Ajah.",
+            "passages": []
+          }
+        },
+        "answer_t__reply": {
+          "output": {
+            "reply": "Hello! Yes, we deliver jollof to Ajah.",
+            "needs_person": false
+          }
+        },
+        "answer_t__check": {
+          "output": {
+            "ok": true,
+            "text": "Hello! Yes, we deliver jollof to Ajah.",
+            "problems": []
+          }
+        },
+        "answer_t__keep": {
+          "output": {
+            "affected": 2,
+            "rows": []
+          }
+        },
+        "send_t": {
+          "output": {
+            "message_id": 8
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "send_t": "completed"
+        },
+        "inputs": {
+          "answer_t__check": {
+            "customer": "Hello\nI want jollof\nDo you deliver to Ajah?"
+          }
+        }
+      }
+    },
+    {
       "name": "a reply that could not be kept in the conversation is still sent",
       "trigger": {
         "event": "message",
@@ -1083,6 +1282,13 @@
         "typing": {
           "output": {
             "ok": true
+          }
+        },
+        "gather": {
+          "output": {
+            "latest": true,
+            "earlier": [],
+            "earlier_text": ""
           }
         },
         "answer_t__memory": {

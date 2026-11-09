@@ -35,6 +35,13 @@
         "typing": {
           "output": {}
         },
+        "gather": {
+          "output": {
+            "latest": true,
+            "earlier": [],
+            "earlier_text": ""
+          }
+        },
         "look_t__acct": {
           "output": {
             "rows": [
@@ -163,6 +170,13 @@
         "typing": {
           "output": {}
         },
+        "gather": {
+          "output": {
+            "latest": true,
+            "earlier": [],
+            "earlier_text": ""
+          }
+        },
         "look_t__acct": {
           "output": {
             "rows": [
@@ -259,6 +273,13 @@
       "mocks": {
         "typing": {
           "output": {}
+        },
+        "gather": {
+          "output": {
+            "latest": true,
+            "earlier": [],
+            "earlier_text": ""
+          }
         },
         "look_t__acct": {
           "output": {
@@ -362,6 +383,13 @@
       "mocks": {
         "typing": {
           "output": {}
+        },
+        "gather": {
+          "output": {
+            "latest": true,
+            "earlier": [],
+            "earlier_text": ""
+          }
         },
         "hear": {
           "output": {
