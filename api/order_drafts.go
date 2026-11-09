@@ -49,7 +49,7 @@ type draftBody struct {
 }
 
 func (b draftBody) total() int64 {
-	t := b.Draft.Total()
+	t := b.Total()
 	if b.Fulfilment == "delivery" {
 		t += b.DeliveryKobo
 	}
@@ -203,7 +203,7 @@ func (d draftRow) view() orderDraftView {
 	}
 	v := orderDraftView{ID: d.id, ChatID: d.chat, MessageID: d.message, Status: d.status, Lines: lines,
 		Fulfilment: d.body.Fulfilment, Address: d.body.Address, When: d.body.When, Note: d.body.Note, Zone: d.body.Zone,
-		DeliveryKobo: d.body.DeliveryKobo, Pay: d.body.Pay, ItemsKobo: d.body.Draft.Total(), TotalKobo: d.body.total(),
+		DeliveryKobo: d.body.DeliveryKobo, Pay: d.body.Pay, ItemsKobo: d.body.Total(), TotalKobo: d.body.total(),
 		Questions: len(d.body.Open()), Version: d.version, Reference: d.reference, OrderStatus: d.orderStatus,
 		ByReader: d.madeBy == "reader", AskedAt: d.askedAt, CreatedAt: d.createdAt, UpdatedAt: d.updatedAt}
 	if d.body.Fulfilment != "delivery" {
@@ -351,7 +351,9 @@ func (s *Server) readCustomerOrderNow(ctx context.Context, tenant, chat, message
 	req := read.Request(text, items, asked)
 	release, err := s.reserveAI(ctx, tenant, "order_read", req.Estimate(), chatAIReservation)
 	if err != nil {
-		return nil
+		// Over the business's AI budget: the message is not read, and that
+		// is not a failure to log.
+		return nil //nolint:nilerr // no budget left is not an error here
 	}
 	resp, err := model.Complete(ctx, req)
 	said, perr := read.Parse(resp)

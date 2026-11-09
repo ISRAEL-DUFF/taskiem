@@ -3,6 +3,7 @@ package read
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -221,7 +222,7 @@ func TestRequestShowsTheCatalogueAndQuestions(t *testing.T) {
 	if r.Schema == nil || !r.System[1].Cache {
 		t.Fatal("no schema, or the catalogue not cached")
 	}
-	if _, err := Parse(&ai.Response{Text: "sorry"}); err != ErrUnread {
+	if _, err := Parse(&ai.Response{Text: "sorry"}); !errors.Is(err, ErrUnread) {
 		t.Fatalf("unread: %v", err)
 	}
 }
