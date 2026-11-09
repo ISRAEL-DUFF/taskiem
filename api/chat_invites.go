@@ -40,9 +40,9 @@ const (
 )
 
 var (
-	inviteRe       = regexp.MustCompile(`(?i)^(?:invite|add)\s+(.+?)\s+as\s+(?:an?\s+)?([a-z][a-z0-9_]*(?:\s+[a-z][a-z0-9_]*)?)$`)
+	inviteRe = regexp.MustCompile(`(?i)^(?:invite|add)\s+(.+?)\s+as\s+(?:an?\s+)?([a-z][a-z0-9_]*(?:\s+[a-z][a-z0-9_]*)?)$`)
 	// phoneInRe is the number in "add Tunde 0803 123 4567 as cashier".
-	phoneInRe = regexp.MustCompile(`\+?\d[\d\s().-]{5,}\d`)
+	phoneInRe      = regexp.MustCompile(`\+?\d[\d\s().-]{5,}\d`)
 	slackMentionRe = regexp.MustCompile(`^<@([A-Z0-9]{1,24})(?:\|[^>]*)?>$`)
 )
 
