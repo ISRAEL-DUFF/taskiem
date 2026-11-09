@@ -144,7 +144,7 @@ export function ToolsPanel({
   supplier?: string;
 }) {
   const { can, me } = useAuth();
-  const listed = toolsFor(can, query, me?.roles);
+  const listed = toolsFor(can, query, me?.roles, me?.delivers);
   const { rows: loaded } = useToolRows(listed);
   const rows: typeof loaded = Object.fromEntries(
     Object.entries(loaded).map(([k, r]) => [
@@ -427,7 +427,9 @@ export function ToolSheet({
   onSaved?: (line: string) => Promise<void> | void;
 }) {
   const { can, me } = useAuth();
-  const tool = toolsFor(can, "", me?.roles).find((t) => t.key === key);
+  const tool = toolsFor(can, "", me?.roles, me?.delivers).find(
+    (t) => t.key === key,
+  );
   const [search, setSearch] = useState("");
   const [chip, setChip] = useState<string>();
   const [open, setOpen] = useState<ToolRow | "add" | undefined>(

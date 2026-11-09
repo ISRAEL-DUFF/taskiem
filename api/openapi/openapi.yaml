@@ -9067,6 +9067,61 @@ paths:
                 format: binary
         default:
           $ref: '#/components/responses/Error'
+  /v1/availability:
+    get:
+      operationId: getAvailability
+      tags:
+      - Riders
+      summary: The business's availability as a rider
+      description: For a business that delivers for others (docs/spec/chat-riders.md). free, busy (till a time, or while it holds deliveries) or off, as the businesses that use it as a rider see it; businesses is how many use it (0 means nothing is kept yet).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The availability
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Availability'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putAvailability
+      tags:
+      - Riders
+      summary: Say whether the business is free, busy or off
+      description: on (or free), off, or busy with until, a clock time today in Lagos ("3pm", "15:30"; left out, the rest of the day). Written for every business that uses it as a rider, as the words on, off and busy till 3 from its WhatsApp are. 409 when no business has linked with it as a rider yet.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [state]
+              properties:
+                state:
+                  type: string
+                  enum: [on, free, "off", busy]
+                until:
+                  type: string
+      responses:
+        '200':
+          description: The availability now
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Availability'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/business-profile/logo:
     post:
       operationId: uploadBusinessLogo
@@ -27619,6 +27674,9 @@ components:
         schools:
           type: boolean
           description: Whether the business has the Schools area on (docs/schools.md).
+        delivers:
+          type: boolean
+          description: The business delivers for other businesses (a rider), so its chat has the Availability tool
         areas:
           type: object
           description: Which parts of Taskiem the business uses, by area name (storefront, orders, stock, money, links, schools), each true when on (docs/spec/business-areas.md). GET /v1/settings/areas has them in plain words.
@@ -31438,6 +31496,25 @@ components:
           type: integer
           minimum: 0
           maximum: 10000000
+    Availability:
+      type: object
+      required: [state, businesses]
+      properties:
+        state:
+          type: string
+          enum: [free, busy, "off"]
+        until:
+          type: string
+          format: date-time
+        since:
+          type: string
+          format: date-time
+        open:
+          type: integer
+          description: Deliveries it holds now, for any business
+        businesses:
+          type: integer
+          description: How many businesses use it as a rider
     Rider:
       type: object
       required: [id, name, phone, zones, fee_kobo, active, reached, presence, created_at]
@@ -33872,6 +33949,10 @@ components:
           type: array
           items:
             type: string
+        available:
+          type: string
+          enum: [free, busy, "off"]
+          description: A delivery business's state, when a business uses it as a rider
     ExploreResult:
       type: object
       additionalProperties: false

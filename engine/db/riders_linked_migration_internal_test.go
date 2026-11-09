@@ -109,3 +109,40 @@ func TestRiderProfileMigrationUpDownUp(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// 00410 (riders phase 3) goes up and down: the availability definers.
+func TestRiderAvailabilityMigrationUpDownUp(t *testing.T) {
+	dsn := emptyDatabase(t)
+	ctx := context.Background()
+	cfg, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB := stdlib.OpenDB(*cfg)
+	defer func() { _ = sqlDB.Close() }()
+	p, err := goose.NewProvider(goose.DialectPostgres, sqlDB, mustSub(migrations, "migrations"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.UpTo(ctx, 410); err != nil {
+		t.Fatal(err)
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(ctx) }()
+	var n int
+	if err := conn.QueryRow(ctx, `SELECT count(*) FROM pg_proc WHERE proname IN ('taskiem_rider_own_hashes', 'taskiem_rider_availability_say', 'taskiem_rider_availability', 'taskiem_link_availability')`).Scan(&n); err != nil || n != 4 {
+		t.Fatalf("the availability definers: %d %v", n, err)
+	}
+	if _, err := p.DownTo(ctx, 409); err != nil {
+		t.Fatal(err)
+	}
+	if err := conn.QueryRow(ctx, `SELECT count(*) FROM pg_proc WHERE proname LIKE 'taskiem_rider_availability%' OR proname = 'taskiem_link_availability'`).Scan(&n); err != nil || n != 0 {
+		t.Fatalf("after Down: %d %v", n, err)
+	}
+	if _, err := p.UpTo(ctx, 410); err != nil {
+		t.Fatal(err)
+	}
+}

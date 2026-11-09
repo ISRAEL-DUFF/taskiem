@@ -224,3 +224,94 @@ func TestRiderByPhoneLinksBusiness(t *testing.T) {
 		t.Fatalf("a plain rider: %v", out)
 	}
 }
+
+// TestRiderAvailability (docs/spec/chat-riders.md, phase 3): a rider's
+// business says it is off, busy till a time or free from its own chat;
+// the business that uses it sees that on its rider and Explore's card
+// shows it; holding a delivery is busy whatever was said; a business no
+// one uses as a rider has nothing to say yet.
+func TestRiderAvailability(t *testing.T) {
+	w, ada := newDispatchWorld(t, "Ada Stores")
+	musaBiz := w.tenant(t, "Musa Rides", "musa@rides.test")
+	musaBiz.must(200, "PUT", "/v1/business-profile", map[string]any{"name": "Musa Rides", "delivers": true, "vehicle": "bike"})
+	musaBiz.must(200, "PUT", "/v1/link-settings", map[string]any{"findable": true})
+	// Not anyone's rider yet: nothing to say.
+	if got := musaBiz.must(200, "GET", "/v1/availability", nil); got["state"] != "free" || got["businesses"] != float64(0) {
+		t.Fatalf("before any link: %v", got)
+	}
+	musaBiz.must(409, "PUT", "/v1/availability", map[string]any{"state": "off"})
+	// The Explore card says nothing of a rider no one uses.
+	card := func() map[string]any {
+		t.Helper()
+		for _, c := range ada.must(200, "GET", "/v1/explore?q=musa", nil)["results"].([]any) {
+			if m := c.(map[string]any); m["name"] == "Musa Rides" {
+				return m
+			}
+		}
+		t.Fatal("no card")
+		return nil
+	}
+	if c := card(); c["available"] != nil {
+		t.Fatalf("a card before any link: %v", c)
+	}
+	// Linked and named as Ada's rider (as phase 1 does).
+	ada.must(201, "POST", "/v1/links", map[string]any{"business": tenantOf(t, musaBiz), "role": "supplier"})
+	l := musaBiz.must(200, "GET", "/v1/links", nil)["links"].([]any)[0].(map[string]any)
+	musaBiz.must(200, "POST", "/v1/links/"+l["id"].(string)+"/accept", nil)
+	w.srv.WaitBackground()
+	const musa = "+2348031110041"
+	// Musa taps in on WhatsApp (a rider reached by SMS alone is not offered).
+	path := strings.TrimPrefix(ada.must(200, "GET", "/v1/riders", nil)["tap_in_url"].(string), "https://"+reachFormHost)
+	loc, _ := url.Parse(w.page(t, path+"/whatsapp", nil).Header().Get("Location"))
+	w.whatsapp(t, musa, loc.Query().Get("text"))
+	m := ada.must(201, "POST", "/v1/riders", map[string]any{"name": "Musa Bello", "phone": musa, "zones": []string{"Lekki"}, "fee_kobo": 100000})["rider"].(map[string]any)
+	ada.must(200, "PATCH", "/v1/riders/"+m["id"].(string), map[string]any{"link_id": l["id"]})
+	rider := func() map[string]any {
+		t.Helper()
+		return ada.must(200, "GET", "/v1/riders", nil)["riders"].([]any)[0].(map[string]any)["presence"].(map[string]any)
+	}
+	if got := musaBiz.must(200, "GET", "/v1/availability", nil); got["state"] != "free" || got["businesses"] != float64(1) {
+		t.Fatalf("linked: %v", got)
+	}
+	// Off: Ada's rider is off, the card says so, and an offer by rotation finds no one.
+	if got := musaBiz.must(200, "PUT", "/v1/availability", map[string]any{"state": "off"}); got["state"] != "off" {
+		t.Fatalf("off: %v", got)
+	}
+	if p := rider(); p["state"] != "off" {
+		t.Errorf("Ada's rider when off: %v", p)
+	}
+	if c := card(); c["available"] != "off" {
+		t.Errorf("the card when off: %v", c["available"])
+	}
+	ref := w.order(t, "none")
+	if out := ada.must(200, "POST", "/v1/storefront/orders/"+ref+"/offer", map[string]any{}); out["status"] != "no_rider" {
+		t.Errorf("offered to a rider who is off: %v", out)
+	}
+	// Busy till a time, then free again; a bad time is refused.
+	musaBiz.must(400, "PUT", "/v1/availability", map[string]any{"state": "busy", "until": "soon"})
+	if got := musaBiz.must(200, "PUT", "/v1/availability", map[string]any{"state": "busy", "until": "11:59pm"}); got["state"] != "busy" || got["until"] == nil {
+		t.Fatalf("busy: %v", got)
+	}
+	if p := rider(); p["state"] != "busy" {
+		t.Errorf("Ada's rider when busy: %v", p)
+	}
+	if got := musaBiz.must(200, "PUT", "/v1/availability", map[string]any{"state": "free"}); got["state"] != "free" {
+		t.Fatalf("free: %v", got)
+	}
+	if c := card(); c["available"] != "free" {
+		t.Errorf("the card when free: %v", c["available"])
+	}
+	// Holding a delivery is busy, whatever was said.
+	out := ada.must(200, "POST", "/v1/storefront/orders/"+ref+"/offer", map[string]any{})
+	if out["status"] != "offered" {
+		t.Fatalf("offer: %v", out)
+	}
+	oid := musaBiz.must(200, "GET", "/v1/trade-orders", nil)["orders"].([]any)[0].(map[string]any)["id"].(string)
+	musaBiz.must(200, "POST", "/v1/trade-orders/"+oid+"/accept", nil)
+	if got := musaBiz.must(200, "GET", "/v1/availability", nil); got["state"] != "busy" || got["open"] != float64(1) {
+		t.Errorf("holding a delivery: %v", got)
+	}
+	if c := card(); c["available"] != "busy" {
+		t.Errorf("the card while holding: %v", c["available"])
+	}
+}

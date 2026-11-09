@@ -310,6 +310,8 @@ export interface Me {
   tenant_name?: string;
   /** Whether the business has the Schools area on (docs/schools.md). */
   schools?: boolean;
+  /** The business delivers for other businesses (a rider): its chat has the Availability tool. */
+  delivers?: boolean;
   /** Which parts of Taskiem the business uses, by area (docs/spec/business-areas.md). */
   areas?: Partial<Record<"storefront" | "orders" | "stock" | "money" | "links" | "schools", boolean>>;
   /** A gate session: the gate screen only; the server refuses the rest. */

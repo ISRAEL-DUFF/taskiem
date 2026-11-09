@@ -23,9 +23,36 @@ export type ToolKey =
   | "bills"
   | "order"
   | "sell"
-  | "handover";
+  | "handover"
+  | "availability";
 
 export type PillTone = "warn" | "lime" | "plain";
+
+/** A rider's business's availability (GET /v1/availability). */
+export interface Availability {
+  state: "free" | "busy" | "off";
+  until?: string;
+  since?: string;
+  open?: number;
+  /** How many businesses use it as a rider; 0 means nothing is kept yet. */
+  businesses: number;
+}
+
+/** "Free", "Busy till 3:30pm", "Busy, 2 deliveries", "Off today". */
+export function availabilityWord(a: Availability): string {
+  switch (a.state) {
+    case "off":
+      return "Off today";
+    case "busy":
+      if (a.until)
+        return `Busy till ${new Date(a.until).toLocaleTimeString("en-NG", { hour: "numeric", minute: "2-digit", timeZone: "Africa/Lagos" })}`;
+      if (a.open)
+        return `Busy, ${a.open} ${a.open === 1 ? "delivery" : "deliveries"}`;
+      return "Busy";
+    default:
+      return "Free";
+  }
+}
 
 /** One row of a tool's sheet. */
 export interface ToolRow {
@@ -69,6 +96,8 @@ export interface Tool {
   rowIcon?: string;
   /** Only for the staff whose role gives it (Handover). */
   staffOnly?: boolean;
+  /** Only for a business that delivers for others (Availability). */
+  deliversOnly?: boolean;
 }
 
 const count = (n: number, one: string, many = `${one}s`) =>
@@ -145,6 +174,40 @@ export const TOOLS: Tool[] = [
     line: () => "Hand the shift over",
     staffOnly: true,
     more: "Open stock",
+  },
+  {
+    // A rider's business: free, busy till a time, or off (docs/spec/
+    // chat-riders.md, phase 3). One row, the state, so the tile reads it.
+    key: "availability",
+    title: "Availability",
+    icon: "clock",
+    perm: "link.manage",
+    url: "/v1/availability",
+    page: "/chat",
+    rows: (data) => {
+      const a = data as Availability | undefined;
+      return a
+        ? [
+            {
+              id: "me",
+              name: availabilityWord(a),
+              sub: "",
+              href: "/chat",
+              tags: a.state === "free" ? [] : [a.state],
+              data: a,
+            },
+          ]
+        : [];
+    },
+    line: (r) => r[0]?.name ?? "Free",
+    badge: (r) => {
+      const a = r[0]?.data as Availability | undefined;
+      return a && a.state !== "free"
+        ? { text: a.state === "off" ? "Off" : "Busy", tone: "warn" }
+        : undefined;
+    },
+    deliversOnly: true,
+    more: "Open chat",
   },
   {
     key: "products",
@@ -411,12 +474,14 @@ export function toolsFor(
   can: (perm: string) => boolean,
   query = "",
   roles?: string[],
+  delivers = false,
 ): Tool[] {
   const q = query.trim().toLowerCase();
   const only = roleTools(roles);
   return TOOLS.filter(
     (t) =>
       can(t.perm) &&
+      (!t.deliversOnly || delivers) &&
       (only ? only.has(t.key) : !t.staffOnly) &&
       (q === "" ||
         t.title

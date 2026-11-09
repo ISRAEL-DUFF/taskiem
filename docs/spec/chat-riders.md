@@ -82,7 +82,9 @@ The rider's business has chat tools on, so it has the seller's tools. They show 
 
 ## Availability
 
-A supplier of a time-bound service is free, busy or off. Dispatch has this as `rider_presence` by phone hash; it becomes the business's **availability**: on, off, busy till a time, and the areas on today, kept on the rider's business and written from the Availability tool or the words `on`, `off`, `busy till 3` that exist. Businesses read it through the definer that exists, which answers a state and never a business or an order: "free", "busy, 2 deliveries", "off today". Busy from held orders is inferred as today, across every business the rider delivers for. Explore shows it on the card. For a dispatch company, availability is per rider member and the company is free while any rider is.
+A supplier of a time-bound service is free, busy or off. Dispatch has this as `rider_presence` by the rider's phone, written by the words `on`, `off`, `busy till 3` texted to a business's WhatsApp number, and read by rotation (free riders first, off ones skipped) through a definer that answers a state and never a business or an order. Busy from held orders is inferred, across every business the rider delivers for.
+
+Phase 3 makes it the rider's business's **availability** without a second store: the rider's business writes the same row, for the rider rows that are linked to it (`riders.link_id`, phase 1), from an **Availability** tool in its own chat (On, Busy till a time, Off) or the words that exist, and reads it back the same way. A business that uses the rider sees it as today, in its riders list and the offer; Explore's card shows it ("Free now", "Busy", "Off today") for a business that delivers, from the same definer, so a business learns a state and nothing else. The areas on today, and a dispatch company's per-member state, are left for later phases: the profile's delivery areas and the business's rider zones already say where, and a company needs to exist first (phase 5).
 
 ## Getting paid
 
@@ -184,3 +186,12 @@ The plan assumes the answer in brackets.
 - **Small things from phase 1's "not yet"**: the Orders tile is named Deliveries for a business whose orders are all deliveries; the new-order alert for a delivery reads "Delivery P-… for Ada Stores to Lekki · ₦1,000 · answer within 4 min".
 - **Not yet**: availability (phase 3); the rider's own price list; the Release button on the business's card.
 - **Tests**: `api/areas_test.go` (the kind), `api/explore_test.go` (`TestExploreDelivery`), `api/link_deliveries_test.go` (`TestRiderByPhoneLinksBusiness`), the chat sign-up test's choices, `engine/db` migration up/down.
+
+## As built (phase 3, 9 November 2026)
+
+- **One store, the rider's business writes it.** Availability stays `rider_presence` by the rider's phone. The rider's business writes and reads it for the rider rows linked to it (`riders.link_id`), through three definers (migration 00410): say on, off or busy till a time for every business that uses it; read its own state with how many businesses that is; and, for Explore, a findable or linked delivery business's state as `free`, `busy` or `off`, nothing when no business uses it as a rider yet. A business's riders list and rotation read presence exactly as before, so a rider with and without a business are one path.
+- **The Availability tool** (`GET`/`PUT /v1/availability`) is in the chat tools of a business whose profile says it delivers (`delivers` on `/v1/me`): Free, Busy (with a time today, else the rest of the day) and Off, the tile reading "Free", "Busy till 3:30pm" or "Off today", a warning badge when not free. A business no one has added as a rider yet is told so and refused the change until then (409). A held delivery is busy whatever was said, as today.
+- **The words** `on`, `off`, `free`, `busy till 3` from the rider's WhatsApp already reached presence by the rider's phone, which is the rider business's owner's number, so nothing was added for them; Telegram's words go by the contact, as before.
+- **Explore** shows "Free now", "Busy" or "Off today" on a delivery business's card; the riders list line and the offer's choice of rider are unchanged.
+- **Left for later**: the areas on today (the profile's delivery areas and the business's rider zones already say where); a dispatch company's per-member state (phase 5); words in the rider's own web conversation (the tool does it there).
+- **Tests**: `api/link_deliveries_test.go` `TestRiderAvailability` (nothing to say before a link; off, busy till a time, free; the card and the rider's presence; no rider offered while off; busy while holding); `engine/db` migration up/down/up; the web's tools and plain-words tests.

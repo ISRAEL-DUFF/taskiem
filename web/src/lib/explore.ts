@@ -22,6 +22,8 @@ export interface ExploreCard {
   delivers?: boolean;
   vehicle?: string;
   delivery_areas?: string[];
+  /** A delivery business's state, when a business uses it as a rider. */
+  available?: "free" | "busy" | "off";
 }
 
 export interface ExploreResult {
@@ -76,14 +78,22 @@ export function cardOffer(state: ExploreCard["state"]): CardAction {
 export function cardLine(
   c: Pick<
     ExploreCard,
-    "tagline" | "area" | "delivers" | "vehicle" | "delivery_areas"
+    "tagline" | "area" | "delivers" | "vehicle" | "delivery_areas" | "available"
   >,
 ): string {
   const line = [c.tagline, c.area].filter(Boolean).join(" · ");
   if (!c.delivers) return line;
   const how = c.vehicle ? `Delivers by ${c.vehicle}` : "Delivers";
   const where = (c.delivery_areas ?? []).slice(0, 3).join(", ");
-  return [c.tagline ? line : how, c.tagline ? how : where || c.area]
+  const now =
+    c.available === "free"
+      ? "Free now"
+      : c.available === "busy"
+        ? "Busy"
+        : c.available === "off"
+          ? "Off today"
+          : "";
+  return [c.tagline ? line : how, c.tagline ? how : where || c.area, now]
     .filter(Boolean)
     .join(" · ");
 }

@@ -45,6 +45,9 @@ type ExploreCard struct {
 	Delivers      bool     `json:"delivers,omitempty"`
 	Vehicle       string   `json:"vehicle,omitempty"`
 	DeliveryAreas []string `json:"delivery_areas,omitempty"`
+	// Available is a delivery business's state as businesses may know it
+	// (free, busy or off); "" when no business uses it as a rider yet.
+	Available string `json:"available,omitempty"`
 }
 
 // ExploreTx lists businesses for a section: what a search for q finds
@@ -68,7 +71,42 @@ func ExploreTx(ctx context.Context, tx pgx.Tx, section, q string, limit, offset 
 	if err == nil && len(out) > 0 {
 		err = exploreCaptionsTx(ctx, tx, out)
 	}
+	if err == nil {
+		err = exploreAvailabilityTx(ctx, tx, out)
+	}
 	return out, pgErr(err)
+}
+
+// exploreAvailabilityTx fills in, for the cards of businesses that
+// deliver, whether each is free, busy or off, in one query.
+func exploreAvailabilityTx(ctx context.Context, tx pgx.Tx, cards []ExploreCard) error {
+	var ids []uuid.UUID
+	for _, c := range cards {
+		if c.Delivers {
+			ids = append(ids, c.Business)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	rows, err := tx.Query(ctx, `SELECT b.id, taskiem_link_availability(b.id) FROM unnest($1::uuid[]) AS b(id)`, ids)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var b uuid.UUID
+		var state *string
+		if err := rows.Scan(&b, &state); err != nil {
+			return err
+		}
+		for i := range cards {
+			if cards[i].Business == b && state != nil {
+				cards[i].Available = *state
+			}
+		}
+	}
+	return rows.Err()
 }
 
 // PhotoURLsTx is the nth photo shown for a business, the sizes it was stored
