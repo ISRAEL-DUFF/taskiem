@@ -424,6 +424,14 @@
       "text": "Ba za ka ƙara samun labarai daga {business} a nan ba. Aika START don sake samun su.",
       "reviewed": false
     },
+    "customer.resumed": {
+      "text": "Za ka iya sake rubuta wa {business} a nan, kuma za su iya ba ka amsa.",
+      "reviewed": false
+    },
+    "customer.stopped": {
+      "text": "Ba za ka ƙara samun saƙonni daga {business} a nan ba, kuma an goge abin da ka rubuta musu. Aika START don sake rubuta musu.",
+      "reviewed": false
+    },
     "reach.stopped_none": {
       "text": "Ba ka samun labarai daga kowa a nan.",
       "reviewed": false

@@ -13,6 +13,9 @@ import { applyBrand, savedBrand } from "./brand";
 
 applyTheme(savedTheme());
 applyBrand(savedBrand());
+// iOS Safari shows a tapped button's :active (the pressed look in
+// styles.css) only when the page listens for touches.
+document.addEventListener("touchstart", () => undefined, { passive: true });
 
 // The operator console (/ops) is its own app with its own session; it
 // never mounts the tenant console's providers (docs/operator-console.md).

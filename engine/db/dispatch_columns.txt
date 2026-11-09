@@ -343,6 +343,8 @@ customer_invoices.total_kobo
 customer_invoices.updated_at
 customer_invoices.void_reason
 customer_invoices.voided_at
+customer_messages.expires_at
+customer_messages.id
 data_table_columns.created_at
 data_table_columns.name
 data_table_columns.personal

@@ -133,7 +133,45 @@ func (s *Server) waPublic(ctx context.Context, wa *whatsapp.Platform, number str
 	for i, x := range items {
 		lines[i] = fmt.Sprintf("%d. %s", i+1, x.Label)
 	}
+	if sess.state == "" {
+		// A menu shown: the number chosen from it comes back here.
+		if err := s.pubSave(ctx, tenant, number, stateMenu, pubData{}); err != nil {
+			return true, err
+		}
+	}
 	return true, say(tr(l, "wa.public.menu", "list", strings.Join(lines, "\n")))
+}
+
+// stateMenu is a public menu shown, its choice not yet made.
+const stateMenu = "menu"
+
+// waPublicAsked reports whether a customer's message on the business's
+// own number is for its public menu: the word menu, a choice from a menu
+// shown (a number, or cancel), or a step of a workflow under way. All
+// else is the customer's conversation with the business.
+func (s *Server) waPublicAsked(ctx context.Context, wa *whatsapp.Platform, number string, in whatsapp.Inbound) bool {
+	if in.Flow != "" {
+		return true
+	}
+	text := in.Text
+	if in.Reply != "" {
+		text = in.Reply
+	}
+	cmd := normalizeCommand(text)
+	if cmd == "menu" {
+		return true
+	}
+	sess, err := s.pubLoad(ctx, wa.Tenant, number)
+	if err != nil || sess.state == "" {
+		return false
+	}
+	if sess.state != stateMenu {
+		return true
+	}
+	if _, err := strconv.Atoi(cmd); err == nil {
+		return true
+	}
+	return cmd == "cancel"
 }
 
 func (s *Server) pubLoad(ctx context.Context, tenant uuid.UUID, number string) (pubSession, error) {

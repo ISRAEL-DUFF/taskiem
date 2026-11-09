@@ -424,6 +424,14 @@
       "text": "Ị gaghị enwetakwa ozi site na {business} ebe a. Zipu START iji nweta ha ọzọ.",
       "reviewed": false
     },
+    "customer.resumed": {
+      "text": "Ị nwere ike idegara {business} ebe a ọzọ, ha nwekwara ike ịza gị.",
+      "reviewed": false
+    },
+    "customer.stopped": {
+      "text": "Ị gaghị enweta ozi ọzọ site n'aka {business} ebe a, ehichapụla ihe i degaara ha. Zipu START ka i degara ha ọzọ.",
+      "reviewed": false
+    },
     "reach.stopped_none": {
       "text": "Ọ dịghị onye na-ezitere gị ozi ebe a.",
       "reviewed": false

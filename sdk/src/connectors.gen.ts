@@ -3378,6 +3378,7 @@ export interface XenibaseReadRowsInput {
   count?: Val<"exact" | "estimated">;
   /** The previous page's next_cursor */
   cursor?: Val<string>;
+  /** Filters that all hold. An item may instead be {"any": [filters]}: up to 20 filters, one of which must hold. */
   filters?: Value;
   limit?: Val<number>;
   order?: Value;

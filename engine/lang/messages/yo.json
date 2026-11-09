@@ -424,6 +424,14 @@
       "text": "O kò ní gba ìròyìn láti ọ̀dọ̀ {business} níbí mọ́. Fi START ránṣẹ́ láti tún gbà wọ́n.",
       "reviewed": false
     },
+    "customer.resumed": {
+      "text": "O lè kọ sí {business} níbí lẹ́ẹ̀kan sí i, wọ́n sì lè dá ọ lóhùn.",
+      "reviewed": false
+    },
+    "customer.stopped": {
+      "text": "O ò ní gba ìfiránṣẹ́ láti ọ̀dọ̀ {business} níbí mọ́, a sì ti pa ohun tí o kọ sí wọn rẹ́. Fi START ránṣẹ́ láti kọ sí wọn lẹ́ẹ̀kan sí i.",
+      "reviewed": false
+    },
     "reach.stopped_none": {
       "text": "O kò gba ìròyìn láti ọ̀dọ̀ ẹnikẹ́ni níbí.",
       "reviewed": false

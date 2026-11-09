@@ -71,7 +71,11 @@
 
 /* ---------- The tools panel (over the composer) ---------- */
 
-.tk-tools { margin: 0 10px 8px; padding: 14px 12px 12px; background: var(--panel); border-radius: 22px; box-shadow: var(--tk-lift); transform-origin: 50% 100%; }
+/* The tools rest on the message bar as one surface; their height is the
+   room above it (ToolsPanel sets max-height), the tiles scrolling inside. */
+.tk-tools { margin: 0 10px 8px; padding: 14px 12px 12px; background: var(--panel); border-radius: 22px; box-shadow: var(--tk-lift); transform-origin: 50% 100%; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.tk-tools-grid, .tk-tools-none { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 2px; margin: -2px; }
+.tk-tools-head, .tk-tools-recent { flex: none; }
 .tk-tools-head { display: flex; align-items: baseline; justify-content: space-between; padding: 0 4px 12px; }
 .tk-tools-head h2 { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -0.01em; }
 .tk-tools-head span, .tk-tools-none { font-size: 12px; color: var(--muted); }
@@ -92,7 +96,7 @@
 .tk-tools-recent { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; padding: 10px 6px 2px; border-top: 1px solid var(--border); font-size: 13px; color: var(--muted); }
 .tk-tools-recent button { font-weight: 600; color: var(--brand); background: var(--tk-soft); border: 0; box-shadow: none; padding: 7px 12px; border-radius: 999px; min-height: 36px; }
 :root[data-theme="dark"] .tk-tools-recent button { color: var(--brand-dark); }
-@media (max-width: 360px) { .tk-tools-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 599px) { .tk-tools-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 @media (prefers-reduced-motion: no-preference) {
   .tk-picker, .tk-tools { animation: tk-spring-up var(--t-picker) var(--spring) backwards; }
@@ -132,6 +136,22 @@
 /* The picker and the tools float over the chat from the composer. */
 .composer { position: relative; }
 .composer > .tk-picker, .composer > .tk-tools { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); margin: 0 10px; z-index: 20; }
+/* On a phone the tools sit on the message bar, flush, as one surface. */
+@media (max-width: 1199px) {
+  .composer > .tk-tools { bottom: 100%; margin: 0; border-radius: 22px 22px 0 0; box-shadow: 0 -10px 30px -18px rgba(13, 59, 46, 0.35); padding: 12px 12px 10px; }
+}
+/* At phone width a tile is a row, icon beside its words: nine fit on a
+   360 x 640 screen. */
+@media (max-width: 599px) {
+  .tk-tools-head { padding-bottom: 8px; }
+  .tk-tools-grid { gap: 8px; }
+  .tk-tile { flex-direction: row; align-items: center; justify-content: flex-start; gap: 10px; min-height: 60px; padding: 10px; }
+  .tk-tile-icon { width: 36px; height: 36px; border-radius: 11px; flex: none; }
+  .tk-tile > span:not(.tk-tile-icon):not(.tk-tile-badge) { min-width: 0; }
+  .tk-tile-name, .tk-tile-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tk-tile-badge { top: 6px; right: 6px; }
+  .tk-tools-recent { margin-top: 8px; padding-top: 8px; }
+}
 @media (min-width: 1200px) {
   .composer > .tk-picker, .composer > .tk-tools { left: 14px; right: auto; width: min(520px, calc(100% - 48px)); margin: 0; }
 }
@@ -281,8 +301,10 @@ img.tk-live-tile { object-fit: cover; }
   .tk-sheet { animation: tkd-panel 0.42s cubic-bezier(0.2, 0.95, 0.25, 1.04) both; }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .tk-sheet.tk-morphing { animation: none; }
-  .tk-sheet.leaving { animation: tk-sheet-down var(--t-picker) var(--ease-out) forwards; }
+  /* Grown out of a tile or card (Sheet): that was its entrance. */
+  .tk-sheet.tk-grown:not(.leaving) { animation: none; }
+  .tk-sheet.tk-grown .tk-stagger > * { animation-delay: 0.36s; }
+  .tk-sheet.leaving { animation: tk-sheet-down var(--t-picker) var(--ease-out) forwards; pointer-events: none; }
   .tk-picker.leaving, .tk-tools.leaving { animation: tk-leave-down 180ms var(--ease-out) forwards; }
   .tk-veil.leaving { animation: tk-unfade var(--t-picker) var(--ease-out) forwards; }
 }
@@ -404,3 +426,12 @@ img.tk-live-tile { object-fit: cover; }
 .tk-share-row { display: flex; align-items: center; gap: 10px; min-height: 40px; font-size: 14px; font-weight: 500; color: var(--text); cursor: pointer; }
 .tk-share-note { margin: 0; padding: 12px 14px; border-radius: 14px; border: 1px dashed color-mix(in srgb, var(--brand-dark) 70%, var(--border-strong)); background: var(--tone-green-bg); color: var(--tone-green-ink); font-size: 13px; line-height: 1.45; }
 @media (prefers-reduced-motion: no-preference) { .tk-share-pick { animation: tkd-up8 0.25s ease both; } }
+
+/* Customers' conversations (chat-five-more-flows.md, phase 1): how a reply
+ * goes, above the box: more than a day since they wrote (amber), or STOP
+ * (red, and no box). */
+.customer-note { margin: 0 12px 8px; padding: 8px 12px; border-radius: 12px; font-size: 13px; line-height: 1.4; background: var(--tk-warn-bg); color: var(--tk-warn-ink); }
+.customer-note.stop { background: var(--tk-danger-bg); color: var(--tk-danger-ink); }
+.chat-pane .bubble.media-note .text { color: var(--muted); }
+.chat-list-pane section[aria-labelledby="customers-head"] { margin-top: 12px; }
+.customer-failed { display: block; margin-top: 4px; font-size: 12px; color: var(--danger); }
