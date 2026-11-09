@@ -5802,6 +5802,34 @@
     "ready.area_off": {
       "text": "{area} never dey on for dis business, so dis workflow no fit do wetin e need from am. Owner fit on am for Settings, What your business uses.",
       "reviewed": false
+    },
+    "wa.knowledge.denied": {
+      "text": "Na only di people wey dey manage {org} settings fit add to wetin im assistant sabi.",
+      "reviewed": false
+    },
+    "wa.knowledge.slack": {
+      "text": "Add documents for your assistant for web: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.unavailable": {
+      "text": "Wetin your assistant sabi no dey dis Taskiem.",
+      "reviewed": false
+    },
+    "wa.knowledge.too_big": {
+      "text": "Dat document too big to read from chat. Add am for web: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.scanned": {
+      "text": "Dat document na scan wey no get text, and Taskiem no fit read scan yet. Send one wey get text wey you fit select, or type wetin e talk.",
+      "reviewed": false
+    },
+    "wa.knowledge.unreadable": {
+      "text": "I no fit read dat document. Send PDF or Word (.docx) file wey no get password.",
+      "reviewed": false
+    },
+    "wa.knowledge.added": {
+      "text": "I don add {name} to wetin your assistant sabi. Dem never dey use am: check am and press Use this for here: {link}",
+      "reviewed": false
     }
   }
 }

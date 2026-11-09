@@ -12,7 +12,7 @@ The facts come from **knowledge sources**, inside Taskiem and outside it. Each s
 | **My storefront** (`storefront`) | The published storefront (what customers see, not the draft being edited): its name, address, phone, area, opening hours and whether it is closed now, and what it sells with its prices, availability and descriptions. A storefront not published yet cannot be read; a suspended one is not used | Daily |
 | **A table** (`table`) | A data table's rows, with the columns the owner picks, fixed when the source is saved (a column added to the table later is read once the owner saves the source again). Its personal columns (and its phone and email columns) are never read, whatever is picked. The table is the one picked, not a later table of the same name. Tables kept by Taskiem (the money log, the school copies) cannot be sources | Daily |
 | **My website** (`website`) | The business's own website: only one it has proved is its own ([embed sites](embed-sites.md)), checked again on every read. Read from its first page, following links on that origin only, up to 50 pages (20 by default). When the first page sends visitors to its `www.` twin (or back), the twin is read only if the business has proved it is its own too | Daily |
-| **A document** (`file`) | A PDF or Word (.docx) document the owner uploads. Only its text is kept, never the file. A scan with no text in it is refused in plain words until OCR exists. Text hidden in the document (invisible PDF text, hidden Word text) is left out | When the owner uploads a new version on its page |
+| **A document** (`file`) | A PDF or Word (.docx) document the owner uploads, or sends in Taskiem's chat on WhatsApp or Telegram (up to 10 MB; it waits for **Use this** like any new source; only people with `secret.manage`). Only its text is kept, never the file. A scan with no text in it is refused in plain words until OCR exists. Text hidden in the document (invisible PDF text, hidden Word text) is left out | When the owner uploads a new version on its page |
 | **A Google Sheet** (`sheet`) | A range of a sheet (its link, pasted) through a `googlesheets@1` connection (`main` unless another is named). The first row names the columns. Columns headed as contact details (phone, email, WhatsApp, BVN, NIN, account number, date of birth) are left out, and phone numbers, emails and identity numbers in the rest are masked | Daily |
 | **My books** (`books`) | The items and prices in the business's books, through a connection whose connector lists them (`books_items`: QuickBooks, Zoho Books; `main` unless another is named) | Daily |
 
@@ -68,6 +68,6 @@ A read that fails keeps the last text in use (or none, if it was never read) and
 ## Not yet
 
 - **OCR** for scanned documents and photos of menus.
-- **Google Docs and Drive files:** there is no Drive connector yet.
+- **Google Docs and Drive files:** the Google connection may read only files Taskiem made or the person picked (`drive.file`), so a pasted Doc link cannot be read. It needs the Google Picker (an API key and an app id) or a broader read scope, which Google must verify (for `drive.readonly`, with a security assessment): a decision for the business running Taskiem.
+- **Better search** (embeddings) waits for evidence from real questions that full-text search misses answers (K4).
 - **Shop platforms** (Shopify, WooCommerce, Jumia): there are no connectors yet.
-- **Sending a document in chat** to add it: today a document is uploaded on the page.

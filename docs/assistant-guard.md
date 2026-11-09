@@ -138,6 +138,13 @@ The owners are told when this month's allowance for AI steps or for voice (secon
 - **Not read yet.** Telegram Business messages (a bot connected to a business account: `business_message`), presses of inline buttons (`callback_query`), and a customer blocking the bot (`my_chat_member` kicked, which is not taken as STOP). A Meta delivery without the sender's number (usernames) is not read as a customer's message.
 - **The queue cap** is a soft one: deliveries for different customers at the same moment can each pass it.
 
+## Several quick messages: `assistant@1 gather`
+
+A customer who sends three short messages in a row gets one answer (L5). The assistant's templates wait a moment after each message they will answer (**Wait for more messages**, 4 seconds by default), then `gather` says whether that message is still the customer's newest one waiting (`latest`) and what they wrote before it since they were last answered (`earlier`, `earlier_text`). The run of an earlier message stays quiet; the newest one answers them all together, its text and voice notes alike. `gather` reads only the run's own conversation.
+
+## The WhatsApp number's quality
+
+Meta rates how a business number's customers receive its messages (green, yellow, red) and lowers its daily limit, or restricts it, when they block or report it (C23). Every six hours Taskiem reads each WhatsApp number an assistant answers on (`whatsapp@1 get_phone_number`: `quality_rating`, `messaging_limit_tier`, `status`), keeps what it read (`whatsapp_number_health`, migration 00323), and tells the owners (`whatsapp_quality`) when it gets worse, with what helps it recover.
+
 ## Not yet
 
-- **Debounce** (L5): three quick messages get three answers.

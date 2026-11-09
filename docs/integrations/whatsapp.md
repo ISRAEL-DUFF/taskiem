@@ -25,7 +25,7 @@ A message's `to` is taken as people write it: spaces, dashes and brackets are dr
 
 | Action | Request | Class | Notes |
 | --- | --- | --- | --- |
-| `get_phone_number` | `GET /{phone-number-id}` | read | Display number, verified name, quality rating |
+| `get_phone_number` | `GET /{phone-number-id}?fields=…` | read | Display number, verified name, quality rating, messaging limit tier, status (CONNECTED, FLAGGED, RESTRICTED) and the name's review |
 | `list_templates` | `GET /{waba-id}/message_templates?status=APPROVED` | read | The approved templates' `name`, `language`, `category`, body words and how many values the body takes. Needs `business_account_id`. The web app's template picker (`GET /v1/whatsapp/templates`) uses it |
 | `send_text` | `POST /{id}/messages`, `type: text` | unsafe write | Only within the 24-hour customer service window. `preview_url`, `reply_to` (a wamid to quote) |
 | `send_template` | `type: template` | unsafe write | `name`, `language` (`en_US`), `components` as Meta documents them, for example `[{type: body, parameters: [{type: text, parameter_name: first_name, text: Ada}]}]`. The only message allowed outside the window |

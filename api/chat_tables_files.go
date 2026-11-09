@@ -84,6 +84,10 @@ func fileButtons(c *chat, offer bool) []whatsapp.Button {
 // waDocument answers a file sent in chat.
 func (s *Server) waDocument(ctx context.Context, c *chat) error {
 	doc := c.in.Document
+	if isKnowledgeDocument(doc) {
+		// A PDF or Word document: for what the assistant knows (K7).
+		return s.waKnowledgeDocument(ctx, c)
+	}
 	if !c.p.Can(PermTableEdit) {
 		return c.say(ctx, s, c.t("wa.file.denied", "org", c.tenant.Name))
 	}

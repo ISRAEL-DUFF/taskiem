@@ -121,6 +121,9 @@ export interface AssistantCheckReplyInput {
   /** The reply */
   text: Val<string>;
 }
+export interface AssistantGatherInput {
+  [key: string]: Value;
+}
 export interface AssistantHandOverInput {
   /** trigger.guard.channel */
   channel: Val<string>;
@@ -139,6 +142,8 @@ export interface AssistantWindowInput {
 export const assistant = {
   /** Check a reply before it is sent (read) */
   check_reply: (input: AssistantCheckReplyInput, extra?: ConnectorExtra): StepSpec => connector("assistant@1", "check_reply", input, extra),
+  /** Gather a customer's quick messages (read) */
+  gather: (input?: AssistantGatherInput, extra?: ConnectorExtra): StepSpec => connector("assistant@1", "gather", input, extra),
   /** Hand a customer to a person (idempotent_write) */
   hand_over: (input: AssistantHandOverInput, extra?: ConnectorExtra): StepSpec => connector("assistant@1", "hand_over", input, extra),
   /** Answer a customer again (idempotent_write) */
@@ -4120,7 +4125,7 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
 export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "africastalking@1": ["fetch_messages", "get_airtime_status", "get_balance", "send_airtime", "send_sms"],
   "anchor@1": ["book_transfer", "get_balance", "get_transfer", "get_transfer_by_reference", "list_banks", "transfer", "verify_account"],
-  "assistant@1": ["check_reply", "hand_over", "resume", "window"],
+  "assistant@1": ["check_reply", "gather", "hand_over", "resume", "window"],
   "bills@1": ["finish_bill_payment"],
   "breet@1": ["add_bank", "generate_address", "get_balances", "get_deposit", "get_withdrawal", "list_assets", "list_banks", "verify_bank_account", "withdraw_crypto", "withdraw_to_bank"],
   "brevo@1": ["add_to_list", "create_or_update_contact", "get_account", "list_lists", "send_campaign", "send_email", "send_sms"],

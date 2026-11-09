@@ -156,9 +156,9 @@ func TestChatBringsAFileIntoATable(t *testing.T) {
 	if r := w.sendAll(t, cn, whatsapptest.Text("0")); !strings.Contains(r, "None of the file's headings") {
 		t.Errorf("no columns: %q", r)
 	}
-	w.graph.AddMedia("doc-pdf", "application/pdf", []byte("%PDF"), 0)
-	if r := w.sendAll(t, cn, whatsapptest.Document("doc-pdf", "application/pdf", "list.pdf", "")); !strings.Contains(r, "CSV and Excel (.xlsx)") {
-		t.Errorf("pdf: %q", r)
+	w.graph.AddMedia("doc-png", "image/png", []byte("\x89PNG"), 0)
+	if r := w.sendAll(t, cn, whatsapptest.Document("doc-png", "image/png", "list.png", "")); !strings.Contains(r, "CSV and Excel (.xlsx)") {
+		t.Errorf("an image: %q", r)
 	}
 	w.graph.AddMedia("doc-big", "text/csv", []byte("a\n1\n"), 3<<20)
 	if r := w.sendAll(t, cn, whatsapptest.Document("doc-big", "text/csv", "big.csv", "")); !strings.Contains(r, "over 2 MB") {
@@ -325,5 +325,38 @@ func TestSlackFileGoesToTheWeb(t *testing.T) {
 	got := w.says("U0OWNER", before)
 	if len(got) != 1 || !strings.Contains(got[0], "cannot open files sent on Slack") || !strings.Contains(got[0], "/tables") {
 		t.Fatalf("answer: %q", got)
+	}
+}
+
+// A PDF or Word document sent in chat is for what the assistant knows
+// (decision 0062 V10, K7): read into a new source that waits for Use this,
+// by someone who manages the settings; others are told who can.
+func TestChatAddsAKnowledgeDocument(t *testing.T) {
+	w := newWATablesWorld(t)
+	w.srv.Knowledge = w.srv.KnowledgeService(w.env.DB.App)
+	owner := w.tenant(t, "Mama Put", "owner@mamaput.test")
+	const on, bn = "+2348010000009", "+2348010000007"
+	w.bind(t, owner, on)
+	w.bind(t, w.member(t, owner, "bob@mamaput.test", "builder"), bn)
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	f, _ := zw.Create("word/document.xml")
+	_, _ = f.Write([]byte(`<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>` +
+		`<w:p><w:r><w:t>Our menu</w:t></w:r></w:p><w:p><w:r><w:t>Jollof rice and chicken: 3,500 naira. We deliver to Lekki and Ajah.</w:t></w:r></w:p></w:body></w:document>`))
+	_ = zw.Close()
+	w.graph.AddMedia("doc-menu", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", buf.Bytes(), 0)
+	doc := whatsapptest.Document("doc-menu", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "Menu.docx", "")
+	if r := w.sendAll(t, bn, doc); !strings.Contains(r, "Only the people who manage") {
+		t.Errorf("a builder: %q", r)
+	}
+	if r := w.sendAll(t, on, doc); !strings.Contains(r, "I added Menu.docx to what your assistant knows") || !strings.Contains(r, "Use this") {
+		t.Fatalf("the owner: %q", r)
+	}
+	var kind, status string
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT kind, status FROM knowledge_sources WHERE title = 'Menu.docx'`).Scan(&kind, &status); err != nil {
+		t.Fatal(err)
+	}
+	if kind != "file" || (status != "review" && status != "new") {
+		t.Fatalf("the source: %s %s", kind, status)
 	}
 }

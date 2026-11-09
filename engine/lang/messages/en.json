@@ -7253,6 +7253,41 @@
       "text": "{area} is not turned on for this business, so this workflow cannot do what it needs from it. An owner turns it on in Settings, What your business uses.",
       "reviewed": true,
       "context": "Readiness: a workflow's step or trigger belongs to a part of Taskiem (an area) the business has turned off"
+    },
+    "wa.knowledge.denied": {
+      "text": "Only the people who manage {org}'s settings can add to what its assistant knows.",
+      "reviewed": true,
+      "context": "Chat: someone without secret.manage sent a PDF or Word document"
+    },
+    "wa.knowledge.slack": {
+      "text": "Add documents for your assistant on the web: {link}",
+      "reviewed": true,
+      "context": "Chat (Slack): a document was sent; Slack files are not read"
+    },
+    "wa.knowledge.unavailable": {
+      "text": "What your assistant knows is not available on this Taskiem.",
+      "reviewed": true,
+      "context": "Chat: a document was sent and this deployment has no knowledge store"
+    },
+    "wa.knowledge.too_big": {
+      "text": "That document is too big to read from chat. Add it on the web instead: {link}",
+      "reviewed": true,
+      "context": "Chat: a PDF or Word document over 10 MB"
+    },
+    "wa.knowledge.scanned": {
+      "text": "That document is a scan with no text in it, and Taskiem cannot read scans yet. Send one with text you can select, or type what it says.",
+      "reviewed": true,
+      "context": "Chat: a scanned PDF (no text layer) was sent for the assistant"
+    },
+    "wa.knowledge.unreadable": {
+      "text": "I could not read that document. Send a PDF or Word (.docx) file that is not password-protected.",
+      "reviewed": true,
+      "context": "Chat: a PDF or Word document could not be read"
+    },
+    "wa.knowledge.added": {
+      "text": "I added {name} to what your assistant knows. It is not used yet: check it and press Use this here: {link}",
+      "reviewed": true,
+      "context": "Chat: a document was added as a knowledge source waiting for review"
     }
   }
 }

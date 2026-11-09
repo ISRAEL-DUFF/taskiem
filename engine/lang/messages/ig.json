@@ -5802,6 +5802,34 @@
     "ready.area_off": {
       "text": "{area} agbanyeghị maka azụmahịa a, ya mere ọrụ a enweghị ike ime ihe ọ chọrọ na ya. Onye nwe ya na-agbanye ya na Settings, What your business uses.",
       "reviewed": false
+    },
+    "wa.knowledge.denied": {
+      "text": "Naanị ndị na-elekọta ntọala {org} nwere ike ịgbakwunye ihe onye inyeaka ya maara.",
+      "reviewed": false
+    },
+    "wa.knowledge.slack": {
+      "text": "Gbakwunye akwụkwọ maka onye inyeaka gị na weebụ: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.unavailable": {
+      "text": "Ihe onye inyeaka gị maara adịghị na Taskiem a.",
+      "reviewed": false
+    },
+    "wa.knowledge.too_big": {
+      "text": "Akwụkwọ ahụ buru ibu nke ukwuu ịgụ site na nkata. Gbakwunye ya na weebụ: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.scanned": {
+      "text": "Akwụkwọ ahụ bụ foto na-enweghị ederede, Taskiem enweghịkwa ike ịgụ ya ugbu a. Zite nke nwere ederede ị nwere ike ịhọrọ, ma ọ bụ dee ihe ọ na-ekwu.",
+      "reviewed": false
+    },
+    "wa.knowledge.unreadable": {
+      "text": "Enweghị m ike ịgụ akwụkwọ ahụ. Zite faịlụ PDF ma ọ bụ Word (.docx) na-enweghị okwuntughe.",
+      "reviewed": false
+    },
+    "wa.knowledge.added": {
+      "text": "Agbakwunyela m {name} na ihe onye inyeaka gị maara. A malitebeghị iji ya: lelee ya pịa Use this ebe a: {link}",
+      "reviewed": false
     }
   }
 }

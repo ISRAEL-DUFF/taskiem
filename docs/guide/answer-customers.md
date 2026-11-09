@@ -78,6 +78,10 @@ You need a payments service that can read a customer's wallet or account (iswall
 
 ## Day to day
 
+- A customer who sends several short messages in a row gets one answer: your assistant waits a moment (4 seconds, **Wait for more messages**) for another before answering.
+- You are told if WhatsApp rates your number lower or lowers its daily limit (customers blocking or reporting its messages): look at what your assistant sends.
+- Send your assistant's documents in Taskiem's chat: a PDF or Word document you send is added to **What your assistant knows**, waiting for you to press **Use this**.
+
 - **Conversations** shows every customer, what they said and what was answered, with numbers and emails hidden. Open a customer to answer them yourself: your assistant stays quiet for them while you do.
 - You are told when a customer asks for a person, when the assistant hands one to you (it was unsure, or a reply was held back: it stays quiet for them for 6 hours), when the AI model could not answer (once a day while it lasts), and when a reply could not be sent.
 - While a person answers a customer, or your assistant is paused, what they write is still kept in the conversation, so your assistant knows it when it answers them again.

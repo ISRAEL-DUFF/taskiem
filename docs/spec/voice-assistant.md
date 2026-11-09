@@ -188,7 +188,7 @@ Each gap says what is missing, the evidence, and how much it matters: **Blocker*
 | K4 ⊕ | The prompt is capped at 256 KB, and a website plus files plus a catalogue will not fit; no search to send only the passages that answer the question | `maxAIQuestion` (`aistep.go:300`) | Blocker once outside sources are in (D12): search moves into the first release |
 | K5 ⊕ | No "hand me to a person": the customer cannot ask for a human, and no member is told to take over | | Launch |
 | K6 ⊕ | No way to read the business's own website: no page fetcher for content (only verification fetches for embed sites), no HTML-to-text, no refresh. The site must be one the business has proven it owns (embed sites already verify origins by DNS or file) | `engine/embedsites` verifies origins only | Launch (D12) |
-| K7 ⊕ | No text extraction from files: `engine/pdf` writes PDFs and reads none; no DOCX or spreadsheet reading; a scanned menu needs OCR, and the `ai` step takes no images (A4) | `engine/pdf/pdf.go` | Launch (D12; OCR later) |
+| K7 ⊕ | (V5b: PDF and Word text extraction, `engine/knowledge/extract`; V10: from a document sent in chat.) Still: a scanned menu needs OCR, and the `ai` step takes no images (A4) | `engine/pdf/pdf.go` | Launch (D12; OCR later) |
 | K8 ⊕ | Google Sheets can be read (`googlesheets@1` `get_values`); Google Docs and Drive files cannot (the Google connection asks only for `drive.file`, and there is no Drive or Docs connector) | `connectors/googlesheets/manifest.yaml:38` | Launch for Sheets; Drive and Docs need a connector |
 | K9 ⊕ | Connected systems: items and prices from books exist as the `books_items` capability (QuickBooks, Zoho Books); there is no connector for shop platforms (Shopify, WooCommerce, Jumia) | `schemas/capabilities-v1.json:603` | Launch for books; shop platforms later |
 | K10 ⊕ | No knowledge store: nowhere to keep what each source said as text, split into passages, with its source, when it was read, and a way to delete it; no owner review before a new or changed source is used | | Blocker (D12) |
@@ -568,6 +568,17 @@ Left as they are:
 - OCR for scanned files and photos of menus (K7, A4); a Drive and Docs connector; shop-platform connectors (K8, K9); adding a knowledge document by sending it in chat (K7).
 - Better search (embeddings) if full-text search is not good enough on real questions (K4).
 - Debounce several quick messages into one answer (L5).
+
+**Built:**
+- **Quality watch (C23).** `whatsapp@1 get_phone_number` reads the messaging limit tier and status too; every six hours each assistant's WhatsApp number is read (`whatsapp_number_health`, migration 00323, definer `taskiem_whatsapp_quality_due`), and the owners told (`whatsapp_quality`) when its rating, limit or status gets worse in prod.
+- **The builder knows assistants (A13).** Six evaluation cases (`evals/builder/assistant.jsonl`) graded with a `customer_guard` property; retrieval meets the WhatsApp or Telegram assistant for an assistant goal and the `-accounts` variants only for goals about customers' own money (the callable building blocks carry no channel words). The builder's prompt had the recipe since V8.
+- **Debounce (L5).** `assistant@1 gather` and a short wait in the templates (**Wait for more messages**, 4 seconds): the newest of several quick messages answers them all, the others stay quiet. No guard or runtime change: the wait holds a run slot for seconds.
+- **A document sent in chat (K7).** A PDF or Word document sent in Taskiem's chat by someone with `secret.manage` becomes a document source waiting for **Use this** (up to 10 MB; a scan refused in plain words).
+- **Not built, and why:**
+  - **OCR** of scans and photos of menus needs image input to the model (A4), which this plan leaves out.
+  - **Google Docs and Drive** need the Google Picker or a broader scope that Google must verify (`drive.readonly` with a security assessment): a decision for the business running Taskiem, not code.
+  - **Shop-platform connectors** (Shopify, WooCommerce, Jumia) are each a connector of their own, from the platform's own documentation and, for some, a partnership.
+  - **Embeddings** wait for evidence from real questions that full-text search misses answers (K4: "if full-text search is not good enough").
 
 ### Not in this plan
 

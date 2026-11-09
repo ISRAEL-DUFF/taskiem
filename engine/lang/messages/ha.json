@@ -5802,6 +5802,34 @@
     "ready.area_off": {
       "text": "{area} ba a kunna shi ga wannan kasuwancin ba, don haka wannan aikin ba zai iya yin abin da yake buƙata daga gare shi ba. Mai shi yana kunna shi a Settings, What your business uses.",
       "reviewed": false
+    },
+    "wa.knowledge.denied": {
+      "text": "Waɗanda ke kula da saitunan {org} ne kawai za su iya ƙara abin da mataimakinsa ya sani.",
+      "reviewed": false
+    },
+    "wa.knowledge.slack": {
+      "text": "Ƙara takardu don mataimakinka a yanar gizo: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.unavailable": {
+      "text": "Abin da mataimakinka ya sani ba ya samuwa a wannan Taskiem.",
+      "reviewed": false
+    },
+    "wa.knowledge.too_big": {
+      "text": "Wannan takardar ta yi girma da yawa don karantawa daga hira. Ƙara ta a yanar gizo: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.scanned": {
+      "text": "Wannan takardar hoto ce babu rubutu a ciki, kuma Taskiem ba ya iya karanta hotunan takardu tukuna. Aika wadda ke da rubutun da za ka iya zaɓa, ko ka rubuta abin da ta ce.",
+      "reviewed": false
+    },
+    "wa.knowledge.unreadable": {
+      "text": "Ban iya karanta wannan takardar ba. Aika fayil na PDF ko Word (.docx) da ba shi da kalmar sirri.",
+      "reviewed": false
+    },
+    "wa.knowledge.added": {
+      "text": "Na ƙara {name} cikin abin da mataimakinka ya sani. Ba a fara amfani da shi ba: duba shi ka danna Use this a nan: {link}",
+      "reviewed": false
     }
   }
 }

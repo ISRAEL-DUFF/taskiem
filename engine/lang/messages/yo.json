@@ -5802,6 +5802,34 @@
     "ready.area_off": {
       "text": "{area} kò tíì tàn fún iṣẹ́ òwò yìí, nítorí náà iṣẹ́ yìí kò lè ṣe ohun tó nílò láti inú rẹ̀. Olúwa rẹ̀ lè tàn án ní Settings, What your business uses.",
       "reviewed": false
+    },
+    "wa.knowledge.denied": {
+      "text": "Àwọn tó ń ṣàkóso ètò {org} nìkan ló lè fi kún ohun tí olùrànlọ́wọ́ rẹ̀ mọ̀.",
+      "reviewed": false
+    },
+    "wa.knowledge.slack": {
+      "text": "Fi àwọn ìwé kún un fún olùrànlọ́wọ́ rẹ lórí wẹ́ẹ̀bù: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.unavailable": {
+      "text": "Ohun tí olùrànlọ́wọ́ rẹ mọ̀ kò sí lórí Taskiem yìí.",
+      "reviewed": false
+    },
+    "wa.knowledge.too_big": {
+      "text": "Ìwé yẹn tóbi jù láti kà láti inú ìjíròrò. Fi kún un lórí wẹ́ẹ̀bù: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.scanned": {
+      "text": "Ìwé yẹn jẹ́ àwòrán tí kò ní ọ̀rọ̀ nínú, Taskiem kò sì lè ka irú rẹ̀ báyìí. Fi èyí tó ní ọ̀rọ̀ tí o lè yàn ránṣẹ́, tàbí tẹ ohun tó sọ.",
+      "reviewed": false
+    },
+    "wa.knowledge.unreadable": {
+      "text": "Mi ò lè ka ìwé yẹn. Fi fáìlì PDF tàbí Word (.docx) tí kò ní ọ̀rọ̀ aṣínà ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.knowledge.added": {
+      "text": "Mo ti fi {name} kún ohun tí olùrànlọ́wọ́ rẹ mọ̀. A kò tíì lò ó: ṣàyẹ̀wò rẹ̀ kí o sì tẹ Use this níbí: {link}",
+      "reviewed": false
     }
   }
 }
