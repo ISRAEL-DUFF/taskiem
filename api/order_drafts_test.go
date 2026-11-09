@@ -236,6 +236,17 @@ func TestOrdersFromCustomersMessages(t *testing.T) {
 		t.Fatalf("paid told: %+v", paid)
 	}
 
+	// Dispatch's word to the customer (on its way, arrived, delivered) goes
+	// in their thread too, as the storefront's notice to a customer does.
+	before = len(sent())
+	out2, err := w.srv.Orders.NotifyCustomer(ctx, alphaID, ref, "Your order "+ref+" is on its way with Musa (+2348000000099).", "", "delivery:on_way:"+ref)
+	if err != nil || toJSON(out2["queued"]) != `["whatsapp"]` {
+		t.Fatalf("notify: %v %v", out2, err)
+	}
+	if way := sent()[before:]; len(way) != 1 || !strings.Contains(way[0].Text, "is on its way with Musa") {
+		t.Fatalf("on its way: %+v", way)
+	}
+
 	// An order started by hand, then dropped; a second one waits.
 	h := cashier.must(201, "POST", "/v1/customer-chats/"+chat+"/orders", nil)
 	cashier.must(409, "POST", "/v1/customer-chats/"+chat+"/orders", nil)

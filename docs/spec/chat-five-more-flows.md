@@ -1,6 +1,6 @@
 # Chat: five more flows
 
-Status: **plan**, for review (8 November 2026; phase 0 added 9 November, from the founder's checks on a phone). Phase 0 is built; phase 1 is built (see As built under each). Written with the founder; the live
+Status: **plan**, for review (8 November 2026; phase 0 added 9 November, from the founder's checks on a phone). Phases 0, 1 and 2 are built (see As built under each). Written with the founder; the live
 doc is [the shared plan](https://claude.ai/artifact/FycMX9CLMjjE6oMBiGCumm), and this file is its copy beside the code.
 
 ## Summary
@@ -252,6 +252,36 @@ Built 9 November 2026. `TestCustomerConversations` and `TestCustomerConversation
   - **The customer's name** comes from the business's own book of customers, else the name they gave WhatsApp (kept sealed), else their number.
   - **Late replies in the browser test:** the e2e test can't wait a day, so the 24-hour rule and the 900-character limit are checked in the Go tests and the helpers' unit tests.
 
+### As built: phase 2, orders from customers' messages
+
+Built 9 November 2026. `TestOrdersFromCustomersMessages` (`api/order_drafts_test.go`) checks the server end to end with a fake model, fake WhatsApp and a real catalogue; `engine/orders/read/read_test.go` checks the reader against a corpus (misspellings, pidgin, quantities in words, two that fit, sizes, two orders in one message, nothing orderable, a name the model made up). `web/e2e/whatsapp.spec.ts` checks the card at 390 and 360 px in both themes with axe.
+
+- **The reader** (`engine/orders/read`): the model reads the customer's words, given the catalogue's names, into lines (their words, the catalogue name it clearly means, how many, any size or colour), delivery or pickup, where and when. Code then matches that to the catalogue, and never guesses:
+  - the model's name is taken only when it is exactly a catalogue name; otherwise the customer's words are matched (a word of four letters or more may be one letter off, so "jolof" finds both jollof dishes);
+  - words that fit two items, or a product in sizes with no size said, are a question with the answers and their prices ("2 jolof: Jollof rice plate (₦4,500) or Jollof rice cooler (₦38,000)?");
+  - no quantity is a question; a name that matches nothing is kept as written, for staff to pick;
+  - prices are only the catalogue's; out of stock and no price are shown.
+- **When it reads:** after the webhook has answered WhatsApp, when Orders is on, a model is set up, the plan has AI and the month's budget is not spent, and the message names something sold (a cheap check first, so "good morning" never reaches the model). A thread is read up to six times at once, then once a minute.
+- **Drafts:** migration 00412 adds `order_drafts`, sealed under the customer's subject. A thread works on one order at a time; the customer's next message is read onto it (their answers, and anything more they ask for). STOP deletes the thread's drafts; one goes with the message it was read from after a year.
+- **The card** (the customer's pane, above the reply box): the lines with what they wrote, each question with the answers to tap, how many, a price where the catalogue has none, items added from the catalogue, delivered or picked up, where and the fee (a delivery area's fee when the business has areas), and how they pay. Staff change it one step at a time, on the version they see. **Ask them** sends its questions as one message; the answer is read onto it. **Confirm** and **Drop** are a person's taps; why Confirm waits is said under it. **Start an order** begins one by hand.
+- **Confirmed:** a storefront order of the kind `chat`, decided when placed, so payment matching, stock and dispatch work on it as on an order from the page. The customer is sent the order, the delivery fee, the total and how to pay, in their thread:
+  - **pay now:** the order's page, where they pay by transfer (an account number for the order, matched to it exactly) or card. Only for a business with a storefront; the order waits 48 hours for the payment, and its stock goes when it is paid;
+  - **pay when it arrives:** at the door, as dispatch does today; its stock goes at once;
+  - **arranged by staff:** money that comes in is matched to it as to any order waiting for payment; its stock goes at once.
+- **The customer told:** "Paid, thank you" when the payment is matched, and dispatch's on its way, arrived and delivered, all in their thread from the business's number, not by SMS. Outside the 24 hours these go as the customer reply template.
+- **Needs you** has a card for each order waiting for staff, opening the customer's thread.
+- **Voice notes:** where the business has voice notes on (Settings, Languages), a customer's voice note is transcribed after the webhook, the recording not kept; its words replace "Voice note" in the thread and are read for an order.
+- **API:** `/v1/customer-chats/{id}/orders` (list, with the business's delivery areas, whether it has a page to pay on, and what may be picked; start one) and `/v1/order-drafts/{id}` (change; ask, confirm, tell again, drop), for those who handle orders, in the Orders area.
+- **Where it differs from the plan:**
+  - **The card** is in the customer's thread; Needs you opens it rather than holding the card itself.
+  - **Their own account number** is not used for an order: money into it is counted to their invoices. An order is paid on its page, at the door, or as staff arrange.
+  - **Templates:** no order templates were added. Outside the 24 hours, the order, its questions and its updates go as the customer reply template.
+  - **Who confirms:** anyone who handles orders; a setting for which roles may is not built.
+  - **Pay on delivery** is chosen per order; a business default is not built (the open question stands).
+  - **Photos of written lists** wait for phase 4's image reading.
+  - **Food options** (a dish's choices, "with chicken") are not read; staff note them.
+  - **The browser test** puts an order together on the card against a stand-in for the order endpoints, since those tests run without a catalogue table or a model; reading, confirming and sending are tested in Go.
+
 ## Phases
 
 Seven phases, each a PR that ships on its own. Phase 0 puts the chat's tools, motion and tables right first, since every flow adds sheets and cards on top of them. Customer conversations go next because flows 1 and 4 stand on them; tasks and restocking are small and can run beside the larger ones.
@@ -260,7 +290,7 @@ Seven phases, each a PR that ships on its own. Phase 0 puts the chat's tools, mo
    - Done when: the checks above pass at 360 × 640 and 390 × 844, in both themes.
 1. **Customer conversations** (built; above). The Customers list and threads; a stranger on the business's own number lands there instead of "link your account"; staff reply within the 24-hour window, templates outside it; STOP honoured.
    - Done when: a customer's WhatsApp message to the business's number appears as a thread in the web chat, and a staff reply reaches their WhatsApp.
-2. **Orders from customers' messages.** The reader for text; the draft order card with questions; confirm; the total and how to pay sent back; paid matched; on to stock, dispatch and "On the way". Then voice notes for customers (the transcription that exists) and photos of written lists (after phase 4's image reading).
+2. **Orders from customers' messages** (built; above). The reader for text; the draft order card with questions; confirm; the total and how to pay sent back; paid matched; on to stock, dispatch and "On the way". Then voice notes for customers (the transcription that exists) and photos of written lists (after phase 4's image reading).
    - Done when: "2 jollof and 1 chapman, deliver to Yaba by 1" becomes a confirmed, paid, dispatched order without retyping.
 3. **Tasks for staff.** Tasks from words, cards and Tools; WhatsApp delivery and DONE; photo proof; nudges and late lines; the briefing line; repeats.
    - Done when: "@Tunde count the float every day at 7am" makes a repeating task Tunde closes from WhatsApp, and a late one reaches the owner.
