@@ -192,6 +192,7 @@ var deliveryStatus = map[string]string{
 	// and the fee was paid. The order is complete already.
 	"confirmed": "completed",
 	"paid":      "completed",
+	"not_paid":  "completed",
 }
 
 // DeliveryStepTx records a delivery's step on the rider's order, in the

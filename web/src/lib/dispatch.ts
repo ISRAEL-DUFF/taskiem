@@ -106,6 +106,16 @@ export function deliverySteps(d: Delivery): { label: string; at: string }[] {
           : "Delivered",
       d.delivered_at,
     ],
+    [
+      d.fee_paid === "cash"
+        ? "Confirmed, fee paid in cash"
+        : d.fee_paid === "bank"
+          ? "Confirmed, fee paid to the rider's bank"
+          : d.fee_paid === "pending"
+            ? "Confirmed, fee on its way"
+            : "Confirmed, fee not paid yet",
+      d.confirmed_at,
+    ],
     ["Taken back", d.released_at],
   ];
   return steps

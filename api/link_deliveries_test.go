@@ -452,21 +452,54 @@ func TestConfirmPaysPerDelivery(t *testing.T) {
 	if got := events(musaBiz); !strings.HasSuffix(got, "delivered confirmed") {
 		t.Fatalf("Musa's cards: %s", got)
 	}
-	var batch uuid.UUID
-	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT batch_id FROM rider_payouts WHERE tenant_id = $1 AND delivery_id = $2`, w.biz, d["id"]).Scan(&batch); err != nil {
-		t.Fatal(err)
+	var batch, runID uuid.UUID
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT batch_id, run_id FROM rider_payouts WHERE tenant_id = $1 AND delivery_id = $2`, w.biz, d["id"]).Scan(&batch, &runID); err != nil || runID.String() != out["run_id"] {
+		t.Fatalf("the payout's run: %v %v (run %v)", runID, err, out["run_id"])
 	}
-	// The run pays it (here, as the connector's finish does): the paid
-	// card on both sides, the fee in Musa's money log, the delivery paid.
 	payouts := ada.must(200, "GET", "/v1/riders/pay", nil)["payouts"].([]any)
 	if len(payouts) != 1 || payouts[0].(map[string]any)["status"] != "pending" {
 		t.Fatalf("payouts: %v", payouts)
 	}
 	pid := uuid.MustParse(payouts[0].(map[string]any)["payout_id"].(string))
+	// While its run is going, the payout cannot be marked not paid (it may
+	// yet pay): nothing is paid twice.
+	ada.must(409, "POST", "/v1/riders/payouts/"+pid.String()+"/not-paid", nil)
+	// The run fails (the bank refused): both sides told, the fee due again;
+	// Confirm pays it again, a new payout and run.
+	if _, failed, err := w.srv.Dispatch.FinishBatch(ctx, w.biz, batch, []dispatch.Result{{PayoutID: pid, Status: "failed"}}, false); err != nil || failed != 1 {
+		t.Fatalf("a failed run: %d %v", failed, err)
+	}
+	if got := events(musaBiz); !strings.HasSuffix(got, "delivered confirmed not_paid") {
+		t.Fatalf("Musa's cards after the failed payout: %s", got)
+	}
+	found = false
+	for _, a := range ada.must(200, "GET", "/v1/chat-alerts", nil)["alerts"].([]any) {
+		if x := a.(map[string]any); x["kind"] == "confirm" && x["reference"] == ref && strings.Contains(fmt.Sprint(x["line"]), "not paid") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("no card to pay the fee again")
+	}
+	out = ada.must(200, "POST", "/v1/storefront/orders/"+ref+"/confirm", map[string]any{})
+	if out["delivery"].(map[string]any)["fee_paid"] != "pending" || out["run_id"] == nil {
+		t.Fatalf("confirmed again: %v", out)
+	}
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT batch_id FROM rider_payouts WHERE tenant_id = $1 AND delivery_id = $2 AND status = 'pending'`, w.biz, d["id"]).Scan(&batch); err != nil {
+		t.Fatal(err)
+	}
+	payouts = ada.must(200, "GET", "/v1/riders/pay", nil)["payouts"].([]any)
+	for _, x := range payouts {
+		if x.(map[string]any)["status"] == "pending" {
+			pid = uuid.MustParse(x.(map[string]any)["payout_id"].(string))
+		}
+	}
+	// The run pays it (here, as the connector's finish does): the paid
+	// card on both sides, the fee in Musa's money log, the delivery paid.
 	if paid, _, err := w.srv.Dispatch.FinishBatch(ctx, w.biz, batch, []dispatch.Result{{PayoutID: pid, Status: "paid", AccountName: "MUSA BELLO"}}, false); err != nil || paid != 1 {
 		t.Fatalf("finish: %d %v", paid, err)
 	}
-	if got := events(musaBiz); !strings.HasSuffix(got, "delivered confirmed paid") {
+	if got := events(musaBiz); !strings.HasSuffix(got, "delivered confirmed not_paid confirmed paid") {
 		t.Fatalf("Musa's cards after paying: %s", got)
 	}
 	if d := ada.must(200, "GET", "/v1/storefront/orders/"+ref+"/deliveries", nil)["deliveries"].([]any)[0].(map[string]any); d["fee_paid"] != "bank" {

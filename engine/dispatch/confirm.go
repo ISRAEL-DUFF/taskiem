@@ -58,20 +58,23 @@ func (d *Dispatch) ConfirmTx(ctx context.Context, tx pgx.Tx, tenant, delivery uu
 	if err != nil {
 		return out, err
 	}
+	// Confirmed with its fee paid or being paid: nothing more. Confirmed
+	// but its payout failed, not approved or marked not paid: the fee is
+	// paid again from here.
 	switch {
 	case x.Status != "delivered":
 		return out, fmt.Errorf("%w: %s is not delivered yet", ErrMove, x.Reference)
-	case x.ConfirmedAt != nil:
-		return out, fmt.Errorf("%w: %s is confirmed already", ErrMove, x.Reference)
+	case x.FeePaid == "pending":
+		return out, fmt.Errorf("%w: %s's fee is being paid already", ErrMove, x.Reference)
 	case x.FeePaid != "":
-		return out, fmt.Errorf("%w: %s's fee is in a payout already", ErrMove, x.Reference)
+		return out, fmt.Errorf("%w: %s's fee is paid already", ErrMove, x.Reference)
 	}
 	r, err := d.Riders.GetTx(ctx, tx, tenant, x.RiderID)
 	if err != nil {
 		return out, err
 	}
 	x.Rider = r.Name
-	if _, err := tx.Exec(ctx, `UPDATE deliveries SET confirmed_at = now(), confirmed_by = $3 WHERE tenant_id = $1 AND id = $2`, tenant, delivery, actor); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE deliveries SET confirmed_at = COALESCE(confirmed_at, now()), confirmed_by = $3 WHERE tenant_id = $1 AND id = $2`, tenant, delivery, actor); err != nil {
 		return out, err
 	}
 	// Paid by bank, the cash the rider owes, up to the fee, comes off it.
@@ -143,22 +146,41 @@ func (d *Dispatch) feePaidTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x
 // payoutPaidTx is FinishBatch's word that a payout went through: for a
 // payout of one delivery (a confirm), the fee's paid card on both sides.
 func (d *Dispatch) payoutPaidTx(ctx context.Context, tx pgx.Tx, tenant, payout uuid.UUID) error {
-	var delivery *uuid.UUID
-	var how string
-	if err := tx.QueryRow(ctx, `SELECT delivery_id, how FROM rider_payouts WHERE tenant_id = $1 AND id = $2`, tenant, payout).Scan(&delivery, &how); err != nil {
-		return err
-	}
-	if delivery == nil {
-		return nil
-	}
-	x, err := d.GetTx(ctx, tx, tenant, *delivery)
-	if errors.Is(err, ErrNoDelivery) {
-		return nil
-	}
-	if err != nil {
+	x, how, ok, err := d.payoutDeliveryTx(ctx, tx, tenant, payout)
+	if err != nil || !ok {
 		return err
 	}
 	return d.feePaidTx(ctx, tx, tenant, x, how)
+}
+
+// payoutNotPaidTx is the word that a payout of one delivery did not go
+// out (the run failed, was not approved, or the owner marked it not
+// paid): both sides' cards say so, and the business's Confirm pays it
+// again.
+func (d *Dispatch) payoutNotPaidTx(ctx context.Context, tx pgx.Tx, tenant, payout uuid.UUID) error {
+	x, _, ok, err := d.payoutDeliveryTx(ctx, tx, tenant, payout)
+	if err != nil || !ok {
+		return err
+	}
+	return d.mirrorStep(ctx, tx, tenant, x, "not_paid", true)
+}
+
+// payoutDeliveryTx is the one delivery a payout is for (a confirm's), and
+// how it was to be paid; ok false for a batch's payout.
+func (d *Dispatch) payoutDeliveryTx(ctx context.Context, tx pgx.Tx, tenant, payout uuid.UUID) (Delivery, string, bool, error) {
+	var delivery *uuid.UUID
+	var how string
+	if err := tx.QueryRow(ctx, `SELECT delivery_id, how FROM rider_payouts WHERE tenant_id = $1 AND id = $2`, tenant, payout).Scan(&delivery, &how); err != nil {
+		return Delivery{}, "", false, err
+	}
+	if delivery == nil {
+		return Delivery{}, "", false, nil
+	}
+	x, err := d.GetTx(ctx, tx, tenant, *delivery)
+	if errors.Is(err, ErrNoDelivery) {
+		return Delivery{}, "", false, nil
+	}
+	return x, how, err == nil, err
 }
 
 // riderIncomeTx records the fee as income in the rider's own business, in
@@ -175,4 +197,33 @@ func (d *Dispatch) riderIncomeTx(ctx context.Context, tx pgx.Tx, rider uuid.UUID
 	_, _, err := d.MoneyLog.RecordTx(ctx, tx, rider, moneylog.Entry{Direction: "in", Kind: "payment", Status: "settled", Channel: channel, OccurredAt: &at,
 		Reference: "delivery-fee:" + x.ID.String(), AmountKobo: &fee, Source: "event", Description: "Delivery fee for " + x.Reference + " from " + business})
 	return err
+}
+
+// LetGoBatchTx lets a confirm's payout go before its run ever started: the
+// payout is failed, its delivery due again, and both sides told, as a run
+// that failed would leave it.
+func (d *Dispatch) LetGoBatchTx(ctx context.Context, tx pgx.Tx, tenant, batch uuid.UUID) error {
+	rows, err := tx.Query(ctx, `SELECT id FROM rider_payouts WHERE tenant_id = $1 AND batch_id = $2 AND status = 'pending' FOR UPDATE`, tenant, batch)
+	if err != nil {
+		return err
+	}
+	ids, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		if _, err := tx.Exec(ctx, `UPDATE rider_payouts SET status = 'failed', settled_at = now() WHERE id = $1`, id); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE deliveries SET payout_id = NULL WHERE tenant_id = $1 AND payout_id = $2`, tenant, id); err != nil {
+			return err
+		}
+		if err := d.payoutNotPaidTx(ctx, tx, tenant, id); err != nil {
+			return err
+		}
+		if err := audit(ctx, tx, tenant, "dispatch.payout_not_started", id.String(), nil); err != nil {
+			return err
+		}
+	}
+	return nil
 }

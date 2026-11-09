@@ -37,6 +37,7 @@ const DELIVERY: Record<string, CardStatus> = {
   // Phase 4: the business confirmed it (the fee is on its way) and paid it.
   confirmed: { word: "Confirmed", tone: "lime", step: 4 },
   paid: { word: "Fee paid", tone: "lime", step: 4 },
+  not_paid: { word: "Fee not paid", tone: "warn", step: 4 },
   cant: { word: "Passed", tone: "danger" },
   passed: { word: "Ran out", tone: "plain" },
   withdrawn: { word: "Withdrawn", tone: "plain" },

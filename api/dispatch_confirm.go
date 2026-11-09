@@ -13,6 +13,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/dispatch"
 	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/riders"
 	"github.com/israel-duff/taskiem/engine/runtime"
 )
 
@@ -96,11 +97,24 @@ func (s *Server) confirmDelivery(ctx context.Context, p *Principal, reference, h
 			Trigger: map[string]any{"type": "manual", "body": map[string]any{"batch_id": out.Batch.String()}}, StartedBy: p.Actor(), TriggerID: "riders/confirm",
 			DedupKey: "riders-pay:" + out.Batch.String()})
 		if err != nil {
-			// Confirmed and the payout made; the owner pays it from Riders >
-			// Pay, which reads the batch back.
+			// The payout cannot go out now: it is let go, so the next
+			// Confirm makes it again. The delivery stays confirmed.
 			s.Logger.Warn("dispatch: starting the fee's payout", "tenant", p.TenantID, "batch", out.Batch, "err", err)
-		} else {
-			run = ref.ID.String()
+			if ferr := db0(ctx, s, p.TenantID, func(tx pgx.Tx) error {
+				return s.Dispatch.LetGoBatchTx(ctx, tx, p.TenantID, out.Batch)
+			}); ferr != nil {
+				return out, "", ferr
+			}
+			return out, "", fmt.Errorf("%w: the payment could not be started; tap Confirm again in a moment", dispatch.ErrMove)
+		}
+		run = ref.ID.String()
+		// The run on the payout, so Not paid waits for it to end
+		// (MarkNotPaidTx) and nothing is paid twice.
+		if err := db0(ctx, s, p.TenantID, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `UPDATE rider_payouts SET run_id = $3 WHERE tenant_id = $1 AND batch_id = $2`, p.TenantID, out.Batch, ref.ID)
+			return err
+		}); err != nil {
+			return out, run, err
 		}
 	}
 	s.diaryChange(ctx, p, confirmWords(out, how))
@@ -127,9 +141,11 @@ func (s *Server) confirmAlerts(ctx context.Context, p *Principal) ([]chatAlert, 
 	}
 	var out []chatAlert
 	err := db0(ctx, s, p.TenantID, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT d.id, o.reference, d.fee_kobo, d.delivered_at, r.id FROM deliveries d
+		// Delivered and not confirmed, or confirmed and its payout failed
+		// (payout_id cleared): either way the fee waits.
+		rows, err := tx.Query(ctx, `SELECT d.id, o.reference, d.fee_kobo, d.delivered_at, r.id, d.confirmed_at IS NOT NULL FROM deliveries d
 			JOIN storefront_orders o ON o.id = d.order_id JOIN riders r ON r.id = d.rider_id
-			WHERE d.tenant_id = $1 AND d.status = 'delivered' AND d.confirmed_at IS NULL AND d.payout_id IS NULL
+			WHERE d.tenant_id = $1 AND d.status = 'delivered' AND d.payout_id IS NULL
 			  AND d.delivered_at > now() - interval '14 days'
 			ORDER BY d.delivered_at LIMIT 20`, p.TenantID)
 		if err != nil {
@@ -137,16 +153,17 @@ func (s *Server) confirmAlerts(ctx context.Context, p *Principal) ([]chatAlert, 
 		}
 		defer rows.Close()
 		type row struct {
-			id    uuid.UUID
-			ref   string
-			fee   int64
-			at    time.Time
-			rider uuid.UUID
+			id        uuid.UUID
+			ref       string
+			fee       int64
+			at        time.Time
+			rider     uuid.UUID
+			confirmed bool
 		}
 		var list []row
 		for rows.Next() {
 			var x row
-			if err := rows.Scan(&x.id, &x.ref, &x.fee, &x.at, &x.rider); err != nil {
+			if err := rows.Scan(&x.id, &x.ref, &x.fee, &x.at, &x.rider, &x.confirmed); err != nil {
 				return err
 			}
 			list = append(list, x)
@@ -154,14 +171,27 @@ func (s *Server) confirmAlerts(ctx context.Context, p *Principal) ([]chatAlert, 
 		if err := rows.Err(); err != nil {
 			return err
 		}
+		if len(list) == 0 {
+			return nil
+		}
+		names := map[uuid.UUID]string{}
+		if all, err := s.Riders.ListTx(ctx, tx, p.TenantID, riders.Filter{}); err == nil {
+			for _, rd := range all {
+				names[rd.ID] = rd.Name
+			}
+		}
 		for _, x := range list {
-			name := "the rider"
-			if rd, err := s.Riders.GetTx(ctx, tx, p.TenantID, x.rider); err == nil {
-				name = rd.Name
+			name := names[x.rider]
+			if name == "" {
+				name = "the rider"
 			}
 			fee := x.fee
+			line := invoicing.Naira(fee) + " fee waits on your word"
+			if x.confirmed {
+				line = invoicing.Naira(fee) + " fee was not paid: confirm again to pay it"
+			}
 			out = append(out, chatAlert{Key: "confirm:" + x.id.String(), Kind: "confirm", At: x.at, ID: x.id.String(), Reference: x.ref,
-				Title: "Confirm " + x.ref + ", delivered by " + name, Line: invoicing.Naira(fee) + " fee waits on your word", AmountKobo: &fee})
+				Title: "Confirm " + x.ref + ", delivered by " + name, Line: line, AmountKobo: &fee})
 		}
 		return nil
 	})
