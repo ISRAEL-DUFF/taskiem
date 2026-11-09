@@ -257,6 +257,39 @@ func TestDataTables(t *testing.T) {
 	if s, _ := viewer.do("POST", "/v1/tables/"+id+"/rows/query", map[string]any{"filters": []map[string]any{{"column": "secret", "op": "eq", "value": 1}}}); s != 400 {
 		t.Errorf("unknown filter column: %d", s)
 	}
+	// The Tables tool's search (five more flows, phase 0): words in any
+	// text column, with an exact count, sorted by a column, a page at a time.
+	anyOf := func(words string) map[string]any {
+		return map[string]any{"any": []map[string]any{{"column": "name", "op": "ilike", "value": "%" + words + "%"}, {"column": "phone", "op": "ilike", "value": "%" + words + "%"}}}
+	}
+	both := map[string]any{"filters": []any{map[string]any{"any": []map[string]any{{"column": "name", "op": "ilike", "value": "%BI%"}, {"column": "phone", "op": "ilike", "value": "%801%"}}}}, "order": []map[string]any{{"column": "name", "desc": true}}, "count": "exact", "limit": 1}
+	q = viewer.must(200, "POST", "/v1/tables/"+id+"/rows/query", both)
+	if r := q["rows"].([]any); len(r) != 1 || r[0].(map[string]any)["name"] != "Bisi" || q["count"] != float64(2) || q["next_cursor"] == nil {
+		t.Fatalf("any of name or phone, first page %v", q)
+	}
+	both["cursor"] = q["next_cursor"]
+	q = viewer.must(200, "POST", "/v1/tables/"+id+"/rows/query", both)
+	if r := q["rows"].([]any); len(r) != 1 || r[0].(map[string]any)["name"] != "Ada" || q["count"] != float64(2) {
+		t.Fatalf("any of name or phone, second page %v", q)
+	}
+	dele := builder.must(201, "POST", "/v1/tables/"+id+"/rows", map[string]any{"row": map[string]any{"name": "Dele 50% off"}})
+	if q = viewer.must(200, "POST", "/v1/tables/"+id+"/rows/query", map[string]any{"filters": []any{anyOf(`0\%`)}, "count": "exact"}); q["count"] != float64(1) {
+		t.Fatalf("an escaped %% is a %% sign, not any words: %v", q)
+	}
+	if q = viewer.must(200, "POST", "/v1/tables/"+id+"/rows/query", map[string]any{"filters": []any{anyOf(`\_`)}, "count": "exact"}); q["count"] != float64(0) {
+		t.Fatalf("an escaped _ is an underscore, not any letter: %v", q)
+	}
+	builder.must(200, "DELETE", "/v1/tables/"+id+"/rows/"+strconv.Itoa(int(dele["rows"].([]any)[0].(map[string]any)["id"].(float64))), nil)
+	for _, bad := range []any{
+		map[string]any{"any": []map[string]any{{"column": "secret", "op": "eq", "value": 1}}},
+		map[string]any{"any": []any{anyOf("a")}},
+		map[string]any{"any": []any{}},
+		map[string]any{"any": []map[string]any{{"column": "name", "op": "eq", "value": "Ada"}}, "column": "name"},
+	} {
+		if s, out := viewer.do("POST", "/v1/tables/"+id+"/rows/query", map[string]any{"filters": []any{bad}}); s != 400 {
+			t.Errorf("any group %v: %d %v", bad, s, out)
+		}
+	}
 	del := builder.must(200, "DELETE", "/v1/tables/"+id+"/rows/"+strconv.Itoa(rowID), nil)
 	if del["affected"] != float64(1) {
 		t.Fatalf("delete %v", del)

@@ -35,6 +35,7 @@ var areaPaths = []struct {
 }{
 	{"/v1/storefront/orders", areas.Orders},
 	{"/v1/trade-orders", areas.Orders},
+	{"/v1/customer-chats", areas.Orders},
 
 	{"/v1/storefront", areas.Storefront},
 	{"/v1/riders", areas.Storefront},

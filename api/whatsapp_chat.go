@@ -139,6 +139,11 @@ func (s *Server) waReceive(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	// What became of replies to customers (delivered, read, failed),
+	// for the numbers this app speaks for (customer_chat.go).
+	if sts, err := whatsapp.ParseStatuses(body); err == nil && len(sts) > 0 {
+		s.customerStatuses(ctx, hook, sts)
+	}
 	for _, m := range msgs {
 		if m.ID == "" {
 			continue
@@ -527,6 +532,11 @@ func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number st
 	if done, err := s.riderMedia(ctx, &chat{ch: wa, wa: wa, addr: number, in: in}, reach.WhatsApp); done || err != nil {
 		return err
 	}
+	// A customer's STOP or START on the business's own number
+	// (customer_chat.go), before the reach book's.
+	if done, err := s.customerStopStart(ctx, wa, number, text); done || err != nil {
+		return err
+	}
 	if done, err := s.reachStopStart(ctx, wa, reach.WhatsApp, number, text); done || err != nil {
 		return err
 	}
@@ -566,7 +576,15 @@ func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number st
 		return err
 	}
 	if wa.Own() {
-		if done, err := s.waPublic(ctx, wa, number, in); done || err != nil {
+		// The public menu answers a customer who asks for it (its word,
+		// or a choice of it under way); anything else a customer writes
+		// to the business's own number is their conversation with it.
+		if s.waPublicAsked(ctx, wa, number, in) {
+			if done, err := s.waPublic(ctx, wa, number, in); done || err != nil {
+				return err
+			}
+		}
+		if done, err := s.customerInbound(ctx, wa, number, in); done || err != nil {
 			return err
 		}
 	} else if s.WhatsAppPublic != nil {

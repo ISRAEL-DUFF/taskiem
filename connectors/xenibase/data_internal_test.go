@@ -106,3 +106,40 @@ func TestValueText(t *testing.T) {
 		}
 	}
 }
+
+// An any group is the query body's or, for reads only (the Tables tool's
+// search across columns).
+func TestAnyGroup(t *testing.T) {
+	fs, err := parseDataFilters([]any{
+		map[string]any{"column": "paid", "op": "is", "value": false},
+		map[string]any{"any": []any{
+			map[string]any{"column": "name", "op": "ilike", "value": "%ada%"},
+			map[string]any{"column": "phone", "op": "ilike", "value": "%ada%"},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := json.Marshal(queryWhere(fs))
+	want := `{"and":[{"column":"paid","op":"is","value":false},{"or":[{"column":"name","op":"ilike","value":"%ada%"},{"column":"phone","op":"ilike","value":"%ada%"}]}]}`
+	if string(got) != want {
+		t.Errorf("where %s, want %s", got, want)
+	}
+	one, _ := parseDataFilters([]any{map[string]any{"any": []any{map[string]any{"column": "name", "op": "eq", "value": "Ada"}}}})
+	if got, _ := json.Marshal(queryWhere(one)); string(got) != `{"column":"name","op":"eq","value":"Ada"}` {
+		t.Errorf("a group of one: %s", got)
+	}
+	if _, err := whereParams(fs); err == nil {
+		t.Error("a write by an any group was allowed")
+	}
+	for _, bad := range []any{
+		map[string]any{"any": []any{}},
+		map[string]any{"any": "name"},
+		map[string]any{"any": []any{map[string]any{"any": []any{map[string]any{"column": "name", "op": "eq", "value": 1}}}}},
+		map[string]any{"any": []any{map[string]any{"column": "name", "op": "nope"}}},
+	} {
+		if _, err := parseDataFilters([]any{bad}); err == nil {
+			t.Errorf("%v was taken", bad)
+		}
+	}
+}

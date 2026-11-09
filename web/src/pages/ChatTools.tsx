@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type KeyboardEvent,
@@ -177,6 +178,31 @@ export function ToolsPanel({
   const recent = recentTools()
     .map((k) => tools.find((t) => t.key === k))
     .filter((t): t is Tool => !!t);
+  // It fits the room above the message bar, the keyboard's too: the
+  // tiles scroll inside it while its heading and Recent stay in place.
+  const panel = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const el = panel.current;
+    const bar = el?.parentElement;
+    if (!el || !bar) return;
+    const fit = () => {
+      const top = window.visualViewport?.offsetTop ?? 0;
+      const room = bar.getBoundingClientRect().top - top - 12;
+      el.style.maxHeight = `${Math.max(160, Math.floor(room))}px`;
+    };
+    fit();
+    const vv = window.visualViewport;
+    window.addEventListener("resize", fit);
+    vv?.addEventListener("resize", fit);
+    const ro =
+      typeof ResizeObserver === "function" ? new ResizeObserver(fit) : null;
+    ro?.observe(bar);
+    return () => {
+      window.removeEventListener("resize", fit);
+      vv?.removeEventListener("resize", fit);
+      ro?.disconnect();
+    };
+  }, []);
   // A tap outside the composer closes it (its button toggles it).
   useEffect(() => {
     if (leaving) return;
@@ -189,6 +215,7 @@ export function ToolsPanel({
   }, [leaving, onClose]);
   return (
     <section
+      ref={panel}
       className={`tk-tools${leaving ? " leaving" : ""}`}
       aria-label="Tools"
       data-testid="tools-panel"
