@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   customerLetter,
+  LATE_REPLY_MAX,
+  lateLength,
+  lateTooLong,
   customerTitle,
   phoneWords,
   latestPage,
@@ -92,5 +95,17 @@ describe("customers' conversations", () => {
     const known = { name: "Chidi Obi", phone: "+2348031112222" };
     expect(customerTitle(known)).toBe("Chidi Obi");
     expect(customerLetter(known)).toBe("Chidi Obi");
+  });
+});
+
+describe("a late reply's length", () => {
+  it("counts it on one line and only limits it after the day", () => {
+    expect(lateLength("  hi \n\n there ")).toBe(8);
+    const long = "a".repeat(LATE_REPLY_MAX + 1);
+    expect(lateTooLong(long, true)).toBe(false);
+    expect(lateTooLong(long, false)).toBe(true);
+    expect(lateTooLong("a".repeat(LATE_REPLY_MAX), false)).toBe(false);
+    // Line breaks fold to one space, as the server sends it.
+    expect(lateTooLong("a\n\n\n".repeat(450), false)).toBe(false);
   });
 });

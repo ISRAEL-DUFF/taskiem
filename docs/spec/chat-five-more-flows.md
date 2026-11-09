@@ -214,7 +214,7 @@ Built 9 November 2026 (`web/e2e/chat-phase0.spec.ts` checks each at 360 × 640 a
 
 ### As built: phase 1, customers' conversations
 
-Built 9 November 2026. `TestCustomerConversations` (`api/customer_chat_test.go`) checks the server, and `web/e2e/whatsapp.spec.ts` checks the page at 390 and 360 px, in both themes with axe.
+Built 9 November 2026. `TestCustomerConversations` and `TestCustomerConversationsEdges` (`api/customer_chat_test.go`) check the server. `web/e2e/whatsapp.spec.ts` checks the page at 390 and 360 px, in both themes with axe: a reply, its ticks, archiving, and STOP.
 
 - **Who is a customer:** someone who writes to the business's own WhatsApp number and isn't on its team, a rider, a supplier or a linked business.
   - A six-digit code, a rider's or supplier's words, a key, or a sign-up still go where they went. Everything else they write goes to their thread.
@@ -230,18 +230,27 @@ Built 9 November 2026. `TestCustomerConversations` (`api/customer_chat_test.go`)
   - Until that template is approved, a late reply is refused with the reason, and can go when they write again.
   - A reply is refused after STOP, or when the business's number is no longer the one they wrote to.
   - A repeated send is one message.
-- **STOP** from a customer deletes the thread's messages, stops every reply, and tells them so in their language. **START** opens it again. This comes before the reach book's STOP.
-- **API:** `/v1/customer-chats` (list; one thread, with what they owe; messages; reply; read; archive), for `storefront.manage` or `order.handle`, in the Orders area.
+  - A reply is written before it goes (shown as sending), so two sends of one message, even at once, go once. A reply WhatsApp refuses is taken back out, with the reason.
+  - After the 24 hours a reply goes on one line, up to 900 characters. A longer one is refused, not cut, and the box says so as it is typed.
+  - When the business has changed its number since the customer wrote, the thread moves to the new number and the reply goes from it.
+- **Ticks:** WhatsApp's word on each reply (sent, delivered, read, or not delivered with the reason) is kept and shown under it. A status only moves forward.
+- **STOP** from a customer deletes the thread's messages, stops every reply, stops the business's updates to that number too (the reach book), and tells them so in their language. **START** opens it again; it is only taken as that when they had stopped. This comes before the reach book's STOP.
+- **Riders and suppliers:** a number on the business's riders or suppliers is never made a customer, even when it isn't linked.
+- **How long:** a customer's message is kept for a year, then the daily purge deletes it (`taskiem_customer_messages_purge()`, owned by the dispatch role).
+- **API:** `/v1/customer-chats` (list, `?archived=1` for archived; unread counts; search; one thread, with what they owe; messages; reply; read; archive), for `storefront.manage` or `order.handle`, in the Orders area.
 - **The Chat page:**
-  - **The list:** a Customers section under Taskiem, with the customer's name in the book or their number as people say it ("+234 803 111 2222"). Search and Unread cover it.
+  - **The list:** a Customers section under Taskiem, with the customer's name in the book, else their WhatsApp name, else their number as people say it ("+234 803 111 2222"). It shows how many are waiting, and each row keeps its unsent draft.
+  - **Filters and keys:** Unread, Archived and the arrow keys cover customers. Search finds them by name or number, and finds words in their messages (the latest thousand).
+  - **The Chat tab's count** includes customers' threads with unread messages.
   - **The thread:** what they wrote and who replied, what they owe in its head, and a box to reply from.
-  - **Notes above the box:** one says when a reply will go as a message they answer (after a day). After STOP, a red note replaces the box.
+  - **Notes above the box:** one says when a reply will go as a message they answer (after a day), and one when a late reply is too long. After STOP, a red note replaces the box.
 - **Where it differs from the plan:**
   - **Sealing:** the plan says "sealed like link messages", but business chats aren't sealed. Customers' messages are sealed as the Taskiem chat history is.
   - **Photos and voice notes:** what a customer sends that isn't words shows as what it was ("Photo", "Voice note", a location). No copy is kept yet; phase 2 reads orders from them.
   - **Live updates:** the thread and the list follow by asking every few seconds, not through the chat's live stream.
   - **Replies** are words only. "Thanks, we've got your message" isn't built: it is off by default, and the open question stands.
-  - **The customer's name** comes from the business's own book of customers, else their number. WhatsApp's profile name isn't kept.
+  - **The customer's name** comes from the business's own book of customers, else the name they gave WhatsApp (kept sealed), else their number.
+  - **Late replies in the browser test:** the e2e test can't wait a day, so the 24-hour rule and the 900-character limit are checked in the Go tests and the helpers' unit tests.
 
 ## Phases
 

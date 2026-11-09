@@ -321,9 +321,15 @@ An organisation with its own number may offer a menu to anyone who writes to it 
 Someone who writes to an organisation's own number and isn't on its team, a rider, a supplier or a linked business is a customer ([chat-five-more-flows](spec/chat-five-more-flows.md), phase 1).
 - **Their thread:** what they write is a thread in the Chat page (Customers), one per customer number, sealed under the customer's own subject. Nothing is sent back.
 - **Who replies:** people who handle orders (`storefront.manage` or `order.handle`), from the thread.
-- **How a reply goes:** from the organisation's number, as text within 24 hours of the customer's last message, and as `taskiem_customer_reply` after that (refused until it is approved).
-- **STOP:** it deletes the thread's messages and stops every reply until **START**, before the reach book's STOP.
-- **API:** `/v1/customer-chats`.
+- **How a reply goes:** from the organisation's number, as text within 24 hours of the customer's last message, and as `taskiem_customer_reply` after that (refused until it is approved; on one line, up to 900 characters, a longer one refused rather than cut).
+  - A reply is written as sending before it goes, so a send repeated or made twice at once goes once; one Graph refuses is taken out again.
+  - If the organisation's number changed since the customer wrote, the thread moves to the new number.
+- **Ticks:** the webhook's statuses for a reply (sent, delivered, read, failed with the reason) are kept on it, only ever moving forward.
+- **STOP:** it deletes the thread's messages, stops every reply and the reach book's updates to that number, until **START** (taken as START only when they had stopped). It comes before the reach book's STOP.
+- **Not customers:** numbers on the organisation's riders or suppliers.
+- **Names:** the book's name, else the WhatsApp profile name (sealed), else the number.
+- **How long:** a year, then the daily purge deletes the message.
+- **API:** `/v1/customer-chats` (with `/unread` and `/search`).
 
 ## Alerts to WhatsApp
 

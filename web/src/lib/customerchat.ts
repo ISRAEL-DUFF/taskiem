@@ -32,6 +32,10 @@ export interface CustomerMessage {
   body: string;
   sender_name?: string;
   sent_as?: "text" | "template";
+  /** A reply's way to the customer, as WhatsApp reports it. */
+  delivery?: "sending" | "sent" | "delivered" | "read" | "failed";
+  /** Why WhatsApp could not deliver it. */
+  failure?: string;
   read_at: string | null;
   created_at: string;
   /** Shown before the server answers. */
@@ -125,4 +129,29 @@ export function customerLetter(
   c: Pick<CustomerChat, "name" | "phone">,
 ): string {
   return c.name === c.phone || /^\+?\d/.test(c.name) ? "Customer" : c.name;
+}
+
+/** A message a search found in a customer's thread. */
+export interface CustomerHit {
+  chat_id: string;
+  message_id: string;
+  name: string;
+  mine: boolean;
+  body: string;
+  created_at: string;
+}
+
+/** The longest reply that can go after the 24 hours (the template's room). */
+export const LATE_REPLY_MAX = 900;
+
+/** Whether a reply is too long to go now: after the 24 hours it goes on
+ * one line, up to LATE_REPLY_MAX characters. */
+export function lateTooLong(text: string, windowOpen: boolean): boolean {
+  if (windowOpen) return false;
+  return lateLength(text) > LATE_REPLY_MAX;
+}
+
+/** A reply's length as it goes after the 24 hours: on one line. */
+export function lateLength(text: string): number {
+  return [...text.trim().split(/\s+/).join(" ")].length;
 }

@@ -434,3 +434,4 @@ img.tk-live-tile { object-fit: cover; }
 .customer-note.stop { background: var(--tk-danger-bg); color: var(--tk-danger-ink); }
 .chat-pane .bubble.media-note .text { color: var(--muted); }
 .chat-list-pane section[aria-labelledby="customers-head"] { margin-top: 12px; }
+.customer-failed { display: block; margin-top: 4px; font-size: 12px; color: var(--danger); }

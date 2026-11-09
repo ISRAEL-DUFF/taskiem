@@ -45,8 +45,13 @@ import { ConversationPane } from "./Conversation";
 import { TaskiemPane } from "./TaskiemChat";
 import { useChatAlerts } from "./ChatAlerts";
 import { ChatRow } from "./ChatRow";
-import { CustomerPane, CustomerRows, useCustomerChats } from "./CustomerChat";
-import { customerID } from "../lib/customerchat";
+import {
+  CustomerPane,
+  CustomerRows,
+  CustomerSearch,
+  useCustomerChats,
+} from "./CustomerChat";
+import { customerID, customerKey } from "../lib/customerchat";
 import { useConfirm } from "./ConfirmSheet";
 import { Explore } from "./Explore";
 import { HeadMenu } from "./ChatHead";
@@ -271,6 +276,7 @@ export function ChatPage() {
   const customersOn =
     can("storefront.manage|order.handle") && areaOn(me?.areas, "orders");
   const customers = useCustomerChats(customersOn);
+  const archivedCustomers = useCustomerChats(customersOn, true);
   const { view, act, answer } = useLinks();
   const [params, setParams] = useSearchParams();
   // Explore is a step in the browser history (a state of this same address),
@@ -392,7 +398,19 @@ export function ChatPage() {
   const taskiemOpen = openID === "taskiem";
   const customerOpen = customersOn ? customerID(openID) : undefined;
   const unreadCount = all.filter((c) => !c.archived && c.unread > 0).length;
-  const archivedCount = all.filter((c) => c.archived).length;
+  const archivedCount =
+    all.filter((c) => c.archived).length +
+    (archivedCustomers.data?.length ?? 0);
+  // Customers' threads as the list shows them: the archived ones under
+  // Archived, narrowed by Unread and by a letter typed.
+  const shownCustomers = (
+    (archived ? archivedCustomers.data : customers.data) ?? []
+  ).filter(
+    (c) =>
+      (filter !== "unread" || c.unread > 0) &&
+      (query.length === 0 ||
+        c.name.toLowerCase().includes(query.toLowerCase())),
+  );
   const narrowed = linksOn && query.length === 1 ? matchChats(all, query) : all;
   const listed = narrowed.filter(
     (c) => c.archived === archived && (filter !== "unread" || c.unread > 0),
@@ -403,7 +421,13 @@ export function ChatPage() {
   const searchBox = useRef<HTMLInputElement>(null);
   const [keysOpen, setKeysOpen] = useState(false);
   const [hint, setHint] = useState("");
-  const order = ["taskiem", ...listed.map((c) => c.link)];
+  const order = [
+    "taskiem",
+    ...(filter !== "starred" && query.length < 2
+      ? shownCustomers.map((c) => customerKey(c.id))
+      : []),
+    ...listed.map((c) => c.link),
+  ];
   const keys = useRef({ order, openID: openID ?? undefined, setParams });
   keys.current = { order, openID: openID ?? undefined, setParams };
   // Asking a business to link starts at the search box (the "n" key, and the
@@ -577,7 +601,7 @@ export function ChatPage() {
               )}
             />
           </div>
-          {linksOn && (
+          {(linksOn || customersOn) && (
             <div className="filters" role="search" aria-label="Find a business">
               <label className="search">
                 <span className="sr-only">Find a business</span>
@@ -606,34 +630,37 @@ export function ChatPage() {
           <p className="sr-only" role="status">
             {hint}
           </p>
-          {!searching && all.length > 0 && (
-            <div className="chat-chips" role="group" aria-label="Show">
-              {(
-                [
-                  ["all", "All"],
+          {!searching &&
+            (all.length > 0 ||
+              (customers.data?.length ?? 0) > 0 ||
+              (archivedCustomers.data?.length ?? 0) > 0) && (
+              <div className="chat-chips" role="group" aria-label="Show">
+                {(
                   [
-                    "unread",
-                    unreadCount ? `Unread (${unreadCount})` : "Unread",
-                  ],
-                  ["starred", "Starred"],
-                  ["archived", `Archived (${archivedCount})`],
-                ] as const
-              ).map(([key, label]) => (
-                <button
-                  key={key}
-                  type="button"
-                  className="chat-chip"
-                  aria-pressed={filter === key}
-                  onClick={() => {
-                    setFilter(key);
-                    if (key === "starred") setStarTick((n) => n + 1);
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
+                    ["all", "All"],
+                    [
+                      "unread",
+                      unreadCount ? `Unread (${unreadCount})` : "Unread",
+                    ],
+                    ["starred", "Starred"],
+                    ["archived", `Archived (${archivedCount})`],
+                  ] as const
+                ).map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className="chat-chip"
+                    aria-pressed={filter === key}
+                    onClick={() => {
+                      setFilter(key);
+                      if (key === "starred") setStarTick((n) => n + 1);
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
           <ErrorBox error={view.error ?? act.error ?? searchError} />
           {!searching &&
             !archived &&
@@ -673,17 +700,18 @@ export function ChatPage() {
                 />
               </ul>
             )}
-          {!searching && !archived && filter !== "starred" && (
-            <CustomerRows
-              chats={(customers.data ?? []).filter(
-                (c) =>
-                  (filter !== "unread" || c.unread > 0) &&
-                  (query.length === 0 ||
-                    c.name.toLowerCase().includes(query.toLowerCase())),
-              )}
-              openKey={openID}
-            />
-          )}
+          {customersOn &&
+            filter !== "starred" &&
+            (query.length >= 2 ? (
+              <CustomerSearch query={query} openKey={openID} />
+            ) : (
+              <CustomerRows
+                chats={shownCustomers}
+                openKey={openID}
+                drafts={drafts}
+                archived={archived}
+              />
+            ))}
           {searching ? (
             <section aria-label="Search results" data-testid="link-results">
               {chats.length > 0 && (
@@ -1028,7 +1056,7 @@ export function ChatPage() {
             key={customerOpen}
             id={customerOpen}
             onBack={() => setParams({})}
-            onChanged={customers.reload}
+            onChanged={() => (customers.reload(), archivedCustomers.reload())}
           />
         )}
         {open && (

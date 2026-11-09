@@ -248,6 +248,48 @@ test.describe("customers' conversations", () => {
     });
     expect(r.status()).toBe(200);
   };
+  // WhatsApp's word on a reply: delivered, read, failed.
+  const status = async (page: Page, id: string, st: string) => {
+    const body = JSON.stringify({
+      object: "whatsapp_business_account",
+      entry: [
+        {
+          id: shop.waba,
+          changes: [
+            {
+              field: "messages",
+              value: {
+                messaging_product: "whatsapp",
+                metadata: {
+                  display_phone_number: "2348000000010",
+                  phone_number_id: shop.pnid,
+                },
+                statuses: [
+                  {
+                    id,
+                    status: st,
+                    timestamp: String(Math.floor(Date.now() / 1000)),
+                    recipient_id: customer,
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+    const sig =
+      "sha256=" +
+      createHmac("sha256", "e2e-app-secret").update(body).digest("hex");
+    const r = await page.request.post("/channels/whatsapp", {
+      headers: {
+        "Content-Type": "application/json",
+        "X-Hub-Signature-256": sig,
+      },
+      data: body,
+    });
+    expect(r.status()).toBe(200);
+  };
   const bothThemes = async (page: Page, where: string) => {
     for (const scheme of ["light", "dark"] as const) {
       await page.evaluate((t) => {
@@ -308,7 +350,7 @@ test.describe("customers' conversations", () => {
     const rows = page.getByTestId("customer-chats");
     const row = rows
       .getByTestId("customer-chat")
-      .filter({ hasText: "+234 803 111 2222" });
+      .filter({ hasText: "Chidi" });
     await expect(row).toContainText("Do you deliver to Yaba?");
     await fits(page);
     await bothThemes(page, "the chat list with a customer");
@@ -320,7 +362,7 @@ test.describe("customers' conversations", () => {
     ]);
     await expect(pane.getByTestId("customer-note")).toHaveCount(0);
     await pane
-      .getByLabel("Reply to +234 803 111 2222")
+      .getByLabel("Reply to Chidi")
       .fill("Yes, Yaba is ₦1,500. Two plates come to ₦9,000.");
     await pane.getByRole("button", { name: "Send" }).click();
     await expect(pane.getByTestId("customer-message").last()).toContainText(
@@ -338,6 +380,12 @@ test.describe("customers' conversations", () => {
     expect(out?.text?.body).toBe(
       "Yes, Yaba is ₦1,500. Two plates come to ₦9,000.",
     );
+    // One tick once WhatsApp has it, two when it reaches their phone.
+    await expect(pane.getByRole("img", { name: "Sent" })).toBeVisible();
+    await status(page, `wamid.shop${shopSent.length}`, "delivered");
+    await expect(pane.getByRole("img", { name: "Delivered" })).toBeVisible({
+      timeout: 10_000,
+    });
     await fits(page);
     await bothThemes(page, "a customer's thread");
 
@@ -347,6 +395,25 @@ test.describe("customers' conversations", () => {
       "send me the account number",
       { timeout: 10_000 },
     );
+
+    // Archived, the thread leaves the list and waits under Archived;
+    // unarchived, it comes back.
+    await pane
+      .getByRole("button", { name: "More about this conversation" })
+      .click();
+    await page.getByRole("menuitem", { name: "Archive" }).click();
+    await page.goto("/chat");
+    await expect(row).toHaveCount(0);
+    await page.getByRole("button", { name: "Archived (1)" }).click();
+    await expect(row).toBeVisible();
+    await row.click();
+    await pane
+      .getByRole("button", { name: "More about this conversation" })
+      .click();
+    await page.getByRole("menuitem", { name: "Unarchive" }).click();
+    await page.goto("/chat");
+    await expect(row).toBeVisible();
+    await row.click();
 
     // At 360 px too.
     await page.setViewportSize({ width: 360, height: 640 });
@@ -360,7 +427,7 @@ test.describe("customers' conversations", () => {
       { timeout: 10_000 },
     );
     await expect(pane.getByTestId("customer-message")).toHaveCount(0);
-    await expect(pane.getByLabel("Reply to +234 803 111 2222")).toHaveCount(0);
+    await expect(pane.getByLabel("Reply to Chidi")).toHaveCount(0);
     await bothThemes(page, "a customer who sent STOP");
 
     // The number goes back for the other tests.

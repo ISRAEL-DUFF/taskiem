@@ -5,7 +5,11 @@ import { naira } from "../lib/billing";
 import {
   customerKey,
   customerLetter,
+  type CustomerHit,
   customerTitle,
+  LATE_REPLY_MAX,
+  lateLength,
+  lateTooLong,
   latestPage,
   mergeCustomer,
   owesWords,
@@ -19,7 +23,7 @@ import { clock, listTime } from "../lib/linkchat";
 import { useAutoGrow } from "../lib/useAutoGrow";
 import { useThread } from "../lib/useThread";
 import { ErrorBox, fmtTime, useAction, useLoad } from "../ui";
-import { BubbleShell } from "./BubbleShell";
+import { BubbleShell, Ticks } from "./BubbleShell";
 import { ChatAvatar } from "./ChatAvatar";
 import { ChatHead } from "./ChatHead";
 import { ChatRow } from "./ChatRow";
@@ -32,57 +36,172 @@ import { ChatStream } from "./ChatStream";
 /** How often an open thread and the list look for what is new. */
 const POLL_MS = 4000;
 
-/** The Customers section of the chat list: one row per customer's thread. */
+/** The Customers section of the chat list: one row per customer's thread
+ * (the archived ones under Archived), with an unsent reply as a draft. */
 export function CustomerRows({
   chats,
   openKey,
+  drafts,
+  archived = false,
 }: {
   chats: CustomerChat[];
   openKey: string | null;
+  drafts: Record<string, string>;
+  archived?: boolean;
 }) {
   if (chats.length === 0) return null;
+  const waiting = chats.filter((c) => c.unread > 0).length;
+  const head = archived ? "Archived customers" : "Customers";
   return (
     <section aria-labelledby="customers-head">
       <div className="toolbar" style={{ marginBottom: 6 }}>
         <h2 id="customers-head" className="grow" style={{ margin: 0 }}>
-          Customers
+          {head}
+          {waiting > 0 && !archived && (
+            <span className="customers-waiting" data-testid="customers-waiting">
+              {" "}
+              · {waiting === 1 ? "1 waiting" : `${waiting} waiting`}
+            </span>
+          )}
         </h2>
       </div>
-      <ul
-        className="chat-rows"
-        aria-label="Customers"
-        data-testid="customer-chats"
-      >
-        {chats.map((c) => (
-          <ChatRow
-            key={c.id}
-            to={`/chat?with=${customerKey(c.id)}`}
-            letter={customerLetter(c)}
-            title={customerTitle(c)}
-            time={listTime(c.last_at)}
-            preview={
-              c.stopped ? "Sent STOP" : `${c.last_mine ? "You: " : ""}${c.last}`
-            }
-            unread={c.unread}
-            selected={openKey === customerKey(c.id)}
-            testid="customer-chat"
-          />
-        ))}
+      <ul className="chat-rows" aria-label={head} data-testid="customer-chats">
+        {chats.map((c) => {
+          const draft = drafts[`customer:${c.id}`];
+          return (
+            <ChatRow
+              key={c.id}
+              to={`/chat?with=${customerKey(c.id)}`}
+              letter={customerLetter(c)}
+              title={customerTitle(c)}
+              time={listTime(c.last_at)}
+              preview={
+                draft ? (
+                  <>
+                    <span className="draft">Draft:</span> {draft}
+                  </>
+                ) : c.stopped ? (
+                  "Sent STOP"
+                ) : (
+                  `${c.last_mine ? "You: " : ""}${c.last}`
+                )
+              }
+              unread={c.unread}
+              selected={openKey === customerKey(c.id)}
+              testid="customer-chat"
+            />
+          );
+        })}
       </ul>
     </section>
   );
 }
 
+/** What a search finds among customers: by name or number, and in the
+ * latest of their messages. */
+export function CustomerSearch({
+  query,
+  openKey,
+}: {
+  query: string;
+  openKey: string | null;
+}) {
+  const found = useLoad(
+    () =>
+      query.length >= 2
+        ? get<{ chats: CustomerChat[]; messages: CustomerHit[] }>(
+            `/v1/customer-chats/search?q=${encodeURIComponent(query)}`,
+          )
+        : Promise.resolve({ chats: [], messages: [] }),
+    [query],
+  );
+  const chats = found.data?.chats ?? [];
+  const msgs = found.data?.messages ?? [];
+  if (chats.length === 0 && msgs.length === 0) return null;
+  return (
+    <section aria-label="Customers found" data-testid="customer-results">
+      {chats.length > 0 && (
+        <>
+          <h2>Customers</h2>
+          <ul className="chat-rows" aria-label="Customers found">
+            {chats.map((c) => (
+              <ChatRow
+                key={c.id}
+                to={`/chat?with=${customerKey(c.id)}`}
+                letter={customerLetter(c)}
+                title={customerTitle(c)}
+                time={listTime(c.last_at)}
+                preview={c.last}
+                unread={c.unread}
+                selected={openKey === customerKey(c.id)}
+                testid="customer-found"
+              />
+            ))}
+          </ul>
+        </>
+      )}
+      {msgs.length > 0 && (
+        <>
+          <h2>In customers' messages</h2>
+          <ul className="chat-rows" aria-label="Customers' messages found">
+            {msgs.map((m) => (
+              <ChatRow
+                key={m.message_id}
+                to={`/chat?with=${customerKey(m.chat_id)}`}
+                letter={m.name}
+                title={/^\+\d/.test(m.name) ? phoneWords(m.name) : m.name}
+                time={listTime(m.created_at)}
+                preview={`${m.mine ? "You: " : ""}${m.body}`}
+                testid="customer-message-found"
+              />
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
+  );
+}
+
+/** How many customers are waiting for an answer (the Chat tab's count),
+ * for those who handle orders. */
+export function useCustomerUnread(on: boolean): number {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    if (!on) {
+      setN(0);
+      return;
+    }
+    let live = true;
+    const look = () =>
+      get<{ chats: number; messages: number }>(
+        "/v1/customer-chats/unread",
+      ).then(
+        (r) => live && setN(r.chats),
+        () => undefined,
+      );
+    void look();
+    const t = setInterval(
+      () => document.visibilityState === "visible" && void look(),
+      15_000,
+    );
+    return () => {
+      live = false;
+      clearInterval(t);
+    };
+  }, [on]);
+  return n;
+}
+
 /** The customers' threads, followed while the page is seen. */
-export function useCustomerChats(on: boolean) {
+export function useCustomerChats(on: boolean, archived = false) {
   const list = useLoad(
     () =>
       on
-        ? get<{ chats: CustomerChat[] }>("/v1/customer-chats").then(
-            (x) => x.chats,
-          )
+        ? get<{ chats: CustomerChat[] }>(
+            `/v1/customer-chats${archived ? "?archived=1" : ""}`,
+          ).then((x) => x.chats)
         : Promise.resolve([] as CustomerChat[]),
-    [on],
+    [on, archived],
   );
   const reload = list.reload;
   useEffect(() => {
@@ -188,6 +307,7 @@ export function CustomerPane({
   const c = chat.data;
   const note = c ? replyNote(c) : null;
   const canSend = !!c && !c.stopped && !!c.phone;
+  const tooLong = !!c && lateTooLong(text, c.window_open);
   const send = () => {
     const words = text.trim();
     if (!words || !canSend || act.busy) return;
@@ -320,15 +440,7 @@ export function CustomerPane({
                 <time dateTime={m.created_at} title={fmtTime(m.created_at)}>
                   {clock(m.created_at)}
                 </time>
-                {m.local && (
-                  <span
-                    className="ticks pending"
-                    role="img"
-                    aria-label="Sending"
-                  >
-                    <Icon name="clock" />
-                  </span>
-                )}
+                {m.mine && <DeliveryMark m={m} />}
               </span>
             }
           >
@@ -338,6 +450,11 @@ export function CustomerPane({
             <span className="text">
               {m.kind === "media" ? <em>{m.body}</em> : m.body}
             </span>
+            {m.mine && m.delivery === "failed" && (
+              <span className="customer-failed" role="status">
+                Not delivered{m.failure ? `: ${m.failure}` : "."}
+              </span>
+            )}
           </BubbleShell>
         )}
       />
@@ -348,6 +465,16 @@ export function CustomerPane({
           data-testid="customer-note"
         >
           {note.text}
+        </p>
+      )}
+      {canSend && tooLong && (
+        <p
+          className="customer-note stop"
+          role="alert"
+          data-testid="customer-too-long"
+        >
+          Too long to send now: after a day, a reply can be up to{" "}
+          {LATE_REPLY_MAX} characters. This one is {lateLength(text)}.
         </p>
       )}
       {canSend && (
@@ -382,7 +509,7 @@ export function CustomerPane({
           <button
             type="submit"
             className="primary icon-button send-button"
-            disabled={act.busy || !text.trim()}
+            disabled={act.busy || !text.trim() || tooLong}
           >
             <Icon name="arrow-up" />
             <span className="sr-only">Send</span>
@@ -391,4 +518,34 @@ export function CustomerPane({
       )}
     </section>
   );
+}
+
+/** How far a reply of ours has got: a clock while it goes, one tick once
+ * WhatsApp has it, two when it reached their phone (blue once read), and a
+ * mark when it could not be delivered. */
+function DeliveryMark({ m }: { m: CustomerMessage }) {
+  if (m.local || m.delivery === "sending")
+    return (
+      <span className="ticks pending" role="img" aria-label="Sending">
+        <Icon name="clock" />
+      </span>
+    );
+  switch (m.delivery) {
+    case "failed":
+      return (
+        <span className="ticks failed" role="img" aria-label="Not delivered">
+          <span aria-hidden="true">!</span>
+        </span>
+      );
+    case "delivered":
+      return <Ticks read={false} />;
+    case "read":
+      return <Ticks read />;
+    default:
+      return (
+        <span className="ticks" role="img" aria-label="Sent">
+          <Icon name="tick" />
+        </span>
+      );
+  }
 }
