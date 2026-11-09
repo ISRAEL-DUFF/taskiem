@@ -26,6 +26,7 @@ import { Dashboard } from "./pages/Dashboard";
 import { Members } from "./pages/Members";
 import { Staff } from "./pages/Staff";
 import { StaffPerson } from "./pages/StaffPerson";
+import { Tasks } from "./pages/Tasks";
 import { Policies } from "./pages/Policies";
 import { Account, Invitations, Passkeys } from "./pages/Account";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -462,6 +463,8 @@ function SignedIn() {
     ["/chat", "Chat", "chat", true],
     // The people of the business (pages/Staff.tsx).
     ["/staff", "Staff", "members", can("member.manage")],
+    // Tasks for staff (pages/Tasks.tsx): everyone has their own.
+    ["/tasks", "Tasks", "check", true],
     [
       "/approvals",
       "Approvals",
@@ -896,6 +899,7 @@ function SignedIn() {
                   <Route path="/members" element={<Members />} />
                   <Route path="/staff" element={<Staff />} />
                   <Route path="/staff/:user" element={<StaffPerson />} />
+                  <Route path="/tasks" element={<Tasks />} />
                   <Route path="/policies" element={<Policies />} />
                   <Route path="/account" element={<Account />} />
                   <Route path="/handoff" element={<Handoff />} />

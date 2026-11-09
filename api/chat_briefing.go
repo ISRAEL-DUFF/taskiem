@@ -165,6 +165,9 @@ type briefing struct {
 	Bookings   *int `json:"bookings,omitempty"`
 	// Staff is who is clocked in and who is late, when anyone is either.
 	Staff *staffNow `json:"staff,omitempty"`
+	// Tasks is the open tasks due today and late (staff_tasks.go), when
+	// there are any.
+	Tasks *taskCounts `json:"tasks,omitempty"`
 }
 
 type briefingSales struct {
@@ -280,6 +283,13 @@ func (s *Server) getChatBriefing(w http.ResponseWriter, r *http.Request) {
 			}
 			if len(st.In) > 0 || len(st.Late) > 0 {
 				out.Staff = &st
+			}
+			tc, err := taskCountsTx(ctx, tx, p.TenantID, now)
+			if err != nil {
+				return err
+			}
+			if tc.Today > 0 || tc.Late > 0 {
+				out.Tasks = &tc
 			}
 		}
 		return nil

@@ -2,11 +2,15 @@ package api_test
 
 import (
 	"context"
+	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/israel-duff/taskiem/engine/whatsapp/whatsapptest"
 )
 
 // Staff by phone (docs/spec/chat-five-more-flows.md, phase 3 plan, step 1):
@@ -268,4 +272,195 @@ func TestStaffClock(t *testing.T) {
 // rotaDayName is a date's day as a rota names it.
 func rotaDayName(t time.Time) string {
 	return []string{"sun", "mon", "tue", "wed", "thu", "fri", "sat"}[t.Weekday()]
+}
+
+// TestStaffTasks: a task given from the web, told on WhatsApp, nudged,
+// late to the giver, DONE; one for any cashier, taken, needing a photo;
+// CAN'T; one said in chat and confirmed; a repeat making its task each
+// day; the briefing's count; and removal giving tasks back.
+func TestStaffTasks(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	owner.must(200, "PUT", "/v1/settings/chat-tools", map[string]any{"chat_tools": true})
+	const ownerNumber, cashNumber = "+2348031239511", "+2348031239512"
+	w.bind(t, owner, ownerNumber)
+	cashier := w.member(t, owner, "cash@acme.test", "cashier")
+	w.bind(t, cashier, cashNumber)
+	id := func(c *client) string {
+		return c.must(200, "GET", "/v1/me", nil)["user"].(map[string]any)["id"].(string)
+	}
+	ownerID, cashID := id(owner), id(cashier)
+	for u, name := range map[string]string{ownerID: "Ada", cashID: "Bisi"} {
+		if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE users SET name = $2 WHERE id = $1`, u, name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var proofs [][]byte
+	w.srv.ProofStore = func(_ context.Context, _ uuid.UUID, data []byte) (string, error) {
+		proofs = append(proofs, data)
+		return fmt.Sprintf("files/task-%d.jpg", len(proofs)), nil
+	}
+	lagos, _ := time.LoadLocation("Africa/Lagos")
+	base := time.Now().In(lagos)
+	at := func(day, hour, minute int) time.Time {
+		return time.Date(base.Year(), base.Month(), base.Day()+day, hour, minute, 0, 0, lagos)
+	}
+	clock := func(day, h, m int) { w.srv.BriefingClock = func() time.Time { return at(day, h, m) } }
+	tick := func() {
+		t.Helper()
+		if err := w.srv.StaffTick(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	since := func(number string) func() []string {
+		n := len(w.graph.Sent(number))
+		return func() []string {
+			var out []string
+			for _, s := range w.graph.Sent(number)[n:] {
+				out = append(out, s.Text)
+			}
+			return out
+		}
+	}
+	has := func(got []string, want string) bool {
+		return slices.ContainsFunc(got, func(s string) bool { return strings.Contains(s, want) })
+	}
+
+	// Given on the web at 08:00, due 09:00: Bisi is told, with Done and Can't.
+	clock(0, 8, 0)
+	toBisi := since(cashNumber)
+	task := owner.must(201, "POST", "/v1/staff/tasks", map[string]any{"what": "count the cash float", "to_user": cashID, "due_at": at(0, 9, 0)})["task"].(map[string]any)
+	if got := toBisi(); len(got) != 1 || !strings.Contains(got[0], "Ada asked you: count the cash float, by 09:00") {
+		t.Fatalf("told: %q", got)
+	}
+	if got := w.say(t, cashNumber, "my tasks"); !strings.Contains(got, "1. count the cash float, by 09:00") {
+		t.Fatalf("my tasks: %q", got)
+	}
+	// 08:35: a nudge, once. 09:05: Ada hears it is late, once.
+	clock(0, 8, 35)
+	toBisi = since(cashNumber)
+	tick()
+	tick()
+	if got := toBisi(); len(got) != 1 || !strings.Contains(got[0], "Soon: count the cash float") {
+		t.Fatalf("nudge: %q", got)
+	}
+	clock(0, 9, 5)
+	toAda := since(ownerNumber)
+	tick()
+	tick()
+	if got := toAda(); len(got) != 1 || !strings.Contains(got[0], "Count the cash float is 5 minutes late (Bisi)") {
+		t.Fatalf("late: %q", got)
+	}
+	if b := owner.must(200, "GET", "/v1/chat-briefing", nil); b["tasks"].(map[string]any)["late"] != float64(1) {
+		t.Fatalf("the briefing: %v", b["tasks"])
+	}
+	// Remind, from the button.
+	toBisi = since(cashNumber)
+	w.send(t, ownerNumber, whatsapptest.ButtonReply("tsk:remind:"+task["id"].(string), "Remind"))
+	if got := toBisi(); len(got) != 1 || !strings.Contains(got[0], "Ada reminds you") {
+		t.Fatalf("remind: %q", got)
+	}
+	// DONE: Ada hears.
+	toAda = since(ownerNumber)
+	if got := w.say(t, cashNumber, "done"); !strings.Contains(got, "Done: count the cash float") {
+		t.Fatalf("done: %q", got)
+	}
+	if got := toAda(); !has(got, "Bisi did: count the cash float") || !has(got, "(5 minutes late)") {
+		t.Fatalf("Ada told: %q", got)
+	}
+	if got := w.say(t, cashNumber, "done"); !strings.Contains(got, "no tasks open") {
+		t.Fatalf("done again: %q", got)
+	}
+
+	// For any cashier, with a photo: taken, DONE asks for the photo, the photo closes it.
+	toBisi = since(cashNumber)
+	role := owner.must(201, "POST", "/v1/staff/tasks", map[string]any{"what": "clean the counter", "to_role": "cashier", "photo": true})["task"].(map[string]any)
+	if got := toBisi(); len(got) != 1 || !strings.Contains(got[0], "Ada asked any cashier: clean the counter") {
+		t.Fatalf("role told: %q", got)
+	}
+	got := w.send(t, cashNumber, whatsapptest.ButtonReply("tsk:take:"+role["id"].(string), "I'll do it"))
+	if len(got) != 1 || !strings.Contains(got[0].Text, "It is yours: clean the counter") {
+		t.Fatalf("take: %+v", got)
+	}
+	if got := w.say(t, cashNumber, "done"); !strings.Contains(got, "Send a photo of it to finish") {
+		t.Fatalf("done without a photo: %q", got)
+	}
+	w.graph.AddMedia("media-counter", "image/jpeg", []byte("\xff\xd8\xff counter"), 0)
+	got = w.send(t, cashNumber, whatsapptest.Image("media-counter", "image/jpeg", ""))
+	if len(got) != 1 || !strings.Contains(got[0].Text, "Done, with the photo: clean the counter") || len(proofs) != 1 {
+		t.Fatalf("the photo: %+v", got)
+	}
+	cashier.must(409, "POST", "/v1/staff/tasks/"+task["id"].(string)+"/done", map[string]any{})
+	cashier.must(409, "POST", "/v1/staff/tasks/"+role["id"].(string)+"/done", map[string]any{})
+
+	// CAN'T, with why; Ada gives it to herself again.
+	toAda = since(ownerNumber)
+	fuel := owner.must(201, "POST", "/v1/staff/tasks", map[string]any{"what": "buy diesel", "to_user": cashID})["task"].(map[string]any)
+	if got := w.say(t, cashNumber, "can't no fuel station open"); !strings.Contains(got, "Sent back to Ada: buy diesel") {
+		t.Fatalf("can't: %q", got)
+	}
+	if got := toAda(); !has(got, "Bisi can't: buy diesel") || !has(got, `"no fuel station open"`) {
+		t.Fatalf("Ada told of can't: %q", got)
+	}
+	back := owner.must(200, "POST", "/v1/staff/tasks/"+fuel["id"].(string)+"/give", map[string]any{"to_user": ownerID})
+	if back["state"] != "open" || back["to_user"] != ownerID {
+		t.Fatalf("given again: %v", back)
+	}
+
+	// Said in chat, confirmed, told.
+	if got := w.say(t, ownerNumber, "@Bisi clean the freezer by 5pm, with a photo"); !strings.Contains(got, "Make it a task for Bisi: clean the freezer, by 17:00, with a photo?") {
+		t.Fatalf("said: %q", got)
+	}
+	toBisi = since(cashNumber)
+	if got := w.say(t, ownerNumber, "yes"); !strings.Contains(got, "Task given to Bisi") {
+		t.Fatalf("yes: %q", got)
+	}
+	if got := toBisi(); len(got) != 1 || !strings.Contains(got[0], "clean the freezer, by 17:00") || !strings.Contains(got[0], "send a photo") {
+		t.Fatalf("Bisi told: %q", got)
+	}
+	// On the web, a task that needs a photo is not done without one.
+	for _, x := range cashier.must(200, "GET", "/v1/staff/tasks", nil)["tasks"].([]any) {
+		if x := x.(map[string]any); x["what"] == "clean the freezer" {
+			cashier.must(400, "POST", "/v1/staff/tasks/"+x["id"].(string)+"/done", map[string]any{})
+		}
+	}
+	if got := w.say(t, cashNumber, "@Ada do this by 3pm"); strings.Contains(got, "Make it a task") {
+		t.Fatalf("a cashier gives a task: %q", got)
+	}
+
+	// Every day at 07:00, made at 09:05: none today; tomorrow's is made at midnight.
+	owner.must(201, "POST", "/v1/staff/tasks", map[string]any{"what": "open the shop", "to_user": cashID, "repeat": map[string]any{"every": "day", "at": "07:00"}})
+	all := owner.must(200, "GET", "/v1/staff/tasks?all=true", nil)
+	if len(all["repeats"].([]any)) != 1 || slices.ContainsFunc(all["tasks"].([]any), func(x any) bool { return x.(map[string]any)["what"] == "open the shop" }) {
+		t.Fatalf("the repeat: %v", all)
+	}
+	clock(1, 0, 5)
+	toBisi = since(cashNumber)
+	tick()
+	tick()
+	if got := toBisi(); !has(got, "open the shop, by 07:00") || len(got) != 1 {
+		t.Fatalf("tomorrow's: %q", got)
+	}
+
+	// Bisi sees only her own; a cashier gives none and sees not everyone's.
+	mine := cashier.must(200, "GET", "/v1/staff/tasks", nil)
+	if mine["give"] != false || len(mine["tasks"].([]any)) == 0 {
+		t.Fatalf("mine: %v", mine)
+	}
+	cashier.must(403, "GET", "/v1/staff/tasks?all=true", nil)
+	cashier.must(403, "POST", "/v1/staff/tasks", map[string]any{"what": "x", "to_user": ownerID})
+	owner.must(400, "POST", "/v1/staff/tasks", map[string]any{"what": "x", "to_role": "rider"})
+
+	// Removed: Bisi's open tasks are Ada's again; the repeat stops.
+	owner.must(204, "POST", "/v1/staff/"+cashID+"/remove", nil)
+	var open, stopped int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT (SELECT count(*) FROM staff_tasks WHERE COALESCE(taken_by, to_user) = $1 AND state = 'open'),
+		(SELECT count(*) FROM staff_task_repeats WHERE stopped_at IS NOT NULL)`, cashID).Scan(&open, &stopped); err != nil || open != 0 || stopped != 1 {
+		t.Fatalf("after removal: %d %d %v", open, stopped, err)
+	}
+	var back2 int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM staff_tasks WHERE to_user = $1 AND state = 'open' AND what IN ('clean the freezer', 'open the shop')`, ownerID).Scan(&back2); err != nil || back2 != 2 {
+		t.Fatalf("given back: %d %v", back2, err)
+	}
 }

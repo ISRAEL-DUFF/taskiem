@@ -1059,6 +1059,10 @@ staff_clock.out_at
 staff_clock.tenant_id
 staff_profiles.rota
 staff_profiles.tenant_id
+staff_task_repeats.stopped_at
+staff_task_repeats.tenant_id
+staff_tasks.state
+staff_tasks.tenant_id
 stock_movements.change
 stock_movements.claimed_at
 stock_movements.count_after

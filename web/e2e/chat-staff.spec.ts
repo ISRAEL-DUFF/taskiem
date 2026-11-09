@@ -92,7 +92,7 @@ async function answer(page: Page) {
   return sent;
 }
 
-test("a cashier's tools are Sell, Stock, Orders and clocking in, and Sell records a sale", async ({ browser }) => {
+test("a cashier's tools are Sell, Stock, Orders, Tasks and clocking in, and Sell records a sale", async ({ browser }) => {
   test.setTimeout(120_000);
   const { member } = await people(browser, "cashier");
   const sent = await answer(member);
@@ -100,7 +100,7 @@ test("a cashier's tools are Sell, Stock, Orders and clocking in, and Sell record
   const pane = member.getByTestId("taskiem-pane");
   await pane.getByRole("button", { name: "Open tools" }).click();
   const panel = member.getByRole("region", { name: "Tools" });
-  await expect(panel.locator(".tk-tile .tk-tile-name")).toHaveText(["Sell", "Stock", "Orders", "Clock in", "Clock out"]);
+  await expect(panel.locator(".tk-tile .tk-tile-name")).toHaveText(["Sell", "Stock", "Orders", "Tasks", "Clock in", "Clock out"]);
   await panel.getByRole("button", { name: /^Sell/ }).click();
   const sheet = member.getByTestId("sell-sheet");
   // Only what has a price.

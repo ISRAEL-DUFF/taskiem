@@ -257,6 +257,9 @@ type chatData struct {
 	Money *chatMoney `json:"money,omitempty"`
 	// Invite is an invitation the owner is confirming (chat_invites.go).
 	Invite *chatInvite `json:"invite,omitempty"`
+	// Task is a task said in chat, waiting for the giver's yes
+	// (staff_tasks.go).
+	Task *chatTask `json:"task,omitempty"`
 	// Link is a link to another business being asked for (chat_links.go).
 	Link *chatLink `json:"link,omitempty"`
 	// TableMake is a data table being made, or a column added
@@ -500,6 +503,10 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	// A photo: a product to add, or the logo the set-up asked for
 	// (whatsapp_storefront.go).
 	if in.Image != nil {
+		// The photo a task asked for, after DONE (staff_tasks.go).
+		if done, err := s.taskPhoto(ctx, c); done || err != nil {
+			return err
+		}
 		return s.waPhoto(ctx, c)
 	}
 	// A file: a list brought into a table (chat_tables_files.go).
@@ -710,6 +717,21 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	// Confirm on a payout the supplier's matching did not pair (bills.go).
 	if strings.HasPrefix(text, billPairPrefix) {
 		return s.waBillPairPress(ctx, c, text)
+	}
+	// A task's Done, Can't, I'll do it and Remind (staff_tasks.go).
+	if strings.HasPrefix(text, taskPrefix) {
+		return s.waTaskPress(ctx, c, text)
+	}
+	if c.data.Task != nil && c.state != stateIdle {
+		return s.waTaskReply(ctx, c, cmd)
+	}
+	// DONE, CAN'T, "my tasks", and "@Tunde count the float by 7am" from
+	// those who give tasks, before "@" is read as a business; not in the
+	// middle of something else, where "done" is that thing's word.
+	if c.state == stateIdle {
+		if done, err := s.waTaskWords(ctx, c, text, cmd); done || err != nil {
+			return err
+		}
 	}
 	// A reply quoting a linked business's message, into its conversation
 	// (link_chat.go), whatever else the conversation is in the middle of.

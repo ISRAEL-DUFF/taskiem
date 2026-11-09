@@ -351,6 +351,7 @@ func (s *Server) removeStaff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var name string
+	var returned []staffTask
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var roles []string
 		if err := tx.QueryRow(r.Context(), `SELECT COALESCE(array_agg(role), '{}') FROM memberships WHERE tenant_id = $1 AND user_id = $2`, p.TenantID, user).Scan(&roles); err != nil {
@@ -380,6 +381,11 @@ func (s *Server) removeStaff(w http.ResponseWriter, r *http.Request) {
 		if _, err := tx.Exec(r.Context(), `DELETE FROM memberships WHERE tenant_id = $1 AND user_id = $2`, p.TenantID, user); err != nil {
 			return err
 		}
+		// Their open tasks go back to whoever gave them (staff_tasks.go).
+		var err error
+		if returned, err = returnTasksTx(r.Context(), tx, p.TenantID, user); err != nil {
+			return err
+		}
 		if _, err := tx.Exec(r.Context(), `DELETE FROM member_invitations WHERE tenant_id = $1 AND user_id = $2`, p.TenantID, user); err != nil {
 			return err
 		}
@@ -389,5 +395,12 @@ func (s *Server) removeStaff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.diaryChange(r.Context(), p, "Removed "+name+" from the business")
+	for _, t := range returned {
+		if t.GivenBy == p.UserID {
+			continue
+		}
+		s.tellAbout(r.Context(), p.TenantID, []uuid.UUID{t.GivenBy}, "task:"+t.ID.String(), "Back to you: "+t.What,
+			name+" left the business, so the task is yours again. Give it to someone else in Tasks.", nil, nil)
+	}
 	w.WriteHeader(http.StatusNoContent)
 }

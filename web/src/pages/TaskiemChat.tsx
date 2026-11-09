@@ -13,6 +13,7 @@ import { AlertCards, useChatAlerts } from "./ChatAlerts";
 import { BriefingCard, ChartCard } from "./ChatStaff";
 import { useAuth } from "../auth";
 import { asksBriefing, showBriefing, type SalesChart } from "../lib/staff";
+import { TasksSheet } from "./Tasks";
 
 /** A chart message's numbers, or undefined when they cannot be read. */
 function parseChart(text: string): SalesChart | undefined {
@@ -169,6 +170,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
     [],
   );
   const act = useAction();
+  const [tasksOpen, setTasksOpen] = useState(false);
   const chatTools = useChatTools();
   const { can, me } = useAuth();
   // The business's own categories: "@sneakers" offers its Sneakers, to
@@ -234,6 +236,8 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
                 },
               ]
             : []),
+          // Tasks, given and done (phase 3, step 4).
+          { key: "tasks", title: "Tasks", icon: "check", line: "To do, and given", onPick: () => setTasksOpen(true) },
           // Clocking in and out, as "in" and "out" are said (phase 3).
           { key: "clock-in", title: "Clock in", icon: "clock", line: "Start your shift", onPick: () => say({ text: "in" }) },
           { key: "clock-out", title: "Clock out", icon: "clock", line: "End your shift", onPick: () => say({ text: "out" }) },
@@ -701,6 +705,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
         textId="taskiem-text"
         textLabel="Message to Taskiem"
       />
+      {tasksOpen && <TasksSheet onClose={() => setTasksOpen(false)} />}
     </section>
   );
 }

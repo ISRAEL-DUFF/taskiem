@@ -375,6 +375,9 @@ func (s *Server) StaffTick(ctx context.Context) error {
 		if err := s.staffTickTenant(ctx, tenant, now); err != nil && ctx.Err() == nil {
 			s.Logger.Warn("staff: the job", "tenant", tenant, "err", err)
 		}
+		if err := s.staffTaskTick(ctx, tenant, now); err != nil && ctx.Err() == nil {
+			s.Logger.Warn("staff: the tasks job", "tenant", tenant, "err", err)
+		}
 	}
 	return nil
 }

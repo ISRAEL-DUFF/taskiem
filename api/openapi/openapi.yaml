@@ -19706,6 +19706,341 @@ paths:
                       $ref: '#/components/schemas/StaffLate'
         default:
           $ref: '#/components/responses/Error'
+  /v1/staff/tasks:
+    get:
+      operationId: listStaffTasks
+      tags:
+      - Account
+      summary: Tasks for staff
+      description: 'The person''s open tasks (their own, and those for a role they hold that no one has taken) and those closed in the last week; with all=true, for those who give tasks (member.manage or invoice.manage), everyone''s and the repeats. give says whether this person gives tasks, and people (for them) who tasks can go to.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: all
+        in: query
+        required: false
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: The tasks
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [tasks, repeats, give, people]
+                properties:
+                  tasks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StaffTask'
+                  repeats:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StaffTaskRepeat'
+                  give:
+                    type: boolean
+                  people:
+                    type: array
+                    description: Who a task can be given to, with their roles (for those who give tasks; empty otherwise)
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [id, name, roles]
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        roles:
+                          type: array
+                          items:
+                            type: string
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: giveStaffTask
+      tags:
+      - Account
+      summary: Give a task
+      description: 'To one person (to_user) or to anyone in a role (to_role; the first to take it has it), maybe due at a time, maybe needing a photo when done, maybe about an order, invoice, bill, purchase or stock item. With repeat, a task repeating every day or every week on one day at a time: todays is made now when its time has not passed, and each later one on its day. The person (or everyone in the role) is told in their chat; on WhatsApp outside the 24 hours, the taskiem_staff_task template.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'member.manage|invoice.manage'
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StaffTaskIn'
+      responses:
+        '201':
+          description: Given
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [task, repeat_id]
+                properties:
+                  task:
+                    oneOf:
+                    - $ref: '#/components/schemas/StaffTask'
+                    - type: 'null'
+                  repeat_id:
+                    type: [string, 'null']
+                    format: uuid
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/staff/tasks/{id}:
+    delete:
+      operationId: cancelStaffTask
+      tags:
+      - Account
+      summary: Call a task off
+      description: 'An open task, or one sent back.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'member.manage|invoice.manage'
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The task
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffTask'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/staff/tasks/{id}/take:
+    post:
+      operationId: takeStaffTask
+      tags:
+      - Account
+      summary: Take a task given to a role
+      description: 'The first in the role to take it has it.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The task
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffTask'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/staff/tasks/{id}/done:
+    post:
+      operationId: doneStaffTask
+      tags:
+      - Account
+      summary: Done
+      description: 'Closes the persons task (taking a roles task first). A task that needs a photo takes it as a multipart form (photo), kept privately in the businesss own storage. Whoever gave it is told.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                photo:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: The task
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffTask'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/staff/tasks/{id}/cant:
+    post:
+      operationId: cantStaffTask
+      tags:
+      - Account
+      summary: Cant do it
+      description: 'Sends the task back to whoever gave it, with why.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                why:
+                  type: string
+                  maxLength: 300
+      responses:
+        '200':
+          description: The task
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffTask'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/staff/tasks/{id}/remind:
+    post:
+      operationId: remindStaffTask
+      tags:
+      - Account
+      summary: Remind the person
+      description: 'They are told again; once in ten minutes.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'member.manage|invoice.manage'
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The task
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffTask'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/staff/tasks/{id}/give:
+    post:
+      operationId: passStaffTask
+      tags:
+      - Account
+      summary: Give a task to someone else
+      description: 'To another person or role; a task sent back is open again.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'member.manage|invoice.manage'
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                to_user:
+                  type: string
+                  format: uuid
+                to_role:
+                  type: string
+      responses:
+        '200':
+          description: The task
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffTask'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/staff/task-repeats/{id}:
+    delete:
+      operationId: stopStaffTaskRepeat
+      tags:
+      - Account
+      summary: Stop a repeating task
+      description: 'No more tasks are made from it; those made stay.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'member.manage|invoice.manage'
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Stopped
+        default:
+          $ref: '#/components/responses/Error'
   /v1/staff/{user}:
     get:
       operationId: getStaff
@@ -23522,6 +23857,16 @@ paths:
                         type: array
                         items:
                           $ref: '#/components/schemas/StaffLate'
+                  tasks:
+                    type: object
+                    description: Open tasks due today, and late, when there are any (for those who run the people).
+                    additionalProperties: false
+                    required: [today, late]
+                    properties:
+                      today:
+                        type: integer
+                      late:
+                        type: integer
                   part:
                     type: string
                     enum: [morning, afternoon, evening]
@@ -33752,6 +34097,143 @@ components:
         minutes:
           type: integer
           description: How long the service takes; an invoice's or an order's total is price_kobo
+    StaffTask:
+      type: object
+      additionalProperties: false
+      required: [id, what, given_by, giver, photo, state, created_at, late]
+      properties:
+        id:
+          type: string
+          format: uuid
+        what:
+          type: string
+        given_by:
+          type: string
+          format: uuid
+        giver:
+          type: string
+        to_user:
+          type: string
+          format: uuid
+        to_role:
+          type: string
+        taken_by:
+          type: string
+          format: uuid
+        person:
+          type: string
+          description: The name of the person who has it, once someone does
+        due_at:
+          type: string
+          format: date-time
+        photo:
+          type: boolean
+          description: A photo is needed when it is done
+        state:
+          type: string
+          enum: [open, done, cant, cancelled]
+        done_at:
+          type: string
+          format: date-time
+        photo_url:
+          type: string
+          description: The photo it was done with, a link good for ten minutes
+        cant_why:
+          type: string
+        link:
+          type: object
+          additionalProperties: false
+          required: [kind, id]
+          properties:
+            kind:
+              type: string
+              enum: [order, invoice, bill, purchase, stock]
+            id:
+              type: string
+            name:
+              type: string
+        repeat_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        late:
+          type: boolean
+    StaffTaskRepeat:
+      type: object
+      additionalProperties: false
+      required: [id, what, photo, every, at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        what:
+          type: string
+        to_user:
+          type: string
+          format: uuid
+        to_role:
+          type: string
+        person:
+          type: string
+        photo:
+          type: boolean
+        every:
+          type: string
+          enum: [day, week]
+        day:
+          type: string
+          enum: [mon, tue, wed, thu, fri, sat, sun]
+        at:
+          type: string
+          pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+    StaffTaskIn:
+      type: object
+      additionalProperties: false
+      required: [what]
+      properties:
+        what:
+          type: string
+          maxLength: 200
+        to_user:
+          type: string
+          format: uuid
+        to_role:
+          type: string
+        due_at:
+          type: string
+          format: date-time
+        photo:
+          type: boolean
+        link:
+          type: object
+          additionalProperties: false
+          required: [kind, id]
+          properties:
+            kind:
+              type: string
+              enum: [order, invoice, bill, purchase, stock]
+            id:
+              type: string
+              maxLength: 100
+            name:
+              type: string
+              maxLength: 120
+        repeat:
+          type: object
+          additionalProperties: false
+          required: [every, at]
+          properties:
+            every:
+              type: string
+              enum: [day, week]
+            day:
+              type: string
+              enum: [mon, tue, wed, thu, fri, sat, sun]
+            at:
+              type: string
+              pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
     StaffShift:
       type: object
       additionalProperties: false
