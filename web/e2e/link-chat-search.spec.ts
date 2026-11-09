@@ -135,8 +135,9 @@ test("on a computer the panel sits beside the thread; rows show who, when and th
   const bubble = pane
     .getByTestId("chat-message")
     .filter({ hasText: "Send twenty bags" });
-  await expect(bubble).toBeInViewport();
+  // The flash lasts 1.8 s: looked for first, while the scroll settles.
   await expect(bubble).toHaveClass(/flash/);
+  await expect(bubble).toBeInViewport();
   await expect(panel).toBeVisible(); // beside the thread, it stays
 
   await panel.getByTestId("chat-search").fill("zebra");
