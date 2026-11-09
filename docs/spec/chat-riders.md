@@ -1,6 +1,6 @@
 # Chat: dispatch riders as participants
 
-Status: **plan**, for review (8 November 2026). Written with the founder. Decision: [0065](../decisions/0065-riders-are-organisations.md) (proposed). Amends [dispatch.md](dispatch.md) (D1 to D6, built) and builds on [chat tools](chat-tools.md), [business links](business-links.md) ([0061](../decisions/0061-business-links.md)), [fronts: services](fronts.md), [paying people](chat-pay-people.md) (plan) and [the five flows](chat-five-more-flows.md) (plan).
+Status: **plan**, for review (8 November 2026); **phase 1 built** (9 November 2026, §As built). Written with the founder. Decision: [0065](../decisions/0065-riders-are-organisations.md) (proposed). Amends [dispatch.md](dispatch.md) (D1 to D6, built) and builds on [chat tools](chat-tools.md), [business links](business-links.md) ([0061](../decisions/0061-business-links.md)), [fronts: services](fronts.md), [paying people](chat-pay-people.md) (plan) and [the five flows](chat-five-more-flows.md) (plan).
 
 ## Summary
 
@@ -62,7 +62,7 @@ A delivery for a linked rider is **a link order the business places with the rid
 
 **The door, cash and proof** are unchanged: the one-time account number is issued on Arrived against the business's storefront order as today, Paid reaches the rider's card, Cash received records the cash and the rider's debt (§ Getting paid). Quiet riders raise the alerts dispatch has, now reading the order's step times.
 
-**Dispatch shrinks.** For linked riders, the dispatch module's rows are no longer written: `deliveries` is the legacy path. Rotation, the window, presence, the door payment, quiet riders and the customer's messages stay in `engine/dispatch` and act on the delivery order. Nothing is rewritten for a rider not on Taskiem.
+**Dispatch keeps its record.** The business's `deliveries` row is the record of every delivery, linked rider or not: the hold, the window, the door, cash, proof and the quiet-rider sweep all hang off it, as built. What changes for a linked rider is how they receive and answer it: the order in their own business, mirrored from the delivery and back, step for step. Nothing is rewritten for a rider not on Taskiem.
 
 ## The rider's tools
 
@@ -163,3 +163,13 @@ The plan assumes the answer in brackets.
 - [ ] A rider's areas: the business's zone labels, or free text? (Labels, with free text matched by name.)
 - [ ] Should a rider see the customer's phone, or call through Taskiem? (The phone, while holding, as today.)
 - [ ] A rider with no bank connected paying a cash bill from the app: needs decision 0052's wallet for individuals. (Phase 4 uses transfer or hand-in until then.)
+
+## As built (phase 1, 9 November 2026)
+
+- **The delivery is a trade order with delivery fields**, not a kind of its own: the rider's order is a storefront order of kind `trade` in their business, as a linked supplier's order is, and `link_orders` carries the delivery (`delivery_id`, the business's delivery; `pickup`, `pickup_link`, `drop_area`, `proof_required`, `door_payment`, `expires_at`, `picked_up_at`, `arrived_at`; migration 00408). The API shows it as `delivery` on the order, with the customer (name, phone, address, landmark, pin) only while the rider holds it (accepted to arrived); the details are cleared from the rider's side once it is delivered, declined or cancelled, the name kept. The storefront status `arrived` is the order's "At the door".
+- **The business's `deliveries` row stays the record**, with `link_order_id` pointing at the rider's order; `riders.link_id` says which of the business's active links the rider is (`PATCH /v1/riders/{id}` with `link_id`, or `""` to take it off). The claim of a legacy rider is phase 2.
+- **Placing and mirroring** (`engine/dispatch/linked.go`, `engine/links/deliveries.go`): `offerTx` writes the business's card and then, through `taskiem_link_enter` (`link.delivery.*`, gated on the Links area, so a rider's business needs nothing else turned on), the rider's order and card, and returns the scope to the business (`links.ReturnTx`, which only ever restores the caller's own side). Every step through `press`, from the rider's buttons and words, is mirrored the same way; a step from the rider's own business (`Dispatch.RiderStep`) enters the business's side, takes the step as the button would, returns, and writes the rider's side. Withdrawn, passed and released offers cancel the rider's order; Can't declines it. A rider whose business has its links off, or whose link ended, is offered by chat alone and the delivery goes on.
+- **The rider's steps** are `POST /v1/trade-orders/{id}/{accept|cant|decline|picked_up|arrived|delivered}` on their order, `delivered` as a multipart form with a `photo` when the business asks for proof, kept in the business's storage as a photo from WhatsApp is. The chat app's offer and buttons go out as before, so a rider on the road has both.
+- **Cards**: the business's side names the document `dispatch`, the rider's `delivery`, one pair per step, with the steps Offered, Accepted, Picked up, Arrived, Delivered on both; the rider's own steps are diary lines on their side. The web's card shows the five steps and, on the rider's side, the next step as a button; the Orders tool opens a delivery as its own view (where to pick up, where it goes, the customer while held, the fee, Can't and the next step, the photo on Delivered).
+- **Not yet**: the Orders tile is still named Orders for a rider (the rename to Deliveries comes with the sign-up answer in phase 2); the `/v1/trade-orders` routes sit under the Orders area, which a rider's business of kind `service` has off, so phase 2's sign-up turns it on for them; the alert's countdown and the business-side Release button on the card.
+- **Tests**: `engine/dispatch/linked_db_test.go` (offer to delivered through both paths, the customer held and cleared, the window, Can't, release, a legacy rider untouched); `api/link_deliveries_test.go` (the same over the API with the WhatsApp button and the photo, both conversations' cards); `web/src/lib/cardframe.test.ts`.

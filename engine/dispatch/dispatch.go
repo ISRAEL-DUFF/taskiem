@@ -244,6 +244,9 @@ type Delivery struct {
 	Late string `json:"late,omitempty"`
 	// Zone is the order's delivery area.
 	Zone string `json:"zone,omitempty"`
+	// LinkOrderID is the rider's own order for it, when the rider is a
+	// business on Taskiem (docs/spec/chat-riders.md).
+	LinkOrderID *uuid.UUID `json:"link_order_id,omitempty"`
 	// proofPath is the photo's place in the business's storage.
 	proofPath string
 }
@@ -253,13 +256,13 @@ func (x Delivery) ProofPath() string { return x.proofPath }
 
 const deliveryCols = `d.id, d.order_id, o.reference, d.rider_id, d.status, d.offered_by, d.offered_at, d.expires_at, d.answered_at, d.accepted_at,
 	d.picked_up_at, d.arrived_at, d.delivered_at, d.released_at, d.fee_kobo, COALESCE(d.paid_how, ''), COALESCE(d.proof, ''), COALESCE(d.location, ''),
-	d.rating, COALESCE(o.zone, '')`
+	d.rating, COALESCE(o.zone, ''), d.link_order_id`
 
 func scanDelivery(r pgx.Row) (Delivery, error) {
 	var x Delivery
 	var rating *int16
 	err := r.Scan(&x.ID, &x.OrderID, &x.Reference, &x.RiderID, &x.Status, &x.OfferedBy, &x.OfferedAt, &x.ExpiresAt, &x.AnsweredAt, &x.AcceptedAt,
-		&x.PickedUpAt, &x.ArrivedAt, &x.DeliveredAt, &x.ReleasedAt, &x.FeeKobo, &x.PaidHow, &x.proofPath, &x.Location, &rating, &x.Zone)
+		&x.PickedUpAt, &x.ArrivedAt, &x.DeliveredAt, &x.ReleasedAt, &x.FeeKobo, &x.PaidHow, &x.proofPath, &x.Location, &rating, &x.Zone, &x.LinkOrderID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return x, ErrNoDelivery
 	}
@@ -469,6 +472,9 @@ func (d *Dispatch) offerTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, ref
 		if err := d.queue(ctx, tx, tenant, cur.ID, cur.RiderID, StageWithdrawn, ""); err != nil {
 			return out, nil, err
 		}
+		if err := d.mirrorStep(ctx, tx, tenant, cur, StageWithdrawn, true); err != nil {
+			return out, nil, err
+		}
 	case err != nil && !errors.Is(err, ErrNoDelivery):
 		return out, nil, err
 	}
@@ -523,6 +529,11 @@ func (d *Dispatch) offerTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, ref
 		return out, nil, err
 	}
 	if err := audit(ctx, tx, tenant, "dispatch.offered", ord.Reference, map[string]any{"rider": rider.ID, "by": by}); err != nil {
+		return out, nil, err
+	}
+	// A rider that is a business on Taskiem gets the order in their own
+	// business too (docs/spec/chat-riders.md).
+	if err := d.placeLinked(ctx, tx, tenant, id, rider, ord, fee, s); err != nil {
 		return out, nil, err
 	}
 	x, err := d.GetTx(ctx, tx, tenant, id)
@@ -689,7 +700,7 @@ func (d *Dispatch) Press(ctx context.Context, tenant, delivery uuid.UUID, action
 		if err != nil {
 			return err
 		}
-		t, after, err = d.press(ctx, tx, tenant, x, ord, action)
+		t, after, err = d.press(ctx, tx, tenant, x, ord, action, nil)
 		return err
 	})
 	if err != nil {
@@ -698,9 +709,13 @@ func (d *Dispatch) Press(ctx context.Context, tenant, delivery uuid.UUID, action
 	return t, run(after)
 }
 
-func (d *Dispatch) press(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x Delivery, ord storefront.Order, action string) (Tap, []func() error, error) {
+// press takes the tap in tx; opt says it came from the rider's own
+// business (the rider's side written by the caller), nil from their
+// button or word, in which case a linked rider's order is mirrored here.
+func (d *Dispatch) press(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x Delivery, ord storefront.Order, action string, opt *pressOpt) (Tap, []func() error, error) {
 	t := Tap{Delivery: x}
 	var after []func() error
+	moved := ""
 	set := func(status, col string, orderStatus string) error {
 		q := `UPDATE deliveries SET status = $2, ` + col + ` = now(), answered_at = COALESCE(answered_at, now()) WHERE id = $1`
 		if col == "answered_at" {
@@ -716,6 +731,7 @@ func (d *Dispatch) press(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x Del
 			}
 		}
 		t.Moved = true
+		moved = status
 		return audit(ctx, tx, tenant, "dispatch."+status, ord.Reference, map[string]any{"rider": x.RiderID})
 	}
 	already := func(states ...string) bool { return slices.Contains(states, x.Status) }
@@ -750,9 +766,14 @@ func (d *Dispatch) press(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x Del
 		if err := set("declined", "answered_at", ""); err != nil {
 			return t, nil, err
 		}
+		moved = Cant
 		if err := d.queue(ctx, tx, tenant, x.ID, x.RiderID, StageCant, ""); err != nil {
 			return t, nil, err
 		}
+		if err := d.mirrorPress(ctx, tx, tenant, x, moved, opt); err != nil {
+			return t, nil, err
+		}
+		moved = ""
 		if err := d.next(ctx, tx, tenant, x, ord); err != nil {
 			return t, nil, err
 		}
@@ -842,12 +863,34 @@ func (d *Dispatch) press(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x Del
 	default:
 		return t, nil, fmt.Errorf("%w: %q", ErrMove, action)
 	}
+	if moved != "" {
+		if err := d.mirrorPress(ctx, tx, tenant, x, moved, opt); err != nil {
+			return t, nil, err
+		}
+	}
 	nx, err := d.GetTx(ctx, tx, tenant, x.ID)
 	if err != nil {
 		return t, nil, err
 	}
 	t.Delivery = nx
 	return t, after, nil
+}
+
+// mirrorPress records a step a rider took on their own order: through the
+// door when it came from their button or word; the business's card alone
+// when it came from their own business, which writes its side.
+func (d *Dispatch) mirrorPress(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x Delivery, stage string, opt *pressOpt) error {
+	if x.LinkOrderID == nil {
+		return nil
+	}
+	if opt == nil {
+		return d.mirrorStep(ctx, tx, tenant, x, stage, false)
+	}
+	r, err := d.Riders.GetTx(ctx, tx, tenant, x.RiderID)
+	if err != nil || r.LinkID == nil {
+		return err
+	}
+	return d.ourCard(ctx, tx, tenant, *r.LinkID, opt.pair, x, stage, false)
 }
 
 // complete completes a delivered order as the owner's "delivered" does,
@@ -926,6 +969,9 @@ func (d *Dispatch) Release(ctx context.Context, tenant uuid.UUID, reference, act
 		if err := d.queue(ctx, tx, tenant, x.ID, x.RiderID, stage, ""); err != nil {
 			return err
 		}
+		if err := d.mirrorStep(ctx, tx, tenant, x, status, true); err != nil {
+			return err
+		}
 		if err := audit(ctx, tx, tenant, "dispatch."+status, reference, map[string]any{"by": actor, "rider": x.RiderID}); err != nil {
 			return err
 		}
@@ -987,6 +1033,9 @@ func (d *Dispatch) sweepTenant(ctx context.Context, tenant uuid.UUID) error {
 				return err
 			}
 			if err := d.queue(ctx, tx, tenant, x.ID, x.RiderID, StageWithdrawn, ""); err != nil {
+				return err
+			}
+			if err := d.mirrorStep(ctx, tx, tenant, x, "passed", true); err != nil {
 				return err
 			}
 			ord, err := d.Orders.GetOrder(ctx, tx, tenant, x.Reference)

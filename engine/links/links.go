@@ -396,6 +396,10 @@ func actionArea(action string) (areas.Area, bool) {
 		return areas.Stock, true
 	case strings.HasPrefix(action, "link.order"):
 		return areas.Orders, true
+	case strings.HasPrefix(action, "link.delivery"):
+		// A delivery reaches a rider's business through its links alone:
+		// its orders are theirs whatever else it has on.
+		return areas.Links, true
 	case strings.HasPrefix(action, "link.bill"):
 		return areas.Money, true
 	case action == "link.message":

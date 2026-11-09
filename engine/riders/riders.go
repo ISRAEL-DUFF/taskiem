@@ -106,6 +106,10 @@ type Rider struct {
 	InvitedAt *time.Time `json:"invited_at"`
 	CreatedAt time.Time  `json:"created_at"`
 	RetiredAt *time.Time `json:"retired_at"`
+	// LinkID is the link with the rider's own business on Taskiem, when
+	// they have one (docs/spec/chat-riders.md): their deliveries reach them
+	// as orders in it, beside their chat app.
+	LinkID    *uuid.UUID `json:"link_id,omitempty"`
 	phoneHash []byte
 }
 
@@ -159,12 +163,15 @@ type In struct {
 	Zones   *[]string `json:"zones"`
 	FeeKobo *int64    `json:"fee_kobo"`
 	Active  *bool     `json:"active"`
+	// LinkID is the link with the rider's own business on Taskiem ("" to
+	// take it off): an active link of this business.
+	LinkID *string `json:"link_id"`
 }
 
 const riderCols = `r.id, r.phone_hash, r.phone, r.name, r.zones, r.fee_kobo, r.active, r.invited_at, r.created_at, r.retired_at,
 	r.not_answering_since IS NOT NULL, COALESCE(r.bank_shown, ''),
 	(SELECT avg(x.rating)::float8 FROM deliveries x WHERE x.rider_id = r.id AND x.rating IS NOT NULL),
-	(SELECT count(*) FROM deliveries x WHERE x.rider_id = r.id AND x.rating IS NOT NULL),
+	(SELECT count(*) FROM deliveries x WHERE x.rider_id = r.id AND x.rating IS NOT NULL), r.link_id,
 	COALESCE((SELECT ch.channel FROM reach_contacts c JOIN reach_channels ch ON ch.contact_id = c.id
 	  WHERE c.tenant_id = r.tenant_id AND c.phone_hash = r.phone_hash AND ch.stopped_at IS NULL
 	  ORDER BY ch.linked_at DESC LIMIT 1), 'sms')`
@@ -179,7 +186,7 @@ func (r *Riders) scan(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows pgx
 	list, err := pgx.CollectRows(rows, func(c pgx.CollectableRow) (row, error) {
 		var v row
 		err := c.Scan(&v.x.ID, &v.x.phoneHash, &v.phone, &v.name, &v.x.Zones, &v.x.FeeKobo, &v.x.Active, &v.x.InvitedAt, &v.x.CreatedAt,
-			&v.x.RetiredAt, &v.x.NotAnswering, &v.x.Bank, &v.x.Rating, &v.x.Ratings, &v.x.Reached)
+			&v.x.RetiredAt, &v.x.NotAnswering, &v.x.Bank, &v.x.Rating, &v.x.Ratings, &v.x.LinkID, &v.x.Reached)
 		return v, err
 	})
 	if err != nil {
@@ -553,6 +560,32 @@ func (r *Riders) UpdateTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, 
 			return Rider{}, err
 		}
 		changed["active"] = *in.Active
+	}
+	if in.LinkID != nil {
+		// The rider's own business on Taskiem (docs/spec/chat-riders.md):
+		// one of this business's active links, or none.
+		var link *uuid.UUID
+		if *in.LinkID != "" {
+			lid, err := uuid.Parse(*in.LinkID)
+			if err != nil {
+				return Rider{}, fmt.Errorf("%w: no such link", ErrInvalid)
+			}
+			var n int
+			if err := tx.QueryRow(ctx, `SELECT count(*) FROM taskiem_links_of() WHERE id = $1 AND state = 'active'`, lid).Scan(&n); err != nil {
+				return Rider{}, err
+			}
+			if n == 0 {
+				return Rider{}, fmt.Errorf("%w: no active link with that business", ErrInvalid)
+			}
+			link = &lid
+		}
+		if _, err := tx.Exec(ctx, `UPDATE riders SET link_id = $2, updated_at = now() WHERE id = $1`, id, link); err != nil {
+			if link != nil {
+				return Rider{}, fmt.Errorf("%w: another rider is already that business", ErrInvalid)
+			}
+			return Rider{}, err
+		}
+		changed["link_id"] = in.LinkID
 	}
 	if err := audit(ctx, tx, tenant, "rider.changed", id, changed); err != nil {
 		return Rider{}, err

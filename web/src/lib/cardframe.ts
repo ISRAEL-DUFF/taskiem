@@ -1,7 +1,7 @@
 // The card frame (docs/spec/chat-tools.md §3): what a document card shows
 // on its top line and its progress, from the event it carries.
 
-import type { DocCard } from "./linkchat";
+import { isDelivery, type DocCard } from "./linkchat";
 
 export type Tone = "lime" | "warn" | "danger" | "plain";
 
@@ -14,6 +14,25 @@ export interface CardStatus {
 }
 
 export const ORDER_STEPS = ["Placed", "Accepted", "On the way", "Delivered"];
+/** A delivery's steps (docs/spec/chat-riders.md): the rider's and the business's card alike. */
+export const DELIVERY_STEPS = ["Offered", "Accepted", "Picked up", "Arrived", "Delivered"];
+
+/** The steps a card's progress runs on. */
+export function stepsFor(card: Pick<DocCard, "doc">): string[] {
+  return isDelivery(card) ? DELIVERY_STEPS : ORDER_STEPS;
+}
+
+const DELIVERY: Record<string, CardStatus> = {
+  offered: { word: "Offered", tone: "warn", step: 0 },
+  accepted: { word: "Accepted", tone: "lime", step: 1 },
+  picked_up: { word: "Picked up", tone: "lime", step: 2 },
+  arrived: { word: "At the door", tone: "lime", step: 3 },
+  delivered: { word: "Delivered", tone: "lime", step: 4 },
+  cant: { word: "Passed", tone: "danger" },
+  passed: { word: "Ran out", tone: "plain" },
+  withdrawn: { word: "Withdrawn", tone: "plain" },
+  released: { word: "Taken back", tone: "warn" },
+};
 
 const ORDER: Record<string, CardStatus> = {
   ordered: { word: "New", tone: "lime", step: 0 },
@@ -50,6 +69,8 @@ const INVOICE: Record<string, CardStatus> = {
 
 /** The card's pill and progress. */
 export function cardStatus(card: DocCard, now = Date.now()): CardStatus {
+  if (isDelivery(card))
+    return DELIVERY[card.event] ?? { word: card.event.replaceAll("_", " "), tone: "plain" };
   const order = card.doc === "order" || card.doc === "purchase";
   // A deal no one answered in time (phase 7): nothing more happens to it.
   if (
@@ -68,8 +89,11 @@ export function cardStatus(card: DocCard, now = Date.now()): CardStatus {
 
 /** The card's kicker: "ORDER · P-7QX4KD". */
 export function cardKicker(card: DocCard): string {
-  const word =
-    card.doc === "order" || card.doc === "purchase" ? "Order" : "Invoice";
+  const word = isDelivery(card)
+    ? "Delivery"
+    : card.doc === "order" || card.doc === "purchase"
+      ? "Order"
+      : "Invoice";
   return `${word} · ${card.reference}`;
 }
 

@@ -108,6 +108,7 @@ const ORDER_WORD: Record<string, string> = {
   accepted: "Accepted",
   ready: "Ready",
   dispatched: "On the way",
+  arrived: "At the door",
   delivered: "Delivered",
   declined: "Declined",
   cancelled: "Cancelled",
@@ -240,9 +241,14 @@ export const TOOLS: Tool[] = [
         (o) => ({
           id: o.id,
           name: o.order_reference,
-          sub: `${o.buyer_name} · ${formatPrice(o.total_kobo)}`,
+          sub: o.delivery
+            ? `${o.buyer_name} · Delivery${o.delivery.drop_area ? ` to ${o.delivery.drop_area}` : ""} · ${formatPrice(o.total_kobo)}`
+            : `${o.buyer_name} · ${formatPrice(o.total_kobo)}`,
           pill: {
-            text: ORDER_WORD[o.status] ?? o.status,
+            text:
+              o.delivery && o.status === "received"
+                ? "Offered"
+                : (ORDER_WORD[o.status] ?? o.status),
             tone:
               o.status === "received"
                 ? "lime"

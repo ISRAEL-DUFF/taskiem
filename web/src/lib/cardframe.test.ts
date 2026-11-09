@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cardKicker, cardStatus, isDiary } from "./cardframe";
+import { DELIVERY_STEPS, ORDER_STEPS, cardKicker, cardStatus, isDiary, stepsFor } from "./cardframe";
 
 describe("the card frame", () => {
   it("places an order on its four steps", () => {
@@ -35,5 +35,20 @@ describe("the card frame", () => {
     expect(
       cardStatus({ doc: "order", event: "accept", reference: "P-1", deal: deal("2026-11-07T09:00:00Z") }, now).word,
     ).toBe("Accepted");
+  });
+  it("places a delivery on its five steps, on either side (chat-riders phase 1)", () => {
+    expect(cardStatus({ doc: "delivery", event: "offered", reference: "AK-1" })).toEqual({ word: "Offered", tone: "warn", step: 0 });
+    expect(cardStatus({ doc: "dispatch", event: "accepted", reference: "AK-1" }).step).toBe(1);
+    expect(cardStatus({ doc: "delivery", event: "picked_up", reference: "AK-1" }).step).toBe(2);
+    expect(cardStatus({ doc: "delivery", event: "arrived", reference: "AK-1" })).toEqual({ word: "At the door", tone: "lime", step: 3 });
+    expect(cardStatus({ doc: "dispatch", event: "delivered", reference: "AK-1" }).step).toBe(4);
+    expect(cardStatus({ doc: "delivery", event: "cant", reference: "AK-1" })).toEqual({ word: "Passed", tone: "danger" });
+    expect(cardStatus({ doc: "dispatch", event: "released", reference: "AK-1" }).word).toBe("Taken back");
+    expect(cardKicker({ doc: "delivery", event: "offered", reference: "AK-1" })).toBe("Delivery · AK-1");
+    expect(stepsFor({ doc: "delivery" })).toBe(DELIVERY_STEPS);
+    expect(stepsFor({ doc: "order" })).toBe(ORDER_STEPS);
+    // The offer is a card on both sides; the rider's own steps are lines on theirs.
+    expect(isDiary({ doc: "dispatch", event: "offered", reference: "AK-1" }, true)).toBe(false);
+    expect(isDiary({ doc: "delivery", event: "accepted", reference: "AK-1" }, true)).toBe(true);
   });
 });

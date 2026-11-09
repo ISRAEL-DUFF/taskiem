@@ -5,6 +5,7 @@ import {
   get,
   patch,
   post,
+  postForm,
   postOnce,
   put,
   sendWith,
@@ -14,7 +15,7 @@ import { useConfirm } from "./ConfirmSheet";
 import { KitEmpty, KitField, KitLoading, Pill } from "../kit";
 import { serviceRow } from "../lib/bookings";
 import type { Service, ServiceColumns } from "../lib/bookings";
-import { ORDER_STEPS } from "../lib/cardframe";
+import { DELIVERY_STEPS, ORDER_STEPS } from "../lib/cardframe";
 import {
   itemsWithPrice,
   listFor,
@@ -827,8 +828,260 @@ const STEP: Record<string, number> = {
   delivered: 3,
 };
 
+/** Where a delivery is on Offered, Accepted, Picked up, Arrived, Delivered. */
+const DELIVERY_STEP: Record<string, number> = {
+  received: 0,
+  accepted: 1,
+  dispatched: 2,
+  arrived: 3,
+  delivered: 4,
+};
+const DELIVERY_WORD: Record<string, string> = {
+  received: "Offered",
+  accepted: "Accepted",
+  dispatched: "Picked up",
+  arrived: "At the door",
+  delivered: "Delivered",
+  declined: "Passed",
+  cancelled: "Taken back",
+};
+
+/** The rider's diary line for a step. */
+function deliveryLine(step: string, reference: string, business: string): string {
+  switch (step) {
+    case "accept":
+      return `Taking ${reference} for ${business}`;
+    case "cant":
+      return `Passed on ${reference} for ${business}`;
+    case "picked_up":
+      return `Picked up ${reference} from ${business}`;
+    case "arrived":
+      return `At the door with ${reference}`;
+    default:
+      return `Delivered ${reference} for ${business}`;
+  }
+}
+
+/** A delivery for a linked business (docs/spec/chat-riders.md): where to
+ * pick up and where it goes, who it is for while we hold it, the fee, and
+ * the next step; Delivered with a photo when the business asks for proof. */
+export function DeliveryView({
+  order,
+  onSaved,
+  canEdit = true,
+}: {
+  order: TradeOrder;
+  onSaved: (line: string | null) => void;
+  canEdit?: boolean;
+}) {
+  const { confirm, node } = useConfirm();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>();
+  const [photo, setPhoto] = useState<File>();
+  const d = order.delivery;
+  const step = DELIVERY_STEP[order.status];
+  const c = d?.customer;
+  const act = async (s: "accept" | "cant" | "picked_up" | "arrived" | "delivered") => {
+    if (
+      s === "cant" &&
+      !(await confirm({
+        title: `Pass on ${order.order_reference}?`,
+        body: "It goes to another rider.",
+        ok: "Can't take it",
+        danger: true,
+      }))
+    )
+      return;
+    setBusy(true);
+    try {
+      const path = `/v1/trade-orders/${encodeURIComponent(order.id)}/${s}`;
+      if (s === "delivered" && photo) {
+        const form = new FormData();
+        form.append("photo", photo);
+        await postForm(path, form);
+      } else {
+        await post(path);
+      }
+      onSaved(deliveryLine(s, order.order_reference, order.buyer_name));
+    } catch (e) {
+      setError(e);
+      setBusy(false);
+    }
+  };
+  const next: { step: Parameters<typeof act>[0]; word: string } | undefined =
+    order.status === "received"
+      ? { step: "accept", word: "Accept" }
+      : order.status === "accepted"
+        ? { step: "picked_up", word: "Picked up" }
+        : order.status === "dispatched"
+          ? { step: "arrived", word: "Arrived" }
+          : order.status === "arrived"
+            ? { step: "delivered", word: "Delivered" }
+            : undefined;
+  const needsPhoto = !!d?.proof_required && order.status === "arrived" && !photo;
+  return (
+    <>
+      <div className="tk-sheet-list tk-form-body">
+        <p className="tk-form-now">
+          {order.buyer_name} ·{" "}
+          <Pill
+            tone={
+              order.status === "received"
+                ? "warn"
+                : order.status === "declined" || order.status === "cancelled"
+                  ? "danger"
+                  : order.status === "delivered"
+                    ? "lime"
+                    : "plain"
+            }
+          >
+            {DELIVERY_WORD[order.status] ?? order.status}
+          </Pill>
+        </p>
+        {step !== undefined && (
+          <span className="tk-progress">
+            <span
+              className="tk-progress-bar"
+              role="img"
+              aria-label={`${DELIVERY_STEPS[step]}: step ${step + 1} of ${DELIVERY_STEPS.length}`}
+            >
+              {DELIVERY_STEPS.map((w, i) => (
+                <span key={w} className={i <= step ? "done" : ""} />
+              ))}
+            </span>
+            <span className="tk-progress-words" aria-hidden="true">
+              {DELIVERY_STEPS.map((w, i) => (
+                <span key={w} className={i === step ? "now" : ""}>
+                  {w}
+                </span>
+              ))}
+            </span>
+          </span>
+        )}
+        <ul className="tk-lines">
+          {d?.pickup && (
+            <li>
+              <span>Pick up</span>
+              <b>
+                {d.pickup}
+                {d.pickup_link && (
+                  <>
+                    {" "}
+                    <a href={d.pickup_link} target="_blank" rel="noreferrer">
+                      Map
+                    </a>
+                  </>
+                )}
+              </b>
+            </li>
+          )}
+          <li>
+            <span>Deliver to</span>
+            <b>
+              {c?.address
+                ? `${c.address}${d?.drop_area ? ` (${d.drop_area})` : ""}`
+                : d?.drop_area || "The area is on the order"}
+            </b>
+          </li>
+          {c?.landmark && (
+            <li>
+              <span>Landmark</span>
+              <b>{c.landmark}</b>
+            </li>
+          )}
+          {c?.pin && (
+            <li>
+              <span>Pin</span>
+              <b>
+                <a href={c.pin} target="_blank" rel="noreferrer">
+                  Open the map
+                </a>
+              </b>
+            </li>
+          )}
+          {c?.name && (
+            <li>
+              <span>Customer</span>
+              <b>
+                {c.name}
+                {c.phone && (
+                  <>
+                    {" · "}
+                    <a href={`tel:${c.phone}`}>{c.phone}</a>
+                  </>
+                )}
+              </b>
+            </li>
+          )}
+          {d?.door_payment && (
+            <li>
+              <span>Payment</span>
+              <b>At the door</b>
+            </li>
+          )}
+          <li className="tk-lines-total">
+            <span>Your fee</span>
+            <b>{formatPrice(order.total_kobo)}</b>
+          </li>
+        </ul>
+        {d?.proof_required && order.status === "arrived" && (
+          <KitField label="Photo of the delivery" hint="The business asks for one.">
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={(e) => setPhoto(e.target.files?.[0])}
+            />
+          </KitField>
+        )}
+        <ErrorBox error={error} />
+      </div>
+      {canEdit && next && (
+        <div className="tk-sheet-foot tk-foot-two">
+          {order.status === "received" ? (
+            <button
+              type="button"
+              className="tk-btn ghost"
+              disabled={busy}
+              onClick={() => void act("cant")}
+            >
+              Can&apos;t
+            </button>
+          ) : (
+            <span />
+          )}
+          <button
+            type="button"
+            className="tk-cta"
+            disabled={busy || needsPhoto}
+            onClick={() => void act(next.step)}
+          >
+            {next.word}
+          </button>
+        </div>
+      )}
+      {node}
+    </>
+  );
+}
+
 /** An order from a linked business: what it asks for, where it is, Accept or Decline. */
 export function OrderView({
+  order,
+  onSaved,
+  canEdit = true,
+}: {
+  order: TradeOrder;
+  onSaved: (line: string | null) => void;
+  canEdit?: boolean;
+}) {
+  if (order.delivery) {
+    return <DeliveryView order={order} onSaved={onSaved} canEdit={canEdit} />;
+  }
+  return <TradeOrderView order={order} onSaved={onSaved} canEdit={canEdit} />;
+}
+
+function TradeOrderView({
   order,
   onSaved,
   canEdit = true,

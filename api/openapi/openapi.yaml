@@ -6701,7 +6701,7 @@ paths:
       tags:
       - Links
       summary: Take a step on an order from a linked business
-      description: 'accept, decline, change (with lines), ready, dispatched, delivered (with what was delivered), cancel (our own, or yes to the buyer''s request), keep (no to the buyer''s request to cancel), or agree (the buyer''s count of a short delivery). The buyer''s purchase order follows in the same transaction, and the buyer is told. An invoice to the buyer is raised at acceptance or once the delivery is received, as set for the link (PUT /v1/links/{id}/trade), and becomes its bill. 409 when the order''s status does not allow the step.'
+      description: 'accept, decline, change (with lines), ready, dispatched, delivered (with what was delivered), cancel (our own, or yes to the buyer''s request), keep (no to the buyer''s request to cancel), or agree (the buyer''s count of a short delivery). The buyer''s purchase order follows in the same transaction, and the buyer is told. An invoice to the buyer is raised at acceptance or once the delivery is received, as set for the link (PUT /v1/links/{id}/trade), and becomes its bill. 409 when the order''s status does not allow the step. On a delivery for a linked business (the order carries delivery; the rider is a business on Taskiem), the steps are accept, decline or cant, picked_up, arrived and delivered, which may be sent as a multipart form with a photo field when the business asks for proof: each runs on the business''s delivery as the rider''s WhatsApp button would, the customer told, and both sides'' cards follow.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -6720,10 +6720,18 @@ paths:
         required: true
         schema:
           type: string
-          enum: [accept, decline, change, ready, dispatched, delivered, cancel, keep, agree]
+          enum: [accept, decline, cant, change, ready, dispatched, picked_up, arrived, delivered, cancel, keep, agree]
       requestBody:
         required: false
         content:
+          multipart/form-data:
+            schema:
+              type: object
+              description: delivered on a delivery for a linked business, with the proof photo the business asks for
+              properties:
+                photo:
+                  type: string
+                  format: binary
           application/json:
             schema:
               type: object
@@ -31477,6 +31485,10 @@ components:
           format: date-time
         retired_at:
           $ref: '#/components/schemas/NullableTimestamp'
+        link_id:
+          type: string
+          format: uuid
+          description: The link with the rider's own business on Taskiem, when they have one
     StockSale:
       type: object
       required: [id, reference, lines, amount_kobo, paid_how, status, by, sold_at]
@@ -31899,8 +31911,8 @@ components:
       properties:
         doc:
           type: string
-          enum: [order, purchase, invoice, bill]
-          description: Our own document it names
+          enum: [order, purchase, invoice, bill, delivery, dispatch]
+          description: Our own document it names (delivery, a rider's order for a delivery; dispatch, the business's delivery)
         event:
           type: string
           description: What happened to it (ordered, accept, delivered, bill, queried, resolved, …)
@@ -32357,8 +32369,10 @@ components:
           type: string
         status:
           type: string
-          enum: [proposed, received, changed, accepted, ready, dispatched, delivered, declined, cancelled]
-          description: proposed, drafted by us for the buyer and waiting for its Confirm
+          enum: [proposed, received, changed, accepted, ready, dispatched, arrived, delivered, declined, cancelled]
+          description: proposed, drafted by us for the buyer and waiting for its Confirm; arrived, a delivery at the door
+        delivery:
+          $ref: '#/components/schemas/TradeDelivery'
         change:
           type: array
           items:
@@ -32427,6 +32441,53 @@ components:
         updated_at:
           type: string
           format: date-time
+    TradeDelivery:
+      type: object
+      additionalProperties: false
+      required: [delivery_id, proof_required, door_payment]
+      description: The order is a delivery for the linked business, by a rider that is a business on Taskiem (docs/spec/chat-riders.md)
+      properties:
+        delivery_id:
+          type: string
+          format: uuid
+          description: The business's delivery it is
+        pickup:
+          type: string
+        pickup_link:
+          type: string
+        drop_area:
+          type: string
+        proof_required:
+          type: boolean
+          description: The business asks for a photo on Delivered
+        door_payment:
+          type: boolean
+          description: The customer pays at the door
+        expires_at:
+          type: string
+          format: date-time
+          description: When the offer runs out, while it is received
+        picked_up_at:
+          type: string
+          format: date-time
+        arrived_at:
+          type: string
+          format: date-time
+        customer:
+          description: Who it goes to, while the rider holds it (accepted to arrived)
+          type: object
+          additionalProperties: false
+          properties:
+            name:
+              type: string
+            phone:
+              type: string
+            address:
+              type: string
+            landmark:
+              type: string
+            pin:
+              type: string
     StockItem:
       type: object
       required: [id, name, available, stock]
@@ -32551,6 +32612,9 @@ components:
           maximum: 10000000
         active:
           type: boolean
+        link_id:
+          type: string
+          description: The link with the rider's own business on Taskiem (an active link of this business), or "" to take it off; their deliveries then reach them as orders there too (docs/spec/chat-riders.md)
     StorefrontAvailability:
       type: object
       additionalProperties: false

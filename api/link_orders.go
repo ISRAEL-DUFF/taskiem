@@ -90,8 +90,11 @@ func (s *Server) getTradeOrder(w http.ResponseWriter, r *http.Request) {
 	var out tradeOrderOut
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
-		out.Order, err = links.GetOrderTx(r.Context(), tx, chi.URLParam(r, "id"), false)
-		return err
+		if out.Order, err = links.GetOrderTx(r.Context(), tx, chi.URLParam(r, "id"), false); err != nil {
+			return err
+		}
+		// A delivery's customer, for the rider while they hold it.
+		return s.openHeld(r.Context(), tx, principalFrom(r.Context()), &out.Order)
 	}); err != nil {
 		s.fail(w, r, orderErr(err))
 		return
@@ -128,6 +131,24 @@ func orderStepAllowed(p *Principal, step string, o links.Order) error {
 // delivery. The buyer's purchase order follows at once.
 func (s *Server) tradeOrderStep(w http.ResponseWriter, r *http.Request) {
 	step := chi.URLParam(r, "step")
+	// A delivery for a linked business (docs/spec/chat-riders.md): the
+	// rider's steps run on the business's delivery through the door.
+	if _, ok := deliveryOrderSteps[step]; ok {
+		var ref links.DeliveryRef
+		err := s.tx(r, func(tx pgx.Tx) error {
+			var err error
+			ref, err = links.DeliveryOfTx(r.Context(), tx, chi.URLParam(r, "id"))
+			return err
+		})
+		switch {
+		case err == nil:
+			s.deliveryStep(w, r, ref, step)
+			return
+		case !errors.Is(err, links.ErrState) && !errors.Is(err, links.ErrNotFound):
+			s.fail(w, r, orderErr(err))
+			return
+		}
+	}
 	if !slices.Contains(links.SellerSteps, step) {
 		s.fail(w, r, pgx.ErrNoRows)
 		return
