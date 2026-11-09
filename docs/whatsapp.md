@@ -294,7 +294,7 @@ In the organisation's Meta app, set the callback URL to `<edge URL>/channels/wha
 
 Then:
 
-- inbound messages are routed by `metadata.phone_number_id`: a delivery signed with one app's secret is only taken for that app's numbers; a bound person writing to the number acts in that organisation only, if they are a member; an unbound number gets the [public menu](#public-menus), if there is one;
+- inbound messages are routed by `metadata.phone_number_id`: a delivery signed with one app's secret is only taken for that app's numbers; a bound person writing to the number acts in that organisation only, if they are a member; an unbound number writing to an organisation's own number is a [customer](#customers-conversations) (or asks for the [public menu](#public-menus) by its word); on the shared number it is told how to link;
 - binding codes, approval requests, step-up links and forms, run outcomes and alerts to the organisation's people go from its number, without the bracketed name; the 24-hour window is per business number (`whatsapp_own_contacts`);
 - anything else, and other organisations, use the shared number.
 
@@ -314,7 +314,16 @@ Approvals, codes, step-up and alerts never wait on a bill. Usage is in `GET /v1/
 
 ## Public menus
 
-An organisation with its own number may offer a menu to anyone who writes to it without a linked account (Settings > WhatsApp number, `PUT /v1/whatsapp/public-menu`, `workflow.publish`): up to nine workflows it marks public, each with a short label. A message gets the numbered menu; a number picks one; its inputs come as a form (`taskiem_inputs`, never asked in chat), checked against the schema; a summary and **yes**; then a run of the version deployed in `prod`, started as `whatsapp_public:<number>` (audited by the system actor with the number masked), and a reference. Nothing else is reachable: no status, no approvals, no other workflows. Limits: six messages then one every 10 seconds per number, three starts then one every 20 minutes per number, and per-organisation ceilings, then the plan limits. Menus are never offered on the shared number (`Server.WhatsAppPublic` remains the hook there).
+An organisation with its own number may offer a menu to anyone who writes to it without a linked account (Settings > WhatsApp number, `PUT /v1/whatsapp/public-menu`, `workflow.publish`): up to nine workflows it marks public, each with a short label. The word **menu** gets the numbered menu (any other message is the [customer's conversation](#customers-conversations) with the business); a number picks one; its inputs come as a form (`taskiem_inputs`, never asked in chat), checked against the schema; a summary and **yes**; then a run of the version deployed in `prod`, started as `whatsapp_public:<number>` (audited by the system actor with the number masked), and a reference. Nothing else is reachable: no status, no approvals, no other workflows. Limits: six messages then one every 10 seconds per number, three starts then one every 20 minutes per number, and per-organisation ceilings, then the plan limits. Menus are never offered on the shared number (`Server.WhatsAppPublic` remains the hook there).
+
+## Customers' conversations
+
+Someone who writes to an organisation's own number and isn't on its team, a rider, a supplier or a linked business is a customer ([chat-five-more-flows](spec/chat-five-more-flows.md), phase 1).
+- **Their thread:** what they write is a thread in the Chat page (Customers), one per customer number, sealed under the customer's own subject. Nothing is sent back.
+- **Who replies:** people who handle orders (`storefront.manage` or `order.handle`), from the thread.
+- **How a reply goes:** from the organisation's number, as text within 24 hours of the customer's last message, and as `taskiem_customer_reply` after that (refused until it is approved).
+- **STOP:** it deletes the thread's messages and stops every reply until **START**, before the reach book's STOP.
+- **API:** `/v1/customer-chats`.
 
 ## Alerts to WhatsApp
 

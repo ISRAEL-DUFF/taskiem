@@ -1,6 +1,6 @@
 # Chat: five more flows
 
-Status: **plan**, for review (8 November 2026; phase 0 added 9 November, from the founder's checks on a phone). Written with the founder; the live
+Status: **plan**, for review (8 November 2026; phase 0 added 9 November, from the founder's checks on a phone). Phase 0 is built; phase 1 is built (see As built under each). Written with the founder; the live
 doc is [the shared plan](https://claude.ai/artifact/FycMX9CLMjjE6oMBiGCumm), and this file is its copy beside the code.
 
 ## Summary
@@ -212,13 +212,44 @@ Built 9 November 2026 (`web/e2e/chat-phase0.spec.ts` checks each at 360 × 640 a
   - `TestDataTables` (`api/datatables_test.go`) runs the viewer's own request through the real route against the test Xenibase: an `any` group with an exact count, a sort, the cursor's second page, and an escaped `%` and `_`.
   - `TestAnyGroup` (`connectors/xenibase`) checks the `or` it sends.
 
+### As built: phase 1, customers' conversations
+
+Built 9 November 2026. `TestCustomerConversations` (`api/customer_chat_test.go`) checks the server, and `web/e2e/whatsapp.spec.ts` checks the page at 390 and 360 px, in both themes with axe.
+
+- **Who is a customer:** someone who writes to the business's own WhatsApp number and isn't on its team, a rider, a supplier or a linked business.
+  - A six-digit code, a rider's or supplier's words, a key, or a sign-up still go where they went. Everything else they write goes to their thread.
+  - Nothing is sent back: the business answers from the chat.
+  - They no longer get "link your account". The shared number still says it to a stranger.
+- **The public menu** answers a customer who asks for it with the word *menu*, then a number from the menu shown, or a workflow under way. Before, it answered any message.
+- **Stored sealed:** migration 00411 adds `customer_conversations` and `customer_messages`.
+  - One thread per customer number per business, the number and every message sealed under the customer's own subject (the phone's, the same key as their invoices).
+  - Erasing the customer erases the thread.
+- **Replies** go from the business's own number:
+  - as words within 24 hours of the customer's last message;
+  - after that, as the approved template `taskiem_customer_reply` ("[Mama Put Kitchen] Reply to your message: … Answer here to carry on.").
+  - Until that template is approved, a late reply is refused with the reason, and can go when they write again.
+  - A reply is refused after STOP, or when the business's number is no longer the one they wrote to.
+  - A repeated send is one message.
+- **STOP** from a customer deletes the thread's messages, stops every reply, and tells them so in their language. **START** opens it again. This comes before the reach book's STOP.
+- **API:** `/v1/customer-chats` (list; one thread, with what they owe; messages; reply; read; archive), for `storefront.manage` or `order.handle`, in the Orders area.
+- **The Chat page:**
+  - **The list:** a Customers section under Taskiem, with the customer's name in the book or their number as people say it ("+234 803 111 2222"). Search and Unread cover it.
+  - **The thread:** what they wrote and who replied, what they owe in its head, and a box to reply from.
+  - **Notes above the box:** one says when a reply will go as a message they answer (after a day). After STOP, a red note replaces the box.
+- **Where it differs from the plan:**
+  - **Sealing:** the plan says "sealed like link messages", but business chats aren't sealed. Customers' messages are sealed as the Taskiem chat history is.
+  - **Photos and voice notes:** what a customer sends that isn't words shows as what it was ("Photo", "Voice note", a location). No copy is kept yet; phase 2 reads orders from them.
+  - **Live updates:** the thread and the list follow by asking every few seconds, not through the chat's live stream.
+  - **Replies** are words only. "Thanks, we've got your message" isn't built: it is off by default, and the open question stands.
+  - **The customer's name** comes from the business's own book of customers, else their number. WhatsApp's profile name isn't kept.
+
 ## Phases
 
 Seven phases, each a PR that ships on its own. Phase 0 puts the chat's tools, motion and tables right first, since every flow adds sheets and cards on top of them. Customer conversations go next because flows 1 and 4 stand on them; tasks and restocking are small and can run beside the larger ones.
 
 0. **The chat's tools, motion and tables, put right** (above): the tools menu fits the screen and rests on the message bar; one motion per sheet; no tap box; the Tables tool's viewer with colour, search and pages; the message box's hint on one line.
    - Done when: the checks above pass at 360 × 640 and 390 × 844, in both themes.
-1. **Customer conversations.** The Customers list and threads; a stranger on the business's own number lands there instead of "link your account"; staff reply within the 24-hour window, templates outside it; STOP honoured.
+1. **Customer conversations** (built; above). The Customers list and threads; a stranger on the business's own number lands there instead of "link your account"; staff reply within the 24-hour window, templates outside it; STOP honoured.
    - Done when: a customer's WhatsApp message to the business's number appears as a thread in the web chat, and a staff reply reaches their WhatsApp.
 2. **Orders from customers' messages.** The reader for text; the draft order card with questions; confirm; the total and how to pay sent back; paid matched; on to stock, dispatch and "On the way". Then voice notes for customers (the transcription that exists) and photos of written lists (after phase 4's image reading).
    - Done when: "2 jollof and 1 chapman, deliver to Yaba by 1" becomes a confirmed, paid, dispatched order without retyping.
