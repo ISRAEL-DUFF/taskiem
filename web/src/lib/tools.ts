@@ -13,6 +13,17 @@ import type { Table } from "./tables";
 import type { Purchase } from "./purchases";
 import type { Bill } from "./bills";
 import { purchaseState } from "./buyer";
+import type { CustomerInvoice } from "./invoices";
+import {
+  entryName,
+  entryPill,
+  entrySub,
+  entryTags,
+  invoicePill,
+  invoiceSub,
+  invoiceTags,
+  type MoneyEntry,
+} from "./chatmoney";
 
 export type ToolKey =
   | "products"
@@ -23,6 +34,8 @@ export type ToolKey =
   | "tables"
   | "purchases"
   | "bills"
+  | "invoices"
+  | "money"
   | "order"
   | "sell"
   | "handover";
@@ -412,6 +425,81 @@ TOOLS.push(
     },
     chips: [{ label: "To pay", tag: "due" }],
     more: "Open bills",
+  },
+);
+
+/** What the business is owed and the money it has (phase 2 additions):
+ * its invoices, and the money log. */
+TOOLS.push(
+  {
+    key: "invoices",
+    title: "Invoices",
+    icon: "invoices",
+    perm: "invoice.read",
+    url: "/v1/invoices?limit=200",
+    page: "/invoices",
+    rows: (data) =>
+      (
+        (data as { invoices?: CustomerInvoice[] } | undefined)?.invoices ?? []
+      ).map((x) => ({
+        id: x.id,
+        name: x.number,
+        sub: invoiceSub(x),
+        pill: invoicePill(x),
+        href: `/invoices/${encodeURIComponent(x.id)}`,
+        tags: invoiceTags(x),
+        words: (x.lines ?? []).map((l) => l.description).join(" "),
+        data: x,
+      })),
+    line: (r) => `${tagged(r, "owed")} owed`,
+    rowIcon: "invoices",
+    badge: (r) => {
+      const n = tagged(r, "overdue");
+      return n > 0 ? { text: `${n} overdue`, tone: "warn" } : undefined;
+    },
+    chips: [
+      { label: "Owed", tag: "owed" },
+      { label: "Overdue", tag: "overdue" },
+      { label: "Drafts", tag: "draft" },
+    ],
+    more: "Open invoices",
+  },
+  {
+    key: "money",
+    title: "Money",
+    icon: "money",
+    perm: "invoice.read",
+    url: "/v1/money/entries",
+    page: "/money",
+    rows: (data) =>
+      ((data as { entries?: MoneyEntry[] } | undefined)?.entries ?? []).map(
+        (e) => ({
+          id: e.id,
+          name: entryName(e),
+          sub: entrySub(e),
+          pill: entryPill(e),
+          href: "/money",
+          tags: entryTags(e),
+          category: e.category,
+          words: [e.vendor, e.reference, e.towards].filter(Boolean).join(" "),
+          data: e,
+        }),
+      ),
+    line: (r) =>
+      tagged(r, "match") > 0
+        ? `${tagged(r, "match")} to match`
+        : "In and out",
+    rowIcon: "money",
+    badge: (r) => {
+      const n = tagged(r, "match");
+      return n > 0 ? { text: `${n} to match`, tone: "warn" } : undefined;
+    },
+    chips: [
+      { label: "In", tag: "in" },
+      { label: "Out", tag: "out" },
+      { label: "To match", tag: "match" },
+    ],
+    more: "Open money",
   },
 );
 

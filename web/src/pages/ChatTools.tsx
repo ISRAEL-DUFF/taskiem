@@ -15,6 +15,14 @@ import { Link } from "react-router-dom";
 import { get } from "../api";
 import { useAuth } from "../auth";
 import { Icon } from "../icons";
+import {
+  InvoiceAdd,
+  InvoiceView,
+  MoneyAdd,
+  MoneyEntryView,
+} from "./ChatMoney";
+import type { CustomerInvoice } from "../lib/invoices";
+import type { MoneyEntry } from "../lib/chatmoney";
 import { tileLetters, toneOf } from "../lib/tone";
 import { KitEmpty, KitLoading, Pill, SavedTick, Sheet } from "../kit";
 import type { Service } from "../lib/bookings";
@@ -354,6 +362,8 @@ export function mayEdit(tool: ToolKey, can: (p: string) => boolean): boolean {
       // Drafting needs table.edit; sending and the supplier, storefront.manage.
       return can("table.edit") && can("storefront.manage");
     case "bills":
+    case "invoices":
+    case "money":
       return can("invoice.manage");
     default:
       return can("storefront.manage");
@@ -384,6 +394,10 @@ function Detail({
   if (row === "add")
     return tool === "services" ? (
       <ServiceForm onSaved={onSaved} prefill={prefill} />
+    ) : tool === "invoices" ? (
+      <InvoiceAdd onSaved={onSaved} onCancel={onCancel} />
+    ) : tool === "money" ? (
+      <MoneyAdd onSaved={onSaved} onCancel={onCancel} />
     ) : (
       <ProductAdd onSaved={onSaved} />
     );
@@ -454,6 +468,22 @@ function Detail({
       return (
         <BillView bill={row.data as Bill} onSaved={onSaved} canEdit={canEdit} />
       );
+    case "invoices":
+      return (
+        <InvoiceView
+          invoice={row.data as CustomerInvoice}
+          onSaved={onSaved}
+          canEdit={canEdit}
+        />
+      );
+    case "money":
+      return (
+        <MoneyEntryView
+          entry={row.data as MoneyEntry}
+          onSaved={onSaved}
+          canEdit={canEdit}
+        />
+      );
     case "order":
       return null;
   }
@@ -470,6 +500,8 @@ function plainItem(r: ToolRow): boolean {
 const ADDS: Partial<Record<ToolKey, string>> = {
   products: "Add product",
   services: "Add service",
+  invoices: "New invoice",
+  money: "Add cash or expense",
 };
 
 /** A tool's sheet: its list (search, chips, the full page), and each row's

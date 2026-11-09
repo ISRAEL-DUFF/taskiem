@@ -2951,6 +2951,88 @@ paths:
         default:
           $ref: '#/components/responses/Error'
   /v1/money/entries:
+    get:
+      operationId: listMoneyEntries
+      tags:
+      - Invoices
+      summary: The money log, newest first
+      description: "What came in and went out, newest first by when it was recorded (the chat's Money tool), with what each counts towards and whether matching left it for a person. A payer's details are never listed here."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        description: How many, 100 unless given, at most 200.
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+      - name: before
+        in: query
+        required: false
+        description: Only those recorded before this time (RFC 3339), for the next page.
+        schema:
+          type: string
+          format: date-time
+      responses:
+        '200':
+          description: The entries
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [entries]
+                properties:
+                  entries:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, kind, direction, status, when, to_match]
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        kind:
+                          type: string
+                          enum: [payment, account_credit, payout, refund, pos_sale, fee, statement, cash, expense, correction]
+                        direction:
+                          type: string
+                          enum: [in, out]
+                        amount_kobo:
+                          type: integer
+                        fee_kobo:
+                          type: integer
+                        status:
+                          type: string
+                          enum: [settled, pending, failed, reversed]
+                        channel:
+                          type: string
+                        reference:
+                          type: string
+                        when:
+                          type: string
+                          format: date-time
+                        description:
+                          type: string
+                        vendor:
+                          type: string
+                        category:
+                          type: string
+                        left_kobo:
+                          type: integer
+                          description: Money in only, what is left of it to count towards an invoice or order.
+                        towards:
+                          type: string
+                          description: What it counts towards now, such as "invoice INV-0104".
+                        to_match:
+                          type: boolean
+                          description: Matching left it for a person (as /v1/money/unmatched).
+        default:
+          $ref: '#/components/responses/Error'
     post:
       operationId: enterMoney
       tags:
