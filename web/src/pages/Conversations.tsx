@@ -17,6 +17,7 @@ import {
 import {
   fillTemplate,
   kindWords,
+  mergeTurns,
   seconds,
   statusWords,
   templateSlots,
@@ -109,6 +110,13 @@ export function Conversations() {
   );
   const assistants = list.data?.assistants ?? [];
   const channel = params.get("channel") ?? assistants[0]?.channel ?? "";
+  // The list is per assistant: with none chosen, the first one's is asked
+  // for (one busy assistant cannot push another's customers off).
+  const first = assistants[0]?.channel;
+  useEffect(() => {
+    if (!params.get("channel") && first)
+      setParams({ channel: first }, { replace: true });
+  }, [first, params, setParams]);
   const current =
     assistants.find((a) => a.channel === channel) ?? assistants[0];
   return (
@@ -119,7 +127,9 @@ export function Conversations() {
       />
       <ErrorBox error={list.error} />
       {!list.data ? (
-        <Skeleton />
+        list.error ? null : (
+          <Skeleton />
+        )
       ) : assistants.length === 0 ? (
         <EmptyState icon="chat">
           No assistant yet. Publish a workflow that answers your customers on
@@ -238,7 +248,7 @@ export function ConversationPage() {
   const channel = params.get("channel") ?? "";
   const customer = params.get("customer") ?? "";
   const [reveal, setReveal] = useState(false);
-  const [earlier, setEarlier] = useState<TurnView[]>([]);
+  const [turns, setTurns] = useState<TurnView[]>([]);
   const [noEarlier, setNoEarlier] = useState(false);
   const q = `channel=${encodeURIComponent(channel)}&customer=${encodeURIComponent(customer)}`;
   const thread = useLoad(
@@ -249,38 +259,47 @@ export function ConversationPage() {
     [q, reveal],
   );
   useEffect(() => {
-    setEarlier([]);
+    setTurns([]);
     setNoEarlier(false);
   }, [q, reveal]);
+  // Each answer is merged with what is shown (earlier messages loaded
+  // stay; a message's new status replaces the old).
+  const latest = thread.data?.turns;
+  useEffect(() => {
+    if (latest) setTurns((t) => mergeTurns(t, latest));
+  }, [latest]);
   // New messages show as they come: asked again every 15 seconds while
-  // the page is open and in view.
+  // the page is in view. Not while numbers are shown: each showing is
+  // audited.
   const reload = thread.reload;
   useEffect(() => {
+    if (reveal) return;
     const t = setInterval(() => {
       if (document.visibilityState === "visible") reload();
     }, 15000);
     return () => clearInterval(t);
-  }, [reload]);
+  }, [reload, reveal]);
   const stream = useRef<HTMLDivElement>(null);
-  const newest = thread.data?.turns.at(-1)?.id;
+  const atBottom = useRef(true);
+  const newest = turns.at(-1)?.id;
   useEffect(() => {
     const el = stream.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (el && atBottom.current) el.scrollTop = el.scrollHeight;
   }, [newest]);
   const act = useAction();
   const more = useAction();
   const loadEarlier = () =>
     void more.run(async () => {
-      const first = earlier[0] ?? thread.data?.turns[0];
+      const first = turns[0];
       if (!first) return;
       const r = await get<{ turns: TurnView[] }>(
-        `/v1/conversations/thread?${q}${reveal ? "&reveal=true" : ""}&before=${encodeURIComponent(first.at)}`,
+        `/v1/conversations/thread?${q}${reveal ? "&reveal=true" : ""}&before=${encodeURIComponent(first.at)}&before_id=${encodeURIComponent(first.id)}`,
       );
       if (r.turns.length === 0) setNoEarlier(true);
-      setEarlier((e) => [...r.turns, ...e]);
+      setTurns((t) => mergeTurns(t, r.turns));
     }, false);
-  if (thread.error) return <ErrorBox error={thread.error} />;
-  if (!thread.data) return <Skeleton />;
+  if (!thread.data)
+    return thread.error ? <ErrorBox error={thread.error} /> : <Skeleton />;
   const c = thread.data.customer;
   const st = stateWords(c);
   const run = (fn: () => Promise<unknown>, done: string) =>
@@ -303,7 +322,10 @@ export function ConversationPage() {
       <div className="toolbar">
         {can("pii.reveal") && (
           <button
-            onClick={() => setReveal(!reveal)}
+            onClick={() => {
+              setReveal(!reveal);
+              setTurns([]);
+            }}
             data-testid="conversation-reveal"
           >
             {reveal ? "Hide numbers and emails" : "Show numbers and emails"}
@@ -342,15 +364,23 @@ export function ConversationPage() {
         )}
       </div>
       <ErrorBox error={act.error} />
+      {thread.error && <ErrorBox error={thread.error} />}
       <div className="chat-pane" style={{ marginTop: 12 }}>
         <div
           className="chat-stream"
           data-testid="conversation-thread"
           role="log"
           aria-live="polite"
+          aria-relevant="additions"
+          aria-busy={more.busy}
           aria-label="The conversation"
           tabIndex={0}
           ref={stream}
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            atBottom.current =
+              el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+          }}
         >
           {thread.data.turns.length >= 200 && !noEarlier && (
             <button disabled={more.busy} onClick={loadEarlier}>
@@ -358,11 +388,9 @@ export function ConversationPage() {
             </button>
           )}
           <ErrorBox error={more.error} />
-          {thread.data.turns.length === 0 && (
-            <p className="hint">Nothing yet.</p>
-          )}
-          {[...earlier, ...thread.data.turns].map((t) => (
-            <TurnBubble key={t.id} t={t} />
+          {turns.length === 0 && <p className="hint">Nothing yet.</p>}
+          {turns.map((t) => (
+            <TurnBubble key={t.id} t={t} runs={can("run.read")} />
           ))}
         </div>
       </div>
@@ -383,7 +411,7 @@ export function ConversationPage() {
   );
 }
 
-function TurnBubble({ t }: { t: TurnView }) {
+function TurnBubble({ t, runs }: { t: TurnView; runs: boolean }) {
   const mine = t.role !== "customer";
   const who =
     t.role === "customer"
@@ -398,7 +426,11 @@ function TurnBubble({ t }: { t: TurnView }) {
     <div
       className={mine ? "bubble mine" : "bubble"}
       data-testid={`turn-${t.role}`}
-      style={t.role === "held" ? { opacity: 0.75 } : undefined}
+      style={
+        t.role === "held"
+          ? { borderStyle: "dashed", borderColor: "var(--warn)" }
+          : undefined
+      }
     >
       <span className="who">{who}</span>
       {t.erased ? (
@@ -416,7 +448,7 @@ function TurnBubble({ t }: { t: TurnView }) {
       <span className="hint" style={{ display: "block", fontSize: 12 }}>
         {fmtTime(t.at)}
         {note ? ` · ${note}` : ""}
-        {t.run_id && (
+        {t.run_id && runs && (
           <>
             {" · "}
             <Link to={`/runs/${t.run_id}`}>See how it was answered</Link>
@@ -462,11 +494,12 @@ function ReplyBox({
   const tpl = templates.data?.templates.find(
     (t) => `${t.name}|${t.language}` === chosen,
   );
-  const slots = tpl ? templateSlots(tpl.body) : 0;
+  const named = tpl ? templateSlots(tpl.body) < 0 : false;
+  const slots = tpl ? Math.max(0, templateSlots(tpl.body)) : 0;
   const filled = Array.from({ length: slots }, (_, i) => values[i] ?? "");
   const ready = windowOpen
     ? !!text.trim()
-    : !!tpl && filled.every((v) => v.trim() !== "");
+    : !!tpl && !named && filled.every((v) => v.trim() !== "");
   const send = () =>
     act.run(async () => {
       await post(
@@ -546,6 +579,12 @@ function ReplyBox({
             </select>
           </Field>
           {tpl && <p className="hint">{tpl.body}</p>}
+          {named && (
+            <p className="hint">
+              This template has named blanks, which cannot be filled in here
+              yet. Choose another one.
+            </p>
+          )}
           {Array.from({ length: slots }, (_, i) => (
             <Field key={i} label={`Fill in {{${i + 1}}}`}>
               <input
@@ -658,8 +697,13 @@ function TalkToIt({ assistant }: { assistant: AssistantView }) {
       });
       setLines((l) => [...l, { who: "you", text: said }]);
       setText("");
-      if (r.run) setPending(r.run);
-      else
+      if (r.run) {
+        if (r.outcome === "quiet")
+          note(
+            `${statusWords({ role: "customer", status: "quiet", reason: r.reason })}. Start again to forget it.`,
+          );
+        setPending(r.run);
+      } else
         note(
           statusWords({
             role: "customer",

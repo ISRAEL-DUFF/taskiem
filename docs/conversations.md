@@ -52,7 +52,7 @@ Also how much of this month's allowance for AI answers and voice notes the busin
 ## Talk to it here
 
 A member writes as a customer would, and sees what the assistant would answer:
-- **The guard is real.** The message goes through the assistant's guard on a test chat of the member's own, one per assistant (`test/<member>.<workflow>/<env>`), so the notice, STOP and START, the limits and asking for a person all work as they will for customers. Only that member sees it. **Start again** forgets it (and STOP or a hand-over tried in it).
+- **The guard is real.** The message goes through the assistant's guard on a test chat of the member's own, one per assistant (`test/<member>.<workflow>/<env>`), so the notice, STOP and START, the limits and asking for a person all work as they will for customers. Only that member sees it, on this page only (not in the list of customers). **Start again** forgets the member's test chats (and STOP or a hand-over tried in them).
 - **The run is real.** It runs the version published in the environment (dev before prod), not a draft, with what the business knows, the real model, and hearing and speaking. It counts against the month's allowances.
 - **Nothing changes.** It runs as a *sandbox run* (`runs.sandbox`). Every step that would change something (a WhatsApp or Telegram message, a row, a hand-over) is simulated: it answers an output of the action's shape, marked `simulated`, and sends nothing.
 - **What you see.** What it would have sent appears as its answer, with replies the check held back, and a link to the run. A test run that fails alerts no one.
@@ -63,4 +63,4 @@ A member writes as a customer would, and sees what the assistant would answer:
 ## For operators
 
 - **Storage.** `assistant_turns` (migration 00322), under forced row-level security; text in sealed envelopes. The hourly sweep in the `api` role finds the businesses with turns past their days through `taskiem_conversation_turns_due` (ids and days only) and deletes them in each business's scope.
-- **API.** `/v1/conversations` (assistants and customers), `/thread` (a conversation; `reveal=true` with `pii.reveal`), `/reply`, `/templates`, `/pause`, `/resume`, `/metrics`, `/test` (and `DELETE /test` to start again) and `/test/{run}`. The page asks again for new messages every 15 seconds.
+- **API.** `/v1/conversations` (assistants and customers), `/thread` (a conversation; `reveal=true` with `pii.reveal`), `/reply`, `/templates`, `/pause`, `/resume`, `/metrics`, `/test` (and `DELETE /test` to start again) and `/test/{run}`. The page asks again for new messages every 15 seconds, except while numbers are shown (each showing is audited).

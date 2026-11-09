@@ -3,6 +3,7 @@ import {
   fillTemplate,
   heldWords,
   kindWords,
+  mergeTurns,
   seconds,
   statusWords,
   templateSlots,
@@ -44,10 +45,18 @@ describe("the conversations page's words", () => {
   it("counts and fills a template's blanks", () => {
     expect(templateSlots("Hi {{1}}, your order {{2}} is ready. {{1}}")).toBe(2);
     expect(templateSlots("No blanks")).toBe(0);
+    expect(templateSlots("Hi {{name}}")).toBe(-1);
     expect(fillTemplate("Hi {{1}}, order {{2}}", ["Ada", "P-1"])).toBe(
       "Hi Ada, order P-1",
     );
     expect(fillTemplate("Hi {{1}}", [])).toBe("Hi {{1}}");
+  });
+
+  it("merges turns by id, oldest first, the newer copy winning", () => {
+    const a = { id: "a", at: "2026-11-01T10:00:00Z", status: "sending" };
+    const b = { id: "b", at: "2026-11-01T09:00:00Z", status: "" };
+    const a2 = { ...a, status: "sent" };
+    expect(mergeTurns([a], [b, a2])).toEqual([b, a2]);
   });
 
   it("gives times and kinds short words", () => {

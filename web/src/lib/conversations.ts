@@ -114,6 +114,7 @@ export function kindWords(kind: string): string {
 
 /** How many blanks ({{1}}, {{2}}…) a template's body has. */
 export function templateSlots(body: string): number {
+  if (/\{\{\s*[A-Za-z_]/.test(body)) return -1; // named blanks: not offered
   let n = 0;
   for (const m of body.matchAll(/\{\{(\d+)\}\}/g))
     n = Math.max(n, Number(m[1]));
@@ -125,5 +126,19 @@ export function fillTemplate(body: string, values: string[]): string {
   return body.replace(
     /\{\{(\d+)\}\}/g,
     (all, i) => values[Number(i) - 1] || all,
+  );
+}
+
+/** Turns merged by id (the newer copy wins), oldest first. */
+export function mergeTurns<T extends { id: string; at: string }>(
+  shown: T[],
+  more: T[],
+): T[] {
+  const byId = new Map(shown.map((t) => [t.id, t]));
+  for (const t of more) byId.set(t.id, t);
+  return [...byId.values()].sort((a, b) =>
+    a.at === b.at
+      ? a.id.localeCompare(b.id)
+      : Date.parse(a.at) - Date.parse(b.at),
   );
 }
