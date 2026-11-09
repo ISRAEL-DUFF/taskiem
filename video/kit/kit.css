@@ -1,0 +1,503 @@
+/* The explainer's stage (video/README.md): a 16:9 or 9:16 frame on the
+   app's paper, a phone that holds the app's screens as the design boards
+   draw them, a caption, and a tap. Colours are the app's own (relay brand,
+   docs/brand/README.md): lime only on pine. */
+
+:root {
+  --pine: #0d3b2e;
+  --pine-2: #164a3b;
+  --lime: #c8f169;
+  --paper: #efeae2;
+  --ink: #0e1a14;
+  --muted: #55615a;
+  --line: #e2e7df;
+  --soft: #f1f4ef;
+  --white: #ffffff;
+  --peach-bg: #fde3d8;
+  --peach-ink: #a3401c;
+  --warn-bg: #fdf0dc;
+  --warn-ink: #8a3410;
+  --spring: cubic-bezier(0.2, 0.9, 0.25, 1.12);
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+html,
+body {
+  margin: 0;
+  background: #1b1d1a;
+}
+* {
+  box-sizing: border-box;
+}
+button {
+  font: inherit;
+  color: inherit;
+  border: 0;
+  background: none;
+  padding: 0;
+}
+
+/* The frame: 1920 × 1080, 1080 × 1920 for phones (?size=9x16), or
+   1080 × 1080 for feeds (?size=1x1). */
+.stage {
+  position: relative;
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+  font-family: "Inter", system-ui, sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(60% 70% at 72% 52%, rgba(200, 241, 105, 0.22), transparent 70%),
+    radial-gradient(rgba(14, 26, 20, 0.05) 1.6px, transparent 2.2px) 0 0 / 36px 36px,
+    radial-gradient(rgba(14, 26, 20, 0.05) 1.6px, transparent 2.2px) 18px 18px / 36px 36px,
+    var(--paper);
+}
+.portrait .stage {
+  width: 1080px;
+  height: 1920px;
+  background:
+    radial-gradient(80% 50% at 50% 68%, rgba(200, 241, 105, 0.22), transparent 70%),
+    radial-gradient(rgba(14, 26, 20, 0.05) 1.6px, transparent 2.2px) 0 0 / 36px 36px,
+    radial-gradient(rgba(14, 26, 20, 0.05) 1.6px, transparent 2.2px) 18px 18px / 36px 36px,
+    var(--paper);
+}
+
+.square .stage {
+  width: 1080px;
+  height: 1080px;
+  background:
+    radial-gradient(60% 70% at 74% 52%, rgba(200, 241, 105, 0.22), transparent 70%),
+    radial-gradient(rgba(14, 26, 20, 0.05) 1.6px, transparent 2.2px) 0 0 / 36px 36px,
+    radial-gradient(rgba(14, 26, 20, 0.05) 1.6px, transparent 2.2px) 18px 18px / 36px 36px,
+    var(--paper);
+}
+
+/* The caption: what the scene says, beside the phone (below it on 9:16). */
+.caption {
+  position: absolute;
+  left: 150px;
+  top: 50%;
+  width: 780px;
+  transform: translateY(-50%);
+}
+.portrait .caption {
+  left: 90px;
+  right: 90px;
+  top: 150px;
+  width: auto;
+  transform: none;
+  text-align: center;
+}
+.square .caption {
+  left: 64px;
+  width: 480px;
+}
+.kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 22px;
+  border-radius: 999px;
+  background: var(--pine);
+  color: var(--lime);
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.kicker::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--lime);
+}
+.headline {
+  margin: 34px 0 0;
+  font-size: 88px;
+  line-height: 1.04;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+}
+.headline em {
+  font-style: normal;
+  color: var(--pine);
+  box-shadow: inset 0 -0.16em 0 rgba(13, 59, 46, 0.14);
+}
+.portrait .headline {
+  font-size: 84px;
+}
+.square .headline {
+  margin-top: 26px;
+  font-size: 56px;
+}
+.square .kicker {
+  padding: 10px 18px;
+  font-size: 17px;
+}
+.sub {
+  margin: 30px 0 0;
+  font-size: 32px;
+  line-height: 1.35;
+  color: var(--muted);
+  max-width: 680px;
+}
+.portrait .sub {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* The phone: a 390 × 844 screen, as the boards draw it, scaled up. */
+.phone {
+  position: absolute;
+  --s: 1.1;
+  right: 210px;
+  /* Centred without a transform, so a scene may animate the phone. */
+  top: calc((1080px - (844px * var(--s) + 28px)) / 2);
+  width: calc(390px * var(--s) + 28px);
+  height: calc(844px * var(--s) + 28px);
+  padding: 14px;
+  border-radius: 68px;
+  background: #0b1411;
+  box-shadow:
+    0 60px 120px -40px rgba(13, 59, 46, 0.55),
+    0 24px 48px -24px rgba(14, 26, 20, 0.45),
+    inset 0 0 0 2px #26302b;
+}
+.portrait .phone {
+  --s: 1.32;
+  right: auto;
+  top: auto;
+  left: calc((1080px - (390px * var(--s) + 28px)) / 2);
+  bottom: 110px;
+}
+.square .phone {
+  --s: 1.06;
+  right: 60px;
+}
+.phone .screen {
+  position: relative;
+  width: calc(390px * var(--s));
+  height: calc(844px * var(--s));
+  border-radius: 54px;
+  overflow: hidden;
+  background: var(--paper);
+}
+.phone .screen > .app {
+  width: 390px;
+  height: 844px;
+  transform: scale(var(--s));
+  transform-origin: 0 0;
+}
+.phone .island {
+  position: absolute;
+  top: 26px;
+  left: 50%;
+  width: 120px;
+  height: 34px;
+  border-radius: 999px;
+  background: #0b1411;
+  transform: translateX(-50%);
+  z-index: 3;
+}
+
+/* A card that floats beside the phone: the owner told elsewhere. */
+.float {
+  position: absolute;
+  width: 470px;
+  border-radius: 26px;
+  background: var(--white);
+  box-shadow:
+    0 40px 80px -30px rgba(13, 59, 46, 0.5),
+    0 2px 6px rgba(14, 26, 20, 0.08);
+  padding: 22px;
+  font-size: 18px;
+}
+
+/* A tap: a soft lime ripple where the finger lands. */
+.tap {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  margin: -22px 0 0 -22px;
+  border-radius: 50%;
+  background: rgba(200, 241, 105, 0.32);
+  box-shadow: 0 0 0 2px rgba(13, 59, 46, 0.3);
+  pointer-events: none;
+  opacity: 0;
+  z-index: 5;
+}
+
+/* The app's screen parts, as the boards draw them. */
+.app {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  font-family: "Inter", system-ui, sans-serif;
+  color: var(--ink);
+  overflow: hidden;
+}
+.app header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 58px 16px 12px;
+  background: var(--white);
+  border-bottom: 1px solid var(--line);
+}
+.avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 15px;
+  flex: none;
+}
+.avatar.pine {
+  background: var(--pine);
+  color: var(--lime);
+}
+.avatar.lime {
+  background: var(--lime);
+  color: var(--pine);
+}
+.who b {
+  display: block;
+  font-size: 16px;
+}
+.who span {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+}
+.chat {
+  flex: 1;
+  padding: 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background:
+    radial-gradient(rgba(14, 26, 20, 0.06) 1.2px, transparent 1.7px) 0 0 / 28px 28px,
+    radial-gradient(rgba(14, 26, 20, 0.06) 1.2px, transparent 1.7px) 14px 14px / 28px 28px,
+    var(--paper);
+  overflow: hidden;
+}
+.bubble {
+  max-width: 78%;
+  padding: 9px 12px 7px;
+  border-radius: 16px;
+  background: var(--white);
+  font-size: 15px;
+  line-height: 1.35;
+  box-shadow: 0 1px 1px rgba(14, 26, 20, 0.08);
+}
+.bubble.mine {
+  align-self: flex-end;
+  background: #d9fdd3;
+}
+.bubble time {
+  display: block;
+  text-align: right;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.day {
+  align-self: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.85);
+  padding: 5px 12px;
+  border-radius: 999px;
+}
+.app footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px 30px;
+  background: var(--soft);
+}
+.round {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.box {
+  flex: 1;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  background: var(--white);
+  border-radius: 24px;
+  color: var(--muted);
+  font-size: 15px;
+}
+.pill {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+.pill.warn {
+  background: var(--peach-bg);
+  color: var(--peach-ink);
+}
+.pill.lime {
+  background: var(--lime);
+  color: var(--pine);
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 14px;
+}
+.btn.pine {
+  background: var(--pine);
+  color: var(--white);
+}
+.btn.lime {
+  background: var(--lime);
+  color: var(--pine);
+}
+.btn.ghost {
+  background: var(--white);
+  border: 1px solid #d3dbd0;
+}
+.btn.soft {
+  background: var(--soft);
+}
+
+/* ---------- Moving parts: put one on an element with its moment,
+   style="--at: 2.4s". The app's timings (web/src/motion.css). ---------- */
+@keyframes k-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes k-up { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: none; } }
+@keyframes k-pop { from { opacity: 0; transform: translateY(22px) scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes k-show { from { opacity: 0; } to { opacity: 1; } }
+@keyframes k-hide { from { opacity: 1; } to { opacity: 0; } }
+@keyframes k-leave { from { opacity: 1; max-height: 400px; } to { opacity: 0; max-height: 0; margin-top: 0; margin-bottom: 0; padding-top: 0; padding-bottom: 0; } }
+@keyframes k-sheet { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes k-land { 0% { opacity: 0; transform: translateY(-12px) scale(.96); background: #c8f169; } 22% { opacity: 1; transform: none; background: #c8f169; } 100% { background: rgba(255,255,255,.9); } }
+@keyframes k-fill { from { transform: scaleX(0); } to { transform: none; } }
+@keyframes k-grow { from { transform: scaleY(0); } to { transform: none; } }
+@keyframes k-toast { 0% { opacity: 0; transform: translate(-50%, 16px); } 12%, 85% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, 0); } }
+.in { animation: k-in .45s var(--ease) both; animation-delay: var(--at, 0s); }
+.up { animation: k-up .7s var(--ease) both; animation-delay: var(--at, 0s); }
+.pop { animation: k-pop .6s var(--spring) both; animation-delay: var(--at, 0s); }
+.show { animation: k-show .35s var(--ease) both; animation-delay: var(--at, 0s); }
+.hide { animation: k-hide .3s var(--ease) both; animation-delay: var(--at, 0s); }
+.leave { animation: k-leave .4s var(--ease) both; animation-delay: var(--at, 0s); overflow: hidden; }
+.rise { animation: k-sheet .36s var(--ease) both; animation-delay: var(--at, 0s); }
+.lands { animation: k-land 1.8s var(--ease) both; animation-delay: var(--at, 0s); }
+.fills { transform-origin: 0 50%; animation: k-fill .5s var(--ease) both; animation-delay: var(--at, 0s); }
+.grows { transform-origin: 50% 100%; animation: k-grow .6s var(--spring) both; animation-delay: var(--at, 0s); }
+.toasts { animation: k-toast 2.4s var(--ease) both; animation-delay: var(--at, 0s); }
+/* Swap two states in one place: the first leaves, the second arrives. */
+.swap { display: grid; }
+.swap > * { grid-area: 1 / 1; }
+
+/* ---------- More of the app's parts ---------- */
+.card { align-self: stretch; border-radius: 18px; background: #fff; padding: 14px; box-shadow: 0 1px 2px rgba(14,26,20,.1); }
+.card .kick { font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--muted); }
+.card .ttl { margin-top: 6px; font-weight: 700; font-size: 15px; line-height: 1.3; }
+.card .csub { font-size: 14px; color: var(--muted); margin-top: 4px; }
+.card .top { display: flex; align-items: center; justify-content: space-between; }
+.card .acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.card .acts .btn { flex: 1 1 0; white-space: nowrap; }
+.steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-top: 12px; }
+.steps span { height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.steps span i { display: block; height: 100%; background: var(--pine); }
+.stepwords { display: grid; grid-template-columns: repeat(4, 1fr); font-size: 11px; color: var(--muted); margin-top: 4px; }
+.dl { align-self: center; font-size: 13px; font-weight: 600; color: var(--pine); padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,.9); }
+.toast { position: absolute; left: 50%; bottom: 96px; padding: 10px 16px; border-radius: 14px; background: var(--ink); color: #fff; font-size: 13px; font-weight: 600; width: 320px; text-align: center; z-index: 4; }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; background: #fff; border-radius: 24px 24px 0 0; box-shadow: 0 -20px 40px -20px rgba(14,26,20,.35); padding: 10px 16px 30px; z-index: 3; }
+.sheet .grab { width: 40px; height: 5px; border-radius: 3px; background: #d3dbd0; margin: 0 auto 12px; }
+.sheet h4 { margin: 0 0 12px; font-size: 22px; font-weight: 800; letter-spacing: -.02em; }
+.veil { position: absolute; inset: 0; background: rgba(14,26,20,.38); z-index: 2; }
+.tiles6 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.tiles6 div { border-radius: 16px; background: var(--soft); padding: 12px 10px; font-weight: 700; font-size: 14px; }
+.tiles6 div small { display: block; font-weight: 500; font-size: 12px; color: var(--muted); margin-top: 2px; }
+.tiles6 .ico { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; margin-bottom: 8px; font-size: 16px; }
+.prow { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
+.prow .tile { width: 46px; height: 46px; border-radius: 13px; display: grid; place-items: center; font-weight: 800; font-size: 15px; flex: none; }
+.prow .nm { flex: 1; min-width: 0; }
+.prow .nm b { display: block; font-size: 15px; }
+.prow .nm span { display: block; font-size: 13px; color: var(--muted); }
+.chip { font-size: 12px; font-weight: 700; padding: 4px 9px; border-radius: 999px; background: var(--soft); color: var(--muted); }
+.field { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-size: 13px; color: var(--muted); margin-top: 12px; }
+.field .in-box { min-height: 50px; border-radius: 14px; background: #f3f5f1; display: flex; align-items: center; padding: 0 14px; font-size: 17px; font-weight: 700; color: var(--ink); }
+.list-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #fff; border-bottom: 1px solid #eef1ec; }
+.list-row .nm { flex: 1; min-width: 0; }
+.list-row b { display: block; font-size: 16px; }
+.list-row span { display: block; font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.list-row time { font-size: 12px; color: var(--muted); }
+.badge { min-width: 22px; height: 22px; border-radius: 11px; background: #25a244; color: #fff; font-size: 12px; font-weight: 700; display: grid; place-items: center; padding: 0 6px; }
+
+/* In and out: arrives at --at, leaves at --out. */
+@keyframes k-sink { to { transform: translateY(100%); } }
+/* Only a "to": before its moment it holds whatever came before it. */
+@keyframes k-gone { to { opacity: 0; } }
+.sheet-io { animation: k-sheet .36s var(--ease) both, k-sink .32s var(--ease) both; animation-delay: var(--at, 0s), var(--out, 999s); }
+.show-io { animation: k-show .3s var(--ease) both, k-gone .3s var(--ease) both; animation-delay: var(--at, 0s), var(--out, 999s); }
+.pop-io { animation: k-pop .6s var(--spring) both, k-gone .3s var(--ease) both; animation-delay: var(--at, 0s), var(--out, 999s); }
+
+/* ---------- Step 4: the Motion board's moments (chatdesign Motion) ---------- */
+
+/* The chat dims and blurs in step with a sheet. */
+.veil { backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+
+/* A card grows into its sheet in 360 ms (Motion board): the sheet's edges
+   travel from the tapped thing's box (--t0 --l0 --r0 --b0, in the screen's
+   own pixels, and its corner --rad0) to the sheet's (top at --t1); springs
+   with no bounce; it closes by sinking. Its content fades in once there is
+   room (put .after on it). */
+@keyframes k-morph {
+  from { top: var(--t0); left: var(--l0); right: var(--r0); bottom: var(--b0); border-radius: var(--rad0, 16px); }
+  to { top: var(--t1); left: 0px; right: 0px; bottom: 0px; border-radius: 24px 24px 0 0; }
+}
+/* Hidden until its moment: before it, its starting shape would sit on the
+   tapped thing. */
+@keyframes k-on { from { visibility: visible; } to { visibility: visible; } }
+.morph-io { position: absolute; overflow: hidden; top: var(--t1); left: 0; right: 0; bottom: 0; z-index: 3; visibility: hidden; animation: k-morph .36s cubic-bezier(.2,.85,.25,1) both, k-sink .28s cubic-bezier(.4,0,.6,1) both, k-on .01s linear forwards; animation-delay: var(--at, 0s), var(--out, 999s), var(--at, 0s); }
+.after { animation: k-show .25s var(--ease) both; animation-delay: calc(var(--at, 0s) + .24s); }
+
+/* A line that lands and makes its own room (no gap before it lands). */
+@keyframes k-landroom { 0% { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; margin-top: -12px; background: #c8f169; } 22% { opacity: 1; max-height: 60px; padding-top: 6px; padding-bottom: 6px; margin-top: 0; background: #c8f169; } 100% { max-height: 60px; background: rgba(255,255,255,.9); } }
+.lands-room { overflow: hidden; animation: k-landroom 1.8s var(--ease) both; animation-delay: var(--at, 0s); }
+
+/* A tap presses its target in to 97% (put .press with --press). */
+@keyframes k-press { 0% { transform: none; } 35% { transform: scale(.97); } 100% { transform: none; } }
+.press { animation: k-press .26s var(--ease) both; animation-delay: var(--press, 999s); }
+
+/* Save: a tick that draws itself in 260 ms, in a pill. */
+@keyframes k-draw { from { stroke-dashoffset: 30; } to { stroke-dashoffset: 0; } }
+.tick { display: inline-flex; align-items: center; gap: 10px; padding: 10px 16px 10px 12px; border-radius: 999px; background: var(--pine); color: #fff; font-weight: 700; font-size: 15px; box-shadow: 0 14px 30px -12px rgba(13,59,46,.6); }
+.tick svg { width: 22px; height: 22px; border-radius: 50%; background: var(--lime); padding: 4px; }
+.tick path { stroke-dasharray: 30; animation: k-draw .26s var(--ease) both; animation-delay: calc(var(--at, 0s) + .12s); }
+
+/* A live number changes: the new value rolls up into place in 450 ms. */
+@keyframes k-rollout { to { transform: translateY(-110%); opacity: 0; } }
+@keyframes k-rollin { from { transform: translateY(110%); opacity: 0; } to { transform: none; opacity: 1; } }
+.roll { display: inline-grid; overflow: hidden; vertical-align: bottom; }
+.roll > * { grid-area: 1 / 1; }
+.roll > :first-child { animation: k-rollout .45s var(--ease) both; animation-delay: var(--at, 999s); }
+.roll > :last-child { animation: k-rollin .45s var(--ease) both; animation-delay: var(--at, 999s); }
+
+/* A good moment: a short burst, 900 ms, never in the way
+   (<i class="burst" data-at="ms" style="left;top">). */
+@keyframes k-burst { 0% { opacity: 0; transform: rotate(var(--a)) translateY(0) scale(.4); } 15% { opacity: 1; } 100% { opacity: 0; transform: rotate(var(--a)) translateY(-70px) scale(1); } }
+.burst { position: absolute; width: 0; height: 0; z-index: 6; pointer-events: none; }
+.burst b { position: absolute; left: -5px; top: -5px; width: 10px; height: 10px; border-radius: 50%; animation: k-burst .9s cubic-bezier(.2,.8,.2,1) both; }
+.burst b:nth-child(odd) { background: var(--lime); }
+.burst b:nth-child(even) { background: var(--pine); width: 7px; height: 7px; }

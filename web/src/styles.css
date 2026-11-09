@@ -550,6 +550,7 @@ a.list-row:hover { background: var(--panel-2); text-decoration: none; }
   table.cards td { display: block; padding: 0; border: none; background: none !important; min-width: 0; overflow-wrap: anywhere; }
   table.cards td[data-label]::before { content: attr(data-label); display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 2px; }
   table.cards td.primary { grid-column: 1 / -1; font-weight: 500; }
+  table.cards td.wide { grid-column: 1 / -1; }
   .modal-backdrop { place-items: end center; }
   .modal { width: 100vw; max-height: 92dvh; border-radius: 16px 16px 0 0; padding: 20px 16px calc(20px + env(safe-area-inset-bottom)); }
   .modal:has(.ai-builder) { width: 100vw; }
@@ -1731,6 +1732,9 @@ fieldset.path-set legend { font-size: 12.5px; font-weight: 600; padding: 0 4px; 
 /* A price list's items (business links L4): one per row, its fields below it. */
 .price-rows { display: flex; flex-direction: column; gap: 8px; max-height: 60vh; overflow-y: auto; }
 .price-row { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px; margin: 0; min-width: 0; }
+/* A product sold in sizes and colours: its sizes' own prices on the list. */
+.price-row .price-sizes { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+.price-row .price-sizes summary, .price-row .price-sizes .hint { grid-column: 1 / -1; }
 .price-row .price-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; align-items: end; margin-top: 6px; }
 /* A quantity price (phase 7): From 10 at ₦39,500, on its own line. */
 .price-row .price-break { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: 8px; align-items: end; }

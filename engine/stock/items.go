@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/israel-duff/taskiem/engine/storefront"
+	"github.com/israel-duff/taskiem/engine/variants"
 )
 
 // Item is a catalogue row as stock sees it: the columns the mapping
@@ -26,11 +27,40 @@ type Item struct {
 	Reorder  *int64 `json:"reorder_level,omitempty"`
 	Target   *int64 `json:"target_level,omitempty"`
 	Supplier string `json:"supplier,omitempty"`
+	// Category is the owner's label for the kind of thing it is
+	// ("Sneakers"), when the catalogue has a category column.
+	Category string `json:"category,omitempty"`
+	// Description is the item's words on the storefront, when mapped:
+	// search reads it.
+	Description string `json:"description,omitempty"`
+	// Sizes and colours (engine/variants): a variant's product row and its
+	// values; a product's choices. A product with variants keeps no stock
+	// of its own: its count is theirs together.
+	VariantOf string            `json:"variant_of,omitempty"`
+	Variant   map[string]string `json:"variant,omitempty"`
+	Choices   []variants.Choice `json:"choices,omitempty"`
+	// OwnPrice is, on a product, the Keys of its sizes and colours with a
+	// price of their own; the others follow the product's.
+	OwnPrice []string `json:"own_price,omitempty"`
+	// PhotoID is the first entry of its photo column (a media id), when
+	// the catalogue has one: a colour's photo on a size is read from it.
+	PhotoID string `json:"-"`
 }
 
-// Low reports whether the item is at or below its reorder level.
+// HasSizes reports whether the item is a product sold in sizes and
+// colours: it keeps no stock of its own, and is sold, counted and
+// received through them.
+func (it Item) HasSizes() bool { return len(it.Choices) > 0 }
+
+// Retired reports whether the item is a size or colour taken off sale: it
+// keeps its history, and is offered nowhere.
+func (it Item) Retired() bool { return it.VariantOf != "" && !it.Available }
+
+// Low reports whether the item is at or below its reorder level. A
+// product with sizes and colours is never low itself: it keeps no stock of
+// its own, and each of them is low or not.
 func (it Item) Low() bool {
-	return it.Stock != nil && it.Reorder != nil && *it.Stock <= *it.Reorder
+	return !it.HasSizes() && it.Stock != nil && it.Reorder != nil && *it.Stock <= *it.Reorder
 }
 
 // Suggest is how many to order of a low item: up to its target level,
@@ -100,6 +130,25 @@ func Items(rows []map[string]any, m storefront.Columns) []Item {
 		}
 		if m.Supplier != "" {
 			it.Supplier = str(r[m.Supplier])
+		}
+		if m.Category != "" {
+			it.Category = str(r[m.Category])
+		}
+		if m.Description != "" {
+			it.Description = str(r[m.Description])
+		}
+		if m.VariantOf != "" {
+			it.VariantOf = str(r[m.VariantOf])
+		}
+		if m.Variant != "" {
+			it.Variant = variants.ParseVariant(str(r[m.Variant]))
+		}
+		if m.Choices != "" {
+			st := variants.ParseSetup(str(r[m.Choices]))
+			it.Choices, it.OwnPrice = st.Choices, st.OwnPrice
+		}
+		if m.Photo != "" {
+			it.PhotoID = strings.TrimSpace(strings.Split(str(r[m.Photo]), ",")[0])
 		}
 		it.PriceKobo = money(r, m.Price, m.PriceUnit)
 		it.CostKobo = money(r, m.CostPrice, m.PriceUnit)

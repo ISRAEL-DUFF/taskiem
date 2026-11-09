@@ -155,6 +155,13 @@ func (s *Server) putPriceListItems(w http.ResponseWriter, r *http.Request) {
 			Available   *bool  `json:"available"`
 			// Quantity breaks: lower prices from larger quantities.
 			Breaks []links.Break `json:"breaks"`
+			// A product sold in sizes and colours: its sizes go on the list
+			// with it; these are those with their own price, or off it.
+			Sizes []struct {
+				ItemID    string `json:"item_id"`
+				PriceKobo int64  `json:"price_kobo"`
+				Available *bool  `json:"available"`
+			} `json:"sizes"`
 		} `json:"items"`
 	}
 	if err := decodeBody(r, &in); err != nil {
@@ -163,6 +170,7 @@ func (s *Server) putPriceListItems(w http.ResponseWriter, r *http.Request) {
 	}
 	p := principalFrom(r.Context())
 	var own map[string]stock.Item
+	var all []stock.Item
 	if len(in.Items) > 0 {
 		if !s.Stock.Ready() {
 			s.stockFail(w, r, errStockOff)
@@ -173,7 +181,7 @@ func (s *Server) putPriceListItems(w http.ResponseWriter, r *http.Request) {
 			s.stockFail(w, r, err)
 			return
 		}
-		own = map[string]stock.Item{}
+		own, all = map[string]stock.Item{}, items
 		for _, it := range items {
 			own[it.ID] = it
 		}
@@ -181,13 +189,42 @@ func (s *Server) putPriceListItems(w http.ResponseWriter, r *http.Request) {
 	list := make([]links.PriceItem, 0, len(in.Items))
 	for _, x := range in.Items {
 		it, ok := own[x.ItemID]
-		if !ok {
+		switch {
+		case !ok:
 			s.fail(w, r, fmt.Errorf("%w: %q is not one of your items", errBadRequest, x.ItemID))
 			return
+		case it.VariantOf != "":
+			s.fail(w, r, fmt.Errorf("%w: %s is a size or colour: put its product on the list, and its sizes and colours come with it", errBadRequest, it.Name))
+			return
 		}
-		pi := links.PriceItem{ItemID: it.ID, Name: it.Name, Unit: it.Unit, PriceKobo: x.PriceKobo, MinQuantity: max(1, x.MinQuantity), Available: true, Breaks: x.Breaks}
+		pi := links.PriceItem{ItemID: it.ID, Name: it.Name, Unit: it.Unit, Category: it.Category, Description: it.Description, PriceKobo: x.PriceKobo, MinQuantity: max(1, x.MinQuantity), Available: true, Breaks: x.Breaks}
 		if x.Available != nil {
 			pi.Available = *x.Available
+		}
+		if it.HasSizes() {
+			pi.Choices, pi.Sizes = listSizesOf(it, all)
+			at := map[string]int{}
+			for i, z := range pi.Sizes {
+				at[z.ItemID] = i
+			}
+			for _, z := range x.Sizes {
+				i, ok := at[z.ItemID]
+				if !ok {
+					s.fail(w, r, fmt.Errorf("%w: %q is not one of %s's sizes and colours on sale", errBadRequest, z.ItemID, it.Name))
+					return
+				}
+				if z.PriceKobo < 0 {
+					s.fail(w, r, fmt.Errorf("%w: a price is 0 or more", errBadRequest))
+					return
+				}
+				pi.Sizes[i].PriceKobo = z.PriceKobo
+				if z.Available != nil {
+					pi.Sizes[i].Available = *z.Available
+				}
+			}
+		} else if len(x.Sizes) > 0 {
+			s.fail(w, r, fmt.Errorf("%w: %s is not sold in sizes and colours", errBadRequest, it.Name))
+			return
 		}
 		list = append(list, pi)
 	}
@@ -573,9 +610,19 @@ func (s *Server) draftFromPricesTx(ctx context.Context, tx pgx.Tx, p *Principal,
 	if len(got) == 0 {
 		return stock.Purchase{}, fmt.Errorf("%w: they share no price list with you", links.ErrState)
 	}
-	listed := map[string]links.PriceItem{}
+	// A product sold in sizes and colours is ordered by its sizes: each a
+	// line of its own, its minimum and its quantity prices counted on the
+	// product's sizes together.
+	listed := links.Flat(got[0].Items)
+	products := map[string]links.PriceItem{}
 	for _, it := range got[0].Items {
-		listed[it.ItemID] = it
+		products[it.ItemID] = it
+	}
+	together := map[string]int64{}
+	for _, l := range in {
+		if it, ok := listed[l.SellerItemID]; ok {
+			together[links.ProductOf(it)] += l.Quantity
+		}
 	}
 	linked, err := links.ItemLinksTx(ctx, tx, p.TenantID, link)
 	if err != nil {
@@ -593,20 +640,12 @@ func (s *Server) draftFromPricesTx(ctx context.Context, tx pgx.Tx, p *Principal,
 	if err != nil {
 		return stock.Purchase{}, err
 	}
-	if len(in) == 0 {
-		return stock.Purchase{}, fmt.Errorf("%w: an order has at least one line", links.ErrInvalid)
+	if err := checkPriceLines(got[0].Items, in); err != nil {
+		return stock.Purchase{}, err
 	}
 	lines := make([]stock.PurchaseLine, 0, len(in))
 	for _, l := range in {
-		it, ok := listed[l.SellerItemID]
-		switch {
-		case !ok:
-			return stock.Purchase{}, fmt.Errorf("%w: that is not on their price list", links.ErrInvalid)
-		case !it.Available:
-			return stock.Purchase{}, fmt.Errorf("%w: %s is not available now", links.ErrInvalid, it.Name)
-		case l.Quantity < int64(it.MinQuantity):
-			return stock.Purchase{}, fmt.Errorf("%w: order at least %d of %s", links.ErrInvalid, it.MinQuantity, it.Name)
-		}
+		it := listed[l.SellerItemID]
 		item := mine[it.ItemID]
 		if l.ItemID != "" && l.ItemID != item {
 			if _, ok := own[l.ItemID]; !ok {
@@ -625,7 +664,7 @@ func (s *Server) draftFromPricesTx(ctx context.Context, tx pgx.Tx, p *Principal,
 			return stock.Purchase{}, errUnlinkedItem{Item: it}
 		}
 		// The quantity's price: a quantity break once reached (phase 7).
-		lines = append(lines, stock.PurchaseLine{ItemID: o.ID, Item: o.Name, Unit: o.Unit, Quantity: l.Quantity, CostKobo: links.PriceAt(it, l.Quantity)})
+		lines = append(lines, stock.PurchaseLine{ItemID: o.ID, Item: o.Name, Unit: o.Unit, Quantity: l.Quantity, CostKobo: links.PriceAt(it, together[links.ProductOf(it)])})
 	}
 	offer := len(deal) > 0 && deal[0].Offer
 	if offer {
@@ -666,6 +705,47 @@ func (s *Server) draftFromPricesTx(ctx context.Context, tx pgx.Tx, p *Principal,
 	return x, err
 }
 
+// checkPriceLines is what an order's lines from a price list are short
+// of, before anything is written: each on the list and available now, a
+// whole number, and at least its minimum (a product's sizes counted
+// together).
+func checkPriceLines(items []links.PriceItem, in []orderLineIn) error {
+	if len(in) == 0 {
+		return fmt.Errorf("%w: an order has at least one line", links.ErrInvalid)
+	}
+	listed := links.Flat(items)
+	products := map[string]links.PriceItem{}
+	for _, it := range items {
+		products[it.ItemID] = it
+	}
+	together := map[string]int64{}
+	for _, l := range in {
+		if it, ok := listed[l.SellerItemID]; ok {
+			together[links.ProductOf(it)] += l.Quantity
+		}
+	}
+	for _, l := range in {
+		it, ok := listed[l.SellerItemID]
+		switch {
+		case !ok:
+			if p, ok := products[l.SellerItemID]; ok && len(p.Choices) > 0 {
+				return fmt.Errorf("%w: %s comes in sizes and colours: choose them in your chat with them on Taskiem, where each size has its box", links.ErrInvalid, p.Name)
+			}
+			return fmt.Errorf("%w: that is not on their price list", links.ErrInvalid)
+		case l.Quantity < 1:
+			return fmt.Errorf("%w: order a whole number of %s", links.ErrInvalid, it.Name)
+		case !it.Available:
+			return fmt.Errorf("%w: %s is not available now", links.ErrInvalid, it.Name)
+		case it.VariantOf == "" && l.Quantity < int64(it.MinQuantity):
+			return fmt.Errorf("%w: order at least %d of %s", links.ErrInvalid, it.MinQuantity, it.Name)
+		case it.VariantOf != "" && together[it.VariantOf] < int64(products[it.VariantOf].MinQuantity):
+			return fmt.Errorf("%w: order at least %d of %s, its sizes and colours together", links.ErrInvalid,
+				products[it.VariantOf].MinQuantity, products[it.VariantOf].Name)
+		}
+	}
+	return nil
+}
+
 // orderFromPrices is POST /v1/supplier-prices/{link}/order, with an
 // Idempotency-Key: a purchase order drafted from a linked supplier's
 // price list ({lines: [{seller_item_id, quantity, item_id}], note}), at
@@ -702,16 +782,40 @@ func (s *Server) orderFromPrices(w http.ResponseWriter, r *http.Request) {
 		s.stockFail(w, r, err)
 		return
 	}
+	// A supplier's size: the buyer's own size of the same values, added
+	// to the buyer's product when it lacks it (trade_sizes.go).
+	audit := func(tx pgx.Tx, action, target string, detail map[string]any) error {
+		return auditTx(r, tx, action, target, detail)
+	}
+	lines, err := s.resolveSizeLines(r.Context(), p, audit, link, in.Lines, "prices-"+key)
+	var differ errSizesDiffer
+	var first errSizesFirst
+	switch {
+	case errors.As(err, &differ):
+		writeJSON(w, http.StatusConflict, map[string]any{"error": differ.Error(), "code": "sizes_differ"})
+		return
+	case errors.As(err, &first):
+		writeJSON(w, http.StatusConflict, map[string]any{"error": first.Error(), "code": "sizes_first"})
+		return
+	}
+	if err == nil && len(lines) > 0 {
+		if _, items, err = s.stockItems(r.Context(), p.TenantID); err != nil {
+			s.stockFail(w, r, err)
+			return
+		}
+	}
 	own := map[string]stock.Item{}
 	for _, it := range items {
 		own[it.ID] = it
 	}
 	var x stock.Purchase
-	err = s.tx(r, func(tx pgx.Tx) error {
-		var err error
-		x, err = s.draftFromPricesTx(r.Context(), tx, p, link, in.Lines, own, strings.TrimSpace(in.Note), "prices-"+key, in.dealIn)
-		return err
-	})
+	if err == nil {
+		err = s.tx(r, func(tx pgx.Tx) error {
+			var err error
+			x, err = s.draftFromPricesTx(r.Context(), tx, p, link, lines, own, strings.TrimSpace(in.Note), "prices-"+key, in.dealIn)
+			return err
+		})
+	}
 	var unlinked errUnlinkedItem
 	switch {
 	case errors.As(err, &unlinked):

@@ -7,6 +7,7 @@ import {
   payProblem,
   purchaseActions,
   purchaseSub,
+  sizeParents,
   receiveForm,
   receiveProblem,
   receiveRequest,
@@ -14,7 +15,7 @@ import {
   type ReceiveForm,
 } from "../lib/purchases";
 import { feeInput, feeKobo } from "../lib/orders";
-import { quantity } from "../lib/stock";
+import { quantity, type StockItem, type StockView } from "../lib/stock";
 import { formatPrice } from "../lib/storefront";
 import { sellerLine } from "../lib/tradeorders";
 
@@ -26,6 +27,15 @@ export function PurchasesCard({ onChanged }: { onChanged: () => void }) {
     () => get<{ purchases: Purchase[] }>("/v1/stock/purchases"),
     [],
   );
+  // A product's sizes are told together on a row (linesWords).
+  const own = useLoad(
+    () =>
+      get<StockView>("/v1/stock")
+        .then((v) => v.items)
+        .catch((): StockItem[] => []),
+    [],
+  );
+  const parents = sizeParents(own.data ?? []);
   const [receiving, setReceiving] = useState<Purchase | null>(null);
   const [paying, setPaying] = useState<Purchase | null>(null);
   const [lowKey, setLowKey] = useState(() => crypto.randomUUID());
@@ -108,7 +118,7 @@ export function PurchasesCard({ onChanged }: { onChanged: () => void }) {
                 }
                 sub={
                   <span className="sub">
-                    {purchaseSub(p)}
+                    {purchaseSub(p, parents)}
                     {p.counter && (
                       <>
                         <br />

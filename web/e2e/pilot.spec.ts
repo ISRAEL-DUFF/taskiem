@@ -187,7 +187,12 @@ test("the pilot path through the demo school on a phone", async ({ page, browser
   await expect(report).toContainText("says it paid");
   await fits(page);
   await axeBoth(page, "/schools/overview (the demo's close)");
-  const again = await page.request.post("/v1/schools/close", { headers: H, data: {} });
+  // Again for that same day, named: "yesterday" moves if the run crosses
+  // midnight in Lagos between the seed and here.
+  const closes = await page.request.get("/v1/schools/closes", { headers: H });
+  const [seeded] = ((await closes.json()) as { closes: { day: string }[] }).closes;
+  expect(seeded).toBeDefined();
+  const again = await page.request.post("/v1/schools/close", { headers: H, data: { day: seeded?.day } });
   expect(again.status(), await again.text()).toBe(200);
   expect(((await again.json()) as { taken_now: boolean }).taken_now).toBe(false);
 });

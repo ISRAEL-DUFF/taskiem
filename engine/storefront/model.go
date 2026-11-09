@@ -107,6 +107,13 @@ type Columns struct {
 	ReorderLevel string `json:"reorder_level,omitempty"`
 	TargetLevel  string `json:"target_level,omitempty"`
 	Supplier     string `json:"supplier,omitempty"`
+	// Sizes and colours (docs/spec/chat-categories-and-variants.md, Part
+	// B), all text: on a variant, VariantOf holds its product's row id and
+	// Variant its choices as JSON ({"Size":"42","Colour":"Black"}); on a
+	// product, Choices holds its choices and their order as JSON.
+	VariantOf string `json:"variant_of,omitempty"`
+	Variant   string `json:"variant,omitempty"`
+	Choices   string `json:"choices,omitempty"`
 	// A Food menu's (fronts F3): a dish's options (sizes, extras, each
 	// with its price) and the minutes it takes.
 	Options string `json:"options,omitempty"`
@@ -205,6 +212,7 @@ func (m *Columns) Check(known func(string) (typ string, ok bool)) error {
 		m.Duration: {"integer", "number"}, m.Capacity: {"integer", "number"}, m.Buffer: {"integer", "number"},
 		m.Starts: {"datetime", "date"}, m.Venue: {"text"},
 		m.Unit: {"text"}, m.CostPrice: {"integer", "number"}, m.ReorderLevel: {"integer"}, m.TargetLevel: {"integer"}, m.Supplier: {"text"},
+		m.VariantOf: {"text"}, m.Variant: {"text"}, m.Choices: {"text"},
 	}
 	for col, types := range want {
 		if col == "" {

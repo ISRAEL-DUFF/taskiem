@@ -185,12 +185,7 @@ func (s *Server) getChatBriefing(w http.ResponseWriter, r *http.Request) {
 	}
 	if p.Can(PermTableRead) && s.Stock.Ready() {
 		if items, err := s.alertStockItems(ctx, p.TenantID); err == nil {
-			n := 0
-			for _, it := range items {
-				if it.Low() {
-					n++
-				}
-			}
+			n := len(lowByProduct(items))
 			out.Low = &n
 		}
 	}
@@ -276,11 +271,7 @@ func (s *Server) handoverOf(ctx context.Context, p *Principal) (handover, error)
 	}
 	if s.Stock.Ready() {
 		if items, err := s.alertStockItems(ctx, p.TenantID); err == nil {
-			for _, it := range items {
-				if it.Low() {
-					out.Low = append(out.Low, it.Name)
-				}
-			}
+			out.Low = lowByProduct(items)
 		}
 	}
 	return out, nil
@@ -561,4 +552,46 @@ func (s *Server) waHowDidWeDo(ctx context.Context, c *chat, cmd string) (bool, e
 		}
 	}
 	return true, nil
+}
+
+// lowByProduct names what is low as the low-stock cards do: an item by
+// its name, a product sold in sizes and colours once, however many of its
+// sizes are low ("Air Max 90 (3 sizes and colours)"; one alone by its
+// full name).
+func lowByProduct(items []stock.Item) []string {
+	names := map[string]string{}
+	for _, it := range items {
+		names[it.ID] = it.Name
+	}
+	out := []string{} // none low: an empty list, never null
+	sizes := map[string]int{}
+	one := map[string]string{} // the low size, when it is the only one
+	var products []string
+	for _, it := range items {
+		if !it.Low() {
+			continue
+		}
+		if it.VariantOf == "" {
+			out = append(out, it.Name)
+			continue
+		}
+		if sizes[it.VariantOf] == 0 {
+			products = append(products, it.VariantOf)
+			one[it.VariantOf] = it.Name
+		}
+		sizes[it.VariantOf]++
+	}
+	for _, id := range products {
+		name := names[id]
+		if name == "" {
+			continue
+		}
+		if n := sizes[id]; n > 1 {
+			name += fmt.Sprintf(" (%d %s)", n, sizesWord(n))
+		} else {
+			name = one[id] // "Air Max 90 – 42, Black"
+		}
+		out = append(out, name)
+	}
+	return out
 }

@@ -8,6 +8,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -118,7 +119,23 @@ func (s *Server) waOrderItem(ctx context.Context, c *chat, m []string) error {
 		}
 		return c.say(ctx, s, c.t("wa.prices.none", "name", whatsapp.SafeText(m[3])))
 	}
-	hits := matchPriceItems(p.Items, m[2])
+	hits, sized, notSold := pricedSizes(p.Items, m[2])
+	if sized != nil && notSold != "" {
+		// A size it does not come in: what it does, never another size.
+		return c.say(ctx, s, c.t("wa.order.no_size", "name", whatsapp.SafeText(sized.Name), "business", whatsapp.SafeText(p.Business),
+			"said", whatsapp.SafeText(notSold), "sizes", whatsapp.SafeText(pricedSummary(*sized))))
+	}
+	if sized != nil {
+		// A product sold in sizes and colours, its size not said: by
+		// name here, or many at once in the chat on Taskiem.
+		example := sized.Name
+		if len(hits) > 0 {
+			example = hits[0].Name
+		}
+		return c.say(ctx, s, c.t("wa.order.which_size", "name", whatsapp.SafeText(sized.Name), "business", whatsapp.SafeText(p.Business),
+			"sizes", whatsapp.SafeText(pricedSummary(*sized)), "example", whatsapp.SafeText(fmt.Sprintf("order %d %s from %s", qty, example, p.Business)))+
+			s.waLink(c, "/chat?with="+p.LinkID.String()))
+	}
 	switch len(hits) {
 	case 0:
 		return c.say(ctx, s, c.t("wa.prices.no_item", "name", whatsapp.SafeText(p.Business), "item", whatsapp.SafeText(m[2])))
@@ -140,13 +157,55 @@ func (s *Server) waOrderItem(ctx context.Context, c *chat, m []string) error {
 		own[x.ID] = x
 	}
 	line := orderLineIn{SellerItemID: it.ItemID, Quantity: qty}
+	key := "wa-" + uuid.NewString()
+	// A size: the buyer's own size of the same values, added to their
+	// product when it lacks it, as the order sheet does (trade_sizes.go).
+	if it.VariantOf != "" {
+		product := it.Name
+		for _, x := range p.Items {
+			if x.ItemID == it.VariantOf {
+				product = x.Name
+			}
+		}
+		for _, o := range items {
+			if o.VariantOf == "" && strings.EqualFold(strings.TrimSpace(o.Name), strings.TrimSpace(product)) {
+				line.ItemID = o.ID // the first time, their product of the same name
+			}
+		}
+		audit := func(tx pgx.Tx, action, target string, detail map[string]any) error {
+			return waAudit(ctx, tx, c.ch.Name(), c.p, action, target, detail)
+		}
+		resolved, rerr := s.resolveSizeLines(s.waTablesCtx(ctx, c), c.p, audit, p.LinkID, []orderLineIn{line}, key)
+		var differ errSizesDiffer
+		var first errSizesFirst
+		var unlinked errUnlinkedItem
+		switch {
+		case errors.As(rerr, &differ):
+			return c.say(ctx, s, c.t("wa.prices.refused", "reason", whatsapp.SafeText(differ.Error())))
+		case errors.As(rerr, &first):
+			return c.say(ctx, s, c.t("wa.prices.refused", "reason", whatsapp.SafeText(first.Error())))
+		case errors.As(rerr, &unlinked):
+			return c.say(ctx, s, c.t("wa.prices.unlinked", "item", whatsapp.SafeText(product), "name", whatsapp.SafeText(p.Business)))
+		case errors.Is(rerr, links.ErrInvalid), errors.Is(rerr, links.ErrState):
+			return c.say(ctx, s, c.t("wa.prices.refused", "reason", whatsapp.SafeText(linkReason(rerr))))
+		case rerr != nil:
+			return rerr
+		}
+		line = resolved[0]
+		if _, items, ok, err = s.stockChatItems(ctx, c); !ok || err != nil {
+			return err
+		}
+		for _, x := range items {
+			own[x.ID] = x
+		}
+	}
 	var x stock.Purchase
 	err = chatTx(ctx, s, c, func(tx pgx.Tx) error {
 		linked, err := links.ItemLinksTx(ctx, tx, c.tenant.ID, p.LinkID)
 		if err != nil {
 			return err
 		}
-		known := false
+		known := it.VariantOf != "" // its size is the buyer's already
 		for _, l := range linked {
 			known = known || l.SellerItemID == it.ItemID
 		}
@@ -162,7 +221,7 @@ func (s *Server) waOrderItem(ctx context.Context, c *chat, m []string) error {
 				line.ItemID = same[0].ID
 			}
 		}
-		x, err = s.draftFromPricesTx(ctx, tx, c.p, p.LinkID, []orderLineIn{line}, own, "", "wa-"+uuid.NewString())
+		x, err = s.draftFromPricesTx(ctx, tx, c.p, p.LinkID, []orderLineIn{line}, own, "", key)
 		return err
 	})
 	var unlinked errUnlinkedItem
@@ -188,4 +247,25 @@ func linkReason(err error) string {
 		msg = strings.TrimPrefix(msg, p)
 	}
 	return msg
+}
+
+// pricedSummary says a listed product's sizes and colours on sale by its
+// choices: "40, 41, 42 · Black, White".
+func pricedSummary(product links.PriceItem) string {
+	parts := make([]string, 0, len(product.Choices))
+	for _, c := range product.Choices {
+		var vals []string
+		for _, v := range c.Values {
+			for _, z := range product.Sizes {
+				if z.Available && strings.EqualFold(z.Variant[c.Name], v) {
+					vals = append(vals, v)
+					break
+				}
+			}
+		}
+		if len(vals) > 0 {
+			parts = append(parts, strings.Join(vals, ", "))
+		}
+	}
+	return strings.Join(parts, " · ")
 }

@@ -27,6 +27,8 @@ import { BubbleShell, CopyItem, Ticks } from "./BubbleShell";
 import { useChatLive } from "./ChatLive";
 import { get, post, upload } from "../api";
 import type { Conversation } from "../lib/linkchat";
+import { categoriesOf } from "../lib/mentions";
+import type { StockItem, StockView } from "../lib/stock";
 import { priceWords, type SupplierPrices } from "../lib/pricelists";
 import { Icon, TaskiemMark } from "../icons";
 import { clock } from "../lib/linkchat";
@@ -112,6 +114,18 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
   const act = useAction();
   const chatTools = useChatTools();
   const { can, me } = useAuth();
+  // The business's own categories: "@sneakers" offers its Sneakers, to
+  // open in Products (docs/spec/chat-categories-and-variants.md).
+  const ownStock = useLoad(
+    () =>
+      chatTools && can("table.read")
+        ? get<StockView>("/v1/stock").then(
+            (r) => r.items,
+            () => [] as StockItem[],
+          )
+        : Promise.resolve([] as StockItem[]),
+    [chatTools],
+  );
   // Alerts you can act on, as cards at the end (chat-tools.md §6).
   const alerts = useChatAlerts(!!chatTools);
   const afterDiary = useRef<() => void>(() => undefined);
@@ -141,8 +155,11 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
             id: `${p.link}:${it.item_id}`,
             name: it.name,
             sub: `${p.business} · ${priceWords(it)}`,
+            category: it.category,
+            words: it.description,
           })),
       ),
+      categories: categoriesOf(ownStock.data ?? []),
     },
     onSend: (s) => {
       if (s.file) sendFile(s.file, s.text);

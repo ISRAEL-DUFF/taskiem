@@ -130,7 +130,9 @@ func (s *Server) counter(ctx context.Context, p *Principal, id uuid.UUID, prices
 
 // dealCheck is why an order's offer, or a counter's lines, are past what
 // those without the storefront's say may agree (nothing: within).
-func dealCheck(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, lines []links.OrderLine) ([]string, error) {
+// catalogue is each size's product as the catalogue has it (sizeParents);
+// the lists' record adds sizes no longer in it.
+func dealCheck(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, lines []links.OrderLine, catalogue map[string]string) ([]string, error) {
 	floors, err := links.FloorsTx(ctx, tx, tenant)
 	if err != nil {
 		return nil, err
@@ -139,7 +141,14 @@ func dealCheck(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, lines []links.O
 	if err != nil {
 		return nil, err
 	}
-	return links.BelowFloor(lines, floors, set), nil
+	parents, err := links.SizeParentsTx(ctx, tx, tenant)
+	if err != nil {
+		return nil, err
+	}
+	for size, product := range catalogue {
+		parents[size] = product
+	}
+	return links.BelowFloor(lines, floors, parents, set), nil
 }
 
 // errOwnerAsked: an accept below the floor, waiting for the owner.
@@ -159,6 +168,7 @@ func (s *Server) dealGate(ctx context.Context, p *Principal, ref, step string, i
 	var o links.Order
 	var why []string
 	asked := false
+	parents := s.sizeParents(ctx, p.TenantID)
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
 		var err error
 		if o, err = links.GetOrderTx(ctx, tx, ref, true); err != nil {
@@ -178,7 +188,7 @@ func (s *Server) dealGate(ctx context.Context, p *Principal, ref, step string, i
 				lines[i] = l
 			}
 		}
-		if why, err = dealCheck(ctx, tx, p.TenantID, lines); err != nil || len(why) == 0 {
+		if why, err = dealCheck(ctx, tx, p.TenantID, lines, parents); err != nil || len(why) == 0 {
 			return err
 		}
 		if step == links.StepChange {

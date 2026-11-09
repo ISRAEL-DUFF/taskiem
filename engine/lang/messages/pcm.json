@@ -1368,6 +1368,54 @@
       "text": "Your table {table} never get {columns} column, wey e dey use. Add am for the app{link}, or those steps go fail.",
       "reviewed": false
     },
+    "wa.stock.category": {
+      "text": "*{category}* ({count}):\n{list}",
+      "reviewed": false
+    },
+    "wa.stock.category_more": {
+      "text": "Send *more* make I show you the rest.",
+      "reviewed": false
+    },
+    "wa.stock.which_size": {
+      "text": "{name} get {count} sizes and colours. Talk which one, put the size and colour after the name, like *{example}*.",
+      "reviewed": false
+    },
+    "wa.order.which_size": {
+      "text": "{name} from {business} dey come for sizes and colours: {sizes}. Talk which one, like *{example}*, or choose many at once for your chat with them for Taskiem.",
+      "reviewed": false
+    },
+    "wa.size.which": {
+      "text": "Which {choice} of {name}? Reply with im number, or talk am:\n{list}",
+      "reviewed": false
+    },
+    "wa.size.again": {
+      "text": "Reply with the number of the {choice}, or talk am:\n{list}",
+      "reviewed": false
+    },
+    "wa.size.none": {
+      "text": "{name} no get any for sale for {said}. E dey come for {sizes}.",
+      "reviewed": false
+    },
+    "wa.size.say": {
+      "text": "Which {choice} of {name}? Talk am: {list}",
+      "reviewed": false
+    },
+    "wa.size.say_again": {
+      "text": "Talk the {choice}: {list}",
+      "reviewed": false
+    },
+    "wa.order.no_size": {
+      "text": "{name} from {business} no dey come for {said}. E dey come for {sizes}.",
+      "reviewed": false
+    },
+    "wa.stock.sizes": {
+      "text": "{name}: {count} sizes and colours, {total} for all.\n{lines}",
+      "reviewed": false
+    },
+    "wa.stock.low_tag": {
+      "text": "(e don low)",
+      "reviewed": false
+    },
     "wa.tablemake.denied": {
       "text": "You no fit make or change tables for {org} (e need table.edit).",
       "reviewed": false

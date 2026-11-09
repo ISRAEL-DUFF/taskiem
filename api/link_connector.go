@@ -25,6 +25,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/effects"
 	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/stock"
+	"github.com/israel-duff/taskiem/engine/variants"
 )
 
 // linkWrites are the actions that change something: made in prod only.
@@ -420,7 +421,8 @@ func (s *Server) linkOrderStep(ctx context.Context, p *Principal, c linkconn.Cal
 
 // priceListed finds an item on a supplier's list: its item id, its name,
 // or the business's own item linked to it (by id or name).
-func priceListed(items []links.PriceItem, linked []links.ItemLink, own map[string]stock.Item, want string) (links.PriceItem, bool) {
+func priceListed(listed []links.PriceItem, linked []links.ItemLink, own map[string]stock.Item, want string) (links.PriceItem, bool) {
+	items := orderable(listed)
 	w := strings.ToLower(strings.TrimSpace(want))
 	for _, it := range items {
 		if it.ItemID == want || strings.ToLower(it.Name) == w {
@@ -447,6 +449,78 @@ func priceListed(items []links.PriceItem, linked []links.ItemLink, own map[strin
 	}
 	if len(found) == 1 {
 		return found[0], true
+	}
+	return links.PriceItem{}, false
+}
+
+// orderable is a list's items as they are ordered, in its order: a
+// product sold in sizes and colours as each of its sizes, named in full
+// ("Air Max 90 – 42, Black"); a product with none on sale, not at all.
+func orderable(listed []links.PriceItem) []links.PriceItem {
+	flat := links.Flat(listed)
+	out := make([]links.PriceItem, 0, len(flat))
+	for _, it := range listed {
+		if len(it.Sizes) == 0 {
+			if x, ok := flat[it.ItemID]; ok {
+				out = append(out, x)
+			}
+			continue
+		}
+		for _, z := range it.Sizes {
+			out = append(out, flat[z.ItemID])
+		}
+	}
+	return out
+}
+
+// topUpSizes brings each product sold in sizes up to its minimum, its
+// sizes together: the low sizes alone may come to less than the supplier
+// takes, and the order would be refused. What is short goes on the
+// product's first low size, and the line says so. Prices are each size's
+// at the order's totals (quantity breaks counted together).
+func topUpSizes(listed []links.PriceItem, lines []any) {
+	flat := links.Flat(listed)
+	products := map[string]links.PriceItem{}
+	for _, it := range listed {
+		products[it.ItemID] = it
+	}
+	together := map[string]int64{}
+	first := map[string]map[string]any{}
+	for _, l := range lines {
+		m := l.(map[string]any)
+		it := flat[m["item"].(string)]
+		if it.VariantOf == "" {
+			continue
+		}
+		together[it.VariantOf] += m["quantity"].(int64)
+		if first[it.VariantOf] == nil {
+			first[it.VariantOf] = m
+		}
+	}
+	for product, n := range together {
+		if short := int64(products[product].MinQuantity) - n; short > 0 {
+			m := first[product]
+			m["quantity"] = m["quantity"].(int64) + short
+			m["topped_up"] = short
+			together[product] += short
+		}
+	}
+	for _, l := range lines {
+		m := l.(map[string]any)
+		if it := flat[m["item"].(string)]; it.VariantOf != "" {
+			m["price_kobo"] = links.PriceAt(it, together[it.VariantOf])
+		}
+	}
+}
+
+// sizedProductNamed is the product sold in sizes and colours on the list
+// that the words name: it is not ordered itself, but by its sizes.
+func sizedProductNamed(items []links.PriceItem, want string) (links.PriceItem, bool) {
+	w := strings.ToLower(strings.TrimSpace(want))
+	for _, it := range items {
+		if len(it.Sizes) > 0 && (it.ItemID == want || strings.ToLower(it.Name) == w) {
+			return it, true
+		}
 	}
 	return links.PriceItem{}, false
 }
@@ -547,14 +621,29 @@ func (s *Server) linkLowOrders(ctx context.Context, p *Principal, c linkconn.Cal
 			if err != nil {
 				return err
 			}
-			listed := map[string]links.PriceItem{}
-			for _, it := range l.Items {
-				listed[it.ItemID] = it
-			}
+			listed := links.Flat(l.Items)
 			sl := supplierList{list: l, byItem: map[string]links.PriceItem{}}
+			products := map[string]string{} // our product → their product sold in sizes
 			for _, il := range linked {
 				if it, ok := listed[il.SellerItemID]; ok && it.Available {
 					sl.byItem[il.ItemID] = it
+				}
+				for _, it := range l.Items {
+					if it.ItemID == il.SellerItemID && len(it.Choices) > 0 {
+						products[il.ItemID] = it.ItemID
+					}
+				}
+			}
+			// One of our sizes not linked yet: their size of the same values,
+			// through the products' link.
+			for _, it := range items {
+				if _, ok := sl.byItem[it.ID]; ok || it.VariantOf == "" || products[it.VariantOf] == "" {
+					continue
+				}
+				for _, x := range listed {
+					if x.VariantOf == products[it.VariantOf] && x.Available && variants.Key(x.Variant) == variants.Key(it.Variant) {
+						sl.byItem[it.ID] = x
+					}
 				}
 			}
 			sups = append(sups, sl)
@@ -599,7 +688,13 @@ func (s *Server) linkLowOrders(ctx context.Context, p *Principal, c linkconn.Cal
 			d.total += qty * listed.PriceKobo
 		}
 		for _, d := range drafts {
-			orders = append(orders, map[string]any{"business": d.sup.list.Business, "link": d.sup.list.LinkID.String(), "items": d.lines, "total_kobo": d.total})
+			topUpSizes(d.sup.list.Items, d.lines)
+			total := int64(0)
+			for _, l := range d.lines {
+				m := l.(map[string]any)
+				total += m["quantity"].(int64) * m["price_kobo"].(int64)
+			}
+			orders = append(orders, map[string]any{"business": d.sup.list.Business, "link": d.sup.list.LinkID.String(), "items": d.lines, "total_kobo": total})
 		}
 		return nil
 	})
@@ -625,12 +720,14 @@ func (s *Server) linkPlaceOrder(ctx context.Context, p *Principal, c linkconn.Ca
 	var business string
 	drafted := false // by this step before: the same order, no second draft
 	key := "link-" + c.Key
+	var link uuid.UUID
+	var lines []orderLineIn
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
 		l, err := linkNamed(ctx, tx, inStr(c.Input, "business"))
 		if err != nil {
 			return err
 		}
-		business = l.Name
+		business, link = l.Name, l.ID
 		var id uuid.UUID
 		switch err := tx.QueryRow(ctx, `SELECT id FROM purchase_orders WHERE tenant_id = $1 AND key = $2`, p.TenantID, key).Scan(&id); {
 		case err == nil:
@@ -651,12 +748,14 @@ func (s *Server) linkPlaceOrder(ctx context.Context, p *Principal, c linkconn.Ca
 		if err != nil {
 			return err
 		}
-		lines := make([]orderLineIn, 0, len(raw))
 		for _, r := range raw {
 			m, _ := r.(map[string]any)
 			name := inStr(m, "item")
 			it, ok := priceListed(got[0].Items, linked, own, name)
 			if !ok {
+				if pr, ok := sizedProductNamed(got[0].Items, name); ok {
+					return fmt.Errorf("%w: %s comes in sizes and colours: name each one, like %q", links.ErrInvalid, pr.Name, pr.Sizes[0].Name)
+				}
 				return fmt.Errorf("%w: %q is not on %s's price list", links.ErrInvalid, name, l.Name)
 			}
 			line := orderLineIn{SellerItemID: it.ItemID, Quantity: inInt(m, "quantity")}
@@ -669,12 +768,31 @@ func (s *Server) linkPlaceOrder(ctx context.Context, p *Principal, c linkconn.Ca
 			}
 			lines = append(lines, line)
 		}
-		x, err = s.draftFromPricesTx(ctx, tx, p, l.ID, lines, own, inStr(c.Input, "note"), key)
-		if err != nil {
-			return err
-		}
-		return wfAudit(ctx, tx, p, "purchase.draft", x.Reference, map[string]any{"purchase_id": x.ID, "link": l.ID})
+		return nil
 	})
+	if err == nil && !drafted {
+		// A supplier's size: the business's own size of the same values,
+		// added to its product when it lacks it (trade_sizes.go).
+		audit := func(tx pgx.Tx, action, target string, detail map[string]any) error {
+			return wfAudit(ctx, tx, p, action, target, detail)
+		}
+		var resolved []orderLineIn
+		if resolved, err = s.resolveSizeLines(ctx, p, audit, link, lines, key); err == nil {
+			if len(resolved) > 0 {
+				lines = resolved
+			}
+			if own, _, err = s.ownItems(ctx, p.TenantID); err == nil {
+				err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+					var err error
+					x, err = s.draftFromPricesTx(ctx, tx, p, link, lines, own, inStr(c.Input, "note"), key)
+					if err != nil {
+						return err
+					}
+					return wfAudit(ctx, tx, p, "purchase.draft", x.Reference, map[string]any{"purchase_id": x.ID, "link": link})
+				})
+			}
+		}
+	}
 	if err != nil {
 		return nil, err
 	}

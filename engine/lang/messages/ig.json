@@ -1368,6 +1368,54 @@
       "text": "Tebụl gị {table} enweghị kọlụm {columns} ugbu a, nke ọ na-eji. Tinye ya na ngwa ahụ{link}, ma ọ bụghị ya, nzọụkwụ ndị ahụ ga-ada.",
       "reviewed": false
     },
+    "wa.stock.category": {
+      "text": "*{category}* ({count}):\n{list}",
+      "reviewed": false
+    },
+    "wa.stock.category_more": {
+      "text": "Ziga *more* maka ndị fọdụrụ.",
+      "reviewed": false
+    },
+    "wa.stock.which_size": {
+      "text": "{name} nwere nha na agba {count}. Kwuo nke ọ bụ, tinye nha na agba ya mgbe aha gachara, dị ka *{example}*.",
+      "reviewed": false
+    },
+    "wa.order.which_size": {
+      "text": "{name} si {business} na-abịa na nha na agba: {sizes}. Kwuo nke ọ bụ, dị ka *{example}*, ma ọ bụ họrọ ọtụtụ otu mgbe na nkata gị na ha na Taskiem.",
+      "reviewed": false
+    },
+    "wa.size.which": {
+      "text": "Kedu {choice} nke {name}? Zaa nọmba ya, ma ọ bụ kwuo ya:\n{list}",
+      "reviewed": false
+    },
+    "wa.size.again": {
+      "text": "Zaa nọmba {choice} ahụ, ma ọ bụ kwuo ya:\n{list}",
+      "reviewed": false
+    },
+    "wa.size.none": {
+      "text": "{name} enweghị nke a na-ere na {said}. Ọ na-abịa na {sizes}.",
+      "reviewed": false
+    },
+    "wa.size.say": {
+      "text": "Kedu {choice} nke {name}? Kwuo ya: {list}",
+      "reviewed": false
+    },
+    "wa.size.say_again": {
+      "text": "Kwuo {choice} ahụ: {list}",
+      "reviewed": false
+    },
+    "wa.order.no_size": {
+      "text": "{name} sitere na {business} anaghị abịa na {said}. Ọ na-abịa na {sizes}.",
+      "reviewed": false
+    },
+    "wa.stock.sizes": {
+      "text": "{name}: nha na agba {count}, {total} n'ozuzu.\n{lines}",
+      "reviewed": false
+    },
+    "wa.stock.low_tag": {
+      "text": "(ọ dịla ala)",
+      "reviewed": false
+    },
     "wa.tablemake.denied": {
       "text": "Ị nweghị ike ịme ma ọ bụ ịgbanwe tebụl na {org} (ọ chọrọ table.edit).",
       "reviewed": false

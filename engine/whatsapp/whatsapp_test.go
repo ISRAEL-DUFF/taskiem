@@ -292,3 +292,24 @@ func TestConfigFromEnv(t *testing.T) {
 		t.Fatalf("%v %v", c, err)
 	}
 }
+
+// A token has one spelling: unpadded, the last character of its MAC holds
+// two bits that are not part of the bytes; set differently, the token is
+// refused, not read as the same one (a test that altered a token's end
+// once found it still valid).
+func TestTokenOneSpelling(t *testing.T) {
+	s := Signer{Key: bytes.Repeat([]byte{7}, 32)}
+	tok := s.Sign(Claims{Tenant: uuid.New(), Nonce: NewNonce(), Purpose: PurposeDecide, Decision: "approved", Expires: time.Now().Add(time.Hour),
+		Run: uuid.New(), Step: "ok", User: uuid.New()})
+	const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+	last := strings.IndexByte(alphabet, tok[len(tok)-1])
+	for spare := 1; spare < 4; spare++ { // the two spare bits, set otherwise
+		other := tok[:len(tok)-1] + string(alphabet[last^spare])
+		if _, _, err := ParseToken(other); err == nil {
+			t.Fatalf("another spelling of the token was read: %s", other)
+		}
+	}
+	if _, _, err := ParseToken(tok); err != nil {
+		t.Fatalf("the token itself: %v", err)
+	}
+}

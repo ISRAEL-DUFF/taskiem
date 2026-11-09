@@ -35,10 +35,13 @@ type ToolStart = {
   rowId?: string;
   add?: boolean;
   prefill?: Prefill;
+  /** A chip already on: a category picked in "@". */
+  chip?: string;
   /** The Order sheet: an item in the bag, or a past order again. */
   order?: OrderStart;
 };
 import { useAuth } from "../auth";
+import { categoryTag } from "../lib/tools";
 import { usePresence } from "../kit";
 
 // The composer of every conversation (a business's and Taskiem's): the box
@@ -149,7 +152,18 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     setDraft(o.draftKey, o.tools && /^\/\S*$/.test(text) ? "" : text);
     // Only a change of the words is kept: a switch of conversation loads one.
   }, [text]);
-  const mentions = useMentions(text, setText, textBox, o.sources, o.grouped);
+  // A category picked in "@" opens its items (set below, once the tools are).
+  const onCategory = useRef<(name: string) => void>(() => undefined);
+  const mentions = useMentions(
+    text,
+    setText,
+    textBox,
+    o.sources,
+    o.grouped && {
+      ...o.grouped,
+      onCategory: (name) => onCategory.current(name),
+    },
+  );
   // The tools panel: the grid button, or "/" and a word as the whole message.
   const [toolsOpen, setToolsOpen] = useState(false);
   const [tool, setTool] = useState<{
@@ -170,6 +184,12 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     closeTools();
     setTool({ key: k, from, start });
   };
+  // A supplier's category opens their list, to order from; ours, our
+  // products.
+  onCategory.current = (name) =>
+    o.scope?.supplies
+      ? openTool("order", undefined, { order: { category: name } })
+      : openTool("products", undefined, { chip: categoryTag(name) });
   // A typed request: its tool opens at the form, filled in; the words go.
   const openRequest = (r: Request) => {
     setText("");
@@ -270,7 +290,12 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     const r = insertAt(text, start, el?.selectionEnd ?? start, c);
     typed(r.text);
     mentions.update(r.text, r.caret);
+    // Back to the message after the render, unless the person has gone on
+    // somewhere (the search box, to find the next one) in the meantime.
+    const from = document.activeElement;
     requestAnimationFrame(() => {
+      const now = document.activeElement;
+      if (now !== from && now !== document.body && now !== el) return;
       el?.focus();
       el?.setSelectionRange(r.caret, r.caret);
     });
