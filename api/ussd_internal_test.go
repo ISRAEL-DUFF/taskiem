@@ -25,6 +25,7 @@ func TestUSSDLookupsPacedPerCaller(t *testing.T) {
 	h := s.USSDHooks()
 	before := len(s.limiters.m)
 	codes := map[string]int{}
+	start := time.Now()
 	for range 40 {
 		body := url.Values{"sessionId": {"s1"}, "phoneNumber": {"+2348000000000"}, "serviceCode": {"*384*1#"}, "text": {""}}.Encode()
 		r := httptest.NewRequest(http.MethodPost, "/"+uuid.NewString()+"/africastalking", strings.NewReader(body))
@@ -41,8 +42,12 @@ func TestUSSDLookupsPacedPerCaller(t *testing.T) {
 			t.Fatalf("answer %d %q", w.Code, w.Body.String())
 		}
 	}
-	if codes["busy"] == 0 || codes["unknown"] > 20 {
-		t.Errorf("40 made-up tenants from one address: %v; want at most the burst looked up", codes)
+	// The burst, plus the tokens the limiter gave back while the loop ran
+	// (one per 100 ms: forty lookups that miss the database take over a
+	// second on a loaded runner).
+	allowed := 20 + int(time.Since(start)/(100*time.Millisecond)) + 1
+	if codes["busy"] == 0 || codes["unknown"] > allowed {
+		t.Errorf("40 made-up tenants from one address: %v; want at most the burst (%d) looked up", codes, allowed)
 	}
 	if n := len(s.limiters.m) - before; n != 1 {
 		t.Errorf("one address left %d limiter buckets, want 1", n)
