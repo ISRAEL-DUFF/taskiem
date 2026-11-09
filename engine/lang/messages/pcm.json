@@ -424,6 +424,14 @@
       "text": "You no go dey get update from {business} for here again. Send START make e start again.",
       "reviewed": false
     },
+    "customer.resumed": {
+      "text": "You fit write {business} for here again, and dem fit answer you.",
+      "reviewed": false
+    },
+    "customer.stopped": {
+      "text": "You no go dey get message from {business} for here again, and wetin you write give dem don delete. Send START make you fit write dem again.",
+      "reviewed": false
+    },
     "reach.stopped_none": {
       "text": "Nobody dey send you update for here.",
       "reviewed": false

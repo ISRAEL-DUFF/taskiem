@@ -150,6 +150,17 @@ var (
 		Buttons:  []TemplateButton{{Type: "url", Text: "Open", Host: HostApp, Path: "/chat"}},
 		Purpose:  "A message from a linked business in the conversation between them, to the people who write in it, outside the window; {{2}} is the sender's first name and the words on one line (or what was sent: a photo, a voice note, a file), or 'open the chat' when they are not shown.",
 	}
+	// A business's reply to a customer who wrote to its own number
+	// (chat-five-more-flows.md, customers' conversations), once the 24
+	// hours since they last wrote have passed: their answer reopens the
+	// conversation, as any message of theirs does.
+	TplCustomerReply = Template{
+		Name: "taskiem_customer_reply", Category: "UTILITY",
+		Body:     "[{{1}}] Reply to your message: {{2}} Answer here to carry on.",
+		Vars:     []string{"business", "message"},
+		Examples: []string{"Mama Put Kitchen", "Yes, we deliver to Yaba. It is ₦1,500."},
+		Purpose:  "A reply from the business to a customer who wrote to its own number, sent after the 24 hours since they last wrote; {{2}} is the reply on one line.",
+	}
 	TplUpdate = Template{
 		Name: "taskiem_update", Category: "UTILITY",
 		Body:     "[{{1}}] Update on {{2}}: {{3}}",
@@ -268,7 +279,7 @@ var (
 )
 
 // AllTemplates lists the library, for documentation, submission and tests.
-var AllTemplates = []Template{TplOTP, TplApprovalRequest, TplStepUpLink, TplRunFailed, TplRunCompleted, TplNeedsReconciliation, TplApprovalWaiting, TplAlert, TplUpdate, TplLinkMessage,
+var AllTemplates = []Template{TplOTP, TplApprovalRequest, TplStepUpLink, TplRunFailed, TplRunCompleted, TplNeedsReconciliation, TplApprovalWaiting, TplAlert, TplUpdate, TplLinkMessage, TplCustomerReply,
 	TplInvoice, TplBalance, TplDeliveryOffer, TplMatchQuestion, TplFeeReminder, TplReceipt, TplAccountNumber, TplPlanDecision, TplFamilyLink, TplDailySummary, TplDailyClose, TplInvite}
 
 var placeholder = regexp.MustCompile(`\{\{(\d+)\}\}`)

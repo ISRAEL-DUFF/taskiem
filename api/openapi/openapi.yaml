@@ -121,6 +121,9 @@ tags:
 - name: Invoices
   description: Invoices the business sends its customers, paid only by the payments counted towards them.
   x-taskiem-guide: invoices
+- name: Customers
+  description: Customers' conversations with the business on its own WhatsApp number (chat-five-more-flows, phase 1).
+  x-taskiem-guide: spec/chat-five-more-flows
 - name: Links
   description: Links with other businesses on Taskiem, made with both sides' consent (decision 0061).
   x-taskiem-guide: spec/business-links
@@ -8708,6 +8711,220 @@ paths:
                 properties:
                   read:
                     type: integer
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/customer-chats:
+    get:
+      operationId: listCustomerChats
+      tags:
+      - Customers
+      summary: Customers' conversations
+      description: One thread per customer who wrote to the business's own WhatsApp number, the latest first. Archived ones with archived=1.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      parameters:
+      - name: archived
+        in: query
+        schema:
+          type: string
+          enum: ['1']
+      responses:
+        '200':
+          description: The threads
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [chats]
+                properties:
+                  chats:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CustomerChat'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/customer-chats/{id}:
+    get:
+      operationId: getCustomerChat
+      tags:
+      - Customers
+      summary: A customer's conversation
+      description: The thread, with what the customer owes on open invoices.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The thread
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerChat'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putCustomerChat
+      tags:
+      - Customers
+      summary: Archive a customer's conversation, or bring it back
+      description: An archived thread comes back when the customer writes again.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [archived]
+              properties:
+                archived:
+                  type: boolean
+      responses:
+        '204':
+          description: Done
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/customer-chats/{id}/messages:
+    get:
+      operationId: listCustomerMessages
+      tags:
+      - Customers
+      summary: A customer's conversation's messages
+      description: The latest 50, oldest first; before (a message's id) for the 50 before it.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: before
+        in: query
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: A page of messages
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [messages, more]
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CustomerMessage'
+                  more:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: replyCustomer
+      tags:
+      - Customers
+      summary: Reply to a customer
+      description: Sent from the business's own WhatsApp number, as words within 24 hours of the customer's last message and as the approved template after. Refused (409) when the customer sent STOP, the template is not approved yet, or the business's number is no longer the one they wrote to. A repeat of a client_id answers the message it sent (200).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [text]
+              properties:
+                text:
+                  type: string
+                  maxLength: 2000
+                client_id:
+                  type: string
+                  maxLength: 80
+      responses:
+        '200':
+          description: The reply already sent with this client_id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerMessage'
+        '201':
+          description: Sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerMessage'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/customer-chats/{id}/read:
+    post:
+      operationId: readCustomerChat
+      tags:
+      - Customers
+      summary: Mark a customer's messages read
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Done
         default:
           $ref: '#/components/responses/Error'
   /v1/links/{business}/logo:
@@ -32536,6 +32753,72 @@ components:
           items:
             type: string
           description: Their first names
+    CustomerChat:
+      type: object
+      additionalProperties: false
+      required: [id, name, phone, last, last_mine, last_at, unread, window_open, window_until, stopped, archived]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: The customer's name in the business's book, or their number.
+        phone:
+          type: string
+          description: Empty when the customer's details were erased.
+        last:
+          type: string
+        last_mine:
+          type: boolean
+        last_at:
+          type: string
+          format: date-time
+        unread:
+          type: integer
+        window_open:
+          type: boolean
+          description: A reply goes as words (within 24 hours of the customer's last message, and not stopped).
+        window_until:
+          type: [string, 'null']
+          format: date-time
+        stopped:
+          type: boolean
+          description: The customer sent STOP; nothing is sent until START.
+        archived:
+          type: boolean
+        owes_kobo:
+          type: integer
+          description: One thread only, what the customer owes on open invoices.
+        open_invoices:
+          type: integer
+    CustomerMessage:
+      type: object
+      additionalProperties: false
+      required: [id, mine, kind, body, read_at, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        mine:
+          type: boolean
+          description: From the business.
+        kind:
+          type: string
+          enum: [text, media]
+        body:
+          type: string
+        sender_name:
+          type: string
+        sent_as:
+          type: string
+          enum: [text, template]
+        read_at:
+          type: [string, 'null']
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
     LinkMessage:
       type: object
       additionalProperties: false
