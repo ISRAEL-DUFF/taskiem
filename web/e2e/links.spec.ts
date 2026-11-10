@@ -31,6 +31,9 @@ async function narrow(page: Page) {
 }
 
 test("two businesses find each other and link", async ({ browser }) => {
+  // Two businesses signed up and linked: as slow on a busy CI runner as
+  // the other two-business tests, which have the long timeout too.
+  test.setTimeout(180_000);
   // Letters, not digits: a search with six digits in a row is never run.
   const stamp = String(Date.now()).replace(/\d/g, (d) => "abcdefghij".charAt(Number(d)));
   const dangoteName = `Dangote Depot ${stamp}`;
